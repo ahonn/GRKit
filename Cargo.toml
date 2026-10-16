@@ -1,0 +1,27 @@
+[workspace]
+members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+publish = false
+
+[workspace.dependencies]
+ab_glyph = { version = "0.2.32", default-features = false, features = ["std"] }
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+crc32fast = "1"
+hex = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempfile = "3"
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
+grkit-core = { path = "crates/grkit-core" }
+grkit-build = { path = "crates/grkit-build" }
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"

@@ -1,0 +1,11 @@
+# Local inputs and generated products are not release sources.
+/firmware/
+/vendor/
+/work/
+/dist/
+/build/
+/target/
+*.bin
+*.raw
+*.zip
+.DS_Store

@@ -1,0 +1,12 @@
+Changes to third-party LUTs (as asked by SPEKTRAFILM_LICENSE.txt)
+
+No LUT, profile or rendered LUT output is included in this repository. The fit data listed in README.md (License)
+encodes each LUT's look as GR III camera parameters: a 3x3 look matrix, three 256-entry tone curves and a 3x3
+post-curve matrix, fitted by cube_fit.py / joint_fit.py / lab_fit.py to the LUT's output on synthetic colour samples.
+Some fits also include an exposure offset applied before the LUT ("ev" or a ":<ev>" suffix in "spec").
+
+spektrafilm LUTs (Andrea Volpato, https://github.com/andreavolpato/spektrafilm, spektrafilm v0.3.4, CC BY-SA 4.0):
+built with spektrafilm-lut (input V-Log/V-Gamut, output sRGB, 33^3) and fitted as above. Modified by idontknownihil.
+
+FujifilmCameraProfiles "classic neg_sRGB.cube" (abpy, https://github.com/abpy/FujifilmCameraProfiles,
+CC BY-NC-SA 4.0): input exposure -0.88 EV, fitted as above. Modified by idontknownihil.

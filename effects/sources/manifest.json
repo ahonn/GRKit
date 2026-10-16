@@ -1,0 +1,38 @@
+{
+  "schema": "grkit-effect-sources-v1",
+  "repository": "https://github.com/idontknownihil/gr3-film-mods",
+  "revision": "04d5d5dd6e85d80089c6200bd0f0de5fff2d658f",
+  "original_project": "https://github.com/andreavolpato/spektrafilm",
+  "original_author": "Andrea Volpato",
+  "original_version": "0.3.4",
+  "fit_author": "idontknownihil",
+  "license_notice": "SPEKTRAFILM_LICENSE.txt",
+  "upstream_changes": "CHANGELOG.txt",
+  "files": {
+    "ektar_b2n3.json": {
+      "sha256": "17035697f8ec07da97c3361f423cbcea01549b5b943dd35c656002c1ba723326",
+      "upstream_path": "work/films_v3/fits/ektar_b2n3.json",
+      "license": "CC-BY-SA-4.0"
+    },
+    "pro400h_own_b4n3.json": {
+      "sha256": "1d7cfd40133d801b79169f58d8e05b2720c323af177c8361ce056777b5574229",
+      "upstream_path": "work/films_v4/fits/pro400h_own_b4n3.json",
+      "license": "CC-BY-SA-4.0"
+    },
+    "vision3250d_2383_b4n3.json": {
+      "sha256": "5b81f1ef8ecf5185c7f405745172880e6a894c2aba56e599de20304b751432ad",
+      "upstream_path": "work/films_v10/fits/vision3250d_2383_b4n3.json",
+      "license": "CC-BY-SA-4.0"
+    },
+    "SPEKTRAFILM_LICENSE.txt": {
+      "sha256": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9",
+      "upstream_path": "LICENSES/SPEKTRAFILM_LICENSE.txt",
+      "license": "upstream-notice"
+    },
+    "CHANGELOG.txt": {
+      "sha256": "18580c1b5038110e3f03142b92a6754f316433ae58ad65db9e64dc3a7ff7f742",
+      "upstream_path": "LICENSES/CHANGELOG.txt",
+      "license": "upstream-notice"
+    }
+  }
+}

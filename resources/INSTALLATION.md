@@ -1,0 +1,45 @@
+# GRKit
+
+For RICOH GR III firmware 2.10 only.
+
+## Install
+
+1. Turn the camera off.
+2. Back up the SD card, including any existing startup scripts.
+3. Copy the contents of `SD_ROOT` to the card root.
+4. Safely eject the card.
+5. Insert the card into the camera.
+
+If SD scripts are not enabled:
+
+1. Hold MENU while turning the camera on.
+2. Wait for the camera to turn itself off.
+
+With the camera off, remove `00078350.588` and `DEVELOP.MOD` from the card root.
+Keep the `SCRIPT` directory. Use normal power-on from now on.
+
+## Use
+
+GRKit loads a few seconds after power-on. Open ADJ and select the sixth entry, marked GRK. If the entry is absent, wait and open ADJ again.
+
+- **Image Control:** highlight an effect or Off with the direction keys or dial. The viewfinder previews it. Press OK to keep it. MENU or leaving without OK restores the previous effect.
+- **Fn on an effect:** keep the effect and open the native Standard parameters, which plugin effects share. Press OK there to return. Fn requires native Image Control Standard.
+- **Framing:** highlight Off or an aspect ratio to preview its mask, then press OK. Photos record at that ratio. The viewfinder stays 3:2 and dims the area outside the photo.
+- **MENU:** return one level. From GRKit, return to native ADJ with the selected effect.
+
+Both modules reset to Off on each boot. Pressing OK on a native Image Control disables the plugin effect.
+Playback information shows the plugin effect icon while that effect is installed.
+
+Framing requires the native 3:2 aspect ratio. With native 1:1, photos keep 1:1 and the viewfinder shows no mask.
+In-camera Crop, Resize, Digital Filter, and RAW development of Framing photos are not tested.
+
+## Remove or recover
+
+With the camera off, remove `SCRIPT/PLUGINS` and GRKit's `SCRIPT/STARTUP.TTL` from the card.
+Remove either activation file if it remains. This does not disable the camera's SD-script setting.
+
+If normal startup freezes, try normal power-off first. If the camera remains unresponsive, remove the battery.
+Remove the card, reinsert the battery, and restart without the card.
+Do not interrupt an official firmware update. If startup still fails, see the [recovery guide](https://github.com/ahonn/GRKit/blob/main/resources/RECOVERY.md).
+
+Private test build. Software and artwork distribution terms remain undecided. Effect attribution and licenses: https://github.com/ahonn/GRKit/blob/main/effects/NOTICE.md
