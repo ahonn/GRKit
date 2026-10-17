@@ -385,55 +385,6 @@ pub fn interpolate_curve(points: &Value) -> Result<Vec<u16>> {
     Ok(result)
 }
 
-pub fn import_fit(fit: &Value) -> Result<Value> {
-    const PRESET_KEYS: &[&str] = &[
-        "spec",
-        "curves",
-        "chart_de_mean",
-        "chart_de_max",
-        "std_de_mean",
-        "target_gray_row",
-        "fit_chart",
-        "target_chart",
-        "std_chart",
-    ];
-    ensure!(
-        has_keys(fit, &["matrix", "mid_index", "presets"])
-            && fit["mid_index"].as_f64() == Some(7.8)
-            && fit["presets"]
-                .as_array()
-                .is_some_and(|p| p.len() == 1 && has_keys(&p[0], PRESET_KEYS)),
-        "Expected the supported two-stage fit schema"
-    );
-    let rows = fit["matrix"]
-        .as_array()
-        .context("Expected a finite 3 x 3 matrix within signed Q13 bounds")?;
-    ensure!(
-        rows.len() == 3
-            && rows
-                .iter()
-                .all(|row| row.as_array().is_some_and(|row| row.len() == 3
-                    && row.iter().all(|v| v
-                        .as_f64()
-                        .is_some_and(|v| v.is_finite() && (-4.0..4.0).contains(&v))))),
-        "Expected a finite 3 x 3 matrix within signed Q13 bounds"
-    );
-    let mut matrix = Vec::with_capacity(9);
-    for (diagonal, row) in rows.iter().enumerate() {
-        let mut values: Vec<i64> = row
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| (v.as_f64().unwrap() * 8192.0).round_ties_even() as i64)
-            .collect();
-        values[diagonal] += 8192 - values.iter().sum::<i64>();
-        matrix.extend(values);
-    }
-    let result = json!({"matrix": matrix, "curves": fit["presets"][0]["curves"]});
-    coefficients(&result)?;
-    Ok(result)
-}
-
 pub fn compile_definition(definition: &Value) -> Result<Vec<u8>> {
     let mut required = vec![
         "schema",

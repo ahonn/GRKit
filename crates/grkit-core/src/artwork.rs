@@ -8,8 +8,8 @@ use anyhow::{bail, ensure, Result};
 
 /// Inter Medium 4.1, SIL Open Font License 1.1 (`assets/Inter-LICENSE.txt`).
 const FONT: &[u8] = include_bytes!("../assets/Inter-Medium.ttf");
-/// Effect icon labels keep the character set of the original bitmap tiles.
-const LABEL_CHARACTERS: &[u8] = b"EFGHMNOV01245";
+/// Effect icon labels use capitals and digits, as the native text tiles do.
+const LABEL_CHARACTERS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 /// Native text tiles, such as "Std", use about 15-pixel capitals.
 const LABEL_SIZE: f32 = 21.0;
 /// Text stays inside the frame with a small margin.

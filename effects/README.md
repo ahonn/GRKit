@@ -22,12 +22,43 @@ The compiler writes self-contained GRFX0001 files with a 40 x 40 icon. CRC32 det
 
 A monochrome effect cannot have `post_matrix`.
 
-## Starter effects
+## Effect catalog
 
-- Mono Orange and Everyday Neg are original definitions with editable curve knots.
-- Ektar 100, Pro 400H, and Vision3 250D are imported fits with all 768 curve samples.
+The site and the release packages publish every effect in this directory. Each effect is a fit of one film simulation LUT:
 
-`sources/` stores the exact fit inputs, hashes, and upstream notices. `import_fit()` reproduces the imported matrices and curves.
+| Effect | ID | Target |
+|---|---|---|
+| Portra 400 | `portra-400-endura-v1` | Kodak Portra 400 on Portra Endura paper |
+| Gold 200 | `gold-200-premier-v1` | Kodak Gold 200 on Endura Premier paper |
+| Ektar 100 | `ektar-100-edge-v1` | Kodak Ektar 100 on Ektacolor Edge paper |
+| Pro 400H | `pro-400h-crystal-v1` | Fujifilm Pro 400H on Crystal Archive Type II paper |
+| X-Tra 400 | `xtra-400-crystal-v1` | Fujifilm X-Tra 400 on Crystal Archive Type II paper |
+| Vision3 250D | `vision3-250d-2383-v1` | Kodak Vision3 250D on Vision 2383 print film |
+| Vision3 500T | `vision3-500t-2393-v1` | Kodak Vision3 500T on Vision Premier 2393 print film |
+| Portra 800 +2 | `portra-800-push2-v1` | Kodak Portra 800 pushed two stops, on Portra Endura paper |
+| Kodachrome 64 | `kodachrome-64-v1` | Kodak Kodachrome 64 slide film, scanned |
+| Velvia 100 | `velvia-100-v1` | Fujifilm Velvia 100 slide film, scanned |
+| Portra 160 | `portra-160-ultra-v1` | Kodak Portra 160 on Ultra Endura paper |
+| Tri-X 400 | `trix-400-mono-v1` | Kodak Tri-X 400 on Polymax Fine-Art paper, grade 2 |
+| Tri-X 400 Red | `red-filter-mono-v1` | Tri-X 400 behind a Wratten 25 red filter, on Polymax Fine-Art paper |
+| FP-100C | `fp-100c-v1` | Fujifilm FP-100C instant film |
+| Aerocolor IV | `aerocolor-iv-v1` | Kodak Aerocolor IV 2460 aerial negative on Portra Endura paper |
+| EXR 200T | `exr-200t-2383-v1` | Kodak EXR 200T 5293 on Vision 2383 print film |
+
+Menu names are the names of the simulated films. They identify the materials, not an endorsement. [NOTICE.md](NOTICE.md) has the disclaimer.
+
+The first eleven LUTs come from [spektrafilm](https://github.com/andreavolpato/spektrafilm) 0.3.4. The other five come from [Spectral Film LUT](https://github.com/JanLohse/spectral_film_lut). `sources/` holds the scripts that bake each LUT, the upstream notices, and `manifest.json`, which records the SHA-256 of each LUT. The LUTs themselves are not in the repository.
+
+To refit an effect:
+
+1. Install the generator at the revision in `sources/manifest.json`.
+2. Run `python sources/bake_spektrafilm.py LUTS` or `python sources/bake_spectral_film_lut.py LUTS`.
+3. Compare the SHA-256 of `LUTS/ID.cube` with the manifest. Floating-point results can differ on another platform.
+4. Run `grkit effects import --input vlog` with the effect's ID, name, label, and shape.
+5. Copy `license`, `target`, and `generator` from the old `attribution`.
+
+The two monochrome fits have identical matrix rows and curves. Set `flags` to 1 for them.
+
 Attribution and licenses are in [NOTICE.md](NOTICE.md). The installation guide in each package links to it.
 
 ## Processing domain
@@ -59,7 +90,7 @@ grkit effects import --cube look.cube --firmware fwdc239b.bin --input srgb \
 6. Add the license of the LUT to `attribution`. Then run `grkit effects build`.
 
 If `OUT/ID` exists, the command stops and writes nothing.
-The command checks the ID, name, label, and shape before the fit. Labels use the characters `EFGHMNOV01245`.
+The command checks the ID, name, label, and shape before the fit. Labels have one to four capitals or digits.
 The command checks the firmware SHA-256 and the shape of the base gamma table. If a check fails, the command stops.
 
 The fit follows `cube_fit.py`, `joint_fit.py`, and `lab_fit.py` of gr3-film-mods (MIT):

@@ -1,38 +1,114 @@
 {
   "schema": "grkit-effect-sources-v1",
-  "repository": "https://github.com/idontknownihil/gr3-film-mods",
-  "revision": "04d5d5dd6e85d80089c6200bd0f0de5fff2d658f",
-  "original_project": "https://github.com/andreavolpato/spektrafilm",
-  "original_author": "Andrea Volpato",
-  "original_version": "0.3.4",
-  "fit_author": "idontknownihil",
-  "license_notice": "SPEKTRAFILM_LICENSE.txt",
+  "generators": {
+    "spektrafilm": {
+      "repository": "https://github.com/andreavolpato/spektrafilm",
+      "revision": "3bb2c2d2801ff68b92019cf1dbcbb133d60832bc",
+      "version": "0.3.4",
+      "author": "Andrea Volpato",
+      "license": "CC-BY-SA-4.0",
+      "license_notice": "SPEKTRAFILM_LICENSE.txt",
+      "script": "bake_spektrafilm.py"
+    },
+    "spectral_film_lut": {
+      "repository": "https://github.com/JanLohse/spectral_film_lut",
+      "revision": "bcbcfc6861f49cc706dc5d00ea048e4853060aab",
+      "version": "0.18.13",
+      "author": "Jan Lohse",
+      "license": "MIT",
+      "license_notice": "SPECTRAL_FILM_LUT_LICENSE.txt",
+      "script": "bake_spectral_film_lut.py"
+    }
+  },
   "upstream_changes": "CHANGELOG.txt",
   "files": {
-    "ektar_b2n3.json": {
-      "sha256": "17035697f8ec07da97c3361f423cbcea01549b5b943dd35c656002c1ba723326",
-      "upstream_path": "work/films_v3/fits/ektar_b2n3.json",
-      "license": "CC-BY-SA-4.0"
-    },
-    "pro400h_own_b4n3.json": {
-      "sha256": "1d7cfd40133d801b79169f58d8e05b2720c323af177c8361ce056777b5574229",
-      "upstream_path": "work/films_v4/fits/pro400h_own_b4n3.json",
-      "license": "CC-BY-SA-4.0"
-    },
-    "vision3250d_2383_b4n3.json": {
-      "sha256": "5b81f1ef8ecf5185c7f405745172880e6a894c2aba56e599de20304b751432ad",
-      "upstream_path": "work/films_v10/fits/vision3250d_2383_b4n3.json",
-      "license": "CC-BY-SA-4.0"
-    },
     "SPEKTRAFILM_LICENSE.txt": {
       "sha256": "76d629501783ae52e8d63aee1e054c1e1a9713b9fe7d36fb306e25b1d14b24e9",
-      "upstream_path": "LICENSES/SPEKTRAFILM_LICENSE.txt",
-      "license": "upstream-notice"
+      "license": "upstream-notice",
+      "upstream": "https://github.com/andreavolpato/spektrafilm/blob/3bb2c2d2801ff68b92019cf1dbcbb133d60832bc/SPEKTRAFILM_LICENSE.txt"
+    },
+    "SPECTRAL_FILM_LUT_LICENSE.txt": {
+      "sha256": "3cdc90b3e7727be6e5930102fadeaf35cf3d3bd7c492b90d6d16fb9ad8c3a1bd",
+      "license": "upstream-notice",
+      "upstream": "https://github.com/JanLohse/spectral_film_lut/blob/bcbcfc6861f49cc706dc5d00ea048e4853060aab/LICENSE"
     },
     "CHANGELOG.txt": {
-      "sha256": "18580c1b5038110e3f03142b92a6754f316433ae58ad65db9e64dc3a7ff7f742",
-      "upstream_path": "LICENSES/CHANGELOG.txt",
-      "license": "upstream-notice"
+      "sha256": "637a0606c1f00c873c5a6902f1ef0193407e789431908a3eb1f17b750d25ccfe",
+      "license": "upstream-changes"
+    },
+    "bake_spektrafilm.py": {
+      "sha256": "e71599a181f485a5279cd0d8b6620b3bb51201c68b6aa60abe54ef25e855e714",
+      "license": "project"
+    },
+    "bake_spectral_film_lut.py": {
+      "sha256": "5b4139e84593bb43d0173278a289ab4e8377c972b5c3f7a93582b84ebf4c875d",
+      "license": "project"
+    }
+  },
+  "luts": {
+    "aerocolor-iv-v1.cube": {
+      "generator": "spectral_film_lut",
+      "sha256": "7079fd3703de7046543b5fb75d74f241092b2d5596cbb74e70e84cc56d442978"
+    },
+    "ektar-100-edge-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "88413f2d769d5f2f06cc209b76f63a9ac0fb267d4dbf6f4d8d850a9fcd310f52"
+    },
+    "exr-200t-2383-v1.cube": {
+      "generator": "spectral_film_lut",
+      "sha256": "0b05b9f4032d2f0d41d47aa4a8731b6e8cd7b22fcbefa7d5349f69ce77687a89"
+    },
+    "fp-100c-v1.cube": {
+      "generator": "spectral_film_lut",
+      "sha256": "39e37d9d30783d84c43291ba33c31afbeaf88a7f0601b2d2d8618dc40e155901"
+    },
+    "gold-200-premier-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "d75eb39993bd120b9e587c014135e02608fcb908dc29bcb62dbcfec716d7c004"
+    },
+    "kodachrome-64-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "8e16cab3018eee39cd66cded8df0fef7aeff6f4aff92379d490527e299e8bae2"
+    },
+    "portra-160-ultra-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "547855f64778a303a6b30d0ec750c01c1360a7b8722f851c7489c2d39d1f2521"
+    },
+    "portra-400-endura-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "e2d43bebfdcc0744e54d95f88bdf32a4a0505b358db04353af72d2ef1c605682"
+    },
+    "portra-800-push2-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "b00d80ceb876c28912d619f2a6f6ad9dc1cf7d58cb0e729738039793174ba800"
+    },
+    "pro-400h-crystal-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "66361c619cbc20d8ff1622359947a72e229d3a2ef029b57f54084d9c691bf729"
+    },
+    "red-filter-mono-v1.cube": {
+      "generator": "spectral_film_lut",
+      "sha256": "fb92f310bd4695e53f4c615bf37da594b6f47fdea54db7bee638b945981733af"
+    },
+    "trix-400-mono-v1.cube": {
+      "generator": "spectral_film_lut",
+      "sha256": "b618b9c36de455fa86c31018bde5763e2f17726db5bcf9140a2c6bb410d56910"
+    },
+    "velvia-100-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "49c8b99b4edfc901ea3ec3a364d939947da492c934bb96067c6484d1f5154b52"
+    },
+    "vision3-250d-2383-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "6deeaf3c1f84f4ccb0e3005dc722e127a507534b08b82ea3cf5d55945eaf3684"
+    },
+    "vision3-500t-2393-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "cea22beac0935008169bf716d8aa84fe1d331ca8d2a69493499d3d61bae52290"
+    },
+    "xtra-400-crystal-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "9305c01ab20062fa09572fb6d29ea0769183ff1c2184654578afb8943b5eafae"
     }
   }
 }

@@ -7,7 +7,7 @@ import { SAMPLES, type Sample } from '../preview/samples';
 import { EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
 
-const DEFAULT_PREVIEW = 'ektar-100-endura-v3';
+const DEFAULT_PREVIEW = 'portra-400-endura-v1';
 
 interface Props {
   strings: Strings;

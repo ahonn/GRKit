@@ -29,9 +29,17 @@ fn source() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../effects")
 }
 
+/// The number of effect definitions in `effects/`.
+fn source_count() -> usize {
+    fs::read_dir(source())
+        .unwrap()
+        .filter(|entry| entry.as_ref().unwrap().path().join("effect.json").is_file())
+        .count()
+}
+
 fn write_definition(root: &Path, id: &str) {
     let mut definition: Value =
-        serde_json::from_slice(&fs::read(source().join("mono-orange-v1/effect.json")).unwrap())
+        serde_json::from_slice(&fs::read(source().join("red-filter-mono-v1/effect.json")).unwrap())
             .unwrap();
     definition["effect_id"] = json!(id);
     let directory = root.join(id);
@@ -98,8 +106,8 @@ fn exports_effects_without_overwriting() {
         text(&output),
     ];
     let result = success(&args);
-    assert_eq!(result["effects"], 5);
-    assert_eq!(fs::read_dir(&output).unwrap().count(), 5);
+    assert_eq!(result["effects"], source_count());
+    assert_eq!(fs::read_dir(&output).unwrap().count(), source_count());
     assert!(!run(&args).status.success());
 }
 
@@ -206,10 +214,10 @@ fn compiled_directory_extras_and_changed_runtime_bytes_are_rejected() {
 fn symlink_definitions_and_compiled_effects_are_rejected() {
     use std::os::unix::fs::symlink;
     let tmp = tempfile::tempdir().unwrap();
-    let input = tmp.path().join("input/mono-orange-v1");
+    let input = tmp.path().join("input/red-filter-mono-v1");
     fs::create_dir_all(&input).unwrap();
     symlink(
-        source().join("mono-orange-v1/effect.json"),
+        source().join("red-filter-mono-v1/effect.json"),
         input.join("effect.json"),
     )
     .unwrap();
@@ -256,8 +264,9 @@ fn package_roundtrip_and_output_ownership() {
         text(&zip),
     ];
     let packaged = success(&args);
-    assert_eq!(packaged["entries"], 14);
-    assert_eq!(success(&["verify", text(&zip)])["effects"], 5);
+    // Nine runtime and document entries, then one per effect.
+    assert_eq!(packaged["entries"], 9 + source_count());
+    assert_eq!(success(&["verify", text(&zip)])["effects"], source_count());
     let before = fs::read(&zip).unwrap();
     assert!(!run(&args).status.success());
     assert_eq!(fs::read(&zip).unwrap(), before);
@@ -607,7 +616,7 @@ fn effect_publish_writes_the_site_catalog() {
     ];
     let result = success(&args);
     assert_eq!(result["target"], "gr3-2.10");
-    assert_eq!(result["effects"], 5);
+    assert_eq!(result["effects"], source_count());
     let catalog = effects::parse_json(&fs::read(out.join("catalog.json")).unwrap()).unwrap();
     let compiled = tmp.path().join("compiled");
     compile(&source(), &compiled);

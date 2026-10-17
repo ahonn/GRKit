@@ -1,12 +1,26 @@
 Changes to third-party LUTs (as asked by SPEKTRAFILM_LICENSE.txt)
 
-No LUT, profile or rendered LUT output is included in this repository. The fit data listed in README.md (License)
-encodes each LUT's look as GR III camera parameters: a 3x3 look matrix, three 256-entry tone curves and a 3x3
-post-curve matrix, fitted by cube_fit.py / joint_fit.py / lab_fit.py to the LUT's output on synthetic colour samples.
-Some fits also include an exposure offset applied before the LUT ("ev" or a ":<ev>" suffix in "spec").
+No LUT, profile, or rendered LUT output is included in this repository. Each effect encodes the
+look of one LUT as GR III effect parameters: a 3 x 3 look matrix, three 256-entry tone curves, and
+an optional 3 x 3 post-curve matrix. `grkit effects import` fits them to the LUT output on a gray
+ramp, the ColorChecker 24 from -2 to +2 EV, and 6000 seeded random colors. The fit quantizes each
+matrix to signed Q13 with rows that sum to 8192.
 
-spektrafilm LUTs (Andrea Volpato, https://github.com/andreavolpato/spektrafilm, spektrafilm v0.3.4, CC BY-SA 4.0):
-built with spektrafilm-lut (input V-Log/V-Gamut, output sRGB, 33^3) and fitted as above. Modified by idontknownihil.
+spektrafilm LUTs (Andrea Volpato, https://github.com/andreavolpato/spektrafilm, spektrafilm 0.3.4,
+git 3bb2c2d2801ff68b92019cf1dbcbb133d60832bc, CC BY-SA 4.0):
+- Built with spektrafilm-lut: input Panasonic V-Log / V-Gamut, output sRGB, 33^3, default settings.
+- Slide films (Kodachrome 64, Velvia 100) are scanned directly (`io.scan_film`) instead of
+  printed, because the LUT builder always prints and the print stocks are negative-working.
+- The "# Created:" header line is removed before the fit.
+- Fitted as above by GRKit contributors.
 
-FujifilmCameraProfiles "classic neg_sRGB.cube" (abpy, https://github.com/abpy/FujifilmCameraProfiles,
-CC BY-NC-SA 4.0): input exposure -0.88 EV, fitted as above. Modified by idontknownihil.
+Spectral Film LUT tables (Jan Lohse, https://github.com/JanLohse/spectral_film_lut, 0.18.13,
+git bcbcfc6861f49cc706dc5d00ea048e4853060aab, MIT):
+- Built with the library defaults: input Panasonic V-Log / V-Gamut, output sRGB, 33^3.
+- The red filter effect multiplies the Tri-X 400 sensitivity by the Kodak Wratten 25
+  transmission from the library's own data.
+- Fitted as above by GRKit contributors. The two monochrome fits have identical matrix rows and
+  curves; GRKit marks them as monochrome.
+
+bake_spektrafilm.py and bake_spectral_film_lut.py reproduce the LUTs. manifest.json records the
+SHA-256 of each LUT that an effect was fitted from.

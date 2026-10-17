@@ -7,7 +7,7 @@ import { RichText } from './components/RichText';
 import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language } from './i18n';
 import { buildPackage, save } from './package';
 
-const DEFAULT_SELECTION = ['ektar-100-endura-v3', 'pro-400h-crystal-v4'];
+const DEFAULT_SELECTION = ['portra-400-endura-v1', 'vision3-250d-2383-v1'];
 const REPOSITORY = 'https://github.com/ahonn/GRKit';
 
 const MODULES = [

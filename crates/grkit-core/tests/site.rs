@@ -58,11 +58,11 @@ fn standard_preview_returns_each_input() {
 #[test]
 fn effect_previews_follow_the_effect() {
     let base = synthetic_base();
-    let mono = site::preview_lut(&base, &decoded(&definition("mono-orange-v1"))).unwrap();
+    let mono = site::preview_lut(&base, &decoded(&definition("red-filter-mono-v1"))).unwrap();
     assert!(mono
         .chunks_exact(3)
         .all(|rgb| rgb[0] == rgb[1] && rgb[1] == rgb[2]));
-    let ektar = site::preview_lut(&base, &decoded(&definition("ektar-100-endura-v3"))).unwrap();
+    let ektar = site::preview_lut(&base, &decoded(&definition("ektar-100-edge-v1"))).unwrap();
     let gray = |table: &[u8], i| entry(table, i, i, i);
     // Brighter input stays brighter, and the film look differs from Standard.
     for i in 1..site::LUT_SIZE {
@@ -76,7 +76,7 @@ fn effect_previews_follow_the_effect() {
 
 #[test]
 fn published_effects_match_their_definitions() {
-    let ids = ["ektar-100-endura-v3", "mono-orange-v1"];
+    let ids = ["ektar-100-edge-v1", "red-filter-mono-v1"];
     let definitions: Vec<Value> = ids.iter().map(|id| definition(id)).collect();
     let files = site::publish_effects(&definitions, &synthetic_base()).unwrap();
     let catalog = effects::parse_json(&files["catalog.json"]).unwrap();

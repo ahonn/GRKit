@@ -381,7 +381,7 @@ fn import_writes_a_compilable_definition() {
     assert_eq!(attribution["fit"]["csp_max"], result.csp_max);
     assert!(definition.get("glow").is_none());
 
-    request.label = "AB";
+    request.label = "ab";
     let failure = format!(
         "{:#}",
         fit::import(text.as_bytes(), &synthetic_base(), &request).unwrap_err()

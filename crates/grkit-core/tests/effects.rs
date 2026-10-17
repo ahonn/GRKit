@@ -75,38 +75,45 @@ fn host_artwork_matches_golden_pixels_and_preserves_binary_transparency() {
 
 #[test]
 fn user_definition_preserves_edited_name_and_creative_curve() {
-    let mut definition = read_json(root().join("ektar-100-endura-v3/effect.json"));
-    definition["name"] = json!("My Ektar");
+    let mut definition = read_json(root().join("portra-400-endura-v1/effect.json"));
+    definition["name"] = json!("My Portrait");
     definition["curves"][0][100] = json!(0);
     let (compiled, _) =
         effects::decode(&effects::compile_definition(&definition).unwrap()).unwrap();
-    assert_eq!(compiled["name"], "My Ektar");
+    assert_eq!(compiled["name"], "My Portrait");
     assert_eq!(compiled["curves"], definition["curves"]);
     assert_eq!(compiled["matrix"], definition["matrix"]);
     assert_eq!(compiled["effect_id"], definition["effect_id"]);
 }
 
 #[test]
-fn real_fit_imports_reproduce_editable_definitions() {
+fn cube_fits_record_their_pinned_luts() {
+    let manifest = read_json(root().join("sources/manifest.json"));
+    let luts = manifest["luts"].as_object().unwrap();
+    let mut used = Vec::new();
     for entry in fs::read_dir(root()).unwrap() {
         let path = entry.unwrap().path().join("effect.json");
         if !path.is_file() {
             continue;
         }
         let definition = read_json(path);
-        if definition["attribution"]["origin"] != "derived-fit" {
+        let attribution = &definition["attribution"];
+        if attribution["origin"] != "cube-fit" {
             continue;
         }
-        let fit = read_json(
-            root()
-                .join("sources")
-                .join(definition["attribution"]["source"].as_str().unwrap()),
-        );
+        let source = attribution["source"].as_str().unwrap();
         assert_eq!(
-            effects::import_fit(&fit).unwrap(),
-            json!({"matrix": definition["matrix"], "curves": definition["curves"]})
+            source,
+            format!("{}.cube", definition["effect_id"].as_str().unwrap())
         );
+        let lut = &luts[source];
+        assert_eq!(lut["sha256"], attribution["source_sha256"], "{source}");
+        let generator = &manifest["generators"][lut["generator"].as_str().unwrap()];
+        assert_eq!(generator["license"], attribution["license"], "{source}");
+        used.push(source.to_owned());
     }
+    used.sort();
+    assert_eq!(used, luts.keys().cloned().collect::<Vec<_>>());
 }
 
 #[test]
@@ -247,27 +254,14 @@ fn knots_validate_and_round_ties_even() {
 }
 
 #[test]
-fn fit_quantization_rounds_ties_even_and_rejects_extra_stages() {
-    let mut fit = read_json(root().join("sources/ektar_b2n3.json"));
-    fit["matrix"][0] = json!([1, -1.5 / 8192.0, 0.5 / 8192.0]);
-    let converted = effects::import_fit(&fit).unwrap();
-    assert_eq!(
-        &converted["matrix"].as_array().unwrap()[..3],
-        &[json!(8194), json!(-2), json!(0)]
-    );
-    fit["post_matrix"] = json!([]);
-    assert!(effects::import_fit(&fit).is_err());
-}
-
-#[test]
 fn compiler_rejects_ambiguous_definitions_and_invalid_artwork() {
-    let mut definition = read_json(root().join("mono-orange-v1/effect.json"));
+    let mut definition = read_json(root().join("red-filter-mono-v1/effect.json"));
     definition["curves"] = json!([]);
     definition["curve_knots"] = json!(vec![[[0, 0], [255, 16320]]; 3]);
     assert!(effects::compile_definition(&definition).is_err());
     for (label, shape) in [
         ("", "film"),
-        ("X", "film"),
+        ("x", "film"),
         ("XXXXX", "plain"),
         ("MO", "other"),
         ("é", "film"),
