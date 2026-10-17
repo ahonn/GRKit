@@ -475,3 +475,14 @@ fn runtime_builds_must_match_their_manifest_exactly() {
         "{unknown}"
     );
 }
+
+#[test]
+fn the_loader_waits_before_its_first_request() {
+    let loader = String::from_utf8(runtime::loader()).unwrap();
+    let first_request = loader.find("sendln").unwrap();
+    let wait = loader
+        .find(&format!("mpause {}", runtime::FIRST_REQUEST_DELAY_MS))
+        .unwrap();
+    assert!(wait < first_request);
+    const { assert!(runtime::FIRST_REQUEST_DELAY_MS >= 3000) };
+}

@@ -20,6 +20,11 @@ Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C
 ## Loading
 
 The loader script starts at power-on and polls. `lcmd` requests return NG until Linux mounts the card, so the loader repeats SCAN until the allocation plan appears.
+
+The loader waits 3 s before its first `lcmd`. The first request creates the firmware's host-interface command factory.
+In some starts, that creation took a data abort in the Script task during the first second.
+Linux mounts the card about 5 s after power-on, so the wait does not delay the installation.
+
 SCAN selects the effect catalog and writes the plan. The startup script allocates the arrays and stays resident, so they remain allocated.
 
 INSTALL checks the allocations, prepares records and icons, then publishes code before entry hooks.

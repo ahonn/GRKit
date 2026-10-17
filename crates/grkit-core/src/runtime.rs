@@ -39,6 +39,8 @@ pub const RECORD_CODE: usize = 0x6f8;
 /// camera's own file system, never from Linux while the camera may write photos.
 pub const STATE_FILE: &str = "STATE.TXT";
 pub const LINUX_DIRECTORY: &str = "/media/storage1/SCRIPT/PLUGINS";
+/// The wait of the loader before its first `lcmd` request. See `loader`.
+pub const FIRST_REQUEST_DELAY_MS: u32 = 3000;
 
 pub fn layout(count: usize) -> Result<Value> {
     ensure!(count <= MAX_COUNT, "Expected 0..{MAX_COUNT} effects");
@@ -65,10 +67,18 @@ pub fn activation_files() -> Files {
 /// `lcmd` requests are synchronous: each returns after the Linux command ends,
 /// or with NG when Linux is not ready. The loader checks the result file after
 /// each request and repeats it after a short pause.
+///
+/// The first `lcmd` creates the firmware's host-interface command factory. During
+/// the first second after power-on, that creation took a data abort in the Script
+/// task in some starts, so the loader waits before its first request. Linux mounts
+/// the card about 5 s after power-on, so the wait does not delay the installation.
 pub fn loader() -> Vec<u8> {
     let path = |name: &str| format!("C:\\SCRIPT\\PLUGINS\\{name}");
     let (plan, done, failed) = (path("MODULE.BIN"), path("INSTALL.OK"), path("INSTALL.ERR"));
-    let mut lines: Vec<String> = vec!["sendln 'lcmd_resp on'".into()];
+    let mut lines: Vec<String> = vec![
+        format!("mpause {FIRST_REQUEST_DELAY_MS}"),
+        "sendln 'lcmd_resp on'".into(),
+    ];
     for name in [
         "MODULE.BIN",
         "MODULE.TMP",
