@@ -73,6 +73,10 @@ pub fn validate_plan(plan: &PatchPlan) -> Result<()> {
 pub const RUNTIME_SOURCES: &[(&str, &[u8])] = &[
     ("abi.h", include_bytes!("../../../runtime/abi.h")),
     ("catalog.h", include_bytes!("../../../runtime/catalog.h")),
+    (
+        "visibility.h",
+        include_bytes!("../../../runtime/visibility.h"),
+    ),
     ("grf.c", include_bytes!("../../../runtime/grf.c")),
     ("grf.h", include_bytes!("../../../runtime/grf.h")),
     (

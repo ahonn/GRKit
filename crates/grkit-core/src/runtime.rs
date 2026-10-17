@@ -30,6 +30,8 @@ pub const HOST_COUNT: usize = 0;
 pub const HOST_RECORDS: usize = 4;
 pub const HOST_ACTIVE: usize = 8;
 pub const HOST_STAMP: usize = 52;
+/// Modules that `MODULES.TXT` hides: bit n is module n of `runtime/modules.h`.
+pub const HOST_HIDDEN: usize = 56;
 pub const HOST_GUIDE: usize = 204;
 pub const HOST_FRAME_RATIO: usize = 208;
 pub const RECORD_CODE: usize = 0x6f8;
@@ -207,6 +209,19 @@ pub fn loader() -> Vec<u8> {
         "guide = upper - rest * 8".into(),
         "if guide > 4 goto restore_end".into(),
         "if rest > 4 goto restore_end".into(),
+        // A hidden module has no menu to turn it off, so it restores Off. The
+        // script has no bit operators. Bit 0 is Image Control, which is never hidden.
+        format!("hidden = {} / 2", word(HOST_HIDDEN)),
+    ]);
+    for value in ["ratio", "guide", "rest"] {
+        lines.extend([
+            "higher = hidden / 2".into(),
+            "hiddenbit = hidden - higher * 2".into(),
+            format!("if hiddenbit = 1 {value} = 0"),
+            "hidden = higher".into(),
+        ]);
+    }
+    lines.extend([
         format!("{} = ratio", word(HOST_FRAME_RATIO)),
         format!("{} = guide", word(HOST_GUIDE)),
         format!("{} = rest", word(HOST_STAMP)),

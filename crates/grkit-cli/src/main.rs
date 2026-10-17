@@ -4,7 +4,7 @@ mod storage;
 
 use anyhow::{ensure, Context, Result};
 use clap::{Parser, Subcommand};
-use grkit_core::{effects, fit, packaging, site, Files};
+use grkit_core::{effects, fit, modules::Hidden, packaging, site, Files};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -49,8 +49,12 @@ enum Command {
     Package {
         #[arg(long)]
         build: PathBuf,
+        /// Compiled effects. Without effects, the camera menu hides Image Control.
         #[arg(long)]
-        effects: PathBuf,
+        effects: Option<PathBuf>,
+        /// Modules that the camera menu hides: framing, guides, date-stamp.
+        #[arg(long, value_delimiter = ',')]
+        hide: Vec<String>,
         #[arg(long)]
         out: PathBuf,
     },
@@ -202,22 +206,28 @@ fn run(command: Command) -> Result<Value> {
         Command::Package {
             build,
             effects,
+            hide,
             out,
         } => {
             let (runtime, manifest) = storage::load_build(&build)?;
-            let effects = storage::read_effects(&effects)?;
-            let bytes = packaging::assemble(&runtime, &manifest, &effects)?;
+            let effects = match effects {
+                Some(directory) => storage::read_effects(&directory)?,
+                None => Files::new(),
+            };
+            let hidden = Hidden::from_names(hide.iter().map(String::as_str))?;
+            let bytes = packaging::assemble(&runtime, &manifest, &effects, hidden)?;
             let verified = packaging::verify_package(&bytes)?;
             storage::write_new(&out, &bytes)?;
             Ok(json!({"path": out, "sha256": packaging::sha256(&bytes),
-                "entries": verified["entries"]}))
+                "entries": verified["entries"], "hidden_modules": verified["hidden_modules"]}))
         }
         Command::Verify { archive } => {
             // Include room for ZIP metadata while bounding the archive read itself.
             let bytes = storage::read_bounded(&archive, 64 * 1024 * 1024)?;
             let verified = packaging::verify_package(&bytes)?;
             Ok(json!({"valid": true, "target": verified["target"],
-                "effects": verified["effect_ids"].as_array().map_or(0, Vec::len)}))
+                "effects": verified["effect_ids"].as_array().map_or(0, Vec::len),
+                "hidden_modules": verified["hidden_modules"]}))
         }
         Command::Site { build, out } => {
             let (target, files) = storage::export_runtime(&build, &out)?;

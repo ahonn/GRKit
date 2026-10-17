@@ -5,17 +5,11 @@ import { EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
 import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language } from './i18n';
+import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 import { buildPackage, save } from './package';
 
 const DEFAULT_SELECTION = ['portra-400-endura-v1', 'vision3-250d-2383-v1'];
 const REPOSITORY = 'https://github.com/ahonn/GRKit';
-
-const MODULES = [
-  ['Image Control', 'imageControl'],
-  ['Framing', 'framing'],
-  ['Guides', 'guides'],
-  ['Date Stamp', 'dateStamp'],
-] as const;
 
 type Build = { state: 'idle' } | { state: 'building' } | { state: 'ready' } | { state: 'failed' };
 
@@ -23,6 +17,7 @@ export function App() {
   const [language, setLanguage] = useState<Language>(initialLanguage);
   const [cameraId, setCameraId] = useState(CAMERAS[0]!.id);
   const [selection, setSelection] = useState<ReadonlySet<string>>(() => new Set(DEFAULT_SELECTION));
+  const [enabled, setEnabled] = useState<ReadonlySet<ModuleKey>>(ALL_MODULES);
   const [build, setBuild] = useState<Build>({ state: 'idle' });
   // A newer build or a changed selection makes the result of an older build stale.
   const buildRun = useRef(0);
@@ -30,6 +25,8 @@ export function App() {
   const t = STRINGS[language];
   const camera = CAMERAS.find((item) => item.id === cameraId) ?? CAMERAS[0]!;
   const support = camera.support;
+  const plan = planModules(enabled, selection.size);
+  const effectCount = plan.includeEffects ? selection.size : 0;
 
   function chooseLanguage(next: Language) {
     applyLanguage(next);
@@ -51,8 +48,17 @@ export function App() {
     resetBuild();
   }
 
+  function toggleModule(key: ModuleKey) {
+    const next = new Set(enabled);
+    if (!next.delete(key)) {
+      next.add(key);
+    }
+    setEnabled(next);
+    resetBuild();
+  }
+
   async function download() {
-    if (!support) {
+    if (!support || plan.visible.length === 0) {
       return;
     }
     buildRun.current += 1;
@@ -60,8 +66,10 @@ export function App() {
     setBuild({ state: 'building' });
     try {
       const catalog = await loadCatalog(support.target);
-      const effects = catalog.effects.filter((effect) => selection.has(effect.id));
-      const blob = await buildPackage(support.target, effects);
+      const effects = plan.includeEffects
+        ? catalog.effects.filter((effect) => selection.has(effect.id))
+        : [];
+      const blob = await buildPackage(support.target, effects, plan.hidden);
       if (run === buildRun.current) {
         save(blob, 'GRKit.zip');
         setBuild({ state: 'ready' });
@@ -129,30 +137,49 @@ export function App() {
           </div>
         </section>
 
-        <section className="section" aria-labelledby="effects-label">
-          <h2 id="effects-label">{t.effects}</h2>
-          <ErrorBoundary fallback={<p className="status error section-body">{t.loadError}</p>}>
-            <Suspense fallback={<p className="status section-body">{t.loading}</p>}>
-              <EffectsSection
-                strings={t}
-                language={language}
-                selection={selection}
-                onSelectionChange={changeSelection}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        </section>
-
         <section className="section" aria-labelledby="modules-label">
           <h2 id="modules-label">{t.modules}</h2>
-          <dl className="modules">
-            {MODULES.map(([name, key]) => (
-              <div key={key}>
-                <dt>{name}</dt>
-                <dd>{t.modulesText[key]}</dd>
-              </div>
-            ))}
-          </dl>
+          <div className="section-body">
+            <p className="note">{t.modulesNote}</p>
+            <div role="group" aria-labelledby="modules-label" className="modules">
+              {MODULES.map((module) => (
+                <label key={module.key} className="module">
+                  <input
+                    type="checkbox"
+                    checked={enabled.has(module.key)}
+                    onChange={() => toggleModule(module.key)}
+                  />
+                  <span className="module-text">
+                    <span className="module-name">{module.name}</span>
+                    <span className="module-description">{t.modulesText[module.key]}</span>
+                    {module.key === 'imageControl' &&
+                      enabled.has('imageControl') &&
+                      selection.size === 0 && (
+                        <span className="module-warning">{t.imageControlEmpty}</span>
+                      )}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section" aria-labelledby="effects-label">
+          <h2 id="effects-label">{t.effects}</h2>
+          {plan.includeEffects ? (
+            <ErrorBoundary fallback={<p className="status error section-body">{t.loadError}</p>}>
+              <Suspense fallback={<p className="status section-body">{t.loading}</p>}>
+                <EffectsSection
+                  strings={t}
+                  language={language}
+                  selection={selection}
+                  onSelectionChange={changeSelection}
+                />
+              </Suspense>
+            </ErrorBoundary>
+          ) : (
+            <p className="status section-body">{t.effectsOff}</p>
+          )}
         </section>
 
         <section className="section" aria-labelledby="package-label">
@@ -164,20 +191,29 @@ export function App() {
               <dt>{t.firmware}</dt>
               <dd>{support?.firmware ?? '—'}</dd>
               <dt>{t.effectCount}</dt>
-              <dd>{selection.size}</dd>
+              <dd>{effectCount}</dd>
+              <dt>{t.modules}</dt>
+              <dd>
+                {plan.visible.length > 0
+                  ? MODULES.filter((module) => plan.visible.includes(module.key))
+                      .map((module) => module.name)
+                      .join(', ')
+                  : '—'}
+              </dd>
               <dd className="package-note">{t.firmwareNote}</dd>
             </dl>
             <div className="package-action">
               <button
                 type="button"
                 className="download"
-                disabled={!support || build.state === 'building'}
+                disabled={!support || plan.visible.length === 0 || build.state === 'building'}
                 aria-busy={build.state === 'building'}
                 onClick={download}
               >
                 {t.download}
               </button>
               <div aria-live="polite">
+                {plan.visible.length === 0 && <p className="status error">{t.noModules}</p>}
                 {build.state === 'building' && <p className="status">{t.building}</p>}
                 {build.state === 'ready' && <p className="status">{t.ready}</p>}
                 {build.state === 'failed' && (

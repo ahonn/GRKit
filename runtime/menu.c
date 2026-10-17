@@ -177,8 +177,8 @@ A32_ENTRY void menu_refresh(u32 controller) {
     if(h[GRKIT_HOST_RETURN/4]==2 && BYTE(controller,0x270)!=1) {
         h[GRKIT_HOST_RETURN/4]=0;
         enter(controller,3);
-        /* Root row 0 opens Image Control at the committed row. */
-        menu_confirm(h);
+        /* Fn starts only from Image Control, so it is visible. */
+        menu_open(h,0);
         render(controller);
         return;
     }
@@ -220,7 +220,7 @@ static void render(u32 controller) {
         u32 row=CALL2(0x53394758)(view,i);
         u32 index=start+i;
         /* Private icon IDs are resolved by the host's guarded icon adapter. */
-        u32 icon=h[9]==MENU_ROOT ? modules[index].icon(h,index) : module->icon(h,index);
+        u32 icon=h[9]==MENU_ROOT ? modules[root_module(h,index)].icon(h,index) : module->icon(h,index);
         CALL2(0x533a1734)(row,icon);
         CALL2(0x533a19b4)(row,h[9]!=MENU_ROOT && module->checked(h,index));
     }
@@ -255,7 +255,7 @@ static void leave(u32 controller) {
 static void enter(u32 controller,u32 edge) {
     volatile u32 *h=menu_header();
     u32 view=WORD(controller,0x1f0);
-    h[8]=controller; h[9]=1; h[10]=0;
+    h[8]=controller; menu_start(h);
     h[11]=BYTE(controller,0x1f4); h[22]=edge;
     h[GRKIT_HOST_PREVIEW/4]=0;
     CALL3(0x533947f0)(view,(u32)(h+16),(u32)(h+17));
@@ -374,8 +374,9 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         return 0;
     }
     if(kind==0xce || kind==0xcf) {
-        if(h[9]>MENU_ROOT && kind==0xce) {
-            menu_back(h); render(controller); return 0;
+        /* A single module has no root level: left leaves, as from the root. */
+        if(h[9]>MENU_ROOT && kind==0xce && menu_back(h)) {
+            render(controller); return 0;
         }
         {
             u32 edge=h[22], advance=advance_from_private(kind,edge);

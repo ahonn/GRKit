@@ -66,6 +66,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage) -> Result<String> {
         ("LOCK_PATH", "INSTALL.LCK"),
         ("DONE_PATH", "INSTALL.OK"),
         ("FAILED_PATH", "INSTALL.ERR"),
+        ("MODULES_PATH", "MODULES.TXT"),
     ] {
         writeln!(
             result,

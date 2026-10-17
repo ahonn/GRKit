@@ -452,7 +452,7 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
     let header = loader::header(&plan, &synthetic_firmware())?;
     assert_eq!(
         sha256(header.as_bytes()),
-        "2e5b8be62cc52c0db4da7f40cd0740b23e8df153afa2429c44db914aa18cbf7a"
+        "5abb4ecaf7cc12f65817f5f7682b6a65051f3efcc464dd023c24f70dc8416ec5"
     );
     Ok(())
 }
@@ -511,7 +511,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
         ),
         (
             "SCRIPT/PLUGINS/PLUGINS.TTL",
-            "e9814bff481bfa844abf26be1d36072ef4603a8de12a9940fb0441d230f83d0b",
+            "2355d1fbb2bddd20e51e7ff27da33ba1c2602b2ba749e3bda3979e2ad47dc40b",
         ),
         (
             "SCRIPT/PLUGINS/INSTALL.BIN",

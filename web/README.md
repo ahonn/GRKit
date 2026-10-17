@@ -1,6 +1,6 @@
 # GRKit site
 
-The site lets a user select a camera and effects, preview the effects, and download `GRKit.zip`. The browser builds the package with `grkit-wasm`. No server code runs.
+The site lets a user select a camera, the modules, and the effects, preview the effects, and download `GRKit.zip`. The browser builds the package with `grkit-wasm`. No server code runs.
 
 The site serves these files:
 

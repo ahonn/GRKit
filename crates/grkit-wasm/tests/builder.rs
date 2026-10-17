@@ -61,6 +61,25 @@ fn a_package_without_effects_is_valid() {
 }
 
 #[test]
+fn hidden_modules_are_written_and_checked() {
+    let mut builder = builder_with_runtime(&runtime_files());
+    builder.hide_module("framing").unwrap();
+    assert!(error(builder.hide_module("framing")).contains("Module listed twice"));
+    assert!(error(builder.hide_module("image-control")).contains("Unknown module"));
+    builder.hide_module("guides").unwrap();
+    let package = builder.build().unwrap();
+    assert_eq!(
+        packaging::verify_package(&package).unwrap()["hidden_modules"],
+        json!(["framing", "guides"])
+    );
+    // Without effects, hiding every other module leaves no module to show.
+    builder.hide_module("date-stamp").unwrap();
+    assert!(error(builder.build()).contains("shows no module"));
+    builder.add_effect(&effect("test-a")).unwrap();
+    builder.build().unwrap();
+}
+
+#[test]
 fn missing_or_changed_runtime_files_are_rejected() {
     let files = runtime_files();
     let mut missing = Builder::new(&manifest(&files)).unwrap();

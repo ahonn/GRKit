@@ -180,38 +180,72 @@ static const Module modules[] = {
     {guide_title,guide_summary,guide_rows,guide_label,guide_icon,guide_checked,guide_apply,guide_style},
     {stamp_title,stamp_summary,stamp_rows,stamp_label,stamp_icon,stamp_checked,stamp_apply,stamp_style}
 };
+/* Visible modules as a bit mask in registry order. Image Control shows exactly
+   when effects are installed, and the others unless MODULES.TXT hides them.
+   With nothing visible, Image Control shows with Off only. */
+static u32 visible_modules(volatile u32 *h) {
+    u32 all=(1U<<ARRAY_COUNT(modules))-1;
+    u32 mask=~h[GRKIT_HOST_HIDDEN/4]&all&~1U;
+    if(h[GRKIT_HOST_COUNT/4]) mask|=1;
+    return mask ? mask : 1;
+}
+/* The module of a root row, or of the last row for a row past the end. */
+static u32 root_module(volatile u32 *h,u32 row) {
+    u32 mask=visible_modules(h), module=0, last=0;
+    for(;module<ARRAY_COUNT(modules);++module) {
+        if(!(mask>>module&1)) continue;
+        if(!row--) return module;
+        last=module;
+    }
+    return last;
+}
+static u32 root_row(volatile u32 *h,u32 module) {
+    u32 mask=visible_modules(h), row=0, i;
+    for(i=0;i<module && i<ARRAY_COUNT(modules);++i) row+=mask>>i&1;
+    return row;
+}
+static u32 root_count(volatile u32 *h) { return root_row(h,ARRAY_COUNT(modules)); }
+/* With one visible module, ADJ opens its page directly and has no root level. */
+static u32 single_module(volatile u32 *h) { return root_count(h)==1; }
 static const Module *current_module(volatile u32 *h) {
-    u32 index=h[9]==MENU_ROOT ? h[10] : h[GRKIT_HOST_MODULE/4];
-    return &modules[index<ARRAY_COUNT(modules) ? index : 0];
+    return &modules[h[9]==MENU_ROOT ? root_module(h,h[10]) : h[GRKIT_HOST_MODULE/4]];
 }
 static u32 count(volatile u32 *h) {
-    return h[9]==MENU_ROOT ? ARRAY_COUNT(modules) : current_module(h)->rows(h);
+    return h[9]==MENU_ROOT ? root_count(h) : current_module(h)->rows(h);
+}
+/* Each module opens at its committed row. Image Control previews from there. */
+static void menu_open(volatile u32 *h,u32 module) {
+    h[GRKIT_HOST_MODULE/4]=module;
+    h[9]=MENU_MODULE;
+    h[10]=modules[module].committed(h);
+}
+static void menu_start(volatile u32 *h) {
+    h[9]=MENU_ROOT;
+    h[10]=0;
+    h[GRKIT_HOST_MODULE/4]=0;
+    if(single_module(h)) menu_open(h,root_module(h,0));
 }
 static void menu_normalize(volatile u32 *h) {
-    if(h[9]<MENU_ROOT || h[9]>MENU_MODULE || h[GRKIT_HOST_MODULE/4]>=ARRAY_COUNT(modules)) {
-        h[9]=MENU_ROOT;
-        h[GRKIT_HOST_MODULE/4]=0;
-    }
+    u32 module=h[GRKIT_HOST_MODULE/4];
+    if(h[9]<MENU_ROOT || h[9]>MENU_MODULE || module>=ARRAY_COUNT(modules) ||
+       (h[9]==MENU_MODULE && !(visible_modules(h)>>module&1)) ||
+       (h[9]==MENU_ROOT && single_module(h)))
+        menu_start(h);
     if(h[10]>=count(h)) h[10]=0;
 }
 static void menu_confirm(volatile u32 *h) {
     menu_normalize(h);
-    if(h[9]==MENU_ROOT) {
-        u32 module=h[10];
-        h[GRKIT_HOST_MODULE/4]=module;
-        h[9]=MENU_MODULE;
-        /* Each module opens at its committed row. Image Control previews from there. */
-        h[10]=modules[module].committed(h);
-    } else current_module(h)->apply(h,h[10]);
+    if(h[9]==MENU_ROOT) menu_open(h,root_module(h,h[10]));
+    else current_module(h)->apply(h,h[10]);
 }
-/* Return false at the root so the caller can restore the stock ADJ page. */
+/* Return false at the top level so the caller can restore the stock ADJ page. */
 static u32 menu_back(volatile u32 *h) {
     /* Leaving a level without OK restores the committed effect in the live view. */
     h[GRKIT_HOST_PREVIEW/4]=0;
     menu_normalize(h);
-    if(h[9]==MENU_ROOT) return 0;
+    if(h[9]==MENU_ROOT || single_module(h)) return 0;
     h[9]=MENU_ROOT;
-    h[10]=h[GRKIT_HOST_MODULE/4];
+    h[10]=root_row(h,h[GRKIT_HOST_MODULE/4]);
     return 1;
 }
 #endif

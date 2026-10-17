@@ -379,5 +379,74 @@ int main(void)
     menu_confirm(test_header);
     image_preview(test_header);
     assert(test_header[GRKIT_HOST_PREVIEW / 4] == 0);
+
+    /* MODULES.TXT hides modules from the root. The others keep their order. */
+    test_header[GRKIT_HOST_PREVIEW / 4] = 0;
+    test_header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << GUIDES_MODULE;
+    menu_start(test_header);
+    assert(test_header[9] == MENU_ROOT && test_header[10] == 0 && count(test_header) == 3);
+    assert(current_module(test_header) == &modules[0]);
+    test_header[10] = 2;
+    assert(current_module(test_header) == &modules[STAMP_MODULE]);
+    assert(current_module(test_header)->summary(test_header) == stamp_summaries[0]);
+    menu_confirm(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    assert(menu_back(test_header));
+    assert(test_header[9] == MENU_ROOT && test_header[10] == 2);
+    test_header[10] = 1;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_MODULE / 4] == FRAMING_MODULE);
+    assert(menu_back(test_header) && test_header[10] == 1);
+    /* A hidden module page does not stay open. */
+    test_header[9] = MENU_MODULE;
+    test_header[GRKIT_HOST_MODULE / 4] = GUIDES_MODULE;
+    menu_normalize(test_header);
+    assert(test_header[9] == MENU_ROOT && test_header[10] == 0);
+    /* Bit 0 does not hide Image Control: its effects show it. */
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U | 1U << FRAMING_MODULE;
+    assert(visible_modules(test_header) == (1U | 1U << GUIDES_MODULE | 1U << STAMP_MODULE));
+    /* Without effects, Image Control is hidden. */
+    test_header[GRKIT_HOST_HIDDEN / 4] = 0;
+    test_header[GRKIT_HOST_COUNT / 4] = 0;
+    menu_start(test_header);
+    assert(test_header[9] == MENU_ROOT && count(test_header) == 3);
+    assert(current_module(test_header) == &modules[FRAMING_MODULE]);
+    test_header[10] = 2;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    assert(menu_back(test_header) && test_header[10] == 2);
+    /* One visible module opens at its committed row, and MENU leaves the private page. */
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE;
+    test_header[GRKIT_HOST_STAMP / 4] = 3;
+    menu_start(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    assert(test_header[10] == 3 && count(test_header) == 5);
+    assert(!menu_back(test_header));
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    /* That module has no root level. */
+    test_header[9] = MENU_ROOT;
+    menu_normalize(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    test_header[10] = 1;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_STAMP / 4] == 1 && test_header[9] == MENU_MODULE);
+    test_header[GRKIT_HOST_STAMP / 4] = 0;
+    /* With nothing visible, Image Control shows with Off only. */
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE | 1U << STAMP_MODULE;
+    menu_start(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == 0);
+    assert(count(test_header) == 1 && test_header[10] == 0);
+    /* Image Control alone opens at the committed effect, where Fn applies. */
+    test_header[GRKIT_HOST_COUNT / 4] = 5;
+    test_header[GRKIT_HOST_ACTIVE / 4] = 0x59005000 + 2 * GRKIT_RECORD_SIZE;
+    menu_start(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == 0);
+    assert(test_header[10] == 3 && parameters_row(test_header));
+    test_header[10] = 1;
+    image_preview(test_header);
+    assert(test_header[GRKIT_HOST_PREVIEW / 4] == 0x59005000);
+    assert(!menu_back(test_header));
+    assert(test_header[GRKIT_HOST_PREVIEW / 4] == 0);
     return 0;
 }

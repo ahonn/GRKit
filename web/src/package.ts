@@ -15,9 +15,14 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 
 /**
  * Builds GRKit.zip in the browser from the target's published runtime and the selected effects.
+ * `hidden` names the modules that the camera menu hides.
  * grkit-wasm checks each runtime file against `build.json` and each effect's format.
  */
-export async function buildPackage(target: string, effects: readonly Effect[]): Promise<Blob> {
+export async function buildPackage(
+  target: string,
+  effects: readonly Effect[],
+  hidden: readonly string[],
+): Promise<Blob> {
   const { default: init, Package } = await import('./wasm/grkit_wasm.js');
   await init();
   const runtime = `runtime/${target}/`;
@@ -38,6 +43,9 @@ export async function buildPackage(target: string, effects: readonly Effect[]): 
         throw new Error(`Effect checksum mismatch: ${effect.id}`);
       }
       builder.addEffect(blob);
+    }
+    for (const name of hidden) {
+      builder.hideModule(name);
     }
     const zip = builder.build();
     return new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' });

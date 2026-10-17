@@ -5,7 +5,7 @@
 //! `Builder` holds the logic so that native tests cover it. `Package` only adapts it for JS.
 
 use anyhow::{ensure, Context, Result};
-use grkit_core::{effects, packaging, runtime, Files};
+use grkit_core::{effects, modules::Hidden, packaging, runtime, Files};
 use wasm_bindgen::prelude::*;
 
 /// Collects one runtime build and a set of compiled effects, then assembles the package.
@@ -14,6 +14,7 @@ pub struct Builder {
     paths: Vec<String>,
     runtime: Files,
     effects: Files,
+    hidden: Vec<String>,
 }
 
 impl Builder {
@@ -36,6 +37,7 @@ impl Builder {
             paths,
             runtime: Files::new(),
             effects: Files::new(),
+            hidden: Vec::new(),
         })
     }
 
@@ -79,10 +81,21 @@ impl Builder {
         Ok(id)
     }
 
+    /// Hides one module from the camera menu: `framing`, `guides`, or `date-stamp`.
+    /// Image Control shows exactly when the package has effects.
+    pub fn hide_module(&mut self, name: &str) -> Result<()> {
+        let mut hidden = self.hidden.clone();
+        hidden.push(name.to_owned());
+        Hidden::from_names(hidden.iter().map(String::as_str))?;
+        self.hidden = hidden;
+        Ok(())
+    }
+
     /// Verifies the runtime against its manifest and returns the verified package ZIP.
     pub fn build(&self) -> Result<Vec<u8>> {
         let (runtime, manifest) = packaging::load_runtime(&self.manifest, &self.runtime)?;
-        packaging::assemble(&runtime, &manifest, &self.effects)
+        let hidden = Hidden::from_names(self.hidden.iter().map(String::as_str))?;
+        packaging::assemble(&runtime, &manifest, &self.effects, hidden)
     }
 }
 
@@ -116,6 +129,12 @@ impl Package {
     #[wasm_bindgen(js_name = addEffect)]
     pub fn add_effect(&mut self, blob: &[u8]) -> Result<String, JsError> {
         self.0.add_effect(blob).map_err(js_error)
+    }
+
+    /// Hides one module from the camera menu: `framing`, `guides`, or `date-stamp`.
+    #[wasm_bindgen(js_name = hideModule)]
+    pub fn hide_module(&mut self, name: &str) -> Result<(), JsError> {
+        self.0.hide_module(name).map_err(js_error)
     }
 
     /// Returns the verified package as ZIP bytes.

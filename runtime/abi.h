@@ -15,6 +15,10 @@
 #define GRKIT_HOST_GUIDE_PREVIEW 48
 /* Date stamp style: 0 Off, 1 'YY M D, 2 'YY M D H:MM, 3 M D 'YY, 4 D M 'YY. */
 #define GRKIT_HOST_STAMP 52
+/* Modules that MODULES.TXT hides from the menu: bit n is module n of
+   runtime/modules.h. Bit 0 stays clear, because Image Control shows exactly
+   when effects are installed. */
+#define GRKIT_HOST_HIDDEN 56
 /* Words 24..43 belong to the menu: two text descriptors (96..111) and a
    16-word event ring (112..175). */
 #define GRKIT_HOST_PLUGINS_ICON 176

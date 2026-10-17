@@ -1,6 +1,6 @@
 use std::io::{Cursor, Read, Write};
 
-use grkit_core::{effects, packaging::*, runtime, Files};
+use grkit_core::{effects, modules::Hidden, packaging::*, runtime, Files};
 use serde_json::{json, Value};
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
@@ -31,6 +31,7 @@ fn package() -> Vec<u8> {
         &runtime_fixture(),
         &build(),
         &Files::from([effect("test-effect")]),
+        Hidden::default(),
     )
     .unwrap()
 }
@@ -204,7 +205,13 @@ fn production_boundaries_are_enforced() {
     ] {
         let mut altered = build();
         altered[key] = json!(value);
-        assert!(assemble(&runtime_fixture(), &altered, &Files::new()).is_err());
+        assert!(assemble(
+            &runtime_fixture(),
+            &altered,
+            &Files::new(),
+            Hidden::default()
+        )
+        .is_err());
     }
     for suffix in [b"--select test-effect".as_slice(), b"changed"] {
         let mut altered = runtime_fixture();
@@ -221,7 +228,7 @@ fn target_capacity_and_empty_effect_selection_are_supported() {
     let mut effects: Files = (0..runtime::MAX_COUNT)
         .map(|i| effect(&format!("effect-{i}")))
         .collect();
-    let bytes = assemble(&runtime_fixture(), &build(), &effects).unwrap();
+    let bytes = assemble(&runtime_fixture(), &build(), &effects, Hidden::default()).unwrap();
     assert_eq!(
         verify_package(&bytes).unwrap()["effect_ids"]
             .as_array()
@@ -230,9 +237,77 @@ fn target_capacity_and_empty_effect_selection_are_supported() {
         runtime::MAX_COUNT
     );
     effects.extend([effect("effect-overflow")]);
-    assert!(assemble(&runtime_fixture(), &build(), &effects).is_err());
-    let bytes = assemble(&runtime_fixture(), &build(), &Files::new()).unwrap();
+    assert!(assemble(&runtime_fixture(), &build(), &effects, Hidden::default()).is_err());
+    let bytes = assemble(
+        &runtime_fixture(),
+        &build(),
+        &Files::new(),
+        Hidden::default(),
+    )
+    .unwrap();
     assert_eq!(verify_package(&bytes).unwrap()["effect_ids"], json!([]));
+}
+
+#[test]
+fn hidden_modules_are_packaged_and_verified() {
+    let effects = Files::from([effect("test-effect")]);
+    let hidden = Hidden::from_names(["date-stamp", "framing"]).unwrap();
+    let bytes = assemble(&runtime_fixture(), &build(), &effects, hidden).unwrap();
+    let files = unpack(&bytes);
+    assert_eq!(
+        files["SD_ROOT/SCRIPT/PLUGINS/MODULES.TXT"],
+        b"framing\ndate-stamp\n"
+    );
+    assert_eq!(
+        verify_package(&bytes).unwrap()["hidden_modules"],
+        json!(["framing", "date-stamp"])
+    );
+    // A package that hides nothing has no file and keeps its earlier bytes.
+    let plain = assemble(&runtime_fixture(), &build(), &effects, Hidden::default()).unwrap();
+    assert!(!unpack(&plain).contains_key("SD_ROOT/SCRIPT/PLUGINS/MODULES.TXT"));
+    assert_eq!(verify_package(&plain).unwrap()["hidden_modules"], json!([]));
+    assert_eq!(plain, package());
+}
+
+#[test]
+fn invalid_module_files_and_empty_menus_are_rejected() {
+    for text in [
+        b"image-control\n".as_slice(),
+        b"guides guides",
+        b"Framing",
+        b"framing,guides",
+        b"\xff",
+    ] {
+        let mut files = unpack(&package());
+        files.insert("SD_ROOT/SCRIPT/PLUGINS/MODULES.TXT".into(), text.to_vec());
+        assert!(
+            validate_contents(&with_sums(files)).is_err(),
+            "{}",
+            String::from_utf8_lossy(text)
+        );
+    }
+    let mut files = unpack(&package());
+    files.insert(
+        "SD_ROOT/SCRIPT/PLUGINS/MODULES.TXT".into(),
+        b" guides\r\n\tframing ".to_vec(),
+    );
+    assert_eq!(
+        validate_contents(&with_sums(files)).unwrap().1.names(),
+        ["framing", "guides"]
+    );
+    let all = Hidden::from_names(grkit_core::modules::NAMES).unwrap();
+    assert!(assemble(&runtime_fixture(), &build(), &Files::new(), all).is_err());
+    let bytes = assemble(
+        &runtime_fixture(),
+        &build(),
+        &Files::from([effect("test-effect")]),
+        all,
+    )
+    .unwrap();
+    assert_eq!(
+        verify_package(&bytes).unwrap()["hidden_modules"],
+        json!(grkit_core::modules::NAMES)
+    );
 }
 
 #[test]

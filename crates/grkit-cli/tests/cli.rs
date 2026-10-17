@@ -287,6 +287,63 @@ fn package_roundtrip_and_output_ownership() {
 }
 
 #[test]
+fn package_hides_modules_and_may_omit_effects() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (build, effects) = fixture(tmp.path());
+    let zip = tmp.path().join("hidden.zip");
+    let packaged = success(&[
+        "package",
+        "--build",
+        text(&build),
+        "--effects",
+        text(&effects),
+        "--hide",
+        "guides,date-stamp",
+        "--out",
+        text(&zip),
+    ]);
+    // The module file is one more entry.
+    assert_eq!(packaged["entries"], 10 + source_count());
+    assert_eq!(packaged["hidden_modules"], json!(["guides", "date-stamp"]));
+    let verified = success(&["verify", text(&zip)]);
+    assert_eq!(verified["hidden_modules"], json!(["guides", "date-stamp"]));
+
+    // Without effects, Image Control is hidden, so one module must stay.
+    let framing_only = tmp.path().join("framing.zip");
+    let packaged = success(&[
+        "package",
+        "--build",
+        text(&build),
+        "--hide",
+        "guides",
+        "--hide",
+        "date-stamp",
+        "--out",
+        text(&framing_only),
+    ]);
+    assert_eq!(packaged["entries"], 10);
+    assert_eq!(success(&["verify", text(&framing_only)])["effects"], 0);
+    for hide in [
+        "framing,guides,date-stamp",
+        "image-control",
+        "guides,guides",
+    ] {
+        let rejected = tmp.path().join("rejected.zip");
+        let output = run(&[
+            "package",
+            "--build",
+            text(&build),
+            "--hide",
+            hide,
+            "--out",
+            text(&rejected),
+        ]);
+        assert!(!output.status.success(), "{hide}");
+        assert!(!rejected.exists(), "{hide}");
+    }
+}
+
+#[test]
 fn invalid_archive_and_firmware_fail_without_panicking() {
     let tmp = tempfile::tempdir().unwrap();
     let bad = tmp.path().join("invalid");

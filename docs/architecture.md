@@ -29,6 +29,10 @@ It returns not-ready statuses while the camera initializes, and the loader repea
 An unusable effect file does not stop the other effects or Framing. Unusable files include names outside the `NAME.GRF` 8.3 rule, symbolic links, unreadable files, and invalid records.
 The `._` companions that macOS writes are therefore ignored.
 
+INSTALL also reads `SCRIPT/PLUGINS/MODULES.TXT`, which names the modules that the menu hides (`runtime/visibility.h`). A missing file hides nothing.
+An unknown or repeated name stops the installation with status 43, and a read error with status 44. The installer stores the result in header `+56`.
+Hidden modules keep their hooks. Each one stays inactive at Off.
+
 With more than 20 effects, the installer keeps the 20 smallest effect IDs.
 For a duplicate ID, the file with the smallest name wins. The result does not depend on directory order. Directory read errors stop the installation.
 
@@ -45,6 +49,8 @@ It keeps one decimal integer in `SCRIPT/PLUGINS/STATE.TXT`: `code + 65536 * (rat
 
 The loader checks the state every 2 s and writes the file only after a change. It writes through the camera's own file system, as photos do, never from Linux while the camera may write photos.
 An unreadable or out-of-range file restores nothing. An effect that is no longer installed stays Off, and its file entry stays until the next change.
+
+A hidden module restores Off, because no menu can turn it off. The script has no bit operators, so it reads header `+56` by division.
 A power loss during the write can lose the last change.
 
 ## Menu
@@ -56,6 +62,9 @@ The ADJ controller owns both objects. Exit hides them and restores the native ge
 
 The compiled registry in `runtime/modules.h` contains Image Control, Framing, Guides, and Date Stamp.
 Each descriptor owns its title, summary, rows, labels, icons, selection checks, activation, and committed row. A module page opens at its committed row.
+
+The root lists only the visible modules, in registry order. Image Control is visible when effects are installed. Each other module is visible unless header `+56` has its bit.
+If no module is visible, Image Control shows with only Off. If one module is visible, ADJ opens its page directly, and MENU or left returns to native ADJ.
 Module state stays in the private host header.
 
 MENU returns one level. From the GRKit root it returns to the native ADJ items. The private menu restores the native list on its supported exit paths.

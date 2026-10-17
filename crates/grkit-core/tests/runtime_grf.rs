@@ -1,6 +1,6 @@
 //! Compare the portable decoder with the actual installer parser and C ABI.
 
-use grkit_core::{effects, runtime, selective::Selective};
+use grkit_core::{effects, modules::Hidden, runtime, selective::Selective};
 use serde_json::{json, Value};
 use std::{
     env,
@@ -380,9 +380,9 @@ _Static_assert(GRKIT_RECORD_NAME + 34 <= GRKIT_RECORD_MONOCHROME, "Name overlap"
 _Static_assert(GRKIT_RECORD_CODE + 2 <= GRKIT_RECORD_FEATURES, "Extension overlap");
 _Static_assert(GRKIT_RECORD_POST + 20 <= GRKIT_RECORD_SIZE, "Extension overflow");
 int main(void) {
-    printf("%u %u %u %u %u %u %u %u %u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE,
+    printf("%u %u %u %u %u %u %u %u %u %u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE,
            GRKIT_PICTURE_SCRATCH, GRKIT_HOST_COUNT, GRKIT_HOST_RECORDS, GRKIT_HOST_ACTIVE, GRKIT_HOST_STAMP,
-           GRKIT_HOST_GUIDE, GRKIT_HOST_FRAME_RATIO, GRKIT_RECORD_CODE);
+           GRKIT_HOST_GUIDE, GRKIT_HOST_FRAME_RATIO, GRKIT_RECORD_CODE, GRKIT_HOST_HIDDEN);
     return 0;
 }
 "#,
@@ -409,7 +409,8 @@ int main(void) {
             runtime::HOST_STAMP,
             runtime::HOST_GUIDE,
             runtime::HOST_FRAME_RATIO,
-            runtime::RECORD_CODE
+            runtime::RECORD_CODE,
+            runtime::HOST_HIDDEN
         ]
     );
 }
@@ -501,4 +502,50 @@ fn native_picture_contract_applies_post_matrix_and_stamp() {
         &[],
     );
     checked(&mut Command::new(&executable));
+}
+
+#[test]
+fn rust_and_installer_c_read_the_same_module_files() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("visibility_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/visibility_contract.c"),
+        &executable,
+        &[],
+    );
+    // 256 bytes is the largest file the installer reads.
+    let long = format!("{}framing", " ".repeat(249));
+    let cases: [&[u8]; 16] = [
+        b"",
+        b"\n",
+        b"framing\n",
+        b"guides\ndate-stamp\n",
+        b"date-stamp framing guides",
+        b" \tguides\r\n",
+        b"framing\nframing\n",
+        b"image-control\n",
+        b"Framing\n",
+        b"framingx\n",
+        b"frame\n",
+        b"framing,guides\n",
+        b"framing\0\n",
+        b"\xff\n",
+        long.as_bytes(),
+        &[b' '; 257],
+    ];
+    for case in cases {
+        let output = checked(Command::new(&executable).arg(hex::encode(case)));
+        let native = String::from_utf8(output.stdout).unwrap();
+        let expected = match Hidden::parse(case) {
+            Ok(hidden) => format!("{}\n", hidden.mask()),
+            Err(_) => "invalid\n".to_owned(),
+        };
+        assert_eq!(native, expected, "{:?}", String::from_utf8_lossy(case));
+    }
+    assert_eq!(Hidden::parse(b"guides date-stamp").unwrap().mask(), 0b1100);
+    assert!(Hidden::parse(long.as_bytes()).is_ok());
 }

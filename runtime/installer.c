@@ -32,6 +32,7 @@ static const char plan_tmp[] = PLAN_TMP_PATH;
 static const char lock_path[] = LOCK_PATH;
 static const char done_path[] = DONE_PATH;
 static const char failed_path[] = FAILED_PATH;
+static const char modules_path[] = MODULES_PATH;
 static volatile u8 *at(u32 physical) { return mapping + physical - MAP_BASE; }
 static u32 get32(const u8 *p) { return p[0] | p[1] << 8 | p[2] << 16 | (u32)p[3] << 24; }
 static void put32(u8 *p, u32 v) { for (u32 i=0; i<4; ++i) p[i] = v >> (i*8); }
@@ -57,6 +58,7 @@ static void number(u32 value)
 #define GRKIT_GRF_EMBEDDED
 #include "grf.c"
 #include "catalog.h"
+#include "visibility.h"
 static char names[MAX_COUNT][CATALOG_NAME_SIZE];
 static int read_file(const char *path, u8 *buffer, u32 wanted)
 {
@@ -71,6 +73,26 @@ static int read_file(const char *path, u8 *buffer, u32 wanted)
     u8 extra; got=syscall6(3,fd,(u32)&extra,1,0,0,0);
     syscall6(6,fd,0,0,0,0,0);
     return have==wanted && got==0;
+}
+/* A missing MODULES.TXT hides nothing. An unreadable or invalid one stops the
+   installation, so a card never shows a menu that its file does not describe. */
+static int read_hidden(u32 *hidden)
+{
+    u8 text[VISIBILITY_FILE_MAX + 1];
+    u32 have = 0; long got = 0;
+    long fd = syscall6(5, (u32)modules_path, 0x8800, 0, 0, 0, 0);
+    *hidden = 0;
+    if (fd == -2) return 0;
+    if (fd < 0) return 44;
+    while (have < sizeof(text)) {
+        got = syscall6(3, fd, (u32)(text + have), sizeof(text) - have, 0, 0, 0);
+        if (got <= 0) break;
+        have += (u32)got;
+    }
+    syscall6(6, fd, 0, 0, 0, 0, 0);
+    if (got < 0) return 44;
+    if (have > VISIBILITY_FILE_MAX || !visibility_parse(text, have, hidden)) return 43;
+    return 0;
 }
 static int discover(void)
 {
@@ -167,8 +189,10 @@ static void publish(struct patch *p, const u8 *bytes)
 }
 static int install(void)
 {
+    u32 hidden;
     int status = discover();
     if (status) return status;
+    if ((status = read_hidden(&hidden))) return status;
     layout();
     if (!read_file(plan_path, plan, 20 + count * 8192) || get32(plan) != 0x314d5247 ||
         get32(plan + 4) != count || get32(plan + 8) != size / 4 ||
@@ -211,6 +235,7 @@ static int install(void)
     zero(at(base), size);
     store(base, count); store(base + 4, base + GRKIT_HOST_HEADER_SIZE);
     store(base + 16, 0x314d5247); store(base + 20, 1);
+    store(base + GRKIT_HOST_HIDDEN, hidden);
     for (u32 i = 0; i < icon_chunks; ++i) {
         zero(at(icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, icon_bases[i]);

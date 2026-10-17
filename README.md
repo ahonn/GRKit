@@ -9,6 +9,8 @@ GRKit adds a sixth ADJ entry with four modules:
 - **Guides**: thirds, center, golden ratio, or diagonal lines inside the Framing area.
 - **Date Stamp**: a film data-back date on photos, in glowing orange seven-segment digits.
 
+A package can leave out modules, and the camera menu then hides them. A package without effects hides Image Control.
+
 The project is in development. Its behavior, file formats, and package layout can change.
 
 ## Build
@@ -20,6 +22,7 @@ cargo install --path crates/grkit-cli --locked
 grkit effects build --source effects --out build/effects
 grkit build --target gr3-2.10 --firmware firmware/fwdc239b.bin --out build/runtime
 grkit package --build build/runtime --effects build/effects --out dist/GRKit.zip
+# Optional: --hide framing,guides,date-stamp. Without --effects, the package has no Image Control.
 grkit verify dist/GRKit.zip
 ```
 
