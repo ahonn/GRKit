@@ -36,10 +36,6 @@ typedef unsigned char u8;
 #define FRAMING_INVALIDATE(view) (((void (*)(u32))0x533ad308)(view))
 #endif
 extern volatile u32 *framing_header(void);
-/* Live-view glow overlay, in picture.c. */
-u32 picture_live_strength(volatile u32 *h);
-u32 picture_live_due(volatile u32 *h);
-void picture_live_paint(volatile u32 *h,u32 data,u32 stride);
 
 /* Original 5x7 column glyphs, bit zero at the top. Each pixel is 2x2 LCD pixels. */
 static void ratio_badge(u32 data,u32 stride,u32 ratio) {
@@ -113,9 +109,8 @@ void framing_bind(u32 controller) {
     capture_sync(controller);
     /* A selection that has not drawn on this canvas yet, such as one restored
        at power-on, needs a redraw: nothing else invalidates a still live view. */
-    /* The glow overlay follows the scene, so it also redraws on a schedule. */
-    if(h[GRKIT_HOST_FRAME_CANVAS/4] && (picture_live_due(h) |
-       (!h[GRKIT_HOST_FRAME_BITMAP/4] && (frame_ratio_value(h) || guide_value(h)))))
+    if(h[GRKIT_HOST_FRAME_CANVAS/4] && !h[GRKIT_HOST_FRAME_BITMAP/4] &&
+       (frame_ratio_value(h) || guide_value(h)))
         FRAMING_INVALIDATE(h[GRKIT_HOST_FRAME_CANVAS/4]);
 }
 void framing_leave(u32 controller) {
@@ -206,8 +201,7 @@ void framing_prepare(u32 canvas) {
     /* Canvas::Draw clears the full native bitmap before drawing its children.
        Use this path even for Off to remove the previous drawing on the next draw. */
     if((h[GRKIT_HOST_FRAME_CANVAS/4]==canvas &&
-        (frame_ratio_value(h) || guide_value(h) || picture_live_strength(h) ||
-         h[GRKIT_HOST_FRAME_BITMAP/4])) ||
+        (frame_ratio_value(h) || guide_value(h) || h[GRKIT_HOST_FRAME_BITMAP/4])) ||
        (canvas && h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]==canvas))
         BYTE(canvas,0xa0)=1;
 }
@@ -225,24 +219,17 @@ static void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {
 }
 void framing_paint(u32 canvas,u32 bitmap) {
     volatile u32 *h=framing_header();
-    u32 ratio=frame_ratio_value(h),style=guide_value(h),glow;
+    u32 ratio=frame_ratio_value(h),style=guide_value(h);
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],data,stride;
     if(canvas && canvas==h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]) { preview_paint(h,canvas,bitmap); return; }
     if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;
-    glow=picture_live_strength(h);
-    if(!ratio && !style && !glow) {
-        h[GRKIT_HOST_FRAME_BITMAP/4]=0;
-        picture_live_paint(h,0,0);
-        return;
-    }
+    if(!ratio && !style) { h[GRKIT_HOST_FRAME_BITMAP/4]=0; return; }
     h[GRKIT_HOST_FRAME_BITMAP/4]=bitmap;
     /* The LCD still canvas is registered in native slot zero. Unsupported
        canvas sizes and bitmap formats leave the native image untouched. */
     data=WORD(owner,4)==canvas && BYTE(owner,0x2d2)==0 ? canvas_pixels(canvas,bitmap) : 0;
-    if(!data) { ++h[GRKIT_HOST_FRAME_SKIPPED/4]; picture_live_paint(h,0,0); return; }
+    if(!data) { ++h[GRKIT_HOST_FRAME_SKIPPED/4]; return; }
     stride=HALF(bitmap,0x18);
-    /* The glow lies below the mask and the guides, as the photo area does. */
-    picture_live_paint(h,data,stride);
     if(ratio) ratio_mask(data,stride,ratio);
     guide_lines(data,stride,ratio,style);
     /* The badge covers the guides that cross it. */

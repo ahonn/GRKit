@@ -49,21 +49,6 @@ static uint32_t invalidations, invalidated;
 static volatile u32 header[64];
 volatile u32 *framing_header(void) { return header; }
 
-/* Live glow stubs: picture_contract.c covers the overlay itself. The paint stub
-   marks one pixel outside every photo area and one inside all of them. */
-#define GLOW_MARK 0x40404040U
-static u32 live_strength, live_due, live_ticks, live_paints, live_clears;
-u32 picture_live_strength(volatile u32 *h) { (void)h; return live_strength; }
-u32 picture_live_due(volatile u32 *h) { (void)h; ++live_ticks; return live_due; }
-void picture_live_paint(volatile u32 *h,u32 data,u32 stride)
-{
-    (void)h;
-    if(!live_strength || !data) { ++live_clears; return; }
-    ++live_paints;
-    FRAMING_PIXELS(data+10*stride*4)[10]=GLOW_MARK;
-    FRAMING_PIXELS(data+240*stride*4)[360]=GLOW_MARK;
-}
-
 static void reset(void)
 {
     memset((void *)header, 0, sizeof(header));
@@ -88,7 +73,6 @@ static void reset(void)
     native_aspect=0;
     capture_aspect=0;
     capture_requests=0;
-    live_strength=live_due=live_ticks=live_paints=live_clears=0;
     framing_bind(TEST_OWNER);
     assert(header[GRKIT_HOST_FRAME_OWNER/4]==TEST_OWNER);
     assert(header[GRKIT_HOST_FRAME_CANVAS/4]==TEST_CANVAS);
@@ -401,48 +385,6 @@ int main(void)
     BYTE(TEST_CANVAS,0xa0)=0;
     framing_prepare(TEST_CANVAS);
     assert(BYTE(TEST_CANVAS,0xa0)==0);
-
-    /* Glow alone forces full clears and draws below everything else. */
-    reset();
-    header[GRKIT_HOST_FRAME_RATIO/4]=0;
-    live_strength=2;
-    BYTE(TEST_CANVAS,0xa0)=0;
-    framing_prepare(TEST_CANVAS);
-    assert(BYTE(TEST_CANVAS,0xa0)==1);
-    framing_paint(TEST_CANVAS,TEST_BITMAP);
-    assert(live_paints==1 && live_clears==0);
-    assert(pixels[1+10*TEST_STRIDE+10]==GLOW_MARK && pixels[1+240*TEST_STRIDE+360]==GLOW_MARK);
-    assert(header[GRKIT_HOST_FRAME_BITMAP/4]==TEST_BITMAP && header[GRKIT_HOST_FRAME_DRAWS/4]==1);
-    /* The Framing mask covers the glow outside the photo area. */
-    reset();
-    live_strength=3;
-    framing_paint(TEST_CANVAS,TEST_BITMAP);
-    assert(live_paints==1);
-    assert(pixels[1+10*TEST_STRIDE+10]==0x80000000 && pixels[1+240*TEST_STRIDE+360]==GLOW_MARK);
-    /* After the glow ends, the next draw erases it and clears the overlay state. */
-    header[GRKIT_HOST_FRAME_RATIO/4]=0;
-    live_strength=0;
-    BYTE(TEST_CANVAS,0xa0)=0;
-    framing_prepare(TEST_CANVAS);
-    assert(BYTE(TEST_CANVAS,0xa0)==1);
-    framing_paint(TEST_CANVAS,TEST_BITMAP);
-    assert(live_paints==1 && live_clears==1 && header[GRKIT_HOST_FRAME_BITMAP/4]==0);
-    /* An unsupported bitmap gets no glow either. */
-    reset();
-    live_strength=1;
-    BYTE(TEST_BITMAP,2)=4;
-    framing_paint(TEST_CANVAS,TEST_BITMAP);
-    assert(live_paints==0 && live_clears==1);
-    assert(header[GRKIT_HOST_FRAME_SKIPPED/4]==1);
-    /* Every update counts toward the schedule; a due overlay redraws the canvas. */
-    reset();
-    header[GRKIT_HOST_FRAME_RATIO/4]=0;
-    invalidations=0;
-    framing_bind(TEST_OWNER);
-    assert(live_ticks==2 && invalidations==0);
-    live_due=1;
-    framing_bind(TEST_OWNER);
-    assert(live_ticks==3 && invalidations==1 && invalidated==TEST_CANVAS);
 
     reset();
     framing_leave(TEST_OWNER+4);

@@ -1,6 +1,6 @@
 #include "abi.h"
-/* Picture processing for effect extensions: the post-curve matrix, then soft glow
-   and the date stamp on recorded pictures. */
+/* Picture processing for effect extensions: the post-curve matrix, and the
+   date stamp on recorded pictures. */
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
@@ -47,7 +47,7 @@ void picture_post(u32 object,u32 context) {
         WORD(object,(i*3+j)*4)=(u32)(sum<-256 ? -256 : sum>255 ? 255 : sum);
     }
 }
-/* ---- Recorded pictures: soft glow and the date stamp ------------------------
+/* ---- Recorded pictures: the date stamp --------------------------------------
    JpegEncodeMacroProcess::Execute (0x535047d4) calls picture_encode before it
    submits the encode. Its image descriptors hold Y at +4, CbCr at +8, then u16
    width, height, and the shared pitch at +0x10. The CbCr plane interleaves
@@ -64,15 +64,14 @@ void picture_post(u32 object,u32 context) {
 #define PICTURE_NATIVE_ASPECT() (((u32 (*)(u32))0x53245260)(((u32 (*)(void))0x5320b31c)()))
 #endif
 #ifndef PICTURE_SCRATCH
-/* Glow map after the header and the records, inside the loader's registry array. */
+/* Stamp masks after the header and the records, inside the loader's registry array. */
 #define PICTURE_SCRATCH(h) ((h)[GRKIT_HOST_RECORDS/4]+(h)[GRKIT_HOST_COUNT/4]*GRKIT_RECORD_SIZE)
 #endif
 #ifndef PICTURE_MAP
 #define PICTURE_MAP(address) ((u8 *)(address))
 #endif
-#define GLOW_WIDTH 376U
-/* Longest blurred line: the date stamp mask is wider than the glow map. The
-   line copy lives on the stack, because the code region is read-only. */
+/* Longest blurred line of a date stamp mask. The line copy lives on the stack,
+   because the code region is read-only. */
 #define BLUR_WIDTH 640U
 
 typedef struct { u32 y,c,width,height,pitch,half,left,top,right,bottom; } Plane;
@@ -90,7 +89,7 @@ static void flush(const Plane *p) {
 }
 static u32 chroma_row(const Plane *p,u32 y) { return p->c+(p->half ? y>>1 : y)*p->pitch; }
 
-/* Spread the highlight map in place: three box passes per axis, radius r. */
+/* Spread a mask line in place: three box passes, radius r. */
 static void blur_line(u8 *line,u32 step,u32 n,u32 r) {
     u16 copy[BLUR_WIDTH];
     u32 i,pass,sum,window=2*r+1,reciprocal=divide(65536+window/2,window);
@@ -103,60 +102,6 @@ static void blur_line(u8 *line,u32 step,u32 n,u32 r) {
             sum+=copy[i+r+1<n ? i+r+1 : n-1];
             sum-=copy[i>=r ? i-r : 0];
         }
-    }
-}
-/* Glow gain for strength 1 low, 2 medium, and 3 high, in 1/256. */
-static const u8 glow_gains[4]={0,90,154,230};
-/* Highlight of an average luma: 0 up to Y 200, then a ramp that reaches 255 at Y 255. */
-static u32 highlight(u32 average) {
-    u32 v=average>200 ? (average-200)*297>>6 : 0;
-    return v>255 ? 255 : v;
-}
-/* Soft glow: highlights above Y 200 spread into a diffuse halo that lifts Y
-   toward white and moves chroma toward neutral, like a mist filter. */
-static void glow(volatile u32 *h,const Plane *p,u32 strength) {
-    u8 *map=PICTURE_MAP(PICTURE_SCRATCH(h));
-    u32 f=1,w,ht,x,y,sx,sy,dx,dy,r,step,gain=glow_gains[strength];
-    while(p->width>f*GLOW_WIDTH) ++f;
-    w=divide(p->width+f-1,f); ht=divide(p->height+f-1,f);
-    if(ht>GLOW_WIDTH) return;
-    for(sy=0;sy<ht;++sy) for(sx=0;sx<w;++sx) {
-        u32 total=0,i,j,px,py;
-        for(j=0;j<2;++j) for(i=0;i<2;++i) {
-            px=sx*f+((f*(1+2*i))>>2); py=sy*f+((f*(1+2*j))>>2);
-            if(px>=p->width) px=p->width-1;
-            if(py>=p->height) py=p->height-1;
-            total+=BYTE(p->y,py*p->pitch+px);
-        }
-        map[sy*w+sx]=(u8)highlight(total>>2);
-    }
-    r=(w*1966)>>16; if(!r) r=1;
-    for(sy=0;sy<ht;++sy) blur_line(map+sy*w,1,w,r);
-    for(sx=0;sx<w;++sx) blur_line(map+sx,w,ht,r);
-    /* Bilinear between map cells: cell = pixel / f, fraction = (pixel % f) / f,
-       counted without division. Cells without glow around them are skipped. */
-    step=divide(65536,f);
-    for(y=0,sy=0,dy=0;y<p->height;++y) {
-        u32 ty=dy*step, cy1=sy+1<ht ? sy+1 : sy;
-        u32 crow=chroma_row(p,y), even=!p->half || !(y&1);
-        for(x=0,sx=0,dx=0;x<p->width;) {
-            u32 tx=dx*step, cx1=sx+1<w ? sx+1 : sx;
-            u32 a=map[sy*w+sx],b=map[sy*w+cx1],c=map[cy1*w+sx],d=map[cy1*w+cx1],g,yv,amount;
-            if(!(a|b|c|d)) { x+=f-dx; dx=0; ++sx; continue; }
-            g=((a*(65536-tx)+b*tx)>>16)*(65536-ty)+((c*(65536-tx)+d*tx)>>16)*ty;
-            amount=((g>>16)*gain)>>8;
-            yv=BYTE(p->y,y*p->pitch+x);
-            BYTE(p->y,y*p->pitch+x)=(u8)(yv+(((255-yv)*amount+128)>>8));
-            if(even && !(x&1)) {
-                u32 i,k=256-(amount>>1);
-                for(i=0;i<2;++i) {
-                    int v=(int)BYTE(crow,x+i)-128;
-                    BYTE(crow,x+i)=(u8)(128+((v*(int)k)>>8));
-                }
-            }
-            ++x; if(++dx==f) { dx=0; ++sx; }
-        }
-        if(++dy==f) { dy=0; ++sy; }
     }
 }
 
@@ -301,9 +246,9 @@ static u32 stamp(volatile u32 *h,const Plane *p,const char *text,u32 n,u32 mono,
         total=text_width(text,n,m);
         cw=total+((m*31)>>8)+1;
         mw=cw+2*pad; mh=m+2*pad;
-        if(mw<=BLUR_WIDTH && mw*mh*2<=GRKIT_GLOW_SCRATCH) break;
+        if(mw<=BLUR_WIDTH && mw*mh*2<=GRKIT_PICTURE_SCRATCH) break;
     }
-    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || mw*mh*2>GRKIT_GLOW_SCRATCH) return 0;
+    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || mw*mh*2>GRKIT_PICTURE_SCRATCH) return 0;
     margin=(size*45875)>>16;
     if((((mw-pad)*f)>>(ss-1))+margin>width || (((mh-pad)*f)>>(ss-1))+margin>height) return 0;
     halo=core+mw*mh;
@@ -455,23 +400,22 @@ static u32 plane_of(u32 image,u32 code,Plane *p) {
            p->y>=0x40000000U && p->y<0xc0000000U-p->pitch*p->height &&
            p->c>=0x40000000U && p->c<0xc0000000U-p->pitch*p->height;
 }
-/* Glow first, then the stamp, once per plane set. The second full-size image
-   (descriptor 3) shares the main planes. */
+/* The stamp, once per plane set. The second full-size image (descriptor 3)
+   shares the main planes. */
 void picture_encode(u32 process,u32 message) {
     volatile u32 *h=framing_header();
     u32 config=WORD(message,8), style=h[GRKIT_HOST_STAMP/4], record=h[GRKIT_HOST_STILL/4];
-    u32 features=record_features(h,record), strength=0, mono=0, done[4], count=0, i, j, n=0;
+    u32 mono=0, done[4], count=0, i, j, n=0;
     u32 date[3];
     u8 *dt=(u8 *)date;
     char text[20];
     Plane p, planes[4];
     Stamp st;
     (void)process;
-    if(features&GRKIT_FEATURE_GLOW) strength=BYTE(record,GRKIT_RECORD_GLOW);
     if(owned(h,record)) mono=WORD(record,GRKIT_RECORD_MONOCHROME)&1;
     if(style>4) style=0;
-    if(!strength && !style) return;
-    if(style) { PICTURE_DATE(dt); n=date_text(text,dt,style); }
+    if(!style) return;
+    PICTURE_DATE(dt); n=date_text(text,dt,style);
     for(i=0;i<4;++i) {
         u32 seen=0;
         if(!plane_of(WORD(config,0x3c+i*4),WORD(config,0x4c+i*4),&p)) continue;
@@ -481,12 +425,9 @@ void picture_encode(u32 process,u32 message) {
         visible_area(h,&p);
         planes[count++]=p;
     }
-    for(i=0;i<count;++i) {
-        flush(&planes[i]);
-        /* Glow uses the scratch first; the stamp mask then lives there. */
-        if(strength) glow(h,&planes[i],strength);
-    }
-    if(style && count) {
+    if(!count) return;
+    for(i=0;i<count;++i) flush(&planes[i]);
+    {
         /* The largest picture draws the stamp. The smaller ones scale its mask,
            so playback keeps the stamp's place and width when it switches from
            the screennail to the main picture. */
@@ -498,148 +439,4 @@ void picture_encode(u32 process,u32 message) {
         }
     }
     for(i=0;i<count;++i) flush(&planes[i]);
-}
-
-/* ---- Live-view glow overlay -------------------------------------------------
-   The live-view pipe has no spatial filter that can spread light, so the
-   viewfinder approximates the photo glow on the OSD canvas. The native OSD
-   stores premultiplied pixels: no translucent native pixel has a color above
-   its alpha. Premultiplied white at alpha a shows Y + (255 - Y) * a, the same
-   lift as the photo. Chroma moves toward neutral by a, not by a / 2 as in the
-   photo, so the overlay is a little less saturated. */
-#ifndef PICTURE_LCD
-/* LCD display block, main layer: input size (height << 16 | width) at +0x208,
-   the Y plane at +0x210, its pitch at +0x240, and the scaler ratios
-   (input << 8 | output) at +0x404 and +0x408. */
-#define PICTURE_LCD(offset) WORD(0x28904000U,(offset))
-#endif
-#ifndef PICTURE_LIVE
-#define PICTURE_LIVE(h) (PICTURE_SCRATCH(h)+GRKIT_GLOW_SCRATCH)
-#endif
-#ifndef PICTURE_LIVE_MAP
-#define PICTURE_LIVE_MAP(address) ((u8 *)(address))
-#endif
-#ifndef PICTURE_PIXELS
-#define PICTURE_PIXELS(address) ((volatile u32 *)(address))
-#endif
-#ifndef PICTURE_COUNTER
-/* Generic timer, in picture.S: the low word of CNTPCT and CNTFRQ. The still
-   LCD controller updates about 200 times a second, so the overlay redraws on
-   time instead: eight times a second. */
-u32 picture_privileged(void);
-u32 picture_counter(void);
-u32 picture_frequency(void);
-#define PICTURE_PRIVILEGED() picture_privileged()
-#define PICTURE_COUNTER() picture_counter()
-#define PICTURE_FREQUENCY() picture_frequency()
-#endif
-/* Counts between two redraws: 1/8 s, or 1/8 s of the camera's 40 MHz counter
-   if CNTFRQ is not set. */
-static u32 live_period(void) {
-    u32 frequency=PICTURE_FREQUENCY();
-    return frequency ? frequency>>3 : 40000000U>>3;
-}
-#define LIVE_W GRKIT_LIVE_GLOW_WIDTH
-#define LIVE_H GRKIT_LIVE_GLOW_HEIGHT
-#define LIVE_CELL GRKIT_LIVE_GLOW_CELL
-
-typedef struct { u32 y,pitch,width,height,rx,ry; } Live;
-
-/* Glow strength of the effect that the live view shows, or 0. */
-u32 picture_live_strength(volatile u32 *h) {
-    u32 record=h[GRKIT_HOST_LIVE_RECORD/4],strength;
-    if(!(record_features(h,record)&GRKIT_FEATURE_GLOW)) return 0;
-    strength=BYTE(record,GRKIT_RECORD_GLOW);
-    return strength<=3 ? strength : 0;
-}
-/* The frame that the LCD main layer shows, with the LCD-to-input scale in
-   16.16. Returns 0 for a layout that the overlay does not support. */
-static u32 live_frame(Live *f) {
-    u32 size=PICTURE_LCD(0x208),hr=PICTURE_LCD(0x404),vr=PICTURE_LCD(0x408);
-    u32 hin=hr>>8&255,hout=hr&255,vin=vr>>8&255,vout=vr&255;
-    f->width=size&0xffff; f->height=size>>16;
-    f->y=PICTURE_LCD(0x210); f->pitch=PICTURE_LCD(0x240);
-    /* The cache maintenance below needs PL1. */
-    if(!PICTURE_PRIVILEGED() || !hin || !hout || !vin || !vout) return 0;
-    if(f->width<360 || f->height<240 || f->pitch<f->width || f->pitch>4096 || f->height>2048) return 0;
-    /* The RTOS maps both memory pools one to one: one ends at 0x80000000, the
-       other is 1 GiB at 0xa0000000, where the live view keeps its frames. */
-    if(!(f->y>=0x40000000U && f->y<=0x80000000U-f->pitch*f->height) &&
-       !(f->y>=0xa0000000U && f->y<=0xc0000000U-f->pitch*f->height)) return 0;
-    f->rx=divide(hin<<16,hout); f->ry=divide(vin<<16,vout);
-    PICTURE_CACHE_FLUSH(f->y,f->pitch*f->height);
-    return 1;
-}
-/* Luma of the frame under an LCD pixel. */
-static u32 live_luma(const Live *f,u32 x,u32 y) {
-    u32 sx=(x*f->rx)>>16,sy=(y*f->ry)>>16;
-    if(sx>=f->width) sx=f->width-1;
-    if(sy>=f->height) sy=f->height-1;
-    return BYTE(f->y,sy*f->pitch+sx);
-}
-/* One map cell: the highlight of four samples, as the photo glow takes them. */
-static u32 live_cell(const Live *f,u32 cx,u32 cy) {
-    u32 x=cx*LIVE_CELL,y=cy*LIVE_CELL;
-    return highlight((live_luma(f,x+1,y+1)+live_luma(f,x+3,y+1)+
-                      live_luma(f,x+1,y+3)+live_luma(f,x+3,y+3))>>2);
-}
-/* A coarse check for any highlight: one cell in each 4 x 4 block of cells. */
-static u32 live_any(const Live *f) {
-    u32 cx,cy;
-    for(cy=1;cy<LIVE_H;cy+=4) for(cx=1;cx<LIVE_W;cx+=4) if(live_cell(f,cx,cy)) return 1;
-    return 0;
-}
-/* framing_bind calls this for each update of the still LCD controller. It
-   returns 1 when the canvas must redraw: to refresh an overlay, to draw a new
-   highlight, or to erase an overlay after the glow ends. */
-u32 picture_live_due(volatile u32 *h) {
-    u32 state=PICTURE_LIVE(h),lit=WORD(state,GRKIT_LIVE_GLOW_LIT),now;
-    Live f;
-    ++WORD(state,GRKIT_LIVE_GLOW_TICKS);
-    if(!lit && !picture_live_strength(h)) return 0;
-    if(!PICTURE_PRIVILEGED()) return 0;
-    now=PICTURE_COUNTER();
-    if(now-WORD(state,GRKIT_LIVE_GLOW_LAST)<live_period()) return 0;
-    /* One check per period, even when it finds nothing to draw. */
-    WORD(state,GRKIT_LIVE_GLOW_LAST)=now;
-    if(lit) return 1;
-    return live_frame(&f) && live_any(&f);
-}
-/* framing_paint calls this on a cleared 720 x 480 canvas, before the Framing
-   mask and the guides. data 0 means the canvas has no overlay. */
-void picture_live_paint(volatile u32 *h,u32 data,u32 stride) {
-    u32 state=PICTURE_LIVE(h),strength=picture_live_strength(h),gain,lit=0,r,x,y,sx,sy,dx,dy;
-    u8 *map=PICTURE_LIVE_MAP(state+GRKIT_LIVE_GLOW_MAP);
-    Live f;
-    if(!strength || !data) { WORD(state,GRKIT_LIVE_GLOW_LIT)=0; return; }
-    if(!live_frame(&f)) {
-        ++WORD(state,GRKIT_LIVE_GLOW_SKIPS);
-        WORD(state,GRKIT_LIVE_GLOW_LIT)=0;
-        return;
-    }
-    for(sy=0;sy<LIVE_H;++sy) for(sx=0;sx<LIVE_W;++sx) lit|=map[sy*LIVE_W+sx]=(u8)live_cell(&f,sx,sy);
-    WORD(state,GRKIT_LIVE_GLOW_LIT)=lit!=0;
-    if(!lit) return;
-    /* The photo radius: 3% of the map width. */
-    r=(LIVE_W*1966)>>16;
-    for(sy=0;sy<LIVE_H;++sy) blur_line(map+sy*LIVE_W,1,LIVE_W,r);
-    for(sx=0;sx<LIVE_W;++sx) blur_line(map+sx,LIVE_W,LIVE_H,r);
-    gain=glow_gains[strength];
-    for(y=0,sy=0,dy=0;y<480;++y) {
-        volatile u32 *row=PICTURE_PIXELS(data+y*stride*4);
-        u32 ty=dy*(65536/LIVE_CELL),sy1=sy+1<LIVE_H ? sy+1 : sy;
-        for(sx=0,x=0;sx<LIVE_W;++sx,x+=LIVE_CELL) {
-            u32 sx1=sx+1<LIVE_W ? sx+1 : sx;
-            u32 a=map[sy*LIVE_W+sx],b=map[sy*LIVE_W+sx1],c=map[sy1*LIVE_W+sx],d=map[sy1*LIVE_W+sx1];
-            if(!(a|b|c|d)) continue;
-            for(dx=0;dx<LIVE_CELL;++dx) {
-                u32 tx=dx*(65536/LIVE_CELL);
-                u32 g=(((a*(65536-tx)+b*tx)>>16)*(65536-ty)+((c*(65536-tx)+d*tx)>>16)*ty)>>16;
-                u32 alpha=(g*gain)>>8;
-                if(alpha) row[x+dx]=alpha*0x01010101U;
-            }
-        }
-        if(++dy==LIVE_CELL) { dy=0; ++sy; }
-    }
-    ++WORD(state,GRKIT_LIVE_GLOW_DRAWS);
 }

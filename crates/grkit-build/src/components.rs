@@ -111,7 +111,7 @@ pub const PICTURE_HOOKS: &[(u32, &str, &str, bool)] = &[
     (0x536de1a8, "module_gamma_dirty", "0e30d4e5", false),
     // YCbCrMatrix Make: the call to its calc. Applies the post-curve matrix.
     (0x536e4774, "picture_post", "e9ffffeb", true),
-    // JpegEncodeMacroProcess::Execute entry: glow and the date stamp before the encode.
+    // JpegEncodeMacroProcess::Execute entry: the date stamp before the encode.
     (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
 ];
 

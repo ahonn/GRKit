@@ -1,6 +1,6 @@
 /* Shared GRFX0001 validation for the installer and host tools. Bytes 84..127
-   hold the optional extension: u32 features at 84, an i16[9] post matrix at
-   88, and glow at 107. Byte 106 and bytes 108..127 are reserved. */
+   hold the optional extension: u32 features at 84 and an i16[9] post matrix
+   at 88. Bytes 106..127 are reserved. */
 #include "grf.h"
 #ifndef GRKIT_GRF_EMBEDDED
 typedef unsigned char u8;
@@ -26,16 +26,14 @@ static u32 crc(const u8 *p)
 }
 static int zeros(const u8 *p, u32 n) { for(u32 i=0;i<n;++i) if(p[i]) return 0; return 1; }
 #define GRF_FEATURE_POST 1U
-#define GRF_FEATURE_GLOW 4U
 /* Each feature bit owns its field, and an unused field stays zero. An effect
    without features has zeros in the whole extension. */
 static int valid_extension(const u8 *p)
 {
     u32 features=grf_get32(p+84);
-    if ((features & ~(GRF_FEATURE_POST|GRF_FEATURE_GLOW)) || p[106] || !zeros(p+108,20)) return 0;
+    if ((features & ~GRF_FEATURE_POST) || !zeros(p+106,22)) return 0;
     if (!(features&GRF_FEATURE_POST) && !zeros(p+88,18)) return 0;
     if ((features&GRF_FEATURE_POST) && grf_get32(p+80)==1) return 0;
-    if ((features&GRF_FEATURE_GLOW) ? p[107]<1 || p[107]>3 : p[107]!=0) return 0;
     return 1;
 }
 static int valid_profile(const u8 *p)

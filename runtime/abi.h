@@ -62,31 +62,11 @@
 /* GRF extension, zero for an effect without features. */
 #define GRKIT_RECORD_FEATURES 0x700
 #define GRKIT_FEATURE_POST 1U
-#define GRKIT_FEATURE_GLOW 4U
-/* i16[9] signed Q13 RGB matrix after the tone curves, applied through the YCbCr matrix. */
+/* i16[9] signed Q13 RGB matrix after the tone curves, applied through the YCbCr
+   matrix. Bytes 0x716 and 0x717 are reserved and zero. */
 #define GRKIT_RECORD_POST 0x704
-/* Glow strength: 1 low, 2 medium, 3 high. Byte 0x716 is reserved and zero. */
-#define GRKIT_RECORD_GLOW 0x717
 #define GRKIT_ICON_STRIDE 6408
-/* Soft-glow map after the records: at most 376 x 376 cells. */
-#define GRKIT_GLOW_SCRATCH 141376
-/* Live-view glow overlay after the glow map. The viewfinder and the encode
-   can run at the same time, so the overlay has its own map: five state words,
-   then one byte for each 4 x 4 cell of the 720 x 480 LCD canvas. */
-#define GRKIT_LIVE_GLOW_CELL 4
-#define GRKIT_LIVE_GLOW_WIDTH 180
-#define GRKIT_LIVE_GLOW_HEIGHT 120
-/* Still LCD controller updates, and the CNTPCT low word of the last redraw request. */
-#define GRKIT_LIVE_GLOW_TICKS 0
-#define GRKIT_LIVE_GLOW_LAST 4
-/* Overlay draws, and draws skipped because the live frame was unusable. */
-#define GRKIT_LIVE_GLOW_DRAWS 8
-#define GRKIT_LIVE_GLOW_SKIPS 12
-/* 1 when the canvas holds an overlay that a redraw must erase or refresh. */
-#define GRKIT_LIVE_GLOW_LIT 16
-#define GRKIT_LIVE_GLOW_MAP 20
-#define GRKIT_LIVE_GLOW_SCRATCH (GRKIT_LIVE_GLOW_MAP + GRKIT_LIVE_GLOW_WIDTH * GRKIT_LIVE_GLOW_HEIGHT)
-/* Everything after the records. */
-#define GRKIT_SCRATCH_SIZE (GRKIT_GLOW_SCRATCH + GRKIT_LIVE_GLOW_SCRATCH)
+/* Picture scratch after the records: the date stamp core and halo masks. */
+#define GRKIT_PICTURE_SCRATCH 141376
 
 #endif

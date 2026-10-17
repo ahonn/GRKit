@@ -1,8 +1,8 @@
 //! Data-only Image Control definitions and GRFX0001 encoding.
 //!
-//! Bytes 84..128 hold the optional extension: u32 features, an i16[9] signed
-//! Q13 post-curve matrix, and a glow strength. Byte 106 is reserved. An effect
-//! without features has zeros in the whole extension.
+//! Bytes 84..128 hold the optional extension: u32 features and an i16[9]
+//! signed Q13 post-curve matrix. Bytes 106..128 are reserved. An effect without
+//! features has zeros in the whole extension.
 
 use anyhow::{ensure, Context, Result};
 use serde::{
@@ -20,10 +20,7 @@ pub const ICON_OFFSET: usize = 1684;
 pub const MONOCHROME: u32 = 1;
 pub const SCHEMA: &str = "grkit-effect-v1";
 pub const FEATURE_POST: u32 = 1;
-pub const FEATURE_GLOW: u32 = 4;
-/// Strength names for glow, in their stored order from 1.
-pub const STRENGTHS: [&str; 3] = ["low", "medium", "high"];
-const EXTENSION_KEYS: [&str; 2] = ["post_matrix", "glow"];
+const EXTENSION_KEYS: [&str; 1] = ["post_matrix"];
 
 struct UniqueValue(Value);
 
@@ -110,18 +107,16 @@ fn has_keys_with(value: &Value, required: &[&str], optional: &[&str]) -> bool {
     })
 }
 
-/// The optional extension of an effect: features, post matrix, and glow.
+/// The optional extension of an effect: features and the post matrix.
 struct Extension {
     features: u32,
     post: [i16; 9],
-    glow: u8,
 }
 
 fn extension(effect: &Value) -> Result<Extension> {
     let mut result = Extension {
         features: 0,
         post: [0; 9],
-        glow: 0,
     };
     if let Some(matrix) = effect.get("post_matrix") {
         let values = matrix
@@ -135,14 +130,6 @@ fn extension(effect: &Value) -> Result<Extension> {
                 .context("Expected nine signed Q13 post-matrix coefficients")?;
         }
         result.features |= FEATURE_POST;
-    }
-    if let Some(value) = effect.get("glow") {
-        let strength = value
-            .as_u64()
-            .filter(|n| (1..=3).contains(n))
-            .context("Expected glow strength 1 to 3")?;
-        result.glow = strength as u8;
-        result.features |= FEATURE_GLOW;
     }
     Ok(result)
 }
@@ -215,7 +202,7 @@ pub fn validate(effect: &Value, icon: &[u8]) -> Result<()> {
             &["effect_id", "name", "matrix", "curves"],
             &optional
         ),
-        "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, and glow"
+        "Expected effect_id, name, matrix, curves, and optional flags and post_matrix"
     );
     let flags = effect
         .get("flags")
@@ -284,7 +271,6 @@ pub fn encode(effect: &Value, icon: &[u8]) -> Result<Vec<u8>> {
     for (index, value) in extension.post.iter().enumerate() {
         blob[88 + index * 2..90 + index * 2].copy_from_slice(&value.to_le_bytes());
     }
-    blob[107] = extension.glow;
     blob[8..12].copy_from_slice(&(SIZE as u32).to_le_bytes());
     blob[80..84].copy_from_slice(
         &(effect.get("flags").and_then(Value::as_u64).unwrap_or(0) as u32).to_le_bytes(),
@@ -311,7 +297,7 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
         "Invalid effect size or CRC32"
     );
     ensure!(
-        [(108, 128), (146, 148), (8084, SIZE)]
+        [(106, 128), (146, 148), (8084, SIZE)]
             .iter()
             .all(|(start, end)| blob[*start..*end].iter().all(|v| *v == 0)),
         "Unsupported effect flags or reserved bytes"
@@ -344,10 +330,7 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
     let mut effect = json!({"effect_id": string(16)?, "name": string(48)?, "flags": read_u32(80), "matrix": matrix, "curves": curves});
     {
         let features = read_u32(84);
-        ensure!(
-            features & !(FEATURE_POST | FEATURE_GLOW) == 0 && blob[106] == 0,
-            "Unsupported effect features"
-        );
+        ensure!(features & !FEATURE_POST == 0, "Unsupported effect features");
         let post: Vec<i16> = blob[88..106]
             .chunks_exact(2)
             .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
@@ -360,11 +343,6 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
         let object = effect.as_object_mut().unwrap();
         if features & FEATURE_POST != 0 {
             object.insert("post_matrix".into(), json!(post));
-        }
-        if features & FEATURE_GLOW != 0 {
-            object.insert("glow".into(), json!(blob[107]));
-        } else {
-            ensure!(blob[107] == 0, "Unsupported effect features");
         }
     }
     let icon = blob[ICON_OFFSET..ICON_OFFSET + ICON_SIZE].to_vec();
@@ -506,13 +484,6 @@ pub fn compile_definition(definition: &Value) -> Result<Vec<u8>> {
     let object = effect.as_object_mut().unwrap();
     if let Some(matrix) = definition.get("post_matrix") {
         object.insert("post_matrix".into(), matrix.clone());
-    }
-    if let Some(value) = definition.get("glow") {
-        let strength = value
-            .as_str()
-            .and_then(|name| STRENGTHS.iter().position(|s| *s == name))
-            .context("Expected glow low, medium, or high")?;
-        object.insert("glow".into(), json!(strength + 1));
     }
     encode(&effect, &pixels)
 }

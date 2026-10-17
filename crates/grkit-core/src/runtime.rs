@@ -15,16 +15,12 @@ pub const ICONS_PER_CHUNK: usize = 40;
 pub const HOST_ICON_COUNT: usize = 16;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
-/// Soft-glow map after the records (`GRKIT_GLOW_SCRATCH`): at most 376 x 376 cells.
-pub const GLOW_SCRATCH: usize = 376 * 376;
-/// Live-view glow overlay after the glow map (`GRKIT_LIVE_GLOW_SCRATCH`): five
-/// state words, then 180 x 120 cells of the LCD canvas.
-pub const LIVE_GLOW_SCRATCH: usize = 20 + 180 * 120;
-/// Everything after the records (`GRKIT_SCRATCH_SIZE`).
-pub const SCRATCH_SIZE: usize = GLOW_SCRATCH + LIVE_GLOW_SCRATCH;
+/// Picture scratch after the records (`GRKIT_PICTURE_SCRATCH`): the date stamp
+/// core and halo masks.
+pub const PICTURE_SCRATCH: usize = 141376;
 // One script array holds the header, every record, and the scratch: at most 65536 words.
-const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE + SCRATCH_SIZE <= 65536 * 4);
-const _: () = assert!(GLOW_SCRATCH.is_multiple_of(4) && LIVE_GLOW_SCRATCH.is_multiple_of(4));
+const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE + PICTURE_SCRATCH <= 65536 * 4);
+const _: () = assert!(PICTURE_SCRATCH.is_multiple_of(4));
 pub const MAX_CHUNKS: usize = (MAX_COUNT + HOST_ICON_COUNT).div_ceil(ICONS_PER_CHUNK);
 const _: () = assert!(MAX_COUNT + HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 pub const HEADER_REFERENCE: u32 = 0x58012340;
@@ -49,7 +45,7 @@ pub fn layout(count: usize) -> Result<Value> {
         .map(|start| ICONS_PER_CHUNK.min(count + HOST_ICON_COUNT - start) * ICON_STRIDE / 4)
         .collect();
     Ok(
-        json!({"words": (HEADER_SIZE + count * RECORD_SIZE + SCRATCH_SIZE) / 4, "icon_words": icon_words}),
+        json!({"words": (HEADER_SIZE + count * RECORD_SIZE + PICTURE_SCRATCH) / 4, "icon_words": icon_words}),
     )
 }
 
@@ -111,7 +107,7 @@ pub fn loader() -> Vec<u8> {
         "fileclose fh".into(),
         format!(
             "expected = {} + count * {}",
-            (HEADER_SIZE + SCRATCH_SIZE) / 4,
+            (HEADER_SIZE + PICTURE_SCRATCH) / 4,
             RECORD_SIZE / 4
         ),
         "if words != expected goto reject".into(),

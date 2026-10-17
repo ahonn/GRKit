@@ -223,21 +223,13 @@ int main(int argc, char **argv) {
     // Extension: each feature bit owns its field.
     let mut extended_effect = sample(false);
     extended_effect["post_matrix"] = json!([9000, -500, -308, -200, 8600, -208, 100, -300, 8392]);
-    extended_effect["glow"] = json!(3);
     let extended = effects::encode(&extended_effect, &vec![0; effects::ICON_SIZE]).unwrap();
     assert_eq!(&extended[..8], effects::MAGIC);
-    corpus.push((
-        "extended post and glow".into(),
-        extended.clone(),
-        Some(true),
-    ));
-    let mut glow_effect = sample(true);
+    corpus.push(("extended post".into(), extended.clone(), Some(true)));
+    // Glow is not an effect field.
+    let mut glow_effect = sample(false);
     glow_effect["glow"] = json!(1);
-    corpus.push((
-        "extended monochrome glow".into(),
-        effects::encode(&glow_effect, &vec![0; effects::ICON_SIZE]).unwrap(),
-        Some(true),
-    ));
+    assert!(effects::encode(&glow_effect, &vec![0; effects::ICON_SIZE]).is_err());
     let mut mono_post = mono.clone();
     mono_post[84] = 1;
     mono_post[88] = 1;
@@ -249,10 +241,10 @@ int main(int argc, char **argv) {
         // Bit 2 is undefined.
         (84, 2_u32.to_le_bytes().to_vec()),
         (84, 7_u32.to_le_bytes().to_vec()),
-        (84, 1_u32.to_le_bytes().to_vec()),
         (84, 4_u32.to_le_bytes().to_vec()),
         (106, vec![1]),
-        (107, vec![0]),
+        // Byte 107 held a glow strength; it is reserved.
+        (107, vec![1]),
         (107, vec![4]),
         (108, vec![1]),
         (127, vec![1]),
@@ -332,10 +324,10 @@ _Static_assert(GRKIT_HOST_ICON_CHUNKS + 4 * 4 <= GRKIT_HOST_HEADER_SIZE, "Header
 _Static_assert(GRKIT_RECORD_COEFFICIENTS + 1556 == GRKIT_RECORD_NAME, "Coefficient overlap");
 _Static_assert(GRKIT_RECORD_NAME + 34 <= GRKIT_RECORD_MONOCHROME, "Name overlap");
 _Static_assert(GRKIT_RECORD_CODE + 2 <= GRKIT_RECORD_FEATURES, "Extension overlap");
-_Static_assert(GRKIT_RECORD_GLOW < GRKIT_RECORD_SIZE, "Extension overflow");
+_Static_assert(GRKIT_RECORD_POST + 20 <= GRKIT_RECORD_SIZE, "Extension overflow");
 int main(void) {
-    printf("%u %u %u %u %u %u %u %u %u %u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE,
-           GRKIT_GLOW_SCRATCH, GRKIT_SCRATCH_SIZE, GRKIT_HOST_COUNT, GRKIT_HOST_RECORDS, GRKIT_HOST_ACTIVE, GRKIT_HOST_STAMP,
+    printf("%u %u %u %u %u %u %u %u %u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE,
+           GRKIT_PICTURE_SCRATCH, GRKIT_HOST_COUNT, GRKIT_HOST_RECORDS, GRKIT_HOST_ACTIVE, GRKIT_HOST_STAMP,
            GRKIT_HOST_GUIDE, GRKIT_HOST_FRAME_RATIO, GRKIT_RECORD_CODE);
     return 0;
 }
@@ -356,8 +348,7 @@ int main(void) {
             runtime::HEADER_SIZE,
             runtime::RECORD_SIZE,
             runtime::ICON_STRIDE,
-            runtime::GLOW_SCRATCH,
-            runtime::SCRATCH_SIZE,
+            runtime::PICTURE_SCRATCH,
             runtime::HOST_COUNT,
             runtime::HOST_RECORDS,
             runtime::HOST_ACTIVE,
@@ -418,7 +409,7 @@ fn native_framing_contract_preserves_canvas_bounds_and_settings() {
 }
 
 #[test]
-fn native_picture_contract_applies_post_matrix_glow_and_stamp() {
+fn native_picture_contract_applies_post_matrix_and_stamp() {
     let Some(compiler) = compiler() else {
         return;
     };

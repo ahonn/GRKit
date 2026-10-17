@@ -61,27 +61,6 @@ dirty_resume:
 
 // JpegEncodeMacroProcess::Execute entry: r0 = process, r1 = message. The stub
 // keeps every argument and replays the displaced `mov ip, sp`.
-// 1 when the caller runs at PL1, else 0 (User mode). The live-view glow reads
-// CNTPCT and maintains the data cache, and both need PL1.
-.global picture_privileged
-picture_privileged:
-    mrs r0, cpsr
-    and r0, r0, #0x1f
-    subs r0, r0, #0x10
-    movne r0, #1
-    bx lr
-// Generic timer for the live-view glow schedule: the low word of CNTPCT, and
-// CNTFRQ. Call them only at PL1.
-.global picture_counter
-picture_counter:
-    isb
-    mrrc p15, 0, r0, r1, c14
-    bx lr
-.global picture_frequency
-picture_frequency:
-    mrc p15, 0, r0, c14, c0, 0
-    bx lr
-
 .global picture_encode_entry
 picture_encode_entry:
     push {r0-r3, r12, lr}

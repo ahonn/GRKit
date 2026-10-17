@@ -19,7 +19,6 @@ The compiler writes self-contained GRFX0001 files with a 40 x 40 icon. CRC32 det
 | `icon` | Yes | `label` and `shape` (`film`, `filter`, or `plain`) |
 | `attribution` | Yes | An object with the origin, source, and license |
 | `post_matrix` | No | Nine signed Q13 coefficients, row-major, after the tone curves |
-| `glow` | No | `low`, `medium`, or `high` |
 
 A monochrome effect cannot have `post_matrix`.
 
@@ -37,7 +36,7 @@ Effects run on the camera's look matrix before Standard base gamma. RGB curves i
 They are not display-sRGB JPEG transforms. Imported fits assume 18% gray at base-gamma index 7.8.
 
 The optional post-curve matrix (`post_matrix`) acts on gamma-encoded RGB after the tone curves. The runtime multiplies the YCbCr matrix by it.
-The optional `glow` applies to captured photos. The viewfinder shows an approximation. Effects add no grain or hue-sector correction.
+Effects add no grain, glow, or hue-sector correction.
 
 ## Import a .cube preset
 
