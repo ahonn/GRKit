@@ -29,7 +29,8 @@ GRKit loads a few seconds after power-on. Open ADJ and select the sixth entry, m
 - **Date Stamp:** select Off or a date style, then press OK. Photos get the date at the bottom right in glowing orange digits, like a film data back. The digits fade on bright areas. The viewfinder does not show them.
 - **MENU:** return one level. From GRKit, return to native ADJ with the selected effect.
 
-All modules reset to Off on each boot. Pressing OK on a native Image Control disables the plugin effect.
+GRKit keeps the selected effect, ratio, guide style, and date style in `SCRIPT/PLUGINS/STATE.TXT` and restores them a few seconds after power-on.
+Delete that file to start from Off. Pressing OK on a native Image Control disables the plugin effect.
 Some effects add a soft glow. Photos show it, but the viewfinder does not.
 Playback information shows the plugin effect icon while that effect is installed.
 

@@ -32,6 +32,16 @@ The script array holds the header, the records, and the 141,376-byte soft-glow m
 Off, GRKit, and the fourteen module tiles (four Framing, five Guides, five Date Stamp) use sixteen host icon records outside that capacity.
 The module tiles are contiguous, and the menu derives each one from the first Framing tile.
 
+### Saved selections
+
+After `INSTALL.OK`, the resident loader restores and saves the effect, the Framing ratio, the Guides style, and the Date Stamp style.
+The private header is the loader's `registry` array, so the script reads and writes it directly.
+It keeps one decimal integer in `SCRIPT/PLUGINS/STATE.TXT`: `code + 65536 * (ratio + 4 * (guide + 8 * stamp))`, where `code` is the effect's ImageTone code and 0 is Off.
+
+The loader checks the state every 2 s and writes the file only after a change. It writes through the camera's own file system, as photos do, never from Linux while the camera may write photos.
+An unreadable or out-of-range file restores nothing. An effect that is no longer installed stays Off, and its file entry stays until the next change.
+A power loss during the write can lose the last change.
+
 ## Menu
 
 The ADJ toolbar shows five native entries and a private GRKit entry. All six cells use a 50-pixel pitch with a 40-pixel icon.
@@ -82,8 +92,8 @@ Framing draws black at 50% alpha into the still-viewfinder OSD bitmap. It draws 
 It checks the still mode, the native 3:2 aspect, the canvas owner, the dimensions, the pixel format, and the allocation first.
 The OSD pixel buffer moves between boots (`0x5f83df80` and `0x619e1200` were seen), so the allocation must lie in `0x40000000`..`0x80000000`.
 
-The ratio badge occupies `[204,46,66,22]`. A new session starts with Off.
-A still live view redraws its canvas only on a change. A selection that has not drawn on the canvas yet invalidates the canvas (`0x533ad308`) on the next live-view update.
+The ratio badge occupies `[204,46,66,22]`. A new session starts with the saved selections.
+A still live view redraws its canvas only on a change. A selection restored at power-on has not drawn on the canvas yet. Such a selection invalidates the canvas (`0x533ad308`) on the next live-view update.
 
 ADJ has its own canvas in slot zero (`controller+4`), so the live-view mask is not visible there.
 While ADJ is open, Framing draws the committed ratio's mask on the ADJ canvas below the menu controls. The Framing page draws the highlighted ratio instead.

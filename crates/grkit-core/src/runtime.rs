@@ -23,6 +23,18 @@ const _: () = assert!(GLOW_SCRATCH.is_multiple_of(4));
 pub const MAX_CHUNKS: usize = (MAX_COUNT + HOST_ICON_COUNT).div_ceil(ICONS_PER_CHUNK);
 const _: () = assert!(MAX_COUNT + HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 pub const HEADER_REFERENCE: u32 = 0x58012340;
+/// Header and record offsets that the loader script reads and writes. They
+/// match `runtime/abi.h`, which a native test checks.
+pub const HOST_COUNT: usize = 0;
+pub const HOST_RECORDS: usize = 4;
+pub const HOST_ACTIVE: usize = 8;
+pub const HOST_STAMP: usize = 52;
+pub const HOST_GUIDE: usize = 204;
+pub const HOST_FRAME_RATIO: usize = 208;
+pub const RECORD_CODE: usize = 0x6f8;
+/// Selections kept across power-off, written by the resident loader through the
+/// camera's own file system, never from Linux while the camera may write photos.
+pub const STATE_FILE: &str = "STATE.TXT";
 pub const LINUX_DIRECTORY: &str = "/media/storage1/SCRIPT/PLUGINS";
 
 pub fn layout(count: usize) -> Result<Value> {
@@ -133,11 +145,98 @@ pub fn loader() -> Vec<u8> {
         "if attempts > 60 mpause 9500".into(),
         "goto install".into(),
     ]);
+    // The private header is the `registry` array, so the script reads and
+    // writes it directly. The state is one integer:
+    // code + 65536 * (ratio + 4 * (guide + 8 * stamp)), code 0 for Off.
+    let word = |offset: usize| format!("registry[{}]", offset / 4);
+    let state = path(STATE_FILE);
+    lines.extend([
+        ":resident".into(),
+        "call restore".into(),
+        ":watch".into(),
+        "mpause 2000".into(),
+        "call snapshot".into(),
+        "if state = saved goto watch".into(),
+        format!("filecreate sfh '{state}'"),
+        "if sfh < 0 goto watch".into(),
+        "int2str line state".into(),
+        "filewrite sfh line".into(),
+        "fileclose sfh".into(),
+        "saved = state".into(),
+        "goto watch".into(),
+        ":snapshot".into(),
+        format!("active = {}", word(HOST_ACTIVE)),
+        "code = 0".into(),
+        "if active = 0 goto snapshot_values".into(),
+        format!("index = (active - {}) / {RECORD_SIZE}", word(HOST_RECORDS)),
+        format!(
+            "code = registry[{} + index * {} + {}]",
+            HEADER_SIZE / 4,
+            RECORD_SIZE / 4,
+            RECORD_CODE / 4
+        ),
+        ":snapshot_values".into(),
+        format!(
+            "state = code + 65536 * ({} + 4 * ({} + 8 * {}))",
+            word(HOST_FRAME_RATIO),
+            word(HOST_GUIDE),
+            word(HOST_STAMP)
+        ),
+        "return".into(),
+        // An unreadable or out-of-range file restores nothing. An effect that is
+        // no longer installed stays Off. `fileopen` creates a missing file, and a
+        // read of an empty file stops the interpreter, so check the size first.
+        ":restore".into(),
+        "size = 0".into(),
+        format!("filestat '{state}' size"),
+        "if size < 1 goto restore_end".into(),
+        "if size > 10 goto restore_end".into(),
+        format!("fileopen sfh '{state}' 0"),
+        "if sfh < 0 goto restore_end".into(),
+        "fileread sfh size line".into(),
+        "fileclose sfh".into(),
+        "str2int stored line".into(),
+        "if result = 0 goto restore_end".into(),
+        "if stored < 0 goto restore_end".into(),
+        "rest = stored / 65536".into(),
+        "code = stored - rest * 65536".into(),
+        "upper = rest / 4".into(),
+        "ratio = rest - upper * 4".into(),
+        "rest = upper / 8".into(),
+        "guide = upper - rest * 8".into(),
+        "if guide > 4 goto restore_end".into(),
+        "if rest > 4 goto restore_end".into(),
+        format!("{} = ratio", word(HOST_FRAME_RATIO)),
+        format!("{} = guide", word(HOST_GUIDE)),
+        format!("{} = rest", word(HOST_STAMP)),
+        "index = 0".into(),
+        ":restore_find".into(),
+        "if code = 0 goto restore_end".into(),
+        format!("if index >= {} goto restore_end", word(HOST_COUNT)),
+        format!(
+            "if registry[{} + index * {} + {}] <> code goto restore_next",
+            HEADER_SIZE / 4,
+            RECORD_SIZE / 4,
+            RECORD_CODE / 4
+        ),
+        format!(
+            "{} = {} + index * {RECORD_SIZE}",
+            word(HOST_ACTIVE),
+            word(HOST_RECORDS)
+        ),
+        "goto restore_end".into(),
+        ":restore_next".into(),
+        "index = index + 1".into(),
+        "goto restore_find".into(),
+        // Write only after the next change, so a missing effect keeps its file entry
+        // until the user selects something else.
+        ":restore_end".into(),
+        "call snapshot".into(),
+        "saved = state".into(),
+        "return".into(),
+    ]);
     lines.extend(
         [
-            ":resident",
-            "mpause 60000",
-            "goto resident",
             ":reject_close",
             "fileclose fh",
             ":reject",
