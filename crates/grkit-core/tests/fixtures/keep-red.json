@@ -1,0 +1,28 @@
+{
+  "schema": "grkit-effect-v1",
+  "effect_id": "keep-red-v1",
+  "name": "Keep Red",
+  "flags": 0,
+  "matrix": [8116, 743, -667, 15, 8598, -421, -244, 542, 7894],
+  "icon": {
+    "label": "RED",
+    "shape": "plain"
+  },
+  "attribution": {
+    "origin": "original-design",
+    "license": "CC-BY-SA-4.0",
+    "target": "Standard rendering that keeps only red",
+    "author": "GRKit tests"
+  },
+  "curve_knots": [
+    [[0, 0], [255, 16320]],
+    [[0, 0], [255, 16320]],
+    [[0, 0], [255, 16320]]
+  ],
+  "selective_color": {
+    "hue": 108.6,
+    "lower": [20, 35],
+    "higher": [6, 14],
+    "chroma": [6, 16]
+  }
+}

@@ -19,12 +19,15 @@ The compiler writes self-contained GRFX0001 files with a 40 x 40 icon. CRC32 det
 | `icon` | Yes | `label` and `shape` (`film`, `filter`, or `plain`) |
 | `attribution` | Yes | An object with the origin, source, and license |
 | `post_matrix` | No | Nine signed Q13 coefficients, row-major, after the tone curves |
+| `selective_color` | No | `hue` in degrees (0 to 360), `lower` and `higher` `[inner, outer]` half widths in degrees (0 to 75), and `chroma` `[c0, c1]` (c0 < c1 <= 181) |
 
-A monochrome effect cannot have `post_matrix`.
+A monochrome effect cannot have `post_matrix` or `selective_color`.
+
+`selective_color` keeps the chroma of one hue in recorded pictures and removes it elsewhere. A pair keeps all of its chroma inside the inner half width, and none outside the outer one. `lower` is the side toward smaller hue angles (from red, toward magenta), and `higher` the side toward larger angles (toward orange and skin). Pairs with chroma below `c0` lose it, and pairs above `c1` keep it. The hue is the angle of (Cb - 128, Cr - 128): sRGB red is at 108.6 degrees. The viewfinder shows the effect in monochrome, because selective color applies only to recorded pictures.
 
 ## Effect catalog
 
-The site and the release packages publish every effect in this directory. Each effect is a fit of one film simulation LUT:
+The site and the release packages publish every effect in this directory:
 
 | Effect | ID | Target |
 |---|---|---|
@@ -45,7 +48,7 @@ The site and the release packages publish every effect in this directory. Each e
 | Aerocolor IV | `aerocolor-iv-v1` | Kodak Aerocolor IV 2460 aerial negative on Portra Endura paper |
 | EXR 200T | `exr-200t-2383-v1` | Kodak EXR 200T 5293 on Vision 2383 print film |
 
-Menu names are the names of the simulated films. They identify the materials, not an endorsement. [NOTICE.md](NOTICE.md) has the disclaimer.
+Each effect is a fit of one film simulation LUT. Their menu names are the names of the simulated films. They identify the materials, not an endorsement. [NOTICE.md](NOTICE.md) has the disclaimer.
 
 The first eleven LUTs come from [spektrafilm](https://github.com/andreavolpato/spektrafilm) 0.3.4. The other five come from [Spectral Film LUT](https://github.com/JanLohse/spectral_film_lut). `sources/` holds the scripts that bake each LUT, the upstream notices, and `manifest.json`, which records the SHA-256 of each LUT. The LUTs themselves are not in the repository.
 
@@ -67,7 +70,7 @@ Effects run on the camera's look matrix before Standard base gamma. RGB curves i
 They are not display-sRGB JPEG transforms. Imported fits assume 18% gray at base-gamma index 7.8.
 
 The optional post-curve matrix (`post_matrix`) acts on gamma-encoded RGB after the tone curves. The runtime multiplies the YCbCr matrix by it.
-Effects add no grain, glow, or hue-sector correction.
+Effects add no grain or glow. Only `selective_color` changes color by hue, and only in recorded pictures.
 
 ## Import a .cube preset
 

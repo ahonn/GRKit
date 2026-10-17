@@ -21,6 +21,12 @@ fn synthetic_base() -> [u16; 256] {
     })
 }
 
+/// A selective color definition that keeps only red. No published effect uses the feature.
+fn keep_red() -> Value {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/keep-red.json");
+    effects::parse_json(&fs::read(path).unwrap()).unwrap()
+}
+
 fn decoded(definition: &Value) -> Value {
     effects::decode(&effects::compile_definition(definition).unwrap())
         .unwrap()
@@ -108,4 +114,32 @@ fn published_effects_match_their_definitions() {
     let error = site::publish_effects(&duplicate, &synthetic_base()).unwrap_err();
     assert!(error.to_string().contains("Duplicate effect ID"), "{error}");
     assert!(site::publish_effects(&[], &synthetic_base()).is_err());
+}
+
+#[test]
+fn selective_color_previews_keep_red_and_gray_other_hues() {
+    let base = synthetic_base();
+    let accent = site::preview_lut(&base, &decoded(&keep_red())).unwrap();
+    let mut standard = decoded(&keep_red());
+    standard.as_object_mut().unwrap().remove("selective_color");
+    let plain = site::preview_lut(&base, &standard).unwrap();
+    let last = site::LUT_SIZE - 1;
+    // Saturated red keeps its color; green and blue turn neutral.
+    let red = entry(&accent, last, 0, 0);
+    assert!(red[0] as i32 - red[1] as i32 > 100, "{red:?}");
+    for rgb in [entry(&accent, 0, last, 0), entry(&accent, 0, 0, last)] {
+        assert!(
+            rgb.iter().max().unwrap() - rgb.iter().min().unwrap() <= 2,
+            "{rgb:?}"
+        );
+    }
+    // The gray ramp has no chroma to keep or remove. The 8-bit YCbCr round trip,
+    // as in a camera JPEG, can move a channel by one level.
+    for i in 0..site::LUT_SIZE {
+        let (a, p) = (entry(&accent, i, i, i), entry(&plain, i, i, i));
+        assert!(
+            a.iter().zip(p).all(|(a, p)| a.abs_diff(p) <= 1),
+            "{a:?} {p:?}"
+        );
+    }
 }

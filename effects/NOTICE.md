@@ -1,6 +1,6 @@
 # Effect attribution
 
-Each GRKit effect is a fit of one film simulation LUT to the GR III effect model: a 3 x 3 look
+Each film effect is a fit of one film simulation LUT to the GR III effect model: a 3 x 3 look
 matrix, three tone curves, and an optional post-curve matrix. GRKit contributors made the fits.
 The repository and the SD packages contain the fitted parameters, not the LUTs.
 
@@ -32,8 +32,8 @@ Kodak Alaris, or Fujifilm. The simulations are models of published data, not mea
 equivalents of the products.
 
 The effects operate in the camera's native image-processing domain. They are not display-sRGB
-JPEG transforms. They add no grain, halation, or other spatial effect, and no hue-selective
-correction. The fits assume 18% gray at base-gamma index 7.8.
+JPEG transforms. They add no grain, halation, or other spatial effect. The fits assume 18% gray
+at base-gamma index 7.8.
 
 Icon text uses the Inter typeface (SIL Open Font License 1.1, see
 `crates/grkit-core/assets/Inter-LICENSE.txt`). Icons use no manufacturer logo.

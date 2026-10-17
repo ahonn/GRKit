@@ -62,9 +62,15 @@
 /* GRF extension, zero for an effect without features. */
 #define GRKIT_RECORD_FEATURES 0x700
 #define GRKIT_FEATURE_POST 1U
+#define GRKIT_FEATURE_SELECTIVE 2U
 /* i16[9] signed Q13 RGB matrix after the tone curves, applied through the YCbCr
-   matrix. Bytes 0x716 and 0x717 are reserved and zero. */
+   matrix. */
 #define GRKIT_RECORD_POST 0x704
+/* Selective color for recorded pictures: i16 cos and sin of the target hue (Q12),
+   u16 inner and outer tangents toward smaller hue angles, then toward larger
+   ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72b are reserved and
+   zero. */
+#define GRKIT_RECORD_SELECTIVE 0x716
 #define GRKIT_ICON_STRIDE 6408
 /* Picture scratch after the records: the date stamp core and halo masks. */
 #define GRKIT_PICTURE_SCRATCH 141376

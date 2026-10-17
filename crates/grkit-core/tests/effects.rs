@@ -13,6 +13,11 @@ fn fixture() -> Value {
         "matrix": [8192, 0, 0, 0, 8192, 0, 0, 0, 8192], "curves": [&curve, &curve, &curve]})
 }
 
+/// A selective color definition that keeps only red. No published effect uses the feature.
+fn keep_red() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/keep-red.json")
+}
+
 fn read_json(path: impl AsRef<std::path::Path>) -> Value {
     effects::parse_json(&fs::read(path).unwrap()).unwrap()
 }
@@ -286,4 +291,55 @@ fn pinned_source_inputs_match_their_manifest() {
             "{name}"
         );
     }
+}
+
+#[test]
+fn selective_color_compiles_to_kernel_integers_and_round_trips() {
+    let definition = read_json(keep_red());
+    let blob = effects::compile_definition(&definition).unwrap();
+    assert_eq!(&blob[84..88], &effects::FEATURE_SELECTIVE.to_le_bytes());
+    // cos and sin of 108.6 degrees in Q12, Q8 tangents of 20/35 and 6/14 degrees,
+    // then the chroma gate. The runtime test uses the same integers.
+    assert_eq!(
+        blob[106..120],
+        [0xe6, 0xfa, 0x2a, 0x0f, 93, 0, 179, 0, 27, 0, 64, 0, 6, 16]
+    );
+    assert!(blob[120..128].iter().all(|v| *v == 0));
+    let (effect, icon) = effects::decode(&blob).unwrap();
+    assert_eq!(
+        effect["selective_color"],
+        json!({"direction_q12": [-1306, 3882], "lower_tan_q8": [93, 179],
+               "higher_tan_q8": [27, 64], "chroma": [6, 16]})
+    );
+    assert_eq!(effects::encode(&effect, &icon).unwrap(), blob);
+}
+
+#[test]
+fn selective_color_rejects_invalid_parameters() {
+    let base = read_json(keep_red());
+    let invalid = [
+        json!({"hue": 360, "lower": [20, 35], "higher": [6, 14], "chroma": [6, 16]}),
+        json!({"hue": -1, "lower": [20, 35], "higher": [6, 14], "chroma": [6, 16]}),
+        json!({"hue": 108.6, "lower": [20, 20], "higher": [6, 14], "chroma": [6, 16]}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 76], "chroma": [6, 16]}),
+        json!({"hue": 108.6, "lower": [-1, 35], "higher": [6, 14], "chroma": [6, 16]}),
+        json!({"hue": 108.6, "lower": [20, 20.05], "higher": [6, 14], "chroma": [6, 16]}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 14], "chroma": [16, 6]}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 14], "chroma": [6, 182]}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 14], "chroma": [6.5, 16]}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 14], "chroma": [6, 16], "x": 1}),
+        json!({"hue": 108.6, "lower": [20, 35], "higher": [6, 14]}),
+        json!({"direction_q12": [-1306, 3882], "lower_tan_q8": [93, 179],
+               "higher_tan_q8": [27, 64], "chroma": [6, 16]}),
+    ];
+    for value in invalid {
+        let mut definition = base.clone();
+        definition["selective_color"] = value.clone();
+        assert!(effects::compile_definition(&definition).is_err(), "{value}");
+    }
+    // Selective color needs the chroma that a monochrome effect removes.
+    let mut mono = read_json(root().join("red-filter-mono-v1/effect.json"));
+    mono["selective_color"] = base["selective_color"].clone();
+    let error = effects::compile_definition(&mono).unwrap_err().to_string();
+    assert!(error.contains("selective"), "{error}");
 }

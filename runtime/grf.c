@@ -1,6 +1,7 @@
 /* Shared GRFX0001 validation for the installer and host tools. Bytes 84..127
-   hold the optional extension: u32 features at 84 and an i16[9] post matrix
-   at 88. Bytes 106..127 are reserved. */
+   hold the optional extension: u32 features at 84, an i16[9] post matrix at 88,
+   and selective color at 106 (i16 cos and sin, four u16 tangents, two u8 chroma
+   limits). Bytes 120..127 are reserved. */
 #include "grf.h"
 #ifndef GRKIT_GRF_EMBEDDED
 typedef unsigned char u8;
@@ -26,14 +27,32 @@ static u32 crc(const u8 *p)
 }
 static int zeros(const u8 *p, u32 n) { for(u32 i=0;i<n;++i) if(p[i]) return 0; return 1; }
 #define GRF_FEATURE_POST 1U
+#define GRF_FEATURE_SELECTIVE 2U
+static u32 grf_get16(const u8 *p) { return p[0] | p[1] << 8; }
+/* The bounds of grkit_core::selective: a Q12 unit direction, inner < outer <= 1024
+   on each side, and c0 < c1 <= 181. */
+static int valid_selective(const u8 *p)
+{
+    int c=(short)grf_get16(p), s=(short)grf_get16(p+2);
+    u32 square=(u32)(c*c)+(u32)(s*s);
+    if (square<15000000U || square>18000000U) return 0;
+    for (u32 side=0; side<2; ++side) {
+        u32 inner=grf_get16(p+4+side*4), outer=grf_get16(p+6+side*4);
+        if (inner>=outer || outer>1024) return 0;
+    }
+    return p[12]<p[13] && p[13]<=181;
+}
 /* Each feature bit owns its field, and an unused field stays zero. An effect
-   without features has zeros in the whole extension. */
+   without features has zeros in the whole extension. A monochrome effect has
+   no features. */
 static int valid_extension(const u8 *p)
 {
     u32 features=grf_get32(p+84);
-    if ((features & ~GRF_FEATURE_POST) || !zeros(p+106,22)) return 0;
+    if ((features & ~(GRF_FEATURE_POST|GRF_FEATURE_SELECTIVE)) || !zeros(p+120,8)) return 0;
     if (!(features&GRF_FEATURE_POST) && !zeros(p+88,18)) return 0;
-    if ((features&GRF_FEATURE_POST) && grf_get32(p+80)==1) return 0;
+    if (!(features&GRF_FEATURE_SELECTIVE) && !zeros(p+106,14)) return 0;
+    if (features && grf_get32(p+80)==1) return 0;
+    if ((features&GRF_FEATURE_SELECTIVE) && !valid_selective(p+106)) return 0;
     return 1;
 }
 static int valid_profile(const u8 *p)

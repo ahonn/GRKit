@@ -1,8 +1,9 @@
 //! Data-only Image Control definitions and GRFX0001 encoding.
 //!
-//! Bytes 84..128 hold the optional extension: u32 features and an i16[9]
-//! signed Q13 post-curve matrix. Bytes 106..128 are reserved. An effect without
-//! features has zeros in the whole extension.
+//! Bytes 84..128 hold the optional extension: u32 features, an i16[9] signed Q13
+//! post-curve matrix at 88, and the selective color parameters at 106 (see
+//! `selective`). Bytes 120..128 are reserved. An effect without features has zeros in
+//! the whole extension.
 
 use anyhow::{ensure, Context, Result};
 use serde::{
@@ -13,6 +14,8 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
+use crate::selective::{self, Selective};
+
 pub const MAGIC: &[u8; 8] = b"GRFX0001";
 pub const SIZE: usize = 8192;
 pub const ICON_SIZE: usize = 6400;
@@ -20,7 +23,13 @@ pub const ICON_OFFSET: usize = 1684;
 pub const MONOCHROME: u32 = 1;
 pub const SCHEMA: &str = "grkit-effect-v1";
 pub const FEATURE_POST: u32 = 1;
-const EXTENSION_KEYS: [&str; 1] = ["post_matrix"];
+pub const FEATURE_SELECTIVE: u32 = 2;
+const FEATURES: u32 = FEATURE_POST | FEATURE_SELECTIVE;
+/// Optional keys of both a definition and a decoded effect. A definition writes
+/// `selective_color` in degrees; a decoded effect holds its GRF integers.
+const EXTENSION_KEYS: [&str; 2] = ["post_matrix", "selective_color"];
+const SELECTIVE_OFFSET: usize = 106;
+const RESERVED: std::ops::Range<usize> = SELECTIVE_OFFSET + selective::SIZE..128;
 
 struct UniqueValue(Value);
 
@@ -107,16 +116,18 @@ fn has_keys_with(value: &Value, required: &[&str], optional: &[&str]) -> bool {
     })
 }
 
-/// The optional extension of an effect: features and the post matrix.
+/// The optional extension of an effect: features, the post matrix, and selective color.
 struct Extension {
     features: u32,
     post: [i16; 9],
+    selective: Option<Selective>,
 }
 
 fn extension(effect: &Value) -> Result<Extension> {
     let mut result = Extension {
         features: 0,
         post: [0; 9],
+        selective: None,
     };
     if let Some(matrix) = effect.get("post_matrix") {
         let values = matrix
@@ -130,6 +141,10 @@ fn extension(effect: &Value) -> Result<Extension> {
                 .context("Expected nine signed Q13 post-matrix coefficients")?;
         }
         result.features |= FEATURE_POST;
+    }
+    if let Some(value) = effect.get("selective_color") {
+        result.selective = Some(Selective::from_json(value)?);
+        result.features |= FEATURE_SELECTIVE;
     }
     Ok(result)
 }
@@ -202,7 +217,7 @@ pub fn validate(effect: &Value, icon: &[u8]) -> Result<()> {
             &["effect_id", "name", "matrix", "curves"],
             &optional
         ),
-        "Expected effect_id, name, matrix, curves, and optional flags and post_matrix"
+        "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, and selective_color"
     );
     let flags = effect
         .get("flags")
@@ -227,6 +242,10 @@ pub fn validate(effect: &Value, icon: &[u8]) -> Result<()> {
     ensure!(
         flags != MONOCHROME as u64 || extension.features & FEATURE_POST == 0,
         "Monochrome effects cannot have a post matrix"
+    );
+    ensure!(
+        flags != MONOCHROME as u64 || extension.features & FEATURE_SELECTIVE == 0,
+        "Monochrome effects cannot have selective color"
     );
     if flags == MONOCHROME as u64 {
         let matrix = effect["matrix"].as_array().unwrap();
@@ -271,6 +290,9 @@ pub fn encode(effect: &Value, icon: &[u8]) -> Result<Vec<u8>> {
     for (index, value) in extension.post.iter().enumerate() {
         blob[88 + index * 2..90 + index * 2].copy_from_slice(&value.to_le_bytes());
     }
+    if let Some(selective) = extension.selective {
+        blob[SELECTIVE_OFFSET..RESERVED.start].copy_from_slice(&selective.to_bytes());
+    }
     blob[8..12].copy_from_slice(&(SIZE as u32).to_le_bytes());
     blob[80..84].copy_from_slice(
         &(effect.get("flags").and_then(Value::as_u64).unwrap_or(0) as u32).to_le_bytes(),
@@ -297,7 +319,7 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
         "Invalid effect size or CRC32"
     );
     ensure!(
-        [(106, 128), (146, 148), (8084, SIZE)]
+        [(RESERVED.start, RESERVED.end), (146, 148), (8084, SIZE)]
             .iter()
             .all(|(start, end)| blob[*start..*end].iter().all(|v| *v == 0)),
         "Unsupported effect flags or reserved bytes"
@@ -330,7 +352,7 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
     let mut effect = json!({"effect_id": string(16)?, "name": string(48)?, "flags": read_u32(80), "matrix": matrix, "curves": curves});
     {
         let features = read_u32(84);
-        ensure!(features & !FEATURE_POST == 0, "Unsupported effect features");
+        ensure!(features & !FEATURES == 0, "Unsupported effect features");
         let post: Vec<i16> = blob[88..106]
             .chunks_exact(2)
             .map(|bytes| i16::from_le_bytes(bytes.try_into().unwrap()))
@@ -340,9 +362,20 @@ pub fn decode(blob: &[u8]) -> Result<(Value, Vec<u8>)> {
             features & FEATURE_POST != 0 || post.iter().all(|v| *v == 0),
             "Unsupported effect features"
         );
+        let selective = &blob[SELECTIVE_OFFSET..RESERVED.start];
+        ensure!(
+            features & FEATURE_SELECTIVE != 0 || selective.iter().all(|v| *v == 0),
+            "Unsupported effect features"
+        );
         let object = effect.as_object_mut().unwrap();
         if features & FEATURE_POST != 0 {
             object.insert("post_matrix".into(), json!(post));
+        }
+        if features & FEATURE_SELECTIVE != 0 {
+            object.insert(
+                "selective_color".into(),
+                Selective::from_bytes(selective)?.to_json(),
+            );
         }
     }
     let icon = blob[ICON_OFFSET..ICON_OFFSET + ICON_SIZE].to_vec();
@@ -435,6 +468,12 @@ pub fn compile_definition(definition: &Value) -> Result<Vec<u8>> {
     let object = effect.as_object_mut().unwrap();
     if let Some(matrix) = definition.get("post_matrix") {
         object.insert("post_matrix".into(), matrix.clone());
+    }
+    if let Some(value) = definition.get("selective_color") {
+        object.insert(
+            "selective_color".into(),
+            Selective::from_definition(value)?.to_json(),
+        );
     }
     encode(&effect, &pixels)
 }

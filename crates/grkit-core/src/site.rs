@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 
 use crate::cube::{self, Matrix};
 use crate::fit::{self, Model, Params};
+use crate::selective::{self, Selective};
 use crate::{effects, packaging, Files};
 
 /// Points on each axis of a preview table.
@@ -101,6 +102,10 @@ impl Standard {
 /// An 8-bit sRGB table with `LUT_SIZE` points on each axis, red fastest, then green, then blue.
 pub fn preview_lut(base_gamma: &[u16; 256], effect: &Value) -> Result<Vec<u8>> {
     let params = params(effect)?;
+    let selective = effect
+        .get("selective_color")
+        .map(|value| Selective::from_json(value).map(|s| s.table()))
+        .transpose()?;
     let model = Model::new(base_gamma);
     let standard = Standard::new(base_gamma);
     let step = |i: usize| i as f64 / (LUT_SIZE - 1) as f64;
@@ -109,7 +114,10 @@ pub fn preview_lut(base_gamma: &[u16; 256], effect: &Value) -> Result<Vec<u8>> {
         for g in 0..LUT_SIZE {
             for r in 0..LUT_SIZE {
                 let linear = standard.linear([step(r), step(g), step(b)]);
-                let display = model.render(&params, linear);
+                let mut display = model.render(&params, linear);
+                if let Some(table) = &selective {
+                    display = selective::apply_rgb(table, display);
+                }
                 table.extend(display.map(|v| (v * 255.0).round() as u8));
             }
         }

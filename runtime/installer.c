@@ -221,9 +221,10 @@ static int install(void)
         copy(at(record), (const u8 *)at(STOCK_RECORD), 84);
         store(record + 4, record + 84);
         copy(at(record + 84), profile + 128, 1556);
-        /* Extension: features, then the post matrix and two reserved zero bytes. */
+        /* Extension: features, then the post matrix, selective color, and the
+           reserved zero bytes. */
         copy(at(record + GRKIT_RECORD_FEATURES), profile + 84, 4);
-        copy(at(record + GRKIT_RECORD_POST), profile + 88, 20);
+        copy(at(record + GRKIT_RECORD_POST), profile + 88, 40);
         u32 n = length((const char *)profile + 48);
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[48 + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + 80));

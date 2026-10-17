@@ -1,6 +1,6 @@
 #include "abi.h"
-/* Picture processing for effect extensions: the post-curve matrix, and the
-   date stamp on recorded pictures. */
+/* Picture processing for effect extensions: the post-curve matrix, selective
+   color, and the date stamp on recorded pictures. */
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
@@ -29,23 +29,34 @@ static u32 owned(volatile u32 *h,u32 record) {
 static u32 record_features(volatile u32 *h,u32 record) {
     return owned(h,record) ? WORD(record,GRKIT_RECORD_FEATURES) : 0;
 }
+/* The tuning context byte of a build, from the Make's third argument (settings +
+   0x120): 1 for ImageTuningLiveview, 0 for a still build. module_parameters reads
+   the same byte at settings + 0x82ac. */
+#define PICTURE_LIVE_CONTEXT 0x818c
 /* Replaces the YCbCrMatrix Make call to its calc (0x536e4774). The matrix acts
    on gamma-encoded RGB, so CSP x P applies P after the tone curves, and the hue
    rotation still follows it. The calc stores each coefficient as the low 9 bits
-   of a word, and the register writer packs those bits without saturation. */
-void picture_post(u32 object,u32 context) {
+   of a word, and the register writer packs those bits without saturation.
+   Selective color changes only recorded pictures, so the live view of such an
+   effect drops its chroma rows: the viewfinder shows the luma that the removed
+   hues keep in the picture. */
+void picture_post(u32 object,u32 context,u32 settings) {
     volatile u32 *h=framing_header();
-    u32 record=WORD(context,8),i,j,k;
+    u32 record=WORD(context,8),features,i,j,k;
     int csp[9],sum;
     PICTURE_YCBCR_CALC(object,context);
-    if(!(record_features(h,record)&GRKIT_FEATURE_POST)) return;
-    for(i=0;i<9;++i) csp[i]=(int)(WORD(object,i*4)<<23)>>23;
-    for(i=0;i<3;++i) for(j=0;j<3;++j) {
-        sum=0;
-        for(k=0;k<3;++k) sum+=csp[i*3+k]*(s16)HALF(record,GRKIT_RECORD_POST+(k*3+j)*2);
-        sum=(sum+4096)>>13;
-        WORD(object,(i*3+j)*4)=(u32)(sum<-256 ? -256 : sum>255 ? 255 : sum);
+    features=record_features(h,record);
+    if(features&GRKIT_FEATURE_POST) {
+        for(i=0;i<9;++i) csp[i]=(int)(WORD(object,i*4)<<23)>>23;
+        for(i=0;i<3;++i) for(j=0;j<3;++j) {
+            sum=0;
+            for(k=0;k<3;++k) sum+=csp[i*3+k]*(s16)HALF(record,GRKIT_RECORD_POST+(k*3+j)*2);
+            sum=(sum+4096)>>13;
+            WORD(object,(i*3+j)*4)=(u32)(sum<-256 ? -256 : sum>255 ? 255 : sum);
+        }
     }
+    if((features&GRKIT_FEATURE_SELECTIVE) && BYTE(settings,PICTURE_LIVE_CONTEXT)==1)
+        for(i=3;i<9;++i) WORD(object,i*4)=0;
 }
 /* ---- Recorded pictures: the date stamp --------------------------------------
    JpegEncodeMacroProcess::Execute (0x535047d4) calls picture_encode before it
@@ -377,6 +388,72 @@ static void stamp_scaled(const Plane *dst,const Plane *src,const Stamp *st,u32 m
     }
     #undef CELL
 }
+/* ---- Recorded pictures: selective color ------------------------------------
+   An effect with GRKIT_FEATURE_SELECTIVE keeps the chroma of one hue range and
+   removes it elsewhere. The hue is the angle of (Cb - 128, Cr - 128). Each side
+   of the target hue has an inner and an outer half width: inside the inner one a
+   pair keeps all of its chroma, outside the outer one none, and between them the
+   weight falls linearly in tan(angle offset). Side 1 is toward larger angles. A
+   chroma gate fades out pairs whose chroma along the target is low. Luma stays,
+   so the rest of the picture keeps the luma of the effect's color rendering.
+   grkit_core::selective computes the same table for the site preview. */
+#define SELECTIVE_ALONG 182U /* the largest projection of a CbCr vector, plus one */
+#define SELECTIVE_SIDE 128U  /* table cells per axis: one per 2 x 2 (Cb, Cr) block */
+#define SELECTIVE_TABLE (SELECTIVE_SIDE*SELECTIVE_SIDE)
+typedef struct { int hc,hs; u32 t[2][2],c0,c1; } Selective;
+/* Q16 reciprocals: 256 / ((outer - inner) * along) per side, and 256 / (c1 - c0). */
+typedef struct { u32 angle[2][SELECTIVE_ALONG],gate; } SelectiveFactors;
+
+static void selective_load(u32 record,Selective *s) {
+    u32 i;
+    s->hc=(s16)HALF(record,GRKIT_RECORD_SELECTIVE); s->hs=(s16)HALF(record,GRKIT_RECORD_SELECTIVE+2);
+    for(i=0;i<4;++i) s->t[i>>1][i&1]=HALF(record,GRKIT_RECORD_SELECTIVE+4+i*2);
+    s->c0=BYTE(record,GRKIT_RECORD_SELECTIVE+12); s->c1=BYTE(record,GRKIT_RECORD_SELECTIVE+13);
+}
+/* Keep weight of one pair, 0..256. The installer accepted inner < outer and c0 < c1. */
+static u32 selective_weight(const Selective *s,const SelectiveFactors *f,int u,int v) {
+    int along=(u*s->hc+v*s->hs)>>12, across=(v*s->hc-u*s->hs)>>12;
+    u32 a,b,i,limit,full,w;
+    if(along<=0) return 0;
+    a=(u32)along; i=across>0; b=(u32)(across<0 ? -across : across);
+    if(a>=SELECTIVE_ALONG) a=SELECTIVE_ALONG-1;
+    /* Compare tan(offset) = b / a with the tangents by cross-multiplying. */
+    limit=s->t[i][1]*a; full=s->t[i][0]*a;
+    if((b<<8)>=limit || a<=s->c0) return 0;
+    w=(b<<8)<=full ? 256 : ((limit-(b<<8))*f->angle[i][a])>>16;
+    if(a<s->c1) w=(w*(((a-s->c0)*f->gate)>>16))>>8;
+    return w;
+}
+/* The weight of each 2 x 2 (Cb, Cr) block at its center, Cr rows of Cb columns. */
+static void selective_table(u32 record,u8 *table,SelectiveFactors *f) {
+    Selective s;
+    u32 i,j,a;
+    selective_load(record,&s);
+    for(i=0;i<2;++i) {
+        f->angle[i][0]=0;
+        for(a=1;a<SELECTIVE_ALONG;++a) f->angle[i][a]=divide(256U<<16,(s.t[i][1]-s.t[i][0])*a);
+    }
+    f->gate=divide(256U<<16,s.c1-s.c0);
+    for(j=0;j<SELECTIVE_SIDE;++j) for(i=0;i<SELECTIVE_SIDE;++i) {
+        u32 w=selective_weight(&s,f,(int)(2*i+1)-128,(int)(2*j+1)-128);
+        table[j*SELECTIVE_SIDE+i]=(u8)(w>255 ? 255 : w);
+    }
+}
+/* Scale the chroma of every pair of a plane by its weight. The black bars of a
+   preview picture are neutral, so they stay unchanged. */
+static void selective_plane(const Plane *p,const u8 *table) {
+    u32 rows=p->half ? p->height>>1 : p->height, y, x;
+    for(y=0;y<rows;++y) {
+        u32 row=p->c+y*p->pitch;
+        for(x=0;x<p->width;x+=2) {
+            u32 cb=BYTE(row,x), cr=BYTE(row,x+1), w=table[(cr>>1)*SELECTIVE_SIDE+(cb>>1)];
+            w+=w==255; /* 255 keeps all chroma */
+            BYTE(row,x)=(u8)(128+((((int)cb-128)*(int)w+128)>>8));
+            BYTE(row,x+1)=(u8)(128+((((int)cr-128)*(int)w+128)>>8));
+        }
+    }
+}
+
 /* Visible area of a preview picture: black bars depend on the capture aspect. */
 static void visible_area(volatile u32 *h,Plane *p) {
     /* Screennail and thumbnail insets for ids 0 (3:2), 1 (4:3), 2 (16:9), 3 (1:1), then XPan. */
@@ -400,22 +477,25 @@ static u32 plane_of(u32 image,u32 code,Plane *p) {
            p->y>=0x40000000U && p->y<0xc0000000U-p->pitch*p->height &&
            p->c>=0x40000000U && p->c<0xc0000000U-p->pitch*p->height;
 }
-/* The stamp, once per plane set. The second full-size image (descriptor 3)
-   shares the main planes. */
+/* Selective color, then the stamp, once per plane set: the stamp keeps its own
+   color. The second full-size image (descriptor 3) shares the main planes. */
 void picture_encode(u32 process,u32 message) {
     volatile u32 *h=framing_header();
     u32 config=WORD(message,8), style=h[GRKIT_HOST_STAMP/4], record=h[GRKIT_HOST_STILL/4];
-    u32 mono=0, done[4], count=0, i, j, n=0;
+    u32 mono=0, selective=0, done[4], count=0, i, j, n=0;
     u32 date[3];
     u8 *dt=(u8 *)date;
     char text[20];
     Plane p, planes[4];
     Stamp st;
     (void)process;
-    if(owned(h,record)) mono=WORD(record,GRKIT_RECORD_MONOCHROME)&1;
+    if(owned(h,record)) {
+        mono=WORD(record,GRKIT_RECORD_MONOCHROME)&1;
+        selective=!mono && (WORD(record,GRKIT_RECORD_FEATURES)&GRKIT_FEATURE_SELECTIVE);
+    }
     if(style>4) style=0;
-    if(!style) return;
-    PICTURE_DATE(dt); n=date_text(text,dt,style);
+    if(!style && !selective) return;
+    if(style) { PICTURE_DATE(dt); n=date_text(text,dt,style); }
     for(i=0;i<4;++i) {
         u32 seen=0;
         if(!plane_of(WORD(config,0x3c+i*4),WORD(config,0x4c+i*4),&p)) continue;
@@ -427,7 +507,13 @@ void picture_encode(u32 process,u32 message) {
     }
     if(!count) return;
     for(i=0;i<count;++i) flush(&planes[i]);
-    {
+    if(selective) {
+        /* The table and its factors use the stamp scratch, before the stamp does. */
+        u8 *table=PICTURE_MAP(PICTURE_SCRATCH(h));
+        selective_table(record,table,(SelectiveFactors *)(table+SELECTIVE_TABLE));
+        for(i=0;i<count;++i) selective_plane(&planes[i],table);
+    }
+    if(style) {
         /* The largest picture draws the stamp. The smaller ones scale its mask,
            so playback keeps the stamp's place and width when it switches from
            the screennail to the main picture. */

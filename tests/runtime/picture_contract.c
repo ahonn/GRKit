@@ -49,6 +49,9 @@ volatile u32 *framing_header(void) { return header; }
 #define RECORDS (ARENA + 0x100)
 #define OBJECT (ARENA + 0x8000)
 #define CONTEXT (ARENA + 0x8100)
+/* The Make's settings argument: the live-view byte lies at +0x818c. */
+#define SETTINGS (ARENA + 0x20000)
+static void live(int on) { BYTE(SETTINGS, PICTURE_LIVE_CONTEXT) = (uint8_t)on; }
 
 static void reset(void)
 {
@@ -64,6 +67,16 @@ static void post(uint32_t r, const short *matrix)
     for (int i = 0; i < 9; ++i) HALF(r, GRKIT_RECORD_POST + i * 2) = (uint16_t)matrix[i];
 }
 static int coefficient(int i) { return (int)(WORD(OBJECT, i * 4) << 23) >> 23; }
+/* Keep red: the parameters that grkit_core::selective compiles from hue 108.6,
+   lower 20/35, higher 6/14, and chroma 6/16 degrees and units. */
+static void keep_red(uint32_t r)
+{
+    static const short words[6] = {-1306, 3882, 93, 179, 27, 64};
+    WORD(r, GRKIT_RECORD_FEATURES) |= GRKIT_FEATURE_SELECTIVE;
+    for (int i = 0; i < 6; ++i) HALF(r, GRKIT_RECORD_SELECTIVE + i * 2) = (uint16_t)words[i];
+    BYTE(r, GRKIT_RECORD_SELECTIVE + 12) = 6;
+    BYTE(r, GRKIT_RECORD_SELECTIVE + 13) = 16;
+}
 
 /* Encode configuration: four image and four code descriptors, then the planes. */
 #define MESSAGE (ARENA + 0x8300)
@@ -141,16 +154,16 @@ int main(void)
     /* Native records and GRFX0001 records keep the native matrix bits. */
     reset();
     WORD(CONTEXT, 8) = 0x5501900c;
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     assert(calcs == 1);
     for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
     WORD(CONTEXT, 8) = record(1);
     uint32_t stock[9];
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int i = 0; i < 9; ++i) stock[i] = WORD(OBJECT, i * 4);
     /* An identity post matrix gives the same coefficients, sign-extended. */
     post(record(1), identity);
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int i = 0; i < 9; ++i) {
         assert(coefficient(i) == bt601[i]);
         assert((WORD(OBJECT, i * 4) & 0x1ff) == (stock[i] & 0x1ff));
@@ -158,7 +171,7 @@ int main(void)
     /* CSP x P: P swaps red and blue, so each row swaps its R and B columns. */
     static const short swap[9] = {0, 0, 8192, 0, 8192, 0, 8192, 0, 0};
     post(record(1), swap);
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int row = 0; row < 3; ++row) {
         assert(coefficient(row * 3) == bt601[row * 3 + 2]);
         assert(coefficient(row * 3 + 1) == bt601[row * 3 + 1]);
@@ -167,23 +180,48 @@ int main(void)
     /* Q13 rounding to nearest: 77 x 1.5 = 115.5 rounds to 116, -43 x 1.5 to -64. */
     static const short gain[9] = {12288, 0, 0, 0, 8192, 0, 0, 0, 8192};
     post(record(1), gain);
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     assert(coefficient(0) == 116 && coefficient(3) == -64 && coefficient(6) == 192);
     /* Results saturate to the 9-bit register range instead of wrapping. */
     static const short strong[9] = {32767, 0, 0, 0, 32767, 0, 0, 0, -32768};
     post(record(1), strong);
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     assert(coefficient(0) == 255 && coefficient(1) == 255 && coefficient(2) == -116);
     assert(coefficient(4) == -256 && coefficient(5) == -256 && coefficient(6) == 255);
     assert((int32_t)WORD(OBJECT, 4 * 4) == -256);
     /* Only owned records count: an address between records or past the catalog. */
     WORD(CONTEXT, 8) = record(1) + 4;
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
     WORD(record(3), GRKIT_RECORD_FEATURES) = GRKIT_FEATURE_POST;
     WORD(CONTEXT, 8) = record(3);
-    picture_post(OBJECT, CONTEXT);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+
+    /* Selective color: the live view drops the chroma rows, so the viewfinder shows
+       the luma that removed hues keep. Still builds keep the whole matrix. */
+    reset();
+    WORD(CONTEXT, 8) = record(1);
+    keep_red(record(1));
+    live(0);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+    live(1);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    for (int i = 0; i < 9; ++i) assert(coefficient(i) == (i < 3 ? bt601[i] : 0));
+    /* With a post matrix, the luma row keeps the product. */
+    post(record(1), swap);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    assert(coefficient(0) == bt601[2] && coefficient(1) == bt601[1] && coefficient(2) == bt601[0]);
+    for (int i = 3; i < 9; ++i) assert(coefficient(i) == 0);
+    /* Other live-view records keep their chroma. */
+    WORD(CONTEXT, 8) = record(1) + 4;
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+    WORD(CONTEXT, 8) = record(2);
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+    live(0);
 
     /* Date text for each style: no leading zeros except the year and minutes. */
     {
@@ -311,6 +349,58 @@ int main(void)
     for (u32 y = 0; y < 400; ++y) for (u32 x = 0; x < 600; ++x) {
         u32 inside = y >= 180 && y < 220 && x >= 280 && x < 320;
         assert(BYTE(PLANES, y * 640 + x) == (inside ? 250 : 60));
+    }
+    /* Selective color keeps red and crimson and removes green, skin, and orange,
+       on every picture of the set. Luma and neutral pairs stay unchanged. */
+    {
+        /* Cb, Cr, and whether the pair keeps its chroma. */
+        static const uint8_t cases[][3] = {
+            {85, 255, 1}, {118, 215, 1}, {62, 44, 0}, {102, 157, 0}, {63, 195, 0}, {128, 128, 1},
+        };
+        for (u32 k = 0; k < sizeof cases / sizeof *cases; ++k) {
+            encode_setup();
+            fill_planes(90, cases[k][0], cases[k][1]);
+            header[GRKIT_HOST_STILL / 4] = record(0);
+            keep_red(record(0));
+            picture_encode(0, MESSAGE);
+            assert(flushes == 12);
+            for (u32 i = 0; i < 3; ++i) {
+                const struct test_plane *p = &planes[i];
+                for (u32 y = 0; y < p->height; ++y) for (u32 x = 0; x < p->width; ++x) {
+                    uint8_t c = BYTE(p->c, y * p->pitch + x);
+                    assert(BYTE(p->y, y * p->pitch + x) == 90);
+                    assert(c == (cases[k][2] ? cases[k][x & 1] : 128));
+                }
+            }
+        }
+    }
+    /* A 4:2:0 plane has chroma rows for only half of its height. */
+    encode_setup();
+    fill_planes(90, 62, 44);
+    BYTE(DESCRIPTORS + 0x100, 0x10) = 2;
+    header[GRKIT_HOST_STILL / 4] = record(0);
+    keep_red(record(0));
+    picture_encode(0, MESSAGE);
+    for (u32 y = 0; y < 400; ++y) for (u32 x = 0; x < 600; ++x)
+        assert(BYTE(planes[0].c, y * 640 + x) == (y < 200 ? 128 : (x & 1 ? 44 : 62)));
+    /* The stamp draws after selective color, so it keeps its orange. */
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 1;
+    header[GRKIT_HOST_STILL / 4] = record(0);
+    keep_red(record(0));
+    picture_encode(0, MESSAGE);
+    assert(flushes == 12 && changes(0, 0).orange);
+    /* A monochrome record or a pointer that no record owns changes nothing. */
+    for (u32 k = 0; k < 2; ++k) {
+        encode_setup();
+        fill_planes(90, 62, 44);
+        keep_red(record(0));
+        WORD(record(0), GRKIT_RECORD_MONOCHROME) = k == 0;
+        header[GRKIT_HOST_STILL / 4] = k == 0 ? record(0) : record(0) + 4;
+        picture_encode(0, MESSAGE);
+        assert(flushes == 0);
+        assert(changes(0, 0).lit == 0 && changes(1, 0).lit == 0 && changes(2, 0).lit == 0);
     }
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);

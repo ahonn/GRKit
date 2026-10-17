@@ -144,10 +144,12 @@ In-camera Crop, Resize, Digital Filter, and RAW development do not know the 65:2
 ## Effect extension
 
 Bytes 84..127 of a GRFX0001 file hold an optional extension.
-It holds u32 features at 84 and an i16[9] signed Q13 post matrix at 88. Bytes 106..127 are reserved and zero.
-Each feature bit owns its field, and a field without its bit stays zero. A monochrome effect cannot have a post matrix. An effect without features has zeros in the whole extension.
+It holds u32 features at 84, an i16[9] signed Q13 post matrix at 88 (bit 1), and selective color parameters at 106 (bit 2). Bytes 120..127 are reserved and zero.
+Each feature bit owns its field, and a field without its bit stays zero. A monochrome effect has no features.
 
-The installer copies the extension to record `+0x700`. Records are 0x740 bytes.
+An effect without features has zeros in the whole extension. Bit 4 belonged to the removed soft glow. The parsers reject it.
+
+The installer copies the extension to record `+0x700`: features at `+0x700`, the post matrix at `+0x704`, and selective color at `+0x716`. Records are 0x740 bytes.
 
 The processing region has little room left, so the extension hooks link into the Framing region (`runtime/picture.*`). The live-view diff hook moved there too.
 
@@ -159,12 +161,33 @@ The hook multiplies the result by the effect's post matrix P: `CSP' = CSP x P`. 
 The coefficients are 9-bit two's complement with 256 = 1.0. The register writer packs 9 bits without saturation, so the hook sign-extends each one and saturates the products to -256..255.
 The live-view diff also sets the YCbCr stage flag (`+7`) when the live-view record changes. Its stage runs before the gamma hook, so the post matrix changes one update later.
 
+### Selective color
+
+Selective color keeps the chroma of one hue range in recorded pictures and removes it elsewhere. The hue is the angle of (Cb - 128, Cr - 128).
+The parameters are an i16 Q12 direction (cos and sin of the target hue), then u16 Q8 tangents and a u8 chroma gate.
+Each side of the target has an inner and an outer half width. Inside the inner one a pair keeps all of its chroma, and outside the outer one none.
+Between them, the weight falls linearly in tan(offset).
+
+The side toward larger angles is separate, because skin lies only on that side of red. The gate fades out pairs whose chroma along the target is low.
+
+The effect compiler converts degrees to these integers, so the runtime needs no trigonometry. The parsers require a direction of length 0.95 to 1.03, inner < outer <= 1024, and c0 < c1 <= 181.
+
+For each picture, `picture_encode` builds a 128 x 128 weight table in the picture scratch with the shift-subtract division. One cell covers a 2 x 2 block of Cb and Cr values.
+Then each pair costs one lookup and two multiplies: 22 A32 instructions in the loop.
+`grkit_core::selective` computes the same table, and a test compares the two byte for byte. Site previews use it.
+
+The live view shows the effect in monochrome. `picture_post` reads the tuning context byte at `settings + 0x82ac` through the Make's third argument (`settings + 0x120`): 1 is ImageTuningLiveview and 0 a still build.
+For a live-view build of a selective effect it clears the Cb and Cr rows of the YCbCr matrix. The viewfinder then shows the luma that the removed hues keep in the picture, and the target hue is gray too.
+Still builds keep the whole matrix, and their encode applies selective color. The encode time on a camera is not measured.
+
 ## Recorded pictures
 
 `JpegEncodeMacroProcess::Execute` (`0x535047d4`) receives four image descriptors at configuration `+0x3c`.
 They are the main picture, the 720 x 480 screennail, the 160 x 120 thumbnail, and a second full-size encode of the main planes.
 Each descriptor holds Y at `+4`, CbCr at `+8`, and u16 width, height, and shared pitch at `+0x10`. The CbCr plane interleaves Cb and Cr for each pixel pair, in full rows (4:2:2) or half rows (4:2:0).
-The entry hook processes each plane set once, before the encode is submitted. It cleans and invalidates the data cache for the planes before and after (`0x5383c8a8`), because the image hardware writes and reads them.
+
+The entry hook processes each plane set once, before the encode is submitted.
+It applies selective color first and then the date stamp, so the stamp keeps its color. It cleans and invalidates the data cache for the planes before and after (`0x5383c8a8`), because the image hardware writes and reads them.
 
 The screennail and the thumbnail have black bars that depend on the capture aspect. The hook uses the visible area from the GetResolution inset tables and the Framing insets.
 
