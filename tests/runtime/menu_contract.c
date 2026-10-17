@@ -144,7 +144,7 @@ int main(void)
     assert(advance_from_private(0xcf, 2) == 0);
     assert(advance_from_private(0xce, 2) == 1);
     test_header[9] = 1;
-    assert(count(test_header) == 3);
+    assert(count(test_header) == 4);
     test_header[9] = 2;
     assert(count(test_header) == 6);
     test_header[GRKIT_HOST_COUNT / 4] = 0;
@@ -159,8 +159,12 @@ int main(void)
     /* Guides tiles follow the Framing tiles. */
     assert(menu_icon(GUIDES_ICON) == 0x59007000 + FRAMING_ICON_COUNT * GRKIT_ICON_STRIDE);
     assert(menu_icon(GUIDE_STYLE_ICON(4)) == 0x59007000 + 8 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(FRAMING_ICON + MODULE_ICON_COUNT) == 0);
+    /* Module tiles fill 0x7ff0..0x7ffd; the GRKit tile (0x7ffe) follows them. */
+    assert(menu_icon(FRAMING_ICON - 1) == 0);
     assert(FRAMING_ICON + MODULE_ICON_COUNT <= 0x7ffe);
+    /* Date Stamp tiles follow the Guides tiles. */
+    assert(menu_icon(STAMP_ICON) == 0x59007000 + 9 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(STAMP_STYLE_ICON(4)) == 0x59007000 + 13 * GRKIT_ICON_STRIDE);
     test_header[9] = MENU_ROOT;
     test_header[10] = 1;
     assert(current_module(test_header) == &modules[1]);
@@ -273,6 +277,36 @@ int main(void)
     assert(guide_style(test_header) == 0);
     test_header[GRKIT_HOST_GUIDE / 4] = 0;
     test_header[GRKIT_HOST_FRAME_RATIO / 4] = 3;
+    test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
+    /* Date Stamp lists its styles, opens at the committed one, and changes nothing else. */
+    test_header[9] = MENU_ROOT;
+    test_header[10] = 3;
+    assert(current_module(test_header)->summary(test_header) == stamp_summaries[0]);
+    assert(modules[3].icon(test_header, 3) == STAMP_ICON);
+    test_header[GRKIT_HOST_STAMP / 4] = 2;
+    assert(modules[3].icon(test_header, 3) == STAMP_STYLE_ICON(2));
+    menu_confirm(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
+    assert(test_header[10] == 2 && count(test_header) == 5);
+    assert(current_module(test_header)->title(test_header) == date_stamp);
+    for (u32 row = 0; row < 5; ++row) {
+        test_header[10] = row;
+        menu_confirm(test_header);
+        assert(test_header[GRKIT_HOST_STAMP / 4] == row);
+        assert(current_module(test_header)->checked(test_header, row));
+        assert(current_module(test_header)->label(test_header, row) == stamp_labels[row]);
+        assert(current_module(test_header)->icon(test_header, row) == (row ? STAMP_STYLE_ICON(row) : 0x7fff));
+        assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == 3 && test_header[GRKIT_HOST_GUIDE / 4] == 0);
+        assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
+    }
+    /* The Date Stamp page keeps the committed mask and guides on the ADJ canvas. */
+    frame_preview(test_header, 0x5c000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 4 && test_header[GRKIT_HOST_GUIDE_PREVIEW / 4] == 0);
+    assert(menu_back(test_header) && test_header[10] == 3);
+    assert(current_module(test_header)->summary(test_header) == stamp_summaries[4]);
+    test_header[GRKIT_HOST_STAMP / 4] = 999;
+    assert(stamp_style(test_header) == 0);
+    test_header[GRKIT_HOST_STAMP / 4] = 0;
     test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
     test_header[9] = MENU_ROOT;
     test_header[10] = 1;

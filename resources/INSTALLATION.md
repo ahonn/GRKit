@@ -26,6 +26,7 @@ GRKit loads a few seconds after power-on. Open ADJ and select the sixth entry, m
 - **Fn on an effect:** keep the effect and open the native Standard parameters, which plugin effects share. Press OK there to return. Fn requires native Image Control Standard.
 - **Framing:** highlight Off or an aspect ratio to preview its mask, then press OK. Photos record at that ratio. The viewfinder stays 3:2 and dims the area outside the photo.
 - **Guides:** highlight Off or a guide style to preview it, then press OK. The lines stay inside the Framing area. They do not appear in photos.
+- **Date Stamp:** select Off or a date style, then press OK. Photos get the date at the bottom right in glowing orange digits, like a film data back. The digits fade on bright areas. The viewfinder does not show them.
 - **MENU:** return one level. From GRKit, return to native ADJ with the selected effect.
 
 All modules reset to Off on each boot. Pressing OK on a native Image Control disables the plugin effect.
@@ -35,6 +36,7 @@ Playback information shows the plugin effect icon while that effect is installed
 Framing and Guides require the native 3:2 aspect ratio and still shooting. With native 1:1, photos keep 1:1 and the viewfinder shows no mask or guides.
 GRKit does not change the native grid guide. Turn it off to avoid two sets of lines.
 In-camera Crop, Resize, Digital Filter, and RAW development of Framing photos are not tested.
+In-camera RAW development and edits also get the date stamp, with the time of the edit.
 
 ## Remove or recover
 

@@ -409,7 +409,7 @@ fn native_framing_contract_preserves_canvas_bounds_and_settings() {
 }
 
 #[test]
-fn native_picture_contract_applies_post_matrix_and_glow() {
+fn native_picture_contract_applies_post_matrix_glow_and_stamp() {
     let Some(compiler) = compiler() else {
         return;
     };

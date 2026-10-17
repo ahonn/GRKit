@@ -13,6 +13,10 @@
 #define GRKIT_HOST_BACK_PENDING 92
 /* Guide style previewed on the ADJ canvas while GRKIT_HOST_FRAME_PREVIEW is set. */
 #define GRKIT_HOST_GUIDE_PREVIEW 48
+/* Date stamp style: 0 Off, 1 'YY M D, 2 'YY M D H:MM, 3 M D 'YY, 4 D M 'YY. */
+#define GRKIT_HOST_STAMP 52
+/* Words 24..43 belong to the menu: two text descriptors (96..111) and a
+   16-word event ring (112..175). */
 #define GRKIT_HOST_PLUGINS_ICON 176
 #define GRKIT_HOST_TOOLBAR_WIDGET 180
 #define GRKIT_HOST_TOOLBAR_OWNER 184

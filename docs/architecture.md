@@ -29,8 +29,8 @@ For a duplicate ID, the file with the smallest name wins. The result does not de
 
 The 20-effect capacity is a product limit, not a GRF format limit. It fits one script array and one icon chunk.
 The script array holds the header, the records, and the 141,376-byte soft-glow map (376 x 376 cells).
-Off, GRKit, the four Framing tiles, and the five Guides tiles use eleven host icon records outside that capacity.
-The Framing and Guides tiles are contiguous, and the menu derives each one from the first Framing tile.
+Off, GRKit, and the fourteen module tiles (four Framing, five Guides, five Date Stamp) use sixteen host icon records outside that capacity.
+The module tiles are contiguous, and the menu derives each one from the first Framing tile.
 
 ## Menu
 
@@ -39,7 +39,7 @@ A private LineView draws the native translucent background before the shared sel
 
 The ADJ controller owns both objects. Exit hides them and restores the native geometry. Destruction unlinks and releases them. Movie mode keeps the five-entry layout.
 
-The compiled registry in `runtime/modules.h` contains Image Control, Framing, and Guides.
+The compiled registry in `runtime/modules.h` contains Image Control, Framing, Guides, and Date Stamp.
 Each descriptor owns its title, summary, rows, labels, icons, selection checks, activation, and committed row. A module page opens at its committed row.
 Module state stays in the private host header.
 
@@ -151,6 +151,8 @@ They are the main picture, the 720 x 480 screennail, the 160 x 120 thumbnail, an
 Each descriptor holds Y at `+4`, CbCr at `+8`, and u16 width, height, and shared pitch at `+0x10`. The CbCr plane interleaves Cb and Cr for each pixel pair, in full rows (4:2:2) or half rows (4:2:0).
 The entry hook processes each plane set once, before the encode is submitted. It cleans and invalidates the data cache for the planes before and after (`0x5383c8a8`), because the image hardware writes and reads them.
 
+The screennail and the thumbnail have black bars that depend on the capture aspect. The hook uses the visible area from the GetResolution inset tables and the Framing insets.
+
 ### Soft glow
 
 An effect's glow lifts the halo of highlights toward white and moves its chroma toward neutral, like a mist filter.
@@ -159,6 +161,22 @@ Cells without glow around them are skipped.
 
 Glow uses the record of the last still build, so it applies to the picture that the build developed. It does not reach the live view or RAW files.
 Its time on a camera is not measured. Bright scenes take longest.
+
+### Date stamp
+
+The Date Stamp module prints the local time (`0x536b6510`) at the bottom right of the visible area, as a film data back exposes it.
+The styles are `'YY M D`, `'YY M D  H:MM`, `M D 'YY`, and `D M 'YY`. Months, days, and hours have no leading zero.
+
+The digits are italic seven-segment characters at 4.5% of the short side, at least 8 pixels. They render into a coverage mask of at most 48 rows (32 for long text), with horizontal anti-aliasing.
+Two box blurs of the mask give an amber core and a red-orange halo. The hook scales the mask up and adds the light with a screen blend in RGB.
+The digits therefore glow on dark areas and fade on bright ones. A monochrome GRKit effect gets the luma of the light only.
+
+Only the largest plane of an encode renders the mask. The screennail and the thumbnail sample that mask at their own scale, with 2 x 2 subsamples for each pixel.
+Playback shows the screennail first and then the main picture. The stamp therefore keeps its position and total width, and only the strokes become sharper.
+If the largest plane has digits of 24 pixels or less, its mask has twice that size, and each pixel averages 2 x 2 cells.
+
+The mask uses the glow scratch after the glow. The blur line copy is on the stack (1280 bytes), because the code region is read-only.
+Every encode that passes through the hook gets the stamp, including in-camera RAW development and edits. Those show the time of the edit.
 
 ## Code areas
 

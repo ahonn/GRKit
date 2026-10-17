@@ -274,11 +274,25 @@ pub fn guides_tiles() -> Vec<Vec<u8>> {
     ]
 }
 
+/// Date stamp artwork in runtime order: the module tile, then the 'YY M D,
+/// 'YY M D H:MM, M D 'YY, and D M 'YY styles, each named by a sample.
+pub fn stamp_tiles() -> Vec<Vec<u8>> {
+    ["DATE", "'26", "9:05", "M D", "D M"]
+        .iter()
+        .map(|label| {
+            let mut rgba = background();
+            text(&mut rgba, label, LABEL_SIZE, LABEL_WIDTH, 20.0, 255);
+            rgba
+        })
+        .collect()
+}
+
 /// Module artwork in runtime order. The menu addresses each tile by its
 /// offset from the first Framing tile.
 pub fn module_tiles() -> Vec<Vec<u8>> {
     let mut tiles = framing_tiles();
     tiles.extend(guides_tiles());
+    tiles.extend(stamp_tiles());
     tiles
 }
 

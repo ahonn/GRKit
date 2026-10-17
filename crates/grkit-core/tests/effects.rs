@@ -50,8 +50,8 @@ fn host_artwork_matches_golden_pixels_and_preserves_binary_transparency() {
         "994c7df1e812485f987680a32ff1e4d02fbd49ff21039a098f7f849de7709e25"
     );
     let modules = artwork::module_tiles();
-    // Four Framing and five Guides tiles, addressed by offset from the first.
-    assert_eq!(modules.len(), 9);
+    // Four Framing, five Guides, and five Date Stamp tiles, addressed by offset from the first.
+    assert_eq!(modules.len(), 14);
     assert_eq!(modules[0], artwork::framing_pixels());
     for pixels in [
         artwork::plugins_pixels(),

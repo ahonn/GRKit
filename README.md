@@ -2,11 +2,12 @@
 
 An experimental SD-loaded plugin runtime for RICOH GR III firmware 2.10. Other models and firmware versions are unsupported.
 
-GRKit adds a sixth ADJ entry with three modules:
+GRKit adds a sixth ADJ entry with four modules:
 
 - **Image Control**: bundled or custom effects, with live-view preview. Effects can add a post-curve color matrix and a soft glow.
 - **Framing**: XPan (65:24), 16:9, or 4:3 photos with a 3:2 viewfinder mask.
 - **Guides**: thirds, center, golden ratio, or diagonal lines inside the Framing area.
+- **Date Stamp**: a film data-back date on photos, in glowing orange seven-segment digits.
 
 The project is in development. Its behavior, file formats, and package layout can change.
 

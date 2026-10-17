@@ -14,7 +14,12 @@
 #define GUIDES_ICON (FRAMING_ICON+FRAMING_ICON_COUNT)
 #define GUIDE_STYLE_ICON(style) (GUIDES_ICON+(style))
 #define GUIDES_ICON_COUNT 5U
-#define MODULE_ICON_COUNT (FRAMING_ICON_COUNT+GUIDES_ICON_COUNT)
+#define STAMP_MODULE 3U
+/* Date stamp artwork follows the Guides artwork: the module tile, then four styles. */
+#define STAMP_ICON (GUIDES_ICON+GUIDES_ICON_COUNT)
+#define STAMP_STYLE_ICON(style) (STAMP_ICON+(style))
+#define STAMP_ICON_COUNT 5U
+#define MODULE_ICON_COUNT (FRAMING_ICON_COUNT+GUIDES_ICON_COUNT+STAMP_ICON_COUNT)
 #define ARRAY_COUNT(a) (sizeof(a)/sizeof((a)[0]))
 
 typedef struct {
@@ -125,6 +130,34 @@ static u32 guide_icon(volatile u32 *h,u32 row) {
 static u32 guide_checked(volatile u32 *h,u32 row) { return row==guide_style(h); }
 static void guide_apply(volatile u32 *h,u32 row) { h[GRKIT_HOST_GUIDE/4]=row; }
 
+static const u16 date_stamp[] = {'D','a','t','e',' ','S','t','a','m','p',0};
+static const u16 stamp_labels[][13] = {
+    {'O','f','f',0}, {'\'','Y','Y',' ','M',' ','D',0}, {'\'','Y','Y',' ','M',' ','D',' ','H',':','M','M',0},
+    {'M',' ','D',' ','\'','Y','Y',0}, {'D',' ','M',' ','\'','Y','Y',0}
+};
+static const u16 stamp_summaries[][25] = {
+    {'D','a','t','e',' ','S','t','a','m','p',':',' ','O','f','f',0},
+    {'D','a','t','e',' ','S','t','a','m','p',':',' ','\'','Y','Y',' ','M',' ','D',0},
+    {'D','a','t','e',' ','S','t','a','m','p',':',' ','\'','Y','Y',' ','M',' ','D',' ','H',':','M','M',0},
+    {'D','a','t','e',' ','S','t','a','m','p',':',' ','M',' ','D',' ','\'','Y','Y',0},
+    {'D','a','t','e',' ','S','t','a','m','p',':',' ','D',' ','M',' ','\'','Y','Y',0}
+};
+static u32 stamp_style(volatile u32 *h) {
+    u32 value=h[GRKIT_HOST_STAMP/4];
+    return value<ARRAY_COUNT(stamp_labels) ? value : 0;
+}
+static const u16 *stamp_title(volatile u32 *h) { (void)h; return date_stamp; }
+static const u16 *stamp_summary(volatile u32 *h) { return stamp_summaries[stamp_style(h)]; }
+static u32 stamp_rows(volatile u32 *h) { (void)h; return ARRAY_COUNT(stamp_labels); }
+static const u16 *stamp_label(volatile u32 *h,u32 row) { (void)h; return stamp_labels[row]; }
+static u32 stamp_icon(volatile u32 *h,u32 row) {
+    if(h[9]==MENU_ROOT) return stamp_style(h) ? STAMP_STYLE_ICON(stamp_style(h)) : STAMP_ICON;
+    return row ? STAMP_STYLE_ICON(row) : 0x7fff;
+}
+static u32 stamp_checked(volatile u32 *h,u32 row) { return row==stamp_style(h); }
+/* Recorded pictures only: the encode hook prints the capture date. */
+static void stamp_apply(volatile u32 *h,u32 row) { h[GRKIT_HOST_STAMP/4]=row; }
+
 /* ADJ covers the live-view drawing, so ADJ draws the mask and guides on its
    own canvas. The Framing page shows its highlighted ratio and the Guides page
    its highlighted style, each with the other module's committed value. Off
@@ -144,7 +177,8 @@ static void frame_preview(volatile u32 *h,u32 canvas,u32 movie) {
 static const Module modules[] = {
     {image_title,image_summary,image_rows,image_label,image_icon,image_checked,image_apply,image_committed},
     {frame_title,frame_summary,frame_rows,frame_label,frame_icon,frame_checked,frame_apply,frame_ratio},
-    {guide_title,guide_summary,guide_rows,guide_label,guide_icon,guide_checked,guide_apply,guide_style}
+    {guide_title,guide_summary,guide_rows,guide_label,guide_icon,guide_checked,guide_apply,guide_style},
+    {stamp_title,stamp_summary,stamp_rows,stamp_label,stamp_icon,stamp_checked,stamp_apply,stamp_style}
 };
 static const Module *current_module(volatile u32 *h) {
     u32 index=h[9]==MENU_ROOT ? h[10] : h[GRKIT_HOST_MODULE/4];

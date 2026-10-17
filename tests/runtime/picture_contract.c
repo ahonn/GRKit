@@ -5,7 +5,7 @@
 
 /* One arena stands in for camera memory: records, the matrix object, and the planes. */
 #define ARENA 0x59000000U
-static uint8_t arena[0x300000];
+static uint8_t arena[0x600000];
 static void *mapped(uint32_t address, uint32_t bytes)
 {
     assert(address >= ARENA && address - ARENA + bytes <= sizeof(arena));
@@ -31,9 +31,15 @@ static void calc(uint32_t object)
     for (int i = 0; i < 9; ++i) WORD(object, i * 4) = ((uint32_t)(bt601[i] * 8192 + 0x1000)) >> 13;
 }
 #define PICTURE_YCBCR_CALC(object,context) ((void)(context), calc(object))
-static unsigned flushes;
+static unsigned flushes, native_aspect;
 #define PICTURE_CACHE_FLUSH(address,length) ((void)mapped((address), 1), (void)mapped((address) + (length) - 1, 1), ++flushes)
-#define PICTURE_SCRATCH(h) ((void)(h), ARENA + 0x2c0000)
+/* 2026-10-17 09:05 */
+#define PICTURE_DATE(out) do { uint8_t *d = (uint8_t *)(out); d[0] = 2026 & 255; d[1] = 2026 >> 8; \
+    d[2] = 10; d[3] = 17; d[4] = 9; d[5] = 5; } while (0)
+#define PICTURE_NATIVE_ASPECT() native_aspect
+/* Glow map and stamp mask. */
+#define SCRATCH (ARENA + 0x500000)
+#define PICTURE_SCRATCH(h) ((void)(h), SCRATCH)
 #define PICTURE_MAP(address) ((u8 *)region((address), GRKIT_GLOW_SCRATCH))
 #include "picture.c"
 
@@ -66,10 +72,13 @@ static int coefficient(int i) { return (int)(WORD(OBJECT, i * 4) << 23) >> 23; }
 #define PLANES (ARENA + 0x10000)
 struct test_plane { uint32_t width, height, pitch, y, c; };
 static struct test_plane planes[3];
+/* Plane baseline: luma, then Cb at even and Cr at odd bytes of the CbCr plane. */
+static uint8_t base_y = 60, base_cb = 100, base_cr = 150;
 static void picture(uint32_t index, uint32_t width, uint32_t height, uint32_t pitch, uint32_t at)
 {
     uint32_t image = DESCRIPTORS + index * 0x20, code = DESCRIPTORS + 0x100 + index * 0x20;
     planes[index] = (struct test_plane){width, height, pitch, at, at + pitch * height};
+    base_y = 60; base_cb = 100; base_cr = 150;
     WORD(image, 4) = at; WORD(image, 8) = at + pitch * height;
     HALF(image, 0x10) = (uint16_t)width; HALF(image, 0x12) = (uint16_t)height; HALF(image, 0x14) = (uint16_t)pitch;
     BYTE(code, 0x10) = 1;
@@ -88,16 +97,42 @@ static void encode_setup(void)
     picture(2, 160, 120, 160, PLANES + 0x140000);
     /* Descriptor 3 is the second full-size encode of the main planes. */
     WORD(CONFIG, 0x48) = WORD(CONFIG, 0x3c); WORD(CONFIG, 0x58) = WORD(CONFIG, 0x4c);
-    flushes = 0;
+    flushes = 0; native_aspect = 0;
 }
-/* Number of pixels that differ from the planes that picture() wrote. */
-static uint32_t changes(uint32_t index)
+static void fill_planes(uint8_t luma, uint8_t cb, uint8_t cr)
+{
+    for (u32 i = 0; i < 3; ++i) {
+        const struct test_plane *p = &planes[i];
+        for (u32 y = 0; y < p->height; ++y) for (u32 x = 0; x < p->pitch; ++x) {
+            BYTE(p->y, y * p->pitch + x) = luma;
+            BYTE(p->c, y * p->pitch + x) = x & 1 ? cr : cb;
+        }
+    }
+    base_y = luma; base_cb = cb; base_cr = cr;
+}
+/* Changed pixels: their bounding box, whether all are lighter (and keep their
+   chroma for a monochrome effect), whether a lit pair is orange, and the
+   largest luma change. */
+struct box { uint32_t left, top, right, bottom, lit; int lighter, orange; uint32_t lift; };
+static struct box changes(uint32_t index, int mono)
 {
     const struct test_plane *p = &planes[index];
-    uint32_t lit = 0;
-    for (uint32_t y = 0; y < p->height; ++y) for (uint32_t x = 0; x < p->pitch; ++x)
-        lit += BYTE(p->y, y * p->pitch + x) != 60 || BYTE(p->c, y * p->pitch + x) != (x & 1 ? 150 : 100);
-    return lit;
+    struct box b = {p->width, p->height, 0, 0, 0, 1, 0, 0};
+    for (uint32_t y = 0; y < p->height; ++y) for (uint32_t x = 0; x < p->pitch; ++x) {
+        uint8_t luma = BYTE(p->y, y * p->pitch + x), chroma = BYTE(p->c, y * p->pitch + x);
+        uint8_t stock = x & 1 ? base_cr : base_cb;
+        if (luma == base_y && chroma == stock) continue;
+        if (luma < base_y) b.lighter = 0;
+        if (mono && chroma != stock) b.lighter = 0;
+        if (luma - base_y > (int)b.lift) b.lift = luma - base_y;
+        if (!(x & 1) && luma >= 110 && chroma <= 105 && BYTE(p->c, y * p->pitch + x + 1) >= 165) b.orange = 1;
+        if (x < b.left) b.left = x;
+        if (y < b.top) b.top = y;
+        if (x + 1 > b.right) b.right = x + 1;
+        if (y + 1 > b.bottom) b.bottom = y + 1;
+        ++b.lit;
+    }
+    return b;
 }
 
 int main(void)
@@ -150,23 +185,120 @@ int main(void)
     picture_post(OBJECT, CONTEXT);
     for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
 
-    /* An effect without glow touches nothing. */
+    /* Date text for each style: no leading zeros except the year and minutes. */
+    {
+        static const char *const expected[] = {"'26 10 17", "'26 10 17  9:05", "10 17 '26", "17 10 '26"};
+        static const char *const early[] = {"'07 1 5", "'07 1 5  13:07", "1 5 '07", "5 1 '07"};
+        static const uint8_t date[6] = {2026 & 255, 2026 >> 8, 10, 17, 9, 5};
+        static const uint8_t january[6] = {2007 & 255, 2007 >> 8, 1, 5, 13, 7};
+        char text[20];
+        for (u32 style = 1; style <= 4; ++style) {
+            u32 n = date_text(text, date, style);
+            assert(n == strlen(expected[style - 1]) && !memcmp(text, expected[style - 1], n));
+            n = date_text(text, january, style);
+            assert(n == strlen(early[style - 1]) && !memcmp(text, early[style - 1], n));
+        }
+    }
+    /* Off with no glow touches nothing. */
     encode_setup();
     picture_encode(0, MESSAGE);
     assert(flushes == 0);
-    for (u32 i = 0; i < 3; ++i) assert(changes(i) == 0);
+    for (u32 i = 0; i < 3; ++i) assert(changes(i, 0).lit == 0);
+    /* On a dark neutral picture the stamp lights an orange core at the bottom
+       right of the visible area, once per plane set, and only lightens. */
+    for (u32 style = 1; style <= 4; ++style) {
+        encode_setup();
+        fill_planes(40, 128, 128);
+        header[GRKIT_HOST_STAMP / 4] = style;
+        picture_encode(0, MESSAGE);
+        assert(flushes == 12);
+        for (u32 i = 0; i < 3; ++i) {
+            const struct test_plane *p = &planes[i];
+            u32 bottom = p->height - (i == 2 ? 8 : 0);
+            struct box b = changes(i, 0);
+            assert(b.lit && b.lighter);
+            assert(i == 2 || b.orange);
+            assert(b.right <= p->width && b.bottom <= bottom);
+            assert(b.left > p->width / 3 && b.top > p->height / 2);
+        }
+    }
+    /* Longer styles reach further left. */
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 1;
+    picture_encode(0, MESSAGE);
+    u32 short_left = changes(0, 0).left;
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 2;
+    picture_encode(0, MESSAGE);
+    assert(changes(0, 0).left < short_left);
+    /* A screen blend fades on bright areas, as an exposure on film does. */
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 1;
+    picture_encode(0, MESSAGE);
+    u32 dark_lift = changes(0, 0).lift;
+    encode_setup();
+    fill_planes(240, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 1;
+    picture_encode(0, MESSAGE);
+    {
+        struct box b = changes(0, 0);
+        assert(b.lighter && b.lift <= 15 && dark_lift >= 100);
+    }
+    /* 16:9 Framing: the screennail stamp stays above the bottom bar. */
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 3;
+    header[GRKIT_HOST_FRAME_RATIO / 4] = 2;
+    picture_encode(0, MESSAGE);
+    {
+        struct box b = changes(1, 0);
+        assert(b.lit && b.bottom <= 480 - 38 && b.top > 240);
+    }
+    /* A monochrome GRKit effect keeps neutral chroma: the stamp lights only Y. */
+    encode_setup();
+    fill_planes(40, 128, 128);
+    header[GRKIT_HOST_STAMP / 4] = 1;
+    header[GRKIT_HOST_STILL / 4] = record(2);
+    WORD(record(2), GRKIT_RECORD_MONOCHROME) = 1;
+    picture_encode(0, MESSAGE);
+    for (u32 i = 0; i < 3; ++i) { struct box b = changes(i, 1); assert(b.lit && b.lighter && !b.orange); }
     /* Unusable descriptors are skipped. */
     encode_setup();
-    header[GRKIT_HOST_STILL / 4] = record(1);
-    WORD(record(1), GRKIT_RECORD_FEATURES) = GRKIT_FEATURE_GLOW;
-    BYTE(record(1), GRKIT_RECORD_GLOW) = 3;
+    header[GRKIT_HOST_STAMP / 4] = 1;
     HALF(WORD(CONFIG, 0x3c), 0x14) = 500;
     WORD(CONFIG, 0x40) = 0;
     HALF(WORD(CONFIG, 0x44), 0x10) = 161;
     picture_encode(0, MESSAGE);
     assert(flushes == 0);
-    for (u32 i = 0; i < 3; ++i) assert(changes(i) == 0);
+    for (u32 i = 0; i < 3; ++i) assert(changes(i, 0).lit == 0);
 
+    /* The largest picture draws the stamp and the previews scale its mask, so
+       the stamp keeps its place and total width when playback switches from the
+       screennail to the main picture. */
+    for (u32 style = 1; style <= 4; ++style) {
+        reset();
+        WORD(MESSAGE, 8) = CONFIG;
+        picture(0, 1200, 800, 1216, PLANES);
+        picture(1, 720, 480, 736, PLANES + 0x200000);
+        picture(2, 160, 120, 160, PLANES + 0x2c0000);
+        WORD(CONFIG, 0x48) = WORD(CONFIG, 0x3c); WORD(CONFIG, 0x58) = WORD(CONFIG, 0x4c);
+        flushes = 0; native_aspect = 0;
+        fill_planes(40, 128, 128);
+        header[GRKIT_HOST_STAMP / 4] = style;
+        picture_encode(0, MESSAGE);
+        struct box big = changes(0, 0), sn = changes(1, 0), th = changes(2, 0);
+        assert(big.lit && big.lighter && big.orange && sn.lit && sn.lighter && th.lit && th.lighter);
+        /* Screennail: 1200 / 720 per pixel. Thumbnail: 1200 / 160 across, 800 / 104 down. */
+        assert(abs((int)sn.right - (int)(big.right * 720 / 1200)) <= 2);
+        assert(abs((int)sn.left - (int)(big.left * 720 / 1200)) <= 2);
+        assert(abs((int)sn.bottom - (int)(big.bottom * 480 / 800)) <= 2);
+        assert(abs((int)th.right - (int)(big.right * 160 / 1200)) <= 2);
+        assert(abs((int)th.left - (int)(big.left * 160 / 1200)) <= 2);
+        assert(abs((int)th.bottom - (int)(8 + big.bottom * 104 / 800)) <= 2);
+    }
     /* Soft glow: a bright square lifts its surroundings toward white and moves
        their chroma toward neutral. It never darkens, and dark areas far away stay. */
     encode_setup();
@@ -204,7 +336,7 @@ int main(void)
     WORD(record(1), GRKIT_RECORD_FEATURES) = GRKIT_FEATURE_GLOW;
     BYTE(record(1), GRKIT_RECORD_GLOW) = 3;
     picture_encode(0, MESSAGE);
-    for (u32 i = 0; i < 3; ++i) assert(changes(i) == 0);
+    for (u32 i = 0; i < 3; ++i) assert(changes(i, 0).lit == 0);
     assert(flushes == 12);
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);

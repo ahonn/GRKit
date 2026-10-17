@@ -9,9 +9,10 @@ pub const HEADER_SIZE: usize = 256;
 pub const RECORD_SIZE: usize = 0x740;
 pub const ICON_STRIDE: usize = 6408;
 pub const ICONS_PER_CHUNK: usize = 40;
-/// Off, GRKit, four Framing tiles, and five Guides tiles. The menu addresses
-/// module tiles by offset, so they must stay contiguous in one icon chunk.
-pub const HOST_ICON_COUNT: usize = 11;
+/// Off, GRKit, four Framing tiles, five Guides tiles, and five Date Stamp tiles.
+/// The menu addresses module tiles by offset, so they must stay contiguous in
+/// one icon chunk.
+pub const HOST_ICON_COUNT: usize = 16;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
 /// Soft-glow map after the records (`GRKIT_GLOW_SCRATCH`): at most 376 x 376 cells.
