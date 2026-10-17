@@ -156,41 +156,16 @@ pub fn load_build(directory: &Path) -> Result<(Files, Value)> {
         fs::symlink_metadata(directory)?.is_dir(),
         "Expected a regular build directory"
     );
-    let manifest = packaging::read_manifest(&read_regular(&directory.join("build.json"))?)?;
-    ensure!(
-        manifest["profile"] == "production"
-            && manifest["target"] == "gr3-2.10"
-            && manifest["startup_activation"] == "Off",
-        "Expected a production GR III 2.10 build that starts in Off"
-    );
+    let manifest = read_regular(&directory.join("build.json"))?;
     let sd = directory.join("sd");
-    let mut actual = BTreeSet::new();
-    collect_files(&sd, Path::new(""), &mut actual)?;
-    let allowed = runtime::runtime_files(&[]);
+    let mut names = BTreeSet::new();
+    collect_files(&sd, Path::new(""), &mut names)?;
     let mut files = Files::new();
-    for item in manifest["files"]
-        .as_array()
-        .context("Expected a manifest file list")?
-    {
-        let name = item["path"].as_str().context("Expected a runtime path")?;
-        ensure!(
-            allowed.contains_key(name) && !files.contains_key(name),
-            "Invalid runtime manifest entries"
-        );
-        let bytes = read_regular(&sd.join(name))?;
-        ensure!(
-            item["size"].as_u64() == Some(bytes.len() as u64)
-                && item["sha256"] == packaging::sha256(&bytes),
-            "Runtime hash or size mismatch: {name}"
-        );
-        files.insert(name.to_owned(), bytes);
+    for name in names {
+        let bytes = read_regular(&sd.join(&name))?;
+        files.insert(name, bytes);
     }
-    ensure!(
-        actual == files.keys().cloned().collect(),
-        "Runtime directory differs from its manifest"
-    );
-    packaging::validate_runtime(&files)?;
-    Ok((files, manifest))
+    packaging::load_runtime(&manifest, &files)
 }
 
 // Resolve existing ancestors too, so symlink aliases cannot conceal nested outputs.

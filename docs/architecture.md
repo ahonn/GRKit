@@ -8,6 +8,7 @@ Menu, processing, and Framing hooks run in the camera's RTOS domain.
 - `grkit-core` implements artwork, GRF formats, effect compilation, runtime templates, and deterministic ZIP assembly. It does not read files or start processes.
 - `grkit-build` checks firmware, generates patches, and invokes Clang and LLD.
 - `grkit-cli` exposes commands and enforces filesystem rules.
+- `grkit-wasm` assembles packages in the browser. It takes a runtime build as `grkit build` writes it (`build.json` and `sd/`) and compiled effects, and it uses the `grkit-core` checks that the CLI uses.
 
 Native sources live under `runtime/`, and package documents live under `resources/`. The CLI embeds both, so it works outside the checkout.
 Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C tests check the GRF parser, the effect catalog, the menu, and Framing.

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli"]
+members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crates/grkit-wasm"]
 resolver = "2"
 
 [workspace.package]
@@ -18,6 +18,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tempfile = "3"
+# The site pins wasm-bindgen-cli to this exact version.
+wasm-bindgen = "=0.2.128"
 zip = { version = "2.4", default-features = false, features = ["deflate"] }
 grkit-core = { path = "crates/grkit-core" }
 grkit-build = { path = "crates/grkit-build" }

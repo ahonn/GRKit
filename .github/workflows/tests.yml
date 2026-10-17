@@ -12,7 +12,7 @@ jobs:
       GRKIT_REQUIRE_NATIVE_TESTS: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt
+      - run: rustup toolchain install 1.92.0 --profile minimal --component clippy --component rustfmt --target wasm32-unknown-unknown
       - run: rustup default 1.92.0
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang lld
@@ -20,6 +20,7 @@ jobs:
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --locked
+      - run: cargo build -p grkit-wasm --target wasm32-unknown-unknown --release --locked
       - if: runner.os == 'Linux'
         run: GRKIT_CLANG=clang GRKIT_LLD=ld.lld cargo test -p grkit-build --locked synthetic_ -- --ignored
       - run: cargo build --release --locked -p grkit-cli

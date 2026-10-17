@@ -297,7 +297,11 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
             .map(|v| v.as_u64().unwrap() as usize)
             .collect();
         // Glow map, then the live-view overlay: five state words and 180 x 120 cells.
-        assert_eq!(words * 4, 256 + count * 0x740 + 376 * 376 + 20 + 180 * 120, "count {count}");
+        assert_eq!(
+            words * 4,
+            256 + count * 0x740 + 376 * 376 + 20 + 180 * 120,
+            "count {count}"
+        );
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
             (count + 16) * 6408,
@@ -361,4 +365,42 @@ fn symlink_and_encrypted_entries_are_rejected() {
         }
         assert!(verify_package(&bytes).is_err());
     }
+}
+
+#[test]
+fn runtime_builds_must_match_their_manifest_exactly() {
+    let files = runtime_fixture();
+    let manifest = |files: &Files| {
+        let mut value = build();
+        value["files"] = files
+            .iter()
+            .map(
+                |(path, bytes)| json!({"path": path, "size": bytes.len(), "sha256": sha256(bytes)}),
+            )
+            .collect();
+        json_bytes(&value).unwrap()
+    };
+    let (runtime, loaded) = load_runtime(&manifest(&files), &files).unwrap();
+    assert_eq!(runtime, files);
+    assert_eq!(loaded["target"], json!("gr3-2.10"));
+
+    let mut extra = files.clone();
+    extra.insert("SCRIPT/EXTRA.SH".into(), b"x".to_vec());
+    let mut missing = files.clone();
+    missing.remove("SCRIPT/STARTUP.TTL");
+    let mut changed = files.clone();
+    changed.insert("SCRIPT/STARTUP.TTL".into(), b"changed".to_vec());
+    for (actual, expected) in [
+        (&extra, "differs from its manifest"),
+        (&missing, "differs from its manifest"),
+        (&changed, "hash or size mismatch"),
+    ] {
+        let message = format!("{:#}", load_runtime(&manifest(&files), actual).unwrap_err());
+        assert!(message.contains(expected), "{message}");
+    }
+    let unknown = format!("{:#}", load_runtime(&manifest(&extra), &extra).unwrap_err());
+    assert!(
+        unknown.contains("Invalid runtime manifest entries"),
+        "{unknown}"
+    );
 }

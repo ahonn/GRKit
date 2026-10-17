@@ -1,0 +1,17 @@
+[package]
+name = "grkit-wasm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+anyhow.workspace = true
+grkit-core.workspace = true
+wasm-bindgen.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
