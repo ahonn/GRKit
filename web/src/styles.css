@@ -279,6 +279,15 @@ button {
   border-color: var(--ink);
 }
 
+.badge.experimental {
+  color: #9a3412;
+  border: 1px solid #9a3412;
+}
+
+.note.warning {
+  color: #9a3412;
+}
+
 /* Effect preview */
 
 .preview-row {

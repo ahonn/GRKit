@@ -1,18 +1,19 @@
 use super::*;
 
 fn synthetic_firmware() -> firmware::FirmwareImage {
+    let gr3 = &target::GR3_210;
     let mut image = firmware::FirmwareImage {
-        body: vec![0; (target::DATA_SOURCE - target::RTOS_BASE + target::DATA_SIZE) as usize],
+        target: gr3,
+        body: vec![0; (gr3.data_source - target::RTOS_BASE + gr3.data_size) as usize],
         sha256: "synthetic".into(),
         decoded_sha256: "synthetic".into(),
     };
     let mut write = |address: u32, bytes: &[u8]| {
-        let address =
-            if (target::DATA_START..target::DATA_START + target::DATA_SIZE).contains(&address) {
-                address - target::DATA_START + target::DATA_SOURCE
-            } else {
-                address
-            };
+        let address = if (gr3.data_start..gr3.data_start + gr3.data_size).contains(&address) {
+            address - gr3.data_start + gr3.data_source
+        } else {
+            address
+        };
         let offset = (address - target::RTOS_BASE) as usize;
         image.body[offset..offset + bytes.len()].copy_from_slice(bytes);
     };
@@ -36,12 +37,17 @@ fn synthetic_firmware() -> firmware::FirmwareImage {
     {
         write(address, &hex::decode(bytes).unwrap());
     }
-    for address in target::TABLES {
+    for address in target::GR3_IMAGE_CONTROL.tables {
         write(address, &(0..104u8).collect::<Vec<_>>());
     }
-    write(target::TABLES[0] + 21 * 4, &0x5501900cu32.to_le_bytes());
+    write(
+        target::GR3_IMAGE_CONTROL.tables[0] + 11 * 4,
+        &0x5501900cu32.to_le_bytes(),
+    );
     write(0x5501900c, &(0..84u8).collect::<Vec<_>>());
     write(0x55019010, &0x53dc2754u32.to_le_bytes());
+    // The English entry of the language table, as GR III 2.10 holds it.
+    write(gr3.english_slot, &0x55004490u32.to_le_bytes());
     image
 }
 
@@ -70,7 +76,7 @@ fn firmware_identity_rejected_before_decode() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("firmware.bin");
     fs::write(&path, b"wrong firmware").unwrap();
-    assert!(verify_firmware(&path)
+    assert!(verify_firmware(&path, &target::GR3_210)
         .unwrap_err()
         .to_string()
         .contains("SHA-256"));
@@ -81,12 +87,12 @@ fn firmware_address_mapping_and_record_contract() {
     let mut body = synthetic_firmware();
     assert_eq!(body.stock_record().unwrap().0, 0x5501900c);
     assert_eq!(
-        body.read(target::DATA_START, 8).unwrap(),
-        body.read(target::DATA_SOURCE, 8).unwrap()
+        body.read(target::GR3_210.data_start, 8).unwrap(),
+        body.read(target::GR3_210.data_source, 8).unwrap()
     );
     assert!(body.read(0, 4).is_err());
     assert!(body.read(target::RTOS_BASE, usize::MAX).is_err());
-    let offset = (target::DATA_SOURCE - target::RTOS_BASE + 0x19010) as usize;
+    let offset = (target::GR3_210.data_source - target::RTOS_BASE + 0x19010) as usize;
     body.body[offset] ^= 1;
     assert!(body.stock_record().is_err());
 }
@@ -263,17 +269,42 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
     let runtime = directory.path().join("runtime");
     materialize_runtime(&runtime)?;
     let body = synthetic_firmware();
-    let processing = components::processing(directory.path(), &runtime, &body, &tools)?;
-    let menu = components::menu(directory.path(), &runtime, &body, &tools)?;
-    let framing = components::framing(directory.path(), &runtime, &body, &tools)?;
+    fs::write(runtime.join("hooks.h"), components::hooks_header(&body)?)?;
+    let layout = &components::GR3_LAYOUT;
+    let processing_region = layout.processing.unwrap();
+    let framing_region = layout.framing.unwrap();
+    let processing = components::processing(
+        directory.path(),
+        &runtime,
+        &body,
+        &tools,
+        layout,
+        processing_region,
+    )?;
+    let menu = components::menu(directory.path(), &runtime, &body, &tools, layout)?;
+    let framing = components::framing(
+        directory.path(),
+        &runtime,
+        &body,
+        &tools,
+        layout,
+        framing_region,
+    )?;
 
     // Reject changes to the widget's input and output context, not just its BL.
     for address in 0x531710bc..0x531710d8 {
         let mut changed = synthetic_firmware();
         changed.body[(address - target::RTOS_BASE) as usize] ^= 1;
-        let error = components::processing(directory.path(), &runtime, &changed, &tools)
-            .err()
-            .expect("Modified viewfinder instructions must be rejected");
+        let error = components::processing(
+            directory.path(),
+            &runtime,
+            &changed,
+            &tools,
+            layout,
+            processing_region,
+        )
+        .err()
+        .expect("Modified viewfinder instructions must be rejected");
         assert!(error
             .to_string()
             .contains("instructions changed at 0x531710bc"));
@@ -420,7 +451,7 @@ fn pinned_firmware_build_is_reproducible() -> Result<()> {
     let firmware =
         PathBuf::from(std::env::var("GRKIT_TEST_FIRMWARE").context("Set GRKIT_TEST_FIRMWARE")?);
     let tools = tools()?;
-    let body = verify_firmware(&firmware)?;
+    let body = verify_firmware(&firmware, &target::GR3_210)?;
     let directory = tempfile::tempdir()?;
     let first = build_image(&body, &directory.path().join("first"), &tools)?;
     let second = build_image(&body, &directory.path().join("second"), &tools)?;
@@ -452,7 +483,7 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
     let header = loader::header(&plan, &synthetic_firmware())?;
     assert_eq!(
         sha256(header.as_bytes()),
-        "5abb4ecaf7cc12f65817f5f7682b6a65051f3efcc464dd023c24f70dc8416ec5"
+        "9c11956d528d356cbb2cf592f8773831f3fe8c0fb22301cd413346cd872ba0c4"
     );
     Ok(())
 }
@@ -503,7 +534,7 @@ fn menu_assembly_symbols_are_typed_functions() {
 
 #[test]
 fn production_scripts_and_activation_match_fixed_contracts() {
-    let files = runtime_files(b"ELF");
+    let files = grkit_core::runtime::runtime_files(b"ELF");
     let expected = [
         (
             "SCRIPT/STARTUP.TTL",
@@ -537,6 +568,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
     for (camera, modeset) in [
         (&grkit_core::camera::GR3, "00078350.588"),
         (&grkit_core::camera::GR3X, "00078490.609"),
+        (&grkit_core::camera::GR4, "00078560.636"),
     ] {
         let activation = grkit_core::runtime::activation_files(camera);
         assert_eq!(activation.len(), 2);
@@ -548,5 +580,25 @@ fn production_scripts_and_activation_match_fixed_contracts() {
             sha256(&activation["DEVELOP.MOD"]),
             "0d622b3b4e26b183a0434f876f33cf56787c9b37c9b05e850f4be4a15c8ccf2d"
         );
+    }
+}
+
+#[test]
+fn each_camera_offers_what_its_runtime_has() {
+    for camera in grkit_core::camera::CAMERAS {
+        let target = target::find(camera.target).unwrap();
+        let layout = target.layout.unwrap();
+        assert_eq!(layout.processing.is_some(), camera.effects, "{}", camera.id);
+        // The installer hides the modules that the layout lacks (bit n + 1 of
+        // the hidden mask is module name n).
+        for (index, name) in grkit_core::modules::NAMES.iter().enumerate() {
+            let absent = layout.hidden & (2 << index) != 0;
+            assert_eq!(
+                absent,
+                !camera.modules.contains(name),
+                "{} {name}",
+                camera.id
+            );
+        }
     }
 }

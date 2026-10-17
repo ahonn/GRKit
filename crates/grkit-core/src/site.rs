@@ -17,8 +17,6 @@ use crate::{effects, packaging, Files};
 /// Points on each axis of a preview table.
 pub const LUT_SIZE: usize = 33;
 pub const CATALOG_SCHEMA: &str = "grkit-site-effects-v1";
-/// The only target whose base gamma the fit model describes.
-pub const TARGET: &str = "gr3-2.10";
 /// A bound on the catalog. A package still holds at most `runtime::MAX_COUNT` effects.
 pub const MAX_EFFECTS: usize = 100;
 
@@ -131,9 +129,14 @@ fn text<'a>(value: &'a Value, what: &str) -> Result<&'a str> {
         .with_context(|| format!("Expected effect {what}"))
 }
 
-/// Compiles effect definitions for the site. The result holds `catalog.json`, one `.GRF`
-/// per effect under its package filename, and `preview/<id>.lut`.
-pub fn publish_effects(definitions: &[Value], base_gamma: &[u16; 256]) -> Result<Files> {
+/// Compiles effect definitions for the site catalog of `target`, whose firmware holds
+/// `base_gamma`. The result holds `catalog.json`, one `.GRF` per effect under its
+/// package filename, and `preview/<id>.lut`.
+pub fn publish_effects(
+    definitions: &[Value],
+    base_gamma: &[u16; 256],
+    target: &str,
+) -> Result<Files> {
     ensure!(
         (1..=MAX_EFFECTS).contains(&definitions.len()),
         "Expected 1 to {MAX_EFFECTS} effects"
@@ -170,7 +173,7 @@ pub fn publish_effects(definitions: &[Value], base_gamma: &[u16; 256]) -> Result
     }
     let catalog = json!({
         "schema": CATALOG_SCHEMA,
-        "target": TARGET,
+        "target": target,
         "preview": {"size": LUT_SIZE, "order": "rgb", "input": "standard-srgb8"},
         "effects": entries,
     });

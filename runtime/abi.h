@@ -75,7 +75,10 @@
    ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72b are reserved and
    zero. */
 #define GRKIT_RECORD_SELECTIVE 0x716
+/* GR III 2.10. A target header can define a larger slot (see runtime/targets). */
+#ifndef GRKIT_ICON_STRIDE
 #define GRKIT_ICON_STRIDE 6408
+#endif
 /* Picture scratch after the records: the date stamp core and halo masks. */
 #define GRKIT_PICTURE_SCRATCH 141376
 

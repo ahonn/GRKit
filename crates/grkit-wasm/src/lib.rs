@@ -98,7 +98,8 @@ impl Builder {
         Ok(())
     }
 
-    /// Selects the camera: `gr3` (the default) or `gr3x`. The package gets its ModeSet file.
+    /// Selects the camera: `gr3` (the default), `gr3x`, or `gr4`. The package gets its
+    /// ModeSet file. `build` rejects a camera that does not run this runtime.
     pub fn set_camera(&mut self, id: &str) -> Result<()> {
         self.camera = camera::find(id)?;
         Ok(())
@@ -150,7 +151,7 @@ impl Package {
         self.0.hide_module(name).map_err(js_error)
     }
 
-    /// Selects the camera: `gr3` (the default) or `gr3x`.
+    /// Selects the camera: `gr3` (the default), `gr3x`, or `gr4`.
     #[wasm_bindgen(js_name = setCamera)]
     pub fn set_camera(&mut self, id: &str) -> Result<(), JsError> {
         self.0.set_camera(id).map_err(js_error)

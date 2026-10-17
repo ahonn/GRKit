@@ -97,6 +97,10 @@ static int read_hidden(u32 *hidden)
 static int discover(void)
 {
     count=0;
+#if defined(GRKIT_NO_MODULES) || defined(GRKIT_NO_IMAGE_CONTROL)
+    /* Without Image Control, the target has no use for effect files. */
+    return 0;
+#endif
     long fd=syscall6(5,(u32)root,0xc000,0,0,0,0);
     if(fd==-2) return 0;
     if(fd<0) return 30;
@@ -129,6 +133,12 @@ static int discover(void)
 }
 /* Photos record this code as their Image Control tag. It stays stable across
    catalogs and outside the native values 256..267. */
+#ifdef GRKIT_NATIVE_TONE_PAGE
+/* The target also records native values in this 256-value page. */
+#define NATIVE_CODE(code) ((code) >> 8 == GRKIT_NATIVE_TONE_PAGE)
+#else
+#define NATIVE_CODE(code) 0
+#endif
 static u32 effect_code(const u8 *id)
 {
     u32 hash = 0x811c9dc5;
@@ -177,6 +187,18 @@ static int sync_alias(u32 address, u32 n)
     __asm__ volatile("dsb sy" ::: "memory");
     return syscall6(0xf0002, (u32)at(address), (u32)at(address + n), 0, 0, 0, 0) == 0;
 }
+/* A native icon descriptor, then the 40 x 40 pixels. */
+#ifdef GRKIT_ICON_DESCRIPTOR_12
+/* Width and a valid flag, height, and the pixel offset in words. */
+#define ICON_PIXELS 12
+#define ICON_HEADER(icon) do { store(icon, 0x00280001); store(icon + 4, 40); \
+    store(icon + 8, (icon + ICON_PIXELS - pixels) / 4); } while (0)
+#else
+/* Height and width, then the pixel offset in words. */
+#define ICON_PIXELS 8
+#define ICON_HEADER(icon) do { store(icon, 0x00280028); \
+    store(icon + 4, (icon + ICON_PIXELS - pixels) / 4); } while (0)
+#endif
 static int heap(u32 p, u32 n)
 {
     return !(p & 3) && p >= HEAP_MIN && n <= HEAP_END - HEAP_MIN && p <= HEAP_END - n;
@@ -211,35 +233,58 @@ static int install(void)
             if (ptr < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < ptr + bytes) return 11;
         icon_bases[i] = ptr;
     }
+#ifndef GRKIT_NO_MODULES
     if (word(ENGLISH_SLOT) != ORIGINAL_ENGLISH) return 12;
+#ifndef GRKIT_NO_IMAGE_CONTROL
     if (!equal(at(STOCK_RECORD), stock_record, 68)) return 13;
     /* Firmware fills four pointers at +0x44 after the image copy. Records copied
        before that would miss them, so an image-copy tail means not ready yet. */
     if (!equal(at(STOCK_RECORD + 68), initialized_tail, 16))
         return equal(at(STOCK_RECORD + 68), stock_record + 68, 16) ? 14 : 13;
+#endif
     /* No firmware code refers to the RTOS tail, so earlier GRKit code there is
        overwritten. Every other patch must still find its stock bytes. */
+#endif
     for (u32 i = 0; i < PATCH_COUNT; ++i)
         if (!patches[i].kind && !equal(at(patches[i].address), patches[i].before, patches[i].size)) return 16;
+#ifndef GRKIT_NO_MODULES
+#ifndef GRKIT_NO_IMAGE_CONTROL
     for (u32 i = 0; i < 3; ++i)
-        if (!equal(at(table_addresses[i]), stock_tables + i * 104, 104)) return 17;
+        if (!equal(at(table_addresses[i]), stock_tables + i * TABLE_BYTES, TABLE_BYTES)) return 17;
     /* Reject stale native types; never attempt an in-place settings repair. */
-    u32 domain = word(0x553458b0);
+    u32 domain = word(SETTINGS_DOMAIN);
     if (!heap(domain, 0x51c)) return 39;
     u32 control = word(domain + 0x518);
     if (!heap(control, 4)) return 39;
     u32 payload = word(control);
-    if (!heap(payload, 0x77d) || at(payload + 0x77c)[0] >= 26) return 39;
+    if (!heap(payload, SETTINGS_IC_TYPE + 1) || at(payload + SETTINGS_IC_TYPE)[0] >= IC_TYPE_COUNT) return 39;
+#endif
+#ifdef ICON_DRAWER_SLOT
+    /* The icon drawer exists after the first icon draw. Its first word is the
+       base of icon pixel offsets, which can lie outside the mapping. */
+    u32 drawer = word(ICON_DRAWER_SLOT);
+    if (!heap(drawer, 4)) return 26;
+    u32 pixels = word(drawer);
+    if ((pixels & 3) || !pixels) return 26;
+#else
     u32 pixels = word(ICON_PIXEL_BASE_SLOT);
     if ((pixels & 3) || pixels < MAP_BASE || pixels >= HEAP_MIN) return 26;
+#endif
+#endif
     zero(at(base), size);
     store(base, count); store(base + 4, base + GRKIT_HOST_HEADER_SIZE);
     store(base + 16, 0x314d5247); store(base + 20, 1);
+#ifdef TARGET_HIDDEN
+    /* Modules that the target does not implement yet stay hidden. */
+    hidden |= TARGET_HIDDEN;
+#endif
     store(base + GRKIT_HOST_HIDDEN, hidden);
+#ifndef GRKIT_NO_MODULES
     for (u32 i = 0; i < icon_chunks; ++i) {
         zero(at(icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, icon_bases[i]);
     }
+#ifndef GRKIT_NO_IMAGE_CONTROL
     for (u32 i = 0; i < count; ++i) {
         u32 record = base + GRKIT_HOST_HEADER_SIZE + i * GRKIT_RECORD_SIZE;
         const u8 *profile = profiles[i];
@@ -256,28 +301,30 @@ static int install(void)
         copy(at(record + GRKIT_RECORD_ID), profile + 16, 32);
         module_summary((volatile u16 *)at(record + GRKIT_RECORD_SUMMARY), profile + 48);
         u32 icon = icon_bases[i / ICONS_PER_CHUNK] + (i % ICONS_PER_CHUNK) * ICON_STRIDE;
-        store(icon, 0x00280028); store(icon + 4, (icon + 8 - pixels) / 4);
-        copy(at(icon + 8), profile + 1684, 6400);
+        ICON_HEADER(icon);
+        copy(at(icon + ICON_PIXELS), profile + 1684, 6400);
         store(record + GRKIT_RECORD_ICON, icon);
-        /* Resolve hash collisions in catalog order. */
+        /* Resolve hash collisions in catalog order, and skip native values. */
         u32 code = effect_code(profile + 16), j = 0;
-        while (j < i) {
-            if (*(volatile u16 *)at(base + GRKIT_HOST_HEADER_SIZE + j * GRKIT_RECORD_SIZE + GRKIT_RECORD_CODE) != code) { ++j; continue; }
+        while (j < i || NATIVE_CODE(code)) {
+            if (!NATIVE_CODE(code) && *(volatile u16 *)at(base + GRKIT_HOST_HEADER_SIZE + j * GRKIT_RECORD_SIZE + GRKIT_RECORD_CODE) != code) { ++j; continue; }
             code = 0x8000 | ((code + 1) & 0x7fff);
             j = 0;
         }
         *(volatile u16 *)at(record + GRKIT_RECORD_CODE) = code;
     }
+#endif
     /* Host artwork does not consume an effect record or a native settings ID. */
     for (u32 i = 0; i < HOST_ICON_COUNT; ++i) {
         u32 index = count + i;
         u32 icon = icon_bases[index / ICONS_PER_CHUNK] + (index % ICONS_PER_CHUNK) * ICON_STRIDE;
-        store(icon, 0x00280028); store(icon + 4, (icon + 8 - pixels) / 4);
+        ICON_HEADER(icon);
         const u8 *artwork = i >= 2 ? module_pixels + (i - 2) * 6400 : i ? plugins_pixels : off_pixels;
-        copy(at(icon + 8), artwork, 6400);
+        copy(at(icon + ICON_PIXELS), artwork, 6400);
         /* The menu derives the other module tiles from the first Framing tile. */
         if (i <= 2) store(base + (i == 2 ? GRKIT_HOST_FRAMING_ICON : i ? GRKIT_HOST_PLUGINS_ICON : GRKIT_HOST_OFF_ICON), icon);
     }
+#endif
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
         u32 patch_index = code_relocations[i * 2], offset = code_relocations[i * 2 + 1];
         put32(patches[patch_index].after + offset, base);

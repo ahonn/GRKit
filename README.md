@@ -9,14 +9,17 @@ GRKit is an SD-loaded plugin runtime for the RICOH GR III with firmware 2.10 and
 
 A package can leave out modules. The camera menu then shows only the modules in the package.
 
+GR IV and GR IV HDF with firmware 1.11 have experimental support for Image Control, Framing (XPan only, cropped from native 16:9), Guides, and Date Stamp. This support has not been tested on a camera.
+
 > [!WARNING]
 > GRKit is experimental and is not affiliated with Ricoh. It patches the firmware in RAM for the current session and does not write the firmware. Activation enables the camera's persistent SD-script setting. A failure can stop the camera during startup. Read the [recovery guide](resources/RECOVERY.md) before you install GRKit.
 > GR IIIx 1.60 runs the code of GR III 2.10, so it uses the same runtime. GRKit has not been tested on a GR IIIx camera.
+> GRKit has not been tested on a GR IV camera. GR IV support stays experimental until it passes that test.
 > Other models and firmware versions are not supported. File formats and the package layout can change.
 
 ## Install
 
-Each package contains `INSTALLATION.md`. The [installation guide](resources/INSTALLATION.md) is the same document.
+Each package contains `INSTALLATION.md`. The [installation guide](resources/INSTALLATION.md) is the same document. GR IV packages contain the [GR IV installation guide](resources/INSTALLATION-GR4.md).
 
 ## Build a package
 
@@ -31,6 +34,7 @@ grkit verify dist/GRKit.zip
 ```
 
 `grkit package --camera gr3x` makes a package for the GR IIIx. The runtime build is the same, and only the file that enables SD scripts changes.
+For GR IV, build the runtime from the GR IV 1.11 firmware file (`fwdc248b.bin`) with `--target gr4-1.11`, then package it with `--camera gr4`.
 `grkit package --hide framing,guides,date-stamp` hides modules. A package without `--effects` has no Image Control.
 
 ## Documentation

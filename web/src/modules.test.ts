@@ -31,4 +31,18 @@ describe('planModules', () => {
       'date-stamp',
     ]);
   });
+
+  it('plans only the modules that the camera has', () => {
+    const partial: ModuleKey[] = ['guides', 'dateStamp'];
+    expect(planModules(ALL_MODULES, 2, partial)).toEqual({
+      includeEffects: false,
+      hidden: [],
+      visible: ['guides', 'dateStamp'],
+    });
+    expect(planModules(new Set<ModuleKey>(['imageControl', 'framing', 'guides']), 2, partial)).toEqual({
+      includeEffects: false,
+      hidden: ['date-stamp'],
+      visible: ['guides'],
+    });
+  });
 });

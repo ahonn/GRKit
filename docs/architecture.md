@@ -19,8 +19,28 @@ An effect equal to Standard maps each input to itself. The preview assumes that 
 GR IIIx 1.60 runs the RTOS code of GR III 2.10. The two RTOS images have the same size and layout. They differ only in the model name, the version, the build time, the default year, the ModeSet numbers, and one byte of the model selection.
 None of these bytes is a patch site or a firmware input of GRKit. A runtime built from either firmware is therefore byte-identical, and both cameras run the `gr3-2.10` runtime.
 
-The cameras differ in the ModeSet file that enables SD scripts: `00078350.588` on GR III and `00078490.609` on GR IIIx. `grkit_core::camera` lists both.
+The cameras differ in the ModeSet file that enables SD scripts: `00078350.588` on GR III and `00078490.609` on GR IIIx. `grkit_core::camera` lists the cameras.
 A package holds the ModeSet file of one camera, and its installation guide names that camera and file. `grkit verify` identifies the camera from that file.
+
+GR IV 1.11 is a different build, with the target `gr4-1.11`. GR IV and GR IV HDF run the same firmware and ModeSet file, `00078560.636`.
+Its RTOS image is larger (0x13d2ac0 bytes), and its data, functions, and object layouts are at other addresses. `runtime/firmware.h` selects `runtime/targets/<target>.h`, which holds these values for the C and assembly sources.
+`components::Layout` holds the regions and hooks of each target, and the build generates `hooks.h` from it.
+
+The GR IV runtime has the menu, Image Control, Framing, Guides, and Date Stamp. GR IV Framing offers only XPan, as a crop of native 16:9 (see Framing).
+GR IV processing hooks are in `runtime/targets/gr4-1.11-processing.S`, after the Framing region. GR IV reads the type tables through getters.
+A private record therefore sets the Standard index (11) where all type paths join, and the record store keeps the private record.
+
+The GR IV packet tail has no special type path. Its gamma object holds the built-curve flag at `+0x382c`. `target::ImageControl` holds the tables, the Standard record, and the settings offsets of each target.
+
+GR IV photos record the plugin effect as on GR III. The hooks are the ImageTone call `0x53810804`, the DISP icon `0x531916c0`, and the detail `0x533a7614`.
+GR IV extraction compares each native tag value, and its default case (`0x537d8a54`) keeps a non-native tag. GR IV also uses the native values `0x8100` to `0x8105`, so the installer skips codes `0x8100` to `0x81ff` there.
+The effects use the GR III fit model.
+
+Neither camera reads one fixed base gamma table. Each picture build computes the base from 15 ROM curves, the tone setting, and a gain. GR IV uses the GR III function (`0x5391dad4`) and the same curves.
+`grkit effects publish` reads the curve for tone 0 and the lowest gain (GR IV `0x5407f4b4`). The gain of real GR IV stills is not known, so their shadows can differ from the fit.
+The GR IV Standard look matrix differs from the GR III one.
+
+GR IV icon descriptors have 12 bytes, and GR IV draws icons from a copy of the icon pixels. The installer reads the base of that copy from the icon drawer.
 
 Native sources live under `runtime/`, and package documents live under `resources/`. The CLI embeds both, so it works outside the checkout.
 Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C tests check the GRF parser, the effect catalog, the menu, and Framing.
@@ -162,6 +182,12 @@ The image aspect getter (`0x532b3ca0`) reports id 2 for 65:24 sizes.
 
 DNG files keep the full 6112x4064 sensor data, as native 1:1 does. DefaultCropOrigin and DefaultCropSize describe the crop.
 In-camera Crop, Resize, Digital Filter, and RAW development do not know the 65:24 variant.
+
+GR IV has native 4:3 and 16:9 live-view modes, so the GR III changes above would break them. GR IV Framing therefore offers Off and XPan, and XPan crops native 16:9 photos.
+GR IV has no capture request hook and no live-view changes. The GR IV sizes come from `ImageResolutionTranslatorKb636`. Its GetResolution (`0x538cfbfc`) has the id 2 height hooks, and slots 9 and 10 have the inset hooks.
+The `Kb588` class holds the GR III sizes and is not used. The GR IV size classifier (`0x533a2820`) keeps the width in `r6` and the class pointer in `r5`.
+
+GR IV 65:24 sizes are 6192x2288, 4944x1824, 3504x1296, and 1920x712. In native 16:9 the XPan mask uses the GR III XPan area. In native 3:2 XPan has no effect, and the viewfinder shows only the guides.
 
 ## Effect extension
 

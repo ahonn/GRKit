@@ -221,7 +221,7 @@ fn production_boundaries_are_enforced() {
             .get_mut("SCRIPT/STARTUP.TTL")
             .unwrap()
             .extend_from_slice(suffix);
-        assert!(validate_runtime(&altered).is_err());
+        assert!(validate_runtime(&altered, "gr3-2.10").is_err());
     }
 }
 
@@ -563,8 +563,9 @@ fn a_package_has_the_modeset_file_of_exactly_one_camera() {
     let mut files = unpack(&package());
     files.insert("SD_ROOT/00078350.588".into(), b"changed".to_vec());
     assert!(validate_contents(&with_sums(files)).is_err());
-    assert!(camera::find("gr4").is_err());
+    assert!(camera::find("gr2").is_err());
     assert_eq!(camera::find("gr3x").unwrap(), &camera::GR3X);
+    assert_eq!(camera::find("gr4").unwrap(), &camera::GR4);
 }
 
 #[test]
@@ -576,4 +577,64 @@ fn the_loader_waits_before_its_first_request() {
         .unwrap();
     assert!(wait < first_request);
     const { assert!(runtime::FIRST_REQUEST_DELAY_MS >= 3000) };
+}
+
+fn gr4_runtime_fixture() -> Files {
+    let mut binary = vec![0; 52];
+    binary[..6].copy_from_slice(b"\x7fELF\x01\x01");
+    binary[16..20].copy_from_slice(b"\x02\x00\x28\x00");
+    runtime::runtime_files_for(&binary, runtime::icon_stride("gr4-1.11").unwrap())
+}
+
+fn gr4_build() -> Value {
+    json!({"target": "gr4-1.11", "profile": "production", "startup_activation": "Off"})
+}
+
+#[test]
+fn a_gr4_package_has_its_modeset_file_guide_and_modules() {
+    let runtime = gr4_runtime_fixture();
+    let bytes = assemble(
+        &runtime,
+        &gr4_build(),
+        &Files::new(),
+        Hidden::default(),
+        &camera::GR4,
+    )
+    .unwrap();
+    let verified = verify_package(&bytes).unwrap();
+    assert_eq!(verified["camera"], "gr4");
+    assert_eq!(verified["target"], "gr4-1.11");
+    let files = unpack(&bytes);
+    assert!(files.contains_key("SD_ROOT/00078560.636"));
+    assert_eq!(
+        files["INSTALLATION.md"],
+        include_bytes!("../../../resources/INSTALLATION-GR4.md")
+    );
+    // A GR III runtime does not run on GR IV.
+    assert!(assemble(
+        &runtime_fixture(),
+        &build(),
+        &Files::new(),
+        Hidden::default(),
+        &camera::GR4
+    )
+    .is_err());
+    // GR IV has Image Control.
+    let bytes = assemble(
+        &runtime,
+        &gr4_build(),
+        &Files::from([effect("test-effect")]),
+        Hidden::default(),
+        &camera::GR4,
+    )
+    .unwrap();
+    assert_eq!(
+        verify_package(&bytes).unwrap()["effect_ids"],
+        json!(["test-effect"])
+    );
+    // GR IV has Framing, so hiding the other two without effects still shows Framing.
+    let hidden = Hidden::from_names(["guides", "date-stamp"]).unwrap();
+    assert!(assemble(&runtime, &gr4_build(), &Files::new(), hidden, &camera::GR4).is_ok());
+    let hidden = Hidden::from_names(["framing", "guides", "date-stamp"]).unwrap();
+    assert!(assemble(&runtime, &gr4_build(), &Files::new(), hidden, &camera::GR4).is_err());
 }

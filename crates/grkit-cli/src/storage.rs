@@ -184,7 +184,7 @@ pub fn load_build(directory: &Path) -> Result<(Files, Value)> {
     packaging::load_runtime(&manifest, &files)
 }
 
-/// Writes a verified build into a new site directory as `runtime/<target>/`.
+/// Writes a verified build into a site directory as a new `runtime/<target>/`.
 ///
 /// The copy holds only `build.json` and `sd/`, so it is itself a valid `--build` input.
 /// `objects/` stays out because its generated header holds firmware bytes.
@@ -195,7 +195,9 @@ pub fn export_runtime(build: &Path, site: &Path) -> Result<(String, usize)> {
         .as_str()
         .context("Expected a build target")?
         .to_owned();
-    validate_output(site)?;
+    // A site holds one runtime for each target, so a second target can join it.
+    let output = site.join("runtime").join(&target);
+    validate_output(&output)?;
     let mut tree = Files::from([("build.json".to_owned(), manifest)]);
     tree.extend(
         runtime
@@ -203,7 +205,7 @@ pub fn export_runtime(build: &Path, site: &Path) -> Result<(String, usize)> {
             .map(|(name, bytes)| (format!("sd/{name}"), bytes)),
     );
     let count = tree.len();
-    write_directory(&site.join("runtime").join(&target), &tree)?;
+    write_directory(&output, &tree)?;
     Ok((target, count))
 }
 

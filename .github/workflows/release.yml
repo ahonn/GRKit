@@ -19,11 +19,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FIRMWARE_URL: https://www.ricoh-imaging.co.jp/resources/japan/support/download/digital/FIRMWARE/gr3_v210.zip
-  FIRMWARE_ZIP_SHA256: e895b439e4b3b96ac04f50072f02a63061ec7de5dcc1b070890baa09bc659470
-  # A private repository holds the same zip as a release asset. See docs/releasing.md.
+  FIRMWARE_BASE_URL: https://www.ricoh-imaging.co.jp/resources/japan/support/download/digital/FIRMWARE
+  GR3_ZIP_SHA256: e895b439e4b3b96ac04f50072f02a63061ec7de5dcc1b070890baa09bc659470
+  GR4_ZIP_SHA256: ded47aa6385886e4b1f8f41f8551866ab0f1ecd0aef89934a43ef0e456539e8f
+  # A private repository holds the same zips as release assets, one tag for each
+  # target. See docs/releasing.md.
   FIRMWARE_BACKUP_REPO: ${{ vars.FIRMWARE_BACKUP_REPO }}
-  FIRMWARE_BACKUP_TAG: gr3-2.10
   LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
 
 jobs:
@@ -59,37 +60,49 @@ jobs:
           sudo apt-get install --yes clang-21 lld-21
       - run: cargo build --release --locked -p grkit-cli
       - run: target/release/grkit doctor --clang clang-21 --lld ld.lld-21
-      - name: Build the runtime and effects from the official firmware
+      - name: Build the runtimes and effects from the official firmware
         env:
           FIRMWARE_SOURCE: ${{ inputs.firmware_source }}
           BACKUP_TOKEN: ${{ secrets.FIRMWARE_BACKUP_TOKEN }}
         run: |
           firmware="$RUNNER_TEMP/firmware"
-          zip="$firmware/gr3_v210.zip"
           mkdir "$firmware"
           trap 'rm -rf "$firmware"' EXIT
-          check() { echo "$FIRMWARE_ZIP_SHA256  $zip" | sha256sum --check --strict; }
-          if [ "$FIRMWARE_SOURCE" = backup ] \
-            || ! curl --fail --location --silent --show-error --retry 3 -o "$zip" "$FIRMWARE_URL" \
-            || ! check; then
-            if [ "$FIRMWARE_SOURCE" != backup ]; then
-              echo "::warning::The Ricoh download failed or changed. The build uses the private backup."
+          # fetch ZIP SHA256 TAG: download an official zip, or its backup, into $firmware.
+          fetch() {
+            zip="$firmware/$1"
+            sum="$2"
+            check() { echo "$sum  $zip" | sha256sum --check --strict; }
+            if [ "$FIRMWARE_SOURCE" = backup ] \
+              || ! curl --fail --location --silent --show-error --retry 3 -o "$zip" "$FIRMWARE_BASE_URL/$1" \
+              || ! check; then
+              if [ "$FIRMWARE_SOURCE" != backup ]; then
+                echo "::warning::The Ricoh download of $1 failed or changed. The build uses the private backup."
+              fi
+              if [ -z "$FIRMWARE_BACKUP_REPO" ] || [ -z "$BACKUP_TOKEN" ]; then
+                echo "::error::No firmware backup is configured."
+                exit 1
+              fi
+              rm -f "$zip"
+              GH_TOKEN="$BACKUP_TOKEN" gh release download "$3" \
+                --repo "$FIRMWARE_BACKUP_REPO" --pattern "$1" --dir "$firmware"
+              check
             fi
-            if [ -z "$FIRMWARE_BACKUP_REPO" ] || [ -z "$BACKUP_TOKEN" ]; then
-              echo "::error::No firmware backup is configured."
-              exit 1
-            fi
-            rm -f "$zip"
-            GH_TOKEN="$BACKUP_TOKEN" gh release download "$FIRMWARE_BACKUP_TAG" \
-              --repo "$FIRMWARE_BACKUP_REPO" --pattern gr3_v210.zip --dir "$firmware"
-            check
-          fi
-          unzip -q "$zip" fwdc239b.bin -d "$firmware"
+          }
+          fetch gr3_v210.zip "$GR3_ZIP_SHA256" gr3-2.10
+          fetch gr4_v111.zip "$GR4_ZIP_SHA256" gr4-1.11
+          unzip -q "$firmware/gr3_v210.zip" fwdc239b.bin -d "$firmware"
+          unzip -q "$firmware/gr4_v111.zip" fwdc248b.bin -d "$firmware"
           target/release/grkit build --target gr3-2.10 --firmware "$firmware/fwdc239b.bin" \
-            --out "$RUNNER_TEMP/runtime" --clang clang-21 --lld ld.lld-21
-          target/release/grkit site --build "$RUNNER_TEMP/runtime" --out site
+            --out "$RUNNER_TEMP/runtime-gr3" --clang clang-21 --lld ld.lld-21
+          target/release/grkit build --target gr4-1.11 --firmware "$firmware/fwdc248b.bin" \
+            --out "$RUNNER_TEMP/runtime-gr4" --clang clang-21 --lld ld.lld-21
+          target/release/grkit site --build "$RUNNER_TEMP/runtime-gr3" --out site
+          target/release/grkit site --build "$RUNNER_TEMP/runtime-gr4" --out site
           target/release/grkit effects publish --source effects --firmware "$firmware/fwdc239b.bin" \
             --out site/effects/gr3-2.10
+          target/release/grkit effects publish --source effects --target gr4-1.11 \
+            --firmware "$firmware/fwdc248b.bin" --out site/effects/gr4-1.11
       - name: Add the web page to the site
         run: |
           for path in web/dist/* web/dist/.[!.]*; do
@@ -103,8 +116,9 @@ jobs:
       - name: Package the published runtime for device testing
         run: |
           mkdir "$RUNNER_TEMP/no-effects"
-          for camera in gr3 gr3x; do
-            target/release/grkit package --build site/runtime/gr3-2.10 --camera "$camera" \
+          for pair in gr3:gr3-2.10 gr3x:gr3-2.10 gr4:gr4-1.11; do
+            camera="${pair%%:*}"
+            target/release/grkit package --build "site/runtime/${pair#*:}" --camera "$camera" \
               --effects "$RUNNER_TEMP/no-effects" --out "GRKit-device-test-$camera.zip"
             target/release/grkit verify "GRKit-device-test-$camera.zip"
           done

@@ -82,7 +82,9 @@ impl Hidden {
     }
 
     /// True when the camera menu would show no module for this many effects.
-    pub fn hides_everything(self, effects: usize) -> bool {
-        effects == 0 && self.names().len() == NAMES.len()
+    /// `available` names the modules that the runtime has.
+    pub fn hides_everything(self, effects: usize, available: &[&str]) -> bool {
+        let hidden = self.names();
+        effects == 0 && available.iter().all(|name| hidden.contains(name))
     }
 }

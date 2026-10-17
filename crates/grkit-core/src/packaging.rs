@@ -102,7 +102,8 @@ pub fn read_manifest(blob: &[u8]) -> Result<Value> {
     Ok(result)
 }
 
-pub fn validate_runtime(files: &Files) -> Result<()> {
+/// Checks the runtime files of a build for `target`.
+pub fn validate_runtime(files: &Files, target: &str) -> Result<()> {
     ensure!(
         files.len() == RUNTIME_PATHS.len() && RUNTIME_PATHS.iter().all(|p| files.contains_key(*p)),
         "Expected the complete production runtime file set"
@@ -116,7 +117,7 @@ pub fn validate_runtime(files: &Files) -> Result<()> {
         "Expected a production installer without diagnostic selection"
     );
     ensure!(
-        *files == runtime::runtime_files(binary),
+        *files == runtime::runtime_files_for(binary, runtime::icon_stride(target)?),
         "Runtime scripts differ from the production templates"
     );
     Ok(())
@@ -128,11 +129,15 @@ pub fn validate_runtime(files: &Files) -> Result<()> {
 /// The file set must equal the manifest list, and each file must match its size and SHA-256.
 pub fn load_runtime(manifest: &[u8], files: &Files) -> Result<(Files, Value)> {
     let manifest = read_manifest(manifest)?;
+    let target = manifest["target"]
+        .as_str()
+        .context("Expected a runtime target")?
+        .to_owned();
     ensure!(
         manifest["profile"] == "production"
-            && manifest["target"] == "gr3-2.10"
+            && runtime::icon_stride(&target).is_ok()
             && manifest["startup_activation"] == "Off",
-        "Expected a production GR III 2.10 build that starts in Off"
+        "Expected a production build for a supported target that starts in Off"
     );
     let mut runtime = Files::new();
     for item in manifest["files"]
@@ -157,7 +162,7 @@ pub fn load_runtime(manifest: &[u8], files: &Files) -> Result<(Files, Value)> {
         runtime.len() == files.len(),
         "Runtime directory differs from its manifest"
     );
-    validate_runtime(&runtime)?;
+    validate_runtime(&runtime, &target)?;
     Ok((runtime, manifest))
 }
 
@@ -231,7 +236,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         .iter()
         .map(|name| ((*name).into(), contents[&format!("SD_ROOT/{name}")].clone()))
         .collect();
-    validate_runtime(&runtime)?;
+    validate_runtime(&runtime, camera.target)?;
     let mut ids = BTreeSet::new();
     let mut hidden = Hidden::default();
     let modules_path = format!("SD_ROOT/{}", modules::PATH);
@@ -258,7 +263,12 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         "Target effect capacity exceeded"
     );
     ensure!(
-        !hidden.hides_everything(ids.len()),
+        camera.effects || ids.is_empty(),
+        "{} has no Image Control yet, so a package for it cannot have effects",
+        camera.name
+    );
+    ensure!(
+        !hidden.hides_everything(ids.len(), camera.modules),
         "The package shows no module: it has no effects and hides every other module"
     );
     Ok(Contents {
@@ -277,9 +287,13 @@ fn checksum_list(contents: &Files) -> Vec<u8> {
         .into_bytes()
 }
 
-/// The installation guide of a package. The resource describes GR III. Other
-/// cameras get their name, firmware version, and ModeSet file.
+/// The installation guide of a package. The main resource describes GR III.
+/// GR IIIx gets its name, firmware version, and ModeSet file. GR IV, which has
+/// fewer modules, has its own resource.
 pub fn installation_guide(camera: &Camera) -> Vec<u8> {
+    if camera.target == camera::GR4.target {
+        return include_bytes!("../../../resources/INSTALLATION-GR4.md").to_vec();
+    }
     include_str!("../../../resources/INSTALLATION.md")
         .replace(
             &format!("{} firmware {}", camera::GR3.name, camera::GR3.firmware),
@@ -309,7 +323,7 @@ pub fn assemble(
         camera.name,
         camera.target
     );
-    validate_runtime(runtime)?;
+    validate_runtime(runtime, camera.target)?;
     let mut contents: Files = runtime
         .iter()
         .map(|(name, blob)| (format!("SD_ROOT/{name}"), blob.clone()))

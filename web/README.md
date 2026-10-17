@@ -7,8 +7,8 @@ The site serves these files:
 | Path | Source |
 |---|---|
 | `index.html`, `assets/`, `_headers` | `pnpm build` in this directory |
-| `runtime/gr3-2.10/` | `grkit site` |
-| `effects/gr3-2.10/` | `grkit effects publish` |
+| `runtime/gr3-2.10/`, `runtime/gr4-1.11/` | `grkit site` |
+| `effects/gr3-2.10/`, `effects/gr4-1.11/` | `grkit effects publish` |
 
 ## Develop
 
@@ -23,6 +23,8 @@ The tools are Node.js 24, pnpm, the `wasm32-unknown-unknown` Rust target, and wa
    grkit site --build dist/runtime-local --out dist/site-data
    grkit effects publish --source effects --firmware fwdc239b.bin --out dist/site-data/effects/gr3-2.10
    ```
+
+   For GR IV, also build `gr4-1.11` from `fwdc248b.bin`, add it with `grkit site`, and publish its effects with `--target gr4-1.11`. Without them, only the GR III and GR IIIx packages work.
 
 4. Start the development server: `pnpm dev`. The server reads the site data from `../dist/site-data`. To use another directory, set `GRKIT_SITE_DATA`.
 

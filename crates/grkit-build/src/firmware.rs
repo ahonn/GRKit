@@ -1,4 +1,4 @@
-use crate::target;
+use crate::target::{self, Target};
 use anyhow::{bail, ensure, Context, Result};
 use sha2::{Digest, Sha256};
 use std::path::Path;
@@ -81,19 +81,22 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>> {
 
 #[derive(Debug)]
 pub struct FirmwareImage {
+    pub target: &'static Target,
+    /// The decoded RTOS image, loaded at `target::RTOS_BASE`.
     pub body: Vec<u8>,
     pub sha256: String,
     pub decoded_sha256: String,
 }
 
 impl FirmwareImage {
+    /// Reads RTOS memory. The data section reads from its copy source in the image.
     pub fn read(&self, address: u32, size: usize) -> Result<&[u8]> {
-        let address =
-            if (target::DATA_START..target::DATA_START + target::DATA_SIZE).contains(&address) {
-                address - target::DATA_START + target::DATA_SOURCE
-            } else {
-                address
-            };
+        let data = self.target.data_start..self.target.data_start + self.target.data_size;
+        let address = if data.contains(&address) {
+            address - self.target.data_start + self.target.data_source
+        } else {
+            address
+        };
         let offset = address
             .checked_sub(target::RTOS_BASE)
             .context("Address outside supported firmware")? as usize;
@@ -105,29 +108,36 @@ impl FirmwareImage {
             .context("Address outside supported firmware")
     }
 
+    /// The native Standard record (84 bytes) that private records copy.
     pub fn stock_record(&self) -> Result<(u32, &[u8])> {
+        let image_control = self
+            .target
+            .image_control
+            .with_context(|| format!("{} has no Image Control", self.target.firmware))?;
         let word =
             |address| -> Result<u32> { Ok(u32::from_le_bytes(self.read(address, 4)?.try_into()?)) };
-        let address = word(target::TABLES[0] + 21 * 4)?;
+        let address = word(image_control.tables[0] + 11 * 4)?;
         ensure!(
-            address == 0x5501900c && word(address + 4)? == 0x53dc2754,
+            address == image_control.record && word(address + 4)? == image_control.coefficients,
             "Unsupported stock processing record"
         );
         Ok((address, self.read(address, 84)?))
     }
 }
 
-pub fn verify_firmware(path: &Path) -> Result<FirmwareImage> {
+/// Reads the official firmware of `target` and returns its RTOS image.
+pub fn verify_firmware(path: &Path, target: &'static Target) -> Result<FirmwareImage> {
     let data = std::fs::read(path).with_context(|| format!("Read firmware {}", path.display()))?;
     let identity = sha256(&data);
     ensure!(
-        identity == target::FIRMWARE_SHA256,
-        "Firmware SHA-256 does not match GR III 2.10"
+        identity == target.firmware_sha256,
+        "Firmware SHA-256 does not match {}",
+        target.firmware
     );
     let decoded = decode(&data)?;
     let decoded_identity = sha256(&decoded);
     ensure!(
-        decoded_identity == target::DECODED_SHA256,
+        decoded_identity == target.decoded_sha256,
         "Decoded firmware SHA-256 mismatch"
     );
     let mut pos = 0;
@@ -142,6 +152,7 @@ pub fn verify_firmware(path: &Path) -> Result<FirmwareImage> {
         if name == b"RTOS\0\0\0\0" {
             ensure!(group == 1, "Unexpected RTOS group");
             return Ok(FirmwareImage {
+                target,
                 body: decoded[pos + 16..end].to_vec(),
                 sha256: identity,
                 decoded_sha256: decoded_identity,
@@ -152,12 +163,15 @@ pub fn verify_firmware(path: &Path) -> Result<FirmwareImage> {
     bail!("Firmware has no RTOS section")
 }
 
-/// The still-path Standard base gamma: 256 little-endian u16 of 14-bit output.
-pub const STANDARD_BASE_GAMMA: u32 = 0x53dcf7f0;
-
-/// Reads the Standard base gamma and rejects a table without its known shape.
+/// Reads the still-path Standard base gamma (256 little-endian u16 of 14-bit
+/// output) and rejects a table without its known shape.
 pub fn standard_base_gamma(image: &FirmwareImage) -> Result<[u16; 256]> {
-    let bytes = image.read(STANDARD_BASE_GAMMA, 512)?;
+    let address = image
+        .target
+        .image_control
+        .with_context(|| format!("{} has no Image Control", image.target.firmware))?
+        .base_gamma;
+    let bytes = image.read(address, 512)?;
     let table: [u16; 256] =
         std::array::from_fn(|i| u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]));
     ensure!(
@@ -165,7 +179,7 @@ pub fn standard_base_gamma(image: &FirmwareImage) -> Result<[u16; 256]> {
             && table.windows(2).all(|pair| pair[0] <= pair[1])
             && table[8] == 7552
             && (16000..=16384).contains(&table[255]),
-        "Unexpected Standard base gamma at {STANDARD_BASE_GAMMA:#x}"
+        "Unexpected Standard base gamma at {address:#x}"
     );
     Ok(table)
 }

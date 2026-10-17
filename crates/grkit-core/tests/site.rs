@@ -84,7 +84,7 @@ fn effect_previews_follow_the_effect() {
 fn published_effects_match_their_definitions() {
     let ids = ["ektar-100-edge-v1", "red-filter-mono-v1"];
     let definitions: Vec<Value> = ids.iter().map(|id| definition(id)).collect();
-    let files = site::publish_effects(&definitions, &synthetic_base()).unwrap();
+    let files = site::publish_effects(&definitions, &synthetic_base(), "gr3-2.10").unwrap();
     let catalog = effects::parse_json(&files["catalog.json"]).unwrap();
     assert_eq!(catalog["schema"], site::CATALOG_SCHEMA);
     assert_eq!(catalog["target"], "gr3-2.10");
@@ -111,9 +111,9 @@ fn published_effects_match_their_definitions() {
     assert_eq!(entries[1]["shape"], "filter");
 
     let duplicate = [definitions[0].clone(), definitions[0].clone()];
-    let error = site::publish_effects(&duplicate, &synthetic_base()).unwrap_err();
+    let error = site::publish_effects(&duplicate, &synthetic_base(), "gr3-2.10").unwrap_err();
     assert!(error.to_string().contains("Duplicate effect ID"), "{error}");
-    assert!(site::publish_effects(&[], &synthetic_base()).is_err());
+    assert!(site::publish_effects(&[], &synthetic_base(), "gr3-2.10").is_err());
 }
 
 #[test]

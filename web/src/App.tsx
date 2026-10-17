@@ -25,7 +25,8 @@ export function App() {
   const t = STRINGS[language];
   const camera = CAMERAS.find((item) => item.id === cameraId) ?? CAMERAS[0]!;
   const support = camera.support;
-  const plan = planModules(enabled, selection.size);
+  const available = support?.modules ?? [];
+  const plan = planModules(enabled, selection.size, available);
   const effectCount = plan.includeEffects ? selection.size : 0;
 
   function chooseLanguage(next: Language) {
@@ -65,9 +66,8 @@ export function App() {
     const run = buildRun.current;
     setBuild({ state: 'building' });
     try {
-      const catalog = await loadCatalog(support.target);
       const effects = plan.includeEffects
-        ? catalog.effects.filter((effect) => selection.has(effect.id))
+        ? (await loadCatalog(support.target)).effects.filter((effect) => selection.has(effect.id))
         : [];
       const blob = await buildPackage(support.target, camera.id, effects, plan.hidden);
       if (run === buildRun.current) {
@@ -127,13 +127,28 @@ export function App() {
                         {t.firmware} {item.support.firmware}
                       </span>
                     )}
-                    <span className={item.support ? 'badge supported' : 'badge'}>
-                      {item.support ? t.supported : t.planned}
+                    <span
+                      className={
+                        !item.support
+                          ? 'badge'
+                          : item.support.experimental
+                            ? 'badge experimental'
+                            : 'badge supported'
+                      }
+                    >
+                      {!item.support
+                        ? t.planned
+                        : item.support.experimental
+                          ? t.experimental
+                          : t.supported}
                     </span>
                   </span>
                 </label>
               ))}
             </div>
+            {support?.experimental && (
+              <p className="note warning">{t.experimentalNote(camera.name)}</p>
+            )}
           </div>
         </section>
 
@@ -142,7 +157,7 @@ export function App() {
           <div className="section-body">
             <p className="note">{t.modulesNote}</p>
             <div role="group" aria-labelledby="modules-label" className="modules">
-              {MODULES.map((module) => (
+              {MODULES.filter((module) => available.includes(module.key)).map((module) => (
                 <label key={module.key} className="module">
                   <input
                     type="checkbox"
@@ -151,7 +166,11 @@ export function App() {
                   />
                   <span className="module-text">
                     <span className="module-name">{module.name}</span>
-                    <span className="module-description">{t.modulesText[module.key]}</span>
+                    <span className="module-description">
+                      {module.key === 'framing' && support?.xpanOnly
+                        ? t.framingXpanOnly
+                        : t.modulesText[module.key]}
+                    </span>
                     {module.key === 'imageControl' &&
                       enabled.has('imageControl') &&
                       selection.size === 0 && (
@@ -166,7 +185,9 @@ export function App() {
 
         <section className="section" aria-labelledby="effects-label">
           <h2 id="effects-label">{t.effects}</h2>
-          {plan.includeEffects ? (
+          {!available.includes('imageControl') ? (
+            <p className="status section-body">{t.effectsUnavailable(camera.name)}</p>
+          ) : plan.includeEffects ? (
             <ErrorBoundary fallback={<p className="status error section-body">{t.loadError}</p>}>
               <Suspense fallback={<p className="status section-body">{t.loading}</p>}>
                 <EffectsSection

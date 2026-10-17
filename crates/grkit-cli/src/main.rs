@@ -29,7 +29,7 @@ enum Command {
     },
     /// Build the production runtime from official firmware.
     Build {
-        #[arg(long, value_parser = ["gr3-2.10"])]
+        #[arg(long, value_parser = grkit_build::target::TARGETS.map(|target| target.name))]
         target: String,
         #[arg(long)]
         firmware: PathBuf,
@@ -63,7 +63,8 @@ enum Command {
     },
     /// Check package layout, profiles and checksums.
     Verify { archive: PathBuf },
-    /// Write a verified runtime build into a new static site directory.
+    /// Write a verified runtime build into a static site directory. The site
+    /// must not have a runtime for the same target yet.
     Site {
         #[arg(long)]
         build: PathBuf,
@@ -84,7 +85,10 @@ enum EffectsCommand {
     Publish {
         #[arg(long)]
         source: PathBuf,
-        /// Official GR III 2.10 firmware, the source of the Standard base gamma.
+        /// The runtime target whose catalog this is.
+        #[arg(long, default_value = "gr3-2.10")]
+        target: String,
+        /// The official firmware of the target, the source of the Standard base gamma.
         #[arg(long)]
         firmware: PathBuf,
         #[arg(long)]
@@ -125,13 +129,14 @@ fn run(command: Command) -> Result<Value> {
             Ok(json!({"toolchain": tools.manifest(), "grkit_version": env!("CARGO_PKG_VERSION")}))
         }
         Command::Build {
+            target,
             firmware,
             out,
             clang,
             lld,
-            ..
         } => {
-            let result = grkit_build::build_runtime(&firmware, &out, &clang, &lld)?;
+            let target = grkit_build::target::find(&target)?;
+            let result = grkit_build::build_runtime(target, &firmware, &out, &clang, &lld)?;
             Ok(
                 json!({"output": result.output, "target": result.manifest["target"], "files": result.files.len()}),
             )
@@ -148,17 +153,19 @@ fn run(command: Command) -> Result<Value> {
             command:
                 EffectsCommand::Publish {
                     source,
+                    target,
                     firmware,
                     out,
                 },
         } => {
+            let target = grkit_build::target::find(&target)?;
             let definitions = storage::read_definitions(&source)?;
             storage::validate_output(&out)?;
-            let image = grkit_build::verify_firmware(&firmware)?;
+            let image = grkit_build::verify_firmware(&firmware, target)?;
             let base_gamma = grkit_build::firmware::standard_base_gamma(&image)?;
-            let files = site::publish_effects(&definitions, &base_gamma)?;
+            let files = site::publish_effects(&definitions, &base_gamma, target.name)?;
             storage::write_directory(&out, &files)?;
-            Ok(json!({"output": out, "target": site::TARGET, "effects": definitions.len()}))
+            Ok(json!({"output": out, "target": target.name, "effects": definitions.len()}))
         }
         Command::Effects {
             command:
@@ -178,7 +185,7 @@ fn run(command: Command) -> Result<Value> {
             ensure!(effects::valid_id(&id), "Invalid effect ID");
             let output = out.join(&id);
             storage::validate_output(&output)?;
-            let image = grkit_build::verify_firmware(&firmware)?;
+            let image = grkit_build::verify_firmware(&firmware, &grkit_build::target::GR3_210)?;
             let base_gamma = grkit_build::firmware::standard_base_gamma(&image)?;
             let bytes = storage::read_bounded(&cube, MAX_CUBE_SIZE)?;
             let request = fit::Import {

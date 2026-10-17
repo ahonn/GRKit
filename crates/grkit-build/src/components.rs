@@ -137,6 +137,217 @@ pub const INSTRUCTION_PATCHES: &[(u32, &str, &str)] = &[
     (0x535c251c, "0020a083", "01288083"),
 ];
 
+/// A hook: (address, symbol, stock instruction, BL instead of B).
+pub type Hook = (u32, &'static str, &'static str, bool);
+/// An in-place change: (address, stock bytes, new bytes).
+pub type InstructionPatch = (u32, &'static str, &'static str);
+
+/// Where a target's components live and where they hook the firmware.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Layout {
+    /// The preprocessor definition that selects `runtime/targets/<target>.h`.
+    pub define: Option<&'static str>,
+    /// Module bits (`GRKIT_HOST_HIDDEN`) that the target does not implement.
+    pub hidden: u32,
+    /// Image Control processing, if the target has it: its region and its
+    /// assembly source.
+    pub processing: Option<(u32, u32)>,
+    pub processing_source: &'static str,
+    pub menu: (u32, u32),
+    /// Framing, Guides, and picture code (`runtime/framing.*`, `runtime/picture.*`).
+    pub framing: Option<(u32, u32)>,
+    pub contexts: &'static [(u32, &'static str)],
+    pub processing_hooks: &'static [(u32, &'static str, bool)],
+    /// Menu entry hooks (B), then the viewfinder and metadata hooks.
+    pub menu_hooks: &'static [(u32, &'static str, &'static str)],
+    pub viewfinder_hooks: &'static [Hook],
+    pub metadata_hooks: &'static [Hook],
+    pub instruction_patches: &'static [InstructionPatch],
+    pub framing_hooks: &'static [Hook],
+    pub picture_hooks: &'static [Hook],
+    pub framing_patches: &'static [InstructionPatch],
+}
+
+pub const GR3_LAYOUT: Layout = Layout {
+    define: None,
+    hidden: 0,
+    processing: Some((PROCESSING_BASE, MENU_BASE)),
+    processing_source: include_str!("../../../runtime/processing.S"),
+    menu: (MENU_BASE, 0x53004000),
+    framing: Some((FRAMING_BASE, FRAMING_END)),
+    contexts: CONTEXTS,
+    processing_hooks: PROCESSING_HOOKS,
+    menu_hooks: MENU_HOOKS,
+    viewfinder_hooks: VIEWFINDER_HOOKS,
+    metadata_hooks: METADATA_HOOKS,
+    instruction_patches: INSTRUCTION_PATCHES,
+    framing_hooks: FRAMING_HOOKS,
+    picture_hooks: PICTURE_HOOKS,
+    framing_patches: FRAMING_PATCHES,
+};
+
+/// GR IV 1.11 menu hooks. The menu code follows the GR IV boot
+/// header, which ends at 0x530021a8.
+const GR4_MENU_HOOKS: &[(u32, &str, &str)] = &[
+    (0x531bf9d8, "menu_native_touch_0", "fc31d0e5"),
+    (0x531bf9ec, "menu_native_touch_1", "fc31d0e5"),
+    (0x531bfa00, "menu_native_touch_2", "fc31d0e5"),
+    (0x531bfa14, "menu_native_touch_3", "fc31d0e5"),
+    (0x531bfa28, "menu_native_touch_4", "fc31d0e5"),
+    (0x531ba1c0, "menu_destroy", "0dc0a0e1"),
+    (0x531bf3c8, "menu_refresh", "0dc0a0e1"),
+    (0x531bf834, "menu_event", "b030d1e1"),
+    (0x531bf580, "menu_exit", "fc11d0e5"),
+    (0x531bf38c, "menu_changed", "0dc0a0e1"),
+    (0x53572b00, "menu_text_measure", "077193e7"),
+    (0x5357350c, "menu_text_draw", "073193e7"),
+    // ADJ Image Control item apply (item 15, +0x28), ImageControlController
+    // apply, event, and exit, as on GR III.
+    (0x531badd4, "menu_native_adj_apply", "0dc0a0e1"),
+    (0x531c5894, "menu_native_dialog_apply", "0dc0a0e1"),
+    (0x531c635c, "menu_native_page_event", "0dc0a0e1"),
+    (0x531c4fb8, "menu_native_page_exit", "0dc0a0e1"),
+    // Icon lookup entry, then the limit check and the table read of the icon draw.
+    (0x5323db68, "menu_icon_lookup", "0dc0a0e1"),
+    (0x5323e434, "menu_icon_limit", "020057e1"),
+    (0x5323e4d8, "menu_icon_entry", "073190e7"),
+];
+
+/// GR IV 1.11 Framing and Guides hooks: LiveViewController update, exit, and
+/// destroy, then Canvas::Draw entry and its child-draw BL. XPan crops native
+/// 16:9, so GR IV needs no capture request hook and no live-view patches.
+const GR4_FRAMING_HOOKS: &[Hook] = &[
+    (0x5318e350, "framing_update", "0dc0a0e1", false),
+    (0x5318e984, "framing_exit", "0dc0a0e1", false),
+    (0x531879e0, "framing_destroy", "0dc0a0e1", false),
+    (0x5356dde4, "framing_canvas", "0dc0a0e1", false),
+    (0x5356deb0, "framing_children", "6b0800eb", true),
+    // ImageResolutionTranslatorKb636 (the GR IV sizes) GetResolution id 2
+    // heights. The Kb588 class holds the GR III sizes and is not used.
+    (0x538cfff8, "framing_height_0", "983d00e3", true),
+    (0x538cffe4, "framing_height_1", "ae3ea0e3", true),
+    (0x538cffcc, "framing_height_2", "7b3ea0e3", true),
+    (0x538cffb8, "framing_height_3", "383400e3", true),
+    // Id 2 top insets of the screennail and the thumbnail.
+    (0x538d00fc, "framing_screennail_inset", "2610a0e3", true),
+    (0x538d01b4, "framing_thumbnail_inset", "1010a0e3", true),
+    // Playback size classifier and image aspect getter.
+    (0x533a2850, "framing_classify", "6dfcffeb", true),
+    (0x533a2c58, "framing_image_aspect", "6bfbffea", false),
+];
+
+/// GR IV 1.11 picture hooks, as `PICTURE_HOOKS` on GR III: the live-view diff,
+/// the YCbCr matrix calc call, and the JpegEncodeMacroProcess::Execute entry.
+const GR4_PICTURE_HOOKS: &[Hook] = &[
+    (0x5391410c, "module_gamma_dirty", "0e30d4e5", false),
+    (0x5391a6a4, "picture_post", "e9ffffeb", true),
+    (0x537034b4, "picture_encode_entry", "0dc0a0e1", false),
+];
+
+const GR4_VIEWFINDER_HOOKS: &[Hook] = &[(0x53187f90, "menu_viewfinder_icon", "2e3d08eb", true)];
+
+/// GR IV 1.11 Image Control tag, as `METADATA_HOOKS` on GR III: the ImageTone
+/// call of the maker-note setter, the playback DISP icon, and the playback
+/// parameter detail.
+const GR4_METADATA_HOOKS: &[Hook] = &[
+    (0x53810804, "menu_capture_tone", "1a37ffeb", true),
+    (0x531916c0, "menu_playback_icon", "5a5408eb", true),
+    (0x533a7614, "menu_playback_detail", "7af0ffeb", true),
+];
+
+/// GR IV ImageTone extraction compares each native tag value. Its default
+/// case stores 0x10000 | (tag - 0x100), as on GR III, instead of 0.
+const GR4_INSTRUCTION_PATCHES: &[InstructionPatch] = &[(0x537d8a54, "0020a0e3", "ff2c80e2")];
+
+/// GR IV 1.11 Image Control processing (`runtime/targets/gr4-1.11-processing.S`).
+const GR4_PROCESSING_HOOKS: &[(u32, &str, bool)] = &[
+    (0x53912c70, "module_parameters", true),
+    (0x53912d40, "module_processing", true),
+    (0x53912d4c, "module_record", true),
+    (0x53913188, "module_packet", true),
+    (0x5391e360, "module_gamma_flag", true),
+    (0x5391e76c, "module_gamma_curves", true),
+];
+/// The stock instructions around the GR IV processing hooks.
+const GR4_CONTEXTS: &[(u32, &str)] = &[
+    // Normalizer BL, then the type-table getters and the record store.
+    (0x53912c70, "d8f9ffeb"),
+    (0x53912d3c, "34a01be50a10a0e10600a0e18d4c00eb080084e5"),
+    // Packet: the last field store before the native tail.
+    (0x53913184, "943195e5903084e5255000eb"),
+    // Gamma stage: the custom-curve flag and the curve getter BL.
+    (0x5391e360, "9b10d1e5"),
+    (0x5391e76c, "231a00eb"),
+    // LiveViewController's Image Control widget: load native type, map, assign.
+    (0x53187f88, "ec3494e5401ad3e52e3d08eb"),
+];
+
+pub const GR4_LAYOUT: Layout = Layout {
+    define: Some("-DGRKIT_TARGET_GR4_111"),
+    hidden: 0,
+    // After the Framing region.
+    processing: Some((0x543db000, 0x543dc000)),
+    processing_source: include_str!("../../../runtime/targets/gr4-1.11-processing.S"),
+    menu: (0x530021c0, 0x53004000),
+    // After the decoded RTOS image (0x543d2ac0), like GR III.
+    framing: Some((0x543d3000, 0x543db000)),
+    contexts: GR4_CONTEXTS,
+    processing_hooks: GR4_PROCESSING_HOOKS,
+    menu_hooks: GR4_MENU_HOOKS,
+    viewfinder_hooks: GR4_VIEWFINDER_HOOKS,
+    metadata_hooks: GR4_METADATA_HOOKS,
+    instruction_patches: GR4_INSTRUCTION_PATCHES,
+    framing_hooks: GR4_FRAMING_HOOKS,
+    picture_hooks: GR4_PICTURE_HOOKS,
+    framing_patches: &[],
+};
+
+/// Every hook of a layout: (address, symbol).
+fn hook_sites(layout: &Layout) -> impl Iterator<Item = (u32, &'static str)> + '_ {
+    layout
+        .processing_hooks
+        .iter()
+        .map(|&(address, name, _)| (address, name))
+        .chain(
+            layout
+                .menu_hooks
+                .iter()
+                .map(|&(address, name, _)| (address, name)),
+        )
+        .chain(
+            layout
+                .viewfinder_hooks
+                .iter()
+                .chain(layout.metadata_hooks)
+                .chain(layout.framing_hooks)
+                .chain(layout.picture_hooks)
+                .map(|&(address, name, _, _)| (address, name)),
+        )
+}
+
+/// `hooks.h` for the assembly sources: for each hook, its address, the address
+/// after it, the replaced instruction, and the target of a replaced branch.
+pub fn hooks_header(body: &FirmwareImage) -> Result<String> {
+    use std::fmt::Write;
+    let mut result = format!("/* Generated for {}. */\n", body.target.name);
+    let Some(layout) = body.target.layout else {
+        return Ok(result);
+    };
+    for (address, name) in hook_sites(layout) {
+        let word = u32::from_le_bytes(body.read(address, 4)?.try_into()?);
+        let name = name.to_ascii_uppercase();
+        writeln!(result, "#define HOOK_{name} {address:#x}")?;
+        writeln!(result, "#define HOOK_{name}_RESUME {:#x}", address + 4)?;
+        writeln!(result, "#define HOOK_{name}_STOCK {word:#010x}")?;
+        if (word >> 25) & 7 == 5 && word >> 28 != 0xf {
+            let offset = ((word << 8) as i32 >> 6) as u32;
+            let target = address.wrapping_add(8).wrapping_add(offset);
+            writeln!(result, "#define HOOK_{name}_TARGET {target:#x}")?;
+        }
+    }
+    Ok(result)
+}
+
 pub struct Component {
     pub patches: Vec<Patch>,
     pub relocations: Vec<usize>,
@@ -195,8 +406,10 @@ pub fn processing(
     runtime: &Path,
     body: &FirmwareImage,
     tools: &Toolchain,
+    layout: &Layout,
+    (base, end): (u32, u32),
 ) -> Result<Component> {
-    for &(address, expected) in CONTEXTS {
+    for &(address, expected) in layout.contexts {
         ensure!(
             body.read(address, expected.len() / 2)? == hex::decode(expected)?,
             "Private processing instructions changed at {address:#x}"
@@ -214,7 +427,9 @@ pub fn processing(
         .join("\n    ");
     let assembly = format!(
         ".equ HEADER, 0x{HEADER_REFERENCE:x}\n{}",
-        include_str!("../../../runtime/processing.S").replace("@ ORIGINAL_PROCESSING", &original)
+        layout
+            .processing_source
+            .replace("@ ORIGINAL_PROCESSING", &original)
     );
     let source = directory.join("module-processing.S");
     let object = directory.join("module-processing.o");
@@ -231,12 +446,14 @@ pub fn processing(
             path(&source)?,
             "-o",
             path(&object)?,
-        ],
+        ]
+        .into_iter()
+        .chain(layout.define),
     )?;
     let (code, symbols) = elf_text(&fs::read(object)?)?;
-    let mut component = code_component(code, symbols, body, PROCESSING_BASE, MENU_BASE)?;
-    for &(address, name, link) in PROCESSING_HOOKS {
-        let target = PROCESSING_BASE
+    let mut component = code_component(code, symbols, body, base, end)?;
+    for &(address, name, link) in layout.processing_hooks {
+        let target = base
             .checked_add(
                 *component
                     .symbols
@@ -262,7 +479,9 @@ pub fn menu(
     runtime: &Path,
     body: &FirmwareImage,
     tools: &Toolchain,
+    layout: &Layout,
 ) -> Result<Component> {
+    let (base, end) = layout.menu;
     let source = directory.join("module-menu.S");
     let object = directory.join("module-menu.o");
     let assembly_object = directory.join("module-menu-asm.o");
@@ -284,7 +503,9 @@ pub fn menu(
             path(&runtime.join("menu.c"))?,
             "-o",
             path(&object)?,
-        ],
+        ]
+        .into_iter()
+        .chain(layout.define),
     )?;
     run(
         &tools.clang,
@@ -292,11 +513,15 @@ pub fn menu(
             "--target=arm-none-eabi",
             "-march=armv7-a",
             "-marm",
+            "-I",
+            path(runtime)?,
             "-c",
             path(&source)?,
             "-o",
             path(&assembly_object)?,
-        ],
+        ]
+        .into_iter()
+        .chain(layout.define),
     )?;
     let mut component = linked_component(
         directory,
@@ -304,15 +529,22 @@ pub fn menu(
         &[object, assembly_object],
         body,
         tools,
-        MENU_BASE,
-        0x53004000,
+        base,
+        end,
     )?;
-    let hooks = MENU_HOOKS
+    let hooks = layout
+        .menu_hooks
         .iter()
         .map(|&(a, n, b)| (a, n, b, false))
-        .chain(VIEWFINDER_HOOKS.iter().copied())
-        .chain(METADATA_HOOKS.iter().copied());
-    add_patches(&mut component, body, MENU_BASE, INSTRUCTION_PATCHES, hooks)?;
+        .chain(layout.viewfinder_hooks.iter().copied())
+        .chain(layout.metadata_hooks.iter().copied());
+    add_patches(
+        &mut component,
+        body,
+        base,
+        layout.instruction_patches,
+        hooks,
+    )?;
     Ok(component)
 }
 
@@ -321,6 +553,8 @@ pub fn framing(
     runtime: &Path,
     body: &FirmwareImage,
     tools: &Toolchain,
+    layout: &Layout,
+    (base, end): (u32, u32),
 ) -> Result<Component> {
     let object = directory.join("framing.o");
     let assembly_object = directory.join("framing-asm.o");
@@ -350,7 +584,9 @@ pub fn framing(
                 path(&runtime.join(source))?,
                 "-o",
                 path(object)?,
-            ],
+            ]
+            .into_iter()
+            .chain(layout.define),
         )?;
     }
     let mut component = linked_component(
@@ -359,17 +595,21 @@ pub fn framing(
         &[object, assembly_object, picture, picture_assembly],
         body,
         tools,
-        FRAMING_BASE,
-        FRAMING_END,
+        base,
+        end,
     )?;
     // The capture hook changes nothing until a Framing ratio is selected, so
     // the data patches can follow it.
     add_patches(
         &mut component,
         body,
-        FRAMING_BASE,
-        FRAMING_PATCHES,
-        FRAMING_HOOKS.iter().chain(PICTURE_HOOKS).copied(),
+        base,
+        layout.framing_patches,
+        layout
+            .framing_hooks
+            .iter()
+            .chain(layout.picture_hooks)
+            .copied(),
     )?;
     Ok(component)
 }

@@ -82,7 +82,10 @@ fn hidden_modules_are_written_and_checked() {
 #[test]
 fn the_camera_selects_the_modeset_file() {
     let mut builder = builder_with_runtime(&runtime_files());
-    assert!(error(builder.set_camera("gr4")).contains("Unknown camera"));
+    assert!(error(builder.set_camera("gr2")).contains("Unknown camera"));
+    // GR IV needs its own runtime.
+    builder.set_camera("gr4").unwrap();
+    assert!(error(builder.build()).contains("GR IV runs the gr4-1.11 runtime"));
     builder.set_camera("gr3x").unwrap();
     let package = builder.build().unwrap();
     let verified = packaging::verify_package(&package).unwrap();
@@ -136,7 +139,7 @@ fn non_production_manifests_are_rejected() {
     for path in builder.runtime_paths().to_vec() {
         builder.add_runtime_file(&path, &files[&path]).unwrap();
     }
-    assert!(error(builder.build()).contains("Expected a production GR III 2.10 build"));
+    assert!(error(builder.build()).contains("Expected a production build for a supported target"));
     assert!(error(Builder::new(b"{}")).contains("Expected a manifest file list"));
 }
 

@@ -9,7 +9,10 @@ pub mod toolchain;
 use anyhow::{ensure, Context, Result};
 use firmware::sha256;
 pub use firmware::verify_firmware;
-use grkit_core::{runtime::runtime_files, Files};
+use grkit_core::{
+    runtime::{icon_stride, runtime_files_for},
+    Files,
+};
 use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -72,6 +75,15 @@ pub fn validate_plan(plan: &PatchPlan) -> Result<()> {
 
 pub const RUNTIME_SOURCES: &[(&str, &[u8])] = &[
     ("abi.h", include_bytes!("../../../runtime/abi.h")),
+    ("firmware.h", include_bytes!("../../../runtime/firmware.h")),
+    (
+        "targets/gr3-2.10.h",
+        include_bytes!("../../../runtime/targets/gr3-2.10.h"),
+    ),
+    (
+        "targets/gr4-1.11.h",
+        include_bytes!("../../../runtime/targets/gr4-1.11.h"),
+    ),
     ("catalog.h", include_bytes!("../../../runtime/catalog.h")),
     (
         "visibility.h",
@@ -97,6 +109,10 @@ pub const RUNTIME_SOURCES: &[(&str, &[u8])] = &[
     (
         "processing.S",
         include_bytes!("../../../runtime/processing.S"),
+    ),
+    (
+        "targets/gr4-1.11-processing.S",
+        include_bytes!("../../../runtime/targets/gr4-1.11-processing.S"),
     ),
 ];
 
@@ -156,7 +172,7 @@ pub fn source_hashes() -> BTreeMap<String, String> {
 }
 
 pub fn materialize_runtime(directory: &Path) -> Result<()> {
-    fs::create_dir_all(directory)?;
+    fs::create_dir_all(directory.join("targets"))?;
     for (name, bytes) in RUNTIME_SOURCES {
         fs::write(directory.join(name), bytes)?;
     }
@@ -164,12 +180,13 @@ pub fn materialize_runtime(directory: &Path) -> Result<()> {
 }
 
 pub fn build_runtime(
+    target: &'static target::Target,
     firmware: &Path,
     output: &Path,
     clang: &str,
     lld: &str,
 ) -> Result<BuildResult> {
-    let image = verify_firmware(firmware)?;
+    let image = verify_firmware(firmware, target)?;
     let tools = Toolchain::discover(clang, lld)?;
     build_image(&image, output, &tools)
 }
@@ -189,13 +206,26 @@ fn build_image(
     let objects = output.join("objects");
     let runtime = objects.join("runtime");
     materialize_runtime(&runtime)?;
-    let processing = components::processing(&objects, &runtime, image, tools)?;
-    let menu = components::menu(&objects, &runtime, image, tools)?;
-    let framing = components::framing(&objects, &runtime, image, tools)?;
-    let components = [&processing, &menu, &framing];
+    fs::write(runtime.join("hooks.h"), components::hooks_header(image)?)?;
+    // A target without a layout gets the loader and the installer only.
+    let mut built: Vec<(&str, components::Component)> = Vec::new();
+    if let Some(layout) = image.target.layout {
+        if let Some(region) = layout.processing {
+            let component =
+                components::processing(&objects, &runtime, image, tools, layout, region)?;
+            built.push(("processing", component));
+        }
+        let component = components::menu(&objects, &runtime, image, tools, layout)?;
+        built.push(("menu", component));
+        if let Some(region) = layout.framing {
+            let component = components::framing(&objects, &runtime, image, tools, layout, region)?;
+            built.push(("framing", component));
+        }
+    }
+    let components: Vec<_> = built.iter().map(|(_, component)| component).collect();
     // The installer publishes every code payload before any firmware change.
     let mut patches: Vec<_> = components.iter().map(|c| c.patches[0].clone()).collect();
-    for component in components {
+    for component in &components {
         patches.extend_from_slice(&component.patches[1..]);
     }
     let relocations = components
@@ -249,7 +279,7 @@ fn build_image(
             path(&object)?,
         ],
     )?;
-    let files = runtime_files(&fs::read(binary)?);
+    let files = runtime_files_for(&fs::read(binary)?, icon_stride(image.target.name)?);
     ensure!(
         !files
             .values()
@@ -262,15 +292,13 @@ fn build_image(
         fs::write(destination, bytes)?;
     }
     let manifest = json!({
-        "schema_version": 1, "target": target::NAME, "profile": "production", "startup_activation": "Off",
+        "schema_version": 1, "target": image.target.name, "profile": "production", "startup_activation": "Off",
         "toolchain": tools.manifest(), "source_revision": null, "source_dirty": null,
         "firmware_sha256": image.sha256, "decoded_firmware_sha256": image.decoded_sha256,
         "source_sha256": source_hashes(), "generated_header_sha256": sha256(generated.as_bytes()),
-        "components": {
-            "processing": {"sha256": sha256(&processing.patches[0].after), "size": processing.code_size},
-            "menu": {"sha256": sha256(&menu.patches[0].after), "size": menu.code_size},
-            "framing": {"sha256": sha256(&framing.patches[0].after), "size": framing.code_size}
-        },
+        "components": built.iter().map(|(name, component)| (name.to_string(),
+            json!({"sha256": sha256(&component.patches[0].after), "size": component.code_size})))
+            .collect::<serde_json::Map<_, _>>(),
         "files": files.iter().map(|(path, bytes)| json!({"path": path, "size": bytes.len(), "sha256": sha256(bytes)})).collect::<Vec<_>>()
     });
     fs::write(

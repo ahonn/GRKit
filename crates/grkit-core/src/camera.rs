@@ -5,8 +5,14 @@
 //! byte of the model selection, and none of these bytes is a GRKit patch site or
 //! input. A runtime built for `gr3-2.10` is therefore valid on both cameras. The
 //! cameras differ only in the ModeSet file that enables SD scripts.
+//!
+//! GR IV 1.11 is a different build with its own runtime. It has Image Control,
+//! Guides, and Date Stamp, but no Framing yet, and it has not been tested on a
+//! camera.
 
 use anyhow::{bail, Result};
+
+use crate::modules;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Camera {
@@ -18,6 +24,13 @@ pub struct Camera {
     pub target: &'static str,
     /// The ModeSet command file: the major and minor numbers of the RTOS.
     pub modeset: &'static str,
+    /// True until the runtime has been tested on a camera.
+    pub experimental: bool,
+    /// True when the runtime has Image Control, so a package can have effects.
+    pub effects: bool,
+    /// The modules of `modules::NAMES` that the runtime has. The camera menu
+    /// never shows the others.
+    pub modules: &'static [&'static str],
 }
 
 pub const GR3: Camera = Camera {
@@ -26,6 +39,9 @@ pub const GR3: Camera = Camera {
     firmware: "2.10",
     target: "gr3-2.10",
     modeset: "00078350.588",
+    experimental: false,
+    effects: true,
+    modules: &modules::NAMES,
 };
 
 pub const GR3X: Camera = Camera {
@@ -34,9 +50,24 @@ pub const GR3X: Camera = Camera {
     firmware: "1.60",
     target: "gr3-2.10",
     modeset: "00078490.609",
+    experimental: false,
+    effects: true,
+    modules: &modules::NAMES,
 };
 
-pub const CAMERAS: [&Camera; 2] = [&GR3, &GR3X];
+/// GR IV and GR IV HDF run the same firmware and ModeSet file.
+pub const GR4: Camera = Camera {
+    id: "gr4",
+    name: "GR IV",
+    firmware: "1.11",
+    target: "gr4-1.11",
+    modeset: "00078560.636",
+    experimental: true,
+    effects: true,
+    modules: &modules::NAMES,
+};
+
+pub const CAMERAS: [&Camera; 3] = [&GR3, &GR3X, &GR4];
 
 pub fn find(id: &str) -> Result<&'static Camera> {
     match CAMERAS.iter().find(|camera| camera.id == id) {

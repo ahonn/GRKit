@@ -7,7 +7,17 @@ use crate::{camera::Camera, Files};
 
 pub const HEADER_SIZE: usize = 256;
 pub const RECORD_SIZE: usize = 0x740;
+/// The icon slot of GR III 2.10: an 8-byte native descriptor, then 40 x 40 RGBA.
 pub const ICON_STRIDE: usize = 6408;
+
+/// The icon slot size of a runtime target. GR IV 1.11 has 12-byte descriptors.
+pub fn icon_stride(target: &str) -> Result<usize> {
+    match target {
+        "gr3-2.10" => Ok(ICON_STRIDE),
+        "gr4-1.11" => Ok(6412),
+        _ => anyhow::bail!("Unknown runtime target {target:?}"),
+    }
+}
 pub const ICONS_PER_CHUNK: usize = 40;
 /// Off, GRKit, four Framing tiles, five Guides tiles, and five Date Stamp tiles.
 /// The menu addresses module tiles by offset, so they must stay contiguous in
@@ -74,6 +84,11 @@ pub fn activation_files(camera: &Camera) -> Files {
 /// task in some starts, so the loader waits before its first request. Linux mounts
 /// the card about 5 s after power-on, so the wait does not delay the installation.
 pub fn loader() -> Vec<u8> {
+    loader_for(ICON_STRIDE)
+}
+
+/// The loader for a target with `icon_stride`-byte icon slots.
+pub fn loader_for(icon_stride: usize) -> Vec<u8> {
     let path = |name: &str| format!("C:\\SCRIPT\\PLUGINS\\{name}");
     let (plan, done, failed) = (path("MODULE.BIN"), path("INSTALL.OK"), path("INSTALL.ERR"));
     let mut lines: Vec<String> = vec![
@@ -139,7 +154,7 @@ pub fn loader() -> Vec<u8> {
                 i * ICONS_PER_CHUNK
             ),
             format!("if items > {ICONS_PER_CHUNK} items = {ICONS_PER_CHUNK}"),
-            format!("iconwords = items * {}", ICON_STRIDE / 4),
+            format!("iconwords = items * {}", icon_stride / 4),
             format!("intdim artwork{i} iconwords"),
         ]);
     }
@@ -287,6 +302,11 @@ pub fn loader() -> Vec<u8> {
 }
 
 pub fn runtime_files(binary: &[u8]) -> Files {
+    runtime_files_for(binary, ICON_STRIDE)
+}
+
+/// The runtime files of a target with `icon_stride`-byte icon slots.
+pub fn runtime_files_for(binary: &[u8], icon_stride: usize) -> Files {
     let target = "C:\\SCRIPT\\PLUGINS\\PLUGINS.TTL";
     let startup = format!("filesearch '{target}'\r\nif result = 0 goto done\r\ninclude '{target}'\r\n:done\r\nend\r\n");
     let wrapper = |mode: &str| {
@@ -294,7 +314,7 @@ pub fn runtime_files(binary: &[u8]) -> Files {
     };
     Files::from([
         ("SCRIPT/STARTUP.TTL".into(), startup.into_bytes()),
-        ("SCRIPT/PLUGINS/PLUGINS.TTL".into(), loader()),
+        ("SCRIPT/PLUGINS/PLUGINS.TTL".into(), loader_for(icon_stride)),
         ("SCRIPT/PLUGINS/INSTALL.BIN".into(), binary.to_vec()),
         ("SCRIPT/PLUGINS/SCAN.SH".into(), wrapper("scan")),
         ("SCRIPT/PLUGINS/INSTALL.SH".into(), wrapper("install")),

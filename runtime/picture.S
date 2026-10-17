@@ -1,10 +1,13 @@
 #include "abi.h"
+#include "firmware.h"
+#include "hooks.h"
 .syntax unified
 .arm
 .text
 /* Picture processing hooks for effect extensions. They link into the Framing
    region, because the processing region has no room left. */
 
+#ifdef HOOK_MODULE_GAMMA_DIRTY
 // Z=1 only for an owned record in r0. Preserves all registers.
 picture_owned:
     push {r0-r3, lr}
@@ -49,15 +52,16 @@ module_gamma_dirty:
     cmp r0, #0
     bne dirty_resume
     ldr r0, [r4, #0x17c]
-    add r0, r0, #0x3200
-    ldr r2, [r0, #0x30]
+    add r0, r0, #(GAMMA_BUILT & ~0xff)
+    ldr r2, [r0, #(GAMMA_BUILT & 0xff)]
     cmp r2, #0
     bne dirty_resume
 dirty_on:
     mov r3, #1
 dirty_resume:
     pop {r0-r2, lr}
-    ldr pc, =0x536de1ac
+    ldr pc, =HOOK_MODULE_GAMMA_DIRTY_RESUME
+#endif
 
 // JpegEncodeMacroProcess::Execute entry: r0 = process, r1 = message. The stub
 // keeps every argument and replays the displaced `mov ip, sp`.
@@ -67,5 +71,5 @@ picture_encode_entry:
     bl picture_encode
     pop {r0-r3, r12, lr}
     mov r12, sp
-    ldr pc, =0x535047d8
+    ldr pc, =HOOK_PICTURE_ENCODE_ENTRY_RESUME
 .ltorg

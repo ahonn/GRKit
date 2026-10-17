@@ -17,6 +17,9 @@ const en = {
   firmware: 'Firmware',
   supported: 'Supported',
   planned: 'Planned',
+  experimental: 'Experimental',
+  experimentalNote: (name: string) =>
+    `GRKit for ${name} is experimental. It has not been tested on a camera.`,
   effects: 'Effects',
   modules: 'Modules',
   package: 'Package',
@@ -54,12 +57,14 @@ const en = {
   building: 'Preparing GRKit.zip…',
   ready: 'GRKit.zip is ready. Copy the contents of SD_ROOT to the card root.',
   buildError: 'GRKit.zip cannot be prepared. Reload the page to try again.',
-  footer: 'Supports RICOH GR III firmware 2.10 and GR IIIx firmware 1.60. GR IV is planned.',
+  footer:
+    'Supports RICOH GR III firmware 2.10 and GR IIIx firmware 1.60. GR IV and GR IV HDF firmware 1.11 support is experimental and has not been tested on a camera.',
   licenses: 'Effect licenses',
   recovery: 'Recovery guide',
   source: 'Source',
   modulesNote: 'The camera menu shows only the modules that you select.',
   effectsOff: 'Image Control is off. The package has no effects.',
+  effectsUnavailable: (name: string) => `GRKit has no Image Control for ${name} yet.`,
   imageControlEmpty: 'Select at least one effect. Without effects, the camera hides Image Control.',
   noModules: 'Select at least one module.',
   modulesText: {
@@ -69,6 +74,8 @@ const en = {
     guides: 'Thirds, center, golden ratio, or diagonal lines inside the Framing area.',
     dateStamp: 'The date on photos in orange seven-segment digits.',
   },
+  framingXpanOnly:
+    'XPan 65:24 photos, cropped from the native 16:9 aspect ratio. The viewfinder dims the area outside the photo.',
   steps: [
     ['Turn the camera off. Back up the SD card, including any existing startup scripts.'],
     ['Unzip GRKit.zip. Copy the contents of ', '`SD_ROOT', ' to the card root.'],
@@ -115,6 +122,8 @@ const zhHans: Strings = {
   firmware: '固件',
   supported: '已支持',
   planned: '计划支持',
+  experimental: '实验性',
+  experimentalNote: (name) => `${name} 的 GRKit 是实验性的，未经真机测试。`,
   effects: '效果',
   modules: '模块',
   package: '安装包',
@@ -150,12 +159,14 @@ const zhHans: Strings = {
   building: '正在准备 GRKit.zip…',
   ready: 'GRKit.zip 已就绪。请把 SD_ROOT 中的内容复制到存储卡根目录。',
   buildError: '无法准备 GRKit.zip。请刷新页面后重试。',
-  footer: '目前支持 RICOH GR III 固件 2.10 和 GR IIIx 固件 1.60。GR IV 计划支持。',
+  footer:
+    '目前支持 RICOH GR III 固件 2.10 和 GR IIIx 固件 1.60。GR IV 与 GR IV HDF 固件 1.11 为实验性支持，未经真机测试。',
   licenses: '效果许可',
   recovery: '恢复指南',
   source: '源代码',
   modulesNote: '相机菜单只显示你选择的模块。',
   effectsOff: 'Image Control 已关闭，安装包中不包含效果。',
+  effectsUnavailable: (name) => `GRKit 暂不支持 ${name} 的 Image Control。`,
   imageControlEmpty: '请至少选择一个效果。没有效果时，相机会隐藏 Image Control。',
   noModules: '请至少选择一个模块。',
   modulesText: {
@@ -164,6 +175,7 @@ const zhHans: Strings = {
     guides: '在 Framing 区域内显示三分线、中心十字、黄金分割线或对角线。',
     dateStamp: '用橙色七段数码字体在照片上打印日期。',
   },
+  framingXpanOnly: '从原生 16:9 画幅裁出 XPan 65:24 照片。取景器遮暗照片外的区域。',
   steps: [
     ['关闭相机。备份 SD 卡，包括已有的启动脚本。'],
     ['解压 GRKit.zip。把 ', '`SD_ROOT', ' 中的内容复制到存储卡根目录。'],
@@ -198,6 +210,8 @@ const zhHant: Strings = {
   firmware: '韌體',
   supported: '已支援',
   planned: '規劃中',
+  experimental: '實驗性',
+  experimentalNote: (name) => `${name} 的 GRKit 為實驗性支援，未經實機測試。`,
   effects: '效果',
   modules: '模組',
   package: '安裝包',
@@ -233,12 +247,14 @@ const zhHant: Strings = {
   building: '正在準備 GRKit.zip…',
   ready: 'GRKit.zip 已就緒。請把 SD_ROOT 中的內容複製到記憶卡根目錄。',
   buildError: '無法準備 GRKit.zip。請重新整理頁面後再試。',
-  footer: '目前支援 RICOH GR III 韌體 2.10 與 GR IIIx 韌體 1.60。GR IV 規劃中。',
+  footer:
+    '目前支援 RICOH GR III 韌體 2.10 與 GR IIIx 韌體 1.60。GR IV 與 GR IV HDF 韌體 1.11 為實驗性支援，未經實機測試。',
   licenses: '效果授權',
   recovery: '復原指南',
   source: '原始碼',
   modulesNote: '相機選單只顯示你選擇的模組。',
   effectsOff: 'Image Control 已關閉，安裝包中不包含效果。',
+  effectsUnavailable: (name) => `GRKit 暫不支援 ${name} 的 Image Control。`,
   imageControlEmpty: '請至少選擇一個效果。沒有效果時，相機會隱藏 Image Control。',
   noModules: '請至少選擇一個模組。',
   modulesText: {
@@ -247,6 +263,7 @@ const zhHant: Strings = {
     guides: '在 Framing 區域內顯示三分線、中心十字、黃金分割線或對角線。',
     dateStamp: '用橙色七段數字字型在照片上印上日期。',
   },
+  framingXpanOnly: '從原生 16:9 畫幅裁出 XPan 65:24 照片。取景器遮暗照片外的區域。',
   steps: [
     ['關閉相機。備份 SD 卡，包括現有的啟動腳本。'],
     ['解壓縮 GRKit.zip。把 ', '`SD_ROOT', ' 中的內容複製到記憶卡根目錄。'],

@@ -85,11 +85,11 @@ static const u16 frame_summaries[][15] = {
 };
 static u32 frame_ratio(volatile u32 *h) {
     u32 value=h[GRKIT_HOST_FRAME_RATIO/4];
-    return value<ARRAY_COUNT(ratio_labels) ? value : 0;
+    return value<FRAMING_RATIO_COUNT ? value : 0;
 }
 static const u16 *frame_title(volatile u32 *h) { (void)h; return framing; }
 static const u16 *frame_summary(volatile u32 *h) { return frame_summaries[frame_ratio(h)]; }
-static u32 frame_rows(volatile u32 *h) { (void)h; return ARRAY_COUNT(ratio_labels); }
+static u32 frame_rows(volatile u32 *h) { (void)h; return FRAMING_RATIO_COUNT; }
 static const u16 *frame_label(volatile u32 *h,u32 row) { (void)h; return ratio_labels[row]; }
 /* The root tile shows the selected ratio, like Image Control shows its effect. */
 static u32 frame_icon(volatile u32 *h,u32 row) {
