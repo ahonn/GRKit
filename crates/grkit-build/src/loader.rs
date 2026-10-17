@@ -1,7 +1,7 @@
 use crate::{firmware::FirmwareImage, target, PatchPlan};
 use anyhow::Result;
 use grkit_core::{
-    artwork::{framing_tiles, off_pixels, plugins_pixels},
+    artwork::{module_tiles, off_pixels, plugins_pixels},
     runtime::{
         HOST_ICON_COUNT, ICONS_PER_CHUNK, ICON_STRIDE, LINUX_DIRECTORY, MAX_CHUNKS, MAX_COUNT,
     },
@@ -76,12 +76,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage) -> Result<String> {
     array(&mut result, "stock_record", record, true);
     array(&mut result, "off_pixels", &off_pixels(), true);
     array(&mut result, "plugins_pixels", &plugins_pixels(), true);
-    array(
-        &mut result,
-        "framing_pixels",
-        &framing_tiles().concat(),
-        true,
-    );
+    array(&mut result, "module_pixels", &module_tiles().concat(), true);
     let tail: Vec<_> = [0x53dc27b4u32, 0x53dc2938, 0x53dc29dc, 0x53dc2444]
         .into_iter()
         .flat_map(u32::to_le_bytes)

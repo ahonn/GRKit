@@ -244,9 +244,9 @@ static int install(void)
         u32 index = count + i;
         u32 icon = icon_bases[index / ICONS_PER_CHUNK] + (index % ICONS_PER_CHUNK) * ICON_STRIDE;
         store(icon, 0x00280028); store(icon + 4, (icon + 8 - pixels) / 4);
-        const u8 *artwork = i >= 2 ? framing_pixels + (i - 2) * 6400 : i ? plugins_pixels : off_pixels;
+        const u8 *artwork = i >= 2 ? module_pixels + (i - 2) * 6400 : i ? plugins_pixels : off_pixels;
         copy(at(icon + 8), artwork, 6400);
-        /* The menu derives the other Framing tiles from the first one. */
+        /* The menu derives the other module tiles from the first Framing tile. */
         if (i <= 2) store(base + (i == 2 ? GRKIT_HOST_FRAMING_ICON : i ? GRKIT_HOST_PLUGINS_ICON : GRKIT_HOST_OFF_ICON), icon);
     }
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {

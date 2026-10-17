@@ -49,14 +49,20 @@ fn host_artwork_matches_golden_pixels_and_preserves_binary_transparency() {
         hex::encode(Sha256::digest(artwork::plugins_pixels())),
         "994c7df1e812485f987680a32ff1e4d02fbd49ff21039a098f7f849de7709e25"
     );
+    let modules = artwork::module_tiles();
+    // Four Framing and five Guides tiles, addressed by offset from the first.
+    assert_eq!(modules.len(), 9);
+    assert_eq!(modules[0], artwork::framing_pixels());
     for pixels in [
         artwork::plugins_pixels(),
-        artwork::framing_pixels(),
         artwork::off_pixels(),
         artwork::render_tile("OFF", "film").unwrap(),
         artwork::render_tile("OFF", "filter").unwrap(),
         artwork::render_tile("OFF", "plain").unwrap(),
-    ] {
+    ]
+    .into_iter()
+    .chain(modules)
+    {
         assert_eq!(pixels.len(), effects::ICON_SIZE);
         assert!(pixels[..160].iter().chain(&pixels[6240..]).all(|v| *v == 0));
         assert!(pixels

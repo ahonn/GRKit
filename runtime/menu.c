@@ -430,7 +430,8 @@ u32 menu_playback_private(void) {
 A32_ENTRY u32 menu_icon(u32 id) {
     volatile u32 *h=menu_header();
     u32 index=id-0x8000;
-    if(id-FRAMING_ICON<FRAMING_ICON_COUNT)
+    /* Module tiles are contiguous from the first Framing tile. */
+    if(id-FRAMING_ICON<MODULE_ICON_COUNT)
         return h[GRKIT_HOST_FRAMING_ICON/4]+(id-FRAMING_ICON)*GRKIT_ICON_STRIDE;
     if(id==0x7ffe) return h[GRKIT_HOST_PLUGINS_ICON/4];
     if(id==0x7fff) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : WORD(0x550020fc,0x166*4);

@@ -201,6 +201,87 @@ pub fn framing_tiles() -> Vec<Vec<u8>> {
     ]
 }
 
+/// Composition guide styles, in runtime order after Off.
+#[derive(Clone, Copy)]
+enum Guide {
+    Thirds,
+    Center,
+    Golden,
+    Diagonals,
+}
+
+/// A frame of about 3:2 with its guide lines, centered horizontally. Lines are
+/// gray, so they stay distinct from the frame.
+fn guide_frame(rgba: &mut [u8], top: usize, guide: Guide) {
+    let (width, height) = (28, 18);
+    let left = (40 - width) / 2;
+    let (right, bottom) = (left + width - 1, top + height - 1);
+    for y in top..=bottom {
+        for x in left..=right {
+            let edge = x == left || x == right || y == top || y == bottom;
+            dot(rgba, x, y, if edge { 255 } else { 20 });
+        }
+    }
+    // Symmetric line offsets from the left and top edges.
+    let grid = |rgba: &mut [u8], column: usize, row: usize| {
+        for x in [left + column, right - column] {
+            (top + 1..bottom).for_each(|y| dot(rgba, x, y, 170));
+        }
+        for y in [top + row, bottom - row] {
+            (left + 1..right).for_each(|x| dot(rgba, x, y, 170));
+        }
+    };
+    match guide {
+        Guide::Thirds => grid(rgba, 9, 6),
+        Guide::Golden => grid(rgba, 10, 7),
+        Guide::Center => {
+            // Even dimensions center the cross between two pixel rows and columns.
+            for offset in [0, 1] {
+                (left + 9..=right - 9).for_each(|x| dot(rgba, x, top + 8 + offset, 170));
+                (top + 4..=bottom - 4).for_each(|y| dot(rgba, left + 13 + offset, y, 170));
+            }
+        }
+        Guide::Diagonals => {
+            for x in 1..width - 1 {
+                // Round half up, as the runtime's Bresenham lines do.
+                let y = (2 * x * (height - 1) + width - 1) / (2 * (width - 1));
+                dot(rgba, left + x, top + y, 170);
+                dot(rgba, right - x, top + y, 170);
+            }
+        }
+    }
+}
+
+/// A guide frame centered above its label.
+fn guide_pixels(label: &str, guide: Guide) -> Vec<u8> {
+    let mut rgba = background();
+    guide_frame(&mut rgba, 6, guide);
+    text(&mut rgba, label, 11.0, 32.0, 30.5, 255);
+    rgba
+}
+
+/// Guides artwork in runtime order: the module tile, then thirds, center,
+/// golden ratio, and diagonals.
+pub fn guides_tiles() -> Vec<Vec<u8>> {
+    let mut module = background();
+    guide_frame(&mut module, 11, Guide::Thirds);
+    vec![
+        module,
+        guide_pixels("3x3", Guide::Thirds),
+        guide_pixels("Ctr", Guide::Center),
+        guide_pixels("Phi", Guide::Golden),
+        guide_pixels("Diag", Guide::Diagonals),
+    ]
+}
+
+/// Module artwork in runtime order. The menu addresses each tile by its
+/// offset from the first Framing tile.
+pub fn module_tiles() -> Vec<Vec<u8>> {
+    let mut tiles = framing_tiles();
+    tiles.extend(guides_tiles());
+    tiles
+}
+
 pub fn plugins_pixels() -> Vec<u8> {
     let mut rgba = background();
     text(&mut rgba, "GRK", LABEL_SIZE, LABEL_WIDTH, 20.0, 255);

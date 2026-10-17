@@ -9,9 +9,9 @@ pub const HEADER_SIZE: usize = 256;
 pub const RECORD_SIZE: usize = 0x700;
 pub const ICON_STRIDE: usize = 6408;
 pub const ICONS_PER_CHUNK: usize = 40;
-/// Off, GRKit, and four Framing tiles. The menu addresses Framing tiles by
-/// offset, so they must stay contiguous in one icon chunk.
-pub const HOST_ICON_COUNT: usize = 6;
+/// Off, GRKit, four Framing tiles, and five Guides tiles. The menu addresses
+/// module tiles by offset, so they must stay contiguous in one icon chunk.
+pub const HOST_ICON_COUNT: usize = 11;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
 // One script array holds the header and every record: at most 65536 words.

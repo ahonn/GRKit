@@ -2,10 +2,11 @@
 
 An experimental SD-loaded plugin runtime for RICOH GR III firmware 2.10. Other models and firmware versions are unsupported.
 
-GRKit adds a sixth ADJ entry with two modules:
+GRKit adds a sixth ADJ entry with three modules:
 
 - **Image Control**: bundled or custom effects, with live-view preview.
 - **Framing**: XPan (65:24), 16:9, or 4:3 photos with a 3:2 viewfinder mask.
+- **Guides**: thirds, center, golden ratio, or diagonal lines inside the Framing area.
 
 The project is in development. Its behavior, file formats, and package layout can change.
 

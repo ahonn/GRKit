@@ -9,6 +9,12 @@
 #define FRAMING_ICON 0x7ff0U
 #define FRAMING_RATIO_ICON(ratio) (FRAMING_ICON+(ratio))
 #define FRAMING_ICON_COUNT 4U
+#define GUIDES_MODULE 2U
+/* Guides artwork follows the Framing artwork: the module tile, then the four styles. */
+#define GUIDES_ICON (FRAMING_ICON+FRAMING_ICON_COUNT)
+#define GUIDE_STYLE_ICON(style) (GUIDES_ICON+(style))
+#define GUIDES_ICON_COUNT 5U
+#define MODULE_ICON_COUNT (FRAMING_ICON_COUNT+GUIDES_ICON_COUNT)
 #define ARRAY_COUNT(a) (sizeof(a)/sizeof((a)[0]))
 
 typedef struct {
@@ -19,6 +25,8 @@ typedef struct {
     u32 (*icon)(volatile u32 *,u32);
     u32 (*checked)(volatile u32 *,u32);
     void (*apply)(volatile u32 *,u32);
+    /* The committed row, where the module page opens. */
+    u32 (*committed)(volatile u32 *);
 } Module;
 
 static const u16 *image_title(volatile u32 *h) { (void)h; return image_control; }
@@ -39,6 +47,10 @@ static u32 image_icon(volatile u32 *h,u32 row) {
 }
 static u32 image_checked(volatile u32 *h,u32 row) {
     return h[GRKIT_HOST_ACTIVE/4]==image_record(h,row);
+}
+static u32 image_committed(volatile u32 *h) {
+    u32 icon=selected_icon(h);
+    return icon==0x7fff ? 0 : icon-0x7fff;
 }
 /* OK commits the highlighted row and ends its live-view preview. */
 static void image_apply(volatile u32 *h,u32 row) {
@@ -84,21 +96,55 @@ static void frame_apply(volatile u32 *h,u32 row) {
     h[GRKIT_HOST_FRAME_RATIO/4]=row;
     MENU_FRAMING_REQUEST();
 }
-/* ADJ covers the live-view mask, so ADJ draws a mask on its own canvas: the
-   highlighted ratio on the Framing page, else the committed ratio. Off ends
-   the mask, and the canvas stays until a full draw has erased it. */
+
+static const u16 guides[] = {'G','u','i','d','e','s',0};
+static const u16 guide_labels[][13] = {
+    {'O','f','f',0}, {'T','h','i','r','d','s',0}, {'C','e','n','t','e','r',0},
+    {'G','o','l','d','e','n',' ','R','a','t','i','o',0}, {'D','i','a','g','o','n','a','l','s',0}
+};
+static const u16 guide_summaries[][21] = {
+    {'G','u','i','d','e','s',':',' ','O','f','f',0},
+    {'G','u','i','d','e','s',':',' ','T','h','i','r','d','s',0},
+    {'G','u','i','d','e','s',':',' ','C','e','n','t','e','r',0},
+    {'G','u','i','d','e','s',':',' ','G','o','l','d','e','n',' ','R','a','t','i','o',0},
+    {'G','u','i','d','e','s',':',' ','D','i','a','g','o','n','a','l','s',0}
+};
+static u32 guide_style(volatile u32 *h) {
+    u32 value=h[GRKIT_HOST_GUIDE/4];
+    return value<ARRAY_COUNT(guide_labels) ? value : 0;
+}
+static const u16 *guide_title(volatile u32 *h) { (void)h; return guides; }
+static const u16 *guide_summary(volatile u32 *h) { return guide_summaries[guide_style(h)]; }
+static u32 guide_rows(volatile u32 *h) { (void)h; return ARRAY_COUNT(guide_labels); }
+static const u16 *guide_label(volatile u32 *h,u32 row) { (void)h; return guide_labels[row]; }
+/* The root tile shows the selected style, like Framing shows its ratio. */
+static u32 guide_icon(volatile u32 *h,u32 row) {
+    if(h[9]==MENU_ROOT) return guide_style(h) ? GUIDE_STYLE_ICON(guide_style(h)) : GUIDES_ICON;
+    return row ? GUIDE_STYLE_ICON(row) : 0x7fff;
+}
+static u32 guide_checked(volatile u32 *h,u32 row) { return row==guide_style(h); }
+static void guide_apply(volatile u32 *h,u32 row) { h[GRKIT_HOST_GUIDE/4]=row; }
+
+/* ADJ covers the live-view drawing, so ADJ draws the mask and guides on its
+   own canvas. The Framing page shows its highlighted ratio and the Guides page
+   its highlighted style, each with the other module's committed value. Off
+   ends the drawing, and the canvas stays until a full draw has erased it. */
 static void frame_preview(volatile u32 *h,u32 canvas,u32 movie) {
-    u32 page=h[9]==MENU_MODULE && h[GRKIT_HOST_MODULE/4]==FRAMING_MODULE;
-    u32 ratio=page ? h[10] : frame_ratio(h);
+    u32 module=h[9]==MENU_MODULE ? h[GRKIT_HOST_MODULE/4] : 0;
+    u32 page=module==FRAMING_MODULE || module==GUIDES_MODULE;
+    u32 ratio=module==FRAMING_MODULE ? h[10] : frame_ratio(h);
+    u32 style=module==GUIDES_MODULE ? h[10] : guide_style(h);
     if(movie) { h[GRKIT_HOST_FRAME_PREVIEW/4]=0; return; }
+    h[GRKIT_HOST_GUIDE_PREVIEW/4]=style;
     /* A highlighted Off keeps the canvas for the next row. */
-    h[GRKIT_HOST_FRAME_PREVIEW/4]=ratio || page ? ratio+1 : 0;
+    h[GRKIT_HOST_FRAME_PREVIEW/4]=ratio || style || page ? ratio+1 : 0;
     h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]=canvas;
 }
 
 static const Module modules[] = {
-    {image_title,image_summary,image_rows,image_label,image_icon,image_checked,image_apply},
-    {frame_title,frame_summary,frame_rows,frame_label,frame_icon,frame_checked,frame_apply}
+    {image_title,image_summary,image_rows,image_label,image_icon,image_checked,image_apply,image_committed},
+    {frame_title,frame_summary,frame_rows,frame_label,frame_icon,frame_checked,frame_apply,frame_ratio},
+    {guide_title,guide_summary,guide_rows,guide_label,guide_icon,guide_checked,guide_apply,guide_style}
 };
 static const Module *current_module(volatile u32 *h) {
     u32 index=h[9]==MENU_ROOT ? h[10] : h[GRKIT_HOST_MODULE/4];
@@ -117,11 +163,11 @@ static void menu_normalize(volatile u32 *h) {
 static void menu_confirm(volatile u32 *h) {
     menu_normalize(h);
     if(h[9]==MENU_ROOT) {
-        u32 icon=selected_icon(h), module=h[10];
+        u32 module=h[10];
         h[GRKIT_HOST_MODULE/4]=module;
         h[9]=MENU_MODULE;
         /* Each module opens at its committed row. Image Control previews from there. */
-        h[10]=module ? frame_ratio(h) : icon==0x7fff ? 0 : icon-0x7fff;
+        h[10]=modules[module].committed(h);
     } else current_module(h)->apply(h,h[10]);
 }
 /* Return false at the root so the caller can restore the stock ADJ page. */

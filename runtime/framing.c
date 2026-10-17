@@ -31,6 +31,10 @@ typedef unsigned char u8;
    capture property 0xd4 again and posts no UI change event. */
 #define FRAMING_REQUEST_ASPECT() (((u32 (*)(u32,u32))0x532525a4)(FRAMING_SETTINGS(),0))
 #endif
+#ifndef FRAMING_INVALIDATE
+/* View::Invalidate: request a redraw unless one is pending (+0xa0). */
+#define FRAMING_INVALIDATE(view) (((void (*)(u32))0x533ad308)(view))
+#endif
 extern volatile u32 *framing_header(void);
 
 /* Original 5x7 column glyphs, bit zero at the top. Each pixel is 2x2 LCD pixels. */
@@ -66,6 +70,16 @@ static void ratio_badge(u32 data,u32 stride,u32 ratio) {
                 }
 }
 
+#define GUIDE_LAST 4U
+/* Committed ratio and guide style, with unknown values treated as Off. */
+static u32 frame_ratio_value(volatile u32 *h) {
+    u32 ratio=h[GRKIT_HOST_FRAME_RATIO/4];
+    return ratio<=3 ? ratio : 0;
+}
+static u32 guide_value(volatile u32 *h) {
+    u32 style=h[GRKIT_HOST_GUIDE/4];
+    return style<=GUIDE_LAST ? style : 0;
+}
 /* Capture aspect ids: 0 = 3:2, 1 = 4:3, 2 = 16:9 and 65:24. GR III hides
    ids 1 and 2 from its menu, but its capture and playback code support them. */
 static u32 capture_id(volatile u32 *h) {
@@ -93,6 +107,11 @@ void framing_bind(u32 controller) {
     /* Shooting: id 2 geometry follows the Framing ratio again. */
     ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=0;
     capture_sync(controller);
+    /* A selection that has not drawn on this canvas yet, such as one restored
+       at power-on, needs a redraw: nothing else invalidates a still live view. */
+    if(h[GRKIT_HOST_FRAME_CANVAS/4] && !h[GRKIT_HOST_FRAME_BITMAP/4] &&
+       (frame_ratio_value(h) || guide_value(h)))
+        FRAMING_INVALIDATE(h[GRKIT_HOST_FRAME_CANVAS/4]);
 }
 void framing_leave(u32 controller) {
     volatile u32 *h=framing_header();
@@ -112,57 +131,108 @@ static u32 canvas_pixels(u32 canvas,u32 bitmap) {
     if(FRAMING_NATIVE_ASPECT()!=0) return 0;
     stride=HALF(bitmap,0x18);
     data=WORD(bitmap,8);
+    /* The OSD buffer moves between boots (0x5f83df80 and 0x619e1200 seen). */
     if(stride<720 || stride>1024 || HALF(bitmap,0x1a)!=480 ||
-       data<0x60000000 || data>0x6fe00000 || (data&3) ||
+       data<0x40000000 || data>0x80000000-stride*480*4 || (data&3) ||
        WORD(bitmap,4)<stride*480*4) return 0;
     return data;
 }
+/* Photo area {left,top,right,bottom} on the 720x480 canvas for each ratio. */
+static const u16 photo_boxes[4][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480}};
 /* Black at 50% alpha outside the photo area. */
 static void ratio_mask(u32 data,u32 stride,u32 ratio) {
-    u32 x,y,top=0,left=0,bottom=480,right=720;
+    const u16 *box=photo_boxes[ratio];
+    u32 x,y;
     volatile u32 *row;
-    if(ratio==1) { top=107; bottom=373; }
-    if(ratio==2) { top=37; bottom=442; }
-    if(ratio==3) { left=40; right=680; }
     for(y=0;y<480;++y) {
         row=FRAMING_PIXELS(data+y*stride*4);
         for(x=0;x<720;++x)
-            if(y<top || y>=bottom || x<left || x>=right) row[x]=0x80000000;
+            if(y<box[1] || y>=box[3] || x<box[0] || x>=box[2]) row[x]=0x80000000;
+    }
+}
+/* Opaque gray is the same pixel with straight or premultiplied alpha. */
+#define GUIDE_COLOR 0xffc0c0c0U
+#define GUIDE_ARM 20U
+static void guide_pixel(u32 data,u32 stride,u32 x,u32 y) { FRAMING_PIXELS(data+y*stride*4)[x]=GUIDE_COLOR; }
+/* A position at `fraction`/65536 of the span, rounded. The link has no division helpers. */
+static u32 guide_at(u32 start,u32 end,u32 fraction) { return start+(((end-start)*fraction+0x8000)>>16); }
+/* One vertical and one horizontal line at each fraction of the photo area. */
+static void guide_grid(u32 data,u32 stride,const u16 *box,u32 fraction) {
+    u32 i,j,f,x,y;
+    for(i=0;i<2;++i) {
+        f=i ? 65536-fraction : fraction;
+        x=guide_at(box[0],box[2],f);
+        y=guide_at(box[1],box[3],f);
+        for(j=box[1];j<box[3];++j) guide_pixel(data,stride,x,j);
+        for(j=box[0];j<box[2];++j) guide_pixel(data,stride,j,y);
+    }
+}
+/* Corner-to-corner Bresenham lines. Every photo area is wider than tall, so
+   each column has one pixel of each diagonal, rounded half up. */
+static void guide_diagonals(u32 data,u32 stride,const u16 *box) {
+    int run=box[2]-box[0]-1, rise=box[3]-box[1]-1, error=0;
+    u32 x, y=box[1];
+    for(x=0;x<=(u32)run;++x) {
+        guide_pixel(data,stride,box[0]+x,y);
+        guide_pixel(data,stride,box[2]-1-x,y);
+        error+=rise;
+        if(2*error>=run) { ++y; error-=run; }
+    }
+}
+/* Guides stay inside the photo area of the Framing ratio. Grid fractions are
+   in 1/65536: 1/3 for thirds and 0.381966 for the golden section. */
+static void guide_lines(u32 data,u32 stride,u32 ratio,u32 style) {
+    const u16 *box=photo_boxes[ratio];
+    u32 x,y,i;
+    if(style==1) guide_grid(data,stride,box,21845);
+    if(style==3) guide_grid(data,stride,box,25033);
+    if(style==4) guide_diagonals(data,stride,box);
+    if(style==2) {
+        x=guide_at(box[0],box[2],32768);
+        y=guide_at(box[1],box[3],32768);
+        for(i=0;i<=2*GUIDE_ARM;++i) {
+            guide_pixel(data,stride,x-GUIDE_ARM+i,y);
+            guide_pixel(data,stride,x,y-GUIDE_ARM+i);
+        }
     }
 }
 void framing_prepare(u32 canvas) {
     volatile u32 *h=framing_header();
-    u32 ratio=h[GRKIT_HOST_FRAME_RATIO/4];
     /* Canvas::Draw clears the full native bitmap before drawing its children.
-       Use this path even for Off to remove the previous mask on the next draw. */
+       Use this path even for Off to remove the previous drawing on the next draw. */
     if((h[GRKIT_HOST_FRAME_CANVAS/4]==canvas &&
-        ((ratio>=1 && ratio<=3) || h[GRKIT_HOST_FRAME_BITMAP/4])) ||
+        (frame_ratio_value(h) || guide_value(h) || h[GRKIT_HOST_FRAME_BITMAP/4])) ||
        (canvas && h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]==canvas))
         BYTE(canvas,0xa0)=1;
 }
-/* The ADJ Framing page previews its highlighted ratio on the ADJ canvas,
-   below the menu controls. After the page ends, one more full draw erases
-   the mask and releases the canvas. */
+/* The ADJ Framing and Guides pages preview their highlighted row on the ADJ
+   canvas, below the menu controls. After the page ends, one more full draw
+   erases the drawing and releases the canvas. */
 static void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {
-    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],data;
+    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],style=h[GRKIT_HOST_GUIDE_PREVIEW/4],data;
     if(!preview) { h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]=0; return; }
-    if(preview<2 || preview>4) return;
+    if(preview>4 || style>GUIDE_LAST || (preview<2 && !style)) return;
     data=canvas_pixels(canvas,bitmap);
-    if(data) ratio_mask(data,HALF(bitmap,0x18),preview-1);
+    if(!data) return;
+    if(preview>=2) ratio_mask(data,HALF(bitmap,0x18),preview-1);
+    guide_lines(data,HALF(bitmap,0x18),preview-1,style);
 }
 void framing_paint(u32 canvas,u32 bitmap) {
     volatile u32 *h=framing_header();
-    u32 ratio=h[GRKIT_HOST_FRAME_RATIO/4];
-    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],data;
+    u32 ratio=frame_ratio_value(h),style=guide_value(h);
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],data,stride;
     if(canvas && canvas==h[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]) { preview_paint(h,canvas,bitmap); return; }
     if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;
-    if(!ratio || ratio>3) { h[GRKIT_HOST_FRAME_BITMAP/4]=0; return; }
+    if(!ratio && !style) { h[GRKIT_HOST_FRAME_BITMAP/4]=0; return; }
     h[GRKIT_HOST_FRAME_BITMAP/4]=bitmap;
     /* The LCD still canvas is registered in native slot zero. Unsupported
        canvas sizes and bitmap formats leave the native image untouched. */
     data=WORD(owner,4)==canvas && BYTE(owner,0x2d2)==0 ? canvas_pixels(canvas,bitmap) : 0;
     if(!data) { ++h[GRKIT_HOST_FRAME_SKIPPED/4]; return; }
-    ratio_mask(data,HALF(bitmap,0x18),ratio);
-    ratio_badge(data,HALF(bitmap,0x18),ratio);
+    stride=HALF(bitmap,0x18);
+    if(ratio) ratio_mask(data,stride,ratio);
+    guide_lines(data,stride,ratio,style);
+    /* The badge covers the guides that cross it. */
+    if(ratio) ratio_badge(data,stride,ratio);
     ++h[GRKIT_HOST_FRAME_DRAWS/4];
 }

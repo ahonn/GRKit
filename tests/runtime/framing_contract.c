@@ -42,6 +42,8 @@ static volatile uint32_t *mapped_pixels(uint32_t address)
 #define FRAMING_CAPTURE_ASPECT() capture_aspect
 /* The native setter resends 0 through the property handler hook. */
 #define FRAMING_REQUEST_ASPECT() (++capture_requests, capture_aspect=framing_capture_request(0))
+static uint32_t invalidations, invalidated;
+#define FRAMING_INVALIDATE(view) (++invalidations, invalidated = (view))
 #include "framing.c"
 
 static volatile u32 header[64];
@@ -128,6 +130,41 @@ static u32 expected_badge(u32 ratio,u32 x,u32 y,u32 background)
     }
     return 0x80000000;
 }
+/* Independent guide fixtures: exact positions, rounded half up. */
+static const u32 boxes[][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480}};
+static const u32 thirds[][4]={{240,480,160,320},{240,480,196,284},{240,480,172,307},{253,467,160,320}};
+static const u32 golden[][4]={{275,445,183,297},{275,445,209,271},{275,445,192,287},{284,436,183,297}};
+static u32 expected_guide(u32 ratio,u32 style,u32 x,u32 y)
+{
+    const u32 *box=boxes[ratio];
+    if(x<box[0] || x>=box[2] || y<box[1] || y>=box[3]) return 0;
+    if(style==1 || style==3) {
+        const u32 *lines=style==1 ? thirds[ratio] : golden[ratio];
+        return x==lines[0] || x==lines[1] || y==lines[2] || y==lines[3];
+    }
+    /* Every center is (360,240), with 20-pixel arms. */
+    if(style==2) return (y==240 && x>=340 && x<=380) || (x==360 && y>=220 && y<=260);
+    if(style==4) {
+        u32 width=box[2]-box[0], height=box[3]-box[1], column=x-box[0];
+        u32 rows[2]={column, width-1-column};
+        for(u32 i=0; i<2; ++i)
+            if(y==box[1]+(2*rows[i]*(height-1)+width-1)/(2*(width-1))) return 1;
+    }
+    return 0;
+}
+static void assert_guides(u32 ratio,u32 style,u32 badge)
+{
+    const u32 *box=boxes[ratio];
+    for(u32 y=0; y<480; ++y) for(u32 x=0; x<TEST_STRIDE; ++x) {
+        u32 expected=SENTINEL;
+        if(x<720) {
+            if(ratio && (x<box[0] || x>=box[2] || y<box[1] || y>=box[3])) expected=0x80000000;
+            if(expected_guide(ratio,style,x,y)) expected=GUIDE_COLOR;
+            if(badge) expected=expected_badge(ratio,x,y,expected);
+        }
+        assert(pixels[1+y*TEST_STRIDE+x]==expected);
+    }
+}
 int main(void)
 {
     /* Fixed rectangles are independent expected output, not a second renderer. */
@@ -198,6 +235,61 @@ int main(void)
     BYTE(TEST_BITMAP,2)=4;
     framing_paint(TEST_CANVAS,TEST_BITMAP);
     assert_untouched();
+    /* Guides stay inside the photo area of each ratio, below the badge. */
+    for (u32 ratio=0; ratio<4; ++ratio) for (u32 style=1; style<=4; ++style) {
+        reset();
+        header[GRKIT_HOST_FRAME_RATIO/4]=ratio;
+        header[GRKIT_HOST_GUIDE/4]=style;
+        framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==1);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_guides(ratio,style,1);
+        assert(header[GRKIT_HOST_FRAME_DRAWS/4]==1);
+        assert(header[GRKIT_HOST_FRAME_BITMAP/4]==TEST_BITMAP);
+    }
+    /* The diagonals run corner to corner. */
+    for (u32 ratio=0; ratio<4; ++ratio) {
+        const u32 *box=boxes[ratio];
+        assert(expected_guide(ratio,4,box[0],box[1]) && expected_guide(ratio,4,box[2]-1,box[3]-1));
+        assert(expected_guide(ratio,4,box[2]-1,box[1]) && expected_guide(ratio,4,box[0],box[3]-1));
+    }
+    /* Turning the guides off requests one more full clear. */
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_GUIDE/4]=0;
+    BYTE(TEST_CANVAS,0xa0)=0;
+    framing_prepare(TEST_CANVAS);
+    assert(BYTE(TEST_CANVAS,0xa0)==1);
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(header[GRKIT_HOST_FRAME_BITMAP/4]==0);
+    BYTE(TEST_CANVAS,0xa0)=0;
+    framing_prepare(TEST_CANVAS);
+    assert(BYTE(TEST_CANVAS,0xa0)==0);
+    /* Unknown styles draw nothing. */
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_GUIDE/4]=GUIDE_LAST+1;
+    framing_prepare(TEST_CANVAS);
+    assert(BYTE(TEST_CANVAS,0xa0)==0);
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_untouched();
+    /* The ADJ preview draws guides without a badge, with or without a ratio. */
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_FRAME_PREVIEW/4]=1;
+    header[GRKIT_HOST_GUIDE_PREVIEW/4]=1;
+    header[GRKIT_HOST_FRAME_PREVIEW_CANVAS/4]=TEST_CANVAS;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_guides(0,1,0);
+    for(u32 i=0; i<sizeof(pixels)/sizeof(pixels[0]); ++i) pixels[i]=SENTINEL;
+    header[GRKIT_HOST_FRAME_PREVIEW/4]=3;
+    header[GRKIT_HOST_GUIDE_PREVIEW/4]=4;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_guides(2,4,0);
+    assert(header[GRKIT_HOST_FRAME_DRAWS/4]==0);
+    for(u32 i=0; i<sizeof(pixels)/sizeof(pixels[0]); ++i) pixels[i]=SENTINEL;
+    header[GRKIT_HOST_GUIDE_PREVIEW/4]=GUIDE_LAST+1;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_untouched();
     /* Native 3:2 requests record the Framing ratio; other native ratios pass. */
     {
         const u32 ids[]={0,2,2,1};
@@ -210,6 +302,22 @@ int main(void)
         header[GRKIT_HOST_FRAME_RATIO/4]=999;
         assert(framing_capture_request(0)==0);
     }
+    /* A selection that has not drawn yet requests one redraw, as after a restore at power-on. */
+    reset();
+    assert(invalidations >= 1 && invalidated == TEST_CANVAS);
+    invalidations = 0;
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 1);
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 1);
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    header[GRKIT_HOST_FRAME_BITMAP/4] = 0;
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 1);
+    header[GRKIT_HOST_GUIDE/4] = 2;
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 2);
     /* Returning to the live view ends the playback 65:24 variant. */
     reset();
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=2;
@@ -250,8 +358,8 @@ int main(void)
     reset(); HALF(TEST_BITMAP,0x18)=719; assert_rejected();
     reset(); HALF(TEST_BITMAP,0x18)=1025; assert_rejected();
     reset(); HALF(TEST_BITMAP,0x1a)=479; assert_rejected();
-    reset(); WORD(TEST_BITMAP,8)=0x5ffffffc; assert_rejected();
-    reset(); WORD(TEST_BITMAP,8)=0x6fe00004; assert_rejected();
+    reset(); WORD(TEST_BITMAP,8)=0x3ffffffc; assert_rejected();
+    reset(); WORD(TEST_BITMAP,8)=0x80000000-TEST_STRIDE*480*4+4; assert_rejected();
     reset(); WORD(TEST_BITMAP,8)=TEST_PIXELS+1; assert_rejected();
     reset(); WORD(TEST_BITMAP,4)=TEST_STRIDE*480*4-1; assert_rejected();
     reset(); native_aspect=3; assert_rejected();

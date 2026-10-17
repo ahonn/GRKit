@@ -11,6 +11,8 @@
 #define GRKIT_HOST_VERSION 20
 #define GRKIT_HOST_OFF_ICON 84
 #define GRKIT_HOST_BACK_PENDING 92
+/* Guide style previewed on the ADJ canvas while GRKIT_HOST_FRAME_PREVIEW is set. */
+#define GRKIT_HOST_GUIDE_PREVIEW 48
 /* Words 24..43 belong to the menu: two text descriptors (96..111) and a
    16-word event ring (112..175). */
 #define GRKIT_HOST_PLUGINS_ICON 176
@@ -24,12 +26,15 @@
 #define GRKIT_HOST_FRAME_FILE 196
 /* Record of the last live-view build: an owned record, or 0 for native processing. */
 #define GRKIT_HOST_LIVE_RECORD 200
+/* Committed composition guide style: 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals. */
+#define GRKIT_HOST_GUIDE 204
 #define GRKIT_HOST_FRAME_RATIO 208
 /* ADJ Framing page preview: 0 none, else the highlighted ratio + 1. */
 #define GRKIT_HOST_FRAME_PREVIEW 212
 #define GRKIT_HOST_FRAME_DRAWS 216
 /* ADJ canvas of the preview. It stays set until a full draw erases the mask. */
 #define GRKIT_HOST_FRAME_PREVIEW_CANVAS 220
+/* First module tile: the Framing tiles, then the Guides tiles, contiguous. */
 #define GRKIT_HOST_FRAMING_ICON 224
 #define GRKIT_HOST_FRAME_OWNER 228
 #define GRKIT_HOST_FRAME_CANVAS 232

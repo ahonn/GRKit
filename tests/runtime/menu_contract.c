@@ -144,7 +144,7 @@ int main(void)
     assert(advance_from_private(0xcf, 2) == 0);
     assert(advance_from_private(0xce, 2) == 1);
     test_header[9] = 1;
-    assert(count(test_header) == 2);
+    assert(count(test_header) == 3);
     test_header[9] = 2;
     assert(count(test_header) == 6);
     test_header[GRKIT_HOST_COUNT / 4] = 0;
@@ -156,7 +156,11 @@ int main(void)
     /* Framing tiles are contiguous after the module tile. */
     assert(menu_icon(FRAMING_ICON) == 0x59007000);
     assert(menu_icon(FRAMING_RATIO_ICON(3)) == 0x59007000 + 3 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(FRAMING_ICON + FRAMING_ICON_COUNT) == 0);
+    /* Guides tiles follow the Framing tiles. */
+    assert(menu_icon(GUIDES_ICON) == 0x59007000 + FRAMING_ICON_COUNT * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GUIDE_STYLE_ICON(4)) == 0x59007000 + 8 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(FRAMING_ICON + MODULE_ICON_COUNT) == 0);
+    assert(FRAMING_ICON + MODULE_ICON_COUNT <= 0x7ffe);
     test_header[9] = MENU_ROOT;
     test_header[10] = 1;
     assert(current_module(test_header) == &modules[1]);
@@ -207,6 +211,71 @@ int main(void)
     test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
     assert(!menu_back(test_header));
     assert(current_module(test_header)->summary(test_header) == frame_summaries[3]);
+    /* Guides opens at the committed style and commits only its own setting. */
+    test_header[9] = MENU_ROOT;
+    test_header[10] = 2;
+    assert(current_module(test_header)->summary(test_header) == guide_summaries[0]);
+    assert(modules[2].icon(test_header, 2) == GUIDES_ICON);
+    test_header[GRKIT_HOST_GUIDE / 4] = 3;
+    assert(modules[2].icon(test_header, 2) == GUIDE_STYLE_ICON(3));
+    {
+        u32 requests = framing_requests;
+        menu_confirm(test_header);
+        assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == GUIDES_MODULE);
+        assert(test_header[10] == 3);
+        assert(count(test_header) == 5);
+        assert(current_module(test_header)->title(test_header) == guides);
+        for (u32 row = 0; row < 5; ++row) {
+            test_header[10] = row;
+            menu_confirm(test_header);
+            assert(test_header[GRKIT_HOST_GUIDE / 4] == row);
+            assert(current_module(test_header)->checked(test_header, row));
+            assert(!current_module(test_header)->checked(test_header, (row + 1) % 5));
+            assert(current_module(test_header)->label(test_header, row) == guide_labels[row]);
+            assert(current_module(test_header)->icon(test_header, row) == (row ? GUIDE_STYLE_ICON(row) : 0x7fff));
+            assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == 3);
+            assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
+        }
+        assert(framing_requests == requests);
+    }
+    /* The Guides page previews its highlighted style inside the committed ratio. */
+    test_header[10] = 2;
+    frame_preview(test_header, 0x5a000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 4);
+    assert(test_header[GRKIT_HOST_GUIDE_PREVIEW / 4] == 2);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] == 0x5a000000);
+    /* A highlighted Off with no ratio keeps the canvas for the next row. */
+    test_header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
+    test_header[10] = 0;
+    frame_preview(test_header, 0x5a000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 1);
+    assert(test_header[GRKIT_HOST_GUIDE_PREVIEW / 4] == 0);
+    assert(menu_back(test_header));
+    assert(test_header[9] == MENU_ROOT && test_header[10] == 2);
+    /* Other ADJ pages show the committed style, even without a ratio. */
+    test_header[GRKIT_HOST_GUIDE / 4] = 4;
+    frame_preview(test_header, 0x5b000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 1);
+    assert(test_header[GRKIT_HOST_GUIDE_PREVIEW / 4] == 4);
+    /* The Framing page keeps the committed style with its highlighted ratio. */
+    test_header[10] = 1;
+    menu_confirm(test_header);
+    test_header[10] = 2;
+    frame_preview(test_header, 0x5b000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 3);
+    assert(test_header[GRKIT_HOST_GUIDE_PREVIEW / 4] == 4);
+    /* Committed Off for both ends the drawing. */
+    assert(menu_back(test_header));
+    test_header[GRKIT_HOST_GUIDE / 4] = 0;
+    frame_preview(test_header, 0x5b000000, 0);
+    assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 0);
+    test_header[GRKIT_HOST_GUIDE / 4] = 999;
+    assert(guide_style(test_header) == 0);
+    test_header[GRKIT_HOST_GUIDE / 4] = 0;
+    test_header[GRKIT_HOST_FRAME_RATIO / 4] = 3;
+    test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
+    test_header[9] = MENU_ROOT;
+    test_header[10] = 1;
     /* Invalid public navigation cursors cannot form an effect pointer. */
     test_header[10] = 999;
     menu_confirm(test_header);

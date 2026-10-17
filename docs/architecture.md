@@ -28,7 +28,8 @@ With more than 20 effects, the installer keeps the 20 smallest effect IDs.
 For a duplicate ID, the file with the smallest name wins. The result does not depend on directory order. Directory read errors stop the installation.
 
 The 20-effect capacity is a product limit, not a GRF format limit. It fits one script array and one icon chunk.
-Off, GRKit, and the four Framing tiles use six host icon records outside that capacity. The Framing tiles are contiguous, and the menu derives each one from the first.
+Off, GRKit, the four Framing tiles, and the five Guides tiles use eleven host icon records outside that capacity.
+The Framing and Guides tiles are contiguous, and the menu derives each one from the first Framing tile.
 
 ## Menu
 
@@ -37,8 +38,9 @@ A private LineView draws the native translucent background before the shared sel
 
 The ADJ controller owns both objects. Exit hides them and restores the native geometry. Destruction unlinks and releases them. Movie mode keeps the five-entry layout.
 
-The compiled registry in `runtime/modules.h` contains Image Control and Framing.
-Each descriptor owns its title, summary, rows, labels, icons, selection checks, and activation. Module state stays in the private host header.
+The compiled registry in `runtime/modules.h` contains Image Control, Framing, and Guides.
+Each descriptor owns its title, summary, rows, labels, icons, selection checks, activation, and committed row. A module page opens at its committed row.
+Module state stays in the private host header.
 
 MENU returns one level. From the GRKit root it returns to the native ADJ items. The private menu restores the native list on its supported exit paths.
 List restoration suppresses the native selection callbacks.
@@ -77,10 +79,25 @@ The detail hook (`0x532b7cfc`) shows GRKit photos as Standard. The still-viewfin
 
 Framing draws black at 50% alpha into the still-viewfinder OSD bitmap. It draws after the canvas background clear and before the child views, so native status stays on top.
 It checks the still mode, the native 3:2 aspect, the canvas owner, the dimensions, the pixel format, and the allocation first.
+The OSD pixel buffer moves between boots (`0x5f83df80` and `0x619e1200` were seen), so the allocation must lie in `0x40000000`..`0x80000000`.
+
 The ratio badge occupies `[204,46,66,22]`. A new session starts with Off.
+A still live view redraws its canvas only on a change. A selection that has not drawn on the canvas yet invalidates the canvas (`0x533ad308`) on the next live-view update.
 
 ADJ has its own canvas in slot zero (`controller+4`), so the live-view mask is not visible there.
 While ADJ is open, Framing draws the committed ratio's mask on the ADJ canvas below the menu controls. The Framing page draws the highlighted ratio instead.
+
+### Guides
+
+Guides draws 1-pixel lines inside the photo area of the committed Framing ratio, in the same drawing path as the mask. Off uses the full 3:2 canvas.
+The styles are thirds, a center cross with 20-pixel arms, the golden section (0.381966), and corner-to-corner diagonals.
+Grid positions are fractions of the photo size in 1/65536, rounded. The diagonals are Bresenham lines, rounded half up. Neither needs division.
+
+The line color is opaque gray (`0xffc0c0c0`), which has the same value with straight or premultiplied alpha. The format of the OSD bitmap is not confirmed.
+The mask draws first and the badge last, so the badge covers the lines that cross it. Native child views, which may include the native grid guide, draw after both.
+
+The Guides page previews its highlighted style on the ADJ canvas, inside the committed ratio. The Framing page previews its ratio with the committed style.
+The preview style is in header `+48`, and it applies only while the Framing preview word is set.
 
 ### Capture
 
