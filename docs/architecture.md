@@ -14,6 +14,14 @@ Menu, processing, and Framing hooks run in the camera's RTOS domain.
 The site preview applies one 33 x 33 x 33 table for each effect. `grkit effects publish` computes each table from the fit model: it undoes the Standard rendering of an sRGB input, then renders the result with the effect.
 An effect equal to Standard maps each input to itself. The preview assumes that the input is a Standard JPEG. The long highlight shoulder of the base gamma can exaggerate the change of other bright, saturated colors.
 
+## Cameras
+
+GR IIIx 1.60 runs the RTOS code of GR III 2.10. The two RTOS images have the same size and layout. They differ only in the model name, the version, the build time, the default year, the ModeSet numbers, and one byte of the model selection.
+None of these bytes is a patch site or a firmware input of GRKit. A runtime built from either firmware is therefore byte-identical, and both cameras run the `gr3-2.10` runtime.
+
+The cameras differ in the ModeSet file that enables SD scripts: `00078350.588` on GR III and `00078490.609` on GR IIIx. `grkit_core::camera` lists both.
+A package holds the ModeSet file of one camera, and its installation guide names that camera and file. `grkit verify` identifies the camera from that file.
+
 Native sources live under `runtime/`, and package documents live under `resources/`. The CLI embeds both, so it works outside the checkout.
 Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C tests check the GRF parser, the effect catalog, the menu, and Framing.
 

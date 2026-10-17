@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MODESET_TOKEN } from './cameras';
 import { matchLanguage, STRINGS } from './i18n';
 
 describe('matchLanguage', () => {
@@ -26,5 +27,12 @@ describe('STRINGS', () => {
     });
     expect(shape('zh-Hans')).toEqual(shape('en'));
     expect(shape('zh-Hant')).toEqual(shape('en'));
+  });
+
+  it('names the ModeSet file through the camera token once in each language', () => {
+    for (const language of Object.keys(STRINGS) as (keyof typeof STRINGS)[]) {
+      const parts = STRINGS[language].steps.flat();
+      expect(parts.filter((part) => part === MODESET_TOKEN)).toHaveLength(1);
+    }
   });
 });

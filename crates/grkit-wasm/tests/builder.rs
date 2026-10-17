@@ -80,6 +80,22 @@ fn hidden_modules_are_written_and_checked() {
 }
 
 #[test]
+fn the_camera_selects_the_modeset_file() {
+    let mut builder = builder_with_runtime(&runtime_files());
+    assert!(error(builder.set_camera("gr4")).contains("Unknown camera"));
+    builder.set_camera("gr3x").unwrap();
+    let package = builder.build().unwrap();
+    let verified = packaging::verify_package(&package).unwrap();
+    assert_eq!(verified["camera"], "gr3x");
+    builder.set_camera("gr3").unwrap();
+    let package = builder.build().unwrap();
+    assert_eq!(
+        packaging::verify_package(&package).unwrap()["camera"],
+        "gr3"
+    );
+}
+
+#[test]
 fn missing_or_changed_runtime_files_are_rejected() {
     let files = runtime_files();
     let mut missing = Builder::new(&manifest(&files)).unwrap();

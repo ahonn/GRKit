@@ -5,7 +5,12 @@
 //! `Builder` holds the logic so that native tests cover it. `Package` only adapts it for JS.
 
 use anyhow::{ensure, Context, Result};
-use grkit_core::{effects, modules::Hidden, packaging, runtime, Files};
+use grkit_core::{
+    camera::{self, Camera},
+    effects,
+    modules::Hidden,
+    packaging, runtime, Files,
+};
 use wasm_bindgen::prelude::*;
 
 /// Collects one runtime build and a set of compiled effects, then assembles the package.
@@ -15,6 +20,7 @@ pub struct Builder {
     runtime: Files,
     effects: Files,
     hidden: Vec<String>,
+    camera: &'static Camera,
 }
 
 impl Builder {
@@ -38,6 +44,7 @@ impl Builder {
             runtime: Files::new(),
             effects: Files::new(),
             hidden: Vec::new(),
+            camera: &camera::GR3,
         })
     }
 
@@ -91,11 +98,17 @@ impl Builder {
         Ok(())
     }
 
+    /// Selects the camera: `gr3` (the default) or `gr3x`. The package gets its ModeSet file.
+    pub fn set_camera(&mut self, id: &str) -> Result<()> {
+        self.camera = camera::find(id)?;
+        Ok(())
+    }
+
     /// Verifies the runtime against its manifest and returns the verified package ZIP.
     pub fn build(&self) -> Result<Vec<u8>> {
         let (runtime, manifest) = packaging::load_runtime(&self.manifest, &self.runtime)?;
         let hidden = Hidden::from_names(self.hidden.iter().map(String::as_str))?;
-        packaging::assemble(&runtime, &manifest, &self.effects, hidden)
+        packaging::assemble(&runtime, &manifest, &self.effects, hidden, self.camera)
     }
 }
 
@@ -135,6 +148,12 @@ impl Package {
     #[wasm_bindgen(js_name = hideModule)]
     pub fn hide_module(&mut self, name: &str) -> Result<(), JsError> {
         self.0.hide_module(name).map_err(js_error)
+    }
+
+    /// Selects the camera: `gr3` (the default) or `gr3x`.
+    #[wasm_bindgen(js_name = setCamera)]
+    pub fn set_camera(&mut self, id: &str) -> Result<(), JsError> {
+        self.0.set_camera(id).map_err(js_error)
     }
 
     /// Returns the verified package as ZIP bytes.

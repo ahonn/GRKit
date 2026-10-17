@@ -1,5 +1,5 @@
 import { Suspense, useRef, useState } from 'react';
-import { CAMERAS } from './cameras';
+import { CAMERAS, MODESET_TOKEN } from './cameras';
 import { loadCatalog } from './catalog';
 import { EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -69,7 +69,7 @@ export function App() {
       const effects = plan.includeEffects
         ? catalog.effects.filter((effect) => selection.has(effect.id))
         : [];
-      const blob = await buildPackage(support.target, effects, plan.hidden);
+      const blob = await buildPackage(support.target, camera.id, effects, plan.hidden);
       if (run === buildRun.current) {
         save(blob, 'GRKit.zip');
         setBuild({ state: 'ready' });
@@ -229,7 +229,11 @@ export function App() {
           <ol className="steps">
             {t.steps.map((parts, index) => (
               <li key={index}>
-                <RichText parts={parts} />
+                <RichText
+                  parts={parts.map((part) =>
+                    part === MODESET_TOKEN ? `\`${support?.modeset ?? ''}` : part,
+                  )}
+                />
               </li>
             ))}
           </ol>

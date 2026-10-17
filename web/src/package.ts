@@ -15,11 +15,12 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 
 /**
  * Builds GRKit.zip in the browser from the target's published runtime and the selected effects.
- * `hidden` names the modules that the camera menu hides.
+ * `camera` selects the ModeSet file. `hidden` names the modules that the camera menu hides.
  * grkit-wasm checks each runtime file against `build.json` and each effect's format.
  */
 export async function buildPackage(
   target: string,
+  camera: string,
   effects: readonly Effect[],
   hidden: readonly string[],
 ): Promise<Blob> {
@@ -28,6 +29,7 @@ export async function buildPackage(
   const runtime = `runtime/${target}/`;
   const builder = new Package(await fetchBytes(siteUrl(`${runtime}build.json`)));
   try {
+    builder.setCamera(camera);
     const files = await Promise.all(
       builder.runtimePaths().map(async (path) => {
         return [path, await fetchBytes(siteUrl(`${runtime}sd/${path}`))] as const;

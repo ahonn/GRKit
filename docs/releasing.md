@@ -27,8 +27,8 @@ With `firmware_source` set to `auto`, the build uses the backup only if the Rico
 ## Release a version
 
 1. Start the `Release` workflow on `main`.
-2. When the run is complete, download its `device-test` artifact. It contains `GRKit-device-test.zip`, a package with the published runtime and no effects.
-3. Install that package on a camera and test it.
+2. When the run is complete, download its `device-test` artifact. It contains `GRKit-device-test-gr3.zip` and `GRKit-device-test-gr3x.zip`: packages with the published runtime and no effects, one for each camera.
+3. Install the package of each camera that you have, and test it.
 4. If the test passes, start the `Deploy` workflow with the run ID of that `Release` run. The run summary shows the ID.
 
 The release toolchain is LLVM 21 on Ubuntu, not the reference Apple Clang. Test each CI runtime on a camera before you deploy it.

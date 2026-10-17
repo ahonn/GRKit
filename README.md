@@ -1,6 +1,6 @@
 # GRKit
 
-GRKit is an SD-loaded plugin runtime for the RICOH GR III with firmware 2.10. It adds a sixth ADJ entry with four modules:
+GRKit is an SD-loaded plugin runtime for the RICOH GR III with firmware 2.10 and the GR IIIx with firmware 1.60. It adds a sixth ADJ entry with four modules:
 
 - **Image Control**: film effects and custom effects, with a live-view preview.
 - **Framing**: XPan (65:24), 16:9, or 4:3 photos, with a mask in the 3:2 viewfinder.
@@ -11,6 +11,7 @@ A package can leave out modules. The camera menu then shows only the modules in 
 
 > [!WARNING]
 > GRKit is experimental and is not affiliated with Ricoh. It patches the firmware in RAM for the current session and does not write the firmware. Activation enables the camera's persistent SD-script setting. A failure can stop the camera during startup. Read the [recovery guide](resources/RECOVERY.md) before you install GRKit.
+> GR IIIx 1.60 runs the code of GR III 2.10, so it uses the same runtime. GRKit has not been tested on a GR IIIx camera.
 > Other models and firmware versions are not supported. File formats and the package layout can change.
 
 ## Install
@@ -29,6 +30,7 @@ grkit package --build build/runtime --effects build/effects --out dist/GRKit.zip
 grkit verify dist/GRKit.zip
 ```
 
+`grkit package --camera gr3x` makes a package for the GR IIIx. The runtime build is the same, and only the file that enables SD scripts changes.
 `grkit package --hide framing,guides,date-stamp` hides modules. A package without `--effects` has no Image Control.
 
 ## Documentation

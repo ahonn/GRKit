@@ -533,14 +533,20 @@ fn production_scripts_and_activation_match_fixed_contracts() {
     assert!(!files
         .values()
         .any(|data| data.windows(8).any(|part| part == b"--select")));
-    let activation = grkit_core::runtime::activation_files();
-    assert_eq!(activation.len(), 2);
-    assert_eq!(
-        sha256(&activation["00078350.588"]),
-        "94db9a80a0e5c8f6bd8f3fce41aff6b8758f58333193ed48eb0b6db7db76afb3"
-    );
-    assert_eq!(
-        sha256(&activation["DEVELOP.MOD"]),
-        "0d622b3b4e26b183a0434f876f33cf56787c9b37c9b05e850f4be4a15c8ccf2d"
-    );
+    // Each camera gets the same files under its own ModeSet name.
+    for (camera, modeset) in [
+        (&grkit_core::camera::GR3, "00078350.588"),
+        (&grkit_core::camera::GR3X, "00078490.609"),
+    ] {
+        let activation = grkit_core::runtime::activation_files(camera);
+        assert_eq!(activation.len(), 2);
+        assert_eq!(
+            sha256(&activation[modeset]),
+            "94db9a80a0e5c8f6bd8f3fce41aff6b8758f58333193ed48eb0b6db7db76afb3"
+        );
+        assert_eq!(
+            sha256(&activation["DEVELOP.MOD"]),
+            "0d622b3b4e26b183a0434f876f33cf56787c9b37c9b05e850f4be4a15c8ccf2d"
+        );
+    }
 }

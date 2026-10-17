@@ -287,6 +287,40 @@ fn package_roundtrip_and_output_ownership() {
 }
 
 #[test]
+fn package_targets_the_selected_camera() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (build, effects) = fixture(tmp.path());
+    let zip = tmp.path().join("gr3x.zip");
+    let packaged = success(&[
+        "package",
+        "--build",
+        text(&build),
+        "--effects",
+        text(&effects),
+        "--camera",
+        "gr3x",
+        "--out",
+        text(&zip),
+    ]);
+    assert_eq!(packaged["camera"], "gr3x");
+    let verified = success(&["verify", text(&zip)]);
+    assert_eq!(verified["camera"], "gr3x");
+    assert_eq!(verified["target"], "gr3-2.10");
+    let rejected = tmp.path().join("gr4.zip");
+    let output = run(&[
+        "package",
+        "--build",
+        text(&build),
+        "--camera",
+        "gr4",
+        "--out",
+        text(&rejected),
+    ]);
+    assert!(!output.status.success());
+    assert!(!rejected.exists());
+}
+
+#[test]
 fn package_hides_modules_and_may_omit_effects() {
     let tmp = tempfile::tempdir().unwrap();
     let (build, effects) = fixture(tmp.path());

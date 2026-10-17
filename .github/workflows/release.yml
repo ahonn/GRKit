@@ -1,7 +1,7 @@
 name: Release
 
-# Manual release build. It makes the site from the official firmware and uploads it with a
-# device-test package. After a device test, the Deploy workflow publishes this run's site.
+# Manual release build. It makes the site from the official firmware and uploads it with
+# device-test packages. After a device test, the Deploy workflow publishes this run's site.
 on:
   workflow_dispatch:
     inputs:
@@ -103,9 +103,11 @@ jobs:
       - name: Package the published runtime for device testing
         run: |
           mkdir "$RUNNER_TEMP/no-effects"
-          target/release/grkit package --build site/runtime/gr3-2.10 \
-            --effects "$RUNNER_TEMP/no-effects" --out GRKit-device-test.zip
-          target/release/grkit verify GRKit-device-test.zip
+          for camera in gr3 gr3x; do
+            target/release/grkit package --build site/runtime/gr3-2.10 --camera "$camera" \
+              --effects "$RUNNER_TEMP/no-effects" --out "GRKit-device-test-$camera.zip"
+            target/release/grkit verify "GRKit-device-test-$camera.zip"
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: site
@@ -114,11 +116,11 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: device-test
-          path: GRKit-device-test.zip
+          path: GRKit-device-test-*.zip
           if-no-files-found: error
       - name: Summary
         run: |
           {
-            echo "Test \`GRKit-device-test.zip\` from the \`device-test\` artifact on a camera."
+            echo "Test the packages of the \`device-test\` artifact on a camera."
             echo "If it passes, start the Deploy workflow with run ID \`$GITHUB_RUN_ID\`."
           } >> "$GITHUB_STEP_SUMMARY"

@@ -55,6 +55,9 @@ enum Command {
         /// Modules that the camera menu hides: framing, guides, date-stamp.
         #[arg(long, value_delimiter = ',')]
         hide: Vec<String>,
+        /// The camera that the package enables SD scripts on.
+        #[arg(long, default_value = "gr3", value_parser = grkit_core::camera::CAMERAS.map(|camera| camera.id))]
+        camera: String,
         #[arg(long)]
         out: PathBuf,
     },
@@ -207,6 +210,7 @@ fn run(command: Command) -> Result<Value> {
             build,
             effects,
             hide,
+            camera,
             out,
         } => {
             let (runtime, manifest) = storage::load_build(&build)?;
@@ -215,19 +219,24 @@ fn run(command: Command) -> Result<Value> {
                 None => Files::new(),
             };
             let hidden = Hidden::from_names(hide.iter().map(String::as_str))?;
-            let bytes = packaging::assemble(&runtime, &manifest, &effects, hidden)?;
+            let camera = grkit_core::camera::find(&camera)?;
+            let bytes = packaging::assemble(&runtime, &manifest, &effects, hidden, camera)?;
             let verified = packaging::verify_package(&bytes)?;
             storage::write_new(&out, &bytes)?;
-            Ok(json!({"path": out, "sha256": packaging::sha256(&bytes),
-                "entries": verified["entries"], "hidden_modules": verified["hidden_modules"]}))
+            Ok(
+                json!({"path": out, "sha256": packaging::sha256(&bytes), "camera": verified["camera"],
+                "entries": verified["entries"], "hidden_modules": verified["hidden_modules"]}),
+            )
         }
         Command::Verify { archive } => {
             // Include room for ZIP metadata while bounding the archive read itself.
             let bytes = storage::read_bounded(&archive, 64 * 1024 * 1024)?;
             let verified = packaging::verify_package(&bytes)?;
-            Ok(json!({"valid": true, "target": verified["target"],
+            Ok(
+                json!({"valid": true, "camera": verified["camera"], "target": verified["target"],
                 "effects": verified["effect_ids"].as_array().map_or(0, Vec::len),
-                "hidden_modules": verified["hidden_modules"]}))
+                "hidden_modules": verified["hidden_modules"]}),
+            )
         }
         Command::Site { build, out } => {
             let (target, files) = storage::export_runtime(&build, &out)?;

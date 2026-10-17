@@ -3,7 +3,7 @@
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
 
-use crate::Files;
+use crate::{camera::Camera, Files};
 
 pub const HEADER_SIZE: usize = 256;
 pub const RECORD_SIZE: usize = 0x740;
@@ -53,9 +53,10 @@ pub fn layout(count: usize) -> Result<Value> {
     )
 }
 
-pub fn activation_files() -> Files {
+/// The files that enable SD scripts when the camera starts with MENU held.
+pub fn activation_files(camera: &Camera) -> Files {
     Files::from([
-        ("00078350.588".into(), b"[SCRIPT_EN_MODE EN]\r\n".to_vec()),
+        (camera.modeset.into(), b"[SCRIPT_EN_MODE EN]\r\n".to_vec()),
         (
             "DEVELOP.MOD".into(),
             vec![7, 1, 44, 31, 16, 3, 30, 22, 5, 45],
