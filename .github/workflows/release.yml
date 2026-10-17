@@ -21,7 +21,7 @@ concurrency:
 env:
   FIRMWARE_URL: https://www.ricoh-imaging.co.jp/resources/japan/support/download/digital/FIRMWARE/gr3_v210.zip
   FIRMWARE_ZIP_SHA256: e895b439e4b3b96ac04f50072f02a63061ec7de5dcc1b070890baa09bc659470
-  # A private repository holds the same zip as a release asset. See CONTRIBUTING.md.
+  # A private repository holds the same zip as a release asset. See docs/releasing.md.
   FIRMWARE_BACKUP_REPO: ${{ vars.FIRMWARE_BACKUP_REPO }}
   FIRMWARE_BACKUP_TAG: gr3-2.10
   LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421

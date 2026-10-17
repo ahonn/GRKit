@@ -37,4 +37,4 @@ at base-gamma index 7.8.
 
 Icon text uses the Inter typeface (SIL Open Font License 1.1, see
 `crates/grkit-core/assets/Inter-LICENSE.txt`). Icons use no manufacturer logo.
-These statements do not set a license for project code or artwork.
+The project code is licensed under the MIT License (see `LICENSE` at the repository root).

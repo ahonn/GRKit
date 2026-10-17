@@ -48,7 +48,7 @@ The site and the release packages publish every effect in this directory:
 | Aerocolor IV | `aerocolor-iv-v1` | Kodak Aerocolor IV 2460 aerial negative on Portra Endura paper |
 | EXR 200T | `exr-200t-2383-v1` | Kodak EXR 200T 5293 on Vision 2383 print film |
 
-Each effect is a fit of one film simulation LUT. Their menu names are the names of the simulated films. They identify the materials, not an endorsement. [NOTICE.md](NOTICE.md) has the disclaimer.
+Each effect is a fit of one film simulation LUT. Their menu names are the names of the simulated films. [NOTICE.md](NOTICE.md) gives the attribution, the licenses, and the trademark notice.
 
 The first eleven LUTs come from [spektrafilm](https://github.com/andreavolpato/spektrafilm) 0.3.4. The other five come from [Spectral Film LUT](https://github.com/JanLohse/spectral_film_lut). `sources/` holds the scripts that bake each LUT, the upstream notices, and `manifest.json`, which records the SHA-256 of each LUT. The LUTs themselves are not in the repository.
 
@@ -61,8 +61,6 @@ To refit an effect:
 5. Copy `license`, `target`, and `generator` from the old `attribution`.
 
 The two monochrome fits have identical matrix rows and curves. Set `flags` to 1 for them.
-
-Attribution and licenses are in [NOTICE.md](NOTICE.md). The installation guide in each package links to it.
 
 ## Processing domain
 
@@ -96,7 +94,7 @@ If `OUT/ID` exists, the command stops and writes nothing.
 The command checks the ID, name, label, and shape before the fit. Labels have one to four capitals or digits.
 The command checks the firmware SHA-256 and the shape of the base gamma table. If a check fails, the command stops.
 
-The fit follows `cube_fit.py`, `joint_fit.py`, and `lab_fit.py` of gr3-film-mods (MIT):
+The fit follows `cube_fit.py`, `joint_fit.py`, and `lab_fit.py` of [gr3-film-mods](https://github.com/idontknownihil/gr3-film-mods) ([MIT](../crates/grkit-core/GR3_FILM_MODS_LICENSE.txt)):
 
 - The model is `Curve_c(BaseGamma(K (M L)_c)) / 16384`, then the post matrix `P` on the gamma-encoded result.
 - `BaseGamma` is the still-path Standard base gamma from the firmware. `K` puts 18% gray at base-gamma index 7.8. This index is an assumption.

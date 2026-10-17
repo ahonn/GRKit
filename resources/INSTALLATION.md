@@ -51,4 +51,4 @@ If normal startup freezes, try normal power-off first. If the camera remains unr
 Remove the card, reinsert the battery, and restart without the card.
 Do not interrupt an official firmware update. If startup still fails, see the [recovery guide](https://github.com/ahonn/GRKit/blob/main/resources/RECOVERY.md).
 
-Private test build. Software and artwork distribution terms remain undecided. Effect attribution and licenses: https://github.com/ahonn/GRKit/blob/main/effects/NOTICE.md
+GRKit is not affiliated with Ricoh. Source code and license: https://github.com/ahonn/GRKit. Effect attribution and licenses: https://github.com/ahonn/GRKit/blob/main/effects/NOTICE.md

@@ -1,7 +1,8 @@
 //! Fit of a target look, such as a `.cube` LUT, to the camera model of GRKit effects.
 //!
-//! The model and the fitting approach are ported from gr3-film-mods (MIT): `cube_fit.py`,
-//! `joint_fit.py`, and `lab_fit.py`, FINDINGS §11-§13 and §22l-§22m. For scene-linear RGB `L`:
+//! The model and the fitting approach are ported from gr3-film-mods (MIT, see
+//! `GR3_FILM_MODS_LICENSE.txt`): `cube_fit.py`, `joint_fit.py`, and `lab_fit.py`, FINDINGS
+//! §11-§13 and §22l-§22m. For scene-linear RGB `L`:
 //!
 //!   code_c = Curve_c(BaseGamma(K (M L)_c)) / 16384,   display = clip(P code, 0, 1)
 //!

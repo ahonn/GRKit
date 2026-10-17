@@ -156,11 +156,11 @@ Bytes 84..127 of a GRFX0001 file hold an optional extension.
 It holds u32 features at 84, an i16[9] signed Q13 post matrix at 88 (bit 1), and selective color parameters at 106 (bit 2). Bytes 120..127 are reserved and zero.
 Each feature bit owns its field, and a field without its bit stays zero. A monochrome effect has no features.
 
-An effect without features has zeros in the whole extension. Bit 4 belonged to the removed soft glow. The parsers reject it.
+An effect without features has zeros in the whole extension. Bit 4 is reserved, and the parsers reject it.
 
 The installer copies the extension to record `+0x700`: features at `+0x700`, the post matrix at `+0x704`, and selective color at `+0x716`. Records are 0x740 bytes.
 
-The processing region has little room left, so the extension hooks link into the Framing region (`runtime/picture.*`). The live-view diff hook moved there too.
+The processing region has little room left, so the extension hooks and the live-view diff hook link into the Framing region (`runtime/picture.*`).
 
 ### Post matrix
 
@@ -230,5 +230,3 @@ Picture code divides with its own shift-subtract routine, once per picture for e
 The Framing range follows the decoded RTOS image, which ends at `0x540b55c0`. The RTOS maps it read-only and executable up to `0x55000000`, and no firmware code refers to it.
 BOOT loads only the image, so the range can keep the previous session's code after a restart. The installer therefore overwrites it without a stock-byte check.
 All other patches keep that check. The builder rejects overflow, occupied reservations, changed hook instructions, and overlapping patches.
-
-Cache synchronization and camera task lifetimes need device testing whenever their implementation changes.
