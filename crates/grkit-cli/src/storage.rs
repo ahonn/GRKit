@@ -58,9 +58,9 @@ fn basename(path: &Path) -> Result<&str> {
         .context("Expected a UTF-8 filename")
 }
 
-pub fn compile_directory(source: &Path) -> Result<Files> {
-    let mut files = Files::new();
-    let mut ids = BTreeSet::new();
+/// Reads each `ID/effect.json` under `source`. Each directory name must match its effect ID.
+pub fn read_definitions(source: &Path) -> Result<Vec<Value>> {
+    let mut definitions = Vec::new();
     for directory in directory_entries(source)? {
         let metadata = fs::symlink_metadata(&directory)?;
         ensure!(
@@ -75,7 +75,6 @@ pub fn compile_directory(source: &Path) -> Result<Files> {
             continue;
         }
         let definition = effects::parse_json(&read_regular(&path)?)?;
-        let blob = effects::compile_definition(&definition)?;
         let id = definition["effect_id"]
             .as_str()
             .context("Expected an effect ID")?;
@@ -83,6 +82,17 @@ pub fn compile_directory(source: &Path) -> Result<Files> {
             basename(&directory)? == id,
             "Effect directory must match its stable ID"
         );
+        definitions.push(definition);
+    }
+    Ok(definitions)
+}
+
+pub fn compile_directory(source: &Path) -> Result<Files> {
+    let mut files = Files::new();
+    let mut ids = BTreeSet::new();
+    for definition in read_definitions(source)? {
+        let blob = effects::compile_definition(&definition)?;
+        let id = definition["effect_id"].as_str().unwrap();
         let name = effects::filename(id)?;
         ensure!(
             ids.insert(id.to_owned()) && !files.contains_key(&name),

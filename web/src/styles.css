@@ -1,0 +1,645 @@
+:root {
+  --ink: #0b0b0b;
+  --ink-2: #2b2b2b;
+  --muted: #545454;
+  --line: #d4d4d4;
+  --paper: #ffffff;
+  --accent: #c2410c;
+  --selected: #fbf3ee;
+  --code: #f2f2f2;
+  --cjk: 'Noto Sans SC';
+  --body: 'IBM Plex Sans', var(--cjk), sans-serif;
+  --display: 'IBM Plex Sans Condensed', var(--cjk), sans-serif;
+  --mono: 'IBM Plex Mono', var(--cjk), monospace;
+  color-scheme: light;
+}
+
+:root[lang='zh-Hant'] {
+  --cjk: 'Noto Sans TC';
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  -webkit-text-size-adjust: 100%;
+}
+
+a {
+  color: var(--ink);
+}
+
+a:hover {
+  color: var(--accent);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px clamp(16px, 4vw, 56px) 64px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Buttons */
+
+.button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.button.small {
+  min-height: 40px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.download {
+  min-height: 60px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 22px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.download:disabled {
+  background: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.download[aria-busy='true'] {
+  cursor: progress;
+}
+
+/* Header */
+
+.languages {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 24px;
+}
+
+.languages > div {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--ink);
+}
+
+.languages .button {
+  border: 0;
+}
+
+.languages .button:lang(en) {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+.languages .button:lang(zh-Hans) {
+  font-family: 'Noto Sans SC', sans-serif;
+}
+
+.languages .button:lang(zh-Hant) {
+  font-family: 'Noto Sans TC', sans-serif;
+}
+
+.masthead {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 32px;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-family: 'IBM Plex Sans Condensed', sans-serif;
+  font-weight: 700;
+  font-size: clamp(64px, 10vw, 140px);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+}
+
+.masthead p {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.6;
+  max-width: 560px;
+}
+
+/* Sections */
+
+.section {
+  border-top: 2px solid var(--ink);
+  padding: 28px 0 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.section > h2 {
+  margin: 0;
+  flex: 0 0 200px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 26px;
+}
+
+.section-body {
+  flex: 999 1 640px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.status {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.status.error {
+  color: #9a3412;
+}
+
+/* Camera */
+
+.cameras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.camera {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 16px;
+  border: 1px solid var(--ink);
+  cursor: pointer;
+}
+
+.camera:has(input:checked) {
+  padding: 15px;
+  border: 2px solid var(--accent);
+}
+
+.camera:has(input:disabled) {
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.camera input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.camera-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.camera-name {
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.camera-firmware {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.badge {
+  align-self: flex-start;
+  font-size: 12px;
+  padding: 2px 8px;
+  background: var(--paper);
+  color: var(--ink-2);
+  border: 1px dashed var(--muted);
+}
+
+.badge.supported {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+/* Effect preview */
+
+.preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.viewer {
+  flex: 1 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.frame {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  background: #c9c4ba;
+  overflow: hidden;
+}
+
+.frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.frame-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.frame[aria-busy='true'] .after {
+  opacity: 0.6;
+}
+
+.after {
+  position: absolute;
+  inset: 0;
+  transition: opacity 120ms;
+}
+
+.divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px rgba(11, 11, 11, 0.35);
+}
+
+.tag {
+  position: absolute;
+  top: 10px;
+  background: rgba(11, 11, 11, 0.78);
+  color: var(--paper);
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.tag.left {
+  left: 10px;
+}
+
+.tag.right {
+  right: 10px;
+}
+
+.compare {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.compare input {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.preview-side {
+  flex: 0 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.previewing {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 26px;
+}
+
+.choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.upload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px solid var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.upload:has(+ input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Effect table */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.toolbar p {
+  margin: 0;
+  font-size: 16px;
+}
+
+.toolbar .count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.toolbar > div {
+  display: flex;
+  gap: 8px;
+}
+
+.table-box {
+  /* Keeps the hidden header text inside the scroll box. */
+  position: relative;
+  overflow-x: auto;
+  border-top: 1px solid var(--ink);
+}
+
+table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th {
+  padding: 10px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: left;
+}
+
+td {
+  padding: 14px 8px;
+  vertical-align: middle;
+  line-height: 1.5;
+}
+
+tbody tr {
+  border-bottom: 1px solid var(--line);
+}
+
+tbody tr:has(input:checked) {
+  background: var(--selected);
+}
+
+td input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.effect-name {
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.effect-icon {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.effect-icon.filter {
+  border-radius: 50%;
+}
+
+.effect-icon.film::before,
+.effect-icon.film::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  border-top: 3px dotted var(--ink);
+}
+
+.effect-icon.film::before {
+  top: 3px;
+}
+
+.effect-icon.film::after {
+  bottom: 3px;
+}
+
+/* Modules, package, install */
+
+.modules {
+  flex: 999 1 640px;
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0 32px;
+}
+
+.modules > div {
+  border-bottom: 1px solid var(--line);
+  padding: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modules dt {
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.modules dd {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.package {
+  flex: 999 1 640px;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: flex-start;
+}
+
+.package dl {
+  flex: 1 1 320px;
+  margin: 0;
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  row-gap: 10px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.package dt {
+  color: var(--muted);
+}
+
+.package dd {
+  margin: 0;
+}
+
+.package .package-note {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.package-action {
+  flex: 0 1 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.steps {
+  flex: 999 1 640px;
+  min-width: 0;
+  margin: 0;
+  padding-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 14px;
+  background: var(--code);
+  padding: 1px 5px;
+}
+
+.footer {
+  border-top: 1px solid var(--ink);
+  padding-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.footer p {
+  margin: 0;
+}
+
+.footer div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}

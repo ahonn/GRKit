@@ -4,7 +4,7 @@ mod storage;
 
 use anyhow::{ensure, Context, Result};
 use clap::{Parser, Subcommand};
-use grkit_core::{effects, fit, packaging, Files};
+use grkit_core::{effects, fit, packaging, site, Files};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
@@ -73,6 +73,16 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Write effects, preview tables, and their catalog into a new site directory.
+    Publish {
+        #[arg(long)]
+        source: PathBuf,
+        /// Official GR III 2.10 firmware, the source of the Standard base gamma.
+        #[arg(long)]
+        firmware: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Fit a .cube LUT into a new effect definition at OUT/ID/effect.json.
     Import {
         #[arg(long)]
@@ -126,6 +136,22 @@ fn run(command: Command) -> Result<Value> {
             storage::validate_output(&out)?;
             storage::write_directory(&out, &compiled)?;
             Ok(json!({"output": out, "effects": compiled.len()}))
+        }
+        Command::Effects {
+            command:
+                EffectsCommand::Publish {
+                    source,
+                    firmware,
+                    out,
+                },
+        } => {
+            let definitions = storage::read_definitions(&source)?;
+            storage::validate_output(&out)?;
+            let image = grkit_build::verify_firmware(&firmware)?;
+            let base_gamma = grkit_build::firmware::standard_base_gamma(&image)?;
+            let files = site::publish_effects(&definitions, &base_gamma)?;
+            storage::write_directory(&out, &files)?;
+            Ok(json!({"output": out, "target": site::TARGET, "effects": definitions.len()}))
         }
         Command::Effects {
             command:

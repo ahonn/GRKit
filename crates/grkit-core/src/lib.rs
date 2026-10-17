@@ -6,6 +6,7 @@ pub mod effects;
 pub mod fit;
 pub mod packaging;
 pub mod runtime;
+pub mod site;
 
 pub type Files = std::collections::BTreeMap<String, Vec<u8>>;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

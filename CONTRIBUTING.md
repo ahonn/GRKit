@@ -37,10 +37,11 @@ GRKIT_TEST_FIRMWARE="$PWD/firmware/fwdc239b.bin" GRKIT_CLANG=clang GRKIT_LLD=ld.
 
 Two manual workflows publish the site to Cloudflare Pages:
 
-- `Release` builds the site. It downloads the official firmware, checks its SHA-256, and builds the runtime with LLVM 21. Then it deletes the firmware.
+- `Release` builds the site. It downloads the official firmware, checks its SHA-256, builds the runtime with LLVM 21, and publishes the effects in `effects/` with their preview tables. Then it deletes the firmware. It also builds the web page in `web/`.
 - `Deploy` publishes the site artifact of one successful `Release` run on `main`. To start `Deploy` is the approval step, so the deployed bytes are the tested bytes.
 
 `grkit site` writes only `build.json` and `sd/` to `site/runtime/gr3-2.10/`. The `objects/` directory stays out, because its generated header holds firmware bytes.
+`grkit effects publish` writes `catalog.json`, the `.GRF` files, and `preview/<id>.lut` to `site/effects/gr3-2.10/`. The web build adds `index.html`, `assets/`, and `_headers`.
 Required reviewers for environments are not available for this private repository on its plan, so the approval is a separate workflow.
 
 Set up the release one time:

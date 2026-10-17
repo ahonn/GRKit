@@ -563,3 +563,62 @@ fn site_export_rejects_changed_runtime_files() {
     assert!(String::from_utf8_lossy(&result.stderr).contains("Runtime hash or size mismatch"));
     assert!(!site.exists());
 }
+
+#[test]
+fn effect_publish_rejects_unknown_firmware_before_writing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let firmware = tmp.path().join("fwdc239b.bin");
+    fs::write(&firmware, b"not firmware").unwrap();
+    let out = tmp.path().join("site/effects/gr3-2.10");
+    let output = run(&[
+        "effects",
+        "publish",
+        "--source",
+        text(&source()),
+        "--firmware",
+        text(&firmware),
+        "--out",
+        text(&out),
+    ]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("does not match GR III 2.10"));
+    assert!(!out.exists());
+}
+
+/// End to end with the official firmware, which the repository cannot contain.
+#[test]
+fn effect_publish_writes_the_site_catalog() {
+    let Ok(firmware) = std::env::var("GRKIT_TEST_FIRMWARE") else {
+        eprintln!("SKIPPED effect publish: set GRKIT_TEST_FIRMWARE to GR III 2.10 firmware");
+        return;
+    };
+    let tmp = tempfile::tempdir().unwrap();
+    let out = tmp.path().join("site/effects/gr3-2.10");
+    let effects_source = source();
+    let args = [
+        "effects",
+        "publish",
+        "--source",
+        text(&effects_source),
+        "--firmware",
+        &firmware,
+        "--out",
+        text(&out),
+    ];
+    let result = success(&args);
+    assert_eq!(result["target"], "gr3-2.10");
+    assert_eq!(result["effects"], 5);
+    let catalog = effects::parse_json(&fs::read(out.join("catalog.json")).unwrap()).unwrap();
+    let compiled = tmp.path().join("compiled");
+    compile(&source(), &compiled);
+    for entry in catalog["effects"].as_array().unwrap() {
+        let file = entry["file"].as_str().unwrap();
+        assert_eq!(
+            fs::read(out.join(file)).unwrap(),
+            fs::read(compiled.join(file)).unwrap()
+        );
+        let preview = fs::read(out.join(entry["preview"].as_str().unwrap())).unwrap();
+        assert_eq!(preview.len(), 33 * 33 * 33 * 3);
+    }
+    assert!(!run(&args).status.success(), "an existing output is kept");
+}
