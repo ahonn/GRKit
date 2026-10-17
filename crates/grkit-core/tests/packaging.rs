@@ -276,11 +276,11 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 20);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": 35408, "icon_words": [25632]})
+        json!({"words": 40813, "icon_words": [25632]})
     );
     assert_eq!(
         runtime::layout(20).unwrap(),
-        json!({"words": 44688, "icon_words": [57672]})
+        json!({"words": 50093, "icon_words": [57672]})
     );
     assert!(runtime::layout(21).is_err());
 }
@@ -296,7 +296,8 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
             .iter()
             .map(|v| v.as_u64().unwrap() as usize)
             .collect();
-        assert_eq!(words * 4, 256 + count * 0x740 + 376 * 376, "count {count}");
+        // Glow map, then the live-view overlay: five state words and 180 x 120 cells.
+        assert_eq!(words * 4, 256 + count * 0x740 + 376 * 376 + 20 + 180 * 120, "count {count}");
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
             (count + 16) * 6408,

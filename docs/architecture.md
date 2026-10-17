@@ -28,7 +28,7 @@ With more than 20 effects, the installer keeps the 20 smallest effect IDs.
 For a duplicate ID, the file with the smallest name wins. The result does not depend on directory order. Directory read errors stop the installation.
 
 The 20-effect capacity is a product limit, not a GRF format limit. It fits one script array and one icon chunk.
-The script array holds the header, the records, and the 141,376-byte soft-glow map (376 x 376 cells).
+The script array holds the header, the records, the 141,376-byte soft-glow map (376 x 376 cells), and the 21,620-byte live-view glow overlay.
 Off, GRKit, and the fourteen module tiles (four Framing, five Guides, five Date Stamp) use sixteen host icon records outside that capacity.
 The module tiles are contiguous, and the menu derives each one from the first Framing tile.
 
@@ -169,8 +169,28 @@ An effect's glow lifts the halo of highlights toward white and moves its chroma 
 The hook samples Y above 200 into a map of at most 376 cells per side. Three box passes per axis spread it, and bilinear weights blend it back.
 Cells without glow around them are skipped.
 
-Glow uses the record of the last still build, so it applies to the picture that the build developed. It does not reach the live view or RAW files.
+Glow uses the record of the last still build, so it applies to the picture that the build developed. It does not reach RAW files. The viewfinder shows an approximation (see [Live-view glow](#live-view-glow)).
 Its time on a camera is not measured. Bright scenes take longest.
+
+### Live-view glow
+
+The live-view pipe has no spatial filter that can spread light. The viewfinder therefore draws an approximation on the still OSD canvas, below the Framing mask and the guides.
+
+The overlay reads the frame that the LCD main layer shows. The input size is at `0x28904208`, the Y plane at `0x28904210`, and its pitch at `0x28904240`.
+The scaler ratios are at `0x28904404` and `0x28904408`.
+The live view keeps its frames in the 1 GiB pool at `0xa0000000`. The RTOS maps that pool one to one as normal cacheable memory, so the overlay cleans and invalidates the plane before it reads it.
+
+The overlay samples a 180 x 120 map, one cell for each 4 x 4 LCD pixels. It uses the threshold, blur radius, and gain of the photo glow.
+It writes premultiplied white. The native OSD stores premultiplied pixels: no translucent native pixel has a color above its alpha.
+White at alpha a shows Y + (255 - Y) x a, the same lift as the photo. Chroma moves toward neutral by a instead of a / 2.
+
+The still LCD controller updates about 200 times a second. The overlay therefore redraws on the generic timer (CNTPCT and CNTFRQ), eight times a second.
+It redraws while it shows a halo or the frame has a highlight, and it checks the frame once per period. After the glow ends, one more redraw erases the overlay.
+
+The UI task runs in SVC mode. In User mode the overlay stays off, because the timer and the cache maintenance need PL1.
+The overlay has its own map after the photo glow map, because a capture can run while the viewfinder redraws.
+
+The brightness, refresh, and cost of the overlay on a camera are not measured.
 
 ### Date stamp
 

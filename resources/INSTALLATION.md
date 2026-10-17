@@ -31,7 +31,7 @@ GRKit loads a few seconds after power-on. Open ADJ and select the sixth entry, m
 
 GRKit keeps the selected effect, ratio, guide style, and date style in `SCRIPT/PLUGINS/STATE.TXT` and restores them a few seconds after power-on.
 Delete that file to start from Off. Pressing OK on a native Image Control disables the plugin effect.
-Some effects add a soft glow. Photos show it, but the viewfinder does not.
+Some effects add a soft glow. Photos show it. The viewfinder shows an approximation that refreshes eight times a second.
 Playback information shows the plugin effect icon while that effect is installed.
 
 Framing and Guides require the native 3:2 aspect ratio and still shooting. With native 1:1, photos keep 1:1 and the viewfinder shows no mask or guides.

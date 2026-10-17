@@ -37,14 +37,36 @@ static unsigned flushes, native_aspect;
 #define PICTURE_DATE(out) do { uint8_t *d = (uint8_t *)(out); d[0] = 2026 & 255; d[1] = 2026 >> 8; \
     d[2] = 10; d[3] = 17; d[4] = 9; d[5] = 5; } while (0)
 #define PICTURE_NATIVE_ASPECT() native_aspect
-/* Glow map and stamp mask. */
+/* Glow map and stamp mask, then the live-view glow state. */
 #define SCRATCH (ARENA + 0x500000)
 #define PICTURE_SCRATCH(h) ((void)(h), SCRATCH)
 #define PICTURE_MAP(address) ((u8 *)region((address), GRKIT_GLOW_SCRATCH))
+/* LCD main-layer registers, and the live-view overlay in the same arena. */
+static uint32_t lcd[0x500 / 4];
+#define PICTURE_LCD(offset) lcd[(offset) / 4]
+#define PICTURE_LIVE_MAP(address) ((u8 *)region((address), GRKIT_LIVE_GLOW_WIDTH * GRKIT_LIVE_GLOW_HEIGHT))
+#define PICTURE_PIXELS(address) ((volatile u32 *)region((address), 720 * 4))
+/* The camera's 40 MHz generic timer, advanced by the test. */
+static uint32_t counter, timer_frequency = 40000000, privileged = 1;
+#define PICTURE_PRIVILEGED() privileged
+#define PICTURE_COUNTER() counter
+#define PICTURE_FREQUENCY() timer_frequency
 #include "picture.c"
 
 static volatile u32 header[64];
 volatile u32 *framing_header(void) { return header; }
+
+/* Still LCD controller updates at about 200 a second (5 ms apart). Returns the
+   number of redraw requests, and the update index of the first one in `first`. */
+static u32 updates(u32 n, u32 *first)
+{
+    u32 due = 0;
+    for (u32 i = 0; i < n; ++i) {
+        counter += 200000;
+        if (picture_live_due(header)) { if (!due && first) *first = i; ++due; }
+    }
+    return due;
+}
 
 #define RECORDS (ARENA + 0x100)
 #define OBJECT (ARENA + 0x8000)
@@ -338,6 +360,106 @@ int main(void)
     picture_encode(0, MESSAGE);
     for (u32 i = 0; i < 3; ++i) assert(changes(i, 0).lit == 0);
     assert(flushes == 12);
+
+    /* ---- Live-view glow overlay ---- */
+    {
+        /* The camera's live layout: a 1008 x 448 frame scaled 7:5 and 14:15 to 720 x 480. */
+        const u32 frame = PLANES, overlay = ARENA + 0x100000, stride = 736;
+        const u32 state = SCRATCH + GRKIT_GLOW_SCRATCH;
+        volatile u32 *pixel = (volatile u32 *)region(overlay, stride * 480 * 4);
+        reset();
+        assert(state + GRKIT_LIVE_GLOW_SCRATCH <= ARENA + sizeof(arena));
+        lcd[0x208 / 4] = 448U << 16 | 1008; lcd[0x210 / 4] = frame; lcd[0x240 / 4] = 1920;
+        lcd[0x404 / 4] = 0x0705; lcd[0x408 / 4] = 0x0e0f;
+        for (u32 y = 0; y < 448; ++y) for (u32 x = 0; x < 1920; ++x) BYTE(frame, y * 1920 + x) = 40;
+        /* Native processing: no overlay, no schedule, and no frame reads. */
+        flushes = 0;
+        assert(updates(400, 0) == 0);
+        picture_live_paint(header, overlay, stride);
+        assert(flushes == 0 && WORD(state, GRKIT_LIVE_GLOW_DRAWS) == 0 && WORD(state, GRKIT_LIVE_GLOW_TICKS) == 400);
+        for (u32 i = 0; i < stride * 480; ++i) assert(pixel[i] == 0);
+        /* A glow effect on a dark scene stays idle. */
+        header[GRKIT_HOST_LIVE_RECORD / 4] = record(1);
+        WORD(record(1), GRKIT_RECORD_FEATURES) = GRKIT_FEATURE_GLOW;
+        BYTE(record(1), GRKIT_RECORD_GLOW) = 3;
+        assert(picture_live_strength(header) == 3);
+        /* One frame check each 1/8 s, not one each update. */
+        flushes = 0;
+        assert(updates(200, 0) == 0);
+        assert(flushes >= 7 && flushes <= 9);
+        picture_live_paint(header, overlay, stride);
+        assert(!WORD(state, GRKIT_LIVE_GLOW_LIT) && !WORD(state, GRKIT_LIVE_GLOW_DRAWS));
+        for (u32 i = 0; i < stride * 480; ++i) assert(pixel[i] == 0);
+        /* A highlight at input (500..560, 200..260) is LCD (357..400, 214..278).
+           The next scheduled update redraws, and later ones keep the period. */
+        for (u32 y = 200; y < 260; ++y) for (u32 x = 500; x < 560; ++x) BYTE(frame, y * 1920 + x) = 255;
+        u32 first = 999;
+        assert(updates(25, &first) == 1 && first < 25);
+        picture_live_paint(header, overlay, stride);
+        assert(WORD(state, GRKIT_LIVE_GLOW_LIT) == 1 && WORD(state, GRKIT_LIVE_GLOW_DRAWS) == 1);
+        u32 high = pixel[246 * stride + 378] >> 24, painted = 0, peak = 0;
+        for (u32 y = 0; y < 480; ++y) for (u32 x = 0; x < stride; ++x) {
+            u32 v = pixel[y * stride + x], a = v >> 24;
+            /* Premultiplied white: every channel equals alpha, and alpha stays below the gain. */
+            assert(v == a * 0x01010101U && a <= 230);
+            if (a) ++painted;
+            if (a > peak) peak = a;
+            if (x >= 720) assert(v == 0);
+        }
+        assert(high > 100 && high + 2 >= peak);
+        assert(painted > 4000 && painted < 40000);
+        /* The halo reaches past the highlight and fades with distance. */
+        assert(pixel[246 * stride + 330] >> 24 && pixel[246 * stride + 330] >> 24 < pixel[246 * stride + 350] >> 24);
+        assert(pixel[20 * stride + 20] == 0 && pixel[460 * stride + 700] == 0);
+        /* A drawn overlay refreshes eight times a second. */
+        u32 due = updates(600, 0);
+        assert(due >= 23 && due <= 25);
+        /* Lower strengths lift less. */
+        BYTE(record(1), GRKIT_RECORD_GLOW) = 1;
+        for (u32 i = 0; i < stride * 480; ++i) pixel[i] = 0;
+        picture_live_paint(header, overlay, stride);
+        assert((pixel[246 * stride + 378] >> 24) < high);
+        /* An unsupported layout draws nothing and counts a skip. */
+        lcd[0x208 / 4] = 0;
+        for (u32 i = 0; i < stride * 480; ++i) pixel[i] = 0;
+        picture_live_paint(header, overlay, stride);
+        assert(WORD(state, GRKIT_LIVE_GLOW_SKIPS) == 1 && !WORD(state, GRKIT_LIVE_GLOW_LIT));
+        for (u32 i = 0; i < stride * 480; ++i) assert(pixel[i] == 0);
+        lcd[0x208 / 4] = 448U << 16 | 1008;
+        lcd[0x210 / 4] = 0x3ffff000; picture_live_paint(header, overlay, stride);
+        assert(WORD(state, GRKIT_LIVE_GLOW_SKIPS) == 2);
+        lcd[0x210 / 4] = frame; lcd[0x404 / 4] = 0x0700; picture_live_paint(header, overlay, stride);
+        assert(WORD(state, GRKIT_LIVE_GLOW_SKIPS) == 3);
+        lcd[0x404 / 4] = 0x0705;
+        /* After the glow ends, one scheduled redraw erases a drawn overlay. */
+        picture_live_paint(header, overlay, stride);
+        assert(WORD(state, GRKIT_LIVE_GLOW_LIT) == 1);
+        header[GRKIT_HOST_LIVE_RECORD / 4] = 0;
+        first = 999;
+        assert(updates(25, &first) == 1 && first < 25);
+        picture_live_paint(header, overlay, stride);
+        assert(!WORD(state, GRKIT_LIVE_GLOW_LIT));
+        assert(updates(400, 0) == 0);
+        /* In User mode the overlay stays off: no timer, no cache maintenance. */
+        header[GRKIT_HOST_LIVE_RECORD / 4] = record(1);
+        BYTE(record(1), GRKIT_RECORD_GLOW) = 3;
+        privileged = 0; flushes = 0;
+        assert(updates(400, 0) == 0);
+        for (u32 i = 0; i < stride * 480; ++i) pixel[i] = 0;
+        picture_live_paint(header, overlay, stride);
+        assert(flushes == 0 && !WORD(state, GRKIT_LIVE_GLOW_LIT));
+        for (u32 i = 0; i < stride * 480; ++i) assert(pixel[i] == 0);
+        privileged = 1;
+        /* The counter wraps after 107 s at 40 MHz; the schedule keeps working. */
+        counter = 0xffffffffU - 100000;
+        WORD(state, GRKIT_LIVE_GLOW_LAST) = counter - 5000000;
+        picture_live_paint(header, overlay, stride);
+        assert(updates(400, 0) >= 15);
+        /* An invalid strength byte is no glow. */
+        header[GRKIT_HOST_LIVE_RECORD / 4] = record(1);
+        BYTE(record(1), GRKIT_RECORD_GLOW) = 4;
+        assert(picture_live_strength(header) == 0);
+    }
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);
     return 0;

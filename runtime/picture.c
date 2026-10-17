@@ -105,12 +105,18 @@ static void blur_line(u8 *line,u32 step,u32 n,u32 r) {
         }
     }
 }
+/* Glow gain for strength 1 low, 2 medium, and 3 high, in 1/256. */
+static const u8 glow_gains[4]={0,90,154,230};
+/* Highlight of an average luma: 0 up to Y 200, then a ramp that reaches 255 at Y 255. */
+static u32 highlight(u32 average) {
+    u32 v=average>200 ? (average-200)*297>>6 : 0;
+    return v>255 ? 255 : v;
+}
 /* Soft glow: highlights above Y 200 spread into a diffuse halo that lifts Y
    toward white and moves chroma toward neutral, like a mist filter. */
 static void glow(volatile u32 *h,const Plane *p,u32 strength) {
-    static const u8 gains[4]={0,90,154,230};
     u8 *map=PICTURE_MAP(PICTURE_SCRATCH(h));
-    u32 f=1,w,ht,x,y,sx,sy,dx,dy,r,step,gain=gains[strength];
+    u32 f=1,w,ht,x,y,sx,sy,dx,dy,r,step,gain=glow_gains[strength];
     while(p->width>f*GLOW_WIDTH) ++f;
     w=divide(p->width+f-1,f); ht=divide(p->height+f-1,f);
     if(ht>GLOW_WIDTH) return;
@@ -122,9 +128,7 @@ static void glow(volatile u32 *h,const Plane *p,u32 strength) {
             if(py>=p->height) py=p->height-1;
             total+=BYTE(p->y,py*p->pitch+px);
         }
-        total>>=2;
-        total=total>200 ? (total-200)*297>>6 : 0;
-        map[sy*w+sx]=(u8)(total>255 ? 255 : total);
+        map[sy*w+sx]=(u8)highlight(total>>2);
     }
     r=(w*1966)>>16; if(!r) r=1;
     for(sy=0;sy<ht;++sy) blur_line(map+sy*w,1,w,r);
@@ -494,4 +498,148 @@ void picture_encode(u32 process,u32 message) {
         }
     }
     for(i=0;i<count;++i) flush(&planes[i]);
+}
+
+/* ---- Live-view glow overlay -------------------------------------------------
+   The live-view pipe has no spatial filter that can spread light, so the
+   viewfinder approximates the photo glow on the OSD canvas. The native OSD
+   stores premultiplied pixels: no translucent native pixel has a color above
+   its alpha. Premultiplied white at alpha a shows Y + (255 - Y) * a, the same
+   lift as the photo. Chroma moves toward neutral by a, not by a / 2 as in the
+   photo, so the overlay is a little less saturated. */
+#ifndef PICTURE_LCD
+/* LCD display block, main layer: input size (height << 16 | width) at +0x208,
+   the Y plane at +0x210, its pitch at +0x240, and the scaler ratios
+   (input << 8 | output) at +0x404 and +0x408. */
+#define PICTURE_LCD(offset) WORD(0x28904000U,(offset))
+#endif
+#ifndef PICTURE_LIVE
+#define PICTURE_LIVE(h) (PICTURE_SCRATCH(h)+GRKIT_GLOW_SCRATCH)
+#endif
+#ifndef PICTURE_LIVE_MAP
+#define PICTURE_LIVE_MAP(address) ((u8 *)(address))
+#endif
+#ifndef PICTURE_PIXELS
+#define PICTURE_PIXELS(address) ((volatile u32 *)(address))
+#endif
+#ifndef PICTURE_COUNTER
+/* Generic timer, in picture.S: the low word of CNTPCT and CNTFRQ. The still
+   LCD controller updates about 200 times a second, so the overlay redraws on
+   time instead: eight times a second. */
+u32 picture_privileged(void);
+u32 picture_counter(void);
+u32 picture_frequency(void);
+#define PICTURE_PRIVILEGED() picture_privileged()
+#define PICTURE_COUNTER() picture_counter()
+#define PICTURE_FREQUENCY() picture_frequency()
+#endif
+/* Counts between two redraws: 1/8 s, or 1/8 s of the camera's 40 MHz counter
+   if CNTFRQ is not set. */
+static u32 live_period(void) {
+    u32 frequency=PICTURE_FREQUENCY();
+    return frequency ? frequency>>3 : 40000000U>>3;
+}
+#define LIVE_W GRKIT_LIVE_GLOW_WIDTH
+#define LIVE_H GRKIT_LIVE_GLOW_HEIGHT
+#define LIVE_CELL GRKIT_LIVE_GLOW_CELL
+
+typedef struct { u32 y,pitch,width,height,rx,ry; } Live;
+
+/* Glow strength of the effect that the live view shows, or 0. */
+u32 picture_live_strength(volatile u32 *h) {
+    u32 record=h[GRKIT_HOST_LIVE_RECORD/4],strength;
+    if(!(record_features(h,record)&GRKIT_FEATURE_GLOW)) return 0;
+    strength=BYTE(record,GRKIT_RECORD_GLOW);
+    return strength<=3 ? strength : 0;
+}
+/* The frame that the LCD main layer shows, with the LCD-to-input scale in
+   16.16. Returns 0 for a layout that the overlay does not support. */
+static u32 live_frame(Live *f) {
+    u32 size=PICTURE_LCD(0x208),hr=PICTURE_LCD(0x404),vr=PICTURE_LCD(0x408);
+    u32 hin=hr>>8&255,hout=hr&255,vin=vr>>8&255,vout=vr&255;
+    f->width=size&0xffff; f->height=size>>16;
+    f->y=PICTURE_LCD(0x210); f->pitch=PICTURE_LCD(0x240);
+    /* The cache maintenance below needs PL1. */
+    if(!PICTURE_PRIVILEGED() || !hin || !hout || !vin || !vout) return 0;
+    if(f->width<360 || f->height<240 || f->pitch<f->width || f->pitch>4096 || f->height>2048) return 0;
+    /* The RTOS maps both memory pools one to one: one ends at 0x80000000, the
+       other is 1 GiB at 0xa0000000, where the live view keeps its frames. */
+    if(!(f->y>=0x40000000U && f->y<=0x80000000U-f->pitch*f->height) &&
+       !(f->y>=0xa0000000U && f->y<=0xc0000000U-f->pitch*f->height)) return 0;
+    f->rx=divide(hin<<16,hout); f->ry=divide(vin<<16,vout);
+    PICTURE_CACHE_FLUSH(f->y,f->pitch*f->height);
+    return 1;
+}
+/* Luma of the frame under an LCD pixel. */
+static u32 live_luma(const Live *f,u32 x,u32 y) {
+    u32 sx=(x*f->rx)>>16,sy=(y*f->ry)>>16;
+    if(sx>=f->width) sx=f->width-1;
+    if(sy>=f->height) sy=f->height-1;
+    return BYTE(f->y,sy*f->pitch+sx);
+}
+/* One map cell: the highlight of four samples, as the photo glow takes them. */
+static u32 live_cell(const Live *f,u32 cx,u32 cy) {
+    u32 x=cx*LIVE_CELL,y=cy*LIVE_CELL;
+    return highlight((live_luma(f,x+1,y+1)+live_luma(f,x+3,y+1)+
+                      live_luma(f,x+1,y+3)+live_luma(f,x+3,y+3))>>2);
+}
+/* A coarse check for any highlight: one cell in each 4 x 4 block of cells. */
+static u32 live_any(const Live *f) {
+    u32 cx,cy;
+    for(cy=1;cy<LIVE_H;cy+=4) for(cx=1;cx<LIVE_W;cx+=4) if(live_cell(f,cx,cy)) return 1;
+    return 0;
+}
+/* framing_bind calls this for each update of the still LCD controller. It
+   returns 1 when the canvas must redraw: to refresh an overlay, to draw a new
+   highlight, or to erase an overlay after the glow ends. */
+u32 picture_live_due(volatile u32 *h) {
+    u32 state=PICTURE_LIVE(h),lit=WORD(state,GRKIT_LIVE_GLOW_LIT),now;
+    Live f;
+    ++WORD(state,GRKIT_LIVE_GLOW_TICKS);
+    if(!lit && !picture_live_strength(h)) return 0;
+    if(!PICTURE_PRIVILEGED()) return 0;
+    now=PICTURE_COUNTER();
+    if(now-WORD(state,GRKIT_LIVE_GLOW_LAST)<live_period()) return 0;
+    /* One check per period, even when it finds nothing to draw. */
+    WORD(state,GRKIT_LIVE_GLOW_LAST)=now;
+    if(lit) return 1;
+    return live_frame(&f) && live_any(&f);
+}
+/* framing_paint calls this on a cleared 720 x 480 canvas, before the Framing
+   mask and the guides. data 0 means the canvas has no overlay. */
+void picture_live_paint(volatile u32 *h,u32 data,u32 stride) {
+    u32 state=PICTURE_LIVE(h),strength=picture_live_strength(h),gain,lit=0,r,x,y,sx,sy,dx,dy;
+    u8 *map=PICTURE_LIVE_MAP(state+GRKIT_LIVE_GLOW_MAP);
+    Live f;
+    if(!strength || !data) { WORD(state,GRKIT_LIVE_GLOW_LIT)=0; return; }
+    if(!live_frame(&f)) {
+        ++WORD(state,GRKIT_LIVE_GLOW_SKIPS);
+        WORD(state,GRKIT_LIVE_GLOW_LIT)=0;
+        return;
+    }
+    for(sy=0;sy<LIVE_H;++sy) for(sx=0;sx<LIVE_W;++sx) lit|=map[sy*LIVE_W+sx]=(u8)live_cell(&f,sx,sy);
+    WORD(state,GRKIT_LIVE_GLOW_LIT)=lit!=0;
+    if(!lit) return;
+    /* The photo radius: 3% of the map width. */
+    r=(LIVE_W*1966)>>16;
+    for(sy=0;sy<LIVE_H;++sy) blur_line(map+sy*LIVE_W,1,LIVE_W,r);
+    for(sx=0;sx<LIVE_W;++sx) blur_line(map+sx,LIVE_W,LIVE_H,r);
+    gain=glow_gains[strength];
+    for(y=0,sy=0,dy=0;y<480;++y) {
+        volatile u32 *row=PICTURE_PIXELS(data+y*stride*4);
+        u32 ty=dy*(65536/LIVE_CELL),sy1=sy+1<LIVE_H ? sy+1 : sy;
+        for(sx=0,x=0;sx<LIVE_W;++sx,x+=LIVE_CELL) {
+            u32 sx1=sx+1<LIVE_W ? sx+1 : sx;
+            u32 a=map[sy*LIVE_W+sx],b=map[sy*LIVE_W+sx1],c=map[sy1*LIVE_W+sx],d=map[sy1*LIVE_W+sx1];
+            if(!(a|b|c|d)) continue;
+            for(dx=0;dx<LIVE_CELL;++dx) {
+                u32 tx=dx*(65536/LIVE_CELL);
+                u32 g=(((a*(65536-tx)+b*tx)>>16)*(65536-ty)+((c*(65536-tx)+d*tx)>>16)*ty)>>16;
+                u32 alpha=(g*gain)>>8;
+                if(alpha) row[x+dx]=alpha*0x01010101U;
+            }
+        }
+        if(++dy==LIVE_CELL) { dy=0; ++sy; }
+    }
+    ++WORD(state,GRKIT_LIVE_GLOW_DRAWS);
 }
