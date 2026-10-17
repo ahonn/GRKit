@@ -1,0 +1,98 @@
+name: Release
+
+# Manual release build. It makes the site from the official firmware and uploads it with a
+# device-test package. After a device test, the Deploy workflow publishes this run's site.
+on:
+  workflow_dispatch:
+    inputs:
+      firmware_source:
+        description: Firmware source. "auto" uses the private backup only if the Ricoh download fails.
+        type: choice
+        options: [auto, backup]
+        default: auto
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  FIRMWARE_URL: https://www.ricoh-imaging.co.jp/resources/japan/support/download/digital/FIRMWARE/gr3_v210.zip
+  FIRMWARE_ZIP_SHA256: e895b439e4b3b96ac04f50072f02a63061ec7de5dcc1b070890baa09bc659470
+  # A private repository holds the same zip as a release asset. See CONTRIBUTING.md.
+  FIRMWARE_BACKUP_REPO: ${{ vars.FIRMWARE_BACKUP_REPO }}
+  FIRMWARE_BACKUP_TAG: gr3-2.10
+  LLVM_KEY_FINGERPRINT: 6084F3CF814B57C1CF12EFD515CF4D18AF4F7421
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.92.0 --profile minimal
+      - run: rustup default 1.92.0
+      - name: Install LLVM 21
+        run: |
+          curl --fail --location --silent --show-error -o "$RUNNER_TEMP/llvm.asc" https://apt.llvm.org/llvm-snapshot.gpg.key
+          gpg --show-keys --with-colons "$RUNNER_TEMP/llvm.asc" | grep --quiet "^fpr:::::::::$LLVM_KEY_FINGERPRINT:"
+          sudo gpg --dearmor --output /usr/share/keyrings/llvm.gpg "$RUNNER_TEMP/llvm.asc"
+          echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main" \
+            | sudo tee /etc/apt/sources.list.d/llvm-21.list
+          sudo apt-get update
+          sudo apt-get install --yes clang-21 lld-21
+      - run: cargo build --release --locked -p grkit-cli
+      - run: target/release/grkit doctor --clang clang-21 --lld ld.lld-21
+      - name: Build the runtime from the official firmware
+        env:
+          FIRMWARE_SOURCE: ${{ inputs.firmware_source }}
+          BACKUP_TOKEN: ${{ secrets.FIRMWARE_BACKUP_TOKEN }}
+        run: |
+          firmware="$RUNNER_TEMP/firmware"
+          zip="$firmware/gr3_v210.zip"
+          mkdir "$firmware"
+          trap 'rm -rf "$firmware"' EXIT
+          check() { echo "$FIRMWARE_ZIP_SHA256  $zip" | sha256sum --check --strict; }
+          if [ "$FIRMWARE_SOURCE" = backup ] \
+            || ! curl --fail --location --silent --show-error --retry 3 -o "$zip" "$FIRMWARE_URL" \
+            || ! check; then
+            if [ "$FIRMWARE_SOURCE" != backup ]; then
+              echo "::warning::The Ricoh download failed or changed. The build uses the private backup."
+            fi
+            if [ -z "$FIRMWARE_BACKUP_REPO" ] || [ -z "$BACKUP_TOKEN" ]; then
+              echo "::error::No firmware backup is configured."
+              exit 1
+            fi
+            rm -f "$zip"
+            GH_TOKEN="$BACKUP_TOKEN" gh release download "$FIRMWARE_BACKUP_TAG" \
+              --repo "$FIRMWARE_BACKUP_REPO" --pattern gr3_v210.zip --dir "$firmware"
+            check
+          fi
+          unzip -q "$zip" fwdc239b.bin -d "$firmware"
+          target/release/grkit build --target gr3-2.10 --firmware "$firmware/fwdc239b.bin" \
+            --out "$RUNNER_TEMP/runtime" --clang clang-21 --lld ld.lld-21
+      - name: Assemble the site
+        run: target/release/grkit site --build "$RUNNER_TEMP/runtime" --out site
+      - name: Package the published runtime for device testing
+        run: |
+          mkdir "$RUNNER_TEMP/no-effects"
+          target/release/grkit package --build site/runtime/gr3-2.10 \
+            --effects "$RUNNER_TEMP/no-effects" --out GRKit-device-test.zip
+          target/release/grkit verify GRKit-device-test.zip
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: site
+          path: site
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: device-test
+          path: GRKit-device-test.zip
+          if-no-files-found: error
+      - name: Summary
+        run: |
+          {
+            echo "Test \`GRKit-device-test.zip\` from the \`device-test\` artifact on a camera."
+            echo "If it passes, start the Deploy workflow with run ID \`$GITHUB_RUN_ID\`."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -56,6 +56,13 @@ enum Command {
     },
     /// Check package layout, profiles and checksums.
     Verify { archive: PathBuf },
+    /// Write a verified runtime build into a new static site directory.
+    Site {
+        #[arg(long)]
+        build: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
 }
 
 #[derive(Subcommand)]
@@ -185,6 +192,10 @@ fn run(command: Command) -> Result<Value> {
             let verified = packaging::verify_package(&bytes)?;
             Ok(json!({"valid": true, "target": verified["target"],
                 "effects": verified["effect_ids"].as_array().map_or(0, Vec::len)}))
+        }
+        Command::Site { build, out } => {
+            let (target, files) = storage::export_runtime(&build, &out)?;
+            Ok(json!({"output": out, "target": target, "files": files}))
         }
     }
 }

@@ -509,3 +509,57 @@ fn imports_a_cube_into_a_buildable_effect_without_overwriting() {
     let (effect, _) = effects::decode(&fs::read(compiled.join(name)).unwrap()).unwrap();
     assert_eq!(effect["matrix"], definition["matrix"]);
 }
+
+#[test]
+fn site_export_publishes_only_the_verified_runtime() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (build, effects) = fixture(tmp.path());
+    fs::create_dir(build.join("objects")).unwrap();
+    fs::write(build.join("objects/module_payload.h"), b"firmware bytes").unwrap();
+    let site = tmp.path().join("site");
+    let result = success(&["site", "--build", text(&build), "--out", text(&site)]);
+    assert_eq!(result["target"], "gr3-2.10");
+    assert_eq!(result["files"], 6);
+
+    let exported = site.join("runtime/gr3-2.10");
+    assert_eq!(
+        fs::read(exported.join("build.json")).unwrap(),
+        fs::read(build.join("build.json")).unwrap()
+    );
+    assert!(!exported.join("objects").exists());
+    let mut entries: Vec<_> = fs::read_dir(&exported)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+        .collect();
+    entries.sort();
+    assert_eq!(entries, ["build.json", "sd"]);
+
+    // The exported tree is itself a valid build input.
+    let package = tmp.path().join("package.zip");
+    success(&[
+        "package",
+        "--build",
+        text(&exported),
+        "--effects",
+        text(&effects),
+        "--out",
+        text(&package),
+    ]);
+    assert!(
+        !run(&["site", "--build", text(&build), "--out", text(&site)])
+            .status
+            .success()
+    );
+}
+
+#[test]
+fn site_export_rejects_changed_runtime_files() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (build, _) = fixture(tmp.path());
+    fs::write(build.join("sd/SCRIPT/STARTUP.TTL"), b"changed").unwrap();
+    let site = tmp.path().join("site");
+    let result = run(&["site", "--build", text(&build), "--out", text(&site)]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("Runtime hash or size mismatch"));
+    assert!(!site.exists());
+}

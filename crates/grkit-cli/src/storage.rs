@@ -151,7 +151,8 @@ fn collect_files(root: &Path, relative: &Path, files: &mut BTreeSet<String>) -> 
     Ok(())
 }
 
-pub fn load_build(directory: &Path) -> Result<(Files, Value)> {
+/// Reads a build directory's `build.json` bytes and every file under its `sd/` tree.
+fn read_build(directory: &Path) -> Result<(Vec<u8>, Files)> {
     ensure!(
         fs::symlink_metadata(directory)?.is_dir(),
         "Expected a regular build directory"
@@ -165,7 +166,35 @@ pub fn load_build(directory: &Path) -> Result<(Files, Value)> {
         let bytes = read_regular(&sd.join(&name))?;
         files.insert(name, bytes);
     }
+    Ok((manifest, files))
+}
+
+pub fn load_build(directory: &Path) -> Result<(Files, Value)> {
+    let (manifest, files) = read_build(directory)?;
     packaging::load_runtime(&manifest, &files)
+}
+
+/// Writes a verified build into a new site directory as `runtime/<target>/`.
+///
+/// The copy holds only `build.json` and `sd/`, so it is itself a valid `--build` input.
+/// `objects/` stays out because its generated header holds firmware bytes.
+pub fn export_runtime(build: &Path, site: &Path) -> Result<(String, usize)> {
+    let (manifest, files) = read_build(build)?;
+    let (runtime, parsed) = packaging::load_runtime(&manifest, &files)?;
+    let target = parsed["target"]
+        .as_str()
+        .context("Expected a build target")?
+        .to_owned();
+    validate_output(site)?;
+    let mut tree = Files::from([("build.json".to_owned(), manifest)]);
+    tree.extend(
+        runtime
+            .into_iter()
+            .map(|(name, bytes)| (format!("sd/{name}"), bytes)),
+    );
+    let count = tree.len();
+    write_directory(&site.join("runtime").join(&target), &tree)?;
+    Ok((target, count))
 }
 
 // Resolve existing ancestors too, so symlink aliases cannot conceal nested outputs.
