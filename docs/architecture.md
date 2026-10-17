@@ -28,6 +28,7 @@ With more than 20 effects, the installer keeps the 20 smallest effect IDs.
 For a duplicate ID, the file with the smallest name wins. The result does not depend on directory order. Directory read errors stop the installation.
 
 The 20-effect capacity is a product limit, not a GRF format limit. It fits one script array and one icon chunk.
+The script array holds the header, the records, and the 141,376-byte soft-glow map (376 x 376 cells).
 Off, GRKit, the four Framing tiles, and the five Guides tiles use eleven host icon records outside that capacity.
 The Framing and Guides tiles are contiguous, and the menu derives each one from the first Framing tile.
 
@@ -125,15 +126,50 @@ The image aspect getter (`0x532b3ca0`) reports id 2 for 65:24 sizes.
 DNG files keep the full 6112x4064 sensor data, as native 1:1 does. DefaultCropOrigin and DefaultCropSize describe the crop.
 In-camera Crop, Resize, Digital Filter, and RAW development do not know the 65:24 variant.
 
+## Effect extension
+
+Bytes 84..127 of a GRFX0001 file hold an optional extension.
+It holds u32 features at 84, an i16[9] signed Q13 post matrix at 88, and glow at 107. Byte 106 is reserved and zero.
+Each feature bit owns its field, and a field without its bit stays zero. A monochrome effect cannot have a post matrix. An effect without features has zeros in the whole extension.
+
+The installer copies the extension to record `+0x700`. Records are 0x740 bytes.
+
+The processing region has little room left, so the extension hooks link into the Framing region (`runtime/picture.*`). The live-view diff hook moved there too.
+
+### Post matrix
+
+The YCbCrMatrix stage computes the hue rotation times BT.601 (`0x536e4720`), and its Make calls that at `0x536e4774`.
+The hook multiplies the result by the effect's post matrix P: `CSP' = CSP x P`. P therefore acts on gamma-encoded RGB after the tone curves, and the Hue setting still rotates after it.
+
+The coefficients are 9-bit two's complement with 256 = 1.0. The register writer packs 9 bits without saturation, so the hook sign-extends each one and saturates the products to -256..255.
+The live-view diff also sets the YCbCr stage flag (`+7`) when the live-view record changes. Its stage runs before the gamma hook, so the post matrix changes one update later.
+
+## Recorded pictures
+
+`JpegEncodeMacroProcess::Execute` (`0x535047d4`) receives four image descriptors at configuration `+0x3c`.
+They are the main picture, the 720 x 480 screennail, the 160 x 120 thumbnail, and a second full-size encode of the main planes.
+Each descriptor holds Y at `+4`, CbCr at `+8`, and u16 width, height, and shared pitch at `+0x10`. The CbCr plane interleaves Cb and Cr for each pixel pair, in full rows (4:2:2) or half rows (4:2:0).
+The entry hook processes each plane set once, before the encode is submitted. It cleans and invalidates the data cache for the planes before and after (`0x5383c8a8`), because the image hardware writes and reads them.
+
+### Soft glow
+
+An effect's glow lifts the halo of highlights toward white and moves its chroma toward neutral, like a mist filter.
+The hook samples Y above 200 into a map of at most 376 cells per side. Three box passes per axis spread it, and bilinear weights blend it back.
+Cells without glow around them are skipped.
+
+Glow uses the record of the last still build, so it applies to the picture that the build developed. It does not reach the live view or RAW files.
+Its time on a camera is not measured. Bright scenes take longest.
+
 ## Code areas
 
 | Component | Range | Notes |
 | --- | --- | --- |
 | Processing | `0x53002080`–`0x53002340` | A32 assembly |
 | Menu | `0x53002340`–`0x53004000` | Thumb-2 C at `-Oz`, A32 entry points |
-| Framing | `0x540b6000`–`0x540be000` | A32 C at `-Os` and assembly |
+| Framing | `0x540b6000`–`0x540be000` | A32 C at `-Os` and assembly: Framing, Guides, and the effect extension and picture hooks |
 
 The translation table starts at `0x53004000` and must remain untouched. The freestanding link has no division helpers, so menu C must not divide.
+Picture code divides with its own shift-subtract routine, once per picture for each reciprocal.
 
 The Framing range follows the decoded RTOS image, which ends at `0x540b55c0`. The RTOS maps it read-only and executable up to `0x55000000`, and no firmware code refers to it.
 BOOT loads only the image, so the range can keep the previous session's code after a restart. The installer therefore overwrites it without a stock-byte check.

@@ -38,7 +38,6 @@ const PROCESSING_HOOKS: &[(u32, &str, bool)] = &[
     (0x536dc124, "module_parameters", true),
     (0x536dc28c, "module_processing", false),
     (0x536dc68c, "module_packet", false),
-    (0x536de1a8, "module_gamma_dirty", false),
     (0x536e8694, "module_gamma_flag", false),
     (0x536e87c4, "module_gamma_curves", true),
 ];
@@ -104,6 +103,16 @@ pub const FRAMING_PATCHES: &[(u32, &str, &str)] = &[
     // rectangle. Stock writes zeros for id 2 and leaves id 1 stale.
     (0x535ee8b4, "0c00000a", "0300000a"),
     (0x535ee8c0, "000052e3", "020052e1"),
+];
+
+/// Effect extension and picture processing (`runtime/picture.*`), linked into the Framing region.
+pub const PICTURE_HOOKS: &[(u32, &str, &str, bool)] = &[
+    // Live-view diff: `ldrb r3, [r4, #0xe]` before the gamma stage flag.
+    (0x536de1a8, "module_gamma_dirty", "0e30d4e5", false),
+    // YCbCrMatrix Make: the call to its calc. Applies the post-curve matrix.
+    (0x536e4774, "picture_post", "e9ffffeb", true),
+    // JpegEncodeMacroProcess::Execute entry: glow and the date stamp before the encode.
+    (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
 ];
 
 pub const VIEWFINDER_HOOKS: &[(u32, &str, &str, bool)] =
@@ -315,7 +324,14 @@ pub fn framing(
 ) -> Result<Component> {
     let object = directory.join("framing.o");
     let assembly_object = directory.join("framing-asm.o");
-    for (source, object) in [("framing.c", &object), ("framing.S", &assembly_object)] {
+    let picture = directory.join("picture.o");
+    let picture_assembly = directory.join("picture-asm.o");
+    for (source, object) in [
+        ("framing.c", &object),
+        ("framing.S", &assembly_object),
+        ("picture.c", &picture),
+        ("picture.S", &picture_assembly),
+    ] {
         run(
             &tools.clang,
             [
@@ -340,7 +356,7 @@ pub fn framing(
     let mut component = linked_component(
         directory,
         "module-framing",
-        &[object, assembly_object],
+        &[object, assembly_object, picture, picture_assembly],
         body,
         tools,
         FRAMING_BASE,
@@ -353,7 +369,7 @@ pub fn framing(
         body,
         FRAMING_BASE,
         FRAMING_PATCHES,
-        FRAMING_HOOKS.iter().copied(),
+        FRAMING_HOOKS.iter().chain(PICTURE_HOOKS).copied(),
     )?;
     Ok(component)
 }

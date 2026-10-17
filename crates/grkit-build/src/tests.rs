@@ -26,6 +26,7 @@ fn synthetic_firmware() -> firmware::FirmwareImage {
         .iter()
         .chain(components::VIEWFINDER_HOOKS.iter())
         .chain(components::METADATA_HOOKS.iter())
+        .chain(components::PICTURE_HOOKS.iter())
     {
         write(address, &hex::decode(bytes).unwrap());
     }
@@ -283,7 +284,6 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
         (0x536dc124, "module_parameters", "abfdffeb", true),
         (0x536dc28c, "module_processing", "940d08e3", false),
         (0x536dc68c, "module_packet", "903084e5", false),
-        (0x536de1a8, "module_gamma_dirty", "0e30d4e5", false),
         (0x536e8694, "module_gamma_flag", "9b30d4e5", false),
         (0x536e87c4, "module_gamma_curves", "891900eb", true),
     ];
@@ -329,6 +329,9 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
         (0x536a3050, "framing_thumbnail_inset", "1010a0e3", true),
         (0x532b39b8, "framing_classify", "0dfcffeb", true),
         (0x532b3cac, "framing_image_aspect", "50fbffea", false),
+        (0x536de1a8, "module_gamma_dirty", "0e30d4e5", false),
+        (0x536e4774, "picture_post", "e9ffffeb", true),
+        (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
     ];
     let framing_instructions = [
         (0x53d553c8, "02010300", "00000300"),
@@ -508,7 +511,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
         ),
         (
             "SCRIPT/PLUGINS/PLUGINS.TTL",
-            "e90398eba0399f2dcab70f309e352682369149503a15df68e918ded2c3e88b61",
+            "d8383fb4727b41f4354fac4779d03e2ec019d1566459c91c89dfb3f4d3632847",
         ),
         (
             "SCRIPT/PLUGINS/INSTALL.BIN",

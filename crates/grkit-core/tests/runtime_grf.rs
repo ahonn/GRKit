@@ -176,7 +176,8 @@ int main(int argc, char **argv) {
         (48, vec![b'x'; 17]),
         (55, vec![b'z']),
         (80, 2_u32.to_le_bytes().to_vec()),
-        (84, vec![1]),
+        // Bit 2 is undefined.
+        (84, vec![2]),
         (127, vec![1]),
         (146, vec![1]),
         (147, vec![1]),
@@ -219,6 +220,53 @@ int main(int argc, char **argv) {
         boundary.clone(),
         Some(true),
     ));
+    // Extension: each feature bit owns its field.
+    let mut extended_effect = sample(false);
+    extended_effect["post_matrix"] = json!([9000, -500, -308, -200, 8600, -208, 100, -300, 8392]);
+    extended_effect["glow"] = json!(3);
+    let extended = effects::encode(&extended_effect, &vec![0; effects::ICON_SIZE]).unwrap();
+    assert_eq!(&extended[..8], effects::MAGIC);
+    corpus.push((
+        "extended post and glow".into(),
+        extended.clone(),
+        Some(true),
+    ));
+    let mut glow_effect = sample(true);
+    glow_effect["glow"] = json!(1);
+    corpus.push((
+        "extended monochrome glow".into(),
+        effects::encode(&glow_effect, &vec![0; effects::ICON_SIZE]).unwrap(),
+        Some(true),
+    ));
+    let mut mono_post = mono.clone();
+    mono_post[84] = 1;
+    mono_post[88] = 1;
+    repair_crc(&mut mono_post);
+    corpus.push(("monochrome post matrix".into(), mono_post, Some(false)));
+    let extended_fields: Vec<(usize, Vec<u8>)> = vec![
+        (84, 0_u32.to_le_bytes().to_vec()),
+        (84, 8_u32.to_le_bytes().to_vec()),
+        // Bit 2 is undefined.
+        (84, 2_u32.to_le_bytes().to_vec()),
+        (84, 7_u32.to_le_bytes().to_vec()),
+        (84, 1_u32.to_le_bytes().to_vec()),
+        (84, 4_u32.to_le_bytes().to_vec()),
+        (106, vec![1]),
+        (107, vec![0]),
+        (107, vec![4]),
+        (108, vec![1]),
+        (127, vec![1]),
+    ];
+    for (offset, bytes) in extended_fields {
+        let mut changed = extended.clone();
+        changed[offset..offset + bytes.len()].copy_from_slice(&bytes);
+        repair_crc(&mut changed);
+        corpus.push((
+            format!("malformed extension at {offset}: {bytes:?}"),
+            changed,
+            Some(false),
+        ));
+    }
     // A fixed xorshift stream keeps this corpus identical on every host without a RNG dependency.
     let mut state = 83_u64;
     let mut next = || {
@@ -228,10 +276,10 @@ int main(int argc, char **argv) {
         state
     };
     for index in 0..512 {
-        let mut changed = if index % 2 == 0 {
-            boundary.clone()
-        } else {
-            mono.clone()
+        let mut changed = match index % 3 {
+            0 => boundary.clone(),
+            1 => mono.clone(),
+            _ => extended.clone(),
         };
         let offset = (next() % changed.len() as u64) as usize;
         changed[offset] ^= (next() % 255 + 1) as u8;
@@ -283,8 +331,11 @@ _Static_assert(GRKIT_HOST_RETURN + 4 <= GRKIT_HOST_HEADER_SIZE, "Header word ove
 _Static_assert(GRKIT_HOST_ICON_CHUNKS + 4 * 4 <= GRKIT_HOST_HEADER_SIZE, "Header overflow");
 _Static_assert(GRKIT_RECORD_COEFFICIENTS + 1556 == GRKIT_RECORD_NAME, "Coefficient overlap");
 _Static_assert(GRKIT_RECORD_NAME + 34 <= GRKIT_RECORD_MONOCHROME, "Name overlap");
+_Static_assert(GRKIT_RECORD_CODE + 2 <= GRKIT_RECORD_FEATURES, "Extension overlap");
+_Static_assert(GRKIT_RECORD_GLOW < GRKIT_RECORD_SIZE, "Extension overflow");
 int main(void) {
-    printf("%u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE);
+    printf("%u %u %u %u\n", GRKIT_HOST_HEADER_SIZE, GRKIT_RECORD_SIZE, GRKIT_ICON_STRIDE,
+           GRKIT_GLOW_SCRATCH);
     return 0;
 }
 "#,
@@ -303,7 +354,8 @@ int main(void) {
         [
             runtime::HEADER_SIZE,
             runtime::RECORD_SIZE,
-            runtime::ICON_STRIDE
+            runtime::ICON_STRIDE,
+            runtime::GLOW_SCRATCH
         ]
     );
 }
@@ -350,6 +402,22 @@ fn native_framing_contract_preserves_canvas_bounds_and_settings() {
     compile(
         &compiler,
         &root().join("tests/runtime/framing_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
+#[test]
+fn native_picture_contract_applies_post_matrix_and_glow() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("picture_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/picture_contract.c"),
         &executable,
         &[],
     );

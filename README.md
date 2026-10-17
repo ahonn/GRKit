@@ -4,7 +4,7 @@ An experimental SD-loaded plugin runtime for RICOH GR III firmware 2.10. Other m
 
 GRKit adds a sixth ADJ entry with three modules:
 
-- **Image Control**: bundled or custom effects, with live-view preview.
+- **Image Control**: bundled or custom effects, with live-view preview. Effects can add a post-curve color matrix and a soft glow.
 - **Framing**: XPan (65:24), 16:9, or 4:3 photos with a 3:2 viewfinder mask.
 - **Guides**: thirds, center, golden ratio, or diagonal lines inside the Framing area.
 

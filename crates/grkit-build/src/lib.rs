@@ -84,6 +84,8 @@ pub const RUNTIME_SOURCES: &[(&str, &[u8])] = &[
     ("modules.h", include_bytes!("../../../runtime/modules.h")),
     ("framing.c", include_bytes!("../../../runtime/framing.c")),
     ("framing.S", include_bytes!("../../../runtime/framing.S")),
+    ("picture.c", include_bytes!("../../../runtime/picture.c")),
+    ("picture.S", include_bytes!("../../../runtime/picture.S")),
     (
         "menu_labels.h",
         include_bytes!("../../../runtime/menu_labels.h"),

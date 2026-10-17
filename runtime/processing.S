@@ -1,7 +1,8 @@
 // Private Image Control processing hooks for the pinned GR III 2.10 image.
 // HEADER +0..12: count, record base, active record, last applied record.
 // HEADER +24/+28: last processing context flags and normalization call count.
-// Records are immutable, contiguous 0x700-byte allocations retained until reboot.
+// Records are immutable, contiguous GRKIT_RECORD_SIZE allocations retained until reboot.
+// The live-view dirty hook lives in picture.S: this region has no room left.
 #include "abi.h"
 .syntax unified
 .arm
@@ -150,40 +151,6 @@ packet_stock:
     msr cpsr_f, r12
     pop {r0-r3, r12, lr}
     ldr pc, =0x536dc690
-
-module_gamma_dirty:
-    push {r0-r2, lr}
-    ldrb r3, [r4, #0xe]
-    ldr r0, [r5, #8]
-    .word 0xeb000000 | (((.Lowned_record - . - 8) >> 2) & 0x00ffffff)
-    movne r0, #0
-    // The native diff sets the stage flags from native inputs only. When the
-    // live-view record changes, rebuild the curves now and the color matrix
-    // (+5), which carries the monochrome weights, on the next update: its
-    // stage has already run. This hook runs only for ImageTuningLiveview.
-    ldr r1, =HEADER
-    ldr r2, [r1, #GRKIT_HOST_LIVE_RECORD]
-    str r0, [r1, #GRKIT_HOST_LIVE_RECORD]
-    subs r2, r2, r0
-    movne r2, #1
-    strbne r2, [r4, #5]
-    // Private records and record changes always rebuild the curves.
-    orrs r2, r2, r0
-    bne dirty_on
-    // Native curves must also be rebuilt when leaving a private record.
-    ldrb r0, [r5, #0x9b]
-    cmp r0, #0
-    bne dirty_resume
-    ldr r0, [r4, #0x17c]
-    add r0, r0, #0x3200
-    ldr r2, [r0, #0x30]
-    cmp r2, #0
-    bne dirty_resume
-dirty_on:
-    mov r3, #1
-dirty_resume:
-    pop {r0-r2, lr}
-    ldr pc, =0x536de1ac
 
 module_gamma_flag:
     push {r0-r2, lr}

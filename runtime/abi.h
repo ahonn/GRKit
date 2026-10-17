@@ -13,8 +13,6 @@
 #define GRKIT_HOST_BACK_PENDING 92
 /* Guide style previewed on the ADJ canvas while GRKIT_HOST_FRAME_PREVIEW is set. */
 #define GRKIT_HOST_GUIDE_PREVIEW 48
-/* Words 24..43 belong to the menu: two text descriptors (96..111) and a
-   16-word event ring (112..175). */
 #define GRKIT_HOST_PLUGINS_ICON 176
 #define GRKIT_HOST_TOOLBAR_WIDGET 180
 #define GRKIT_HOST_TOOLBAR_OWNER 184
@@ -47,7 +45,7 @@
 /* Return to GRKit Image Control after the native parameter page: 1 opening, 2 away. */
 #define GRKIT_HOST_RETURN 252
 
-#define GRKIT_RECORD_SIZE 0x700
+#define GRKIT_RECORD_SIZE 0x740
 #define GRKIT_RECORD_COEFFICIENTS 84
 #define GRKIT_RECORD_NAME 0x668
 #define GRKIT_RECORD_MONOCHROME 0x690
@@ -57,6 +55,16 @@
 #define GRKIT_SUMMARY_UNITS 32
 /* u16 ImageTone code recorded in photos: 0x8000 | hash of the effect ID. */
 #define GRKIT_RECORD_CODE 0x6f8
+/* GRF extension, zero for an effect without features. */
+#define GRKIT_RECORD_FEATURES 0x700
+#define GRKIT_FEATURE_POST 1U
+#define GRKIT_FEATURE_GLOW 4U
+/* i16[9] signed Q13 RGB matrix after the tone curves, applied through the YCbCr matrix. */
+#define GRKIT_RECORD_POST 0x704
+/* Glow strength: 1 low, 2 medium, 3 high. Byte 0x716 is reserved and zero. */
+#define GRKIT_RECORD_GLOW 0x717
 #define GRKIT_ICON_STRIDE 6408
+/* Soft-glow map after the records: at most 376 x 376 cells. */
+#define GRKIT_GLOW_SCRATCH 141376
 
 #endif

@@ -6,7 +6,7 @@ use serde_json::{json, Value};
 use crate::Files;
 
 pub const HEADER_SIZE: usize = 256;
-pub const RECORD_SIZE: usize = 0x700;
+pub const RECORD_SIZE: usize = 0x740;
 pub const ICON_STRIDE: usize = 6408;
 pub const ICONS_PER_CHUNK: usize = 40;
 /// Off, GRKit, four Framing tiles, and five Guides tiles. The menu addresses
@@ -14,8 +14,11 @@ pub const ICONS_PER_CHUNK: usize = 40;
 pub const HOST_ICON_COUNT: usize = 11;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
+/// Soft-glow map after the records (`GRKIT_GLOW_SCRATCH`): at most 376 x 376 cells.
+pub const GLOW_SCRATCH: usize = 376 * 376;
 // One script array holds the header and every record: at most 65536 words.
-const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE <= 65536 * 4);
+const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE + GLOW_SCRATCH <= 65536 * 4);
+const _: () = assert!(GLOW_SCRATCH.is_multiple_of(4));
 pub const MAX_CHUNKS: usize = (MAX_COUNT + HOST_ICON_COUNT).div_ceil(ICONS_PER_CHUNK);
 const _: () = assert!(MAX_COUNT + HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 pub const HEADER_REFERENCE: u32 = 0x58012340;
@@ -27,7 +30,9 @@ pub fn layout(count: usize) -> Result<Value> {
         .step_by(ICONS_PER_CHUNK)
         .map(|start| ICONS_PER_CHUNK.min(count + HOST_ICON_COUNT - start) * ICON_STRIDE / 4)
         .collect();
-    Ok(json!({"words": (HEADER_SIZE + count * RECORD_SIZE) / 4, "icon_words": icon_words}))
+    Ok(
+        json!({"words": (HEADER_SIZE + count * RECORD_SIZE + GLOW_SCRATCH) / 4, "icon_words": icon_words}),
+    )
 }
 
 pub fn activation_files() -> Files {
@@ -86,7 +91,11 @@ pub fn loader() -> Vec<u8> {
         "call readword".into(),
         "chunks = value".into(),
         "fileclose fh".into(),
-        "expected = 64 + count * 448".into(),
+        format!(
+            "expected = {} + count * {}",
+            (HEADER_SIZE + GLOW_SCRATCH) / 4,
+            RECORD_SIZE / 4
+        ),
         "if words != expected goto reject".into(),
         format!(
             "expectedchunks = (count + {}) / {ICONS_PER_CHUNK}",

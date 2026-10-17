@@ -2,11 +2,14 @@
 
 mod storage;
 
-use anyhow::Result;
+use anyhow::{ensure, Context, Result};
 use clap::{Parser, Subcommand};
-use grkit_core::packaging;
+use grkit_core::{effects, fit, packaging, Files};
 use serde_json::{json, Value};
 use std::path::PathBuf;
+
+/// Room for a 256-point 3D table written with generous precision.
+const MAX_CUBE_SIZE: usize = 1024 * 1024 * 1024;
 
 #[derive(Parser)]
 #[command(name = "grkit", version, about = "Build GRKit plugins and SD effects")]
@@ -63,6 +66,32 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Fit a .cube LUT into a new effect definition at OUT/ID/effect.json.
+    Import {
+        #[arg(long)]
+        cube: PathBuf,
+        /// Official GR III 2.10 firmware, the source of the Standard base gamma.
+        #[arg(long)]
+        firmware: PathBuf,
+        #[arg(long, value_parser = ["srgb", "linear", "vlog"])]
+        input: String,
+        /// Exposure offset in EV, applied to scene-linear light before the LUT.
+        #[arg(long, default_value_t = 0.0, allow_negative_numbers = true)]
+        exposure: f64,
+        /// Fit no post-curve matrix.
+        #[arg(long)]
+        no_post: bool,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        label: String,
+        #[arg(long, value_parser = ["film", "filter", "plain"])]
+        shape: String,
+        #[arg(long)]
+        out: PathBuf,
+    },
 }
 
 fn run(command: Command) -> Result<Value> {
@@ -90,6 +119,52 @@ fn run(command: Command) -> Result<Value> {
             storage::validate_output(&out)?;
             storage::write_directory(&out, &compiled)?;
             Ok(json!({"output": out, "effects": compiled.len()}))
+        }
+        Command::Effects {
+            command:
+                EffectsCommand::Import {
+                    cube,
+                    firmware,
+                    input,
+                    exposure,
+                    no_post,
+                    id,
+                    name,
+                    label,
+                    shape,
+                    out,
+                },
+        } => {
+            ensure!(effects::valid_id(&id), "Invalid effect ID");
+            let output = out.join(&id);
+            storage::validate_output(&output)?;
+            let image = grkit_build::verify_firmware(&firmware)?;
+            let base_gamma = grkit_build::firmware::standard_base_gamma(&image)?;
+            let bytes = storage::read_bounded(&cube, MAX_CUBE_SIZE)?;
+            let request = fit::Import {
+                effect_id: &id,
+                name: &name,
+                label: &label,
+                shape: &shape,
+                source: cube
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .context("Expected a UTF-8 .cube filename")?,
+                input: input.parse()?,
+                exposure,
+                options: fit::Options {
+                    post: !no_post,
+                    ..fit::Options::default()
+                },
+            };
+            let (result, text) = fit::import(&bytes, &base_gamma, &request)?;
+            let errors = effects::parse_json(text.as_bytes())?["attribution"]["fit"].take();
+            storage::write_directory(
+                &output,
+                &Files::from([("effect.json".to_owned(), text.into_bytes())]),
+            )?;
+            Ok(json!({"output": output, "effect_id": id, "fit": errors,
+                "post_matrix": result.post_matrix.is_some()}))
         }
         Command::Package {
             build,

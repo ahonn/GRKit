@@ -178,7 +178,7 @@ fn corruption_reserved_fields_and_string_padding_are_rejected() {
         changed[offset] ^= 1;
         assert!(effects::decode(&changed).is_err());
     }
-    for offset in [84, 146, 8084, 47, 79] {
+    for offset in [106, 108, 146, 8084, 47, 79] {
         let mut changed = bytes.clone();
         changed[offset] = 1;
         let checksum = effects::checksum(&changed);

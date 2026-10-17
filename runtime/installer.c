@@ -115,7 +115,7 @@ static u32 effect_code(const u8 *id)
 }
 static void layout(void)
 {
-    size = GRKIT_HOST_HEADER_SIZE + count * GRKIT_RECORD_SIZE;
+    size = GRKIT_HOST_HEADER_SIZE + count * GRKIT_RECORD_SIZE + GRKIT_GLOW_SCRATCH;
     icon_chunks = (count + HOST_ICON_COUNT + ICONS_PER_CHUNK - 1) / ICONS_PER_CHUNK;
 }
 static u32 chunk_count(u32 chunk)
@@ -221,6 +221,9 @@ static int install(void)
         copy(at(record), (const u8 *)at(STOCK_RECORD), 84);
         store(record + 4, record + 84);
         copy(at(record + 84), profile + 128, 1556);
+        /* Extension: features, then the post matrix, a reserved byte, and glow. */
+        copy(at(record + GRKIT_RECORD_FEATURES), profile + 84, 4);
+        copy(at(record + GRKIT_RECORD_POST), profile + 88, 20);
         u32 n = length((const char *)profile + 48);
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[48 + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + 80));
@@ -280,7 +283,7 @@ static int select_profile(const char *id)
     u32 base = word(ARRAY_TABLE + 4);
     if (!heap(base, GRKIT_HOST_HEADER_SIZE) || word(base + 16) != 0x314d5247 || word(base + 20) != 1) return 41;
     u32 n = word(base), records = word(base + 4), selected = 0;
-    if (n > MAX_COUNT || records != base + GRKIT_HOST_HEADER_SIZE || !heap(base, GRKIT_HOST_HEADER_SIZE + n * GRKIT_RECORD_SIZE)) return 41;
+    if (n > MAX_COUNT || records != base + GRKIT_HOST_HEADER_SIZE || !heap(base, GRKIT_HOST_HEADER_SIZE + n * GRKIT_RECORD_SIZE + GRKIT_GLOW_SCRATCH)) return 41;
     if (!text_equal(id, "off")) {
         for (u32 i = 0; i < n; ++i) {
             u32 p = records + i * GRKIT_RECORD_SIZE;

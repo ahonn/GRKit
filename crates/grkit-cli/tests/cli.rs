@@ -362,3 +362,150 @@ fn literal_backslash_cannot_alias_manifest_path() {
     .success());
     assert!(!output.exists());
 }
+
+fn warm_cube(path: &Path) {
+    let mut text = String::from("TITLE \"Warm\"\nLUT_3D_SIZE 5\n");
+    for b in 0..5 {
+        for g in 0..5 {
+            for r in 0..5 {
+                let [r, g, b] = [r, g, b].map(|v| v as f64 / 4.0);
+                let row = [r * 0.94 + 0.05, g * 0.92 + 0.04, b * 0.86 + 0.03];
+                text.push_str(&format!("{:.6} {:.6} {:.6}\n", row[0], row[1], row[2]));
+            }
+        }
+    }
+    fs::write(path, text).unwrap();
+}
+
+fn import(cube: &Path, firmware: &Path, id: &str, label: &str, effects: &Path) -> Output {
+    run(&[
+        "effects",
+        "import",
+        "--cube",
+        text(cube),
+        "--firmware",
+        text(firmware),
+        "--input",
+        "srgb",
+        "--exposure",
+        "-0.5",
+        "--id",
+        id,
+        "--name",
+        "Warm",
+        "--label",
+        label,
+        "--shape",
+        "film",
+        "--out",
+        text(effects),
+    ])
+}
+
+#[test]
+fn cube_import_rejects_invalid_firmware_and_ids_before_output() {
+    let tmp = tempfile::tempdir().unwrap();
+    let cube = tmp.path().join("warm.cube");
+    warm_cube(&cube);
+    let firmware = tmp.path().join("firmware.bin");
+    fs::write(&firmware, b"not firmware").unwrap();
+    let effects = tmp.path().join("effects");
+    let failed = import(&cube, &firmware, "warm-v1", "FV", &effects);
+    assert_eq!(failed.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("SHA-256"));
+    let failed = import(&cube, &firmware, "../warm", "FV", &effects);
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("Invalid effect ID"));
+    assert!(!effects.exists());
+}
+
+#[test]
+fn standard_base_gamma_is_read_and_checked() {
+    use grkit_build::{firmware, target};
+    let offset = (firmware::STANDARD_BASE_GAMMA - target::RTOS_BASE) as usize;
+    let image = |table: &[u16; 256]| firmware::FirmwareImage {
+        body: [
+            vec![0; offset],
+            table.iter().flat_map(|v| v.to_le_bytes()).collect(),
+        ]
+        .concat(),
+        sha256: "synthetic".into(),
+        decoded_sha256: "synthetic".into(),
+    };
+    let mut table: [u16; 256] = std::array::from_fn(|i| match i {
+        0 => 0,
+        1..=8 => 944 * i as u16,
+        _ => 7552 + ((i - 8) * 8832 / 247) as u16,
+    });
+    assert_eq!(
+        firmware::standard_base_gamma(&image(&table)).unwrap(),
+        table
+    );
+    for (index, value) in [(8, 7551), (0, 1), (255, 15999), (100, 0)] {
+        let saved = table[index];
+        table[index] = value;
+        assert!(
+            firmware::standard_base_gamma(&image(&table)).is_err(),
+            "{index}"
+        );
+        table[index] = saved;
+    }
+}
+
+/// End to end with the official firmware, which the repository cannot contain.
+#[test]
+fn imports_a_cube_into_a_buildable_effect_without_overwriting() {
+    let Ok(firmware) = std::env::var("GRKIT_TEST_FIRMWARE") else {
+        eprintln!(
+            "SKIPPED cube import end to end: set GRKIT_TEST_FIRMWARE to GR III 2.10 firmware"
+        );
+        return;
+    };
+    let firmware = PathBuf::from(firmware);
+    let tmp = tempfile::tempdir().unwrap();
+    let cube = tmp.path().join("warm.cube");
+    warm_cube(&cube);
+    let effects = tmp.path().join("effects");
+    let output = import(&cube, &firmware, "warm-v1", "FV", &effects);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
+    eprintln!("{summary}");
+    assert_eq!(summary["effect_id"], "warm-v1");
+    assert!(summary["fit"]["mean_de"].as_f64().unwrap() < 2.0);
+    assert!(summary["fit"]["csp_max"].as_i64().unwrap() <= 240);
+    let path = effects.join("warm-v1/effect.json");
+    let written = fs::read(&path).unwrap();
+    let definition = effects::parse_json(&written).unwrap();
+    assert_eq!(definition["attribution"]["source"], "warm.cube");
+    assert_eq!(definition["attribution"]["exposure"], -0.5);
+    assert_eq!(
+        definition.get("post_matrix").is_some(),
+        summary["post_matrix"] == true
+    );
+
+    let failed = import(&cube, &firmware, "warm-v1", "FV", &effects);
+    assert_eq!(failed.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("already exists"));
+    assert_eq!(fs::read(&path).unwrap(), written);
+    assert!(!import(&cube, &firmware, "bad-v1", "AB", &effects)
+        .status
+        .success());
+    assert!(!effects.join("bad-v1").exists());
+
+    let compiled = tmp.path().join("compiled");
+    let built = success(&[
+        "effects",
+        "build",
+        "--source",
+        text(&effects),
+        "--out",
+        text(&compiled),
+    ]);
+    assert_eq!(built["effects"], 1);
+    let name = effects::filename("warm-v1").unwrap();
+    let (effect, _) = effects::decode(&fs::read(compiled.join(name)).unwrap()).unwrap();
+    assert_eq!(effect["matrix"], definition["matrix"]);
+}

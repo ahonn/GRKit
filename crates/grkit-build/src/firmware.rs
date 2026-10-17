@@ -151,3 +151,21 @@ pub fn verify_firmware(path: &Path) -> Result<FirmwareImage> {
     }
     bail!("Firmware has no RTOS section")
 }
+
+/// The still-path Standard base gamma: 256 little-endian u16 of 14-bit output.
+pub const STANDARD_BASE_GAMMA: u32 = 0x53dcf7f0;
+
+/// Reads the Standard base gamma and rejects a table without its known shape.
+pub fn standard_base_gamma(image: &FirmwareImage) -> Result<[u16; 256]> {
+    let bytes = image.read(STANDARD_BASE_GAMMA, 512)?;
+    let table: [u16; 256] =
+        std::array::from_fn(|i| u16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]));
+    ensure!(
+        table[0] == 0
+            && table.windows(2).all(|pair| pair[0] <= pair[1])
+            && table[8] == 7552
+            && (16000..=16384).contains(&table[255]),
+        "Unexpected Standard base gamma at {STANDARD_BASE_GAMMA:#x}"
+    );
+    Ok(table)
+}
