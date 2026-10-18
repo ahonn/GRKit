@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/ahonn/GRKit/security/policy
+    about: Report problems that can stop the camera, damage card files, or change a package. Do not open a public issue.
+  - name: Recovery guide
+    url: https://github.com/ahonn/GRKit/blob/main/resources/RECOVERY.md
+    about: Read this guide first if the camera does not start.

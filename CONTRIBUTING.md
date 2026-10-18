@@ -18,7 +18,10 @@ Identical inputs give identical outputs.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 GRKIT_REQUIRE_NATIVE_TESTS=1 cargo test --workspace --locked
+cargo deny --locked check
 ```
+
+`cargo deny` checks the dependency licenses, the security advisories, and the crate sources against `deny.toml`. Each ignored advisory in that file gives its reason.
 
 Host C contract tests compile the runtime's GRF parser, effect catalog, menu, and Framing code with a host C compiler.
 They use the GR III target. The picture contract also runs for GR IV, and a syntax check compiles the C sources of each target.
@@ -46,5 +49,12 @@ For the web site, see [web/README.md](web/README.md).
 - Use conventional commits.
 - Keep firmware, build outputs, archives, and local paths out of Git.
 - Keep third-party notices. Review each new effect input and its license.
+
+## License of contributions
+
+- A code contribution is licensed under the MIT License.
+- An effect contribution uses the license that its source requires. A fit of a spektrafilm LUT uses CC BY-SA 4.0. A fit of a Spectral Film LUT uses the MIT License.
+- For a new effect source, add its attribution and license to `effects/NOTICE.md`. Add its license text and its changes to `effects/sources/`.
+- Do not contribute an effect if its source license does not permit redistribution of derived data.
 
 Maintainers release the site as [docs/releasing.md](docs/releasing.md) describes.

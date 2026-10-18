@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a problem in the CLI, the site, or the documentation.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For a result on a camera, use the device report.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - Site
+        - Effects
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The commit of the CLI, or the date that you used the site.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The commands or the actions that cause the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and observed result
+      description: Include the full error text.
+    validations:
+      required: true
