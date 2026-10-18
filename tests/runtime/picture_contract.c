@@ -285,6 +285,7 @@ int main(void)
         struct box b = changes(0, 0);
         assert(b.lighter && b.lift <= 15 && dark_lift >= 100);
     }
+#ifndef FRAMING_XPAN_NATIVE
     /* 16:9 Framing: the screennail stamp stays above the bottom bar. */
     encode_setup();
     fill_planes(40, 128, 128);
@@ -295,6 +296,31 @@ int main(void)
         struct box b = changes(1, 0);
         assert(b.lit && b.bottom <= 480 - 38 && b.top > 240);
     }
+#else
+    /* GR IV: XPan crops native 16:9 captures, and native 3:2 captures ignore it.
+       The screennail and thumbnail stamps stay above the bar of the capture. */
+    {
+        struct box sn[3][2], th[3][2];
+        for (u32 native = 0; native <= 2; native += 2)
+            for (u32 ratio = 0; ratio <= 1; ++ratio) {
+                encode_setup();
+                fill_planes(40, 128, 128);
+                header[GRKIT_HOST_STAMP / 4] = 3;
+                header[GRKIT_HOST_FRAME_RATIO / 4] = ratio;
+                native_aspect = native;
+                picture_encode(0, MESSAGE);
+                sn[native][ratio] = changes(1, 0);
+                th[native][ratio] = changes(2, 0);
+                assert(sn[native][ratio].lit && th[native][ratio].lit);
+            }
+        assert(!memcmp(&sn[0][1], &sn[0][0], sizeof(struct box)));
+        assert(!memcmp(&th[0][1], &th[0][0], sizeof(struct box)));
+        assert(sn[2][0].bottom <= 480 - 38 && sn[2][0].bottom > 480 - 107);
+        assert(th[2][0].bottom <= 120 - 16 && th[2][0].bottom > 120 - 30);
+        assert(sn[2][1].bottom <= 480 - 107 && sn[2][1].top > 240);
+        assert(th[2][1].bottom <= 120 - 30);
+    }
+#endif
     /* A monochrome GRKit effect keeps neutral chroma: the stamp lights only Y. */
     encode_setup();
     fill_planes(40, 128, 128);

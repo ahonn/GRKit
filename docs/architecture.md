@@ -23,7 +23,9 @@ The cameras differ in the ModeSet file that enables SD scripts: `00078350.588` o
 A package holds the ModeSet file of one camera, and its installation guide names that camera and file. `grkit verify` identifies the camera from that file.
 
 GR IV 1.11 is a different build, with the target `gr4-1.11`. GR IV and GR IV HDF run the same firmware and ModeSet file, `00078560.636`.
-Its RTOS image is larger (0x13d2ac0 bytes), and its data, functions, and object layouts are at other addresses. `runtime/firmware.h` selects `runtime/targets/<target>.h`, which holds these values for the C and assembly sources.
+Its RTOS image is larger (0x13d2ac0 bytes), and its data, functions, and object layouts are at other addresses. `runtime/targets/<target>.h` holds these values for the C and assembly sources.
+
+The build defines `GRKIT_TARGET_<target>` (`components::Layout::define`), and `runtime/firmware.h` selects the header from it. Without a known definition, the compilation stops.
 `components::Layout` holds the regions and hooks of each target, and the build generates `hooks.h` from it.
 
 The GR IV runtime has the menu, Image Control, Framing, Guides, and Date Stamp. GR IV Framing offers only XPan, as a crop of native 16:9 (see Framing).
@@ -43,7 +45,7 @@ The GR IV Standard look matrix differs from the GR III one.
 GR IV icon descriptors have 12 bytes, and GR IV draws icons from a copy of the icon pixels. The installer reads the base of that copy from the icon drawer.
 
 Native sources live under `runtime/`, and package documents live under `resources/`. The CLI embeds both, so it works outside the checkout.
-Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C tests check the GRF parser, the effect catalog, the menu, and Framing.
+Rust tests pin GRF bytes, artwork, generated headers, and loader scripts. Host C tests check the GRF parser, the effect catalog, the menu, and Framing on GR III, and the picture code on both targets. A syntax check compiles the C sources of each target.
 
 ## Loading
 
@@ -188,6 +190,7 @@ GR IV has no capture request hook and no live-view changes. The GR IV sizes come
 The `Kb588` class holds the GR III sizes and is not used. The GR IV size classifier (`0x533a2820`) keeps the width in `r6` and the class pointer in `r5`.
 
 GR IV 65:24 sizes are 6192x2288, 4944x1824, 3504x1296, and 1920x712. In native 16:9 the XPan mask uses the GR III XPan area. In native 3:2 XPan has no effect, and the viewfinder shows only the guides.
+The date stamp follows the same rule: it uses the XPan area of the screennail and the thumbnail only for a native 16:9 capture.
 
 ## Effect extension
 

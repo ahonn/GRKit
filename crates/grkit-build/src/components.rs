@@ -145,8 +145,9 @@ pub type InstructionPatch = (u32, &'static str, &'static str);
 /// Where a target's components live and where they hook the firmware.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Layout {
-    /// The preprocessor definition that selects `runtime/targets/<target>.h`.
-    pub define: Option<&'static str>,
+    /// The preprocessor definition that selects `runtime/targets/<target>.h`
+    /// in `runtime/firmware.h`.
+    pub define: &'static str,
     /// Module bits (`GRKIT_HOST_HIDDEN`) that the target does not implement.
     pub hidden: u32,
     /// Image Control processing, if the target has it: its region and its
@@ -169,7 +170,7 @@ pub struct Layout {
 }
 
 pub const GR3_LAYOUT: Layout = Layout {
-    define: None,
+    define: "-DGRKIT_TARGET_GR3_210",
     hidden: 0,
     processing: Some((PROCESSING_BASE, MENU_BASE)),
     processing_source: include_str!("../../../runtime/processing.S"),
@@ -283,7 +284,7 @@ const GR4_CONTEXTS: &[(u32, &str)] = &[
 ];
 
 pub const GR4_LAYOUT: Layout = Layout {
-    define: Some("-DGRKIT_TARGET_GR4_111"),
+    define: "-DGRKIT_TARGET_GR4_111",
     hidden: 0,
     // After the Framing region.
     processing: Some((0x543db000, 0x543dc000)),
@@ -370,8 +371,10 @@ fn code_component(
     );
     let image_end = crate::target::RTOS_BASE + body.body.len() as u32;
     if base >= image_end {
-        // The decoded image does not contain the tail. The installer checks
-        // that the running camera has zeros there.
+        // The decoded image does not contain the tail, and the installer does
+        // not compare it: BOOT loads only the image, so the tail can hold the
+        // previous session's code. This check uses the GR III executable
+        // mapping, which is not confirmed on other targets.
         ensure!(
             end <= RTOS_EXECUTABLE_END,
             "Private component is outside the RTOS executable mapping"
@@ -448,7 +451,7 @@ pub fn processing(
             path(&object)?,
         ]
         .into_iter()
-        .chain(layout.define),
+        .chain([layout.define]),
     )?;
     let (code, symbols) = elf_text(&fs::read(object)?)?;
     let mut component = code_component(code, symbols, body, base, end)?;
@@ -505,7 +508,7 @@ pub fn menu(
             path(&object)?,
         ]
         .into_iter()
-        .chain(layout.define),
+        .chain([layout.define]),
     )?;
     run(
         &tools.clang,
@@ -521,7 +524,7 @@ pub fn menu(
             path(&assembly_object)?,
         ]
         .into_iter()
-        .chain(layout.define),
+        .chain([layout.define]),
     )?;
     let mut component = linked_component(
         directory,
@@ -586,7 +589,7 @@ pub fn framing(
                 path(object)?,
             ]
             .into_iter()
-            .chain(layout.define),
+            .chain([layout.define]),
         )?;
     }
     let mut component = linked_component(

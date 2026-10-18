@@ -61,7 +61,24 @@ fn compiler() -> Option<OsString> {
     None
 }
 
+/// The definitions that select each runtime target in `runtime/firmware.h`,
+/// as `components::Layout::define` passes them to the ARM build.
+const GR3_TARGET: &str = "-DGRKIT_TARGET_GR3_210";
+const GR4_TARGET: &str = "-DGRKIT_TARGET_GR4_111";
+const TARGETS: [&str; 2] = [GR3_TARGET, GR4_TARGET];
+
+/// Builds a host C harness for the GR III target.
 fn compile(compiler: &OsString, source: &Path, executable: &Path, extra_sources: &[PathBuf]) {
+    compile_for(GR3_TARGET, compiler, source, executable, extra_sources);
+}
+
+fn compile_for(
+    target: &str,
+    compiler: &OsString,
+    source: &Path,
+    executable: &Path,
+    extra_sources: &[PathBuf],
+) {
     checked(
         Command::new(compiler)
             .args([
@@ -69,6 +86,7 @@ fn compile(compiler: &OsString, source: &Path, executable: &Path, extra_sources:
                 "-O2",
                 "-Wno-int-to-pointer-cast",
                 "-Wno-pointer-to-int-cast",
+                target,
             ])
             .arg("-I")
             .arg(root().join("runtime"))
@@ -494,14 +512,52 @@ fn native_picture_contract_applies_post_matrix_and_stamp() {
         return;
     };
     let temporary = tempfile::tempdir().unwrap();
-    let executable = temporary.path().join("picture_contract");
-    compile(
-        &compiler,
-        &root().join("tests/runtime/picture_contract.c"),
-        &executable,
-        &[],
-    );
-    checked(&mut Command::new(&executable));
+    for (index, target) in TARGETS.into_iter().enumerate() {
+        let executable = temporary.path().join(format!("picture_contract_{index}"));
+        compile_for(
+            target,
+            &compiler,
+            &root().join("tests/runtime/picture_contract.c"),
+            &executable,
+            &[],
+        );
+        checked(&mut Command::new(&executable));
+    }
+}
+
+/// The host contracts above run the GR III branches of the menu and Framing
+/// code. This check makes every PR compile the code of each target.
+#[test]
+fn runtime_c_sources_compile_for_each_target() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    for target in TARGETS {
+        for source in ["menu.c", "framing.c", "picture.c"] {
+            checked(
+                Command::new(&compiler)
+                    .args([
+                        "-std=c11",
+                        "-fsyntax-only",
+                        "-Wno-int-to-pointer-cast",
+                        "-Wno-pointer-to-int-cast",
+                        target,
+                    ])
+                    .arg("-I")
+                    .arg(root().join("runtime"))
+                    .arg(root().join("runtime").join(source)),
+            );
+        }
+    }
+    // Without a target definition, firmware.h stops the build instead of
+    // selecting the GR III addresses.
+    let output = Command::new(&compiler)
+        .args(["-std=c11", "-fsyntax-only", "-x", "c"])
+        .arg(root().join("runtime/firmware.h"))
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("GRKIT_TARGET_"));
 }
 
 #[test]

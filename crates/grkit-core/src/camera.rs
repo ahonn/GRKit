@@ -7,8 +7,8 @@
 //! cameras differ only in the ModeSet file that enables SD scripts.
 //!
 //! GR IV 1.11 is a different build with its own runtime. It has Image Control,
-//! Guides, and Date Stamp, but no Framing yet, and it has not been tested on a
-//! camera.
+//! Framing (XPan only, cropped from native 16:9), Guides, and Date Stamp, and it
+//! has not been tested on a camera.
 
 use anyhow::{bail, Result};
 

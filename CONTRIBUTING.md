@@ -21,6 +21,7 @@ GRKIT_REQUIRE_NATIVE_TESTS=1 cargo test --workspace --locked
 ```
 
 Host C contract tests compile the runtime's GRF parser, effect catalog, menu, and Framing code with a host C compiler.
+They use the GR III target. The picture contract also runs for GR IV, and a syntax check compiles the C sources of each target.
 If no host compiler is available, the tests are skipped. `GRKIT_REQUIRE_NATIVE_TESTS=1` makes them fail instead.
 
 The ARM builds are ignored tests. The second command needs the firmware:

@@ -81,6 +81,16 @@ void picture_post(u32 object,u32 context,u32 settings) {
 /* Visible-area id of a native aspect. GR III offers only 3:2 (0) and 1:1 (3). */
 #define PICTURE_NATIVE_ID(native) ((native)==3 ? 3 : 0)
 #endif
+/* Visible-area id of the capture: 0 3:2, 1 4:3, 2 16:9, 3 1:1, 4 XPan. */
+#ifdef FRAMING_XPAN_NATIVE
+/* XPan crops native FRAMING_XPAN_NATIVE photos. Other native aspects ignore it. */
+#define PICTURE_AREA_ID(native,ratio) \
+    ((native)==FRAMING_XPAN_NATIVE && (ratio)==1 ? 4 : PICTURE_NATIVE_ID(native))
+#else
+/* Framing ratios (Off, XPan, 16:9, 4:3) apply only to native 3:2 captures. */
+#define PICTURE_AREA_ID(native,ratio) ((native) ? PICTURE_NATIVE_ID(native) : \
+    (ratio)==1 ? 4 : (ratio)==2 ? 2 : (ratio)==3 ? 1 : 0)
+#endif
 #ifndef PICTURE_SCRATCH
 /* Stamp masks after the header and the records, inside the loader's registry array. */
 #define PICTURE_SCRATCH(h) ((h)[GRKIT_HOST_RECORDS/4]+(h)[GRKIT_HOST_COUNT/4]*GRKIT_RECORD_SIZE)
@@ -468,7 +478,7 @@ static void visible_area(volatile u32 *h,Plane *p) {
     static const u8 thumbnail[5][2]={{0,8},{0,0},{0,16},{20,0},{0,30}};
     u32 ratio=h[GRKIT_HOST_FRAME_RATIO/4], native=PICTURE_NATIVE_ASPECT(), id;
     const u8 *inset=0;
-    id=native ? PICTURE_NATIVE_ID(native) : ratio==1 ? 4 : ratio==2 ? 2 : ratio==3 ? 1 : 0;
+    id=PICTURE_AREA_ID(native,ratio);
     if(p->width==720 && p->height==480) inset=screennail[id];
     if(p->width==160 && p->height==120) inset=thumbnail[id];
     p->left=inset ? inset[0] : 0; p->top=inset ? inset[1] : 0;

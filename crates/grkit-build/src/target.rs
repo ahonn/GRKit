@@ -114,7 +114,7 @@ pub const GR3_210: Target = Target {
 };
 
 /// GR IV and GR IV HDF 1.11. The runtime has the private menu, Image Control,
-/// Guides, and Date Stamp so far.
+/// Framing (XPan only), Guides, and Date Stamp.
 pub const GR4_111: Target = Target {
     name: "gr4-1.11",
     firmware: "GR IV 1.11",

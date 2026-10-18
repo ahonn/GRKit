@@ -1,4 +1,5 @@
-//! The private GR III runtime layout and production loader templates.
+//! The private runtime layout and the production loader templates. The layout
+//! values are those of GR III 2.10 unless a function takes the target.
 
 use anyhow::{ensure, Result};
 use serde_json::{json, Value};
