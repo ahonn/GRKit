@@ -27,6 +27,41 @@ owned_no:
 owned_done:
     pop {r0-r3, pc}
 
+// Store r0, the record of a non-live-view build (0 for native processing),
+// in the shot ring under the shot settings pointer r7. The live view (context
+// kind 1) stores nothing. A reader in another task checks the key again after
+// it reads the record, so the key is cleared while the record changes.
+// Preserves all registers.
+.if GRKIT_SHOT_RING != 0x22840
+.error "The shot ring offset changed"
+.endif
+.Lshot_store:
+    push {r0-r3, r12, lr}
+    ldrb r2, [sb, #0x2ac]
+    cmp r2, #1
+    beq shot_done
+    ldr r1, =HEADER
+    str r0, [r1, #GRKIT_HOST_STILL]
+    ldr r2, [r1]
+    ldr r3, [r1, #4]
+    mov r12, #GRKIT_RECORD_SIZE
+    mla r3, r2, r12, r3
+    add r3, r3, #0x22800
+    add r3, r3, #0x40
+    ldr r2, [r3]
+    add r12, r2, #1
+    str r12, [r3]
+    and r2, r2, #(GRKIT_SHOT_ENTRIES - 1)
+    add r2, r3, r2, lsl #3
+    mov r12, #0
+    str r12, [r2, #8]
+    dmb ish
+    str r0, [r2, #12]
+    dmb ish
+    str r7, [r2, #8]
+shot_done:
+    pop {r0-r3, r12, pc}
+
 // Replaces the BL to the parameter normalizer (0x539113d8) at 0x53912c70.
 // sb = context (+0x8000), r4 = packet, r5 = transient object, r7 = settings.
 // Snapshot activation before the packet is built. Unsupported contexts use the
@@ -60,11 +95,8 @@ parameters_committed:
     .word 0xeb000000 | (((.Lowned_record - . - 8) >> 2) & 0x00ffffff)
     bne parameters_stock
     str r0, [r4, #8]
-    // Capture metadata records the effect that a still build applied.
-    ldrb r2, [sb, #0x2ac]
-    cmp r2, #0
-    ldreq r1, =HEADER
-    streq r0, [r1, #GRKIT_HOST_STILL]
+    // Capture metadata and the encode read the record of this shot.
+    .word 0xeb000000 | (((.Lshot_store - . - 8) >> 2) & 0x00ffffff)
     // Fill the transient object like the native Standard branch (0x53911614),
     // from the live settings. Never write the settings back, so other native
     // types keep their own fields. The native branch writes one byte at +0x1f8.
@@ -93,10 +125,7 @@ parameters_stock:
     mov r0, #0
     str r0, [r4, #8]
     // Other non-live-view builds, such as in-camera RAW development, record no effect.
-    ldrb r2, [sb, #0x2ac]
-    cmp r2, #1
-    ldrne r1, =HEADER
-    strne r0, [r1, #GRKIT_HOST_STILL]
+    .word 0xeb000000 | (((.Lshot_store - . - 8) >> 2) & 0x00ffffff)
     pop {r0-r3, r12, lr}
     ldr pc, =0x539113d8
 

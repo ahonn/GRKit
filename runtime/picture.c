@@ -95,6 +95,9 @@ void picture_post(u32 object,u32 context,u32 settings) {
 /* Stamp masks after the header and the records, inside the loader's registry array. */
 #define PICTURE_SCRATCH(h) ((h)[GRKIT_HOST_RECORDS/4]+(h)[GRKIT_HOST_COUNT/4]*GRKIT_RECORD_SIZE)
 #endif
+#ifndef PICTURE_BARRIER
+#define PICTURE_BARRIER() __asm__ volatile("dmb ish" ::: "memory")
+#endif
 #ifndef PICTURE_MAP
 #define PICTURE_MAP(address) ((u8 *)(address))
 #endif
@@ -274,9 +277,9 @@ static u32 stamp(volatile u32 *h,const Plane *p,const char *text,u32 n,u32 mono,
         total=text_width(text,n,m);
         cw=total+((m*31)>>8)+1;
         mw=cw+2*pad; mh=m+2*pad;
-        if(mw<=BLUR_WIDTH && mw*mh*2<=GRKIT_PICTURE_SCRATCH) break;
+        if(mw<=BLUR_WIDTH && mw*mh*2<=GRKIT_PICTURE_MASKS) break;
     }
-    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || mw*mh*2>GRKIT_PICTURE_SCRATCH) return 0;
+    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || mw*mh*2>GRKIT_PICTURE_MASKS) return 0;
     margin=(size*45875)>>16;
     if((((mw-pad)*f)>>(ss-1))+margin>width || (((mh-pad)*f)>>(ss-1))+margin>height) return 0;
     halo=core+mw*mh;
@@ -494,11 +497,28 @@ static u32 plane_of(u32 image,u32 code,Plane *p) {
            p->y>=0x40000000U && p->y<0xc0000000U-p->pitch*p->height &&
            p->c>=0x40000000U && p->c<0xc0000000U-p->pitch*p->height;
 }
+/* The record that the still build of a shot applied, from the shot ring
+   (runtime/abi.h), or 0. Newer entries come first. The key is read again after
+   the record, because the build writes the ring from another task. */
+static u32 shot_record(volatile u32 *h,u32 shot) {
+    u32 ring=PICTURE_SCRATCH(h)+GRKIT_SHOT_RING, n=WORD(ring,0), i, entry, record;
+    for(i=1;shot && i<=GRKIT_SHOT_ENTRIES;++i) {
+        entry=ring+8+((n-i)&(GRKIT_SHOT_ENTRIES-1))*8;
+        if(WORD(entry,0)!=shot) continue;
+        record=WORD(entry,4);
+        PICTURE_BARRIER();
+        if(WORD(entry,0)==shot) return record;
+    }
+    return 0;
+}
+/* For picture_capture_tone: the record of a shot, or 0. */
+u32 picture_capture_record(u32 shot) { return shot_record(framing_header(),shot); }
 /* Selective color, then the stamp, once per plane set: the stamp keeps its own
    color. The second full-size image (descriptor 3) shares the main planes. */
 void picture_encode(u32 process,u32 message) {
     volatile u32 *h=framing_header();
-    u32 config=WORD(message,8), style=h[GRKIT_HOST_STAMP/4], record=h[GRKIT_HOST_STILL/4];
+    /* Configuration +0x34 holds the shot settings of the encoded pictures. */
+    u32 config=WORD(message,8), style=h[GRKIT_HOST_STAMP/4], record=shot_record(h,WORD(config,0x34));
     u32 mono=0, selective=0, done[4], count=0, i, j, n=0;
     u32 date[3];
     u8 *dt=(u8 *)date;

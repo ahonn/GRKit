@@ -27,8 +27,9 @@ pub const HOST_ICON_COUNT: usize = 16;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
 /// Picture scratch after the records (`GRKIT_PICTURE_SCRATCH`): the date stamp
-/// core and halo masks.
-pub const PICTURE_SCRATCH: usize = 141376;
+/// core and halo masks (141,376 bytes), then the shot ring (a write count, a
+/// pad word, and eight {key, record} entries).
+pub const PICTURE_SCRATCH: usize = 141376 + 8 + 8 * 8;
 // One script array holds the header, every record, and the scratch: at most 65536 words.
 const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE + PICTURE_SCRATCH <= 65536 * 4);
 const _: () = assert!(PICTURE_SCRATCH.is_multiple_of(4));

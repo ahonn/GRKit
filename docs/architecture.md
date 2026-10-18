@@ -80,7 +80,9 @@ With more than 20 effects, the installer keeps the 20 smallest effect IDs.
 For a duplicate ID, the file with the smallest name wins. The result does not depend on directory order. Directory read errors stop the installation.
 
 The 20-effect capacity is a product limit, not a GRF format limit. It fits one script array and one icon chunk.
-The script array holds the header, the records, and the 141,376-byte picture scratch for the date stamp masks.
+The script array holds the header, the records, and the picture scratch.
+The scratch has 141,376 bytes for the date stamp masks, then the 72-byte shot ring (see Recorded pictures).
+
 Off, GRKit, and the fourteen module tiles (four Framing, five Guides, five Date Stamp) use sixteen host icon records outside that capacity.
 The module tiles are contiguous, and the menu derives each one from the first Framing tile.
 
@@ -137,6 +139,7 @@ It first refreshes the model snapshot with `0x531a0150`, because a cancel restor
 On return, header `+252` reopens GRKit Image Control at the committed row.
 
 Photos record the effect in the maker-note ImageTone tag (`0x4f`, hook `0x53608080`). Each record has a stable code at `+0x6f8`: `0x8000` plus 15 bits of an FNV-1a hash of the effect ID.
+The tag hook reads the record of its own shot from the shot ring (see Recorded pictures). A shot without an entry keeps the native tag.
 Native readers accept only 256 to 267, so in-camera RAW development falls back to Standard.
 
 Playback extraction keeps a non-native tag in metadata key `0x25` (instruction `0x535c251c`). The DISP icon hook (`0x53179b7c`) shows the effect icon.
@@ -249,6 +252,23 @@ Each descriptor holds Y at `+4`, CbCr at `+8`, and u16 width, height, and shared
 The entry hook processes each plane set once, before the encode is submitted.
 It applies selective color first and then the date stamp, so the stamp keeps its color. It cleans and invalidates the data cache for the planes before and after (`0x5383c8a8`), because the image hardware writes and reads them.
 
+### Shot ring
+
+A shot can start processing before an earlier shot is written. The still parameter build of a second shot can run before the tag and the encode of the first one.
+If the effect changes between the two shots, a single "last still build" word (header `+248`) gives the first photo the effect of the second.
+
+The parameter hook therefore stores the record of each non-live-view build in a ring.
+The key is the shot settings pointer of the build: `r7`, which is `[context + 0x82d0]` on GR IV.
+The maker-note setter holds the same pointer at `+0x18` (in `r2` at the ImageTone call), and the JPEG encode configuration at `+0x34`. Both targets use these offsets.
+
+The ring follows the date stamp masks in the picture scratch: a write count, a pad word, and eight `{key, record}` entries. A native build stores record 0.
+The writer clears the key, writes the record, then writes the key, with a `dmb ish` between the stores. A reader searches from the newest entry and reads the key again after the record.
+
+An entry leaves the ring after eight later builds. A reused shot settings pointer matches its newest entry. A photo whose own build has not run yet can therefore get the previous build of that pointer.
+Header `+248` still holds the last non-live-view record, as a diagnostic.
+
+### Screennail and thumbnail areas
+
 The screennail and the thumbnail have black bars that depend on the capture aspect. The hook uses the visible area from the GetResolution inset tables and the Framing insets.
 
 ### Date stamp
@@ -264,7 +284,7 @@ Only the largest plane of an encode renders the mask. The screennail and the thu
 Playback shows the screennail first and then the main picture. The stamp therefore keeps its position and total width, and only the strokes become sharper.
 If the largest plane has digits of 24 pixels or less, its mask has twice that size, and each pixel averages 2 x 2 cells.
 
-The masks use the picture scratch after the records. The blur line copy is on the stack (1280 bytes), because the code region is read-only.
+The masks use the picture scratch after the records, before the shot ring. The blur line copy is on the stack (1280 bytes), because the code region is read-only.
 Every encode that passes through the hook gets the stamp, including in-camera RAW development and edits. Those show the time of the edit.
 
 ## Code areas

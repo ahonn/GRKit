@@ -48,7 +48,8 @@
 #define GRKIT_HOST_FRAME_SKIPPED 240
 /* Live-view-only override: 0 none, 1 native processing, else an owned record. */
 #define GRKIT_HOST_PREVIEW 244
-/* Record applied by the last non-live-view parameter build, or 0. Capture metadata reads it. */
+/* Record applied by the last non-live-view parameter build, or 0. A
+   diagnostic: capture metadata and the encode read the shot ring. */
 #define GRKIT_HOST_STILL 248
 /* Return to GRKit Image Control after the native parameter page: 1 opening, 2 away. */
 #define GRKIT_HOST_RETURN 252
@@ -79,7 +80,17 @@
 #ifndef GRKIT_ICON_STRIDE
 #define GRKIT_ICON_STRIDE 6408
 #endif
-/* Picture scratch after the records: the date stamp core and halo masks. */
-#define GRKIT_PICTURE_SCRATCH 141376
+/* Picture scratch after the records: the date stamp core and halo masks, then
+   the shot ring. */
+#define GRKIT_PICTURE_MASKS 141376
+/* Shot ring: the record of each recent non-live-view parameter build, keyed by
+   its shot settings pointer, which the maker-note setter (+0x18) and the JPEG
+   encode configuration (+0x34) also hold. A later shot can start processing
+   before an earlier one is written, so a single "last build" word is not
+   enough. Word 0 counts the writes, and entry n is {key, record} at 8 + 8 n.
+   The assembly computes the offset as 0x22800 + 0x40. */
+#define GRKIT_SHOT_RING GRKIT_PICTURE_MASKS
+#define GRKIT_SHOT_ENTRIES 8
+#define GRKIT_PICTURE_SCRATCH (GRKIT_PICTURE_MASKS + 8 + 8 * GRKIT_SHOT_ENTRIES)
 
 #endif

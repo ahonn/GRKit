@@ -185,24 +185,6 @@ menu_native_page_exit:
 .ltorg
 #endif
 
-#ifdef HOOK_MENU_CAPTURE_TONE
-/* Capture: record the effect that the still build applied (+248) as the Image
-   Control tag. Replaces the ImageTone BL in PentaxMakernoteEntryDataSetter. r1
-   is the IFD entry. FW_IFD_SET_SHORT(entry, 0, value) stores the u16 tag value. */
-.global menu_capture_tone
-.type menu_capture_tone, %function
-menu_capture_tone:
-    ldr r12, =0x58012340
-    ldr r12, [r12, #248]
-    cmp r12, #0
-    ldreq pc, =HOOK_MENU_CAPTURE_TONE_TARGET
-    mov r0, r1
-    mov r1, #0
-    add r12, r12, #0x700
-    ldrh r2, [r12, #-8]          @ record + 0x6f8, the effect code
-    ldr pc, =FW_IFD_SET_SHORT
-#endif
-
 #ifdef HOOK_MENU_PLAYBACK_ICON
 /* Playback DISP: keep the native Image Control icon, or show the private icon
    for the code recorded at capture. Replaces the BL to the icon getter, which

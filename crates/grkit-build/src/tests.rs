@@ -343,7 +343,6 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
         (0x531ac270, "menu_native_page_event", "0dc0a0e1", false),
         (0x531ab1b0, "menu_native_page_exit", "0dc0a0e1", false),
         (0x531710c4, "menu_viewfinder_icon", "97e204eb", true),
-        (0x53608080, "menu_capture_tone", "e1fdfeeb", true),
         (0x53179b7c, "menu_playback_icon", "daf404eb", true),
         (0x532b7cfc, "menu_playback_detail", "eef1ffeb", true),
     ];
@@ -366,6 +365,7 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
         (0x536de1a8, "module_gamma_dirty", "0e30d4e5", false),
         (0x536e4774, "picture_post", "e9ffffeb", true),
         (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
+        (0x53608080, "picture_capture_tone", "e1fdfeeb", true),
     ];
     let framing_instructions = [
         (0x53d553c8, "02010300", "00000300"),
@@ -545,7 +545,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
         ),
         (
             "SCRIPT/PLUGINS/PLUGINS.TTL",
-            "45fddf9991e3c6e2f03ccee4dee0bc7349e66a37546e19d4b3e6f3a1576e2df1",
+            "f40585fe4ef2c1b139964dc1b3204a21109539ad2433a9a7da722c415134582d",
         ),
         (
             "SCRIPT/PLUGINS/INSTALL.BIN",

@@ -116,16 +116,17 @@ pub const PICTURE_HOOKS: &[(u32, &str, &str, bool)] = &[
     (0x536e4774, "picture_post", "e9ffffeb", true),
     // JpegEncodeMacroProcess::Execute entry: the date stamp before the encode.
     (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
+    // PentaxMakernoteEntryDataSetter, tag 0x4f (ImageTone): the effect code of
+    // the shot.
+    (0x53608080, "picture_capture_tone", "e1fdfeeb", true),
 ];
 
 pub const VIEWFINDER_HOOKS: &[(u32, &str, &str, bool)] =
     &[(0x531710c4, "menu_viewfinder_icon", "97e204eb", true)];
 
-/// Image Control tag for GRKit photos: capture writes the effect code, and the
-/// playback DISP page shows the effect icon.
+/// Image Control tag for GRKit photos: the playback DISP page shows the effect
+/// icon. Capture writes the effect code (`picture_capture_tone`).
 pub const METADATA_HOOKS: &[(u32, &str, &str, bool)] = &[
-    // PentaxMakernoteEntryDataSetter, tag 0x4f (ImageTone).
-    (0x53608080, "menu_capture_tone", "e1fdfeeb", true),
     // Playback DISP page Image Control icon.
     (0x53179b7c, "menu_playback_icon", "daf404eb", true),
     // Playback parameter detail: render GRKit photos as Standard.
@@ -251,15 +252,15 @@ const GR4_PICTURE_HOOKS: &[Hook] = &[
     (0x5391410c, "module_gamma_dirty", "0e30d4e5", false),
     (0x5391a6a4, "picture_post", "e9ffffeb", true),
     (0x537034b4, "picture_encode_entry", "0dc0a0e1", false),
+    // The ImageTone call of the maker-note setter.
+    (0x53810804, "picture_capture_tone", "1a37ffeb", true),
 ];
 
 const GR4_VIEWFINDER_HOOKS: &[Hook] = &[(0x53187f90, "menu_viewfinder_icon", "2e3d08eb", true)];
 
-/// GR IV 1.11 Image Control tag, as `METADATA_HOOKS` on GR III: the ImageTone
-/// call of the maker-note setter, the playback DISP icon, and the playback
-/// parameter detail.
+/// GR IV 1.11 Image Control tag, as `METADATA_HOOKS` on GR III: the playback
+/// DISP icon and the playback parameter detail.
 const GR4_METADATA_HOOKS: &[Hook] = &[
-    (0x53810804, "menu_capture_tone", "1a37ffeb", true),
     (0x531916c0, "menu_playback_icon", "5a5408eb", true),
     (0x533a7614, "menu_playback_detail", "7af0ffeb", true),
 ];

@@ -41,6 +41,7 @@ static unsigned flushes, native_aspect;
 #define SCRATCH (ARENA + 0x500000)
 #define PICTURE_SCRATCH(h) ((void)(h), SCRATCH)
 #define PICTURE_MAP(address) ((u8 *)region((address), GRKIT_PICTURE_SCRATCH))
+#define PICTURE_BARRIER() ((void)0)
 #include "picture.c"
 
 static volatile u32 header[64];
@@ -101,10 +102,23 @@ static void picture(uint32_t index, uint32_t width, uint32_t height, uint32_t pi
         BYTE(at + pitch * height, y * pitch + x) = (uint8_t)(x & 1 ? 150 : 100);
     }
 }
+/* The shot settings pointer of the encoded pictures. */
+#define SHOT (ARENA + 0x9000)
+/* Record r for a shot in the shot ring, as the still build stores it. */
+static void store_shot(uint32_t shot, uint32_t r)
+{
+    uint32_t ring = SCRATCH + GRKIT_SHOT_RING, n = WORD(ring, 0);
+    uint32_t entry = ring + 8 + (n & (GRKIT_SHOT_ENTRIES - 1)) * 8;
+    WORD(entry, 0) = shot;
+    WORD(entry, 4) = r;
+    WORD(ring, 0) = n + 1;
+}
+static void still(uint32_t r) { store_shot(SHOT, r); }
 static void encode_setup(void)
 {
     reset();
     WORD(MESSAGE, 8) = CONFIG;
+    WORD(CONFIG, 0x34) = SHOT;
     picture(0, 600, 400, 640, PLANES);
     picture(1, 720, 480, 736, PLANES + 0x80000);
     picture(2, 160, 120, 160, PLANES + 0x140000);
@@ -325,7 +339,7 @@ int main(void)
     encode_setup();
     fill_planes(40, 128, 128);
     header[GRKIT_HOST_STAMP / 4] = 1;
-    header[GRKIT_HOST_STILL / 4] = record(2);
+    still(record(2));
     WORD(record(2), GRKIT_RECORD_MONOCHROME) = 1;
     picture_encode(0, MESSAGE);
     for (u32 i = 0; i < 3; ++i) { struct box b = changes(i, 1); assert(b.lit && b.lighter && !b.orange); }
@@ -366,7 +380,7 @@ int main(void)
     /* Glow is gone: a record with the old glow bit and strength byte leaves a
        picture with highlights untouched when no stamp is selected. */
     encode_setup();
-    header[GRKIT_HOST_STILL / 4] = record(1);
+    still(record(1));
     WORD(record(1), GRKIT_RECORD_FEATURES) = 4;
     BYTE(record(1), GRKIT_RECORD_POST + 19) = 3;
     for (u32 y = 180; y < 220; ++y) for (u32 x = 280; x < 320; ++x) BYTE(PLANES, y * 640 + x) = 250;
@@ -386,7 +400,7 @@ int main(void)
         for (u32 k = 0; k < sizeof cases / sizeof *cases; ++k) {
             encode_setup();
             fill_planes(90, cases[k][0], cases[k][1]);
-            header[GRKIT_HOST_STILL / 4] = record(0);
+            still(record(0));
             keep_red(record(0));
             picture_encode(0, MESSAGE);
             assert(flushes == 12);
@@ -404,7 +418,7 @@ int main(void)
     encode_setup();
     fill_planes(90, 62, 44);
     BYTE(DESCRIPTORS + 0x100, 0x10) = 2;
-    header[GRKIT_HOST_STILL / 4] = record(0);
+    still(record(0));
     keep_red(record(0));
     picture_encode(0, MESSAGE);
     for (u32 y = 0; y < 400; ++y) for (u32 x = 0; x < 600; ++x)
@@ -413,7 +427,7 @@ int main(void)
     encode_setup();
     fill_planes(40, 128, 128);
     header[GRKIT_HOST_STAMP / 4] = 1;
-    header[GRKIT_HOST_STILL / 4] = record(0);
+    still(record(0));
     keep_red(record(0));
     picture_encode(0, MESSAGE);
     assert(flushes == 12 && changes(0, 0).orange);
@@ -423,10 +437,30 @@ int main(void)
         fill_planes(90, 62, 44);
         keep_red(record(0));
         WORD(record(0), GRKIT_RECORD_MONOCHROME) = k == 0;
-        header[GRKIT_HOST_STILL / 4] = k == 0 ? record(0) : record(0) + 4;
+        still(k == 0 ? record(0) : record(0) + 4);
         picture_encode(0, MESSAGE);
         assert(flushes == 0);
         assert(changes(0, 0).lit == 0 && changes(1, 0).lit == 0 && changes(2, 0).lit == 0);
+    }
+    /* The encode reads the record of its own shot. A later shot that has
+       started processing does not change it, the newest entry of a reused
+       shot pointer wins, and a shot without an entry gets no effect. */
+    for (u32 k = 0; k < 4; ++k) {
+        encode_setup();
+        fill_planes(90, 62, 44);
+        keep_red(record(0));
+        keep_red(record(1));
+        WORD(record(1), GRKIT_RECORD_MONOCHROME) = 1;
+        if (k == 0) { still(record(0)); store_shot(SHOT + 0x100, record(1)); }
+        if (k == 1) { still(record(1)); still(record(0)); }
+        if (k == 2) store_shot(SHOT + 0x100, record(0));
+        if (k == 3) {
+            /* Older entries leave the ring after eight later builds. */
+            still(record(0));
+            for (u32 i = 0; i < GRKIT_SHOT_ENTRIES; ++i) store_shot(SHOT + 0x100 + i * 4, record(1));
+        }
+        picture_encode(0, MESSAGE);
+        assert((changes(0, 0).lit != 0) == (k < 2));
     }
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);

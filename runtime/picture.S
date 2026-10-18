@@ -63,6 +63,25 @@ dirty_resume:
     ldr pc, =HOOK_MODULE_GAMMA_DIRTY_RESUME
 #endif
 
+/* Capture: record the effect of this shot as the Image Control tag. Replaces
+   the ImageTone BL in PentaxMakernoteEntryDataSetter. r1 is the IFD entry, and
+   r2 the shot settings. FW_IFD_SET_SHORT(entry, 0, value) stores the u16 tag
+   value. A shot without a private record keeps the native tag. */
+.global picture_capture_tone
+picture_capture_tone:
+    push {r0-r4, lr}
+    mov r0, r2
+    bl picture_capture_record
+    mov r12, r0
+    pop {r0-r4, lr}
+    cmp r12, #0
+    ldreq pc, =HOOK_PICTURE_CAPTURE_TONE_TARGET
+    mov r0, r1
+    mov r1, #0
+    add r12, r12, #(GRKIT_RECORD_CODE & ~0xff)
+    ldrh r2, [r12, #(GRKIT_RECORD_CODE & 0xff)]
+    ldr pc, =FW_IFD_SET_SHORT
+
 // JpegEncodeMacroProcess::Execute entry: r0 = process, r1 = message. The stub
 // keeps every argument and replays the displaced `mov ip, sp`.
 .global picture_encode_entry
