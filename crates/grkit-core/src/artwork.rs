@@ -297,7 +297,7 @@ fn speckles(rgba: &mut [u8], top: usize, bottom: usize, period: u32) {
                 .wrapping_add((y as u32).wrapping_mul(0x85eb_ca77))
                 .rotate_left(13)
                 .wrapping_mul(0xc2b2_ae3d);
-            if (hash >> 16) % period == 0 {
+            if (hash >> 16).is_multiple_of(period) {
                 dot(rgba, x, y, 220);
             }
         }

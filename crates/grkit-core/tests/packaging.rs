@@ -404,7 +404,11 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
             .map(|v| v.as_u64().unwrap() as usize)
             .collect();
         // Picture scratch: the date stamp masks, then the shot ring.
-        assert_eq!(words * 4, 256 + count * 0x740 + 141376 + 72, "count {count}");
+        assert_eq!(
+            words * 4,
+            256 + count * 0x740 + 141376 + 72,
+            "count {count}"
+        );
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
             (count + 20) * 6408,
