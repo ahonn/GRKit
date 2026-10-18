@@ -38,8 +38,29 @@ function siteData(directory: string): Plugin {
   return { name: 'grkit-site-data', configureServer: serve, configurePreviewServer: serve };
 }
 
+/**
+ * Removes the WOFF fallback from the Fontsource styles. The site targets ES2023 browsers,
+ * which all read WOFF2, so the fallback only doubles the style rules and the font files.
+ */
+function woff2Only(): Plugin {
+  return {
+    name: 'grkit-woff2-only',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.includes('/@fontsource/') || !id.endsWith('.css')) return;
+      return code.replace(/,\s*url\([^)]*\.woff\) format\('woff'\)/g, '');
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), siteData(process.env.GRKIT_SITE_DATA ?? '../dist/site-data')],
-  build: { target: 'es2023' },
+  plugins: [react(), woff2Only(), siteData(process.env.GRKIT_SITE_DATA ?? '../dist/site-data')],
+  build: {
+    target: 'es2023',
+    // The CSP allows fonts only from the site, so fonts stay files and never become data URLs.
+    assetsInlineLimit: (file) => (/\.woff2?$/.test(file) ? false : undefined),
+    // scripts/third-party-licenses.mjs merges this list into THIRD_PARTY_LICENSES.txt.
+    license: { fileName: '.vite/licenses.json' },
+  },
   test: { environment: 'node' },
 });

@@ -1,6 +1,6 @@
 import { Suspense, useRef, useState } from 'react';
 import { CAMERAS, MODESET_TOKEN } from './cameras';
-import { loadCatalog } from './catalog';
+import { loadCatalog, siteUrl } from './catalog';
 import { EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
@@ -262,9 +262,13 @@ export function App() {
       </main>
 
       <footer className="footer">
-        <p>{t.footer}</p>
+        <div className="footer-notes">
+          <p>{t.footer}</p>
+          <p>{t.trademarks}</p>
+        </div>
         <div>
           <a href={`${REPOSITORY}/blob/main/effects/NOTICE.md`}>{t.licenses}</a>
+          <a href={siteUrl('THIRD_PARTY_LICENSES.txt')}>{t.thirdParty}</a>
           <a href={`${REPOSITORY}/blob/main/resources/RECOVERY.md`}>{t.recovery}</a>
           <a href={REPOSITORY}>{t.source}</a>
         </div>

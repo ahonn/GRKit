@@ -10,12 +10,17 @@
   "scripts": {
     "wasm": "sh scripts/build-wasm.sh",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/third-party-licenses.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/ibm-plex-sans-condensed": "5.3.0",
+    "@fontsource/noto-sans-sc": "5.3.0",
+    "@fontsource/noto-sans-tc": "5.3.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

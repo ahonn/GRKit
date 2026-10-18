@@ -59,7 +59,10 @@ const en = {
   buildError: 'GRKit.zip cannot be prepared. Reload the page to try again.',
   footer:
     'Supports RICOH GR III firmware 2.10 and GR IIIx firmware 1.60. GR IV and GR IV HDF firmware 1.11 support is experimental and has not been tested on a camera.',
+  trademarks:
+    'GRKit is not affiliated with or endorsed by Ricoh, Kodak, or Fujifilm. Some camera, film, and paper names are trademarks of their owners.',
   licenses: 'Effect licenses',
+  thirdParty: 'Third-party licenses',
   recovery: 'Recovery guide',
   source: 'Source',
   modulesNote: 'The camera menu shows only the modules that you select.',
@@ -162,7 +165,10 @@ const zhHans: Strings = {
   buildError: '无法准备 GRKit.zip。请刷新页面后重试。',
   footer:
     '目前支持 RICOH GR III 固件 2.10 和 GR IIIx 固件 1.60。GR IV 与 GR IV HDF 固件 1.11 为实验性支持，未经真机测试。',
+  trademarks:
+    'GRKit 与 Ricoh、Kodak、Fujifilm 无关，也未获得它们的认可。部分相机、胶片和相纸名称是其所有者的商标。',
   licenses: '效果许可',
+  thirdParty: '第三方许可',
   recovery: '恢复指南',
   source: '源代码',
   modulesNote: '相机菜单只显示你选择的模块。',
@@ -251,7 +257,10 @@ const zhHant: Strings = {
   buildError: '無法準備 GRKit.zip。請重新整理頁面後再試。',
   footer:
     '目前支援 RICOH GR III 韌體 2.10 與 GR IIIx 韌體 1.60。GR IV 與 GR IV HDF 韌體 1.11 為實驗性支援，未經實機測試。',
+  trademarks:
+    'GRKit 與 Ricoh、Kodak、Fujifilm 無關，也未獲得其認可。部分相機、底片與相紙名稱為其所有者的商標。',
   licenses: '效果授權',
+  thirdParty: '第三方授權',
   recovery: '復原指南',
   source: '原始碼',
   modulesNote: '相機選單只顯示你選擇的模組。',

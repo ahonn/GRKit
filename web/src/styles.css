@@ -670,6 +670,12 @@ code {
   margin: 0;
 }
 
+.footer .footer-notes {
+  display: grid;
+  gap: 6px;
+  max-width: 72ch;
+}
+
 .footer div {
   display: flex;
   flex-wrap: wrap;
