@@ -7,6 +7,8 @@ typedef unsigned int u32;
 /* kind 1: a reservation after the decoded RTOS image. BOOT does not reload
    it, so it can keep the previous session's code after a restart. */
 struct patch { u32 address, size, kind; const u8 *before; u8 *after; };
+/* Stock bytes that statically patched firmware changes. */
+struct guard { u32 address, size; const u8 *bytes; };
 #include "module_payload.h"
 
 static long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
@@ -233,6 +235,12 @@ static int install(void)
             if (ptr < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < ptr + bytes) return 11;
         icon_bases[i] = ptr;
     }
+#ifdef GUARD_COUNT
+    /* Patched firmware can extend the RTOS image into the private tail
+       regions. GRKit then refuses to load instead of overwriting that code. */
+    for (u32 i = 0; i < GUARD_COUNT; ++i)
+        if (!equal(at(guards[i].address), guards[i].bytes, guards[i].size)) return 45;
+#endif
 #ifndef GRKIT_NO_MODULES
     if (word(ENGLISH_SLOT) != ORIGINAL_ENGLISH) return 12;
 #ifndef GRKIT_NO_IMAGE_CONTROL

@@ -33,6 +33,8 @@ The GRKit page shows only the modules in this package. If it has only one module
 Image Control shows when `SCRIPT/PLUGINS/EFFECTS` contains effects. `SCRIPT/PLUGINS/MODULES.TXT` lists the other modules to hide: `framing`, `guides`, or `date-stamp`, one on each line.
 If that file names an unknown module, GRKit does not load, and `SCRIPT/PLUGINS/INSTALL.ERR` contains 43.
 
+GRKit requires the official firmware. If the camera runs a modified firmware, GRKit does not load, and `INSTALL.ERR` contains 45. Install the official firmware 2.10 (GR IIIx: 1.60) again to use GRKit.
+
 GRKit keeps the selected effect, ratio, guide style, and date style in `SCRIPT/PLUGINS/STATE.TXT` and restores them a few seconds after power-on.
 Delete that file to start from Off. A hidden module starts from Off. Pressing OK on a native Image Control disables the plugin effect.
 Playback information shows the plugin effect icon while that effect is installed.

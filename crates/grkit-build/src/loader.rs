@@ -1,5 +1,5 @@
 use crate::{firmware::FirmwareImage, target, PatchPlan};
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use grkit_core::{
     artwork::{module_tiles, off_pixels, plugins_pixels},
     runtime::{
@@ -155,6 +155,22 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage) -> Result<String> {
     for (i, patch) in plan.patches.iter().enumerate() {
         array(&mut result, &format!("before_{i}"), &patch.before, true);
         array(&mut result, &format!("after_{i}"), &patch.after, false);
+    }
+    if let Some(layout) = target.layout.filter(|layout| !layout.guards.is_empty()) {
+        let mut entries = String::new();
+        for (i, &(address, expected)) in layout.guards.iter().enumerate() {
+            let bytes = hex::decode(expected)?;
+            ensure!(
+                body.read(address, bytes.len())? == bytes,
+                "Firmware guard differs at {address:#x}"
+            );
+            array(&mut result, &format!("guard_{i}"), &bytes, true);
+            writeln!(entries, "{{{address:#x},{},guard_{i}}},", bytes.len())?;
+        }
+        writeln!(result, "#define GUARD_COUNT {}U", layout.guards.len())?;
+        result.push_str("static const struct guard guards[] = {\n");
+        result.push_str(&entries);
+        result.push_str("};\n");
     }
     // Kind 1 marks a patch after the decoded RTOS image. The installer does
     // not require its stock bytes, because a restart keeps earlier GRKit code.

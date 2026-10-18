@@ -37,6 +37,9 @@ fn synthetic_firmware() -> firmware::FirmwareImage {
     {
         write(address, &hex::decode(bytes).unwrap());
     }
+    for &(address, bytes) in components::GR3_LAYOUT.guards {
+        write(address, &hex::decode(bytes).unwrap());
+    }
     for address in target::GR3_IMAGE_CONTROL.tables {
         write(address, &(0..104u8).collect::<Vec<_>>());
     }
@@ -483,7 +486,7 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
     let header = loader::header(&plan, &synthetic_firmware())?;
     assert_eq!(
         sha256(header.as_bytes()),
-        "9c11956d528d356cbb2cf592f8773831f3fe8c0fb22301cd413346cd872ba0c4"
+        "15df293de1df251838ca0f590d4b0c45278b83249eacb95a8478c058f113bcc5"
     );
     Ok(())
 }

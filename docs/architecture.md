@@ -61,6 +61,14 @@ INSTALL checks the allocations, prepares records and icons, then publishes code 
 It returns not-ready statuses while the camera initializes, and the loader repeats it. The result is `INSTALL.OK`, or `INSTALL.ERR` with the decimal status.
 `O_EXCL` files serialize overlapping attempts. The loader deletes stale result and lock files at startup.
 
+Before INSTALL writes anything, it compares the firmware guards (`components::Layout::guards`) with the running image. A difference stops it with status 45.
+The guards are the startup literals of the `.data` copy at `0x53000450`: source, destination, and size. Source plus size is the end of the RTOS image.
+On GR IV, the guards also include the icon catalog getter (`0x533ef604`).
+
+A statically patched firmware that extends the RTOS image changes them. Its additions can lie in the private regions after the image, which INSTALL would otherwise overwrite without a check.
+One such GR IV firmware extends the image from `0x543d2ac0` to `0x5440eac0`, over the Framing and processing regions.
+That firmware also changes three GRKit hook sites, so the hook check (status 16) would stop it too. A patched firmware that changes no hook site passes that check, but not the guards.
+
 An unusable effect file does not stop the other effects or Framing. Unusable files include names outside the `NAME.GRF` 8.3 rule, symbolic links, unreadable files, and invalid records.
 The `._` companions that macOS writes are therefore ignored.
 

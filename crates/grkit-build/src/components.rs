@@ -31,6 +31,9 @@ pub const CONTEXTS: &[(u32, &str)] = &[
         "e83494e5001ad3e597e204eb0040a0e10500a0e10410a0e131a608eb",
     ),
 ];
+/// The startup literals for the `.data` copy: source, destination, and size.
+/// Source plus size is the end of the RTOS image.
+const GR3_GUARDS: &[(u32, &str)] = &[(0x53000450, "40b507540000005580a00300")];
 // Instructions replaced by the processing hook and replayed on its stock path.
 const PROCESSING_ORIGINAL: &str =
     "940d08e3f0cc08e3010545e301c545e37b9f86e201e190e74c0e08e3010545e3";
@@ -167,6 +170,10 @@ pub struct Layout {
     pub framing_hooks: &'static [Hook],
     pub picture_hooks: &'static [Hook],
     pub framing_patches: &'static [InstructionPatch],
+    /// Stock bytes that a statically patched firmware changes when it grows the
+    /// RTOS image into the private tail regions. The installer checks them
+    /// before it writes anything.
+    pub guards: &'static [(u32, &'static str)],
 }
 
 pub const GR3_LAYOUT: Layout = Layout {
@@ -185,6 +192,7 @@ pub const GR3_LAYOUT: Layout = Layout {
     framing_hooks: FRAMING_HOOKS,
     picture_hooks: PICTURE_HOOKS,
     framing_patches: FRAMING_PATCHES,
+    guards: GR3_GUARDS,
 };
 
 /// GR IV 1.11 menu hooks. The menu code follows the GR IV boot
@@ -283,6 +291,14 @@ const GR4_CONTEXTS: &[(u32, &str)] = &[
     (0x53187f88, "ec3494e5401ad3e52e3d08eb"),
 ];
 
+/// The startup `.data` literals, as on GR III, and the icon catalog getter
+/// (`movw r0` / `movt r0`, 0x55013410), which patched firmware moves into the
+/// RTOS tail when it adds icons.
+const GR4_GUARDS: &[(u32, &str)] = &[
+    (0x53000450, "40b637540000005580740500"),
+    (0x533ef604, "100403e3010545e3"),
+];
+
 pub const GR4_LAYOUT: Layout = Layout {
     define: "-DGRKIT_TARGET_GR4_111",
     hidden: 0,
@@ -301,6 +317,7 @@ pub const GR4_LAYOUT: Layout = Layout {
     framing_hooks: GR4_FRAMING_HOOKS,
     picture_hooks: GR4_PICTURE_HOOKS,
     framing_patches: &[],
+    guards: GR4_GUARDS,
 };
 
 /// Every hook of a layout: (address, symbol).
