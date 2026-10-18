@@ -119,6 +119,10 @@ pub const PICTURE_HOOKS: &[(u32, &str, &str, bool)] = &[
     // PentaxMakernoteEntryDataSetter, tag 0x4f (ImageTone): the effect code of
     // the shot.
     (0x53608080, "picture_capture_tone", "e1fdfeeb", true),
+    // DigitalFilterProcess SetEffectParameter (0x5350304c): the Particle load,
+    // then the BL to the stage gate (0x535131c0, plan +0x24).
+    (0x535031b0, "grain_particle", "9537d5e5", true),
+    (0x5351361c, "grain_gate", "e7feffeb", true),
 ];
 
 pub const VIEWFINDER_HOOKS: &[(u32, &str, &str, bool)] =
@@ -254,6 +258,13 @@ const GR4_PICTURE_HOOKS: &[Hook] = &[
     (0x537034b4, "picture_encode_entry", "0dc0a0e1", false),
     // The ImageTone call of the maker-note setter.
     (0x53810804, "picture_capture_tone", "1a37ffeb", true),
+    // DigitalFilterProcess SetEffectParameter (0x53701c40): the grain on,
+    // strength, and size loads, then the BL to the stage gate (0x537150fc,
+    // plan +0x25).
+    (0x53701e14, "grain_enable", "b537d4e5", true),
+    (0x53701e34, "grain_strength", "b737d4e5", true),
+    (0x53701e58, "grain_size", "b637d4e5", true),
+    (0x5371557c, "grain_gate", "defeffeb", true),
 ];
 
 const GR4_VIEWFINDER_HOOKS: &[Hook] = &[(0x53187f90, "menu_viewfinder_icon", "2e3d08eb", true)];

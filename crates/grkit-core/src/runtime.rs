@@ -20,10 +20,11 @@ pub fn icon_stride(target: &str) -> Result<usize> {
     }
 }
 pub const ICONS_PER_CHUNK: usize = 40;
-/// Off, GRKit, four Framing tiles, five Guides tiles, and five Date Stamp tiles.
+/// Off, GRKit, four Framing tiles, five Guides tiles, five Date Stamp tiles, and
+/// four Grain tiles.
 /// The menu addresses module tiles by offset, so they must stay contiguous in
 /// one icon chunk.
-pub const HOST_ICON_COUNT: usize = 16;
+pub const HOST_ICON_COUNT: usize = 20;
 /// Product limit for private Image Control effects.
 pub const MAX_COUNT: usize = 20;
 /// Picture scratch after the records (`GRKIT_PICTURE_SCRATCH`): the date stamp
@@ -42,6 +43,7 @@ pub const HOST_COUNT: usize = 0;
 pub const HOST_RECORDS: usize = 4;
 pub const HOST_ACTIVE: usize = 8;
 pub const HOST_STAMP: usize = 52;
+pub const HOST_GRAIN: usize = 72;
 /// Modules that `MODULES.TXT` hides: bit n is module n of `runtime/modules.h`.
 pub const HOST_HIDDEN: usize = 56;
 pub const HOST_GUIDE: usize = 204;
@@ -178,7 +180,8 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
     ]);
     // The private header is the `registry` array, so the script reads and
     // writes it directly. The state is one integer:
-    // code + 65536 * (ratio + 4 * (guide + 8 * stamp)), code 0 for Off.
+    // code + 65536 * (ratio + 4 * (guide + 8 * (stamp + 8 * grain))), code 0
+    // for Off. A file from before Grain has grain 0.
     let word = |offset: usize| format!("registry[{}]", offset / 4);
     let state = path(STATE_FILE);
     lines.extend([
@@ -211,10 +214,11 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         ),
         ":snapshot_values".into(),
         format!(
-            "state = code + 65536 * ({} + 4 * ({} + 8 * {}))",
+            "state = code + 65536 * ({} + 4 * ({} + 8 * ({} + 8 * {})))",
             word(HOST_FRAME_RATIO),
             word(HOST_GUIDE),
-            word(HOST_STAMP)
+            word(HOST_STAMP),
+            word(HOST_GRAIN)
         ),
         "return".into(),
         // An unreadable or out-of-range file restores nothing. An effect that is
@@ -239,12 +243,15 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         "rest = upper / 8".into(),
         "guide = upper - rest * 8".into(),
         "if guide > 4 goto restore_end".into(),
-        "if rest > 4 goto restore_end".into(),
+        "grain = rest / 8".into(),
+        "stamp = rest - grain * 8".into(),
+        "if stamp > 4 goto restore_end".into(),
+        "if grain > 3 goto restore_end".into(),
         // A hidden module has no menu to turn it off, so it restores Off. The
         // script has no bit operators. Bit 0 is Image Control, which is never hidden.
         format!("hidden = {} / 2", word(HOST_HIDDEN)),
     ]);
-    for value in ["ratio", "guide", "rest"] {
+    for value in ["ratio", "guide", "stamp", "grain"] {
         lines.extend([
             "higher = hidden / 2".into(),
             "hiddenbit = hidden - higher * 2".into(),
@@ -255,7 +262,8 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
     lines.extend([
         format!("{} = ratio", word(HOST_FRAME_RATIO)),
         format!("{} = guide", word(HOST_GUIDE)),
-        format!("{} = rest", word(HOST_STAMP)),
+        format!("{} = stamp", word(HOST_STAMP)),
+        format!("{} = grain", word(HOST_GRAIN)),
         "index = 0".into(),
         ":restore_find".into(),
         "if code = 0 goto restore_end".into(),

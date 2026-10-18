@@ -366,6 +366,8 @@ fn synthetic_arm_hooks_match_fixed_target_contract() -> Result<()> {
         (0x536e4774, "picture_post", "e9ffffeb", true),
         (0x535047d4, "picture_encode_entry", "0dc0a0e1", false),
         (0x53608080, "picture_capture_tone", "e1fdfeeb", true),
+        (0x535031b0, "grain_particle", "9537d5e5", true),
+        (0x5351361c, "grain_gate", "e7feffeb", true),
     ];
     let framing_instructions = [
         (0x53d553c8, "02010300", "00000300"),
@@ -486,7 +488,7 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
     let header = loader::header(&plan, &synthetic_firmware())?;
     assert_eq!(
         sha256(header.as_bytes()),
-        "15df293de1df251838ca0f590d4b0c45278b83249eacb95a8478c058f113bcc5"
+        "0b69a53e4351f839cb0e393023421671164b8c07d1cf9e0967a8d7e8dc17d00a"
     );
     Ok(())
 }
@@ -545,7 +547,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
         ),
         (
             "SCRIPT/PLUGINS/PLUGINS.TTL",
-            "f40585fe4ef2c1b139964dc1b3204a21109539ad2433a9a7da722c415134582d",
+            "18873aba6432904392f3897932a740992d9859a7d8f3d233703b60174eb2dca1",
         ),
         (
             "SCRIPT/PLUGINS/INSTALL.BIN",

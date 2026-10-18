@@ -144,7 +144,7 @@ int main(void)
     assert(advance_from_private(0xcf, 2) == 0);
     assert(advance_from_private(0xce, 2) == 1);
     test_header[9] = 1;
-    assert(count(test_header) == 4);
+    assert(count(test_header) == 5);
     test_header[9] = 2;
     assert(count(test_header) == 6);
     test_header[GRKIT_HOST_COUNT / 4] = 0;
@@ -159,12 +159,16 @@ int main(void)
     /* Guides tiles follow the Framing tiles. */
     assert(menu_icon(GUIDES_ICON) == 0x59007000 + FRAMING_ICON_COUNT * GRKIT_ICON_STRIDE);
     assert(menu_icon(GUIDE_STYLE_ICON(4)) == 0x59007000 + 8 * GRKIT_ICON_STRIDE);
-    /* Module tiles fill 0x7ff0..0x7ffd; the GRKit tile (0x7ffe) follows them. */
+    /* Module tiles fill 0x7fec..0x7ffd; the GRKit tile (0x7ffe) follows them. */
     assert(menu_icon(FRAMING_ICON - 1) == 0);
     assert(FRAMING_ICON + MODULE_ICON_COUNT <= 0x7ffe);
     /* Date Stamp tiles follow the Guides tiles. */
     assert(menu_icon(STAMP_ICON) == 0x59007000 + 9 * GRKIT_ICON_STRIDE);
     assert(menu_icon(STAMP_STYLE_ICON(4)) == 0x59007000 + 13 * GRKIT_ICON_STRIDE);
+    /* Grain tiles follow the Date Stamp tiles and end below the GRKit tile. */
+    assert(menu_icon(GRAIN_ICON) == 0x59007000 + 14 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRAIN_LEVEL_ICON(3)) == 0x59007000 + 17 * GRKIT_ICON_STRIDE);
+    assert(GRAIN_LEVEL_ICON(3) == 0x7ffd);
     test_header[9] = MENU_ROOT;
     test_header[10] = 1;
     assert(current_module(test_header) == &modules[1]);
@@ -308,6 +312,33 @@ int main(void)
     assert(stamp_style(test_header) == 0);
     test_header[GRKIT_HOST_STAMP / 4] = 0;
     test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
+    /* Grain lists its levels, opens at the committed one, and changes nothing else. */
+    test_header[9] = MENU_ROOT;
+    test_header[10] = 4;
+    assert(current_module(test_header)->summary(test_header) == grain_summaries[0]);
+    assert(modules[GRAIN_MODULE].icon(test_header, 4) == GRAIN_ICON);
+    test_header[GRKIT_HOST_GRAIN / 4] = 2;
+    assert(modules[GRAIN_MODULE].icon(test_header, 4) == GRAIN_LEVEL_ICON(2));
+    menu_confirm(test_header);
+    assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == GRAIN_MODULE);
+    assert(test_header[10] == 2 && count(test_header) == 4);
+    assert(current_module(test_header)->title(test_header) == grain);
+    for (u32 row = 0; row < 4; ++row) {
+        test_header[10] = row;
+        menu_confirm(test_header);
+        assert(test_header[GRKIT_HOST_GRAIN / 4] == row);
+        assert(current_module(test_header)->checked(test_header, row));
+        assert(current_module(test_header)->label(test_header, row) == grain_labels[row]);
+        assert(current_module(test_header)->icon(test_header, row) == (row ? GRAIN_LEVEL_ICON(row) : 0x7fff));
+        assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == 3 && test_header[GRKIT_HOST_STAMP / 4] == 0);
+        assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
+    }
+    assert(menu_back(test_header) && test_header[10] == 4);
+    assert(current_module(test_header)->summary(test_header) == grain_summaries[3]);
+    test_header[GRKIT_HOST_GRAIN / 4] = 999;
+    assert(grain_level(test_header) == 0);
+    test_header[GRKIT_HOST_GRAIN / 4] = 0;
+    test_header[GRKIT_HOST_FRAME_PREVIEW_CANVAS / 4] = 0;
     test_header[9] = MENU_ROOT;
     test_header[10] = 1;
     /* Invalid public navigation cursors cannot form an effect pointer. */
@@ -385,7 +416,7 @@ int main(void)
     test_header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
     test_header[GRKIT_HOST_HIDDEN / 4] = 1U << GUIDES_MODULE;
     menu_start(test_header);
-    assert(test_header[9] == MENU_ROOT && test_header[10] == 0 && count(test_header) == 3);
+    assert(test_header[9] == MENU_ROOT && test_header[10] == 0 && count(test_header) == 4);
     assert(current_module(test_header) == &modules[0]);
     test_header[10] = 2;
     assert(current_module(test_header) == &modules[STAMP_MODULE]);
@@ -405,19 +436,19 @@ int main(void)
     assert(test_header[9] == MENU_ROOT && test_header[10] == 0);
     /* Bit 0 does not hide Image Control: its effects show it. */
     test_header[GRKIT_HOST_HIDDEN / 4] = 1U | 1U << FRAMING_MODULE;
-    assert(visible_modules(test_header) == (1U | 1U << GUIDES_MODULE | 1U << STAMP_MODULE));
+    assert(visible_modules(test_header) == (1U | 1U << GUIDES_MODULE | 1U << STAMP_MODULE | 1U << GRAIN_MODULE));
     /* Without effects, Image Control is hidden. */
     test_header[GRKIT_HOST_HIDDEN / 4] = 0;
     test_header[GRKIT_HOST_COUNT / 4] = 0;
     menu_start(test_header);
-    assert(test_header[9] == MENU_ROOT && count(test_header) == 3);
+    assert(test_header[9] == MENU_ROOT && count(test_header) == 4);
     assert(current_module(test_header) == &modules[FRAMING_MODULE]);
     test_header[10] = 2;
     menu_confirm(test_header);
     assert(test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
     assert(menu_back(test_header) && test_header[10] == 2);
     /* One visible module opens at its committed row, and MENU leaves the private page. */
-    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE;
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE | 1U << GRAIN_MODULE;
     test_header[GRKIT_HOST_STAMP / 4] = 3;
     menu_start(test_header);
     assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == STAMP_MODULE);
@@ -433,7 +464,7 @@ int main(void)
     assert(test_header[GRKIT_HOST_STAMP / 4] == 1 && test_header[9] == MENU_MODULE);
     test_header[GRKIT_HOST_STAMP / 4] = 0;
     /* With nothing visible, Image Control shows with Off only. */
-    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE | 1U << STAMP_MODULE;
+    test_header[GRKIT_HOST_HIDDEN / 4] = 1U << FRAMING_MODULE | 1U << GUIDES_MODULE | 1U << STAMP_MODULE | 1U << GRAIN_MODULE;
     menu_start(test_header);
     assert(test_header[9] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == 0);
     assert(count(test_header) == 1 && test_header[10] == 0);

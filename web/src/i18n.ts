@@ -73,6 +73,7 @@ const en = {
       'XPan 65:24, 16:9, or 4:3 photos. The viewfinder stays 3:2 and dims the area outside the photo.',
     guides: 'Thirds, center, golden ratio, or diagonal lines inside the Framing area.',
     dateStamp: 'The date on photos in orange seven-segment digits.',
+    grain: "Film grain from the camera's own grain stage, in three strengths. Photos only.",
   },
   framingXpanOnly:
     'XPan 65:24 photos, cropped from the native 16:9 aspect ratio. The viewfinder dims the area outside the photo.',
@@ -174,6 +175,7 @@ const zhHans: Strings = {
     framing: '拍摄 XPan 65:24、16:9 或 4:3 照片。取景器保持 3:2，并遮暗照片外的区域。',
     guides: '在 Framing 区域内显示三分线、中心十字、黄金分割线或对角线。',
     dateStamp: '用橙色七段数码字体在照片上打印日期。',
+    grain: '使用相机自带的颗粒处理，为照片加上三档强度的胶片颗粒。只作用于照片。',
   },
   framingXpanOnly: '从原生 16:9 画幅裁出 XPan 65:24 照片。取景器遮暗照片外的区域。',
   steps: [
@@ -262,6 +264,7 @@ const zhHant: Strings = {
     framing: '拍攝 XPan 65:24、16:9 或 4:3 照片。取景器維持 3:2，並遮暗照片外的區域。',
     guides: '在 Framing 區域內顯示三分線、中心十字、黃金分割線或對角線。',
     dateStamp: '用橙色七段數字字型在照片上印上日期。',
+    grain: '使用相機內建的顆粒處理，為照片加上三檔強度的底片顆粒。只作用於照片。',
   },
   framingXpanOnly: '從原生 16:9 畫幅裁出 XPan 65:24 照片。取景器遮暗照片外的區域。',
   steps: [

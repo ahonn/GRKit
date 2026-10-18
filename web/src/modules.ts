@@ -8,6 +8,7 @@ export const MODULES = [
   { key: 'framing', name: 'Framing', hide: 'framing' },
   { key: 'guides', name: 'Guides', hide: 'guides' },
   { key: 'dateStamp', name: 'Date Stamp', hide: 'date-stamp' },
+  { key: 'grain', name: 'Grain', hide: 'grain' },
 ] as const;
 
 export type ModuleKey = (typeof MODULES)[number]['key'];

@@ -351,14 +351,14 @@ fn package_hides_modules_and_may_omit_effects() {
         "--hide",
         "guides",
         "--hide",
-        "date-stamp",
+        "date-stamp,grain",
         "--out",
         text(&framing_only),
     ]);
     assert_eq!(packaged["entries"], 10);
     assert_eq!(success(&["verify", text(&framing_only)])["effects"], 0);
     for hide in [
-        "framing,guides,date-stamp",
+        "framing,guides,date-stamp,grain",
         "image-control",
         "guides,guides",
     ] {

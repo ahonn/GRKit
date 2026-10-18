@@ -5,8 +5,8 @@
    Image Control is not listed: it shows exactly when effects are installed.
    grkit_core::modules implements the same rules. Callers define u8 and u32. */
 #define VISIBILITY_FILE_MAX 256U
-#define VISIBILITY_MODULES 3U
-static const char *const visibility_names[VISIBILITY_MODULES] = {"framing", "guides", "date-stamp"};
+#define VISIBILITY_MODULES 4U
+static const char *const visibility_names[VISIBILITY_MODULES] = {"framing", "guides", "date-stamp", "grain"};
 static int visibility_space(u8 c) { return c==' ' || c=='\t' || c=='\r' || c=='\n'; }
 static int visibility_name(const u8 *text, u32 n, const char *name)
 {

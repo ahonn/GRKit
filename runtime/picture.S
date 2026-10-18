@@ -63,6 +63,96 @@ dirty_resume:
     ldr pc, =HOOK_MODULE_GAMMA_DIRTY_RESUME
 #endif
 
+/* Grain: the native grain stage of DigitalFilterProcess, which runs for
+   recorded pictures only. SetEffectParameter reads the grain settings from the
+   shot settings (r4 on GR IV, r5 on GR III); these hooks replace each load with
+   the Grain level, and Off keeps the native value. The stage gate ignores grain
+   for Standard, so the gate wrapper turns the stage on for any level. */
+#if defined(HOOK_GRAIN_ENABLE) || defined(HOOK_GRAIN_PARTICLE)
+// r3 = the level minus 1, or a value above 2 for Off. Flags change.
+grain_level:
+    ldr r3, =0x58012340
+    ldr r3, [r3, #GRKIT_HOST_GRAIN]
+    sub r3, r3, #1
+    cmp r3, #2
+    bx lr
+
+// Replaces the BL to the stage gate. r0 = plan, r1 = shot settings. The caller
+// reloads r0 and r1 after the call.
+.global grain_gate
+grain_gate:
+    push {r0, lr}
+    ldr r12, =HOOK_GRAIN_GATE_TARGET
+    blx r12
+    bl grain_level
+    pop {r0, lr}
+    movls r3, #1
+    strbls r3, [r0, #GRAIN_GATE_FLAG]
+    bx lr
+#endif
+
+#ifdef HOOK_GRAIN_ENABLE
+// GR IV replaces `ldrb r3, [r4, #0x7b5]` (grain on). A cmp of r3 follows each
+// replaced load, so the hooks may change the flags.
+.global grain_enable
+grain_enable:
+    push {lr}
+    bl grain_level
+    pop {lr}
+    movls r3, #1
+    ldrbhi r3, [r4, #0x7b5]
+    bx lr
+
+// Replaces `ldrb r3, [r4, #0x7b7]` (strength 0..2): weak, medium, strong.
+.global grain_strength
+grain_strength:
+    push {lr}
+    bl grain_level
+    pop {lr}
+    ldrbhi r3, [r4, #0x7b7]
+    bx lr
+
+// Replaces `ldrb r3, [r4, #0x7b6]` (size 0..2). The size follows the ISO of
+// the shot: small to ISO 400, medium to ISO 800, large above. +0xba0 holds the
+// float APEX Sv that the EXIF ISO uses. The native ISO index is
+// round((Sv - 1) * 3), so ISO 400 ends at Sv 43/6 and ISO 800 at Sv 49/6.
+// For a positive float, the bit patterns compare as the values. A negative
+// value, an infinity, or a NaN gives small grain.
+.global grain_size
+grain_size:
+    push {lr}
+    bl grain_level
+    pop {lr}
+    ldrbhi r3, [r4, #0x7b6]
+    bxhi lr
+    ldr r12, [r4, #0xba0]
+    ldr r3, =0x7f800000
+    cmp r12, r3
+    movhs r3, #0
+    bxhs lr
+    ldr r3, =0x40e55555
+    cmp r12, r3
+    movlo r3, #0
+    bxlo lr
+    ldr r3, =0x4102aaab
+    cmp r12, r3
+    movlo r3, #1
+    movhs r3, #2
+    bx lr
+#endif
+
+#ifdef HOOK_GRAIN_PARTICLE
+// GR III replaces `ldrb r3, [r5, #0x795]` (Particle 0..3): the level itself.
+.global grain_particle
+grain_particle:
+    push {lr}
+    bl grain_level
+    pop {lr}
+    addls r3, r3, #1
+    ldrbhi r3, [r5, #0x795]
+    bx lr
+#endif
+
 /* Capture: record the effect of this shot as the Image Control tag. Replaces
    the ImageTone BL in PentaxMakernoteEntryDataSetter. r1 is the IFD entry, and
    r2 the shot settings. FW_IFD_SET_SHORT(entry, 0, value) stores the u16 tag

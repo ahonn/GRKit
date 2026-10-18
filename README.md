@@ -1,15 +1,16 @@
 # GRKit
 
-GRKit is an SD-loaded plugin runtime for the RICOH GR III with firmware 2.10 and the GR IIIx with firmware 1.60. It adds a sixth ADJ entry with four modules:
+GRKit is an SD-loaded plugin runtime for the RICOH GR III with firmware 2.10 and the GR IIIx with firmware 1.60. It adds a sixth ADJ entry with five modules:
 
 - **Image Control**: film effects and custom effects, with a live-view preview.
 - **Framing**: XPan (65:24), 16:9, or 4:3 photos, with a mask in the 3:2 viewfinder.
 - **Guides**: thirds, center, golden ratio, or diagonal lines inside the Framing area.
 - **Date Stamp**: a film data-back date in orange seven-segment digits on photos.
+- **Grain**: film grain on photos from the camera's own grain stage, in three strengths.
 
 A package can leave out modules. The camera menu then shows only the modules in the package.
 
-GR IV and GR IV HDF with firmware 1.11 have experimental support for Image Control, Framing (XPan only, cropped from native 16:9), Guides, and Date Stamp. This support has not been tested on a camera.
+GR IV and GR IV HDF with firmware 1.11 have experimental support for all five modules. Framing offers only XPan, cropped from native 16:9. This support has not been tested on a camera.
 
 > [!WARNING]
 > GRKit is experimental and is not affiliated with Ricoh. It patches the firmware in RAM for the current session and does not write the firmware. Activation enables the camera's persistent SD-script setting. A failure can stop the camera during startup. Read the [recovery guide](resources/RECOVERY.md) before you install GRKit.
@@ -35,7 +36,7 @@ grkit verify dist/GRKit.zip
 
 `grkit package --camera gr3x` makes a package for the GR IIIx. The runtime build is the same, and only the file that enables SD scripts changes.
 For GR IV, build the runtime from the GR IV 1.11 firmware file (`fwdc248b.bin`) with `--target gr4-1.11`, then package it with `--camera gr4`.
-`grkit package --hide framing,guides,date-stamp` hides modules. A package without `--effects` has no Image Control.
+`grkit package --hide framing,guides,date-stamp,grain` hides modules. A package without `--effects` has no Image Control.
 
 ## Documentation
 

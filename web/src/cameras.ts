@@ -20,7 +20,7 @@ export interface Camera {
   };
 }
 
-const ALL: readonly ModuleKey[] = ['imageControl', 'framing', 'guides', 'dateStamp'];
+const ALL: readonly ModuleKey[] = ['imageControl', 'framing', 'guides', 'dateStamp', 'grain'];
 
 export const CAMERAS: readonly Camera[] = [
   {

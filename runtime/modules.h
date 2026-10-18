@@ -5,8 +5,9 @@
 #define MENU_ROOT 1U
 #define MENU_MODULE 2U
 #define FRAMING_MODULE 1U
-/* Framing artwork is contiguous: the module tile, then the three ratios. */
-#define FRAMING_ICON 0x7ff0U
+/* Module artwork is contiguous and ends below the GRKit tile (0x7ffe). Framing
+   comes first: the module tile, then the three ratios. */
+#define FRAMING_ICON 0x7fecU
 #define FRAMING_RATIO_ICON(ratio) (FRAMING_ICON+(ratio))
 #define FRAMING_ICON_COUNT 4U
 #define GUIDES_MODULE 2U
@@ -19,7 +20,12 @@
 #define STAMP_ICON (GUIDES_ICON+GUIDES_ICON_COUNT)
 #define STAMP_STYLE_ICON(style) (STAMP_ICON+(style))
 #define STAMP_ICON_COUNT 5U
-#define MODULE_ICON_COUNT (FRAMING_ICON_COUNT+GUIDES_ICON_COUNT+STAMP_ICON_COUNT)
+#define GRAIN_MODULE 4U
+/* Grain artwork follows the date stamp artwork: the module tile, then three levels. */
+#define GRAIN_ICON (STAMP_ICON+STAMP_ICON_COUNT)
+#define GRAIN_LEVEL_ICON(level) (GRAIN_ICON+(level))
+#define GRAIN_ICON_COUNT 4U
+#define MODULE_ICON_COUNT (FRAMING_ICON_COUNT+GUIDES_ICON_COUNT+STAMP_ICON_COUNT+GRAIN_ICON_COUNT)
 #define ARRAY_COUNT(a) (sizeof(a)/sizeof((a)[0]))
 
 typedef struct {
@@ -158,6 +164,32 @@ static u32 stamp_checked(volatile u32 *h,u32 row) { return row==stamp_style(h); 
 /* Recorded pictures only: the encode hook prints the capture date. */
 static void stamp_apply(volatile u32 *h,u32 row) { h[GRKIT_HOST_STAMP/4]=row; }
 
+static const u16 grain[] = {'G','r','a','i','n',0};
+static const u16 grain_labels[][7] = {
+    {'O','f','f',0}, {'W','e','a','k',0}, {'M','e','d','i','u','m',0}, {'S','t','r','o','n','g',0}
+};
+static const u16 grain_summaries[][14] = {
+    {'G','r','a','i','n',':',' ','O','f','f',0},
+    {'G','r','a','i','n',':',' ','W','e','a','k',0},
+    {'G','r','a','i','n',':',' ','M','e','d','i','u','m',0},
+    {'G','r','a','i','n',':',' ','S','t','r','o','n','g',0}
+};
+static u32 grain_level(volatile u32 *h) {
+    u32 value=h[GRKIT_HOST_GRAIN/4];
+    return value<ARRAY_COUNT(grain_labels) ? value : 0;
+}
+static const u16 *grain_title(volatile u32 *h) { (void)h; return grain; }
+static const u16 *grain_summary(volatile u32 *h) { return grain_summaries[grain_level(h)]; }
+static u32 grain_rows(volatile u32 *h) { (void)h; return ARRAY_COUNT(grain_labels); }
+static const u16 *grain_label(volatile u32 *h,u32 row) { (void)h; return grain_labels[row]; }
+static u32 grain_icon(volatile u32 *h,u32 row) {
+    if(h[9]==MENU_ROOT) return grain_level(h) ? GRAIN_LEVEL_ICON(grain_level(h)) : GRAIN_ICON;
+    return row ? GRAIN_LEVEL_ICON(row) : 0x7fff;
+}
+static u32 grain_checked(volatile u32 *h,u32 row) { return row==grain_level(h); }
+/* Recorded pictures only: the native grain stage reads the level. */
+static void grain_apply(volatile u32 *h,u32 row) { h[GRKIT_HOST_GRAIN/4]=row; }
+
 /* ADJ covers the live-view drawing, so ADJ draws the mask and guides on its
    own canvas. The Framing page shows its highlighted ratio and the Guides page
    its highlighted style, each with the other module's committed value. Off
@@ -178,7 +210,8 @@ static const Module modules[] = {
     {image_title,image_summary,image_rows,image_label,image_icon,image_checked,image_apply,image_committed},
     {frame_title,frame_summary,frame_rows,frame_label,frame_icon,frame_checked,frame_apply,frame_ratio},
     {guide_title,guide_summary,guide_rows,guide_label,guide_icon,guide_checked,guide_apply,guide_style},
-    {stamp_title,stamp_summary,stamp_rows,stamp_label,stamp_icon,stamp_checked,stamp_apply,stamp_style}
+    {stamp_title,stamp_summary,stamp_rows,stamp_label,stamp_icon,stamp_checked,stamp_apply,stamp_style},
+    {grain_title,grain_summary,grain_rows,grain_label,grain_icon,grain_checked,grain_apply,grain_level}
 };
 /* Visible modules as a bit mask in registry order. Image Control shows exactly
    when effects are installed, and the others unless MODULES.TXT hides them.

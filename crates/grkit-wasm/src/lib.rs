@@ -88,7 +88,7 @@ impl Builder {
         Ok(id)
     }
 
-    /// Hides one module from the camera menu: `framing`, `guides`, or `date-stamp`.
+    /// Hides one module from the camera menu: `framing`, `guides`, `date-stamp`, or `grain`.
     /// Image Control shows exactly when the package has effects.
     pub fn hide_module(&mut self, name: &str) -> Result<()> {
         let mut hidden = self.hidden.clone();
@@ -145,7 +145,7 @@ impl Package {
         self.0.add_effect(blob).map_err(js_error)
     }
 
-    /// Hides one module from the camera menu: `framing`, `guides`, or `date-stamp`.
+    /// Hides one module from the camera menu: `framing`, `guides`, `date-stamp`, or `grain`.
     #[wasm_bindgen(js_name = hideModule)]
     pub fn hide_module(&mut self, name: &str) -> Result<(), JsError> {
         self.0.hide_module(name).map_err(js_error)

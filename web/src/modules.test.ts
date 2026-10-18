@@ -6,7 +6,7 @@ describe('planModules', () => {
     expect(planModules(ALL_MODULES, 2)).toEqual({
       includeEffects: true,
       hidden: [],
-      visible: ['imageControl', 'framing', 'guides', 'dateStamp'],
+      visible: ['imageControl', 'framing', 'guides', 'dateStamp', 'grain'],
     });
   });
 
@@ -14,7 +14,7 @@ describe('planModules', () => {
     const enabled = new Set<ModuleKey>(['framing', 'dateStamp']);
     expect(planModules(enabled, 2)).toEqual({
       includeEffects: false,
-      hidden: ['guides'],
+      hidden: ['guides', 'grain'],
       visible: ['framing', 'dateStamp'],
     });
   });
@@ -29,6 +29,7 @@ describe('planModules', () => {
       'framing',
       'guides',
       'date-stamp',
+      'grain',
     ]);
   });
 

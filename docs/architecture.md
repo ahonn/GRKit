@@ -28,7 +28,7 @@ Its RTOS image is larger (0x13d2ac0 bytes), and its data, functions, and object 
 The build defines `GRKIT_TARGET_<target>` (`components::Layout::define`), and `runtime/firmware.h` selects the header from it. Without a known definition, the compilation stops.
 `components::Layout` holds the regions and hooks of each target, and the build generates `hooks.h` from it.
 
-The GR IV runtime has the menu, Image Control, Framing, Guides, and Date Stamp. GR IV Framing offers only XPan, as a crop of native 16:9 (see Framing).
+The GR IV runtime has the menu, Image Control, Framing, Guides, Date Stamp, and Grain. GR IV Framing offers only XPan, as a crop of native 16:9 (see Framing).
 GR IV processing hooks are in `runtime/targets/gr4-1.11-processing.S`, after the Framing region. GR IV reads the type tables through getters.
 A private record therefore sets the Standard index (11) where all type paths join, and the record store keeps the private record.
 
@@ -83,14 +83,15 @@ The 20-effect capacity is a product limit, not a GRF format limit. It fits one s
 The script array holds the header, the records, and the picture scratch.
 The scratch has 141,376 bytes for the date stamp masks, then the 72-byte shot ring (see Recorded pictures).
 
-Off, GRKit, and the fourteen module tiles (four Framing, five Guides, five Date Stamp) use sixteen host icon records outside that capacity.
-The module tiles are contiguous, and the menu derives each one from the first Framing tile.
+Off, GRKit, and the eighteen module tiles (four Framing, five Guides, five Date Stamp, four Grain) use twenty host icon records outside that capacity. With 20 effects, they fill the 40-icon chunk.
+The module tiles are contiguous from icon ID `0x7fec` to `0x7ffd`, below the GRKit tile (`0x7ffe`) and Off (`0x7fff`). The menu derives each one from the first Framing tile.
 
 ### Saved selections
 
-After `INSTALL.OK`, the resident loader restores and saves the effect, the Framing ratio, the Guides style, and the Date Stamp style.
+After `INSTALL.OK`, the resident loader restores and saves the effect, the Framing ratio, the Guides style, the Date Stamp style, and the Grain level.
 The private header is the loader's `registry` array, so the script reads and writes it directly.
-It keeps one decimal integer in `SCRIPT/PLUGINS/STATE.TXT`: `code + 65536 * (ratio + 4 * (guide + 8 * stamp))`, where `code` is the effect's ImageTone code and 0 is Off.
+It keeps one decimal integer in `SCRIPT/PLUGINS/STATE.TXT`: `code + 65536 * (ratio + 4 * (guide + 8 * (stamp + 8 * grain)))`, where `code` is the effect's ImageTone code and 0 is Off.
+A file from before Grain decodes with grain 0.
 
 The loader checks the state every 2 s and writes the file only after a change. It writes through the camera's own file system, as photos do, never from Linux while the camera may write photos.
 An unreadable or out-of-range file restores nothing. An effect that is no longer installed stays Off, and its file entry stays until the next change.
@@ -106,7 +107,7 @@ A private LineView draws the native translucent background before the shared sel
 
 The ADJ controller owns both objects. Exit hides them and restores the native geometry. Destruction unlinks and releases them. Movie mode keeps the five-entry layout.
 
-The compiled registry in `runtime/modules.h` contains Image Control, Framing, Guides, and Date Stamp.
+The compiled registry in `runtime/modules.h` contains Image Control, Framing, Guides, Date Stamp, and Grain.
 Each descriptor owns its title, summary, rows, labels, icons, selection checks, activation, and committed row. A module page opens at its committed row.
 
 The root lists only the visible modules, in registry order. Image Control is visible when effects are installed. Each other module is visible unless header `+56` has its bit.
@@ -266,6 +267,26 @@ The writer clears the key, writes the record, then writes the key, with a `dmb i
 
 An entry leaves the ring after eight later builds. A reused shot settings pointer matches its newest entry. A photo whose own build has not run yet can therefore get the previous build of that pointer.
 Header `+248` still holds the last non-live-view record, as a diagnostic.
+
+### Grain
+
+The Grain module drives the native grain stage of `DigitalFilterProcess`, which runs for recorded pictures only. The live view does not show it, and DNG files do not have it.
+Its `SetEffectParameter` reads the grain settings from the shot settings, and hooks replace those loads with the level in header `+72`. Off keeps the native values.
+The stage gate ignores grain for Standard, so a wrapper of the gate call sets the stage flag for any level.
+
+| | GR III 2.10 | GR IV 1.11 |
+| --- | --- | --- |
+| `SetEffectParameter` | `0x5350304c` | `0x53701c40` |
+| Grain loads | Particle `+0x795` (0..3) at `0x535031b0` | on `+0x7b5` at `0x53701e14`, strength `+0x7b7` (0..2) at `0x53701e34`, size `+0x7b6` (0..2) at `0x53701e58` |
+| Gate call | `0x5351361c` to `0x535131c0`, flag `+0x24` | `0x5371557c` to `0x537150fc`, flag `+0x25` |
+| Level 1..3 | Particle 1..3 | on 1, strength 0..2 |
+
+The GR IV grain size follows the ISO of the shot: small to ISO 400, medium to ISO 800, and large above.
+The shot settings hold the float APEX Sv at `+0xba0`, which the EXIF ISO also uses (`0x537fe338`). The native ISO index is `round((Sv - 1) * 3)` (`0x538f5568`), so ISO 400 ends at Sv 43/6 and ISO 800 at Sv 49/6.
+The hook compares the bit pattern of the float, which orders as the value for a positive float. A negative value, an infinity, or a NaN gives small grain.
+
+The hooks read the level when the stage runs, as Date Stamp reads its style. In-camera RAW development therefore gets the level selected at that time.
+With a level selected, the level also replaces the grain settings of native styles that have them. The grain pixels have not been checked on a camera.
 
 ### Screennail and thumbnail areas
 

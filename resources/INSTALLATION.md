@@ -27,15 +27,16 @@ GRKit loads a few seconds after power-on. Open ADJ and select the sixth entry, m
 - **Framing:** highlight Off or an aspect ratio to preview its mask, then press OK. Photos record at that ratio. The viewfinder stays 3:2 and dims the area outside the photo.
 - **Guides:** highlight Off or a guide style to preview it, then press OK. The lines stay inside the Framing area. They do not appear in photos.
 - **Date Stamp:** select Off or a date style, then press OK. Photos get the date at the bottom right in glowing orange digits, like a film data back. The digits fade on bright areas. The viewfinder does not show them.
+- **Grain:** select Off, Weak, Medium, or Strong, then press OK. Photos get film grain from the camera's own grain stage. The viewfinder does not show it.
 - **MENU:** return one level. From GRKit, return to native ADJ with the selected effect.
 
 The GRKit page shows only the modules in this package. If it has only one module, ADJ opens that module directly, and MENU returns to native ADJ.
-Image Control shows when `SCRIPT/PLUGINS/EFFECTS` contains effects. `SCRIPT/PLUGINS/MODULES.TXT` lists the other modules to hide: `framing`, `guides`, or `date-stamp`, one on each line.
+Image Control shows when `SCRIPT/PLUGINS/EFFECTS` contains effects. `SCRIPT/PLUGINS/MODULES.TXT` lists the other modules to hide: `framing`, `guides`, `date-stamp`, or `grain`, one on each line.
 If that file names an unknown module, GRKit does not load, and `SCRIPT/PLUGINS/INSTALL.ERR` contains 43.
 
 GRKit requires the official firmware. If the camera runs a modified firmware, GRKit does not load, and `INSTALL.ERR` contains 45. Install the official firmware 2.10 (GR IIIx: 1.60) again to use GRKit.
 
-GRKit keeps the selected effect, ratio, guide style, and date style in `SCRIPT/PLUGINS/STATE.TXT` and restores them a few seconds after power-on.
+GRKit keeps the selected effect, ratio, guide style, date style, and grain level in `SCRIPT/PLUGINS/STATE.TXT` and restores them a few seconds after power-on.
 Delete that file to start from Off. A hidden module starts from Off. Pressing OK on a native Image Control disables the plugin effect.
 Playback information shows the plugin effect icon while that effect is installed.
 
@@ -43,6 +44,9 @@ Framing and Guides require the native 3:2 aspect ratio and still shooting. With 
 GRKit does not change the native grid guide. Turn it off to avoid two sets of lines.
 In-camera Crop, Resize, Digital Filter, and RAW development of Framing photos are not tested.
 In-camera RAW development and edits also get the date stamp, with the time of the edit.
+
+In-camera RAW development also gets the grain level that is selected at that time.
+With Grain on, the grain level replaces the grain settings of native Image Control styles that have them.
 
 ## Remove or recover
 

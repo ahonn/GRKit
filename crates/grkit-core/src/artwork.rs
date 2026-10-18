@@ -287,12 +287,45 @@ pub fn stamp_tiles() -> Vec<Vec<u8>> {
         .collect()
 }
 
+/// Light speckles in rows `top..bottom`, one in `period` pixels on average.
+/// A fixed hash places them, so the artwork stays deterministic.
+fn speckles(rgba: &mut [u8], top: usize, bottom: usize, period: u32) {
+    for y in top..bottom {
+        for x in 6..34 {
+            let hash = (x as u32)
+                .wrapping_mul(0x9e37_79b1)
+                .wrapping_add((y as u32).wrapping_mul(0x85eb_ca77))
+                .rotate_left(13)
+                .wrapping_mul(0xc2b2_ae3d);
+            if (hash >> 16) % period == 0 {
+                dot(rgba, x, y, 220);
+            }
+        }
+    }
+}
+
+/// Grain artwork in runtime order: the module tile, then the weak, medium,
+/// and strong levels, with more speckles at each level.
+pub fn grain_tiles() -> Vec<Vec<u8>> {
+    let mut module = background();
+    speckles(&mut module, 6, 34, 4);
+    let mut tiles = vec![module];
+    for (label, period) in [("Weak", 9), ("Med", 5), ("Strong", 3)] {
+        let mut rgba = background();
+        speckles(&mut rgba, 6, 24, period);
+        text(&mut rgba, label, 11.0, 32.0, 30.5, 255);
+        tiles.push(rgba);
+    }
+    tiles
+}
+
 /// Module artwork in runtime order. The menu addresses each tile by its
 /// offset from the first Framing tile.
 pub fn module_tiles() -> Vec<Vec<u8>> {
     let mut tiles = framing_tiles();
     tiles.extend(guides_tiles());
     tiles.extend(stamp_tiles());
+    tiles.extend(grain_tiles());
     tiles
 }
 

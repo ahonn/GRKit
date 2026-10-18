@@ -74,6 +74,8 @@ fn hidden_modules_are_written_and_checked() {
     );
     // Without effects, hiding every other module leaves no module to show.
     builder.hide_module("date-stamp").unwrap();
+    builder.build().unwrap();
+    builder.hide_module("grain").unwrap();
     assert!(error(builder.build()).contains("shows no module"));
     builder.add_effect(&effect("test-a")).unwrap();
     builder.build().unwrap();

@@ -15,6 +15,9 @@
 #define GRKIT_HOST_GUIDE_PREVIEW 48
 /* Date stamp style: 0 Off, 1 'YY M D, 2 'YY M D H:MM, 3 M D 'YY, 4 D M 'YY. */
 #define GRKIT_HOST_STAMP 52
+/* Grain level: 0 Off, 1 weak, 2 medium, 3 strong. The native grain stage of
+   recorded pictures uses it instead of the native grain settings. */
+#define GRKIT_HOST_GRAIN 72
 /* Modules that MODULES.TXT hides from the menu: bit n is module n of
    runtime/modules.h. Bit 0 stays clear, because Image Control shows exactly
    when effects are installed. */

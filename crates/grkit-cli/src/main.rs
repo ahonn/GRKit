@@ -52,7 +52,7 @@ enum Command {
         /// Compiled effects. Without effects, the camera menu hides Image Control.
         #[arg(long)]
         effects: Option<PathBuf>,
-        /// Modules that the camera menu hides: framing, guides, date-stamp.
+        /// Modules that the camera menu hides: framing, guides, date-stamp, grain.
         #[arg(long, value_delimiter = ',')]
         hide: Vec<String>,
         /// The camera that the package enables SD scripts on.

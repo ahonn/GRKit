@@ -13,7 +13,7 @@ pub const PATH: &str = "SCRIPT/PLUGINS/MODULES.TXT";
 pub const MAX_FILE_SIZE: usize = 256;
 /// Modules that a package can hide, in menu order. Name n is module n + 1 of
 /// `runtime/modules.h`, after Image Control.
-pub const NAMES: [&str; 3] = ["framing", "guides", "date-stamp"];
+pub const NAMES: [&str; 4] = ["framing", "guides", "date-stamp", "grain"];
 
 /// A set of hidden modules. Bit n hides module n of `runtime/modules.h`, as the
 /// installer stores it in the private header.

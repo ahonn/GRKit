@@ -98,6 +98,8 @@
    after the native curves are built. */
 #define GAMMA_BUILT 0x3230
 #define FW_YCBCR_CALC 0x536e4720
+/* DigitalFilterProcess plan: the grain stage flag that the stage gate sets. */
+#define GRAIN_GATE_FLAG 0x24
 #define FW_CACHE_FLUSH 0x5383c8a8
 #define FW_CLOCK 0x536bd838
 #define FW_LOCAL_TIME 0x536b6510
