@@ -38,3 +38,9 @@ at base-gamma index 7.8.
 Icon text uses the Inter typeface (SIL Open Font License 1.1, see
 `crates/grkit-core/assets/Inter-LICENSE.txt`). Icons use no manufacturer logo.
 The project code is licensed under the MIT License (see `LICENSE` at the repository root).
+
+## Packages
+
+Each SD package contains `LICENSES.md`, which gives these notices for the package files. Its source is
+`resources/LICENSES.md`. When you add an effect or a source, update both files. A test checks that both
+files name each catalog effect under its source.

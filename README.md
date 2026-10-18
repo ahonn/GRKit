@@ -20,7 +20,7 @@ GR IV and GR IV HDF with firmware 1.11 have experimental support for all five mo
 
 ## Install
 
-Each package contains `INSTALLATION.md`. The [installation guide](resources/INSTALLATION.md) is the same document. GR IV packages contain the [GR IV installation guide](resources/INSTALLATION-GR4.md).
+Each package contains `INSTALLATION.md` and `LICENSES.md`. The [installation guide](resources/INSTALLATION.md) is the same document. `LICENSES.md` gives the licenses and the attribution of the package files, from [resources/LICENSES.md](resources/LICENSES.md). GR IV packages contain the [GR IV installation guide](resources/INSTALLATION-GR4.md).
 
 ## Build a package
 

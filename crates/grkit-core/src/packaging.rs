@@ -221,7 +221,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         .map(|name| format!("SD_ROOT/{name}"))
         .collect();
     mandatory.extend(activation.keys().map(|name| format!("SD_ROOT/{name}")));
-    mandatory.extend(["INSTALLATION.md", "SHA256SUMS"].map(String::from));
+    mandatory.extend(["INSTALLATION.md", "LICENSES.md", "SHA256SUMS"].map(String::from));
     ensure!(
         mandatory.iter().all(|name| contents.contains_key(name)),
         "Package is missing required files"
@@ -303,6 +303,20 @@ pub fn installation_guide(camera: &Camera) -> Vec<u8> {
         .into_bytes()
 }
 
+/// The license notice of every package. CC BY-SA 4.0 and the MIT License
+/// require the attribution and the notices in each copy of an effect, so the
+/// package carries them with the effects.
+pub const LICENSES: &str = concat!(
+    include_str!("../../../resources/LICENSES.md"),
+    "\n## Changes to the LUTs\n\n```text\n",
+    include_str!("../../../effects/sources/CHANGELOG.txt"),
+    "```\n\n## GRKit license\n\n```text\n",
+    include_str!("../../../LICENSE"),
+    "```\n\n## Spectral Film LUT license\n\n```text\n",
+    include_str!("../../../effects/sources/SPECTRAL_FILM_LUT_LICENSE.txt"),
+    "```\n",
+);
+
 /// Builds the package ZIP for one camera. `hidden` names the modules that the
 /// camera menu hides.
 pub fn assemble(
@@ -343,6 +357,7 @@ pub fn assemble(
         contents.insert(format!("SD_ROOT/{}", modules::PATH), file);
     }
     contents.insert("INSTALLATION.md".into(), installation_guide(camera));
+    contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());
     contents.insert("SHA256SUMS".into(), checksum_list(&contents));
     validate_contents(&contents)?;
     let mut archive = ZipWriter::new(Cursor::new(Vec::new()));

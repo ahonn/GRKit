@@ -264,8 +264,8 @@ fn package_roundtrip_and_output_ownership() {
         text(&zip),
     ];
     let packaged = success(&args);
-    // Nine runtime and document entries, then one per effect.
-    assert_eq!(packaged["entries"], 9 + source_count());
+    // Ten runtime and document entries, then one per effect.
+    assert_eq!(packaged["entries"], 10 + source_count());
     assert_eq!(success(&["verify", text(&zip)])["effects"], source_count());
     let before = fs::read(&zip).unwrap();
     assert!(!run(&args).status.success());
@@ -337,7 +337,7 @@ fn package_hides_modules_and_may_omit_effects() {
         text(&zip),
     ]);
     // The module file is one more entry.
-    assert_eq!(packaged["entries"], 10 + source_count());
+    assert_eq!(packaged["entries"], 11 + source_count());
     assert_eq!(packaged["hidden_modules"], json!(["guides", "date-stamp"]));
     let verified = success(&["verify", text(&zip)]);
     assert_eq!(verified["hidden_modules"], json!(["guides", "date-stamp"]));
@@ -355,7 +355,7 @@ fn package_hides_modules_and_may_omit_effects() {
         "--out",
         text(&framing_only),
     ]);
-    assert_eq!(packaged["entries"], 10);
+    assert_eq!(packaged["entries"], 11);
     assert_eq!(success(&["verify", text(&framing_only)])["effects"], 0);
     for hide in [
         "framing,guides,date-stamp,grain",

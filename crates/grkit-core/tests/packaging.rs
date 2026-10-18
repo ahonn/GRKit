@@ -95,14 +95,14 @@ fn package_round_trip_is_deterministic_and_preserves_metadata() {
 }
 
 #[test]
-fn packages_ship_only_the_guide_and_checksums() {
+fn packages_ship_only_the_guide_the_licenses_and_checksums() {
     let files = unpack(&package());
     let documents: Vec<_> = files
         .keys()
         .filter(|name| !name.starts_with("SD_ROOT/"))
         .map(String::as_str)
         .collect();
-    assert_eq!(documents, ["INSTALLATION.md", "SHA256SUMS"]);
+    assert_eq!(documents, ["INSTALLATION.md", "LICENSES.md", "SHA256SUMS"]);
 }
 
 #[test]
@@ -133,7 +133,12 @@ fn legacy_deflated_packages_remain_supported() {
 fn corrupted_profiles_documents_manifests_and_sums_are_rejected() {
     let original = unpack(&package());
     let profile = original.keys().find(|name| name.ends_with(".GRF")).unwrap();
-    for name in [profile.as_str(), "INSTALLATION.md", "SHA256SUMS"] {
+    for name in [
+        profile.as_str(),
+        "INSTALLATION.md",
+        "LICENSES.md",
+        "SHA256SUMS",
+    ] {
         let mut files = original.clone();
         files.get_mut(name).unwrap().push(b' ');
         assert!(
