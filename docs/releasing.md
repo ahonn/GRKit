@@ -33,4 +33,6 @@ With `firmware_source` set to `auto`, the build uses the backup of a zip only if
 3. Install the package of each camera that you have, and test it. The GR IV runtime stays experimental until it passes a test on a camera.
 4. If the test passes, start the `Deploy` workflow with the run ID of that `Release` run. The run summary shows the ID.
 
+GitHub keeps the `site` and `device-test` artifacts of a `Release` run for 14 days. `Deploy` downloads the `site` artifact, so it fails after that period. If the period ends before the device test is complete, start a new `Release` run.
+
 The release toolchain is LLVM 21 on Ubuntu, not the reference Apple Clang. Test each CI runtime on a camera before you deploy it.

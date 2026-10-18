@@ -1,0 +1,36 @@
+# cargo-deny policy. CI runs `cargo deny check` with this file.
+
+[graph]
+all-features = true
+
+[advisories]
+# Each ignored advisory needs a reason. Remove the entry when the dependency is updated.
+ignore = [
+    { id = "RUSTSEC-2026-0367", reason = "zip 2.4.2: only ZipArchive::extract and stream extraction are affected. GRKit never calls them. verify_package reads each entry into memory and rejects symbolic links." },
+    { id = "RUSTSEC-2026-0368", reason = "zip 2.4.2: only ZipArchive::extract is affected. GRKit never calls it. verify_package reads each entry into memory and rejects symbolic links." },
+    { id = "RUSTSEC-2026-0369", reason = "zip 2.4.2: only ZipArchive::extract and ZipStreamReader::extract are affected. GRKit never calls them." },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained. ab_glyph uses it only to parse the bundled Inter font, which is trusted input." },
+]
+
+[licenses]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+# The lockfile has no duplicate crate versions. Add a `skip` entry with a reason if an update needs one.
+multiple-versions = "deny"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
