@@ -94,7 +94,8 @@ The loader checks the state every 2 s and writes the file only after a change. I
 An unreadable or out-of-range file restores nothing. An effect that is no longer installed stays Off, and its file entry stays until the next change.
 
 A hidden module restores Off, because no menu can turn it off. The script has no bit operators, so it reads header `+56` by division.
-A power loss during the write can lose the last change.
+The camera's `filecreate` does not truncate an existing file. The writes `33603290`, `48858`, and `0` leave `08858290`.
+The loader therefore deletes the file before it writes the state. A power loss between the two steps can lose the last change.
 
 ## Menu
 

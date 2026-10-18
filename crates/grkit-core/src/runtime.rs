@@ -187,6 +187,9 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         "mpause 2000".into(),
         "call snapshot".into(),
         "if state = saved goto watch".into(),
+        // `filecreate` keeps the old bytes after the new text, so a shorter
+        // number would end with digits of the previous one. Delete the file first.
+        format!("filedelete '{state}'"),
         format!("filecreate sfh '{state}'"),
         "if sfh < 0 goto watch".into(),
         "int2str line state".into(),

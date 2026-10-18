@@ -545,7 +545,7 @@ fn production_scripts_and_activation_match_fixed_contracts() {
         ),
         (
             "SCRIPT/PLUGINS/PLUGINS.TTL",
-            "9263fb5dde411a7c9f380169161ccbe0e28d2cf03fb7ef5329360b1a866a0188",
+            "45fddf9991e3c6e2f03ccee4dee0bc7349e66a37546e19d4b3e6f3a1576e2df1",
         ),
         (
             "SCRIPT/PLUGINS/INSTALL.BIN",
