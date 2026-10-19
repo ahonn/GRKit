@@ -20,7 +20,7 @@
   "files": [
     {
       "path": "SCRIPT/PLUGINS/INSTALL.BIN",
-      "sha256": "94ac6d2df38930966b62d7efc549ae07cad19b070ce849c36456fcf9d24670c1",
+      "sha256": "e8ecad9fbbf3939aef9e909e412a21ae5247886bcfaf6b8afb8a4bf1a64e4578",
       "size": 263256
     },
     {
@@ -45,7 +45,7 @@
     }
   ],
   "firmware_sha256": "d6a3c9c288d784080e7b283222ecdd8752adfeed6faa36dab44f73115354bfd4",
-  "generated_header_sha256": "0a3118bc337ad4ca89758a982b348e5ef8129ec119744758c4bfd4cf1cc32c7b",
+  "generated_header_sha256": "0993c832c451723556c9c48868816bd7a90347918295f0bcdc5200194a0a5b46",
   "points": {
     "capture.aspect": 14,
     "menu.page": 16,
@@ -59,8 +59,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "f12163f7c28ed8e10a2b9811a979613be2660f3962959d57928f0308e63b965c",
-    "Cargo.toml": "dbb63ad891a59a1aa6cce4436dace1b824b9d22161b79cc236e65ae3a56be30b",
+    "Cargo.lock": "c3b0d2bf978bd62b5c909bfa4ff31c26b2dfb944c767dfbf3696a67513b07b77",
+    "Cargo.toml": "1b3f5a4373f3d13a0e3afae9d043371226620064e49e32c3a4db2a5e39c5c33e",
     "crates/grkit-build/Cargo.toml": "cfa7a97fb9401d20d4e798c06f3bd4739f729563850096ed3dd32eee5fbe9a9f",
     "crates/grkit-build/src/arm.rs": "39e495908b83c000101b854ca8b40af02e4d15418c477c09259cc8182d7b5fd3",
     "crates/grkit-build/src/components.rs": "dd39d1f0dd5d340eb41168f8f0aadc2ae292e4c185c2277887aa817f3327310b",
@@ -116,5 +116,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
