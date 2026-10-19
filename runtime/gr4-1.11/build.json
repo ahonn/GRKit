@@ -7,8 +7,8 @@
     },
     "menu": {
       "limit": 9984,
-      "sha256": "8d6ad8b2e465c59297fb55ca423ad6df7b13eb4684a7f042f0f4e2f29857ea41",
-      "size": 8148
+      "sha256": "93b31554a2429bc18060d0109b5956dd55b066056a0cb8ec197086b19b663c3e",
+      "size": 8152
     },
     "processing": {
       "limit": 2048,
@@ -20,8 +20,8 @@
   "files": [
     {
       "path": "SCRIPT/PLUGINS/INSTALL.BIN",
-      "sha256": "352f8ca36b5f1621c64852c0bfbf478c5acde83c6485c548b6082230ffa69568",
-      "size": 263684
+      "sha256": "1417ef16c28e05ed4f863185a1553c685c13087354b2b4ccc6b2e8eeb389a1ce",
+      "size": 264668
     },
     {
       "path": "SCRIPT/PLUGINS/INSTALL.SH",
@@ -30,7 +30,7 @@
     },
     {
       "path": "SCRIPT/PLUGINS/PLUGINS.TTL",
-      "sha256": "0211ca5c1f632a8112fb8bf5f8fe0ef069f6cfc97028e215d30683cdea70455b",
+      "sha256": "a1c47d999d62e2f2277fc4358c5c78d413722c849a50d257a8ce52c7a42f3fc9",
       "size": 8984
     },
     {
@@ -45,7 +45,7 @@
     }
   ],
   "firmware_sha256": "a2f664dfca034059eb0fd6e18ab08684c326b4a034d85c164dad7e1ec9b5655f",
-  "generated_header_sha256": "baafc1e95a66d1a79ad939a08639bc30c3a5d890296f7b7d1980cd4b2eef8d3b",
+  "generated_header_sha256": "c907f3f11e423d8983f2b8d35e4bd83a52957952bad440f9d132337cf654f5d6",
   "points": {
     "capture.aspect": 11,
     "menu.page": 15,
@@ -70,13 +70,13 @@
     "crates/grkit-build/src/target.rs": "a6cf1685fab94c24753b67af0e796e09d098d8af7c270f2c9b49eacd8a52c3ce",
     "crates/grkit-build/src/toolchain.rs": "e323ecdf385de69d3938cc2d6434b5b3e5b14f72c11785e2d16245cce7806d40",
     "crates/grkit-core/Cargo.toml": "a512b69b790d19bcba815165086ca9730e4941c8f7c8e5830335e0a7d35b7716",
-    "crates/grkit-core/src/abi.rs": "e75191fe4d739e49c5b84f22a8be9890a84261e082f531db5711fff9ab3a7511",
+    "crates/grkit-core/src/abi.rs": "6febcddf186e10cbac7dcaaec23f1b5659a9b8dd5e0f91b112f4100541a69d2e",
     "crates/grkit-core/src/artwork.rs": "f2fa9ea17a1b35a2220412da1d596de62c41bd924ce21b3a13e00c8311350049",
     "crates/grkit-core/src/lib.rs": "a1f91a71a1b22e383a73c09cfa2dc4c7aeb783c0264b980d9ac086cbd277e073",
-    "crates/grkit-core/src/menu_text.rs": "36b28201fd905e4080750708d49b6fead38ab02773018c3fe6134bc6e05fa8fa",
+    "crates/grkit-core/src/menu_text.rs": "97d64320b3a43237cd53ea50cb29e662fbc91e1b95da40d4f129a847abc34fe7",
     "crates/grkit-core/src/plugins.rs": "07a4a73f90a230934340b42f5033fcd17551eff3ae9476029bd7b9f8ef922e30",
     "crates/grkit-core/src/runtime.rs": "0054531dfada184965bc46df79eb8cd83b7b0a9ff652fdf938da06dc838c9ca3",
-    "runtime/abi.h": "5d2bdbccb5ff5ec254e57e289ba0e6e4d2e9b3483e88fdef2da5a0b59f00ab7b",
+    "runtime/abi.h": "f6fd4cb33d2dde505d9062ee711f7ee5681338a2f7eefbaff953785b1c6a7b01",
     "runtime/about.h": "e03fdc219e937af1ffa5d3ce6323ae56d864c398c6388729062191495b173700",
     "runtime/catalog.h": "ac1b115ea12c0381b94077f38e4462a2377e689691391cc98984af39722f602a",
     "runtime/firmware.h": "d152d9485ed634b66c4a70426800cf3b83b3e5d4f0da83fc864673e9b2c2bf0c",
@@ -90,7 +90,7 @@
     "runtime/grf.h": "14ea8e97ad514ed797f7b71ef903378a4aba7678edfc8ea2856d93f159676a94",
     "runtime/installer.c": "d7fce12bda89970c2ec5d63223e9f6765f8a907429813da20d3c68bd4911b39e",
     "runtime/menu.S": "da7b25aff0841902e1056ee04182072ccb8cf8c411ca3f516553d15bb783efbd",
-    "runtime/menu.c": "56d1564ebe3a49803a00204b2ca9831e4f69f65b86d42887b7b75bfcc033fc8b",
+    "runtime/menu.c": "e2c409713d06c508514dc5168ec158648b7cf4a60c91b9c412b7bffe42f63b57",
     "runtime/modules.h": "e5ef27cfab97db72795d3eff6f9511117cb33fe2921511a6d86dc913b4934b55",
     "runtime/picture.S": "0ad50032112561c42e6622dbfe51a99f5253dcc71104f4dd84e453bcc72849d4",
     "runtime/picture.c": "36779ad1125204bf6b286f872f09a8087b5b17e893476fe3aa5032fb69cad8c6",

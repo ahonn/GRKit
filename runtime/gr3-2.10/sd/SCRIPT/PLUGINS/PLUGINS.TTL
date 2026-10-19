@@ -31,7 +31,7 @@ words = value
 call readword
 chunks = value
 fileclose fh
-expected = 37474 + count * 464
+expected = 38498 + count * 464
 if words != expected goto reject
 expectedchunks = (count + 59) / 40
 if chunks != expectedchunks goto reject
