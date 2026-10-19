@@ -1,0 +1,21 @@
+{
+  "source": "https://upload.wikimedia.org/wikipedia/commons/9/97/Snow_in_Akihabara_2022-01-06.jpg",
+  "sourcePage": "https://www.flickr.com/photos/cafetricot/51803682755/",
+  "sourceSha256": "a4f15f37167735876bfc8c7dcd8bf480a7551c51a00d38045ceb4c5d4cecb598",
+  "title": "Snow in Akihabara",
+  "author": "nagi usano",
+  "license": "CC-BY-2.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
+  "camera": "RICOH GR IIIx",
+  "decoder": "jpeg-js 0.4.4",
+  "settings": {
+    "input": "sRGB JPEG",
+    "outputColor": "linear sRGB, estimated by inverting preview/standard.lut",
+    "standardTableSha256": "734ac8066742ad3b21348e4b5a46255a9a6214c075a88bd66a7ce6b1d18c8680",
+    "bits": 16,
+    "resize": "area resampling in linear light"
+  },
+  "width": 1200,
+  "height": 800,
+  "sha256": "8b123b41f3981423e3e6f87e5e79cd0fb9129eb5e917e8b927b9798a448d6990"
+}
