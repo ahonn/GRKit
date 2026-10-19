@@ -1,0 +1,23 @@
+{
+  "source": "https://raw.pixls.us/getfile.php/3115/nice/Ricoh%20-%20GR%20III%20-%2014bit%20(3%3A2).DNG",
+  "sourceRecord": "https://raw.pixls.us/json/getrepository.php?set=all",
+  "sourceId": 3115,
+  "sourceSha256": "05513ee72f7cac4165534c9f64995412084f414a033c80c473c79fd94154292e",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "author": "Not specified by raw.pixls.us",
+  "camera": "RICOH GR III",
+  "decoder": "@colorhythm/libraw-wasm 1.1.1 (LibRaw 0.22.1)",
+  "settings": {
+    "halfSize": true,
+    "cameraWhiteBalance": true,
+    "outputColor": "linear sRGB",
+    "bits": 16,
+    "autoBrightness": false,
+    "adjustMaximumThreshold": 0,
+    "crop": "DNG default crop"
+  },
+  "width": 1200,
+  "height": 800,
+  "sha256": "b0ff18aab5c7b81340cbf53375092777585c8bb50d70a2ec14bf349eee4c56cb"
+}
