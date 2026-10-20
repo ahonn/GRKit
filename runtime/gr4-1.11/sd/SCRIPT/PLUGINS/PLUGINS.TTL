@@ -31,16 +31,21 @@ words = value
 call readword
 chunks = value
 fileclose fh
-expected = 38498 + count * 464
+expected = 39586 + count * 464
 if words != expected goto reject
-expectedchunks = (count + 59) / 40
+expectedchunks = (count + 62) / 40
 if chunks != expectedchunks goto reject
 intdim registry words
 if chunks <= 0 goto icons_ready
-items = count + 20 - 0
+items = count + 23 - 0
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork0 iconwords
+if chunks <= 1 goto icons_ready
+items = count + 23 - 40
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork1 iconwords
 :icons_ready
 attempts = 0
 :install
@@ -93,9 +98,9 @@ if pcount > 20 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[64 + pindex * 464 + 459]
-pw1 = registry[64 + pindex * 464 + 460]
-pw2 = registry[64 + pindex * 464 + 461]
+pw0 = registry[128 + pindex * 464 + 459]
+pw1 = registry[128 + pindex * 464 + 460]
+pw2 = registry[128 + pindex * 464 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -125,7 +130,7 @@ pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
 if pvalue = 0 goto save_parameters_next
-pkey = 990000000 + (registry[64 + pindex * 464 + 446] and 32767)
+pkey = 990000000 + (registry[128 + pindex * 464 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
@@ -162,12 +167,12 @@ rest = offset % 1856
 if rest != 0 goto snapshot_values
 index = offset / 1856
 if index >= count goto snapshot_values
-value0 = registry[64 + index * 464 + 446] and 65535
+value0 = registry[128 + index * 464 + 446] and 65535
 :snapshot_values
 value1 = registry[52]
 value2 = registry[51]
 value3 = registry[13]
-value4 = registry[18]
+value4 = registry[64]
 pchanges = registry[37]
 return
 :restore
@@ -241,7 +246,7 @@ pcode = key - 990000000
 pindex = 0
 :restore_parameters
 if pindex >= pcount goto restore_reset
-pkey = registry[64 + pindex * 464 + 446] and 32767
+pkey = registry[128 + pindex * 464 + 446] and 32767
 if pkey != pcode goto restore_parameters_next
 pvalue = token
 pd0 = pvalue % 9
@@ -262,10 +267,10 @@ pd7 = pvalue % 9
 pvalue = pvalue / 9
 pd8 = pvalue % 9
 pvalue = pvalue / 9
-registry[64 + pindex * 464 + 459] = pd0 + pd1 * 256 + pd2 * 65536 + pd3 * 16777216
-registry[64 + pindex * 464 + 460] = pd4 + pd5 * 256 + pd6 * 65536 + pd7 * 16777216
-pw2 = registry[64 + pindex * 464 + 461] >> 8
-registry[64 + pindex * 464 + 461] = pw2 * 256 + pd8
+registry[128 + pindex * 464 + 459] = pd0 + pd1 * 256 + pd2 * 65536 + pd3 * 16777216
+registry[128 + pindex * 464 + 460] = pd4 + pd5 * 256 + pd6 * 65536 + pd7 * 16777216
+pw2 = registry[128 + pindex * 464 + 461] >> 8
+registry[128 + pindex * 464 + 461] = pw2 * 256 + pd8
 :restore_parameters_next
 pindex = pindex + 1
 goto restore_parameters
@@ -278,11 +283,11 @@ if token > 3 goto restore_reset
 stored1 = token
 goto restore_reset
 :restore_key2
-if token > 4 goto restore_reset
+if token > 5 goto restore_reset
 stored2 = token
 goto restore_reset
 :restore_key3
-if token > 4 goto restore_reset
+if token > 5 goto restore_reset
 stored3 = token
 goto restore_reset
 :restore_key4
@@ -312,14 +317,14 @@ if bit = 0 stored3 = 0
 registry[13] = stored3
 bit = (plugins >> 4) and 1
 if bit = 0 stored4 = 0
-registry[18] = stored4
+registry[64] = stored4
 count = registry[0]
 if count > 20 count = 0
 index = 0
 :restore_find
 if stored0 = 0 goto restore_end
 if index >= count goto restore_end
-code = registry[64 + index * 464 + 446] and 65535
+code = registry[128 + index * 464 + 446] and 65535
 if code != stored0 goto restore_next
 registry[2] = registry[1] + index * 1856
 goto restore_end
