@@ -1,0 +1,375 @@
+mpause 2000
+sendln 'lcmd_resp on'
+filedelete 'C:\SCRIPT\PLUGINS\MODULE.BIN'
+filedelete 'C:\SCRIPT\PLUGINS\MODULE.TMP'
+filedelete 'C:\SCRIPT\PLUGINS\INSTALL.OK'
+filedelete 'C:\SCRIPT\PLUGINS\INSTALL.ERR'
+filedelete 'C:\SCRIPT\PLUGINS\INSTALL.LCK'
+filesearch 'C:\SCRIPT\PLUGINS\MODULE.BIN'
+if result != 0 goto reject
+filesearch 'C:\SCRIPT\PLUGINS\INSTALL.OK'
+if result != 0 goto reject
+attempts = 0
+:scan
+sendln 'lcmd sh /media/storage1/SCRIPT/PLUGINS/SCAN.SH'
+filesearch 'C:\SCRIPT\PLUGINS\MODULE.BIN'
+if result != 0 goto plan_ready
+mpause 200
+attempts = attempts + 1
+if attempts < 150 goto scan
+goto reject
+:plan_ready
+fileopen fh 'C:\SCRIPT\PLUGINS\MODULE.BIN' 0
+if fh < 0 goto reject
+call readword
+if value != 827150919 goto reject_close
+call readword
+count = value
+if count < 0 goto reject_close
+if count > 20 goto reject_close
+call readword
+words = value
+call readword
+chunks = value
+fileclose fh
+expected = 39586 + count * 1088
+if words != expected goto reject
+expectedchunks = (count + 62) / 40
+if chunks != expectedchunks goto reject
+intdim registry words
+if chunks <= 0 goto icons_ready
+items = count + 23 - 0
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork0 iconwords
+if chunks <= 1 goto icons_ready
+items = count + 23 - 40
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork1 iconwords
+:icons_ready
+attempts = 0
+:install
+sendln 'lcmd sh /media/storage1/SCRIPT/PLUGINS/INSTALL.SH'
+filesearch 'C:\SCRIPT\PLUGINS\INSTALL.OK'
+if result != 0 goto resident
+filesearch 'C:\SCRIPT\PLUGINS\INSTALL.ERR'
+if result != 0 goto reject
+mpause 500
+attempts = attempts + 1
+if attempts > 60 mpause 9500
+goto install
+:resident
+call restore
+:watch
+mpause 2000
+call snapshot
+call save
+goto watch
+:save
+changed = 0
+if value0 <> saved0 changed = 1
+if value1 <> saved1 changed = 1
+if value2 <> saved2 changed = 1
+if value3 <> saved3 changed = 1
+if value4 <> saved4 changed = 1
+if value5 <> saved5 changed = 1
+if pchanges <> psaved changed = 1
+if changed = 0 goto save_end
+filedelete 'C:\SCRIPT\PLUGINS\STATE.TMP'
+filecreate sfh 'C:\SCRIPT\PLUGINS\STATE.TMP'
+if sfh < 0 goto save_end
+filewriteln sfh '495043802'
+int2str line value0
+filewriteln sfh line
+filewriteln sfh '684634731'
+int2str line value1
+filewriteln sfh line
+filewriteln sfh '161811731'
+int2str line value2
+filewriteln sfh line
+filewriteln sfh '541741532'
+int2str line value3
+filewriteln sfh line
+filewriteln sfh '957718554'
+int2str line value4
+filewriteln sfh line
+filewriteln sfh '733922165'
+int2str line value5
+filewriteln sfh line
+pcount = registry[0]
+if pcount < 0 pcount = 0
+if pcount > 20 pcount = 0
+pindex = 0
+:save_parameters
+if pindex >= pcount goto save_parameters_end
+pw0 = registry[128 + pindex * 1088 + 459]
+pw1 = registry[128 + pindex * 1088 + 460]
+pw2 = registry[128 + pindex * 1088 + 461]
+pvalue = 0
+pdigit = (pw2 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+if pvalue = 0 goto save_parameters_next
+pkey = 990000000 + (registry[128 + pindex * 1088 + 446] and 32767)
+int2str line pkey
+filewriteln sfh line
+int2str line pvalue
+filewriteln sfh line
+:save_parameters_next
+pindex = pindex + 1
+goto save_parameters
+:save_parameters_end
+fileclose sfh
+filesearch 'C:\SCRIPT\PLUGINS\STATE.TMP'
+if result = 0 goto save_end
+filedelete 'C:\SCRIPT\PLUGINS\STATE.TXT'
+filesearch 'C:\SCRIPT\PLUGINS\STATE.TXT'
+if result != 0 goto save_end
+filerename 'C:\SCRIPT\PLUGINS\STATE.TMP' 'C:\SCRIPT\PLUGINS\STATE.TXT'
+filesearch 'C:\SCRIPT\PLUGINS\STATE.TXT'
+if result = 0 goto save_end
+saved0 = value0
+saved1 = value1
+saved2 = value2
+saved3 = value3
+saved4 = value4
+saved5 = value5
+psaved = pchanges
+:save_end
+return
+:snapshot
+value0 = 0
+count = registry[0]
+if count < 1 goto snapshot_values
+if count > 20 goto snapshot_values
+offset = registry[2] - registry[1]
+if offset < 0 goto snapshot_values
+rest = offset % 4352
+if rest != 0 goto snapshot_values
+index = offset / 4352
+if index >= count goto snapshot_values
+value0 = registry[128 + index * 1088 + 446] and 65535
+:snapshot_values
+value1 = registry[52]
+value2 = registry[51]
+value3 = registry[13]
+value4 = registry[64]
+value5 = registry[65]
+pchanges = registry[37]
+return
+:restore
+stored0 = 0
+stored1 = 0
+stored2 = 0
+stored3 = 0
+stored4 = 0
+stored5 = 0
+pcount = registry[0]
+if pcount < 0 pcount = 0
+if pcount > 20 pcount = 0
+statefile = 'C:\SCRIPT\PLUGINS\STATE.TXT'
+filesearch statefile
+if result != 0 goto restore_open
+statefile = 'C:\SCRIPT\PLUGINS\STATE.TMP'
+filesearch statefile
+if result = 0 goto restore_apply
+:restore_open
+size = 0
+filestat statefile size
+if size < 1 goto restore_apply
+if size > 1024 goto restore_apply
+fileopen sfh statefile 0
+if sfh < 0 goto restore_apply
+position = 0
+ended = 0
+expecting = 0
+key = 0
+keyinvalid = 0
+token = 0
+digits = 0
+invalid = 0
+:restore_byte
+if position >= size goto restore_last
+fileread sfh 1 octet
+if result != 0 goto restore_close
+position = position + 1
+str2code character octet
+if character = 13 goto restore_token
+if character = 10 goto restore_token
+if character < 48 invalid = 1
+if character > 57 invalid = 1
+if digits >= 9 invalid = 1
+if invalid = 1 goto restore_byte
+token = token * 10 + character - 48
+digits = digits + 1
+goto restore_byte
+:restore_last
+ended = 1
+:restore_token
+filled = digits + invalid
+if filled = 0 goto restore_continue
+if expecting = 1 goto restore_value
+key = token
+keyinvalid = invalid
+expecting = 1
+goto restore_reset
+:restore_value
+expecting = 0
+bad = keyinvalid + invalid
+if bad != 0 goto restore_reset
+if key = 495043802 goto restore_key0
+if key = 684634731 goto restore_key1
+if key = 161811731 goto restore_key2
+if key = 541741532 goto restore_key3
+if key = 957718554 goto restore_key4
+if key = 733922165 goto restore_key5
+if key < 990000000 goto restore_reset
+if key > 990032767 goto restore_reset
+if token > 387420488 goto restore_reset
+pcode = key - 990000000
+pindex = 0
+:restore_parameters
+if pindex >= pcount goto restore_reset
+pkey = registry[128 + pindex * 1088 + 446] and 32767
+if pkey != pcode goto restore_parameters_next
+pvalue = token
+pd0 = pvalue % 9
+pvalue = pvalue / 9
+pd1 = pvalue % 9
+pvalue = pvalue / 9
+pd2 = pvalue % 9
+pvalue = pvalue / 9
+pd3 = pvalue % 9
+pvalue = pvalue / 9
+pd4 = pvalue % 9
+pvalue = pvalue / 9
+pd5 = pvalue % 9
+pvalue = pvalue / 9
+pd6 = pvalue % 9
+pvalue = pvalue / 9
+pd7 = pvalue % 9
+pvalue = pvalue / 9
+pd8 = pvalue % 9
+pvalue = pvalue / 9
+registry[128 + pindex * 1088 + 459] = pd0 + pd1 * 256 + pd2 * 65536 + pd3 * 16777216
+registry[128 + pindex * 1088 + 460] = pd4 + pd5 * 256 + pd6 * 65536 + pd7 * 16777216
+pw2 = registry[128 + pindex * 1088 + 461] >> 8
+registry[128 + pindex * 1088 + 461] = pw2 * 256 + pd8
+:restore_parameters_next
+pindex = pindex + 1
+goto restore_parameters
+:restore_key0
+if token > 65535 goto restore_reset
+stored0 = token
+goto restore_reset
+:restore_key1
+if token > 3 goto restore_reset
+stored1 = token
+goto restore_reset
+:restore_key2
+if token > 5 goto restore_reset
+stored2 = token
+goto restore_reset
+:restore_key3
+if token > 5 goto restore_reset
+stored3 = token
+goto restore_reset
+:restore_key4
+if token > 2 goto restore_reset
+stored4 = token
+goto restore_reset
+:restore_key5
+if token > 3 goto restore_reset
+stored5 = token
+goto restore_reset
+:restore_reset
+token = 0
+digits = 0
+invalid = 0
+:restore_continue
+if ended = 0 goto restore_byte
+:restore_close
+fileclose sfh
+:restore_apply
+plugins = registry[14]
+bit = (plugins >> 0) and 1
+if bit = 0 stored0 = 0
+bit = (plugins >> 1) and 1
+if bit = 0 stored1 = 0
+registry[52] = stored1
+bit = (plugins >> 2) and 1
+if bit = 0 stored2 = 0
+registry[51] = stored2
+bit = (plugins >> 3) and 1
+if bit = 0 stored3 = 0
+registry[13] = stored3
+bit = (plugins >> 3) and 1
+if bit = 0 stored4 = 0
+registry[64] = stored4
+bit = (plugins >> 4) and 1
+if bit = 0 stored5 = 0
+registry[65] = stored5
+count = registry[0]
+if count > 20 count = 0
+index = 0
+:restore_find
+if stored0 = 0 goto restore_end
+if index >= count goto restore_end
+code = registry[128 + index * 1088 + 446] and 65535
+if code != stored0 goto restore_next
+registry[2] = registry[1] + index * 4352
+goto restore_end
+:restore_next
+index = index + 1
+goto restore_find
+:restore_end
+call snapshot
+psaved = pchanges
+saved0 = value0
+saved1 = value1
+saved2 = value2
+saved3 = value3
+saved4 = value4
+saved5 = value5
+return
+:reject_close
+fileclose fh
+:reject
+dispstr 'GR_MODULE_LOADER_REJECTED'
+end
+:readword
+value = 0
+weight = 1
+for byteindex 0 3
+fileread fh 1 octet
+if result != 0 goto reject_close
+str2code bytevalue octet
+value = value + bytevalue * weight
+if byteindex < 3 weight = weight * 256
+next
+return

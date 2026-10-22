@@ -1,0 +1,5 @@
+filesearch 'C:\SCRIPT\PLUGINS\PLUGINS.TTL'
+if result = 0 goto done
+include 'C:\SCRIPT\PLUGINS\PLUGINS.TTL'
+:done
+end

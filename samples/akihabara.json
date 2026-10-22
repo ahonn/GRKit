@@ -11,11 +11,11 @@
   "settings": {
     "input": "sRGB JPEG",
     "outputColor": "linear sRGB, estimated by inverting preview/standard.lut",
-    "standardTableSha256": "734ac8066742ad3b21348e4b5a46255a9a6214c075a88bd66a7ce6b1d18c8680",
+    "standardTableSha256": "1db097998a56838269ae5960535a4d408e7049b4b5a6749885cb15cf05917e36",
     "bits": 16,
     "resize": "area resampling in linear light"
   },
   "width": 1200,
   "height": 800,
-  "sha256": "8b123b41f3981423e3e6f87e5e79cd0fb9129eb5e917e8b927b9798a448d6990"
+  "sha256": "daffc3b15cd801c12658fbf46b3aa04e05b40669bdef9a0d9902a2d732196372"
 }

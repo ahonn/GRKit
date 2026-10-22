@@ -1,3 +1,4 @@
+mpause 2000
 sendln 'lcmd_resp on'
 filedelete 'C:\SCRIPT\PLUGINS\MODULE.BIN'
 filedelete 'C:\SCRIPT\PLUGINS\MODULE.TMP'
@@ -31,7 +32,7 @@ words = value
 call readword
 chunks = value
 fileclose fh
-expected = 39586 + count * 464
+expected = 39586 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + 62) / 40
 if chunks != expectedchunks goto reject
@@ -72,6 +73,7 @@ if value1 <> saved1 changed = 1
 if value2 <> saved2 changed = 1
 if value3 <> saved3 changed = 1
 if value4 <> saved4 changed = 1
+if value5 <> saved5 changed = 1
 if pchanges <> psaved changed = 1
 if changed = 0 goto save_end
 filedelete 'C:\SCRIPT\PLUGINS\STATE.TMP'
@@ -89,8 +91,11 @@ filewriteln sfh line
 filewriteln sfh '541741532'
 int2str line value3
 filewriteln sfh line
-filewriteln sfh '733922165'
+filewriteln sfh '957718554'
 int2str line value4
+filewriteln sfh line
+filewriteln sfh '733922165'
+int2str line value5
 filewriteln sfh line
 pcount = registry[0]
 if pcount < 0 pcount = 0
@@ -98,9 +103,9 @@ if pcount > 20 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[128 + pindex * 464 + 459]
-pw1 = registry[128 + pindex * 464 + 460]
-pw2 = registry[128 + pindex * 464 + 461]
+pw0 = registry[128 + pindex * 1088 + 459]
+pw1 = registry[128 + pindex * 1088 + 460]
+pw2 = registry[128 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -130,7 +135,7 @@ pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
 if pvalue = 0 goto save_parameters_next
-pkey = 990000000 + (registry[128 + pindex * 464 + 446] and 32767)
+pkey = 990000000 + (registry[128 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
@@ -153,6 +158,7 @@ saved1 = value1
 saved2 = value2
 saved3 = value3
 saved4 = value4
+saved5 = value5
 psaved = pchanges
 :save_end
 return
@@ -163,16 +169,17 @@ if count < 1 goto snapshot_values
 if count > 20 goto snapshot_values
 offset = registry[2] - registry[1]
 if offset < 0 goto snapshot_values
-rest = offset % 1856
+rest = offset % 4352
 if rest != 0 goto snapshot_values
-index = offset / 1856
+index = offset / 4352
 if index >= count goto snapshot_values
-value0 = registry[128 + index * 464 + 446] and 65535
+value0 = registry[128 + index * 1088 + 446] and 65535
 :snapshot_values
 value1 = registry[52]
 value2 = registry[51]
 value3 = registry[13]
 value4 = registry[64]
+value5 = registry[65]
 pchanges = registry[37]
 return
 :restore
@@ -181,6 +188,7 @@ stored1 = 0
 stored2 = 0
 stored3 = 0
 stored4 = 0
+stored5 = 0
 pcount = registry[0]
 if pcount < 0 pcount = 0
 if pcount > 20 pcount = 0
@@ -238,7 +246,8 @@ if key = 495043802 goto restore_key0
 if key = 684634731 goto restore_key1
 if key = 161811731 goto restore_key2
 if key = 541741532 goto restore_key3
-if key = 733922165 goto restore_key4
+if key = 957718554 goto restore_key4
+if key = 733922165 goto restore_key5
 if key < 990000000 goto restore_reset
 if key > 990032767 goto restore_reset
 if token > 387420488 goto restore_reset
@@ -246,7 +255,7 @@ pcode = key - 990000000
 pindex = 0
 :restore_parameters
 if pindex >= pcount goto restore_reset
-pkey = registry[128 + pindex * 464 + 446] and 32767
+pkey = registry[128 + pindex * 1088 + 446] and 32767
 if pkey != pcode goto restore_parameters_next
 pvalue = token
 pd0 = pvalue % 9
@@ -267,10 +276,10 @@ pd7 = pvalue % 9
 pvalue = pvalue / 9
 pd8 = pvalue % 9
 pvalue = pvalue / 9
-registry[128 + pindex * 464 + 459] = pd0 + pd1 * 256 + pd2 * 65536 + pd3 * 16777216
-registry[128 + pindex * 464 + 460] = pd4 + pd5 * 256 + pd6 * 65536 + pd7 * 16777216
-pw2 = registry[128 + pindex * 464 + 461] >> 8
-registry[128 + pindex * 464 + 461] = pw2 * 256 + pd8
+registry[128 + pindex * 1088 + 459] = pd0 + pd1 * 256 + pd2 * 65536 + pd3 * 16777216
+registry[128 + pindex * 1088 + 460] = pd4 + pd5 * 256 + pd6 * 65536 + pd7 * 16777216
+pw2 = registry[128 + pindex * 1088 + 461] >> 8
+registry[128 + pindex * 1088 + 461] = pw2 * 256 + pd8
 :restore_parameters_next
 pindex = pindex + 1
 goto restore_parameters
@@ -291,8 +300,12 @@ if token > 5 goto restore_reset
 stored3 = token
 goto restore_reset
 :restore_key4
-if token > 3 goto restore_reset
+if token > 2 goto restore_reset
 stored4 = token
+goto restore_reset
+:restore_key5
+if token > 3 goto restore_reset
+stored5 = token
 goto restore_reset
 :restore_reset
 token = 0
@@ -315,18 +328,21 @@ registry[51] = stored2
 bit = (plugins >> 3) and 1
 if bit = 0 stored3 = 0
 registry[13] = stored3
-bit = (plugins >> 4) and 1
+bit = (plugins >> 3) and 1
 if bit = 0 stored4 = 0
 registry[64] = stored4
+bit = (plugins >> 4) and 1
+if bit = 0 stored5 = 0
+registry[65] = stored5
 count = registry[0]
 if count > 20 count = 0
 index = 0
 :restore_find
 if stored0 = 0 goto restore_end
 if index >= count goto restore_end
-code = registry[128 + index * 464 + 446] and 65535
+code = registry[128 + index * 1088 + 446] and 65535
 if code != stored0 goto restore_next
-registry[2] = registry[1] + index * 1856
+registry[2] = registry[1] + index * 4352
 goto restore_end
 :restore_next
 index = index + 1
@@ -339,6 +355,7 @@ saved1 = value1
 saved2 = value2
 saved3 = value3
 saved4 = value4
+saved5 = value5
 return
 :reject_close
 fileclose fh
