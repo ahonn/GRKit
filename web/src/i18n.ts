@@ -163,7 +163,7 @@ const en = {
   ] as readonly RichText[],
   remove: 'Remove GRKit',
   removeSteps: [
-    ['Turn the camera off. Delete the ', '`SCRIPT', ' folder from the card.'],
+    ['Turn the camera off. Delete the ', '`SCRIPT', ' and ', '`GRKIT', ' folders from the card. ', '`GRKIT', ' holds your GRKit settings.'],
     [
       'To turn SD scripts off too, download the files below. Copy the contents of ',
       '`SD_ROOT',
@@ -339,7 +339,7 @@ const zhHans: Strings = {
   ],
   remove: '移除 GRKit',
   removeSteps: [
-    ['关闭相机。从存储卡删除 ', '`SCRIPT', ' 文件夹。'],
+    ['关闭相机。从存储卡删除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 文件夹。', '`GRKIT', ' 保存 GRKit 的设置。'],
     ['如需同时关闭 SD 脚本，下载下面的文件，把 ', '`SD_ROOT', ' 中的内容复制到存储卡根目录。'],
     ['插入存储卡。按住 MENU 按钮开机，等待相机自动关机。'],
     ['从存储卡根目录删除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
@@ -509,7 +509,7 @@ const zhHant: Strings = {
   ],
   remove: '移除 GRKit',
   removeSteps: [
-    ['關閉相機。從記憶卡刪除 ', '`SCRIPT', ' 資料夾。'],
+    ['關閉相機。從記憶卡刪除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 資料夾。', '`GRKIT', ' 保存 GRKit 的設定。'],
     ['如需同時關閉 SD 腳本，下載下方的檔案，把 ', '`SD_ROOT', ' 中的內容複製到記憶卡根目錄。'],
     ['插入記憶卡。按住 MENU 按鈕開機，等待相機自動關機。'],
     ['從記憶卡根目錄刪除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
@@ -681,7 +681,7 @@ const ja: Strings = {
   ],
   remove: 'GRKit の削除',
   removeSteps: [
-    ['カメラの電源を切ります。カードから ', '`SCRIPT', ' フォルダを削除します。'],
+    ['カメラの電源を切ります。カードから ', '`SCRIPT', ' フォルダと ', '`GRKIT', ' フォルダを削除します。', '`GRKIT', ' には GRKit の設定が入っています。'],
     ['SD スクリプトもオフにする場合は、下のファイルをダウンロードし、', '`SD_ROOT', ' の中身をカードのルートにコピーします。'],
     ['カードを入れます。MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。'],
     ['カードのルートから ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を削除します。'],

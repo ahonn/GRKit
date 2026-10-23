@@ -76,7 +76,10 @@ Each hook belongs to one extension point. INSTALL installs only the points of th
 
 `grkit_core::abi` defines the shared header, the effect records, and the picture scratch. It generates `runtime/abi.h`.
 
-The resident loader saves the plugin selections and the Fn adjustments in `SCRIPT/PLUGINS/STATE.TXT`. It writes only after a change, and only through the camera's own file system.
+The resident loader saves the plugin selections and the Fn adjustments in `GRKIT/STATE.TXT`. It writes only after a change, and only through the camera's own file system.
+`GRKIT` is the data folder of GRKit, outside `SCRIPT`. No package holds it, so a copy of a new package never replaces the settings. The loader creates it.
+Each plugin names its state file (`plugins::StateFile`). The loader restores the files in a fixed order and keeps a key with the value 0 out of the file.
+Releases before the data folder kept the state in `SCRIPT/PLUGINS`. The loader reads those files when the data folder has none, saves the values in the data folder at once, and then deletes the old files.
 A script error frees the arrays that the hooks use, so the resident script checks each array index and divides only by constants.
 
 ## Plugins

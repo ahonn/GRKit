@@ -55,7 +55,7 @@ GR IV Monochrome 執行 GR IV 的韌體，但顯示自己的版本號：韌體 1
 
 ## 移除或復原
 
-要移除 GRKit，先關閉相機。然後從記憶卡刪除 `SCRIPT` 資料夾。
+要移除 GRKit，先關閉相機。然後從記憶卡刪除 `SCRIPT` 和 `GRKIT` 資料夾。`GRKIT` 保存 GRKit 的設定。
 
 SD 腳本設定會保持開啟。要關閉它：
 

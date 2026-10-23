@@ -56,7 +56,7 @@ The card root has a firmware update file. Turn the camera off. Remove each `.bin
 
 ## Remove or recover
 
-To remove GRKit, turn the camera off. Then delete the `SCRIPT` folder from the card.
+To remove GRKit, turn the camera off. Then delete the `SCRIPT` and `GRKIT` folders from the card. `GRKIT` holds your GRKit settings.
 
 The SD script setting stays on. To turn it off:
 

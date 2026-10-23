@@ -55,7 +55,7 @@ GR IV Monochrome 运行 GR IV 的固件，但显示自己的版本号：固件 1
 
 ## 移除或恢复
 
-要移除 GRKit，先关闭相机。然后从存储卡删除 `SCRIPT` 文件夹。
+要移除 GRKit，先关闭相机。然后从存储卡删除 `SCRIPT` 和 `GRKIT` 文件夹。`GRKIT` 保存 GRKit 的设置。
 
 SD 脚本设置会保持打开。要关闭它：
 
