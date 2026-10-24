@@ -32,18 +32,18 @@ words = value
 call readword
 chunks = value
 fileclose fh
-expected = 39586 + count * 1088
+expected = 43682 + count * 1088
 if words != expected goto reject
-expectedchunks = (count + 62) / 40
+expectedchunks = (count + 65) / 40
 if chunks != expectedchunks goto reject
 intdim registry words
 if chunks <= 0 goto icons_ready
-items = count + 23 - 0
+items = count + 26 - 0
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork0 iconwords
 if chunks <= 1 goto icons_ready
-items = count + 23 - 40
+items = count + 26 - 40
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork1 iconwords
@@ -67,6 +67,22 @@ call snapshot
 call save
 goto watch
 :save
+stable = 1
+if value0 <> last0 stable = 0
+last0 = value0
+if value1 <> last1 stable = 0
+last1 = value1
+if value2 <> last2 stable = 0
+last2 = value2
+if value3 <> last3 stable = 0
+last3 = value3
+if value4 <> last4 stable = 0
+last4 = value4
+if value5 <> last5 stable = 0
+last5 = value5
+if pchanges <> plast stable = 0
+plast = pchanges
+if stable = 0 goto save_end
 changed = 0
 if value0 <> saved0 changed = 1
 if value1 <> saved1 changed = 1
@@ -288,7 +304,7 @@ if token > 65535 goto restore_reset
 stored0 = token
 goto restore_reset
 :restore_key1
-if token > 3 goto restore_reset
+if token > 6 goto restore_reset
 stored1 = token
 goto restore_reset
 :restore_key2
@@ -350,12 +366,19 @@ goto restore_find
 :restore_end
 call snapshot
 psaved = pchanges
+plast = pchanges
 saved0 = value0
+last0 = value0
 saved1 = value1
+last1 = value1
 saved2 = value2
+last2 = value2
 saved3 = value3
+last3 = value3
 saved4 = value4
+last4 = value4
 saved5 = value5
+last5 = value5
 return
 :reject_close
 fileclose fh
