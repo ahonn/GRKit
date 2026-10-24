@@ -94,6 +94,9 @@ pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 pub const PARAMETER_COUNT: usize = 9;
 
 pub const LINUX_DIRECTORY: &str = "/media/storage1/SCRIPT/PLUGINS";
+/// `DATA_FOLDER` on Linux. It also holds the effects library, `EFFECTS`, and
+/// its index, `EFFECTS.TXT`, which only the installer writes.
+pub const LINUX_DATA_DIRECTORY: &str = "/media/storage1/GRKIT";
 
 pub fn layout(count: usize) -> Result<Value> {
     ensure!(count <= MAX_COUNT, "Expected 0..{MAX_COUNT} effects");

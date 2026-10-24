@@ -34,6 +34,8 @@ Highlight the last row, GRK, to see the GRKit version.
 
 Press MENU to go back one level. GRKit keeps your settings after power-off.
 
+GRKit keeps the effects in the `GRKIT/EFFECTS` folder of the card. A new package adds its effects and replaces their earlier versions. It does not remove other effects. To remove an effect, turn the camera off and delete its file from `GRKIT/EFFECTS`. A later package adds it again only when its file in the package changes. `GRKIT/EFFECTS.TXT` lists the file of each effect. GRKit installs at most 20 effects: first those of the last package, then the others.
+
 ## Troubleshooting
 
 ### The camera starts a firmware update when you hold MENU

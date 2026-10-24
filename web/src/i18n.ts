@@ -52,6 +52,8 @@ const en = {
   retryPreview: 'Retry preview',
   uploadNote: 'DNG only. Your photo stays in this browser.',
   previewNote: 'The preview is approximate. Color and exposure can differ from the camera.',
+  libraryNote:
+    'Effects stay on the card after an update. To remove one, delete its file from GRKIT/EFFECTS. GRKIT/EFFECTS.TXT lists the files.',
   compare: 'Compare',
   original: 'Base development',
   preview: 'Preview',
@@ -234,6 +236,7 @@ const zhHans: Strings = {
   retryPreview: '重试预览',
   uploadNote: '仅支持 DNG。照片只在本浏览器中处理。',
   previewNote: '预览为近似效果，颜色和曝光可能与机内成片不同。',
+  libraryNote: '更新后效果仍保留在存储卡上。要移除一个效果，从 GRKIT/EFFECTS 删除它的文件。GRKIT/EFFECTS.TXT 列出这些文件。',
   compare: '对比',
   original: '基础显影',
   preview: '预览',
@@ -404,6 +407,7 @@ const zhHant: Strings = {
   retryPreview: '重試預覽',
   uploadNote: '僅支援 DNG。照片只在此瀏覽器中處理。',
   previewNote: '預覽為近似效果，顏色與曝光可能與機內成片不同。',
+  libraryNote: '更新後效果仍保留在記憶卡上。要移除一個效果，從 GRKIT/EFFECTS 刪除它的檔案。GRKIT/EFFECTS.TXT 列出這些檔案。',
   compare: '對比',
   original: '基礎顯影',
   preview: '預覽',
@@ -574,6 +578,8 @@ const ja: Strings = {
   retryPreview: 'プレビューを再試行',
   uploadNote: 'DNG のみ。写真はこのブラウザー内だけで処理されます。',
   previewNote: 'プレビューは目安です。色や露出はカメラで撮った写真と異なる場合があります。',
+  libraryNote:
+    'エフェクトはアップデート後もカードに残ります。削除するには、GRKIT/EFFECTS からそのファイルを削除します。GRKIT/EFFECTS.TXT にファイルの一覧があります。',
   compare: '比較',
   original: '基本現像',
   preview: 'プレビュー',

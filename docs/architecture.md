@@ -64,8 +64,8 @@ GR IV has its own layout and all plugins.
 
 At power-on, the loader script waits until Linux mounts the card. Then it runs two steps:
 
-1. SCAN selects the effects and writes an allocation plan. The startup script allocates the arrays and stays resident, so the arrays stay allocated.
-2. INSTALL writes records and icons, publishes the code, and installs the hooks last. It writes `INSTALL.OK`, or `INSTALL.ERR` with a status.
+1. SCAN moves the effects of the package into the effects library, selects the effects, and writes an allocation plan that holds them. The startup script allocates the arrays and stays resident, so the arrays stay allocated.
+2. INSTALL writes the records of the planned effects and the icons, publishes the code, and installs the hooks last. It writes `INSTALL.OK`, or `INSTALL.ERR` with a status.
 
 A camera has one package. When the camera has several targets, the package holds the installer of each, and `INSTALL.SH` selects one at each power-on: first by the identity word of the running build, then by [relocation](#relocation) for a build that no target names (`runtime::package_runtime_files`).
 
@@ -73,6 +73,9 @@ INSTALL changes nothing on a firmware that it does not expect. Each firmware add
 
 Each hook belongs to one extension point. INSTALL installs only the points of the selected plugins, so a plugin that is not selected changes no firmware.
 `SCRIPT/PLUGINS/PLUGINS.TXT` selects the plugins.
+
+The effects library is `GRKIT/EFFECTS`, in the data folder. The package brings its effects in `SCRIPT/PLUGINS/EFFECTS`, the inbox, and lists their files in `SCRIPT/PLUGINS/PACKAGE.TXT`. When a package is new, SCAN copies its listed effects into the library, where each replaces the file with the same name. `GRKIT/IMPORTED.TXT` records the package that the library has, with a hash of each file. So a copy of the same package changes nothing, and an effect that a person deleted from the library stays deleted until a package with a different file brings it. The first power-on with the library copies every valid inbox file, because releases before the library kept the effects there. The installer deletes and renames no file in these folders: on the camera's Linux a rename does not replace a file, and on GR IV exFAT a delete made later lookups fail. Without Image Control in the selection, no effect installs.
+GRKit installs the effects of the library, at most 20. The effects of the last package come first, and each package has the list. The other effects fill the remaining places in ID order. A listed effect that SCAN could not copy installs from the inbox. INSTALL takes the effects from the plan that SCAN wrote, so both steps install the same effects. SCAN writes `GRKIT/EFFECTS.TXT`, the list of the installed effects and their files, when the list changes.
 
 `grkit_core::abi` defines the shared header, the effect records, and the picture scratch. It generates `runtime/abi.h`.
 
