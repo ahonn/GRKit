@@ -778,9 +778,7 @@ pub fn assemble(
         );
     }
     contents.insert(format!("SD_ROOT/{EFFECT_LIST}"), effects.list());
-    if let Some(file) = plugins.file() {
-        contents.insert(format!("SD_ROOT/{}", modules::PATH), file);
-    }
+    contents.insert(format!("SD_ROOT/{}", modules::PATH), plugins.file());
     check_guide(guide.pdf)?;
     contents.insert(guide.language.guide_path(), guide.pdf.to_vec());
     contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());

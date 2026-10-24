@@ -163,6 +163,13 @@ const en = {
     ['Turn the camera on. GRKit loads a few seconds after power-on. Then, in ADJ, select the sixth entry, GRK.'],
     ['Optional: remove ', '`{modeset}', ' and ', '`DEVELOP.MOD', ' from the card root.'],
   ] as readonly RichText[],
+  updateNote: [
+    'To update GRKit, copy the contents of ',
+    '`SD_ROOT',
+    ' of the new package to the card root, over the old files. Your settings and effects stay in ',
+    '`GRKIT',
+    '.',
+  ] as RichText,
   remove: 'Remove GRKit',
   removeSteps: [
     ['Turn the camera off. Delete the ', '`SCRIPT', ' and ', '`GRKIT', ' folders from the card. ', '`GRKIT', ' holds your GRKit settings.'],
@@ -340,6 +347,7 @@ const zhHans: Strings = {
     ['正常开机。GRKit 在开机几秒后才加载，之后在 ADJ 模式中选择第 6 个功能 GRK。'],
     ['可选：从存储卡根目录删除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
   ],
+  updateNote: ['要更新 GRKit，把新安装包中 ', '`SD_ROOT', ' 的内容复制到存储卡根目录，覆盖旧文件。设置和效果保存在 ', '`GRKIT', ' 中，不会丢失。'] as RichText,
   remove: '移除 GRKit',
   removeSteps: [
     ['关闭相机。从存储卡删除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 文件夹。', '`GRKIT', ' 保存 GRKit 的设置。'],
@@ -511,6 +519,7 @@ const zhHant: Strings = {
     ['正常開機。GRKit 在開機幾秒後才載入，之後在 ADJ 模式中選擇第 6 個功能 GRK。'],
     ['選用：從記憶卡根目錄刪除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
   ],
+  updateNote: ['要更新 GRKit，把新安裝包中 ', '`SD_ROOT', ' 的內容複製到記憶卡根目錄，覆蓋舊檔案。設定和效果保存在 ', '`GRKIT', ' 中，不會遺失。'] as RichText,
   remove: '移除 GRKit',
   removeSteps: [
     ['關閉相機。從記憶卡刪除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 資料夾。', '`GRKIT', ' 保存 GRKit 的設定。'],
@@ -685,6 +694,13 @@ const ja: Strings = {
     ['電源を入れます。GRKit は電源を入れてから数秒後に読み込まれます。その後、撮影モードで ADJ レバーを押し込んで ADJ モードにし、6 番目の項目「GRK」を選びます。'],
     ['任意：カードのルートから ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を削除します。'],
   ],
+  updateNote: [
+    'GRKit をアップデートするには、新しいパッケージの ',
+    '`SD_ROOT',
+    ' の中身をカードのルートにコピーし、古いファイルを上書きします。設定とエフェクトは ',
+    '`GRKIT',
+    ' に残ります。',
+  ] as RichText,
   remove: 'GRKit の削除',
   removeSteps: [
     ['カメラの電源を切ります。カードから ', '`SCRIPT', ' フォルダと ', '`GRKIT', ' フォルダを削除します。', '`GRKIT', ' には GRKit の設定が入っています。'],

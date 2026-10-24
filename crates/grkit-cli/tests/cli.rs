@@ -266,8 +266,9 @@ fn package_roundtrip_and_output_ownership() {
         text(&zip),
     ];
     let packaged = success(&args);
-    // Eleven runtime, effect list, and document entries, then one per effect.
-    assert_eq!(packaged["entries"], 11 + source_count());
+    // Twelve runtime, selection, effect list, and document entries, then one
+    // per effect.
+    assert_eq!(packaged["entries"], 12 + source_count());
     assert_eq!(success(&["verify", text(&zip)])["effects"], source_count());
     let before = fs::read(&zip).unwrap();
     assert!(!run(&args).status.success());
@@ -375,7 +376,7 @@ fn package_selects_plugins_and_may_omit_effects() {
         "--out",
         text(&zip),
     ]);
-    // The plugin file is one more entry.
+    // Each package has the plugin file, so the count is the same.
     assert_eq!(packaged["entries"], 12 + source_count());
     assert_eq!(
         packaged["plugins"],

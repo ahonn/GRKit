@@ -288,7 +288,8 @@ fn selected_plugins_are_packaged_and_verified() {
         verify_package(&bytes).unwrap().plugins.names(),
         ["image-control", "date-stamp"]
     );
-    // A package with every plugin has no file and keeps its earlier bytes.
+    // A package with every plugin has the file too, so a copy over an older
+    // package always replaces its selection.
     let plain = assemble(
         &[runtime()],
         &effects,
@@ -298,7 +299,10 @@ fn selected_plugins_are_packaged_and_verified() {
     )
     .unwrap()
     .bytes;
-    assert!(!unpack(&plain).contains_key("SD_ROOT/SCRIPT/PLUGINS/PLUGINS.TXT"));
+    assert_eq!(
+        unpack(&plain)["SD_ROOT/SCRIPT/PLUGINS/PLUGINS.TXT"],
+        Selection::ALL.file()
+    );
     assert_eq!(
         verify_package(&plain).unwrap().plugins.names(),
         grkit_core::modules::NAMES
