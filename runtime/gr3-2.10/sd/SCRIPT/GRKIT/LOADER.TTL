@@ -1,0 +1,1142 @@
+mpause 2000
+sendln 'lcmd_resp on'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto reject
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto reject
+attempts = 0
+:scan
+sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/SCAN.SH'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto plan_ready
+mpause 200
+attempts = attempts + 1
+if attempts < 150 goto scan
+goto reject
+:plan_ready
+fileopen fh 'C:\SCRIPT\GRKIT\PLAN.BIN' 0
+if fh < 0 goto reject
+call readword
+if value != 827150919 goto reject_close
+call readword
+count = value
+if count < 0 goto reject_close
+if count > 20 goto reject_close
+call readword
+words = value
+call readword
+chunks = value
+call readword
+call readword
+modulewords = value
+if modulewords < 0 goto reject_close
+if modulewords > 65536 goto reject_close
+call readword
+moduletiles = value
+if moduletiles < 0 goto reject_close
+if moduletiles > 64 goto reject_close
+fileclose fh
+expected = 128 + count * 1088
+if words != expected goto reject
+expectedchunks = (count + moduletiles + 43) / 40
+if chunks != expectedchunks goto reject
+intdim registry words
+if chunks <= 0 goto icons_ready
+items = count + moduletiles + 4 - 0
+if items > 40 items = 40
+iconwords = items * 1602
+intdim artwork0 iconwords
+if chunks <= 1 goto icons_ready
+items = count + moduletiles + 4 - 40
+if items > 40 items = 40
+iconwords = items * 1602
+intdim artwork1 iconwords
+if chunks <= 2 goto icons_ready
+items = count + moduletiles + 4 - 80
+if items > 40 items = 40
+iconwords = items * 1602
+intdim artwork2 iconwords
+:icons_ready
+if modulewords <= 0 goto modules_ready
+intdim modulecode modulewords
+:modules_ready
+intdim tailarea 45743
+attempts = 0
+:install
+sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto resident
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.ERR'
+if result != 0 goto reject
+mpause 500
+attempts = attempts + 1
+if attempts > 60 mpause 9500
+goto install
+:resident
+stateok = 1
+foldersearch 'C:\GRKIT'
+if result = 0 foldercreate 'C:\GRKIT'
+foldersearch 'C:\GRKIT'
+if result = 0 stateok = 0
+changes = registry[64]
+saved = changes
+last = changes
+filesearch 'C:\GRKIT\STATE.TXT'
+if result = 0 saved = changes - 1
+profile = registry[66]
+if profile <> 0 goto profile_watch
+:watch
+mpause 2000
+changes = registry[64]
+if changes <> last goto watch_moved
+if changes = saved goto watch
+stamp = changes
+call save_state
+goto watch
+:watch_moved
+last = changes
+goto watch
+:save_state
+if stateok = 0 goto save_state_end
+call snapshot
+filedelete 'C:\GRKIT\STATE.TMP'
+filecreate sfh 'C:\GRKIT\STATE.TMP'
+if sfh < 0 goto save_state_end
+if value0 = 0 goto save_key0
+filewriteln sfh '861965461'
+int2str line value0
+filewriteln sfh line
+:save_key0
+if value1 = 0 goto save_key1
+filewriteln sfh '484706023'
+int2str line value1
+filewriteln sfh line
+:save_key1
+if value2 = 0 goto save_key2
+filewriteln sfh '790270076'
+int2str line value2
+filewriteln sfh line
+:save_key2
+if value3 = 0 goto save_key3
+filewriteln sfh '977751003'
+int2str line value3
+filewriteln sfh line
+:save_key3
+pcount = registry[0]
+if pcount < 0 pcount = 0
+if pcount > 20 pcount = 0
+pindex = 0
+:save_parameters
+if pindex >= pcount goto save_parameters_end
+pw0 = registry[128 + pindex * 1088 + 459]
+pw1 = registry[128 + pindex * 1088 + 460]
+pw2 = registry[128 + pindex * 1088 + 461]
+pvalue = 0
+pdigit = (pw2 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+if pvalue = 0 goto save_parameters_next
+pkey = 990000000 + (registry[128 + pindex * 1088 + 446] and 32767)
+int2str line pkey
+filewriteln sfh line
+int2str line pvalue
+filewriteln sfh line
+:save_parameters_next
+pindex = pindex + 1
+goto save_parameters
+:save_parameters_end
+mcount = 0
+if modulewords < 2 goto save_module_count_end
+mcount = modulecode[0]
+mmax = (modulewords - 2) / 3
+if mcount < 0 mcount = 0
+if mcount > mmax mcount = 0
+if mcount > 160 mcount = 0
+:save_module_count_end
+mindex = 0
+:save_modules
+if mindex >= mcount goto save_modules_end
+mid = modulecode[2 + mindex * 3]
+mvalue = modulecode[3 + mindex * 3]
+if mid <= 0 goto save_modules_next
+if mvalue <= 0 goto save_modules_next
+int2str line mid
+filewriteln sfh line
+int2str line mvalue
+filewriteln sfh line
+:save_modules_next
+mindex = mindex + 1
+goto save_modules
+:save_modules_end
+fileclose sfh
+filesearch 'C:\GRKIT\STATE.TMP'
+if result = 0 goto save_state_end
+filedelete 'C:\GRKIT\STATE.TXT'
+filesearch 'C:\GRKIT\STATE.TXT'
+if result != 0 goto save_state_end
+filerename 'C:\GRKIT\STATE.TMP' 'C:\GRKIT\STATE.TXT'
+filesearch 'C:\GRKIT\STATE.TXT'
+if result = 0 goto save_state_end
+saved = stamp
+:save_state_end
+return
+:snapshot
+value0 = 0
+count = registry[0]
+if count < 1 goto snapshot_values
+if count > 20 goto snapshot_values
+offset = registry[2] - registry[1]
+if offset < 0 goto snapshot_values
+rest = offset % 4352
+if rest != 0 goto snapshot_values
+index = offset / 4352
+if index >= count goto snapshot_values
+value0 = registry[128 + index * 1088 + 446] and 65535
+:snapshot_values
+value1 = registry[52]
+value2 = registry[12]
+value3 = registry[60]
+return
+:profile_watch
+ppolls = 0
+pperiod = 0
+pframes = registry[7]
+pname0 = ''
+pc = (tailarea[45620] >> 0) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45620] >> 8) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45620] >> 16) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45620] >> 24) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45621] >> 0) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45621] >> 8) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45621] >> 16) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+pc = (tailarea[45621] >> 24) and 255
+if pc = 0 goto profile_name0_end
+code2str ps pc
+strconcat pname0 ps
+:profile_name0_end
+pname1 = ''
+pc = (tailarea[45624] >> 0) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45624] >> 8) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45624] >> 16) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45624] >> 24) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45625] >> 0) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45625] >> 8) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45625] >> 16) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+pc = (tailarea[45625] >> 24) and 255
+if pc = 0 goto profile_name1_end
+code2str ps pc
+strconcat pname1 ps
+:profile_name1_end
+pname2 = ''
+pc = (tailarea[45628] >> 0) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45628] >> 8) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45628] >> 16) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45628] >> 24) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45629] >> 0) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45629] >> 8) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45629] >> 16) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+pc = (tailarea[45629] >> 24) and 255
+if pc = 0 goto profile_name2_end
+code2str ps pc
+strconcat pname2 ps
+:profile_name2_end
+pname3 = ''
+pc = (tailarea[45632] >> 0) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45632] >> 8) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45632] >> 16) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45632] >> 24) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45633] >> 0) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45633] >> 8) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45633] >> 16) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+pc = (tailarea[45633] >> 24) and 255
+if pc = 0 goto profile_name3_end
+code2str ps pc
+strconcat pname3 ps
+:profile_name3_end
+pname4 = ''
+pc = (tailarea[45636] >> 0) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45636] >> 8) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45636] >> 16) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45636] >> 24) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45637] >> 0) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45637] >> 8) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45637] >> 16) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+pc = (tailarea[45637] >> 24) and 255
+if pc = 0 goto profile_name4_end
+code2str ps pc
+strconcat pname4 ps
+:profile_name4_end
+pname5 = ''
+pc = (tailarea[45640] >> 0) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45640] >> 8) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45640] >> 16) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45640] >> 24) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45641] >> 0) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45641] >> 8) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45641] >> 16) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+pc = (tailarea[45641] >> 24) and 255
+if pc = 0 goto profile_name5_end
+code2str ps pc
+strconcat pname5 ps
+:profile_name5_end
+pname6 = ''
+pc = (tailarea[45644] >> 0) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45644] >> 8) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45644] >> 16) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45644] >> 24) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45645] >> 0) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45645] >> 8) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45645] >> 16) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+pc = (tailarea[45645] >> 24) and 255
+if pc = 0 goto profile_name6_end
+code2str ps pc
+strconcat pname6 ps
+:profile_name6_end
+pname7 = ''
+pc = (tailarea[45648] >> 0) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45648] >> 8) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45648] >> 16) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45648] >> 24) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45649] >> 0) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45649] >> 8) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45649] >> 16) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+pc = (tailarea[45649] >> 24) and 255
+if pc = 0 goto profile_name7_end
+code2str ps pc
+strconcat pname7 ps
+:profile_name7_end
+filesearch 'C:\GRKIT\PROFILE.LOG'
+if result != 0 goto profile_append
+filecreate pfh 'C:\GRKIT\PROFILE.LOG'
+goto profile_opened
+:profile_append
+fileopen pfh 'C:\GRKIT\PROFILE.LOG' 1
+:profile_opened
+if pfh < 0 goto profile_poll
+filewriteln pfh 'GRKit profile: for each period, the live-view frames; for each point, calls, CPU cycles, and the cycles of the largest call'
+fileclose pfh
+:profile_poll
+mpause 2000
+ppolls = ppolls + 1
+if ppolls >= 5 call profile_write
+changes = registry[64]
+if changes <> last goto profile_moved
+if changes = saved goto profile_poll
+stamp = changes
+call save_state
+goto profile_poll
+:profile_moved
+last = changes
+goto profile_poll
+:profile_write
+ppolls = 0
+pperiod = pperiod + 1
+pf = registry[7]
+pframe = pf - pframes
+pframes = pf
+fileopen pfh 'C:\GRKIT\PROFILE.LOG' 1
+if pfh < 0 goto profile_write_end
+filewrite pfh 'period '
+int2str ps pperiod
+filewrite pfh ps
+filewrite pfh ' frames '
+int2str ps pframe
+filewriteln pfh ps
+pc = tailarea[45650]
+if pc = 0 goto profile_slot0
+pcy = tailarea[45651]
+pmx = tailarea[45652]
+tailarea[45650] = 0
+tailarea[45651] = 0
+tailarea[45652] = 0
+filewrite pfh 'frame.bind '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot0
+pc = tailarea[45653]
+if pc = 0 goto profile_slot1
+pcy = tailarea[45654]
+pmx = tailarea[45655]
+tailarea[45653] = 0
+tailarea[45654] = 0
+tailarea[45655] = 0
+filewrite pfh 'frame.prepare '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot1
+pc = tailarea[45656]
+if pc = 0 goto profile_slot2
+pcy = tailarea[45657]
+pmx = tailarea[45658]
+tailarea[45656] = 0
+tailarea[45657] = 0
+tailarea[45658] = 0
+filewrite pfh 'frame.paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot2
+pc = tailarea[45659]
+if pc = 0 goto profile_slot3
+pcy = tailarea[45660]
+pmx = tailarea[45661]
+tailarea[45659] = 0
+tailarea[45660] = 0
+tailarea[45661] = 0
+filewrite pfh 'picture.post '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot3
+pc = tailarea[45662]
+if pc = 0 goto profile_slot4
+pcy = tailarea[45663]
+pmx = tailarea[45664]
+tailarea[45662] = 0
+tailarea[45663] = 0
+tailarea[45664] = 0
+filewrite pfh 'picture.encode '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot4
+pc = tailarea[45665]
+if pc = 0 goto profile_slot5
+pcy = tailarea[45666]
+pmx = tailarea[45667]
+tailarea[45665] = 0
+tailarea[45666] = 0
+tailarea[45667] = 0
+filewrite pfh 'menu.icon '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot5
+pc = tailarea[45668]
+if pc = 0 goto profile_slot6
+pcy = tailarea[45669]
+pmx = tailarea[45670]
+tailarea[45668] = 0
+tailarea[45669] = 0
+tailarea[45670] = 0
+filewrite pfh 'picture.grain '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot6
+pc = tailarea[45671]
+if pc = 0 goto profile_slot7
+pcy = tailarea[45672]
+pmx = tailarea[45673]
+tailarea[45671] = 0
+tailarea[45672] = 0
+tailarea[45673] = 0
+filewrite pfh pname0
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot7
+pc = tailarea[45674]
+if pc = 0 goto profile_slot8
+pcy = tailarea[45675]
+pmx = tailarea[45676]
+tailarea[45674] = 0
+tailarea[45675] = 0
+tailarea[45676] = 0
+filewrite pfh pname0
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot8
+pc = tailarea[45677]
+if pc = 0 goto profile_slot9
+pcy = tailarea[45678]
+pmx = tailarea[45679]
+tailarea[45677] = 0
+tailarea[45678] = 0
+tailarea[45679] = 0
+filewrite pfh pname0
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot9
+pc = tailarea[45680]
+if pc = 0 goto profile_slot10
+pcy = tailarea[45681]
+pmx = tailarea[45682]
+tailarea[45680] = 0
+tailarea[45681] = 0
+tailarea[45682] = 0
+filewrite pfh pname1
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot10
+pc = tailarea[45683]
+if pc = 0 goto profile_slot11
+pcy = tailarea[45684]
+pmx = tailarea[45685]
+tailarea[45683] = 0
+tailarea[45684] = 0
+tailarea[45685] = 0
+filewrite pfh pname1
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot11
+pc = tailarea[45686]
+if pc = 0 goto profile_slot12
+pcy = tailarea[45687]
+pmx = tailarea[45688]
+tailarea[45686] = 0
+tailarea[45687] = 0
+tailarea[45688] = 0
+filewrite pfh pname1
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot12
+pc = tailarea[45689]
+if pc = 0 goto profile_slot13
+pcy = tailarea[45690]
+pmx = tailarea[45691]
+tailarea[45689] = 0
+tailarea[45690] = 0
+tailarea[45691] = 0
+filewrite pfh pname2
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot13
+pc = tailarea[45692]
+if pc = 0 goto profile_slot14
+pcy = tailarea[45693]
+pmx = tailarea[45694]
+tailarea[45692] = 0
+tailarea[45693] = 0
+tailarea[45694] = 0
+filewrite pfh pname2
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot14
+pc = tailarea[45695]
+if pc = 0 goto profile_slot15
+pcy = tailarea[45696]
+pmx = tailarea[45697]
+tailarea[45695] = 0
+tailarea[45696] = 0
+tailarea[45697] = 0
+filewrite pfh pname2
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot15
+pc = tailarea[45698]
+if pc = 0 goto profile_slot16
+pcy = tailarea[45699]
+pmx = tailarea[45700]
+tailarea[45698] = 0
+tailarea[45699] = 0
+tailarea[45700] = 0
+filewrite pfh pname3
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot16
+pc = tailarea[45701]
+if pc = 0 goto profile_slot17
+pcy = tailarea[45702]
+pmx = tailarea[45703]
+tailarea[45701] = 0
+tailarea[45702] = 0
+tailarea[45703] = 0
+filewrite pfh pname3
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot17
+pc = tailarea[45704]
+if pc = 0 goto profile_slot18
+pcy = tailarea[45705]
+pmx = tailarea[45706]
+tailarea[45704] = 0
+tailarea[45705] = 0
+tailarea[45706] = 0
+filewrite pfh pname3
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot18
+pc = tailarea[45707]
+if pc = 0 goto profile_slot19
+pcy = tailarea[45708]
+pmx = tailarea[45709]
+tailarea[45707] = 0
+tailarea[45708] = 0
+tailarea[45709] = 0
+filewrite pfh pname4
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot19
+pc = tailarea[45710]
+if pc = 0 goto profile_slot20
+pcy = tailarea[45711]
+pmx = tailarea[45712]
+tailarea[45710] = 0
+tailarea[45711] = 0
+tailarea[45712] = 0
+filewrite pfh pname4
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot20
+pc = tailarea[45713]
+if pc = 0 goto profile_slot21
+pcy = tailarea[45714]
+pmx = tailarea[45715]
+tailarea[45713] = 0
+tailarea[45714] = 0
+tailarea[45715] = 0
+filewrite pfh pname4
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot21
+pc = tailarea[45716]
+if pc = 0 goto profile_slot22
+pcy = tailarea[45717]
+pmx = tailarea[45718]
+tailarea[45716] = 0
+tailarea[45717] = 0
+tailarea[45718] = 0
+filewrite pfh pname5
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot22
+pc = tailarea[45719]
+if pc = 0 goto profile_slot23
+pcy = tailarea[45720]
+pmx = tailarea[45721]
+tailarea[45719] = 0
+tailarea[45720] = 0
+tailarea[45721] = 0
+filewrite pfh pname5
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot23
+pc = tailarea[45722]
+if pc = 0 goto profile_slot24
+pcy = tailarea[45723]
+pmx = tailarea[45724]
+tailarea[45722] = 0
+tailarea[45723] = 0
+tailarea[45724] = 0
+filewrite pfh pname5
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot24
+pc = tailarea[45725]
+if pc = 0 goto profile_slot25
+pcy = tailarea[45726]
+pmx = tailarea[45727]
+tailarea[45725] = 0
+tailarea[45726] = 0
+tailarea[45727] = 0
+filewrite pfh pname6
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot25
+pc = tailarea[45728]
+if pc = 0 goto profile_slot26
+pcy = tailarea[45729]
+pmx = tailarea[45730]
+tailarea[45728] = 0
+tailarea[45729] = 0
+tailarea[45730] = 0
+filewrite pfh pname6
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot26
+pc = tailarea[45731]
+if pc = 0 goto profile_slot27
+pcy = tailarea[45732]
+pmx = tailarea[45733]
+tailarea[45731] = 0
+tailarea[45732] = 0
+tailarea[45733] = 0
+filewrite pfh pname6
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot27
+pc = tailarea[45734]
+if pc = 0 goto profile_slot28
+pcy = tailarea[45735]
+pmx = tailarea[45736]
+tailarea[45734] = 0
+tailarea[45735] = 0
+tailarea[45736] = 0
+filewrite pfh pname7
+filewrite pfh ' paint '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot28
+pc = tailarea[45737]
+if pc = 0 goto profile_slot29
+pcy = tailarea[45738]
+pmx = tailarea[45739]
+tailarea[45737] = 0
+tailarea[45738] = 0
+tailarea[45739] = 0
+filewrite pfh pname7
+filewrite pfh ' filter '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot29
+pc = tailarea[45740]
+if pc = 0 goto profile_slot30
+pcy = tailarea[45741]
+pmx = tailarea[45742]
+tailarea[45740] = 0
+tailarea[45741] = 0
+tailarea[45742] = 0
+filewrite pfh pname7
+filewrite pfh ' call '
+int2str ps pc
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pcy
+filewrite pfh ps
+filewrite pfh ' '
+int2str ps pmx
+filewrite pfh ps
+filewriteln pfh ''
+:profile_slot30
+fileclose pfh
+:profile_write_end
+return
+:reject_close
+fileclose fh
+:reject
+dispstr 'GR_MODULE_LOADER_REJECTED'
+end
+:readword
+value = 0
+weight = 1
+for byteindex 0 3
+fileread fh 1 octet
+if result != 0 goto reject_close
+str2code bytevalue octet
+value = value + bytevalue * weight
+if byteindex < 3 weight = weight * 256
+next
+return
