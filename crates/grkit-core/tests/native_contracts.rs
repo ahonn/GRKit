@@ -625,6 +625,22 @@ fn native_state_contract_reads_the_pairs_of_the_loader() {
     checked(&mut Command::new(&executable));
 }
 
+#[test]
+fn native_custom_block_contract_maps_gr4_blocks_to_gr3_custom_sets() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("custom_block_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/custom_block_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
 /// The numeric `#define`s of a runtime header: name and value.
 fn defines(path: &str) -> std::collections::HashMap<String, u64> {
     let text = fs::read_to_string(root().join(path)).unwrap();
