@@ -16,6 +16,9 @@
    place in ADJ and in MENU, at most GRM_MAX_ORDER. */
 #define GRM_ORDER 56U
 #define GRM_MAX_ORDER 0xffffU
+/* The header word of the cameras that the module is for: bit n is camera n of
+   grkit_core::camera::CAMERAS, and 0 is each camera. */
+#define GRM_CAMERAS 60U
 #define GRM_DATA_LINK 0x10000000U
 #define GRM_DATA_LOCATION 0x80000000U
 #define GRM_MAX_SEGMENT 0x10000U
@@ -133,10 +136,11 @@
 #define GRM_BAD_DESCRIPTOR 53
 #define GRM_NO_ROOM 54
 #define GRM_MISSING_SETTING 55
+#define GRM_OTHER_CAMERA 56
 
 struct grm_module {
     char id[9];
-    u32 version, abi;
+    u32 version, abi, cameras;
     u32 code_size, data_size, bss_size, descriptor;
     u32 code_relocations, data_relocations, imports;
     const u8 *code, *data, *relocations, *import_entries, *names;
@@ -168,6 +172,7 @@ static int grm_parse(const u8 *file, u32 size, struct grm_module *m)
     m->id[8] = 0;
     if (!m->id[0]) return GRM_BAD_FILE;
     m->version = grm_word(file + 20);
+    m->cameras = grm_word(file + GRM_CAMERAS);
     m->code_size = grm_word(file + 24);
     m->data_size = grm_word(file + 28);
     m->bss_size = grm_word(file + 32);

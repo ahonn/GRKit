@@ -10,6 +10,7 @@ static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10
 #define TABLE_BYTES 0x68U
 #define SETTINGS_IC_TYPE 0x77cU
 #define IC_TYPE_COUNT 0x1aU
+#define TARGET_CAMERAS 0x3U
 #define PATCH_COUNT 0x2U
 #define CODE_RELOCATION_COUNT 0x1U
 #define TAIL_SYMBOL 0U

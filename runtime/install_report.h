@@ -31,6 +31,7 @@ static const char *module_reason(u32 status)
     case GRM_BAD_DESCRIPTOR: return "its description is not valid";
     case GRM_NO_ROOM: return "the modules need more memory than GRKit has";
     case GRM_MISSING_SETTING: return "it uses a setting that no module has: ";
+    case GRM_OTHER_CAMERA: return "it is for another camera";
     default: return "INSTALL stopped";
     }
 }

@@ -55,7 +55,7 @@ enum install_status {
        the core does not name that build. */
     STATUS_RELOCATION = 47,
     STATUS_OTHER_BUILD = 48,
-    /* 50 to 55: the module statuses of runtime/module_link.h (GRM_*). */
+    /* 50 to 56: the module statuses of runtime/module_link.h (GRM_*). */
     /* The loader stopped or waits: SCAN wrote no plan, the plan header is not
        valid, or INSTALL does not answer. The loader writes this status to
        INSTALL.ERR itself, with its attempts on the next line

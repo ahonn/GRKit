@@ -1,8 +1,10 @@
 //! The module file format (GRM v1).
 //!
 //! A module is the code of one feature that the installer links into the
-//! running camera at boot. The same file serves every camera: a module refers
-//! to the firmware only through the services that the core exports.
+//! running camera at boot. The same file serves every camera that it is for: a
+//! module refers to the firmware only through the services that the core
+//! exports. A module that needs a capability of only some cameras names them
+//! in its camera mask.
 //!
 //! A file has a header, the code segment (text and read-only data), the data
 //! segment (initialized writable data), the relocations of each segment, the
@@ -117,6 +119,11 @@ pub struct Module {
     /// GRKit section of MENU: a smaller order first, then by ID. The
     /// installer reads it from the header before it reads the rest.
     pub order: u32,
+    /// The cameras that the module is for: bit n is camera n of
+    /// `camera::CAMERAS`, and 0 is each camera. The installer does not load
+    /// the module on a runtime build that none of these cameras runs, and a
+    /// package for another camera does not take it.
+    pub cameras: u32,
     pub code: Vec<u8>,
     pub data: Vec<u8>,
     pub bss_size: u32,
@@ -155,10 +162,20 @@ fn inside(offset: u32, size: usize, len: usize) -> bool {
 }
 
 impl Module {
+    /// Whether the module is for `camera`.
+    pub fn runs_on(&self, camera: &crate::camera::Camera) -> bool {
+        self.cameras == 0 || self.cameras & camera.bit() != 0
+    }
+
     /// Check the rules that the installer checks, so that a tool never writes
     /// a file that the camera rejects.
     pub fn validate(&self) -> Result<()> {
         ensure!(valid_id(&self.id), "Invalid module ID {:?}", self.id);
+        ensure!(
+            self.cameras & !crate::camera::all_cameras() == 0,
+            "The camera mask of {} names an unknown camera",
+            self.id
+        );
         for (name, size) in [
             ("code", self.code.len()),
             ("data", self.data.len()),
@@ -259,7 +276,7 @@ impl Module {
         put(&mut out, self.imports.len() as u32);
         put(&mut out, names.len() as u32);
         put(&mut out, self.order);
-        put(&mut out, 0);
+        put(&mut out, self.cameras);
         debug_assert_eq!(out.len(), HEADER_SIZE);
         out.extend_from_slice(&self.code);
         out.extend_from_slice(&self.data);
@@ -298,7 +315,7 @@ impl Module {
             (field(0)?, field(1)?, field(2)?, field(3)?, field(4)?);
         let (code_count, data_count, import_count, names_size) =
             (field(5)?, field(6)?, field(7)?, field(8)?);
-        let order = field(9)?;
+        let (order, cameras) = (field(9)?, field(10)?);
         let mut at = HEADER_SIZE;
         let mut take = |length: usize| -> Result<&[u8]> {
             let part = bytes
@@ -342,6 +359,7 @@ impl Module {
             id,
             version,
             order,
+            cameras,
             code,
             data,
             bss_size,
@@ -376,6 +394,9 @@ version = 1
 # The default place in the GRKit root of ADJ and in the GRKit section of
 # MENU: a smaller order first, then by ID. The official modules use 10 to 50.
 order = {order}
+# The cameras that the module is for, such as ["gr3", "gr3x"]. Without it,
+# the module is for each camera.
+# cameras = ["gr3", "gr3x", "gr4"]
 sources = ["module.c"]
 # Tile n shows value n of the page setting. Tile 0 is the module tile, which
 # the root shows at Off. Each tile is a 40 x 40 PNG.
@@ -491,6 +512,7 @@ mod tests {
             id: "PROBE".into(),
             version: 1,
             order: 30,
+            cameras: 0,
             code,
             data: vec![0; 8],
             bss_size: 8,
@@ -511,6 +533,34 @@ mod tests {
         let bytes = module.encode().unwrap();
         assert_eq!(&bytes[..4], b"GRKM");
         assert_eq!(Module::decode(&bytes).unwrap(), module);
+        // The camera mask is the last header word.
+        let module = Module {
+            cameras: crate::camera::GR3.bit() | crate::camera::GR3X.bit(),
+            ..sample()
+        };
+        let bytes = module.encode().unwrap();
+        assert_eq!(&bytes[60..64], &3u32.to_le_bytes());
+        assert_eq!(Module::decode(&bytes).unwrap(), module);
+    }
+
+    #[test]
+    fn the_camera_mask_selects_cameras() {
+        use crate::camera::{GR3, GR3X, GR4};
+        let every = sample();
+        assert!([&GR3, &GR3X, &GR4]
+            .iter()
+            .all(|camera| every.runs_on(camera)));
+        let gr3 = Module {
+            cameras: GR3.bit() | GR3X.bit(),
+            ..sample()
+        };
+        assert!(gr3.runs_on(&GR3) && gr3.runs_on(&GR3X) && !gr3.runs_on(&GR4));
+        // A bit without a camera is not valid.
+        let unknown = Module {
+            cameras: 1 << crate::camera::CAMERAS.len(),
+            ..sample()
+        };
+        assert!(unknown.encode().is_err());
     }
 
     #[test]

@@ -222,6 +222,11 @@ pub struct Manifest {
     /// of MENU: a smaller order first, then by ID (`grkit_core::grm`).
     #[serde(default = "default_order")]
     pub order: u32,
+    /// The IDs of the cameras that the module is for (`grkit_core::camera`),
+    /// such as `["gr3", "gr3x"]` for a module that uses a capability of the
+    /// GR III family. Without it, the module is for each camera.
+    #[serde(default)]
+    pub cameras: Vec<String>,
     /// The C sources, relative to the manifest. A module with only data,
     /// such as a page of a capability, has none.
     #[serde(default)]
@@ -495,6 +500,7 @@ fn validate(m: &Manifest) -> Result<()> {
         "order must be 0 to {}",
         grkit_core::grm::MAX_ORDER
     );
+    camera_mask(&m.cameras)?;
     for (i, setting) in m.settings.iter().enumerate() {
         ensure!(
             valid_key(&setting.key),
@@ -1058,7 +1064,22 @@ pub fn build_manifest(
         tools,
     )?;
     module.order = manifest.order;
+    module.cameras = camera_mask(&manifest.cameras)?;
+    module.validate()?;
     Ok(module)
+}
+
+/// The camera mask of the `cameras` of a manifest (`grkit_core::grm`): 0,
+/// each camera, for an empty list.
+fn camera_mask(ids: &[String]) -> Result<u32> {
+    let mut mask = 0;
+    for id in ids {
+        let camera = grkit_core::camera::find(id)
+            .with_context(|| format!("cameras: {id:?} is not a camera"))?;
+        ensure!(mask & camera.bit() == 0, "cameras: {id} is twice");
+        mask |= camera.bit();
+    }
+    Ok(mask)
 }
 
 /// Run the host test of the module in `directory`: its `test.c`, with the
@@ -1152,5 +1173,21 @@ mod tests {
             define("manage.h", "MANAGE_OPTION_VALUES"),
             OPTION_VALUES as u64
         );
+        assert_eq!(define("module_link.h", "GRM_CAMERAS"), 60);
+    }
+
+    /// `cameras` names known cameras, each once. No list is each camera.
+    #[test]
+    fn the_cameras_of_a_manifest_give_the_camera_mask() {
+        use grkit_core::camera::{GR3, GR3X, GR4};
+        let ids = |ids: &[&str]| ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+        assert_eq!(camera_mask(&[]).unwrap(), 0);
+        assert_eq!(
+            camera_mask(&ids(&["gr3x", "gr3"])).unwrap(),
+            GR3.bit() | GR3X.bit()
+        );
+        assert_eq!(camera_mask(&ids(&["gr4"])).unwrap(), GR4.bit());
+        assert!(camera_mask(&ids(&["gr2"])).is_err());
+        assert!(camera_mask(&ids(&["gr3", "gr3"])).is_err());
     }
 }

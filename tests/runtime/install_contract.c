@@ -39,6 +39,8 @@ typedef unsigned int u32;
 #define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003
 #define PARAMETER_KEY_BASE 990000000U
 #define STATE_TEXT_MAX 16384U
+/* The build runs on cameras 0 and 1 (GR III and GR IIIx). */
+#define TARGET_CAMERAS 0x3U
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
@@ -252,6 +254,8 @@ static void read_state(void)
 struct spec {
     const char *id;
     u32 order, data_bytes, bss_bytes;
+    /* The camera mask of the header: 0 is each camera. */
+    u32 cameras;
     /* A file with another magic, or with another major ABI. */
     int bad_magic, new_abi;
     struct { const char *key; u32 values, flags; } settings[SPEC_ITEMS];
@@ -368,7 +372,7 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     grm_put(p + 20, 1); grm_put(p + 24, code_count * 4); grm_put(p + 28, s->data_bytes);
     grm_put(p + 32, s->bss_bytes); grm_put(p + 36, descriptor * 4);
     grm_put(p + 40, relocation_count); grm_put(p + 44, 0);
-    grm_put(p + 48, imports); grm_put(p + 52, names); grm_put(p + GRM_ORDER, s->order);
+    grm_put(p + 48, imports); grm_put(p + 52, names); grm_put(p + GRM_ORDER, s->order); grm_put(p + GRM_CAMERAS, s->cameras);
     p += GRM_HEADER;
     memcpy(p, code_words, code_count * 4); p += code_count * 4;
     p += s->data_bytes;
@@ -548,6 +552,21 @@ static void a_bad_module_keeps_the_others(void)
     assert(module_code_from[0] == CODE_AT && module_code_from[4] == module_code_to[0]);
     expect_listed(1, GRM_BAD_ABI, "NEWABI (51)");
     expect_listed(5, GRM_BAD_FILE, "BADMAGIC (50)");
+}
+/* A module for other cameras does not load. One for a camera of this build
+   loads. */
+static void a_module_for_another_camera_does_not_load(void)
+{
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "GR3X.GRM", &(struct spec){.id = "GR3X", .order = 1, .cameras = 0x2});
+    add_module(PACKAGE_MODULES_PATH, "GR4.GRM", &(struct spec){.id = "GR4", .order = 2, .cameras = 0x4});
+    assert(install() == 0);
+    static const char *const files[] = {"GR3X.GRM", "GR4.GRM"};
+    static const u32 sources[] = {0, 0};
+    expect_modules(files, sources, 2);
+    assert(module_status[0] == 0 && module_status[1] == GRM_OTHER_CAMERA);
+    assert(module_usable == 1U);
+    expect_listed(1, GRM_OTHER_CAMERA, "GR4 (56)");
 }
 /* SCAN reserves the module array for the most effects. BIG fills half of
    it, and FILL the rest, so that one word more of FILL leaves no room for
@@ -817,6 +836,7 @@ static void *run(void *unused)
     a_full_list_keeps_the_package_modules();
     safe_mode_loads_no_module();
     a_bad_module_keeps_the_others();
+    a_module_for_another_camera_does_not_load();
     the_budget_counts_the_services_block();
     install_writes_the_settings_and_the_contexts();
     the_switch_stops_each_module();

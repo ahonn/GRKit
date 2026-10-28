@@ -36,6 +36,7 @@ The manifest is TOML. An unknown key is an error.
 | `id` | string | required | The module ID: 1 to 8 characters `A`-`Z`, `0`-`9`, or `_`. The file name is `<id>.GRM`, and each setting name starts with it. |
 | `version` | integer | required | The module version. The build writes it into the file header. GRKit does not read it. |
 | `order` | integer | 100 | The default place of the module in ADJ and in the GRKit section of MENU, 0 to 65535: a smaller order first, then by ID. The official modules use 10 (Film Look) to 50 (Grain). ADJ Order in MENU changes the place in ADJ. |
+| `cameras` | array of strings | each camera | The cameras that the module is for: `gr3`, `gr3x`, `gr4`. A module that uses a capability of only some cameras names them. The installer does not load the module on another camera (error 56), and a package for another camera does not take it. GR III and GR IIIx run one runtime build, so the installer loads a module for one of them on both. |
 | `sources` | array of strings | `[]` | The C source files, relative to the manifest. |
 | `tiles` | array of strings | `[]` | The tile files, relative to the manifest. Each is a 40 x 40 PNG. At most 64. |
 | `uses` | array of strings | `[]` | The settings of other modules or of the core that the module uses: `MODULE.KEY`, or `?MODULE.KEY` for an optional one. At most 8. See [Used settings](#used-settings). |
@@ -341,6 +342,7 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 | 53 | its description is not valid | The descriptor breaks a rule: an unknown point or flag, a count over its limit, a bad setting key, a text that is too long, a page whose rows do not match its setting, or a reference outside the module. |
 | 54 | the modules need more memory than GRKit has | The module does not fit in the code area, the script array, the settings table, the tile slots, or the page, layer, or filter slots that earlier modules left. |
 | 55 | it uses a setting that no module has: `<name>` | A required used setting is not a capability, a public setting of a loaded module, or a setting of this module. |
+| 56 | it is for another camera | `cameras` of the module names no camera that runs this runtime build. |
 
 Other lines:
 

@@ -155,6 +155,25 @@ impl Camera {
     pub fn is_gr4(&self) -> bool {
         self.id == GR4.id
     }
+
+    /// The bit of the camera in a camera mask: bit n is camera n of `CAMERAS`.
+    pub fn bit(&self) -> u32 {
+        let index = CAMERAS.iter().position(|camera| camera.id == self.id);
+        1 << index.expect("Each camera is in CAMERAS")
+    }
+}
+
+/// The mask of all cameras.
+pub fn all_cameras() -> u32 {
+    (1 << CAMERAS.len()) - 1
+}
+
+/// The mask of the cameras that run a runtime build.
+pub fn cameras_of(target: &str) -> u32 {
+    CAMERAS
+        .into_iter()
+        .filter(|camera| camera.runs(target))
+        .fold(0, |mask, camera| mask | camera.bit())
 }
 
 /// `web/src/generated/cameras.ts`: the ModeSet file and the firmware releases

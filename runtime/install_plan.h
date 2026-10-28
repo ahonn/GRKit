@@ -204,6 +204,8 @@ static int read_module(u32 i)
     if (got < 0) return GRM_BAD_FILE;
     int status = grm_parse(module_file, have, &module);
     if (status) return status;
+    /* A module for other cameras: none of them runs this build. */
+    if (module.cameras && !(module.cameras & TARGET_CAMERAS)) return GRM_OTHER_CAMERA;
     /* The file name before the dot is the module ID. */
     char id[9];
     module_id(i, id);

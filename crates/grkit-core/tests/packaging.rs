@@ -303,6 +303,43 @@ fn selected_modules_are_packaged_and_verified() {
 }
 
 #[test]
+fn a_package_takes_only_modules_for_its_camera() {
+    let module_for = |cameras: u32| {
+        grkit_core::grm::Module {
+            id: "PHONE".into(),
+            version: 1,
+            cameras,
+            code: vec![0; 40],
+            ..Default::default()
+        }
+        .encode()
+        .unwrap()
+    };
+    let assemble_with = |module: Vec<u8>| {
+        assemble(
+            &[runtime()],
+            &testing::effect_set(&[]),
+            &[module],
+            &camera::GR3,
+            &english(),
+        )
+    };
+    let gr3 = camera::GR3.bit() | camera::GR3X.bit();
+    let bytes = assemble_with(module_for(gr3)).unwrap().bytes;
+    assert_eq!(verify_package(&bytes).unwrap().modules, ["PHONE"]);
+    let error = assemble_with(module_for(camera::GR4.bit())).unwrap_err();
+    assert!(error.to_string().contains("not for GR III"), "{error}");
+    // A package that holds such a module does not verify.
+    let mut files = unpack(&bytes);
+    files.insert(
+        "SD_ROOT/SCRIPT/GRKIT/MODULES/PHONE.GRM".into(),
+        module_for(camera::GR4.bit()),
+    );
+    let error = validate_contents(&with_sums(files)).unwrap_err();
+    assert!(format!("{error:#}").contains("not for GR III"), "{error:#}");
+}
+
+#[test]
 fn packages_that_show_nothing_are_rejected() {
     let assemble_with = |effects: &[&str], modules: &[&str]| {
         let modules: Vec<_> = modules.iter().map(|id| testing::module(id)).collect();

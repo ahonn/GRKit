@@ -758,6 +758,7 @@ fn the_installer_links_a_module_that_rust_writes() {
         id: "CROSS".into(),
         version: 7,
         order: 42,
+        cameras: 5,
         code,
         data,
         bss_size: 12,
@@ -812,7 +813,7 @@ fn the_installer_links_a_module_that_rust_writes() {
         words
     };
     let mut expected = format!(
-        "status 0\nid CROSS\nversion 7\norder 42\nabi {}\ncode 112\ndata 8\nbss 12\n\
+        "status 0\nid CROSS\nversion 7\norder 42\ncameras 5\nabi {}\ncode 112\ndata 8\nbss 12\n\
          descriptor 16\nsettings 1\nuses 1\nsetting MODE 3 2\nuse ?CORE.ASPECT\n",
         grm::ABI_MAJOR << 16 | grm::ABI_MINOR
     );

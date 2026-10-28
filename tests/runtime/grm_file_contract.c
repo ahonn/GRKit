@@ -38,7 +38,8 @@ int main(int argc, char **argv)
     if (!status) status = grm_settings(&m, code, CODE_BASE, settings, &setting_count, uses, &use_count);
     printf("status %d\n", status);
     if (status) return 1;
-    printf("id %s\nversion %u\norder %u\nabi %u\n", m.id, m.version, grm_word(file + GRM_ORDER), m.abi);
+    printf("id %s\nversion %u\norder %u\ncameras %u\nabi %u\n", m.id, m.version, grm_word(file + GRM_ORDER), m.cameras,
+           m.abi);
     printf("code %u\ndata %u\nbss %u\ndescriptor %u\n", m.code_size, m.data_size, m.bss_size, m.descriptor);
     printf("settings %u\nuses %u\n", setting_count, use_count);
     for (u32 i = 0; i < setting_count; ++i) printf("setting %s %u %u\n", settings[i].key, settings[i].values, settings[i].flags);

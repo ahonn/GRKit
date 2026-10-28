@@ -513,6 +513,12 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
                 "The module file {file} is not named by its ID {}",
                 module.id
             );
+            ensure!(
+                module.runs_on(camera),
+                "The module {} is not for {}",
+                module.id,
+                camera.name
+            );
             listed.push(file.to_owned());
             module_ids.insert(module.id);
         } else if let Some(guide) = Language::ALL
@@ -640,7 +646,14 @@ pub fn assemble(
         runtime::MODULES_MAX
     );
     for bytes in modules {
-        let id = crate::grm::Module::decode(bytes)?.id;
+        let module = crate::grm::Module::decode(bytes)?;
+        ensure!(
+            module.runs_on(camera),
+            "The module {} is not for {}",
+            module.id,
+            camera.name
+        );
+        let id = module.id;
         let path = format!("SD_ROOT/{}/{id}.GRM", crate::grm::FOLDER);
         ensure!(
             contents.insert(path, bytes.clone()).is_none(),

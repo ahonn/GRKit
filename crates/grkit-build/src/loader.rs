@@ -97,6 +97,12 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         bail!("{name} ({value:#x}) is a firmware address, so the installer must relocate it");
     }
     constants.extend([
+        // The cameras that run this build: a module for none of them does not
+        // load (runtime/install_plan.h).
+        (
+            "TARGET_CAMERAS",
+            grkit_core::camera::cameras_of(target.name),
+        ),
         ("PATCH_COUNT", plan.patches.len() as u32),
         ("CODE_RELOCATION_COUNT", plan.relocations.len() as u32),
     ]);
