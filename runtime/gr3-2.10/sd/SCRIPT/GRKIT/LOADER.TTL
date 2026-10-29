@@ -1,56 +1,48 @@
 mpause 2000
 sendln 'lcmd_resp on'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
-intdim mailbox 16
-mailbox[0] = 0
-mailbox[10] = 0
-mailbox[11] = 0
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
 attempts = 0
 failure = 60
 call write_error
-fast = 0
-cleared = 0
-filesearch 'C:\SCRIPT\GRKIT\FAST.ON'
-if result <> 0 fast = 1
-filesearch 'C:\SCRIPT\GRKIT\FAST.OFF'
-if result <> 0 fast = 0
-filesearch 'C:\SCRIPT\GRKIT\FAST.TRY'
-if result = 0 goto fast_checked
-fast = 0
-filecreate ffh 'C:\SCRIPT\GRKIT\FAST.OFF'
-if ffh >= 0 fileclose ffh
-:fast_checked
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto reject
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto reject
 :scan
-if fast = 0 goto scan_slow
-sendln 'lcmd : -q ; d=/SCRIPT/GRKIT/LOAD.SH; m=/tmp/m; if grep -q storage /proc/mounts; then sh /media/storage1$d; else mkdir $m && mount -t ipcufs mnt $m -ofs=1 && { cp $m$d /tmp/l || ! umount $m; } && sh /tmp/l $m; :; fi'
-if cleared <> 0 goto scan_sent
-filedelete 'C:\SCRIPT\GRKIT\FAST.TRY'
-cleared = 1
-goto scan_sent
-:scan_slow
-sendln 'lcmd : -q ; t=/tmp/t0; [ -e $t ] || cat /proc/uptime >$t; grep -q storage1 /proc/mounts && sh /media/storage1/SCRIPT/GRKIT/LOAD.SH; :'
-:scan_sent
-posted = mailbox[10]
-if posted = 2 goto reject
-posted = mailbox[0]
-if posted = 827150919 goto plan_ready
+sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/SCAN.SH'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto plan_ready
 mpause 200
 attempts = attempts + 1
-if attempts < 360 goto scan
+if attempts < 150 goto scan
 goto reject
 :plan_ready
 failure = 61
-count = mailbox[1]
-if count < 0 goto reject
-if count > 20 goto reject
-words = mailbox[2]
-chunks = mailbox[3]
-modulewords = mailbox[5]
-if modulewords < 0 goto reject
-if modulewords > 65536 goto reject
-moduletiles = mailbox[6]
-if moduletiles < 0 goto reject
-if moduletiles > 128 goto reject
+fileopen fh 'C:\SCRIPT\GRKIT\PLAN.BIN' 0
+if fh < 0 goto reject
+call readword
+if value != 827150919 goto reject_close
+call readword
+count = value
+if count < 0 goto reject_close
+if count > 20 goto reject_close
+call readword
+words = value
+call readword
+chunks = value
+call readword
+call readword
+modulewords = value
+if modulewords < 0 goto reject_close
+if modulewords > 65536 goto reject_close
+call readword
+moduletiles = value
+if moduletiles < 0 goto reject_close
+if moduletiles > 128 goto reject_close
+fileclose fh
 expected = 192 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 43) / 40
@@ -85,17 +77,20 @@ attempts = 0
 failure = 62
 call write_error
 :install
-sendln 'lcmd sh /tmp/gc/SCRIPT/GRKIT/INSTALL.SH'
-posted = mailbox[10]
-if posted = 1 goto installed
-if posted = 2 goto reject
+sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto installed
+call read_error
+if errorstatus = 62 goto install_wait
+if errorstatus != 0 goto reject
+:install_wait
 mpause 500
 attempts = attempts + 1
 if attempts > 60 mpause 9500
 goto install
 :installed
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
-sendln 'lcmd sh /tmp/gc/SCRIPT/GRKIT/FINISH.SH'
+goto resident
 :resident
 stateok = 1
 foldersearch 'C:\GRKIT'
@@ -1143,13 +1138,30 @@ filewriteln pfh ''
 fileclose pfh
 :profile_write_end
 return
+:reject_close
+fileclose fh
 :reject
-posted = mailbox[11]
-if posted <> 0 failure = posted
+call read_error
+if errorstatus = 0 goto reject_write
+if errorstatus = 60 goto reject_write
+if errorstatus = 62 goto reject_write
+goto reject_end
+:reject_write
 call write_error
-sendln 'lcmd sh /tmp/gc/SCRIPT/GRKIT/FINISH.SH'
+:reject_end
 dispstr 'GR_MODULE_LOADER_REJECTED'
 end
+:readword
+value = 0
+weight = 1
+for byteindex 0 3
+fileread fh 1 octet
+if result != 0 goto reject_close
+str2code bytevalue octet
+value = value + bytevalue * weight
+if byteindex < 3 weight = weight * 256
+next
+return
 :write_error
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
 filecreate efh 'C:\SCRIPT\GRKIT\INSTALL.ERR'
@@ -1160,4 +1172,20 @@ int2str line attempts
 filewriteln efh line
 fileclose efh
 :write_error_end
+return
+:read_error
+errorstatus = 0
+fileopen efh 'C:\SCRIPT\GRKIT\INSTALL.ERR' 0
+if efh < 0 goto read_error_end
+fileread efh 1 octet
+if result != 0 goto read_error_close
+str2code bytevalue octet
+errorstatus = (bytevalue - 48) * 10
+fileread efh 1 octet
+if result != 0 goto read_error_close
+str2code bytevalue octet
+errorstatus = errorstatus + bytevalue - 48
+:read_error_close
+fileclose efh
+:read_error_end
 return
