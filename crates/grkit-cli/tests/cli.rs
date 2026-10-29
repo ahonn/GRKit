@@ -852,8 +852,8 @@ fn cameras_lists_the_runtime_build_of_each_release() {
     assert_eq!(
         gr3x["releases"],
         serde_json::json!([
-            {"firmware": "1.60", "target": "gr3-2.10", "experimental": false},
-            {"firmware": "1.70", "target": "gr3-2.10", "experimental": true},
+            {"firmware": "1.60", "target": "gr3-2.10"},
+            {"firmware": "1.70", "target": "gr3-2.10"},
         ])
     );
 }

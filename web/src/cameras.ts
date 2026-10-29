@@ -24,8 +24,6 @@ export interface Camera {
      */
     targets: readonly string[];
     modeset: string;
-    /** True until the runtime has been tested on a camera with one of the versions. */
-    experimental: boolean;
     /** The modules that the site offers, in menu order: those of the camera
      * (`modules.rs`, through `CAMERA_MODULES`), less any that the entry does not offer. */
     modules: readonly ModuleKey[];
@@ -34,12 +32,11 @@ export interface Camera {
   };
 }
 
-type Releases = Pick<NonNullable<Camera['support']>, 'firmware' | 'targets' | 'modeset' | 'experimental'>;
+type Releases = Pick<NonNullable<Camera['support']>, 'firmware' | 'targets' | 'modeset'>;
 
 /**
  * The firmware versions of a camera (`camera.rs`), each once, its runtime builds in release order,
- * its ModeSet file, and whether the entry is experimental: it is while no version has been tested
- * on a camera. Two builds of one version are two releases with that version.
+ * and its ModeSet file. Two builds of one version are two releases with that version.
  */
 export function releases(id: keyof typeof CAMERA_RELEASES): Releases {
   const camera = CAMERA_RELEASES[id];
@@ -47,7 +44,6 @@ export function releases(id: keyof typeof CAMERA_RELEASES): Releases {
     firmware: [...new Set(camera.releases.map((item) => item.firmware))].join(' / '),
     targets: [...new Set(camera.releases.map((item) => item.target))],
     modeset: camera.modeset,
-    experimental: camera.releases.every((item) => item.experimental),
   };
 }
 

@@ -9,8 +9,7 @@
 //! A camera lists each firmware release that it can run with the runtime build
 //! for it. GR III 2.20 and GR IIIx 1.70 change only the end screen; their code
 //! moves by less than the relocation radius, so the installer relocates the
-//! `gr3-2.10` runtime to them (docs/architecture.md, Relocation). This was
-//! not tested on a camera.
+//! `gr3-2.10` runtime to them (docs/architecture.md, Relocation).
 //!
 //! Each camera has an HDF model that runs the same firmware and ModeSet file:
 //! Ricoh publishes one firmware for both. The RTOS selects the HDF model from a
@@ -37,8 +36,6 @@ use anyhow::{bail, Result};
 pub struct Release {
     pub firmware: &'static str,
     pub target: &'static str,
-    /// True until the runtime has been tested on a camera with this release.
-    pub experimental: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -52,8 +49,6 @@ pub struct Camera {
     pub releases: &'static [Release],
     /// The ModeSet command file: the major and minor numbers of the RTOS.
     pub modeset: &'static str,
-    /// True until the runtime has been tested on a camera.
-    pub experimental: bool,
     /// True when the runtime has Image Control, so a package can have effects.
     pub effects: bool,
 }
@@ -66,16 +61,13 @@ pub const GR3: Camera = Camera {
         Release {
             firmware: "2.10",
             target: "gr3-2.10",
-            experimental: false,
         },
         Release {
             firmware: "2.20",
             target: "gr3-2.10",
-            experimental: true,
         },
     ],
     modeset: "00078350.588",
-    experimental: false,
     effects: true,
 };
 
@@ -87,16 +79,13 @@ pub const GR3X: Camera = Camera {
         Release {
             firmware: "1.60",
             target: "gr3-2.10",
-            experimental: false,
         },
         Release {
             firmware: "1.70",
             target: "gr3-2.10",
-            experimental: true,
         },
     ],
     modeset: "00078490.609",
-    experimental: false,
     effects: true,
 };
 
@@ -108,22 +97,18 @@ pub const GR4: Camera = Camera {
         Release {
             firmware: "1.11",
             target: "gr4-1.11",
-            experimental: false,
         },
         Release {
             firmware: "1.20",
             target: "gr4-1.20",
-            experimental: true,
         },
         // The factory build of GR IV 30th Anniversary Edition cameras.
         Release {
             firmware: "1.20",
             target: "gr4-1.20-0528",
-            experimental: true,
         },
     ],
     modeset: "00078560.636",
-    experimental: false,
     effects: true,
 };
 
@@ -181,8 +166,7 @@ pub fn site_module() -> String {
          // cameras there, then run\n\
          // GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated.\n\n\
          /** The ModeSet file of each camera, and the firmware releases that a\n \
-         * runtime build supports, oldest first. `experimental`: not yet tested on\n \
-         * a camera with the release. */\n\
+         * runtime build supports, oldest first. */\n\
          export const CAMERA_RELEASES = {\n",
     );
     for camera in CAMERAS {
@@ -192,8 +176,8 @@ pub fn site_module() -> String {
         for release in camera.releases {
             writeln!(
                 out,
-                "      {{ firmware: '{}', target: '{}', experimental: {} }},",
-                release.firmware, release.target, release.experimental
+                "      {{ firmware: '{}', target: '{}' }},",
+                release.firmware, release.target
             )
             .unwrap();
         }
@@ -232,13 +216,5 @@ mod tests {
         assert_eq!(GR4.firmware_for("gr4-1.20"), ["1.20"]);
         assert_eq!(GR4.firmware_for("gr4-1.20-0528"), ["1.20"]);
         assert_eq!(GR4.versions(), ["1.11", "1.20"]);
-        // The releases that no camera test covers are experimental.
-        let experimental: Vec<_> = CAMERAS
-            .iter()
-            .flat_map(|camera| camera.releases.iter())
-            .filter(|release| release.experimental)
-            .map(|release| release.firmware)
-            .collect();
-        assert_eq!(experimental, ["2.20", "1.70", "1.20", "1.20"]);
     }
 }

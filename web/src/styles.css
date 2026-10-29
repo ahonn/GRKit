@@ -452,15 +452,6 @@ button {
   border-color: var(--ink);
 }
 
-.badge.experimental {
-  color: var(--warning);
-  border: 1px solid var(--warning);
-}
-
-.note.warning {
-  color: var(--warning);
-}
-
 /* Effect preview */
 
 .preview-row {

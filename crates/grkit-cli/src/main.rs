@@ -583,7 +583,6 @@ fn run(command: Command) -> Result<Value> {
                 "id": camera.id, "name": camera.name, "hdf": camera.hdf, "modeset": camera.modeset,
                 "releases": camera.releases.iter().map(|release| json!({
                     "firmware": release.firmware, "target": release.target,
-                    "experimental": release.experimental,
                 })).collect::<Vec<_>>(),
             }))}),
         ),

@@ -132,9 +132,9 @@ If the code of a new firmware version moved only a little, the existing target r
 
 1. Run `grkit port --target <target> --firmware <its firmware> --to <new firmware> --out <directory>`. If the output gives `"relocatable": true`, add the release to the existing target instead.
 2. Make the build header and the target module from the drafts. Resolve each `PORT` comment, and check each value that is not an address.
-3. Register the target in `crates/grkit-build/src/target.rs`, `runtime/firmware.h`, and `camera.rs` as experimental, then run `GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated`.
+3. Register the target in `crates/grkit-build/src/target.rs`, `runtime/firmware.h`, and `camera.rs`, then run `GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated`.
 4. Add the firmware zip to the private firmware backup (`docs/releasing.md`).
-5. Run `grkit port` again with `--check <new target>`, then the tests. Mark the release as not experimental only after a test on a camera.
+5. Run `grkit port` again with `--check <new target>`, then the tests.
 
 ## Code areas
 

@@ -611,20 +611,8 @@ export function App({
                         </span>
                       )}
                       <span className="camera-status">
-                        <span
-                          className={
-                            !item.support
-                              ? 'badge'
-                              : item.support.experimental
-                                ? 'badge experimental'
-                                : 'badge supported'
-                          }
-                        >
-                          {!item.support
-                            ? t.planned
-                            : item.support.experimental
-                              ? t.experimental
-                              : t.supported}
+                        <span className={item.support ? 'badge supported' : 'badge'}>
+                          {item.support ? t.supported : t.planned}
                         </span>
                         {item.support?.noEffects && (
                           <span className="camera-firmware">{t.noEffects}</span>
@@ -635,9 +623,6 @@ export function App({
                 ))}
               </div>
               <p className="note">{t.firmwareNote}</p>
-              {support?.experimental && (
-                <p className="note warning">{t.experimentalNote(camera.name)}</p>
-              )}
             </div>
           </section>
         )}

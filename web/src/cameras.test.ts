@@ -19,18 +19,16 @@ describe('cameras', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('lists the versions and builds of a camera and stays experimental until one is tested', () => {
+  it('lists the versions and builds of a camera', () => {
     expect(releases('gr3')).toEqual({
       firmware: '2.10 / 2.20',
       targets: ['gr3-2.10'],
       modeset: '00078350.588',
-      experimental: false,
     });
     // Two builds of 1.20 show the version once.
     expect(releases('gr4')).toMatchObject({
       firmware: '1.11 / 1.20',
       targets: ['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528'],
-      experimental: false,
     });
   });
 
