@@ -828,6 +828,9 @@ pub const WHITE_BALANCE: [WhiteBalance; 18] = [
     mode(Some("Custom3"), Some("Custom3"), false),
 ];
 
+/// The portable index of ColorTemp1, the mode that uses the color temperature.
+pub const COLOR_TEMPERATURE_MODE: usize = 14;
+
 /// The setting of the color temperature of ColorTemp1, in kelvin.
 pub const COLOR_TEMPERATURE: &str = "StillWhiteBalanceColorTemp";
 

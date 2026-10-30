@@ -34,6 +34,18 @@ static const char *module_reason(u32 status)
     default: return "INSTALL stopped";
     }
 }
+/* The recipes part of REPORT.TXT. */
+static void say_recipes(void)
+{
+    if (recipes_result == RECIPES_NONE) return;
+    say("\r\nRecipes (GRKIT\\RECIPES.BIN):\r\n");
+    if (recipes_result == RECIPES_DAMAGED) { say("not loaded: the file is damaged. Write the recipes again on the site.\r\n"); return; }
+    say_number(recipes_loaded); say(" of "); say_number(recipes_records); say(" loaded");
+    if (recipes_loaded < recipes_records) {
+        say(", first skipped: recipe "); say_number(recipes_skipped_first); say(" is not valid");
+    }
+    say("\r\n");
+}
 static void write_report(int status)
 {
     report_length = 0;
@@ -77,6 +89,7 @@ static void write_report(int status)
         say_number(overflow_count);
         say(" more effect files are not listed. GRKit lists at most "); say_number(EFFECTS_LISTED); say(" effects.\r\n");
     }
+    say_recipes();
     /* A new card has no GRKIT folder until this start. */
     long made = syscall6(39, (u32)data_path, 0755, 0, 0, 0, 0);
     if (made < 0 && made != -17) return;

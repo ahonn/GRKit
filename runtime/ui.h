@@ -33,6 +33,8 @@
 /* A message with a native slider (ui_slider). */
 #define UI_SLIDER 6U
 #define UI_VIEW_SLIDER 0x16U
+/* A message with two buttons of other texts (ui_choice). */
+#define UI_CHOICE 7U
 
 static volatile u32 *ui_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_UI+offset); }
 
@@ -112,10 +114,17 @@ static void ui_close(volatile u32 *h) {
     ui_word(h,UI_BAR)[0]=ui_word(h,UI_VIEW)[0]=ui_word(h,UI_PARENT)[0]=0;
     ui_word(h,UI_MODE)[0]=UI_NONE;
 }
-/* The text of the box for the text hook, or 0. */
+/* The text of the box for the text hook, or 0. The buttons of a choice box
+   keep the IDs of Execute and Cancel and show the texts of the choice. */
 static u32 ui_text_override(volatile u32 *h,u32 id) {
-    if(id!=SETTINGS_TITLE_TEXT || !h[GRKIT_HOST_SERVICES/4] || ui_word(h,UI_MODE)[0]==UI_NONE) return 0;
-    return (u32)ui_word(h,UI_DESCRIPTOR)|1U;
+    u32 mode;
+    if(!h[GRKIT_HOST_SERVICES/4]) return 0;
+    mode=ui_word(h,UI_MODE)[0];
+    if(mode==UI_NONE) return 0;
+    if(id==SETTINGS_TITLE_TEXT) return (u32)ui_word(h,UI_DESCRIPTOR)|1U;
+    if(mode==UI_CHOICE && id==UI_EXECUTE_TEXT) return (u32)ui_word(h,UI_CHOICE_TEXTS)|1U;
+    if(mode==UI_CHOICE && id==UI_CANCEL_TEXT) return (u32)ui_word(h,UI_CHOICE_TEXTS+8U)|1U;
+    return 0;
 }
 static void ui_set_text(volatile u32 *h,const u16 *const *text) {
     ui_word(h,UI_TEXT)[0]=(u32)text;
@@ -163,6 +172,22 @@ __attribute__((used)) u32 grkit_export_ui_confirm(const u16 *const *text,void (*
     CALL3(FW_MESSAGE_BUTTONS)(view,UI_EXECUTE_TEXT,UI_CANCEL_TEXT);
     /* Both buttons, the cursor on Cancel. */
     CALL3(FW_MESSAGE_ENABLE_BUTTONS)(view,1,1);
+    return 1;
+}
+/* A box of the core with two buttons, `first` and `second`, in the menu
+   language, and the cursor on `first`. OK calls done(0 or 1, arg) for the
+   button under the cursor, and MENU done(2, arg). The native message box
+   has two buttons at most, so a third choice is MENU. */
+static u32 ui_choice(volatile u32 *h,const u16 *const *text,const u16 *first,const u16 *second,
+                     void (*done)(u32,u32),u32 arg) {
+    u32 view;
+    if(!ui_open(h,UI_CHOICE,text,0)) return 0;
+    descriptor(ui_word(h,UI_CHOICE_TEXTS),first);
+    descriptor(ui_word(h,UI_CHOICE_TEXTS+8U),second);
+    ui_word(h,UI_DONE)[0]=(u32)done; ui_word(h,UI_ARG)[0]=arg;
+    view=ui_word(h,UI_VIEW)[0];
+    CALL3(FW_MESSAGE_BUTTONS)(view,UI_EXECUTE_TEXT,UI_CANCEL_TEXT);
+    CALL3(FW_MESSAGE_ENABLE_BUTTONS)(view,1,0);
     return 1;
 }
 __attribute__((used)) u32 grkit_export_ui_progress_open(const u16 *const *text) {
@@ -290,18 +315,25 @@ static void ui_slider_event(volatile u32 *h,u32 kind,u32 back) {
    The box takes each key. `back` is 1 for MENU (back_event). */
 static u32 ui_modal(volatile u32 *h) {
     u32 mode=h[GRKIT_HOST_SERVICES/4] ? ui_word(h,UI_MODE)[0] : UI_NONE;
-    return mode==UI_MESSAGE || mode==UI_CONFIRM || mode==UI_PROGRESS || mode==UI_SLIDER;
+    return mode==UI_MESSAGE || mode==UI_CONFIRM || mode==UI_PROGRESS || mode==UI_SLIDER || mode==UI_CHOICE;
 }
 static void ui_event(volatile u32 *h,u32 kind,u32 back) {
     u32 mode=ui_word(h,UI_MODE)[0], view=ui_word(h,UI_VIEW)[0], done=ui_word(h,UI_DONE)[0], arg=ui_word(h,UI_ARG)[0], executed;
     if(mode==UI_PROGRESS) return;
     if(mode==UI_SLIDER) { ui_slider_event(h,kind,back); return; }
-    if(mode==UI_CONFIRM && (kind==EV_UP || kind==EV_DOWN || kind==EV_DIAL_UP || kind==EV_DIAL_DOWN ||
-                            kind==EV_LEFT || kind==EV_RIGHT)) {
+    if((mode==UI_CONFIRM || mode==UI_CHOICE) && (kind==EV_UP || kind==EV_DOWN || kind==EV_DIAL_UP || kind==EV_DIAL_DOWN ||
+                                                  kind==EV_LEFT || kind==EV_RIGHT)) {
         CALL3(FW_MESSAGE_CURSOR)(view,CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff ? 0 : 1,1);
         return;
     }
     if(kind!=EV_CONFIRM && !back) return;
+    if(mode==UI_CHOICE) {
+        /* Cursor 0 is the first button. MENU is the third choice. */
+        executed=back ? 2U : CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff ? 1U : 0U;
+        ui_close(h);
+        if(done) services_call2(h,done,executed,arg);
+        return;
+    }
     /* Cursor 0 is Execute. MENU cancels. */
     executed=mode==UI_CONFIRM && !back && !(CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff);
     ui_close(h);
@@ -330,9 +362,8 @@ static u32 ui_native_screen(u32 screen) {
     default: return 0;
     }
 }
-__attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u32),u32 arg) {
-    volatile u32 *h=menu_header();
-    u32 id=ui_native_screen(screen);
+/* Record the controller `id` to open, for the core and for modules. */
+static u32 ui_native_request(volatile u32 *h,u32 id,void (*back)(u32),u32 arg) {
     if(!services_in_app(h) || !id || !h[GRKIT_HOST_MENU_CONTROLLER/4] || !h[GRKIT_HOST_MENU_LEVEL/4] ||
        ui_word(h,UI_NATIVE)[0] || ui_modal(h)) return 0;
     ui_word(h,UI_NATIVE_TIMER)[0]=ui_timer_start(1);
@@ -341,16 +372,28 @@ __attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u3
     ui_word(h,UI_BACK)[0]=(u32)back; ui_word(h,UI_BACK_ARG)[0]=arg;
     return 1;
 }
+__attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u32),u32 arg) {
+    return ui_native_request(menu_header(),ui_native_screen(screen),back,arg);
+}
+static u32 ui_keyboard_arm(volatile u32 *h);
 static void ui_native_open(volatile u32 *h) {
     u32 id=ui_word(h,UI_NATIVE)[0], controller=h[GRKIT_HOST_MENU_CONTROLLER/4], root, back=ui_word(h,UI_BACK)[0];
     ui_word(h,UI_NATIVE)[0]=0;
     if(id==UI_NATIVE_BACK) {
         ui_word(h,UI_BACK)[0]=0;
         if(back) services_call1(h,back,ui_word(h,UI_BACK_ARG)[0]);
+        /* A keyboard text is for this call only. */
+        ui_word(h,UI_KEYBOARD_RESULT)[0]=0;
         return;
     }
     /* ADJ closed before the timer: drop the request. */
     if(!id || !controller || !h[GRKIT_HOST_MENU_LEVEL/4]) { ui_word(h,UI_BACK)[0]=0; return; }
+    /* The keyboard is busy: GRKit stays, and back runs without a text. */
+    if(id==KEYBOARD_CONTROLLER && !ui_keyboard_arm(h)) {
+        ui_word(h,UI_BACK)[0]=0;
+        if(back) services_call1(h,back,ui_word(h,UI_BACK_ARG)[0]);
+        return;
+    }
     ui_close(h);
     /* leave() clears the level, so read it first. */
     root=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? RETURN_ROOT : 0;
@@ -369,6 +412,116 @@ static void ui_native_cancel(volatile u32 *h) {
     if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_NATIVE)[0]) return;
     ui_timer_cancel(ui_word(h,UI_NATIVE_TIMER)[0]);
     ui_word(h,UI_NATIVE_TIMER)[0]=ui_word(h,UI_NATIVE)[0]=ui_word(h,UI_BACK)[0]=0;
+}
+/* ---- The keyboard of the camera ------------------------------------------
+   The camera has one text keyboard, SoftwareKeyboardController, with a few
+   fixed uses: each reads its text from a camera setting when it starts and
+   writes the setting on OK. GRKit borrows its copyright use while
+   UI_KEYBOARD is set. Three hooks (runtime/menu.S) then give the keyboard
+   the GRKit text instead of the copyright holder, take the text on OK
+   instead of the copyright setter, and limit the text to UI_KEYBOARD_CHARS.
+   So the copyright setting never sees a GRKit text, and the keyboard never
+   shows the copyright holder for GRKit.
+
+   UI_KEYBOARD is UI_KEYBOARD_ARMED from the change to the keyboard until it
+   loads the text, then UI_KEYBOARD_SHOWN. OK clears it. Each change to
+   another controller clears it too (ui_keyboard_change), as does INSTALL,
+   which clears the services block: the return to ADJ after OK or MENU, and
+   any other way out of the keyboard, end the borrow. The native Copyright
+   page opens the keyboard from its own controller, so its keyboard shows
+   the copyright holder. On GR IV, a model holds the use of the keyboard: the
+   copyright use is set before the change, as the Copyright page does, and
+   the keyboard clears it when it stops. */
+#define UI_KEYBOARD_ARMED 1U
+#define UI_KEYBOARD_SHOWN 2U
+/* Open the keyboard with `text`, its printable ASCII without the spaces at
+   both ends and at most UI_KEYBOARD_CHARS characters: 1, or 0 as
+   ui_open_native refuses. After the return to the GRKit page the core calls
+   back(arg), where ui_keyboard_result gives the text of an OK. If the
+   keyboard is busy, back runs at once on the page. */
+static u32 ui_keyboard_open(volatile u32 *h,const volatile u16 *text,void (*back)(u32),u32 arg) {
+    volatile u8 *to=(volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
+    u32 n=0, i;
+    if(!ui_native_request(h,KEYBOARD_CONTROLLER,back,arg)) return 0;
+    for(i=0;text[i] && n<UI_KEYBOARD_CHARS;++i)
+        if(text[i]>=0x20U && text[i]<=0x7eU && (n || text[i]!=' ')) to[n++]=(u8)text[i];
+    while(n && to[n-1]==' ') --n;
+    to[n]=0;
+    ui_word(h,UI_KEYBOARD_RESULT)[0]=0;
+    return 1;
+}
+/* The text of an OK on the keyboard, during the call of back, else 0. */
+static const volatile u8 *ui_keyboard_result(volatile u32 *h) {
+    if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD_RESULT)[0]) return 0;
+    return (const volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
+}
+/* Before the change to the keyboard: the borrow starts. 0 when another use
+   holds the keyboard model (GR IV). */
+static u32 ui_keyboard_arm(volatile u32 *h) {
+#ifdef FW_KEYBOARD_MODEL
+    u32 model=CALL0(FW_KEYBOARD_MODEL)();
+    /* SetFunction asserts that no use is set. */
+    if(BYTE(model,KEYBOARD_MODEL_FUNCTION)) return 0;
+    CALL2(FW_KEYBOARD_SET_FUNCTION)(model,KEYBOARD_COPYRIGHT);
+#endif
+    ui_word(h,UI_KEYBOARD)[0]=UI_KEYBOARD_ARMED;
+    ui_word(h,UI_KEYBOARD_RESULT)[0]=0;
+    return 1;
+}
+/* A controller change (menu_settings_controller): a change to any other
+   controller than the keyboard ends the borrow. */
+static void ui_keyboard_change(volatile u32 *h,u32 id) {
+    u32 state;
+    if(!h[GRKIT_HOST_SERVICES/4] || id==KEYBOARD_CONTROLLER) return;
+    state=ui_word(h,UI_KEYBOARD)[0];
+    ui_word(h,UI_KEYBOARD)[0]=0;
+#ifdef FW_KEYBOARD_MODEL
+    /* A keyboard that never started does not stop, so the copyright use
+       that GRKit set stays: clear it. */
+    if(state==UI_KEYBOARD_ARMED) {
+        u32 model=CALL0(FW_KEYBOARD_MODEL)();
+        if(BYTE(model,KEYBOARD_MODEL_FUNCTION)==KEYBOARD_COPYRIGHT) BYTE(model,KEYBOARD_MODEL_FUNCTION)=0;
+    }
+#else
+    (void)state;
+#endif
+}
+/* The hooks. The keyboard loads its copyright text: 1 when GRKit gave its
+   text (r1, the text of the keyboard), else 0 for the copyright getter. */
+A32_ENTRY u32 menu_keyboard_text_in(u32 settings,u32 text) {
+    volatile u32 *h=menu_header();
+    const volatile u8 *from;
+    u32 i;
+    (void)settings;
+    if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD)[0]) return 0;
+    from=(const volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
+    for(i=0;i<UI_KEYBOARD_CHARS && from[i];++i) BYTE(text,i)=from[i];
+    BYTE(text,i)=0;
+    ui_word(h,UI_KEYBOARD)[0]=UI_KEYBOARD_SHOWN;
+    return 1;
+}
+/* OK on the keyboard stores its copyright text: 1 when GRKit took the text,
+   else 0 for the copyright setter. */
+A32_ENTRY u32 menu_keyboard_text_out(u32 settings,u32 text) {
+    volatile u32 *h=menu_header();
+    volatile u8 *to;
+    u32 i;
+    (void)settings;
+    if(!h[GRKIT_HOST_SERVICES/4] || ui_word(h,UI_KEYBOARD)[0]!=UI_KEYBOARD_SHOWN) return 0;
+    to=(volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
+    for(i=0;i<UI_KEYBOARD_CHARS && BYTE(text,i);++i) to[i]=BYTE(text,i);
+    to[i]=0;
+    ui_word(h,UI_KEYBOARD_RESULT)[0]=1;
+    ui_word(h,UI_KEYBOARD)[0]=0;
+    return 1;
+}
+/* The text length of the keyboard (r0): UI_KEYBOARD_CHARS for the GRKit
+   text, else 0 for the native length. */
+A32_ENTRY u32 menu_keyboard_limit(u32 keyboard) {
+    volatile u32 *h=menu_header();
+    if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD)[0] ||
+       BYTE(keyboard,KEYBOARD_FUNCTION)!=KEYBOARD_COPYRIGHT) return 0;
+    return UI_KEYBOARD_CHARS;
 }
 /* The GRKit page shows again after a native screen (menu_refresh). */
 static void ui_native_returned(volatile u32 *h) {

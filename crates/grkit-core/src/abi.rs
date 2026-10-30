@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use crate::{capabilities, effects, hue, menu_text, selective};
+use crate::{capabilities, effects, hue, menu_text, recipes, selective};
 
 /// A byte range of the private header, of a record, or of a GRF file.
 pub struct Field {
@@ -77,6 +77,12 @@ pub const MODULE_FILTERS_MAX: usize = 8;
 pub const RECIPE_SLOTS: usize = 8;
 pub const RECIPE_UNDO: usize = 5;
 pub const RECIPE_WORDS: usize = 4;
+/// The name of a camera recipe that the person typed on the camera: at most
+/// `RECIPE_NAME_CHARS` printable ASCII characters, `RECIPE_NAME_CHARS / 4`
+/// words of four 7-bit characters, the first in the low bits. A character 0
+/// ends the name, and a recipe whose name word 0 is 0 has the automatic name.
+pub const RECIPE_NAME_CHARS: usize = 16;
+pub const RECIPE_NAME_WORDS: usize = RECIPE_NAME_CHARS / 4;
 
 fields!(HEADER_FIELDS {
     /// Number of Image Control records.
@@ -233,9 +239,14 @@ fields!(HEADER_FIELDS {
     /// the oldest first. A recipe whose word 0 is 0 is empty. The resident
     /// loader saves each word that is not 0.
     HOST_RECIPES = 268 + 8 * MODULE_FILTERS_MAX, 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
+    /// The names of the RECIPE_SLOTS recipes, RECIPE_NAME_WORDS words each
+    /// (RECIPE_NAME_CHARS). The undo steps have no names. The resident loader
+    /// saves each word that is not 0, after the recipe words.
+    HOST_RECIPE_NAMES = HOST_RECIPES + 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO),
+        4 * RECIPE_NAME_WORDS * RECIPE_SLOTS;
     /// Reserved for later fields.
-    HOST_RESERVED = HOST_RECIPES + 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO),
-        HOST_MODULE_SETTINGS - HOST_RECIPES - 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
+    HOST_RESERVED = HOST_RECIPE_NAMES + 4 * RECIPE_NAME_WORDS * RECIPE_SLOTS,
+        HOST_MODULE_SETTINGS - HOST_RECIPE_NAMES - 4 * RECIPE_NAME_WORDS * RECIPE_SLOTS;
     /// Address of the module settings table, or 0 (runtime/settings.h).
     /// INSTALL writes it.
     HOST_MODULE_SETTINGS = HOST_MODULE_PREVIEW - 4, 4;
@@ -357,6 +368,33 @@ const _: () = assert!(
         && RECORD_SELECTIVE - RECORD_POST == GRF_SELECTIVE - GRF_POST
         && RECORD_PARAMETERS - RECORD_POST == GRF_MATRIX - GRF_POST
 );
+
+// The recipe library (`recipes`), GRKIT/RECIPES.BIN, which INSTALL reads:
+// the header, then `recipes::RECORD_SIZE` bytes for each recipe. Each byte
+// that no field holds is zero.
+fields!(RCP_FIELDS {
+    /// The magic `GRKR0001`.
+    RCP_MAGIC = 0, 8;
+    /// u32 size of the file.
+    RCP_BYTES = 8, 4;
+    /// u32 CRC-32 of the file, which reads these bytes as zero.
+    RCP_CRC = 12, 4;
+    /// u32 number of recipes.
+    RCP_COUNT = 16, 4;
+});
+
+fields!(RCP_RECORD_FIELDS {
+    /// The name: UTF-16LE units, zero-padded, without a NUL at 16 units.
+    RCP_RECORD_NAME = 0, 32;
+    /// The RECIPE_WORDS words of the recipe (runtime/recipes.h).
+    RCP_RECORD_WORDS = 32, 16;
+    /// u32 exposure hints: bits 0-5 the compensation in thirds + 16, bits
+    /// 6-23 the ISO limit, bits 24-26 the metering, bits 27-28 the ND filter;
+    /// 0 for each that is not given.
+    RCP_RECORD_HINTS = 48, 4;
+    /// u8 family: 1 GR III, 2 GR IV, 3 GR IV Monochrome.
+    RCP_RECORD_FAMILY = 52, 1;
+});
 
 /// The plan file that SCAN writes and INSTALL and the loader read
 /// (`PLAN.BIN`): this header, the GRF file of each installed effect
@@ -522,6 +560,32 @@ fn array(out: &mut String, doc: &str, name: &str, values: &[impl std::fmt::Displ
 
 /// The GRF file: the offset and the size of each field, the file sizes, and
 /// the longest ID and name.
+/// The recipe library: the offset and the size of each field.
+fn recipe_table(out: &mut String) {
+    comment(
+        out,
+        "A GRKR0001 recipe library has GRKIT_RCP_HEADER_SIZE bytes, then \
+         GRKIT_RCP_RECORD_SIZE bytes for each of at most GRKIT_RCP_MAX recipes.",
+    );
+    writeln!(
+        out,
+        "#define GRKIT_RCP_HEADER_SIZE {}U",
+        recipes::HEADER_SIZE
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RCP_RECORD_SIZE {}U",
+        recipes::RECORD_SIZE
+    )
+    .unwrap();
+    writeln!(out, "#define GRKIT_RCP_MAX {}U", recipes::LIBRARY_MAX).unwrap();
+    writeln!(out, "#define GRKIT_RCP_NAME_UNITS {}U", recipes::NAME_UNITS).unwrap();
+    for field in RCP_FIELDS.iter().chain(RCP_RECORD_FIELDS) {
+        define(out, field.doc, field.name, format!("{}U", field.offset));
+    }
+}
+
 fn grf_table(out: &mut String) {
     comment(
         out,
@@ -634,11 +698,15 @@ pub fn header() -> String {
         "The camera recipes (runtime/recipes.h): the most recipes, the most undo \
          steps, the words of one recipe, and the state key of word 0 of recipe 0. \
          Word w of slot n (the recipes, then the undo steps) has the state key \
-         GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w.",
+         GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w. The name of a recipe \
+         has GRKIT_RECIPE_NAME_WORDS words of four 7-bit characters, at most \
+         GRKIT_RECIPE_NAME_CHARS, and the keys after those of the undo steps.",
     );
     writeln!(out, "#define GRKIT_RECIPE_SLOTS {RECIPE_SLOTS}U").unwrap();
     writeln!(out, "#define GRKIT_RECIPE_UNDO {RECIPE_UNDO}U").unwrap();
     writeln!(out, "#define GRKIT_RECIPE_WORDS {RECIPE_WORDS}U").unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_NAME_CHARS {RECIPE_NAME_CHARS}U").unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_NAME_WORDS {RECIPE_NAME_WORDS}U").unwrap();
     writeln!(
         out,
         "#define GRKIT_RECIPE_KEY_BASE {}U",
@@ -779,6 +847,7 @@ pub fn header() -> String {
     )
     .unwrap();
     grf_table(&mut out);
+    recipe_table(&mut out);
     hue_tables(&mut out);
     define(
         &mut out,
@@ -986,6 +1055,12 @@ mod tests {
             .iter()
             .all(|field| field.offset % 4 == 0 && field.size % 4 == 0));
         check(HEADER_FIELDS, HOST_HEADER_SIZE, true);
+    }
+
+    #[test]
+    fn the_recipe_fields_fit_the_file() {
+        check(RCP_FIELDS, recipes::HEADER_SIZE, false);
+        check(RCP_RECORD_FIELDS, recipes::RECORD_SIZE, false);
     }
 
     #[test]

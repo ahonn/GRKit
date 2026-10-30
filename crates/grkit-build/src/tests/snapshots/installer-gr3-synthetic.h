@@ -83,6 +83,7 @@ static const u32 guard_symbols[] = {};
 #define IMPORTED_PATH "/media/storage1/GRKIT/IMPORTED.TXT"
 #define LIBRARY_PATH "/media/storage1/GRKIT/EFFECTS"
 #define STATE_PATH "/media/storage1/GRKIT/STATE.TXT"
+#define RECIPES_PATH "/media/storage1/GRKIT/RECIPES.BIN"
 #define STATE_TMP_PATH "/media/storage1/GRKIT/STATE.TMP"
 #define REPORT_PATH "/media/storage1/GRKIT/REPORT.TXT"
 #define RELOCATION_PATH "/media/storage1/GRKIT/RELOC.BIN"
@@ -118,8 +119,8 @@ static const u8 off_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA
 static const u8 grkit_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8daa7522039e76004d273927f937c4a419594664c8c32f7b02bd7c515ffe272d */ };
 static const u8 version_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 e239340476014064a1d36a3dddfb164bfbe4731b325a6ffb08a64397a39e44a6 */ };
 static const u8 modules_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 c63d6fe4548456b6724e152bfa63bdadcf44163e6bb2b9e13a1842e9a9a4acea */ };
-#define MENU_TEXT_BYTES 4544U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 4544 values, SHA-256 47b4cffc3171bf3a04d639bce027cead3ca12e3ee02a32e3060fabe1b2230d5f */ };
+#define MENU_TEXT_BYTES 5470U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5470 values, SHA-256 ad60fd0d78690b013f76e5b70af21df4e4ac01356813b7c2a277130dc5b5926f */ };
 #define LABELS_BYTES 12892U
 static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 12892 values, SHA-256 f0a4ebaa93af4dde3aeac9b1b92a1f0c81d55e21382034ea830bc5fb51625855 */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };

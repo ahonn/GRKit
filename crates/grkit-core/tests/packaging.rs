@@ -1142,3 +1142,47 @@ fn module_files_install_from_the_modules_folder() {
     let limit = format!("at most {} modules", grkit_core::runtime::MODULES_MAX);
     assert!(error.to_string().contains(&limit), "{error}");
 }
+
+/// A package can hold the recipe library of its camera line, which a copy
+/// of the package puts in the data folder. A recipe of another camera line
+/// fails the check.
+#[test]
+fn a_package_holds_the_recipe_library_of_its_camera() {
+    use grkit_core::recipes::{encode, Family, Hints, Look, Recipe};
+    let recipe = |family| Recipe {
+        name: "Street".into(),
+        family,
+        look: Look::Off,
+        grain: None,
+        white_balance: None,
+        corrections: [None; 4],
+        hints: Hints::default(),
+    };
+    let library = encode(&[recipe(Family::Gr3), recipe(Family::Gr3)]).unwrap();
+    let with_library = assemble_with_recipes(
+        &[runtime()],
+        &testing::effect_set(&["test-effect"]),
+        &testing::official_modules(),
+        &camera::GR3,
+        &english(),
+        Some(&library),
+    )
+    .unwrap();
+    assert_eq!(with_library.contents.recipes, 2);
+    assert_eq!(
+        card_files(&with_library.bytes).unwrap()[RECIPES_PATH],
+        library
+    );
+    let other = encode(&[recipe(Family::Gr4)]).unwrap();
+    let error = assemble_with_recipes(
+        &[runtime()],
+        &testing::effect_set(&["test-effect"]),
+        &testing::official_modules(),
+        &camera::GR3,
+        &english(),
+        Some(&other),
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("another camera"), "{error:#}");
+    assert_eq!(verify_package(&package()).unwrap().recipes, 0);
+}

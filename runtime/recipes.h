@@ -21,9 +21,23 @@
    recipe to the native grain of its native type where the values match
    (recipe_native_grain), and else skips it.
 
+   A recipe can have a name that the person typed on the camera
+   (GRKIT_HOST_RECIPE_NAMES): GRKIT_RECIPE_NAME_WORDS words of four 7-bit
+   ASCII characters, the first in the low bits, at most
+   GRKIT_RECIPE_NAME_CHARS. A recipe without one has the automatic name
+   (runtime/recipe_page.h). The names move with the recipes; the undo steps
+   have none.
+
+   The recipes of the library come first: the site writes them to
+   GRKIT/RECIPES.BIN, and INSTALL copies the usable ones to the library of
+   the services block (runtime/install_recipes.h). An entry is a recipe of the
+   list: entry e is library recipe e, then camera recipe e - the library
+   count. A library recipe of another camera line does not apply.
+
    The includer defines u8, u16, u32, the header fields, HALF and BYTE,
    record_index (runtime/tone.h), setting_store (runtime/setting_store.h),
-   and the native settings (runtime/native_look.h). */
+   the native settings (runtime/native_look.h), the library layout
+   (runtime/services.h), and RECIPE_LIBRARY(h), the library or 0. */
 
 /* Word 0. RECIPE_USED is set in each recipe, so word 0 of a recipe is never
    0, and each word stays below 2^29 (RECIPE_VALUE_MAX). */
@@ -67,6 +81,10 @@
 /* Applied without its Grain: no Grain module runs, and the native grain
    has no match. */
 #define RECIPE_GRAIN_SKIPPED 3U
+/* A library recipe of another camera line. */
+#define RECIPE_OTHER_CAMERA 4U
+/* No entry. */
+#define RECIPE_NONE 0xffffffffU
 /* The result of a save: the slot of the new recipe, or RECIPE_FULL. */
 #define RECIPE_FULL 0xffffffffU
 
@@ -85,6 +103,51 @@ static u32 native_grain_fits(u32 t,u32 s,u32 size);
 static volatile u32 *recipe_at(volatile u32 *h,u32 slot) {
     return h+GRKIT_HOST_RECIPES/4+slot*GRKIT_RECIPE_WORDS;
 }
+/* The name words of recipe `slot`. */
+static volatile u32 *recipe_name_at(volatile u32 *h,u32 slot) {
+    return h+GRKIT_HOST_RECIPE_NAMES/4+slot*GRKIT_RECIPE_NAME_WORDS;
+}
+_Static_assert(GRKIT_RECIPE_NAME_CHARS==4U*GRKIT_RECIPE_NAME_WORDS,"four characters in each name word");
+/* The length of the name of recipe `slot`, 0 for the automatic name: the
+   characters up to the first 0. A name with a character that is not
+   printable ASCII, or with bits above its characters, counts as none. */
+static u32 recipe_name_length(volatile u32 *h,u32 slot) {
+    const volatile u32 *w=recipe_name_at(h,slot);
+    u32 n=0, i, c, ended=0;
+    for(i=0;i<GRKIT_RECIPE_NAME_CHARS;++i) {
+        if(!(i&3U) && w[i>>2]>>28) return 0;
+        c=w[i>>2]>>(7U*(i&3U))&0x7fU;
+        if(!c) { ended=1; continue; }
+        if(ended || c<0x20U || c>0x7eU) return 0;
+        ++n;
+    }
+    return n;
+}
+/* Character i of the name of recipe `slot`. */
+static u32 recipe_name_char(volatile u32 *h,u32 slot,u32 i) {
+    return recipe_name_at(h,slot)[i>>2]>>(7U*(i&3U))&0x7fU;
+}
+/* Set the name of recipe `slot` from NUL-terminated ASCII: its printable
+   characters without the spaces at both ends, at most
+   GRKIT_RECIPE_NAME_CHARS. A text without one gives the automatic name. */
+static void recipe_name_set(volatile u32 *h,u32 slot,const volatile u8 *text) {
+    u32 w[GRKIT_RECIPE_NAME_WORDS]={0}, n=0, spaces=0, i, c;
+    for(i=0;text[i] && n<GRKIT_RECIPE_NAME_CHARS;++i) {
+        c=text[i];
+        if(c<0x20U || c>0x7eU) continue;
+        if(c==' ') {
+            /* Spaces count only before a later character. */
+            if(n) ++spaces;
+            continue;
+        }
+        while(spaces && n<GRKIT_RECIPE_NAME_CHARS-1U) { w[n>>2]|=(u32)' '<<(7U*(n&3U)); ++n; --spaces; }
+        spaces=0;
+        w[n>>2]|=c<<(7U*(n&3U));
+        ++n;
+    }
+    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,slot)[i]=w[i];
+    GRKIT_STATE_CHANGED(h);
+}
 /* Whether word 0 is that of a recipe: the used bit, a known look, a grain
    level of CORE.GRAIN, and no bit above the number. */
 static u32 recipe_word_valid(u32 w) {
@@ -99,6 +162,45 @@ static u32 recipe_run(volatile u32 *h,u32 first,u32 n) {
 }
 static u32 recipe_count(volatile u32 *h) { return recipe_run(h,0,GRKIT_RECIPE_SLOTS); }
 static u32 recipe_undo_count(volatile u32 *h) { return recipe_run(h,GRKIT_RECIPE_SLOTS,GRKIT_RECIPE_UNDO); }
+
+/* The library: its count, and entry i. */
+static u32 recipe_library_count(volatile u32 *h) {
+    volatile u32 *library=RECIPE_LIBRARY(h);
+    u32 n;
+    if(!library) return 0;
+    n=library[LIBRARY_COUNT/4];
+    return n<GRKIT_RCP_MAX ? n : GRKIT_RCP_MAX;
+}
+static volatile u8 *recipe_library_entry(volatile u32 *h,u32 i) {
+    return (volatile u8 *)RECIPE_LIBRARY(h)+LIBRARY_ENTRIES+i*LIBRARY_ENTRY_SIZE;
+}
+/* The entries: the library, then the camera recipes. */
+static u32 recipe_entries(volatile u32 *h) { return recipe_library_count(h)+recipe_count(h); }
+/* Whether entry e is a library recipe. */
+static u32 recipe_in_library(volatile u32 *h,u32 e) { return e<recipe_library_count(h); }
+/* The words of entry e. */
+static volatile u32 *recipe_words(volatile u32 *h,u32 e) {
+    u32 n=recipe_library_count(h);
+    return e<n ? (volatile u32 *)(recipe_library_entry(h,e)+LIBRARY_WORDS) : recipe_at(h,e-n);
+    _Static_assert(LIBRARY_WORDS%4U==0U && LIBRARY_HINTS%4U==0U && LIBRARY_ENTRY_SIZE%4U==0U,"aligned library words");
+}
+/* The exposure hints of entry e: those of a library recipe, else 0. */
+static u32 recipe_hints(volatile u32 *h,u32 e) {
+    return recipe_in_library(h,e) ? *(volatile u32 *)(recipe_library_entry(h,e)+LIBRARY_HINTS) : 0;
+}
+/* The family of this camera (grkit_core::recipes::Family): 1 GR III, 2 GR IV,
+   3 GR IV Monochrome. */
+static u32 recipe_own_family(void) {
+#ifdef NATIVE_FAMILY_GR3
+    return 1U;
+#else
+    return NATIVE_MONOCHROME() ? 3U : 2U;
+#endif
+}
+/* Whether entry e is for this camera: each camera recipe is. */
+static u32 recipe_fits_camera(volatile u32 *h,u32 e) {
+    return !recipe_in_library(h,e) || recipe_library_entry(h,e)[LIBRARY_FAMILY]==recipe_own_family();
+}
 
 /* The record of record index i. */
 static u32 recipe_record(volatile u32 *h,u32 i) {
@@ -224,11 +326,13 @@ static u32 recipe_set(volatile u32 *h,const u32 *w) {
     native_write(native);
     return skipped;
 }
-/* Whether the current settings equal each setting that a recipe holds and
-   that runs. A recipe that holds nothing that runs matches nothing. */
-static u32 recipe_matches(volatile u32 *h,u32 slot) {
+/* Whether the current settings equal each setting that entry e holds and
+   that runs. A recipe that holds nothing that runs, or that is for another
+   camera, matches nothing. */
+static u32 recipe_matches(volatile u32 *h,u32 e) {
     u32 w[GRKIT_RECIPE_WORDS], now[GRKIT_RECIPE_WORDS], look, held=0, c;
-    recipe_native_words(h,recipe_at(h,slot),w);
+    if(e>=recipe_entries(h) || !recipe_fits_camera(h,e)) return 0;
+    recipe_native_words(h,recipe_words(h,e),w);
     look=RECIPE_LOOK(w[0]);
     recipe_capture(h,now);
     if(look!=RECIPE_LOOK_KEPT && RECIPE_CAPABILITY(h,TONE)) {
@@ -260,11 +364,11 @@ static u32 recipe_matches(volatile u32 *h,u32 slot) {
     }
     return held;
 }
-/* The first recipe that matches the current settings, or GRKIT_RECIPE_SLOTS. */
+/* The first entry that matches the current settings, or RECIPE_NONE. */
 static u32 recipe_current(volatile u32 *h) {
-    u32 n=recipe_count(h), i;
-    for(i=0;i<n;++i) if(recipe_matches(h,i)) return i;
-    return GRKIT_RECIPE_SLOTS;
+    u32 n=recipe_entries(h), e;
+    for(e=0;e<n;++e) if(recipe_matches(h,e)) return e;
+    return RECIPE_NONE;
 }
 
 static void recipe_copy(volatile u32 *to,const volatile u32 *from) {
@@ -275,11 +379,18 @@ static void recipe_clear(volatile u32 *w) {
     u32 i;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=0;
 }
-/* Move slots first + 1 .. first + n - 1 down by one and clear the last. */
+/* Move slots first + 1 .. first + n - 1 down by one and clear the last.
+   The names of the recipes move with them. */
 static void recipe_close_gap(volatile u32 *h,u32 first,u32 n) {
-    u32 i;
-    for(i=first;i+1<n;++i) recipe_copy(recipe_at(h,i),recipe_at(h,i+1));
-    if(n) recipe_clear(recipe_at(h,n-1));
+    u32 i, w;
+    for(i=first;i+1<n;++i) {
+        recipe_copy(recipe_at(h,i),recipe_at(h,i+1));
+        if(i+1<GRKIT_RECIPE_SLOTS)
+            for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,i)[w]=recipe_name_at(h,i+1)[w];
+    }
+    if(!n) return;
+    recipe_clear(recipe_at(h,n-1));
+    if(n-1<GRKIT_RECIPE_SLOTS) for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,n-1)[w]=0;
 }
 
 /* Two recipes have the same name base: the same look and effect, or the
@@ -307,6 +418,8 @@ static u32 recipe_save(volatile u32 *h) {
     if(number) number=number<RECIPE_NUMBER_MAX ? number+1U : RECIPE_NUMBER_MAX;
     w[0]|=number<<RECIPE_NUMBER_SHIFT;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,n)[i]=w[i];
+    /* A new recipe has the automatic name. */
+    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,n)[i]=0;
     GRKIT_STATE_CHANGED(h);
     return n;
 }
@@ -329,15 +442,19 @@ static void recipe_undo_push(volatile u32 *h) {
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,GRKIT_RECIPE_SLOTS+n)[i]=w[i];
     GRKIT_STATE_CHANGED(h);
 }
-/* Apply recipe `slot`: RECIPE_READY or RECIPE_GRAIN_SKIPPED, or the
-   reason, and then nothing changes. The settings before it become an undo
-   step. */
-static u32 recipe_apply(volatile u32 *h,u32 slot) {
+/* Whether entry e can apply: RECIPE_READY or the reason. */
+static u32 recipe_entry_reason(volatile u32 *h,u32 e) {
+    if(e>=recipe_entries(h)) return RECIPE_MISSING;
+    if(!recipe_fits_camera(h,e)) return RECIPE_OTHER_CAMERA;
+    return recipe_reason(h,recipe_words(h,e));
+}
+/* Apply entry e: RECIPE_READY or RECIPE_GRAIN_SKIPPED, or the reason, and
+   then nothing changes. The settings before it become an undo step. */
+static u32 recipe_apply(volatile u32 *h,u32 e) {
     u32 w[GRKIT_RECIPE_WORDS], reason, i;
-    if(slot>=recipe_count(h)) return RECIPE_MISSING;
-    reason=recipe_reason(h,recipe_at(h,slot));
+    reason=recipe_entry_reason(h,e);
     if(reason!=RECIPE_READY) return reason;
-    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,slot)[i];
+    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,e)[i];
     recipe_undo_push(h);
     return recipe_set(h,w) ? RECIPE_GRAIN_SKIPPED : RECIPE_READY;
 }

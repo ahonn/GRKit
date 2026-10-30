@@ -14,6 +14,9 @@
 #if !defined(FW_CHECK_ITEM) || !defined(HOOK_MENU_CHECK_FACTORY)
 #error "The build header defines FW_CHECK_ITEM, and the target has the menu_check_* hooks"
 #endif
+#if !defined(KEYBOARD_CONTROLLER) || !defined(HOOK_MENU_KEYBOARD_LOAD)
+#error "The build header defines KEYBOARD_CONTROLLER, and the target has the menu_keyboard_* hooks"
+#endif
 .syntax unified
 .arm
 .text
@@ -560,6 +563,47 @@ menu_check_factory:
     pop {r0-r3, r12, lr}
     .inst HOOK_MENU_CHECK_FACTORY_STOCK
     ldr pc, =HOOK_MENU_CHECK_FACTORY_RESUME
+
+/* The keyboard of the camera, which GRKit borrows for text (runtime/ui.h).
+   The copyright text load and store of SoftwareKeyboardController end in a
+   tail call to the settings getter or setter, with the settings in r0 and
+   the text of the keyboard in r1. While GRKit holds the keyboard, they take
+   the GRKit text instead, and the stores return 1 as the setter does. */
+.global menu_keyboard_load
+.type menu_keyboard_load, %function
+menu_keyboard_load:
+    push {r0, r1, r12, lr}
+    bl menu_keyboard_text_in
+    cmp r0, #0
+    pop {r0, r1, r12, lr}
+    bxne lr
+    ldr pc, =HOOK_MENU_KEYBOARD_LOAD_TARGET
+.global menu_keyboard_store
+.type menu_keyboard_store, %function
+menu_keyboard_store:
+    push {r0, r1, r12, lr}
+    bl menu_keyboard_text_out
+    cmp r0, #0
+    pop {r0, r1, r12, lr}
+    movne r0, #1
+    bxne lr
+    ldr pc, =HOOK_MENU_KEYBOARD_STORE_TARGET
+/* The entry of the text length method (r0 the keyboard): the GRKit length,
+   else the native method. */
+.global menu_keyboard_length
+.type menu_keyboard_length, %function
+menu_keyboard_length:
+    push {r0-r3, r12, lr}
+    bl menu_keyboard_limit
+    cmp r0, #0
+    beq 1f
+    add sp, sp, #4
+    pop {r1-r3, r12, pc}
+1:
+    pop {r0-r3, r12, lr}
+    .inst HOOK_MENU_KEYBOARD_LENGTH_STOCK
+    ldr pc, =HOOK_MENU_KEYBOARD_LENGTH_RESUME
+.ltorg
 
 #ifdef HOOK_MENU_INFO_UPDATE
 /* The update of the camera information page (menu.c: menu_info_fill). The

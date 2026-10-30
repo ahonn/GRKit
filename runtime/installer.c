@@ -347,6 +347,7 @@ static int read_plan(void)
     return 0;
 }
 #include "install_modules.h"
+#include "install_recipes.h"
 /* ---- State (runtime/state.h) ----------------------------------------------
    A missing STATE.TXT reads STATE.TMP, which a save that the power cut
    left. */
@@ -401,10 +402,13 @@ static void apply_state(u32 base, u32 table)
         if (!state_value(&saved_state, PARAMETER_KEY_BASE + code, &value) || value > PARAMETER_VALUE_MAX) continue;
         for (u32 d = 0; d < 9; ++d) { at(record + GRKIT_RECORD_PARAMETERS + d)[0] = (u8)(value % 9); value /= 9; }
     }
-    /* The camera recipes, also without a module that uses CORE.RECIPE: the
-       loader saves the words that it restores, so the recipes stay while
-       the module is away. The recipe code checks each word that it uses. */
-    for (u32 i = 0; i < GRKIT_RECIPE_WORDS * (GRKIT_RECIPE_SLOTS + GRKIT_RECIPE_UNDO); ++i)
+    /* The camera recipes and their names, also without a module that uses
+       CORE.RECIPE: the loader saves the words that it restores, so the
+       recipes stay while the module is away. The names follow the recipe
+       words in the header and in the keys. The recipe code checks each word
+       that it uses. */
+    for (u32 i = 0; i < GRKIT_RECIPE_WORDS * (GRKIT_RECIPE_SLOTS + GRKIT_RECIPE_UNDO) +
+                            GRKIT_RECIPE_NAME_WORDS * GRKIT_RECIPE_SLOTS; ++i)
         if (state_value(&saved_state, GRKIT_RECIPE_KEY_BASE + i, &value) && value <= RECIPE_VALUE_MAX)
             store(base + GRKIT_HOST_RECIPES + 4 * i, value);
 }
@@ -614,6 +618,7 @@ static int write_modules(const struct arrays *a, u32 pixels)
     u32 code = relocated[TAIL_SYMBOL] + TAIL_BYTES;
     if (code + module_code_bytes > RTOS_EXECUTABLE_END) return GRM_NO_ROOM;
     if ((status = install_modules(code, a->module_array, pixels, a->icon_bases))) return status;
+    install_recipes(services_block);
     needed_points |= POINT_MENU_PAGE;
     store(base + GRKIT_HOST_MANAGE, module_list);
     store(base + GRKIT_HOST_EFFECTS, effect_list);

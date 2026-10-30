@@ -73,6 +73,7 @@ static void render(u32 controller);
 static void render_step(u32 controller,u32 step);
 static void enter(u32 controller,u32 edge);
 static void ui_native_returned(volatile u32 *h);
+static void ui_keyboard_change(volatile u32 *h,u32 id);
 static const u16 grkit_title[] = {'G','R','K','i','t',0};
 #ifndef MENU_TEXT
 /* The menu text at a camera address. Host tests map the address. */

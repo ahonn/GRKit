@@ -2,7 +2,8 @@
 //! and the largest file.
 
 use super::{
-    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_SLOTS, RECIPE_UNDO, RECIPE_WORDS,
+    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_NAME_WORDS, RECIPE_SLOTS,
+    RECIPE_UNDO, RECIPE_WORDS,
 };
 use crate::capabilities::{self, StateFile};
 
@@ -38,11 +39,16 @@ pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
 /// The camera recipes (`runtime/recipes.h`) are state entries of their own:
 /// word w of recipe slot n (the recipes, then the undo steps) has the key ID
 /// this base plus n * `RECIPE_WORDS` + w, above the Fn adjustment entries.
-/// A word that is 0 has no entry.
+/// Word w of the name of recipe n follows them: this base plus
+/// `RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO)` + n * `RECIPE_NAME_WORDS` +
+/// w. The header holds the words in the same order (`HOST_RECIPES`, then
+/// `HOST_RECIPE_NAMES`). A word that is 0 has no entry.
 pub const RECIPE_KEY_BASE: u32 = 991_000_000;
-/// The number of recipe words, saved or restored.
-pub const RECIPE_STATE_WORDS: usize = RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
-/// The largest value of a recipe word. Each word holds at most 29 bits.
+/// The number of recipe and name words, saved or restored.
+pub const RECIPE_STATE_WORDS: usize =
+    RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO) + RECIPE_NAME_WORDS * RECIPE_SLOTS;
+/// The largest value of a recipe word. Each word holds at most 29 bits, and
+/// a name word 28 bits.
 pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
 /// The largest packed adjustment value: 9^9 - 1.
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;

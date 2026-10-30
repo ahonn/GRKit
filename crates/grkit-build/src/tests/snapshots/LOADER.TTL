@@ -213,7 +213,7 @@ goto save_modules
 :save_modules_end
 rindex = 0
 :save_recipes
-if rindex >= 52 goto save_recipes_end
+if rindex >= 84 goto save_recipes_end
 rvalue = registry[83 + rindex]
 if rvalue <= 0 goto save_recipes_next
 if rvalue > 536870911 goto save_recipes_next

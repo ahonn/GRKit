@@ -134,6 +134,16 @@ const MENU_PAGES: &[HookSpec] = &[
     bl("menu_settings_open", Menu, MenuPage),
 ];
 
+/// The keyboard of the camera, which recipes borrow for names
+/// (`runtime/ui.h`): SoftwareKeyboardController's text length method entry,
+/// then the tail calls of its copyright text load and store to the settings
+/// getter and setter.
+pub const KEYBOARD: &[HookSpec] = &[
+    b("menu_keyboard_length", Menu, MenuPage),
+    b("menu_keyboard_load", Menu, MenuPage),
+    b("menu_keyboard_store", Menu, MenuPage),
+];
+
 /// Framing and Guides: LiveViewController update, exit, and destroy, then
 /// Canvas::Draw entry and its child-draw BL. Then the still aspect property
 /// handler, which replaces `ldrb r1, [r4]`, the requested capture aspect, so

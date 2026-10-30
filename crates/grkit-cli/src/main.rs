@@ -114,6 +114,15 @@ enum Command {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Write GRKIT/RECIPES.BIN from a JSON array of recipes, or with
+    /// --decode, print the recipes of a RECIPES.BIN as JSON.
+    Recipes {
+        input: PathBuf,
+        #[arg(long, conflicts_with = "decode")]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        decode: bool,
+    },
     /// Check package layout, profiles and checksums.
     Verify { archive: PathBuf },
     /// List the cameras, the firmware releases that each runs, and the runtime
@@ -606,6 +615,18 @@ fn run(command: Command) -> Result<Value> {
                 packages.push(json!({"camera": camera.id, "targets": targets, "name": camera.id}));
             }
             Ok(json!({"runtimes": runtimes, "packages": packages}))
+        }
+        Command::Recipes { input, out, decode } => {
+            let bytes = storage::read_bounded(&input, 1024 * 1024)?;
+            if decode {
+                return Ok(serde_json::to_value(grkit_core::recipes::decode(&bytes)?)?);
+            }
+            let library: Vec<grkit_core::recipes::Recipe> = serde_json::from_slice(&bytes)?;
+            let file = grkit_core::recipes::encode(&library)?;
+            let out = out.context("Give --out for the RECIPES.BIN to write")?;
+            std::fs::write(&out, &file)
+                .with_context(|| format!("Could not write {}", out.display()))?;
+            Ok(json!({"output": out, "recipes": library.len(), "bytes": file.len()}))
         }
         Command::Verify { archive } => {
             // Include room for ZIP metadata while bounding the archive read itself.

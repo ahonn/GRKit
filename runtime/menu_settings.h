@@ -159,6 +159,9 @@ A32_ENTRY void menu_check_dot(u32 line,u32 shown) {
 A32_ENTRY u32 menu_settings_controller(u32 id) {
     volatile u32 *h=menu_header();
     u32 i;
+    /* A change to another controller ends a borrow of the keyboard
+       (runtime/ui.h). */
+    ui_keyboard_change(h,id);
     /* OK on an option: the value page stays, so the change does not happen. */
     if(h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_MENU+MENU_ROWS_STAY)[0]) {
         services_word(h,SERVICES_MENU+MENU_ROWS_STAY)[0]=0;

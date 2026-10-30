@@ -432,6 +432,76 @@ fn native_headers_match_each_firmware() -> Result<()> {
     Ok(())
 }
 
+/// The native icon of each type (`NATIVE_TYPE_ICONS`), which the native
+/// Image Control list shows: Monochrome Standard and Monochrome HDR Cuisine
+/// show the icons of Standard and HDR Cuisine, and each other type has its
+/// own. On GR III, Standard shows the icon that NATIVE_OFF_ICON reads.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+fn native_type_icons_match_each_firmware() -> Result<()> {
+    use grkit_core::native::TYPES;
+    let position = |label: &str| TYPES.iter().position(|t| t.label == label).unwrap();
+    let shared = [
+        (position("MonochromeStandard"), position("Standard")),
+        (position("MonochromeHdrCuisine"), position("HdrCuisine")),
+    ];
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let header = crate::userdata::native_header(&image)?;
+        let list = |name: &str| -> Vec<u32> {
+            let line = header
+                .lines()
+                .find_map(|line| line.strip_prefix(&format!("#define {name} ")))
+                .unwrap_or_else(|| panic!("{}: no {name}", target.name));
+            line.split(',')
+                .map(|value| value.parse().unwrap())
+                .collect()
+        };
+        let (codes, icons) = (list("NATIVE_TYPE_CODES"), list("NATIVE_TYPE_ICONS"));
+        assert_eq!(icons.len(), TYPES.len(), "{}", target.name);
+        for (index, (&code, &icon)) in codes.iter().zip(&icons).enumerate() {
+            assert_eq!(
+                code == 0xff,
+                icon == 0,
+                "{}: {}",
+                target.name,
+                TYPES[index].label
+            );
+            let twin = shared
+                .iter()
+                .find(|&&(type_index, _)| type_index == index)
+                .map(|&(_, other)| other);
+            for (other, &other_icon) in icons.iter().enumerate() {
+                if other != index && icon != 0 && other_icon != 0 {
+                    assert_eq!(
+                        icon == other_icon,
+                        twin == Some(other)
+                            || shared.iter().any(|&(t, o)| t == other && o == index),
+                        "{}: {} and {}",
+                        target.name,
+                        TYPES[index].label,
+                        TYPES[other].label
+                    );
+                }
+            }
+        }
+        if target.name.starts_with("gr3") {
+            let definitions = header_definitions(&target.header(), false);
+            assert_eq!(
+                definitions["NATIVE_OFF_ICON()"],
+                format!("WORD(FW_ICON_TABLE,{:#x}*4)", icons[position("Standard")])
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Each build header includes its native header, which each build has.
 #[test]
 fn each_build_includes_its_native_header() {
@@ -445,4 +515,155 @@ fn each_build_includes_its_native_header() {
         );
         assert!(root.join(format!("{}-native.h", target.name)).exists());
     }
+}
+
+/// The value of an ARM data-processing immediate.
+fn immediate(word: u32) -> u32 {
+    (word & 0xff).rotate_right(((word >> 8) & 0xf) * 2)
+}
+
+/// The keyboard of each build header (runtime/ui.h) is that of its firmware.
+/// The length method reads the use byte KEYBOARD_FUNCTION; the hooked load
+/// and store pass the same text of the keyboard to their tail calls. GR IV:
+/// the keyboard copies the use from FW_KEYBOARD_MODEL at its start, and the
+/// Copyright page sets KEYBOARD_COPYRIGHT with FW_KEYBOARD_SET_FUNCTION and
+/// opens KEYBOARD_CONTROLLER. GR III: the controller ID KEYBOARD_CONTROLLER
+/// starts the keyboard with the use KEYBOARD_COPYRIGHT.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+fn keyboard_definitions_match_each_firmware() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let value = |name: &str| -> u32 {
+            let value = definitions
+                .get(name)
+                .unwrap_or_else(|| panic!("{} defines no {name}", target.header()));
+            firmware_definition(value)
+                .map(|(address, _)| address)
+                .or_else(|| number(value))
+                .unwrap_or_else(|| panic!("{name} = {value}"))
+        };
+        let word = |address: u32| -> u32 {
+            u32::from_le_bytes(image.read(address, 4).unwrap().try_into().unwrap())
+        };
+        let site = |symbol: &str| -> u32 {
+            components::hooks(target)
+                .unwrap()
+                .into_iter()
+                .find(|hook| hook.spec.symbol == symbol)
+                .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                .address
+        };
+        let (function, copyright, controller) = (
+            value("KEYBOARD_FUNCTION"),
+            value("KEYBOARD_COPYRIGHT"),
+            value("KEYBOARD_CONTROLLER"),
+        );
+        // The length method: `mov ip, sp`, then `ldrb r3, [r0, #function]`.
+        let length = site("menu_keyboard_length");
+        assert_eq!(word(length), 0xe1a0_c00d, "{}", target.name);
+        assert!(
+            (1..8).any(|k| word(length + 4 * k) == 0xe5d0_3000 | function),
+            "{}: the length method reads no use byte",
+            target.name
+        );
+        // `add r1, r4, #a`, `add r1, r1, #b`, then the epilogue and the tail
+        // call: the load and the store take the same text.
+        let text = |site: u32| -> u32 {
+            let (first, second) = (word(site - 16), word(site - 12));
+            assert!(
+                first & 0xffff_f000 == 0xe284_1000 && second & 0xffff_f000 == 0xe281_1000,
+                "{}: {site:#x}",
+                target.name
+            );
+            assert_eq!(word(site) >> 24, 0xea, "{}: {site:#x}", target.name);
+            immediate(first) + immediate(second)
+        };
+        assert_eq!(
+            text(site("menu_keyboard_load")),
+            text(site("menu_keyboard_store")),
+            "{}",
+            target.name
+        );
+        let code = &image.body[..(target.data_source - target::RTOS_BASE) as usize];
+        let words: Vec<u32> = code
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        let address = |index: usize| target::RTOS_BASE + index as u32 * 4;
+        let calls = |index: usize, callee: u32| {
+            (words[index] >> 24) & 0xf == 0xb
+                && relocation::branch_target(address(index), words[index]) == Some(callee)
+        };
+        if definitions.contains_key("FW_KEYBOARD_MODEL") {
+            let (model, set) = (
+                value("FW_KEYBOARD_MODEL"),
+                value("FW_KEYBOARD_SET_FUNCTION"),
+            );
+            // OnStart: the model getter, its use getter, `strb r0, [r4, #function]`.
+            assert!(
+                (2..words.len()).any(|i| words[i] == 0xe5c4_0000 | function && calls(i - 2, model)),
+                "{}: no keyboard start copies the use of the model",
+                target.name
+            );
+            // The Copyright page: the model, `mov r1, #copyright`, the setter,
+            // with the keyboard ID before.
+            let pages = (2..words.len())
+                .filter(|&i| {
+                    calls(i, set)
+                        && words[i - 1] == 0xe3a0_1000 | copyright
+                        && calls(i - 2, model)
+                        && words[i.saturating_sub(16)..i].windows(2).any(|pair| {
+                            move_value(pair[0]).map(|(_, low)| low) == Some(controller & 0xffff)
+                                && pair[1] & 0xfff0_0fff == 0xe340_0200
+                        })
+                })
+                .count();
+            assert!(pages > 0, "{}: no Copyright page sets the use", target.name);
+        } else {
+            // The start sets the use from the controller ID: `add r1, r1,
+            // #0xfe000000`, `sub r1, r1, #first`, `cmp r1, #count`, and a
+            // table branch, whose entry for the ID sets `mov r3, #copyright`,
+            // `strb r3, [r0, #function]`.
+            let starts = (3..words.len())
+                .filter(|&i| {
+                    if words[i] != 0x979f_f101 || words[i - 8..i].iter().all(|&w| w != 0xe281_14fe)
+                    {
+                        return false;
+                    }
+                    let Some(first) = words[i - 8..i]
+                        .iter()
+                        .find(|&&w| w & 0xffff_f000 == 0xe241_1000)
+                        .map(|&w| immediate(w))
+                    else {
+                        return false;
+                    };
+                    let Some(entry) = controller.checked_sub(0x0200_0000 + first) else {
+                        return false;
+                    };
+                    let Some(&target_address) = words.get(i + 2 + entry as usize) else {
+                        return false;
+                    };
+                    let Some(index) = target_address
+                        .checked_sub(target::RTOS_BASE)
+                        .map(|offset| (offset / 4) as usize)
+                        .filter(|&index| index + 1 < words.len())
+                    else {
+                        return false;
+                    };
+                    words[index] == 0xe3a0_3000 | copyright
+                        && words[index + 1] == 0xe5c0_3000 | function
+                })
+                .count();
+            assert_eq!(starts, 1, "{}: the start of the keyboard", target.name);
+        }
+    }
+    Ok(())
 }

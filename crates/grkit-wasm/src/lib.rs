@@ -7,6 +7,7 @@
 //! `import_lut` fits a LUT as `grkit effects import` does, over the base gamma of the catalog.
 
 use anyhow::{ensure, Context, Result};
+use grkit_core::recipes;
 use grkit_core::{
     camera::{self, Camera},
     cube::Cube,
@@ -143,6 +144,7 @@ pub struct Builder {
     camera: &'static Camera,
     language: Language,
     guide: Option<Vec<u8>>,
+    recipes: Option<Vec<u8>>,
 }
 
 impl Builder {
@@ -156,6 +158,7 @@ impl Builder {
             camera: &camera::GR3,
             language: Language::English,
             guide: None,
+            recipes: None,
         })
     }
 
@@ -236,6 +239,11 @@ impl Builder {
         self.guide = Some(pdf.to_vec());
     }
 
+    /// Puts the recipe library (`RECIPES.BIN`) in the package.
+    pub fn set_recipes(&mut self, bytes: &[u8]) {
+        self.recipes = Some(bytes.to_vec());
+    }
+
     /// Verifies each runtime build against its manifest and returns the verified
     /// package ZIP.
     pub fn build(&self) -> Result<Vec<u8>> {
@@ -244,7 +252,7 @@ impl Builder {
             .iter()
             .map(|build| packaging::load_runtime(&build.manifest, &build.files))
             .collect::<Result<Vec<_>>>()?;
-        let package = packaging::assemble(
+        let package = packaging::assemble_with_recipes(
             &runtimes,
             &self.effects,
             &self.modules,
@@ -256,6 +264,7 @@ impl Builder {
                     .as_deref()
                     .context("Set the installation guide first")?,
             },
+            self.recipes.as_deref(),
         )?;
         Ok(package.bytes)
     }
@@ -364,6 +373,13 @@ impl Package {
         self.0.set_guide(pdf);
     }
 
+    /// Puts the recipe library (`encodeRecipes`) in the package, at
+    /// `GRKIT/RECIPES.BIN` on the card.
+    #[wasm_bindgen(js_name = setRecipes)]
+    pub fn set_recipes(&mut self, bytes: &[u8]) {
+        self.0.set_recipes(bytes);
+    }
+
     /// Returns the verified package as ZIP bytes.
     pub fn build(&self) -> Result<Vec<u8>, JsError> {
         self.0.build().map_err(js_error)
@@ -462,6 +478,40 @@ pub fn scripts_off_files(camera: &str) -> Result<Vec<CardFile>, JsError> {
                 .collect()
         })
         .map_err(js_error)
+}
+
+/// The bytes of `GRKIT/RECIPES.BIN` for a library: a JSON array of recipes
+/// (`grkit_core::recipes::Recipe`). Throws for a recipe that the camera
+/// cannot hold.
+#[wasm_bindgen(js_name = encodeRecipes)]
+pub fn encode_recipes(json: &str) -> Result<Vec<u8>, JsError> {
+    serde_json::from_str::<Vec<recipes::Recipe>>(json)
+        .map_err(anyhow::Error::from)
+        .and_then(|library| recipes::encode(&library))
+        .map_err(js_error)
+}
+
+/// The recipes of a `RECIPES.BIN` as a JSON array. Throws for a damaged file.
+#[wasm_bindgen(js_name = decodeRecipes)]
+pub fn decode_recipes(bytes: &[u8]) -> Result<String, JsError> {
+    recipes::decode(bytes)
+        .and_then(|library| Ok(serde_json::to_string(&library)?))
+        .map_err(js_error)
+}
+
+/// Why the camera cannot hold a recipe (JSON), or nothing.
+#[wasm_bindgen(js_name = recipeProblem)]
+pub fn recipe_problem(json: &str) -> Option<String> {
+    let result = serde_json::from_str::<recipes::Recipe>(json)
+        .map_err(anyhow::Error::from)
+        .and_then(|recipe| recipe.check());
+    result.err().map(|error| format!("{error:#}"))
+}
+
+/// The code of an effect ID in recipes.
+#[wasm_bindgen(js_name = effectCode)]
+pub fn effect_code(id: &str) -> u16 {
+    recipes::effect_code(id)
 }
 
 /// An effect fitted from a LUT. See `importLut`.

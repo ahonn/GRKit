@@ -77,6 +77,10 @@ enum Op {
     Call(u32),
     /// BLX with an immediate target.
     Exchange(u32),
+    /// `orr rd, rn, #imm` without `S`.
+    OrrImm(u8, u8, u32),
+    /// `bx lr`.
+    Return,
     /// STMDB sp! (push).
     Push,
     /// LDM sp (`writeback` for pop) with the registers.
@@ -111,6 +115,10 @@ fn decode(address: u32, word: u32) -> Insn {
         } else {
             Op::Other
         }
+    } else if word & 0x0fff_ffff == 0x012f_ff1e {
+        Op::Return
+    } else if word & 0x0ff0_0000 == 0x0380_0000 {
+        Op::OrrImm(rd, rn, modified_immediate(word))
     } else if word & 0x0ff0_0000 == 0x0300_0000 {
         Op::Movw(rd, ((word >> 4) & 0xf000) | (word & 0xfff))
     } else if word & 0x0ff0_0000 == 0x0340_0000 {
@@ -1037,6 +1045,133 @@ pub fn monochrome_check(image: &FirmwareImage) -> Result<(u32, u32)> {
     Ok((setter, pointer))
 }
 
+/// The hook site whose BL calls the native icon mapper of the types.
+const ICON_MAPPER_SITE: &str = "menu_viewfinder_icon";
+
+/// Whether condition `condition` holds for the flags N, Z, C, and V.
+fn condition_holds(condition: u8, [n, z, c, v]: [bool; 4]) -> Result<bool> {
+    Ok(match condition {
+        0x0 => z,
+        0x1 => !z,
+        0x2 => c,
+        0x3 => !c,
+        0x4 => n,
+        0x5 => !n,
+        0x6 => v,
+        0x7 => !v,
+        0x8 => c && !z,
+        0x9 => !c || z,
+        0xa => n == v,
+        0xb => n != v,
+        0xc => !z && n == v,
+        0xd => z || n != v,
+        ALWAYS => true,
+        _ => bail!("Condition {condition:#x} is not a condition"),
+    })
+}
+
+/// The icon that the native icon mapper returns for type code `code`.
+///
+/// The live-view Image Control widget calls the mapper at the
+/// `menu_viewfinder_icon` site with the type code in r1, and the native Image
+/// Control list calls it for the icon of each row. GR IV enters it through a
+/// thunk that adds to r0 and sets r2 to 0, where a nonzero r2 asks for no
+/// icon. The mapper is a chain of `cmp r1, #CODE` and branches to blocks that
+/// put the icon in r0 and return:
+///
+/// ```text
+/// cmp   r1, #0xa
+/// bls   NONE            ; mov r0, #0; bx lr
+/// cmp   r1, #0xb
+/// beq   STANDARD        ; cmp r2, #0; movw r0, #ICON; movne r0, #0; bx lr
+/// ...
+/// ```
+///
+/// The reader runs the code from the BL target with only r1 known, and only
+/// for the instructions of this shape: each other instruction, or a read of
+/// an unknown register, is an error.
+fn type_icon(image: &Image, mapper: u32, code: u32) -> Result<u32> {
+    let mut registers: [Option<u32>; 16] = [None; 16];
+    registers[R1 as usize] = Some(code);
+    let mut flags = None;
+    let mut at = mapper;
+    for _ in 0..128 {
+        let insn = image.insn(at)?;
+        let read = |register: u8| {
+            registers[register as usize]
+                .ok_or_else(|| anyhow::anyhow!("The icon mapper reads r{register} at {at:#x}"))
+        };
+        if insn.condition != ALWAYS {
+            let flags =
+                flags.ok_or_else(|| anyhow::anyhow!("The icon mapper has no flags at {at:#x}"))?;
+            if !condition_holds(insn.condition, flags)? {
+                at += 4;
+                continue;
+            }
+        }
+        match insn.op {
+            Op::CmpImm(rn, value) => {
+                let left = read(rn)?;
+                let result = left.wrapping_sub(value);
+                flags = Some([
+                    result >> 31 != 0,
+                    result == 0,
+                    left >= value,
+                    ((left ^ value) & (left ^ result)) >> 31 != 0,
+                ]);
+            }
+            Op::MovImm(rd, value) | Op::Movw(rd, value) => registers[rd as usize] = Some(value),
+            Op::OrrImm(rd, rn, value) => registers[rd as usize] = Some(read(rn)? | value),
+            // The thunk moves r0, which the mapper does not read.
+            Op::AddImm(rd, rn, value) => {
+                registers[rd as usize] = registers[rn as usize].map(|x| x.wrapping_add(value))
+            }
+            Op::Branch(_, target) => {
+                at = target;
+                continue;
+            }
+            Op::Return => return read(R0),
+            _ => bail!("Unexpected instruction in the icon mapper at {at:#x}"),
+        }
+        at += 4;
+    }
+    bail!("The icon mapper at {mapper:#x} does not return for type {code}")
+}
+
+/// The native icon of each portable type of `codes` (`NATIVE_TYPE_CODES`),
+/// or 0 for a type that the camera does not have. Each type that the camera
+/// has must have an icon of the native range.
+fn type_icons(image: &FirmwareImage, codes: &[u32]) -> Result<Vec<u32>> {
+    let target = image.target;
+    let &(_, site, _) = target
+        .layout
+        .sites
+        .iter()
+        .find(|(name, _, _)| *name == ICON_MAPPER_SITE)
+        .ok_or_else(|| anyhow::anyhow!("{}: no {ICON_MAPPER_SITE} site", target.name))?;
+    let image = Image { image };
+    let Op::Call(mapper) = image.insn(site)?.op else {
+        bail!("{}: no BL at the {ICON_MAPPER_SITE} site", target.name);
+    };
+    codes
+        .iter()
+        .zip(native::TYPES.iter())
+        .map(|(&code, image_type)| {
+            if code == 0xff {
+                return Ok(0);
+            }
+            let icon = type_icon(&image, mapper, code)?;
+            ensure!(
+                icon != 0 && icon < 0x7000,
+                "{}: the icon of {} is {icon:#x}",
+                target.name,
+                image_type.label
+            );
+            Ok(icon)
+        })
+        .collect()
+}
+
 /// `runtime/targets/<target>-native.h`: the stored values and the field
 /// offsets of the native settings of recipes (`grkit_core::native`) in the
 /// firmware of `image`. Each name, label, and stored value of the model must
@@ -1197,6 +1332,7 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
         "{}: two types have one stored value",
         target.name
     );
+    let icons = type_icons(image, &codes)?;
     // The white balance modes, their shifts, and the color temperature.
     let mode_setting = get(native::WHITE_BALANCE_SETTING)?;
     let Kind::Labels(mode_labels) = &mode_setting.kind else {
@@ -1255,8 +1391,10 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
          the object, or the object itself without NATIVE_RECORD. The fields are one\n   \
          byte, the color temperature two. Each offset of a parameter that a type\n   \
          does not have is 0, and each code of a type or mode that the camera does\n   \
-         not have is all ones. On GR IV, the byte at NATIVE_SENSOR_COLOR_FIELD of\n   \
-         the model record (FW_MODEL_RECORD) is 1 on GR IV Monochrome. */\n",
+         not have is all ones. NATIVE_TYPE_ICONS gives the native icon ID of each\n   \
+         type, as the native Image Control list shows it, or 0. On GR IV, the byte\n   \
+         at NATIVE_SENSOR_COLOR_FIELD of the model record (FW_MODEL_RECORD) is 1\n   \
+         on GR IV Monochrome. */\n",
         target.name
     );
     out.push_str("#ifndef GRKIT_TARGET_NATIVE_H\n#define GRKIT_TARGET_NATIVE_H\n");
@@ -1274,6 +1412,7 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
         type_setting.field.offset
     ));
     out.push_str(&format!("#define NATIVE_TYPE_CODES {}\n", list(&codes)));
+    out.push_str(&format!("#define NATIVE_TYPE_ICONS {}\n", list(&icons)));
     out.push_str(&format!(
         "#define NATIVE_PARAMETER_FIELDS {}\n",
         list(&fields)
@@ -1329,6 +1468,8 @@ mod tests {
             (0x532f_de84, 0xe3a0_3000, Op::MovImm(3, 0)),
             (0x532f_de88, 0xe92d_d870, Op::Push),
             (0x532f_dddc, 0x0a00_0022, Op::Branch(EQ, 0x532f_de6c)),
+            (0x5339_068c, 0x1382_2001, Op::OrrImm(R2, R2, 1)),
+            (0x5339_069c, 0xe12f_ff1e, Op::Return),
         ];
         for (address, word, op) in cases {
             assert_eq!(decode(address, word).op, op, "{address:#x}");

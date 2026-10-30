@@ -19,6 +19,7 @@ pub mod modules;
 pub mod native;
 pub mod packaging;
 pub mod png;
+pub mod recipes;
 pub mod runtime;
 pub mod selective;
 pub mod site;

@@ -15,10 +15,14 @@
 /* The camera recipes (runtime/recipes.h): the most recipes, the most undo
    steps, the words of one recipe, and the state key of word 0 of recipe 0.
    Word w of slot n (the recipes, then the undo steps) has the state key
-   GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w. */
+   GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w. The name of a recipe has
+   GRKIT_RECIPE_NAME_WORDS words of four 7-bit characters, at most
+   GRKIT_RECIPE_NAME_CHARS, and the keys after those of the undo steps. */
 #define GRKIT_RECIPE_SLOTS 8U
 #define GRKIT_RECIPE_UNDO 5U
 #define GRKIT_RECIPE_WORDS 4U
+#define GRKIT_RECIPE_NAME_CHARS 16U
+#define GRKIT_RECIPE_NAME_WORDS 4U
 #define GRKIT_RECIPE_KEY_BASE 991000000U
 #define GRKIT_MODULE_SETTINGS_MAX 160
 /* The most modules that GRKit lists, and the words of the largest script
@@ -198,9 +202,14 @@
    each word that is not 0. */
 #define GRKIT_HOST_RECIPES 332
 #define GRKIT_HOST_RECIPES_WORDS 52
+/* The names of the RECIPE_SLOTS recipes, RECIPE_NAME_WORDS words each
+   (RECIPE_NAME_CHARS). The undo steps have no names. The resident loader saves
+   each word that is not 0, after the recipe words. */
+#define GRKIT_HOST_RECIPE_NAMES 540
+#define GRKIT_HOST_RECIPE_NAMES_WORDS 32
 /* Reserved for later fields. */
-#define GRKIT_HOST_RESERVED 540
-#define GRKIT_HOST_RESERVED_WORDS 36
+#define GRKIT_HOST_RESERVED 668
+#define GRKIT_HOST_RESERVED_WORDS 4
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
 #define GRKIT_HOST_MODULE_SETTINGS 684
@@ -346,6 +355,30 @@
 #define GRKIT_GRF_HUE_SIZE 88U
 #define GRKIT_GRF_ID_MAX 31U
 #define GRKIT_GRF_NAME_MAX 16U
+/* A GRKR0001 recipe library has GRKIT_RCP_HEADER_SIZE bytes, then
+   GRKIT_RCP_RECORD_SIZE bytes for each of at most GRKIT_RCP_MAX recipes. */
+#define GRKIT_RCP_HEADER_SIZE 32U
+#define GRKIT_RCP_RECORD_SIZE 64U
+#define GRKIT_RCP_MAX 24U
+#define GRKIT_RCP_NAME_UNITS 16U
+/* The magic `GRKR0001`. */
+#define GRKIT_RCP_MAGIC 0U
+/* u32 size of the file. */
+#define GRKIT_RCP_BYTES 8U
+/* u32 CRC-32 of the file, which reads these bytes as zero. */
+#define GRKIT_RCP_CRC 12U
+/* u32 number of recipes. */
+#define GRKIT_RCP_COUNT 16U
+/* The name: UTF-16LE units, zero-padded, without a NUL at 16 units. */
+#define GRKIT_RCP_RECORD_NAME 0U
+/* The RECIPE_WORDS words of the recipe (runtime/recipes.h). */
+#define GRKIT_RCP_RECORD_WORDS 32U
+/* u32 exposure hints: bits 0-5 the compensation in thirds + 16, bits 6-23 the
+   ISO limit, bits 24-26 the metering, bits 27-28 the ND filter; 0 for each
+   that is not given. */
+#define GRKIT_RCP_RECORD_HINTS 48U
+/* u8 family: 1 GR III, 2 GR IV, 3 GR IV Monochrome. */
+#define GRKIT_RCP_RECORD_FAMILY 52U
 #define GRKIT_FEATURE_POST 1U
 #define GRKIT_FEATURE_SELECTIVE 2U
 #define GRKIT_FEATURE_HUE 8U
@@ -522,11 +555,14 @@
    name, the text before and after the name to delete, the message when the
    recipes are full, the text of a missing effect, the name of a recipe without
    a look, the separator of the root summary, the message of a value that the
-   camera does not have, and the message of an apply whose Grain has no effect. */
+   camera does not have, the message of an apply whose Grain has no effect, the
+   message of a recipe of another camera, the exposure hints: the text before
+   the ISO limit, four meterings, and ND Off, On, and Auto; then the two
+   buttons of Fn on a camera recipe: Rename and Delete. */
 #define TEXT_RECIPE 21
 /* The names of the native Image Control types, in the order of
    runtime/native.h. */
-#define TEXT_NATIVE_TYPE 32
-#define GRKIT_TEXT_STRINGS 53
+#define TEXT_NATIVE_TYPE 43
+#define GRKIT_TEXT_STRINGS 64
 
 #endif

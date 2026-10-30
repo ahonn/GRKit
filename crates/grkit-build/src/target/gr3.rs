@@ -24,6 +24,7 @@ const GROUPS: &[&[HookSpec]] = &[
     ICONS,
     common::IMAGE_CONTROL_PAGES,
     common::MENU,
+    common::KEYBOARD,
     common::VIEWFINDER,
     common::PICTURE,
     GRAIN,

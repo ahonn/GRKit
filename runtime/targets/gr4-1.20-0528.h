@@ -187,5 +187,12 @@
 #define FW_SLIDER_FLAG FIRMWARE(0x5359a954)
 #define FW_SLIDER_APPLY FIRMWARE(0x5359aa6c)
 #define UI_SLIDER_ICONS {0x25f,0x54,0xc3,0x271}
+/* The keyboard of the camera (runtime/ui.h): its controller ID, the getter
+   of SoftwareKeyboardModel, which holds the use of the keyboard (the getter
+   ignores its argument, the model factory), and the setter of the use,
+   which asserts that no use is set. */
+#define KEYBOARD_CONTROLLER 0x20000f7U
+#define FW_KEYBOARD_MODEL FIRMWARE(0x53241158)
+#define FW_KEYBOARD_SET_FUNCTION FIRMWARE(0x533f3100)
 
 #endif

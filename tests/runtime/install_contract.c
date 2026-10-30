@@ -34,6 +34,7 @@ typedef unsigned int u32;
 #define IMPORTED_PATH CARD "/GRKIT/IMPORTED.TXT"
 #define LIBRARY_PATH CARD "/GRKIT/EFFECTS"
 #define STATE_PATH CARD "/GRKIT/STATE.TXT"
+#define RECIPES_PATH CARD "/GRKIT/RECIPES.BIN"
 #define MODULES_PATH CARD "/GRKIT/MODULES"
 #define LEGACY_EFFECTS_PATH CARD "/SCRIPT/PLUGINS/EFFECTS"
 #define CORE_STATE_COUNT 4U
@@ -240,6 +241,7 @@ static int sync_alias(u32 address, u32 n)
 #define ICON_PIXELS 8
 static void icon_header(u32 icon, u32 pixels) { store(icon, pixels); }
 #include "install_modules.h"
+#include "install_recipes.h"
 /* installer.c also reads STATE.TMP and the state of GRKit 1.2. */
 static void read_state(void)
 {
@@ -776,6 +778,64 @@ static void a_setting_of_a_module_that_did_not_link_is_missing(void)
     }
 }
 
+/* The recipe library that the site writes: the file of the Rust codec
+   (grkit_core::recipes) at $GRKIT_TEST_RECIPES. Each usable record goes to
+   the services block in file order, and the test prints each entry for the
+   Rust side. A record with a name that is not ASCII is skipped, and a
+   changed byte makes the file damaged. */
+static void the_recipe_library_reads_usable_records(void)
+{
+    const char *path = getenv("GRKIT_TEST_RECIPES");
+    static u8 bytes[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_MAX * GRKIT_RCP_RECORD_SIZE];
+    u32 services = ARRAY_AT, library = services + SERVICES_LIBRARY;
+    assert(path);
+    FILE *file = fopen(path, "rb");
+    assert(file);
+    u32 size = (u32)fread(bytes, 1, sizeof bytes, file);
+    fclose(file);
+    assert(size >= GRKIT_RCP_HEADER_SIZE + 2 * GRKIT_RCP_RECORD_SIZE);
+    reset();
+    install_recipes(services);
+    assert(recipes_result == RECIPES_NONE && word(library + LIBRARY_COUNT) == 0);
+    add_file(RECIPES_PATH, bytes, size);
+    install_recipes(services);
+    assert(recipes_result == RECIPES_READ && recipes_loaded == recipes_records);
+    for (u32 i = 0; i < word(library + LIBRARY_COUNT); ++i) {
+        u32 entry = library + LIBRARY_ENTRIES + i * LIBRARY_ENTRY_SIZE;
+        char name[GRKIT_RCP_NAME_UNITS + 1];
+        u32 n = 0;
+        while (n < GRKIT_RCP_NAME_UNITS && at(entry + LIBRARY_NAME)[2 * n]) {
+            name[n] = (char)at(entry + LIBRARY_NAME)[2 * n];
+            ++n;
+        }
+        name[n] = 0;
+        assert(!at(entry + LIBRARY_NAME)[2 * n] && !at(entry + LIBRARY_NAME)[2 * n + 1]);
+        printf("recipe %s|%u|%u %u %u %u|%u\n", name, at(entry + LIBRARY_FAMILY)[0],
+               word(entry + LIBRARY_WORDS), word(entry + LIBRARY_WORDS + 4), word(entry + LIBRARY_WORDS + 8),
+               word(entry + LIBRARY_WORDS + 12), word(entry + LIBRARY_HINTS));
+    }
+    /* A name that is not ASCII: the record is skipped, the CRC set again. */
+    u8 changed[sizeof bytes];
+    memcpy(changed, bytes, size);
+    changed[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_RECORD_NAME + 1] = 0x4e;
+    put32(changed + GRKIT_RCP_CRC, recipes_crc(changed, size));
+    reset();
+    add_file(RECIPES_PATH, changed, size);
+    install_recipes(services);
+    assert(recipes_result == RECIPES_READ && recipes_loaded == recipes_records - 1 && recipes_skipped_first == 1);
+    /* A changed byte without a new CRC: no record. */
+    changed[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_RECORD_WORDS] ^= 1;
+    reset();
+    add_file(RECIPES_PATH, changed, size);
+    install_recipes(services);
+    assert(recipes_result == RECIPES_DAMAGED && word(library + LIBRARY_COUNT) == 0);
+    /* A file of another size. */
+    reset();
+    add_file(RECIPES_PATH, bytes, size - 1);
+    install_recipes(services);
+    assert(recipes_result == RECIPES_DAMAGED);
+}
+
 static void *run(void *unused)
 {
     (void)unused;
@@ -791,6 +851,7 @@ static void *run(void *unused)
     the_layers_and_filters_fill_their_slots();
     settings_rows_of_used_settings();
     a_setting_of_a_module_that_did_not_link_is_missing();
+    the_recipe_library_reads_usable_records();
     reset();
     return 0;
 }

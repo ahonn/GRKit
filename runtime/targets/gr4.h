@@ -244,6 +244,15 @@
 /* DigitalFilterProcess plan: the grain stage flag that the stage gate sets. */
 #define GRAIN_GATE_FLAG 0x25
 
+/* The keyboard of the camera (runtime/ui.h): SoftwareKeyboardController
+   copies its use from the model at its start (OnStart) to the byte
+   KEYBOARD_FUNCTION; the copyright use is KEYBOARD_COPYRIGHT. The model
+   (FW_KEYBOARD_MODEL) holds the use in its byte KEYBOARD_MODEL_FUNCTION, 0
+   for none, and the keyboard clears it when it stops. */
+#define KEYBOARD_FUNCTION 0x240
+#define KEYBOARD_COPYRIGHT 3U
+#define KEYBOARD_MODEL_FUNCTION 0
+
 /* Each native aspect has its own visible area in a preview picture. */
 #define PICTURE_NATIVE_ID(native) ((native)<=3 ? (native) : 0)
 

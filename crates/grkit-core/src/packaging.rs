@@ -12,7 +12,7 @@ use crate::{
     camera::{self, Camera},
     card, effects,
     language::Language,
-    modules, runtime, Files,
+    modules, recipes, runtime, Files,
 };
 
 pub const RUNTIME_PATHS: [&str; 5] = [
@@ -424,9 +424,16 @@ pub struct Contents {
     pub modules: Vec<String>,
     /// The language of the guide.
     pub language: Language,
+    /// The number of recipes of the recipe library, which a package can hold
+    /// at `RECIPES_PATH`.
+    pub recipes: usize,
     /// The number of package entries, the runtime included.
     pub entries: usize,
 }
+
+/// The recipe library of the data folder (`grkit_core::recipes`). A package
+/// can hold it, so that a copy of the package also writes the library.
+pub const RECIPES_PATH: &str = "GRKIT/RECIPES.BIN";
 
 /// Checks the package entries.
 pub fn validate_contents(contents: &Files) -> Result<Contents> {
@@ -489,11 +496,22 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     let mut module_ids = BTreeSet::new();
     let mut listed = Vec::new();
     let mut language = None;
+    let mut recipe_count = 0;
     for (name, blob) in contents
         .iter()
         .filter(|(name, _)| !mandatory.contains(*name))
     {
-        if is_effect_path(name) {
+        if *name == format!("SD_ROOT/{RECIPES_PATH}") {
+            let library = recipes::decode(blob).context("Read the recipe library")?;
+            ensure!(
+                library.iter().all(|recipe| camera
+                    .targets()
+                    .iter()
+                    .all(|target| target.starts_with(recipe.family.native().key()))),
+                "The recipe library has a recipe of another camera"
+            );
+            recipe_count = library.len();
+        } else if is_effect_path(name) {
             let id = effects::decode(blob)?.0.id;
             ensure!(
                 name.rsplit('/').next() == Some(effects::filename(&id)?.as_str()),
@@ -559,6 +577,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         effect_ids: ids.into_iter().collect(),
         modules: module_ids.into_iter().collect(),
         language: language.context("Package has no installation guide")?,
+        recipes: recipe_count,
         entries: contents.len(),
     })
 }
@@ -621,6 +640,19 @@ pub fn assemble(
     camera: &Camera,
     guide: &Guide,
 ) -> Result<Package> {
+    assemble_with_recipes(runtimes, effects, modules, camera, guide, None)
+}
+
+/// `assemble`, with the recipe library (`RECIPES_PATH`) if `recipes` holds
+/// its bytes.
+pub fn assemble_with_recipes(
+    runtimes: &[VerifiedRuntime],
+    effects: &EffectSet,
+    modules: &[Vec<u8>],
+    camera: &Camera,
+    guide: &Guide,
+    recipes: Option<&[u8]>,
+) -> Result<Package> {
     let mut contents: Files = package_runtime(runtimes, camera)?
         .iter()
         .map(|(name, blob)| (format!("SD_ROOT/{name}"), blob.clone()))
@@ -653,6 +685,9 @@ pub fn assemble(
         format!("SD_ROOT/{PACKAGE_LIST}"),
         package_list(listed.iter()),
     );
+    if let Some(bytes) = recipes {
+        contents.insert(format!("SD_ROOT/{RECIPES_PATH}"), bytes.to_vec());
+    }
     check_guide(guide.pdf)?;
     contents.insert(guide.language.guide_path(), guide.pdf.to_vec());
     contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());

@@ -52,7 +52,15 @@
 #define UI_VALUE 64U
 #define UI_START 68U
 #define UI_CHANGED 72U
-#define UI_SIZE 76U
+/* A choice box (ui_choice): the text descriptors of its two buttons. */
+#define UI_CHOICE_TEXTS 76U
+/* The keyboard of the camera (ui_keyboard_open): its state, whether OK gave
+   a text, and the text, NUL-terminated ASCII of at most UI_KEYBOARD_CHARS. */
+#define UI_KEYBOARD 92U
+#define UI_KEYBOARD_RESULT 96U
+#define UI_KEYBOARD_TEXT 100U
+#define UI_KEYBOARD_CHARS GRKIT_RECIPE_NAME_CHARS
+#define UI_SIZE (UI_KEYBOARD_TEXT + ((UI_KEYBOARD_CHARS + 4U) & ~3U))
 /* The GRKit section of the native MENU (runtime/menu_section.h): whether the Customize
    tab has been patched, the number of rows, the controller of the last
    controller change,
@@ -125,14 +133,28 @@
    summary of the root row, and the text of a box with a pointer to it for
    each language (GrkitText). Each text has RECIPE_UNITS units. */
 #define SERVICES_RECIPES (SERVICES_CHECK + 12U)
-#define RECIPE_UNITS 48U
+#define RECIPE_UNITS 96U
 #define RECIPE_TEXT_SIZE (2U * RECIPE_UNITS)
 #define RECIPE_ROWS_MAX (GRKIT_RECIPE_SLOTS + 2U)
 #define RECIPE_SUMMARY_AT (RECIPE_ROWS_MAX * RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
-#define SERVICES_SIZE (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+/* The recipe library of GRKIT/RECIPES.BIN (runtime/install_recipes.h): the
+   number of entries, then LIBRARY_ENTRY_SIZE bytes for each. An entry holds
+   the name (NUL-terminated UTF-16), the family (1 GR III, 2 GR IV, 3 GR IV
+   Monochrome), the RECIPE words, and the exposure hints of a record. */
+#define SERVICES_LIBRARY (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+#define LIBRARY_COUNT 0U
+#define LIBRARY_ENTRIES 4U
+#define LIBRARY_NAME 0U
+#define LIBRARY_FAMILY 34U
+#define LIBRARY_WORDS 36U
+#define LIBRARY_HINTS 52U
+#define LIBRARY_ENTRY_SIZE 56U
+#define LIBRARY_SIZE (LIBRARY_ENTRIES + GRKIT_RCP_MAX * LIBRARY_ENTRY_SIZE)
+_Static_assert(LIBRARY_FAMILY >= 2U * (GRKIT_RCP_NAME_UNITS + 1U), "a library name and its NUL");
+#define SERVICES_SIZE (SERVICES_LIBRARY + LIBRARY_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

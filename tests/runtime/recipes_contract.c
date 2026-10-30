@@ -17,6 +17,7 @@ typedef unsigned int u32;
 static u8 records[TEST_COUNT * GRKIT_RECORD_SIZE];
 static u32 settings_object[2];
 static u8 native_record_bytes[4096];
+static u8 library_bytes[2048] __attribute__((aligned(4)));
 static u8 *mapped(u32 address)
 {
     if (address >= TEST_SETTINGS && address < TEST_SETTINGS + sizeof(settings_object))
@@ -80,6 +81,10 @@ static void setting_store(volatile u32 *h, u32 handle, u32 value)
     else assert(0);
 }
 #include "native_look.h"
+/* The library of the services block (runtime/services.h). */
+#include "services.h"
+_Static_assert(LIBRARY_SIZE <= sizeof(library_bytes), "the test library holds a full library");
+#define RECIPE_LIBRARY(h) ((void)(h), (volatile u32 *)library_bytes)
 #include "recipes.h"
 
 #define RUNNING (GRKIT_CORE_TONE_BIT | GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT | GRKIT_CORE_RECIPE_BIT)
@@ -109,6 +114,7 @@ static void reset(void)
     native_call_count = 0;
     settings_present = 0;
     camera_monochrome = 0;
+    memset(library_bytes, 0, sizeof library_bytes);
     settings_object[1] = TEST_NATIVE;
     header[GRKIT_HOST_COUNT / 4] = TEST_COUNT;
     header[GRKIT_HOST_RECORDS / 4] = TEST_RECORDS;
@@ -195,7 +201,7 @@ static void apply_sets_the_look_and_stores_an_undo_step(void)
     assert(recipe_save(header) == 0);
     select_effect(0); set_fn(1, 2, 0); set_grain(1, 2);
     u32 parameters = header[GRKIT_HOST_PARAMETER_CHANGES / 4];
-    assert(!recipe_matches(header, 0) && recipe_current(header) == GRKIT_RECIPE_SLOTS);
+    assert(!recipe_matches(header, 0) && recipe_current(header) == RECIPE_NONE);
     assert(recipe_apply(header, 0) == RECIPE_READY);
     assert(header[GRKIT_HOST_ACTIVE / 4] == record_at(1));
     assert(fn_of(1, 2) == 5);
@@ -669,6 +675,57 @@ static void monochrome_types(void)
 }
 #endif
 
+/* Library recipe i of family `family` with the words w0 to w3 and hints. */
+static void set_library(u32 i, const char *name, u32 family, const u32 *w, u32 hints)
+{
+    u8 *entry = library_bytes + LIBRARY_ENTRIES + i * LIBRARY_ENTRY_SIZE;
+    for (u32 n = 0; name[n]; ++n) ((u16 *)(entry + LIBRARY_NAME))[n] = (u16)name[n];
+    entry[LIBRARY_FAMILY] = (u8)family;
+    for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) ((u32 *)(entry + LIBRARY_WORDS))[k] = w[k];
+    *(u32 *)(entry + LIBRARY_HINTS) = hints;
+    u32 *count = (u32 *)(library_bytes + LIBRARY_COUNT);
+    if (*count <= i) *count = i + 1;
+}
+
+/* The library recipes come before the camera recipes. A recipe of another
+   camera line does not apply and matches nothing. A save takes the next
+   camera slot, and its number counts only the camera recipes. */
+static void library_recipes_come_first(void)
+{
+    reset();
+    select_effect(0);
+#ifdef NATIVE_FAMILY_GR3
+    const u32 own = 1, other = 2;
+#else
+    const u32 own = 2, other = 1;
+#endif
+    const u32 effect[4] = {RECIPE_USED | RECIPE_LOOK_EFFECT | 0x102U << RECIPE_CODE_SHIFT, 2U, 0, 0};
+    const u32 off[4] = {RECIPE_USED | RECIPE_LOOK_OFF, 0, 0, 0};
+    set_library(0, "Mine", own, effect, 0x0000c8c3U);
+    set_library(1, "Other", other, off, 0);
+    assert(recipe_library_count(header) == 2 && recipe_entries(header) == 2);
+    assert(recipe_save(header) == 0);
+    assert(recipe_entries(header) == 3 && !recipe_in_library(header, 2));
+    /* The camera recipe holds effect 0, entry 2. */
+    assert(recipe_current(header) == 2);
+    assert(recipe_entry_reason(header, 1) == RECIPE_OTHER_CAMERA);
+    assert(recipe_apply(header, 1) == RECIPE_OTHER_CAMERA && !recipe_undo_count(header));
+    assert(!recipe_matches(header, 1));
+    assert(recipe_hints(header, 0) == 0x0000c8c3U && recipe_hints(header, 2) == 0);
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(header[GRKIT_HOST_ACTIVE / 4] == record_at(2) && fn_of(2, 0) == 2);
+    assert(recipe_current(header) == 0 && recipe_matches(header, 0));
+    assert(recipe_undo_count(header) == 1);
+    /* Undo restores effect 0. */
+    recipe_undo(header);
+    assert(header[GRKIT_HOST_ACTIVE / 4] == record_at(0));
+    /* A save of effect 2 is the first of its look on the camera: no number. */
+    select_effect(2);
+    assert(recipe_save(header) == 1 && RECIPE_NUMBER(recipe_at(header, 1)[0]) == 0);
+    /* An entry after the list. */
+    assert(recipe_apply(header, 9) == RECIPE_MISSING);
+}
+
 int main(void)
 {
     save_numbers_each_look();
@@ -686,6 +743,7 @@ int main(void)
     corrections_save_apply_and_unset();
     native_grain_saves_and_applies();
     grain_falls_back_to_native_grain();
+    library_recipes_come_first();
 #ifdef FW_IMAGE_CONTROL_SET
     monochrome_types();
 #endif

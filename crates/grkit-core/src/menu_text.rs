@@ -22,7 +22,7 @@ pub const TEXT_SETTINGS: usize = TEXT_PARAMETER_TITLE - 512;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 53;
+pub const STRINGS: usize = 64;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -93,6 +93,19 @@ struct Words {
     /// The message after an apply whose Grain has no effect: no Grain
     /// module runs, and the native grain has no match.
     recipe_no_grain: &'static str,
+    /// The message of a library recipe of another camera line.
+    recipe_other_camera: &'static str,
+    /// The exposure hints after an apply: the text before the ISO limit,
+    /// the four meterings (multi-segment, center-weighted, spot,
+    /// highlight-weighted), and the ND filter Off, On, and Auto.
+    recipe_iso_limit: &'static str,
+    recipe_metering: [&'static str; 4],
+    recipe_nd: [&'static str; 3],
+    /// The buttons of the box that Fn on a camera recipe shows: Rename, which
+    /// opens the keyboard of the camera, and Delete. The words are those of
+    /// the native Customize rows (Rename, 重命名, 名称変更, 이름 변경) and of
+    /// the native Delete (删除, 刪除, 消去, 삭제).
+    recipe_actions: [&'static str; 2],
     /// The names of the native Image Control types in the order of
     /// `grkit_core::native::TYPES`, as the camera menus name them. The last
     /// seven are the types of GR IV Monochrome, with the names of its
@@ -127,6 +140,16 @@ const ENGLISH: Words = Words {
     recipe_name: "Recipe",
     recipe_unsupported: "Not available on this camera",
     recipe_no_grain: "Grain needs the Grain module",
+    recipe_other_camera: "Recipe of another camera",
+    recipe_iso_limit: "ISO max ",
+    recipe_metering: [
+        "Multi-segment",
+        "Center-weighted",
+        "Spot",
+        "Highlight-weighted",
+    ],
+    recipe_nd: ["ND Off", "ND On", "ND Auto"],
+    recipe_actions: ["Rename", "Delete"],
     native_types: [
         "Standard",
         "Vivid",
@@ -179,6 +202,11 @@ const SIMPLIFIED_CHINESE: Words = Words {
     recipe_name: "配方",
     recipe_unsupported: "此相机不支持这个配方",
     recipe_no_grain: "颗粒感需要颗粒感模块",
+    recipe_other_camera: "此配方属于其他相机",
+    recipe_iso_limit: "ISO 上限 ",
+    recipe_metering: ["多区测光", "中央重点测光", "点测光", "高光重点测光"],
+    recipe_nd: ["ND 关", "ND 开", "ND 自动"],
+    recipe_actions: ["重命名", "删除"],
     native_types: [
         "标准",
         "鲜艳",
@@ -231,6 +259,11 @@ const TRADITIONAL_CHINESE: Words = Words {
     recipe_name: "配方",
     recipe_unsupported: "此相機不支援這個配方",
     recipe_no_grain: "粒紋感需要粒紋感模組",
+    recipe_other_camera: "此配方屬於其他相機",
+    recipe_iso_limit: "ISO 上限 ",
+    recipe_metering: ["多區測光", "中央重點測光", "點測光", "高光重點測光"],
+    recipe_nd: ["ND 關", "ND 開", "ND 自動"],
+    recipe_actions: ["重命名", "刪除"],
     native_types: [
         "標準",
         "鮮豔",
@@ -285,6 +318,16 @@ const JAPANESE: Words = Words {
     recipe_name: "レシピ",
     recipe_unsupported: "このカメラでは使えません",
     recipe_no_grain: "粒状感には粒状感モジュールが必要",
+    recipe_other_camera: "ほかのカメラのレシピです",
+    recipe_iso_limit: "ISO 上限 ",
+    recipe_metering: [
+        "分割測光",
+        "中央重点測光",
+        "スポット測光",
+        "ハイライト重点測光",
+    ],
+    recipe_nd: ["ND オフ", "ND オン", "ND オート"],
+    recipe_actions: ["名称変更", "消去"],
     native_types: [
         "スタンダード",
         "ビビッド",
@@ -337,6 +380,16 @@ const KOREAN: Words = Words {
     recipe_name: "레시피",
     recipe_unsupported: "이 카메라에서 쓸 수 없음",
     recipe_no_grain: "입자감에는 입자감 모듈이 필요함",
+    recipe_other_camera: "다른 카메라의 레시피",
+    recipe_iso_limit: "ISO 상한 ",
+    recipe_metering: [
+        "분할 측광",
+        "중앙 중점 측광",
+        "스폿 측광",
+        "하이라이트 중점 측광",
+    ],
+    recipe_nd: ["ND 꺼짐", "ND 켜짐", "ND 자동"],
+    recipe_actions: ["이름 변경", "삭제"],
     native_types: [
         "스탠다드",
         "비비드",
@@ -445,12 +498,15 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "RECIPE",
-        11,
+        22,
         "The page of camera recipes: the Undo and Save rows, the text before a saved name, \
          the text before and after the name to delete, the message when the recipes are \
          full, the text of a missing effect, the name of a recipe without a look, the \
          separator of the root summary, the message of a value that the camera does not have, \
-         and the message of an apply whose Grain has no effect.",
+         the message of an apply whose Grain has no effect, the message of a recipe of another \
+         camera, the exposure hints: the text before the ISO limit, four meterings, and \
+         ND Off, On, and Auto; then the two buttons of Fn on a camera recipe: Rename and \
+         Delete.",
     ),
     run(
         "NATIVE_TYPE",
@@ -514,10 +570,23 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
             w.separator,
             w.recipe_unsupported,
             w.recipe_no_grain,
-        ]),
+            w.recipe_other_camera,
+            w.recipe_iso_limit,
+        ])
+        .into_iter()
+        .chain(words(&w.recipe_metering))
+        .chain(words(&w.recipe_nd))
+        .chain(words(&w.recipe_actions))
+        .collect(),
         "NATIVE_TYPE" => words(&w.native_types),
         _ => unreachable!("Unknown menu text run {name}"),
     }
+}
+
+/// The camera names of the native Image Control types in a language, in the
+/// order of `native::TYPES`.
+pub fn native_type_names(language: Language) -> &'static [&'static str; 21] {
+    &words(language).native_types
 }
 
 /// The strings of one language in the ID order of `runtime/abi.h`. `version`

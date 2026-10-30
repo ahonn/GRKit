@@ -404,8 +404,8 @@ fn state_script() -> Vec<String> {
                 "goto save_modules".into(),
                 ":save_modules_end".into(),
             ]);
-            // The camera recipes and the undo steps: each word that is not
-            // 0 (runtime/recipes.h).
+            // The camera recipes, the undo steps, and the names of the
+            // recipes: each word that is not 0 (runtime/recipes.h).
             lines.extend([
                 "rindex = 0".into(),
                 ":save_recipes".into(),
@@ -672,6 +672,19 @@ mod tests {
             "if rindex >= {RECIPE_STATE_WORDS} goto save_recipes_end"
         )));
         const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
+        // The names follow the recipe words, so one run of words holds both.
+        const {
+            assert!(
+                crate::abi::HOST_RECIPE_NAMES
+                    == HOST_RECIPES + 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO)
+            )
+        };
+        const {
+            assert!(
+                crate::abi::HOST_RECIPE_NAMES / 4 + RECIPE_NAME_WORDS * RECIPE_SLOTS
+                    == HOST_RECIPES / 4 + RECIPE_STATE_WORDS
+            )
+        };
         assert_eq!(script.matches(&recipes).count(), 1);
     }
 

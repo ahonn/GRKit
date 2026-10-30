@@ -330,5 +330,13 @@
 #define FW_SLIDER_FLAG FIRMWARE(0x5339f210)
 #define FW_SLIDER_APPLY FIRMWARE(0x5339f328)
 #define UI_SLIDER_ICONS {0x230,0x40,0xc7,0x240}
+/* The keyboard of the camera (runtime/ui.h): the controller ID of its
+   copyright use, which the Copyright Information page opens.
+   SoftwareKeyboardController sets its use from the controller ID at its
+   start, in the byte KEYBOARD_FUNCTION; the copyright use is
+   KEYBOARD_COPYRIGHT. */
+#define KEYBOARD_CONTROLLER 0x2000105U
+#define KEYBOARD_FUNCTION 0x1f0
+#define KEYBOARD_COPYRIGHT 2U
 
 #endif
