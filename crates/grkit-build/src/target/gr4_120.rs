@@ -54,7 +54,7 @@ pub const IMAGE_CONTROL: ImageControl = ImageControl {
 /// 1.11.
 pub const LAYOUT: Layout = Layout {
     define: "-DGRKIT_TARGET_GR4_120",
-    tail: (0x5440c000, 0x54419000),
+    tail: (0x5440c000, 0x5441c000),
     contexts: CONTEXTS,
     sites: SITES,
     instruction_patches: INSTRUCTION_PATCHES,

@@ -57,7 +57,7 @@ pub const IMAGE_CONTROL: ImageControl = ImageControl {
 /// The tail after the decoded RTOS image (0x543d2ac0).
 pub const LAYOUT: Layout = Layout {
     define: "-DGRKIT_TARGET_GR4_111",
-    tail: (0x543d3000, 0x543e0000),
+    tail: (0x543d3000, 0x543e3000),
     contexts: CONTEXTS,
     sites: SITES,
     instruction_patches: INSTRUCTION_PATCHES,

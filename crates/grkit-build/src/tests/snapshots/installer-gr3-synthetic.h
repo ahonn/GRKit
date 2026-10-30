@@ -13,7 +13,7 @@ static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10
 #define PATCH_COUNT 0x2U
 #define CODE_RELOCATION_COUNT 0x1U
 #define TAIL_SYMBOL 0U
-#define TAIL_BYTES 0xc000U
+#define TAIL_BYTES 0x10000U
 static const u32 relocation_words[] = { /* 2968 values, SHA-256 43f34df9c7d9be64931d0e63181e636b169378ae8ec175b4da1fe64c9e353b95 */ };
 static const struct relocation_window relocation_windows[] = {
 {0x5300ff00,0,768,0,0,1},
@@ -51,7 +51,7 @@ static const struct relocation_source relocation_sources[] = {
 };
 #define RELOCATION_SYMBOL_COUNT 15U
 #define RELOCATION_WINDOW_COUNT 14U
-static const struct relocation_tables relocation_tables = {relocation_windows,14,relocation_words,relocation_symbols,15,relocation_sources,15,2,0x10000,0xc000};
+static const struct relocation_tables relocation_tables = {relocation_windows,14,relocation_words,relocation_symbols,15,relocation_sources,15,2,0x10000,0x10000};
 static u32 relocated[RELOCATION_SYMBOL_COUNT];
 static const u32 patch_symbols[] = {0xffff,0xffff};
 static const u32 patch_compare[] = {0x0,0x0};

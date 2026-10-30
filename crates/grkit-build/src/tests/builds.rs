@@ -66,11 +66,11 @@ fn synthetic_arm_hooks_match_the_target_tables() -> Result<()> {
     // The regions of GR III, independent of the layout methods.
     let gr3 = target::GR3_210.layout;
     assert_eq!(gr3.processing(), (0x540b6100, 0x540b6500));
-    assert_eq!(gr3.menu(), (0x540b6500, 0x540c2000));
+    assert_eq!(gr3.menu(), (0x540b6500, 0x540c6000));
     // Framing starts after the menu code, at the next 256-byte boundary.
-    assert_eq!(gr3.framing(0x540bb3f4), (0x540bb400, 0x540c2000));
-    assert_eq!(gr3.framing(0x540bb400), (0x540bb400, 0x540c2000));
-    assert_eq!(gr3.framing(0), (0x540b6500, 0x540c2000));
+    assert_eq!(gr3.framing(0x540bb3f4), (0x540bb400, 0x540c6000));
+    assert_eq!(gr3.framing(0x540bb400), (0x540bb400, 0x540c6000));
+    assert_eq!(gr3.framing(0), (0x540b6500, 0x540c6000));
     for target in SYNTHETIC_TARGETS {
         synthetic_hooks(target, &tools)?;
     }

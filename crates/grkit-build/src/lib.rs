@@ -9,6 +9,7 @@ pub mod port;
 pub mod relocation;
 pub mod target;
 pub mod toolchain;
+pub mod userdata;
 
 use anyhow::{ensure, Context, Result};
 use firmware::sha256;

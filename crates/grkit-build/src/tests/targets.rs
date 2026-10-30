@@ -338,3 +338,49 @@ fn fn_hint_ids_are_those_of_the_native_adj_refresh() -> Result<()> {
     }
     Ok(())
 }
+
+/// FW_USERDATA_SET of each build header is the Set dispatcher of its
+/// firmware, and each setting that recipes use matches the patterns of the
+/// reader, with one getter chain and one record shape for the firmware.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+fn userdata_settings_of_recipes_match_each_firmware() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let dispatcher = definitions["FW_USERDATA_SET"]
+            .trim_start_matches("FIRMWARE(")
+            .trim_end_matches(')');
+        let dispatcher = u32::from_str_radix(dispatcher.trim_start_matches("0x"), 16)?;
+        let table = crate::userdata::extract(&image, crate::userdata::recipe_setting)?;
+        assert_eq!(table.dispatcher, dispatcher, "{}", target.name);
+        for name in [
+            "StillActiveImageControlSet",
+            "StillImageControlNo0",
+            "StillWhiteBalance",
+            "StillWhiteBalanceColorTemp",
+            "StillHighlightCorrect",
+            "StillShadowCorrect",
+            "StillLensShadingCorrection",
+            "StillHighIsoNR",
+        ] {
+            assert!(table.settings.contains_key(name), "{}: {name}", target.name);
+        }
+        let first = table.settings.values().next().unwrap();
+        for (name, setting) in &table.settings {
+            assert_eq!(setting.getters, first.getters, "{}: {name}", target.name);
+            assert_eq!(
+                setting.field.record, first.field.record,
+                "{}: {name}",
+                target.name
+            );
+        }
+    }
+    Ok(())
+}

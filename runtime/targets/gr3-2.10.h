@@ -307,6 +307,10 @@
 #define FW_TIMER_SERVICE FIRMWARE(0x5320b01c)
 #define FW_TIMER_START FIRMWARE(0x5322b468)
 #define FW_TIMER_CANCEL FIRMWARE(0x5322b1ec)
+/* The Set command of the RTOS shell command UserData (runtime/recipes.h):
+   set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
+   setter of a native setting by its name and the stored value by its label. */
+#define FW_USERDATA_SET FIRMWARE(0x5334688c)
 #define FW_MESSAGE_BACKGROUND FIRMWARE(0x5339c71c)
 #define FW_MESSAGE_SET FIRMWARE(0x5339c844)
 #define FW_MESSAGE_BUTTONS FIRMWARE(0x5339ca54)
