@@ -373,7 +373,7 @@ fn compiler_rejects_cover_icons_that_do_not_fit() {
     let box_icon = definition["icon"].clone();
     for (key, value) in [
         ("name", json!("")),
-        ("number", json!("1234567")),
+        ("number", json!("123456789")),
         ("number", json!("é")),
         ("band", json!("yes")),
         ("template", json!("can")),
@@ -600,4 +600,22 @@ fn overlay_labels_follow_the_aspect_values() {
             "label {value}"
         );
     }
+}
+
+#[test]
+fn a_long_cover_number_takes_a_smaller_size() {
+    // YELLOW is too wide at the full size; GREEN keeps it.
+    let yellow = artwork::render_cine("RICOH", "CINEMA", "YELLOW").unwrap();
+    let green = artwork::render_cine("RICOH", "CINEMA", "GREEN").unwrap();
+    // The first and last rows with number ink (white) in the body below the name.
+    let rows = |rgba: &[u8]| {
+        let ink: Vec<usize> = (21..32)
+            .filter(|y| (0..40).any(|x| rgba[(y * 40 + x) * 4] > 200))
+            .collect();
+        (ink[0], *ink.last().unwrap())
+    };
+    let (top_y, bottom_y) = rows(&yellow);
+    let (top_g, bottom_g) = rows(&green);
+    assert!(bottom_y - top_y < bottom_g - top_g);
+    assert!(artwork::render_cine("RICOH", "CINEMA", "123456789").is_err());
 }
