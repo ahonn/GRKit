@@ -162,7 +162,7 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.RECIPE` | none | The camera recipes: saved sets of the other capabilities that OK applies in one step. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
-- `CORE.RECIPE`: a page gives only its title and four tiles: the module, Undo, Save, and a recipe without an effect icon. The core gives the rows: Undo, the recipes, and Save Current Settings. A recipe holds and sets only the capabilities that other loaded modules use. `setting_get` gives 0, and `setting_set` does nothing.
+- `CORE.RECIPE`: a page gives only its title and four tiles: the module, Undo, Save, and a recipe without an effect icon or a native Image Control icon. The core gives the rows: Undo, the recipes, and Save Current Settings. A recipe holds and sets only the capabilities that other loaded modules use. `setting_get` gives 0, and `setting_set` does nothing.
 - `CORE.ASPECT`: a page shows only the ratios that the camera offers. The core crops each ratio from the native 3:2, also a ratio that the camera has natively. A layer gets the crop in `Surface.area` and `Surface.box`. `setting_set` with a ratio that the camera does not offer does nothing.
 
 ## Registrations

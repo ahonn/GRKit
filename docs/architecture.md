@@ -71,7 +71,8 @@ A package holds only `SCRIPT`. `GRKIT` at the card root is the data folder: no p
 | `SCRIPT/GRKIT` | the loader, the installers, the package list, and the modules and effects of the package |
 | `GRKIT/EFFECTS` | the effects library |
 | `GRKIT/MODULES` | the modules that a person adds |
-| `GRKIT/STATE.TXT` | the saved settings |
+| `GRKIT/STATE.TXT` | the saved settings, with the camera recipes |
+| `GRKIT/RECIPES.BIN` | the recipe library of the site |
 | `GRKIT/REPORT.TXT`, `GRKIT/BOOT.TXT` | the result and the boot log of the last starts |
 | `GRKIT/SAFE` | starts the safe mode |
 
@@ -94,6 +95,7 @@ Each feature is a module, `<ID>.GRM`, linked at power-on. The same file runs on 
 | `GUIDES` | the guides |
 | `DATE` | the date imprint |
 | `GRAIN` | a page of `CORE.GRAIN` and `CORE.GRAIN_SIZE` |
+| `RECIPES` | a page of `CORE.RECIPE` ([Recipes](#recipes)) |
 
 The core keeps the value of each setting. The capabilities, `CORE.<KEY>`, are settings of the core. The core keeps each in a header word that its hooks read, so module code never runs in a hot path. INSTALL applies the patches of a capability only when a loaded module uses it.
 
@@ -121,6 +123,16 @@ The menu text follows the camera language.
 - **Film Look** (`CORE.TONE`) replaces the color matrix and tone curves of Standard for still pictures and the live view. It can also drive the camera's hue-sector stage. Each effect has its own Fn adjustments, kept apart from the native ones. The live-view highlight warning and histogram follow the white of the effect.
 - **Framing** (`CORE.ASPECT`) crops still pictures to a ratio. The live view stays 3:2 with a mask, and DNG files keep the full sensor data.
 - **Recorded pictures**: a hook on the JPEG encode changes the main picture, the screennail, and the thumbnail. It applies the selective color of the effect and the plane filters of the modules. Each shot keeps its own settings, so continuous shooting is correct. Grain uses the camera's grain stage, so the live view and DNG files have no grain.
+
+## Recipes
+
+A recipe is a named set of picture settings that OK applies in one step. It holds the look, Grain, white balance, and the correction and noise reduction settings. The look is a Film Look effect with its Fn adjustments, or a native Image Control type with its parameters. A recipe can also hold exposure hints, which the camera shows but does not change. The capability is `CORE.RECIPE`, and the `RECIPES` module is its page in ADJ.
+
+- **Sources.** The site writes a library to `GRKIT/RECIPES.BIN`, and INSTALL copies its usable records into the core. The camera saves the current settings as camera recipes, which the state file keeps with the undo steps. The library rows come first.
+- **Record.** Each recipe is the same four words in the library, in the state file, and in the core. The words hold portable values, so a recipe of one camera line fails the checks of another. `grkit_core::recipes` defines the words and the library file, and the site uses them through the wasm build.
+- **Native settings.** Apply writes each native setting by its name and value label through the `Set` command of the RTOS shell command `UserData`. A read takes the fields of the settings record. The build reads the names, the labels, and the field offsets of each build from its firmware (`grkit_build::userdata`) and generates the tables of the core. A GR IV Monochrome type has no label, so apply calls the type setter with its stored value.
+- **Checks.** Apply first checks each value against the tables of the running build. A value that the camera does not have changes nothing. The settings before an apply become an undo step.
+- **Names.** A person types the name of a camera recipe on the camera: after Save, or with Rename from Fn on the recipe. The name is 1 to 16 printable ASCII characters. The state file keeps it in four words after the recipe words. A recipe without a name shows an automatic name: its look and a number. GRKit borrows the camera's own keyboard, the one of the copyright holder. While GRKit holds the keyboard, three hooks give the keyboard the GRKit text, take the text on OK instead of the copyright setter, and limit its length. The copyright holder setting never sees the text. A change to another controller ends the borrow.
 
 ## Relocation
 
