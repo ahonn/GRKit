@@ -1745,6 +1745,35 @@ static void the_guides_menu_page_lists_enable_options_and_settings(void)
     assert(settings_memory[2 + 17 * 3 + 2] == 2);
     settings_memory[2 + 17 * 3 + 2] = SELECT_MENU_ROWS + 9;
     assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == SELECT_MENU_ROWS + 1);
+#if defined(FW_CHECK_ITEM) && defined(FW_MENU_TABS)
+    {
+        /* A long value page shows on the own radio page: the factory builds
+           it once with the rows of the constructor, then appends a radio
+           row view for each value, so the page shows every value. */
+        volatile u32 *check = services_word(h, SERVICES_CHECK);
+        const u32 values = SELECT_MENU_ROWS + 9;
+        assert(menu_settings_controller(pages[SETTINGS_ALIAS]) == pages[SETTINGS_ALIAS]);
+        assert(check[CHECK_ID / 4] == pages[SETTINGS_ALIAS] && !check[CHECK_RADIO / 4]);
+        MENU_OBJECT_BYTE(TEST_CHECK_KINDS, 0) = 0x15;
+        view_calls = 0;
+        assert(menu_check_controller(0, pages[SETTINGS_ALIAS]) == TEST_CHECK_PAGE);
+        assert(check[CHECK_RADIO / 4] == TEST_CHECK_PAGE && !check[CHECK_PAGE / 4] && !check[CHECK_BUILD / 4]);
+        assert(MENU_OBJECT_BYTE(TEST_CHECK_KINDS, 0) == 0x15 && check[CHECK_RADIO_TYPE / 4] == 0x15);
+        int at = view_index(FW_LIST_INIT);
+        assert(at >= 0 && view_args[at + 1][0] == TEST_CHECK_PAGE + 0x100);
+        assert(view_args[at + 1][2] == values - 3 && view_args[at + 1][3] == 50);
+        assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == values + 1);
+        /* The next open reuses the page and its rows. */
+        view_calls = 0;
+        assert(menu_check_controller(0, pages[SETTINGS_ALIAS]) == TEST_CHECK_PAGE && !view_calls);
+        /* A short page gets the native controller again. */
+        settings_memory[2 + 17 * 3 + 2] = 2;
+        assert(menu_settings_controller(pages[SETTINGS_ALIAS]) == pages[SETTINGS_ALIAS] && !check[CHECK_ID / 4]);
+        assert(menu_check_controller(0, pages[SETTINGS_ALIAS]) == 0);
+        check[CHECK_RADIO / 4] = 0;
+        check[CHECK_LISTS / 4 + 2 * CHECK_PAGE_RADIO] = check[CHECK_LISTS / 4 + 2 * CHECK_PAGE_RADIO + 1] = 0;
+    }
+#endif
     settings_memory[2 + 17 * 3 + 2] = 2;
     assert(menu_text_override(view, row_texts[SETTINGS_ALIAS]) ==
            ((u32)(block + SETTINGS_LABELS / 4 + SETTING_ROWS * 2) | 1U));

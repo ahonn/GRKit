@@ -22,7 +22,7 @@ typedef unsigned int u32;
    (crates/grkit-build/src/loader.rs). The target has no Image Control, so
    discover lists no effect. */
 #define GRKIT_NO_IMAGE_CONTROL 1
-#define MAX_COUNT 20U
+#define MAX_COUNT 40U
 #define ICONS_PER_CHUNK 40U
 #define ICON_STRIDE 0x1908U
 #define HOST_ICON_COUNT 4U

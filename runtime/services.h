@@ -113,14 +113,26 @@
    each. The core calls no module code in these ranges. */
 #define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_TAB + MENU_ROWS_TAB_SIZE)
 #define SERVICES_SUSPENDED_MAX GRKIT_MODULES_MAX
-/* The checkbox page of options pages (runtime/menu_settings.h): the second
-   SelectMenuController, or 0 before the first options page; the controller ID
-   of the open options page, or 0; and 1 while the controller is built. */
+/* The own SelectMenuControllers of the long value pages
+   (runtime/menu_settings.h): the checkbox page of options pages, or 0 before
+   the first one; the controller ID of the open long value page, or 0; while a
+   controller is built, 1 + its page (CHECK_PAGE_CHECKBOX or CHECK_PAGE_RADIO),
+   else 0; the radio page of the other long value pages, or 0; the setting
+   that the open long value page shows; the row view type of a radio row and
+   the row height of the native constructor; then for each page its list and
+   its row count. */
 #define SERVICES_CHECK (SERVICES_SUSPENDED + 4U + 8U * SERVICES_SUSPENDED_MAX)
 #define CHECK_PAGE 0U
 #define CHECK_ID 4U
 #define CHECK_BUILD 8U
-#define SERVICES_SIZE (SERVICES_CHECK + 12U)
+#define CHECK_RADIO 12U
+#define CHECK_SETTING 16U
+#define CHECK_RADIO_TYPE 20U
+#define CHECK_HEIGHT 24U
+#define CHECK_LISTS 28U
+#define CHECK_PAGE_CHECKBOX 0U
+#define CHECK_PAGE_RADIO 1U
+#define SERVICES_SIZE (SERVICES_CHECK + CHECK_LISTS + 2U * 8U)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

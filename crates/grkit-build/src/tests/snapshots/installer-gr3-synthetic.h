@@ -1,6 +1,6 @@
 static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10";
-#define MAX_COUNT 0x14U
-#define MAX_CHUNKS 0x4U
+#define MAX_COUNT 0x28U
+#define MAX_CHUNKS 0x5U
 #define ICONS_PER_CHUNK 0x28U
 #define ICON_STRIDE 0x1908U
 #define HOST_ICON_COUNT 0x4U

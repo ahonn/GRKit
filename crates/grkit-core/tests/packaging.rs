@@ -364,16 +364,16 @@ fn json_matches_existing_ascii_pretty_format() {
 
 #[test]
 fn runtime_layout_matches_target_capacity() {
-    assert_eq!(runtime::MAX_COUNT, 20);
+    assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
         json!({"words": 192, "tail_words": 45743, "icon_words": [6408]})
     );
     assert_eq!(
-        runtime::layout(20).unwrap(),
-        json!({"words": 21952, "tail_words": 45743, "icon_words": [38448]})
+        runtime::layout(40).unwrap(),
+        json!({"words": 43712, "tail_words": 45743, "icon_words": [64080, 6408]})
     );
-    assert!(runtime::layout(21).is_err());
+    assert!(runtime::layout(41).is_err());
 }
 
 #[test]

@@ -6,7 +6,7 @@
 export const PREVIEW_TARGET = 'gr3-2.10';
 
 /** The effects that one package can hold. */
-export const MAX_EFFECTS = 20;
+export const MAX_EFFECTS = 40;
 
 /** The schema of the effect catalog of each target. */
 export const CATALOG_SCHEMA = 'grkit-site-effects-v1';

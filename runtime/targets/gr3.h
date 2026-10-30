@@ -78,8 +78,9 @@
 /* The fewest row views of a SelectMenuController. Its constructor builds a
    view for each row of its longest kind (+0x199). The longest native kind has
    21 rows, and no GRKit hook borrows it (2.10: kind table 0x53b3c6c0). The
-   firmware can build the controller before INSTALL, so a value page shows at
-   most these rows. */
+   firmware can build the controller before INSTALL, so a value page on it
+   shows at most these rows. A long value page shows on an own controller
+   (runtime/menu_settings.h). */
 #define SELECT_MENU_ROWS 21U
 #define CHECK_LINE_TYPE 0x2aU
 #define CHECK_TEXT_VIEW 0xf0

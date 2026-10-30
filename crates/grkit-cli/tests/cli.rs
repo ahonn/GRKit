@@ -171,7 +171,7 @@ fn effect_compilation_is_independent_of_target_capacity() {
         text(&archive),
     ]);
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("at most 20"));
+    assert!(String::from_utf8_lossy(&result.stderr).contains("at most 40"));
     assert!(!archive.exists());
 }
 

@@ -54,7 +54,7 @@ const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// record of the registry array and an icon slot, about 10.5 KB of script
 /// memory. The registry holds only the header and the records, and they fit
 /// one array of 65536 words. The tail is an array of its own.
-pub const MAX_COUNT: usize = 20;
+pub const MAX_COUNT: usize = 40;
 /// The chunk addresses that the header holds (`GRKIT_HOST_ICON_CHUNKS`).
 pub const ICON_CHUNK_SLOTS: usize = 5;
 

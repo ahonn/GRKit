@@ -130,7 +130,8 @@
    view for each row of its longest kind (+0x1a5). The longest native kind has
    21 rows on each build, and no GRKit hook borrows it (1.11: kind table
    0x53da2d20). The firmware can build the controller before INSTALL, so a
-   value page shows at most these rows. */
+   value page on it shows at most these rows. A long value page shows on an
+   own controller (runtime/menu_settings.h). */
 #define SELECT_MENU_ROWS 21U
 #define CHECK_LINE_TYPE 0x2aU
 #define CHECK_TEXT_VIEW 0xf0

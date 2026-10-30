@@ -98,12 +98,11 @@ static u32 settings_alias(volatile u32 *h,u32 page) {
 /* The borrowed page that shows the value page of row `row`. */
 static u32 settings_borrowed(u32 row) { return row<SETTINGS_BORROWED ? row : SETTINGS_ALIAS; }
 /* Whether row `setting` of the open page is long: its value page keeps each
-   value in an entry (value_entry), up to VALUES_MAX values. An Options row
-   is long, and a row with more values than the value slots, such as Film
-   Stock. A value page shows at most the rows that each SelectMenu has views
-   for (SELECT_MENU_ROWS), and later values leave it. */
-#define VALUES_MAX (MENU_VALUES_MAX<SELECT_MENU_ROWS ? MENU_VALUES_MAX : SELECT_MENU_ROWS)
-_Static_assert(GRKIT_TEXT_RECORDS+1<=VALUES_MAX,"Film Stock shows Off and each effect");
+   value in an entry (value_entry), up to MENU_VALUES_MAX values. An Options
+   row is long, and a row with more values than the value slots, such as Film
+   Stock. A long value page shows on an own controller with a row view for
+   each value (menu_check_controller). */
+_Static_assert(GRKIT_TEXT_RECORDS+1<=MENU_VALUES_MAX,"Film Stock shows Off and each effect");
 static u32 settings_options(volatile u32 *h,const Setting *page,u32 setting) {
     const Setting *b;
     return page==listed_settings && listed_kind(h,setting,&b)==LISTED_OPTIONS;
@@ -111,42 +110,90 @@ static u32 settings_options(volatile u32 *h,const Setting *page,u32 setting) {
 static u32 settings_long(volatile u32 *h,const Setting *page,u32 setting) {
     return settings_options(h,page,setting) || page[setting].values(h)>SETTING_VALUES;
 }
+/* Each SelectMenu of the camera shares one SelectMenuController. Its
+   constructor builds a radio row view for each row of the longest native
+   kind (SELECT_MENU_ROWS), maybe before INSTALL. A long value page shows on
+   an own controller instead: the controller factory gives the open long
+   value page (CHECK_ID) the checkbox page for an options page, else the
+   radio page. Each is built once, with checkbox rows (CheckBoxListLineView)
+   or radio rows, and the list init of the constructor appends rows: the
+   factory appends more until the page has a row view for each value. So
+   each native list keeps its own rows. */
+static volatile u32 *check_word(volatile u32 *h,u32 at) { return services_word(h,SERVICES_CHECK+at); }
+static volatile u32 *check_list(volatile u32 *h,u32 which) { return check_word(h,CHECK_LISTS+which*8); }
+static u32 check_row(u32 line) { return line && MENU_OBJECT_WORD(line,0)==CHECK_LINE_VTABLE; }
+/* The row views that the value page of row `setting` has: those of the own
+   page that shows it, or the rows of the shared controller. */
+static u32 settings_long_rows(volatile u32 *h,u32 setting) {
+    u32 which;
+    if(!h[GRKIT_HOST_SERVICES/4] || !check_word(h,CHECK_ID)[0] || check_word(h,CHECK_SETTING)[0]!=setting)
+        return SELECT_MENU_ROWS;
+    which=settings_options(h,settings_page(h),setting) ? CHECK_PAGE_CHECKBOX : CHECK_PAGE_RADIO;
+    return check_word(h,which==CHECK_PAGE_RADIO ? CHECK_RADIO : CHECK_PAGE)[0] ? check_list(h,which)[1] : SELECT_MENU_ROWS;
+}
 static u32 settings_values(volatile u32 *h,const Setting *page,u32 setting) {
-    u32 n=page[setting].values(h), most=settings_long(h,page,setting) ? VALUES_MAX : SETTING_VALUES;
+    u32 n=page[setting].values(h), most=SETTING_VALUES;
+    if(settings_long(h,page,setting)) {
+        most=settings_long_rows(h,setting);
+        if(most>MENU_VALUES_MAX) most=MENU_VALUES_MAX;
+    }
     return n<most ? n : most;
 }
 static void settings_forget_all(volatile u32 *h);
-/* An options page shows a checkbox on each option. Each SelectMenu of the
-   camera shares one SelectMenuController, built once with radio rows. The
-   controller factory gives the open options page (CHECK_ID) a second one,
-   built once with checkbox rows (CheckBoxListLineView), so each native list
-   keeps its radio rows. */
-static volatile u32 *check_word(volatile u32 *h,u32 at) { return services_word(h,SERVICES_CHECK+at); }
-static u32 check_row(u32 line) { return line && MENU_OBJECT_WORD(line,0)==CHECK_LINE_VTABLE; }
-/* The controller of `id` (menu.S: menu_check_factory): the checkbox page for
-   the open options page, else 0 for the native one. */
+/* Append rows to page `which` until it has `need` row views. */
+static void check_rows(volatile u32 *h,u32 which,u32 need) {
+    volatile u32 *list=check_list(h,which);
+    u8 types[MENU_VALUES_MAX];
+    u32 i,add;
+    if(need>MENU_VALUES_MAX) need=MENU_VALUES_MAX;
+    if(!list[0] || list[1]>=need) return;
+    add=need-list[1];
+    for(i=0;i<add;++i)
+        types[i]=(u8)(which==CHECK_PAGE_RADIO ? check_word(h,CHECK_RADIO_TYPE)[0] : CHECK_LINE_TYPE);
+    MENU_VIEW4(FW_LIST_INIT,list[0],(u32)types,add,check_word(h,CHECK_HEIGHT)[0]);
+    list[1]=need;
+}
+/* The controller of `id` (menu.S: menu_check_factory): the own page of the
+   open long value page, else 0 for the native one. */
 A32_ENTRY u32 menu_check_controller(u32 factory,u32 id) {
     volatile u32 *h=menu_header();
-    u32 page;
+    const Setting *page;
+    u32 which,setting,controller;
+    volatile u32 *slot;
     (void)factory;
     if(!h[GRKIT_HOST_SERVICES/4] || !id || id!=check_word(h,CHECK_ID)[0]) return 0;
-    page=check_word(h,CHECK_PAGE)[0];
-    if(page) return page;
-    page=MENU_VIEW1(FW_ALLOCATE,SELECT_MENU_SIZE);
-    if(!page) return 0;
-    check_word(h,CHECK_BUILD)[0]=1;
-    MENU_VIEW1(FW_SELECT_MENU_NEW,page);
-    check_word(h,CHECK_BUILD)[0]=0;
-    check_word(h,CHECK_PAGE)[0]=page;
-    return page;
+    page=settings_page(h);
+    setting=check_word(h,CHECK_SETTING)[0];
+    if(!page || setting>=settings_rows(h)) return 0;
+    which=settings_options(h,page,setting) ? CHECK_PAGE_CHECKBOX : CHECK_PAGE_RADIO;
+    slot=check_word(h,which==CHECK_PAGE_RADIO ? CHECK_RADIO : CHECK_PAGE);
+    controller=slot[0];
+    if(!controller) {
+        controller=MENU_VIEW1(FW_ALLOCATE,SELECT_MENU_SIZE);
+        if(!controller) return 0;
+        check_word(h,CHECK_BUILD)[0]=1+which;
+        MENU_VIEW1(FW_SELECT_MENU_NEW,controller);
+        check_word(h,CHECK_BUILD)[0]=0;
+        slot[0]=controller;
+    }
+    check_rows(h,which,page[setting].values(h));
+    return controller;
 }
-/* The rows of a SelectMenuController list: checkbox rows while the checkbox
-   page is built. */
+/* The rows of a SelectMenuController list: while an own page is built, its
+   list, its rows, and the row height, with checkbox rows for the checkbox
+   page. */
 A32_ENTRY void menu_check_lines(u32 list,u32 types,u32 count,u32 height) {
     volatile u32 *h=menu_header();
-    u32 i;
-    if(h[GRKIT_HOST_SERVICES/4] && check_word(h,CHECK_BUILD)[0])
-        for(i=0;i<count;++i) MENU_OBJECT_BYTE(types,i)=CHECK_LINE_TYPE;
+    u32 i,build=h[GRKIT_HOST_SERVICES/4] ? check_word(h,CHECK_BUILD)[0] : 0;
+    if(build) {
+        volatile u32 *at=check_list(h,build-1);
+        if(build-1==CHECK_PAGE_CHECKBOX)
+            for(i=0;i<count;++i) MENU_OBJECT_BYTE(types,i)=CHECK_LINE_TYPE;
+        else if(count) check_word(h,CHECK_RADIO_TYPE)[0]=MENU_OBJECT_BYTE(types,0);
+        check_word(h,CHECK_HEIGHT)[0]=height;
+        at[0]=list;
+        at[1]=count;
+    }
     MENU_VIEW4(FW_LIST_INIT,list,types,count,height);
 }
 /* The start shows the radio dot of the current value only: a checkbox row
@@ -168,15 +215,18 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
     }
     id=menu_rows_controller(h,id);
     menu_parameter_controller(h,id);
-    /* The checkbox page serves the options page that opens now. The return
-       to the settings page keeps it, as the submenu finds the row to put
-       its cursor on from the page that returns. Any other controller gets
-       the native one. */
+    /* An own page serves the long value page that opens now. The return to
+       the settings page keeps it, as the submenu finds the row to put its
+       cursor on from the page that returns. Any other controller gets the
+       native one. */
     if(h[GRKIT_HOST_SERVICES/4] && id!=SETTINGS_SUBMENU) {
         check_word(h,CHECK_ID)[0]=0;
         for(i=0;i<SETTINGS_BORROWED;++i)
             if(id==settings_pages[i] && settings_page(h) && settings_alias(h,i)<settings_rows(h) &&
-               settings_options(h,settings_page(h),settings_alias(h,i))) check_word(h,CHECK_ID)[0]=id;
+               settings_long(h,settings_page(h),settings_alias(h,i))) {
+                check_word(h,CHECK_ID)[0]=id;
+                check_word(h,CHECK_SETTING)[0]=settings_alias(h,i);
+            }
     }
     /* The section title of MENU needs the controller that shows. The camera
        information page shows About GRKit only after the About GRKit row. */
