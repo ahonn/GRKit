@@ -516,6 +516,10 @@ static void write_header(const struct arrays *a)
     store(base + GRKIT_HOST_MAGIC, GRKIT_HOST_MAGIC_VALUE); store(base + GRKIT_HOST_VERSION, GRKIT_HOST_VERSION_VALUE);
     /* The next still live view shows that GRKit has loaded (runtime/framing.c). */
     store(base + GRKIT_HOST_LOAD_CUE, 1);
+    /* The shot ring of the picture hooks (runtime/picture.c) starts empty. The
+       tail holds noise after power-on, and after a soft reset the ring of the
+       last start, whose keys a new shot could match. */
+    zero(at(tail + GRKIT_SHOT_RING), GRKIT_SHOT_ENTRY + GRKIT_SHOT_ENTRIES * GRKIT_SHOT_STRIDE);
     for (u32 i = 0; i < icon_chunks; ++i) {
         zero(at(a->icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, a->icon_bases[i]);
