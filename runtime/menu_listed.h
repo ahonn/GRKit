@@ -174,7 +174,7 @@ static u32 listed_get(volatile u32 *h,u32 row) {
 }
 static void listed_set(volatile u32 *h,u32 row,u32 value) {
     const Setting *b; u32 k=listed_kind(h,row,&b);
-    if(k==LISTED_ENABLE) { setting_store(h,manage_off_handle(h,listed(h)),value); manage_suspend(h); }
+    if(k==LISTED_ENABLE) { setting_store(h,manage_off_handle(h,listed(h)),value); manage_off_changed(h); }
     else if(k==LISTED_OPTIONS) {
         if(value<options_count(h)) option_set(h,value,!option_off(h,value));
         option_redraw(h,row,value);

@@ -1,8 +1,9 @@
 #ifndef GRKIT_MODULES_H
 #define GRKIT_MODULES_H
-/* The menu modules, in root order: GRKIT_MODULE_PAGES_MAX slots for the pages of
-   modules (GRKIT_HOST_MODULE_PAGES), then the core Modules row
-   (runtime/manage.h) and the core About row (runtime/about.h). */
+/* The menu modules: GRKIT_MODULE_PAGES_MAX slots for the pages of modules
+   (GRKIT_HOST_MODULE_PAGES), then the core Modules row (runtime/manage.h),
+   the core About row (runtime/about.h), and the GRKit switch
+   (runtime/manage.h), which the root shows after the module pages. */
 #include "about.h"
 #include "setting_store.h"
 #include "effects.h"
@@ -11,7 +12,8 @@
 #define MODULE_PAGE(slot) (slot)
 #define MANAGE_MODULE MODULE_PAGE(GRKIT_MODULE_PAGES_MAX)
 #define ABOUT_MODULE (MANAGE_MODULE+1U)
-#define MODULE_TOTAL (ABOUT_MODULE+1U)
+#define SWITCH_MODULE (ABOUT_MODULE+1U)
+#define MODULE_TOTAL (SWITCH_MODULE+1U)
 
 static const MenuPage about_module = ABOUT_PAGE;
 
@@ -40,6 +42,7 @@ static const MenuPage about_module = ABOUT_PAGE;
 #endif
 #include "manage.h"
 static const MenuPage manage_module_page = MANAGE_PAGE;
+static const MenuPage switch_module_page = SWITCH_PAGE;
 static u32 module_pages(volatile u32 *h) {
     u32 n=h[GRKIT_HOST_MODULE_PAGE_COUNT/4];
     return n<=GRKIT_MODULE_PAGES_MAX ? n : 0;
@@ -162,6 +165,7 @@ static const MenuPage tone_module={choice_title,tone_summary,tone_rows,tone_labe
 
 /* The page of module `index`. */
 static const MenuPage *menu_page(volatile u32 *h,u32 index) {
+    if(index==SWITCH_MODULE) return &switch_module_page;
     if(index>=ABOUT_MODULE) return &about_module;
     if(index==MANAGE_MODULE) return &manage_module_page;
     h[GRKIT_HOST_MODULE_CHOICE/4]=index;
@@ -252,9 +256,9 @@ static void manage_adj_refresh(volatile u32 *h) {
 }
 static u32 manage_adj_modules(volatile u32 *h) { return h[GRKIT_HOST_ADJ_MODULES/4]; }
 /* Visible modules as a bit mask: each module page with two rows or more,
-   unless a soft Off stopped its module. A page of CORE.TONE has
-   rows only with effects. Without such a page, About shows alone, so that
-   the root has a row. */
+   unless a soft Off stopped its module, and the GRKit switch while a module
+   loaded. A page of CORE.TONE has rows only with effects. Without such a
+   page, About shows alone, so that the root has a row. */
 static u32 visible_modules(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
     for(slot=0;slot<module_pages(h);++slot) {
@@ -262,6 +266,7 @@ static u32 visible_modules(volatile u32 *h) {
         if(listed<MANAGE_MODULES && manage_stopped(h,listed)) continue;
         if(menu_page(h,MODULE_PAGE(slot))->rows(h)>=2) mask|=1U<<MODULE_PAGE(slot);
     }
+    if(manage_switch_shown(h)) mask|=1U<<SWITCH_MODULE;
     /* Module management and the version are in the native MENU (runtime/menu.c).
        About shows only so that the root has a row. */
     if(!mask) mask=1U<<ABOUT_MODULE;
@@ -271,7 +276,7 @@ static u32 visible_modules(volatile u32 *h) {
 }
 /* The root order in `order`, and its length: the module pages in the order
    of their modules (CORE.POS, runtime/manage.h), which applies at once, then
-   the core rows. */
+   the GRKit switch and the core rows. */
 static u32 root_order(volatile u32 *h,u32 *order) {
     u32 n=module_pages(h), keys[GRKIT_MODULE_PAGES_MAX], i, j, t;
     for(i=0;i<n;++i) {
@@ -283,8 +288,8 @@ static u32 root_order(volatile u32 *h,u32 *order) {
             t=order[j]; order[j]=order[j-1]; order[j-1]=t;
         }
     }
-    order[n]=MANAGE_MODULE; order[n+1]=ABOUT_MODULE;
-    return n+2;
+    order[n]=SWITCH_MODULE; order[n+1]=MANAGE_MODULE; order[n+2]=ABOUT_MODULE;
+    return n+3;
 }
 /* The module of a root row, or of the last row for a row past the end. */
 static u32 root_module(volatile u32 *h,u32 row) {

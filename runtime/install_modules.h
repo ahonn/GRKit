@@ -61,7 +61,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
        setting with the same ID is not saved. The choices of the GRKit
        section, those of the effects, and the kept values follow the settings
        of the modules. */
-    u32 choices = MANAGE_PER_MODULE * module_count + listed_count, total = setting_total + choices + kept_count;
+    u32 choices = CHOICE_ENTRIES(module_count, listed_count), total = setting_total + choices + kept_count;
     store(array, total);
     store(array + 4, 0);
     for (u32 k = 0; k < setting_total; ++k) {
@@ -95,6 +95,14 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry, effect_choice_id(i));
         store(entry + 4, listed_choice[i]);
         store(entry + 8, EFFECT_CHOICE_VALUES);
+    }
+    /* The GRKit switch follows the choices of the effects. */
+    u32 switch_handle = setting_total + choices - 1;
+    {
+        u32 entry = array + 4 * SETTINGS_ENTRY(switch_handle);
+        store(entry, grm_state_id(MANAGE_SWITCH_KEY));
+        store(entry + 4, all_off);
+        store(entry + 8, 2);
     }
     for (u32 k = 0; k < kept_count; ++k) {
         u32 entry = array + 4 * SETTINGS_ENTRY(setting_total + choices + k);
@@ -291,7 +299,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         module_code_from[i] = code_base;
         module_code_to[i] = code_base + module.code_size;
         module_capabilities[i] = capabilities;
-        if (!module_off[i]) capabilities_running |= capabilities;
+        if (!module_stopped(i)) capabilities_running |= capabilities;
         print("GR_MODULE_LOADED "); print(module.id); print(" "); number(code_base); print("\n");
     }
     /* The module list of the Modules page. */
@@ -300,6 +308,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     store(list_at + MANAGE_SETTINGS, setting_total);
     store(list_at + MANAGE_FLAGS, safe_mode ? MANAGE_SAFE_MODE : 0);
     store(list_at + MANAGE_OPEN, 0);
+    store(list_at + MANAGE_SWITCH, switch_handle + 1);
     for (u32 i = 0; i < module_count; ++i) {
         u32 entry = list_at + MANAGE_HEADER + i * MANAGE_STRIDE, n = 0;
         volatile u16 *name = (volatile u16 *)at(entry + MANAGE_NAME);
@@ -329,7 +338,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     {
         u32 stopped = 0;
         for (u32 i = 0; i < module_count && stopped < SERVICES_SUSPENDED_MAX; ++i) {
-            if (module_status[i] || !module_off[i]) continue;
+            if (module_status[i] || !module_stopped(i)) continue;
             store(services + SERVICES_SUSPENDED + 4 + 8 * stopped, module_code_from[i]);
             store(services + SERVICES_SUSPENDED + 8 + 8 * stopped, module_code_to[i]);
             ++stopped;

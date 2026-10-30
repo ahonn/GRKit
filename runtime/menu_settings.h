@@ -70,6 +70,7 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {
     if(module==LISTED_PAGE) return listed_settings;
+    if(module==SWITCH_MODULE) return switch_settings;
     if(module>=MODULE_TOTAL) return 0;
     if(one) { menu_page(h,module); return choice_one; }
     return menu_page(h,module)->settings;

@@ -18,6 +18,12 @@
    The resident loader saves them as other settings, and SCAN reads them to
    select and order the modules (runtime/install_plan.h).
 
+   The GRKit switch, the first row of the GRKit section and the root row of
+   ADJ after the module pages, stops each module at once as a soft Off does, and On starts
+   again each module whose own Enable is On. Its setting, CORE.OFF, 1 for
+   Off, follows the settings of the effects in the table. A module that is
+   Off at a start, by its Enable or by the switch, loads stopped.
+
    INSTALL writes the module list (GRKIT_HOST_MANAGE): MANAGE_HEADER words,
    then MANAGE_STRIDE bytes for each listed module, in the order of the last
    start. The includer defines u16, u32, and the header fields. */
@@ -32,7 +38,9 @@
 #define MANAGE_SAFE_MODE 1U
 /* The listed module whose native settings page the Modules page opened. */
 #define MANAGE_OPEN 12U
-#define MANAGE_HEADER 16U
+/* The handle + 1 of CORE.OFF, the GRKit switch, or 0 without it. */
+#define MANAGE_SWITCH 16U
+#define MANAGE_HEADER 20U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -56,6 +64,9 @@
 #define MANAGE_MODULES GRKIT_MODULES_MAX
 /* A position without a CORE.POS value sorts after each position. */
 #define MANAGE_DEFAULT_KEY 1000U
+/* The setting of the GRKit switch: the CORE.OFF of each module without the
+   module ID. */
+#define MANAGE_SWITCH_KEY "CORE.OFF"
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -74,6 +85,12 @@ static u32 manage_off_handle(volatile u32 *h,u32 module) {
     return manage_word(h,MANAGE_SETTINGS)+MANAGE_PER_MODULE*module;
 }
 static u32 manage_off(volatile u32 *h,u32 module) { return setting_value(h,manage_off_handle(h,module)); }
+/* The GRKit switch: the handle + 1 of CORE.OFF, or 0 without a module list,
+   and whether it is Off. */
+static u32 manage_switch(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_SWITCH) : 0; }
+static u32 manage_all_off(volatile u32 *h) { u32 at=manage_switch(h); return at && setting_value(h,at-1); }
+/* Whether a module is Off by its Enable or by the switch. */
+static u32 manage_halted(volatile u32 *h,u32 module) { return manage_off(h,module) || manage_all_off(h); }
 /* The values of the page of a module that are off in ADJ, a bit each. */
 static u32 manage_rows_handle(volatile u32 *h,u32 module) { return manage_off_handle(h,module)+2; }
 static u32 manage_hidden_values(volatile u32 *h,u32 module) { return setting_value(h,manage_rows_handle(h,module)); }
@@ -128,7 +145,15 @@ static u32 manage_adj_row(volatile u32 *h,u32 module) {
 static u32 manage_status(volatile u32 *h,u32 module) { return MANAGE_MAP(manage_entry(h,module)+MANAGE_STATUS)[0]; }
 /* Whether a soft Off stops a module that loaded at this start. */
 static u32 manage_stopped(volatile u32 *h,u32 module) {
-    return manage_status(h,module)==MANAGE_LOADED && manage_off(h,module);
+    return manage_status(h,module)==MANAGE_LOADED && manage_halted(h,module);
+}
+/* The switch shows while a module loaded at this start, and not in safe
+   mode, where no module loads. */
+static u32 manage_switch_shown(volatile u32 *h) {
+    u32 i;
+    if(!manage_switch(h)) return 0;
+    for(i=0;i<manage_count(h);++i) if(manage_status(h,i)==MANAGE_LOADED) return 1;
+    return 0;
 }
 /* Apply the soft Off after a change of Enable: the code ranges of the
    stopped modules (SERVICES_SUSPENDED), and the capabilities of the modules
@@ -139,7 +164,7 @@ static void manage_suspend(volatile u32 *h) {
     for(i=0;i<manage_count(h);++i) {
         u32 entry=manage_entry(h,i);
         if(manage_status(h,i)!=MANAGE_LOADED) continue;
-        if(!manage_off(h,i)) { uses|=MANAGE_MAP(entry+MANAGE_USES)[0]; continue; }
+        if(!manage_halted(h,i)) { uses|=MANAGE_MAP(entry+MANAGE_USES)[0]; continue; }
         if(n>=SERVICES_SUSPENDED_MAX) continue;
         services_word(h,SERVICES_SUSPENDED+4+8*n)[0]=MANAGE_MAP(entry+MANAGE_CODE)[0];
         services_word(h,SERVICES_SUSPENDED+8+8*n)[0]=MANAGE_MAP(entry+MANAGE_CODE_END)[0];
@@ -147,6 +172,23 @@ static void manage_suspend(volatile u32 *h) {
     }
     services_word(h,SERVICES_SUSPENDED)[0]=n;
     h[GRKIT_HOST_CAPABILITIES/4]=uses;
+}
+/* Apply a change of an Enable or of the switch: the soft Off, then the
+   capabilities that start or stop. Framing sends the native 3:2 request
+   again, so the capture hook applies the crop or the full area at once, and
+   Film Look sets the highlight warning again. */
+static void manage_off_changed(volatile u32 *h) {
+    u32 before=h[GRKIT_HOST_CAPABILITIES/4], changed;
+    manage_suspend(h);
+    changed=before^h[GRKIT_HOST_CAPABILITIES/4];
+    if(changed&GRKIT_CORE_ASPECT_BIT && !aspect_native()) aspect_request();
+    if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
+}
+static void manage_set_all_off(volatile u32 *h,u32 off) {
+    u32 at=manage_switch(h);
+    if(!at) return;
+    setting_store(h,at-1,off);
+    manage_off_changed(h);
 }
 /* The name of a module: the title of its page in the menu language, else
    its file name. */
@@ -241,5 +283,27 @@ static const Setting manage_settings[SUBMENU_ROWS]={
 };
 #define MANAGE_PAGE {manage_title,manage_summary,manage_rows,manage_label,manage_icon, \
     manage_checked,manage_apply,manage_committed,0,0,manage_settings}
+
+/* The GRKit switch in ADJ: a root row after the module pages, which gives
+   its value, and a page of two rows, On and Off, the values of CORE.OFF. */
+static const u16 *switch_title(volatile u32 *h) { (void)h; return grkit_title; }
+static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_all_off(h)); }
+static u32 switch_rows(volatile u32 *h) { (void)h; return 2; }
+static const u16 *switch_text(volatile u32 *h,u32 value) { return text(h,value ? TEXT_OFF : TEXT_ON); }
+/* Off shows the Off icon and On the Modules tile, on the root row for the
+   value of the switch. */
+static u32 switch_icon(volatile u32 *h,u32 row) {
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) row=manage_all_off(h);
+    return row ? GRKIT_ICON_OFF : GRKIT_ICON_MODULES;
+}
+static u32 switch_checked(volatile u32 *h,u32 row) { return row==manage_all_off(h); }
+static void switch_apply(volatile u32 *h,u32 row) { manage_set_all_off(h,row); }
+static u32 switch_committed(volatile u32 *h) { return manage_all_off(h); }
+#define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_text,switch_icon, \
+    switch_checked,switch_apply,switch_committed,0,0,0}
+/* The switch row of MENU opens a native settings page with its one row. */
+static const Setting switch_settings[SETTING_ROWS]={
+    {switch_title,switch_rows,switch_text,switch_committed,manage_set_all_off},
+};
 #endif
 #endif
