@@ -257,8 +257,11 @@ static void level_boot(volatile u32 *h,u32 controller);
 static void bind_canvas(volatile u32 *h,u32 controller) {
     h[GRKIT_HOST_FRAME_OWNER/4]=controller;
     h[GRKIT_HOST_FRAME_CANVAS/4]=WORD(controller,LIVEVIEW_CANVAS);
-    /* Shooting: id 2 geometry follows the Framing ratio again. */
+    /* Shooting: the capture sizes follow the crop that applies in the native
+       aspect. A native aspect from the camera menu reads as Framing Off and
+       keeps its stock sizes. */
     ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=0;
+    h[GRKIT_HOST_FRAME_CROP/4]=aspect_value(h);
     capture_sync(controller);
     /* Nothing else invalidates a still live view, so these need a redraw: a
        selection that has not drawn on this canvas yet, such as one restored

@@ -184,9 +184,14 @@
    and its setting handle in the low half with its stage in the high half. */
 #define GRKIT_HOST_MODULE_FILTERS 268
 #define GRKIT_HOST_MODULE_FILTERS_WORDS 16
+/* The crop of the capture size hooks (runtime/framing.S): the Framing ratio
+   where it applies in the native aspect (aspect_value), else 0. Each live-view
+   update sets it, so a native aspect that the camera menu sets takes the stock
+   sizes. */
+#define GRKIT_HOST_FRAME_CROP 332
 /* Reserved for later fields. */
-#define GRKIT_HOST_RESERVED 332
-#define GRKIT_HOST_RESERVED_WORDS 24
+#define GRKIT_HOST_RESERVED 336
+#define GRKIT_HOST_RESERVED_WORDS 23
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
 #define GRKIT_HOST_MODULE_SETTINGS 428

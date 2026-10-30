@@ -669,10 +669,26 @@ int main(void)
     header[GRKIT_HOST_FRAME_RATIO/4]=LAST_RATIO;
     framing_bind(TEST_OWNER);
     assert(capture_requests==3 && capture_aspect==capture_ids[LAST_RATIO]);
+    /* The capture sizes follow the crop in the native 3:2. */
+    assert(header[GRKIT_HOST_FRAME_CROP/4]==LAST_RATIO);
     header[GRKIT_HOST_FRAME_RATIO/4]=1;
     native_aspect=3; capture_aspect=3;
     framing_bind(TEST_OWNER);
     assert(capture_requests==3 && capture_aspect==3);
+    /* A native aspect from the camera menu keeps its stock sizes, so a
+       saved crop does not crop its photos. GR IV crops a native 16:9 photo
+       to XPan and 2.35:1 only. */
+    assert(header[GRKIT_HOST_FRAME_CROP/4]==0);
+    for(uint32_t native=1;native<=3;++native) {
+        native_aspect=native; capture_aspect=native;
+        for(uint32_t ratio=1;ratio<=LAST_RATIO;++ratio) {
+            header[GRKIT_HOST_FRAME_RATIO/4]=ratio;
+            framing_bind(TEST_OWNER);
+            assert(header[GRKIT_HOST_FRAME_CROP/4]==(framing_row(ratio) && FRAMING_CROP_KEEPS(native,ratio) ? ratio : 0));
+        }
+    }
+    header[GRKIT_HOST_FRAME_RATIO/4]=1;
+    native_aspect=3; capture_aspect=3;
     native_aspect=0; capture_aspect=0;
     BYTE(TEST_OWNER,LIVEVIEW_MOVIE)=1;
     framing_bind(TEST_OWNER);

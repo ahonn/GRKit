@@ -223,8 +223,13 @@ fields!(HEADER_FIELDS {
     /// function, and its setting handle in the low half with its stage in the
     /// high half.
     HOST_MODULE_FILTERS = 268, 8 * MODULE_FILTERS_MAX;
+    /// The crop of the capture size hooks (runtime/framing.S): the Framing
+    /// ratio where it applies in the native aspect (aspect_value), else 0.
+    /// Each live-view update sets it, so a native aspect that the camera menu
+    /// sets takes the stock sizes.
+    HOST_FRAME_CROP = 268 + 8 * MODULE_FILTERS_MAX, 4;
     /// Reserved for later fields.
-    HOST_RESERVED = 268 + 8 * MODULE_FILTERS_MAX, HOST_MODULE_SETTINGS - 268 - 8 * MODULE_FILTERS_MAX;
+    HOST_RESERVED = 272 + 8 * MODULE_FILTERS_MAX, HOST_MODULE_SETTINGS - 272 - 8 * MODULE_FILTERS_MAX;
     /// Address of the module settings table, or 0 (runtime/settings.h).
     /// INSTALL writes it.
     HOST_MODULE_SETTINGS = HOST_MODULE_PREVIEW - 4, 4;

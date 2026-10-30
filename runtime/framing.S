@@ -78,7 +78,8 @@ framing_children:
 #endif
 /* The id 2 geometry in r12: 0 = 16:9, 1 = XPan, 2 = 2.35:1. GRKIT_HOST_FRAME_FILE
    is 0 while shooting, else 1 + the geometry of the photo that the classifier
-   saw last. Clobbers only r12 and the flags. */
+   saw last. Shooting follows GRKIT_HOST_FRAME_CROP, the crop that applies in
+   the native aspect (runtime/framing.c). Clobbers only r12 and the flags. */
 wide_mode:
     ldr r12, =GRKIT_HEADER_REFERENCE
     ldrb r12, [r12, #GRKIT_HOST_FRAME_FILE]
@@ -87,7 +88,7 @@ wide_mode:
     sub r12, r12, #1
     bx lr
 1:  ldr r12, =GRKIT_HEADER_REFERENCE
-    ldr r12, [r12, #GRKIT_HOST_FRAME_RATIO]
+    ldr r12, [r12, #GRKIT_HOST_FRAME_CROP]
     cmp r12, #1
     bxeq lr
     cmp r12, #4
@@ -141,7 +142,8 @@ INSET framing_thumbnail_inset, 16, 30, 26
 #error "The family header defines the 5:4, 1:1, and 7:6 sizes"
 #endif
 /* The id 1 geometry in r12: 0 = 4:3, 1 = 5:4, 2 = 1:1, 3 = 7:6. Shooting
-   follows the Framing ratio (value 6 for 5:4, 5 for 1:1, 7 for 7:6),
+   follows GRKIT_HOST_FRAME_CROP (value 6 for 5:4, 5 for 1:1, 7 for 7:6), so
+   the native 4:3 keeps its sizes,
    playback the photo that the classifier saw last (GRKIT_HOST_FRAME_FILE 4
    for 5:4, 5 for 7:6). Clobbers only r12 and the flags. */
 narrow_mode:
@@ -157,7 +159,7 @@ narrow_mode:
     movne r12, #0
     bx lr
 1:  ldr r12, =GRKIT_HEADER_REFERENCE
-    ldr r12, [r12, #GRKIT_HOST_FRAME_RATIO]
+    ldr r12, [r12, #GRKIT_HOST_FRAME_CROP]
     cmp r12, #6
     moveq r12, #1
     bxeq lr
