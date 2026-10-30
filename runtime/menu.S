@@ -612,12 +612,25 @@ menu_info_after:
 .endm
 SETTINGS_KINDS_SAVED menu_settings_kinds_r3_0, 3
 SETTINGS_KINDS_SAVED menu_settings_kinds_r2, 2
-SETTINGS_KINDS_REGISTER menu_settings_kinds_r8, r8
 SETTINGS_KINDS_REGISTER menu_settings_kinds_r5, r5
 SETTINGS_KINDS_SAVED menu_settings_kinds_r3_1, 3
+/* The base in the draw, which has loaded its row list into r6: the C function
+   also fits the rows of a GRKit page to the views of the list. */
+.global menu_settings_kinds_r8
+.type menu_settings_kinds_r8, %function
+menu_settings_kinds_r8:
+    push {r0-r3, r12, lr}
+    mrs r0, cpsr
+    push {r0, r1}
+    mov r0, r6
+    bl menu_settings_kinds_draw
+    mov r8, r0
+    pop {r0, r1}
+    msr APSR_nzcvq, r0
+    pop {r0-r3, r12, pc}
 
-/* The submenu has GRKIT_SUBMENU_ROWS row views instead of five (core.h:
-   SUBMENU_ROWS). Its constructor builds the list from five row types on the
+/* A submenu built after INSTALL has GRKIT_SUBMENU_ROWS row views instead of
+   five (core.h: SUBMENU_ROWS). Its constructor builds the list from five row types on the
    stack, and the stack guard follows at fp - 0x18: the stub replaces the
    store of the fifth and gives the list the types of menu_settings_types. */
 .global menu_settings_build
@@ -627,18 +640,26 @@ menu_settings_build:
     mov r2, #GRKIT_SUBMENU_ROWS
     bx lr
 .ltorg
-/* The draw hides the rows from the row count to the last view: the two
-   compares with the last row. */
-.global menu_settings_hide_first
-.type menu_settings_hide_first, %function
-menu_settings_hide_first:
-    cmp r7, #GRKIT_SUBMENU_ROWS-1
+/* The draw hides the rows from the row count to the last view of its list
+   (r6): the two compares with the last row. The last view comes from the list,
+   because a submenu that the firmware built before INSTALL has five views
+   (menu_settings_kinds_draw). Only the flags change. */
+.macro SETTINGS_LAST_VIEW name, register
+.global \name
+.type \name, %function
+\name:
+    push {r0, r1}
+    ldr r0, [r6, #LIST_ROWS]
+    ldr r1, [r6, #LIST_ROWS+4]
+    sub r1, r1, r0
+    lsr r1, r1, #2
+    sub r1, r1, #1
+    cmp \register, r1
+    pop {r0, r1}
     bx lr
-.global menu_settings_hide_next
-.type menu_settings_hide_next, %function
-menu_settings_hide_next:
-    cmp r4, #GRKIT_SUBMENU_ROWS-1
-    bx lr
+.endm
+SETTINGS_LAST_VIEW menu_settings_hide_first, r7
+SETTINGS_LAST_VIEW menu_settings_hide_next, r4
 /* The kind of row r4 from the kind table (r8 its base, r3 the word index of
    the kind). The entry has room for the kinds of five rows: a later row
    takes the kind of the first, whose word index is r3 - r4. */

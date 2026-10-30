@@ -214,6 +214,21 @@ A32_ENTRY u32 menu_settings_kinds(void) {
     if(!settings_page(h)) return FW_SUBMENU_KINDS;
     return (u32)settings_block(h)-SETTINGS_SUBMENU_KIND*SUBMENU_KIND_SIZE;
 }
+/* The kind table of the submenu draw, whose row list is `list`. The firmware
+   builds one submenu and keeps it until power-off. A submenu that it built
+   before INSTALL has the five row views of the stock constructor, not
+   SUBMENU_ROWS (menu.S: menu_settings_build). So a page shows at most the
+   rows that the list has views for: the draw, Down, and OK read the row count
+   of the entry, and no row past the views of the list. */
+A32_ENTRY u32 menu_settings_kinds_draw(u32 list) {
+    volatile u32 *h=menu_header();
+    if(settings_page(h)) {
+        volatile u8 *rows=(volatile u8 *)settings_block(h)+SUBMENU_KIND_ROWS;
+        u32 views=list_capacity(list);
+        if(*rows>views) *rows=(u8)views;
+    }
+    return menu_settings_kinds();
+}
 /* The text hook finds the text of a view by its address. The native menu
    frees its views at each page change and reuses their addresses, so a view
    is in one slot or entry at most, and a page change forgets each view. */

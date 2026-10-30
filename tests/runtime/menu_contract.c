@@ -1529,6 +1529,22 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
     /* The return to the page forgets the row. */
     assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
     assert(settings_alias(h, SETTINGS_ALIAS) == SETTINGS_ALIAS);
+    /* The draw of a submenu with SUBMENU_ROWS row views shows each row. The
+       firmware keeps a submenu that it built before INSTALL, with the five
+       views of the stock constructor: the page then shows five rows, so the
+       draw, Down, and OK read no view past the list. */
+    const u32 list = TEST_OBJECTS + 0x2800;
+    WORD(list, LIST_ROWS) = 0x59200000;
+    WORD(list, LIST_ROWS + 4) = 0x59200000 + 4 * SUBMENU_ROWS;
+    assert(menu_settings_kinds_draw(list) + SETTINGS_SUBMENU_KIND * SUBMENU_KIND_SIZE == (u32)block);
+    assert(settings_rows(h) == MANAGE_MODULES);
+    WORD(list, LIST_ROWS + 4) = 0x59200000 + 4 * 5;
+    assert(menu_settings_kinds_draw(list) + SETTINGS_SUBMENU_KIND * SUBMENU_KIND_SIZE == (u32)block);
+    assert(settings_rows(h) == 5 && !settings_row_page(h, 5) && settings_row_page(h, 4));
+    /* A native page keeps its entry. */
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    assert(menu_settings_kinds_draw(list) == FW_SUBMENU_KINDS && settings_rows(h) == 5);
+    WORD(list, LIST_ROWS) = WORD(list, LIST_ROWS + 4) = 0;
 }
 
 /* The effect list: Portra 400 and Velvia 100 installed as records 0 and
