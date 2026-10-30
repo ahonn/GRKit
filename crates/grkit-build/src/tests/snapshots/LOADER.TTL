@@ -77,7 +77,7 @@ intdim artwork4 iconwords
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
-intdim tailarea 45743
+intdim tailarea 46767
 attempts = 0
 failure = 62
 call write_error
@@ -183,11 +183,20 @@ pvalue = pvalue * 9 + pdigit
 pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
-if pvalue = 0 goto save_parameters_next
+if pvalue = 0 goto save_toning
 pkey = 990000000 + (registry[192 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
+filewriteln sfh line
+:save_toning
+ptone = (registry[192 + pindex * 1088 + 463] >> 16) and 255
+if ptone < 1 goto save_parameters_next
+if ptone > 8 goto save_parameters_next
+pkey = 990032768 + (registry[192 + pindex * 1088 + 446] and 32767)
+int2str line pkey
+filewriteln sfh line
+int2str line ptone
 filewriteln sfh line
 :save_parameters_next
 pindex = pindex + 1

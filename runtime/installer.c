@@ -80,6 +80,8 @@ _Static_assert(DIRECTORY_UNREADABLE == STATUS_LIBRARY_UNREADABLE && DIRECTORY_BA
                "A failed listing reports its status");
 _Static_assert(GRM_BAD_FILE > STATUS_OTHER_BUILD, "The module statuses follow the install statuses");
 #include "state.h"
+#define TONING_HALF(address) (*(volatile u16 *)at(address))
+#include "toning.h"
 #include "manage.h"
 /* The effect files that GRKit lists (runtime/effects.h): the head of each
    profile, which holds its ID and name, its file name, its status at this
@@ -400,6 +402,16 @@ static void apply_state(u32 base, u32 table)
         if (!state_value(&saved_state, PARAMETER_KEY_BASE + code, &value) || value > PARAMETER_VALUE_MAX) continue;
         for (u32 d = 0; d < 9; ++d) { at(record + GRKIT_RECORD_PARAMETERS + d)[0] = (u8)(value % 9); value /= 9; }
     }
+    /* The Toning of each native look with its own curves in a slot. */
+    for (u32 i = 0; i < count; ++i) {
+        u32 record = base + GRKIT_HOST_HEADER_SIZE + i * GRKIT_RECORD_SIZE;
+        u32 slot = at(record + GRKIT_RECORD_TONE_SLOT)[0];
+        u32 code = *(volatile u16 *)at(record + GRKIT_RECORD_CODE) & 0x7fffU;
+        if (!slot || !state_value(&saved_state, TONING_KEY_BASE + code, &value) || value > 8) continue;
+        at(record + GRKIT_RECORD_TONING)[0] = (u8)value;
+        toning_curves(record + GRKIT_RECORD_CURVES,
+            word(base + GRKIT_HOST_TAIL) + GRKIT_TONE_CURVES + (slot - 1) * GRKIT_TONE_SLOT_SIZE, toning_value(value));
+    }
 }
 /* The script arrays that the loader allocated (grkit_core::runtime::loader):
    the registry, the icon chunks, the module array, then the tail. */
@@ -537,6 +549,7 @@ static void write_header(const struct arrays *a)
 /* Write the record, the menu summaries, and the icon of each effect. */
 static void write_records(const struct arrays *a, u32 pixels)
 {
+    u32 tone_slots = 0;
     u32 base = a->base, text = a->tail + GRKIT_PICTURE_SCRATCH;
     const u32 *icon_bases = a->icon_bases;
     for (u32 i = 0; i < count; ++i) {
@@ -560,6 +573,18 @@ static void write_records(const struct arrays *a, u32 pixels)
             int value = (get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_FN_DEFAULTS)
                 ? (signed char)profile[GRKIT_GRF_FN_DEFAULTS + k] : 0;
             at(record + GRKIT_RECORD_FN_DEFAULTS + k)[0] = (u8)(value < 0 ? value + 9 : value);
+        }
+        /* Toning (runtime/toning.h): a native look whose red or blue curve
+           differs from green keeps those curves in the next tail slot, and
+           starts at its own toning. */
+        zero(at(record + GRKIT_RECORD_TONING), 2);
+        if ((get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_NATIVE_LOOK) && tone_slots < GRKIT_TONE_SLOTS &&
+            !(grf_equal(profile + GRKIT_GRF_CURVES, profile + GRKIT_GRF_CURVES + 512, 512) &&
+              grf_equal(profile + GRKIT_GRF_CURVES + 1024, profile + GRKIT_GRF_CURVES + 512, 512))) {
+            u32 slot = a->tail + GRKIT_TONE_CURVES + tone_slots * GRKIT_TONE_SLOT_SIZE;
+            copy(at(slot), profile + GRKIT_GRF_CURVES, 512);
+            copy(at(slot + 512), profile + GRKIT_GRF_CURVES + 1024, 512);
+            at(record + GRKIT_RECORD_TONE_SLOT)[0] = (u8)++tone_slots;
         }
         u32 n = length((const char *)profile + CATALOG_EFFECT_NAME);
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[CATALOG_EFFECT_NAME + j];

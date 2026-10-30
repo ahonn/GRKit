@@ -204,9 +204,10 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     )?;
     writeln!(
         result,
-        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U",
+        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U\n#define TONING_KEY_BASE {}U",
         grkit_core::runtime::PARAMETER_KEY_BASE,
-        grkit_core::runtime::PARAMETER_VALUE_MAX
+        grkit_core::runtime::PARAMETER_VALUE_MAX,
+        grkit_core::runtime::TONING_KEY_BASE
     )?;
     writeln!(
         result,

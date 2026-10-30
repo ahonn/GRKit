@@ -275,10 +275,17 @@
    4 is neutral. */
 #define GRKIT_RECORD_PARAMETERS 0x72c
 /* The default of each Fn adjustment, in the order of RECORD_PARAMETERS:
-   (default - 4) mod 9 of a native value 0..8, from a native look (feature 32),
-   else zero. An adjustment's native value is (stored + default + 4) mod 9, so
-   a stored zero is the default. */
+   (default - 4) mod 9 of a native value 0..8, from the Fn defaults of the
+   effect (feature 64), else zero. An adjustment's native value is (stored +
+   default + 4) mod 9, so a stored zero is the default. */
 #define GRKIT_RECORD_FN_DEFAULTS 0x735
+/* The Toning of a native look whose red or blue curve differs from green, as a
+   stored Fn byte: (shown value) mod 9, -4..4, 0 the look's own toning. The
+   curves of the record hold the toned curves. */
+#define GRKIT_RECORD_TONING 0x73e
+/* 1 + the slot of the look's own red and blue curves in the tail
+   (`TONE_CURVES`), or 0 for an effect without Toning. */
+#define GRKIT_RECORD_TONE_SLOT 0x73f
 /* The MultiAxial parameter set that INSTALL expands from the hue sectors of
    the GRF (feature 8): the address of the set at +0, the address of the
    highlight-correction set at +4, the set (six pointers) at +8, the bounds at
@@ -488,7 +495,12 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 182972
+#define GRKIT_TAIL_SIZE 187068
+/* The own red and blue curves of the native looks with Toning: for each of
+   GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
+#define GRKIT_TONE_CURVES 182972
+#define GRKIT_TONE_SLOTS 4
+#define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192
 /* The parameter page title of a GRKit session, after the summaries: the page,
    its vtable, and the descriptor of the effect name. */

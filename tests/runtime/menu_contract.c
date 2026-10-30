@@ -665,6 +665,65 @@ static void fn_values_add_the_defaults_of_a_native_look(void)
     test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
 }
 
+/* Toning (runtime/toning.h): adjustment 9 of a native look with its own red and
+   blue curves in a tail slot. A change makes the record curves from the slot,
+   green + (own - green) x (2 + t) / 2, and clears the gamma key. */
+static void toning_moves_red_and_blue_from_green(void)
+{
+#ifdef PARAMETER_TONING_BASE
+    const u32 record = TEST_OBJECTS + 0x2000U, slot = TEST_OBJECTS + 0x3400U;
+    reset();
+    for (u32 k = 0; k < 9; ++k) {
+        BYTE(record, GRKIT_RECORD_PARAMETERS + k) = 0;
+        BYTE(record, GRKIT_RECORD_FN_DEFAULTS + k) = 0;
+    }
+    test_header[GRKIT_HOST_TAIL / 4] = slot - GRKIT_TONE_CURVES;
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 1;
+    BYTE(record, GRKIT_RECORD_TONING) = 0;
+    for (u32 i = 0; i < 256; ++i) {
+        u32 green = 1000 + i * 40;
+        HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) = (u16)green;
+        HALF(slot, i * 2) = (u16)(green + 100);
+        HALF(slot, 512 + i * 2) = (u16)(green - 200);
+    }
+    test_header[GRKIT_HOST_PARAMETERS / 4] = record;
+    /* Its own toning reads as the neutral native value. */
+    assert(menu_parameter_get(PARAMETER_TONING) == 4 + 1);
+    const struct { u32 native; u8 stored; int red, blue; } steps[] = {
+        {5, 1, 150, -300},  /* +1, the GR IV level 3 */
+        {3, 8, 50, -100},   /* -1, the GR IV level 1 */
+        {2, 7, 0, 0},       /* -2, gray */
+        {0, 5, -100, 200},  /* -4, the other way */
+        {8, 4, 300, -600},  /* +4 */
+        {4, 0, 100, -200},  /* its own toning again */
+    };
+    for (u32 s = 0; s < sizeof(steps) / sizeof(steps[0]); ++s) {
+        test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
+        assert(menu_parameter_set(PARAMETER_TONING, steps[s].native));
+        assert(BYTE(record, GRKIT_RECORD_TONING) == steps[s].stored);
+        assert(menu_parameter_get(PARAMETER_TONING) == steps[s].native + 1);
+        assert(test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
+        for (u32 i = 0; i < 256; i += 51) {
+            int green = 1000 + (int)i * 40;
+            assert(HALF(record, GRKIT_RECORD_CURVES + i * 2) == green + steps[s].red);
+            assert(HALF(record, GRKIT_RECORD_CURVES + 1024 + i * 2) == green + steps[s].blue);
+            assert(HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) == green);
+        }
+    }
+    /* The snapshot holds Toning in its row kind. */
+    const u32 model = TEST_OBJECTS + 0x3800U;
+    BYTE(record, GRKIT_RECORD_TONING) = 1;
+    menu_parameter_page_snapshot(model);
+    assert(BYTE(model, MODEL_SNAPSHOT + PARAMETER_TONING_KIND) == 5);
+    /* Without a slot, the native getter and setter run. */
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
+    assert(menu_parameter_get(PARAMETER_TONING) == 0);
+    assert(!menu_parameter_set(PARAMETER_TONING, 6));
+    assert(BYTE(record, GRKIT_RECORD_TONING) == 1);
+    test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
+#endif
+}
+
 static void adj_exits_return_once_for_the_parameter_page(void)
 {
     reset();
@@ -2244,6 +2303,7 @@ int main(void)
     adj_exits_return_once_for_the_parameter_page();
     a_half_press_keeps_the_parameter_session();
     fn_values_add_the_defaults_of_a_native_look();
+    toning_moves_red_and_blue_from_green();
     the_root_lists_the_official_modules();
     module_tiles_follow_the_effect_icons();
     the_framing_page_sets_the_ratios_of_the_target();

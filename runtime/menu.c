@@ -39,6 +39,9 @@ extern u32 menu_destroy_original(u32);
 #ifndef BYTE
 #define BYTE(a,o) (*(u8 *)((a)+(o)))
 #endif
+#ifndef HALF
+#define HALF(a,o) (*(volatile u16 *)((a)+(o)))
+#endif
 /* The shared types of the core, before the services that it declares. */
 #include "core.h"
 #include "profile.h"
@@ -187,6 +190,8 @@ static void level_reapply(volatile u32 *h) {
         MENU_LEVEL_ALARM(h[GRKIT_HOST_LEVEL_SCREEN/4],h[GRKIT_HOST_LEVEL_MODE/4]);
 }
 #include "tone.h"
+#define TONING_HALF(address) HALF(address,0)
+#include "toning.h"
 static u32 selected_icon(volatile u32 *h) {
     u32 i=record_index(h,h[GRKIT_HOST_ACTIVE/4]);
     return i<GRKIT_TEXT_RECORDS ? 0x8000+i : 0x7fff;
@@ -514,18 +519,48 @@ static u32 mod9(u32 value) {
     if(value>=9) value-=9;
     return value;
 }
+/* Toning (runtime/toning.h) is the adjustment after the nine of
+   GRKIT_RECORD_PARAMETERS. The parameter page of a native look with its own
+   curves (GRKIT_RECORD_TONE_SLOT) shows the rows of the native base kind
+   PARAMETER_TONING_BASE: the nine adjustments and Toning, row kind
+   PARAMETER_TONING_KIND. Its default is the look's own toning. */
+#define PARAMETER_TONING 9
+/* The record of a started page with Toning, or 0. */
+static u32 toning_record(u32 record) {
+#ifdef PARAMETER_TONING_BASE
+    return record && BYTE(record,GRKIT_RECORD_TONE_SLOT) ? record : 0;
+#else
+    (void)record;
+    return 0;
+#endif
+}
+/* The record curves for Toning stored byte `stored`, from the look's own red
+   and blue curves in its tail slot. The next live-view frame composes them
+   again: a cleared key never matches (runtime/processing.h). */
+static void toning_apply(volatile u32 *h,u32 record,u32 stored) {
+    u32 slot=h[GRKIT_HOST_TAIL/4]+GRKIT_TONE_CURVES+(BYTE(record,GRKIT_RECORD_TONE_SLOT)-1U)*GRKIT_TONE_SLOT_SIZE;
+    BYTE(record,GRKIT_RECORD_TONING)=(u8)stored;
+    toning_curves(record+GRKIT_RECORD_CURVES,slot,toning_value(stored));
+    h[GRKIT_HOST_GAMMA_KEY/4]=0;
+}
 /* The native value plus 1, or 0 to run the native getter. */
 A32_ENTRY u32 menu_parameter_get(u32 index) {
     u32 record=menu_parameter_session();
+    if(index==PARAMETER_TONING) {
+        record=toning_record(record);
+        return record ? (u32)(toning_value(BYTE(record,GRKIT_RECORD_TONING))+4)+1 : 0;
+    }
     return record ? record_parameter(record,index)+1 : 0;
 }
 /* Nonzero when the value went to the record. */
 A32_ENTRY u32 menu_parameter_set(u32 index,u32 value) {
     volatile u32 *h=menu_header();
     u32 record=menu_parameter_session();
+    if(index==PARAMETER_TONING) record=toning_record(record);
     if(!record) return 0;
     if(value<=8) {
-        BYTE(record,GRKIT_RECORD_PARAMETERS+index)=(u8)mod9(value+14-BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index));
+        if(index==PARAMETER_TONING) toning_apply(h,record,mod9(value+5));
+        else BYTE(record,GRKIT_RECORD_PARAMETERS+index)=(u8)mod9(value+14-BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index));
         ++h[GRKIT_HOST_PARAMETER_CHANGES/4];
         GRKIT_STATE_CHANGED(h);
     }
@@ -554,8 +589,9 @@ static void menu_parameter_controller(volatile u32 *h,u32 id) {
     if(!record || record&1U || id==IC_PARAMETERS_CONTROLLER || id==SHOOTING_CONTROLLER) return;
     h[GRKIT_HOST_PARAMETERS/4]=0;
 }
-/* Show the Standard rows of the base set. The type is Standard, so the
-   native title would read Standard. Keep the page and the effect name, so
+/* Show the Standard rows of the base set, or the rows with Toning
+   (toning_record). The type is Standard, so the native title would read its
+   name. Keep the page and the effect name, so
    that the text hooks draw the name in the title (menu_parameter_title). */
 A32_ENTRY void menu_parameter_page_kinds(u32 page) {
     u32 record=menu_parameter_session();
@@ -568,6 +604,9 @@ A32_ENTRY void menu_parameter_page_kinds(u32 page) {
     BYTE(page,DETAIL_TYPE)=11;
     BYTE(page,DETAIL_SET_KIND)=0;
     BYTE(page,DETAIL_BASE_KIND)=0;
+#ifdef PARAMETER_TONING_BASE
+    if(toning_record(record)) BYTE(page,DETAIL_BASE_KIND)=PARAMETER_TONING_BASE;
+#endif
     title=parameter_title(menu_header());
     descriptor(title+2,(const u16 *)(record+GRKIT_RECORD_NAME));
     title[1]=WORD(page,0);
@@ -579,6 +618,10 @@ A32_ENTRY void menu_parameter_page_snapshot(u32 model) {
     if(!record) return;
     for(i=0;i<sizeof(parameter_kinds);++i)
         BYTE(model,MODEL_SNAPSHOT+parameter_kinds[i])=(u8)record_parameter(record,i);
+#ifdef PARAMETER_TONING_KIND
+    if(toning_record(record))
+        BYTE(model,MODEL_SNAPSHOT+PARAMETER_TONING_KIND)=(u8)(toning_value(BYTE(record,GRKIT_RECORD_TONING))+4);
+#endif
 }
 /* The text descriptor for `view`: the effect name for the title of a page
    that GRKit started, or 0 for native text. A page whose first word is no

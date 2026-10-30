@@ -27,6 +27,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::VIEWFINDER,
     common::PICTURE,
     GRAIN,
+    TONING,
 ];
 
 /// Image Control processing (`runtime/processing.S`): the BL to the parameter
@@ -57,4 +58,13 @@ const GRAIN: &[HookSpec] = &[
     bl("grain_gate", Framing, PipelineGrain),
     bl("grain_fill", Framing, PipelineGrainSize),
     b("grain_amplitude", Framing, PipelineGrain),
+];
+
+/// Toning of a native look on the parameter page (`runtime/toning.h`): the
+/// Image Control model getter and setter of the Retro Toning row (kind 9), and
+/// the BL to its settings getter in the row text.
+const TONING: &[HookSpec] = &[
+    b("menu_parameter_get_9", Menu, Tuning),
+    b("menu_parameter_set_9", Menu, Tuning),
+    bl("menu_parameter_row_9", Menu, Tuning),
 ];

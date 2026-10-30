@@ -194,6 +194,9 @@ const SITES: &[Site] = &[
     ("grain_fill", 0x5367ae14, "c43e00eb"),
     // The granulation (0x5367ad3c): the first test of its amplitude choice.
     ("grain_amplitude", 0x5367ae28, "020055e3"),
+    ("menu_parameter_get_9", 0x532c295c, "0dc0a0e1"),
+    ("menu_parameter_set_9", 0x532c0700, "0dc0a0e1"),
+    ("menu_parameter_row_9", 0x532ac9a4, "f9750aeb"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

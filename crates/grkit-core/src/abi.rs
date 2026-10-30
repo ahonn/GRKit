@@ -291,10 +291,17 @@ fields!(RECORD_FIELDS {
     /// 0..8, and 4 is neutral.
     RECORD_PARAMETERS = 0x72c, 9;
     /// The default of each Fn adjustment, in the order of RECORD_PARAMETERS:
-    /// (default - 4) mod 9 of a native value 0..8, from a native look (feature
-    /// 32), else zero. An adjustment's native value is (stored + default + 4)
-    /// mod 9, so a stored zero is the default.
+    /// (default - 4) mod 9 of a native value 0..8, from the Fn defaults of the
+    /// effect (feature 64), else zero. An adjustment's native value is (stored +
+    /// default + 4) mod 9, so a stored zero is the default.
     RECORD_FN_DEFAULTS = 0x735, 9;
+    /// The Toning of a native look whose red or blue curve differs from green,
+    /// as a stored Fn byte: (shown value) mod 9, -4..4, 0 the look's own
+    /// toning. The curves of the record hold the toned curves.
+    RECORD_TONING = 0x73e, 1;
+    /// 1 + the slot of the look's own red and blue curves in the tail
+    /// (`TONE_CURVES`), or 0 for an effect without Toning.
+    RECORD_TONE_SLOT = 0x73f, 1;
     /// The MultiAxial parameter set that INSTALL expands from the hue sectors of the GRF
     /// (feature 8): the address of the set at +0, the address of the highlight-correction
     /// set at +4, the set (six pointers) at +8, the bounds at +0x20, the bank selectors at
@@ -460,9 +467,15 @@ pub const PROFILE_KINDS: [(&str, &str); 3] =
     [("paint", "PAINT"), ("filter", "FILTER"), ("call", "CALL")];
 pub const PROFILE_SLOT_COUNT: usize = PROFILE_POINTS.len() + PROFILE_MODULES * PROFILE_KINDS.len();
 pub const PROFILE_SIZE: usize = PROFILE_SLOTS + PROFILE_SLOT_COUNT * PROFILE_SLOT_SIZE;
+/// The own red and blue curves of the native looks with Toning, which INSTALL
+/// keeps so that a Toning change can make the record curves again: for each
+/// slot the 256 u16 red samples, then the blue ones.
+pub const TONE_CURVES: usize = PROFILE + PROFILE_SIZE;
+pub const TONE_SLOTS: usize = 4;
+pub const TONE_SLOT_SIZE: usize = 2 * 512;
 /// Everything after the records: the picture scratch, the menu text, the
-/// live-view labels, then the profile table.
-pub const TAIL_SIZE: usize = PROFILE + PROFILE_SIZE;
+/// live-view labels, the profile table, then the Toning curves.
+pub const TAIL_SIZE: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
 // The summaries of every record in every menu language end before the
 // parameter page title.
 const _: () = assert!(
@@ -933,6 +946,15 @@ pub fn header() -> String {
         "TAIL_SIZE",
         TAIL_SIZE,
     );
+    define(
+        &mut out,
+        "The own red and blue curves of the native looks with Toning: for each of \
+         GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones.",
+        "TONE_CURVES",
+        TONE_CURVES,
+    );
+    writeln!(out, "#define GRKIT_TONE_SLOTS {TONE_SLOTS}").unwrap();
+    writeln!(out, "#define GRKIT_TONE_SLOT_SIZE {TONE_SLOT_SIZE}").unwrap();
     writeln!(
         out,
         "#define GRKIT_TEXT_SUMMARY {}",
