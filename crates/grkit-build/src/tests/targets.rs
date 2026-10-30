@@ -338,3 +338,170 @@ fn fn_hint_ids_are_those_of_the_native_adj_refresh() -> Result<()> {
     }
     Ok(())
 }
+
+/// On GR IV the model setters of the parameter page are wrappers of 0x50 bytes,
+/// one for each row kind, from that of kind 0. The setter site of each row is
+/// the wrapper of its row kind (`PARAMETER_KINDS`). GR III does not space its
+/// setters evenly, so it is not checked here.
+#[test]
+fn gr4_parameter_setters_are_those_of_their_row_kinds() {
+    for target in target::TARGETS
+        .iter()
+        .filter(|target| target.family.name == "gr4")
+    {
+        let definitions = header_definitions(&target.header(), false);
+        let kinds: Vec<u32> = definitions["PARAMETER_KINDS"]
+            .trim_matches(|c| c == '{' || c == '}')
+            .split(',')
+            .map(|kind| kind.trim().parse().unwrap())
+            .collect();
+        let site = |symbol: &str| {
+            target
+                .layout
+                .sites
+                .iter()
+                .find(|site| site.0 == symbol)
+                .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                .1
+        };
+        let first = site("menu_parameter_set_0");
+        for (row, kind) in kinds.iter().enumerate() {
+            assert_eq!(
+                site(&format!("menu_parameter_set_{row}")),
+                first + kind * 0x50,
+                "{} row {row} (kind {kind})",
+                target.name
+            );
+        }
+    }
+}
+
+/// The function of each row kind in the parameter model, by row kind. The
+/// model selects the function of a row kind from a table of cases. The table
+/// is found near a call of `first`, the function of kind 0, and each case
+/// calls the function of its kind first.
+fn kind_functions(words: &[u32], first: u32) -> Option<Vec<Option<u32>>> {
+    let word = |address: u32| {
+        words
+            .get(((address - target::RTOS_BASE) / 4) as usize)
+            .copied()
+    };
+    let calls = (0..words.len() as u32)
+        .map(|index| target::RTOS_BASE + index * 4)
+        .filter(|&address| {
+            word(address).is_some_and(|value| {
+                value >> 24 == 0xeb && relocation::branch_target(address, value) == Some(first)
+            })
+        });
+    for call in calls {
+        let Some(switch) = (0..0x200u32)
+            .map(|step| call - step * 4)
+            .find(|&at| word(at).is_some_and(|value| value & 0xffff_fff0 == 0x979f_f100))
+        else {
+            continue;
+        };
+        // The largest row kind of the table.
+        let compare = word(switch - 4)?;
+        if compare & 0x0ff0_f000 != 0x0350_0000 {
+            continue;
+        }
+        let last = (compare & 0xff).rotate_right(((compare >> 8) & 0xf) * 2);
+        let kinds = (0..=last)
+            .map(|kind| {
+                let case = word(switch + 8 + kind * 4)?;
+                (0..16)
+                    .map(|step| case + step * 4)
+                    .map_while(|at| {
+                        word(at)
+                            .filter(|value| value >> 24 != 0xea)
+                            .map(|v| (at, v))
+                    })
+                    .find(|(_, value)| value >> 24 == 0xeb)
+                    .and_then(|(at, value)| relocation::branch_target(at, value))
+            })
+            .collect();
+        return Some(kinds);
+    }
+    None
+}
+
+/// The native getter that a getter of the parameter model passes on to: its
+/// first jump to a distant function.
+fn tail_call(words: &[u32], function: u32) -> Option<u32> {
+    (0..64)
+        .map(|step| function + step * 4)
+        .filter_map(|at| {
+            let value = *words.get(((at - target::RTOS_BASE) / 4) as usize)?;
+            (value >> 24 == 0xea)
+                .then(|| relocation::branch_target(at, value))
+                .flatten()
+        })
+        .find(|&to| to.abs_diff(function) > 0x1000)
+}
+
+/// Each row of the parameter page reads, writes, and names the row kind of
+/// `PARAMETER_KINDS`: its getter and setter sites are the functions that the
+/// jump tables of the parameter model call for that kind, and its row site
+/// calls the native getter of that kind. GR IV 1.20 once had the setters of
+/// shading and clarity one kind too far, and the stock bytes could not show
+/// it, because those setters are equal functions.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+fn parameter_rows_are_those_of_their_row_kinds() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let words: Vec<u32> = image.body[..(target.data_source - target::RTOS_BASE) as usize]
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        let definitions = header_definitions(&target.header(), false);
+        let kinds: Vec<u32> = definitions["PARAMETER_KINDS"]
+            .trim_matches(|c| c == '{' || c == '}')
+            .split(',')
+            .map(|kind| kind.trim().parse().unwrap())
+            .collect();
+        let site = |symbol: &str| -> u32 {
+            target
+                .layout
+                .sites
+                .iter()
+                .find(|site| site.0 == symbol)
+                .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                .1
+        };
+        let getters = kind_functions(&words, site("menu_parameter_get_0"))
+            .with_context(|| format!("{}: no getter switch", target.name))?;
+        let setters = kind_functions(&words, site("menu_parameter_set_0"))
+            .with_context(|| format!("{}: no setter switch", target.name))?;
+        for (row, &kind) in kinds.iter().enumerate() {
+            let getter = getters.get(kind as usize).copied().flatten();
+            let setter = setters.get(kind as usize).copied().flatten();
+            let context = format!("{} row {row} (kind {kind})", target.name);
+            assert_eq!(
+                Some(site(&format!("menu_parameter_get_{row}"))),
+                getter,
+                "{context}: getter"
+            );
+            assert_eq!(
+                Some(site(&format!("menu_parameter_set_{row}"))),
+                setter,
+                "{context}: setter"
+            );
+            let at = site(&format!("menu_parameter_row_{row}"));
+            let call =
+                relocation::branch_target(at, words[((at - target::RTOS_BASE) / 4) as usize]);
+            assert_eq!(
+                call,
+                tail_call(&words, getter.unwrap()),
+                "{context}: row text"
+            );
+        }
+    }
+    Ok(())
+}
