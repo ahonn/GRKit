@@ -207,6 +207,12 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
     if((id==IC_PARAMETERS_CONTROLLER || (id==SHOOTING_CONTROLLER && menu_parameter_session())) &&
        h[GRKIT_HOST_SETTINGS/4]&SETTINGS_FN) return id;
     h[GRKIT_HOST_SETTINGS/4]=0;
+    /* A native page that GRKit opened from ADJ returns to GRKit at the next
+       ADJ (RETURN_PARAMETERS). The page, the shooting screen of a half-press,
+       and ADJ keep that return. Any other screen, such as playback or MENU,
+       ends it, so the next ADJ opens as a native ADJ does and its Fn works. */
+    if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])==RETURN_PARAMETERS && id!=ADJ_CONTROLLER &&
+       id!=IC_PARAMETERS_CONTROLLER && id!=SHOOTING_CONTROLLER) h[GRKIT_HOST_RETURN/4]=0;
     return id;
 }
 /* The kind table that the submenu reads: the private entry at the index of
@@ -215,6 +221,17 @@ A32_ENTRY u32 menu_settings_kinds(void) {
     volatile u32 *h=menu_header();
     if(!settings_page(h)) return FW_SUBMENU_KINDS;
     return (u32)settings_block(h)-SETTINGS_SUBMENU_KIND*SUBMENU_KIND_SIZE;
+}
+/* The title view of a submenu page, before the page sets its title
+   (menu.S: menu_settings_kinds_r3_1). The title setter sets the text ID of
+   its string view (SUBMENU_TITLE_STRING), which measures its text only when
+   the ID changes. Each GRKit page has the title ID of the borrowed entry
+   (SETTINGS_TITLE_TEXT), so a longer title was cut to the width of the title
+   before it. Reset the string view, as the Fn page does with its title
+   (runtime/menu.c: menu_parameter_page_kinds). */
+A32_ENTRY void menu_settings_title(u32 view) {
+    u32 string=view ? MENU_OBJECT_WORD(view,SUBMENU_TITLE_STRING) : 0;
+    if(string) MENU_VIEW3(FW_STRING_VIEW_RESET,string,0,0);
 }
 /* The kind table of the submenu draw, whose row list is `list`. The firmware
    builds one submenu and keeps it until power-off. A submenu that it built
@@ -443,7 +460,7 @@ A32_ENTRY u32 menu_settings_current(u32 value,u32 unused,u32 setting) {
 static u32 settings_count(volatile u32 *h,const Setting *page) {
     u32 n=0;
     if(page==choice_settings) n=PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS);
-    else if(page==manage_settings) n=manage_count(h);
+    else if(page==manage_settings) n=manage_adj_count(h);
     else if(page==listed_settings) n=listed_rows(h);
     else while(n<SETTING_ROWS && page[n].label) ++n;
     return n<SUBMENU_ROWS ? n : SUBMENU_ROWS;
@@ -457,8 +474,12 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
         menu_settings_value_2,menu_settings_value_3,menu_settings_value_4,menu_settings_value_5,
         menu_settings_value_6,menu_settings_value_7,menu_settings_value_8,menu_settings_value_9};
     volatile u32 *block=settings_block(h);
-    const Setting *page=settings_of(h,module,one);
-    u32 stock=FW_SUBMENU_KINDS+SETTINGS_SUBMENU_KIND*SUBMENU_KIND_SIZE, i, rows=page ? settings_count(h,page) : 0;
+    const Setting *page;
+    u32 stock=FW_SUBMENU_KINDS+SETTINGS_SUBMENU_KIND*SUBMENU_KIND_SIZE, i, rows;
+    /* ADJ Order lists the modules that ADJ shows now. */
+    if(module==MANAGE_MODULE) manage_adj_refresh(h);
+    page=settings_of(h,module,one);
+    rows=page ? settings_count(h,page) : 0;
     for(i=0;i<SUBMENU_KIND_SIZE/4;++i) block[i]=MENU_OBJECT_WORD(stock,i*4);
     ((volatile u8 *)block)[SUBMENU_KIND_ROWS]=(u8)rows;
     _Static_assert(sizeof(values)/sizeof(values[0])==SUBMENU_ROWS,"A value method for each row");

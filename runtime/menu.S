@@ -613,7 +613,21 @@ menu_info_after:
 SETTINGS_KINDS_SAVED menu_settings_kinds_r3_0, 3
 SETTINGS_KINDS_SAVED menu_settings_kinds_r2, 2
 SETTINGS_KINDS_REGISTER menu_settings_kinds_r5, r5
-SETTINGS_KINDS_SAVED menu_settings_kinds_r3_1, 3
+/* The title of a submenu page: r0 holds its string view, which the next
+   call sets to the title ID of the kind entry. The C function resets the
+   view first. The base goes to the saved r3. */
+.global menu_settings_kinds_r3_1
+.type menu_settings_kinds_r3_1, %function
+menu_settings_kinds_r3_1:
+    push {r0-r3, r12, lr}
+    mrs r1, cpsr
+    push {r1, r2}
+    bl menu_settings_title
+    bl menu_settings_kinds
+    str r0, [sp, #8+4*3]
+    pop {r1, r2}
+    msr APSR_nzcvq, r1
+    pop {r0-r3, r12, pc}
 /* The base in the draw, which has loaded its row list into r6: the C function
    also fits the rows of a GRKit page to the views of the list. */
 .global menu_settings_kinds_r8

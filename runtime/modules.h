@@ -235,6 +235,22 @@ static u32 page_listed(volatile u32 *h,u32 slot) {
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
     return listed;
 }
+/* The listed modules that the root of ADJ can show (runtime/manage.h): each
+   with a module page of two rows or more, also while a soft Off stops it.
+   The search reads each module page, so only the menu runs it, when the
+   GRKit section is added and when ADJ Order opens. The text hooks of the
+   page read the result (GRKIT_HOST_ADJ_MODULES). */
+static void manage_adj_refresh(volatile u32 *h) {
+    u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
+    for(slot=0;slot<module_pages(h);++slot) {
+        listed=page_listed(h,slot);
+        if(listed<MANAGE_MODULES && menu_page(h,MODULE_PAGE(slot))->rows(h)>=2) mask|=1U<<listed;
+    }
+    /* menu_page selects a page: keep the page of the caller. */
+    h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
+    h[GRKIT_HOST_ADJ_MODULES/4]=mask;
+}
+static u32 manage_adj_modules(volatile u32 *h) { return h[GRKIT_HOST_ADJ_MODULES/4]; }
 /* Visible modules as a bit mask: each module page with two rows or more,
    unless a soft Off stopped its module. A page of CORE.TONE has
    rows only with effects. Without such a page, About shows alone, so that

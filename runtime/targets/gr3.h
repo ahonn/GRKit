@@ -71,6 +71,9 @@
 
 /* The size of SelectMenuController, and the view type and the text view of
    CheckBoxListLineView (runtime/menu_settings.h). */
+/* The string view of the submenu title view (submenu +0x15c): the title
+   setter (2.10: 0x533a2ba0) sets the text ID of this view. */
+#define SUBMENU_TITLE_STRING 0xf0
 #define SELECT_MENU_SIZE 0x1d4U
 /* The fewest row views of a SelectMenuController. Its constructor builds a
    view for each row of its longest kind (+0x199). The longest native kind has

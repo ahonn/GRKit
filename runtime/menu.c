@@ -55,6 +55,8 @@ extern u32 menu_destroy_original(u32);
 #define RETURN_CLOSING 4U
 #define RETURN_ROOT 0x10U
 #define RETURN_STATE(value) ((value)&~RETURN_ROOT)
+/* The controller of ADJ, where a native page that GRKit opened returns. */
+#define ADJ_CONTROLLER 0x2000000U
 /* The return state after an ADJ exit. `in_grkit` is set for an exit while
    GRKit was open. */
 static u32 exit_return(u32 value,u32 in_grkit) {

@@ -36,10 +36,10 @@ static unsigned test_language;
    TEST_PAGE_TEXT + n * 128. */
 #define TEST_PAGE 0x5d000000U
 #define TEST_PAGE_SIZE 0x400U
-#define TEST_PAGE_SLOTS 5U
+#define TEST_PAGE_SLOTS 10U
 #define TEST_PAGE_TEXT 0x5d800000U
 static unsigned page_memory[TEST_PAGE_SLOTS * TEST_PAGE_SIZE / 4];
-static unsigned short page_texts[512][64];
+static unsigned short page_texts[1024][64];
 static unsigned *page_at(unsigned address)
 {
     assert(address >= TEST_PAGE && address < TEST_PAGE + sizeof(page_memory) && !(address & 3));
@@ -649,6 +649,22 @@ static void adj_exits_return_once_for_the_parameter_page(void)
     assert(exit_return(RETURN_OPENING | RETURN_ROOT, 0) == (RETURN_PARAMETERS | RETURN_ROOT));
     assert(exit_return(RETURN_PARAMETERS | RETURN_ROOT, 0) == 0);
     assert(RETURN_STATE(RETURN_PARAMETERS | RETURN_ROOT) == RETURN_PARAMETERS);
+    /* The page, the shooting screen of a half-press, and ADJ keep the return
+       of an open page. Any other screen, such as playback, ends it. */
+    test_header[GRKIT_HOST_RETURN / 4] = RETURN_PARAMETERS | RETURN_ROOT;
+    menu_settings_controller(IC_PARAMETERS_CONTROLLER);
+    menu_settings_controller(SHOOTING_CONTROLLER);
+    menu_settings_controller(IC_PARAMETERS_CONTROLLER);
+    assert(test_header[GRKIT_HOST_RETURN / 4] == (RETURN_PARAMETERS | RETURN_ROOT));
+    menu_settings_controller(ADJ_CONTROLLER);
+    assert(test_header[GRKIT_HOST_RETURN / 4] == (RETURN_PARAMETERS | RETURN_ROOT));
+    menu_settings_controller(0x4000000);
+    assert(!test_header[GRKIT_HOST_RETURN / 4]);
+    /* ADJ that opens GRKit after an exit from GRKit keeps its return. */
+    test_header[GRKIT_HOST_RETURN / 4] = RETURN_GRKIT;
+    menu_settings_controller(0x4000000);
+    assert(test_header[GRKIT_HOST_RETURN / 4] == RETURN_GRKIT);
+    test_header[GRKIT_HOST_RETURN / 4] = 0;
 }
 
 static void the_root_lists_the_official_modules(void)
@@ -1245,6 +1261,19 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
     for (u32 value = 0; value < 6; ++value)
         assert(same(page[0].value_text(test_header, value), stamp_names[value]));
     assert(same(page[1].value_text(test_header, 0), "Classic") && same(page[1].value_text(test_header, 2), "GR II"));
+    /* The title view of each submenu page is reset before the page sets its
+       title ID, so the title measures its own text: GRKit pages share one
+       title ID. */
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x2c00, SUBMENU_TITLE_STRING) = view;
+    view_calls = 0;
+    menu_settings_title(TEST_OBJECTS + 0x2c00);
+    assert(view_calls == 1 && view_functions[0] == FW_STRING_VIEW_RESET && view_args[0][0] == view &&
+           !view_args[0][1] && !view_args[0][2]);
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x2c00, SUBMENU_TITLE_STRING) = 0;
+    view_calls = 0;
+    menu_settings_title(TEST_OBJECTS + 0x2c00);
+    menu_settings_title(0);
+    assert(!view_calls);
     /* Without a page the native table, methods, and text stay. */
     test_header[GRKIT_HOST_SETTINGS / 4] = 0;
     assert(menu_settings_kinds() == FW_SUBMENU_KINDS);
@@ -1344,31 +1373,35 @@ static void the_adj_order_page_moves_modules(void)
     assert(count(test_header) == roots && !(visible_modules(test_header) >> MANAGE_MODULE & 1));
     assert(page_listed(test_header, 2) == 0 && page_listed(test_header, 3) == 1 && page_listed(test_header, 0) == MANAGE_MODULES);
     assert(visible_modules(test_header) >> 3 & 1);
-    /* The ADJ Order page lists the title of a loaded module and the name
-       of another one. */
+    /* ADJ Order lists the modules that ADJ can show, by their page titles.
+       BROKEN (52) did not link, so it has no page and no row. */
     test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
     test_header[GRKIT_HOST_MODULE / 4] = MANAGE_MODULE;
     assert(same(current_module(test_header)->title(test_header), "ADJ Order"));
-    assert(count(test_header) == 3);
+    /* The menu finds these modules when ADJ Order opens or the section is
+       added. The text hooks read only the result. */
+    assert(!manage_adj_modules(test_header) && !count(test_header));
+    manage_adj_refresh(test_header);
+    assert(test_header[GRKIT_HOST_ADJ_MODULES / 4] == 3);
+    assert(manage_adj_modules(test_header) == 3 && count(test_header) == 2);
     assert(same(MODULE(MANAGE_MODULE).label(test_header, 0), "Guides"));
     assert(same(MODULE(MANAGE_MODULE).label(test_header, 1), "Date Imprint"));
-    assert(same(MODULE(MANAGE_MODULE).label(test_header, 2), "BROKEN (52)"));
-    /* The settings page of the first group: a row for each module, in
-       order, whose values are the positions 1 to 3. */
+    /* The settings page: a row for each of these modules, in order, whose
+       values are the positions 1 and 2. */
     test_header[GRKIT_HOST_SETTINGS / 4] = MANAGE_MODULE + 1;
     page = settings_page(test_header);
-    assert(page == MODULE(MANAGE_MODULE).settings && settings_count(test_header, page) == 3);
+    assert(page == MODULE(MANAGE_MODULE).settings && settings_count(test_header, page) == 2);
     /* settings_start writes the row count; a row past it gets no hook. */
-    ((volatile u8 *)settings_block(test_header))[SUBMENU_KIND_ROWS] = 3;
-    assert(!menu_settings_count(0, 0, 3) && !menu_settings_apply(0, 0, 4));
+    ((volatile u8 *)settings_block(test_header))[SUBMENU_KIND_ROWS] = 2;
+    assert(!menu_settings_count(0, 0, 2) && !menu_settings_apply(0, 0, 4));
     assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "Date Imprint"));
-    assert(same(page[2].label(test_header), "BROKEN (52)"));
-    assert(menu_settings_count(0, 0, 1) == 4);
-    assert(same(page[1].value_text(test_header, 0), "1") && same(page[1].value_text(test_header, 2), "3"));
+    assert(menu_settings_count(0, 0, 1) == 3);
+    assert(same(page[1].value_text(test_header, 0), "1") && same(page[1].value_text(test_header, 1), "2"));
     assert(menu_settings_current(1, 0, 1) == 2 && menu_settings_current(0, 0, 1) == 1);
-    /* Position 1 moves Date Imprint first. Each module gets its row + 1. */
+    /* Position 1 moves Date Imprint first. Each module of the page gets its
+       row + 1, and BROKEN (52) keeps its position. */
     assert(menu_settings_apply(0, 0, 1) == 1);
-    assert(settings_memory[2 + 7 * 3 + 1] == 1 && settings_memory[2 + 4 * 3 + 1] == 2 && settings_memory[2 + 10 * 3 + 1] == 3);
+    assert(settings_memory[2 + 7 * 3 + 1] == 1 && settings_memory[2 + 4 * 3 + 1] == 2 && settings_memory[2 + 10 * 3 + 1] == 0);
     assert(same(page[0].label(test_header), "Date Imprint") && same(page[1].label(test_header), "Guides"));
     assert(menu_settings_current(0, 0, 0) == 2);
     /* The return from the value page labels the rows in the new order:
@@ -1381,12 +1414,10 @@ static void the_adj_order_page_moves_modules(void)
        the root of ADJ, and no restart is due. */
     assert(root_row(test_header, 3) + 1 == root_row(test_header, 2) && root_module(test_header, root_row(test_header, 3)) == 3);
     assert(same(MODULE(MANAGE_MODULE).summary(test_header), "Modules"));
-    /* Position 3 moves it last; the others keep their order. */
-    assert(menu_settings_apply(2, 0, 0) == 1);
-    assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "BROKEN (52)"));
-    assert(same(page[2].label(test_header), "Date Imprint"));
-    /* Position 2 restores the order of this start. */
-    assert(menu_settings_apply(1, 0, 2) == 1 && same(page[1].label(test_header), "Date Imprint"));
+    /* Position 2 moves it last again: the order of this start. */
+    assert(menu_settings_apply(1, 0, 0) == 1);
+    assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "Date Imprint"));
+    assert(settings_memory[2 + 10 * 3 + 1] == 0);
     assert(same(MODULE(MANAGE_MODULE).summary(test_header), "Modules"));
     assert(root_row(test_header, 2) + 1 == root_row(test_header, 3));
     /* A page of six rows: the entry has no room for the controller of the
@@ -1412,9 +1443,9 @@ static void the_adj_order_page_moves_modules(void)
         assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "Date Imprint"));
         assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
         assert(test_header[GRKIT_HOST_SETTINGS / 4] == MANAGE_MODULE + 1);
-        /* The return reads the rows of the page again: its three modules.
+        /* The return reads the rows of the page again: its two modules.
            The six rows of this case are set again. */
-        assert(((volatile u8 *)block)[SUBMENU_KIND_ROWS] == 3);
+        assert(((volatile u8 *)block)[SUBMENU_KIND_ROWS] == 2);
         ((volatile u8 *)block)[SUBMENU_KIND_ROWS] = SETTING_ROWS;
         assert(menu_text_override(view, row_texts[SETTINGS_ALIAS]) == ((u32)(block + SETTINGS_LABELS / 4 + 2) | 1U));
         assert(menu_text_override(view, row_texts[SETTING_ROWS - 1]) ==
@@ -1423,7 +1454,7 @@ static void the_adj_order_page_moves_modules(void)
         assert(menu_settings_row_controller(pages[SETTINGS_ALIAS], 0) == pages[SETTINGS_ALIAS]);
         assert(menu_settings_controller(pages[SETTINGS_ALIAS]) == pages[SETTINGS_ALIAS]);
         assert(!(test_header[GRKIT_HOST_SETTINGS / 4] & SETTINGS_OPEN_ROWS));
-        ((volatile u8 *)block)[SUBMENU_KIND_ROWS] = 3;
+        ((volatile u8 *)block)[SUBMENU_KIND_ROWS] = 2;
     }
 }
 
@@ -1472,10 +1503,11 @@ static void enable_applies_at_once(void)
     assert(!manage_count(test_header));
 }
 
-/* ADJ Order has a row for each listed module. The kind table entry has
-   room for the labels of six rows and the controllers of five: a later
-   label shows in a view slot, and OK on a later row opens the value page
-   of SETTINGS_ALIAS for that row. */
+/* ADJ Order has a row for each module that ADJ can show: here each listed
+   module has a page of two rows. The kind table entry has room for the
+   labels of six rows and the controllers of five: a later label shows in a
+   view slot, and OK on a later row opens the value page of SETTINGS_ALIAS
+   for that row. */
 static void the_adj_order_page_has_a_row_for_each_module(void)
 {
     static const u32 pages[] = SETTINGS_PAGES;
@@ -1483,6 +1515,7 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
     const u32 last = MANAGE_MODULES - 1, native = 0x1234, view = 0x5b000000;
     _Static_assert(MANAGE_HEADER + MANAGE_MODULES * MANAGE_STRIDE <= TEST_EFFECTS - TEST_MANAGE &&
                    sizeof(settings_memory) >= 4 * (2 + 3 * (3 + 3 * MANAGE_MODULES)), "The test memory holds the list");
+    _Static_assert(TEST_PAGE_SLOTS >= MANAGE_MODULES && GRKIT_MODULE_PAGES_MAX >= MANAGE_MODULES, "A page for each module");
     reset();
     settings_memory[0] = 3 + 3 * MANAGE_MODULES;
     for (u32 i = 0; i < MANAGE_MODULES; ++i) {
@@ -1491,9 +1524,12 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
         settings_memory[2 + (3 + 3 * i) * 3 + 2] = 2;
         settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_MODULES + 1;
         settings_memory[2 + (5 + 3 * i) * 3 + 2] = 1U << MANAGE_OPTION_VALUES;
-        manage_memory[entry] = 52;
-        manage_memory[entry + 2] = MANAGE_NO_TILE;
+        static const char *const two_rows[] = {"Off", "On"};
         name[7] = (char)('0' + i);
+        install_page(i, name, two_rows, 2, 3 + 3 * i, 0);
+        manage_memory[entry] = MANAGE_LOADED;
+        manage_memory[entry + 1] = TEST_PAGE + i * TEST_PAGE_SIZE + 0x28;
+        manage_memory[entry + 2] = MANAGE_NO_TILE;
         ascii((unsigned short *)&manage_memory[entry + 6], name);
     }
     manage_memory[0] = MANAGE_MODULES;
@@ -2029,6 +2065,11 @@ static void install_stock_tab(u32 rows, u32 sections)
     test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
     test_header[GRKIT_HOST_MANAGE / 4] = TEST_MANAGE;
     manage_memory[0] = 3;
+    /* Module 0 has the page of Guides, so ADJ can show it. */
+    for (u32 i = 0; i < 3; ++i) {
+        manage_memory[MANAGE_ENTRY(i)] = i ? 52 : MANAGE_LOADED;
+        manage_memory[MANAGE_ENTRY(i) + 1] = i ? 0 : TEST_PAGE + 2 * TEST_PAGE_SIZE + 0x28;
+    }
     for (u32 i = 0; i < MENU_TAB_SIZE; i += 4) WORD(TEST_TAB, i) = 0xa5000000U | i;
     BYTE(TEST_TAB, MENU_TAB_ROWS) = (u8)rows;
     BYTE(TEST_TAB, MENU_TAB_SECTIONS) = (u8)sections;
@@ -2084,6 +2125,11 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_tabs[MENU_TAB_GRKIT] = TEST_TAB;
     menu_rows_install(h);
     assert(menu_tabs[MENU_TAB_GRKIT] == TEST_TAB && factory_calls == 1);
+    /* Without a module that ADJ can show, the section has no ADJ Order row. */
+    install_stock_tab(10, 3);
+    manage_memory[MANAGE_ENTRY(0) + 1] = 0;
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
 }
 /* A tab with all its sections gets the rows in its last section. A tab
    without room for each row keeps ADJ Order and About GRKit, and gives rows

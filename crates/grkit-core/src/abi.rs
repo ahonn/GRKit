@@ -228,8 +228,12 @@ fields!(HEADER_FIELDS {
     /// Each live-view update sets it, so a native aspect that the camera menu
     /// sets takes the stock sizes.
     HOST_FRAME_CROP = 268 + 8 * MODULE_FILTERS_MAX, 4;
+    /// The listed modules that ADJ can show, a bit each, which ADJ Order
+    /// lists (runtime/manage.h). The menu sets it. The text hooks read this
+    /// word, so they do not walk the module pages.
+    HOST_ADJ_MODULES = 272 + 8 * MODULE_FILTERS_MAX, 4;
     /// Reserved for later fields.
-    HOST_RESERVED = 272 + 8 * MODULE_FILTERS_MAX, HOST_MODULE_SETTINGS - 272 - 8 * MODULE_FILTERS_MAX;
+    HOST_RESERVED = 276 + 8 * MODULE_FILTERS_MAX, HOST_MODULE_SETTINGS - 276 - 8 * MODULE_FILTERS_MAX;
     /// Address of the module settings table, or 0 (runtime/settings.h).
     /// INSTALL writes it.
     HOST_MODULE_SETTINGS = HOST_MODULE_PREVIEW - 4, 4;

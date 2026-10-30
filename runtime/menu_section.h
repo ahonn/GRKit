@@ -77,9 +77,11 @@ _Static_assert(MENU_TAB_STOCK_ROWS+MENU_ROWS_SLOTS<=MENU_TAB_MAX_ROWS,"The Custo
 static void menu_rows_install(volatile u32 *h) {
     volatile u32 *state=services_word(h,SERVICES_MENU);
     u32 copy=(u32)services_word(h,SERVICES_MENU+MENU_ROWS_TAB), stock, rows, sections, slots=0, i, top;
-    u32 listed=manage_count(h), adj=listed>0;
+    u32 listed=manage_count(h), adj;
     if(state[MENU_ROWS_DONE/4]) return;
     state[MENU_ROWS_DONE/4]=1;
+    manage_adj_refresh(h);
+    adj=manage_adj_count(h)>0;
     stock=WORD(FW_MENU_TABS+4*MENU_TAB_GRKIT,0);
     if(!stock) return;
     for(i=0;i<MENU_TAB_SIZE/4;++i) WORD(copy,4*i)=WORD(stock,4*i);

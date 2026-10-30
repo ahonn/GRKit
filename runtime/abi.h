@@ -189,9 +189,13 @@
    update sets it, so a native aspect that the camera menu sets takes the stock
    sizes. */
 #define GRKIT_HOST_FRAME_CROP 332
+/* The listed modules that ADJ can show, a bit each, which ADJ Order lists
+   (runtime/manage.h). The menu sets it. The text hooks read this word, so they
+   do not walk the module pages. */
+#define GRKIT_HOST_ADJ_MODULES 336
 /* Reserved for later fields. */
-#define GRKIT_HOST_RESERVED 336
-#define GRKIT_HOST_RESERVED_WORDS 23
+#define GRKIT_HOST_RESERVED 340
+#define GRKIT_HOST_RESERVED_WORDS 22
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
 #define GRKIT_HOST_MODULE_SETTINGS 428

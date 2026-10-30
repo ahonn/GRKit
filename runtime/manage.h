@@ -96,9 +96,33 @@ static u32 manage_module(volatile u32 *h,u32 row) {
     }
     return 0;
 }
-static u32 manage_row(volatile u32 *h,u32 module) {
-    u32 row;
-    for(row=0;row<manage_count(h);++row) if(manage_module(h,row)==module) return row;
+/* The listed modules that the root of ADJ can show, a bit each: those with
+   a module page of two rows or more, as the menu last found them
+   (runtime/modules.h: manage_adj_refresh). A soft Off hides a page in ADJ,
+   but its module keeps its place in ADJ Order. */
+static u32 manage_adj_modules(volatile u32 *h);
+/* ADJ Order lists these modules in the order of their keys: the number of
+   its rows, the module of a row, and the row of a module. */
+static u32 manage_adj_count(volatile u32 *h) {
+    u32 mask=manage_adj_modules(h), n=0;
+    for(;mask;mask&=mask-1) ++n;
+    return n;
+}
+static u32 manage_adj_module(volatile u32 *h,u32 row) {
+    u32 mask=manage_adj_modules(h), n=manage_count(h), i, module;
+    for(i=0;i<n;++i) {
+        module=manage_module(h,i);
+        if(mask>>module&1 && !row--) return module;
+    }
+    return 0;
+}
+static u32 manage_adj_row(volatile u32 *h,u32 module) {
+    u32 mask=manage_adj_modules(h), n=manage_count(h), i, row=0, m;
+    for(i=0;i<n;++i) {
+        m=manage_module(h,i);
+        if(m==module) return row;
+        row+=mask>>m&1;
+    }
     return 0;
 }
 static u32 manage_status(volatile u32 *h,u32 module) { return MANAGE_MAP(manage_entry(h,module)+MANAGE_STATUS)[0]; }
@@ -144,38 +168,39 @@ static const u16 *manage_title(volatile u32 *h) { return text(h,TEXT_ADJ); }
 static const u16 *manage_summary(volatile u32 *h) {
     return text(h,TEXT_MODULES_SUMMARY+(manage_word(h,MANAGE_FLAGS)&MANAGE_SAFE_MODE ? 1 : 0));
 }
-static u32 manage_rows(volatile u32 *h) { return manage_count(h); }
-static const u16 *manage_label(volatile u32 *h,u32 row) { return manage_name(h,manage_module(h,row)); }
+static u32 manage_rows(volatile u32 *h) { return manage_adj_count(h); }
+static const u16 *manage_label(volatile u32 *h,u32 row) { return manage_name(h,manage_adj_module(h,row)); }
 /* A module that is Off shows the Off icon, and a loaded module its tile. */
 static u32 manage_icon(volatile u32 *h,u32 row) {
     u32 module, tile;
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return GRKIT_ICON_MODULES;
-    module=manage_module(h,row);
+    module=manage_adj_module(h,row);
     if(manage_off(h,module)) return GRKIT_ICON_OFF;
     tile=MANAGE_MAP(manage_entry(h,module)+MANAGE_TILE)[0];
     return tile!=MANAGE_NO_TILE ? GRKIT_ICON_MODULE_TILE(tile) : GRKIT_ICON_MODULES;
 }
-static u32 manage_checked(volatile u32 *h,u32 row) { return !manage_off(h,manage_module(h,row)); }
+static u32 manage_checked(volatile u32 *h,u32 row) { return !manage_off(h,manage_adj_module(h,row)); }
 /* OK opens the settings of the row (runtime/menu.c: open_settings). */
 static void manage_apply(volatile u32 *h,u32 row) { (void)h; (void)row; }
 /* The page opens at the module of the last settings page. */
 static u32 manage_committed(volatile u32 *h) {
     u32 module=manage_word(h,MANAGE_OPEN);
-    return module<manage_count(h) ? manage_row(h,module) : 0;
+    return module<manage_count(h) ? manage_adj_row(h,module) : 0;
 }
 
 /* The ADJ Order row of the GRKit section of MENU (runtime/menu_section.h) opens a
-   native settings page with a row for each listed module, in their order.
-   The values of a row are the positions 1 to the module count; the row
-   shows the position of the module. A choice moves the module to that
-   position and gives each module its row + 1 as CORE.POS, so the page and
-   the root of ADJ (runtime/modules.h: root_order) show the new order at
-   once. */
+   native settings page with a row for each module that ADJ can show
+   (manage_adj_modules), in their order. The values of a row are the
+   positions 1 to the row count; the row shows the position of the module. A
+   choice moves the module to that position and gives each of these modules
+   its row + 1 as CORE.POS, so the page and the root of ADJ
+   (runtime/modules.h: root_order) show the new order at once. The other
+   modules keep their CORE.POS. */
 _Static_assert(MANAGE_MODULES<=SUBMENU_ROWS,"The ADJ Order page has a row for each module");
 /* More positions than SETTING_VALUES make a long value page
    (runtime/menu_settings.h: settings_long). */
 _Static_assert(MANAGE_MODULES<=MENU_VALUES_MAX,"A value page holds each position");
-static u32 manage_values(volatile u32 *h) { return manage_count(h); }
+static u32 manage_values(volatile u32 *h) { return manage_adj_count(h); }
 static const u16 manage_positions[][3]={{'1',0},{'2',0},{'3',0},{'4',0},{'5',0},{'6',0},{'7',0},{'8',0},{'9',0},
     {'1','0',0}};
 _Static_assert(sizeof(manage_positions)/sizeof(manage_positions[0])==MANAGE_MODULES,"A text for each position");
@@ -183,12 +208,12 @@ static const u16 *manage_value_text(volatile u32 *h,u32 value) {
     (void)h;
     return manage_positions[value<MANAGE_MODULES ? value : MANAGE_MODULES-1];
 }
-/* Move the module at `row` to row `to`, the others keep their order: each
-   module gets its row + 1. */
+/* Move the module at ADJ Order row `row` to row `to`, the others keep their
+   order: each module of the page gets its row + 1. */
 static void manage_move(volatile u32 *h,u32 row,u32 to) {
-    u32 n=manage_count(h), order[MANAGE_MODULES], i, moved;
+    u32 n=manage_adj_count(h), order[MANAGE_MODULES], i, moved;
     if(row>=n || to>=n) return;
-    for(i=0;i<n;++i) order[i]=manage_module(h,i);
+    for(i=0;i<n;++i) order[i]=manage_adj_module(h,i);
     moved=order[row];
     for(i=row;i<to;++i) order[i]=order[i+1];
     for(i=row;i>to;--i) order[i]=order[i-1];
@@ -197,7 +222,7 @@ static void manage_move(volatile u32 *h,u32 row,u32 to) {
 }
 #define MANAGE_ROW(n) \
     static const u16 *manage_label_##n(volatile u32 *h) { \
-        return manage_name(h,manage_module(h,n)); } \
+        return manage_name(h,manage_adj_module(h,n)); } \
     static u32 manage_get_##n(volatile u32 *h) { (void)h; return n; } \
     static void manage_set_##n(volatile u32 *h,u32 value) { manage_move(h,n,value); }
 MANAGE_ROW(0) MANAGE_ROW(1) MANAGE_ROW(2) MANAGE_ROW(3) MANAGE_ROW(4) MANAGE_ROW(5) MANAGE_ROW(6) MANAGE_ROW(7)
