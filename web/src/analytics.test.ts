@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { downloadProps, importProps } from './analytics';
+import { downloadProps, importProps, nativeLooksProps } from './analytics';
 import { CAMERAS } from './cameras';
 import { planModules, type ModuleKey } from './modules';
 
@@ -65,5 +65,15 @@ describe('importProps', () => {
       result: 'failed',
     });
     expect(importProps('look', 'standard', false, { result: 'failed' }).format).toBe('other');
+  });
+});
+
+describe('nativeLooksProps', () => {
+  it('gives the version of a read, or the problem of a failed one', () => {
+    expect(nativeLooksProps({ result: 'ok', version: '1.20' })).toEqual({ result: 'ok', version: '1.20' });
+    expect(nativeLooksProps({ result: 'failed', problem: 'unsupported' })).toEqual({
+      result: 'failed',
+      problem: 'unsupported',
+    });
   });
 });

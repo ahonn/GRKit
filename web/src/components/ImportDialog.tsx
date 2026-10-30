@@ -8,7 +8,7 @@ import {
   type FormEvent,
   type Ref,
 } from 'react';
-import { MAX_EFFECTS, type ImportedEffect } from '../catalog';
+import { MAX_EFFECTS, type ImportedEffect, type LutImport } from '../catalog';
 import type { Strings } from '../i18n';
 import { trackHaldImage, trackImport } from '../analytics';
 import { coverProblem, guessInput, importLut, saveHaldImage } from '../import/lut';
@@ -49,7 +49,7 @@ type Status =
   /** `fraction`: the progress of the fit, from 0 to 1. */
   | { state: 'importing'; fraction: number }
   | { state: 'failed'; message: string }
-  | { state: 'done'; effect: ImportedEffect; full: boolean };
+  | { state: 'done'; effect: ImportedEffect<LutImport>; full: boolean };
 
 /** `auto` uses the input that the LUT data suggests (`guessInput`). */
 type InputChoice = 'auto' | Input;

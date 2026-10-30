@@ -71,18 +71,31 @@ describe('loadSelection and saveSelection', () => {
 
 describe('selectImport', () => {
   it('checks a close fit when the package has room', () => {
-    const result = selectImport(new Set(ids(18)), 'lut', 'B');
+    const result = selectImport(new Set(ids(18)), ['lut'], 'B');
     expect(result.selection.has('lut')).toBe(true);
     expect(result.full).toBe(false);
   });
 
   it('leaves a close fit out when the package is full', () => {
     const checked = new Set(ids(MAX_EFFECTS));
-    expect(selectImport(checked, 'lut', 'A')).toEqual({ selection: checked, full: true });
+    expect(selectImport(checked, ['lut'], 'A')).toEqual({ selection: checked, full: true });
   });
 
   it('leaves a loose fit for the user to check', () => {
     const checked = new Set(ids(2));
-    expect(selectImport(checked, 'lut', 'C')).toEqual({ selection: checked, full: false });
+    expect(selectImport(checked, ['lut'], 'C')).toEqual({ selection: checked, full: false });
+  });
+
+  it('checks native looks up to the package limit', () => {
+    const checked = new Set(ids(MAX_EFFECTS - 1));
+    const result = selectImport(checked, ['yellow', 'green'], 'exact');
+    expect(result.selection.has('yellow')).toBe(true);
+    expect(result.selection.has('green')).toBe(false);
+    expect(result.full).toBe(true);
+  });
+
+  it('keeps the selection of a replaced import that is checked', () => {
+    const checked = new Set([...ids(MAX_EFFECTS - 1), 'yellow']);
+    expect(selectImport(checked, ['yellow'], 'exact')).toEqual({ selection: checked, full: false });
   });
 });

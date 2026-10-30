@@ -1,4 +1,4 @@
-import { MAX_EFFECTS, type Grade } from './catalog';
+import { MAX_EFFECTS, type Grade, type Imported } from './catalog';
 import { EFFECT_ID_MAX } from './generated/site';
 
 /**
@@ -56,17 +56,30 @@ export function saveSelection(storage: Pick<Storage, 'setItem'> | null, selectio
   }
 }
 
+/** How closely an import follows its source: the grade of a LUT fit, or `exact` for a native look. */
+export type ImportFit = Grade | 'exact';
+
+export const importFit = (imported: Imported): ImportFit =>
+  imported.kind === 'native' ? 'exact' : imported.grade;
+
 /**
- * The selection after an import. An import is checked when it follows its LUT closely (grade A
- * or B) and the package has room. A looser fit waits for the user to check it.
+ * The selection after an import of the effects `ids`. They are checked when they follow their
+ * source closely (a native look, or a LUT fit of grade A or B) and the package has room. A looser
+ * fit waits for the user to check it. `full` is true when the package had no room for one of them.
  */
 export function selectImport(
   checked: ReadonlySet<string>,
-  id: string,
-  grade: Grade,
+  ids: readonly string[],
+  fit: ImportFit,
 ): { selection: ReadonlySet<string>; full: boolean } {
-  const close = grade === 'A' || grade === 'B';
+  const close = fit === 'exact' || fit === 'A' || fit === 'B';
   if (!close) return { selection: checked, full: false };
-  if (checked.size >= MAX_EFFECTS) return { selection: checked, full: true };
-  return { selection: new Set(checked).add(id), full: false };
+  const next = new Set(checked);
+  let full = false;
+  for (const id of ids) {
+    if (next.has(id)) continue;
+    if (next.size >= MAX_EFFECTS) full = true;
+    else next.add(id);
+  }
+  return { selection: next.size === checked.size ? checked : next, full };
 }

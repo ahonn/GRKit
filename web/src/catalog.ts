@@ -39,12 +39,15 @@ export interface CatalogEffect extends EffectFields {
   card?: undefined;
 }
 
-/** An effect that this page fitted from a LUT. It has no site files. */
-export interface ImportedEffect extends EffectFields {
+/**
+ * An effect that this page made in the browser: a fit of a LUT, or a native look of a firmware
+ * file that the user chose. It has no site files.
+ */
+export interface ImportedEffect<I extends Imported = Imported> extends EffectFields {
   cover: Cover;
   /** The key of the preview table in the preview cache (`provideTable`). */
   preview: string;
-  imported: Imported;
+  imported: I;
   card?: undefined;
 }
 
@@ -71,12 +74,17 @@ export const GRADES = ['A', 'B', 'C', 'D'] as const;
 /** How closely an imported effect follows its LUT, from A (nearly the same) to D. */
 export type Grade = (typeof GRADES)[number];
 
-/** What `importLut` returns for one LUT, besides the effect fields. */
-export interface Imported {
+/** The data of an imported effect that the package and the preview use. */
+interface ImportData {
   /** The compiled `.GRF` effect, which the package takes as it is. */
   blob: Uint8Array;
   /** The RAW preview table, in the format of the catalog tables. */
   table: Uint8Array;
+}
+
+/** What `importLut` returns for one LUT, besides the effect fields. */
+export interface LutImport extends ImportData {
+  kind: 'lut';
   grade: Grade;
   /** The input encoding that the fit used: the user's choice or the guess. */
   input: Input;
@@ -85,6 +93,21 @@ export interface Imported {
   /** The LUT file name. */
   source: string;
 }
+
+/**
+ * A look that GR IV has built in, which `nativeLooks` reads from the firmware file of the user.
+ * Its data follows the Standard of GR III, so only GR III and GR IIIx packages take it.
+ */
+export interface NativeImport extends ImportData {
+  kind: 'native';
+  /** The GR IV version of the firmware file, such as `1.20`. */
+  version: string;
+  /** The firmware file name. */
+  source: string;
+}
+
+/** `kind` tells the two sources apart. */
+export type Imported = LutImport | NativeImport;
 
 export interface Catalog {
   target: string;

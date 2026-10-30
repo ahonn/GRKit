@@ -39,6 +39,7 @@ import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
 import { loadFonts } from './fonts';
+import { importsForCamera, takesNativeLooks } from './import/native';
 import { deleteImport, saveImport } from './import/store';
 import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
@@ -87,8 +88,9 @@ export function App({
   // comes back.
   const [selection, setSelection] = useState<Selection>(() => loadSelection(browserStorage()));
   const [enabled, setEnabled] = useState<ReadonlySet<ModuleKey>>(ALL_MODULES);
-  // Effects fitted from LUTs on this page. This browser keeps them for the next visit.
-  const [imported, setImported] = useState<readonly ImportedEffect[]>(initialImports);
+  // Effects fitted from LUTs and native looks read on this page. This browser keeps them for the
+  // next visit.
+  const [allImported, setImported] = useState<readonly ImportedEffect[]>(initialImports);
   const [build, setBuild] = useState<Build>({ state: 'idle' });
   // A retry of a failed catalog request clears the error boundaries that use the catalog.
   const [catalogAttempt, setCatalogAttempt] = useState(0);
@@ -112,6 +114,9 @@ export function App({
   const support = camera.support;
   const targets = support?.targets;
   const available = support?.modules ?? [];
+  // The imports that the camera can use. The others stay for a later change of camera, but the
+  // list, the selection count, the package, and the card leave them out.
+  const imported = importsForCamera(allImported, camera.key);
   // A card with GRKit fixes the camera: an update or a change keeps the camera of the card. One
   // build runs on two entries, such as GR III and GR IIIx, so the user can still pick between them.
   // Only the card mode uses the card.
@@ -191,9 +196,10 @@ export function App({
     resetBuild();
   }
 
-  // The effects section checks an import (`selectImport`).
+  // The effects section checks an import (`selectImport`). An import with the ID of an earlier
+  // one, such as a native look read again, takes its place.
   function addImported(effect: ImportedEffect) {
-    setImported((current) => [...current, effect]);
+    setImported((current) => [...current.filter((item) => item.id !== effect.id), effect]);
     void saveImport(effect);
     resetBuild();
   }
@@ -694,6 +700,7 @@ export function App({
                   imported={imported}
                   onImport={addImported}
                   onRemove={removeImported}
+                  nativeLooks={takesNativeLooks(camera.key)}
                   cardEffects={active?.extra ?? []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
                 />

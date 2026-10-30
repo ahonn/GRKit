@@ -1,6 +1,7 @@
 import type { Camera } from './cameras';
 import type { Grade } from './catalog';
 import type { Input } from './import/names';
+import type { NativeProblem } from './import/native';
 import type { Language } from './i18n';
 import type { ModuleKey, ModulePlan } from './modules';
 
@@ -104,6 +105,21 @@ export function trackImport(
   outcome: ImportOutcome,
 ): void {
   track('LUT Import', importProps(file, input, chosen, outcome));
+}
+
+/** A read of native looks from a firmware file: its GR IV version, or why it failed. */
+export type NativeOutcome = { result: 'ok'; version: string } | { result: 'failed'; problem: NativeProblem };
+
+/** The properties of a read of native looks. They hold no file name and no file data. */
+export function nativeLooksProps(outcome: NativeOutcome): Props {
+  return outcome.result === 'ok'
+    ? { result: 'ok', version: outcome.version }
+    : { result: 'failed', problem: outcome.problem };
+}
+
+/** Records a read of the Cinema looks from a GR IV firmware file that ended. */
+export function trackNativeLooks(outcome: NativeOutcome): void {
+  track('Cinema Unlock', nativeLooksProps(outcome));
 }
 
 /** Records a saved identity HALD image. */

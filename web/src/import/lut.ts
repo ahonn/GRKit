@@ -1,4 +1,4 @@
-import type { ImportedEffect } from '../catalog';
+import type { ImportedEffect, LutImport } from '../catalog';
 import { loadWasm, save } from '../package';
 import { provideTable } from '../preview/render';
 import type { GuessRequest, ImportRequest, ImportResponse } from './lut.worker';
@@ -102,7 +102,7 @@ export async function importLut(
   taken: ReadonlySet<string>,
   signal: AbortSignal,
   onProgress?: (fraction: number) => void,
-): Promise<ImportedEffect> {
+): Promise<ImportedEffect<LutImport>> {
   const bytes = await readLut(file, signal);
   const id = effectId(name, taken);
   const { result } = await run(
@@ -131,6 +131,7 @@ export async function importLut(
     monochrome: result.monochrome,
     preview: table,
     imported: {
+      kind: 'lut',
       blob: result.blob,
       table: result.table,
       grade: result.grade,
