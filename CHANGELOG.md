@@ -1,3 +1,12 @@
+## 1.3.4 (2026-10-30)
+
+### Fixes
+
+- ADJ opens as usual again after the Fn adjustments page was left for playback or MENU.
+- In MENU, a module settings page shows its whole title, and ADJ Order lists only the modules that ADJ shows.
+- On GR IV, a photo in an aspect ratio set in the camera menu keeps its full size, where a saved Framing ratio of 5:4, 1:1, or 7:6 cropped it.
+- The camera no longer stops when a MENU item with its own list, such as ISO Setting, was opened before GRKit loaded and is opened again after it loads.
+
 ## 1.3.3 (2026-10-29)
 
 ### Fixes

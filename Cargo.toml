@@ -3,7 +3,7 @@ members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crate
 resolver = "2"
 
 [workspace.package]
-version = "1.3.3"
+version = "1.3.4"
 edition = "2021"
 rust-version = "1.92"
 publish = false
