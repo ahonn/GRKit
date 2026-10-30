@@ -9,6 +9,7 @@ import {
 } from './card';
 import type { CardEffect, CatalogEffect, ImportedEffect, PackageEffect } from './catalog';
 import { effectFile, effectLabel } from './package';
+import { decodeLibrary, sameRecipes, type Recipe } from './recipes';
 
 /** The connected card, as the page compares it with the selection. */
 export interface CardSession {
@@ -18,6 +19,11 @@ export interface CardSession {
   effects: ReadonlyMap<string, readonly string[]>;
   /** The effects on the card that the catalog and the imports do not have. */
   extra: readonly CardEffect[];
+  /**
+   * The recipes of the recipe library on the card, or null without one. A damaged file holds
+   * none.
+   */
+  recipes: readonly Recipe[] | null;
   /**
    * The page wrote the GRKit of this site to the card. The report shows the new version only
    * after the next power-on.
@@ -72,7 +78,21 @@ export async function openSession(
     state,
     effects,
     extra,
+    recipes: state.recipes ? ((await decodeLibrary(state.recipes)) ?? []) : null,
   };
+}
+
+/**
+ * The change of the recipe library: `site` is the library of the site for a package with the
+ * Recipes module, or null to leave the card as it is.
+ */
+export function recipeChange(
+  session: CardSession,
+  site: readonly Recipe[] | null,
+): 'same' | 'write' | 'remove' {
+  if (!site) return 'same';
+  if (site.length === 0) return session.state.recipes ? 'remove' : 'same';
+  return session.recipes && sameRecipes(session.recipes, site) ? 'same' : 'write';
 }
 
 /**

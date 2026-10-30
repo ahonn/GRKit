@@ -8,6 +8,7 @@ import {
   cardModules,
   pickCard,
   planChanges,
+  RECIPES,
   removeGrkit,
   removeModesetFiles,
   writeFiles,
@@ -15,7 +16,13 @@ import {
   type CardDirectory,
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
-import { libraryChanges, openSession, packageEffects as cardPackageEffects, type CardSession } from './cardSession';
+import {
+  libraryChanges,
+  openSession,
+  packageEffects as cardPackageEffects,
+  recipeChange,
+  type CardSession,
+} from './cardSession';
 import {
   cameraForCard,
   CAMERAS,
@@ -36,6 +43,7 @@ import {
   type InstallMode,
 } from './components/CardPanel';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
+import { RecipesSection } from './components/RecipesSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
 import { loadFonts } from './fonts';
@@ -50,6 +58,17 @@ import {
   save,
   scriptsOffCardFiles,
 } from './package';
+import { RECIPE_STRINGS } from './recipeStrings';
+import {
+  encodeLibrary,
+  familyOf,
+  fromCard,
+  LIBRARY_MAX,
+  loadLibrary,
+  saveLibrary,
+  type Family,
+  type LibraryRecipe,
+} from './recipes';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 
 const REPOSITORY = 'https://github.com/ahonn/grkit';
@@ -106,6 +125,13 @@ export function App({
   const [taskArea, setTaskArea] = useState<'apply' | 'remove'>('apply');
   // A newer connection makes the result of an older card task stale.
   const cardRun = useRef(0);
+  // The recipe library of each camera line. This browser keeps them; a card with a library
+  // replaces the one of its camera line.
+  const [libraries, setLibraries] = useState<Record<Family, LibraryRecipe[]>>(() => ({
+    gr3: loadLibrary(browserStorage(), 'gr3'),
+    gr4: loadLibrary(browserStorage(), 'gr4'),
+    gr4Monochrome: loadLibrary(browserStorage(), 'gr4Monochrome'),
+  }));
 
   const t = STRINGS[language];
   const camera = CAMERAS.find((item) => item.key === cameraKey) ?? CAMERAS[0]!;
@@ -138,6 +164,13 @@ export function App({
       : null;
   // Before the first change, every catalog effect is checked, so the count is not 0.
   const plan = planModules(enabled, selection?.size ?? 1, available);
+  const family = familyOf(camera.key);
+  const library = libraries[family];
+  /** The recipes of the package: the library while the package has the Recipes module, else null. */
+  const packageRecipes = plan.modules.includes('RECIPES') ? library.map((item) => item.recipe) : null;
+  /** The bytes of the recipe library of the package, or null without recipes. */
+  const recipeBytes = () =>
+    packageRecipes && packageRecipes.length > 0 ? encodeLibrary(packageRecipes) : Promise.resolve(null);
 
   function prefetch() {
     if (targets) prefetchPackage(targets, camera.id, language);
@@ -208,6 +241,19 @@ export function App({
     } else {
       resetBuild();
     }
+  }
+
+  /** The line of the change list for a change of the recipe library, or null. */
+  function recipeLine(change: CardChanges['recipes']) {
+    if (change === 'same') return null;
+    const r = RECIPE_STRINGS[language];
+    return { label: t.moduleNames.recipes, text: change === 'write' ? r.changeWrite(library.length) : r.changeRemove };
+  }
+
+  function changeLibrary(of: Family, next: LibraryRecipe[]) {
+    setLibraries((current) => ({ ...current, [of]: next }));
+    saveLibrary(browserStorage(), of, next);
+    resetBuild();
   }
 
   function toggleModule(key: ModuleKey) {
@@ -304,6 +350,10 @@ export function App({
         const ids = new Set(cardModules(state));
         setEnabled(new Set(MODULES.filter((module) => ids.has(module.id)).map((module) => module.key)));
       }
+      if (session.recipes && session.recipes.length > 0) {
+        const of = familyOf(fit.key);
+        changeLibrary(of, fromCard(session.recipes, libraries[of]));
+      }
       setCard(session);
       setLastCard(root);
       void saveLastCard(root);
@@ -397,6 +447,7 @@ export function App({
       __GRKIT_VERSION__,
       plan.modules,
       plan.includeEffects ? { before: [...session.effects.keys()], after: checked } : null,
+      recipeChange(session, packageRecipes),
     );
     return session.written && changes.grkit === 'update' ? { ...changes, grkit: 'same' } : changes;
   }
@@ -413,14 +464,23 @@ export function App({
     try {
       const checked = await checkedEffects();
       const effects = plan.includeEffects ? cardPackageEffects(checked) : [];
-      const files = await buildCardFiles(targets, camera.id, effects, plan.modules, language, (received) => {
-        if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
-      });
+      const files = await buildCardFiles(
+        targets,
+        camera.id,
+        effects,
+        plan.modules,
+        language,
+        (received) => {
+          if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
+        },
+        await recipeBytes(),
+      );
       const changes = cardChanges(
         session,
         checked.map((effect) => effect.id),
       );
       const library = await libraryChanges(session, files, checked, changes.addEffects, changes.removeEffects);
+      if (changes.recipes === 'remove') library.remove.push(RECIPES);
       await applyChanges(session.root, session.state, files, library, ({ written, total }) => {
         if (run !== cardRun.current) return;
         setCardTask(written < total ? { kind: 'writing', written, total } : { kind: 'finishing' });
@@ -473,6 +533,7 @@ export function App({
         (received) => {
           if (run === buildRun.current) setBuild({ state: 'building', received });
         },
+        await recipeBytes(),
       );
       if (run === buildRun.current) {
         save(blob, 'GRKit.zip');
@@ -719,6 +780,39 @@ export function App({
           )}
         </section>
 
+        {available.includes('recipes') && (
+          <section className="section" aria-labelledby="recipes-label">
+            <h2 id="recipes-label">{t.moduleNames.recipes}</h2>
+            {enabled.has('recipes') ? (
+              <ErrorBoundary
+                resetKey={String(catalogAttempt)}
+                fallback={<p className="status error section-body">{t.loadError}</p>}
+              >
+                <Suspense fallback={<p className="status section-body">{t.loading}</p>}>
+                  <RecipesWithEffects
+                    strings={t}
+                    language={language}
+                    family={family}
+                    library={library}
+                    onChange={(next) => changeLibrary(family, next)}
+                    onCopy={(to, item) => {
+                      if (libraries[to].length >= LIBRARY_MAX) return false;
+                      changeLibrary(to, [...libraries[to], item]);
+                      return true;
+                    }}
+                    selection={plan.includeEffects ? selection : new Set()}
+                    others={[...imported, ...(active?.extra ?? [])]}
+                    grainModule={plan.modules.includes('GRAIN')}
+                    damaged={!!active?.state.recipes && active.recipes?.length === 0}
+                  />
+                </Suspense>
+              </ErrorBoundary>
+            ) : (
+              <p className="status section-body">{RECIPE_STRINGS[language].note}</p>
+            )}
+          </section>
+        )}
+
         <section className="section" aria-labelledby="package-label">
           <h2 id="package-label">{mode === 'card' ? t.install : t.package}</h2>
           {mode === 'card' && !card ? (
@@ -753,6 +847,7 @@ export function App({
                     message={applyMessage}
                     onApply={applyCard}
                     links={packageLinks}
+                    recipes={recipeLine(recipeChange(card, packageRecipes))}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -1009,6 +1104,7 @@ interface ChangesSectionProps {
   imported: readonly ImportedEffect[];
   changes: (session: CardSession, checked: readonly string[]) => CardChanges;
   modules: readonly string[];
+  recipes: { label: string; text: string } | null;
   canWrite: boolean;
   busy: boolean;
   task: CardTask;
@@ -1043,6 +1139,35 @@ function CardChangesSection({ strings: t, session, selection, imported, changes,
       effectName={effectName}
       {...rest}
     />
+  );
+}
+
+/**
+ * The Recipes section with the effects that an effect recipe can use: the checked effects of the
+ * package. Before the first change, it needs the catalog.
+ */
+function RecipesWithEffects({
+  selection,
+  others,
+  damaged,
+  ...rest
+}: Omit<Parameters<typeof RecipesSection>[0], 'effects'> & {
+  selection: Selection;
+  others: readonly { id: string; name: string }[];
+  damaged: boolean;
+}) {
+  const catalog = use(loadCatalog(PREVIEW_TARGET));
+  const checked = resolveSelection(
+    selection,
+    catalog.effects.map((effect) => effect.id),
+    others.map((effect) => effect.id),
+  );
+  const effects = [...catalog.effects, ...others].filter((effect) => checked.has(effect.id));
+  return (
+    <>
+      {damaged && <p className="note warning section-body">{RECIPE_STRINGS[rest.language].damaged}</p>}
+      <RecipesSection {...rest} effects={effects} />
+    </>
   );
 }
 

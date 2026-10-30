@@ -249,6 +249,8 @@ interface ChangesProps {
   onApply: () => void;
   /** The links that the success state shows, as the download has them. */
   links: ReactNode;
+  /** The label and the text of the change of the recipe library, or null without one. */
+  recipes?: { label: string; text: string } | null;
 }
 
 function Change({ label, items, separator }: { label: string; items: readonly string[]; separator: string }) {
@@ -278,6 +280,7 @@ export function CardChangesView({
   message,
   onApply,
   links,
+  recipes = null,
 }: ChangesProps) {
   const fresh = changes.grkit !== 'same';
   const any = hasChanges(changes);
@@ -316,6 +319,12 @@ export function CardChangesView({
             <Change label={t.changeRemoveModules} items={changes.removeModules.map(moduleName)} separator={t.listSeparator} />
             <Change label={t.changeAddEffects} items={changes.addEffects.map(effectName)} separator={t.listSeparator} />
             <Change label={t.changeRemoveEffects} items={changes.removeEffects.map(effectName)} separator={t.listSeparator} />
+          </>
+        )}
+        {recipes && (
+          <>
+            <dt>{recipes.label}</dt>
+            <dd>{recipes.text}</dd>
           </>
         )}
         {changes.scriptsOn && (

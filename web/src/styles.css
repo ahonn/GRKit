@@ -1613,3 +1613,96 @@ button.row-body {
   line-height: 1.7;
   color: var(--ink-2);
 }
+
+/* The Recipes section: the library in camera order, and the editor. */
+.recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recipe-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.recipe-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name actions'
+    'look actions';
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.recipe-name {
+  grid-area: name;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.recipe-look {
+  grid-area: look;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.recipe-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.recipe-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.recipe-group legend {
+  padding: 0 8px 0 0;
+  font-weight: 700;
+}
+
+@media (max-width: 560px) {
+  .recipe-row {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'name'
+      'look'
+      'actions';
+  }
+
+  .recipe-actions {
+    justify-content: flex-start;
+  }
+}
+
+.recipe-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recipe-flags {
+  color: var(--warning);
+}
+
+.recipe-paste {
+  min-height: 220px;
+  padding: 12px;
+  font-family: var(--mono, monospace);
+  font-size: 14px;
+  resize: vertical;
+}

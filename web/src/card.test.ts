@@ -254,6 +254,7 @@ describe('planChanges', () => {
       removeModules: [],
       addEffects: [],
       removeEffects: [],
+      recipes: 'same',
     });
     const changes = planChanges(state, '1.3.1', ['DATE'], effects(state, ['CCCCCCCC.GRF']));
     expect(changes).toEqual({
@@ -263,6 +264,7 @@ describe('planChanges', () => {
       addModules: ['DATE'],
       removeModules: ['GUIDES'],
       addEffects: ['CCCCCCCC.GRF'],
+      recipes: 'same',
       removeEffects: ['AAAAAAAA.GRF'],
     });
     expect(hasChanges(changes)).toBe(true);
@@ -295,6 +297,7 @@ describe('planChanges', () => {
       addModules: [],
       removeModules: ['FRAMING', 'DATE', 'GRAIN'],
       addEffects: ['CCCCCCCC.GRF'],
+      recipes: 'same',
       removeEffects: ['AAAAAAAA.GRF'],
     });
   });
