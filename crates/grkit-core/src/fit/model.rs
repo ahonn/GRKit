@@ -75,6 +75,8 @@ pub struct Params {
     pub post: [f64; 9],
     /// The MultiAxial stage after the matrix, if the effect has hue sectors.
     pub sectors: Option<hue::Stage>,
+    /// The MultiAxial stage of a native look (GRF feature 32), which excludes `sectors`.
+    pub native: Option<crate::native_look::Stage>,
 }
 
 /// The camera around an effect: the Standard base gamma of the user's firmware.
@@ -158,9 +160,10 @@ impl Model {
     /// Linear RGB after the matrix and the hue sectors, the input of the base gamma.
     pub fn mixed(&self, params: &Params, linear: Rgb) -> Rgb {
         let mixed = cube::mul(&rows(&params.matrix), linear);
-        match &params.sectors {
-            Some(stage) => stage.apply(mixed),
-            None => mixed,
+        match (&params.sectors, &params.native) {
+            (Some(stage), _) => stage.apply(mixed),
+            (None, Some(stage)) => stage.apply(mixed),
+            (None, None) => mixed,
         }
     }
 

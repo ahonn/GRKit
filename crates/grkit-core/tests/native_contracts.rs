@@ -361,7 +361,12 @@ int main(int argc, char **argv) {
         ("slope past 9 bits", 8158, 0x200_u16.to_le_bytes().to_vec()),
         ("moved breakpoint", 8166, 165_u16.to_le_bytes().to_vec()),
         ("byte after the sectors", 8172, vec![1]),
-        ("without the feature bit", 84, 0_u32.to_le_bytes().to_vec()),
+        ("without the feature bits", 84, 0_u32.to_le_bytes().to_vec()),
+        (
+            "defaults without their bit",
+            84,
+            32_u32.to_le_bytes().to_vec(),
+        ),
     ];
     for (description, offset, bytes) in hue_fields {
         let mut changed = hue.clone();
@@ -404,6 +409,102 @@ int main(int argc, char **argv) {
     long_hue[8..12].copy_from_slice(&(effects::SIZE_WITH_LEVELS as u32).to_le_bytes());
     repair_crc(&mut long_hue);
     corpus.push(("8704 bytes without levels".into(), long_hue, Some(false)));
+    // Native look: feature 32, the head of the set at 8084, the matrices at 8192, with
+    // the Fn defaults of feature 64 at 8624, and 8704 bytes.
+    let mut native_effect = sample(false);
+    native_effect["native_look"] = native_look_sample();
+    native_effect["fn_defaults"] = json!({"saturation": 0, "hue": 0, "key": -1, "contrast": 3,
+        "highlight": 0, "shadow": -2, "sharpness": -3, "shading": 0, "clarity": 0});
+    let native = effects::encode(&native_effect, &vec![0; effects::ICON_SIZE]).unwrap();
+    assert_eq!(native.len(), effects::SIZE_WITH_LEVELS);
+    corpus.push(("native look".into(), native.clone(), Some(true)));
+    let native_fields: Vec<(&str, usize, Vec<u8>)> = vec![
+        ("reserved byte", 120, vec![1]),
+        ("Fn default 5", 8625, vec![5]),
+        ("Fn default -5", 8632, vec![0xfb]),
+        (
+            "first bound past 2048",
+            8084,
+            2049_u16.to_le_bytes().to_vec(),
+        ),
+        ("increasing bounds", 8086, 1400_u16.to_le_bytes().to_vec()),
+        ("selector 12", 8120, vec![12]),
+        (
+            "control past 12 bits",
+            8136,
+            0x1000_u16.to_le_bytes().to_vec(),
+        ),
+        ("slope past 9 bits", 8164, 0x200_u16.to_le_bytes().to_vec()),
+        ("gain past 2047", 8180, 2048_u16.to_le_bytes().to_vec()),
+        ("byte after the head", 8188, vec![1]),
+        (
+            "matrix past the register",
+            8192,
+            3000_i16.to_le_bytes().to_vec(),
+        ),
+        (
+            "diagonal past the register",
+            8192,
+            (-2000_i16).to_le_bytes().to_vec(),
+        ),
+        ("byte after the defaults", 8633, vec![1]),
+        ("last byte", 8703, vec![1]),
+        ("with hue sectors", 84, 40_u32.to_le_bytes().to_vec()),
+        ("with hue levels", 84, 48_u32.to_le_bytes().to_vec()),
+        ("without the feature bit", 84, 0_u32.to_le_bytes().to_vec()),
+        ("smaller size field", 8, 8192_u32.to_le_bytes().to_vec()),
+        ("monochrome", 80, 1_u32.to_le_bytes().to_vec()),
+    ];
+    for (description, offset, bytes) in native_fields {
+        let mut changed = native.clone();
+        changed[offset..offset + bytes.len()].copy_from_slice(&bytes);
+        repair_crc(&mut changed);
+        corpus.push((format!("native look: {description}"), changed, Some(false)));
+    }
+    let mut short_native = native[..effects::SIZE].to_vec();
+    short_native[8..12].copy_from_slice(&(effects::SIZE as u32).to_le_bytes());
+    repair_crc(&mut short_native);
+    corpus.push((
+        "native look in 8192 bytes".into(),
+        short_native,
+        Some(false),
+    ));
+    // A native look without Fn defaults keeps zeros at 8624.
+    let mut plain_native = sample(false);
+    plain_native["native_look"] = native_look_sample();
+    let plain_native = effects::encode(&plain_native, &vec![0; effects::ICON_SIZE]).unwrap();
+    corpus.push((
+        "native look without defaults".into(),
+        plain_native,
+        Some(true),
+    ));
+    // Feature 64 alone, on a color and on a monochrome effect.
+    let defaults = json!({"saturation": 0, "hue": 0, "key": 1, "contrast": -2, "highlight": 0,
+        "shadow": 0, "sharpness": -1, "shading": 0, "clarity": 0});
+    for monochrome in [false, true] {
+        let mut effect = sample(monochrome);
+        effect["fn_defaults"] = defaults.clone();
+        let bytes = effects::encode(&effect, &vec![0; effects::ICON_SIZE]).unwrap();
+        assert_eq!(bytes.len(), effects::SIZE_WITH_LEVELS);
+        let kind = if monochrome { "monochrome" } else { "color" };
+        corpus.push((format!("Fn defaults, {kind}"), bytes.clone(), Some(true)));
+        for (description, offset, value) in [
+            ("default 5", 8625, vec![5]),
+            ("default -5", 8632, vec![0xfb]),
+            ("byte in the level area", 8192, vec![1]),
+            ("last byte", 8703, vec![1]),
+            ("smaller size field", 8, 8192_u32.to_le_bytes().to_vec()),
+        ] {
+            let mut changed = bytes.clone();
+            changed[offset..offset + value.len()].copy_from_slice(&value);
+            repair_crc(&mut changed);
+            corpus.push((
+                format!("Fn defaults, {kind}: {description}"),
+                changed,
+                Some(false),
+            ));
+        }
+    }
     // Glow is not an effect field.
     let mut glow_effect = sample(false);
     glow_effect["glow"] = json!(1);
@@ -445,11 +546,12 @@ int main(int argc, char **argv) {
         state ^= state << 17;
         state
     };
-    for index in 0..512 {
-        let mut changed = match index % 4 {
+    for index in 0..640 {
+        let mut changed = match index % 5 {
             0 => boundary.clone(),
             1 => mono.clone(),
             2 => selective.clone(),
+            3 => native.clone(),
             _ => extended.clone(),
         };
         let offset = (next() % changed.len() as u64) as usize;
@@ -1069,4 +1171,38 @@ fn modules_hold_no_firmware_detail() {
         }
     }
     assert!(checked >= 3, "Expected the module sources");
+}
+
+/// A native look whose levels scale level 0 by 16 - l over 16, as the GR IV sets do.
+fn native_look_sample() -> Value {
+    use grkit_core::native_look::{NativeLook, BANKS, LEVELS};
+    let levels: [[[i32; 9]; LEVELS]; BANKS] = std::array::from_fn(|bank| {
+        std::array::from_fn(|level| {
+            let gain = 1024 * (16 - level as i32) / 16;
+            let (a, b) = (60 - bank as i32 * 9, -30 + bank as i32 * 4);
+            let mut m = [0; 9];
+            for r in 0..3 {
+                let off = [a * gain / 1024, b * gain / 1024 + i32::from(level == 3)];
+                m[r * 3 + (r + 1) % 3] = off[0];
+                m[r * 3 + (r + 2) % 3] = off[1];
+                m[r * 4] = gain - off[0] - off[1];
+            }
+            m
+        })
+    });
+    NativeLook::from_levels(
+        [
+            1298, 750, 0, 0, 1448, 843, 0, 0, 1298, 750, 0, 0, 1205, 843, 0, 0,
+        ],
+        [
+            0, 1, 2, 2, 2, 3, 4, 5, 5, 5, 6, 7, 8, 8, 8, 9, 10, 11, 11, 11,
+        ],
+        [
+            32, 328, 328, 328, 293, 800, 1600, 2400, 3200, 32, 1024, 1024, 1024, 1024, 0, 0, 0, 0,
+            0, 640, 1280,
+        ],
+        &levels,
+    )
+    .unwrap()
+    .to_json()
 }

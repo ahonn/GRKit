@@ -149,6 +149,66 @@ static void keep_red(uint32_t r)
     BYTE(r, GRKIT_RECORD_SELECTIVE + 13) = 16;
 }
 
+/* The coefficients of CSP x S x P, rounded as post_matrix rounds them. */
+static void composed(const int *s, const short *p, int *out)
+{
+    int sp[9];
+    for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j) {
+        int sum = 0;
+        for (int k = 0; k < 3; ++k) sum += s[i * 3 + k] * (p ? p[k * 3 + j] : (k == j) * 8192);
+        sp[i * 3 + j] = (sum + 4096) >> 13;
+    }
+    for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j) {
+        int sum = 0;
+        for (int k = 0; k < 3; ++k) sum += bt601[i * 3 + k] * sp[k * 3 + j];
+        sum = (sum + 4096) >> 13;
+        out[i * 3 + j] = sum < -256 ? -256 : sum > 255 ? 255 : sum;
+    }
+}
+/* A native look on GR III applies saturation after the tone curves, as GR IV
+   does: the BT.601 matrices with 8-bit fractions, and 1.1 to the power of the
+   level, rounded to three decimals. Other cameras keep the native matrix. */
+static void native_saturation_contract(const short *swap)
+{
+    static const double rgb[9] = {1, 0, 359 / 256.0, 1, -88 / 256.0, -183 / 256.0, 1, 454 / 256.0, 0};
+    static const double ycbcr[9] = {77 / 256.0, 150 / 256.0, 29 / 256.0, -43 / 256.0, -85 / 256.0,
+        128 / 256.0, 128 / 256.0, -107 / 256.0, -21 / 256.0};
+    for (int level = -4; level <= 4; ++level) {
+        double factor = 1;
+        for (int n = 0; n < (level < 0 ? -level : level); ++n) factor = level < 0 ? factor / 1.1 : factor * 1.1;
+        factor = (double)(long)(factor * 1000 + 0.5) / 1000;
+        int s[9], expected[9];
+        for (int i = 0; i < 3; ++i) for (int j = 0; j < 3; ++j) {
+            double v = 512 * (rgb[i * 3] * ycbcr[j] + factor * (rgb[i * 3 + 1] * ycbcr[3 + j] + rgb[i * 3 + 2] * ycbcr[6 + j]));
+            s[i * 3 + j] = (int)(v < 0 ? v - 0.5 : v + 0.5) * 16;
+        }
+        /* The default is -2 (7 mod 9), and the stored change moves it to the level. */
+        reset();
+        WORD(CONTEXT, 8) = record(1);
+        WORD(record(1), GRKIT_RECORD_FEATURES) = GRKIT_FEATURE_NATIVE_LOOK;
+        BYTE(record(1), GRKIT_RECORD_FN_DEFAULTS) = 7;
+        BYTE(record(1), GRKIT_RECORD_PARAMETERS) = (uint8_t)((level + 2 + 9) % 9);
+        picture_post(OBJECT, CONTEXT, SETTINGS);
+#ifdef NATIVE_SATURATION_BEFORE_CURVES
+        composed(s, 0, expected);
+        for (int i = 0; i < 9; ++i) assert(coefficient(i) == (level ? expected[i] : bt601[i]));
+        /* The saturation follows the post matrix of the effect. */
+        post(record(1), swap);
+        picture_post(OBJECT, CONTEXT, SETTINGS);
+        composed(s, swap, expected);
+        for (int i = 0; i < 9; ++i) assert(level ? coefficient(i) == expected[i] : coefficient(i) == bt601[i / 3 * 3 + 2 - i % 3]);
+#else
+        for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+#endif
+    }
+    /* Effects without a native look keep the native saturation. */
+    reset();
+    WORD(CONTEXT, 8) = record(1);
+    BYTE(record(1), GRKIT_RECORD_FN_DEFAULTS) = 7;
+    picture_post(OBJECT, CONTEXT, SETTINGS);
+    for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+}
+
 /* Encode configuration: four image and four code descriptors, then the planes. */
 #define MESSAGE (ARENA + 0x8300)
 #define CONFIG (ARENA + 0x8400)
@@ -498,6 +558,8 @@ int main(void)
     WORD(CONTEXT, 8) = record(3);
     picture_post(OBJECT, CONTEXT, SETTINGS);
     for (int i = 0; i < 9; ++i) assert(coefficient(i) == bt601[i]);
+
+    native_saturation_contract(swap);
 
     /* Selective color: the live view drops the chroma rows, so the viewfinder shows
        the luma that removed hues keep. Still builds keep the whole matrix. */
@@ -1051,6 +1113,15 @@ int main(void)
         picture_record_parameters(0x1234, SHOT);
         assert(ifd_writes == 9 && ifd_entry == 0x1234);
         for (u32 i = 0; i < 9; ++i) assert(ifd_values[elements[i]] == shown[i]);
+        /* A native look's defaults add to the stored changes: saturation -2
+           with a change of +2 records 0, sharpness -3 with +1 records -2. */
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 0) = 7;
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 6) = 6;
+        picture_record_parameters(0x1234, SHOT);
+        assert(ifd_values[0] == 0 && ifd_values[6] == 0xfffe && ifd_values[3] == 4);
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 0) = 0;
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 6) = 0;
+        picture_record_parameters(0x1234, SHOT);
         /* The other elements keep the native fill. */
         for (u32 i = 0; i < 32; ++i)
             if (i > 10 || i == 7 || i == 8) assert(ifd_values[i] == 0xaaaaaaaaU);

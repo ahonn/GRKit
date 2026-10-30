@@ -386,6 +386,7 @@ impl Problem {
                       curves: &[[f64; 256]; 3],
                       post: &[f64; 9],
                       stage: hue::Stage| Params {
+            native: None,
             matrix: matrix_from(offsets),
             curves: *curves,
             post: *post,
@@ -552,6 +553,7 @@ impl Problem {
         }
         let post_of = |x: &[f64]| -> [f64; 9] { x[no..no + 9].try_into().unwrap() };
         let unpack = |x: &[f64], curves: &[[f64; 256]; 3]| Params {
+            native: None,
             matrix: matrix_from(&x[..no]),
             curves: *curves,
             post: post_of(x),

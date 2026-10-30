@@ -38,17 +38,56 @@ static u32 record_features(volatile u32 *h,u32 record) {
    Selective color changes only recorded pictures, so the live view of such an
    effect drops its chroma rows: the viewfinder shows the luma that the removed
    hues keep in the picture. */
+#ifdef NATIVE_SATURATION_BEFORE_CURVES
+/* GR IV saturation: a matrix on gamma-encoded RGB, with 9-bit fractions.
+   It is RGB x diag(1, f, f) x YCbCr, from the BT.601 matrices with 8-bit
+   fractions. f is 1.1 to the power of the level (-4 to 4), rounded to three
+   decimals. */
+static const s16 saturation_ycbcr[9]={77,150,29,-43,-85,128,128,-107,-21};
+static const s16 saturation_rgb[9]={256,0,359,256,-88,-183,256,454,0};
+static const u16 saturation_factors[9]={683,751,826,909,1000,1100,1210,1331,1464};
+/* The saturation matrix of a native value, as a Q13 post matrix. */
+static void picture_saturation(u32 value,int out[9]) {
+    int factor=saturation_factors[value],sum;
+    u32 i,j;
+    for(i=0;i<3;++i) for(j=0;j<3;++j) {
+        sum=saturation_rgb[i*3]*saturation_ycbcr[j]*1000
+            +(saturation_rgb[i*3+1]*saturation_ycbcr[3+j]+saturation_rgb[i*3+2]*saturation_ycbcr[6+j])*factor;
+        /* 512 / (256 x 256 x 1000), rounded half away from zero. */
+        out[i*3+j]=(sum<0 ? -((64000-sum)/128000) : (sum+64000)/128000)*16;
+    }
+}
+#endif
 static void post_matrix(volatile u32 *h,u32 object,u32 context,u32 settings) {
-    u32 record=WORD(context,8),features,i,j,k;
+    u32 record=WORD(context,8),features,i,j,k,apply=0;
     int csp[9],post[9],sum;
     PICTURE_YCBCR_CALC(object,context);
     features=record_features(h,record);
     if(features&GRKIT_FEATURE_POST) {
+        for(i=0;i<9;++i) post[i]=(s16)HALF(record,GRKIT_RECORD_POST+i*2);
+        apply=1;
+    }
+#ifdef NATIVE_SATURATION_BEFORE_CURVES
+    /* A native look applies saturation after the tone curves and the post
+       matrix, as GR IV does. module_parameters gives the native processing
+       the neutral value. */
+    if((features&GRKIT_FEATURE_NATIVE_LOOK) && (i=record_parameter(record,0))!=4) {
+        int saturation[9],product[9];
+        picture_saturation(i,saturation);
+        if(apply) {
+            for(i=0;i<3;++i) for(j=0;j<3;++j) {
+                sum=0;
+                for(k=0;k<3;++k) sum+=saturation[i*3+k]*post[k*3+j];
+                product[i*3+j]=(sum+4096)>>13;
+            }
+            for(i=0;i<9;++i) post[i]=product[i];
+        } else for(i=0;i<9;++i) post[i]=saturation[i];
+        apply=1;
+    }
+#endif
+    if(apply) {
         /* The live view builds this matrix each frame: read each word once. */
-        for(i=0;i<9;++i) {
-            csp[i]=(int)(WORD(object,i*4)<<23)>>23;
-            post[i]=(s16)HALF(record,GRKIT_RECORD_POST+i*2);
-        }
+        for(i=0;i<9;++i) csp[i]=(int)(WORD(object,i*4)<<23)>>23;
         for(i=0;i<3;++i) for(j=0;j<3;++j) {
             sum=0;
             for(k=0;k<3;++k) sum+=csp[i*3+k]*post[k*3+j];
@@ -215,17 +254,14 @@ u32 picture_capture_record(u32 shot) { return shot_record(framing_header(),shot)
    GRKit shot. The native fill reads the settings of the native Image Control
    type. The record's Fn adjustments replace the nine Standard elements:
    saturation, hue, key, contrast, highlight, shadow, sharpness, then shading
-   and clarity. An element holds the shown value, -4 to 4, as camera photos
-   show. A stored byte (GRKIT_RECORD_PARAMETERS) is the shown value mod 9, and
-   a byte above 8 counts as 0. */
+   and clarity. An element holds the shown value, the native value less 4
+   (-4 to 4), as camera photos show. */
 void picture_record_parameters(u32 entry,u32 shot) {
     static const u8 elements[9]={0,1,2,3,4,5,6,9,10};
-    u32 record=picture_capture_record(shot), i, stored;
+    u32 record=picture_capture_record(shot), i;
     if(!record) return;
-    for(i=0;i<sizeof(elements);++i) {
-        stored=BYTE(record,GRKIT_RECORD_PARAMETERS+i);
-        PICTURE_IFD_SET_SHORT(entry,elements[i],stored>8 ? 0 : stored<=4 ? stored : (stored-9)&0xffffU);
-    }
+    for(i=0;i<sizeof(elements);++i)
+        PICTURE_IFD_SET_SHORT(entry,elements[i],(record_parameter(record,i)-4)&0xffffU);
 }
 /* Whether the native Image Control type of a shot makes a monochrome picture,
    such as Monotone or a type of GR IV Monochrome. */

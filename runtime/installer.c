@@ -551,9 +551,16 @@ static void write_records(const struct arrays *a, u32 pixels)
            reserved zero bytes. */
         copy(at(record + GRKIT_RECORD_FEATURES), profile + GRKIT_GRF_FEATURES, GRKIT_GRF_FEATURES_SIZE);
         copy(at(record + GRKIT_RECORD_POST), profile + GRKIT_GRF_POST, GRKIT_GRF_MATRIX - GRKIT_GRF_POST);
-        if (get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_HUE) multiaxial(record, profile);
-        /* Neutral Fn adjustments until the loader restores the saved ones. */
+        if (get32(profile + GRKIT_GRF_FEATURES) & (GRKIT_FEATURE_HUE | GRKIT_FEATURE_NATIVE_LOOK)) multiaxial(record, profile);
+        /* Neutral Fn adjustments until the loader restores the saved ones, and
+           the defaults that they change: those of feature 64, as values mod 9
+           like a stored adjustment, else zero. */
         zero(at(record + GRKIT_RECORD_PARAMETERS), 9);
+        for (u32 k = 0; k < 9; ++k) {
+            int value = (get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_FN_DEFAULTS)
+                ? (signed char)profile[GRKIT_GRF_FN_DEFAULTS + k] : 0;
+            at(record + GRKIT_RECORD_FN_DEFAULTS + k)[0] = (u8)(value < 0 ? value + 9 : value);
+        }
         u32 n = length((const char *)profile + CATALOG_EFFECT_NAME);
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[CATALOG_EFFECT_NAME + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + GRKIT_GRF_FLAGS));

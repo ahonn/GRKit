@@ -126,7 +126,9 @@ static int discover(void)
    (feature 16), levels 1 to 3 come from the GRF, level 4 repeats level 3, and
    fields 1..8 are hue::LEVEL_CONTROL. Fields 10..20, the weight curve, come from
    the GRF. The region values and the YCbCr matrix are those of Standard's set
-   (type 11). */
+   (type 11). A native look (feature 32) gives its own bounds, selectors, all 21
+   control fields, and the matrices of every bank and level (grf_native_matrix);
+   a capture with highlight correction keeps that set. */
 static const u16 multiaxial_bounds[16] = GRKIT_HUE_BOUNDS;
 static const u8 multiaxial_banks[20] = GRKIT_HUE_SELECTORS;
 static const u16 multiaxial_levels[8] = GRKIT_HUE_LEVEL_CONTROL;
@@ -135,6 +137,7 @@ static void multiaxial(u32 record, const u8 *profile)
 {
     const u8 *sectors = profile + GRKIT_GRF_HUE;
     int levels = (get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_HUE_LEVELS) != 0;
+    int native = (get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_NATIVE_LOOK) != 0;
     u32 slot = record + GRKIT_RECORD_MULTIAXIAL, table = slot + 0x98;
     u32 stock = word(TABLE_ADDRESS(1) + 11 * 4);
     store(slot, slot + 8);
@@ -144,10 +147,22 @@ static void multiaxial(u32 record, const u8 *profile)
     store(slot + 20, word(stock + 12));
     store(slot + 24, slot + 0x6c);
     store(slot + 28, word(stock + 20));
-    copy(at(slot + 0x20), (const u8 *)multiaxial_bounds, sizeof multiaxial_bounds);
-    copy(at(slot + 0x40), multiaxial_banks, sizeof multiaxial_banks);
+    copy(at(slot + 0x20), native ? profile + GRKIT_NATIVE_BOUNDS : (const u8 *)multiaxial_bounds, sizeof multiaxial_bounds);
+    copy(at(slot + 0x40), native ? profile + GRKIT_NATIVE_SELECTORS : multiaxial_banks, sizeof multiaxial_banks);
     for (u32 k = 0; k < 5; ++k) store(slot + 0x58 + k * 4, table);
     volatile u16 *control = (volatile u16 *)at(slot + 0x6c);
+    if (native) {
+        const u8 *fields = profile + GRKIT_NATIVE_CONTROL;
+        for (u32 k = 0; k < 21; ++k) control[k] = (u16)(fields[k * 2] | fields[k * 2 + 1] << 8);
+        for (u32 bank = 0; bank < 12; ++bank)
+            for (u32 level = 0; level < 5; ++level) {
+                int m[9];
+                grf_native_matrix(profile, bank, level, m);
+                for (u32 k = 0; k < 9; ++k) store(table + (bank * 5 + level) * 36 + k * 4, (u32)m[k]);
+            }
+        store(slot + 4, slot + 8);
+        return;
+    }
     control[0] = 0;
     for (u32 k = 1; k <= 8; ++k) control[k] = levels ? multiaxial_levels[k - 1] : 0xfff;
     control[9] = 0;

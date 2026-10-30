@@ -21,8 +21,9 @@ The compiler writes self-contained GRFX0001 files with a 40 x 40 icon. `golden.j
 | `post_matrix` | No | Nine signed Q13 coefficients, row-major, after the tone curves |
 | `selective_color` | No | Keeps the chroma of one hue range. `crates/grkit-core/src/selective.rs` defines the fields. |
 | `hue_sectors` | No | The camera's hue-sector stage. `crates/grkit-core/src/hue.rs` defines the fields. |
+| `native_look` | No | The hue-sector set and tone offsets of a look from camera firmware. It excludes `hue_sectors`. `crates/grkit-core/src/native_look.rs` defines the fields. |
 
-A monochrome effect cannot have `post_matrix`, `selective_color`, or `hue_sectors`.
+A monochrome effect cannot have `post_matrix`, `selective_color`, `hue_sectors`, or `native_look`.
 
 ## Icons
 

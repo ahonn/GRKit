@@ -88,4 +88,8 @@
 /* Visible-area id of a native aspect. GR III offers only 3:2 (0) and 1:1 (3). */
 #define PICTURE_NATIVE_ID(native) ((native)==3 ? 3 : 0)
 
+/* The native processing applies saturation before the tone curves. GR IV
+   applies it after them, so a native look moves it (runtime/picture.c). */
+#define NATIVE_SATURATION_BEFORE_CURVES 1
+
 #endif

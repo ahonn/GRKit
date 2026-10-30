@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 use crate::cube::{self, Encoding};
 use crate::effects::{self, Effect};
 use crate::fit::{self, Model, Params};
+use crate::native_look::{self, NativeLook};
 use crate::selective::{self, Selective};
 use crate::{hue, packaging, Files};
 
@@ -62,8 +63,22 @@ pub fn params(effect: &Effect) -> Params {
     Params {
         matrix: unit(&effect.matrix),
         curves: effect.curves.map(|curve| curve.map(f64::from)),
-        post: effect.post_matrix.as_ref().map_or(fit::IDENTITY, unit),
+        post: native_saturation(effect),
         sectors: effect.hue_sectors.as_ref().map(hue::HueSectors::stage),
+        native: effect.native_look.as_ref().map(NativeLook::stage),
+    }
+}
+
+/// The post matrix of an effect, then the default saturation of a native look, which
+/// GR III applies after the post matrix as GR IV does.
+fn native_saturation(effect: &Effect) -> [f64; 9] {
+    let post = effect.post_matrix.as_ref().map_or(fit::IDENTITY, unit);
+    match (&effect.native_look, &effect.fn_defaults) {
+        (Some(_), Some(defaults)) => {
+            let s = native_look::saturation_matrix(defaults[0]);
+            std::array::from_fn(|k| (0..3).map(|n| s[k / 3 * 3 + n] * post[n * 3 + k % 3]).sum())
+        }
+        _ => post,
     }
 }
 

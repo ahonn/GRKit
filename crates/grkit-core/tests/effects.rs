@@ -602,6 +602,119 @@ fn overlay_labels_follow_the_aspect_values() {
     }
 }
 
+/// A native look whose level-0 rows hold `a` and `b` off the diagonal.
+fn native_look() -> grkit_core::native_look::NativeLook {
+    use grkit_core::native_look::{NativeLook, BANKS, LEVELS};
+    let levels: [[[i32; 9]; LEVELS]; BANKS] = std::array::from_fn(|bank| {
+        std::array::from_fn(|level| {
+            let gain = 1024 - 64 * level as i32;
+            let (a, b) = (20 + bank as i32, -10);
+            let mut m = [0; 9];
+            for r in 0..3 {
+                let off = [a * gain / 1024, b * gain / 1024];
+                m[r * 3 + (r + 1) % 3] = off[0];
+                m[r * 3 + (r + 2) % 3] = off[1];
+                m[r * 4] = gain - off[0] - off[1];
+            }
+            m
+        })
+    });
+    NativeLook::from_levels(
+        [
+            1298, 750, 0, 0, 1448, 843, 0, 0, 1298, 750, 0, 0, 1205, 843, 0, 0,
+        ],
+        [
+            0, 1, 2, 2, 2, 3, 4, 5, 5, 5, 6, 7, 8, 8, 8, 9, 10, 11, 11, 11,
+        ],
+        [0; 21],
+        &levels,
+    )
+    .unwrap()
+}
+
+fn fn_defaults() -> serde_json::Value {
+    json!({"saturation": -2, "hue": 0, "key": 0, "contrast": 1, "highlight": 0, "shadow": -3,
+        "sharpness": -3, "shading": 0, "clarity": 0})
+}
+
+#[test]
+fn native_look_round_trips_in_the_larger_file() {
+    let mut effect = fixture();
+    effect["native_look"] = native_look().to_json();
+    effect["fn_defaults"] = fn_defaults();
+    let icon = vec![0; effects::ICON_SIZE];
+    let bytes = effects::encode(&effect, &icon).unwrap();
+    assert_eq!(bytes.len(), effects::SIZE_WITH_LEVELS);
+    assert_eq!(
+        u32::from_le_bytes(bytes[84..88].try_into().unwrap()),
+        32 | 64
+    );
+    // The Fn defaults after the set, and no bytes in the reserved field.
+    assert_eq!(effects::FN_DEFAULTS, 8624);
+    assert_eq!(&bytes[8624..8633], &[0xfe, 0, 0, 1, 0, 0xfd, 0xfd, 0, 0]);
+    assert!(bytes[120..128].iter().all(|v| *v == 0));
+    let (decoded, _) = effects::decode(&bytes).unwrap();
+    assert_eq!(decoded.native_look, Some(native_look()));
+    assert_eq!(decoded.to_json(), effect);
+    assert_eq!(decoded.encode(&icon).unwrap(), bytes);
+}
+
+#[test]
+fn native_look_excludes_hue_sectors_and_monochrome() {
+    let mut effect = fixture();
+    effect["native_look"] = native_look().to_json();
+    effect["hue_sectors"] = json!({"matrices": vec![vec![0; 6]; 11], "weight": [0, 0, 0, 0]});
+    let icon = vec![0; effects::ICON_SIZE];
+    assert!(effects::encode(&effect, &icon).is_err());
+    let mut mono = fixture();
+    mono["flags"] = json!(1);
+    mono["native_look"] = native_look().to_json();
+    assert!(effects::encode(&mono, &icon).is_err());
+    let mut bad = fixture();
+    bad["native_look"] = native_look().to_json();
+    bad["fn_defaults"] = fn_defaults();
+    bad["fn_defaults"]["shadow"] = json!(5);
+    assert!(effects::encode(&bad, &icon).is_err());
+}
+
+/// Feature 64 alone: any effect, a monochrome one included, takes the larger file with the
+/// defaults at FN_DEFAULTS and zeros elsewhere after SIZE.
+#[test]
+fn fn_defaults_go_with_any_effect() {
+    let icon = vec![0; effects::ICON_SIZE];
+    let mut mono = fixture();
+    mono["flags"] = json!(1);
+    let row = mono["matrix"].as_array().unwrap()[..3].to_vec();
+    mono["matrix"] = json!([row.clone(), row.clone(), row].concat());
+    let curve = mono["curves"][0].clone();
+    mono["curves"] = json!([curve.clone(), curve.clone(), curve]);
+    mono["fn_defaults"] = fn_defaults();
+    let bytes = effects::encode(&mono, &icon).unwrap();
+    assert_eq!(bytes.len(), effects::SIZE_WITH_LEVELS);
+    assert_eq!(u32::from_le_bytes(bytes[84..88].try_into().unwrap()), 64);
+    assert!(bytes[effects::SIZE..8624].iter().all(|v| *v == 0));
+    assert!(bytes[8633..].iter().all(|v| *v == 0));
+    let (decoded, _) = effects::decode(&bytes).unwrap();
+    assert_eq!(decoded.fn_defaults, Some([-2, 0, 0, 1, 0, -3, -3, 0, 0]));
+    assert_eq!(decoded.encode(&icon).unwrap(), bytes);
+    // A byte after the defaults, or defaults without the feature bit, fail.
+    let mut extra = bytes.clone();
+    extra[8633] = 1;
+    assert!(effects::decode(&extra).is_err());
+    let mut missing = bytes.clone();
+    missing[84] = 0;
+    assert!(effects::decode(&missing).is_err());
+    // Hue levels keep their place before the defaults.
+    let mut hue = fixture();
+    hue["hue_sectors"] = json!({"matrices": vec![vec![0; 6]; 11], "weight": [0, 0, 0, 0],
+        "levels": vec![vec![vec![0; 6]; 11]; 3]});
+    hue["fn_defaults"] = fn_defaults();
+    let bytes = effects::encode(&hue, &icon).unwrap();
+    let (decoded, _) = effects::decode(&bytes).unwrap();
+    assert!(decoded.hue_sectors.unwrap().levels.is_some());
+    assert_eq!(decoded.fn_defaults, Some([-2, 0, 0, 1, 0, -3, -3, 0, 0]));
+}
+
 #[test]
 fn a_long_cover_number_takes_a_smaller_size() {
     // YELLOW is too wide at the full size; GREEN keeps it.

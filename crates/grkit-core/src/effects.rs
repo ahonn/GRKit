@@ -5,7 +5,11 @@
 //! effect without features has zeros in the whole extension. With feature 8, the hue
 //! sectors (see `hue`) follow the icon; the rest of the file stays zero. Feature 16 adds
 //! hue levels to feature 8: the file grows to `SIZE_WITH_LEVELS` bytes, and the bytes
-//! from `SIZE` hold the sectors of levels 1 to 3, then zeros.
+//! from `SIZE` hold the sectors of levels 1 to 3, then zeros. Feature 32, a native look
+//! (`native_look`), excludes features 8 and 16: its MultiAxial set fills the hue area and
+//! the bytes from `SIZE` of a `SIZE_WITH_LEVELS` file. Feature 64 gives the effect default
+//! Fn adjustments: nine i8 at `FN_DEFAULTS` of a `SIZE_WITH_LEVELS` file, after the data of
+//! features 16 and 32, so it goes with any effect, monochrome ones included.
 
 use anyhow::{bail, ensure, Context, Result};
 use serde::{
@@ -21,11 +25,13 @@ use crate::abi::{
     GRF_MATRIX, GRF_NAME, GRF_PADDING, GRF_POST, GRF_RESERVED, GRF_SELECTIVE,
 };
 use crate::hue;
+use crate::native_look::{self, NativeLook};
 use crate::selective::Selective;
 
 pub const MAGIC: &[u8; 8] = b"GRFX0001";
 pub const SIZE: usize = 8192;
-/// The size of an effect with hue levels (feature 16).
+/// The size of an effect with hue levels (feature 16), a native look (feature 32), or Fn
+/// defaults (feature 64).
 pub const SIZE_WITH_LEVELS: usize = 8704;
 pub const ICON_SIZE: usize = 6400;
 pub const ICON_OFFSET: usize = GRF_ICON;
@@ -40,12 +46,46 @@ pub const FEATURE_SELECTIVE: u32 = 2;
 pub const FEATURE_HUE_SECTORS: u32 = 8;
 /// Hue levels (`hue::LEVELS`), with feature 8, at `SIZE`.
 pub const FEATURE_HUE_LEVELS: u32 = 16;
-const FEATURES: u32 = FEATURE_POST | FEATURE_SELECTIVE | FEATURE_HUE_SECTORS | FEATURE_HUE_LEVELS;
+/// A native look (`native_look`), without features 8 and 16.
+pub const FEATURE_NATIVE_LOOK: u32 = 32;
+/// Default Fn adjustments, at `FN_DEFAULTS`.
+pub const FEATURE_FN_DEFAULTS: u32 = 64;
+const FEATURES: u32 = FEATURE_POST
+    | FEATURE_SELECTIVE
+    | FEATURE_HUE_SECTORS
+    | FEATURE_HUE_LEVELS
+    | FEATURE_NATIVE_LOOK
+    | FEATURE_FN_DEFAULTS;
+/// The Fn adjustments in the order of the record (`abi::RECORD_PARAMETERS`).
+pub const FN_KEYS: [&str; 9] = [
+    "saturation",
+    "hue",
+    "key",
+    "contrast",
+    "highlight",
+    "shadow",
+    "sharpness",
+    "shading",
+    "clarity",
+];
+/// The largest shown value of an Fn adjustment.
+pub const FN_MAX: i8 = 4;
+/// The default Fn adjustments (feature 64): one i8 for each of `FN_KEYS`, -4..=4, the value
+/// that the Fn page shows before a change. The camera applies default + change.
+pub const FN_DEFAULTS: usize = native_look::END;
+pub const FN_DEFAULTS_END: usize = FN_DEFAULTS + FN_KEYS.len();
+const _: () = assert!(SIZE + hue::LEVEL_SIZE <= FN_DEFAULTS && FN_DEFAULTS_END <= SIZE_WITH_LEVELS);
 /// The hue sectors use the start of the reserved tail of the file.
 pub const HUE_OFFSET: usize = GRF_HUE;
 /// Optional keys of both a definition and a decoded effect. A definition writes
 /// `selective_color` in degrees; a decoded effect holds its GRF integers.
-const EXTENSION_KEYS: [&str; 3] = ["post_matrix", "selective_color", "hue_sectors"];
+const EXTENSION_KEYS: [&str; 5] = [
+    "post_matrix",
+    "selective_color",
+    "hue_sectors",
+    "native_look",
+    "fn_defaults",
+];
 
 struct UniqueValue(Value);
 
@@ -207,6 +247,38 @@ pub struct Effect {
     pub selective: Option<Selective>,
     /// Feature 8, and feature 16 with levels.
     pub hue_sectors: Option<hue::HueSectors>,
+    /// Feature 32.
+    pub native_look: Option<NativeLook>,
+    /// Feature 64, in the order of `FN_KEYS`.
+    pub fn_defaults: Option<[i8; 9]>,
+}
+
+/// The `fn_defaults` object: each of `FN_KEYS` with -4..=4.
+fn read_fn_defaults(value: &Value) -> Result<[i8; 9]> {
+    let message = "Expected fn_defaults with saturation, hue, key, contrast, highlight, shadow, sharpness, shading, and clarity of -4 to 4";
+    let given = value.as_object().context(message)?;
+    ensure!(
+        given.len() == FN_KEYS.len() && FN_KEYS.iter().all(|k| given.contains_key(*k)),
+        "{message}"
+    );
+    let mut defaults = [0i8; 9];
+    for (slot, key) in defaults.iter_mut().zip(FN_KEYS) {
+        *slot = given[key]
+            .as_i64()
+            .filter(|v| (-i64::from(FN_MAX)..=i64::from(FN_MAX)).contains(v))
+            .context(message)? as i8;
+    }
+    Ok(defaults)
+}
+
+fn fn_defaults_json(defaults: &[i8; 9]) -> Value {
+    Value::Object(
+        FN_KEYS
+            .iter()
+            .zip(defaults)
+            .map(|(k, v)| ((*k).to_owned(), json!(v)))
+            .collect(),
+    )
 }
 
 /// The matrix and the curves of `matrix` and `curves`, JSON arrays of GRF integers.
@@ -280,6 +352,11 @@ impl Effect {
                 .get("hue_sectors")
                 .map(hue::HueSectors::from_json)
                 .transpose()?,
+            native_look: value
+                .get("native_look")
+                .map(NativeLook::from_json)
+                .transpose()?,
+            fn_defaults: value.get("fn_defaults").map(read_fn_defaults).transpose()?,
         };
         effect.check()?;
         Ok(effect)
@@ -295,7 +372,7 @@ impl Effect {
                 &["effect_id", "name", "matrix", "curves"],
                 &optional
             ),
-            "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, selective_color, and hue_sectors"
+            "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, selective_color, hue_sectors, native_look, and fn_defaults"
         );
         let selective = value
             .get("selective_color")
@@ -318,6 +395,12 @@ impl Effect {
         if let Some(sectors) = &self.hue_sectors {
             value["hue_sectors"] = sectors.to_json();
         }
+        if let Some(look) = &self.native_look {
+            value["native_look"] = look.to_json();
+        }
+        if let Some(defaults) = &self.fn_defaults {
+            value["fn_defaults"] = fn_defaults_json(defaults);
+        }
         value
     }
 
@@ -339,12 +422,31 @@ impl Effect {
                 features |= FEATURE_HUE_LEVELS;
             }
         }
+        if self.native_look.is_some() {
+            features |= FEATURE_NATIVE_LOOK;
+        }
+        if self.fn_defaults.is_some() {
+            features |= FEATURE_FN_DEFAULTS;
+        }
         features
     }
 
     /// Checks the fields that the parts do not check themselves.
     fn check(&self) -> Result<()> {
         ensure!(self.flags <= MONOCHROME, "Unsupported effect flags");
+        ensure!(
+            self.hue_sectors.is_none() || self.native_look.is_none(),
+            "An effect has hue sectors or a native look, not both"
+        );
+        if let Some(look) = &self.native_look {
+            look.check()?;
+        }
+        if let Some(defaults) = &self.fn_defaults {
+            ensure!(
+                defaults.iter().all(|v| (-FN_MAX..=FN_MAX).contains(v)),
+                "Fn defaults must be -4..=4"
+            );
+        }
         check_identity(&self.id, &self.name)?;
         ensure!(
             self.curves.iter().flatten().all(|v| *v <= 16383),
@@ -360,8 +462,8 @@ impl Effect {
                 "Monochrome effects cannot have selective color"
             );
             ensure!(
-                self.hue_sectors.is_none(),
-                "Monochrome effects cannot have hue sectors"
+                self.hue_sectors.is_none() && self.native_look.is_none(),
+                "Monochrome effects cannot have hue sectors or a native look"
             );
             let m = &self.matrix;
             let c = &self.curves;
@@ -378,11 +480,12 @@ impl Effect {
         self.check()?;
         check_icon(icon)?;
         let features = self.features();
-        let size = if features & FEATURE_HUE_LEVELS != 0 {
-            SIZE_WITH_LEVELS
-        } else {
-            SIZE
-        };
+        let size =
+            if features & (FEATURE_HUE_LEVELS | FEATURE_NATIVE_LOOK | FEATURE_FN_DEFAULTS) != 0 {
+                SIZE_WITH_LEVELS
+            } else {
+                SIZE
+            };
         let mut blob = vec![0; size];
         blob[GRF_MAGIC..GRF_MAGIC + 8].copy_from_slice(MAGIC);
         blob[GRF_FEATURES..GRF_FEATURES + 4].copy_from_slice(&features.to_le_bytes());
@@ -397,6 +500,14 @@ impl Effect {
             blob[HUE_OFFSET..HUE_OFFSET + hue::SIZE].copy_from_slice(&sectors.to_bytes());
             if let Some(levels) = sectors.level_bytes() {
                 blob[SIZE..SIZE + hue::LEVEL_SIZE].copy_from_slice(&levels);
+            }
+        }
+        if let Some(look) = &self.native_look {
+            look.write(&mut blob);
+        }
+        if let Some(defaults) = &self.fn_defaults {
+            for (slot, value) in blob[FN_DEFAULTS..FN_DEFAULTS_END].iter_mut().zip(defaults) {
+                *slot = *value as u8;
             }
         }
         blob[GRF_BYTES..GRF_BYTES + 4].copy_from_slice(&(size as u32).to_le_bytes());
@@ -505,22 +616,45 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
     );
     let features = read_u32(GRF_FEATURES);
     let levels = features & FEATURE_HUE_LEVELS != 0;
+    let native = features & FEATURE_NATIVE_LOOK != 0;
+    let defaults = features & FEATURE_FN_DEFAULTS != 0;
     ensure!(
-        levels == (blob.len() == SIZE_WITH_LEVELS)
+        (levels || native || defaults) == (blob.len() == SIZE_WITH_LEVELS)
             && (!levels || features & FEATURE_HUE_SECTORS != 0),
         "Hue levels need hue sectors and the larger effect size"
     );
-    let hue_end = if features & FEATURE_HUE_SECTORS != 0 {
+    ensure!(
+        !native || features & (FEATURE_HUE_SECTORS | FEATURE_HUE_LEVELS) == 0,
+        "A native look excludes hue sectors"
+    );
+    let hue_end = if native {
+        native_look::HEAD_END
+    } else if features & FEATURE_HUE_SECTORS != 0 {
         HUE_OFFSET + hue::SIZE
     } else {
         HUE_OFFSET
+    };
+    // The bytes from `SIZE` that the features use: the hue levels or the native set,
+    // then the Fn defaults.
+    let tail = if native {
+        native_look::END
+    } else if levels {
+        SIZE + hue::LEVEL_SIZE
+    } else {
+        blob.len().min(SIZE)
+    };
+    let (defaults_start, defaults_end) = if defaults {
+        (FN_DEFAULTS, FN_DEFAULTS_END)
+    } else {
+        (blob.len(), blob.len())
     };
     ensure!(
         [
             (GRF_RESERVED, GRF_MATRIX),
             (GRF_PADDING, GRF_CURVES),
             (hue_end, SIZE),
-            (blob.len().min(SIZE + hue::LEVEL_SIZE), blob.len()),
+            (tail, defaults_start),
+            (defaults_end, blob.len()),
         ]
         .iter()
         .all(|(start, end)| blob[*start..*end].iter().all(|v| *v == 0)),
@@ -575,6 +709,8 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
                 )
             })
             .transpose()?,
+        native_look: native.then(|| NativeLook::read(blob)).transpose()?,
+        fn_defaults: defaults.then(|| std::array::from_fn(|k| blob[FN_DEFAULTS + k] as i8)),
     };
     let icon = blob[GRF_ICON..GRF_ICON + ICON_SIZE].to_vec();
     effect.check()?;

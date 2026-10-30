@@ -507,15 +507,17 @@ A32_ENTRY u32 menu_parameter_session(void) {
     u32 record=menu_header()[GRKIT_HOST_PARAMETERS/4];
     return record&1U ? 0 : record;
 }
-/* The native value 0..8 of a stored byte: (native - 4) mod 9. */
-static u32 parameter_native(u32 record,u32 index) {
-    u32 stored=BYTE(record,GRKIT_RECORD_PARAMETERS+index);
-    return stored>8 ? 4 : stored<5 ? stored+4 : stored-5;
+/* value mod 9 for a value below 27, without a division, which core has no
+   helper for. */
+static u32 mod9(u32 value) {
+    if(value>=18) value-=18;
+    if(value>=9) value-=9;
+    return value;
 }
 /* The native value plus 1, or 0 to run the native getter. */
 A32_ENTRY u32 menu_parameter_get(u32 index) {
     u32 record=menu_parameter_session();
-    return record ? parameter_native(record,index)+1 : 0;
+    return record ? record_parameter(record,index)+1 : 0;
 }
 /* Nonzero when the value went to the record. */
 A32_ENTRY u32 menu_parameter_set(u32 index,u32 value) {
@@ -523,7 +525,7 @@ A32_ENTRY u32 menu_parameter_set(u32 index,u32 value) {
     u32 record=menu_parameter_session();
     if(!record) return 0;
     if(value<=8) {
-        BYTE(record,GRKIT_RECORD_PARAMETERS+index)=(u8)(value>=4 ? value-4 : value+5);
+        BYTE(record,GRKIT_RECORD_PARAMETERS+index)=(u8)mod9(value+14-BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index));
         ++h[GRKIT_HOST_PARAMETER_CHANGES/4];
         GRKIT_STATE_CHANGED(h);
     }
@@ -576,7 +578,7 @@ A32_ENTRY void menu_parameter_page_snapshot(u32 model) {
     u32 record=menu_parameter_session(),i;
     if(!record) return;
     for(i=0;i<sizeof(parameter_kinds);++i)
-        BYTE(model,MODEL_SNAPSHOT+parameter_kinds[i])=(u8)parameter_native(record,i);
+        BYTE(model,MODEL_SNAPSHOT+parameter_kinds[i])=(u8)record_parameter(record,i);
 }
 /* The text descriptor for `view`: the effect name for the title of a page
    that GRKit started, or 0 for native text. A page whose first word is no

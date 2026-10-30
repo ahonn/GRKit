@@ -193,17 +193,33 @@ parameters_fill:
     cmp r2, #9
     subhs r2, r2, #0x10
     bhs parameters_store
-    // A stored byte is (native - 4) mod 9. Another value is neutral.
+    // A stored byte is the change from the default, and a default is
+    // (native - 4) mod 9 (zero without a native look). The native value is
+    // (stored + default + 4) mod 9. A stored byte above 8 counts as 0.
+    add lr, r3, r2
     ldrb r2, [r3, r2]
     cmp r2, #8
     movhi r2, #0
-    cmp r2, #5
-    addlo r2, r2, #4
-    subhs r2, r2, #5
+    ldrb lr, [lr, #(GRKIT_RECORD_FN_DEFAULTS - GRKIT_RECORD_PARAMETERS)]
+    add r2, r2, lr
+    add r2, r2, #4
+    cmp r2, #9
+    subhs r2, r2, #9
+    cmp r2, #9
+    subhs r2, r2, #9
 parameters_store:
     strh r2, [r1], #2
     cmp r1, r0
     bne parameters_fill
+#ifdef NATIVE_SATURATION_BEFORE_CURVES
+    // A native look applies saturation after the tone curves, as GR IV does:
+    // picture_post applies it, and the native processing gets the neutral
+    // value. 0x20 is GRKIT_FEATURE_NATIVE_LOOK, and r1 is at +0x200.
+    ldr r2, [r3, #(GRKIT_RECORD_FEATURES - GRKIT_RECORD_PARAMETERS)]
+    tst r2, #0x20
+    movne r2, #4
+    strhne r2, [r1, #-0x20]
+#endif
 #ifdef PROCESSING_KEPT_BYTE
     pop {r2}
     strb r2, [PROCESSING_OBJECT, #PROCESSING_KEPT_BYTE]

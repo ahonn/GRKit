@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use crate::{capabilities, effects, hue, menu_text, selective};
+use crate::{capabilities, effects, hue, menu_text, native_look, selective};
 
 /// A byte range of the private header, of a record, or of a GRF file.
 pub struct Field {
@@ -290,6 +290,11 @@ fields!(RECORD_FIELDS {
     /// byte is (native value - 4) mod 9, so zero is neutral. A native value is
     /// 0..8, and 4 is neutral.
     RECORD_PARAMETERS = 0x72c, 9;
+    /// The default of each Fn adjustment, in the order of RECORD_PARAMETERS:
+    /// (default - 4) mod 9 of a native value 0..8, from a native look (feature
+    /// 32), else zero. An adjustment's native value is (stored + default + 4)
+    /// mod 9, so a stored zero is the default.
+    RECORD_FN_DEFAULTS = 0x735, 9;
     /// The MultiAxial parameter set that INSTALL expands from the hue sectors of the GRF
     /// (feature 8): the address of the set at +0, the address of the highlight-correction
     /// set at +4, the set (six pointers) at +8, the bounds at +0x20, the bank selectors at
@@ -563,6 +568,31 @@ fn hue_tables(out: &mut String) {
         effects::FEATURE_HUE_LEVELS
     )
     .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_FEATURE_NATIVE_LOOK {}U",
+        effects::FEATURE_NATIVE_LOOK
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_FEATURE_FN_DEFAULTS {}U",
+        effects::FEATURE_FN_DEFAULTS
+    )
+    .unwrap();
+    define(
+        out,
+        "The default Fn adjustments of feature 64: 9 i8 (-4..4) in the order of \
+         GRKIT_RECORD_PARAMETERS, in a file of GRKIT_GRF_MAX_SIZE bytes.",
+        "GRF_FN_DEFAULTS",
+        format!("{}U", effects::FN_DEFAULTS),
+    );
+    writeln!(
+        out,
+        "#define GRKIT_GRF_FN_DEFAULTS_END {}U",
+        effects::FN_DEFAULTS_END
+    )
+    .unwrap();
     writeln!(out, "#define GRKIT_HUE_SIZE {}U", hue::SIZE).unwrap();
     writeln!(out, "#define GRKIT_HUE_MATRICES {}U", hue::SECTORS * 6).unwrap();
     define(
@@ -600,6 +630,26 @@ fn hue_tables(out: &mut String) {
         "HUE_LEVEL_CONTROL_HALVED",
         &hue::LEVEL_CONTROL_HALVED,
     );
+    define(
+        out,
+        "A native look (feature 32, grkit_core::native_look): 16 u16 bounds, 20 u8 \
+         bank selectors, 21 u16 control fields, and 5 u16 level gains from GRKIT_GRF_HUE; \
+         and 12 x 6 i16 level-0 coefficients and 4 x 12 x 6 i8 corrections of levels 1 \
+         to 4 from GRKIT_GRF_SIZE.",
+        "NATIVE_BOUNDS",
+        format!("{}U", native_look::BOUNDS),
+    );
+    for (name, value) in [
+        ("NATIVE_SELECTORS", native_look::SELECTORS),
+        ("NATIVE_CONTROL", native_look::CONTROL),
+        ("NATIVE_GAINS", native_look::GAINS),
+        ("NATIVE_HEAD_END", native_look::HEAD_END),
+        ("NATIVE_MATRICES", native_look::MATRICES),
+        ("NATIVE_CORRECTIONS", native_look::CORRECTIONS),
+        ("NATIVE_END", native_look::END),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
 }
 
 /// The contents of `runtime/abi.h`.

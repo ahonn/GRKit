@@ -633,6 +633,38 @@ static void a_half_press_keeps_the_parameter_session(void)
     test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
 }
 
+/* A native look keeps its Fn defaults in the record: the page shows the
+   default plus the stored change, and a stored zero is the default. */
+static void fn_values_add_the_defaults_of_a_native_look(void)
+{
+    const u32 record = TEST_OBJECTS + 0x2000U;
+    reset();
+    for (u32 k = 0; k < 9; ++k) {
+        BYTE(record, GRKIT_RECORD_PARAMETERS + k) = 0;
+        BYTE(record, GRKIT_RECORD_FN_DEFAULTS + k) = 0;
+    }
+    /* Contrast +3 and shadow -2, each its shown value mod 9. */
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 3) = 3;
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 5) = 7;
+    test_header[GRKIT_HOST_PARAMETERS / 4] = record;
+    /* The getter gives the native value 0..8 plus 1. */
+    assert(menu_parameter_get(0) == 4 + 1);
+    assert(menu_parameter_get(3) == 7 + 1);
+    assert(menu_parameter_get(5) == 2 + 1);
+    /* The default stores zero; the ends of the native range store their change. */
+    assert(menu_parameter_set(3, 7) && BYTE(record, GRKIT_RECORD_PARAMETERS + 3) == 0);
+    assert(menu_parameter_set(3, 8) && BYTE(record, GRKIT_RECORD_PARAMETERS + 3) == 1);
+    assert(menu_parameter_get(3) == 8 + 1);
+    assert(menu_parameter_set(3, 0) && BYTE(record, GRKIT_RECORD_PARAMETERS + 3) == 2);
+    assert(menu_parameter_get(3) == 0 + 1);
+    assert(menu_parameter_set(5, 8) && BYTE(record, GRKIT_RECORD_PARAMETERS + 5) == 6);
+    assert(menu_parameter_get(5) == 8 + 1);
+    /* A stored byte above 8 counts as no change. */
+    BYTE(record, GRKIT_RECORD_PARAMETERS + 5) = 200;
+    assert(menu_parameter_get(5) == 2 + 1);
+    test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
+}
+
 static void adj_exits_return_once_for_the_parameter_page(void)
 {
     reset();
@@ -2211,6 +2243,7 @@ int main(void)
     icons_toolbar_and_edges_map_their_ids();
     adj_exits_return_once_for_the_parameter_page();
     a_half_press_keeps_the_parameter_session();
+    fn_values_add_the_defaults_of_a_native_look();
     the_root_lists_the_official_modules();
     module_tiles_follow_the_effect_icons();
     the_framing_page_sets_the_ratios_of_the_target();

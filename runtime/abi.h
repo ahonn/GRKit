@@ -274,6 +274,11 @@
    is (native value - 4) mod 9, so zero is neutral. A native value is 0..8, and
    4 is neutral. */
 #define GRKIT_RECORD_PARAMETERS 0x72c
+/* The default of each Fn adjustment, in the order of RECORD_PARAMETERS:
+   (default - 4) mod 9 of a native value 0..8, from a native look (feature 32),
+   else zero. An adjustment's native value is (stored + default + 4) mod 9, so
+   a stored zero is the default. */
+#define GRKIT_RECORD_FN_DEFAULTS 0x735
 /* The MultiAxial parameter set that INSTALL expands from the hue sectors of
    the GRF (feature 8): the address of the set at +0, the address of the
    highlight-correction set at +4, the set (six pointers) at +8, the bounds at
@@ -342,6 +347,12 @@
 #define GRKIT_FEATURE_SELECTIVE 2U
 #define GRKIT_FEATURE_HUE 8U
 #define GRKIT_FEATURE_HUE_LEVELS 16U
+#define GRKIT_FEATURE_NATIVE_LOOK 32U
+#define GRKIT_FEATURE_FN_DEFAULTS 64U
+/* The default Fn adjustments of feature 64: 9 i8 (-4..4) in the order of
+   GRKIT_RECORD_PARAMETERS, in a file of GRKIT_GRF_MAX_SIZE bytes. */
+#define GRKIT_GRF_FN_DEFAULTS 8624U
+#define GRKIT_GRF_FN_DEFAULTS_END 8633U
 #define GRKIT_HUE_SIZE 88U
 #define GRKIT_HUE_MATRICES 66U
 /* Hue levels of feature 16: the sectors of levels 1 to 3 after the first
@@ -358,6 +369,18 @@
    highlight correction, which halves the stage's input. */
 #define GRKIT_HUE_LEVEL_CONTROL { 656, 656, 656, 586, 150, 650, 1150, 1650 }
 #define GRKIT_HUE_LEVEL_CONTROL_HALVED { 1312, 1312, 1312, 1172, 75, 325, 575, 825 }
+/* A native look (feature 32, grkit_core::native_look): 16 u16 bounds, 20 u8
+   bank selectors, 21 u16 control fields, and 5 u16 level gains from
+   GRKIT_GRF_HUE; and 12 x 6 i16 level-0 coefficients and 4 x 12 x 6 i8
+   corrections of levels 1 to 4 from GRKIT_GRF_SIZE. */
+#define GRKIT_NATIVE_BOUNDS 8084U
+#define GRKIT_NATIVE_SELECTORS 8116U
+#define GRKIT_NATIVE_CONTROL 8136U
+#define GRKIT_NATIVE_GAINS 8178U
+#define GRKIT_NATIVE_HEAD_END 8188U
+#define GRKIT_NATIVE_MATRICES 8192U
+#define GRKIT_NATIVE_CORRECTIONS 8336U
+#define GRKIT_NATIVE_END 8624U
 /* The plan that SCAN writes: this header, the GRF file of each installed
    effect, then an entry of GRKIT_PLANNED_EFFECT_SIZE bytes for each listed
    effect. */

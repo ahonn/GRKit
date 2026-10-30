@@ -47,10 +47,10 @@ module_record:
 
 // Replaces `str r0, [r4, #0xc]` (1.11 0x53912d5c), the MultiAxial set from the
 // getter (1.11 0x53925fb0), whose table address is fixed in the getter. A private
-// record with hue sectors (feature 8) gives its own set at RECORD_MULTIAXIAL + 8,
-// or, with highlight correction on this capture (the native flag in the frame
-// slot PROCESSING_HIGHLIGHT_SLOT), the set whose address is at
-// RECORD_MULTIAXIAL + 4. Other records keep the set of the Standard index. r0 is
+// record with hue sectors (feature 8) or a native look (feature 32), 0x28, gives
+// its own set at RECORD_MULTIAXIAL + 8, or, with highlight correction on this
+// capture (the native flag in the frame slot PROCESSING_HIGHLIGHT_SLOT), the set
+// whose address is at RECORD_MULTIAXIAL + 4. Other records keep the set of the Standard index. r0 is
 // free after this store.
 .if GRKIT_RECORD_MULTIAXIAL != 0x740
 .error "Update the MultiAxial set offset"
@@ -62,7 +62,7 @@ module_multiaxial:
     .word 0xeb000000 | (((.Lowned_record - . - 8) >> 2) & 0x00ffffff)
     bne multiaxial_store
     ldr r1, [r0, #GRKIT_RECORD_FEATURES]
-    tst r1, #8
+    tst r1, #0x28
     beq multiaxial_store
     add r2, r0, #0x740
     add r2, r2, #8
