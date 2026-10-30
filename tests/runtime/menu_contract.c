@@ -1705,6 +1705,11 @@ static void the_guides_menu_page_lists_enable_options_and_settings(void)
     assert(menu_settings_controller(pages[SETTINGS_ALIAS]) == pages[SETTINGS_ALIAS]);
     assert(h[GRKIT_HOST_SETTINGS / 4] >> SETTINGS_OPEN_ROW == SETTING_ROWS - 1);
     assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == 3);
+    /* A value page shows at most the rows that each SelectMenu has views for. */
+    assert(settings_memory[2 + 17 * 3 + 2] == 2);
+    settings_memory[2 + 17 * 3 + 2] = SELECT_MENU_ROWS + 9;
+    assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == SELECT_MENU_ROWS + 1);
+    settings_memory[2 + 17 * 3 + 2] = 2;
     assert(menu_text_override(view, row_texts[SETTINGS_ALIAS]) ==
            ((u32)(block + SETTINGS_LABELS / 4 + SETTING_ROWS * 2) | 1U));
     assert(menu_settings_apply(1, 0, SETTINGS_ALIAS) == 1 && settings_memory[2 + 17 * 3 + 1] == 1);

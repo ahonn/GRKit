@@ -100,8 +100,10 @@ static u32 settings_borrowed(u32 row) { return row<SETTINGS_BORROWED ? row : SET
 /* Whether row `setting` of the open page is long: its value page keeps each
    value in an entry (value_entry), up to VALUES_MAX values. An Options row
    is long, and a row with more values than the value slots, such as Film
-   Stock. */
-#define VALUES_MAX MENU_VALUES_MAX
+   Stock. A value page shows at most the rows that each SelectMenu has views
+   for (SELECT_MENU_ROWS), and later values leave it. */
+#define VALUES_MAX (MENU_VALUES_MAX<SELECT_MENU_ROWS ? MENU_VALUES_MAX : SELECT_MENU_ROWS)
+_Static_assert(GRKIT_TEXT_RECORDS+1<=VALUES_MAX,"Film Stock shows Off and each effect");
 static u32 settings_options(volatile u32 *h,const Setting *page,u32 setting) {
     const Setting *b;
     return page==listed_settings && listed_kind(h,setting,&b)==LISTED_OPTIONS;
