@@ -6,7 +6,10 @@ use std::{fs, path::Path};
 #[test]
 fn checked_in_generated_files_match_the_tables() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let mut files = vec![("runtime/abi.h", grkit_core::abi::header())];
+    let mut files = vec![
+        ("runtime/abi.h", grkit_core::abi::header()),
+        ("runtime/native.h", grkit_core::native::header()),
+    ];
     files.extend(grkit_core::modules::generated());
     files.extend(grkit_core::camera::generated());
     files.extend(grkit_core::site::generated());

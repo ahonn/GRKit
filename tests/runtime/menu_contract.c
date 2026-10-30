@@ -131,6 +131,13 @@ static unsigned level_calls, level_screen, level_mode;
 #define MENU_LEVEL_ALARM(screen,mode) (++level_calls, level_screen = (screen), level_mode = (mode))
 static unsigned preview_invalidations, preview_invalidated;
 #define MENU_PREVIEW_INVALIDATE(view) (++preview_invalidations, preview_invalidated = (view))
+/* The native settings of recipes (runtime/native_look.h): no settings
+   record, and each UserData Set counted. */
+static unsigned native_sets_count;
+#define NATIVE_SETTINGS() 0U
+#define NATIVE_SET(argv) ((void)(argv), ++native_sets_count)
+#define NATIVE_MONOCHROME() 0U
+#define NATIVE_SET_TYPE(code) ((void)(code), ++native_sets_count)
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
@@ -1026,6 +1033,76 @@ static void the_grain_page_changes_only_the_grain_word(void)
     assert(test_header[GRKIT_HOST_GRAIN / 4] == 1);
     /* A handle after the capabilities is no setting. */
     assert(setting_limit(test_header, GRKIT_CORE_SETTING_BASE + GRKIT_CORE_SETTING_COUNT) == 0);
+}
+
+/* The page of CORE.RECIPE in place of Grain: Undo while an undo step
+   exists, the camera recipes, then Save. The rows are actions: an ADJ exit
+   applies none, and the page shows with Save alone. The recipes here hold
+   Film Look Off and the grain, so no record is read. */
+static void the_recipe_page_saves_applies_and_deletes(void)
+{
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    test_header[GRKIT_HOST_ACTIVE / 4] = 0;
+    test_header[GRKIT_HOST_GRAIN / 4] = 0;
+    assert(MODULE(GRAIN_MODULE).rows(test_header) == 1);
+    assert(visible_modules(test_header) >> GRAIN_MODULE & 1);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    assert(same(current_module(test_header)->summary(test_header), "Recipes"));
+    assert(PAGE_ICON(GRAIN_MODULE, GRAIN_ROW) == GRAIN_TILE(0));
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    assert(same(current_module(test_header)->label(test_header, 0), "Save Current Settings"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(2));
+    /* OK on Save adds a recipe and puts the cursor on it. The second of a
+       look gets a number. */
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    test_header[GRKIT_HOST_GRAIN / 4] = 3;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 2 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(count(test_header) == 3);
+    assert(same(current_module(test_header)->label(test_header, 0), "Film Look: Off"));
+    assert(same(current_module(test_header)->label(test_header, 1), "Film Look: Off 2"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(3));
+    assert(!current_module(test_header)->checked(test_header, 0) && current_module(test_header)->checked(test_header, 1));
+    assert(same(current_module(test_header)->summary(test_header), "Recipes: Film Look: Off 2"));
+    /* OK on a recipe applies it and stores an undo step, which adds the Undo
+       row first. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    assert(count(test_header) == 4);
+    assert(same(current_module(test_header)->label(test_header, 0), "Undo (1)"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(1));
+    assert(same(current_module(test_header)->label(test_header, 2), "Film Look: Off 2"));
+    assert(current_module(test_header)->committed(test_header) == 1);
+    /* An ADJ exit on a recipe applies nothing. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 2;
+    exit_commit(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    /* Fn on a recipe asks to delete it; Fn on Undo or Save does nothing. */
+    assert(current_module(test_header)->fn(test_header, 2));
+    assert(same((const u16 *)recipe_text_at(test_header, RECIPE_BOX_AT), "Delete Film Look: Off 2?"));
+    assert(!current_module(test_header)->fn(test_header, 0) && !current_module(test_header)->fn(test_header, 3));
+    recipe_delete_done(0, 1);
+    assert(recipe_count(test_header) == 2);
+    recipe_delete_done(1, 1);
+    assert(recipe_count(test_header) == 1 && count(test_header) == 3);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == 2);
+    /* OK on Undo restores the grain before the apply. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 3 && recipe_undo_count(test_header) == 0);
+    assert(count(test_header) == 2);
+    /* CORE.RECIPE has no value, and a store does nothing. */
+    assert(setting_value(test_header, GRKIT_CORE_RECIPE) == 0 && setting_limit(test_header, GRKIT_CORE_RECIPE) == 0);
+    setting_store(test_header, GRKIT_CORE_RECIPE, 0);
+    assert(recipe_count(test_header) == 1);
 }
 
 static void invalid_cursors_form_no_effect_pointer(void)
@@ -2122,6 +2199,7 @@ int main(void)
     an_exit_from_a_page_commits_the_highlighted_row();
     the_date_imprint_page_lists_its_styles();
     the_grain_page_changes_only_the_grain_word();
+    the_recipe_page_saves_applies_and_deletes();
     invalid_cursors_form_no_effect_pointer();
     film_look_previews_and_commits_the_highlighted_effect();
     the_root_has_no_about_row();

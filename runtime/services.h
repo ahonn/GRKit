@@ -120,7 +120,19 @@
 #define CHECK_PAGE 0U
 #define CHECK_ID 4U
 #define CHECK_BUILD 8U
-#define SERVICES_SIZE (SERVICES_CHECK + 12U)
+/* The texts of the page of CORE.RECIPE (runtime/recipe_page.h), which the
+   native list reads after the page gives them: the label of each row, the
+   summary of the root row, and the text of a box with a pointer to it for
+   each language (GrkitText). Each text has RECIPE_UNITS units. */
+#define SERVICES_RECIPES (SERVICES_CHECK + 12U)
+#define RECIPE_UNITS 48U
+#define RECIPE_TEXT_SIZE (2U * RECIPE_UNITS)
+#define RECIPE_ROWS_MAX (GRKIT_RECIPE_SLOTS + 2U)
+#define RECIPE_SUMMARY_AT (RECIPE_ROWS_MAX * RECIPE_TEXT_SIZE)
+#define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
+#define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
+#define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
+#define SERVICES_SIZE (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

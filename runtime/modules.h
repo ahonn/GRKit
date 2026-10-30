@@ -159,6 +159,8 @@ static const MenuPage choice_settings_module={choice_title,choice_summary,choice
    title from the module. */
 static const MenuPage tone_module={choice_title,tone_summary,tone_rows,tone_label,tone_icon,
     tone_checked,tone_apply,tone_committed,tone_preview,tone_parameters,0};
+/* A page of CORE.RECIPE too (runtime/recipes.h). */
+#include "recipe_page.h"
 
 /* The page of module `index`. */
 static const MenuPage *menu_page(volatile u32 *h,u32 index) {
@@ -168,6 +170,7 @@ static const MenuPage *menu_page(volatile u32 *h,u32 index) {
     /* Only a registered page has a GrkitPage to read. */
     if(index>=module_pages(h)) return &choice_module;
     if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) return &tone_module;
+    if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_RECIPE) return &recipe_module;
     if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)) return &choice_settings_module;
     return &choice_module;
 }
@@ -236,15 +239,17 @@ static u32 page_listed(volatile u32 *h,u32 slot) {
     return listed;
 }
 /* Visible modules as a bit mask: each module page with two rows or more,
-   unless a soft Off stopped its module. A page of CORE.TONE has
-   rows only with effects. Without such a page, About shows alone, so that
-   the root has a row. */
+   or one row for a page of actions, unless a soft Off stopped its module. A
+   page of CORE.TONE has rows only with effects. Without such a page, About
+   shows alone, so that the root has a row. */
 static u32 visible_modules(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
+    const MenuPage *page;
     for(slot=0;slot<module_pages(h);++slot) {
         listed=page_listed(h,slot);
         if(listed<MANAGE_MODULES && manage_stopped(h,listed)) continue;
-        if(menu_page(h,MODULE_PAGE(slot))->rows(h)>=2) mask|=1U<<MODULE_PAGE(slot);
+        page=menu_page(h,MODULE_PAGE(slot));
+        if(page->rows(h)>=(page->flags&MENU_PAGE_ACTIONS ? 1U : 2U)) mask|=1U<<MODULE_PAGE(slot);
     }
     /* Module management and the version are in the native MENU (runtime/menu.c).
        About shows only so that the root has a row. */

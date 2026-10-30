@@ -110,12 +110,12 @@ fn generated_header_gives_the_points_of_each_patch() -> Result<()> {
     assert!(header.contains("static const u32 patch_points[] = {0x0};"));
     // CORE.TONE needs the tuning and picture encode points (bits 1 and 4),
     // CORE.ASPECT the overlay and capture aspect points (bits 2 and 3),
-    // CORE.GRAIN the grain point (bit 5), and CORE.GRAIN_SIZE the grain size
-    // point (bit 6).
+    // CORE.GRAIN the grain point (bit 5), CORE.GRAIN_SIZE the grain size
+    // point (bit 6), and CORE.RECIPE none.
     assert!(header.contains(
-        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\"};"
+        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\",\"CORE.RECIPE\"};"
     ));
-    assert!(header.contains("static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40};"));
+    assert!(header.contains("static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0x0};"));
     Ok(())
 }
 

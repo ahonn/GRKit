@@ -8,6 +8,8 @@
 #define GRKIT_TARGET_H
 
 #include "gr4.h"
+/* The native settings of recipes (runtime/native.h), from the firmware. */
+#include "gr4-1.11-native.h"
 
 /* Camera settings, the still aspect getter, and the settings domain after the
    vtable of the capture property singleton. */
@@ -150,6 +152,12 @@
    set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
    setter of a native setting by its name and the stored value by its label. */
 #define FW_USERDATA_SET FIRMWARE(0x534a4650)
+/* GR IV Monochrome in recipes (runtime/native_look.h): the setter of the
+   Image Control type of set No0, set(settings object, stored value), which
+   UserData and the native menu call; and the pointer to the current model
+   record. */
+#define FW_IMAGE_CONTROL_SET FIRMWARE(0x532b6f80)
+#define FW_MODEL_RECORD FIRMWARE(0x553a0850)
 #define FW_MESSAGE_BACKGROUND FIRMWARE(0x53578bcc)
 #define FW_MESSAGE_SET FIRMWARE(0x53578c74)
 #define FW_MESSAGE_BUTTONS FIRMWARE(0x53578fc0)

@@ -404,6 +404,25 @@ fn state_script() -> Vec<String> {
                 "goto save_modules".into(),
                 ":save_modules_end".into(),
             ]);
+            // The camera recipes and the undo steps: each word that is not
+            // 0 (runtime/recipes.h).
+            lines.extend([
+                "rindex = 0".into(),
+                ":save_recipes".into(),
+                format!("if rindex >= {RECIPE_STATE_WORDS} goto save_recipes_end"),
+                format!("rvalue = registry[{} + rindex]", HOST_RECIPES / 4),
+                "if rvalue <= 0 goto save_recipes_next".into(),
+                format!("if rvalue > {RECIPE_VALUE_MAX} goto save_recipes_next"),
+                format!("rkey = {RECIPE_KEY_BASE} + rindex"),
+                "int2str line rkey".into(),
+                "filewriteln sfh line".into(),
+                "int2str line rvalue".into(),
+                "filewriteln sfh line".into(),
+                ":save_recipes_next".into(),
+                "rindex = rindex + 1".into(),
+                "goto save_recipes".into(),
+                ":save_recipes_end".into(),
+            ]);
         }
         lines.extend([
             "fileclose sfh".into(),
@@ -610,13 +629,16 @@ mod tests {
             )
         };
         // The computed indexes are words of a record below `count` or `pcount`:
-        // its code, and the three words of its adjustments.
+        // its code, and the three words of its adjustments; and the recipe
+        // words of the header below RECIPE_STATE_WORDS.
+        let recipes = format!("{} + rindex", HOST_RECIPES / 4);
         let allowed = [
             record("index", RECORD_CODE),
             record("pindex", RECORD_CODE),
             record("pindex", RECORD_PARAMETERS),
             record("pindex", RECORD_PARAMETERS + 4),
             record("pindex", RECORD_PARAMETERS + 8),
+            recipes.clone(),
         ];
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
@@ -644,6 +666,13 @@ mod tests {
         assert!(script.contains("if pcount < 0 pcount = 0"));
         assert!(script.contains(&format!("if pcount > {MAX_COUNT} pcount = 0")));
         assert_eq!(script.matches("if pindex >= pcount goto").count(), 1);
+        // Each recipe index is below RECIPE_STATE_WORDS, which ends in the
+        // header.
+        assert!(script.contains(&format!(
+            "if rindex >= {RECIPE_STATE_WORDS} goto save_recipes_end"
+        )));
+        const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
+        assert_eq!(script.matches(&recipes).count(), 1);
     }
 
     /// A series of changes writes the card once: each poll reads only the

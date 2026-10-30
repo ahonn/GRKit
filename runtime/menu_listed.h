@@ -53,7 +53,9 @@ static const Setting *listed_base(volatile u32 *h,u32 *n) {
         if(*n>SETTING_ROWS-1) *n=SETTING_ROWS-1;
         return page->settings;
     }
-    if(page->rows(h)>MENU_VALUES_MAX) return 0;
+    /* The rows of a page of actions, such as the recipes, are no setting:
+       MENU shows only Enable. */
+    if(page->flags&MENU_PAGE_ACTIONS || page->rows(h)>MENU_VALUES_MAX) return 0;
     *n=1;
     return choice_one;
 }

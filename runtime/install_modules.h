@@ -174,11 +174,12 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
            page needs a row for each value of a used setting. */
         for (u32 k = 0; !status && k < page_count; ++k) {
             pages[k].setting = module_handle(i, use_handles, pages[k].setting);
-            /* The core gives the rows of a page of CORE.TONE. */
+            /* The core gives the rows of a page of CORE.TONE or CORE.RECIPE. */
             u32 core_rows = pages[k].flags & GRM_CHOICE_CORE_ROWS;
+            u32 core_page = pages[k].setting == GRKIT_CORE_TONE || pages[k].setting == GRKIT_CORE_RECIPE;
             /* The rows do not fit the setting: the page is not valid. */
             if (pages[k].setting != GRM_NO_SETTING &&
-                (core_rows ? pages[k].setting != GRKIT_CORE_TONE : handle_values(pages[k].setting) != pages[k].rows))
+                (core_rows ? !core_page : handle_values(pages[k].setting) != pages[k].rows))
                 status = GRM_BAD_DESCRIPTOR;
             /* A settings row of a used setting needs a value text for each
                value of that setting. */

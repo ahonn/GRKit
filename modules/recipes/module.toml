@@ -1,0 +1,22 @@
+# Recipes: named sets of picture settings that OK applies in one step. The
+# page sets CORE.RECIPE, and the core gives its rows: Undo, the recipes saved
+# on the camera, and Save Current Settings. A recipe holds the settings of
+# the capabilities that other modules use, such as the effect of Film Look
+# with its Fn adjustments and the grain of Grain.
+id = "RECIPES"
+version = 1
+# The default place in ADJ and in MENU: after Grain.
+order = 60
+sources = []
+# Tile 0 is the module tile, then Undo, Save, and a recipe without an effect
+# icon (runtime/recipe_page.h).
+tiles = [
+    "tiles/0-module.png",
+    "tiles/1-undo.png",
+    "tiles/2-save.png",
+    "tiles/3-recipe.png",
+]
+uses = ["CORE.RECIPE"]
+
+[page]
+setting = "CORE.RECIPE"

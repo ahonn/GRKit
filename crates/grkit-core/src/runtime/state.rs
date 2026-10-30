@@ -1,7 +1,9 @@
 //! The state files of the resident loader: the key IDs, the GRKit 1.2 keys,
 //! and the largest file.
 
-use super::{MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES};
+use super::{
+    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_SLOTS, RECIPE_UNDO, RECIPE_WORDS,
+};
 use crate::capabilities::{self, StateFile};
 
 /// The largest main state file that INSTALL reads (`STATE_TEXT_MAX` in
@@ -33,6 +35,15 @@ pub fn state_key_id(name: &str) -> u32 {
 /// value is the nine stored bytes (`RECORD_PARAMETERS`) as base-9 digits, the
 /// first adjustment lowest. Neutral adjustments have no entry.
 pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
+/// The camera recipes (`runtime/recipes.h`) are state entries of their own:
+/// word w of recipe slot n (the recipes, then the undo steps) has the key ID
+/// this base plus n * `RECIPE_WORDS` + w, above the Fn adjustment entries.
+/// A word that is 0 has no entry.
+pub const RECIPE_KEY_BASE: u32 = 991_000_000;
+/// The number of recipe words, saved or restored.
+pub const RECIPE_STATE_WORDS: usize = RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
+/// The largest value of a recipe word. Each word holds at most 29 bits.
+pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
 /// The largest packed adjustment value: 9^9 - 1.
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
@@ -79,6 +90,9 @@ pub fn worst_state_size(file: StateFile) -> usize {
             MAX_COUNT * (line(PARAMETER_KEY_BASE + 32767) + line(PARAMETER_VALUE_MAX))
                 + MODULE_SETTINGS_MAX
                     * (line(PARAMETER_KEY_BASE - 1) + line(MODULE_SETTING_VALUES as u32 - 1))
+                + RECIPE_STATE_WORDS
+                    * (line(RECIPE_KEY_BASE + RECIPE_STATE_WORDS as u32 - 1)
+                        + line(RECIPE_VALUE_MAX))
         }
     };
     keys + parameters
@@ -160,7 +174,11 @@ mod tests {
         let line = STATE_DIGITS + 2;
         assert!(
             worst_state_size(StateFile::Main)
-                <= 2 * line * (MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX)
+                <= 2 * line
+                    * (MAX_COUNT
+                        + capabilities::state_keys().len()
+                        + MODULE_SETTINGS_MAX
+                        + RECIPE_STATE_WORDS)
         );
         // Module setting IDs stay below the adjustment entries, and values
         // fit the digits that the loader parses.
@@ -184,6 +202,23 @@ mod tests {
             .find_map(|line| line.strip_prefix("#define STATE_PAIRS "))
             .and_then(|value| value.trim_end_matches('U').parse().ok())
             .unwrap();
-        assert!(MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX <= pairs);
+        assert!(
+            MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX + RECIPE_STATE_WORDS
+                <= pairs
+        );
+    }
+
+    /// The recipe entries keep apart from the Fn adjustment entries and the
+    /// IDs of names, and fit the digits of the state file.
+    #[test]
+    fn recipe_entries_fit_the_state_file() {
+        let last = RECIPE_KEY_BASE + RECIPE_STATE_WORDS as u32 - 1;
+        const { assert!(RECIPE_KEY_BASE > PARAMETER_KEY_BASE + 32767) };
+        assert!(last.to_string().len() <= STATE_DIGITS);
+        assert!(RECIPE_VALUE_MAX.to_string().len() <= STATE_DIGITS);
+        assert!(capabilities::state_keys().iter().all(|key| {
+            let id = state_key_id(&key.name);
+            !(RECIPE_KEY_BASE..=last).contains(&id)
+        }));
     }
 }

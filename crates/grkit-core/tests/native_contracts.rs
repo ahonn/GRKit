@@ -625,6 +625,29 @@ fn native_state_contract_reads_the_pairs_of_the_loader() {
     checked(&mut Command::new(&executable));
 }
 
+/// Each target, because the native tables and the grain form differ by
+/// camera family.
+#[test]
+fn native_recipes_contract_saves_applies_and_undoes_recipes() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    for target in targets() {
+        let executable = temporary
+            .path()
+            .join(format!("recipes_contract{}", target.to_lowercase()));
+        compile_for(
+            &target,
+            &compiler,
+            &root().join("tests/runtime/recipes_contract.c"),
+            &executable,
+            &[],
+        );
+        checked(&mut Command::new(&executable));
+    }
+}
+
 /// The numeric `#define`s of a runtime header: name and value.
 fn defines(path: &str) -> std::collections::HashMap<String, u64> {
     let text = fs::read_to_string(root().join(path)).unwrap();

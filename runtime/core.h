@@ -84,7 +84,14 @@ typedef struct {
        settings instead of the page of the module. The page title is the
        module title. */
     const Setting *settings;
+    /* Optional: Fn on a row of the page. It returns 1 when it took the key. */
+    u32 (*fn)(volatile u32 *,u32);
+    /* MENU_PAGE_* flags. */
+    u32 flags;
 } MenuPage;
+/* The rows are actions, not values: an ADJ exit, such as a half-press of
+   the shutter, applies no row, and the page shows with one row. */
+#define MENU_PAGE_ACTIONS 1U
 
 /* Core services for pages. */
 /* One string of the menu text table in the menu language (runtime/abi.h). */

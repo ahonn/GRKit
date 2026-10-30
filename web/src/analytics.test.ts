@@ -19,6 +19,7 @@ describe('downloadProps', () => {
       guides: 'off',
       dateStamp: 'off',
       grain: 'off',
+      recipes: 'off',
     });
   });
 

@@ -690,7 +690,8 @@ A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
    keeps the highlighted row of a page, as a native ADJ keeps the value under
    its cursor. The Modules page opens settings on OK, so it commits nothing. */
 static void exit_commit(volatile u32 *h) {
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && h[GRKIT_HOST_MODULE/4]!=MANAGE_MODULE) menu_confirm(h);
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && h[GRKIT_HOST_MODULE/4]!=MANAGE_MODULE &&
+       !(current_module(h)->flags&MENU_PAGE_ACTIONS)) menu_confirm(h);
 }
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
@@ -812,6 +813,13 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         }
     }
     menu_normalize(h);
+    /* Fn on a row of a page that takes it, such as a delete on the page of
+       recipes. */
+    if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
+       current_module(h)->fn && current_module(h)->fn(h,h[GRKIT_HOST_MENU_CURSOR/4])) {
+        render(controller);
+        return 0;
+    }
     /* On an effect row, commit the highlighted row, then adjust its parameters.
        On the root row, adjust the committed effect. Fn on Off does nothing. */
     if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && parameters_row(h)) {

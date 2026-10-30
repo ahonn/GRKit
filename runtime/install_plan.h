@@ -233,7 +233,7 @@ static int state_taken(u32 id)
 {
     static const u32 core_ids[] = {CORE_STATE_IDS};
     if (id >= PARAMETER_KEY_BASE) return 1;
-    for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) {
+    for (u32 k = 0; k < CORE_STATE_COUNT; ++k) {
         if (core_ids[k] != id) continue;
         for (u32 i = 0; i < module_count; ++i) {
             if (!(module_usable >> i & 1)) continue;

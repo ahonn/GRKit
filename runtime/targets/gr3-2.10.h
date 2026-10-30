@@ -7,6 +7,8 @@
 #define GRKIT_TARGET_H
 
 #include "gr3.h"
+/* The native settings of recipes (runtime/native.h), from the firmware. */
+#include "gr3-2.10-native.h"
 
 /* Camera settings and the still aspect property. */
 #define FW_SETTINGS FIRMWARE(0x5320b31c)

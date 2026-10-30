@@ -36,14 +36,16 @@ typedef unsigned int u32;
 #define STATE_PATH CARD "/GRKIT/STATE.TXT"
 #define MODULES_PATH CARD "/GRKIT/MODULES"
 #define LEGACY_EFFECTS_PATH CARD "/SCRIPT/PLUGINS/EFFECTS"
+#define CORE_STATE_COUNT 4U
 #define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003
 #define PARAMETER_KEY_BASE 990000000U
+#define RECIPE_VALUE_MAX 536870911U
 #define STATE_TEXT_MAX 16384U
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
-static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE"};
-static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40};
+static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE", "CORE.RECIPE"};
+static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0x0};
 /* The tail of the core, and its one export, overlay_label. */
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U
@@ -597,7 +599,7 @@ static void install_writes_the_settings_and_the_contexts(void)
         id_of("CORE.ROWS.DATE"), 5, 12345, 7, 23456, 0, id_of("CORE.ASPECT"), 3, id_of("CORE.GRAIN"), 1,
     };
     static const u32 core_ids[] = {CORE_STATE_IDS};
-    for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) assert(core_ids[k] == id_of(core_setting_names[k]));
+    for (u32 k = 0; k < CORE_STATE_COUNT; ++k) assert(core_ids[k] == id_of(core_setting_names[k]));
     save_state(pairs, sizeof pairs / sizeof pairs[0] / 2);
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, then

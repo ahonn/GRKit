@@ -7,11 +7,19 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 768
+#define GRKIT_HOST_HEADER_SIZE 1024
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
 #define GRKIT_MODULE_FILTERS_MAX 8
+/* The camera recipes (runtime/recipes.h): the most recipes, the most undo
+   steps, the words of one recipe, and the state key of word 0 of recipe 0.
+   Word w of slot n (the recipes, then the undo steps) has the state key
+   GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w. */
+#define GRKIT_RECIPE_SLOTS 8U
+#define GRKIT_RECIPE_UNDO 5U
+#define GRKIT_RECIPE_WORDS 4U
+#define GRKIT_RECIPE_KEY_BASE 991000000U
 #define GRKIT_MODULE_SETTINGS_MAX 160
 /* The most modules that GRKit lists, and the words of the largest script
    array, which holds the module array. */
@@ -184,43 +192,49 @@
    and its setting handle in the low half with its stage in the high half. */
 #define GRKIT_HOST_MODULE_FILTERS 268
 #define GRKIT_HOST_MODULE_FILTERS_WORDS 16
+/* The camera recipes (runtime/recipes.h): RECIPE_WORDS words for each of the
+   RECIPE_SLOTS recipes, then for each of the RECIPE_UNDO undo steps, the
+   oldest first. A recipe whose word 0 is 0 is empty. The resident loader saves
+   each word that is not 0. */
+#define GRKIT_HOST_RECIPES 332
+#define GRKIT_HOST_RECIPES_WORDS 52
 /* Reserved for later fields. */
-#define GRKIT_HOST_RESERVED 332
-#define GRKIT_HOST_RESERVED_WORDS 24
+#define GRKIT_HOST_RESERVED 540
+#define GRKIT_HOST_RESERVED_WORDS 36
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
-#define GRKIT_HOST_MODULE_SETTINGS 428
+#define GRKIT_HOST_MODULE_SETTINGS 684
 /* The ADJ preview of a module page: its setting handle plus 1 (0 for none),
    then the highlighted value. Module layers of that setting paint the
    highlighted value on the ADJ canvas. */
-#define GRKIT_HOST_MODULE_PREVIEW 432
+#define GRKIT_HOST_MODULE_PREVIEW 688
 #define GRKIT_HOST_MODULE_PREVIEW_WORDS 2
 /* Number of module pages in GRKIT_HOST_MODULE_PAGES. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_PAGE_COUNT 440
+#define GRKIT_HOST_MODULE_PAGE_COUNT 696
 /* Three words for each module page (runtime/sdk/grkit.h), in load order: the
    address of its GrkitPage, its setting handle, and the global index of its
    tile 0 (GRKIT_ICON_MODULE_TILE). */
-#define GRKIT_HOST_MODULE_PAGES 444
+#define GRKIT_HOST_MODULE_PAGES 700
 #define GRKIT_HOST_MODULE_PAGES_WORDS 30
 /* The module page that the generic page callbacks of the menu serve. */
-#define GRKIT_HOST_MODULE_CHOICE 564
+#define GRKIT_HOST_MODULE_CHOICE 820
 /* Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_LAYER_COUNT 568
+#define GRKIT_HOST_MODULE_LAYER_COUNT 824
 /* Three words for each module layer, in painting order: its paint function,
    its setting handle (GRKIT_NO_SETTING paints with the value 1), and its flags
    in the low half with its order in the high half. */
-#define GRKIT_HOST_MODULE_LAYERS 572
+#define GRKIT_HOST_MODULE_LAYERS 828
 #define GRKIT_HOST_MODULE_LAYERS_WORDS 48
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
-#define GRKIT_HOST_GAMMA_KEY 764
+#define GRKIT_HOST_GAMMA_KEY 1020
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
    of values. CORE.TONE has neither: its value is the active record, and the
    effects give its number of values (runtime/tone.h). */
 #define GRKIT_CORE_SETTING_BASE 0x100U
-#define GRKIT_CORE_SETTING_COUNT 4U
+#define GRKIT_CORE_SETTING_COUNT 5U
 #define GRKIT_CORE_TONE 0x100U
 #define GRKIT_CORE_TONE_VALUES 0U
 #define GRKIT_CORE_TONE_BIT 0x1
@@ -233,8 +247,11 @@
 #define GRKIT_CORE_GRAIN_SIZE 0x103U
 #define GRKIT_CORE_GRAIN_SIZE_VALUES 4U
 #define GRKIT_CORE_GRAIN_SIZE_BIT 0x8
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4
+#define GRKIT_CORE_RECIPE 0x104U
+#define GRKIT_CORE_RECIPE_VALUES 0U
+#define GRKIT_CORE_RECIPE_BIT 0x10
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,0
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,0
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100
@@ -501,6 +518,15 @@
 /* The guides of an options value page: OK turns an option on or off, MENU goes
    back. */
 #define TEXT_GUIDE 19
-#define GRKIT_TEXT_STRINGS 21
+/* The page of camera recipes: the Undo and Save rows, the text before a saved
+   name, the text before and after the name to delete, the message when the
+   recipes are full, the text of a missing effect, the name of a recipe without
+   a look, the separator of the root summary, the message of a value that the
+   camera does not have, and the message of an apply whose Grain has no effect. */
+#define TEXT_RECIPE 21
+/* The names of the native Image Control types, in the order of
+   runtime/native.h. */
+#define TEXT_NATIVE_TYPE 32
+#define GRKIT_TEXT_STRINGS 53
 
 #endif

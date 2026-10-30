@@ -43,7 +43,7 @@ moduletiles = value
 if moduletiles < 0 goto reject_close
 if moduletiles > 128 goto reject_close
 fileclose fh
-expected = 192 + count * 1088
+expected = 256 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 43) / 40
 if chunks != expectedchunks goto reject
@@ -147,9 +147,9 @@ if pcount > 20 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[192 + pindex * 1088 + 459]
-pw1 = registry[192 + pindex * 1088 + 460]
-pw2 = registry[192 + pindex * 1088 + 461]
+pw0 = registry[256 + pindex * 1088 + 459]
+pw1 = registry[256 + pindex * 1088 + 460]
+pw2 = registry[256 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -179,7 +179,7 @@ pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
 if pvalue = 0 goto save_parameters_next
-pkey = 990000000 + (registry[192 + pindex * 1088 + 446] and 32767)
+pkey = 990000000 + (registry[256 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
@@ -211,6 +211,21 @@ filewriteln sfh line
 mindex = mindex + 1
 goto save_modules
 :save_modules_end
+rindex = 0
+:save_recipes
+if rindex >= 52 goto save_recipes_end
+rvalue = registry[83 + rindex]
+if rvalue <= 0 goto save_recipes_next
+if rvalue > 536870911 goto save_recipes_next
+rkey = 991000000 + rindex
+int2str line rkey
+filewriteln sfh line
+int2str line rvalue
+filewriteln sfh line
+:save_recipes_next
+rindex = rindex + 1
+goto save_recipes
+:save_recipes_end
 fileclose sfh
 filesearch 'C:\GRKIT\STATE.TMP'
 if result = 0 goto save_state_end
@@ -234,7 +249,7 @@ rest = offset % 4352
 if rest != 0 goto snapshot_values
 index = offset / 4352
 if index >= count goto snapshot_values
-value0 = registry[192 + index * 1088 + 446] and 65535
+value0 = registry[256 + index * 1088 + 446] and 65535
 :snapshot_values
 value1 = registry[52]
 value2 = registry[12]

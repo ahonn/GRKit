@@ -59,7 +59,7 @@ pub const MAX_COUNT: usize = 20;
 pub const ICON_CHUNK_SLOTS: usize = 5;
 
 /// The fields of the header.
-pub const HOST_HEADER_SIZE: usize = 768;
+pub const HOST_HEADER_SIZE: usize = 1024;
 /// The placeholder for the header address in ARM code. The installer replaces
 /// each literal word with this value by the address of the `registry` array.
 pub const HEADER_REFERENCE: u32 = 0x58012340;
@@ -72,6 +72,11 @@ pub const MODULE_PAGES_MAX: usize = MODULES_MAX;
 /// that the header holds.
 pub const MODULE_LAYERS_MAX: usize = 16;
 pub const MODULE_FILTERS_MAX: usize = 8;
+/// The camera recipes of `CORE.RECIPE` (runtime/recipes.h): the most recipes
+/// that the camera saves, the most undo steps, and the words of one recipe.
+pub const RECIPE_SLOTS: usize = 8;
+pub const RECIPE_UNDO: usize = 5;
+pub const RECIPE_WORDS: usize = 4;
 
 fields!(HEADER_FIELDS {
     /// Number of Image Control records.
@@ -223,8 +228,14 @@ fields!(HEADER_FIELDS {
     /// function, and its setting handle in the low half with its stage in the
     /// high half.
     HOST_MODULE_FILTERS = 268, 8 * MODULE_FILTERS_MAX;
+    /// The camera recipes (runtime/recipes.h): RECIPE_WORDS words for each of
+    /// the RECIPE_SLOTS recipes, then for each of the RECIPE_UNDO undo steps,
+    /// the oldest first. A recipe whose word 0 is 0 is empty. The resident
+    /// loader saves each word that is not 0.
+    HOST_RECIPES = 268 + 8 * MODULE_FILTERS_MAX, 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
     /// Reserved for later fields.
-    HOST_RESERVED = 268 + 8 * MODULE_FILTERS_MAX, HOST_MODULE_SETTINGS - 268 - 8 * MODULE_FILTERS_MAX;
+    HOST_RESERVED = HOST_RECIPES + 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO),
+        HOST_MODULE_SETTINGS - HOST_RECIPES - 4 * RECIPE_WORDS * (RECIPE_SLOTS + RECIPE_UNDO);
     /// Address of the module settings table, or 0 (runtime/settings.h).
     /// INSTALL writes it.
     HOST_MODULE_SETTINGS = HOST_MODULE_PREVIEW - 4, 4;
@@ -618,6 +629,22 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_MODULE_PAGES_MAX {MODULE_PAGES_MAX}").unwrap();
     writeln!(out, "#define GRKIT_MODULE_LAYERS_MAX {MODULE_LAYERS_MAX}").unwrap();
     writeln!(out, "#define GRKIT_MODULE_FILTERS_MAX {MODULE_FILTERS_MAX}").unwrap();
+    comment(
+        &mut out,
+        "The camera recipes (runtime/recipes.h): the most recipes, the most undo \
+         steps, the words of one recipe, and the state key of word 0 of recipe 0. \
+         Word w of slot n (the recipes, then the undo steps) has the state key \
+         GRKIT_RECIPE_KEY_BASE + n * GRKIT_RECIPE_WORDS + w.",
+    );
+    writeln!(out, "#define GRKIT_RECIPE_SLOTS {RECIPE_SLOTS}U").unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_UNDO {RECIPE_UNDO}U").unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_WORDS {RECIPE_WORDS}U").unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_KEY_BASE {}U",
+        crate::runtime::RECIPE_KEY_BASE
+    )
+    .unwrap();
     writeln!(
         out,
         "#define GRKIT_MODULE_SETTINGS_MAX {}",
@@ -714,7 +741,7 @@ pub fn header() -> String {
                 .iter()
                 .map(|c| match c.state {
                     capabilities::State::Word(word) => word.to_string(),
-                    capabilities::State::Effect => "0".into(),
+                    capabilities::State::Effect | capabilities::State::Recipes => "0".into(),
                 })
                 .collect()
         )

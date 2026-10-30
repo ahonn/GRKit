@@ -360,6 +360,26 @@ fn userdata_settings_of_recipes_match_each_firmware() -> Result<()> {
         let dispatcher = u32::from_str_radix(dispatcher.trim_start_matches("0x"), 16)?;
         let table = crate::userdata::extract(&image, crate::userdata::recipe_setting)?;
         assert_eq!(table.dispatcher, dispatcher, "{}", target.name);
+        // GR IV: the type setter and the model record of Monochrome.
+        let address = |name: &str| -> Option<u32> {
+            let value = definitions.get(name)?;
+            let value = value.trim_start_matches("FIRMWARE(").trim_end_matches(')');
+            u32::from_str_radix(value.trim_start_matches("0x"), 16).ok()
+        };
+        if target.name.starts_with("gr4") {
+            let (setter, record) = crate::userdata::monochrome_check(&image)?;
+            assert_eq!(
+                address("FW_IMAGE_CONTROL_SET"),
+                Some(setter),
+                "{}",
+                target.name
+            );
+            assert_eq!(address("FW_MODEL_RECORD"), Some(record), "{}", target.name);
+        } else {
+            assert!(
+                address("FW_IMAGE_CONTROL_SET").is_none() && address("FW_MODEL_RECORD").is_none()
+            );
+        }
         for name in [
             "StillActiveImageControlSet",
             "StillImageControlNo0",
@@ -383,4 +403,46 @@ fn userdata_settings_of_recipes_match_each_firmware() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// runtime/targets/<target>-native.h is the native header of the firmware of
+/// each build (`userdata::native_header`). With GRKIT_UPDATE_GENERATED set,
+/// the test writes the files instead.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+fn native_headers_match_each_firmware() -> Result<()> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/targets");
+    let update = std::env::var_os("GRKIT_UPDATE_GENERATED").is_some();
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let header = crate::userdata::native_header(&image)?;
+        let file = root.join(format!("{}-native.h", target.name));
+        if update {
+            std::fs::write(&file, &header)?;
+        } else {
+            assert_eq!(std::fs::read_to_string(&file)?, header, "{}", target.name);
+        }
+    }
+    Ok(())
+}
+
+/// Each build header includes its native header, which each build has.
+#[test]
+fn each_build_includes_its_native_header() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/targets");
+    for target in target::TARGETS {
+        let header = std::fs::read_to_string(root.join(format!("{}.h", target.name))).unwrap();
+        assert!(
+            header.contains(&format!("#include \"{}-native.h\"", target.name)),
+            "{}",
+            target.name
+        );
+        assert!(root.join(format!("{}-native.h", target.name)).exists());
+    }
 }

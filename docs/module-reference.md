@@ -66,7 +66,7 @@ A setting reference in `page`, `layers`, or `filters` is a key of `settings`, or
 | `settings` | array of strings | `[]` | The rows of a native settings page: the page setting, then keys of `settings` or names of `uses`. Give 0 to 5 keys (`GRKIT_SETTING_ROWS`). The row of an optional used setting that no module has is left out. With one key, the page setting alone, the row gets a label of its own, and Fn opens no settings page. |
 | `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. |
 
-A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`.
+A page of `CORE.TONE` or `CORE.RECIPE` has no `off_row` and no `settings`. Its text has only `title`. A page of `CORE.TONE` needs no tiles, and a page of `CORE.RECIPE` has no `options`.
 
 ### layers
 
@@ -159,8 +159,10 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.ASPECT` | 8: 0 native 3:2, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The aspect of still pictures. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
+| `CORE.RECIPE` | none | The camera recipes: saved sets of the other capabilities that OK applies in one step. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
+- `CORE.RECIPE`: a page gives only its title and four tiles: the module, Undo, Save, and a recipe without an effect icon. The core gives the rows: Undo, the recipes, and Save Current Settings. A recipe holds and sets only the capabilities that other loaded modules use. `setting_get` gives 0, and `setting_set` does nothing.
 - `CORE.ASPECT`: a page shows only the ratios that the camera offers. The core crops each ratio from the native 3:2, also a ratio that the camera has natively. A layer gets the crop in `Surface.area` and `Surface.box`. `setting_set` with a ratio that the camera does not offer does nothing.
 
 ## Registrations

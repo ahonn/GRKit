@@ -22,7 +22,7 @@ pub const TEXT_SETTINGS: usize = TEXT_PARAMETER_TITLE - 512;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 21;
+pub const STRINGS: usize = 53;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -75,6 +75,29 @@ struct Words {
     /// word (OK, 确定, 決定): empty keeps the native word.
     turn: &'static str,
     back: &'static str,
+    /// The page of camera recipes (runtime/recipe_page.h): the undo row,
+    /// the save row, the toast after a save (before the name), the confirm
+    /// of a delete (before and after the name), the message when the
+    /// recipes are full, the label and message of a recipe whose effect is
+    /// not installed, and the name of a recipe without a look.
+    recipe_undo: &'static str,
+    recipe_save: &'static str,
+    recipe_saved: &'static str,
+    recipe_delete: (&'static str, &'static str),
+    recipe_full: &'static str,
+    recipe_missing: &'static str,
+    recipe_name: &'static str,
+    /// The message of a recipe with a native value that this camera does
+    /// not have.
+    recipe_unsupported: &'static str,
+    /// The message after an apply whose Grain has no effect: no Grain
+    /// module runs, and the native grain has no match.
+    recipe_no_grain: &'static str,
+    /// The names of the native Image Control types in the order of
+    /// `grkit_core::native::TYPES`, as the camera menus name them. The last
+    /// seven are the types of GR IV Monochrome, with the names of its
+    /// firmware.
+    native_types: [&'static str; 21],
 }
 
 const ENGLISH: Words = Words {
@@ -95,6 +118,38 @@ const ENGLISH: Words = Words {
     film: "Film Stock",
     turn: "",
     back: "Back",
+    recipe_undo: "Undo",
+    recipe_save: "Save Current Settings",
+    recipe_saved: "Saved: ",
+    recipe_delete: ("Delete ", "?"),
+    recipe_full: "Full. Fn on a recipe deletes it",
+    recipe_missing: "Effect not installed",
+    recipe_name: "Recipe",
+    recipe_unsupported: "Not available on this camera",
+    recipe_no_grain: "Grain needs the Grain module",
+    native_types: [
+        "Standard",
+        "Vivid",
+        "Monotone",
+        "Soft Monotone",
+        "Hard Monotone",
+        "Hi-Contrast B&W",
+        "Negative Film",
+        "Positive Film",
+        "Bleach Bypass",
+        "Retro",
+        "HDR Tone",
+        "Cross Processing",
+        "Cinema (Yellow)",
+        "Cinema (Green)",
+        "Standard",
+        "Soft",
+        "Hi-Contrast",
+        "Grainy",
+        "Solid",
+        "HDR Tone",
+        "Solarized Effect",
+    ],
 };
 
 const SIMPLIFIED_CHINESE: Words = Words {
@@ -115,6 +170,38 @@ const SIMPLIFIED_CHINESE: Words = Words {
     film: "胶卷",
     turn: "切换",
     back: "返回",
+    recipe_undo: "撤销",
+    recipe_save: "保存当前设置",
+    recipe_saved: "已保存：",
+    recipe_delete: ("删除", "？"),
+    recipe_full: "配方已满，在配方上按 Fn 可删除",
+    recipe_missing: "未安装此效果",
+    recipe_name: "配方",
+    recipe_unsupported: "此相机不支持这个配方",
+    recipe_no_grain: "颗粒感需要颗粒感模块",
+    native_types: [
+        "标准",
+        "鲜艳",
+        "单色",
+        "柔和单色",
+        "硬调单色",
+        "高对比度黑白",
+        "负片",
+        "正片",
+        "漂白效果",
+        "复古",
+        "HDR 色调",
+        "交叉冲印",
+        "电影（黄）",
+        "电影（绿）",
+        "标准",
+        "柔和",
+        "高对比度",
+        "颗粒感",
+        "无颗粒感",
+        "HDR色调",
+        "中途曝光效果",
+    ],
 };
 
 const TRADITIONAL_CHINESE: Words = Words {
@@ -135,6 +222,38 @@ const TRADITIONAL_CHINESE: Words = Words {
     film: "膠卷",
     turn: "切換",
     back: "返回",
+    recipe_undo: "復原",
+    recipe_save: "儲存目前設定",
+    recipe_saved: "已儲存：",
+    recipe_delete: ("刪除", "？"),
+    recipe_full: "配方已滿，在配方上按 Fn 可刪除",
+    recipe_missing: "未安裝此效果",
+    recipe_name: "配方",
+    recipe_unsupported: "此相機不支援這個配方",
+    recipe_no_grain: "粒紋感需要粒紋感模組",
+    native_types: [
+        "標準",
+        "鮮豔",
+        "單色",
+        "柔和單色",
+        "硬調單色",
+        "高對比度黑白",
+        "負片",
+        "正片",
+        "漂白效果",
+        "復古",
+        "HDR 色調",
+        "交叉沖印",
+        "電影（黃）",
+        "電影（綠）",
+        "標準",
+        "柔和",
+        "高對比度",
+        "顆粒感",
+        "無顆粒感",
+        "HDR色調",
+        "中途曝光效果",
+    ],
 };
 
 const JAPANESE: Words = Words {
@@ -157,6 +276,38 @@ const JAPANESE: Words = Words {
     film: "フィルム銘柄",
     turn: "切替",
     back: "戻る",
+    recipe_undo: "元に戻す",
+    recipe_save: "現在の設定を保存",
+    recipe_saved: "保存しました:",
+    recipe_delete: ("", "を削除しますか?"),
+    recipe_full: "上限です。Fn でレシピを削除",
+    recipe_missing: "エフェクト未インストール",
+    recipe_name: "レシピ",
+    recipe_unsupported: "このカメラでは使えません",
+    recipe_no_grain: "粒状感には粒状感モジュールが必要",
+    native_types: [
+        "スタンダード",
+        "ビビッド",
+        "モノトーン",
+        "ソフトモノトーン",
+        "ハードモノトーン",
+        "ハイコントラスト白黒",
+        "ネガフィルム調",
+        "ポジフィルム調",
+        "ブリーチバイパス",
+        "レトロ",
+        "HDR調",
+        "クロスプロセス",
+        "シネマ調(イエロー)",
+        "シネマ調(グリーン)",
+        "スタンダード",
+        "ソフト",
+        "ハイコントラスト",
+        "グレイニー",
+        "ソリッド",
+        "HDR調",
+        "ソラリゼーション調",
+    ],
 };
 
 const KOREAN: Words = Words {
@@ -177,6 +328,38 @@ const KOREAN: Words = Words {
     film: "필름 종류",
     turn: "전환",
     back: "뒤로",
+    recipe_undo: "실행 취소",
+    recipe_save: "현재 설정 저장",
+    recipe_saved: "저장됨: ",
+    recipe_delete: ("", " 삭제?"),
+    recipe_full: "가득 참. 레시피에서 Fn으로 삭제",
+    recipe_missing: "효과가 설치되지 않음",
+    recipe_name: "레시피",
+    recipe_unsupported: "이 카메라에서 쓸 수 없음",
+    recipe_no_grain: "입자감에는 입자감 모듈이 필요함",
+    native_types: [
+        "스탠다드",
+        "비비드",
+        "모노톤",
+        "소프트 모노톤",
+        "하드 모노톤",
+        "하이 콘트라스트 흑백",
+        "네거티브 필름",
+        "포지티브 필름",
+        "블리치 바이패스",
+        "레트로",
+        "HDR 톤",
+        "크로스 프로세스",
+        "시네마(옐로)",
+        "시네마(그린)",
+        "표준",
+        "소프트",
+        "하이 콘트라스트",
+        "그레이니",
+        "솔리드",
+        "HDR톤",
+        "솔라리제이션톤",
+    ],
 };
 
 /// The text between a page title and its value in a root row summary, such
@@ -260,6 +443,20 @@ pub const RUNS: &[Run] = &[
         2,
         "The guides of an options value page: OK turns an option on or off, MENU goes back.",
     ),
+    run(
+        "RECIPE",
+        11,
+        "The page of camera recipes: the Undo and Save rows, the text before a saved name, \
+         the text before and after the name to delete, the message when the recipes are \
+         full, the text of a missing effect, the name of a recipe without a look, the \
+         separator of the root summary, the message of a value that the camera does not have, \
+         and the message of an apply whose Grain has no effect.",
+    ),
+    run(
+        "NATIVE_TYPE",
+        21,
+        "The names of the native Image Control types, in the order of runtime/native.h.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -305,6 +502,20 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         ],
         "FILM" => words(&[w.film]),
         "GUIDE" => words(&[w.turn, w.back]),
+        "RECIPE" => words(&[
+            w.recipe_undo,
+            w.recipe_save,
+            w.recipe_saved,
+            w.recipe_delete.0,
+            w.recipe_delete.1,
+            w.recipe_full,
+            w.recipe_missing,
+            w.recipe_name,
+            w.separator,
+            w.recipe_unsupported,
+            w.recipe_no_grain,
+        ]),
+        "NATIVE_TYPE" => words(&w.native_types),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }

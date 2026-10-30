@@ -368,14 +368,15 @@ static void read_state(void)
     state_translate(&saved_state, from, to, LEGACY_STATE_COUNT, PARAMETER_KEY_BASE);
 }
 /* Restore the values of the capabilities that loaded modules use, the saved
-   module settings in `table` (0 without one), and the Fn adjustments of the
-   records. */
+   module settings in `table` (0 without one), the Fn adjustments of the
+   records, and the camera recipes. */
 static void apply_state(u32 base, u32 table)
 {
     static const u32 ids[] = {CORE_STATE_IDS};
     static const u16 words[] = {GRKIT_CORE_SETTING_WORDS}, values[] = {GRKIT_CORE_SETTING_VALUES};
     u32 value;
-    for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) {
+    _Static_assert(sizeof(ids) / sizeof(ids[0]) == CORE_STATE_COUNT, "a state key for each keyed capability");
+    for (u32 k = 0; k < CORE_STATE_COUNT; ++k) {
         if (!(capabilities_used >> k & 1) || !state_value(&saved_state, ids[k], &value)) continue;
         if (k == GRKIT_CORE_TONE - GRKIT_CORE_SETTING_BASE) {
             /* The effect is its ImageTone code. */
@@ -400,6 +401,12 @@ static void apply_state(u32 base, u32 table)
         if (!state_value(&saved_state, PARAMETER_KEY_BASE + code, &value) || value > PARAMETER_VALUE_MAX) continue;
         for (u32 d = 0; d < 9; ++d) { at(record + GRKIT_RECORD_PARAMETERS + d)[0] = (u8)(value % 9); value /= 9; }
     }
+    /* The camera recipes, also without a module that uses CORE.RECIPE: the
+       loader saves the words that it restores, so the recipes stay while
+       the module is away. The recipe code checks each word that it uses. */
+    for (u32 i = 0; i < GRKIT_RECIPE_WORDS * (GRKIT_RECIPE_SLOTS + GRKIT_RECIPE_UNDO); ++i)
+        if (state_value(&saved_state, GRKIT_RECIPE_KEY_BASE + i, &value) && value <= RECIPE_VALUE_MAX)
+            store(base + GRKIT_HOST_RECIPES + 4 * i, value);
 }
 /* The script arrays that the loader allocated (grkit_core::runtime::loader):
    the registry, the icon chunks, the module array, then the tail. */

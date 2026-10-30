@@ -350,7 +350,7 @@ struct RowText {
 
 /// The capabilities whose pages get their rows from the core
 /// (`runtime/sdk/grkit.h`: GRKIT_CHOICE_CORE_ROWS).
-const CORE_ROWS: [&str; 1] = ["CORE.TONE"];
+const CORE_ROWS: [&str; 2] = ["CORE.TONE", "CORE.RECIPE"];
 
 /// The most UTF-16 units of one text (`runtime/module_link.h`: GRM_TEXT_UNITS).
 const TEXT_UNITS: usize = 64;
@@ -592,6 +592,12 @@ fn core_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) ->
     ensure!(
         !page.off_row && page.settings.is_empty(),
         "A page of {} has no off_row and no settings",
+        page.setting
+    );
+    // The options turn effects on or off: the recipes have none.
+    ensure!(
+        !page.options || page.setting == "CORE.TONE",
+        "A page of {} has no options",
         page.setting
     );
     for (l, language) in Language::ALL.into_iter().enumerate() {

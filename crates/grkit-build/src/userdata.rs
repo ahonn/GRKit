@@ -25,6 +25,7 @@
 
 use crate::firmware::FirmwareImage;
 use anyhow::{bail, ensure, Result};
+use grkit_core::native;
 use std::collections::BTreeMap;
 
 /// The failure message of the shell command, which the reader finds first.
@@ -869,11 +870,8 @@ pub fn recipe_setting(name: &str) -> bool {
         "StillLensShadingCorrection",
         "StillHighIsoNR",
     ];
-    // The Monochrome parameters of GR IV wait for the Monochrome types, and
-    // the names of a custom set are text settings.
-    (PREFIXES.iter().any(|prefix| name.starts_with(prefix))
-        && !name.contains("Monochrome")
-        && !name.ends_with("UserCustomName"))
+    // The names of a custom set are text settings.
+    (PREFIXES.iter().any(|prefix| name.starts_with(prefix)) && !name.ends_with("UserCustomName"))
         || NAMES.contains(&name)
 }
 
@@ -890,6 +888,421 @@ fn setting(image: &Image, stub: u32, strcmp: u32) -> Result<Setting> {
     } else {
         label_handler(image, handler, strcmp)
     }
+}
+
+/// The labels of a setting as a sorted list of (label, stored value).
+fn label_values(setting: &Setting) -> Option<Vec<(String, i64)>> {
+    let Kind::Labels(labels) = &setting.kind else {
+        return None;
+    };
+    let mut values: Vec<(String, i64)> = labels
+        .iter()
+        .map(|(label, value)| (label.clone(), i64::from(*value)))
+        .collect();
+    values.sort();
+    Some(values)
+}
+
+fn model_values(labels: &native::Labels) -> Vec<(String, i64)> {
+    let mut values: Vec<(String, i64)> = labels
+        .values()
+        .map(|(label, value)| (label.to_string(), i64::from(value)))
+        .collect();
+    values.sort();
+    values
+}
+
+/// The stored type value of each type whose parameter fields `fields` gives,
+/// from the functions that pass a changed parameter on to the picture
+/// pipeline. Each one runs only while the current type is its own:
+///
+/// ```text
+/// ldrb r3, [r0, #FIELD]        ; the parameter
+/// ...                          ; at most 10 words
+/// movw r3, #CURRENT
+/// ldrh r3, [r0, r3]            ; the current type << 8
+/// cmp  r3, #TYPE << 8
+/// ```
+///
+/// A type has its value only if each such function of its fields compares
+/// with one value.
+fn synced_types(image: &Image, fields: &BTreeMap<u32, usize>) -> Result<BTreeMap<usize, u32>> {
+    let code: Vec<(u32, u32)> = image.code().collect();
+    let words: Vec<u32> = code.iter().map(|&(_, word)| word).collect();
+    let mut found: BTreeMap<usize, Vec<u32>> = BTreeMap::new();
+    for (index, &word) in words.iter().enumerate() {
+        // ldrb r3, [r0, #imm12]
+        if word & 0xffff_f000 != 0xe5d0_3000 {
+            continue;
+        }
+        let Some(&image_type) = fields.get(&(word & 0xfff)) else {
+            continue;
+        };
+        for at in index + 1..(index + 12).min(words.len().saturating_sub(2)) {
+            let (movw, load, compare) = (words[at], words[at + 1], words[at + 2]);
+            // movw r3, #imm16; ldrh r3, [r0, rM]; cmp r3, #imm
+            if movw & 0xfff0_f000 == 0xe300_3000
+                && load & 0xffff_fff0 == 0xe190_30b0
+                && compare & 0xffff_f000 == 0xe353_0000
+            {
+                let value = modified_immediate(compare);
+                ensure!(
+                    value & 0xff == 0,
+                    "A type check at {:#x} is not a type",
+                    code[at + 2].0
+                );
+                found.entry(image_type).or_default().push(value >> 8);
+                break;
+            }
+        }
+    }
+    let mut types = BTreeMap::new();
+    for (image_type, values) in found {
+        ensure!(
+            values.iter().all(|&value| value == values[0]),
+            "The parameters of type {} check several types: {values:?}",
+            native::TYPES[image_type].label
+        );
+        types.insert(image_type, values[0]);
+    }
+    Ok(types)
+}
+
+/// The model check of GR IV (`FW_MODEL_RECORD`): the address of the
+/// pointer to the current model record, and the offset of the byte that
+/// `SystemConfig_GetImageSensorColorType` returns, 1 on GR IV Monochrome.
+///
+/// ```text
+/// movw/movt rX, POINTER
+/// ldr  rY, [rX]
+/// ldrb r0, [rY, #OFFSET]       ; conditional: the record is not 0
+/// ...
+/// movw/movt rZ, "SystemConfig_GetImageSensorColorType"   ; its error path
+/// ```
+fn sensor_color(image: &Image) -> Result<(u32, u32)> {
+    let names = image.find(b"SystemConfig_GetImageSensorColorType\0");
+    ensure!(
+        names.len() == 1,
+        "{} names of the sensor color check",
+        names.len()
+    );
+    let name = names[0];
+    let mut references = Vec::new();
+    for (address, word) in image.code() {
+        if let Op::Movw(rd, low) = decode(address, word).op {
+            if low == name & 0xffff
+                && movw_movt(image, address, rd)?.map(|(value, _)| value) == Some(name)
+            {
+                references.push(address);
+            }
+        }
+    }
+    ensure!(
+        references.len() == 1,
+        "{} uses of the sensor color check name",
+        references.len()
+    );
+    let reference = references[0];
+    for start in (reference - 0x40..reference).step_by(4) {
+        let Op::Movw(pointer_register, _) = image.insn(start)?.op else {
+            continue;
+        };
+        let Some((pointer, after)) = movw_movt(image, start, pointer_register)? else {
+            continue;
+        };
+        let mut record = None;
+        for at in (after..reference).step_by(4) {
+            match image.insn(at)?.op {
+                Op::Load(4, false, rt, rn, 0) if rn == pointer_register => record = Some(rt),
+                Op::Load(1, false, R0, rn, offset) if Some(rn) == record && offset > 0 => {
+                    return Ok((pointer, offset as u32));
+                }
+                _ => {}
+            }
+        }
+    }
+    bail!("No model record in the sensor color check at {reference:#x}")
+}
+
+/// GR IV: the type setter of set No0 and the model record pointer, which the
+/// build header names `FW_IMAGE_CONTROL_SET` and `FW_MODEL_RECORD`.
+pub fn monochrome_check(image: &FirmwareImage) -> Result<(u32, u32)> {
+    let table = extract(image, |name| name == native::TYPE_SETTING)?;
+    let setter = table
+        .settings
+        .get(native::TYPE_SETTING)
+        .ok_or_else(|| anyhow::anyhow!("No {}", native::TYPE_SETTING))?
+        .setter;
+    let (pointer, _) = sensor_color(&Image { image })?;
+    Ok((setter, pointer))
+}
+
+/// `runtime/targets/<target>-native.h`: the stored values and the field
+/// offsets of the native settings of recipes (`grkit_core::native`) in the
+/// firmware of `image`. Each name, label, and stored value of the model must
+/// be those of the firmware, and the firmware may have no parameter of a
+/// type that the model leaves out.
+pub fn native_header(image: &FirmwareImage) -> Result<String> {
+    let target = image.target;
+    let family = native::Family::of_target(target.name)
+        .ok_or_else(|| anyhow::anyhow!("{} has no native family", target.name))?;
+    let table = extract(image, recipe_setting)?;
+    let get = |name: &str| -> Result<&Setting> {
+        table
+            .settings
+            .get(name)
+            .ok_or_else(|| anyhow::anyhow!("{}: no setting {name}", target.name))
+    };
+    let byte_field = |name: &str| -> Result<u32> {
+        let setting = get(name)?;
+        ensure!(
+            setting.field.width == 1,
+            "{}: {name} is not one byte",
+            target.name
+        );
+        Ok(setting.field.offset)
+    };
+    let check_labels = |name: &str, labels: &native::Labels| -> Result<u32> {
+        let setting = get(name)?;
+        ensure!(
+            label_values(setting) == Some(model_values(labels)),
+            "{}: the labels of {name} differ from the model",
+            target.name
+        );
+        byte_field(name)
+    };
+    // One record shape for each setting.
+    let first = table.settings.values().next().unwrap();
+    for (name, setting) in &table.settings {
+        ensure!(
+            setting.field.record == first.field.record && setting.getters == first.getters,
+            "{}: {name} has another record or getter",
+            target.name
+        );
+    }
+    // The active set and the type: the label and the stored value of each.
+    let active = get(native::ACTIVE_SET_SETTING)?;
+    ensure!(
+        matches!(&active.kind, Kind::Labels(labels) if labels.iter().any(|(l, v)| l == native::MAIN_SET && *v == 0)),
+        "{}: no main set No0 = 0",
+        target.name
+    );
+    let type_setting = get(native::TYPE_SETTING)?;
+    let Kind::Labels(type_labels) = &type_setting.kind else {
+        bail!("{}: the type is not a label setting", target.name);
+    };
+    // A type is in the build if its family has it, but a build can lack a
+    // Monochrome type that a later build adds: then the firmware has none of
+    // its parameters.
+    let present: Vec<bool> = native::TYPES
+        .iter()
+        .enumerate()
+        .map(|(index, image_type)| {
+            image_type.families[family as usize].is_some()
+                && (!image_type.monochrome
+                    || (0..native::PARAMETERS.len()).any(|parameter| {
+                        native::parameter_name(family, index, parameter)
+                            .is_some_and(|name| table.settings.contains_key(&name))
+                    }))
+        })
+        .collect();
+    // The parameters of each type.
+    let mut fields = Vec::new();
+    for (index, image_type) in native::TYPES.iter().enumerate() {
+        for parameter in 0..native::PARAMETERS.len() {
+            match native::parameter_name(family, index, parameter).filter(|_| present[index]) {
+                Some(name) => {
+                    let labels = native::type_parameter_labels(family, index, parameter).unwrap();
+                    fields.push(check_labels(&name, &labels)?);
+                }
+                None => {
+                    for prefix in native::Prefix::ALL {
+                        let name = format!(
+                            "{}{}{}",
+                            prefix.text(),
+                            image_type.label,
+                            native::PARAMETERS[parameter].key
+                        );
+                        ensure!(
+                            !table.settings.contains_key(&name)
+                                || image_type.families[family as usize].is_none(),
+                            "{}: the firmware has {name}, which the model does not",
+                            target.name
+                        );
+                    }
+                    fields.push(0);
+                }
+            }
+        }
+    }
+    // The stored value of each type: the label of StillImageControlNo0, or
+    // for a Monochrome type, the value that the functions of its parameters
+    // check. The other types check that the two agree.
+    let parameters = native::PARAMETERS.len();
+    let type_fields: BTreeMap<u32, usize> = fields
+        .iter()
+        .enumerate()
+        .filter(|&(_, &field)| field != 0)
+        .map(|(at, &field)| (field, at / parameters))
+        .collect();
+    let synced = if native::TYPES
+        .iter()
+        .any(|t| t.monochrome && t.families[family as usize].is_some())
+    {
+        synced_types(&Image { image }, &type_fields)?
+    } else {
+        BTreeMap::new()
+    };
+    let mut codes = Vec::new();
+    for (index, image_type) in native::TYPES.iter().enumerate() {
+        let code = if !present[index] {
+            0xff
+        } else if image_type.monochrome {
+            *synced.get(&index).ok_or_else(|| {
+                anyhow::anyhow!("{}: no stored value of {}", target.name, image_type.label)
+            })?
+        } else {
+            let (_, value) = type_labels
+                .iter()
+                .find(|(l, _)| l == image_type.label)
+                .ok_or_else(|| anyhow::anyhow!("{}: no type {}", target.name, image_type.label))?;
+            let value = u32::try_from(*value)?;
+            if let Some(&checked) = synced.get(&index) {
+                ensure!(
+                    checked == value,
+                    "{}: {} is {value}, but its parameters check {checked}",
+                    target.name,
+                    image_type.label
+                );
+            }
+            value
+        };
+        codes.push(code);
+    }
+    let labelled = codes
+        .iter()
+        .zip(native::TYPES.iter())
+        .filter(|(&code, image_type)| code != 0xff && !image_type.monochrome)
+        .count();
+    ensure!(
+        type_labels.len() == labelled,
+        "{}: the firmware has a type that the model does not",
+        target.name
+    );
+    let mut values: Vec<u32> = codes.iter().copied().filter(|&code| code != 0xff).collect();
+    values.sort_unstable();
+    values.dedup();
+    ensure!(
+        values.len() == codes.iter().filter(|&&code| code != 0xff).count(),
+        "{}: two types have one stored value",
+        target.name
+    );
+    // The white balance modes, their shifts, and the color temperature.
+    let mode_setting = get(native::WHITE_BALANCE_SETTING)?;
+    let Kind::Labels(mode_labels) = &mode_setting.kind else {
+        bail!("{}: the white balance is not a label setting", target.name);
+    };
+    let (mut mode_codes, mut shifts) = (Vec::new(), Vec::new());
+    for (index, label) in native::mode_labels(family).into_iter().enumerate() {
+        mode_codes.push(match label {
+            Some(label) => {
+                let (_, value) = mode_labels
+                    .iter()
+                    .find(|(l, _)| l == label)
+                    .ok_or_else(|| anyhow::anyhow!("{}: no white balance {label}", target.name))?;
+                u32::try_from(*value)?
+            }
+            None => 0xffff,
+        });
+        match native::shift_names(family, index) {
+            Some([ba, gm]) => {
+                shifts.push(check_labels(&ba, &native::SHIFT_BA)?);
+                shifts.push(check_labels(&gm, &native::SHIFT_GM)?);
+            }
+            None => shifts.extend([0, 0]),
+        }
+    }
+    ensure!(
+        mode_labels.len() == mode_codes.iter().filter(|&&code| code != 0xffff).count(),
+        "{}: the firmware has a white balance mode that the model does not",
+        target.name
+    );
+    let temperature = get(native::COLOR_TEMPERATURE)?;
+    ensure!(
+        temperature.kind == Kind::Number && temperature.field.width == 2,
+        "{}: the color temperature is not a number of two bytes",
+        target.name
+    );
+    let corrections: Vec<u32> = native::CORRECTIONS
+        .iter()
+        .map(|correction| check_labels(correction.name, &correction.labels))
+        .collect::<Result<_>>()?;
+    let list = |values: &[u32]| {
+        values
+            .iter()
+            .map(|value| value.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    let mut out = format!(
+        "/* Generated from the firmware of {} (crates/grkit-build/src/userdata.rs). Do\n   \
+         not edit: with the firmware files of the ignored firmware tests, run\n   \
+         GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-build -- --ignored\n   \
+         native_headers_match_each_firmware.\n\n   \
+         The stored values and the field offsets of the native settings of recipes\n   \
+         (runtime/native.h). FW_SETTINGS gives the settings object. A field is at\n   \
+         its offset in the settings record, which is the word at NATIVE_RECORD in\n   \
+         the object, or the object itself without NATIVE_RECORD. The fields are one\n   \
+         byte, the color temperature two. Each offset of a parameter that a type\n   \
+         does not have is 0, and each code of a type or mode that the camera does\n   \
+         not have is all ones. On GR IV, the byte at NATIVE_SENSOR_COLOR_FIELD of\n   \
+         the model record (FW_MODEL_RECORD) is 1 on GR IV Monochrome. */\n",
+        target.name
+    );
+    out.push_str("#ifndef GRKIT_TARGET_NATIVE_H\n#define GRKIT_TARGET_NATIVE_H\n");
+    // The family of the names and labels in runtime/native.h.
+    out.push_str(&format!(
+        "#define NATIVE_FAMILY_{} 1\n",
+        family.key().to_ascii_uppercase()
+    ));
+    if let Some(record) = first.field.record {
+        out.push_str(&format!("#define NATIVE_RECORD {record}U\n"));
+    }
+    out.push_str(&format!(
+        "#define NATIVE_ACTIVE_SET_FIELD {}U\n#define NATIVE_TYPE_FIELD {}U\n",
+        byte_field(native::ACTIVE_SET_SETTING)?,
+        type_setting.field.offset
+    ));
+    out.push_str(&format!("#define NATIVE_TYPE_CODES {}\n", list(&codes)));
+    out.push_str(&format!(
+        "#define NATIVE_PARAMETER_FIELDS {}\n",
+        list(&fields)
+    ));
+    out.push_str(&format!(
+        "#define NATIVE_MODE_FIELD {}U\n#define NATIVE_MODE_CODES {}\n",
+        byte_field(native::WHITE_BALANCE_SETTING)?,
+        list(&mode_codes)
+    ));
+    out.push_str(&format!("#define NATIVE_SHIFT_FIELDS {}\n", list(&shifts)));
+    out.push_str(&format!(
+        "#define NATIVE_TEMPERATURE_FIELD {}U\n",
+        temperature.field.offset
+    ));
+    out.push_str(&format!(
+        "#define NATIVE_CORRECTION_FIELDS {}\n",
+        list(&corrections)
+    ));
+    if native::TYPES
+        .iter()
+        .any(|t| t.monochrome && t.families[family as usize].is_some())
+    {
+        // The build header gives the model record (FW_MODEL_RECORD) and the
+        // type setter (FW_IMAGE_CONTROL_SET), which monochrome_check reads.
+        let (_, offset) = sensor_color(&Image { image })?;
+        out.push_str(&format!("#define NATIVE_SENSOR_COLOR_FIELD {offset:#x}U\n"));
+    }
+    out.push_str("#endif\n");
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -944,8 +1357,11 @@ mod tests {
         assert!(!recipe_setting(
             "StillImageControlNo1ParamStandardSaturation"
         ));
-        assert!(!recipe_setting(
+        assert!(recipe_setting(
             "AfterReleaseStillImageControlNo0ParamMonochromeGrainyParticle"
+        ));
+        assert!(!recipe_setting(
+            "AfterReleaseMovieImageControlNo0ParamMonochromeGrainyParticle"
         ));
         assert!(!recipe_setting("MovieWhiteBalance"));
         assert!(!recipe_setting("StillHighIsoNRCustomIso100"));
