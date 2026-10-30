@@ -114,6 +114,13 @@ fn port_of_gr4_111_to_120_agrees_with_the_gr4_120_target() -> Result<()> {
         review.contains(&"target:image_control.tables[0]"),
         "{check:#}"
     );
+    // 1.20 has one more parameter setter in the run of equal setters, so the
+    // windows of the later setters match one setter too far. Shading and clarity
+    // need a review.
+    for row in [7, 8] {
+        let name = format!("site:hook:menu_parameter_set_{row}");
+        assert!(review.contains(&name.as_str()), "{check:#}");
+    }
     assert!(check["equal"].as_u64().unwrap() >= 130, "{check:#}");
     assert_eq!(port.layout.data_source, target::GR4_120.data_source);
     assert_eq!(port.layout.data_size, target::GR4_120.data_size);

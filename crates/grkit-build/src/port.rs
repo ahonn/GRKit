@@ -294,6 +294,12 @@ fn planned(target: &Target, address: &Address) -> (u32, u32) {
 const WEAK: &str = "only windows of mostly addresses agree: a table that grew or moved \
     matches at another start";
 
+/// Why a port in a run of equal functions needs a check
+/// (`relocation::Planner::repeated`). GR IV 1.20 has one more parameter
+/// setter than 1.11, and the port gave the next setter for two rows.
+const REPEATED: &str = "the function occurs another number of times nearby: a function \
+    added to or removed from a run of equal functions moves the others";
+
 /// A source in a window of mostly address words. A table of pointers masks
 /// to equal words, so its window can match where the table grew or moved,
 /// and a literal in it can then hold another entry. The code windows of
@@ -361,6 +367,7 @@ pub fn port(base: &FirmwareImage, other: &[u8], radius: u32) -> Result<Port> {
     let addresses = addresses(target)?;
     let mut planner = Planner::with_radius(base, radius)?;
     let mut symbols = Vec::new();
+    let mut repeated = Vec::new();
     for address in &addresses {
         let (planned, offset) = planned(target, address);
         symbols.push(
@@ -368,6 +375,11 @@ pub fn port(base: &FirmwareImage, other: &[u8], radius: u32) -> Result<Port> {
                 .map(|symbol| (symbol, offset))
                 .map_err(|error| format!("no window in {}: {error}", target.firmware)),
         );
+        repeated.push(if address.kind == Kind::Target {
+            None
+        } else {
+            planner.repeated(planned)
+        });
     }
     let plan = planner.finish();
     let resolution = relocation::resolve(&plan, other, radius)?;
@@ -375,10 +387,25 @@ pub fn port(base: &FirmwareImage, other: &[u8], radius: u32) -> Result<Port> {
         let start = address.checked_sub(RTOS_BASE)? as usize;
         Some(hex::encode(other.get(start..start + size)?))
     };
+    let masked: Vec<u32> = other
+        .chunks_exact(4)
+        .map(|word| relocation::mask(u32::from_le_bytes(word.try_into().unwrap())))
+        .collect();
+    // How often `words` occur within twice the radius of `at` in `other`.
+    let occurrences = |at: u32, words: &[u32]| -> usize {
+        let index = (at.saturating_sub(RTOS_BASE) / 4) as usize;
+        let span = (2 * radius / 4) as usize;
+        let low = index.saturating_sub(span);
+        let high = (index + span).min(masked.len().saturating_sub(words.len()));
+        (low..=high)
+            .filter(|&at| masked[at..at + words.len()] == *words)
+            .count()
+    };
     let addresses = addresses
         .into_iter()
         .zip(symbols)
-        .map(|(address, symbol)| {
+        .zip(repeated)
+        .map(|((address, symbol), repeated)| {
             let resolved = symbol.and_then(|(symbol, offset)| {
                 resolution.symbols[symbol]
                     .clone()
@@ -387,6 +414,13 @@ pub fn port(base: &FirmwareImage, other: &[u8], radius: u32) -> Result<Port> {
             let review = match &resolved {
                 Ok((_, sources)) if sources.iter().all(|source| weak(&plan, source)) => {
                     Some(WEAK.to_string())
+                }
+                Ok((value, _))
+                    if repeated
+                        .as_ref()
+                        .is_some_and(|(words, count)| occurrences(*value, words) != *count) =>
+                {
+                    Some(REPEATED.to_string())
                 }
                 _ => None,
             };

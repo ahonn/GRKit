@@ -206,6 +206,24 @@ impl<'a> Planner<'a> {
         self.plan
     }
 
+    /// The masked words of the function around the code address `address`,
+    /// and how often they occur within twice the radius, if more than once.
+    /// Then only the code around the function makes its window unique, such
+    /// as the start or the end of a run of equal functions, and the window
+    /// keeps the offset of `address` from there. Another build of the same
+    /// source keeps that offset. A new version can add a function to the run
+    /// and move the others.
+    pub fn repeated(&self, address: u32) -> Option<(Vec<u32>, usize)> {
+        if !(RTOS_BASE..self.image.target.data_source).contains(&address) {
+            return None;
+        }
+        let (start, end) = self.function(address);
+        let words =
+            &self.masked[((start - RTOS_BASE) / 4) as usize..((end - RTOS_BASE) / 4) as usize];
+        let count = self.occurrences(Region::Image, start, words).len();
+        (count > 1).then(|| (words.to_vec(), count))
+    }
+
     fn region(&self, region: Region) -> (&[u32], u32) {
         match region {
             Region::Image => (&self.masked, RTOS_BASE),
