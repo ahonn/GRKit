@@ -82,6 +82,66 @@ fn native_saturation(effect: &Effect) -> [f64; 9] {
     }
 }
 
+/// The input scale of GR III still pictures (`native_tone::ToneSteps`), as GR III 2.10
+/// computes it for a daylight scene. Previews use it to place the tone steps of a native look.
+pub const GR3_STILL_SCALE: u32 = 17829;
+
+/// The base gamma of a native look's preview: `base_gamma` after the change that its
+/// default tone steps (key, contrast, highlight, shadow) make to the camera's base curve.
+/// A Standard code `v` becomes `S'(S^-1(v))`, where `S` and `S'` are the base curves of
+/// neutral and of the look's steps, so the preview keeps the coordinates of the Standard
+/// baseline.
+pub fn native_tone_base(
+    base_gamma: &[u16; 256],
+    tables: &crate::native_tone::ToneTables,
+    defaults: &[i8; 9],
+) -> [u16; 256] {
+    use crate::native_tone::ToneSteps;
+    let steps = |key: i8, contrast: i8, shadow: i8, highlight: i8| ToneSteps {
+        key: key.into(),
+        contrast: contrast.into(),
+        shadow: shadow.into(),
+        highlight: highlight.into(),
+        input_scale: GR3_STILL_SCALE,
+    };
+    // effects::FN_KEYS: saturation, hue, key, contrast, highlight, shadow, ...
+    let neutral = tables.base_curve(&steps(0, 0, 0, 0));
+    let look = tables.base_curve(&steps(defaults[2], defaults[3], defaults[5], defaults[4]));
+    let at = |curve: &[u16; 256], x: f64| {
+        let x = x.clamp(0.0, 255.0);
+        let low = (x as usize).min(254);
+        let t = x - low as f64;
+        f64::from(curve[low]) * (1.0 - t) + f64::from(curve[low + 1]) * t
+    };
+    // The input of the neutral curve that gives `v`; the curve rises monotonically.
+    let inverse = |v: f64| {
+        let i = neutral.partition_point(|&c| f64::from(c) < v);
+        match i {
+            0 => 0.0,
+            256 => 255.0,
+            i => {
+                let (a, b) = (f64::from(neutral[i - 1]), f64::from(neutral[i]));
+                (i - 1) as f64 + if b > a { (v - a) / (b - a) } else { 0.0 }
+            }
+        }
+    };
+    base_gamma.map(|v| at(&look, inverse(f64::from(v))).round().clamp(0.0, 16384.0) as u16)
+}
+
+/// The RAW preview table of an effect with Fn defaults (`linear_preview_lut`) after its
+/// default tone steps, from the tone tables of the firmware that the effect came from.
+pub fn native_preview_lut(
+    base_gamma: &[u16; 256],
+    effect: &Effect,
+    tables: &crate::native_tone::ToneTables,
+) -> Result<Vec<u8>> {
+    let base = match &effect.fn_defaults {
+        Some(defaults) => native_tone_base(base_gamma, tables, defaults),
+        None => *base_gamma,
+    };
+    linear_preview_lut(&base, effect)
+}
+
 /// A legacy Standard-JPEG input table, red fastest, then green, then blue.
 /// Published catalogs use `linear_preview_lut` instead.
 pub fn preview_lut(base_gamma: &[u16; 256], effect: &Effect) -> Result<Vec<u8>> {

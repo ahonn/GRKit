@@ -110,6 +110,50 @@ pub fn import_lut_with_progress(
     })
 }
 
+/// A look that `native_looks` read from a GR IV firmware file of the user.
+pub struct NativeEffect {
+    /// The GR IV version of the file.
+    pub version: &'static str,
+    pub id: String,
+    pub name: String,
+    /// The effect.json text, as `grkit effects native` writes it.
+    pub definition: String,
+    /// The compiled `.GRF` effect for the package.
+    pub blob: Vec<u8>,
+    /// The RAW preview table with the look's default tone steps.
+    pub preview: Vec<u8>,
+    /// The ADJ icon: 40 x 40 RGBA pixels.
+    pub icon: Vec<u8>,
+    pub monochrome: bool,
+}
+
+/// Reads the GR IV looks (`gr4_looks::LOOKS`) from an official GR IV zip or its firmware
+/// file. The page keeps the file in the browser. `base_gamma` is the table of the
+/// site catalog, for the previews.
+pub fn native_looks(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeEffect>> {
+    let base_gamma = site::base_gamma(base_gamma)?;
+    let image = grkit_core::gr4_looks::Image::read(bytes)?;
+    let tables = image.tone_tables()?;
+    image
+        .definitions()?
+        .into_iter()
+        .map(|definition| {
+            let blob = effects::compile_definition(&definition)?;
+            let (effect, icon) = effects::decode(&blob)?;
+            Ok(NativeEffect {
+                version: image.source.version,
+                preview: site::native_preview_lut(&base_gamma, &effect, &tables)?,
+                monochrome: effect.monochrome(),
+                id: effect.id,
+                name: effect.name,
+                definition: serde_json::to_string_pretty(&definition)?,
+                blob,
+                icon,
+            })
+        })
+        .collect()
+}
+
 /// The input that a LUT most likely expects, from its data alone: see `fit::guess_input`.
 pub fn guess_input(bytes: &[u8], base_gamma: &[u16]) -> Result<&'static str> {
     let base_gamma = lut_inputs(bytes, base_gamma)?;
@@ -461,6 +505,68 @@ pub fn scripts_off_files(camera: &str) -> Result<Vec<CardFile>, JsError> {
                 .map(|(path, bytes)| CardFile { path, bytes })
                 .collect()
         })
+        .map_err(js_error)
+}
+
+/// A look of a GR IV firmware file. See `nativeLooks`.
+#[wasm_bindgen(js_name = NativeLookEffect)]
+pub struct NativeLookEffect(NativeEffect);
+
+#[wasm_bindgen(js_class = NativeLookEffect)]
+impl NativeLookEffect {
+    /// The GR IV version of the file, such as `1.20`.
+    #[wasm_bindgen(getter)]
+    pub fn version(&self) -> String {
+        self.0.version.to_owned()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> String {
+        self.0.id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn name(&self) -> String {
+        self.0.name.clone()
+    }
+
+    /// The effect.json text.
+    #[wasm_bindgen(getter)]
+    pub fn definition(&self) -> String {
+        self.0.definition.clone()
+    }
+
+    /// The compiled `.GRF` effect, for `Package.addEffect`.
+    #[wasm_bindgen(getter)]
+    pub fn blob(&self) -> Vec<u8> {
+        self.0.blob.clone()
+    }
+
+    /// The RAW preview table: 33 x 33 x 33 RGB bytes over sRGB-shaped linear input.
+    #[wasm_bindgen(getter)]
+    pub fn preview(&self) -> Vec<u8> {
+        self.0.preview.clone()
+    }
+
+    /// The ADJ icon: 40 x 40 RGBA pixels.
+    #[wasm_bindgen(getter)]
+    pub fn icon(&self) -> Vec<u8> {
+        self.0.icon.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn monochrome(&self) -> bool {
+        self.0.monochrome
+    }
+}
+
+/// Reads the GR IV looks from an official GR IV zip or its firmware file, which the user
+/// chose. `baseGamma` is the `base_gamma` array of the site catalog. It
+/// decodes about 40 MB, so call it from a Worker.
+#[wasm_bindgen(js_name = nativeLooks)]
+pub fn native_looks_js(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeLookEffect>, JsError> {
+    native_looks(bytes, base_gamma)
+        .map(|looks| looks.into_iter().map(NativeLookEffect).collect())
         .map_err(js_error)
 }
 

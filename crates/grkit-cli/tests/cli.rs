@@ -914,3 +914,22 @@ fn release_plan_builds_each_target_and_packages_each_camera() {
         ])
     );
 }
+
+#[test]
+fn native_looks_need_a_supported_gr4_file() {
+    let tmp = tempfile::tempdir().unwrap();
+    let file = tmp.path().join("fwdc248b.bin");
+    std::fs::write(&file, [0u8; 256]).unwrap();
+    let output = run(&[
+        "effects",
+        "native",
+        "--firmware",
+        file.to_str().unwrap(),
+        "--out",
+        tmp.path().join("out").to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("1.11, 1.20"), "{error}");
+    assert!(!tmp.path().join("out").exists());
+}

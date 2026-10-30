@@ -338,3 +338,28 @@ fn fn_hint_ids_are_those_of_the_native_adj_refresh() -> Result<()> {
     }
     Ok(())
 }
+
+/// The GR IV sources of `grkit_core::gr4_looks`, which the site reads without the build
+/// targets, name the same files, data sections, and type tables as the targets.
+#[test]
+fn gr4_look_sources_match_their_targets() {
+    for source in &grkit_core::gr4_looks::SOURCES {
+        let target = target::TARGETS
+            .iter()
+            .find(|t| t.firmware_sha256 == source.firmware_sha256)
+            .unwrap_or_else(|| panic!("No target for GR IV {}", source.version));
+        assert_eq!(target.firmware, format!("GR IV {}", source.version));
+        let tables = target.image_control.unwrap().tables;
+        assert_eq!(
+            source.layout(),
+            (
+                target.data_start,
+                target.data_source,
+                target.data_size,
+                [tables[0], tables[1]]
+            ),
+            "{}",
+            target.name
+        );
+    }
+}
