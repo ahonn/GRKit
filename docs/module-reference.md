@@ -66,7 +66,7 @@ A setting reference in `page`, `layers`, or `filters` is a key of `settings`, or
 | `settings` | array of strings | `[]` | The rows of a native settings page: the page setting, then keys of `settings` or names of `uses`. Give 0 to 5 keys (`GRKIT_SETTING_ROWS`). The row of an optional used setting that no module has is left out. With one key, the page setting alone, the row gets a label of its own, and Fn opens no settings page. |
 | `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. |
 
-A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`.
+A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`. Its tile 0, if it has one, shows on the root row while the setting is Off; without it, the root row shows the Off icon.
 
 ### layers
 
@@ -348,7 +348,7 @@ Other lines:
 | --- | --- |
 | `loaded` | The module loaded. |
 | `loaded, stopped: Enable is Off in the GRKit section of MENU` | The module loaded, but Enable is Off, so the core calls none of its code. On applies at once. |
-| `loaded, stopped: GRKit is Off in the GRKit section of MENU` | The module loaded, but the GRKit switch is Off, so the core calls none of its code. On applies at once. |
+| `loaded, stopped: Enable GRKit is Off in the GRKit section of MENU` | The module loaded, but Enable GRKit is Off, so the core calls none of its code. On applies at once. |
 | `not loaded: safe mode` | GRKit is in the safe mode, so no module loads. See [Report and safe mode](architecture.md#report-and-safe-mode). |
 
 When a module does not load, the other modules still load. A module that requires a setting of it gets error 55. A page, a layer, or a filter of an optional setting of it is not registered.

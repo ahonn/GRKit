@@ -137,9 +137,10 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
         settings_start(h,MANAGE_MODULE);
         return SETTINGS_SUBMENU;
     }
+    /* Enable GRKit opens its value page at once: On or Off. */
     if(kind==MENU_ROW_SWITCH) {
         settings_start(h,SWITCH_MODULE);
-        return SETTINGS_SUBMENU;
+        return settings_pages[0];
     }
     if(kind==MENU_ROW_LISTED) {
         services_word(h,SERVICES_MENU+MENU_ROWS_LISTED)[0]=module;
@@ -182,7 +183,7 @@ static void menu_row_fill(u32 slot,u32 row) {
     kind=at[MENU_ROW_KIND/4];
     module=at[MENU_ROW_MODULE/4];
     if(kind==MENU_ROW_ADJ) { label=text(h,TEXT_ADJ); value=no_text; }
-    else if(kind==MENU_ROW_SWITCH) { label=grkit_title; value=on_off_text(h,manage_all_off(h)); }
+    else if(kind==MENU_ROW_SWITCH) { label=switch_menu_label(h); value=on_off_text(h,manage_all_off(h)); }
     else if(kind==MENU_ROW_LISTED) {
         /* A loaded module shows the value of its page, as a native row shows
            its value, or Off while it or the switch is Off; another module

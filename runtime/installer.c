@@ -590,15 +590,17 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
 {
     u32 base = a->base;
     /* Host artwork does not consume an effect record or a native settings ID.
-       It comes first in chunk 0: Off, the GRKit tile, the Version tile, then
-       the Modules tile. */
-    _Static_assert(HOST_ICON_COUNT == 4, "The host icons are Off, GRKit, Version, and Modules");
+       It comes first in chunk 0: Off, the GRKit tile, the Version tile, the
+       Modules tile, then the Modules tile of Enable GRKit Off. */
+    _Static_assert(HOST_ICON_COUNT == 5, "The host icons are Off, GRKit, Version, Modules, and Modules Off");
     for (u32 i = 0; i < HOST_ICON_COUNT; ++i) {
         u32 icon = a->icon_bases[0] + i * ICON_STRIDE;
-        static const u8 *const artwork[HOST_ICON_COUNT] = {off_pixels, grkit_pixels, version_pixels, modules_pixels};
+        static const u8 *const artwork[HOST_ICON_COUNT] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
+                                                                 modules_off_pixels};
         icon_header(icon, pixels);
         copy(at(icon + ICON_PIXELS), artwork[i], 6400);
-        /* The menu derives the Version and Modules icons from the GRKit icon. */
+        /* The menu derives the Version and the two Modules icons from the
+           GRKit icon. */
         if (i < 2) store(base + (i ? GRKIT_HOST_GRKIT_ICON : GRKIT_HOST_OFF_ICON), icon);
     }
 }

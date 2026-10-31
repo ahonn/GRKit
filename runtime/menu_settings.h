@@ -556,7 +556,7 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
                    manage_name(h,listed(h)));
     else
     descriptor(block+SETTINGS_LABELS/4,module==MANAGE_MODULE ? manage_title(h) :
-               menu_page(h,module)->title(h));
+               module==SWITCH_MODULE ? grkit_title : menu_page(h,module)->title(h));
     for(i=0;i<SETTINGS_VIEW_SLOTS*3;++i) block[SETTINGS_VIEWS/4+i]=0;
     h[GRKIT_HOST_SETTINGS/4]=(module+1)|(one ? SETTINGS_ONE : 0);
 }

@@ -522,6 +522,41 @@ pub fn modules_pixels() -> Vec<u8> {
     rgba
 }
 
+/// The Modules tile with a line through it, from the top left to the bottom
+/// right: the root row of Enable GRKit while it is Off. A band of the body
+/// shade on each side of the white line cuts the text.
+pub fn modules_off_pixels() -> Vec<u8> {
+    let mut rgba = modules_pixels();
+    for (ink, half_width) in [(51, 2.6), (255, 1.1)] {
+        line(&mut rgba, (7.0, 8.0), (32.0, 33.0), half_width, ink);
+    }
+    rgba
+}
+
+/// Blend `ink` over the frame inside, where a pixel is within `half_width`
+/// of the segment `from`-`to`, anti-aliased with 4 x 4 samples.
+fn line(rgba: &mut [u8], from: (f32, f32), to: (f32, f32), half_width: f32, ink: u8) {
+    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+    let distance = |x: f32, y: f32| {
+        let t = (((x - from.0) * dx + (y - from.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+        ((x - from.0 - t * dx).powi(2) + (y - from.1 - t * dy).powi(2)).sqrt()
+    };
+    for y in 3..37 {
+        for x in 2..38 {
+            let covered = (0..16)
+                .filter(|sample| {
+                    let sx = x as f32 + (sample % 4) as f32 / 4.0 + 0.125;
+                    let sy = y as f32 + (sample / 4) as f32 / 4.0 + 0.125;
+                    distance(sx, sy) <= half_width
+                })
+                .count();
+            if covered > 0 {
+                blend(rgba, x, y, ink, covered as f32 / 16.0);
+            }
+        }
+    }
+}
+
 /// The live-view labels in label order: the load cue, then the Framing ratios
 /// in capture area order (runtime/framing.c: photo_boxes), so label n names
 /// capture area n, then the sign of Date Imprint (LABEL_DATE in

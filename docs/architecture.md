@@ -112,7 +112,7 @@ GRKit adds an entry to the ADJ toolbar that lists the module pages. It reuses th
 
 ### GRKit section of MENU
 
-The Customize tab of MENU gets a GRKit section. It has the **GRKit** switch, a row for each module file, which turns the module on or off and opens its settings, **ADJ Order**, and **About GRKit**. The switch turns each module off at once, as the Off of each does, and keeps the Enable of each, so On brings back the modules that were on. The root of ADJ shows it too, after the module pages. The settings pages are native pages of the camera. A module that is off loads stopped: the core calls none of its code, so on applies at once. A page with options can turn each of its values, or each effect, on or off in ADJ.
+The Customize tab of MENU gets a GRKit section. It has **Enable GRKit**, a row for each module file, which turns the module on or off and opens its settings, **ADJ Order**, and **About GRKit**. This switch, which ADJ shows too, turns all modules off and on again and keeps the Enable of each. The settings pages are native pages of the camera. A module that is off loads stopped: the core calls none of its code, so on applies at once. A page with options can turn each of its values, or each effect, on or off in ADJ.
 
 The menu text follows the camera language.
 

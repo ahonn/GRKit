@@ -367,11 +367,11 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": 192, "tail_words": 45743, "icon_words": [6408]})
+        json!({"words": 192, "tail_words": 45743, "icon_words": [8010]})
     );
     assert_eq!(
         runtime::layout(40).unwrap(),
-        json!({"words": 43712, "tail_words": 45743, "icon_words": [64080, 6408]})
+        json!({"words": 43712, "tail_words": 45743, "icon_words": [64080, 8010]})
     );
     assert!(runtime::layout(41).is_err());
 }
@@ -398,15 +398,15 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
         );
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
-            (count + 4) * 6408,
+            (count + 5) * 6408,
             "count {count}"
         );
         assert!(std::iter::once(&words)
             .chain(&icons)
             .all(|v| (1..=65536).contains(v)));
-        // The 4 host icons come first, then the effects, 40 icons in each
+        // The 5 host icons come first, then the effects, 40 icons in each
         // chunk. Module tiles follow the effects (runtime/installer.c).
-        assert_eq!(icons.len(), (count + 4).div_ceil(40), "count {count}");
+        assert_eq!(icons.len(), (count + 5).div_ceil(40), "count {count}");
     }
     assert!(runtime::layout(usize::MAX).is_err());
 }

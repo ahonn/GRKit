@@ -721,9 +721,12 @@ A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
 /* GRKit leaves a page itself on OK, MENU, Fn, Left, Right, and touch. An
    ADJ exit that GRKit did not start, such as a half-press of the shutter,
    keeps the highlighted row of a page, as a native ADJ keeps the value under
-   its cursor. The Modules page opens settings on OK, so it commits nothing. */
+   its cursor. The Modules page opens settings on OK, so it commits nothing.
+   The GRKit switch commits only on OK or a touch: a half-press on its page
+   must not turn each module off. */
 static void exit_commit(volatile u32 *h) {
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && h[GRKIT_HOST_MODULE/4]!=MANAGE_MODULE) menu_confirm(h);
+    u32 module=h[GRKIT_HOST_MODULE/4];
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && module!=MANAGE_MODULE && module!=SWITCH_MODULE) menu_confirm(h);
 }
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
@@ -958,6 +961,7 @@ static u32 icon_address(volatile u32 *h,u32 id) {
     if(id==GRKIT_ICON_VERSION) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+GRKIT_ICON_STRIDE : 0;
     /* The Modules icon follows the Version icon. */
     if(id==GRKIT_ICON_MODULES) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+2*GRKIT_ICON_STRIDE : 0;
+    if(id==GRKIT_ICON_MODULES_OFF) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+3*GRKIT_ICON_STRIDE : 0;
     if(id==0x7fff) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : NATIVE_OFF_ICON();
     if(index>=h[GRKIT_HOST_COUNT/4]) return 0;
     return WORD(h[GRKIT_HOST_RECORDS/4]+index*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);

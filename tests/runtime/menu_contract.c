@@ -398,6 +398,16 @@ static void the_root_reads_off_without_a_committed_effect(void)
     descriptor(slot, MODULE(0).summary(test_header));
     assert(same(MODULE(0).summary(test_header), "Film Look: Off") && slot[0] == 0x10f);
     assert(same(MODULE(0).title(test_header), "Film Look"));
+    /* The root row shows tile 0 of the module for Off; the Off row of the
+       page keeps the Off icon. A module without tiles shows Off. */
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    assert(MODULE(0).icon(test_header, 0) == GRKIT_ICON_MODULE_TILE(0));
+    test_header[GRKIT_HOST_MODULE_PAGES / 4 + 2] = MANAGE_NO_TILE;
+    assert(MODULE(0).icon(test_header, 0) == GRKIT_ICON_OFF);
+    test_header[GRKIT_HOST_MODULE_PAGES / 4 + 2] = 0;
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
+    assert(MODULE(0).icon(test_header, 0) == GRKIT_ICON_OFF);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = 0;
 }
 
 static void each_language_reads_its_own_texts_and_font(void)
@@ -736,7 +746,8 @@ static void module_tiles_follow_the_effect_icons(void)
     /* The Modules tile follows the Version tile, and the icon IDs below it
        are not tiles. */
     assert(menu_icon(GRKIT_ICON_MODULES) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 2 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_MODULES - 1) == 0);
+    assert(menu_icon(GRKIT_ICON_MODULES_OFF) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 3 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_MODULES_OFF - 1) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -1559,20 +1570,27 @@ static void the_switch_stops_each_module_at_once(void)
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] = tone | aspect;
     assert(count(h) == roots + 1 && root_module(h, roots) == SWITCH_MODULE);
-    assert(same(MODULE(SWITCH_MODULE).summary(h), "GRKit: On"));
+    /* Under the GRKit title of the root, the row is Enable. */
+    assert(same(MODULE(SWITCH_MODULE).summary(h), "Enable: On"));
     assert(MODULE(SWITCH_MODULE).icon(h, roots) == GRKIT_ICON_MODULES);
     assert(!MODULE(SWITCH_MODULE).settings);
-    /* The page: On and Off, open at the value. */
+    /* The page: Off first, as on each module page, then On; it opens at the
+       value. */
     menu_open(h, SWITCH_MODULE);
-    assert(count(h) == 2 && !h[GRKIT_HOST_MENU_CURSOR / 4] && same(current_module(h)->title(h), "GRKit"));
-    assert(same(MODULE(SWITCH_MODULE).label(h, 0), "On") && same(MODULE(SWITCH_MODULE).label(h, 1), "Off"));
-    assert(MODULE(SWITCH_MODULE).checked(h, 0) && !MODULE(SWITCH_MODULE).checked(h, 1));
-    assert(MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_MODULES && MODULE(SWITCH_MODULE).icon(h, 1) == GRKIT_ICON_OFF);
+    assert(count(h) == 2 && h[GRKIT_HOST_MENU_CURSOR / 4] == 1 && same(current_module(h)->title(h), "Enable"));
+    assert(same(MODULE(SWITCH_MODULE).label(h, 0), "Off") && same(MODULE(SWITCH_MODULE).label(h, 1), "On"));
+    assert(!MODULE(SWITCH_MODULE).checked(h, 0) && MODULE(SWITCH_MODULE).checked(h, 1));
+    assert(MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_OFF && MODULE(SWITCH_MODULE).icon(h, 1) == GRKIT_ICON_MODULES);
+    /* An ADJ exit on the page, such as a half-press with Off highlighted,
+       keeps the switch On. */
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    exit_commit(h);
+    assert(!manage_all_off(h) && h[GRKIT_HOST_MODULE / 4] == SWITCH_MODULE);
     /* Off stops each loaded module at once and counts as one change. The
        Enable of each keeps its value. No capability runs, and Framing
        sends the native 3:2 request again for the full area. */
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
     menu_confirm(h);
     assert(manage_all_off(h) && settings_memory[2 + 12 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
     assert(manage_stopped(h, 0) && manage_stopped(h, 1) && !manage_off(h, 0) && !manage_off(h, 1));
@@ -1582,7 +1600,9 @@ static void the_switch_stops_each_module_at_once(void)
     h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
     assert(count(h) == roots - 1 && !(visible_modules(h) >> 2 & 1) && !(visible_modules(h) >> 3 & 1));
     assert(root_module(h, roots - 2) == SWITCH_MODULE);
-    assert(same(MODULE(SWITCH_MODULE).summary(h), "GRKit: Off") && MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_OFF);
+    /* The root row shows the Modules tile with a line through it. */
+    assert(same(MODULE(SWITCH_MODULE).summary(h), "Enable: Off") &&
+           MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_MODULES_OFF);
     /* Film Look keeps its effect, and the viewfinder shows the native
        icon. */
     h[GRKIT_HOST_ACTIVE / 4] = 0x59005000;
@@ -2266,8 +2286,8 @@ static void the_section_rows_follow_the_listed_modules(void)
     assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
 }
 /* While a module loaded, the section starts with the GRKit switch. OK on it
-   opens a settings page with its one row. A tab without room for each row
-   keeps the switch, ADJ Order, and About GRKit. */
+   opens its value page. A tab without room for each row keeps the switch,
+   ADJ Order, and About GRKit. */
 static void the_section_starts_with_the_switch(void)
 {
     static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_ADJ,
@@ -2282,10 +2302,14 @@ static void the_section_starts_with_the_switch(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && BYTE(tab_copy(), MENU_TAB_ROWS) == 16);
     for (u32 slot = 0; slot < 6; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
-    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    /* The row, Enable GRKit, opens its value page at once: On, then Off,
+       as the Enable of a module. */
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == settings_pages[0]);
     assert(h[GRKIT_HOST_SETTINGS / 4] == SWITCH_MODULE + 1 && settings_page(h) == switch_settings);
-    assert(settings_rows(h) == 1 && same(switch_settings[0].label(h), "GRKit"));
-    assert(switch_settings[0].values(h) == 2 && same(switch_settings[0].value_text(h, 1), "Off"));
+    assert(same(switch_menu_label(h), "Enable GRKit"));
+    assert(settings_rows(h) == 1 && same(switch_settings[0].label(h), "Enable GRKit"));
+    assert(switch_settings[0].values(h) == 2 && same(switch_settings[0].value_text(h, 0), "On") &&
+           same(switch_settings[0].value_text(h, 1), "Off"));
     switch_settings[0].set(h, 1);
     assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
     switch_settings[0].set(h, 0);

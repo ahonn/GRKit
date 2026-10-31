@@ -22,9 +22,7 @@ pub const TEXT_SETTINGS: usize = TEXT_PARAMETER_TITLE - 512;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 23;
-/// The name of the GRKit switch, the same in each language.
-const GRKIT: &str = "GRKit";
+pub const STRINGS: usize = 24;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -60,6 +58,8 @@ struct Words {
     /// The row that turns a module or an effect on or off, and its On value.
     enable: &'static str,
     on: &'static str,
+    /// The MENU row of the switch that turns all modules off and on again.
+    enable_grkit: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The settings row that lists the options of a module page.
@@ -89,6 +89,7 @@ const ENGLISH: Words = Words {
     safe_mode: "Safe mode",
     enable: "Enable",
     on: "On",
+    enable_grkit: "Enable GRKit",
     adj_order: "ADJ Order",
     options: "Options",
     about: "About GRKit",
@@ -109,6 +110,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     safe_mode: "安全模式",
     enable: "启用",
     on: "开启",
+    enable_grkit: "启用 GRKit",
     adj_order: "ADJ 菜单顺序",
     options: "可选项",
     about: "关于 GRKit",
@@ -129,6 +131,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     safe_mode: "安全模式",
     enable: "啟用",
     on: "開啟",
+    enable_grkit: "啟用 GRKit",
     adj_order: "ADJ 選單順序",
     options: "可選項",
     about: "關於 GRKit",
@@ -151,6 +154,7 @@ const JAPANESE: Words = Words {
     safe_mode: "セーフモード",
     enable: "有効",
     on: "オン",
+    enable_grkit: "GRKit を有効",
     adj_order: "ADJ メニューの順番",
     options: "オプション",
     about: "GRKit について",
@@ -171,6 +175,7 @@ const KOREAN: Words = Words {
     safe_mode: "안전 모드",
     enable: "사용",
     on: "켜짐",
+    enable_grkit: "GRKit 사용",
     adj_order: "ADJ 메뉴 순서",
     options: "옵션",
     about: "GRKit 정보",
@@ -264,8 +269,8 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "SWITCH",
-        2,
-        "The GRKit switch, which stops each module at once: its summary while on, and while off.",
+        3,
+        "The switch that stops each module at once: its ADJ summary while on, and while off, then its MENU row.",
     ),
 ];
 
@@ -312,7 +317,11 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         ],
         "FILM" => words(&[w.film]),
         "GUIDE" => words(&[w.turn, w.back]),
-        "SWITCH" => vec![summary(GRKIT, w.on), summary(GRKIT, w.off)],
+        "SWITCH" => vec![
+            summary(w.enable, w.on),
+            summary(w.enable, w.off),
+            w.enable_grkit.into(),
+        ],
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -429,11 +438,15 @@ mod tests {
         for language in Language::ALL {
             let w = words(language);
             let list = strings(language, VERSION);
-            assert_eq!(list[id("SWITCH")], format!("GRKit{}{}", w.separator, w.on));
+            assert_eq!(
+                list[id("SWITCH")],
+                format!("{}{}{}", w.enable, w.separator, w.on)
+            );
             assert_eq!(
                 list[id("SWITCH") + 1],
-                format!("GRKit{}{}", w.separator, w.off)
+                format!("{}{}{}", w.enable, w.separator, w.off)
             );
+            assert!(list[id("SWITCH") + 2].contains("GRKit"));
         }
     }
 

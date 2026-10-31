@@ -265,7 +265,8 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
             if (pages[k].setting == GRM_NO_SETTING) continue;
             module_pages[module_page_count * 3] = pages[k].address;
             module_pages[module_page_count * 3 + 1] = pages[k].setting;
-            module_pages[module_page_count * 3 + 2] = module_tile_first[i];
+            /* A module without tiles has no tile 0 for its root row. */
+            module_pages[module_page_count * 3 + 2] = tile_count ? module_tile_first[i] : MANAGE_NO_TILE;
             ++module_page_count;
             points |= POINT_MENU_PAGE;
         }

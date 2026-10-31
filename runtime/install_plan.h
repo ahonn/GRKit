@@ -61,8 +61,8 @@ static u32 capabilities_running;
    the core services, or 0 (install_modules). */
 static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
-   choices of each module, the switch, and the choices of `effects`
-   effects. */
+   choices of each module, the choices of `effects` effects, then the
+   switch. */
 #define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 1U + (effects))
 /* The words of the module list and of the effect list. */
 #define MANAGE_WORDS(n) ((MANAGE_HEADER + (n) * MANAGE_STRIDE) / 4U)

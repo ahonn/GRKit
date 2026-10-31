@@ -7,6 +7,9 @@ version = 1
 # The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
 order = 10
 uses = ["CORE.TONE"]
+# Tile 0 is the module tile, for Off at the root. A row of an effect shows
+# the icon of the effect.
+tiles = ["tiles/0-module.png"]
 
 [page]
 setting = "CORE.TONE"

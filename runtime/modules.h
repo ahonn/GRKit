@@ -95,7 +95,11 @@ static u32 choice_value_row(volatile u32 *h,u32 value) {
 static const u16 *choice_text(volatile u32 *h,u32 field,u32 index) {
     return MENU_TEXT(PAGE_WORD(PAGE_WORD(CHOICE_ENTRY(h)[0],field),(index*GRKIT_TEXT_LANGUAGES+menu_language())*4));
 }
-static u32 choice_tile(volatile u32 *h,u32 n) { return GRKIT_ICON_MODULE_TILE(CHOICE_ENTRY(h)[2]+n); }
+/* Tile n of the module of the page. A module without tiles shows Off. */
+static u32 choice_tile(volatile u32 *h,u32 n) {
+    return CHOICE_ENTRY(h)[2]!=MANAGE_NO_TILE ? GRKIT_ICON_MODULE_TILE(CHOICE_ENTRY(h)[2]+n) : GRKIT_ICON_OFF;
+}
+static u32 choice_off_tile(volatile u32 *h) { return choice_tile(h,0); }
 static const u16 *choice_title(volatile u32 *h) { return choice_text(h,PAGE_TITLE,0); }
 static const u16 *choice_summary(volatile u32 *h) { return choice_text(h,PAGE_SUMMARIES,choice_value(h)); }
 static const u16 *choice_label(volatile u32 *h,u32 row) { return choice_text(h,PAGE_LABELS,choice_row_value(h,row)); }

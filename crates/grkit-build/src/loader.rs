@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{bail, ensure, Context, Result};
 use grkit_core::{
-    artwork::{grkit_pixels, modules_pixels, off_pixels, version_pixels},
+    artwork::{grkit_pixels, modules_off_pixels, modules_pixels, off_pixels, version_pixels},
     card::{LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LINUX_LEGACY_DIRECTORY, LINUX_RAM_PLAN},
     runtime::{icon_stride, HOST_ICON_COUNT, ICONS_PER_CHUNK, MAX_CHUNKS, MAX_COUNT},
 };
@@ -280,6 +280,12 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     array(&mut result, "grkit_pixels", &grkit_pixels(), true);
     array(&mut result, "version_pixels", &version_pixels(), true);
     array(&mut result, "modules_pixels", &modules_pixels(), true);
+    array(
+        &mut result,
+        "modules_off_pixels",
+        &modules_off_pixels(),
+        true,
+    );
     // The installer copies the menu text table after the picture scratch.
     let text = grkit_core::menu_text::table(version)?;
     writeln!(result, "#define MENU_TEXT_BYTES {}U", text.len())?;

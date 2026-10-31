@@ -34,8 +34,10 @@ typedef short s16;
 #define GRKIT_ICON_OFF 0x7fffU
 #define GRKIT_ICON_GRKIT 0x7ffeU
 #define GRKIT_ICON_EFFECT(n) (0x8000U+(n))
-/* The Modules tile. The installer puts it after the Version tile. */
+/* The Modules tile. The installer puts it after the Version tile, then the
+   Modules tile with a line through it (Enable GRKit Off). */
 #define GRKIT_ICON_MODULES 0x7ffcU
+#define GRKIT_ICON_MODULES_OFF 0x7ffbU
 
 /* One setting of a native settings page: its row label, its values (at most
    SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a

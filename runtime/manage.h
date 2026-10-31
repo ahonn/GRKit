@@ -18,11 +18,12 @@
    The resident loader saves them as other settings, and SCAN reads them to
    select and order the modules (runtime/install_plan.h).
 
-   The GRKit switch, the first row of the GRKit section and the root row of
-   ADJ after the module pages, stops each module at once as a soft Off does, and On starts
-   again each module whose own Enable is On. Its setting, CORE.OFF, 1 for
-   Off, follows the settings of the effects in the table. A module that is
-   Off at a start, by its Enable or by the switch, loads stopped.
+   The switch Enable GRKit, the first row of the GRKit section and a root
+   row of ADJ after the module pages, stops each module at once as a soft
+   Off does, and On starts again each module whose own Enable is On. Its
+   setting, CORE.OFF, 1 for Off, follows the settings of the effects in the
+   table. A module that is Off at a start, by its Enable or by the switch,
+   loads stopped.
 
    INSTALL writes the module list (GRKIT_HOST_MANAGE): MANAGE_HEADER words,
    then MANAGE_STRIDE bytes for each listed module, in the order of the last
@@ -284,26 +285,32 @@ static const Setting manage_settings[SUBMENU_ROWS]={
 #define MANAGE_PAGE {manage_title,manage_summary,manage_rows,manage_label,manage_icon, \
     manage_checked,manage_apply,manage_committed,0,0,manage_settings}
 
-/* The GRKit switch in ADJ: a root row after the module pages, which gives
-   its value, and a page of two rows, On and Off, the values of CORE.OFF. */
-static const u16 *switch_title(volatile u32 *h) { (void)h; return grkit_title; }
+/* The switch in ADJ: a root row after the module pages, under the GRKit
+   title, so its page is Enable and its summary Enable: On or Enable: Off.
+   The page has two rows, Off first as on each module page, then On: row r
+   gives CORE.OFF !r. The root row shows the Modules tile, with a line
+   through it while the switch is Off. */
+static const u16 *switch_title(volatile u32 *h) { return text(h,TEXT_ENABLE); }
 static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_all_off(h)); }
+/* The MENU row: Enable GRKit. */
+static const u16 *switch_menu_label(volatile u32 *h) { return text(h,TEXT_SWITCH+2); }
 static u32 switch_rows(volatile u32 *h) { (void)h; return 2; }
-static const u16 *switch_text(volatile u32 *h,u32 value) { return text(h,value ? TEXT_OFF : TEXT_ON); }
-/* Off shows the Off icon and On the Modules tile, on the root row for the
-   value of the switch. */
+static const u16 *switch_value_text(volatile u32 *h,u32 off) { return text(h,off ? TEXT_OFF : TEXT_ON); }
+static const u16 *switch_label(volatile u32 *h,u32 row) { return switch_value_text(h,!row); }
 static u32 switch_icon(volatile u32 *h,u32 row) {
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) row=manage_all_off(h);
-    return row ? GRKIT_ICON_OFF : GRKIT_ICON_MODULES;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return manage_all_off(h) ? GRKIT_ICON_MODULES_OFF : GRKIT_ICON_MODULES;
+    return row ? GRKIT_ICON_MODULES : GRKIT_ICON_OFF;
 }
-static u32 switch_checked(volatile u32 *h,u32 row) { return row==manage_all_off(h); }
-static void switch_apply(volatile u32 *h,u32 row) { manage_set_all_off(h,row); }
-static u32 switch_committed(volatile u32 *h) { return manage_all_off(h); }
-#define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_text,switch_icon, \
+static u32 switch_checked(volatile u32 *h,u32 row) { return !row==manage_all_off(h); }
+static void switch_apply(volatile u32 *h,u32 row) { manage_set_all_off(h,!row); }
+static u32 switch_committed(volatile u32 *h) { return !manage_all_off(h); }
+#define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_label,switch_icon, \
     switch_checked,switch_apply,switch_committed,0,0,0}
-/* The switch row of MENU opens a native settings page with its one row. */
+/* The MENU row opens the value page of this one setting at once
+   (menu_rows_controller), titled Enable GRKit: On, then Off, as the Enable
+   of a module. */
 static const Setting switch_settings[SETTING_ROWS]={
-    {switch_title,switch_rows,switch_text,switch_committed,manage_set_all_off},
+    {switch_menu_label,switch_rows,switch_value_text,manage_all_off,manage_set_all_off},
 };
 #endif
 #endif

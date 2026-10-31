@@ -23,7 +23,7 @@
 /* Icon slots: the host icons, then the effect icons, then the module tiles, in
    chunks of GRKIT_ICONS_PER_CHUNK (GRKIT_HOST_ICON_CHUNKS).
    GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n. */
-#define GRKIT_HOST_ICON_COUNT 4
+#define GRKIT_HOST_ICON_COUNT 5
 #define GRKIT_ICONS_PER_CHUNK 40
 #define GRKIT_MODULE_TILES_MAX 128
 #define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))
@@ -510,9 +510,9 @@
 /* The guides of an options value page: OK turns an option on or off, MENU goes
    back. */
 #define TEXT_GUIDE 19
-/* The GRKit switch, which stops each module at once: its summary while on, and
-   while off. */
+/* The switch that stops each module at once: its ADJ summary while on, and
+   while off, then its MENU row. */
 #define TEXT_SWITCH 21
-#define GRKIT_TEXT_STRINGS 23
+#define GRKIT_TEXT_STRINGS 24
 
 #endif

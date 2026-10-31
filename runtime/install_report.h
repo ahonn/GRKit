@@ -49,7 +49,7 @@ static void write_report(int status)
         u32 result = module_status[i];
         if (!result && (module_usable >> i & 1))
             say(module_off[i] ? "  loaded, stopped: Enable is Off in the GRKit section of MENU\r\n" :
-                all_off ? "  loaded, stopped: GRKit is Off in the GRKit section of MENU\r\n" : "  loaded\r\n");
+                all_off ? "  loaded, stopped: Enable GRKit is Off in the GRKit section of MENU\r\n" : "  loaded\r\n");
         else if (result == MANAGE_SAFE) say("  not loaded: safe mode\r\n");
         else {
             say("  not loaded: error "); say_number(result); say(", "); say(module_reason(result));

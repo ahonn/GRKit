@@ -55,12 +55,14 @@ static const u16 *tone_label(volatile u32 *h,u32 row) {
     u32 record=tone_row_record(h,row);
     return record ? (const u16 *)(record+GRKIT_RECORD_NAME) : text(h,TEXT_OFF);
 }
-/* The root tile shows the selected effect. */
+/* The root tile shows the selected effect, or the tile 0 of the module
+   for Off (runtime/modules.h). */
+static u32 choice_off_tile(volatile u32 *h);
 static u32 tone_icon(volatile u32 *h,u32 row) {
     u32 index;
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) {
         row=tone_value(h);
-        return row ? GRKIT_ICON_EFFECT(row-1) : GRKIT_ICON_OFF;
+        return row ? GRKIT_ICON_EFFECT(row-1) : choice_off_tile(h);
     }
     index=tone_row_index(h,row);
     return index!=EFFECTS_NO_RECORD ? GRKIT_ICON_EFFECT(index) : GRKIT_ICON_OFF;

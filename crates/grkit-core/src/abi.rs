@@ -44,11 +44,11 @@ pub const MODULE_SETTINGS_MAX: usize = 160;
 /// The most artwork tiles of all modules. The installer puts them in the
 /// icon chunks after the effect icons.
 pub const MODULE_TILES_MAX: usize = 128;
-/// Off, GRKit, Version, and Modules.
-/// The menu addresses the Version and Modules icons by their offset from the
-/// GRKit icon, so the host icons come first in chunk 0, and they must fit in
-/// it. The effect icons follow them.
-pub const HOST_ICON_COUNT: usize = 4;
+/// Off, GRKit, Version, Modules, and Modules with a line through it (Enable
+/// GRKit Off). The menu addresses the Version and Modules icons by their
+/// offset from the GRKit icon, so the host icons come first in chunk 0, and
+/// they must fit in it. The effect icons follow them.
+pub const HOST_ICON_COUNT: usize = 5;
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script
