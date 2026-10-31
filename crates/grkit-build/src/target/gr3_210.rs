@@ -73,6 +73,7 @@ const SITES: &[Site] = &[
     ("menu_event", 0x531a4db8, "b030d1e1"),
     ("menu_exit", 0x531a3e88, "7022d0e5"),
     ("menu_changed", 0x531a4cfc, "0dc0a0e1"),
+    ("menu_apply", 0x531a3100, "0dc0a0e1"),
     ("menu_text_measure", 0x533966fc, "077193e7"),
     ("menu_text_draw", 0x53397108, "073193e7"),
     ("menu_icon_width", 0x53209fb8, "9e3200e3"),

@@ -144,6 +144,11 @@ menu_refresh_original:
 menu_changed_original:
     mov r12, sp
     ldr pc, =HOOK_MENU_CHANGED_RESUME
+.global menu_apply_original
+.type menu_apply_original, %function
+menu_apply_original:
+    mov r12, sp
+    ldr pc, =HOOK_MENU_APPLY_RESUME
 .ltorg
 #ifdef HOOK_MENU_ICON_WIDTH
 .global menu_icon_width

@@ -9,8 +9,8 @@ use crate::components::{
 };
 
 /// AdjModeController: the touch thunks of the five slots, destroy, refresh,
-/// event, exit, and changed. Then the table loads of the text measure and
-/// draw.
+/// event, exit, changed, and the apply of the list value to the slot. Then
+/// the table loads of the text measure and draw.
 pub const ADJ: &[HookSpec] = &[
     b("menu_native_touch_0", Menu, MenuPage),
     b("menu_native_touch_1", Menu, MenuPage),
@@ -22,6 +22,7 @@ pub const ADJ: &[HookSpec] = &[
     b("menu_event", Menu, MenuPage),
     b("menu_exit", Menu, MenuPage),
     b("menu_changed", Menu, MenuPage),
+    b("menu_apply", Menu, MenuPage),
     b("menu_text_measure", Menu, MenuPage),
     b("menu_text_draw", Menu, MenuPage),
 ];

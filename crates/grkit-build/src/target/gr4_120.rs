@@ -80,6 +80,7 @@ const SITES: &[Site] = &[
     ("menu_event", 0x531c0d6c, "b030d1e1"),
     ("menu_exit", 0x531c0ab8, "fc11d0e5"),
     ("menu_changed", 0x531c08c4, "0dc0a0e1"),
+    ("menu_apply", 0x531c040c, "0dc0a0e1"),
     ("menu_text_measure", 0x53595dc8, "077193e7"),
     ("menu_text_draw", 0x535967d8, "073193e7"),
     ("menu_native_adj_apply", 0x531bc30c, "0dc0a0e1"),

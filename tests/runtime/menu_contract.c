@@ -346,6 +346,7 @@ static void install_modules(void)
 #define GRAIN_TILE(n) GRKIT_ICON_MODULE_TILE(19 + (n))
 #define ALL_PAGES 5U
 static u32 native_changes;
+static u32 native_applies;
 static u32 native_events;
 volatile u32 *menu_header(void) { return test_header; }
 u32 menu_event_original(u32 controller, const u16 *event)
@@ -354,6 +355,7 @@ void menu_exit_original(u32 controller) { (void)controller; }
 u32 menu_destroy_original(u32 controller) { return controller; }
 void menu_refresh_original(u32 controller) { (void)controller; }
 void menu_changed_original(u32 controller) { (void)controller; ++native_changes; }
+void menu_apply_original(u32 controller) { (void)controller; ++native_applies; }
 
 /* Each block starts from this state: the label table, the official modules,
    five effect records with their icons, and no other memory, setting, call,
@@ -373,7 +375,7 @@ static void reset(void)
     text_count = 0;
     view_calls = 0;
     framing_requests = native_aspect_value = native_sets = live_view_stops = 0;
-    native_changes = native_events = 0;
+    native_changes = native_applies = native_events = 0;
     factory_calls = factory_top = 0;
     test_language = 0;
     assert(sizeof(menu_text_table) <= GRKIT_TEXT_SUMMARY);
@@ -517,6 +519,27 @@ static void list_restoration_keeps_the_committed_effect(void)
         assert(test_header[GRKIT_HOST_BACK_PENDING / 4] == 0);
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
+}
+
+static void a_touch_on_a_grkit_row_keeps_the_native_slot_value(void)
+{
+    reset();
+    /* A touch on a row of the ADJ list applies its row to the slot setting.
+       On a GRKit page it selects the GRKit row instead; while a UI box is
+       open, it does nothing. Neither writes the native slot. */
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    test_header[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x1000;
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    ui_word(test_header, UI_MODE)[0] = UI_MESSAGE;
+    menu_apply(0x1000);
+    assert(native_applies == 0);
+    assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
+    /* Another controller, and the native rows, apply as before. */
+    menu_apply(0x2000);
+    assert(native_applies == 1);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = 0;
+    menu_apply(0x1000);
+    assert(native_applies == 2);
 }
 
 static void the_event_ring_tells_menu_from_ok_and_adj(void)
@@ -2206,6 +2229,7 @@ int main(void)
     fn_applies_to_effect_rows_of_film_look();
     switch_presses_and_back_events_are_filtered();
     list_restoration_keeps_the_committed_effect();
+    a_touch_on_a_grkit_row_keeps_the_native_slot_value();
     the_event_ring_tells_menu_from_ok_and_adj();
     playback_matches_private_tags_only();
     icons_toolbar_and_edges_map_their_ids();

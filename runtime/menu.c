@@ -9,6 +9,7 @@ extern volatile u32 *menu_header(void);
 extern u32 menu_event_original(u32, const u16 *);
 extern void menu_exit_original(u32);
 extern void menu_changed_original(u32);
+extern void menu_apply_original(u32);
 extern void menu_refresh_original(u32);
 extern u32 menu_destroy_original(u32);
 #define CALL0(a) ((u32 (*)(void))(a))
@@ -753,6 +754,20 @@ A32_ENTRY void menu_changed(u32 controller) {
         return;
     }
     menu_changed_original(controller);
+}
+/* The native ADJ writes the value under the list cursor to the setting of its
+   slot: on a cursor change, a slot change, and a touch on a row. A GRKit page
+   shows its own rows in that list, so it must not write the setting of the
+   native slot that was selected before GRKit. On a GRKit page only a touch on
+   a row reaches here: menu_changed does not run the native change, and a slot
+   change leaves the page first. The touch selects the row as OK does, and ADJ
+   stays open, as after a touch on a native row. */
+A32_ENTRY void menu_apply(u32 controller) {
+    volatile u32 *h=menu_header();
+    if(!private_mode(controller)) { menu_apply_original(controller); return; }
+    if(ui_modal(h)) return;
+    menu_confirm(h);
+    render(controller);
 }
 A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     volatile u32 *h=menu_header();
