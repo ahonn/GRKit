@@ -1,3 +1,14 @@
+## 1.3.5 (2026-10-31)
+
+### Fixes
+
+- The exposure box of ISO Setting no longer stays over GRKit in ADJ.
+- In ADJ, a touch on a GRKit row now selects it as on a native entry, and no longer changes the setting that was selected before GRKit, such as Outdoor View Setting.
+- GRKit installs up to 40 effects, instead of 20, Film Stock and Options in MENU list all of them, and Film Look in ADJ scrolls through them as a native list.
+- On GR IV 1.20, GR IV HDF 1.20, and GR IV Monochrome, the Fn adjustments of an effect change its own Shading and Clarity, and no longer change the Shading of the native Standard.
+- Enable GRKit, a switch in the GRKit section of MENU and in ADJ, turns all modules off and on again at once, and keeps the settings of each module.
+- While Film Look is off, the viewfinder shows the native Image Control icon, and turning Framing on or off changes the crop of the next picture at once.
+
 ## 1.3.4 (2026-10-30)
 
 ### Fixes
