@@ -10,7 +10,8 @@ use crate::components::{
 
 /// AdjModeController: the touch thunks of the five slots, destroy, refresh,
 /// event, exit, changed, and the apply of the list value to the slot. Then
-/// the table loads of the text measure and draw.
+/// the table loads of the text measure and draw, and the BL to the slot type
+/// in the periodic update, which shows the exposure box of ISO Setting.
 pub const ADJ: &[HookSpec] = &[
     b("menu_native_touch_0", Menu, MenuPage),
     b("menu_native_touch_1", Menu, MenuPage),
@@ -25,6 +26,7 @@ pub const ADJ: &[HookSpec] = &[
     b("menu_apply", Menu, MenuPage),
     b("menu_text_measure", Menu, MenuPage),
     b("menu_text_draw", Menu, MenuPage),
+    bl("menu_tick_type", Menu, MenuPage),
 ];
 
 /// The ADJ Image Control item apply, then the ImageControlController (MENU

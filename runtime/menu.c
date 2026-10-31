@@ -769,6 +769,12 @@ A32_ENTRY void menu_apply(u32 controller) {
     menu_confirm(h);
     render(controller);
 }
+/* ADJ updates the exposure box of some slot types (ISO Setting) every 50 ms
+   while their slot is selected. On a GRKit page the type of no slot shows,
+   so the update hides the box and draws nothing. */
+A32_ENTRY u32 menu_tick_type(u32 controller,u32 slot) {
+    return private_mode(controller) ? 0 : CALL2(FW_ADJ_SLOT_TYPE)(controller,slot);
+}
 A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     volatile u32 *h=menu_header();
     u32 kind=*event, back;

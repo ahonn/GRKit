@@ -542,6 +542,16 @@ static void a_touch_on_a_grkit_row_keeps_the_native_slot_value(void)
     assert(native_applies == 2);
 }
 
+static void the_adj_update_shows_no_slot_type_on_a_grkit_page(void)
+{
+    reset();
+    /* The periodic ADJ update reads the slot type to show the exposure box.
+       On a GRKit page it reads type 0: no box. */
+    test_header[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x1000;
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
+    assert(menu_tick_type(0x1000, 4) == 0);
+}
+
 static void the_event_ring_tells_menu_from_ok_and_adj(void)
 {
     reset();
@@ -2230,6 +2240,7 @@ int main(void)
     switch_presses_and_back_events_are_filtered();
     list_restoration_keeps_the_committed_effect();
     a_touch_on_a_grkit_row_keeps_the_native_slot_value();
+    the_adj_update_shows_no_slot_type_on_a_grkit_page();
     the_event_ring_tells_menu_from_ok_and_adj();
     playback_matches_private_tags_only();
     icons_toolbar_and_edges_map_their_ids();
