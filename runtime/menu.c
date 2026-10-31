@@ -188,8 +188,11 @@ static void level_reapply(volatile u32 *h) {
         MENU_LEVEL_ALARM(h[GRKIT_HOST_LEVEL_SCREEN/4],h[GRKIT_HOST_LEVEL_MODE/4]);
 }
 #include "tone.h"
+/* A soft Off of Film Look, or the GRKit switch, keeps the effect but shows
+   the native icon. */
 static u32 selected_icon(volatile u32 *h) {
     u32 i=record_index(h,h[GRKIT_HOST_ACTIVE/4]);
+    if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return 0x7fff;
     return i<GRKIT_TEXT_RECORDS ? 0x8000+i : 0x7fff;
 }
 /* Override only the native still-viewfinder icon result. Off retains stock UI. */

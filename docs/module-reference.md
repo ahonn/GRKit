@@ -348,6 +348,7 @@ Other lines:
 | --- | --- |
 | `loaded` | The module loaded. |
 | `loaded, stopped: Enable is Off in the GRKit section of MENU` | The module loaded, but Enable is Off, so the core calls none of its code. On applies at once. |
+| `loaded, stopped: GRKit is Off in the GRKit section of MENU` | The module loaded, but the GRKit switch is Off, so the core calls none of its code. On applies at once. |
 | `not loaded: safe mode` | GRKit is in the safe mode, so no module loads. See [Report and safe mode](architecture.md#report-and-safe-mode). |
 
 When a module does not load, the other modules still load. A module that requires a setting of it gets error 55. A page, a layer, or a filter of an optional setting of it is not registered.

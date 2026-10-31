@@ -510,6 +510,9 @@
 /* The guides of an options value page: OK turns an option on or off, MENU goes
    back. */
 #define TEXT_GUIDE 19
-#define GRKIT_TEXT_STRINGS 21
+/* The GRKit switch, which stops each module at once: its summary while on, and
+   while off. */
+#define TEXT_SWITCH 21
+#define GRKIT_TEXT_STRINGS 23
 
 #endif

@@ -555,7 +555,7 @@ static void a_bad_module_keeps_the_others(void)
 static void the_budget_counts_the_services_block(void)
 {
     const u32 big = 2 * GRM_MAX_SEGMENT / 4;
-    const u32 others = SETTINGS_WORDS(MANAGE_PER_MODULE * 2 + EFFECTS_LISTED) + 2 * CONTEXT_WORDS(0) +
+    const u32 others = SETTINGS_WORDS(CHOICE_ENTRIES(2, EFFECTS_LISTED)) + 2 * CONTEXT_WORDS(0) +
                        MANAGE_WORDS(2) + EFFECT_LIST_WORDS(EFFECTS_LISTED) + SERVICES_WORDS + big;
     const u32 room = GRKIT_MODULE_ARRAY_WORDS - others;
     assert(room * 4 > GRM_MAX_SEGMENT && room * 4 < 2 * GRM_MAX_SEGMENT);
@@ -600,10 +600,10 @@ static void install_writes_the_settings_and_the_contexts(void)
     for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) assert(core_ids[k] == id_of(core_setting_names[k]));
     save_state(pairs, sizeof pairs / sizeof pairs[0] / 2);
     assert(install() == 0);
-    /* The settings of the modules, the choices of the GRKit section, then
-       the saved values that no setting takes: CORE.GRAIN, which no module
-       uses, and an unknown key, but not a value 0. */
-    assert(word(ARRAY_AT) == 12 && word(ARRAY_AT + 4) == 0);
+    /* The settings of the modules, the choices of the GRKit section, the
+       switch, then the saved values that no setting takes: CORE.GRAIN,
+       which no module uses, and an unknown key, but not a value 0. */
+    assert(word(ARRAY_AT) == 13 && word(ARRAY_AT + 4) == 0);
     expect_setting(0, id_of("GUIDES.STYLE"), 0, 6);
     expect_setting(1, id_of("GUIDES.COLOR"), 0, 3);
     expect_setting(2, 0, 0, 2);
@@ -614,11 +614,12 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(7, id_of("CORE.OFF.DATE"), 1, 2);
     expect_setting(8, id_of("CORE.POS.DATE"), 0, MANAGE_MODULES + 1);
     expect_setting(9, id_of("CORE.ROWS.DATE"), 5, 1U << MANAGE_OPTION_VALUES);
-    expect_setting(10, 12345, 7, 8);
-    expect_setting(11, id_of("CORE.GRAIN"), 1, 2);
+    expect_setting(10, id_of("CORE.OFF"), 0, 2);
+    expect_setting(11, 12345, 7, 8);
+    expect_setting(12, id_of("CORE.GRAIN"), 1, 2);
     /* The contexts: the first setting, the count, reserved, then the handle
        of each used setting. */
-    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(12);
+    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(13);
     assert(word(context) == 0 && word(context + 4) == 3 && word(context + 8) == 0);
     assert(word(context + 12) == GRKIT_CORE_ASPECT && word(context + 16) == GRM_NO_SETTING);
     u32 date_context = context + 4 * CONTEXT_WORDS(2);
@@ -632,6 +633,40 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert(capabilities_running == capabilities_used);
     assert((needed_points & core_setting_points[1]) == core_setting_points[1]);
     assert(word(module_list + MANAGE_SETTINGS) == 4);
+    assert(word(module_list + MANAGE_SWITCH) == 10 + 1);
+}
+/* The GRKit switch Off stops each module that loads, as its own Off does,
+   and keeps the Enable of each. */
+static void the_switch_stops_each_module(void)
+{
+    reset();
+    u32 first = add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){.id = "FIRST", .order = 1, .uses = {"CORE.ASPECT"}});
+    u32 second = add_module(PACKAGE_MODULES_PATH, "SECOND.GRM", &(struct spec){.id = "SECOND", .order = 2, .uses = {"CORE.GRAIN"}});
+    const u32 pairs[] = {id_of("CORE.OFF"), 1, id_of("CORE.OFF.SECOND"), 1};
+    save_state(pairs, 2);
+    assert(install() == 0);
+    assert(all_off && module_status[0] == 0 && module_status[1] == 0);
+    /* The switch and the Enable of each module keep their values. */
+    u32 handle = word(module_list + MANAGE_SWITCH) - 1;
+    expect_setting(handle, id_of("CORE.OFF"), 1, 2);
+    expect_setting(word(module_list + MANAGE_SETTINGS), id_of("CORE.OFF.FIRST"), 0, 2);
+    expect_setting(word(module_list + MANAGE_SETTINGS) + MANAGE_PER_MODULE, id_of("CORE.OFF.SECOND"), 1, 2);
+    /* Each module loads stopped, and no capability runs. */
+    assert(word(services_block + SERVICES_SUSPENDED) == 2);
+    assert(word(services_block + SERVICES_SUSPENDED + 4) == CODE_AT);
+    assert(word(services_block + SERVICES_SUSPENDED + 16) == CODE_AT + first + second);
+    assert(capabilities_running == 0);
+    assert(capabilities_used == (1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE) |
+                                 1U << (GRKIT_CORE_GRAIN - GRKIT_CORE_SETTING_BASE)));
+    /* A switch that is On runs the modules whose Enable is On. */
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){.id = "FIRST", .order = 1, .uses = {"CORE.ASPECT"}});
+    add_module(PACKAGE_MODULES_PATH, "SECOND.GRM", &(struct spec){.id = "SECOND", .order = 2, .uses = {"CORE.GRAIN"}});
+    const u32 on[] = {id_of("CORE.OFF"), 0, id_of("CORE.OFF.SECOND"), 1};
+    save_state(on, 2);
+    assert(install() == 0);
+    assert(!all_off && word(services_block + SERVICES_SUSPENDED) == 1);
+    assert(capabilities_running == 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE));
 }
 static void layers_follow_their_order_and_filters_their_stage(void)
 {
@@ -784,6 +819,7 @@ static void *run(void *unused)
     a_bad_module_keeps_the_others();
     the_budget_counts_the_services_block();
     install_writes_the_settings_and_the_contexts();
+    the_switch_stops_each_module();
     layers_follow_their_order_and_filters_their_stage();
     the_module_list_shows_each_result();
     the_layers_and_filters_fill_their_slots();

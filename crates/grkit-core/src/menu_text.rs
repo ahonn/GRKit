@@ -22,7 +22,9 @@ pub const TEXT_SETTINGS: usize = TEXT_PARAMETER_TITLE - 512;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 21;
+pub const STRINGS: usize = 23;
+/// The name of the GRKit switch, the same in each language.
+const GRKIT: &str = "GRKit";
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -260,6 +262,11 @@ pub const RUNS: &[Run] = &[
         2,
         "The guides of an options value page: OK turns an option on or off, MENU goes back.",
     ),
+    run(
+        "SWITCH",
+        2,
+        "The GRKit switch, which stops each module at once: its summary while on, and while off.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -305,6 +312,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         ],
         "FILM" => words(&[w.film]),
         "GUIDE" => words(&[w.turn, w.back]),
+        "SWITCH" => vec![summary(GRKIT, w.on), summary(GRKIT, w.off)],
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -414,6 +422,19 @@ mod tests {
         assert_eq!(english[id("OFF")], "Off");
         assert_eq!(english[id("IMAGE_OFF_SUMMARY")], "Film Look: Off");
         assert_eq!(english[id("IMAGE_PREFIX")], "Film Look: ");
+    }
+
+    #[test]
+    fn the_switch_summary_gives_its_value_in_each_language() {
+        for language in Language::ALL {
+            let w = words(language);
+            let list = strings(language, VERSION);
+            assert_eq!(list[id("SWITCH")], format!("GRKit{}{}", w.separator, w.on));
+            assert_eq!(
+                list[id("SWITCH") + 1],
+                format!("GRKit{}{}", w.separator, w.off)
+            );
+        }
     }
 
     #[test]

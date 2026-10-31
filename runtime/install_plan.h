@@ -46,6 +46,11 @@ static char module_detail[GRKIT_MODULES_MAX][GRM_NAME + 1];
    INSTALL also notes the title texts and tile 0 of each module. */
 static u32 module_off[GRKIT_MODULES_MAX], module_position[GRKIT_MODULES_MAX], module_rows[GRKIT_MODULES_MAX];
 static u32 module_title[GRKIT_MODULES_MAX], module_tile[GRKIT_MODULES_MAX];
+/* The GRKit switch: 1 while it is Off, which stops each module as its own
+   Off does, and keeps the Enable of each. */
+static u32 all_off;
+/* Whether module i loads stopped: its Enable or the switch is Off. */
+static u32 module_stopped(u32 i) { return module_off[i] || all_off; }
 /* The code range and the used capabilities of each loaded module, for the
    soft Off of runtime/manage.h. */
 static u32 module_code_from[GRKIT_MODULES_MAX], module_code_to[GRKIT_MODULES_MAX], module_capabilities[GRKIT_MODULES_MAX];
@@ -55,6 +60,10 @@ static u32 capabilities_running;
 /* The addresses of the module list, of the effect list, and of the state of
    the core services, or 0 (install_modules). */
 static u32 module_list, effect_list, services_block;
+/* The entries of the settings table after the module settings: the
+   choices of each module, the switch, and the choices of `effects`
+   effects. */
+#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 1U + (effects))
 /* The words of the module list and of the effect list. */
 #define MANAGE_WORDS(n) ((MANAGE_HEADER + (n) * MANAGE_STRIDE) / 4U)
 #define EFFECT_LIST_WORDS(n) ((EFFECTS_HEADER + (n) * EFFECTS_STRIDE) / 4U)
@@ -220,6 +229,7 @@ static u32 manage_id(u32 i, const char *key)
 static void order_modules(void)
 {
     u32 value;
+    all_off = state_value(&saved_state, grm_state_id(MANAGE_SWITCH_KEY), &value) && value == 1;
     for (u32 i = 0; i < module_count; ++i) {
         module_off[i] = state_value(&saved_state, manage_id(i, "OFF"), &value) && value == 1;
         module_position[i] = state_value(&saved_state, manage_id(i, "POS"), &value) && value <= MANAGE_MODULES ? value : 0;
@@ -247,6 +257,7 @@ static int state_taken(u32 id)
         if ((setting_flags[k] & GRM_SETTING_SAVED) && grm_state_id(setting_names[k]) == id) return 1;
     for (u32 i = 0; i < module_count; ++i)
         if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id) return 1;
+    if (grm_state_id(MANAGE_SWITCH_KEY) == id) return 1;
     for (u32 i = 0; i < listed_count; ++i)
         if (effect_choice_id(i) == id) return 1;
     return 0;
@@ -275,6 +286,7 @@ static void plan_kept(u32 room)
 static void plan_modules(void)
 {
     module_count = module_usable = module_words = module_code_bytes = setting_total = module_tiles = kept_count = 0;
+    all_off = 0;
     module_overflow = 0;
     module_contexts = module_data_words = 0;
     for (u32 i = 0; i < GRKIT_MODULES_MAX; ++i) {
@@ -301,14 +313,15 @@ static void plan_modules(void)
        the effect list, the services, then the data of each module. The
        effects are listed later (discover), so the modules leave room for
        each of them. plan_array counts the same parts. */
-    u32 contexts = 0, data = 0, choices = MANAGE_PER_MODULE * module_count + EFFECTS_LISTED;
+    u32 contexts = 0, data = 0, choices = CHOICE_ENTRIES(module_count, EFFECTS_LISTED);
     u32 list = MANAGE_WORDS(module_count) + EFFECT_LIST_WORDS(EFFECTS_LISTED) + SERVICES_WORDS;
     for (u32 i = 0; i < module_count; ++i) {
         struct grm_setting settings[GRM_SETTINGS];
         u32 n = 0, uses = 0, tiles = 0;
         const u8 *tile_data;
         /* A module that is Off loads too, stopped (runtime/manage.h), so that
-           Enable turns it on at once. Its code does not run while it is Off. */
+           Enable or the switch turns it on at once. Its code does not run
+           while it is Off. */
         int status = safe_mode ? (int)MANAGE_SAFE : read_module(i);
         if (!status) status = grm_settings(&module, module.code, 0, settings, &n, module_uses[i], &uses);
         if (!status) status = grm_tiles(&module, module.code, 0, &tile_data, &tiles);
@@ -349,7 +362,7 @@ static void plan_array(void)
 {
     module_words = kept_count = 0;
     if (!module_count) return;
-    u32 entries = setting_total + MANAGE_PER_MODULE * module_count + listed_count;
+    u32 entries = setting_total + CHOICE_ENTRIES(module_count, listed_count);
     u32 fixed = SETTINGS_WORDS(entries) + module_contexts + MANAGE_WORDS(module_count) +
                 EFFECT_LIST_WORDS(listed_count) + SERVICES_WORDS + module_data_words;
     u32 room = GRKIT_MODULE_SETTINGS_MAX - entries;

@@ -65,7 +65,7 @@ static volatile unsigned *mapped_settings(unsigned address)
 #define TEST_EFFECTS (TEST_MANAGE + 0x300U)
 static unsigned manage_memory[(TEST_EFFECTS - TEST_MANAGE + 12 + 3 * 44) / 4];
 /* The module list: the header, then module i at word MANAGE_ENTRY(i). */
-#define MANAGE_ENTRY(i) (4 + (i) * 14)
+#define MANAGE_ENTRY(i) (5 + (i) * 14)
 static volatile unsigned *mapped_manage(unsigned address)
 {
     assert(address >= TEST_MANAGE && address < TEST_MANAGE + sizeof(manage_memory) && !(address & 3));
@@ -1364,7 +1364,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 16, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 20, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -1534,6 +1534,78 @@ static void enable_applies_at_once(void)
     manage_memory[0] = MANAGE_MODULES + 1;
     test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
     assert(!manage_count(test_header));
+}
+
+/* The GRKit switch stops each module at once, as a soft Off does, and keeps
+   the Enable of each: On starts again each module whose Enable is On. In
+   ADJ, it is a root row after the module pages, with a page of On and Off. */
+static void the_switch_stops_each_module_at_once(void)
+{
+    volatile u32 *h = test_header;
+    const u32 tone = 1U << (GRKIT_CORE_TONE - GRKIT_CORE_SETTING_BASE),
+              aspect = 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE);
+    u32 roots, n;
+    reset();
+    install_module_list();
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    /* Without a switch in the module list, the root has no switch row. */
+    roots = count(h);
+    assert(!manage_switch(h) && !manage_all_off(h) && !(visible_modules(h) >> SWITCH_MODULE & 1));
+    /* The switch, CORE.OFF, follows the choices of the modules. Guides
+       uses Film Look and Framing here. */
+    settings_memory[0] = 13;
+    settings_memory[2 + 12 * 3 + 2] = 2;
+    manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] = tone | aspect;
+    assert(count(h) == roots + 1 && root_module(h, roots) == SWITCH_MODULE);
+    assert(same(MODULE(SWITCH_MODULE).summary(h), "GRKit: On"));
+    assert(MODULE(SWITCH_MODULE).icon(h, roots) == GRKIT_ICON_MODULES);
+    assert(!MODULE(SWITCH_MODULE).settings);
+    /* The page: On and Off, open at the value. */
+    menu_open(h, SWITCH_MODULE);
+    assert(count(h) == 2 && !h[GRKIT_HOST_MENU_CURSOR / 4] && same(current_module(h)->title(h), "GRKit"));
+    assert(same(MODULE(SWITCH_MODULE).label(h, 0), "On") && same(MODULE(SWITCH_MODULE).label(h, 1), "Off"));
+    assert(MODULE(SWITCH_MODULE).checked(h, 0) && !MODULE(SWITCH_MODULE).checked(h, 1));
+    assert(MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_MODULES && MODULE(SWITCH_MODULE).icon(h, 1) == GRKIT_ICON_OFF);
+    /* Off stops each loaded module at once and counts as one change. The
+       Enable of each keeps its value. No capability runs, and Framing
+       sends the native 3:2 request again for the full area. */
+    n = h[GRKIT_HOST_STATE_CHANGES / 4];
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    menu_confirm(h);
+    assert(manage_all_off(h) && settings_memory[2 + 12 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
+    assert(manage_stopped(h, 0) && manage_stopped(h, 1) && !manage_off(h, 0) && !manage_off(h, 1));
+    assert(services_word(h, SERVICES_SUSPENDED)[0] == 2);
+    assert(!h[GRKIT_HOST_CAPABILITIES / 4] && framing_requests == 1);
+    /* The pages of the modules leave the root, and the switch stays. */
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    assert(count(h) == roots - 1 && !(visible_modules(h) >> 2 & 1) && !(visible_modules(h) >> 3 & 1));
+    assert(root_module(h, roots - 2) == SWITCH_MODULE);
+    assert(same(MODULE(SWITCH_MODULE).summary(h), "GRKit: Off") && MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_OFF);
+    /* Film Look keeps its effect, and the viewfinder shows the native
+       icon. */
+    h[GRKIT_HOST_ACTIVE / 4] = 0x59005000;
+    assert(selected_icon(h) == 0x7fff);
+    /* On starts the modules whose Enable is On: Date Imprint stays Off. */
+    settings_memory[2 + 6 * 3 + 1] = 1;
+    manage_set_all_off(h, 0);
+    assert(!manage_all_off(h) && !manage_stopped(h, 0) && manage_stopped(h, 1));
+    assert(h[GRKIT_HOST_CAPABILITIES / 4] == (tone | aspect) && framing_requests == 2);
+    assert(selected_icon(h) == 0x8000);
+    assert(visible_modules(h) >> 2 & 1 && !(visible_modules(h) >> 3 & 1));
+    settings_memory[2 + 6 * 3 + 1] = 0;
+    /* In a native aspect other than 3:2, the capture keeps that aspect:
+       no request. */
+    native_aspect_value = 1;
+    manage_set_all_off(h, 1);
+    assert(framing_requests == 2);
+    manage_set_all_off(h, 0);
+    native_aspect_value = 0;
+    /* In safe mode no module loads, and the switch does not show. */
+    for (u32 i = 0; i < 3; ++i) manage_memory[MANAGE_ENTRY(i)] = MANAGE_SAFE;
+    assert(!manage_switch_shown(h) && !(visible_modules(h) >> SWITCH_MODULE & 1));
+    h[GRKIT_HOST_ACTIVE / 4] = 0;
 }
 
 /* ADJ Order has a row for each module that ADJ can show: here each listed
@@ -2193,6 +2265,37 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
 }
+/* While a module loaded, the section starts with the GRKit switch. OK on it
+   opens a settings page with its one row. A tab without room for each row
+   keeps the switch, ADJ Order, and About GRKit. */
+static void the_section_starts_with_the_switch(void)
+{
+    static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_ADJ,
+                                MENU_ROW_GRKIT},
+                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
+    volatile u32 *h = test_header, *menu;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 13;
+    settings_memory[2 + 12 * 3 + 2] = 2;
+    manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    menu = services_word(h, SERVICES_MENU);
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 6 && BYTE(tab_copy(), MENU_TAB_ROWS) == 16);
+    for (u32 slot = 0; slot < 6; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == SWITCH_MODULE + 1 && settings_page(h) == switch_settings);
+    assert(settings_rows(h) == 1 && same(switch_settings[0].label(h), "GRKit"));
+    assert(switch_settings[0].values(h) == 2 && same(switch_settings[0].value_text(h, 1), "Off"));
+    switch_settings[0].set(h, 1);
+    assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
+    switch_settings[0].set(h, 0);
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    install_stock_tab(MENU_TAB_MAX_ROWS - 4, 3);
+    manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 4 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
+    for (u32 slot = 0; slot < 4; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
+}
 /* A tab with all its sections gets the rows in its last section. A tab
    without room for each row keeps ADJ Order and About GRKit, and gives rows
    to the first modules only. */
@@ -2264,6 +2367,7 @@ int main(void)
     the_adj_order_page_has_a_row_for_each_module();
     options_hide_values_that_are_off_in_adj();
     enable_applies_at_once();
+    the_switch_stops_each_module_at_once();
     film_look_lists_the_installed_effects_that_are_on();
     /* The MENU page blocks after the first continue the screen that the block
        before them leaves. */
@@ -2279,6 +2383,7 @@ int main(void)
 #ifdef FW_MENU_TABS
     the_section_rows_follow_the_listed_modules();
     a_full_tab_gets_no_new_section();
+    the_section_starts_with_the_switch();
 #endif
     each_selection_change_counts_once();
     record_index_finds_each_record_start();
