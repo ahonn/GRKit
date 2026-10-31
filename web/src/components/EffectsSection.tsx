@@ -76,6 +76,10 @@ export function EffectsSection({
     [...imported, ...cardEffects].map((effect) => effect.id),
   );
   const taken = new Set([...effects, ...cardEffects].map((effect) => effect.id));
+  // The count reads "of" the effects that a package can hold: each listed effect, up to the limit.
+  // With more listed effects than the limit, it also gives how many are listed.
+  const listed = effects.length + cardEffects.length;
+  const selectable = Math.min(listed, MAX_EFFECTS);
   // The effect that the frame shows, which changes in a transition when its preview is ready, and
   // the effect that the user selected last, which the tiles and the text show at once.
   const [previewId, setPreviewId] = useState(DEFAULT_PREVIEW);
@@ -302,9 +306,10 @@ export function EffectsSection({
       <div className="effects-pick">
         <div className="toolbar">
           <p>
-            {t.count(MAX_EFFECTS)[0]}
+            {t.count(selectable)[0]}
             <span className="count">{checked.size}</span>
-            {t.count(MAX_EFFECTS)[1]}
+            {t.count(selectable)[1]}
+            {listed > MAX_EFFECTS && t.countTotal(listed)}
           </p>
           <div>
             <button
