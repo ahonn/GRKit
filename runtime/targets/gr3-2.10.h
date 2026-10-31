@@ -232,7 +232,8 @@
 /* 1 in movie mode. */
 #define ADJ_MOVIE_FIELD 0x270
 #define ADJ_MOVIE(controller) BYTE(controller,ADJ_MOVIE_FIELD)
-#define ADJ_ACTION 0x279
+/* 1 while the held Fn action of an ADJ slot (type 13) runs. */
+#define ADJ_FN_HELD 0x279
 
 /* AdjModeController events (the first halfword of an event). */
 #define EV_SWITCH 5

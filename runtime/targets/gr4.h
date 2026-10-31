@@ -197,7 +197,8 @@
 #define FN_GUIDE_X 300
 #define ADJ_LIST 0x1f8
 #define ADJ_SLOT 0x1fc
-#define ADJ_ACTION 0x281
+/* 1 while the held Fn action of an ADJ slot runs. */
+#define ADJ_FN_HELD 0x281
 
 /* AdjModeController events (the first halfword of an event). Measured, except
    the dial events, which follow the +6 offset of the direction events. The

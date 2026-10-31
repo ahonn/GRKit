@@ -421,11 +421,11 @@ static void list_frame(u32 view,u32 rows) {
    module. The native refresh fills the hint only on a native slot that
    offers Fn, so a hint that GRKit shows could be empty. Fill it as the
    native Image Control slot does. */
-static u32 settings_target(volatile u32 *h,u32 controller,u32 fn);
+static u32 settings_target(volatile u32 *h,u32 controller);
 static void fn_guide(u32 controller) {
     volatile u32 *h=menu_header();
     u32 guide=WORD(controller,ADJ_FN_GUIDE), shown=parameters_row(h) ? parameters_available(controller) :
-        settings_target(h,controller,1)!=MODULE_TOTAL;
+        settings_target(h,controller)!=MODULE_TOTAL;
     if(shown) {
         CALL4(FW_GUIDE_SET_CONTENT)(guide,FN_GUIDE_TEXT,10,FN_GUIDE_ICON);
 #ifdef FN_GUIDE_X
@@ -668,16 +668,13 @@ A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
    settings page where the target has one. The page returns to where it
    opened (menu_refresh). */
 /* The module whose settings Fn opens at the cursor, or MODULE_TOTAL: Fn on
-   a root row or on a module page. OK opens none. */
-static u32 settings_target(volatile u32 *h,u32 controller,u32 fn) {
+   a root row or on a module page. */
+static u32 settings_target(volatile u32 *h,u32 controller) {
     u32 module, level=h[GRKIT_HOST_MENU_LEVEL/4];
     const MenuPage *page;
     if(ADJ_MOVIE(controller)==1) return MODULE_TOTAL;
-    if(level==MENU_ROOT) {
-        if(!fn) return MODULE_TOTAL;
-        module=root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]);
-    }
-    else if(fn && level==MENU_MODULE) module=h[GRKIT_HOST_MODULE/4];
+    if(level==MENU_ROOT) module=root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+    else if(level==MENU_MODULE) module=h[GRKIT_HOST_MODULE/4];
     else return MODULE_TOTAL;
     page=menu_page(h,module);
     if(!page->settings) return MODULE_TOTAL;
@@ -685,9 +682,9 @@ static u32 settings_target(volatile u32 *h,u32 controller,u32 fn) {
     if(page->settings==choice_settings && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)<2) return MODULE_TOTAL;
     return module;
 }
-static u32 open_settings(u32 controller,u32 fn) {
+static u32 open_settings(u32 controller) {
     volatile u32 *h=menu_header();
-    u32 module=settings_target(h,controller,fn), root=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT;
+    u32 module=settings_target(h,controller), root=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT;
     if(module==MODULE_TOTAL) return 0;
     leave(controller);
     settings_start(h,module);
@@ -777,7 +774,7 @@ A32_ENTRY void menu_changed(u32 controller) {
     volatile u32 *h=menu_header();
     /* Restoration sets the level to native before rebuilding the list. */
     if(h[GRKIT_HOST_MENU_REBUILDING/4]) return;
-    if(h[GRKIT_HOST_MENU_CONTROLLER/4]==controller && h[GRKIT_HOST_MENU_LEVEL/4]) {
+    if(private_mode(controller)) {
         u32 view=WORD(controller,ADJ_LIST);
         u32 next=list_start(h,view)+CALL1(FW_LIST_CURSOR)(view);
         if(next<count(h) && next!=h[GRKIT_HOST_MENU_CURSOR/4]) { h[GRKIT_HOST_MENU_CURSOR/4]=next; highlight(h); render(controller); }
@@ -873,7 +870,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         return 0;
     }
     /* Fn elsewhere opens the detail settings of the module, if it has any. */
-    if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && open_settings(controller,1)) return 0;
+    if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && open_settings(controller)) return 0;
     /* Left and Right move to the next ADJ entry from the root and from a
        page, as on a native entry. MENU returns from a page to the root. */
     if(kind==EV_LEFT || kind==EV_RIGHT) {
@@ -907,10 +904,10 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
        ADJ stays open on the page instead (ui_holds_page). */
     if(kind==EV_CONFIRM) {
         u32 page=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE, close=page;
-        /* OK on the Modules page opens the settings of the row. */
+        /* ADJ shows no Modules page (visible_modules). If it did, OK there
+           would keep ADJ open, as the page has no value to commit. */
         if(page && h[GRKIT_HOST_MODULE/4]==MANAGE_MODULE) close=0;
         if(after_adj_press(h)) close=1;
-        if(!close && open_settings(controller,0)) return 0;
         if(page || !close) menu_confirm(h);
         if(close && ui_holds_page(h)) close=0;
         if(close) {
@@ -921,7 +918,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         render(controller); return 0;
     }
     /* Ordinary touch notifications must not dismiss a private page. */
-    if(kind==EV_TOUCH && native_action_release(BYTE(WORD((u32)event,4),0x50),BYTE(controller,ADJ_ACTION))) {
+    if(kind==EV_TOUCH && native_action_release(BYTE(WORD((u32)event,4),0x50),BYTE(controller,ADJ_FN_HELD))) {
         leave(controller);
         return menu_event_original(controller,event);
     }
