@@ -609,8 +609,15 @@ export function isMobileDevice(device: DeviceNavigator): boolean {
 }
 
 /**
- * Whether the page names the browsers that can write to a card: on a computer whose browser
- * cannot, such as Safari or Firefox.
+ * The hint about writing to a card: on a phone or a tablet, where no browser can, use a
+ * computer (`computer`); on a computer whose browser cannot, such as Safari or Firefox, use Chrome
+ * or Edge (`browser`); else none.
  */
-export const suggestCardBrowser = () =>
-  typeof navigator !== 'undefined' && !canWriteCards() && !isMobileDevice(navigator as DeviceNavigator);
+export function cardHint(device: DeviceNavigator, canWrite: boolean): 'computer' | 'browser' | null {
+  if (canWrite) return null;
+  return isMobileDevice(device) ? 'computer' : 'browser';
+}
+
+/** The card hint of this browser (`cardHint`). */
+export const suggestCardHint = () =>
+  typeof navigator === 'undefined' ? null : cardHint(navigator as DeviceNavigator, canWriteCards());

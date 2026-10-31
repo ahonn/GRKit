@@ -10,7 +10,7 @@ import { suggestOwnBrowser } from './browser';
 import {
   applyChanges,
   canWriteCards,
-  suggestCardBrowser,
+  suggestCardHint,
   cardBuilds,
   cardModules,
   pickCard,
@@ -118,6 +118,9 @@ export function App({
   const t = STRINGS[language];
   // An app browser, such as WeChat's, often saves no GRKit.zip, so the page asks for a browser.
   const appBrowser = suggestOwnBrowser();
+  // Without an app browser, the page tells how to write to the card: on a computer from a phone,
+  // or in Chrome or Edge from another computer browser.
+  const cardHintKind = suggestCardHint();
   const camera = CAMERAS.find((item) => item.key === cameraKey) ?? CAMERAS[0]!;
   const support = camera.support;
   const targets = support?.targets;
@@ -519,16 +522,10 @@ export function App({
 
   return (
     <>
-      {appBrowser ? (
+      {(appBrowser || cardHintKind) && (
         <div className="browser-banner" role="note">
-          {t.appBrowser}
+          {appBrowser ? t.appBrowser : cardHintKind === 'computer' ? t.cardComputer : t.cardBrowser}
         </div>
-      ) : (
-        suggestCardBrowser() && (
-          <div className="browser-banner" role="note">
-            {t.cardBrowser}
-          </div>
-        )
       )}
     <div className="page">
       <div className="languages">

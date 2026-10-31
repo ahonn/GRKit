@@ -330,6 +330,7 @@ export function EffectsSection({
             </button>
           </div>
         </div>
+        <p className="note">{t.countLimit(MAX_EFFECTS)}</p>
         {catalog.baseGamma && (
           <p className="note">
             {t.importHint}{' '}
