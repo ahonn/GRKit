@@ -28,7 +28,7 @@ if value != 827150919 goto reject_close
 call readword
 count = value
 if count < 0 goto reject_close
-if count > 20 goto reject_close
+if count > 40 goto reject_close
 call readword
 words = value
 call readword
@@ -45,29 +45,34 @@ if moduletiles > 128 goto reject_close
 fileclose fh
 expected = 192 + count * 1088
 if words != expected goto reject
-expectedchunks = (count + moduletiles + 43) / 40
+expectedchunks = (count + moduletiles + 44) / 40
 if chunks != expectedchunks goto reject
 intdim registry words
 if chunks <= 0 goto icons_ready
-items = count + moduletiles + 4 - 0
+items = count + moduletiles + 5 - 0
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork0 iconwords
 if chunks <= 1 goto icons_ready
-items = count + moduletiles + 4 - 40
+items = count + moduletiles + 5 - 40
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork1 iconwords
 if chunks <= 2 goto icons_ready
-items = count + moduletiles + 4 - 80
+items = count + moduletiles + 5 - 80
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork2 iconwords
 if chunks <= 3 goto icons_ready
-items = count + moduletiles + 4 - 120
+items = count + moduletiles + 5 - 120
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork3 iconwords
+if chunks <= 4 goto icons_ready
+items = count + moduletiles + 5 - 160
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork4 iconwords
 :icons_ready
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
@@ -143,7 +148,7 @@ filewriteln sfh line
 :save_key3
 pcount = registry[0]
 if pcount < 0 pcount = 0
-if pcount > 20 pcount = 0
+if pcount > 40 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
@@ -227,7 +232,7 @@ return
 value0 = 0
 count = registry[0]
 if count < 1 goto snapshot_values
-if count > 20 goto snapshot_values
+if count > 40 goto snapshot_values
 offset = registry[2] - registry[1]
 if offset < 0 goto snapshot_values
 rest = offset % 4352
