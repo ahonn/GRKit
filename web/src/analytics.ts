@@ -3,6 +3,7 @@ import type { Grade } from './catalog';
 import type { Input } from './import/names';
 import type { Language } from './i18n';
 import type { ModuleKey, ModulePlan } from './modules';
+import { TransferError } from './transfer';
 
 type Props = Record<string, string>;
 
@@ -44,6 +45,37 @@ export function trackDownload(
   language: Language,
 ): void {
   track('Download', downloadProps(camera, plan, effectCount, language));
+}
+
+/** The kind of site file of `url`, by its first folder: runtime, effect, module, guide, or packager. */
+function fileKind(url: string): string {
+  const path = new URL(url, 'https://grkit.app/').pathname;
+  if (path.endsWith('.wasm')) return 'packager';
+  const folder = path.split('/').find((part) => part !== '') ?? '';
+  return { runtime: 'runtime', effects: 'effect', modules: 'module', guides: 'guide' }[folder] ?? 'other';
+}
+
+/**
+ * The properties of a package that the page could not make: the camera, `zip` or `card`, whether
+ * the page runs in an app browser, and the cause. A file that did not arrive gives the reason
+ * (`stall`, `network`, or the HTTP status) and its kind, never its URL.
+ */
+export function downloadErrorProps(camera: Camera, mode: 'zip' | 'card', appBrowser: boolean, error: unknown): Props {
+  const props: Props = { camera: camera.key, mode, app: appBrowser ? 'yes' : 'no' };
+  if (error instanceof TransferError) {
+    props.reason = error.reason === 'status' ? String(error.status) : error.reason;
+    props.file = fileKind(error.url);
+  } else if (error instanceof Error && error.message.startsWith('Effect checksum mismatch')) {
+    props.reason = 'checksum';
+  } else {
+    props.reason = 'other';
+  }
+  return props;
+}
+
+/** Records a package that the page could not make. */
+export function trackDownloadError(camera: Camera, mode: 'zip' | 'card', appBrowser: boolean, error: unknown): void {
+  track('Download Error', downloadErrorProps(camera, mode, appBrowser, error));
 }
 
 /** Records a write to a connected card: a first install, an update, or a change of the selection. */

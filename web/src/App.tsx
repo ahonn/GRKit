@@ -1,5 +1,12 @@
 import { Suspense, use, useCallback, useRef, useState, type ReactNode } from 'react';
-import { trackCardUninstall, trackCardWrite, trackDownload, trackScriptsOff } from './analytics';
+import {
+  trackCardUninstall,
+  trackCardWrite,
+  trackDownload,
+  trackDownloadError,
+  trackScriptsOff,
+} from './analytics';
+import { suggestOwnBrowser } from './browser';
 import {
   applyChanges,
   canWriteCards,
@@ -51,6 +58,7 @@ import {
   scriptsOffCardFiles,
 } from './package';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
+import { TransferError } from './transfer';
 
 const REPOSITORY = 'https://github.com/ahonn/grkit';
 /** The Tally form for problems, feature ideas, and questions. A plain link, so the page loads nothing from Tally. */
@@ -66,7 +74,7 @@ function guideUrl(name: 'RECOVERY' | 'DUMP', language: Language): string {
 
 type Build =
   | { state: 'idle' }
-  | { state: 'building'; received: number }
+  | { state: 'building'; received: number; retrying: boolean }
   | { state: 'ready' }
   | { state: 'failed' };
 
@@ -108,6 +116,8 @@ export function App({
   const cardRun = useRef(0);
 
   const t = STRINGS[language];
+  // An app browser, such as WeChat's, often saves no GRKit.zip, so the page asks for a browser.
+  const appBrowser = suggestOwnBrowser();
   const camera = CAMERAS.find((item) => item.key === cameraKey) ?? CAMERAS[0]!;
   const support = camera.support;
   const targets = support?.targets;
@@ -449,7 +459,11 @@ export function App({
       );
     } catch (error) {
       console.error(error);
-      if (run === cardRun.current) setApplyMessage({ tone: 'error', lines: cardErrorLines(error, t, true) });
+      if (run === cardRun.current) {
+        // Only a site file that did not arrive is a download error. Other errors are the card's.
+        if (error instanceof TransferError) trackDownloadError(camera, 'card', appBrowser, error);
+        setApplyMessage({ tone: 'error', lines: cardErrorLines(error, t, true) });
+      }
     } finally {
       if (run === cardRun.current) setCardTask({ kind: 'idle' });
     }
@@ -461,7 +475,7 @@ export function App({
     }
     buildRun.current += 1;
     const run = buildRun.current;
-    setBuild({ state: 'building', received: 0 });
+    setBuild({ state: 'building', received: 0, retrying: false });
     try {
       const effects = await packageEffects();
       const blob = await buildPackage(
@@ -470,8 +484,8 @@ export function App({
         effects,
         plan.modules,
         language,
-        (received) => {
-          if (run === buildRun.current) setBuild({ state: 'building', received });
+        (received, retrying) => {
+          if (run === buildRun.current) setBuild({ state: 'building', received, retrying });
         },
       );
       if (run === buildRun.current) {
@@ -482,6 +496,7 @@ export function App({
     } catch (error) {
       console.error(error);
       if (run === buildRun.current) {
+        trackDownloadError(camera, 'zip', appBrowser, error);
         setBuild({ state: 'failed' });
       }
     }
@@ -504,10 +519,16 @@ export function App({
 
   return (
     <>
-      {suggestCardBrowser() && (
+      {appBrowser ? (
         <div className="browser-banner" role="note">
-          {t.cardBrowser}
+          {t.appBrowser}
         </div>
+      ) : (
+        suggestCardBrowser() && (
+          <div className="browser-banner" role="note">
+            {t.cardBrowser}
+          </div>
+        )
       )}
     <div className="page">
       <div className="languages">
@@ -790,7 +811,11 @@ export function App({
                   {plan.visible.length === 0 && <p className="status error">{t.noModules}</p>}
                   {build.state === 'building' && (
                     <p className="status">
-                      {build.received > 0 ? t.downloading(megabytes(build.received)) : t.building}
+                      {build.retrying
+                        ? t.retrying
+                        : build.received > 0
+                          ? t.downloading(megabytes(build.received))
+                          : t.building}
                     </p>
                   )}
                   {build.state === 'ready' && <p className="status">{t.ready}</p>}
