@@ -358,11 +358,36 @@ A32_ENTRY void menu_refresh(u32 controller) {
 /* First row of the cursor's page. The reciprocal equals row/6 for rows below 2^15
    and avoids a division helper, which the freestanding link does not provide. */
 static u32 page_start(u32 row) { return (row*0xaaabU>>18)*PAGE; }
-/* The list has as many rows as the longest native slot of the controller
-   (32 on GR III). It holds all rows of the root or page when they fit, and
-   scrolls them as a native list does. Otherwise it holds the page of six rows
-   around the cursor. Each native ADJ list holds more than six rows. */
+/* The list has a row view for each row of the longest native slot of the
+   controller (32 on GR III), and list_grow adds more for a longer page. It
+   holds all rows of the root or page when they fit, and scrolls them as a
+   native list does. Otherwise (more than ADJ_ROWS_MAX rows) it holds the
+   page of six rows around the cursor. Each native ADJ list holds more than
+   six rows. */
 static u32 list_capacity(u32 view) { return (WORD(view,LIST_ROWS+4)-WORD(view,LIST_ROWS))>>2; }
+/* Film Look can have more rows than the longest native slot: Off and up to
+   40 effects. Append row views of the native kind (style 0x19, height 0x3a,
+   as the native list init makes them) until the list has `rows`, so that it
+   scrolls them as a native list does. The native fill and marks run over
+   the native capacity only (controller byte +0x271 on GR III, the row count
+   of the slot on GR IV), so the added rows stay with GRKit. The controller
+   lives as long as the camera runs, so the rows are added once. */
+#define ADJ_ROW_STYLE 0x19U
+#define ADJ_ROW_HEIGHT 0x3aU
+#define ADJ_ROWS_MAX 64U
+static void list_grow(u32 view,u32 rows) {
+    u8 styles[ADJ_ROWS_MAX];
+    u32 have=list_capacity(view), i;
+    if(rows>ADJ_ROWS_MAX) rows=ADJ_ROWS_MAX;
+    if(!have || rows<=have) return;
+    for(i=0;i<rows-have;++i) styles[i]=(u8)ADJ_ROW_STYLE;
+    CALL4(FW_LIST_INIT)(view,(u32)styles,rows-have,ADJ_ROW_HEIGHT);
+#ifdef FW_LIST_ROWS_VALUE
+    /* GR IV gives the value of the native init to each row: the added rows
+       need it too, else they draw with separators. */
+    CALL2(FW_LIST_ROWS_VALUE)(view,0x10);
+#endif
+}
 static u32 list_start(volatile u32 *h,u32 view) {
     return count(h)>list_capacity(view) ? page_start(h[GRKIT_HOST_MENU_CURSOR/4]) : 0;
 }
@@ -428,6 +453,7 @@ static void render_step(u32 controller,u32 step) {
     const MenuPage *module;
     menu_normalize(h);
     cursor=h[GRKIT_HOST_MENU_CURSOR/4]; total=count(h);
+    list_grow(view,total);
     start=list_start(h,view); n=total-start;
     module=current_module(h);
     if(total>list_capacity(view)) {
@@ -438,15 +464,19 @@ static void render_step(u32 controller,u32 step) {
     kept=BYTE(view,LIST_COUNT)==n;
     /* Suppress the native list callback while replacing private rows. */
     h[GRKIT_HOST_MENU_REBUILDING/4]=1;
-    CALL2(FW_LIST_SET_COUNT)(view,n);
-    for(i=0;i<n;++i) {
-        u32 row=CALL2(FW_LIST_ROW)(view,i);
-        u32 index=start+i;
-        /* Private icon IDs are resolved by the host's guarded icon adapter. */
-        u32 owner=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? root_module(h,index) : h[GRKIT_HOST_MODULE/4];
-        u32 icon=module_icon(owner,menu_page(h,owner)->icon(h,index));
-        CALL2(FW_ROW_SET_ICON)(row,icon);
-        CALL2(FW_ROW_SET_CHECK)(row,h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_ROOT && module->checked(h,index));
+    /* An Up or Down step keeps the rows: a row's icon depends on its index,
+       and its check on committed values, which a step does not change. */
+    if(!(kept && step)) {
+        CALL2(FW_LIST_SET_COUNT)(view,n);
+        for(i=0;i<n;++i) {
+            u32 row=CALL2(FW_LIST_ROW)(view,i);
+            u32 index=start+i;
+            /* Private icon IDs are resolved by the host's guarded icon adapter. */
+            u32 owner=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? root_module(h,index) : h[GRKIT_HOST_MODULE/4];
+            u32 icon=module_icon(owner,menu_page(h,owner)->icon(h,index));
+            CALL2(FW_ROW_SET_ICON)(row,icon);
+            CALL2(FW_ROW_SET_CHECK)(row,h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_ROOT && module->checked(h,index));
+        }
     }
     /* The rows selected other module pages (menu_page). */
     module=current_module(h);

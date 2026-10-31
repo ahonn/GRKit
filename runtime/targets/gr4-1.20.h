@@ -98,6 +98,9 @@
 #define CHECK_LINE_VTABLE FIRMWARE(0x53ecff88)
 #define FW_CHECK_ITEM FIRMWARE(0x535a8300)
 #define FW_LIST_INIT FIRMWARE(0x53593c14)
+/* Gives a list value to each of its rows; the ADJ list init passes 0x10.
+   GR III keeps it in the list, so it needs no call for added rows. */
+#define FW_LIST_ROWS_VALUE FIRMWARE(0x53594efc)
 #define FW_ROW_DOT FIRMWARE(0x5359e00c)
 #define CHECK_IMAGE_ON 0x111U
 #define CHECK_IMAGE_OFF 0x110U
