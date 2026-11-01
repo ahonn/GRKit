@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 768
+#define GRKIT_HOST_HEADER_SIZE 680
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -193,36 +193,33 @@
    (runtime/manage.h). The menu sets it. The text hooks read this word, so they
    do not walk the module pages. */
 #define GRKIT_HOST_ADJ_MODULES 336
-/* Reserved for later fields. */
-#define GRKIT_HOST_RESERVED 340
-#define GRKIT_HOST_RESERVED_WORDS 22
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
-#define GRKIT_HOST_MODULE_SETTINGS 428
+#define GRKIT_HOST_MODULE_SETTINGS 340
 /* The ADJ preview of a module page: its setting handle plus 1 (0 for none),
    then the highlighted value. Module layers of that setting paint the
    highlighted value on the ADJ canvas. */
-#define GRKIT_HOST_MODULE_PREVIEW 432
+#define GRKIT_HOST_MODULE_PREVIEW 344
 #define GRKIT_HOST_MODULE_PREVIEW_WORDS 2
 /* Number of module pages in GRKIT_HOST_MODULE_PAGES. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_PAGE_COUNT 440
+#define GRKIT_HOST_MODULE_PAGE_COUNT 352
 /* Three words for each module page (runtime/sdk/grkit.h), in load order: the
    address of its GrkitPage, its setting handle, and the global index of its
    tile 0 (GRKIT_ICON_MODULE_TILE). */
-#define GRKIT_HOST_MODULE_PAGES 444
+#define GRKIT_HOST_MODULE_PAGES 356
 #define GRKIT_HOST_MODULE_PAGES_WORDS 30
 /* The module page that the generic page callbacks of the menu serve. */
-#define GRKIT_HOST_MODULE_CHOICE 564
+#define GRKIT_HOST_MODULE_CHOICE 476
 /* Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_LAYER_COUNT 568
+#define GRKIT_HOST_MODULE_LAYER_COUNT 480
 /* Three words for each module layer, in painting order: its paint function,
    its setting handle (GRKIT_NO_SETTING paints with the value 1), and its flags
    in the low half with its order in the high half. */
-#define GRKIT_HOST_MODULE_LAYERS 572
+#define GRKIT_HOST_MODULE_LAYERS 484
 #define GRKIT_HOST_MODULE_LAYERS_WORDS 48
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
-#define GRKIT_HOST_GAMMA_KEY 764
+#define GRKIT_HOST_GAMMA_KEY 676
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
