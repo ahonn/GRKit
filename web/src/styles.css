@@ -171,6 +171,76 @@ button {
   font-size: 14px;
   line-height: 1.5;
   text-align: center;
+  text-wrap: balance;
+}
+
+/* The GR Snap bar on an iPhone or an iPad. The bar stays above the home indicator, and the
+   space element keeps the end of the page clear of it. The bar is 74px high with three lines of
+   text, and the space leaves room for the description to wrap to a second line. */
+.app-promo {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px calc(10px + env(safe-area-inset-bottom)) 16px;
+  border-top: 1px solid var(--ink);
+  background: var(--paper);
+}
+
+.app-promo-space {
+  height: calc(96px + env(safe-area-inset-bottom));
+}
+
+.app-promo img {
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+
+.app-promo-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.app-promo-text strong {
+  font-size: 15px;
+}
+
+.app-promo-text span {
+  color: var(--muted);
+}
+
+.app-promo-text small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.app-promo .button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  text-decoration: none;
+}
+
+.app-promo-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 /* Header */
@@ -180,7 +250,6 @@ button {
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
-  padding-bottom: 24px;
 }
 
 .github {
@@ -263,6 +332,14 @@ button {
   padding-bottom: 32px;
 }
 
+/* The name comes first in the page order. On a wide screen the controls show above it, at the
+   top right. */
+.masthead-top {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 24px;
+}
+
 /* The version of the packaged GRKit sits at the top right of the name, as a mark on a box. */
 .masthead-title {
   display: flex;
@@ -316,6 +393,34 @@ button {
 
 .masthead .lead-line {
   display: block;
+}
+
+/* On a phone, a smaller name sits at the top left, in the row of the controls. */
+@media (max-width: 560px) {
+  .masthead {
+    gap: 28px;
+  }
+
+  .masthead-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .masthead-title {
+    gap: 6px;
+  }
+
+  .masthead h1 {
+    font-size: 40px;
+  }
+
+  .masthead-version {
+    margin-top: 0;
+    padding: 1px 5px;
+    font-size: 11px;
+  }
 }
 
 /* Sections */

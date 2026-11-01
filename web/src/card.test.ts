@@ -5,6 +5,8 @@ import {
   cardEffects,
   cardModules,
   hasChanges,
+  cardHint,
+  isAppleMobileDevice,
   isMobileDevice,
   parseList,
   parseReport,
@@ -538,5 +540,19 @@ describe('isMobileDevice', () => {
     expect(isMobileDevice(device(SAFARI, 'MacIntel'))).toBe(false);
     expect(isMobileDevice(device(FIREFOX, 'Win32'))).toBe(false);
     expect(isMobileDevice(device(LINUX, 'Linux x86_64', 0, false))).toBe(false);
+  });
+  it('names iPhones and iPads apart from other phones and computers', () => {
+    expect(isAppleMobileDevice(device(IPHONE, 'iPhone', 5))).toBe(true);
+    expect(isAppleMobileDevice(device(SAFARI, 'MacIntel', 5))).toBe(true);
+    expect(isAppleMobileDevice(device(ANDROID, 'Linux armv8l', 5, true))).toBe(false);
+    expect(isAppleMobileDevice(device(SAFARI, 'MacIntel'))).toBe(false);
+  });
+
+  it('points a phone or a tablet to a computer, and another computer browser to Chrome or Edge', () => {
+    expect(cardHint(device(ANDROID, 'Linux armv8l', 5, true), false)).toBe('computer');
+    expect(cardHint(device(SAFARI, 'MacIntel', 5), false)).toBe('computer');
+    expect(cardHint(device(SAFARI, 'MacIntel'), false)).toBe('browser');
+    expect(cardHint(device(FIREFOX, 'Win32'), false)).toBe('browser');
+    expect(cardHint(device(LINUX, 'Linux x86_64', 0, false), true)).toBeNull();
   });
 });

@@ -10,7 +10,7 @@ import { suggestOwnBrowser } from './browser';
 import {
   applyChanges,
   canWriteCards,
-  suggestCardBrowser,
+  suggestCardHint,
   cardBuilds,
   cardModules,
   pickCard,
@@ -42,6 +42,7 @@ import {
   type CardTask,
   type InstallMode,
 } from './components/CardPanel';
+import { AppPromo } from './components/AppPromo';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
@@ -118,6 +119,9 @@ export function App({
   const t = STRINGS[language];
   // An app browser, such as WeChat's, often saves no GRKit.zip, so the page asks for a browser.
   const appBrowser = suggestOwnBrowser();
+  // Without an app browser, the page tells how to write to the card: on a computer from a phone,
+  // or in Chrome or Edge from another computer browser.
+  const cardHintKind = suggestCardHint();
   const camera = CAMERAS.find((item) => item.key === cameraKey) ?? CAMERAS[0]!;
   const support = camera.support;
   const targets = support?.targets;
@@ -519,65 +523,62 @@ export function App({
 
   return (
     <>
-      {appBrowser ? (
+      {(appBrowser || cardHintKind) && (
         <div className="browser-banner" role="note">
-          {t.appBrowser}
+          {appBrowser ? t.appBrowser : cardHintKind === 'computer' ? t.cardComputer : t.cardBrowser}
         </div>
-      ) : (
-        suggestCardBrowser() && (
-          <div className="browser-banner" role="note">
-            {t.cardBrowser}
-          </div>
-        )
       )}
     <div className="page">
-      <div className="languages">
-        <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
-          <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
-            <path
-              fill="currentColor"
-              d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"
-            />
-          </svg>
-        </a>
-        <div role="group" aria-label={t.language}>
-          {LANGUAGES.map((item) => (
-            <button
-              key={item.code}
-              type="button"
-              lang={item.code}
-              className="button"
-              aria-pressed={item.code === language}
-              onClick={() => chooseLanguage(item.code)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-        <span className="language-select">
-          <select
-            className="button"
-            aria-label={t.language}
-            value={language}
-            onChange={(event) => chooseLanguage(event.target.value as Language)}
-          >
-            {LANGUAGES.map((item) => (
-              <option key={item.code} value={item.code} lang={item.code}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </span>
-      </div>
-
       <header className="masthead">
-        <div className="masthead-title">
-          <h1>
-            GRK<span className="dot">i</span>t
-          </h1>
-          <a className="masthead-version" href={RELEASE_URL}>
-            v{__GRKIT_VERSION__}
-          </a>
+        {/* The name and the controls share one row on a phone. On a wider screen the controls
+            come first, at the top right, and the name sits under them. */}
+        <div className="masthead-top">
+          <div className="masthead-title">
+            <h1>
+              GRK<span className="dot">i</span>t
+            </h1>
+            <a className="masthead-version" href={RELEASE_URL}>
+              v{__GRKIT_VERSION__}
+            </a>
+          </div>
+          <div className="languages">
+            <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
+              <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"
+                />
+              </svg>
+            </a>
+            <div role="group" aria-label={t.language}>
+              {LANGUAGES.map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  lang={item.code}
+                  className="button"
+                  aria-pressed={item.code === language}
+                  onClick={() => chooseLanguage(item.code)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+            <span className="language-select">
+              <select
+                className="button"
+                aria-label={t.language}
+                value={language}
+                onChange={(event) => chooseLanguage(event.target.value as Language)}
+              >
+                {LANGUAGES.map((item) => (
+                  <option key={item.code} value={item.code} lang={item.code}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </span>
+          </div>
         </div>
         <p className="lead">
           {t.lead.map((line) => (
@@ -951,6 +952,7 @@ export function App({
         </div>
       </footer>
     </div>
+      <AppPromo strings={t} />
     </>
   );
 }
