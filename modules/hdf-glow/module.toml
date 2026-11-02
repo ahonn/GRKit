@@ -1,0 +1,40 @@
+# HDF Glow: the glow of a highlight diffusion filter (Black Pro-Mist, GR III
+# HDF) on each recorded JPEG, with an optional CineStill halation. The live
+# view and DNG files stay as they are.
+id = "HDF"
+version = 1
+# The default place in ADJ and in MENU: after Date (40), before Grain (50).
+order = 45
+sources = ["hdf.c"]
+# Tile n shows strength n. Tile 0 is the module tile, for Off at the root.
+tiles = [
+    "tiles/0-module.png",
+    "tiles/1-eighth.png",
+    "tiles/2-quarter.png",
+    "tiles/3-half.png",
+]
+
+# 0 Off, 1 1/8, 2 1/4, 3 1/2.
+[[settings]]
+key = "STRENGTH"
+values = 4
+saved = true
+public = true
+
+# The red ring of CineStill film around lights: 0 Off, 1 On.
+[[settings]]
+key = "HALO"
+values = 2
+saved = true
+public = true
+
+[page]
+setting = "STRENGTH"
+off_row = true
+settings = ["STRENGTH", "HALO"]
+
+# Stage frame, before the date (mark), so the date does not glow.
+[[filters]]
+apply = "hdf_apply"
+setting = "STRENGTH"
+stage = "frame"

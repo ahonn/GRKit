@@ -1,0 +1,9 @@
+title = "HDF 柔光"
+rows = ["關閉", "1/8", "1/4", "1/2"]
+
+[settings.STRENGTH]
+label = "強度"
+
+[settings.HALO]
+label = "CineStill 紅色光暈"
+values = ["關閉", "開啟"]

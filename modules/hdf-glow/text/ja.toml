@@ -1,0 +1,9 @@
+title = "HDFグロー"
+rows = ["オフ", "1/8", "1/4", "1/2"]
+
+[settings.STRENGTH]
+label = "強さ"
+
+[settings.HALO]
+label = "シネスティル ハレーション"
+values = ["オフ", "オン"]

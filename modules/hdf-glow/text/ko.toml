@@ -1,0 +1,9 @@
+title = "HDF 글로우"
+rows = ["꺼짐", "1/8", "1/4", "1/2"]
+
+[settings.STRENGTH]
+label = "강도"
+
+[settings.HALO]
+label = "CineStill 할레이션"
+values = ["꺼짐", "켜짐"]
