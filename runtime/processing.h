@@ -152,7 +152,22 @@ module_parameters:
     // Without a module that uses CORE.TONE, as after a soft Off of Film Look
     // (runtime/manage.h), the native processing runs.
     ldr r3, [r0, #GRKIT_HOST_CAPABILITIES]
+#ifdef FW_DEVELOP_MODEL
+    // A RAW development applies its own effect (GRKIT_HOST_DEVELOP), not the
+    // selected one: 1 is native processing.
+    ldr r2, =FW_DEVELOP_GUARD
+    ldr r2, [r2]
+    tst r2, #1
+    ldrne r2, =FW_DEVELOP_MODEL
+    ldrbne r2, [r2, #DEVELOP_STATE]
+    cmpne r2, #0
+    ldrne r0, [r0, #GRKIT_HOST_DEVELOP]
+    ldreq r0, [r0, #GRKIT_HOST_ACTIVE]
+    cmp r0, #1
+    moveq r0, #0
+#else
     ldr r0, [r0, #GRKIT_HOST_ACTIVE]
+#endif
     tst r3, #GRKIT_CORE_TONE_BIT
     moveq r0, #0
     // Context 1 is the live view (ImageTuningLiveview); 0 is the still path.

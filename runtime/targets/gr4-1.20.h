@@ -141,6 +141,25 @@
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5324129c)
 #define FW_IFD_SET_SHORT FIRMWARE(0x5380dd48)
+/* RawDevelopmentModel: the guard of its static instance, and the instance.
+   The family header gives its state (DEVELOP_STATE). */
+#define FW_DEVELOP_GUARD FIRMWARE(0x55089270)
+#define FW_DEVELOP_MODEL FIRMWARE(0x55089688)
+/* The time of the photo in the playback metadata (runtime/targets/gr4.h). */
+#define METADATA_TIME 0x3e4
+/* The EXIF Orientation of the photo in the playback metadata. */
+#define METADATA_ORIENTATION 0x2c8
+/* RAW development, the Image Control list (runtime/menu.c): the label and
+   the icon of an Image Control (model, category, value), the children of a
+   list row view (their maker and layout, a child, and the setups of the icon
+   and of the text). */
+#define FW_DEVELOP_TONE_TEXT FIRMWARE(0x53382dd4)
+#define FW_DEVELOP_TONE_ICON FIRMWARE(0x53382d88)
+#define FW_ROW_CHILDREN FIRMWARE(0x535a1ab8)
+#define DEVELOP_ROW_LAYOUT FIRMWARE(0x53dc3340)
+#define FW_ROW_CHILD FIRMWARE(0x535a1664)
+#define FW_ICON_VIEW_STYLE FIRMWARE(0x5359a194)
+#define FW_STRING_VIEW_STYLE FIRMWARE(0x53590590)
 
 /* Picture processing: the YCbCr matrix calculation. */
 #define FW_YCBCR_CALC FIRMWARE(0x53942440)

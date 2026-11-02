@@ -13,6 +13,9 @@ static uint32_t owner_memory[512], canvas_memory[256], bitmap_memory[256];
 /* One effect record for the highlight warning (GRKIT_RECORD_SIZE bytes). */
 #define TEST_RECORD 0x5d000000U
 static uint32_t record_memory[0x1100 / 4];
+/* The playback metadata: the size of the photo in playback at METADATA_SIZE. */
+#define TEST_METADATA 0x5c000000U
+static uint32_t metadata_memory[0x40 / 4];
 static uint32_t pixels[1024 * 480 + 2];
 static uint32_t native_aspect, capture_aspect, capture_requests;
 
@@ -25,6 +28,8 @@ static void *mapped(uint32_t address, uint32_t bytes)
         object = canvas_memory; address -= TEST_CANVAS;
     } else if (address >= TEST_RECORD && address < TEST_RECORD + sizeof(record_memory)) {
         object = record_memory; address -= TEST_RECORD; size = sizeof(record_memory);
+    } else if (address >= TEST_METADATA && address < TEST_METADATA + sizeof(metadata_memory)) {
+        object = metadata_memory; address -= TEST_METADATA; size = sizeof(metadata_memory);
     } else {
         assert(address >= TEST_BITMAP && address < TEST_BITMAP + sizeof(bitmap_memory));
         object = bitmap_memory; address -= TEST_BITMAP;
@@ -55,6 +60,7 @@ static volatile uint32_t *mapped_pixels(uint32_t address)
 #define FRAMING_REQUEST_ASPECT() (++capture_requests, capture_aspect=framing_capture_request(0))
 static uint32_t display_mode;
 #define FRAMING_DISPLAY_MODE() display_mode
+#define FRAMING_PLAYBACK_METADATA() TEST_METADATA
 static uint32_t invalidations, invalidated;
 #define FRAMING_INVALIDATE(view) (++invalidations, invalidated = (view))
 static uint32_t local_second;
@@ -658,6 +664,39 @@ int main(void)
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=2;
     framing_bind(TEST_OWNER);
     assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==0);
+#ifdef DEVELOP_SQUARE
+    /* RAW development of the DNG in playback: the initial aspect and
+       GRKIT_HOST_FRAME_FILE follow the size of its photo. A Framing size
+       develops as recorded (0), a Framing 1:1 as the native 1:1, a native
+       aspect natively (-1). */
+    {
+        static const u16 xpan[]={XPAN_SIZES}, scope[]={SCOPE_SIZES}, narrow[]={NARROW_SIZES};
+        static const u16 wide_stock[]={XPAN_HEIGHT_0};
+        const struct { u32 width, height, aspect, value, file; } cases[]={
+            {xpan[0],xpan[1],2,0,2}, {xpan[1],xpan[0],2,0,2}, {scope[2],scope[3],2,0,3},
+            {narrow[0],narrow[1],1,0,4}, {narrow[8],narrow[9],1,0,5},
+            {narrow[2],narrow[2],1,DEVELOP_SQUARE,1},
+            {xpan[0],xpan[0]*2/3,0,0xffffffffU,1},
+            {xpan[0],wide_stock[0],2,DEVELOP_NATIVE_ASPECTS>>2&1 ? 0xffffffffU : 0,1},
+        };
+        for (u32 i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i) {
+            HALF(TEST_METADATA,METADATA_SIZE)=(u16)cases[i].width;
+            HALF(TEST_METADATA,METADATA_SIZE+4)=(u16)cases[i].height;
+            ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=0;
+            assert(framing_develop_select(TEST_OWNER,cases[i].aspect)==cases[i].value);
+            assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==cases[i].file);
+        }
+        /* An aspect that the user selects takes the stock sizes, the recorded
+           aspect (0) the geometry of the DNG again. */
+        HALF(TEST_METADATA,METADATA_SIZE)=xpan[0];
+        HALF(TEST_METADATA,METADATA_SIZE+4)=xpan[1];
+        framing_develop_geometry(TEST_OWNER,1);
+        assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==1);
+        framing_develop_geometry(TEST_OWNER,0);
+        assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==2);
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=0;
+    }
+#endif
     /* Live-view updates resend the 3:2 request only when capture differs. */
     reset();
     assert(capture_requests==1 && capture_aspect==2);

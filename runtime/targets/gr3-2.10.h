@@ -259,6 +259,39 @@
 #define FW_ICON_TABLE FIRMWARE(0x550020fc)
 /* The native Off icon, used until the installer provides the GRKit one. */
 #define NATIVE_OFF_ICON() WORD(FW_ICON_TABLE,0x166*4)
+/* RawDevelopmentModel: the guard of its static instance, and the instance.
+   The family header gives its state (DEVELOP_STATE). */
+#define FW_DEVELOP_GUARD FIRMWARE(0x550662d0)
+#define FW_DEVELOP_MODEL FIRMWARE(0x550666e0)
+/* The time of the photo in the playback metadata (runtime/targets/gr3.h). */
+#define METADATA_TIME 0x3c0
+/* The EXIF Orientation of the photo in the playback metadata. */
+#define METADATA_ORIENTATION 0x2b0
+/* RAW development, the Image Control list (runtime/menu.c): the label and
+   the icon of an Image Control (model, category, value), the child view of a
+   list row, the controller ID word, the ID of the list, and the first
+   instruction of the row category, which its entry hook replaces. The
+   subtitle of the list is at +0x160 of the controller (r4 in UpdateSubTitle),
+   the subtitle of RawDevelopmentTopController in r6. */
+#define FW_DEVELOP_TONE_TEXT FIRMWARE(0x532891f4)
+#define FW_DEVELOP_TONE_ICON FIRMWARE(0x532891a8)
+#define FW_ROW_CHILD FIRMWARE(0x533a1d34)
+#define CONTROLLER_ID 0x124
+#define DEVELOP_TONE_LIST 0x4000025U
+/* The list view of RawDevelopmentParameterSetController, and the style and
+   the height of its row views. */
+#define DEVELOP_LIST_VIEW 0x168
+#define DEVELOP_ROW_STYLE 0x1aU
+#define DEVELOP_ROW_HEIGHT 0x3aU
+/* The children of its row views: their maker (row, count, layout), the
+   layout, and the setups of the icon and of the text that the list init does. */
+#define FW_ROW_CHILDREN FIRMWARE(0x533a20dc)
+#define DEVELOP_ROW_LAYOUT FIRMWARE(0x53b33640)
+#define FW_ICON_VIEW_STYLE FIRMWARE(0x5339aa30)
+#define FW_STRING_VIEW_STYLE FIRMWARE(0x53390ff8)
+#define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
+#define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
+#define DEVELOP_TOP_TITLE mov r3, r6
 /* Maker-note IFD entry setter: (entry, 0, value) stores a u16 value. */
 #define FW_IFD_SET_SHORT FIRMWARE(0x535d02c8)
 /* LiveViewController: nonzero in movie mode, and the LCD canvas. */

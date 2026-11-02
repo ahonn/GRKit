@@ -770,3 +770,74 @@ SETTINGS_METHOD menu_settings_draw_4, menu_settings_draw, 4, HOOK_MENU_SETTINGS_
 SETTINGS_METHOD menu_settings_apply_4, menu_settings_apply, 4, HOOK_MENU_SETTINGS_APPLY_4_STOCK, HOOK_MENU_SETTINGS_APPLY_4_RESUME
 SETTINGS_METHOD menu_settings_current_4, menu_settings_current, 4, HOOK_MENU_SETTINGS_CURRENT_4_STOCK, HOOK_MENU_SETTINGS_CURRENT_4_RESUME
 .ltorg
+
+#ifdef HOOK_MENU_DEVELOP_COUNT
+/* The Image Control list of a RAW development (runtime/menu.c). Each entry
+   hook replaces the first instruction of its function. */
+/* GetListItemCount: run it, then add the effects to the Image Control list. */
+.global menu_develop_count
+.type menu_develop_count, %function
+menu_develop_count:
+    push {r0,lr}
+    adr lr, 1f
+    mov ip, sp
+    ldr pc, =HOOK_MENU_DEVELOP_COUNT_RESUME
+1:  pop {r1,lr}
+    b menu_develop_count_after
+/* An entry that menu.c answers for an effect row: menu.c returns the value,
+   or -1 to run the native function from its second instruction. */
+.macro DEVELOP_ANSWER name, helper, first, resume
+.global \name
+.type \name, %function
+\name:
+    push {r0-r3,r12,lr}
+    bl \helper
+    cmn r0, #1
+    beq 1f
+    add sp, sp, #4
+    pop {r1-r3,r12,lr}
+    bx lr
+1:  pop {r0-r3,r12,lr}
+    \first
+    ldr pc, =\resume
+.endm
+DEVELOP_ANSWER menu_develop_category, menu_develop_category_answer, DEVELOP_CATEGORY_FIRST, HOOK_MENU_DEVELOP_CATEGORY_RESUME
+DEVELOP_ANSWER menu_develop_value, menu_develop_value_answer, "mov ip, sp", HOOK_MENU_DEVELOP_VALUE_RESUME
+DEVELOP_ANSWER menu_develop_row, menu_develop_row_answer, "mov ip, sp", HOOK_MENU_DEVELOP_ROW_RESUME
+DEVELOP_ANSWER menu_develop_current, menu_develop_current_answer, "mov ip, sp", HOOK_MENU_DEVELOP_CURRENT_RESUME
+DEVELOP_ANSWER menu_develop_fn, menu_develop_fn_answer, "mov ip, sp", HOOK_MENU_DEVELOP_FN_RESUME
+/* An entry that menu.c sees first, then the native function runs. */
+.macro DEVELOP_BEFORE name, helper, resume
+.global \name
+.type \name, %function
+\name:
+    push {r0-r3,r12,lr}
+    bl \helper
+    pop {r0-r3,r12,lr}
+    mov ip, sp
+    ldr pc, =\resume
+.endm
+DEVELOP_BEFORE menu_develop_decide, menu_develop_choose, HOOK_MENU_DEVELOP_DECIDE_RESUME
+DEVELOP_BEFORE menu_develop_open, menu_develop_opened, HOOK_MENU_DEVELOP_OPEN_RESUME
+/* The BL to the model restore at Cancel. */
+.global menu_develop_restore
+.type menu_develop_restore, %function
+menu_develop_restore:
+    push {r0-r3,r12,lr}
+    bl menu_develop_restored
+    pop {r0-r3,r12,lr}
+    ldr pc, =HOOK_MENU_DEVELOP_RESTORE_TARGET
+/* The BLs to the label (model, category, value) of the subtitles: r3 gets
+   the subtitle view. */
+.global menu_develop_list_text
+.type menu_develop_list_text, %function
+menu_develop_list_text:
+    DEVELOP_LIST_TITLE
+    b menu_develop_label
+.global menu_develop_top_text
+.type menu_develop_top_text, %function
+menu_develop_top_text:
+    DEVELOP_TOP_TITLE
+    b menu_develop_label
+.ltorg
+#endif

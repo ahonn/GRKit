@@ -74,6 +74,45 @@
 #define CLASSIFY_WIDTH r6
 #define CLASSIFY_CLASS r5
 #define CLASSIFY_RETURN ldm sp, {r3,r4,r5,r6,fp,sp,pc}
+/* RAW development (RawDevelopmentModel) of the photo in playback. The
+   playback metadata (FW_PLAYBACK_METADATA) holds the width and the height of
+   that photo at METADATA_SIZE, as u16 values 4 bytes apart. The development
+   aspect 0 develops the capture aspect that the DNG records, DEVELOP_SQUARE
+   is the native 1:1, and DEVELOP_NATIVE_ASPECTS has a bit for each capture
+   aspect id that the camera develops itself (all four). The initial-aspect
+   hook gets the model in DEVELOP_MODEL and the recorded capture aspect in
+   DEVELOP_ASPECT. */
+#define METADATA_SIZE 0x30
+/* The playback metadata also holds the time of that photo at METADATA_TIME
+   (build header), in the layout of GrkitDateTime (runtime/sdk/grkit.h).
+   RawDevelopmentModel has its state at DEVELOP_STATE: 0 while no
+   development runs. */
+#define DEVELOP_STATE 4
+#define DEVELOP_SQUARE 4
+/* The value of the Standard Image Control in the development (category 0). */
+#define DEVELOP_STANDARD 1
+/* The Image Control list of the development (RawDevelopmentParameterSetController):
+   the controller ID word, the ID of the list, the first instruction of the
+   row category, which its entry hook replaces, the subtitle of the list
+   (+0x160 of the controller, r4 in UpdateSubTitle), the subtitle of
+   RawDevelopmentTopController (r6), the list view, and the style and the
+   height of its row views. */
+#define CONTROLLER_ID 0x124
+#define DEVELOP_TONE_LIST 0x4000022U
+#define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
+#define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
+#define DEVELOP_TOP_TITLE mov r3, r6
+#define DEVELOP_LIST_VIEW 0x168
+#define DEVELOP_ROW_STYLE 0x1aU
+#define DEVELOP_ROW_HEIGHT 0x3aU
+#define DEVELOP_NATIVE_ASPECTS 0xfU
+#define DEVELOP_MODEL r0
+#define DEVELOP_ASPECT r1
+/* Resize: the register of the source size at the end of its getter, and the
+   aspect that the resize job gives a 16:9 and a 4:3 source size. */
+#define RESIZE_SIZE r4
+#define RESIZE_JOB_WIDE 1
+#define RESIZE_JOB_NARROW 2
 
 /* View classes. Their vtables and object sizes equal those of GR III 2.10.
    The list's row vector (first and end pointers) and its shown row count. */

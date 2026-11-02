@@ -313,6 +313,64 @@ framing_image_aspect:
     movhs r0, #1
     bx lr
 6:  ldr pc, =HOOK_FRAMING_IMAGE_ASPECT_TARGET
+#ifdef HOOK_FRAMING_DEVELOP_ASPECT
+#if !defined(DEVELOP_MODEL) || !defined(DEVELOP_ASPECT)
+#error "The family header defines the RAW development registers"
+#endif
+/* RAW development of a DNG (runtime/framing.c). This replaces the BL that
+   gives the initial development aspect for the recorded capture aspect.
+   framing_develop_select returns the development aspect, or -1 for the
+   native choice. */
+.global framing_develop_aspect
+framing_develop_aspect:
+    mov r0, DEVELOP_MODEL
+    mov r1, DEVELOP_ASPECT
+    push {r0,r1,r4,lr}
+    bl framing_develop_select
+    cmn r0, #1
+    popne {r1,r2,r4,pc}
+    pop {r0,r1,r4,lr}
+    ldr pc, =HOOK_FRAMING_DEVELOP_ASPECT_TARGET
+/* This replaces the BL that turns the development aspect (r1, model r0) into
+   the capture aspect that the development sends to the pipeline. The
+   GetResolution hooks above then give the size of the developed photo. */
+.global framing_develop_push
+framing_develop_push:
+    push {r0,r1,r4,lr}
+    bl framing_develop_geometry
+    pop {r0,r1,r4,lr}
+    ldr pc, =HOOK_FRAMING_DEVELOP_PUSH_TARGET
+#endif
+#ifdef HOOK_FRAMING_RESIZE_SOURCE
+#ifndef RESIZE_SIZE
+#error "The family header names the register of the resize source size"
+#endif
+/* Resize of the photo in playback (runtime/framing.c). This replaces
+   `mov r0, RESIZE_SIZE` at the end of the getter of the size {width, height}
+   that the camera looks up in its resize size table. */
+.global framing_resize_source
+framing_resize_source:
+    push {r0-r3,r12,lr}
+    mov r0, RESIZE_SIZE
+    bl framing_resize_stock
+    pop {r0-r3,r12,lr}
+    mov r0, RESIZE_SIZE
+    bx lr
+#endif
+#ifdef HOOK_FRAMING_PLAY_ASPECT
+/* This replaces the first instruction (`mov ip, sp`) of the function that
+   gives the aspect of an image size {width, height} (r0) in playback edits.
+   It runs the function, then framing_resize_play_aspect corrects the result
+   for a Framing size. */
+.global framing_play_aspect
+framing_play_aspect:
+    push {r0,lr}
+    adr lr, 1f
+    mov ip, sp
+    ldr pc, =HOOK_FRAMING_PLAY_ASPECT_RESUME
+1:  pop {r1,lr}
+    b framing_resize_play_aspect
+#endif
 #endif
 #ifdef HOOK_FRAMING_LEVEL_THRESHOLD
 /* ScreenDevice::OnSetLevelAlarm (runtime/framing.c: highlight warning).

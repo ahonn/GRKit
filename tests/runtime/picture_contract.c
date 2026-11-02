@@ -37,6 +37,17 @@ static unsigned flushes, native_aspect;
 #define PICTURE_DATE(out) do { uint8_t *d = (uint8_t *)(out); d[0] = 2026 & 255; d[1] = 2026 >> 8; \
     d[2] = 10; d[3] = 17; d[4] = 9; d[5] = 5; } while (0)
 #define PICTURE_NATIVE_ASPECT() native_aspect
+/* A RAW development runs while `developing` is set. The DNG in playback was
+   taken on 2025-01-01 12:02:11. `photo_unset` 1 gives metadata without a
+   time, 2 other bytes at the place of the time. */
+static unsigned developing, photo_unset;
+#define PICTURE_DEVELOPING() developing
+/* The EXIF Orientation of that DNG. */
+static unsigned photo_orientation = 1;
+#define PICTURE_PHOTO_ORIENTATION() photo_orientation
+#define PICTURE_PHOTO_TIME(out) do { uint8_t *d = (uint8_t *)(out); memset(d, 0, 8); if (!photo_unset) { \
+    d[0] = 2025 & 255; d[1] = 2025 >> 8; d[2] = 1; d[3] = 1; d[4] = 12; d[5] = 2; d[6] = 11; } \
+    else if (photo_unset == 2) { d[0] = 12; d[1] = 2; d[2] = 14; } } while (0)
 /* Stamp mask scratch, clear of the planes. */
 #define SCRATCH (ARENA + 0x500000)
 #define PICTURE_SCRATCH(h) ((void)(h), SCRATCH)
@@ -89,7 +100,8 @@ volatile u32 *framing_header(void) { return header; }
 #include "../../modules/date/stamp.c"
 const GrkitContext grkit_self = {0, 2, 0};
 u32 setting_get(u32 handle) { return setting_value(header, handle); }
-void local_time(GrkitDateTime *out) { PICTURE_DATE(out); }
+/* The module gets the time through the export of the core, as on the camera. */
+void local_time(GrkitDateTime *out) { grkit_export_local_time((u8 *)out); }
 /* The live-view sign of the module (date_badge). This test checks pictures,
    so the label draws nothing. */
 static void overlay_label(const Surface *s,u32 label,u32 left,u32 top) { (void)s; (void)label; (void)left; (void)top; }
@@ -593,6 +605,24 @@ int main(void)
         picture_encode(0, MESSAGE);
         assert(applied_turns == 0);
     }
+    /* A RAW development turns as the EXIF Orientation of its DNG, not as
+       the posture at the development. */
+    {
+        static const u32 orientation[5] = {1, 6, 3, 8, 2};
+        static const u32 turns[5] = {0, 1, 2, 3, 0};
+        developing = 1;
+        for (u32 k = 0; k < 5; ++k) {
+            encode_setup();
+            fill_planes(40, 128, 128);
+            STAMP_STYLE = 1;
+            store_posed(SHOT, 0, 3);
+            photo_orientation = orientation[k];
+            picture_encode(0, MESSAGE);
+            assert(applied_turns == turns[k]);
+        }
+        developing = 0;
+        photo_orientation = 1;
+    }
     /* Upright position: on each plane the stamp goes to the bottom right of
        the picture turned upright, which is the top right of the frame for
        one quarter turn, and its text runs along the long side of its box.
@@ -768,6 +798,61 @@ int main(void)
             assert(seven.lit && seven.right <= 720 - 80 && seven.left > 360 && seven.top > 240);
             assert(seven.right < crop.right && seven.right > square.right);
         }
+    }
+    /* A RAW development: the time of the DNG in playback, and the clock
+       without one or without a development. */
+    {
+        GrkitDateTime t;
+        developing = 1;
+        local_time(&t);
+        assert(t.year == 2025 && t.month == 1 && t.day == 1 && t.hour == 12 && t.minute == 2 && t.second == 11);
+        for (photo_unset = 1; photo_unset <= 2; ++photo_unset) {
+            local_time(&t);
+            assert(t.year == 2026 && t.month == 10 && t.day == 17);
+        }
+        photo_unset = 0;
+        developing = 0;
+        local_time(&t);
+        assert(t.year == 2026 && t.month == 10 && t.day == 17);
+    }
+    /* A RAW development: the visible area of the developed picture, not the
+       Framing ratio for shots. The main picture is the largest one. */
+    {
+        struct box b;
+        developing = 1;
+        /* XPan for shots, a 3:2 DNG: the stamp of a 3:2 picture. */
+        encode_setup();
+        fill_planes(40, 128, 128);
+        STAMP_STYLE = 3;
+        header[GRKIT_HOST_FRAME_RATIO / 4] = 1;
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 1;
+        picture_encode(0, MESSAGE);
+        b = changes(1, 0);
+        assert(b.lit && b.bottom > 480 - 38);
+        /* Off for shots, an XPan DNG (GRKIT_HOST_FRAME_FILE 2): above the XPan bar. */
+        encode_setup();
+        fill_planes(40, 128, 128);
+        STAMP_STYLE = 3;
+        header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 2;
+        picture_encode(0, MESSAGE);
+        b = changes(1, 0);
+        assert(b.lit && b.bottom <= 480 - 107 && b.top > 240);
+        b = changes(2, 0);
+        assert(b.lit && b.bottom <= 120 - 30);
+        /* A 4:3 DNG: left of the 4:3 bar. */
+        encode_setup();
+        picture(0, 800, 600, 800, PLANES);
+        picture(1, 720, 480, 736, PLANES + 0x100000);
+        picture(2, 160, 120, 160, PLANES + 0x1c0000);
+        fill_planes(40, 128, 128);
+        STAMP_STYLE = 3;
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 1;
+        picture_encode(0, MESSAGE);
+        b = changes(1, 0);
+        assert(b.lit && b.right <= 720 - 40 && b.left > 360);
+        developing = 0;
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
     }
     /* A monochrome GRKit effect keeps neutral chroma: the stamp lights only Y. */
     encode_setup();

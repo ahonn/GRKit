@@ -43,7 +43,7 @@ moduletiles = value
 if moduletiles < 0 goto reject_close
 if moduletiles > 128 goto reject_close
 fileclose fh
-expected = 170 + count * 1088
+expected = 176 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 44) / 40
 if chunks != expectedchunks goto reject
@@ -152,9 +152,9 @@ if pcount > 40 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[170 + pindex * 1088 + 459]
-pw1 = registry[170 + pindex * 1088 + 460]
-pw2 = registry[170 + pindex * 1088 + 461]
+pw0 = registry[176 + pindex * 1088 + 459]
+pw1 = registry[176 + pindex * 1088 + 460]
+pw2 = registry[176 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -184,7 +184,7 @@ pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
 if pvalue = 0 goto save_parameters_next
-pkey = 990000000 + (registry[170 + pindex * 1088 + 446] and 32767)
+pkey = 990000000 + (registry[176 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
@@ -239,7 +239,7 @@ rest = offset % 4352
 if rest != 0 goto snapshot_values
 index = offset / 4352
 if index >= count goto snapshot_values
-value0 = registry[170 + index * 1088 + 446] and 65535
+value0 = registry[176 + index * 1088 + 446] and 65535
 :snapshot_values
 value1 = registry[52]
 value2 = registry[12]

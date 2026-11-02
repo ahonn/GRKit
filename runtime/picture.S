@@ -310,3 +310,15 @@ picture_encode_entry:
     mov r12, sp
     ldr pc, =HOOK_PICTURE_ENCODE_ENTRY_RESUME
 .ltorg
+
+#ifdef HOOK_PICTURE_DEVELOP_TONE
+/* The start of a RAW development: this replaces the BL that gives its initial
+   Image Control. picture_develop_start (runtime/picture.c) sets the effect of
+   the development, then the native conversion runs. */
+.global picture_develop_tone
+picture_develop_tone:
+    push {r0-r3,r12,lr}
+    bl picture_develop_start
+    pop {r0-r3,r12,lr}
+    ldr pc, =HOOK_PICTURE_DEVELOP_TONE_TARGET
+#endif

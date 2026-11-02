@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 680
+#define GRKIT_HOST_HEADER_SIZE 704
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -220,6 +220,23 @@
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
 #define GRKIT_HOST_GAMMA_KEY 676
+/* The effect of the RAW development in playback: 1 for native processing, else
+   an owned record. The start of a development sets the effect that its DNG
+   records (runtime/picture.c), and its Image Control list changes it. The
+   still builds of a development apply it instead of the selected effect
+   (runtime/processing.h). */
+#define GRKIT_HOST_DEVELOP 680
+/* GRKIT_HOST_DEVELOP when the Image Control list of the development opened.
+   Cancel restores it, as the list restores its native value. */
+#define GRKIT_HOST_DEVELOP_SAVED 684
+/* The native rows of that list. The effects follow them (runtime/menu.c). */
+#define GRKIT_HOST_DEVELOP_ROWS 688
+/* The text ID of the native Standard label of the development, which shows the
+   name of a GRKit effect (GRKIT_HOST_DEVELOP_NAME) instead. */
+#define GRKIT_HOST_DEVELOP_TEXT 692
+/* The text descriptor of that name. */
+#define GRKIT_HOST_DEVELOP_NAME 696
+#define GRKIT_HOST_DEVELOP_NAME_WORDS 2
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number

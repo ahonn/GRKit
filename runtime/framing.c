@@ -251,6 +251,102 @@ u32 framing_live_aspect(u32 property) {
 /* Without the capture hooks a Framing ratio cannot be selected. */
 #define capture_sync(controller) ((void)(controller))
 #endif
+
+#ifdef DEVELOP_SQUARE
+/* RAW development of the DNG in playback. A DNG keeps the full sensor image.
+   It records the capture aspect id, and its photo has the size of the crop:
+   a Framing ratio records the id that it crops (16:9 for XPan and 2.35:1,
+   4:3 for 5:4, 7:6, and 1:1). The development takes the size of its photo
+   from the GetResolution hooks (runtime/framing.S), which read
+   GRKIT_HOST_FRAME_FILE in playback, so it sets that byte from the size of
+   the DNG, as the playback classifier does for a JPEG. */
+static const unsigned short develop_sizes[]={XPAN_SIZES,SCOPE_SIZES,
+#ifdef NARROW_SIZES
+    NARROW_SIZES,
+#endif
+};
+#ifndef FRAMING_PLAYBACK_METADATA
+#define FRAMING_PLAYBACK_METADATA() (((u32 (*)(void))FW_PLAYBACK_METADATA)())
+#endif
+/* The size of the photo in playback, landscape: width in the low half. */
+static u32 develop_size(void) {
+    u32 data=FRAMING_PLAYBACK_METADATA();
+    u32 width=HALF(data,METADATA_SIZE), height=HALF(data,METADATA_SIZE+4);
+    return width<height ? height|width<<16 : width|height<<16;
+}
+/* GRKIT_HOST_FRAME_FILE for a photo size: 2 XPan, 3 2.35:1, 4 5:4, 5 7:6,
+   else 1. */
+static u32 develop_file(u32 size) {
+    u32 i;
+    for(i=0;i+1<sizeof(develop_sizes)/sizeof(develop_sizes[0]);i+=2)
+        if(develop_sizes[i]==(size&0xffff) && develop_sizes[i+1]==size>>16) return i/8+2;
+    return 1;
+}
+/* The initial development aspect for the recorded capture aspect, or -1 for
+   the native choice. A Framing size develops the recorded aspect (0) with
+   the geometry of the size. A Framing 1:1 records the 4:3 id with a native
+   1:1 size, so it develops the native 1:1. Another recorded aspect that the
+   camera cannot develop also develops as recorded, with its stock size. */
+u32 framing_develop_select(u32 model,u32 aspect) {
+    u32 size=develop_size(), geometry=develop_file(size);
+    (void)model;
+    ((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE]=(u8)geometry;
+    if(geometry>1) return 0;
+    if(aspect==1 && (size&0xffff)==size>>16) return DEVELOP_SQUARE;
+    return aspect<4 && DEVELOP_NATIVE_ASPECTS>>aspect&1U ? (u32)-1 : 0;
+}
+/* Each time the development sends its aspect to the pipeline: the recorded
+   aspect (0) takes the geometry of the DNG, an aspect that the user selects
+   the stock sizes. */
+void framing_develop_geometry(u32 model,u32 value) {
+    (void)model;
+    ((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE]=(u8)(value ? 1 : develop_file(develop_size()));
+}
+#endif
+
+#ifdef RESIZE_SIZE
+/* Resize of the JPEG in playback. The camera resizes only the sizes of its
+   resize size table: the stock sizes of each aspect and size class. A
+   Framing size takes the stock size of its size class, the 16:9 size with
+   its width or the 4:3 size with its height, so the camera resizes it. A
+   resize target of that class then takes the Framing geometry of the photo
+   (GRKIT_HOST_FRAME_FILE, which the playback classifier sets) again. 1:1
+   sizes are stock sizes. */
+static const unsigned short resize_wide[4][3]={{XPAN_HEIGHT_0},{XPAN_HEIGHT_1},{XPAN_HEIGHT_2},{XPAN_HEIGHT_3}};
+static const unsigned short resize_narrow[4][4]={{NARROW_WIDTH_0},{NARROW_WIDTH_1},{NARROW_WIDTH_2},{NARROW_WIDTH_3}};
+static const unsigned short resize_xpan[]={XPAN_SIZES}, resize_five[]={NARROW_SIZES};
+/* The width of a 16:9 size class, and the height of a 4:3 size class. */
+#define RESIZE_WIDTH(i) resize_xpan[(i)*2]
+#define RESIZE_HEIGHT(i) resize_five[(i)*2+1]
+void framing_resize_stock(u32 size) {
+    u32 width=WORD(size,0), height=WORD(size,4), i;
+    for(i=0;i<4;++i) {
+        if(width==RESIZE_WIDTH(i) && (height==resize_wide[i][1] || height==resize_wide[i][2])) height=resize_wide[i][0];
+        if(height==RESIZE_HEIGHT(i) && (width==resize_narrow[i][1] || width==resize_narrow[i][3])) width=resize_narrow[i][0];
+    }
+    WORD(size,0)=width; WORD(size,4)=height;
+}
+/* The store of a resize target size {width, height}. */
+void framing_resize_target(u32 size,u32 width,u32 height) {
+    u32 file=((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE], i;
+    for(i=0;i<4;++i) {
+        if((file==2 || file==3) && width==RESIZE_WIDTH(i) && height==resize_wide[i][0]) height=resize_wide[i][file-1];
+        if((file==4 || file==5) && height==RESIZE_HEIGHT(i) && width==resize_narrow[i][0]) width=resize_narrow[i][file==4 ? 1 : 3];
+    }
+    WORD(size,0)=width; WORD(size,4)=height;
+}
+/* The aspect of an image size {width, height} in playback edits: a Framing
+   size has the aspect of the id that it crops, so a resize takes its target
+   size from the GetResolution hooks, and an edit the insets of its
+   previews. */
+u32 framing_resize_play_aspect(u32 aspect,u32 size) {
+    u32 width=WORD(size,0), height=WORD(size,4), file;
+    file=develop_file(width<height ? height|width<<16 : width|height<<16);
+    if(file==2 || file==3) return RESIZE_JOB_WIDE;
+    if(file==4 || file==5) return RESIZE_JOB_NARROW;
+    return aspect;
+}
+#endif
 /* Only the native still-photo LCD canvas owns these transient references. */
 /* The highlight warning after INSTALL (runtime/level.h). */
 static void level_boot(volatile u32 *h,u32 controller);

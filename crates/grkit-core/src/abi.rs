@@ -279,6 +279,22 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Key of the inputs of the last private curve composition in the gamma
     /// stage, or 0 (runtime/processing.h).
     HOST_GAMMA_KEY: 4;
+    /// The effect of the RAW development in playback: 1 for native processing,
+    /// else an owned record. The start of a development sets the effect that
+    /// its DNG records (runtime/picture.c), and its Image Control list changes
+    /// it. The still builds of a development apply it instead of the selected
+    /// effect (runtime/processing.h).
+    HOST_DEVELOP: 4;
+    /// GRKIT_HOST_DEVELOP when the Image Control list of the development
+    /// opened. Cancel restores it, as the list restores its native value.
+    HOST_DEVELOP_SAVED: 4;
+    /// The native rows of that list. The effects follow them (runtime/menu.c).
+    HOST_DEVELOP_ROWS: 4;
+    /// The text ID of the native Standard label of the development, which
+    /// shows the name of a GRKit effect (GRKIT_HOST_DEVELOP_NAME) instead.
+    HOST_DEVELOP_TEXT: 4;
+    /// The text descriptor of that name.
+    HOST_DEVELOP_NAME: 8;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

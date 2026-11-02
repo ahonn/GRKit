@@ -120,8 +120,39 @@ static u32 core_divide(u32 n,u32 d) {
     while(bit) { if(n>=d) { n-=d; q|=bit; } d>>=1; bit>>=1; }
     return q;
 }
-/* The core exports these services to modules (runtime/sdk/grkit.h). */
-__attribute__((used)) void grkit_export_local_time(u8 *out) { PICTURE_DATE(out); }
+/* A RAW development encodes the DNG in playback, not a new shot. Its picture
+   takes the time of that DNG from the playback metadata (runtime/targets). */
+#ifndef PICTURE_DEVELOPING
+#ifdef FW_DEVELOP_MODEL
+#define PICTURE_DEVELOPING() ((BYTE(FW_DEVELOP_GUARD,0)&1U) && BYTE(FW_DEVELOP_MODEL,DEVELOP_STATE))
+#define PICTURE_PHOTO_TIME(out) do { \
+    u32 data_=((u32 (*)(void))FW_PLAYBACK_METADATA)(), i_; \
+    for(i_=0;i_<8;++i_) (out)[i_]=BYTE(data_,METADATA_TIME+i_); \
+} while(0)
+/* The EXIF Orientation of that DNG. */
+#define PICTURE_PHOTO_ORIENTATION() BYTE(((u32 (*)(void))FW_PLAYBACK_METADATA)(),METADATA_ORIENTATION)
+#else
+#define PICTURE_DEVELOPING() 0
+#define PICTURE_PHOTO_TIME(out) PICTURE_DATE(out)
+#define PICTURE_PHOTO_ORIENTATION() 1
+#endif
+#endif
+/* The core exports these services to modules (runtime/sdk/grkit.h). The local
+   time is the time of the picture: the clock for a shot, the time of the DNG
+   for a RAW development, so that Date Imprint prints the day of the photo. */
+/* Whether a GrkitDateTime holds a date and a time that the camera can set. */
+static u32 picture_time_valid(const u8 *t) {
+    u32 year=t[0]|(u32)t[1]<<8;
+    return year>=2000 && year<=2099 && t[2]>=1 && t[2]<=12 && t[3]>=1 && t[3]<=31 &&
+           t[4]<24 && t[5]<60 && t[6]<60;
+}
+__attribute__((used)) void grkit_export_local_time(u8 *out) {
+    if(PICTURE_DEVELOPING()) {
+        PICTURE_PHOTO_TIME(out);
+        if(picture_time_valid(out)) return;
+    }
+    PICTURE_DATE(out);
+}
 __attribute__((used)) u32 grkit_export_divide(u32 n,u32 d) { return core_divide(n,d); }
 static void flush(const Plane *p) {
     PICTURE_CACHE_FLUSH(p->y,p->pitch*p->height);
@@ -146,17 +177,37 @@ static u32 module_filters(volatile u32 *h) {
 #endif
 #include "selective.h"
 
-/* Visible area of a preview picture: black bars depend on the capture aspect. */
-static void visible_area(volatile u32 *h,Plane *p) {
+/* The visible-area id of a shot: the capture aspect, with the crop of
+   CORE.ASPECT when a module uses it. */
+static u32 shot_area(volatile u32 *h) {
+    u32 ratio=CAPABILITY_USED(h,GRKIT_CORE_ASPECT) ? h[GRKIT_HOST_FRAME_RATIO/4] : 0;
+    return PICTURE_AREA_ID(PICTURE_NATIVE_ASPECT(),ratio);
+}
+/* The visible-area id of a RAW development, from the size of its main
+   picture: a Framing size (GRKIT_HOST_FRAME_FILE 2 to 5, runtime/framing.c),
+   else the nearest native aspect. The settings for shots do not apply. */
+static u32 developed_area(volatile u32 *h,const Plane *main) {
+    static const u8 file_area[4]={4,5,6,7};
+    /* Width x 100 / height of 3:2, 4:3, 16:9, and 1:1, in area id order. */
+    static const u8 ratios[4]={150,133,178,100};
+    u32 file=((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE], w=main->width, hh=main->height, ratio, best=0, i;
+    if(file>=2 && file<=5) return file_area[file-2];
+    if(w<hh) { u32 t=w; w=hh; hh=t; }
+    ratio=core_divide(w*100,hh);
+    for(i=1;i<4;++i) {
+        u32 d=ratio>ratios[i] ? ratio-ratios[i] : ratios[i]-ratio;
+        u32 b=ratio>ratios[best] ? ratio-ratios[best] : ratios[best]-ratio;
+        if(d<b) best=i;
+    }
+    return best;
+}
+/* Visible area of a preview picture: black bars depend on the area id. */
+static void visible_area(u32 id,Plane *p) {
     /* Screennail and thumbnail insets for ids 0 (3:2), 1 (4:3), 2 (16:9), 3 (1:1), then XPan,
        2.35:1, 5:4, and 7:6 (runtime/framing.S). */
     static const u8 screennail[8][2]={{0,0},{40,0},{0,38},{120,0},{0,107},{0,87},{60,0},{80,0}};
     static const u8 thumbnail[8][2]={{0,8},{0,0},{0,16},{20,0},{0,30},{0,26},{6,0},{10,0}};
-    /* The capture area: the crop of CORE.ASPECT when a module uses it. */
-    u32 ratio=CAPABILITY_USED(h,GRKIT_CORE_ASPECT) ? h[GRKIT_HOST_FRAME_RATIO/4] : 0;
-    u32 native=PICTURE_NATIVE_ASPECT(), id;
     const u8 *inset=0;
-    id=PICTURE_AREA_ID(native,ratio);
     if(p->width==720 && p->height==480) inset=screennail[id];
     if(p->width==160 && p->height==120) inset=thumbnail[id];
     p->left=inset ? inset[0] : 0; p->top=inset ? inset[1] : 0;
@@ -206,6 +257,31 @@ static u32 picture_turns(volatile u32 *h,u32 shot) {
     WORD(ring,GRKIT_SHOT_LAST_TURNS)=turns[posture-1];
     return turns[posture-1];
 }
+#ifdef FW_DEVELOP_MODEL
+#ifndef PICTURE_PLAYBACK_TONE
+/* Key 0x25 of the playback metadata: a non-native Image Control tag as
+   0x10000 | (tag - 0x100). */
+#define PICTURE_PLAYBACK_TONE() WORD(((u32 (*)(void))FW_PLAYBACK_METADATA)(),METADATA_TONE)
+#endif
+/* The start of a RAW development: its effect is the effect that the DNG
+   records (the ImageTone code of the record, picture_capture_tone), or
+   native processing for a native photo or an effect that the camera no
+   longer has. */
+void picture_develop_start(void) {
+    volatile u32 *h=framing_header();
+    u32 value=PICTURE_PLAYBACK_TONE(), code=(value+0x100)&0xffffU, i, record;
+    h[GRKIT_HOST_DEVELOP/4]=1;
+    if(value>>16!=1 || !(code&0x8000U)) return;
+    for(i=0;i<h[GRKIT_HOST_COUNT/4];++i) {
+        record=h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE;
+        if(HALF(record,GRKIT_RECORD_CODE)==code) { h[GRKIT_HOST_DEVELOP/4]=record; return; }
+    }
+}
+#endif
+/* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
+static u32 orientation_turns(u32 orientation) {
+    return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
+}
 /* For picture_capture_tone: the record of a shot, or 0. */
 u32 picture_capture_record(u32 shot) { return shot_record(framing_header(),shot); }
 #ifndef PICTURE_IFD_SET_SHORT
@@ -250,7 +326,8 @@ static void encode_shot(volatile u32 *h,u32 message) {
     set.record=0;
     set.mono=0;
     set.scratch=PICTURE_MAP(PICTURE_SCRATCH(h));
-    set.turns=picture_turns(h,WORD(config,0x34));
+    /* A RAW development turns as its DNG records, not as the camera is held. */
+    set.turns=PICTURE_DEVELOPING() ? orientation_turns(PICTURE_PHOTO_ORIENTATION()) : picture_turns(h,WORD(config,0x34));
     if(owned(h,record)) {
         set.record=record;
         set.mono=WORD(record,GRKIT_RECORD_MONOCHROME)&1;
@@ -272,10 +349,16 @@ static void encode_shot(volatile u32 *h,u32 message) {
         for(j=0;j<set.count;++j) seen|=done[j]==p.y;
         if(seen) continue;
         done[set.count]=p.y;
-        visible_area(h,&p);
         set.planes[set.count++]=p;
     }
     if(!set.count) return;
+    {
+        u32 area, main=0;
+        for(i=1;i<set.count;++i)
+            if(set.planes[i].width*set.planes[i].height>set.planes[main].width*set.planes[main].height) main=i;
+        area=PICTURE_DEVELOPING() ? developed_area(h,&set.planes[main]) : shot_area(h);
+        for(i=0;i<set.count;++i) visible_area(area,&set.planes[i]);
+    }
     for(i=0;i<set.count;++i) flush(&set.planes[i]);
     if(selective) selective_encode(&set);
     /* The module filters follow the color of the effect, in stage order. */

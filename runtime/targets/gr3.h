@@ -68,6 +68,31 @@
 #define CLASSIFY_WIDTH r7
 #define CLASSIFY_CLASS r6
 #define CLASSIFY_RETURN ldm sp, {r4,r5,r6,r7,fp,sp,pc}
+/* RAW development (RawDevelopmentModel) of the photo in playback. The
+   playback metadata (FW_PLAYBACK_METADATA) holds the width and the height of
+   that photo at METADATA_SIZE, as u16 values 4 bytes apart. The development
+   aspect 0 develops the capture aspect that the DNG records, DEVELOP_SQUARE
+   is the native 1:1, and DEVELOP_NATIVE_ASPECTS has a bit for each capture
+   aspect id that the camera develops itself (3:2 and 1:1). The
+   initial-aspect hook gets the model in DEVELOP_MODEL and the recorded
+   capture aspect in DEVELOP_ASPECT. */
+#define METADATA_SIZE 0x30
+/* The playback metadata also holds the time of that photo at METADATA_TIME
+   (build header), in the layout of GrkitDateTime (runtime/sdk/grkit.h).
+   RawDevelopmentModel has its state at DEVELOP_STATE: 0 while no
+   development runs. */
+#define DEVELOP_STATE 4
+#define DEVELOP_SQUARE 2
+/* The value of the Standard Image Control in the development (category 0). */
+#define DEVELOP_STANDARD 1
+#define DEVELOP_NATIVE_ASPECTS 0x9U
+#define DEVELOP_MODEL r4
+#define DEVELOP_ASPECT r2
+/* Resize: the register of the source size at the end of its getter, and the
+   aspect that the resize job gives a 16:9 and a 4:3 source size. */
+#define RESIZE_SIZE r4
+#define RESIZE_JOB_WIDE 1
+#define RESIZE_JOB_NARROW 2
 
 /* The size of SelectMenuController, and the view type and the text view of
    CheckBoxListLineView (runtime/menu_settings.h). */

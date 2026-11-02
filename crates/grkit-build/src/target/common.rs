@@ -174,6 +174,21 @@ pub const PICTURE: &[HookSpec] = &[
     // Playback size classifier and image aspect getter.
     bl("framing_classify", Framing, CaptureAspect),
     b("framing_image_aspect", Framing, CaptureAspect),
+    // RAW development of a DNG (RawDevelopmentModel): the BL that turns the
+    // recorded capture aspect into the initial development aspect, and the
+    // BL that turns the development aspect into the capture aspect that the
+    // development sends to the pipeline.
+    bl("framing_develop_aspect", Framing, CaptureAspect),
+    bl("framing_develop_push", Framing, CaptureAspect),
+    // Resize of a photo in playback: the end of the getter of its size, which
+    // the camera looks up in its resize size table, and the BL that stores a
+    // size of that table as a resize target.
+    bl("framing_resize_source", Framing, CaptureAspect),
+    bl("framing_resize_target", Framing, CaptureAspect),
+    // The entry of the aspect of an image size in playback edits (PlayDefs),
+    // from which the resize job takes the GetResolution size of its target
+    // and an edit the insets of its previews.
+    b("framing_play_aspect", Framing, CaptureAspect),
     // Effect extension and picture processing (`runtime/picture.*`), linked
     // into the Framing region. The live-view diff before the gamma stage
     // flag; the YCbCrMatrix Make call to its calc, which applies the
@@ -186,6 +201,9 @@ pub const PICTURE: &[HookSpec] = &[
     b("picture_encode_entry", Framing, PictureEncode),
     bl("picture_capture_tone", Framing, Tuning),
     bl("picture_capture_parameters", Framing, Tuning),
+    // RawDevelopmentModel: the BL that gives the initial Image Control of a
+    // development, where the development takes the effect of its DNG.
+    bl("picture_develop_tone", Framing, Tuning),
     // ScreenDevice::OnSetLevelAlarm, which sets the live-view highlight
     // warning: the `mov r5, #0xfe00` of its threshold, and the `mov r1, r6`
     // before its tail call, where r4 is the screen and r6 the mode.
@@ -194,6 +212,29 @@ pub const PICTURE: &[HookSpec] = &[
     // LiveViewController's live-view histogram update: the BL to the copy of
     // the 256 luma bins into its 128 bins, which the histogram view draws.
     bl("framing_histogram", Framing, Tuning),
+];
+
+/// The Image Control list of a RAW development lists the effects after the
+/// native rows (`runtime/menu.c`). RawDevelopmentParameterSetController: the
+/// entries of its row count, of the row to category and to value of the
+/// model, of its row fill, of its current-row test, of the choice of a row,
+/// of its list setup, and of its Fn test; the BL to the model restore at
+/// Cancel; the BLs to the label of an Image Control in its subtitle and in
+/// the subtitle of RawDevelopmentTopController; and the BL to the icon of an
+/// Image Control in the row list of RawDevelopmentTopController.
+pub const DEVELOP_TONE: &[HookSpec] = &[
+    b("menu_develop_count", Menu, Tuning),
+    b("menu_develop_category", Menu, Tuning),
+    b("menu_develop_value", Menu, Tuning),
+    b("menu_develop_row", Menu, Tuning),
+    b("menu_develop_current", Menu, Tuning),
+    b("menu_develop_decide", Menu, Tuning),
+    b("menu_develop_open", Menu, Tuning),
+    b("menu_develop_fn", Menu, Tuning),
+    bl("menu_develop_restore", Menu, Tuning),
+    bl("menu_develop_list_text", Menu, Tuning),
+    bl("menu_develop_top_text", Menu, Tuning),
+    bl("menu_develop_top_icon", Menu, Tuning),
 ];
 
 /// The number of hooks in `groups`.

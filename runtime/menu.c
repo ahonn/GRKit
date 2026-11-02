@@ -378,19 +378,21 @@ static u32 list_capacity(u32 view) { return (WORD(view,LIST_ROWS+4)-WORD(view,LI
 #define ADJ_ROW_STYLE 0x19U
 #define ADJ_ROW_HEIGHT 0x3aU
 #define ADJ_ROWS_MAX 64U
-static void list_grow(u32 view,u32 rows) {
+/* Append row views of `style` and `height` until the list has `rows`. */
+static void list_grow_rows(u32 view,u32 rows,u32 style,u32 height) {
     u8 styles[ADJ_ROWS_MAX];
     u32 have=list_capacity(view), i;
     if(rows>ADJ_ROWS_MAX) rows=ADJ_ROWS_MAX;
     if(!have || rows<=have) return;
-    for(i=0;i<rows-have;++i) styles[i]=(u8)ADJ_ROW_STYLE;
-    CALL4(FW_LIST_INIT)(view,(u32)styles,rows-have,ADJ_ROW_HEIGHT);
+    for(i=0;i<rows-have;++i) styles[i]=(u8)style;
+    CALL4(FW_LIST_INIT)(view,(u32)styles,rows-have,height);
 #ifdef FW_LIST_ROWS_VALUE
     /* GR IV gives the value of the native init to each row: the added rows
        need it too, else they draw with separators. */
     CALL2(FW_LIST_ROWS_VALUE)(view,0x10);
 #endif
 }
+static void list_grow(u32 view,u32 rows) { list_grow_rows(view,rows,ADJ_ROW_STYLE,ADJ_ROW_HEIGHT); }
 static u32 list_start(volatile u32 *h,u32 view) {
     return count(h)>list_capacity(view) ? page_start(h[GRKIT_HOST_MENU_CURSOR/4]) : 0;
 }
@@ -653,9 +655,16 @@ static void fit_value(u32 view) {
    value pages show a settings page, and another screen can show the rows of
    the GRKit section. So the screens can use the same text IDs: the rows of
    the GRKit section use those of the borrowed rows (MENU_ROW_LABEL_TEXT). */
+#ifdef DEVELOP_TONE_LIST
+static u32 develop_text(volatile u32 *h,u32 id);
+#else
+#define develop_text(h,id) 0U
+#endif
 A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
     volatile u32 *h=menu_header();
     u32 title=menu_parameter_title(view);
+    if(title) return title;
+    title=develop_text(h,id);
     if(title) return title;
     title=ui_text_override(h,id);
     if(title) return title;
@@ -972,3 +981,129 @@ A32_ENTRY u32 menu_icon(u32 id) {
     profile_end(h,start,GRKIT_PROFILE_MENU_ICON);
     return icon;
 }
+
+#ifdef DEVELOP_TONE_LIST
+/* ---- RAW development: the effects in its Image Control list --------------
+   The development applies GRKIT_HOST_DEVELOP (runtime/processing.h): the
+   effect that its DNG records, or 1 for native processing. Its Image Control
+   list keeps its native rows and lists the effects after them. An effect row
+   is the native Standard to the model (the effects are built on Standard),
+   with GRKIT_HOST_DEVELOP its record. A native row sets native processing.
+   The list applies the highlighted row at once for the preview, and Cancel
+   restores the value of the list start. */
+#define DEVELOP_NONE 0xffffffffU
+static u32 develop_running(void) {
+    return (BYTE(FW_DEVELOP_GUARD,0)&1U) && BYTE(FW_DEVELOP_MODEL,DEVELOP_STATE);
+}
+static u32 develop_effects(volatile u32 *h) {
+    return h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT ? h[GRKIT_HOST_COUNT/4] : 0;
+}
+static u32 develop_record(volatile u32 *h,u32 i) { return h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE; }
+/* The index of the effect of the development, or DEVELOP_NONE. */
+static u32 develop_index(volatile u32 *h) {
+    u32 record=h[GRKIT_HOST_DEVELOP/4], i;
+    if(!develop_running() || record<=1) return DEVELOP_NONE;
+    for(i=0;i<develop_effects(h);++i) if(develop_record(h,i)==record) return i;
+    return DEVELOP_NONE;
+}
+static u32 develop_list(u32 controller) { return WORD(controller,CONTROLLER_ID)==DEVELOP_TONE_LIST; }
+/* The effect of a list row, or DEVELOP_NONE for a native row. */
+static u32 develop_row(volatile u32 *h,u32 row) {
+    u32 rows=h[GRKIT_HOST_DEVELOP_ROWS/4];
+    return rows && row>=rows && row-rows<develop_effects(h) ? row-rows : DEVELOP_NONE;
+}
+/* Add row views until the list has `rows`. The list init of the controller
+   gives each row view its children, an icon, a text, and a mark, as here. */
+static void develop_grow(u32 list,u32 rows) {
+    u32 have=list_capacity(list), i, row;
+    list_grow_rows(list,rows,DEVELOP_ROW_STYLE,DEVELOP_ROW_HEIGHT);
+    for(i=have;have && i<list_capacity(list);++i) {
+        row=CALL2(FW_LIST_ROW)(list,i);
+        CALL3(FW_ROW_CHILDREN)(row,3,DEVELOP_ROW_LAYOUT);
+        CALL2(FW_ICON_VIEW_STYLE)(CALL2(FW_ROW_CHILD)(row,0),1);
+        CALL2(FW_STRING_VIEW_STYLE)(CALL2(FW_ROW_CHILD)(row,1),0);
+    }
+}
+/* The row count of a list of the development. The Image Control list gets
+   a row view for each effect too, once: the list keeps its row views. */
+A32_ENTRY u32 menu_develop_count_after(u32 count,u32 controller) {
+    volatile u32 *h=menu_header();
+    if(!develop_list(controller)) return count;
+    h[GRKIT_HOST_DEVELOP_ROWS/4]=count;
+    develop_grow(WORD(controller,DEVELOP_LIST_VIEW),count+develop_effects(h));
+    return count+develop_effects(h);
+}
+/* The category and the value of an effect row: Standard. */
+A32_ENTRY u32 menu_develop_category_answer(u32 model,u32 row) {
+    (void)model;
+    return develop_row(menu_header(),row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
+}
+A32_ENTRY u32 menu_develop_value_answer(u32 model,u32 row) {
+    (void)model;
+    return develop_row(menu_header(),row)==DEVELOP_NONE ? DEVELOP_NONE : DEVELOP_STANDARD;
+}
+/* The fill of an effect row: the effect icon, no text, no mark. */
+A32_ENTRY u32 menu_develop_row_answer(u32 controller,u32 view,u32 row) {
+    volatile u32 *h=menu_header();
+    static const u8 empty[1]={0};
+    u32 i;
+    if(!develop_list(controller) || (i=develop_row(h,row))==DEVELOP_NONE) return DEVELOP_NONE;
+    if(!CALL2(FW_ROW_CHILD)(view,2)) return DEVELOP_NONE;
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,0),0x8000+i);
+    CALL2(FW_STRING_VIEW_SET_ASCII)(CALL2(FW_ROW_CHILD)(view,1),(u32)empty);
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,2),0);
+    return 0;
+}
+/* The current row: the row of the effect of the development, else the
+   native row of the native value. */
+A32_ENTRY u32 menu_develop_current_answer(u32 controller,u32 row) {
+    volatile u32 *h=menu_header();
+    u32 effect;
+    if(!develop_list(controller)) return DEVELOP_NONE;
+    effect=develop_index(h);
+    if(effect!=DEVELOP_NONE) return develop_row(h,row)==effect;
+    return develop_row(h,row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
+}
+/* The choice of a row, also of each highlighted row for the preview. */
+A32_ENTRY void menu_develop_choose(u32 controller,u32 row) {
+    volatile u32 *h=menu_header();
+    u32 i=develop_row(h,row);
+    (void)controller;
+    h[GRKIT_HOST_DEVELOP/4]=i==DEVELOP_NONE ? 1 : develop_record(h,i);
+}
+A32_ENTRY void menu_develop_opened(u32 controller) {
+    volatile u32 *h=menu_header();
+    if(develop_list(controller)) h[GRKIT_HOST_DEVELOP_SAVED/4]=h[GRKIT_HOST_DEVELOP/4];
+}
+A32_ENTRY void menu_develop_restored(void) {
+    volatile u32 *h=menu_header();
+    h[GRKIT_HOST_DEVELOP/4]=h[GRKIT_HOST_DEVELOP_SAVED/4];
+}
+/* An effect has no native parameter page: Fn does nothing on its row. */
+A32_ENTRY u32 menu_develop_fn_answer(u32 controller) {
+    return develop_list(controller) && develop_index(menu_header())!=DEVELOP_NONE ? 0 : DEVELOP_NONE;
+}
+/* The label of an Image Control in a subtitle. For the effect of the
+   development it is the Standard label, which menu_text_override shows as
+   the effect name. A subtitle draws only a changed text ID, so the view
+   forgets its text first. */
+A32_ENTRY u32 menu_develop_label(u32 model,u32 category,u32 value,u32 view) {
+    volatile u32 *h=menu_header();
+    u32 id=CALL3(FW_DEVELOP_TONE_TEXT)(model,category,value), i=develop_index(h);
+    if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) {
+        h[GRKIT_HOST_DEVELOP_TEXT/4]=id;
+        descriptor(h+GRKIT_HOST_DEVELOP_NAME/4,(const u16 *)(develop_record(h,i)+GRKIT_RECORD_NAME));
+        CALL3(FW_STRING_VIEW_RESET)(view,0,0);
+    }
+    return id;
+}
+/* The icon of an Image Control in the rows of the development. */
+A32_ENTRY u32 menu_develop_top_icon(u32 model,u32 category,u32 value) {
+    u32 i=develop_index(menu_header());
+    if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) return 0x8000+i;
+    return CALL3(FW_DEVELOP_TONE_ICON)(model,category,value);
+}
+static u32 develop_text(volatile u32 *h,u32 id) {
+    return id && id==h[GRKIT_HOST_DEVELOP_TEXT/4] && develop_index(h)!=DEVELOP_NONE ? (u32)(h+GRKIT_HOST_DEVELOP_NAME/4) : 0;
+}
+#endif
