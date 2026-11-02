@@ -2,6 +2,8 @@
 
 仅适用于 RICOH GR III 和 GR III HDF 固件 2.10。
 
+GRKit 是实验性软件，不提供任何担保。如果 GRKit 出错，相机可能在启动时停止响应。请在安装前阅读[恢复指南](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.zh-Hans.md)。安装 GRKit 即表示你接受[使用条款](https://github.com/ahonn/grkit/blob/main/resources/TERMS.zh-Hans.md)。
+
 ## 安装
 
 1. 关闭相机。

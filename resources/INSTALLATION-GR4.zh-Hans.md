@@ -5,6 +5,8 @@
 固件 1.20（GR IV Monochrome 上为 1.10）的更新无法撤销。更新后，同一个包仍然可以使用。
 GR IV Monochrome 运行 GR IV 的固件，但显示自己的版本号：固件 1.11 显示为 1.00，固件 1.20 显示为 1.10。它的包不含胶片风格。GR IV Monochrome 使用 GR IV 的运行时，但本身未经真机测试。
 
+GRKit 是实验性软件，不提供任何担保。如果 GRKit 出错，相机可能在启动时停止响应。请在安装前阅读[恢复指南](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.zh-Hans.md)。安装 GRKit 即表示你接受[使用条款](https://github.com/ahonn/grkit/blob/main/resources/TERMS.zh-Hans.md)。
+
 ## 安装
 
 1. 关闭相机。

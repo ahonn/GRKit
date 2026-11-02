@@ -2,6 +2,8 @@
 
 RICOH GR III および GR III HDF ファームウェア 2.10 専用です。
 
+GRKit は試験的なソフトウェアで、保証はありません。GRKit に問題があると、カメラが起動中に止まることがあります。インストール前に[復旧ガイド](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.ja.md)をお読みください。GRKit をインストールした時点で、[利用規約](https://github.com/ahonn/grkit/blob/main/resources/TERMS.ja.md)に同意したものとみなされます。
+
 ## インストール
 
 1. カメラの電源を切ります。

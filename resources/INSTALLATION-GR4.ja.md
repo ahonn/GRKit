@@ -5,6 +5,8 @@ RICOH GR IV および GR IV HDF ファームウェア 1.11 専用です。
 ファームウェア 1.20（GR IV Monochrome では 1.10）への更新は元に戻せません。更新後も同じパッケージを使えます。
 GR IV Monochrome は GR IV のファームウェアで動作し、独自のバージョンを表示します。ファームウェア 1.11 は 1.00、ファームウェア 1.20 は 1.10 と表示されます。GR IV Monochrome 用のパッケージにはフィルムルックがありません。GR IV Monochrome は GR IV のランタイムを使いますが、GR IV Monochrome 自体は実機でテストしていません。
 
+GRKit は試験的なソフトウェアで、保証はありません。GRKit に問題があると、カメラが起動中に止まることがあります。インストール前に[復旧ガイド](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.ja.md)をお読みください。GRKit をインストールした時点で、[利用規約](https://github.com/ahonn/grkit/blob/main/resources/TERMS.ja.md)に同意したものとみなされます。
+
 ## インストール
 
 1. カメラの電源を切ります。

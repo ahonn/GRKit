@@ -3,6 +3,7 @@ import { cardStarted, cardVersion, hasChanges, type CardChanges } from '../card'
 import type { CardSession } from '../cardSession';
 import type { Camera } from '../cameras';
 import { sentences, type Strings } from '../i18n';
+import { TermsNote } from './TermsNote';
 
 /** What the card panels are doing. Each task disables the card buttons until it ends. */
 export type CardTask =
@@ -249,6 +250,8 @@ interface ChangesProps {
   onApply: () => void;
   /** The links that the success state shows, as the download has them. */
   links: ReactNode;
+  /** The terms of use, which the line under the button links to. */
+  termsUrl: string;
 }
 
 function Change({ label, items, separator }: { label: string; items: readonly string[]; separator: string }) {
@@ -278,6 +281,7 @@ export function CardChangesView({
   message,
   onApply,
   links,
+  termsUrl,
 }: ChangesProps) {
   const fresh = changes.grkit !== 'same';
   const any = hasChanges(changes);
@@ -358,6 +362,7 @@ export function CardChangesView({
                   ? t.cardApplyUpdate
                   : t.cardApply}
             </button>
+            <TermsNote text={t.termsNote} href={termsUrl} />
             <Status task={task} message={message} strings={t} />
           </div>
         </>

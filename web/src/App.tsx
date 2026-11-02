@@ -46,6 +46,7 @@ import { AppPromo } from './components/AppPromo';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
+import { TermsNote } from './components/TermsNote';
 import { loadFonts } from './fonts';
 import { deleteImport, saveImport } from './import/store';
 import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language, type Strings } from './i18n';
@@ -69,7 +70,7 @@ const DONATE = 'https://buymeacoffee.com/yuexunjiang';
 const RELEASE_URL = `${REPOSITORY}/releases/tag/v${__GRKIT_VERSION__}`;
 
 /** A guide in `resources/` in the page language, or in English. */
-function guideUrl(name: 'RECOVERY' | 'DUMP', language: Language): string {
+function guideUrl(name: 'RECOVERY' | 'DUMP' | 'TERMS', language: Language): string {
   return `${REPOSITORY}/blob/main/resources/${name}${language === 'en' ? '' : `.${language}`}.md`;
 }
 
@@ -760,6 +761,7 @@ export function App({
                     message={applyMessage}
                     onApply={applyCard}
                     links={packageLinks}
+                    termsUrl={guideUrl('TERMS', language)}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -808,6 +810,7 @@ export function App({
                 >
                   {t.download}
                 </button>
+                <TermsNote text={t.termsNote} href={guideUrl('TERMS', language)} />
                 <div aria-live="polite">
                   {plan.visible.length === 0 && <p className="status error">{t.noModules}</p>}
                   {build.state === 'building' && (
@@ -944,6 +947,9 @@ export function App({
             <li>
               <a href={siteUrl('THIRD_PARTY_LICENSES.txt')}>{t.thirdParty}</a>
             </li>
+            <li>
+              <a href={guideUrl('TERMS', language)}>{t.terms}</a>
+            </li>
           </ul>
         </div>
         <div className="footer-meta">
@@ -1027,6 +1033,7 @@ interface ChangesSectionProps {
   message: CardMessage;
   onApply: () => void;
   links: ReactNode;
+  termsUrl: string;
 }
 
 /** The changes from the card to the selection. Before the first change, it needs the catalog. */

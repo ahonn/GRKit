@@ -2,6 +2,8 @@
 
 RICOH GR III 및 GR III HDF 펌웨어 2.10 전용입니다.
 
+GRKit은 실험적인 소프트웨어이며, 어떠한 보증도 제공하지 않습니다. GRKit에 문제가 생기면 카메라가 시작 중에 멈출 수 있습니다. 설치 전에 [복구 가이드](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.ko.md)를 읽어 주세요. GRKit을 설치하면 [이용 약관](https://github.com/ahonn/grkit/blob/main/resources/TERMS.ko.md)에 동의한 것으로 간주됩니다.
+
 ## 설치
 
 1. 카메라의 전원을 끕니다.

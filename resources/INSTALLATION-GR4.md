@@ -5,6 +5,8 @@ One package serves each supported firmware version. At each power-on, GRKit find
 The update to firmware 1.20 (1.10 on GR IV Monochrome) cannot be undone. After the update, the same package still works.
 GR IV Monochrome runs the GR IV firmware and shows its own version: 1.00 for firmware 1.11, and 1.10 for firmware 1.20. Its package has no Film Look. GR IV Monochrome uses the GR IV runtimes, but has not been tested on a camera itself.
 
+GRKit is experimental and has no warranty. If GRKit fails, the camera can stop during startup. Read the [recovery guide](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.md) before you install. When you install GRKit, you accept the [terms of use](https://github.com/ahonn/grkit/blob/main/resources/TERMS.md).
+
 ## Install
 
 1. Turn the camera off.

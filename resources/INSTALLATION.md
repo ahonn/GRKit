@@ -2,6 +2,8 @@
 
 For RICOH GR III and GR III HDF firmware 2.10 only.
 
+GRKit is experimental and has no warranty. If GRKit fails, the camera can stop during startup. Read the [recovery guide](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.md) before you install. When you install GRKit, you accept the [terms of use](https://github.com/ahonn/grkit/blob/main/resources/TERMS.md).
+
 ## Install
 
 1. Turn the camera off.

@@ -2,6 +2,8 @@
 
 RICOH GR IV 및 GR IV HDF 펌웨어 1.11 전용입니다. 하나의 패키지를 지원하는 모든 펌웨어 버전에 사용할 수 있습니다. GRKit은 전원을 켤 때마다 카메라의 펌웨어를 확인합니다. 펌웨어 1.20(GR IV Monochrome은 1.10)으로의 업데이트는 되돌릴 수 없습니다. 업데이트한 뒤에도 같은 패키지를 사용할 수 있습니다. GR IV Monochrome은 GR IV의 펌웨어로 작동하며 자체 버전을 표시합니다. 펌웨어 1.11은 1.00, 펌웨어 1.20은 1.10으로 표시됩니다. GR IV Monochrome용 패키지에는 필름 룩이 없습니다. GR IV Monochrome은 GR IV의 런타임을 사용하지만, GR IV Monochrome 자체는 실제 카메라에서 테스트하지 않았습니다.
 
+GRKit은 실험적인 소프트웨어이며, 어떠한 보증도 제공하지 않습니다. GRKit에 문제가 생기면 카메라가 시작 중에 멈출 수 있습니다. 설치 전에 [복구 가이드](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.ko.md)를 읽어 주세요. GRKit을 설치하면 [이용 약관](https://github.com/ahonn/grkit/blob/main/resources/TERMS.ko.md)에 동의한 것으로 간주됩니다.
+
 ## 설치
 
 1. 카메라의 전원을 끕니다.

@@ -5,6 +5,8 @@
 韌體 1.20（GR IV Monochrome 上為 1.10）的更新無法復原。更新後，同一個套件仍然可以使用。
 GR IV Monochrome 執行 GR IV 的韌體，但顯示自己的版本號：韌體 1.11 顯示為 1.00，韌體 1.20 顯示為 1.10。它的套件不含底片風格。GR IV Monochrome 使用 GR IV 的執行環境，但本身未經實機測試。
 
+GRKit 是實驗性軟體，不提供任何擔保。如果 GRKit 出錯，相機可能在啟動時停止回應。請在安裝前閱讀[復原指南](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.zh-Hant.md)。安裝 GRKit 即表示你接受[使用條款](https://github.com/ahonn/grkit/blob/main/resources/TERMS.zh-Hant.md)。
+
 ## 安裝
 
 1. 關閉相機。
