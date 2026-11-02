@@ -528,6 +528,22 @@ fn validate(m: &Manifest) -> Result<()> {
             grkit_core::grm::valid_id(module) && valid_key(key),
             "Invalid used setting {name:?}"
         );
+        // A required capability of only some cameras limits the cameras of
+        // the module to those.
+        let capability = grkit_core::capabilities::CAPABILITIES
+            .iter()
+            .find(|capability| capability.name() == full);
+        if let (Some(capability), false) = (capability, name.starts_with('?')) {
+            let cameras = match camera_mask(&m.cameras)? {
+                0 => grkit_core::camera::all_cameras(),
+                mask => mask,
+            };
+            ensure!(
+                cameras & !capability.cameras() == 0,
+                "{full} is only on {}: set cameras to some of them",
+                camera_names(capability.cameras())
+            );
+        }
     }
     ensure!(
         m.tiles.len() <= grkit_core::runtime::MODULE_TILES_MAX,
@@ -1069,6 +1085,16 @@ pub fn build_manifest(
     Ok(module)
 }
 
+/// The IDs of the cameras of a mask, such as `gr3, gr3x`.
+fn camera_names(mask: u32) -> String {
+    grkit_core::camera::CAMERAS
+        .iter()
+        .filter(|camera| mask & camera.bit() != 0)
+        .map(|camera| camera.id)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// The camera mask of the `cameras` of a manifest (`grkit_core::grm`): 0,
 /// each camera, for an empty list.
 fn camera_mask(ids: &[String]) -> Result<u32> {
@@ -1189,5 +1215,21 @@ mod tests {
         assert_eq!(camera_mask(&ids(&["gr4"])).unwrap(), GR4.bit());
         assert!(camera_mask(&ids(&["gr2"])).is_err());
         assert!(camera_mask(&ids(&["gr3", "gr3"])).is_err());
+    }
+
+    /// A module that needs a capability of only some cameras names some of
+    /// them. An optional use does not limit the cameras.
+    #[test]
+    fn a_camera_capability_limits_the_cameras_of_the_module() {
+        let check = |extra: &str| {
+            let text = format!("id = \"PHONE\"\nversion = 1\n{extra}");
+            validate(&toml::from_str::<Manifest>(&text).unwrap())
+        };
+        let error = check("uses = [\"CORE.CUSTOM_SLOTS\"]").unwrap_err();
+        assert!(error.to_string().contains("only on gr3, gr3x"), "{error}");
+        assert!(check("uses = [\"CORE.CUSTOM_SLOTS\"]\ncameras = [\"gr3\", \"gr4\"]").is_err());
+        assert!(check("uses = [\"CORE.CUSTOM_SLOTS\"]\ncameras = [\"gr3\", \"gr3x\"]").is_ok());
+        assert!(check("uses = [\"?CORE.CUSTOM_SLOTS\"]").is_ok());
+        assert!(check("uses = [\"CORE.GRAIN\"]\ncameras = [\"gr4\"]").is_ok());
     }
 }

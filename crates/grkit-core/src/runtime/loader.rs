@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::abi::{
-    HOST_PROCESSING_CALLS, HOST_PROFILE, PROFILE, PROFILE_KINDS, PROFILE_MODULES,
-    PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
+    HOST_CUSTOM_NAMES, HOST_PROCESSING_CALLS, HOST_PROFILE, PROFILE, PROFILE_KINDS,
+    PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
 };
 use crate::capabilities::{self, StateFile};
 use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
@@ -381,6 +381,24 @@ fn state_script() -> Vec<String> {
                 "goto save_parameters".into(),
                 ":save_parameters_end".into(),
             ]);
+            // The name words of the Custom sets that are not 0. The file keeps
+            // the names while the module of CORE.CUSTOM_SLOTS is off.
+            lines.extend([
+                "nindex = 0".into(),
+                ":save_names".into(),
+                format!("if nindex >= {CUSTOM_NAME_WORDS} goto save_names_end"),
+                format!("nvalue = registry[{} + nindex]", HOST_CUSTOM_NAMES / 4),
+                "if nvalue = 0 goto save_names_next".into(),
+                format!("nkey = {CUSTOM_NAME_KEY_BASE} + nindex"),
+                "int2str line nkey".into(),
+                "filewriteln sfh line".into(),
+                "int2str line nvalue".into(),
+                "filewriteln sfh line".into(),
+                ":save_names_next".into(),
+                "nindex = nindex + 1".into(),
+                "goto save_names".into(),
+                ":save_names_end".into(),
+            ]);
             // The saved module settings that are not 0.
             lines.extend(
                 module_count
@@ -610,14 +628,23 @@ mod tests {
             )
         };
         // The computed indexes are words of a record below `count` or `pcount`:
-        // its code, and the three words of its adjustments.
+        // its code, and the three words of its adjustments; and the name words
+        // below CUSTOM_NAME_WORDS.
         let allowed = [
             record("index", RECORD_CODE),
             record("pindex", RECORD_CODE),
             record("pindex", RECORD_PARAMETERS),
             record("pindex", RECORD_PARAMETERS + 4),
             record("pindex", RECORD_PARAMETERS + 8),
+            format!("{} + nindex", HOST_CUSTOM_NAMES / 4),
         ];
+        const { assert!(HOST_CUSTOM_NAMES / 4 + CUSTOM_NAME_WORDS <= HEADER_SIZE / 4) };
+        assert_eq!(
+            script
+                .matches(&format!("if nindex >= {CUSTOM_NAME_WORDS} goto"))
+                .count(),
+            1
+        );
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
             let index = &index[..index.find(']').unwrap()];

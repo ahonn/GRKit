@@ -182,6 +182,9 @@ static void manage_off_changed(volatile u32 *h) {
     u32 before=h[GRKIT_HOST_CAPABILITIES/4], changed;
     manage_suspend(h);
     changed=before^h[GRKIT_HOST_CAPABILITIES/4];
+    /* Only the property task owns the transport buffers. An epoch change
+       invalidates them even when Off and On occur between two requests. */
+    if(changed&GRKIT_CORE_CUSTOM_SLOTS_BIT) ++h[GRKIT_HOST_CUSTOM_EPOCH/4];
     if(changed&GRKIT_CORE_ASPECT_BIT && !aspect_native()) aspect_request();
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }

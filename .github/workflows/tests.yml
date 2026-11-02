@@ -50,6 +50,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - run: python3 -B -m unittest discover -s examples/custom-slots -p test_client.py
       - run: cargo build --workspace --locked
       - run: cargo build -p grkit-wasm --target wasm32-unknown-unknown --release --locked
       - if: runner.os == 'Linux'

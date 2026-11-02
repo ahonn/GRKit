@@ -1622,6 +1622,18 @@ static void the_switch_stops_each_module_at_once(void)
     assert(framing_requests == 2);
     manage_set_all_off(h, 0);
     native_aspect_value = 0;
+    /* Off then On must invalidate Custom transactions even when no BLE
+       request observes the disabled interval. Other capabilities do not. */
+    u32 epoch = h[GRKIT_HOST_CUSTOM_EPOCH / 4];
+    manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] |= GRKIT_CORE_CUSTOM_SLOTS_BIT;
+    manage_off_changed(h);
+    assert(h[GRKIT_HOST_CUSTOM_EPOCH / 4] == epoch + 1);
+    manage_set_all_off(h, 1);
+    assert(h[GRKIT_HOST_CUSTOM_EPOCH / 4] == epoch + 2);
+    manage_set_all_off(h, 0);
+    assert(h[GRKIT_HOST_CUSTOM_EPOCH / 4] == epoch + 3);
+    manage_set_all_off(h, 0);
+    assert(h[GRKIT_HOST_CUSTOM_EPOCH / 4] == epoch + 3);
     /* In safe mode no module loads, and the switch does not show. */
     for (u32 i = 0; i < 3; ++i) manage_memory[MANAGE_ENTRY(i)] = MANAGE_SAFE;
     assert(!manage_switch_shown(h) && !(visible_modules(h) >> SWITCH_MODULE & 1));

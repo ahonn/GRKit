@@ -641,6 +641,38 @@ fn native_custom_block_contract_maps_gr4_blocks_to_gr3_custom_sets() {
     checked(&mut Command::new(&executable));
 }
 
+#[test]
+fn native_custom_slots_contract_writes_and_reads_the_gr3_custom_sets() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("custom_slots_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/custom_slots_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
+#[test]
+fn native_custom_transport_contract_uses_the_native_passphrase() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("custom_transport_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/custom_transport_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
 /// The numeric `#define`s of a runtime header: name and value.
 fn defines(path: &str) -> std::collections::HashMap<String, u64> {
     let text = fs::read_to_string(root().join(path)).unwrap();

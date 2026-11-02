@@ -255,6 +255,15 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// lists (runtime/manage.h). The menu sets it. The text hooks read this
     /// word, so they do not walk the module pages.
     HOST_ADJ_MODULES: 4;
+    /// Custom slots, the capability CORE.CUSTOM_SLOTS. Its one value is 0:
+    /// a phone can write and read the native Custom sets of a GR III while a
+    /// module that uses the capability is on (runtime/custom_slots.h).
+    HOST_CUSTOM_SLOTS: 4;
+    /// The names of the Custom sets 1 and 2 of CORE.CUSTOM_SLOTS, which GR III
+    /// does not keep itself: 11 words for each name of up to 32 bytes, with
+    /// three bytes in each word, the first lowest. The state file keeps each
+    /// word that is not 0 (`runtime::CUSTOM_NAME_KEY_BASE`).
+    HOST_CUSTOM_NAMES: 88;
     /// Address of the module settings table, or 0 (runtime/settings.h).
     /// INSTALL writes it.
     HOST_MODULE_SETTINGS: 4;
@@ -295,6 +304,10 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DEVELOP_TEXT: 4;
     /// The text descriptor of that name.
     HOST_DEVELOP_NAME: 8;
+    /// Invalidates Custom BLE transactions when their capability changes.
+    HOST_CUSTOM_EPOCH: 4;
+    /// Writable state of the native Passphrase transport (runtime/custom_transport.h).
+    HOST_CUSTOM_TRANSPORT: 264;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

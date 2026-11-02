@@ -20,7 +20,8 @@ pub enum Part {
     Processing,
     /// The private menu (`runtime/menu.*`).
     Menu,
-    /// Framing, Guides, and picture code (`runtime/framing.*`, `runtime/picture.*`).
+    /// Framing, Guides, picture code, and the Custom slots of GR III
+    /// (`runtime/framing.*`, `runtime/picture.*`, `runtime/custom_slots.*`).
     Framing,
 }
 
@@ -393,11 +394,15 @@ pub fn framing(
     let assembly_object = directory.join("framing-asm.o");
     let picture = directory.join("picture.o");
     let picture_assembly = directory.join("picture-asm.o");
+    let slots = directory.join("custom-slots.o");
+    let slots_assembly = directory.join("custom-slots-asm.o");
     for (source, object) in [
         ("framing.c", &object),
         ("framing.S", &assembly_object),
         ("picture.c", &picture),
         ("picture.S", &picture_assembly),
+        ("custom_slots.c", &slots),
+        ("custom_slots.S", &slots_assembly),
     ] {
         run(
             &tools.clang,
@@ -427,7 +432,14 @@ pub fn framing(
     let mut component = linked_component(
         directory,
         "module-framing",
-        &[object, assembly_object, picture, picture_assembly],
+        &[
+            object,
+            assembly_object,
+            picture,
+            picture_assembly,
+            slots,
+            slots_assembly,
+        ],
         body,
         tools,
         (base, end),

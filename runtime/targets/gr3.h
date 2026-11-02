@@ -110,6 +110,52 @@
 #define CHECK_LINE_TYPE 0x2aU
 #define CHECK_TEXT_VIEW 0xf0
 
+/* CORE.CUSTOM_SLOTS (runtime/custom_slots.h): the native Custom sets in the
+   working record of the settings (FW_SETTINGS: the record at +4, the
+   header at +0). Each field is one byte, followed by a flag byte that must
+   stay 0. The settings of GR III 2.20 and GR IIIx 1.60 and 1.70 have the same
+   layout.
+   - The header byte 0 is the CustomSettingBox: 0 in the normal modes, else
+     the U mode whose box the record holds.
+   - CUSTOM_SLOT_ACTIVE is the active set (StillActiveImageControlSet): 0
+     for No0, else Custom n.
+   - CUSTOM_SLOT_TYPE(n) is the type of set n (StillImageControlNo<n>).
+   - CUSTOM_SLOT_FIELDS gives, for each type from Standard (11) to Negative
+     Film (22), the field of each parameter in set No0 (custom_block.h
+     order), or 0 when the type does not have it. Set n is n strides
+     further: CUSTOM_SLOT_STRIDE for the main block, CUSTOM_SLOT_LATE_STRIDE
+     from CUSTOM_SLOT_LATE (the Cross Processing and Negative Film blocks).
+   - CUSTOM_SLOT_FILTER is the R value of filter group 1 of set No0: R, G,
+     and B are 16-bit values 4 bytes apart, and the groups 1 to 4 are 12
+     bytes apart. */
+#define CUSTOM_SLOT_BOX(settings) BYTE(WORD(settings,0),0)
+#define CUSTOM_SLOT_RECORD(settings) WORD(settings,4)
+#define CUSTOM_SLOT_ACTIVE 0x1c0
+#define CUSTOM_SLOT_TYPE(n) (0x1c2+2*(n))
+#define CUSTOM_SLOT_STRIDE 0xe2
+#define CUSTOM_SLOT_LATE 0x9c0
+#define CUSTOM_SLOT_LATE_STRIDE 0x14
+#define CUSTOM_SLOT_FILTER 0x248
+#define CUSTOM_SLOT_FIELDS { \
+    {0x1c8,0x1d4,0x1e0,0x1f2,0x204,0x216,0x228,0x278,0x28a,0,0,0,0},       /* Standard */ \
+    {0x1ca,0x1d6,0x1e2,0x1f4,0x206,0x218,0x22a,0x27a,0x28c,0,0,0,0},       /* Vivid */ \
+    {0,0,0x1e4,0x1f6,0x208,0x21a,0x22c,0x27c,0x28e,0x23a,0,0x2a4,0x29a},   /* Monotone */ \
+    {0,0,0x1e6,0x1f8,0x20a,0x21c,0x22e,0x27e,0,0x23c,0,0x2a6,0x29c},       /* Soft Monotone */ \
+    {0,0,0x1e8,0x1fa,0x20c,0x21e,0x230,0x280,0x290,0x23e,0,0,0x29e},       /* Hard Monotone */ \
+    {0,0,0x1ea,0x1fc,0x20e,0x220,0x232,0x282,0x292,0x240,0,0x2a8,0x2a0},   /* Hi-Contrast B&W */ \
+    {0x1cc,0x1d8,0x1ec,0x1fe,0x210,0x222,0x234,0x284,0x294,0,0,0,0},       /* Positive Film */ \
+    {0x1ce,0x1da,0x1ee,0x200,0x212,0x224,0x236,0x286,0x296,0x242,0,0,0},   /* Bleach Bypass */ \
+    {0x1d0,0x1dc,0x1f0,0x202,0x214,0x226,0x238,0x288,0x298,0x244,0,0,0},   /* Retro */ \
+    {0x1d2,0x1de,0,0,0,0,0,0,0,0x246,0x2a2,0,0},                           /* HDR Tone */ \
+    {0x9c4,0x9c6,0x9c8,0x9ca,0x9cc,0x9ce,0x9d0,0x9d2,0x9d4,0x9d6,0,0,0},   /* Cross Processing */ \
+    {0xa42,0xa44,0xa46,0xa48,0xa4a,0xa4c,0xa4e,0xa50,0xa52,0,0,0,0xa54},   /* Negative Film */ \
+}
+/* The App task command that selects set n with its type, as the native
+   effect property does: kind 0 (set), then the parameters. It stores the set
+   and the type again and rebuilds the live view of the active set. */
+#define CUSTOM_SLOT_COMMAND_SIZE 0x54
+#define CUSTOM_SLOT_COMMAND_SELECT 0x33
+
 /* Visible-area id of a native aspect. GR III offers only 3:2 (0) and 1:1 (3). */
 #define PICTURE_NATIVE_ID(native) ((native)==3 ? 3 : 0)
 

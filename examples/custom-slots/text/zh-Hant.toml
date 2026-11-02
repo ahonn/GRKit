@@ -1,0 +1,8 @@
+title = "藍牙增強"
+# The GRKit section of MENU shows the row of the value while the module is
+# on, and Off while it is off.
+rows = ["開啟"]
+
+[settings."CORE.CUSTOM_SLOTS"]
+label = "影像控制"
+values = ["自定義 1、自定義 2"]

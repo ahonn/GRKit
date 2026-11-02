@@ -1,0 +1,13 @@
+id = "BLESLOTS"
+version = 1
+cameras = ["gr3", "gr3x"]
+# The core serves the requests while the module is on: Enable of the module
+# in the GRKit section of MENU is the switch.
+uses = ["CORE.CUSTOM_SLOTS"]
+tiles = ["tiles/0-module.png"]
+
+# CORE.CUSTOM_SLOTS has one value, so the page has one row and ADJ does not
+# show it. MENU shows the title, Enable, and a row that names the sets.
+[page]
+setting = "CORE.CUSTOM_SLOTS"
+settings = ["CORE.CUSTOM_SLOTS"]

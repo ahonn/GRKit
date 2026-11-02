@@ -19,6 +19,16 @@
 #define FW_LIVE_VIEW_END FIRMWARE(0x53238b40)
 #define FW_LIVE_VIEW_STOP FIRMWARE(0x53238724)
 #define FW_CAPTURE_PROPERTIES FIRMWARE(0x53525d5c)
+/* CORE.CUSTOM_SLOTS: the result of a command of the camera's Linux
+   (LinuxCommCommand: param n at +0xc + 4n, result n at +0x1c + 4n) as
+   (command, n, value), the release of the shared buffer of a property, and
+   the App task command call (ctx, command), which waits for the App task.
+   The hook replaces the first instruction of the property setter of
+   PropertyCommandProcessor. */
+#define FW_LINUX_SET_RESULT FIRMWARE(0x535822d8)
+#define FW_LINUX_ALLOC FIRMWARE(0x53583004)
+#define FW_LINUX_RELEASE FIRMWARE(0x5358313c)
+#define FW_APP_COMMAND FIRMWARE(0x533bdd1c)
 /* Settings domain: +0x518 -> control -> payload with the native Image Control
    type at +0x77c. Standard is type 11. */
 #define FW_SETTINGS_DOMAIN FIRMWARE(0x553458b0)

@@ -49,7 +49,7 @@ pub const IMAGE_CONTROL: ImageControl = ImageControl {
 /// The tail after the decoded RTOS image (0x540b55c0).
 pub const LAYOUT: Layout = Layout {
     define: "-DGRKIT_TARGET_GR3_210",
-    tail: (0x540b6000, 0x540c2000),
+    tail: (0x540b6000, 0x540c3000),
     contexts: CONTEXTS,
     sites: SITES,
     instruction_patches: INSTRUCTION_PATCHES,
@@ -228,6 +228,9 @@ const SITES: &[Site] = &[
     ("grain_fill", 0x5367ae14, "c43e00eb"),
     // The granulation (0x5367ad3c): the first test of its amplitude choice.
     ("grain_amplitude", 0x5367ae28, "020055e3"),
+    // PropertyCommandProcessor: the property setter, `mov ip, sp`.
+    ("custom_slots_property_set", 0x533c19c8, "0dc0a0e1"),
+    ("custom_slots_property_get", 0x533bcdf8, "0dc0a0e1"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

@@ -36,7 +36,7 @@ typedef unsigned int u32;
 #define STATE_PATH CARD "/GRKIT/STATE.TXT"
 #define MODULES_PATH CARD "/GRKIT/MODULES"
 #define LEGACY_EFFECTS_PATH CARD "/SCRIPT/PLUGINS/EFFECTS"
-#define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003
+#define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003, 789090951
 #define PARAMETER_KEY_BASE 990000000U
 #define STATE_TEXT_MAX 16384U
 /* The build runs on cameras 0 and 1 (GR III and GR IIIx). */
@@ -44,8 +44,9 @@ typedef unsigned int u32;
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
-static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE"};
-static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40};
+static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE",
+                                                  "CORE.CUSTOM_SLOTS"};
+static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0x80};
 /* The tail of the core, and its one export, overlay_label. */
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U

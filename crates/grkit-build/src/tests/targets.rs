@@ -53,11 +53,17 @@ fn each_camera_offers_what_its_runtime_has() {
             camera.id
         );
         assert!(layout.sites.len() == target.family.hooks.len());
-        // Each extension point has hooks: those of the capabilities, and
-        // those of the module pages, layers, and filters.
+        // Each extension point of the camera has hooks: those of the
+        // capabilities, and those of the module pages, layers, and filters.
+        // A point of other cameras has none.
         let points: Vec<_> = target.family.hooks.iter().map(|hook| hook.point).collect();
         for point in grkit_core::capabilities::Point::ALL {
-            assert!(points.contains(&point), "{} {point:?}", camera.id);
+            assert_eq!(
+                points.contains(&point),
+                point.cameras() & camera.bit() != 0,
+                "{} {point:?}",
+                camera.id
+            );
         }
     }
 }

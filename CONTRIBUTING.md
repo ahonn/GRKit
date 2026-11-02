@@ -31,6 +31,12 @@ GRKIT_REQUIRE_NATIVE_TESTS=1 cargo test --workspace --locked
 cargo deny --locked check
 ```
 
+The Custom BLE example client has tests that use only the Python 3 standard library:
+
+```sh
+python3 -B -m unittest discover -s examples/custom-slots -p test_client.py
+```
+
 `cargo deny` checks the dependency licenses, the security advisories, and the crate sources against `deny.toml`. Each ignored advisory in that file gives its reason.
 
 Host C tests compile parts of the runtime with a host C compiler. If no host compiler is available, they are skipped. `GRKIT_REQUIRE_NATIVE_TESTS=1` makes them fail instead.
@@ -66,7 +72,7 @@ For the web site, see [web/README.md](web/README.md).
 - Keep firmware details in the core. A module under `modules/<folder>/` includes only `runtime/sdk/grkit.h`. If a module needs a firmware function, add a core service: an export of `grkit_core::grm::EXPORTS`, or a capability.
 - Add each new hook to the hooks of its family in `crates/grkit-build/src/target/<family>.rs`, with its extension point, and give its site in each target module of the family. A build without a site for a hook of its family fails.
 - Keep processing records valid while camera tasks use them.
-- Do not change persistent native camera settings.
+- Do not change persistent native camera settings. The one exception is `CORE.CUSTOM_SLOTS`: on a Bluetooth request, it writes the native Custom sets of GR III, after the checks of `runtime/custom_block.h`.
 - Add focused tests for new behavior. Keep GRF bytes unchanged in compatible refactors.
 - Host tests and builds do not verify device behavior. State in the pull request what you tested on a camera.
 - Changes to cache synchronization or camera task lifetimes need a camera test.

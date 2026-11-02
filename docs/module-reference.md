@@ -160,6 +160,9 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.ASPECT` | 8: 0 native 3:2, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The aspect of still pictures. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
+| `CORE.CUSTOM_SLOTS` | 1: 0 | GR III and GR IIIx only. Reads and writes native Custom sets 1 and 2 in the GR IV custom Image Control format, with names of up to 32 bytes. The core saves the names with its settings. The module Enable switch controls access. A module that uses this capability sets `cameras = ["gr3", "gr3x"]`. |
+
+A phone reaches `CORE.CUSTOM_SLOTS` through hooks on the native Wi-Fi Passphrase property, without an additional GATT service. The [Custom BLE protocol](custom-ble-protocol.md) gives the frame format, and `examples/custom-slots` has the module and a client.
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
 - `CORE.ASPECT`: a page shows only the ratios that the camera offers. The core crops each ratio from the native 3:2, also a ratio that the camera has natively. A layer gets the crop in `Surface.area` and `Surface.box`. `setting_set` with a ratio that the camera does not offer does nothing.

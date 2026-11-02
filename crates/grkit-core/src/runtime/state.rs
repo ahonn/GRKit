@@ -38,6 +38,17 @@ pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
 pub const PARAMETER_COUNT: usize = 9;
 
+/// The names of the Custom sets of CORE.CUSTOM_SLOTS (`abi::HOST_CUSTOM_NAMES`)
+/// are state entries of their own: the key ID of header word i of the names is
+/// this base plus i, after the Fn adjustment entries, and the value is the
+/// word, three bytes of a name. A word of 0 has no entry. INSTALL restores
+/// the words only while a loaded module uses CORE.CUSTOM_SLOTS.
+pub const CUSTOM_NAME_KEY_BASE: u32 = PARAMETER_KEY_BASE + 32768;
+/// The largest name word: three bytes.
+pub const CUSTOM_NAME_VALUE_MAX: u32 = 0xff_ffff;
+/// The header words of the names.
+pub const CUSTOM_NAME_WORDS: usize = 22;
+
 /// The state keys of GRKit 1.2 and the keys that now hold the same values.
 /// The values keep their meaning, and the Fn adjustment entries keep their
 /// key IDs.
@@ -79,6 +90,9 @@ pub fn worst_state_size(file: StateFile) -> usize {
             MAX_COUNT * (line(PARAMETER_KEY_BASE + 32767) + line(PARAMETER_VALUE_MAX))
                 + MODULE_SETTINGS_MAX
                     * (line(PARAMETER_KEY_BASE - 1) + line(MODULE_SETTING_VALUES as u32 - 1))
+                + CUSTOM_NAME_WORDS
+                    * (line(CUSTOM_NAME_KEY_BASE + CUSTOM_NAME_WORDS as u32 - 1)
+                        + line(CUSTOM_NAME_VALUE_MAX))
         }
     };
     keys + parameters
@@ -156,11 +170,15 @@ mod tests {
             !(PARAMETER_KEY_BASE..=last).contains(&id)
         }));
         // Each key and value line, with CR LF, for every effect, capability key,
-        // and module setting.
+        // module setting, and name word.
         let line = STATE_DIGITS + 2;
         assert!(
             worst_state_size(StateFile::Main)
-                <= 2 * line * (MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX)
+                <= 2 * line
+                    * (MAX_COUNT
+                        + capabilities::state_keys().len()
+                        + MODULE_SETTINGS_MAX
+                        + CUSTOM_NAME_WORDS)
         );
         // Module setting IDs stay below the adjustment entries, and values
         // fit the digits that the loader parses.
@@ -184,6 +202,28 @@ mod tests {
             .find_map(|line| line.strip_prefix("#define STATE_PAIRS "))
             .and_then(|value| value.trim_end_matches('U').parse().ok())
             .unwrap();
-        assert!(MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX <= pairs);
+        assert!(
+            MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX + CUSTOM_NAME_WORDS
+                <= pairs
+        );
+    }
+
+    #[test]
+    fn name_entries_fill_the_header_field_and_use_keys_of_their_own() {
+        let field = crate::abi::HEADER_FIELDS
+            .iter()
+            .find(|field| field.name == "HOST_CUSTOM_NAMES")
+            .unwrap();
+        assert_eq!(field.size, 4 * CUSTOM_NAME_WORDS);
+        // Two names of 32 bytes, three bytes in each word.
+        assert_eq!(CUSTOM_NAME_WORDS, 2 * 32usize.div_ceil(3));
+        let last = CUSTOM_NAME_KEY_BASE + CUSTOM_NAME_WORDS as u32 - 1;
+        assert!(last.to_string().len() <= STATE_DIGITS);
+        const { assert!(CUSTOM_NAME_KEY_BASE > PARAMETER_KEY_BASE + 32767) };
+        // Capability and module setting IDs stay below the adjustment entries.
+        assert!(capabilities::state_keys()
+            .iter()
+            .all(|key| state_key_id(&key.name) < PARAMETER_KEY_BASE));
+        assert!(CUSTOM_NAME_VALUE_MAX.to_string().len() <= STATE_DIGITS);
     }
 }

@@ -17,6 +17,8 @@ step Clippy
 cargo clippy --workspace --all-targets --locked -- -D warnings
 step Rust and host C tests
 GRKIT_REQUIRE_NATIVE_TESTS=1 cargo test --workspace --locked
+step Custom BLE client tests
+python3 -B -m unittest discover -s examples/custom-slots -p test_client.py
 step WebAssembly build
 cargo build -p grkit-wasm --target wasm32-unknown-unknown --release --locked
 

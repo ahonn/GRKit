@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 704
+#define GRKIT_HOST_HEADER_SIZE 1064
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -193,57 +193,73 @@
    (runtime/manage.h). The menu sets it. The text hooks read this word, so they
    do not walk the module pages. */
 #define GRKIT_HOST_ADJ_MODULES 336
+/* Custom slots, the capability CORE.CUSTOM_SLOTS. Its one value is 0: a phone
+   can write and read the native Custom sets of a GR III while a module that
+   uses the capability is on (runtime/custom_slots.h). */
+#define GRKIT_HOST_CUSTOM_SLOTS 340
+/* The names of the Custom sets 1 and 2 of CORE.CUSTOM_SLOTS, which GR III does
+   not keep itself: 11 words for each name of up to 32 bytes, with three bytes
+   in each word, the first lowest. The state file keeps each word that is not 0
+   (`runtime::CUSTOM_NAME_KEY_BASE`). */
+#define GRKIT_HOST_CUSTOM_NAMES 344
+#define GRKIT_HOST_CUSTOM_NAMES_WORDS 22
 /* Address of the module settings table, or 0 (runtime/settings.h). INSTALL
    writes it. */
-#define GRKIT_HOST_MODULE_SETTINGS 340
+#define GRKIT_HOST_MODULE_SETTINGS 432
 /* The ADJ preview of a module page: its setting handle plus 1 (0 for none),
    then the highlighted value. Module layers of that setting paint the
    highlighted value on the ADJ canvas. */
-#define GRKIT_HOST_MODULE_PREVIEW 344
+#define GRKIT_HOST_MODULE_PREVIEW 436
 #define GRKIT_HOST_MODULE_PREVIEW_WORDS 2
 /* Number of module pages in GRKIT_HOST_MODULE_PAGES. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_PAGE_COUNT 352
+#define GRKIT_HOST_MODULE_PAGE_COUNT 444
 /* Three words for each module page (runtime/sdk/grkit.h), in load order: the
    address of its GrkitPage, its setting handle, and the global index of its
    tile 0 (GRKIT_ICON_MODULE_TILE). */
-#define GRKIT_HOST_MODULE_PAGES 356
+#define GRKIT_HOST_MODULE_PAGES 448
 #define GRKIT_HOST_MODULE_PAGES_WORDS 30
 /* The module page that the generic page callbacks of the menu serve. */
-#define GRKIT_HOST_MODULE_CHOICE 476
+#define GRKIT_HOST_MODULE_CHOICE 568
 /* Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_LAYER_COUNT 480
+#define GRKIT_HOST_MODULE_LAYER_COUNT 572
 /* Three words for each module layer, in painting order: its paint function,
    its setting handle (GRKIT_NO_SETTING paints with the value 1), and its flags
    in the low half with its order in the high half. */
-#define GRKIT_HOST_MODULE_LAYERS 484
+#define GRKIT_HOST_MODULE_LAYERS 576
 #define GRKIT_HOST_MODULE_LAYERS_WORDS 48
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
-#define GRKIT_HOST_GAMMA_KEY 676
+#define GRKIT_HOST_GAMMA_KEY 768
 /* The effect of the RAW development in playback: 1 for native processing, else
    an owned record. The start of a development sets the effect that its DNG
    records (runtime/picture.c), and its Image Control list changes it. The
    still builds of a development apply it instead of the selected effect
    (runtime/processing.h). */
-#define GRKIT_HOST_DEVELOP 680
+#define GRKIT_HOST_DEVELOP 772
 /* GRKIT_HOST_DEVELOP when the Image Control list of the development opened.
    Cancel restores it, as the list restores its native value. */
-#define GRKIT_HOST_DEVELOP_SAVED 684
+#define GRKIT_HOST_DEVELOP_SAVED 776
 /* The native rows of that list. The effects follow them (runtime/menu.c). */
-#define GRKIT_HOST_DEVELOP_ROWS 688
+#define GRKIT_HOST_DEVELOP_ROWS 780
 /* The text ID of the native Standard label of the development, which shows the
    name of a GRKit effect (GRKIT_HOST_DEVELOP_NAME) instead. */
-#define GRKIT_HOST_DEVELOP_TEXT 692
+#define GRKIT_HOST_DEVELOP_TEXT 784
 /* The text descriptor of that name. */
-#define GRKIT_HOST_DEVELOP_NAME 696
+#define GRKIT_HOST_DEVELOP_NAME 788
 #define GRKIT_HOST_DEVELOP_NAME_WORDS 2
+/* Invalidates Custom BLE transactions when their capability changes. */
+#define GRKIT_HOST_CUSTOM_EPOCH 796
+/* Writable state of the native Passphrase transport
+   (runtime/custom_transport.h). */
+#define GRKIT_HOST_CUSTOM_TRANSPORT 800
+#define GRKIT_HOST_CUSTOM_TRANSPORT_WORDS 66
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
    of values. CORE.TONE has neither: its value is the active record, and the
    effects give its number of values (runtime/tone.h). */
 #define GRKIT_CORE_SETTING_BASE 0x100U
-#define GRKIT_CORE_SETTING_COUNT 4U
+#define GRKIT_CORE_SETTING_COUNT 5U
 #define GRKIT_CORE_TONE 0x100U
 #define GRKIT_CORE_TONE_VALUES 0U
 #define GRKIT_CORE_TONE_BIT 0x1
@@ -256,8 +272,11 @@
 #define GRKIT_CORE_GRAIN_SIZE 0x103U
 #define GRKIT_CORE_GRAIN_SIZE_VALUES 4U
 #define GRKIT_CORE_GRAIN_SIZE_BIT 0x8
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4
+#define GRKIT_CORE_CUSTOM_SLOTS 0x104U
+#define GRKIT_CORE_CUSTOM_SLOTS_VALUES 1U
+#define GRKIT_CORE_CUSTOM_SLOTS_BIT 0x10
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,340
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,1
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100

@@ -83,6 +83,27 @@ fn module_folders_pass_their_host_tests() -> Result<()> {
     Ok(())
 }
 
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
+fn synthetic_custom_slots_module_builds() -> Result<()> {
+    let tools = tools()?;
+    let directory = tempfile::tempdir()?;
+    let (_, bytes) = build_module_manifest(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/custom-slots"),
+        &directory.path().join("objects"),
+        tools.clang.to_str().unwrap(),
+        tools.lld.to_str().unwrap(),
+    )?;
+    let module = grkit_core::grm::Module::decode(&bytes)?;
+    assert_eq!(module.id, "BLESLOTS");
+    assert_eq!(module.version, 1);
+    assert_eq!(
+        module.cameras,
+        grkit_core::camera::GR3.bit() | grkit_core::camera::GR3X.bit()
+    );
+    Ok(())
+}
+
 /// Write the module template (`grkit module new`) into a new folder.
 fn template_folder(directory: &Path, id: &str) -> Result<std::path::PathBuf> {
     let folder = directory.join(id.to_ascii_lowercase());

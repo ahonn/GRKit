@@ -7,7 +7,7 @@ use super::Family;
 use crate::components::{
     b, bl, HookSpec,
     Part::{Framing, Menu, Processing},
-    Point::{MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
+    Point::{CustomSlots, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
 };
 
 pub const FAMILY: Family = Family {
@@ -28,6 +28,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::PICTURE,
     common::DEVELOP_TONE,
     GRAIN,
+    CUSTOM_SLOTS,
 ];
 
 /// Image Control processing (`runtime/processing.S`): the BL to the parameter
@@ -58,4 +59,11 @@ const GRAIN: &[HookSpec] = &[
     bl("grain_gate", Framing, PipelineGrain),
     bl("grain_fill", Framing, PipelineGrainSize),
     b("grain_amplitude", Framing, PipelineGrain),
+];
+
+/// The entry of the property setter of the Linux property commands, which
+/// gives CORE.CUSTOM_SLOTS its requests (`runtime/custom_slots.S`).
+const CUSTOM_SLOTS: &[HookSpec] = &[
+    b("custom_slots_property_set", Framing, CustomSlots),
+    b("custom_slots_property_get", Framing, CustomSlots),
 ];

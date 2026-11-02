@@ -385,6 +385,12 @@ static void apply_state(u32 base, u32 table)
             }
         } else if (value < values[k]) store(base + words[k], value);
     }
+    /* The names of the Custom sets of CORE.CUSTOM_SLOTS: three bytes in each
+       word (grkit_core::runtime::CUSTOM_NAME_KEY_BASE). */
+    if (capabilities_used >> (GRKIT_CORE_CUSTOM_SLOTS - GRKIT_CORE_SETTING_BASE) & 1)
+        for (u32 i = 0; i < GRKIT_HOST_CUSTOM_NAMES_WORDS; ++i)
+            if (state_value(&saved_state, CUSTOM_NAME_KEY_BASE + i, &value) && value <= CUSTOM_NAME_VALUE_MAX)
+                store(base + GRKIT_HOST_CUSTOM_NAMES + 4 * i, value);
     if (table) {
         u32 n = word(table);
         for (u32 k = 0; k < n && k < GRKIT_MODULE_SETTINGS_MAX; ++k) {

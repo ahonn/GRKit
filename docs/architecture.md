@@ -38,7 +38,7 @@ The core is per target. It owns the firmware hooks, the state of each capability
 
 ## Targets
 
-A target is one firmware build. It gives the hook sites and the firmware addresses of that build. The targets of one camera line, such as the GR IV builds, form a family. The family lists its hooks once and shares the runtime code. Each build of a family must have each hook, each definition, and each feature of the family. So a change for one build fails until it reaches each build.
+A target is one firmware build. It gives the hook sites and the firmware addresses of that build. The targets of one camera line, such as the GR IV builds, form a family. The family lists its hooks once and shares the runtime code. Each build of a family must have each hook, each definition, and each feature of the family. So a change for one build fails until it reaches each build. Each build has each feature, except an extension point that only some cameras have: GR III and GR IIIx have the Custom slots point, because GR IV serves the same requests natively. A module that needs such a point names its cameras.
 
 | Target | Cameras |
 | --- | --- |

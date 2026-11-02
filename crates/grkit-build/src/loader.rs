@@ -216,6 +216,12 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     )?;
     writeln!(
         result,
+        "#define CUSTOM_NAME_KEY_BASE {}U\n#define CUSTOM_NAME_VALUE_MAX {}U",
+        grkit_core::runtime::CUSTOM_NAME_KEY_BASE,
+        grkit_core::runtime::CUSTOM_NAME_VALUE_MAX
+    )?;
+    writeln!(
+        result,
         "#define STATE_TEXT_MAX {}U",
         grkit_core::runtime::STATE_MAX_BYTES
     )?;

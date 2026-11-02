@@ -7,11 +7,14 @@
 //! uses its setting. The resident loader saves the value as the state key
 //! `CORE.<KEY>`, and restores it only while a loaded module uses it.
 
-use crate::abi::{HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE};
+use crate::abi::{HOST_CUSTOM_SLOTS, HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE};
+use crate::camera;
 
 /// An extension point: the firmware changes that a group of features needs.
 /// The installer applies the patches of a point only when a loaded module
 /// needs it. The hooks of each family in `grkit_build::target` give their points.
+/// Each family has each point, but a point that serves only some cameras
+/// (`Point::cameras`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Point {
     /// The private ADJ entry, its list, text, and icons.
@@ -30,10 +33,13 @@ pub enum Point {
     /// The grain size: the native size on GR IV, and the noise fill of the
     /// grain stage on GR III.
     PipelineGrainSize,
+    /// Requests of the camera's Linux to write and read the native Custom
+    /// sets. Only GR III and GR IIIx have it: GR IV serves them natively.
+    CustomSlots,
 }
 
 impl Point {
-    pub const ALL: [Point; 7] = [
+    pub const ALL: [Point; 8] = [
         Point::MenuPage,
         Point::Tuning,
         Point::ViewfinderOverlay,
@@ -41,6 +47,7 @@ impl Point {
         Point::PictureEncode,
         Point::PipelineGrain,
         Point::PipelineGrainSize,
+        Point::CustomSlots,
     ];
 
     pub fn name(self) -> &'static str {
@@ -52,6 +59,15 @@ impl Point {
             Point::PictureEncode => "picture.encode",
             Point::PipelineGrain => "pipeline.grain",
             Point::PipelineGrainSize => "pipeline.grain-size",
+            Point::CustomSlots => "custom.slots",
+        }
+    }
+
+    /// The cameras whose runtime has the point (`camera::Camera::bit`).
+    pub fn cameras(self) -> u32 {
+        match self {
+            Point::CustomSlots => camera::GR3.bit() | camera::GR3X.bit(),
+            _ => camera::all_cameras(),
         }
     }
 
@@ -95,10 +111,18 @@ impl Capability {
     pub fn point_mask(&self) -> u32 {
         self.points.iter().fold(0, |mask, point| mask | point.bit())
     }
+
+    /// The cameras whose runtime has each point of the capability. A module
+    /// that uses it must be for some of these cameras only.
+    pub fn cameras(&self) -> u32 {
+        self.points
+            .iter()
+            .fold(camera::all_cameras(), |mask, point| mask & point.cameras())
+    }
 }
 
 /// The capabilities in handle order.
-pub const CAPABILITIES: [Capability; 4] = [
+pub const CAPABILITIES: [Capability; 5] = [
     Capability {
         // The effect of still pictures and the live view: 0 Off, then effect
         // n - 1 of the installed effects (runtime/tone.h). The core gives
@@ -136,6 +160,17 @@ pub const CAPABILITIES: [Capability; 4] = [
         values: 4,
         state: State::Word(HOST_GRAIN_SIZE),
         points: &[Point::PipelineGrainSize],
+    },
+    Capability {
+        // The camera's Linux can write and read the native Custom sets 1
+        // and 2 with blocks of the GR IV custom Image Control format, and
+        // their names (runtime/custom_slots.h), while a module that uses the
+        // capability is on. Enable of that module in MENU is the switch, so
+        // the capability has one value, 0.
+        key: "CUSTOM_SLOTS",
+        values: 1,
+        state: State::Word(HOST_CUSTOM_SLOTS),
+        points: &[Point::CustomSlots],
     },
 ];
 
@@ -206,7 +241,8 @@ mod tests {
         for (i, capability) in CAPABILITIES.iter().enumerate() {
             assert!(CAPABILITIES[..i].iter().all(|c| c.key != capability.key));
             match capability.state {
-                State::Word(_) => assert!(capability.values >= 2),
+                // CORE.CUSTOM_SLOTS gives only its point: one value.
+                State::Word(_) => assert!(capability.values >= 1),
                 State::Effect => assert_eq!(capability.values, 0),
             }
         }
