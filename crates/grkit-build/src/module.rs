@@ -1045,6 +1045,7 @@ pub fn build_manifest(
             directory
                 .join(source)
                 .canonicalize()
+                .map(crate::plain_path)
                 .with_context(|| format!("Read {source}"))?,
         );
     }

@@ -173,7 +173,7 @@ pub fn build_module(
     fs::create_dir_all(directory.parent().unwrap_or(Path::new(".")))?;
     fs::create_dir(directory)
         .with_context(|| format!("Create new build directory {}", directory.display()))?;
-    let directory = directory.canonicalize()?;
+    let directory = directory.canonicalize().map(crate::plain_path)?;
     let runtime = directory.join("runtime");
     materialize_runtime(&runtime)?;
     let sources: Vec<PathBuf> = sources
@@ -181,6 +181,7 @@ pub fn build_module(
         .map(|source| {
             source
                 .canonicalize()
+                .map(crate::plain_path)
                 .with_context(|| format!("Read {}", source.display()))
         })
         .collect::<Result<_>>()?;
@@ -209,12 +210,13 @@ pub fn build_module_manifest(
     fs::create_dir_all(directory.parent().unwrap_or(Path::new(".")))?;
     fs::create_dir(directory)
         .with_context(|| format!("Create new build directory {}", directory.display()))?;
-    let directory = directory.canonicalize()?;
+    let directory = directory.canonicalize().map(crate::plain_path)?;
     let runtime = directory.join("runtime");
     materialize_runtime(&runtime)?;
     let module = module::build_manifest(
         &module_directory
             .canonicalize()
+            .map(crate::plain_path)
             .with_context(|| format!("Read {}", module_directory.display()))?,
         &runtime.join("sdk"),
         &directory,
@@ -230,12 +232,13 @@ pub fn test_module_manifest(module_directory: &Path, directory: &Path, cc: &str)
     fs::create_dir_all(directory.parent().unwrap_or(Path::new(".")))?;
     fs::create_dir(directory)
         .with_context(|| format!("Create new build directory {}", directory.display()))?;
-    let directory = directory.canonicalize()?;
+    let directory = directory.canonicalize().map(crate::plain_path)?;
     let runtime = directory.join("runtime");
     materialize_runtime(&runtime)?;
     module::test_manifest(
         &module_directory
             .canonicalize()
+            .map(crate::plain_path)
             .with_context(|| format!("Read {}", module_directory.display()))?,
         &runtime.join("sdk"),
         &directory,
@@ -281,7 +284,7 @@ fn build_image(
     }
     fs::create_dir(output)
         .with_context(|| format!("Create new build directory {}", output.display()))?;
-    let output = output.canonicalize()?;
+    let output = output.canonicalize().map(crate::plain_path)?;
     let objects = output.join("objects");
     let runtime = objects.join("runtime");
     materialize_runtime(&runtime)?;
@@ -427,3 +430,12 @@ fn build_image(
 
 #[cfg(test)]
 mod tests;
+
+/// Drops the Windows verbatim prefix (`\\?\`) that
+/// `canonicalize` adds, because Clang resolves `#include "..."` against it.
+pub(crate) fn plain_path(path: PathBuf) -> PathBuf {
+    match path.to_str().and_then(|s| s.strip_prefix(r"\\?\")) {
+        Some(rest) if !rest.starts_with(r"UNC\") => PathBuf::from(rest),
+        _ => path,
+    }
+}
