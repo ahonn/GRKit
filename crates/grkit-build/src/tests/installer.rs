@@ -62,6 +62,43 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
 }
 
 #[test]
+fn generated_header_keeps_module_start_and_relocation_span_in_sync() -> Result<()> {
+    let body = synthetic_gr3();
+    let tail = body.target.layout.tail;
+    for (last_size, expected_span) in [(0xc001, 0xc800), (0xd001, 0xd800)] {
+        let plan = PatchPlan {
+            patches: [(0x100, 0x504), (0x700, last_size)]
+                .into_iter()
+                .map(|(offset, size)| Patch {
+                    address: tail + offset,
+                    points: 0,
+                    before: vec![0; size],
+                    after: vec![1; size],
+                    site: Some(Anchor::Tail),
+                })
+                .collect(),
+            relocations: vec![],
+            references: vec![],
+            exports: vec![],
+        };
+        validate_plan(&plan)?;
+        let header = loader::header(&plan, &body, TEST_VERSION)?;
+        assert!(header.contains(&format!("#define TAIL_BYTES {expected_span:#x}U\n")));
+        let table = header
+            .lines()
+            .find(|line| {
+                line.starts_with("static const struct relocation_tables relocation_tables")
+            })
+            .context("Missing relocation table")?;
+        assert!(
+            table.ends_with(&format!(",{expected_span:#x}}};")),
+            "{table}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn generated_header_marks_only_rtos_tail_patches_as_unchecked() -> Result<()> {
     let plan = PatchPlan {
         exports: vec![],
@@ -74,11 +111,11 @@ fn generated_header_marks_only_rtos_tail_patches_as_unchecked() -> Result<()> {
                 site: None,
             },
             Patch {
-                address: target::GR3_210.layout.tail.0,
+                address: target::GR3_210.layout.tail,
                 points: 0,
                 before: vec![0; 4],
                 after: vec![1, 2, 3, 4],
-                site: None,
+                site: Some(Anchor::Tail),
             },
         ],
         relocations: vec![(0, 0)],
@@ -96,11 +133,11 @@ fn generated_header_gives_the_points_of_each_patch() -> Result<()> {
         exports: vec![],
         patches: vec![
             Patch {
-                address: target::GR3_210.layout.tail.0,
+                address: target::GR3_210.layout.tail,
                 points: 0,
                 before: vec![0; 4],
                 after: vec![1, 2, 3, 4],
-                site: None,
+                site: Some(Anchor::Tail),
             },
             Patch {
                 address: 0x531a48f0,

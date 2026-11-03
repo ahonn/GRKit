@@ -457,12 +457,15 @@ static void scan(void)
     plan_array();
 }
 /* INSTALL after SCAN. */
-static int install(void)
+static int install_with_core(u32 tail, u32 core_bytes, u32 executable_end)
 {
     static const u32 icon_bases[1] = {ICONS_AT};
+    u32 code;
     scan();
-    return install_modules(CODE_AT, ARRAY_AT, PIXELS, icon_bases);
+    int status = plan_code(tail, core_bytes, executable_end, &code);
+    return status ? status : install_modules(code, ARRAY_AT, PIXELS, icon_bases);
 }
+static int install(void) { return install_with_core(CODE_AT, 0, ARRAY_AT); }
 static void expect_modules(const char *const *files, const u32 *sources, u32 n)
 {
     assert(module_count == n);
@@ -588,6 +591,48 @@ static void a_bad_module_keeps_the_others(void)
     assert(module_code_from[0] == CODE_AT && module_code_from[4] == module_code_to[0]);
     expect_listed(1, GRM_BAD_ABI, "NEWABI (51)");
     expect_listed(5, GRM_BAD_FILE, "BADMAGIC (50)");
+}
+/* A larger core moves both module code and its linked entry points. The
+   last module may end exactly at the executable boundary. */
+static void module_code_follows_the_actual_core(void)
+{
+    for (u32 core = 0x10000U; core <= 0x18000U; core += 0x8000U) {
+        reset();
+        u32 first = add_module(PACKAGE_MODULES_PATH, "FIRST.GRM",
+            &(struct spec){.id = "FIRST", .order = 1, .layer_count = 1, .layers = {{0, 0, GRM_NO_SETTING}}});
+        u32 second = add_module(PACKAGE_MODULES_PATH, "SECOND.GRM",
+            &(struct spec){.id = "SECOND", .order = 2, .layer_count = 1, .layers = {{0, 0, GRM_NO_SETTING}}});
+        u32 start = CODE_AT + core;
+        assert(install_with_core(CODE_AT, core, start + first + second) == 0);
+        assert(module_code_from[0] == start && module_code_to[0] == start + first);
+        assert(module_code_from[1] == start + first && module_code_to[1] == start + first + second);
+        assert(module_layers[0] == start + 1 && module_layers[3] == start + first + 1);
+    }
+}
+/* A core or module overflow must fail before code, data, icons, or settings
+   are written. Include inputs whose sums would wrap a 32-bit address. */
+static void code_overflow_leaves_camera_memory_unchanged(void)
+{
+    reset();
+    u32 bytes = add_module(PACKAGE_MODULES_PATH, "ONLY.GRM", &(struct spec){.id = "ONLY"});
+    const u32 attempts[][3] = {
+        {CODE_AT, 0x10000U, CODE_AT + 0x10000U + bytes - 1},
+        {CODE_AT, 0x10000U, CODE_AT + 0xffffU},
+        {0x55000004U, 0, 0x55000000U},
+        {0x54ff0000U, 0xffffffffU, 0x55000000U},
+        {0xfffffff0U, 0x20U, 0xffffffffU},
+    };
+    memset(memory, 0xa5, sizeof memory);
+    for (u32 i = 0; i < sizeof attempts / sizeof attempts[0]; ++i) {
+        assert(install_with_core(attempts[i][0], attempts[i][1], attempts[i][2]) == GRM_NO_ROOM);
+        for (u32 j = 0; j < sizeof memory; ++j) assert(memory[j] == 0xa5);
+    }
+    /* The RX end itself is a valid start only when no module code remains. */
+    reset();
+    scan();
+    u32 start = 0;
+    assert(plan_code(0x54ff0000U, 0x10000U, 0x55000000U, &start) == 0);
+    assert(start == 0x55000000U);
 }
 /* SCAN reserves the module array for the most effects. BIG fills half of
    it, and FILL the rest, so that one word more of FILL leaves no room for
@@ -1049,6 +1094,8 @@ static void *run(void *unused)
     a_full_list_keeps_the_package_modules();
     safe_mode_loads_no_module();
     a_bad_module_keeps_the_others();
+    module_code_follows_the_actual_core();
+    code_overflow_leaves_camera_memory_unchanged();
     the_budget_counts_the_services_block();
     install_writes_the_settings_and_the_contexts();
     setting_defaults_and_saved_zero();

@@ -37,6 +37,11 @@ pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
 pub const PARAMETER_COUNT: usize = 9;
+/// The Toning of a native look (`abi::RECORD_TONING`) is an entry of its own: the
+/// key ID is this base plus the low 15 bits of the effect's ImageTone code, and the
+/// value is the stored byte, 1..=8. The look's own toning has no entry.
+pub const TONING_KEY_BASE: u32 = PARAMETER_KEY_BASE + 32768;
+const _: () = assert!(TONING_KEY_BASE + 32767 < 1_000_000_000);
 
 /// The state keys of GRKit 1.2 and the keys that now hold the same values.
 /// The values keep their meaning, and the Fn adjustment entries keep their
@@ -77,6 +82,7 @@ pub fn worst_state_size(file: StateFile) -> usize {
     let parameters = match file {
         StateFile::Main => {
             MAX_COUNT * (line(PARAMETER_KEY_BASE + 32767) + line(PARAMETER_VALUE_MAX))
+                + MAX_COUNT * (line(TONING_KEY_BASE + 32767) + line(8))
                 + MODULE_SETTINGS_MAX
                     * (line(PARAMETER_KEY_BASE - 1) + line(MODULE_SETTING_VALUES as u32 - 1))
         }

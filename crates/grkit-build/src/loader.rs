@@ -204,9 +204,10 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     )?;
     writeln!(
         result,
-        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U",
+        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U\n#define TONING_KEY_BASE {}U",
         grkit_core::runtime::PARAMETER_KEY_BASE,
-        grkit_core::runtime::PARAMETER_VALUE_MAX
+        grkit_core::runtime::PARAMETER_VALUE_MAX,
+        grkit_core::runtime::TONING_KEY_BASE
     )?;
     writeln!(
         result,
@@ -407,14 +408,12 @@ fn relocation_tables(
     let target = body.target;
     let layout = target.layout;
     let mut planner = Planner::new(body)?;
-    let tail = planner.tail(layout.tail.0);
-    // Modules go after the tail, and the core exports are in it.
+    let tail = planner.tail(layout.tail);
+    let core_size = plan.core_size(layout.tail)?;
+    // Modules follow the aligned core payload span, including its gaps.
+    // The relocation check and the module start must use the same span.
     writeln!(result, "#define TAIL_SYMBOL {tail}U")?;
-    writeln!(
-        result,
-        "#define TAIL_BYTES {:#x}U",
-        layout.tail.1 - layout.tail.0
-    )?;
+    writeln!(result, "#define TAIL_BYTES {:#x}U", core_size)?;
     // The hooks that replace a branch: the private code calls its target.
     let mut targets = std::collections::BTreeMap::new();
     for patch in &plan.patches {
@@ -587,7 +586,7 @@ fn relocation_tables(
         relocation.windows.len(),
         relocation.symbols.len(),
         relocation::RADIUS,
-        layout.tail.1 - layout.tail.0,
+        core_size,
     )?;
     result.push_str("static u32 relocated[RELOCATION_SYMBOL_COUNT];\n");
     words(result, "patch_symbols", sites);

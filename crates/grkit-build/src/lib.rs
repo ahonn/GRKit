@@ -69,6 +69,42 @@ pub struct PatchPlan {
     /// (`grkit_core::grm::symbol_hash`) and the offset of its code in the tail.
     pub exports: Vec<(u32, u32)>,
 }
+impl PatchPlan {
+    /// The aligned span of the core payloads. Modules start immediately after it.
+    pub(crate) fn core_size(&self, tail: u32) -> Result<u32> {
+        ensure!(
+            tail < components::RTOS_EXECUTABLE_END,
+            "Private tail is outside the executable mapping"
+        );
+        let mut end = tail;
+        for patch in &self.patches {
+            if patch.site != Some(Anchor::Tail) {
+                ensure!(
+                    u64::from(patch.address) >= u64::from(components::RTOS_EXECUTABLE_END)
+                        || u64::from(patch.address) + patch.after.len() as u64 <= u64::from(tail),
+                    "Private payload has no tail anchor"
+                );
+                continue;
+            }
+            ensure!(patch.address >= tail, "Private code precedes the tail");
+            let size = u32::try_from(patch.after.len()).context("Private payload is too large")?;
+            let patch_end = patch
+                .address
+                .checked_add(size)
+                .context("Private payload end overflows")?;
+            ensure!(
+                patch_end <= components::RTOS_EXECUTABLE_END,
+                "Private payload exceeds the executable mapping"
+            );
+            end = end.max(patch_end);
+        }
+        if end == tail {
+            return Ok(0);
+        }
+        Ok(components::aligned_code_end(end)? - tail)
+    }
+}
+
 #[derive(Debug)]
 pub struct BuildResult {
     pub output: PathBuf,
@@ -267,7 +303,7 @@ fn core_exports(
                 })?;
             Ok((
                 grkit_core::grm::symbol_hash(name),
-                base - layout.tail.0 + offset,
+                base - layout.tail + offset,
             ))
         })
         .collect()
@@ -290,11 +326,13 @@ fn build_image(
     materialize_runtime(&runtime)?;
     fs::write(runtime.join("hooks.h"), components::hooks_header(image)?)?;
     let mut built: Vec<(&str, components::Component)> = Vec::new();
+    let mut processing_end = image.target.layout.tail;
     if image.target.family.processing_source.is_some() {
         let component = components::processing(&objects, &runtime, image, tools)?;
+        processing_end = component.patches[0].address + component.code_size as u32;
         built.push(("processing", component));
     }
-    let mut menu = components::menu(&objects, &runtime, image, tools)?;
+    let menu = components::menu(&objects, &runtime, image, tools, processing_end)?;
     let menu_base = menu.patches[0].address;
     let framing = components::framing(
         &objects,
@@ -303,9 +341,6 @@ fn build_image(
         tools,
         menu_base + menu.code_size as u32,
     )?;
-    // The menu can grow by the space that Framing leaves free at the end of
-    // the tail.
-    menu.limit = menu.code_size + (framing.limit - framing.code_size);
     built.push(("menu", menu));
     built.push(("framing", framing));
     let components: Vec<_> = built.iter().map(|(_, component)| component).collect();
@@ -345,6 +380,8 @@ fn build_image(
         exports,
     };
     validate_plan(&plan)?;
+    let core_size = plan.core_size(image.target.layout.tail)?;
+    let core_end = image.target.layout.tail + core_size;
     let generated = loader::header(&plan, image, env!("CARGO_PKG_VERSION"))?;
     fs::write(objects.join("module_payload.h"), &generated)?;
     let source = runtime.join("installer.c");
@@ -404,8 +441,13 @@ fn build_image(
         "firmware_sha256": image.sha256, "decoded_firmware_sha256": image.decoded_sha256,
         "source_sha256": source_hashes(), "generated_header_sha256": sha256(generated.as_bytes()),
         "components": built.iter().map(|(name, component)| (name.to_string(),
-            json!({"sha256": sha256(&component.patches[0].after), "size": component.code_size, "limit": component.limit})))
+            json!({"sha256": sha256(&component.patches[0].after), "size": component.code_size, "limit": component.limit,
+                "address": component.patches[0].address,
+                "end": component.patches[0].address + component.code_size as u32})))
             .collect::<serde_json::Map<_, _>>(),
+        "code_memory": {"base": image.target.layout.tail, "end": core_end,
+            "used": core_size, "available": components::RTOS_EXECUTABLE_END - core_end,
+            "limit": components::RTOS_EXECUTABLE_END},
         // The firmware changes of each extension point, which a package
         // without its modules does not make.
         "points": components::Point::ALL.iter().map(|point| (point.name().to_owned(),

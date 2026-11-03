@@ -241,6 +241,15 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    /// Read Cinema (Yellow) and Cinema (Green) from your GR IV firmware into new effect
+    /// definitions at OUT/ID/effect.json. FIRMWARE is an official GR IV zip or its
+    /// fwdc248b.bin, version 1.11 or 1.20. GRKit ships none of this data.
+    Native {
+        #[arg(long)]
+        firmware: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Fit a .cube LUT or a LUT image (PNG or TIFF) into a new effect definition at
     /// OUT/ID/effect.json.
     Import {
@@ -462,6 +471,29 @@ fn run(command: Command) -> Result<Value> {
             let files = site::publish_effects(&definitions, &base_gamma, target.name)?;
             storage::write_directory(&out, &files)?;
             Ok(json!({"output": out, "target": target.name, "effects": definitions.len()}))
+        }
+        Command::Effects {
+            command: EffectsCommand::Native { firmware, out },
+        } => {
+            let bytes = storage::read_bounded(&firmware, grkit_core::gr4_looks::MAX_FILE_SIZE)?;
+            let image = grkit_core::gr4_looks::Image::read(&bytes)?;
+            let definitions = image.definitions()?;
+            let ids: Vec<String> = definitions
+                .iter()
+                .map(|d| d["effect_id"].as_str().unwrap_or_default().to_owned())
+                .collect();
+            for id in &ids {
+                storage::validate_output(&out.join(id))?;
+            }
+            for (id, definition) in ids.iter().zip(&definitions) {
+                effects::compile_definition(definition)?;
+                let text = serde_json::to_string_pretty(definition)? + "\n";
+                storage::write_directory(
+                    &out.join(id),
+                    &Files::from([("effect.json".to_owned(), text.into_bytes())]),
+                )?;
+            }
+            Ok(json!({"output": out, "version": image.source.version, "effects": ids}))
         }
         Command::Effects {
             command:

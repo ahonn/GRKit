@@ -101,6 +101,12 @@
 #define MODEL_SNAPSHOT 3
 /* The row kinds of the Standard adjustments, in GRKIT_RECORD_PARAMETERS order. */
 #define PARAMETER_KINDS {0,1,2,3,4,5,6,13,14}
+/* Toning (runtime/toning.h): base kind 9 of the row lists at 0x53b3488c,
+   the rows of Retro, adds Toning, row kind 9, to the Standard rows. Its model
+   getter and setter and row read hook as adjustment 9. The page keeps the
+   Standard type: the Retro type also sets its own Shading. */
+#define PARAMETER_TONING_BASE 9
+#define PARAMETER_TONING_KIND 9
 /* The page event that opens another controller (0x2000015) from the page. */
 #define DETAIL_EV_SUBPAGE 0x88
 /* The native settings page of a GRKit root row (runtime/menu_settings.h). It borrows

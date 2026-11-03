@@ -43,16 +43,18 @@ static int valid_selective(const u8 *p)
 }
 /* Each feature bit owns its field, and an unused field stays zero. An effect
    without features has zeros in the whole extension. A monochrome effect has
-   no features. */
+   no features but its Fn defaults (feature 64). */
 static int valid_extension(const u8 *p)
 {
     u32 features=grf_get32(p+GRKIT_GRF_FEATURES);
-    if ((features & ~(GRKIT_FEATURE_POST|GRKIT_FEATURE_SELECTIVE|GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS)) ||
+    if ((features & ~(GRKIT_FEATURE_POST|GRKIT_FEATURE_SELECTIVE|GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS|GRKIT_FEATURE_NATIVE_LOOK|GRKIT_FEATURE_FN_DEFAULTS)) ||
         !zeros(p+GRKIT_GRF_RESERVED,GRKIT_GRF_RESERVED_SIZE)) return 0;
     if ((features&GRKIT_FEATURE_HUE_LEVELS) && !(features&GRKIT_FEATURE_HUE)) return 0;
+    /* A native look excludes hue sectors. */
+    if ((features&GRKIT_FEATURE_NATIVE_LOOK) && (features&(GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS))) return 0;
     if (!(features&GRKIT_FEATURE_POST) && !zeros(p+GRKIT_GRF_POST,GRKIT_GRF_POST_SIZE)) return 0;
     if (!(features&GRKIT_FEATURE_SELECTIVE) && !zeros(p+GRKIT_GRF_SELECTIVE,GRKIT_GRF_SELECTIVE_SIZE)) return 0;
-    if (features && grf_get32(p+GRKIT_GRF_FLAGS)==1) return 0;
+    if ((features&~GRKIT_FEATURE_FN_DEFAULTS) && grf_get32(p+GRKIT_GRF_FLAGS)==1) return 0;
     if ((features&GRKIT_FEATURE_SELECTIVE) && !valid_selective(p+GRKIT_GRF_SELECTIVE)) return 0;
     return 1;
 }
@@ -66,13 +68,79 @@ static int valid_sectors(const u8 *p, u32 n)
     }
     return 1;
 }
-/* The hue sectors of feature 8 and the levels of feature 16, or zeros. */
+/* floor(x / 1024), also for a negative x. */
+static int grf_floor1024(int x) { return x>=0 ? x>>10 : -((-x+1023)>>10); }
+/* The Q10 matrix m (row-major) of a bank at a level of a native look
+   (grkit_core::native_look::NativeLook::level_matrix): each off-diagonal is the
+   level-0 coefficient times the level's gain, rounded, plus the level's
+   correction; the diagonal is the gain minus the row's off-diagonals. */
+static void grf_native_matrix(const u8 *p, u32 bank, u32 level, int *m)
+{
+    int gain=(int)grf_get16(p+GRKIT_NATIVE_GAINS+level*2);
+    for (u32 r=0; r<3; ++r) {
+        int sum=0;
+        for (u32 j=0; j<2; ++j) {
+            int c=(short)grf_get16(p+GRKIT_NATIVE_MATRICES+(bank*6+r*2+j)*2);
+            int v=grf_floor1024(c*gain+512);
+            if (level) v+=(signed char)p[GRKIT_NATIVE_CORRECTIONS+((level-1)*12+bank)*6+r*2+j];
+            m[r*3+(r+1+j)%3]=v;
+            sum+=v;
+        }
+        m[r*4]=gain-sum;
+    }
+}
+/* The set of a native look: four non-increasing bounds of 0..2048 per quadrant,
+   bank selectors below 12, control fields within their registers (9-bit slopes
+   14..17, 12 bits else), gains of 0..2047, and level matrices within the 12-bit
+   registers. */
+static int valid_native(const u8 *p)
+{
+    for (u32 q=0; q<4; ++q) {
+        const u8 *b=p+GRKIT_NATIVE_BOUNDS+q*8;
+        if (grf_get16(b)>2048) return 0;
+        for (u32 k=1; k<4; ++k) if (grf_get16(b+k*2)>grf_get16(b+k*2-2)) return 0;
+    }
+    for (u32 k=0; k<20; ++k) if (p[GRKIT_NATIVE_SELECTORS+k]>=12) return 0;
+    for (u32 k=0; k<21; ++k)
+        if (grf_get16(p+GRKIT_NATIVE_CONTROL+k*2)>((k>=14 && k<18) ? 0x1ffU : 0xfffU)) return 0;
+    for (u32 l=0; l<5; ++l) if (grf_get16(p+GRKIT_NATIVE_GAINS+l*2)>2047) return 0;
+    for (u32 bank=0; bank<12; ++bank)
+        for (u32 l=0; l<5; ++l) {
+            int m[9];
+            grf_native_matrix(p,bank,l,m);
+            for (u32 k=0; k<9; ++k) if (m[k]<-2048 || m[k]>2047) return 0;
+        }
+    return 1;
+}
+/* The Fn defaults of feature 64, -4..4, in a file of GRKIT_GRF_MAX_SIZE bytes,
+   and zeros after them. Without the feature, those bytes stay zero. */
+static int valid_defaults(const u8 *p, u32 size)
+{
+    if (size!=GRKIT_GRF_MAX_SIZE) return 1;
+    if (!(grf_get32(p+GRKIT_GRF_FEATURES)&GRKIT_FEATURE_FN_DEFAULTS))
+        return zeros(p+GRKIT_GRF_FN_DEFAULTS,size-GRKIT_GRF_FN_DEFAULTS);
+    for (u32 k=GRKIT_GRF_FN_DEFAULTS; k<GRKIT_GRF_FN_DEFAULTS_END; ++k) {
+        int value=(signed char)p[k];
+        if (value<-4 || value>4) return 0;
+    }
+    return zeros(p+GRKIT_GRF_FN_DEFAULTS_END,size-GRKIT_GRF_FN_DEFAULTS_END);
+}
+/* The hue sectors of feature 8 and the levels of feature 16, the set of a
+   native look (feature 32), or zeros, up to the Fn defaults. */
 static int valid_hue(const u8 *p, u32 size)
 {
-    u32 used=(grf_get32(p+GRKIT_GRF_FEATURES)&GRKIT_FEATURE_HUE) ? GRKIT_GRF_HUE_SIZE : 0;
+    u32 features=grf_get32(p+GRKIT_GRF_FEATURES);
+    if (features&GRKIT_FEATURE_NATIVE_LOOK)
+        return size==GRKIT_GRF_MAX_SIZE &&
+            zeros(p+GRKIT_NATIVE_HEAD_END,GRKIT_GRF_SIZE-GRKIT_NATIVE_HEAD_END) &&
+            zeros(p+GRKIT_NATIVE_END,GRKIT_GRF_FN_DEFAULTS-GRKIT_NATIVE_END) && valid_native(p);
+    u32 used=(features&GRKIT_FEATURE_HUE) ? GRKIT_GRF_HUE_SIZE : 0;
     if (!zeros(p+GRKIT_GRF_HUE+used,GRKIT_GRF_SIZE-GRKIT_GRF_HUE-used)) return 0;
+    /* A larger file for Fn defaults alone keeps the level area zero. */
+    if (size==GRKIT_GRF_MAX_SIZE && !(features&GRKIT_FEATURE_HUE_LEVELS) &&
+        !zeros(p+GRKIT_HUE_LEVEL_OFFSET,GRKIT_HUE_LEVEL_SIZE)) return 0;
     if (size==GRKIT_GRF_MAX_SIZE && (!valid_sectors(p+GRKIT_HUE_LEVEL_OFFSET,GRKIT_HUE_LEVEL_SIZE) ||
-        !zeros(p+GRKIT_HUE_LEVEL_OFFSET+GRKIT_HUE_LEVEL_SIZE,size-GRKIT_HUE_LEVEL_OFFSET-GRKIT_HUE_LEVEL_SIZE))) return 0;
+        !zeros(p+GRKIT_HUE_LEVEL_OFFSET+GRKIT_HUE_LEVEL_SIZE,GRKIT_GRF_FN_DEFAULTS-GRKIT_HUE_LEVEL_OFFSET-GRKIT_HUE_LEVEL_SIZE))) return 0;
     if (!used) return 1;
     if (!valid_sectors(p+GRKIT_GRF_HUE,GRKIT_HUE_MATRICES)) return 0;
     const u8 *f=p+GRKIT_GRF_HUE+GRKIT_HUE_MATRICES;
@@ -81,13 +149,13 @@ static int valid_hue(const u8 *p, u32 size)
     for (u32 k=0; k<3; ++k) if (grf_get16(f+16+k*2)!=borders[k]) return 0;
     return 1;
 }
-/* The size is GRKIT_GRF_MAX_SIZE exactly with feature 16, else GRKIT_GRF_SIZE. */
+/* The size is GRKIT_GRF_MAX_SIZE exactly with feature 16, 32, or 64, else GRKIT_GRF_SIZE. */
 static int valid_profile(const u8 *p, u32 size)
 {
     const u8 *id=p+GRKIT_GRF_ID, *name=p+GRKIT_GRF_NAME;
     /* A monochrome effect has equal matrix rows and equal curves. */
     const u32 row=GRKIT_GRF_MATRIX_SIZE/3, curve=GRKIT_GRF_CURVES_SIZE/3;
-    u32 levels=(grf_get32(p+GRKIT_GRF_FEATURES)&GRKIT_FEATURE_HUE_LEVELS) ? 1 : 0;
+    u32 levels=(grf_get32(p+GRKIT_GRF_FEATURES)&(GRKIT_FEATURE_HUE_LEVELS|GRKIT_FEATURE_NATIVE_LOOK|GRKIT_FEATURE_FN_DEFAULTS)) ? 1 : 0;
     if (size!=(levels ? GRKIT_GRF_MAX_SIZE : GRKIT_GRF_SIZE)) return 0;
     if (!grf_equal(p+GRKIT_GRF_MAGIC,(const u8 *)"GRFX0001",GRKIT_GRF_MAGIC_SIZE) ||
         grf_get32(p+GRKIT_GRF_BYTES)!=size || grf_get32(p+GRKIT_GRF_CRC)!=crc(p,size)) return 0;
@@ -102,7 +170,8 @@ static int valid_profile(const u8 *p, u32 size)
     while (n<GRKIT_GRF_NAME_SIZE && name[n]) { if(name[n]<32 || name[n]>126) return 0; ++n; }
     if (!n || n>GRKIT_GRF_NAME_MAX || name[0]==' ' || name[n-1]==' ' || !zeros(name+n,GRKIT_GRF_NAME_SIZE-n)) return 0;
     if (grf_get32(p+GRKIT_GRF_FLAGS)>1 || !valid_extension(p) ||
-        !zeros(p+GRKIT_GRF_PADDING,GRKIT_GRF_PADDING_SIZE) || !valid_hue(p,size)) return 0;
+        !zeros(p+GRKIT_GRF_PADDING,GRKIT_GRF_PADDING_SIZE) || !valid_hue(p,size) ||
+        !valid_defaults(p,size)) return 0;
     for (u32 i=GRKIT_GRF_CURVES;i<GRKIT_GRF_CURVES+GRKIT_GRF_CURVES_SIZE;i+=2) if (((u32)p[i]|p[i+1]<<8)>16383) return 0;
     if(grf_get32(p+GRKIT_GRF_FLAGS)==1 && (!grf_equal(p+GRKIT_GRF_MATRIX,p+GRKIT_GRF_MATRIX+row,row) ||
        !grf_equal(p+GRKIT_GRF_MATRIX,p+GRKIT_GRF_MATRIX+2*row,row) ||

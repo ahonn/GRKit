@@ -390,6 +390,8 @@ enum Bottom {
 const LARGE_NAME: [f32; 5] = [9.0, 8.0, 7.0, 6.0, 5.0];
 /// The capital heights of a name that is too wide for the pixel font, largest first.
 const SMALL_NAME: [f32; 2] = [5.0, 4.0];
+/// Capital heights of a cover number, the full size first.
+const NUMBER_CAPITALS: [f32; 3] = [11.0, 10.0, 9.0];
 /// A name may compress to this horizontal scale before a smaller size is tried.
 const NAME_COMPRESSION: f32 = 0.6;
 /// The width of a name in Roboto Condensed Black: the tile width less one pixel on each side.
@@ -465,17 +467,24 @@ fn cover(brand: &str, name: &str, number: &str, bottom: Bottom) -> Result<Vec<u8
     if pixel.is_err() && !fitted_name(&mut rgba, name, &SMALL_NAME, name_top as f32 + 2.5) {
         pixel.with_context(|| format!("Cover name {name:?} does not fit"))?;
     }
-    cover_text(
-        &mut rgba,
-        number,
-        11.0,
-        baseline,
-        -0.04,
-        34.0,
-        MIN_COMPRESSION,
-        255,
-    )
-    .with_context(|| format!("Cover number {number:?} does not fit"))?;
+    // A number that does not fit at full size takes a smaller size with the same
+    // vertical center.
+    NUMBER_CAPITALS
+        .iter()
+        .find_map(|&capital| {
+            let baseline = baseline - ((NUMBER_CAPITALS[0] - capital) / 2.0).round() as i32;
+            cover_text(
+                &mut rgba,
+                number,
+                capital,
+                baseline,
+                -0.04,
+                34.0,
+                MIN_COMPRESSION,
+                255,
+            )
+        })
+        .with_context(|| format!("Cover number {number:?} does not fit"))?;
     Ok(rgba)
 }
 

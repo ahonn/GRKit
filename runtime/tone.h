@@ -42,4 +42,17 @@ static __attribute__((unused)) u32 tone_values(volatile u32 *h) {
 static __attribute__((unused)) u32 tone_record(volatile u32 *h,u32 value) {
     return value ? h[GRKIT_HOST_RECORDS/4]+(value-1)*GRKIT_RECORD_SIZE : 0;
 }
+/* The native value 0..8 (4 is neutral) of Fn adjustment `index` of a record:
+   (stored + default + 4) mod 9. A stored byte (GRKIT_RECORD_PARAMETERS) is
+   the change from the default (GRKIT_RECORD_FN_DEFAULTS), and a byte above 8
+   counts as 0. module_parameters (runtime/processing.h) computes the same
+   value. Two subtractions take the rest: the runtime has no division. The
+   includer defines BYTE. */
+static __attribute__((unused)) u32 record_parameter(u32 record,u32 index) {
+    u32 value=BYTE(record,GRKIT_RECORD_PARAMETERS+index);
+    value=(value>8 ? 0 : value)+BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index)+4;
+    if(value>=18) value-=18;
+    if(value>=9) value-=9;
+    return value;
+}
 #endif

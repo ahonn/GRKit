@@ -141,7 +141,22 @@ If the code of a new firmware version moved only a little, the existing target r
 
 ## Code areas
 
-All private code is in the reservation after the RTOS image. GRKit changes no byte of the image except the hook sites and a few in-place patches. The builder rejects an overflow, a changed hook instruction, and overlapping patches.
+Private code uses the existing executable mapping after the RTOS image, below `0x55000000`. GRKit changes no other image bytes except hook sites and the listed instruction patches.
+
+The core components share this area without fixed partitions. The builder places Processing, Menu, and Framing in order, using each component's compiled size. Each component starts on a 256-byte boundary. The first 256 bytes after the tail base remain unused.
+
+```text
+RTOS image | page alignment | 256-byte gap | Processing | Menu | Framing | modules | free space
+                           ^ tail base                  (each start is aligned)             ^ 0x55000000
+```
+
+The aligned end of Framing determines the core span, `TAIL_BYTES`. Modules start immediately after that span. A larger component moves the following components and modules, without changing the module ABI or the executable mapping.
+
+At installation, relocation finds the running image's end and aligns the tail base to 4 KiB. The installer checks that the core and selected modules fit before writing their contents. It publishes code before enabling firmware hooks and keeps the existing cache synchronization.
+
+The builder rejects address overflow, overlapping patches, and changed hook instructions. `build.json` reports each component's address and size. Its `code_memory` section reports the core span and remaining executable capacity before modules load.
+
+The writable script tail, `GRKIT_TAIL_SIZE`, is separate. It holds image scratch buffers, text, and Toning curves in heap memory. Code growth does not change that allocation.
 
 ## Testing
 

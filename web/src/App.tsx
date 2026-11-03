@@ -22,7 +22,7 @@ import {
   type CardDirectory,
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
-import { libraryChanges, openSession, packageEffects as cardPackageEffects, type CardSession } from './cardSession';
+import { extraCardEffects, libraryChanges, openSession, packageEffects as cardPackageEffects, type CardSession } from './cardSession';
 import {
   cameraForCard,
   CAMERAS,
@@ -32,7 +32,7 @@ import {
   PREVIEW_TARGET,
   type Camera,
 } from './cameras';
-import { loadCatalog, siteUrl, type ImportedEffect, type PackageEffect } from './catalog';
+import { loadCatalog, siteUrl, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
 import {
   CardChangesView,
   CardUninstall,
@@ -48,6 +48,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { RichText } from './components/RichText';
 import { TermsNote } from './components/TermsNote';
 import { loadFonts } from './fonts';
+import { importsForCamera, takesNativeLooks } from './import/native';
 import { deleteImport, saveImport } from './import/store';
 import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
@@ -97,8 +98,9 @@ export function App({
   // comes back.
   const [selection, setSelection] = useState<Selection>(() => loadSelection(browserStorage()));
   const [enabled, setEnabled] = useState<ReadonlySet<ModuleKey>>(ALL_MODULES);
-  // Effects fitted from LUTs on this page. This browser keeps them for the next visit.
-  const [imported, setImported] = useState<readonly ImportedEffect[]>(initialImports);
+  // Effects fitted from LUTs and native looks read on this page. This browser keeps them for the
+  // next visit.
+  const [allImported, setImported] = useState<readonly ImportedEffect[]>(initialImports);
   const [build, setBuild] = useState<Build>({ state: 'idle' });
   // A retry of a failed catalog request clears the error boundaries that use the catalog.
   const [catalogAttempt, setCatalogAttempt] = useState(0);
@@ -127,6 +129,10 @@ export function App({
   const support = camera.support;
   const targets = support?.targets;
   const available = support?.modules ?? [];
+  // The imports that the camera can use. The others stay for a later change of camera, but the
+  // list, the selection count, the package, and the card leave them out.
+  const imported = importsForCamera(allImported, camera.key);
+  const cardExtra = extraCardEffects(card?.extra ?? [], imported);
   // A card with GRKit fixes the camera: an update or a change keeps the camera of the card. One
   // build runs on two entries, such as GR III and GR IIIx, so the user can still pick between them.
   // Only the card mode uses the card.
@@ -206,9 +212,10 @@ export function App({
     resetBuild();
   }
 
-  // The effects section checks an import (`selectImport`).
+  // The effects section checks an import (`selectImport`). An import with the ID of an earlier
+  // one, such as a native look read again, takes its place.
   function addImported(effect: ImportedEffect) {
-    setImported((current) => [...current, effect]);
+    setImported((current) => [...current.filter((item) => item.id !== effect.id), effect]);
     void saveImport(effect);
     resetBuild();
   }
@@ -254,7 +261,7 @@ export function App({
    */
   async function checkedEffects(): Promise<PackageEffect[]> {
     const catalog = (await loadCatalog(targets![0]!)).effects;
-    const others = [...imported, ...(card?.extra ?? [])];
+    const others = [...imported, ...cardExtra];
     const checked = resolveSelection(
       selection,
       catalog.map((effect) => effect.id),
@@ -717,7 +724,8 @@ export function App({
                   imported={imported}
                   onImport={addImported}
                   onRemove={removeImported}
-                  cardEffects={active?.extra ?? []}
+                  nativeLooks={takesNativeLooks(camera.key)}
+                  cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
                 />
               </Suspense>
@@ -751,6 +759,7 @@ export function App({
                     session={card}
                     selection={selection}
                     imported={imported}
+                    cardEffects={cardExtra}
                     changes={cardChanges}
                     modules={MODULES.filter((module) => plan.visible.includes(module.key)).map(
                       (module) => t.moduleNames[module.key],
@@ -781,7 +790,7 @@ export function App({
                       <Suspense fallback="—">
                         <CheckedCount
                           selection={selection}
-                          others={[...imported, ...(active?.extra ?? [])].map((effect) => effect.id)}
+                          others={[...imported, ...(active ? cardExtra : [])].map((effect) => effect.id)}
                         />
                       </Suspense>
                     </ErrorBoundary>
@@ -1025,6 +1034,7 @@ interface ChangesSectionProps {
   session: CardSession;
   selection: Selection;
   imported: readonly ImportedEffect[];
+  cardEffects: readonly CardEffect[];
   changes: (session: CardSession, checked: readonly string[]) => CardChanges;
   modules: readonly string[];
   canWrite: boolean;
@@ -1037,14 +1047,14 @@ interface ChangesSectionProps {
 }
 
 /** The changes from the card to the selection. Before the first change, it needs the catalog. */
-function CardChangesSection({ strings: t, session, selection, imported, changes, ...rest }: ChangesSectionProps) {
+function CardChangesSection({ strings: t, session, selection, imported, cardEffects, changes, ...rest }: ChangesSectionProps) {
   const catalog = use(loadCatalog(PREVIEW_TARGET));
   const checked = resolveSelection(
     selection,
     catalog.effects.map((effect) => effect.id),
-    [...imported, ...session.extra].map((effect) => effect.id),
+    [...imported, ...cardEffects].map((effect) => effect.id),
   );
-  const effects = [...catalog.effects, ...imported, ...session.extra];
+  const effects = [...catalog.effects, ...imported, ...cardEffects];
   const effectName = (id: string) => effects.find((effect) => effect.id === id)?.name ?? id;
   const moduleName = (id: string) => {
     const module = MODULES.find((item) => item.id === id);

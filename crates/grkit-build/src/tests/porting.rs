@@ -68,7 +68,7 @@ fn port_drafts_the_module_of_each_target() -> Result<()> {
                 data_source: target.data_source,
                 data_size: target.data_size,
                 heap_min: target.heap_min,
-                tail: layout.tail.0,
+                tail: layout.tail,
             },
             addresses,
             relocatable: true,
