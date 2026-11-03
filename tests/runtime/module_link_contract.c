@@ -158,8 +158,69 @@ static int registrations(void)
     return status;
 }
 
+/* Reuse a tile's bytes for descriptor storage in this synthetic module.
+   The linker does not interpret the artwork pixels. */
+#define INDICATOR_AT TILES
+#define CONDITIONS_AT (TILES + 6)
+#define ICON_AT (TILES + 9)
+static void indicator_reset(void)
+{
+    reset();
+    code_words[REGISTRATIONS + 4] = GRM_POINT_VIEWFINDER_INDICATOR;
+    code_words[REGISTRATIONS + 5] = INDICATOR_AT * 4;
+    code_words[INDICATOR_AT] = GRM_INDICATOR;
+    code_words[INDICATOR_AT + 1] = GRM_INDICATOR_STATUS_ROW;
+    code_words[INDICATOR_AT + 3] = 1;
+    pointer(INDICATOR_AT + 4, CONDITIONS_AT, 0);
+    pointer(INDICATOR_AT + 5, ICON_AT, 0);
+    code_words[CONDITIONS_AT] = 0;
+    code_words[CONDITIONS_AT + 1] = GRM_CONDITION_EQUALS;
+    code_words[CONDITIONS_AT + 2] = 1;
+    code_words[ICON_AT] = GRM_ICON;
+    code_words[ICON_AT + 1] = GRM_ICON_TILE;
+    code_words[ICON_AT + 2] = 0;
+}
+static void indicators_validate_resources_and_conditions(void)
+{
+    u32 indicators[GRM_REGISTRATIONS];
+    indicator_reset();
+    assert(registrations() == 0);
+    assert(grm_indicators(&m, code, CODE_BASE, indicators) == 1 && indicators[0] == CODE_BASE + INDICATOR_AT * 4);
+    assert(layer_count == 1 && page_count == 1 && filter_count == 0);
+    indicator_reset(); code_words[CONDITIONS_AT + 2] = 0;
+    assert(registrations() == 0); /* Zero is a valid condition operand. */
+    indicator_reset(); code_words[INDICATOR_AT + 1] = GRM_INDICATOR_NATIVE_SLOT;
+    code_words[INDICATOR_AT + 2] = GRM_SLOT_IMAGE_CONTROL;
+    assert(registrations() == 0);
+    code_words[INDICATOR_AT + 2] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[INDICATOR_AT + 2] = GRM_SLOT_IMAGE_CONTROL;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[INDICATOR_AT + 3] = 0;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[INDICATOR_AT + 3] = GRM_CONDITIONS_MAX + 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[CONDITIONS_AT] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[CONDITIONS_AT + 1] = 3;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[CONDITIONS_AT + 2] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[ICON_AT + 3] = 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR); /* Two values need two tiles. */
+    code_words[ICON_AT + 2] = GRM_NO_SETTING;
+    assert(registrations() == 0); /* A fixed tile needs only one. */
+    indicator_reset(); code_words[ICON_AT + 1] = GRM_ICON_TONE;
+    assert(registrations() == GRM_BAD_DESCRIPTOR); /* Tone requires a used setting. */
+    indicator_reset(); code_words[ICON_AT + 2] = GRM_USED;
+    assert(registrations() == 0); /* Full range checked when uses resolve. */
+    indicator_reset(); code_words[INDICATOR_AT + 4] = CODE_WORDS * 4 - 4;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+}
+
 int main(void)
 {
+    indicators_validate_resources_and_conditions();
     u32 failed = 99;
     const u8 *tiles;
     u32 tile_count;

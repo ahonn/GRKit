@@ -93,6 +93,9 @@ pub const MODULE_PAGES_MAX: usize = MODULES_MAX;
 /// that the header holds.
 pub const MODULE_LAYERS_MAX: usize = 16;
 pub const MODULE_FILTERS_MAX: usize = 8;
+/// The most registered viewfinder indicators and visible status-row cells.
+pub const INDICATORS_MAX: usize = 16;
+pub const STATUS_ICONS_MAX: usize = 6;
 
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
@@ -295,6 +298,14 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DEVELOP_TEXT: 4;
     /// The text descriptor of that name.
     HOST_DEVELOP_NAME: 8;
+    /// Number of registered viewfinder indicators. INSTALL writes it.
+    HOST_INDICATOR_COUNT: 4;
+    /// Descriptor address and module tile base for each indicator, in module
+    /// load order and declaration order (runtime/sdk/grkit.h).
+    HOST_INDICATORS: 8 * INDICATORS_MAX;
+    /// Code address of an ABI 2.0/2.1 module that supplies CORE.TONE, or 0.
+    /// Its legacy native icon applies only without an explicit slot owner.
+    HOST_LEGACY_TONE_OWNER: 4;
     /// CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only.
     HOST_ASPECT_MODE: 4;
     /// Native aspect + 1 at the last live-view bind, or 0 before the first bind.
@@ -701,6 +712,8 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_MODULE_PAGES_MAX {MODULE_PAGES_MAX}").unwrap();
     writeln!(out, "#define GRKIT_MODULE_LAYERS_MAX {MODULE_LAYERS_MAX}").unwrap();
     writeln!(out, "#define GRKIT_MODULE_FILTERS_MAX {MODULE_FILTERS_MAX}").unwrap();
+    writeln!(out, "#define GRKIT_INDICATORS_MAX {INDICATORS_MAX}").unwrap();
+    writeln!(out, "#define GRKIT_STATUS_ICONS_MAX {STATUS_ICONS_MAX}").unwrap();
     writeln!(
         out,
         "#define GRKIT_MODULE_SETTINGS_MAX {}",

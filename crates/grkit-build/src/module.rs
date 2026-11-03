@@ -240,6 +240,8 @@ pub struct Manifest {
     #[serde(default)]
     pub layers: Vec<LayerSpec>,
     #[serde(default)]
+    pub indicators: Vec<IndicatorSpec>,
+    #[serde(default)]
     pub filters: Vec<FilterSpec>,
     pub events: Option<EventsSpec>,
 }
@@ -313,6 +315,54 @@ pub struct ChildPageSpec {
     pub key: String,
     /// The first row is an Off/On setting, toggled with OK in ADJ.
     pub settings: Vec<String>,
+    pub icon: Option<IconSpec>,
+}
+
+/// An ADJ child or viewfinder icon. Only one source is permitted.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IconSpec {
+    pub tile: Option<u32>,
+    pub setting: Option<String>,
+    pub first_tile: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ConditionSpec {
+    pub setting: String,
+    pub equals: Option<u32>,
+    pub not_equals: Option<u32>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AllConditions {
+    pub all: Vec<ConditionSpec>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+pub enum EnabledSpec {
+    Condition(ConditionSpec),
+    All(AllConditions),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum IndicatorPlacement {
+    NativeSlot,
+    StatusRow,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IndicatorSpec {
+    pub id: String,
+    pub placement: IndicatorPlacement,
+    pub slot: Option<String>,
+    pub enabled: EnabledSpec,
+    pub icon: IconSpec,
 }
 
 /// A `picture.plane` filter.
@@ -521,11 +571,16 @@ pub fn generate(directory: &Path) -> Result<(Manifest, String, String)> {
         }
     }
     registrations.extend(layers(m, &mut c)?);
+    registrations.extend(indicators(m, &mut c)?);
     registrations.extend(filters(m, &mut c)?);
     registrations.extend(subscriber(m, &mut c)?);
     ensure!(
         !registrations.is_empty(),
-        "module.toml has no page, no layer, no filter, and no events"
+        "module.toml has no page, layer, indicator, filter, or events"
+    );
+    ensure!(
+        registrations.len() <= 16,
+        "A module has at most 16 registrations"
     );
     descriptor(m, &registrations, &tiles, &mut c)?;
     Ok((manifest, c, header))
@@ -817,7 +872,14 @@ fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -
             per_language(format!("child_{i}_title")),
         )?;
         let settings = native_setting_tables(rows, &format!("child_{i}_"), c)?;
-        writeln!(c, "static const GrkitPage page_child_{i} = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_SETTINGS, .setting = {setting}, .flags = GRKIT_PAGE_MENU_ONLY, .title = child_{i}_page_title, .rows = {values}{settings}}};")?;
+        let icon = if let Some(spec) = &page.children[i].icon {
+            let name = format!("child_{i}_icon");
+            icon(m, spec, &name, c)?;
+            format!(", .icon = &{name}")
+        } else {
+            String::new()
+        };
+        writeln!(c, "static const GrkitPage page_child_{i} = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_SETTINGS, .setting = {setting}, .flags = GRKIT_PAGE_MENU_ONLY, .title = child_{i}_page_title, .rows = {values}{settings}{icon}}};")?;
     }
     writeln!(
         c,
@@ -1103,6 +1165,143 @@ fn native_setting_tables(rows: &[SettingRow], prefix: &str, c: &mut String) -> R
         ", .setting_rows = {}, .settings = {prefix}page_settings",
         rows.len()
     ))
+}
+
+/// A used setting may have a runtime-defined value count. The installer
+/// validates that count after resolving module dependencies.
+fn known_setting_values(m: &Manifest, name: &str) -> Option<u32> {
+    m.settings
+        .iter()
+        .find(|setting| setting.key == name)
+        .map(|setting| setting.values)
+        .or_else(|| {
+            grkit_core::capabilities::CAPABILITIES
+                .iter()
+                .find(|capability| capability.name() == name && capability.values > 0)
+                .map(|capability| capability.values)
+        })
+}
+
+/// Generate a shared, context-independent icon descriptor.
+fn icon(m: &Manifest, spec: &IconSpec, name: &str, c: &mut String) -> Result<()> {
+    let (kind, setting, first_tile) = match (&spec.setting, spec.tile, spec.first_tile) {
+        (None, Some(tile), None) => ("GRKIT_ICON_TILE", "GRKIT_NO_SETTING".to_owned(), tile),
+        (Some(key), None, first_tile) => {
+            let (setting, _) = setting_reference(m, key)?;
+            if key == "CORE.TONE" {
+                ensure!(first_tile.is_none(), "A CORE.TONE icon has no first_tile");
+                ("GRKIT_ICON_TONE", setting, 0)
+            } else {
+                let first = first_tile.unwrap_or(0);
+                if let Some(values) = known_setting_values(m, key) {
+                    ensure!(
+                        u64::from(first) + u64::from(values) <= m.tiles.len() as u64,
+                        "Icon of {key} needs {values} tiles starting at {first}"
+                    );
+                }
+                ("GRKIT_ICON_TILE", setting, first)
+            }
+        }
+        _ => {
+            anyhow::bail!("An icon has either tile or setting, with first_tile only for a setting")
+        }
+    };
+    ensure!(
+        kind != "GRKIT_ICON_TILE" || (first_tile as usize) < m.tiles.len(),
+        "Icon tile {first_tile} is outside the module tiles"
+    );
+    writeln!(c, "static const GrkitIcon {name} = {{.size = sizeof(GrkitIcon), .kind = {kind}, .setting = {setting}, .first_tile = {first_tile}}};")?;
+    Ok(())
+}
+
+/// Viewfinder indicators are declarative registrations. The core owns
+/// placement, display policy, and redraw; modules provide no paint callback.
+fn indicators(m: &Manifest, c: &mut String) -> Result<Vec<String>> {
+    let mut registrations = Vec::new();
+    let mut slots = std::collections::BTreeSet::new();
+    let mut ids = std::collections::BTreeSet::new();
+    let mut status_rows = 0;
+    for (i, indicator) in m.indicators.iter().enumerate() {
+        ensure!(
+            !indicator.id.is_empty()
+                && indicator.id.len() <= 32
+                && indicator
+                    .id
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'),
+            "Invalid indicator ID {:?}: use 1 to 32 lowercase letters, digits, or underscores",
+            indicator.id
+        );
+        ensure!(
+            ids.insert(&indicator.id),
+            "Duplicate indicator ID {}",
+            indicator.id
+        );
+        let (placement, slot) = match indicator.placement {
+            IndicatorPlacement::NativeSlot => {
+                ensure!(
+                    indicator.slot.as_deref() == Some("image_control"),
+                    "A native_slot indicator needs slot = image_control"
+                );
+                ensure!(
+                    slots.insert("image_control"),
+                    "More than one indicator uses image_control"
+                );
+                ("GRKIT_INDICATOR_NATIVE_SLOT", "GRKIT_SLOT_IMAGE_CONTROL")
+            }
+            IndicatorPlacement::StatusRow => {
+                ensure!(
+                    indicator.slot.is_none(),
+                    "A status_row indicator has no slot"
+                );
+                status_rows += 1;
+                ensure!(
+                    status_rows <= 6,
+                    "At most 6 status_row indicators fit the viewfinder"
+                );
+                ("GRKIT_INDICATOR_STATUS_ROW", "0")
+            }
+        };
+        let conditions = match &indicator.enabled {
+            EnabledSpec::Condition(condition) => std::slice::from_ref(condition),
+            EnabledSpec::All(conditions) => conditions.all.as_slice(),
+        };
+        ensure!(
+            (1..=4).contains(&conditions.len()),
+            "An indicator needs 1 to 4 enabled conditions"
+        );
+        writeln!(
+            c,
+            "static const GrkitCondition indicator_{i}_conditions[] = {{"
+        )?;
+        for condition in conditions {
+            let (setting, _) = setting_reference(m, &condition.setting)?;
+            let (comparison, value) = match (condition.equals, condition.not_equals) {
+                (Some(value), None) => ("GRKIT_CONDITION_EQUALS", value),
+                (None, Some(value)) => ("GRKIT_CONDITION_NOT_EQUALS", value),
+                _ => anyhow::bail!("An enabled condition has exactly one of equals or not_equals"),
+            };
+            if let Some(values) = known_setting_values(m, &condition.setting) {
+                ensure!(
+                    value < values,
+                    "Enabled value {value} is outside setting {}",
+                    condition.setting
+                );
+            }
+            writeln!(
+                c,
+                "{{.setting = {setting}, .comparison = {comparison}, .value = {value}}},"
+            )?;
+        }
+        writeln!(c, "}};")?;
+        icon(m, &indicator.icon, &format!("indicator_{i}_icon"), c)?;
+        writeln!(c, "static const GrkitIndicator indicator_{i} = {{.size = sizeof(GrkitIndicator), .placement = {placement}, .slot = {slot}, .condition_count = {}, .conditions = indicator_{i}_conditions, .icon = &indicator_{i}_icon}};", conditions.len())?;
+        registrations.push(registration(
+            "GRKIT_POINT_VIEWFINDER_INDICATOR",
+            &format!("indicator_{i}"),
+        ));
+    }
+    Ok(registrations)
 }
 
 /// The overlay layers (`GrkitLayer`). Return their registrations.

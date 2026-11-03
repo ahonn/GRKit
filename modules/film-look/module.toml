@@ -15,3 +15,10 @@ tiles = ["tiles/0-module.png"]
 setting = "CORE.TONE"
 # The GRKit section of MENU turns each effect on or off for ADJ.
 options = true
+
+[[indicators]]
+id = "film_look"
+placement = "native_slot"
+slot = "image_control"
+enabled = { setting = "CORE.TONE", not_equals = 0 }
+icon = { setting = "CORE.TONE" }

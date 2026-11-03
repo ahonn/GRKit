@@ -148,6 +148,10 @@ fn menu_assembly_symbols_are_typed_functions() {
         );
     }
     assert!(globals > 0);
+    // The viewfinder now has Thumb helpers too. A missing function type
+    // makes their call to the A32 header accessor enter in the wrong state.
+    let framing = include_str!("../../../../runtime/framing.S");
+    assert!(framing.contains(".global framing_header\n.type framing_header, %function\n"));
 }
 
 #[test]

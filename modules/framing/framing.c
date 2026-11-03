@@ -1,8 +1,7 @@
-/* Framing: the mask and the ratio label of the crop in the live view. The
-   core sets the crop from CORE.ASPECT and gives it as the capture area of
-   the surface (Surface.area). The core crops each ratio from the native 3:2,
-   so the layers draw the same mask for each ratio. Off has area 0, and the
-   layers draw nothing. */
+/* Framing: the mask of the selected framing area in the live view. The core
+   gives this CORE.ASPECT layer the composition area in Surface.area and
+   Surface.box, including in Guides Only mode. Off or an unavailable framing
+   area has area 0, so the layer draws nothing. */
 #include "grkit.h"
 #include "grkit_module.h"
 
@@ -73,12 +72,4 @@ void framing_mask(const Surface *s, u32 value)
         if (s->box[0]) mask_span(row, 0, s->box[0], color);
         if (s->box[2] < 720) mask_span(row, s->box[2], 720, color);
     }
-}
-
-/* The ratio label at the left of the second row, unless LABEL is Off. */
-void framing_badge(const Surface *s, u32 value)
-{
-    (void)value;
-    if (s->area && !setting_get(SETTING_LABEL))
-        overlay_label(s, LABEL_RATIO(s->area), LABEL_LEFT, LABEL_TOP);
 }

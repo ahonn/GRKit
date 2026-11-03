@@ -15,5 +15,5 @@ label = "Mask"
 values = ["Dark", "Black", "Frame Lines"]
 
 [settings.LABEL]
-label = "Ratio Label"
+label = "Show Icon"
 values = ["On", "Off"]

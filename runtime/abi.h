@@ -7,11 +7,13 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 712
+#define GRKIT_HOST_HEADER_SIZE 848
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
 #define GRKIT_MODULE_FILTERS_MAX 8
+#define GRKIT_INDICATORS_MAX 16
+#define GRKIT_STATUS_ICONS_MAX 6
 #define GRKIT_MODULE_SETTINGS_MAX 160
 /* The most modules that GRKit lists, and the words of the largest script
    array, which holds the module array. */
@@ -237,10 +239,19 @@
 /* The text descriptor of that name. */
 #define GRKIT_HOST_DEVELOP_NAME 696
 #define GRKIT_HOST_DEVELOP_NAME_WORDS 2
+/* Number of registered viewfinder indicators. INSTALL writes it. */
+#define GRKIT_HOST_INDICATOR_COUNT 704
+/* Descriptor address and module tile base for each indicator, in module load
+   order and declaration order (runtime/sdk/grkit.h). */
+#define GRKIT_HOST_INDICATORS 708
+#define GRKIT_HOST_INDICATORS_WORDS 32
+/* Code address of an ABI 2.0/2.1 module that supplies CORE.TONE, or 0. Its
+   legacy native icon applies only without an explicit slot owner. */
+#define GRKIT_HOST_LEGACY_TONE_OWNER 836
 /* CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only. */
-#define GRKIT_HOST_ASPECT_MODE 704
+#define GRKIT_HOST_ASPECT_MODE 840
 /* Native aspect + 1 at the last live-view bind, or 0 before the first bind. */
-#define GRKIT_HOST_FRAME_NATIVE 708
+#define GRKIT_HOST_FRAME_NATIVE 844
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
@@ -263,7 +274,7 @@
 #define GRKIT_CORE_ASPECT_MODE 0x104U
 #define GRKIT_CORE_ASPECT_MODE_VALUES 2U
 #define GRKIT_CORE_ASPECT_MODE_BIT 0x10
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,704
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,840
 #define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2
 
 /* An Image Control record. The records follow the header. */

@@ -623,6 +623,9 @@ static int write_modules(const struct arrays *a, u32 pixels)
     for (u32 i = 0; i < module_page_count * 3; ++i) store(base + GRKIT_HOST_MODULE_PAGES + i * 4, module_pages[i]);
     store(base + GRKIT_HOST_MODULE_LAYER_COUNT, module_layer_count);
     for (u32 i = 0; i < module_layer_count * 3; ++i) store(base + GRKIT_HOST_MODULE_LAYERS + i * 4, module_layers[i]);
+    store(base + GRKIT_HOST_LEGACY_TONE_OWNER, module_legacy_tone_owner);
+    store(base + GRKIT_HOST_INDICATOR_COUNT, module_indicator_count);
+    for (u32 i = 0; i < module_indicator_count * 2; ++i) store(base + GRKIT_HOST_INDICATORS + i * 4, module_indicators[i]);
     store(base + GRKIT_HOST_MODULE_FILTER_COUNT, module_filter_count);
     for (u32 i = 0; i < module_filter_count * 2; ++i) store(base + GRKIT_HOST_MODULE_FILTERS + i * 4, module_filters[i]);
     return 0;

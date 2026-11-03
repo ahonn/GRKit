@@ -1,6 +1,6 @@
 # Framing: a ratio for cropped pictures or composition only. CORE.ASPECT_MODE
-# selects the output behavior. The layers show the selected ratio in the
-# live view in either mode.
+# selects the output behavior. The layer shows the selected framing area
+# in the live view, and the indicator shows its ADJ icon.
 id = "FRAMING"
 version = 1
 # The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
@@ -27,7 +27,7 @@ values = 3
 saved = true
 public = true
 
-# The ratio label: 0 on, 1 off.
+# The viewfinder icon: 0 on, 1 off. Keep LABEL for saved-setting compatibility.
 [[settings]]
 key = "LABEL"
 values = 2
@@ -47,11 +47,8 @@ paint = "framing_mask"
 setting = "CORE.ASPECT"
 order = 10
 
-# The ratio label shows with the full display, like the top row of native
-# settings. It covers the guides that cross it.
-[[layers]]
-paint = "framing_badge"
-setting = "CORE.ASPECT"
-order = 30
-full_disp = true
-live_only = true
+[[indicators]]
+id = "framing"
+placement = "status_row"
+enabled = { all = [{ setting = "CORE.ASPECT", not_equals = 0 }, { setting = "LABEL", equals = 0 }] }
+icon = { setting = "CORE.ASPECT" }

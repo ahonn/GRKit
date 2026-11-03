@@ -21,7 +21,7 @@ typedef signed int s32;
    equals that of the core and whose minor version is not larger. A minor
    version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 1U
+#define GRKIT_ABI_MINOR 2U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -166,6 +166,49 @@ static inline const GrkitContext *grkit_context(void)
 #define GRKIT_SETTING(n) (grkit_context()->settings + (n))
 #define GRKIT_USED(n) (grkit_context()->uses[n])
 
+/* ---- viewfinder.indicator ------------------------------------------------- */
+
+/* Icons are shared by viewfinder indicators and ADJ group children. TILE
+   resolves to first_tile + the setting value, or first_tile with NO_SETTING.
+   TONE resolves the committed CORE.TONE effect icon; first_tile is zero.
+   Setting references use the same local/GRKIT_USE form as layers. */
+#define GRKIT_ICON_TILE 1U
+#define GRKIT_ICON_TONE 2U
+typedef struct {
+    u32 size;
+    u32 kind;
+    u32 setting;
+    u32 first_tile;
+} GrkitIcon;
+
+#define GRKIT_CONDITION_EQUALS 1U
+#define GRKIT_CONDITION_NOT_EQUALS 2U
+typedef struct {
+    u32 setting;
+    u32 comparison;
+    u32 value;
+} GrkitCondition;
+
+#define GRKIT_INDICATOR_NATIVE_SLOT 1U
+#define GRKIT_INDICATOR_STATUS_ROW 2U
+#define GRKIT_SLOT_IMAGE_CONTROL 1U
+#define GRKIT_INDICATOR_CONDITIONS_MAX 4U
+/* Since ABI 2.2. All conditions must match. A module's soft Off and the
+   GRKit switch also hide its indicators. STATUS_ROW has slot 0, shows only
+   on the full-information still viewfinder, and never previews ADJ values.
+   NATIVE_SLOT replaces the still Image Control icon while active; otherwise
+   the core retains the current native icon. Neither affects photo playback.
+   At most six STATUS_ROW indicators fit; IMAGE_CONTROL has one registrant.
+   The core owns placement, redraw, and removal of the previous drawing. */
+typedef struct {
+    u32 size;
+    u32 placement;
+    u32 slot;
+    u32 condition_count;
+    const GrkitCondition *conditions;
+    const GrkitIcon *icon;
+} GrkitIndicator;
+
 /* ---- menu.page ------------------------------------------------------------ */
 
 /* The menu languages, in this order: English, Simplified Chinese,
@@ -241,6 +284,9 @@ typedef struct GrkitPage {
     const GrkitSettingRow *settings;
     /* Since ABI 2.1; read only for GROUP. Older 40-byte pages remain valid. */
     const struct GrkitPage *const *children;
+    /* Since ABI 2.2; optional icon for a GROUP child. Unlike its indicator,
+       this icon remains visible while the child's first setting is Off. */
+    const GrkitIcon *icon;
 } GrkitPage;
 
 /* ---- picture.plane -------------------------------------------------------- */
@@ -426,6 +472,7 @@ u32 ui_open_native(u32 screen, void (*back)(u32 arg), u32 arg);
 #define GRKIT_POINT_MENU_PAGE 2U
 #define GRKIT_POINT_PICTURE_PLANE 3U
 #define GRKIT_POINT_EVENT 4U
+#define GRKIT_POINT_VIEWFINDER_INDICATOR 5U
 
 typedef struct {
     u32 point;

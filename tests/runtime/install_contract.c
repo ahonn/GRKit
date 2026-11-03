@@ -253,7 +253,7 @@ struct spec {
     const char *id;
     u32 order, data_bytes, bss_bytes;
     /* A file with another magic, or with another major ABI. */
-    int bad_magic, new_abi;
+    int bad_magic, new_abi, legacy_abi;
     struct { const char *key; u32 values, flags, default_value; } settings[SPEC_ITEMS];
     const char *uses[SPEC_ITEMS], *imports[SPEC_ITEMS];
     u32 layer_count, filter_count;
@@ -262,6 +262,8 @@ struct spec {
     /* A choice page of own setting 0 with these native settings rows: row 0
        is setting 0, the others an own setting n or GRM_USED | used n. */
     u32 page_rows, rows[SPEC_ITEMS], settings_page, group_page, bad_group;
+    u32 indicator_count, indicator_slot, condition_setting, condition_value;
+    u32 icon_kind, icon_setting, icon_first, indicator_tiles, page_icon;
 };
 static u32 code_words[GRM_MAX_SEGMENT / 4], code_count, relocations[256], relocation_count;
 static u32 emit(u32 value)
@@ -302,8 +304,8 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     static u8 bytes[MODULE_FILE_MAX];
     u32 settings = 0, uses = items(s->uses), imports = items(s->imports);
     u32 paint[SPEC_ITEMS], apply[SPEC_ITEMS], import_at[SPEC_ITEMS], keys[SPEC_ITEMS], use_names[SPEC_ITEMS];
-    u32 layer_at[SPEC_ITEMS], filter_at[SPEC_ITEMS];
-    u32 abi = (GRM_ABI_MAJOR + (s->new_abi ? 1U : 0U)) << 16 | GRM_ABI_MINOR;
+    u32 layer_at[SPEC_ITEMS], filter_at[SPEC_ITEMS], indicator_at[SPEC_ITEMS];
+    u32 abi = (GRM_ABI_MAJOR + (s->new_abi ? 1U : 0U)) << 16 | (s->legacy_abi ? 1U : GRM_ABI_MINOR);
     while (settings < SPEC_ITEMS && s->settings[settings].key) ++settings;
     memset(code_words, 0, sizeof code_words);
     code_count = relocation_count = 0;
@@ -327,10 +329,22 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
         filter_at[k] = emit(GRM_FILTER); emit(s->filters[k].stage); emit(s->filters[k].setting);
         emit_pointer(apply[k], 1);
     }
+    u32 icon_at = 0;
+    if (s->indicator_count || s->page_icon) {
+        icon_at = emit(GRM_ICON); emit(s->icon_kind ? s->icon_kind : GRM_ICON_TILE);
+        emit(s->icon_setting); emit(s->icon_first);
+        u32 conditions = emit(s->condition_setting); emit(GRM_CONDITION_EQUALS); emit(s->condition_value);
+        for (u32 k = 0; k < s->indicator_count; ++k) {
+            indicator_at[k] = emit(GRM_INDICATOR);
+            emit(s->indicator_slot ? GRM_INDICATOR_NATIVE_SLOT : GRM_INDICATOR_STATUS_ROW);
+            emit(s->indicator_slot); emit(1); emit_pointer(conditions, 0); emit_pointer(icon_at, 0);
+        }
+    }
     /* The page: one text for each language and value, 32 at most, and a
        blank tile for each value of setting 0. */
     u32 page_at = 0, child_at[2] = {0, 0}, tiles_at = 0;
     u32 tile_count = s->group_page ? 3 : s->page_rows ? (s->settings_page ? 1 : s->settings[0].values) : 0;
+    if (s->indicator_tiles) tile_count = s->indicator_tiles;
     if (s->page_rows) {
         static const u16 hi[] = {'H', 'i', 0};
         u32 text = emit(0), texts, row_list;
@@ -345,6 +359,10 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
         page_at = emit(GRM_PAGE); emit(s->settings_page ? GRM_PAGE_SETTINGS : GRM_PAGE_CHOICE); emit(0); emit(0);
         emit_pointer(texts, 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
         emit(s->settings[0].values); emit(s->page_rows); emit_pointer(row_list, 0);
+        if (s->page_icon) {
+            code_words[page_at] = GRM_PAGE_ICON;
+            emit(0); emit_pointer(icon_at, 0);
+        }
         if (s->group_page) {
             child_at[0] = page_at;
             code_words[page_at + GRM_PAGE_KIND_AT / 4] = GRM_PAGE_SETTINGS;
@@ -364,17 +382,18 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
             if (s->bad_group == 3) code_words[page_at] = GRM_PAGE;
             if (s->bad_group == 4) code_words[page_at + GRM_PAGE_ROWS_AT / 4] = GRM_PAGE_CHILDREN + 1;
         }
-        tiles_at = code_count;
-        for (u32 k = 0; k < tile_count * GRM_TILE_BYTES / 4; ++k) emit(0);
     }
+    tiles_at = code_count;
+    for (u32 k = 0; k < tile_count * GRM_TILE_BYTES / 4; ++k) emit(0);
     u32 registrations = code_count;
     for (u32 k = 0; k < s->layer_count; ++k) { emit(GRM_POINT_OVERLAY_LAYER); emit_pointer(layer_at[k], 0); }
     for (u32 k = 0; k < s->filter_count; ++k) { emit(GRM_POINT_PICTURE_PLANE); emit_pointer(filter_at[k], 0); }
     if (s->page_rows) { emit(GRM_POINT_MENU_PAGE); emit_pointer(page_at, 0); }
     if (s->group_page) for (u32 k = 0; k < 2; ++k) { emit(GRM_POINT_MENU_PAGE); emit_pointer(child_at[k], 0); }
+    for (u32 k = 0; k < s->indicator_count; ++k) { emit(GRM_POINT_VIEWFINDER_INDICATOR); emit_pointer(indicator_at[k], 0); }
     u32 descriptor = emit(GRM_DESCRIPTOR);
     emit(abi);
-    emit_list(registrations, s->layer_count + s->filter_count + (s->page_rows ? 1 : 0) + (s->group_page ? 2 : 0));
+    emit_list(registrations, s->layer_count + s->filter_count + s->indicator_count + (s->page_rows ? 1 : 0) + (s->group_page ? 2 : 0));
     emit_list(setting_list, settings);
     emit_list(use_list, uses);
     emit_list(tiles_at, tile_count);
@@ -943,9 +962,88 @@ static void a_setting_of_a_module_that_did_not_link_is_missing(void)
     }
 }
 
+static void indicators_resolve_settings_and_preserve_shared_descriptors(void)
+{
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){.id = "FIRST", .order = 1,
+        .settings = {{"ON", 2, GRM_SETTING_PUBLIC}}});
+    add_module(PACKAGE_MODULES_PATH, "ICONS.GRM", &(struct spec){.id = "ICONS", .order = 2,
+        .settings = {{"ON", 2, 0}, {"STRENGTH", 3, 0}}, .uses = {"FIRST.ON"},
+        .indicator_count = 2, .condition_setting = GRM_USED, .condition_value = 1,
+        .icon_setting = 1, .indicator_tiles = 3, .page_rows = 1, .page_icon = 1});
+    assert(install() == 0 && module_status[0] == 0 && module_status[1] == 0);
+    assert(module_indicator_count == 2 && module_status_icons == 2 && !module_native_slots);
+    u32 indicator = module_indicators[0], conditions = word(indicator + GRM_INDICATOR_CONDITIONS_AT);
+    u32 icon = word(indicator + GRM_INDICATOR_ICON_AT);
+    assert(word(conditions) == 0); /* FIRST.ON, not ICONS.ON. */
+    assert(word(icon + GRM_ICON_SETTING_AT) == 2); /* The strength after FIRST.ON and ICONS.ON. */
+    assert(word(module_indicators[2] + GRM_INDICATOR_ICON_AT) == icon);
+    assert(word(module_pages[0] + GRM_PAGE_ICON_AT) == icon);
+    assert((needed_points & POINT_VIEWFINDER_OVERLAY) != 0);
+
+    /* Missing optional settings hide the icon, not the whole module. */
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "OPTIONAL.GRM", &(struct spec){.id = "OPTIONAL",
+        .uses = {"?MISSING.ON"}, .indicator_count = 1, .condition_setting = GRM_USED,
+        .icon_setting = GRM_USED, .indicator_tiles = 1});
+    assert(install() == 0 && module_status[0] == 0 && module_indicator_count == 1);
+    indicator = module_indicators[0];
+    assert(word(word(indicator + GRM_INDICATOR_CONDITIONS_AT)) == GRM_NO_SETTING);
+    assert(word(word(indicator + GRM_INDICATOR_ICON_AT) + GRM_ICON_KIND_AT) == 0);
+}
+static void indicators_reject_conflicts_overflow_and_used_value_ranges(void)
+{
+    reset();
+    const struct spec native = {.id = "FIRST", .order = 1, .settings = {{"ON", 2, 0}},
+        .indicator_count = 1, .indicator_slot = GRM_SLOT_IMAGE_CONTROL, .indicator_tiles = 2};
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &native);
+    struct spec duplicate = native; duplicate.id = "SECOND"; duplicate.order = 2;
+    add_module(PACKAGE_MODULES_PATH, "SECOND.GRM", &duplicate);
+    assert(install() == 0 && module_indicator_count == 1);
+    assert(module_status[0] == 0 && module_status[1] == GRM_BAD_DESCRIPTOR);
+    assert(module_native_slots == 1U << GRM_SLOT_IMAGE_CONTROL);
+
+    reset();
+    struct spec row = {.id = "FIRST", .order = 1, .settings = {{"ON", 2, 0}},
+        .indicator_count = 4, .indicator_tiles = 2};
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &row);
+    row.id = "SECOND"; row.order = 2; row.indicator_count = 3;
+    add_module(PACKAGE_MODULES_PATH, "SECOND.GRM", &row);
+    assert(install() == 0 && module_indicator_count == 4 && module_status[1] == GRM_NO_ROOM);
+
+    for (u32 bad = 0; bad < 3; ++bad) {
+        reset();
+        add_module(PACKAGE_MODULES_PATH, "INVALID.GRM", &(struct spec){.id = "INVALID",
+            .uses = {"CORE.GRAIN"}, .indicator_count = 1, .condition_setting = GRM_USED,
+            .condition_value = bad == 0 ? 5 : 0, .icon_setting = GRM_USED,
+            .icon_kind = bad == 2 ? GRM_ICON_TONE : GRM_ICON_TILE,
+            .indicator_tiles = bad == 1 ? 4 : 5});
+        assert(install() == 0 && !module_indicator_count && module_status[0] == GRM_BAD_DESCRIPTOR);
+    }
+}
+static void legacy_tone_icon_is_only_for_old_module_abi(void)
+{
+    for (u32 legacy = 0; legacy < 2; ++legacy) {
+        reset();
+        add_module(PACKAGE_MODULES_PATH, "TONE.GRM", &(struct spec){.id = "TONE",
+            .uses = {"CORE.TONE"}, .legacy_abi = (int)legacy});
+        assert(install() == 0 && module_status[0] == 0);
+        assert(module_legacy_tone_owner == (legacy ? CODE_AT : 0));
+    }
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "TONE.GRM", &(struct spec){.id = "TONE",
+        .uses = {"CORE.TONE"}, .indicator_count = 1, .indicator_slot = GRM_SLOT_IMAGE_CONTROL,
+        .condition_setting = GRM_USED, .icon_kind = GRM_ICON_TONE, .icon_setting = GRM_USED});
+    assert(install() == 0 && module_status[0] == 0 && module_indicator_count == 1);
+    assert(word(word(module_indicators[0] + GRM_INDICATOR_ICON_AT) + GRM_ICON_SETTING_AT) == GRKIT_CORE_TONE);
+}
+
 static void *run(void *unused)
 {
     (void)unused;
+    indicators_resolve_settings_and_preserve_shared_descriptors();
+    indicators_reject_conflicts_overflow_and_used_value_ranges();
+    legacy_tone_icon_is_only_for_old_module_abi();
     modules_come_from_both_folders_in_header_order();
     more_modules_than_the_list_holds_are_counted();
     a_full_list_keeps_the_package_modules();
