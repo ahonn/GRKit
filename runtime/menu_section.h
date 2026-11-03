@@ -121,6 +121,24 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
     u32 slot=id-MENU_ROW_TARGET, kind, module;
     if(!h[GRKIT_HOST_SERVICES/4]) return id;
     menu_rows_install(h);
+    /* Parent and child share one native submenu. MENU can therefore return
+       to that same controller. Check the incoming target before translating
+       a child link; a value page returning to the submenu is not a Back. */
+    u32 self_back=id==SETTINGS_SUBMENU && services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU;
+    if((id==MENU_RETURN_CONTROLLER || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) {
+        settings_start(h,LISTED_PAGE);
+        return SETTINGS_SUBMENU;
+    }
+    if(self_back && (h[GRKIT_HOST_SETTINGS/4]&0xffffU)==LISTED_PAGE+1 &&
+       listed_slot(h)<module_pages(h) && menu_page(h,listed_slot(h))==&group_module) return MENU_RETURN_CONTROLLER;
+    if(id>=MENU_GROUP_TARGET && id<MENU_GROUP_TARGET+SETTING_ROWS && settings_page(h)==listed_settings) {
+        u32 child=listed_child(h,id-MENU_GROUP_TARGET);
+        if(child<module_pages(h)) {
+            settings_start(h,child);
+            h[GRKIT_HOST_SETTINGS/4]|=SETTINGS_PARENT;
+            return SETTINGS_SUBMENU;
+        }
+    }
     /* The Fn adjustments row of the page of Image Control. Without a
        committed effect, it opens nothing. */
     if(id==MENU_FN_TARGET) {
@@ -185,14 +203,14 @@ static void menu_row_fill(u32 slot,u32 row) {
     if(kind==MENU_ROW_ADJ) { label=text(h,TEXT_ADJ); value=no_text; }
     else if(kind==MENU_ROW_SWITCH) { label=switch_menu_label(h); value=on_off_text(h,manage_all_off(h)); }
     else if(kind==MENU_ROW_LISTED) {
-        /* A loaded module shows the value of its page, as a native row shows
-           its value, or Off while it or the switch is Off; another module
-           its Enable value. */
+        /* A loaded choice page shows its value; a settings-only page has
+           no summary value. Both show Off while the module or switch is
+           Off. Another module shows its Enable value. */
         page=listed_page(h,module);
         if(page<module_pages(h)) {
             const MenuPage *m=menu_page(h,page);
             label=m->title(h);
-            value=manage_halted(h,module) ? on_off_text(h,1) : m->label(h,m->committed(h));
+            value=manage_halted(h,module) ? on_off_text(h,1) : (choice_direct(h) || choice_group(h)) ? no_text : m->label(h,m->committed(h));
         }
         else { label=manage_name(h,module); value=on_off_text(h,manage_off(h,module)); }
     }

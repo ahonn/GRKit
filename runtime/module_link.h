@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 0U
+#define GRM_ABI_MINOR 1U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U
@@ -29,6 +29,10 @@
 /* The events of a subscriber (GRKIT_EVENT_*). */
 #define GRM_EVENTS 3U
 #define GRM_PAGE_CHOICE 1U
+#define GRM_PAGE_SETTINGS 2U
+#define GRM_PAGE_GROUP 3U
+#define GRM_PAGE_MENU_ONLY 8U
+#define GRM_PAGE_CHILDREN 4U
 #define GRM_CHOICE_OFF_ROW 1U
 #define GRM_CHOICE_CORE_ROWS 2U
 #define GRM_CHOICE_OPTIONS 4U
@@ -74,10 +78,12 @@
 #define GRM_REGISTRATION 8U
 #define GRM_REGISTRATION_IMPL_AT 4U
 /* GrkitSetting. */
-#define GRM_SETTING 16U
+#define GRM_SETTING 16U /* ABI 2.0 minimum */
+#define GRM_SETTING_DEFAULT 20U
 #define GRM_SETTING_KEY_AT 4U
 #define GRM_SETTING_VALUES_AT 8U
 #define GRM_SETTING_FLAGS_AT 12U
+#define GRM_SETTING_DEFAULT_AT 16U
 /* GrkitLayer. */
 #define GRM_LAYER 20U
 #define GRM_LAYER_FLAGS_AT 4U
@@ -86,6 +92,8 @@
 #define GRM_LAYER_ORDER_AT 16U
 /* GrkitPage. */
 #define GRM_PAGE 40U
+#define GRM_GROUP_PAGE 44U
+#define GRM_PAGE_CHILDREN_AT 40U
 #define GRM_PAGE_KIND_AT 4U
 #define GRM_PAGE_SETTING_AT 8U
 #define GRM_PAGE_FLAGS_AT 12U
@@ -269,8 +277,8 @@ static u32 grm_string(const struct grm_module *m, const u8 *code, u32 base, u32 
     return 0;
 }
 
-/* A setting of a module: its key, its number of values, and its flags. */
-struct grm_setting { char key[GRM_KEY]; u32 values, flags; };
+/* A setting of a module: its key, range, flags, and initial value. */
+struct grm_setting { char key[GRM_KEY]; u32 values, flags, default_value; };
 
 /* Read the settings and the used settings of the descriptor of a module whose
    code was linked for `base` (0 for the file itself). A used setting is a
@@ -286,12 +294,18 @@ static int grm_settings(const struct grm_module *m, const u8 *code, u32 base,
     const u8 *list = n ? grm_code_at(m, code, base, grm_word(d + GRM_DESCRIPTOR_SETTINGS_AT), n * GRM_SETTING) : d;
     const u8 *names = u ? grm_code_at(m, code, base, grm_word(d + GRM_DESCRIPTOR_USES_AT), u * 4) : d;
     if (!list || !names) return GRM_BAD_DESCRIPTOR;
+    u32 offset = n ? grm_word(d + GRM_DESCRIPTOR_SETTINGS_AT) : 0;
     for (u32 i = 0; i < n; ++i) {
-        const u8 *e = list + i * GRM_SETTING;
+        const u8 *e = grm_code_at(m, code, base, offset, GRM_SETTING);
+        if (!e) return GRM_BAD_DESCRIPTOR;
+        u32 size = grm_word(e);
+        if (size < GRM_SETTING || (size & 3) || !grm_code_at(m, code, base, offset, size)) return GRM_BAD_DESCRIPTOR;
+        offset += size;
         struct grm_setting *s = settings + i;
         s->values = grm_word(e + GRM_SETTING_VALUES_AT);
         s->flags = grm_word(e + GRM_SETTING_FLAGS_AT);
-        if (grm_word(e) < GRM_SETTING || !s->values || s->values > GRM_SETTING_VALUES ||
+        s->default_value = size >= GRM_SETTING_DEFAULT ? grm_word(e + GRM_SETTING_DEFAULT_AT) : 0;
+        if (!s->values || s->values > GRM_SETTING_VALUES || s->default_value >= s->values ||
             (s->flags & ~(GRM_SETTING_PUBLIC | GRM_SETTING_SAVED)) ||
             !grm_string(m, code, base, grm_word(e + GRM_SETTING_KEY_AT), s->key, GRM_KEY, 0)) return GRM_BAD_DESCRIPTOR;
         for (u32 j = 0; j < i; ++j) {
@@ -408,11 +422,26 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             l->paint = paint; l->setting = setting; l->flags = flags; l->order = grm_word(layer + GRM_LAYER_ORDER_AT);
         } else if (point == GRM_POINT_MENU_PAGE) {
             const u8 *page = grm_code_at(m, code, base, impl, GRM_PAGE);
-            if (!page || grm_word(page) < GRM_PAGE || grm_word(page + GRM_PAGE_KIND_AT) != GRM_PAGE_CHOICE) return GRM_BAD_DESCRIPTOR;
+            if (!page || grm_word(page) < GRM_PAGE) return GRM_BAD_DESCRIPTOR;
+            u32 kind = grm_word(page + GRM_PAGE_KIND_AT), direct = kind == GRM_PAGE_SETTINGS;
+            if (kind == GRM_PAGE_GROUP) {
+                u32 rows = grm_word(page + GRM_PAGE_ROWS_AT);
+                if (grm_word(page) < GRM_GROUP_PAGE || !grm_code_at(m, code, base, impl, GRM_GROUP_PAGE) ||
+                    grm_word(page + GRM_PAGE_SETTING_AT) != GRM_NO_SETTING || grm_word(page + GRM_PAGE_FLAGS_AT) ||
+                    grm_word(page + GRM_PAGE_SETTING_ROWS_AT) || !rows || rows > GRM_PAGE_CHILDREN || rows + 1 > tile_count ||
+                    !grm_texts(m, code, base, grm_word(page + GRM_PAGE_TITLE_AT), GRM_LANGUAGES) ||
+                    !grm_code_at(m, code, base, grm_word(page + GRM_PAGE_CHILDREN_AT), rows * 4)) return GRM_BAD_DESCRIPTOR;
+                if (*page_count >= max) return GRM_NO_ROOM;
+                struct grm_page *p = pages + (*page_count)++;
+                p->address = impl; p->setting = GRM_NO_SETTING; p->flags = 0; p->rows = rows;
+                continue;
+            }
+            if (kind != GRM_PAGE_CHOICE && !direct) return GRM_BAD_DESCRIPTOR;
             u32 setting = grm_word(page + GRM_PAGE_SETTING_AT), flags = grm_word(page + GRM_PAGE_FLAGS_AT);
             u32 rows = grm_word(page + GRM_PAGE_ROWS_AT);
             if (!grm_setting_reference(setting, setting_count, use_count) ||
-                (flags & ~(GRM_CHOICE_OFF_ROW | GRM_CHOICE_CORE_ROWS | GRM_CHOICE_OPTIONS))) return GRM_BAD_DESCRIPTOR;
+                (flags & ~(GRM_CHOICE_OFF_ROW | GRM_CHOICE_CORE_ROWS | GRM_CHOICE_OPTIONS | GRM_PAGE_MENU_ONLY))) return GRM_BAD_DESCRIPTOR;
+            if (direct && ((flags & ~GRM_PAGE_MENU_ONLY) || !grm_word(page + GRM_PAGE_SETTING_ROWS_AT))) return GRM_BAD_DESCRIPTOR;
             /* The core gives the rows of a page of a used capability: the
                page has only its title. The installer checks the setting. */
             if (flags & GRM_CHOICE_CORE_ROWS) {
@@ -426,10 +455,10 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             /* One row and one tile for each value. The installer checks the
                values of a used setting. */
             if (!(setting & GRM_USED) && rows != settings[setting].values) return GRM_BAD_DESCRIPTOR;
-            if (!rows || rows > GRM_PAGE_ROWS || rows > tile_count ||
+            if (!rows || rows > GRM_PAGE_ROWS || (direct ? !tile_count : rows > tile_count) ||
                 !grm_texts(m, code, base, grm_word(page + GRM_PAGE_TITLE_AT), GRM_LANGUAGES) ||
-                !grm_texts(m, code, base, grm_word(page + GRM_PAGE_SUMMARIES_AT), rows * GRM_LANGUAGES) ||
-                !grm_texts(m, code, base, grm_word(page + GRM_PAGE_LABELS_AT), rows * GRM_LANGUAGES)) return GRM_BAD_DESCRIPTOR;
+                (!direct && (!grm_texts(m, code, base, grm_word(page + GRM_PAGE_SUMMARIES_AT), rows * GRM_LANGUAGES) ||
+                 !grm_texts(m, code, base, grm_word(page + GRM_PAGE_LABELS_AT), rows * GRM_LANGUAGES)))) return GRM_BAD_DESCRIPTOR;
             /* The rows of a native settings page: settings of the module, the
                first the page setting, each with its label and value texts. */
             u32 setting_rows = grm_word(page + GRM_PAGE_SETTING_ROWS_AT);
@@ -469,6 +498,22 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             struct grm_filter *f = filters + (*filter_count)++;
             f->apply = apply; f->setting = setting; f->stage = stage;
         } else if (point != GRM_POINT_EVENT) return GRM_BAD_DESCRIPTOR;
+    }
+    /* Group links must name registered settings pages in this module. This
+       also rules out cycles and descriptors that the installer never patches. */
+    for (u32 i = 0; i < *page_count; ++i) {
+        const u8 *page = grm_code_at(m, code, base, pages[i].address, GRM_PAGE);
+        if (grm_word(page + GRM_PAGE_KIND_AT) != GRM_PAGE_GROUP) continue;
+        const u8 *children = grm_code_at(m, code, base, grm_word(page + GRM_PAGE_CHILDREN_AT), pages[i].rows * 4);
+        for (u32 r = 0; r < pages[i].rows; ++r) {
+            u32 child = grm_word(children + r * 4), found = 0;
+            for (u32 k = 0; k < *page_count; ++k) if (pages[k].address == child) {
+                const u8 *p = grm_code_at(m, code, base, child, GRM_PAGE);
+                found = grm_word(p + GRM_PAGE_KIND_AT) == GRM_PAGE_SETTINGS &&
+                    pages[k].flags == GRM_PAGE_MENU_ONLY && pages[k].rows == 2;
+            }
+            if (!found) return GRM_BAD_DESCRIPTOR;
+        }
     }
     return 0;
 }

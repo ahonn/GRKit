@@ -381,7 +381,7 @@ fn state_script() -> Vec<String> {
                 "goto save_parameters".into(),
                 ":save_parameters_end".into(),
             ]);
-            // The saved module settings that are not 0.
+            // Save zero too: a missing setting uses its declared default.
             lines.extend(
                 module_count
                     .iter()
@@ -394,7 +394,7 @@ fn state_script() -> Vec<String> {
                 "mid = modulecode[2 + mindex * 3]".into(),
                 "mvalue = modulecode[3 + mindex * 3]".into(),
                 "if mid <= 0 goto save_modules_next".into(),
-                "if mvalue <= 0 goto save_modules_next".into(),
+                "if mvalue < 0 goto save_modules_next".into(),
                 "int2str line mid".into(),
                 "filewriteln sfh line".into(),
                 "int2str line mvalue".into(),
@@ -815,7 +815,7 @@ mod tests {
         assert!(force < at(&state, ":watch"));
     }
 
-    /// A key with the value 0 has no entry, because a missing key restores 0.
+    /// A core key with value 0 has no entry, because a missing core key restores 0.
     #[test]
     fn the_loader_writes_only_keys_with_a_value() {
         let script = state_script();
@@ -830,5 +830,17 @@ mod tests {
             );
             assert_eq!(script[write + 3], format!(":save_key{i}"));
         }
+    }
+    /// Module settings must persist zero even when their default is nonzero.
+    #[test]
+    fn the_loader_saves_module_zero() {
+        let script = state_script();
+        let start = at(&script, ":save_modules");
+        let end = at(&script, ":save_modules_next");
+        let lines = &script[start..end];
+        assert!(lines.contains(&"if mid <= 0 goto save_modules_next".to_owned()));
+        assert!(lines.contains(&"if mvalue < 0 goto save_modules_next".to_owned()));
+        assert!(!lines.contains(&"if mvalue <= 0 goto save_modules_next".to_owned()));
+        assert!(lines.contains(&"int2str line mvalue".to_owned()));
     }
 }

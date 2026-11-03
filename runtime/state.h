@@ -55,6 +55,14 @@ static int state_value(const struct state *state, u32 key, u32 *value)
     return 0;
 }
 
+/* A saved setting overrides its initial value only when its value is valid.
+   Zero is a saved choice, distinct from an absent key. */
+static u32 state_setting_value(const struct state *state, u32 key, u32 initial, u32 values)
+{
+    u32 value;
+    return key && state_value(state, key, &value) && value < values ? value : initial;
+}
+
 /* Turn the pairs of a GRKit 1.2 state file into current pairs: a key of
    `from` takes the key at the same index of `to`, an Fn adjustment entry
    (`parameter_base` to `parameter_base` + 32767) keeps its key, and other

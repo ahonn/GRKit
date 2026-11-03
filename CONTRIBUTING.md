@@ -35,7 +35,7 @@ cargo deny --locked check
 
 Host C tests compile parts of the runtime with a host C compiler. If no host compiler is available, they are skipped. `GRKIT_REQUIRE_NATIVE_TESTS=1` makes them fail instead.
 
-The ARM builds are ignored tests. The second command needs the firmware:
+The ARM builds are ignored tests. The first command also runs the NEON parity test of Glow, which needs `qemu-arm` (`GRKIT_QEMU_ARM` names another program). The second command needs the firmware:
 
 ```sh
 GRKIT_CLANG=clang GRKIT_LLD=ld.lld cargo test -p grkit-build --locked -- --ignored synthetic_ dump_
@@ -62,9 +62,11 @@ For the web site, see [web/README.md](web/README.md).
 - Keep filesystem and process access out of `grkit-core`.
 - Put target addresses in the target definition or its native adapter. Check the hook bytes before you patch them.
 - Do not edit `runtime/abi.h` or `web/src/generated/`. Change the layout tables in `crates/grkit-core/src/abi.rs`, the capabilities in `crates/grkit-core/src/capabilities.rs`, or the official modules in `crates/grkit-core/src/modules.rs`. Then run `GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated`.
+- For independent controls in one ADJ entry, use `[page] kind = "settings"` and list the controls in `page.settings`. See [Page syntax](docs/module-reference.md#page).
+- For separate settings pages under one ADJ entry, use `[page] kind = "group"` and declare `[[page.children]]`. Each child has a title and its own settings. MENU keeps one module entry and opens the same child pages.
 - To add a module, follow [Writing a module](docs/modules.md). [docs/module-reference.md](docs/module-reference.md) gives the keys, services, limits, and error numbers.
-- Keep firmware details in the core. A module under `modules/<folder>/` includes only `runtime/sdk/grkit.h`. If a module needs a firmware function, add a core service: an export of `grkit_core::grm::EXPORTS`, or a capability.
-- Add each new hook to the hooks of its family in `crates/grkit-build/src/target/<family>.rs`, with its extension point, and give its site in each target module of the family. A build without a site for a hook of its family fails.
+- Keep firmware details in the core. Modules under `modules/<folder>/` can include local headers, `runtime/sdk/grkit.h`, and the generated `grkit_module.h`. If a module needs a firmware function, add a core service: an export of `grkit_core::grm::EXPORTS`, or a capability.
+- Add each new hook and its extension point to the hooks of its family in `crates/grkit-build/src/target/<family>.rs`. Give its site in each target module of the family. A build without a site for a hook of its family fails.
 - Keep processing records valid while camera tasks use them.
 - Do not change persistent native camera settings.
 - Add focused tests for new behavior. Keep GRF bytes unchanged in compatible refactors.

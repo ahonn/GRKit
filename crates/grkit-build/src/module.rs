@@ -264,16 +264,30 @@ pub struct SettingSpec {
     pub key: String,
     pub values: u32,
     #[serde(default)]
+    pub default: u32,
+    #[serde(default)]
     pub saved: bool,
     #[serde(default)]
     pub public: bool,
 }
 
-/// A choice page of one setting: a key of `settings`, or a name of `uses`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageKind {
+    #[default]
+    Choice,
+    Settings,
+    Group,
+}
+
+/// The module's root page: a choice, native settings, or a group of children.
 /// Its text is in `text/<language>.toml`.
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageSpec {
+    #[serde(default)]
+    pub kind: PageKind,
+    #[serde(default)]
     pub setting: String,
     /// Row 0 shows the Off icon instead of tile 0.
     #[serde(default)]
@@ -287,6 +301,18 @@ pub struct PageSpec {
     /// effects (`GRKIT_CHOICE_OPTIONS`).
     #[serde(default)]
     pub options: bool,
+    /// Native settings pages opened by the rows of a group.
+    #[serde(default)]
+    pub children: Vec<ChildPageSpec>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChildPageSpec {
+    /// The key of the title in `children.<KEY>` in each text file.
+    pub key: String,
+    /// The first row is an Off/On setting, toggled with OK in ADJ.
+    pub settings: Vec<String>,
 }
 
 /// A `picture.plane` filter.
@@ -337,6 +363,14 @@ struct PageText {
     /// The rows of the native settings page (`PageSpec::settings`) by key.
     #[serde(default)]
     settings: std::collections::BTreeMap<String, RowText>,
+    #[serde(default)]
+    children: std::collections::BTreeMap<String, ChildPageText>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChildPageText {
+    title: String,
 }
 
 /// The text of a row of the native settings page.
@@ -419,6 +453,7 @@ fn read_text(directory: &Path, language: Language) -> Result<(PathBuf, PageText)
         .chain(&text.rows)
         .chain(text.summaries.iter().flatten())
         .chain(rows)
+        .chain(text.children.values().map(|child| &child.title))
     {
         if let Some(c) = language.undrawable(item) {
             bail!(
@@ -465,12 +500,25 @@ pub fn generate(directory: &Path) -> Result<(Manifest, String, String)> {
     );
     let mut registrations = Vec::new();
     if let Some(page) = &m.page {
-        if CORE_ROWS.contains(&page.setting.as_str()) {
+        if page.kind != PageKind::Group {
+            ensure!(page.children.is_empty(), "Only a group page has children");
+        }
+        if page.kind == PageKind::Group {
+            group_page(directory, m, page, &mut c)?;
+        } else if page.kind == PageKind::Settings {
+            settings_page(directory, m, page, &mut c)?;
+        } else if CORE_ROWS.contains(&page.setting.as_str()) {
             core_page(directory, m, page, &mut c)?;
         } else {
             choice_page(directory, m, page, &mut c)?;
         }
         registrations.push(registration("GRKIT_POINT_MENU_PAGE", "page"));
+        for i in 0..page.children.len() {
+            registrations.push(registration(
+                "GRKIT_POINT_MENU_PAGE",
+                &format!("page_child_{i}"),
+            ));
+        }
     }
     registrations.extend(layers(m, &mut c)?);
     registrations.extend(filters(m, &mut c)?);
@@ -506,6 +554,11 @@ fn validate(m: &Manifest) -> Result<()> {
             "Setting {} needs 1 to {} values",
             setting.key,
             grkit_core::runtime::MODULE_SETTING_VALUES
+        );
+        ensure!(
+            setting.default < setting.values,
+            "Setting {} default is outside its values",
+            setting.key
         );
         ensure!(
             m.settings[..i].iter().all(|s| s.key != setting.key),
@@ -597,7 +650,10 @@ fn core_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) ->
     for (l, language) in Language::ALL.into_iter().enumerate() {
         let (path, text) = read_text(directory, language)?;
         ensure!(
-            text.rows.is_empty() && text.summaries.is_none() && text.settings.is_empty(),
+            text.rows.is_empty()
+                && text.summaries.is_none()
+                && text.settings.is_empty()
+                && text.children.is_empty(),
             "{}: the core gives the rows of {}, so the text has only the title",
             path.display(),
             page.setting
@@ -623,6 +679,156 @@ struct SettingRow {
     /// The C reference of the setting (`setting_reference`).
     reference: String,
     values: usize,
+}
+
+/// An ADJ entry that opens its native settings directly, without a choice page.
+fn settings_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -> Result<()> {
+    ensure!(
+        page.setting.is_empty() && !page.off_row && !page.options,
+        "A settings page has no setting, off_row, or options"
+    );
+    let first = page
+        .settings
+        .first()
+        .context("A settings page needs at least one row")?;
+    ensure!(!m.tiles.is_empty(), "A settings page needs a module tile");
+    let (setting, own_values) = setting_reference(m, first)?;
+    let values = match own_values {
+        Some(values) => values,
+        None => used_values(directory, first)?,
+    };
+    let rows = setting_rows(directory, m, page, &setting, values)?;
+    for (l, language) in Language::ALL.into_iter().enumerate() {
+        let (path, text) = read_text(directory, language)?;
+        ensure!(
+            text.rows.is_empty() && text.summaries.is_none() && text.children.is_empty(),
+            "{}: a settings page has no choice rows, summaries, or child titles",
+            path.display()
+        );
+        writeln!(c, "static const u16 title_{l}[] = {};", utf16(&text.title)?)?;
+        setting_text(&path, &text, &rows, l, c)?;
+    }
+    text_table(c, "page_title", per_language("title".to_owned()))?;
+    let settings = setting_row_tables(&rows, c)?;
+    writeln!(c, "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_SETTINGS, .setting = {setting}, .title = page_title, .rows = {values}{settings}}};")?;
+    Ok(())
+}
+
+/// A group has one ADJ entry and one native settings page for each child.
+fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -> Result<()> {
+    ensure!(
+        page.setting.is_empty() && page.settings.is_empty() && !page.off_row && !page.options,
+        "A group page has no setting, settings, off_row, or options"
+    );
+    ensure!(
+        (1..=4).contains(&page.children.len()),
+        "A group page needs 1 to 4 children"
+    );
+    ensure!(
+        m.tiles.len() > page.children.len(),
+        "A group page needs a module tile and one tile for each child"
+    );
+    let mut children = Vec::new();
+    for (i, child) in page.children.iter().enumerate() {
+        ensure!(valid_key(&child.key), "Invalid child key {:?}", child.key);
+        ensure!(
+            page.children[..i]
+                .iter()
+                .all(|other| other.key != child.key),
+            "Child {} is twice in module.toml",
+            child.key
+        );
+        let first = child
+            .settings
+            .first()
+            .with_context(|| format!("Child {} needs at least one settings row", child.key))?;
+        ensure!(
+            !m.uses
+                .iter()
+                .any(|name| name.strip_prefix('?') == Some(first.as_str())),
+            "Child {} cannot start with an optional setting",
+            child.key
+        );
+        let (setting, own_values) = setting_reference(m, first)?;
+        let values = match own_values {
+            Some(values) => values,
+            None => used_values(directory, first)?,
+        };
+        ensure!(
+            values == 2,
+            "Child {} must start with a two-value Off/On setting",
+            child.key
+        );
+        let child_page = PageSpec {
+            kind: PageKind::Settings,
+            setting: String::new(),
+            off_row: false,
+            settings: child.settings.clone(),
+            options: false,
+            children: Vec::new(),
+        };
+        let rows = setting_rows(directory, m, &child_page, &setting, values)?;
+        children.push((setting, values, rows));
+    }
+    let keys: std::collections::BTreeSet<_> = children
+        .iter()
+        .flat_map(|(_, _, rows)| rows.iter().map(|row| &row.key))
+        .collect();
+    for (l, language) in Language::ALL.into_iter().enumerate() {
+        let (path, text) = read_text(directory, language)?;
+        ensure!(
+            text.rows.is_empty() && text.summaries.is_none(),
+            "{}: a group page has no choice rows or summaries",
+            path.display()
+        );
+        ensure!(
+            text.children.len() == page.children.len(),
+            "{} must name the text of each group child",
+            path.display()
+        );
+        ensure!(
+            text.settings
+                .keys()
+                .collect::<std::collections::BTreeSet<_>>()
+                == keys,
+            "{} must name the text of each group setting",
+            path.display()
+        );
+        writeln!(c, "static const u16 title_{l}[] = {};", utf16(&text.title)?)?;
+        for (i, (child, (_, _, rows))) in page.children.iter().zip(&children).enumerate() {
+            let title = &text
+                .children
+                .get(&child.key)
+                .with_context(|| format!("{} has no [children.{}]", path.display(), child.key))?
+                .title;
+            writeln!(
+                c,
+                "static const u16 child_{i}_title_{l}[] = {};",
+                utf16(title)?
+            )?;
+            native_setting_text(&path, &text, rows, l, &format!("child_{i}_"), c)?;
+        }
+    }
+    text_table(c, "page_title", per_language("title".to_owned()))?;
+    for (i, (setting, values, rows)) in children.iter().enumerate() {
+        text_table(
+            c,
+            &format!("child_{i}_page_title"),
+            per_language(format!("child_{i}_title")),
+        )?;
+        let settings = native_setting_tables(rows, &format!("child_{i}_"), c)?;
+        writeln!(c, "static const GrkitPage page_child_{i} = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_SETTINGS, .setting = {setting}, .flags = GRKIT_PAGE_MENU_ONLY, .title = child_{i}_page_title, .rows = {values}{settings}}};")?;
+    }
+    writeln!(
+        c,
+        "static const GrkitPage *const page_children[] = {{{}}};",
+        (0..children.len())
+            .map(|i| format!("&page_child_{i}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )?;
+    writeln!(c, "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_GROUP, .setting = GRKIT_NO_SETTING, .title = page_title, .rows = {}, .children = page_children}};", children.len())?;
+    Ok(())
 }
 
 /// A choice page: a row with a tile and a label for each value of its
@@ -702,7 +908,7 @@ fn setting_rows(
     for (i, key) in page.settings.iter().enumerate() {
         let (reference, count) = if i == 0 {
             ensure!(
-                key == &page.setting,
+                page.kind == PageKind::Settings || key == &page.setting,
                 "The first native settings row is the page setting"
             );
             (setting.to_owned(), values)
@@ -765,6 +971,11 @@ fn choice_text(
 ) -> Result<()> {
     let (path, text) = read_text(directory, language)?;
     ensure!(
+        text.children.is_empty(),
+        "{}: only a group page has child titles",
+        path.display()
+    );
+    ensure!(
         text.rows.len() == values,
         "{} has {} rows, and {} has {values} values",
         path.display(),
@@ -789,6 +1000,16 @@ fn choice_text(
             utf16(&format!("{}{separator}{value}", text.title))?
         )?;
     }
+    setting_text(&path, &text, rows, l, c)
+}
+
+fn setting_text(
+    path: &Path,
+    text: &PageText,
+    rows: &[SettingRow],
+    l: usize,
+    c: &mut String,
+) -> Result<()> {
     ensure!(
         text.settings.len() == rows.len(),
         "{} names the text of {} native settings rows, and the page has {}",
@@ -796,6 +1017,17 @@ fn choice_text(
         text.settings.len(),
         rows.len()
     );
+    native_setting_text(path, text, rows, l, "", c)
+}
+
+fn native_setting_text(
+    path: &Path,
+    text: &PageText,
+    rows: &[SettingRow],
+    l: usize,
+    prefix: &str,
+    c: &mut String,
+) -> Result<()> {
     for (r, row) in rows.iter().enumerate() {
         let key = &row.key;
         let row_text = text
@@ -804,7 +1036,7 @@ fn choice_text(
             .with_context(|| format!("{} has no [settings.{key}]", path.display()))?;
         writeln!(
             c,
-            "static const u16 row_{r}_{l}[] = {};",
+            "static const u16 {prefix}row_{r}_{l}[] = {};",
             utf16(&row_text.label)?
         )?;
         let texts = match (&row_text.values, r) {
@@ -820,7 +1052,11 @@ fn choice_text(
             row.values
         );
         for (v, value) in texts.iter().enumerate() {
-            writeln!(c, "static const u16 row_{r}_{v}_{l}[] = {};", utf16(value)?)?;
+            writeln!(
+                c,
+                "static const u16 {prefix}row_{r}_{v}_{l}[] = {};",
+                utf16(value)?
+            )?;
         }
     }
     Ok(())
@@ -829,16 +1065,20 @@ fn choice_text(
 /// The tables of the native settings rows (`GrkitSettingRow`). Return the
 /// fields of `GrkitPage` that refer to them, empty without rows.
 fn setting_row_tables(rows: &[SettingRow], c: &mut String) -> Result<String> {
+    native_setting_tables(rows, "", c)
+}
+
+fn native_setting_tables(rows: &[SettingRow], prefix: &str, c: &mut String) -> Result<String> {
     for (r, row) in rows.iter().enumerate() {
         text_table(
             c,
-            &format!("row_{r}_label"),
-            per_language(format!("row_{r}")),
+            &format!("{prefix}row_{r}_label"),
+            per_language(format!("{prefix}row_{r}")),
         )?;
         text_table(
             c,
-            &format!("row_{r}_values"),
-            (0..row.values).flat_map(move |v| per_language(format!("row_{r}_{v}"))),
+            &format!("{prefix}row_{r}_values"),
+            (0..row.values).flat_map(move |v| per_language(format!("{prefix}row_{r}_{v}"))),
         )?;
     }
     if rows.is_empty() {
@@ -849,18 +1089,18 @@ fn setting_row_tables(rows: &[SettingRow], c: &mut String) -> Result<String> {
         .enumerate()
         .map(|(r, row)| {
             format!(
-                "{{.size = sizeof(GrkitSettingRow), .setting = {}, .label = row_{r}_label, .values = row_{r}_values}}",
+                "{{.size = sizeof(GrkitSettingRow), .setting = {}, .label = {prefix}row_{r}_label, .values = {prefix}row_{r}_values}}",
                 row.reference
             )
         })
         .collect();
     writeln!(
         c,
-        "static const GrkitSettingRow page_settings[] = {{{}}};",
+        "static const GrkitSettingRow {prefix}page_settings[] = {{{}}};",
         entries.join(", ")
     )?;
     Ok(format!(
-        ", .setting_rows = {}, .settings = page_settings",
+        ", .setting_rows = {}, .settings = {prefix}page_settings",
         rows.len()
     ))
 }
@@ -984,8 +1224,8 @@ fn descriptor(m: &Manifest, registrations: &[String], tiles: &[u8], c: &mut Stri
                     (false, false) => "0",
                 };
                 format!(
-                    "{{.size = sizeof(GrkitSetting), .key = \"{}\", .values = {}, .flags = {flags}}}",
-                    s.key, s.values
+                    "{{.size = sizeof(GrkitSetting), .key = \"{}\", .values = {}, .flags = {flags}, .default_value = {}}}",
+                    s.key, s.values, s.default
                 )
             })
             .collect();

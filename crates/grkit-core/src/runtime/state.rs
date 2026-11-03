@@ -10,9 +10,9 @@ pub const STATE_MAX_BYTES: usize = 16384;
 
 /// A state file keeps the state keys of the capabilities
 /// (`capabilities::state_keys`) and the saved module settings.
-/// The file holds two lines for each key with a value other than 0: the key
-/// ID (`state_key_id`), then the value, both in decimal. A missing key and a
-/// module that is not installed restore 0.
+/// The file holds two decimal lines per saved key: its ID (`state_key_id`),
+/// then its value. Module settings include zero, so a missing key can use
+/// its declared default. Core settings with value zero can omit their key.
 /// The most digits of a number in the state file. The loader parses the digits
 /// itself, and 9 digits cannot overflow its 32-bit integers.
 pub const STATE_DIGITS: usize = 9;

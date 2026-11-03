@@ -46,6 +46,9 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/llvm-21.list
           sudo apt-get update
           sudo apt-get install --yes clang-21 lld-21
+      # qemu-arm runs the NEON parity test of Glow (synthetic_glow_neon_parity).
+      - if: runner.os == 'Linux'
+        run: sudo apt-get install --yes qemu-user
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings

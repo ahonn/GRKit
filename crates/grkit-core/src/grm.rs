@@ -30,7 +30,7 @@ pub const DATA_LOCATION: u32 = 0x8000_0000;
 /// in the low half. The installer loads a module whose major equals its own
 /// and whose minor is not larger than its own (`runtime/sdk/grkit.h`).
 pub const ABI_MAJOR: u32 = 2;
-pub const ABI_MINOR: u32 = 0;
+pub const ABI_MINOR: u32 = 1;
 /// The largest code, data, or BSS size of one module that the installer
 /// accepts.
 pub const MAX_SEGMENT: usize = 0x10000;
@@ -51,6 +51,8 @@ pub const EXPORTS: &[(&str, &str)] = &[
     ("setting_set", "grkit_export_setting_set"),
     ("local_time", "grkit_export_local_time"),
     ("divide", "grkit_export_divide"),
+    ("picture_white", "grkit_export_picture_white"),
+    ("picture_shot", "grkit_export_picture_shot"),
     ("timer_start", "grkit_export_timer_start"),
     ("timer_cancel", "grkit_export_timer_cancel"),
     ("ui_toast", "grkit_export_ui_toast"),

@@ -438,6 +438,35 @@
 #define GRKIT_SHOT_LAST_TURNS 4
 #define GRKIT_PICTURE_SCRATCH 141512
 
+/* The layout of GrkitShot (runtime/sdk/grkit.h) that picture_shot fills:
+   its size in bytes, the byte offset of each field, and the bits of
+   `known`. tests/runtime/layout_contract.c checks them against the SDK. */
+#define GRKIT_SHOT_INFO_BYTES 52
+#define GRKIT_SHOT_INFO_SIZE 0
+#define GRKIT_SHOT_INFO_KNOWN 4
+#define GRKIT_SHOT_INFO_AV 8
+#define GRKIT_SHOT_INFO_TV 12
+#define GRKIT_SHOT_INFO_SV 16
+#define GRKIT_SHOT_INFO_SCENE_EV 20
+#define GRKIT_SHOT_INFO_COMPENSATION 24
+#define GRKIT_SHOT_INFO_EXPOSURE_US 28
+#define GRKIT_SHOT_INFO_F_NUMBER 32
+#define GRKIT_SHOT_INFO_ISO 34
+#define GRKIT_SHOT_INFO_FOCAL 36
+#define GRKIT_SHOT_INFO_FOCAL_35MM 38
+#define GRKIT_SHOT_INFO_PROGRAM 40
+#define GRKIT_SHOT_INFO_METERING 41
+#define GRKIT_SHOT_INFO_FLASH 42
+#define GRKIT_SHOT_INFO_TAKEN 44
+#define GRKIT_SHOT_INFO_KNOWN_EXPOSURE 1
+#define GRKIT_SHOT_INFO_KNOWN_COMPENSATION 2
+#define GRKIT_SHOT_INFO_KNOWN_FOCAL 4
+#define GRKIT_SHOT_INFO_KNOWN_TAKEN 8
+#define GRKIT_SHOT_INFO_KNOWN_FLASH 16
+#define GRKIT_SHOT_INFO_KNOWN_PROGRAM 32
+#define GRKIT_SHOT_INFO_KNOWN_METERING 64
+#define GRKIT_SHOT_INFO_KNOWN_ALL 127
+
 /* Menu text after the picture scratch, in each menu language: 0 English, 1
    Simplified Chinese, 2 Traditional Chinese, 3 Japanese, 4 Korean. The
    installer copies the label table of the build to offset 0: for each

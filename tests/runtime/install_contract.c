@@ -254,14 +254,14 @@ struct spec {
     u32 order, data_bytes, bss_bytes;
     /* A file with another magic, or with another major ABI. */
     int bad_magic, new_abi;
-    struct { const char *key; u32 values, flags; } settings[SPEC_ITEMS];
+    struct { const char *key; u32 values, flags, default_value; } settings[SPEC_ITEMS];
     const char *uses[SPEC_ITEMS], *imports[SPEC_ITEMS];
     u32 layer_count, filter_count;
     struct { u32 order, flags, setting; } layers[SPEC_ITEMS];
     struct { u32 stage, setting; } filters[SPEC_ITEMS];
     /* A choice page of own setting 0 with these native settings rows: row 0
        is setting 0, the others an own setting n or GRM_USED | used n. */
-    u32 page_rows, rows[SPEC_ITEMS];
+    u32 page_rows, rows[SPEC_ITEMS], settings_page, group_page, bad_group;
 };
 static u32 code_words[GRM_MAX_SEGMENT / 4], code_count, relocations[256], relocation_count;
 static u32 emit(u32 value)
@@ -314,8 +314,8 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     for (u32 k = 0; k < uses; ++k) use_names[k] = emit_text(s->uses[k]);
     u32 setting_list = code_count;
     for (u32 k = 0; k < settings; ++k) {
-        emit(GRM_SETTING); emit_pointer(keys[k], 0);
-        emit(s->settings[k].values); emit(s->settings[k].flags);
+        emit(GRM_SETTING_DEFAULT); emit_pointer(keys[k], 0);
+        emit(s->settings[k].values); emit(s->settings[k].flags); emit(s->settings[k].default_value);
     }
     u32 use_list = code_count;
     for (u32 k = 0; k < uses; ++k) emit_pointer(use_names[k], 0);
@@ -329,7 +329,8 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     }
     /* The page: one text for each language and value, 32 at most, and a
        blank tile for each value of setting 0. */
-    u32 page_at = 0, tiles_at = 0, tile_count = s->page_rows ? s->settings[0].values : 0;
+    u32 page_at = 0, child_at[2] = {0, 0}, tiles_at = 0;
+    u32 tile_count = s->group_page ? 3 : s->page_rows ? (s->settings_page ? 1 : s->settings[0].values) : 0;
     if (s->page_rows) {
         static const u16 hi[] = {'H', 'i', 0};
         u32 text = emit(0), texts, row_list;
@@ -341,9 +342,28 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
         for (u32 r = 0; r < s->page_rows; ++r) {
             emit(GRM_ROW); emit(r ? s->rows[r] : 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
         }
-        page_at = emit(GRM_PAGE); emit(GRM_PAGE_CHOICE); emit(0); emit(0);
+        page_at = emit(GRM_PAGE); emit(s->settings_page ? GRM_PAGE_SETTINGS : GRM_PAGE_CHOICE); emit(0); emit(0);
         emit_pointer(texts, 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
-        emit(tile_count); emit(s->page_rows); emit_pointer(row_list, 0);
+        emit(s->settings[0].values); emit(s->page_rows); emit_pointer(row_list, 0);
+        if (s->group_page) {
+            child_at[0] = page_at;
+            code_words[page_at + GRM_PAGE_KIND_AT / 4] = GRM_PAGE_SETTINGS;
+            code_words[page_at + GRM_PAGE_FLAGS_AT / 4] = GRM_PAGE_MENU_ONLY;
+            row_list = code_count;
+            for (u32 r = 0; r < 2; ++r) {
+                emit(GRM_ROW); emit(r + 2); emit_pointer(texts, 0); emit_pointer(texts, 0);
+            }
+            child_at[1] = emit(GRM_PAGE); emit(GRM_PAGE_SETTINGS); emit(2); emit(GRM_PAGE_MENU_ONLY);
+            emit_pointer(texts, 0); emit(0); emit(0); emit(s->settings[2].values); emit(2); emit_pointer(row_list, 0);
+            u32 children = code_count;
+            emit_pointer(child_at[0], 0); emit_pointer(child_at[1], 0);
+            page_at = emit(GRM_GROUP_PAGE); emit(GRM_PAGE_GROUP); emit(GRM_NO_SETTING); emit(0);
+            emit_pointer(texts, 0); emit(0); emit(0); emit(2); emit(0); emit(0); emit_pointer(children, 0);
+            if (s->bad_group == 1) code_words[child_at[1] + GRM_PAGE_FLAGS_AT / 4] = 0;
+            if (s->bad_group == 2) code_words[children + 1] = page_at * 4;
+            if (s->bad_group == 3) code_words[page_at] = GRM_PAGE;
+            if (s->bad_group == 4) code_words[page_at + GRM_PAGE_ROWS_AT / 4] = GRM_PAGE_CHILDREN + 1;
+        }
         tiles_at = code_count;
         for (u32 k = 0; k < tile_count * GRM_TILE_BYTES / 4; ++k) emit(0);
     }
@@ -351,9 +371,10 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     for (u32 k = 0; k < s->layer_count; ++k) { emit(GRM_POINT_OVERLAY_LAYER); emit_pointer(layer_at[k], 0); }
     for (u32 k = 0; k < s->filter_count; ++k) { emit(GRM_POINT_PICTURE_PLANE); emit_pointer(filter_at[k], 0); }
     if (s->page_rows) { emit(GRM_POINT_MENU_PAGE); emit_pointer(page_at, 0); }
+    if (s->group_page) for (u32 k = 0; k < 2; ++k) { emit(GRM_POINT_MENU_PAGE); emit_pointer(child_at[k], 0); }
     u32 descriptor = emit(GRM_DESCRIPTOR);
     emit(abi);
-    emit_list(registrations, s->layer_count + s->filter_count + (s->page_rows ? 1 : 0));
+    emit_list(registrations, s->layer_count + s->filter_count + (s->page_rows ? 1 : 0) + (s->group_page ? 2 : 0));
     emit_list(setting_list, settings);
     emit_list(use_list, uses);
     emit_list(tiles_at, tile_count);
@@ -602,8 +623,8 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, the
        switch, then the saved values that no setting takes: CORE.GRAIN,
-       which no module uses, and an unknown key, but not a value 0. */
-    assert(word(ARRAY_AT) == 13 && word(ARRAY_AT + 4) == 0);
+       which no module uses, and unknown keys, including a value 0. */
+    assert(word(ARRAY_AT) == 14 && word(ARRAY_AT + 4) == 0);
     expect_setting(0, id_of("GUIDES.STYLE"), 0, 6);
     expect_setting(1, id_of("GUIDES.COLOR"), 0, 3);
     expect_setting(2, 0, 0, 2);
@@ -616,10 +637,11 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(9, id_of("CORE.ROWS.DATE"), 5, 1U << MANAGE_OPTION_VALUES);
     expect_setting(10, id_of("CORE.OFF"), 0, 2);
     expect_setting(11, 12345, 7, 8);
-    expect_setting(12, id_of("CORE.GRAIN"), 1, 2);
+    expect_setting(12, 23456, 0, 1);
+    expect_setting(13, id_of("CORE.GRAIN"), 1, 2);
     /* The contexts: the first setting, the count, reserved, then the handle
        of each used setting. */
-    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(13);
+    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(14);
     assert(word(context) == 0 && word(context + 4) == 3 && word(context + 8) == 0);
     assert(word(context + 12) == GRKIT_CORE_ASPECT && word(context + 16) == GRM_NO_SETTING);
     u32 date_context = context + 4 * CONTEXT_WORDS(2);
@@ -634,6 +656,85 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert((needed_points & core_setting_points[1]) == core_setting_points[1]);
     assert(word(module_list + MANAGE_SETTINGS) == 4);
     assert(word(module_list + MANAGE_SWITCH) == 10 + 1);
+}
+/* Defaults initialize both saved and transient settings. Explicit saved zero
+   survives a restart and a period without the module installed. */
+static void setting_defaults_and_saved_zero(void)
+{
+    const struct spec module = {
+        .id = "DEFAULT", .settings = {{"LEVEL", 3, GRM_SETTING_SAVED, 1}, {"TEMP", 3, 0, 2}},
+    };
+    const u32 pairs[] = {id_of("DEFAULT.LEVEL"), 0};
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "DEFAULT.GRM", &module);
+    assert(install() == 0);
+    expect_setting(0, pairs[0], 1, 3);
+    expect_setting(1, 0, 2, 3);
+    save_state(pairs, 1);
+    assert(install() == 0);
+    u32 entry = ARRAY_AT + 4 * SETTINGS_ENTRY(0);
+    assert(state_setting_value(&saved_state, word(entry), word(entry + 4), word(entry + 8)) == 0);
+
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "GUIDES.GRM", &guides);
+    save_state(pairs, 1);
+    assert(install() == 0);
+    assert(kept_count == 1 && kept_ids[0] == pairs[0] && kept_values[0] == 0);
+}
+/* A settings-only entry links its independent rows with only a module tile. */
+static void install_settings_page(void)
+{
+    const struct spec module = {
+        .id = "SETTINGS", .settings = {{"FIRST", 4, GRM_SETTING_SAVED}, {"SECOND", 4, GRM_SETTING_SAVED}},
+        .page_rows = 2, .rows = {0, 1}, .settings_page = 1,
+    };
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "SETTINGS.GRM", &module);
+    assert(install() == 0 && module_page_count == 1 && module_tiles == 1);
+    u32 page = module_pages[0], rows = word(page + GRM_PAGE_SETTINGS_AT);
+    assert(word(page + GRM_PAGE_KIND_AT) == GRM_PAGE_SETTINGS && word(page + GRM_PAGE_SETTING_ROWS_AT) == 2);
+    assert(word(rows + GRM_ROW_SETTING_AT) == 0 && word(rows + GRM_ROW + GRM_ROW_SETTING_AT) == 1);
+}
+/* A group and both children install atomically; children keep independent
+   handles, and descriptors remain inside the owning module's code. */
+static void install_group_page(void)
+{
+    struct spec group = {
+        .id = "GROUP", .settings = {{"FIRST_ON", 2, GRM_SETTING_SAVED}, {"FIRST_POWER", 3, GRM_SETTING_SAVED, 1},
+                                 {"SECOND_ON", 2, GRM_SETTING_SAVED}, {"SECOND_POWER", 3, GRM_SETTING_SAVED, 1}},
+        .page_rows = 2, .rows = {0, 1}, .group_page = 1,
+    };
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "GROUP.GRM", &group);
+    assert(install() == 0 && module_status[0] == 0 && module_page_count == 3 && module_tiles == 3);
+    u32 page = module_pages[0], children = word(page + GRM_PAGE_CHILDREN_AT);
+    assert(word(page + GRM_PAGE_KIND_AT) == GRM_PAGE_GROUP && module_pages[1] == GRM_NO_SETTING);
+    for (u32 c = 0; c < 2; ++c) {
+        u32 child = module_pages[(c + 1) * 3], rows = word(child + GRM_PAGE_SETTINGS_AT);
+        assert(word(children + c * 4) == child && module_pages[(c + 1) * 3 + 1] == c * 2);
+        assert(word(rows + GRM_ROW_SETTING_AT) == c * 2 && word(rows + GRM_ROW + GRM_ROW_SETTING_AT) == c * 2 + 1);
+        assert(word(child + GRM_PAGE_FLAGS_AT) == GRM_PAGE_MENU_ONLY);
+    }
+    for (u32 bad = 1; bad <= 4; ++bad) {
+        reset(); group.bad_group = bad;
+        add_module(PACKAGE_MODULES_PATH, "GROUP.GRM", &group);
+        assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR && !module_page_count);
+    }
+    group.bad_group = 0;
+    /* An otherwise valid child cannot toggle a setting with three values. */
+    reset();
+    group.settings[0].values = 3;
+    add_module(PACKAGE_MODULES_PATH, "GROUP.GRM", &group);
+    assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR && !module_page_count);
+    group.settings[0].values = 2;
+    reset();
+    for (u32 i = 0; i < 4; ++i) {
+        char id[] = "GROUP0", file[] = "GROUP0.GRM";
+        id[5] += (char)i; file[5] += (char)i;
+        group.id = id; group.order = i;
+        add_module(PACKAGE_MODULES_PATH, file, &group);
+    }
+    assert(install() == 0 && module_page_count == 9 && module_status[3] == GRM_NO_ROOM);
 }
 /* The GRKit switch Off stops each module that loads, as its own Off does,
    and keeps the Enable of each. */
@@ -819,6 +920,9 @@ static void *run(void *unused)
     a_bad_module_keeps_the_others();
     the_budget_counts_the_services_block();
     install_writes_the_settings_and_the_contexts();
+    setting_defaults_and_saved_zero();
+    install_settings_page();
+    install_group_page();
     the_switch_stops_each_module();
     layers_follow_their_order_and_filters_their_stage();
     the_module_list_shows_each_result();

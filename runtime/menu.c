@@ -328,7 +328,7 @@ A32_ENTRY void menu_refresh(u32 controller) {
     parameter_title(h)[0]=0;
     if(private_mode(controller)) { render(controller); return; }
     if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])==RETURN_PARAMETERS && ADJ_MOVIE(controller)!=1) {
-        u32 root=h[GRKIT_HOST_RETURN/4]&RETURN_ROOT;
+        u32 root=h[GRKIT_HOST_RETURN/4]&RETURN_ROOT, row=h[GRKIT_HOST_MENU_CURSOR/4];
         h[GRKIT_HOST_RETURN/4]=0;
         /* The page has ended. A record that no page started stays unused. */
         if(h[GRKIT_HOST_PARAMETERS/4]&1U) h[GRKIT_HOST_PARAMETERS/4]=0;
@@ -337,7 +337,7 @@ A32_ENTRY void menu_refresh(u32 controller) {
            page. The page is visible, because it opened the other page. */
         enter(controller,3);
         if(!root) {
-            menu_open(h,h[GRKIT_HOST_MODULE/4]);
+            menu_return_page(h,row);
             render(controller);
         }
         ui_native_returned(h);
@@ -689,9 +689,14 @@ static u32 settings_target(volatile u32 *h,u32 controller) {
     else if(level==MENU_MODULE) module=h[GRKIT_HOST_MODULE/4];
     else return MODULE_TOTAL;
     page=menu_page(h,module);
+    if(level==MENU_MODULE && page==&group_module) {
+        module=group_child(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+        if(module>=module_pages(h)) return MODULE_TOTAL;
+        page=menu_page(h,module);
+    }
     if(!page->settings) return MODULE_TOTAL;
     /* A page with one settings row has it in MENU only: it is the page. */
-    if(page->settings==choice_settings && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)<2) return MODULE_TOTAL;
+    if(page->settings==choice_settings && !choice_direct(h) && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)<2) return MODULE_TOTAL;
     return module;
 }
 static u32 open_settings(u32 controller) {
@@ -703,6 +708,30 @@ static u32 open_settings(u32 controller) {
     h[GRKIT_HOST_RETURN/4]=RETURN_OPENING|(root ? RETURN_ROOT : 0);
     CALL3(FW_CHANGE_CONTROLLER)(controller,SETTINGS_SUBMENU,0x2000000);
     return 1;
+}
+/* A settings entry has no intermediate choice page. */
+static u32 direct_settings_root(volatile u32 *h) {
+    u32 module;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_ROOT) return 0;
+    module=current_index(h);
+    if(module>=module_pages(h)) return 0;
+    menu_page(h,module);
+    return choice_direct(h);
+}
+static u32 group_settings_row(volatile u32 *h) {
+    return h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && current_module(h)==&group_module;
+}
+static u32 direct_settings_event(volatile u32 *h,u32 kind) {
+    return (kind==EV_RIGHT || (kind==EV_CONFIRM && !after_adj_press(h))) && direct_settings_root(h);
+}
+/* Confirm the current selection and return whether ADJ should close.
+   Group OK toggles a child in place; an ADJ press only closes its list. */
+static u32 confirm_selection(volatile u32 *h) {
+    u32 page=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE, group=group_settings_row(h);
+    u32 close=page && h[GRKIT_HOST_MODULE/4]!=MANAGE_MODULE && !group;
+    if(after_adj_press(h)) close=1;
+    if((page || !close) && !(group && close)) menu_confirm(h);
+    return close;
 }
 /* Open the native parameter page, as the native ADJ Image Control slot does
    for event 0x1b with argument 2. Refresh the model snapshot first: a cancel
@@ -731,11 +760,12 @@ A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
    ADJ exit that GRKit did not start, such as a half-press of the shutter,
    keeps the highlighted row of a page, as a native ADJ keeps the value under
    its cursor. The Modules page opens settings on OK, so it commits nothing.
-   The GRKit switch commits only on OK or a touch: a half-press on its page
-   must not turn each module off. */
+   The GRKit switch and group toggles commit only on OK or a touch: leaving
+   their pages must not change an Enable setting. */
 static void exit_commit(volatile u32 *h) {
     u32 module=h[GRKIT_HOST_MODULE/4];
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && module!=MANAGE_MODULE && module!=SWITCH_MODULE) menu_confirm(h);
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && module!=MANAGE_MODULE && module!=SWITCH_MODULE &&
+       menu_page(h,module)!=&group_module) menu_confirm(h);
 }
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
@@ -808,6 +838,7 @@ A32_ENTRY void menu_apply(u32 controller) {
     volatile u32 *h=menu_header();
     if(!private_mode(controller)) { menu_apply_original(controller); return; }
     if(ui_modal(h)) return;
+    if(direct_settings_root(h) && open_settings(controller)) return;
     menu_confirm(h);
     render(controller);
 }
@@ -886,8 +917,10 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     }
     /* Fn elsewhere opens the detail settings of the module, if it has any. */
     if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && open_settings(controller)) return 0;
-    /* Left and Right move to the next ADJ entry from the root and from a
-       page, as on a native entry. MENU returns from a page to the root. */
+    /* OK and Right on a settings entry open its native controls. */
+    if(direct_settings_event(h,kind) && open_settings(controller)) return 0;
+    /* Left and Right otherwise move to the next ADJ entry from the root
+       and from a page. MENU returns from a page to the root. */
     if(kind==EV_LEFT || kind==EV_RIGHT) {
         u32 edge=h[GRKIT_HOST_MENU_EDGE/4], advance=advance_from_private(kind,edge);
         leave(controller);
@@ -913,17 +946,13 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     /* Confirm is 0xd8. Press and release events do not activate a profile.
        OK on a root row opens its page. OK on a page row commits it and closes
        ADJ, as OK on a native value does: the restored native list gets the
-       confirm, as after MENU on the root. An ADJ press closes ADJ from the
-       root too, as on a native entry; on a page it commits the row first.
+       confirm, as after MENU on the root. Group OK toggles a child and keeps
+       the list open. An ADJ press closes that list without another toggle;
+       on other pages it commits the row first.
        If the commit made a module show a UI box or ask for a native screen,
        ADJ stays open on the page instead (ui_holds_page). */
     if(kind==EV_CONFIRM) {
-        u32 page=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE, close=page;
-        /* ADJ shows no Modules page (visible_modules). If it did, OK there
-           would keep ADJ open, as the page has no value to commit. */
-        if(page && h[GRKIT_HOST_MODULE/4]==MANAGE_MODULE) close=0;
-        if(after_adj_press(h)) close=1;
-        if(page || !close) menu_confirm(h);
+        u32 close=confirm_selection(h);
         if(close && ui_holds_page(h)) close=0;
         if(close) {
             leave(controller);

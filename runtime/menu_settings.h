@@ -62,6 +62,15 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
    that a row of the page opened show (menu_settings_controller). */
 #define SETTINGS_ONE 0x10000U
 #define SETTINGS_FN 0x20000U
+/* A child opened from a module in MENU returns to that module page. */
+#define SETTINGS_PARENT 0x40000U
+#define MENU_GROUP_TARGET 0x2000f60U
+#define MENU_RETURN_CONTROLLER 0x200004aU
+/* BaseController fields shared by the four supported firmware builds. Back
+   sets the flag before ChangeController; its asynchronous completion clears
+   the old instance's return target when that flag is still set. */
+#define SETTINGS_RETURN_TARGET 0x150U
+#define SETTINGS_BACK_PENDING 0x154U
 /* The row past SETTINGS_BORROWED whose value page SETTINGS_ALIAS shows, or
    0: bits 24 to 31. */
 #define SETTINGS_OPEN_ROW 24U
@@ -241,8 +250,11 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
         /* The page shows its rows and labels again on each start, as a value
            page can change them: Film Stock adds Parameters once an effect is
            committed, and an ADJ Order choice moves the modules. */
-        if(settings_page(h))
+        if(settings_page(h)) {
+            u32 parent=h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT;
             settings_open(h,(h[GRKIT_HOST_SETTINGS/4]&0xffffU)-1,h[GRKIT_HOST_SETTINGS/4]&SETTINGS_ONE);
+            h[GRKIT_HOST_SETTINGS/4]|=parent;
+        }
         return id;
     }
     for(i=0;i<SETTINGS_BORROWED;++i) if(id==settings_pages[i]) {
@@ -264,6 +276,25 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
        ends it, so the next ADJ opens as a native ADJ does and its Fn works. */
     if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])==RETURN_PARAMETERS && id!=ADJ_CONTROLLER &&
        id!=IC_PARAMETERS_CONTROLLER && id!=SHOOTING_CONTROLLER) h[GRKIT_HOST_RETURN/4]=0;
+    return id;
+}
+/* A MENU group and its child reuse the same SubMenuController instance.
+   Native Back would clear that instance's return target after starting the
+   parent, leaving its next MENU press with nowhere to go. Treat only this
+   self transition as a fresh start and restore the parent's top-level MENU
+   target. ADJ and value-page returns keep their native Back semantics. */
+A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id) {
+    volatile u32 *h=menu_header();
+    u32 parent_back=controller && h[GRKIT_HOST_SERVICES/4] &&
+        (id==SETTINGS_SUBMENU || id==MENU_RETURN_CONTROLLER) &&
+        (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT) &&
+        services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU &&
+        MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING);
+    id=menu_settings_controller(id);
+    if(parent_back && id==SETTINGS_SUBMENU) {
+        MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING)=0;
+        MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET)=MENU_RETURN_CONTROLLER;
+    }
     return id;
 }
 /* The kind table that the submenu reads: the private entry at the index of
@@ -542,6 +573,8 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
         if(i<SETTINGS_BORROWED) {
             block[SUBMENU_KIND_CONTROLLERS/4+i]=settings_pages[i];
             if(settings_fn_row(h,page,i)) block[SUBMENU_KIND_CONTROLLERS/4+i]=MENU_FN_TARGET;
+            if(page==listed_settings && listed_child(h,i)<module_pages(h))
+                block[SUBMENU_KIND_CONTROLLERS/4+i]=MENU_GROUP_TARGET+i;
             /* The stock entry has three rows: the others take the kind of the first. */
             block[SUBMENU_KIND_ROW_KINDS/4+i]=block[SUBMENU_KIND_ROW_KINDS/4];
         }

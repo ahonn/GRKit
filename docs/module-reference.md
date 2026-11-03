@@ -54,19 +54,56 @@ A setting reference in `page`, `layers`, or `filters` is a key of `settings`, or
 | --- | --- | --- | --- |
 | `key` | string | required | 1 to 15 characters `A`-`Z`, `0`-`9`, or `_`. Unique in the module. The full name is `<id>.<key>`. |
 | `values` | integer | required | The number of values, 1 to 65536. The values are 0 to `values` - 1. |
-| `saved` | boolean | `false` | The state file keeps the value. |
+| `default` | integer | `0` | The initial value, from 0 to `values` - 1. Used when no valid saved value exists. |
+| `saved` | boolean | `false` | The state file keeps the value, including 0. |
 | `public` | boolean | `false` | Other modules can use the setting. |
 
 ### page
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `setting` | string | required | The setting of the page: a setting reference. |
+| `kind` | string | `"choice"` | `"choice"` lists setting values. `"settings"` opens native settings directly. `"group"` lists child settings pages. |
+| `setting` | string | required for `choice` | The setting of a choice page. Omit it for `settings` and `group`. |
 | `off_row` | boolean | `false` | Row 0 shows the Off icon instead of tile 0. |
-| `settings` | array of strings | `[]` | The rows of a native settings page: the page setting, then keys of `settings` or names of `uses`. Give 0 to 5 keys (`GRKIT_SETTING_ROWS`). The row of an optional used setting that no module has is left out. With one key, the page setting alone, the row gets a label of its own, and Fn opens no settings page. |
+| `settings` | array of strings | `[]` | Up to 5 native settings rows (`GRKIT_SETTING_ROWS`). A choice page starts with its page setting. A settings page needs at least one row. |
 | `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. |
+| `children` | array of tables | `[]` | A group page has 1 to 4 children, in display order. Each child opens one native settings page. Other page kinds have none. |
 
-A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`. Its tile 0, if it has one, shows on the root row while the setting is Off; without it, the root row shows the Off icon.
+A `settings` page needs a module tile and has no `setting`, `off_row`, or `options`. Its text gives `title` and `settings.<KEY>.label` and `values` for each row. It has no `rows` or `summaries`. The first row must be available for the page to load. Later optional rows are omitted when unavailable.
+
+```toml
+[page]
+kind = "settings"
+settings = ["BLOOM", "HALATION"]
+```
+
+A `group` page has no `setting`, `settings`, `off_row`, or `options`. Each `[[page.children]]` table has two fields:
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `key` | string | A unique key with 1 to 15 characters `A`-`Z`, `0`-`9`, or `_`. It identifies the child title in the text files. |
+| `settings` | array of strings | The child's 1 to 5 native settings rows. The first setting must have two values: 0 (Off) and 1 (On). It must be available and cannot be an optional use. |
+
+This example uses four settings declared elsewhere in the manifest:
+
+```toml
+[page]
+kind = "group"
+
+[[page.children]]
+key = "BLOOM"
+settings = ["BLOOM_ENABLED", "BLOOM_STRENGTH"]
+
+[[page.children]]
+key = "HALATION"
+settings = ["HAL_ENABLED", "HAL_STRENGTH"]
+```
+
+The text files give `title`, `children.<KEY>.title`, and the label and values of each setting. A group has no choice `rows` or `summaries`. Tile 0 identifies the group. Tiles 1 to the child count identify its children in declaration order.
+
+The generator registers the group first, then its child settings pages. Each child has `GRKIT_PAGE_MENU_ONLY`, so only the group appears in the ADJ root. A group and its children consume one page slot each from the shared limit of 10 loaded pages.
+
+A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`. If tile 0 exists, the root row shows that tile while the setting is Off. Otherwise, the root row shows the Off icon.
 
 ### layers
 
@@ -109,16 +146,32 @@ A module with a page has one text file for each menu language: `text/en.toml`, `
 | `summaries` | array of strings | Optional. The value in the root row, one for each value. Without it, the root row shows the label. |
 | `settings.<KEY>.label` | string | The label of a row of the native settings page. |
 | `settings.<KEY>.values` | array of strings | The text of each value of that row. The row of the page setting can omit it and use `rows`. |
+| `children.<KEY>.title` | string | The title of a group child. The ADJ group and the module page in MENU use this title for the child row. |
 
-The root row shows `<title><separator><summary>`. Each text, and the text of the root row, has at most 64 UTF-16 units. For a page of a used setting, the build takes the number of values from `rows` in `text/en.toml`, and the installer checks it against the setting.
+A choice root row shows `<title><separator><summary>`. A settings or group root row shows only the title. Each text, and the text of the root row, has at most 64 UTF-16 units. For a choice page of a used setting, the build counts `rows` in `text/en.toml`. The installer checks this count against the setting.
+
+For example, these tables name a group child and its two settings:
+
+```toml
+[children.BLOOM]
+title = "Bloom"
+
+[settings.BLOOM_ENABLED]
+label = "Enable"
+values = ["Off", "On"]
+
+[settings.BLOOM_STRENGTH]
+label = "Strength"
+values = ["Weak", "Medium", "Strong"]
+```
 
 ## Tiles
 
-A tile is a 40 x 40 PNG file. Tile n shows value n of the page setting, on its row and on the root row, and tile 0 is also the module tile. A choice page needs at least one tile for each value.
+A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. A settings page needs only tile 0. A group page needs tile 0 and one tile for each child.
 
 ## Settings
 
-The core stores the value of each setting, 0 to `values` - 1, and 0 until the user or a module changes it. A module reads and changes a value only through `setting_get` and `setting_set`. Read a setting each time that you use it, because the menu and other modules can change it.
+The core stores each setting from 0 to `values` - 1. Without a valid saved value, a setting starts at `default`. A module reads and changes a value only through `setting_get` and `setting_set`. Read a setting each time that you use it, because the menu and other modules can change it.
 
 ### Handles
 
@@ -136,7 +189,7 @@ A function names a setting by its handle, a `u32`.
 
 The state file keeps a saved setting under a number that the core computes from its full name, `MODULE.KEY`:
 
-- A new ID or a new key starts the setting at 0 again.
+- A new ID or key starts at `default` (0 if omitted). A valid saved value overrides it, including 0.
 - If a new version has fewer values, a saved value out of the range is not restored.
 - INSTALL restores a saved value only when its module loads. If the module is Off or missing, the file keeps the value.
 - The resident loader writes the file 2 to 4 s after the last change.
@@ -175,9 +228,17 @@ A registration connects a part of the module to an extension point of the core. 
 
 ### Pages
 
-A page is a choice page in ADJ: one row for each value of its setting. OK on a row sets the value. The root shows a page only if it has two rows or more, in the order of the modules, which ADJ Order in MENU can change. The installer rejects a page whose number of rows is not the number of values of its setting.
+A `choice` page lists one row for each value of its setting in ADJ. OK on a row sets the value. ADJ shows a choice page when it has at least two rows. ADJ Order in MENU sets the module order. The installer rejects a page whose number of rows is not the number of values of its setting.
 
 A page of a setting of the module can also give 2 to 5 rows of a native settings page (`GRKIT_SETTING_ROWS`), as `modules/date` does. The first row is the page setting, and the others are settings of the module or used settings, with at most 8 values each. The text of a used setting gives its `values`. INSTALL leaves out the row of an optional used setting that no module has. Fn in ADJ opens this page.
+
+A `settings` page shows one ADJ entry with its title and module tile. OK, Right, Fn, or a touch opens the native settings directly. Each row changes only its own setting. MENU shows Enable followed by the same rows.
+
+A `group` page shows one ADJ entry. OK opens an icon list of its children. OK on a child toggles its first setting and keeps ADJ open. A selection mark identifies each enabled child.
+
+Fn opens the child's native settings page. Returning to ADJ restores the selected child. Navigation and Fn do not toggle the setting.
+
+MENU shows the module's Enable row and one row for each child. Each child row opens the same native settings page as ADJ. Returning from that page restores the module page. A child's Enable setting does not prevent changes to its other settings. The module's Enable setting controls the whole module.
 
 Each module also has a row in the GRKit section of MENU. It opens Enable, then the rows of the settings page, or the row of the page setting for a page without settings rows. See [GRKit section of MENU](architecture.md#grkit-section-of-menu).
 
@@ -185,7 +246,7 @@ Each module also has a row in the GRKit section of MENU. It opens Enable, then t
 
 A layer paints over the still live view. The core calls `paint` for each draw of the live view with the value of the layer setting. It does not call `paint` while the value is 0.
 
-The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, then green, blue, and alpha in its high byte, so the bytes in memory are R, G, B, A:
+The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, then green, blue, and alpha in its high byte. The bytes in memory are R, G, B, A:
 
 | Field | Meaning |
 | --- | --- |
@@ -240,6 +301,8 @@ A module calls the core only through these functions. The installer links each c
 | `void overlay_label(const Surface *s, u32 label, u32 left, u32 top)` | Draw a label of the core with its top left at (left, top), in the style of the native live-view text. A label that does not fit draws nothing. |
 | `void local_time(GrkitDateTime *out)` | The local time: year, month, day, hour, minute, and second. |
 | `u32 divide(u32 n, u32 d)` | n / d, rounded down, for d > 0. |
+| `void picture_white(const PictureSet *set, u8 white[3])` | The R, G, B white of the effect of a recorded picture: the levels that its brightest light reaches. 255 each without an effect. A color effect ends below 255. Since ABI 2.1. |
+| `void picture_shot(const PictureSet *set, GrkitShot *shot)` | The shooting data of a recorded picture, as its EXIF records it: the exposure (APEX values, the exposure value of the scene, the f-number, the ISO speed, the exposure time), the exposure compensation, the focal length, the program, the metering, the flash, and the capture time. Set `shot->size` to `sizeof(GrkitShot)` first. `known` has a bit for each group of fields that holds a value. Since ABI 2.1. |
 | `u32 timer_start(u32 ms, void (*fire)(u32 arg), u32 arg)` | Call `fire(arg)` once, `ms` milliseconds later, in the App task. Returns a timer, or 0 when no timer is free or the caller is not in the App task. |
 | `void timer_cancel(u32 timer)` | Stop a timer that has not fired. |
 | `u32 ui_toast(GrkitText text, u32 ms)` | Show a message panel for `ms` milliseconds. See [UI](#ui). |
@@ -281,18 +344,22 @@ The UI services show the native message box of the camera. A text is a `GrkitTex
 - The box shows only while the GRKit page of ADJ is open. A call returns 1 when the box shows, else 0.
 - One box shows at a time. A toast closes when a new box opens. A message, a confirm, or a progress box takes each key until it closes.
 - ADJ exit closes the box without a callback.
-- OK on a row of a module page commits the value and closes ADJ, as OK on a native value does. If the commit makes the module show a box or open a native screen (in its `SETTING_CHANGED` handler), ADJ stays open on the page, so the box shows.
+- OK on a row of a choice page commits the value and closes ADJ, as OK on a native value does. A commit can make the module show a box or open a native screen in its `SETTING_CHANGED` handler. ADJ then stays open on the page, so the box shows.
 - `ui_confirm` shows Execute and Cancel, with the cursor on Cancel. Up, Down, Left, and Right move the cursor. OK calls `done(1, arg)` for Execute, else `done(0, arg)`. MENU calls `done(0, arg)`.
 - `ui_message` closes on OK or MENU and calls `done(arg)`.
 - A progress box takes the keys until `ui_progress_close`. Use a timer to move the bar.
-- `ui_slider` shows the text and the native slider. Up and Down move it by one, Left and Right by a tenth of the range, and each move calls `changed(value, arg)`, for example to preview the value. OK calls `done(1, value, arg)`, MENU `done(0, start, arg)` with the value at the start. The range has at most 65536 values.
+- `ui_slider` shows the text and the native slider. Up and Down move it by one. Left and Right move it by a tenth of the range. Each move calls `changed(value, arg)`, for example to preview the value. OK calls `done(1, value, arg)`, MENU `done(0, start, arg)` with the value at the start. The range has at most 65536 values.
 - `ui_open_native` opens a native screen after the current event. MENU on the screen returns to ADJ, which opens the GRKit page that was open, and then the core calls `back(arg)` (`back` can be 0). The screens: `GRKIT_NATIVE_WHITE_BALANCE` (the white balance list of still mode) and `GRKIT_NATIVE_LCD` (the LCD settings). It returns 0 for an unknown screen, while a message, a confirm, or a progress box shows, or while another screen waits to open.
 
 The UI services work only in an event handler, a timer callback, or a UI callback, which the core calls in the App task. In other code they return 0.
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.0: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version only adds functions and registration types. A major version changes a layout. In 2.0, each text list also has a Korean text, so the installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
+**ABI version.** `GRKIT_ABI` is 2.1: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
+
+In 2.0, each text list also has a Korean text. The installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
+
+ABI 2.1 adds `picture_white`, `picture_shot`, setting defaults, and the settings and group page kinds. `GrkitSetting` appends `default_value`, and `GrkitPage` appends the group `children` pointer. The installer accepts older 16-byte settings and 40-byte pages. Older settings have default 0. A group needs the 44-byte page descriptor and registers each child separately.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, and the imports. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 
@@ -317,6 +384,7 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 | Tiles of one module | 64 | build error, or 53 |
 | Tiles of all loaded modules | 128 | 54 |
 | Rows of a choice page | 1 to 64 | build error, or 53 |
+| Children of a group page | 1 to 4 | build error, or 53 |
 | Rows of a native settings page | 5 | build error, or 53 |
 | Values of a native settings row | 8 | 53 |
 | Event subscribers | 1 in each module | 53 |

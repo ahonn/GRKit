@@ -1,11 +1,14 @@
 /* The core of `grkit module test` (grkit_test.h). */
 #include <assert.h>
 #include <stdlib.h>
+#include <string.h>
 
 static u32 pixels[GRKIT_TEST_STRIDE * 480];
 static u8 planes[GRKIT_TEST_PLANE_BYTES];
 u8 grkit_test_scratch[GRKIT_PLANE_SCRATCH];
 GrkitDateTime grkit_test_time = {2026, 10, 25, 9, 5, 0, 0};
+u8 grkit_test_white[3] = {255, 255, 255};
+GrkitShot grkit_test_shot;
 u32 grkit_test_settings[GRKIT_TEST_SETTINGS];
 u32 grkit_test_labels;
 u32 grkit_test_label[3];
@@ -30,6 +33,23 @@ volatile u8 *grkit_test_bytes(u32 address)
 }
 void local_time(GrkitDateTime *out) { *out = grkit_test_time; }
 u32 divide(u32 n, u32 d) { assert(d); return n / d; }
+void picture_white(const PictureSet *set, u8 white[3])
+{
+    (void)set;
+    white[0] = grkit_test_white[0];
+    white[1] = grkit_test_white[1];
+    white[2] = grkit_test_white[2];
+}
+void picture_shot(const PictureSet *set, GrkitShot *shot)
+{
+    u32 size = shot->size < sizeof(GrkitShot) ? shot->size : sizeof(GrkitShot);
+    GrkitShot copy = grkit_test_shot;
+    (void)set;
+    /* As the core: a size below 8 gets nothing. */
+    if (size < 8) return;
+    copy.size = size;
+    memcpy(shot, &copy, size);
+}
 void grkit_test_clear(void)
 {
     for (u32 i = 0; i < GRKIT_TEST_STRIDE * 480; ++i) pixels[i] = GRKIT_TEST_CLEAR;

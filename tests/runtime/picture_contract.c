@@ -458,12 +458,98 @@ static void grain_contract(void)
 }
 #endif
 
+/* picture_shot: the data of a shot, from the offsets of the target. */
+#define TEST_SHOT (ARENA + 0x300000)
+static uint32_t float_bits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }
+static void shot_contract(void)
+{
+    struct { u32 size, known; int av, tv, sv, ev, xv; u32 us; u16 f, iso, focal, focal35; u8 program, metering; u16 flash;
+             u16 year; u8 month, day, hour, minute, second, reserved; } info;
+    PictureSet s;
+    reset();
+    memset(&s, 0, sizeof s);
+    /* No shot: only the size and no known field. */
+    memset(&info, 0xee, sizeof info);
+    info.size = sizeof info;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(sizeof info == GRKIT_SHOT_INFO_BYTES && info.size == sizeof info && info.known == 0 && info.av == 0);
+    /* f/2.8 (Av 3), 1/128 s (Tv 7), ISO 400 (Sv 7), -1/3 EV, 18.3 mm, at
+       2026-11-02 21:45:30, program and metering codes of index 1 and 0. */
+    s.shot = TEST_SHOT;
+    WORD(TEST_SHOT, SHOT_APEX) = float_bits(3.0f);
+    WORD(TEST_SHOT, SHOT_APEX + 4) = float_bits(7.0f);
+    WORD(TEST_SHOT, SHOT_APEX + 8) = float_bits(7.0f);
+    WORD(TEST_SHOT, SHOT_APEX + 12) = float_bits(-1.0f / 3);
+    WORD(TEST_SHOT, SHOT_FOCAL) = float_bits(18.3f);
+    WORD(TEST_SHOT, SHOT_CROP) = float_bits(1.0f);
+    HALF(TEST_SHOT, SHOT_TAKEN) = 2026;
+    BYTE(TEST_SHOT, SHOT_TAKEN + 2) = 11; BYTE(TEST_SHOT, SHOT_TAKEN + 3) = 2;
+    BYTE(TEST_SHOT, SHOT_TAKEN + 5) = 21; BYTE(TEST_SHOT, SHOT_TAKEN + 6) = 45; BYTE(TEST_SHOT, SHOT_TAKEN + 7) = 30;
+    BYTE(TEST_SHOT, SHOT_PROGRAM) = 1;
+    memset(&info, 0, sizeof info);
+    info.size = sizeof info;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(info.known == 0x7f);
+    assert(info.av == 768 && info.tv == 1792 && info.sv == 1792 && info.ev == 2048 && info.xv == -85);
+    assert(info.us >= 7811 && info.us <= 7814 && info.f == 28 && info.iso == 400);
+    assert(info.focal == 183 && info.focal35 == 28 && info.metering == 5 && info.flash == 0x10);
+    assert(info.year == 2026 && info.month == 11 && info.day == 2 && info.hour == 21 && info.minute == 45 && info.second == 30);
+    {
+        static const u8 codes[] = {SHOT_PROGRAM_CODES};
+        assert(info.program == codes[1]);
+    }
+    /* A 30 s time exposure: its time decides the shutter value (-4.91). */
+    BYTE(TEST_SHOT, SHOT_LONG_MODE) = SHOT_LONG_FIRST;
+    WORD(TEST_SHOT, SHOT_TIME) = 30000000; WORD(TEST_SHOT, SHOT_TIME + 4) = 0;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(info.us == 30000000 && info.tv >= -1258 && info.tv <= -1255);
+    /* The flash fired, with red-eye reduction. */
+    BYTE(TEST_SHOT, SHOT_FLASH_ON) = 1; BYTE(TEST_SHOT, SHOT_FLASH_MODE) = 3; BYTE(TEST_SHOT, SHOT_FLASH_FIRED) = 1;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(info.flash == 0x49);
+    /* An older, shorter GrkitShot: the core fills only its size. */
+    memset(&info, 0xee, sizeof info);
+    info.size = 12;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(info.size == 12 && info.known == 0x7f && info.av == 768 && info.tv == (int)0xeeeeeeee);
+    /* No exposure in a cleared shot. */
+    memset(region(TEST_SHOT, 0x72000), 0, 0x72000);
+    info.size = sizeof info;
+    grkit_export_picture_shot(&s, (u8 *)&info);
+    assert(!(info.known & 1) && info.known & 0x10);
+}
 int main(void)
 {
 #ifdef GRAIN_FILL_PITCH
     grain_contract();
 #endif
     static const short identity[9] = {8192, 0, 0, 0, 8192, 0, 0, 0, 8192};
+    shot_contract();
+    /* picture_white: input 255 of the curves after the post matrix, and 255
+       each without a record. */
+    {
+        static const short swap[9] = {0, 8192, 0, 8192, 0, 0, 0, 0, 8192};
+        PictureSet s;
+        u8 w[3];
+        memset(&s, 0, sizeof s);
+        grkit_export_picture_white(&s, w);
+        assert(w[0] == 255 && w[1] == 255 && w[2] == 255);
+        reset();
+        s.record = record(1);
+        HALF(record(1), GRKIT_RECORD_CURVES + 255 * 2) = 14777;
+        HALF(record(1), GRKIT_RECORD_CURVES + GRKIT_RECORD_CURVE_SIZE + 255 * 2) = 14584;
+        HALF(record(1), GRKIT_RECORD_CURVES + 2 * GRKIT_RECORD_CURVE_SIZE + 255 * 2) = 14391;
+        grkit_export_picture_white(&s, w);
+        assert(w[0] == 230 && w[1] == 227 && w[2] == 224);
+        post(record(1), swap);
+        grkit_export_picture_white(&s, w);
+        assert(w[0] == 227 && w[1] == 230 && w[2] == 224);
+        HALF(record(1), GRKIT_RECORD_CURVES + 255 * 2) = 16383;
+        HALF(record(1), GRKIT_RECORD_CURVES + GRKIT_RECORD_CURVE_SIZE + 255 * 2) = 16383;
+        HALF(record(1), GRKIT_RECORD_CURVES + 2 * GRKIT_RECORD_CURVE_SIZE + 255 * 2) = 16383;
+        grkit_export_picture_white(&s, w);
+        assert(w[0] == 255 && w[1] == 255 && w[2] == 255);
+    }
     /* Native records and GRFX0001 records keep the native matrix bits. */
     reset();
     WORD(CONTEXT, 8) = 0x5501900c;

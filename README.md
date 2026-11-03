@@ -5,7 +5,7 @@ English | [简体中文](README.zh-Hans.md) | [繁體中文](README.zh-Hant.md) 
 [![Tests](https://github.com/ahonn/grkit/actions/workflows/tests.yml/badge.svg)](https://github.com/ahonn/grkit/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GRKit adds film looks, XPan and other crops, date stamps, and grain to RICOH GR III, GR IIIx, and GR IV. It runs from the SD card and never writes to the firmware. Take the card out and the camera is back to stock.
+GRKit adds film looks, XPan and other crops, date stamps, glow, and grain to RICOH GR III, GR IIIx, and GR IV. It runs from the SD card and never writes to the firmware. Take the card out and the camera is back to stock.
 
 <p>
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-root.jpg" alt="The GRKit page in the ADJ menu" width="49%">
@@ -22,6 +22,7 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 - **Framing**: XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, and 1:1, with a mask or frame lines in the viewfinder.
 - **Guides**: thirds, center, golden ratio, or diagonals.
 - **Date Imprint**: the date on the photo in classic, GR1s dot-matrix, or GR II style.
+- **Glow**: Bloom softly spreads light around lights and highlights. Halation adds a red-orange halo around bright lights to simulate motion-picture film. Each effect has its own Enable and Strength settings, so both can run together.
 - **Grain**: film grain in four strengths and four sizes (Auto, Small, Medium, Large).
 
 GRKit takes about 8 to 10 seconds to load after power-on, and longer on GR IV or on the first start after an install or update. Until then, the camera uses its own settings. All the settings are in the GRKit section at the end of the Customize tab in MENU. To write your own module, see [Writing a module](docs/modules.md).

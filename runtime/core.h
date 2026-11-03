@@ -144,7 +144,9 @@ static inline u32 chroma_row(const Plane *p,u32 y) { return p->c+(p->half ? y>>1
 /* The deduplicated planes of one encode. `record` is the processing record of
    the shot, or 0 for native processing, and `mono` is set for a monochrome
    record or a native monochrome Image Control type. `scratch` holds GRKIT_PICTURE_MASKS bytes for this call.
-   `turns` is the quarter turns clockwise that show the picture upright. */
+   `turns` is the quarter turns clockwise that show the picture upright.
+   `shot` is the shot settings pointer of the encode (picture_shot); the SDK
+   declares it as `reserved_shot`, which a module does not use. */
 typedef struct {
     Plane planes[4];
     u32 count;
@@ -152,6 +154,7 @@ typedef struct {
     u32 mono;
     u8 *scratch;
     u32 turns;
+    u32 shot;
 } PictureSet;
 /* Core services for the planes. */
 /* Unsigned division: the freestanding link has no division helper. */

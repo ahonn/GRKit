@@ -19,7 +19,7 @@ const en = {
   title: 'GRKit: film looks and XPan for RICOH GR III, IIIx, and IV, no firmware flashing',
   /** The search result and link preview text of the page. */
   description:
-    'Film looks, XPan and other crops, date stamps, and grain for RICOH GR III, GR IIIx, and GR IV. Use film simulation recipes or import your own LUT. GRKit runs from the SD card, with no firmware flashing.',
+    'Film looks, XPan and other crops, date stamps, glow, and grain for RICOH GR III, GR IIIx, and GR IV. Use film simulation recipes or import your own LUT. GRKit runs from the SD card, with no firmware flashing.',
   /** The hero lines under the GRKit heading, one line each. */
   lead: ['Film looks and XPan for your RICOH GR.', 'No firmware flashing.'] as readonly string[],
   camera: 'Camera',
@@ -37,6 +37,7 @@ const en = {
     framing: 'Framing',
     guides: 'Guides',
     dateStamp: 'Date Imprint',
+    glow: 'Glow',
     grain: 'Grain',
   },
   package: 'Download',
@@ -164,6 +165,7 @@ const en = {
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, or 1:1 photos. The viewfinder stays 3:2 and dims the rest.',
     guides: 'Thirds, center, golden ratio, or diagonals inside the Framing area.',
     dateStamp: 'A date at the bottom right of photos, with classic, GR1s dot-matrix, or GR II digits: orange on color photos, white on black-and-white photos.',
+    glow: 'Bloom softly spreads light around lights and highlights. Halation adds a red-orange halo around bright lights to simulate motion-picture film. Each effect has its own Enable and Strength settings, so both can run together. The effects apply only to JPEG photos, with no live-view preview.',
     grain: "Film grain from the camera's grain stage, in three strengths. Photos only.",
   },
   steps: [
@@ -378,7 +380,7 @@ const zhHans: Strings = {
   language: '语言',
   title: 'GRKit：理光 GR III / IIIx / IV 胶片滤镜与 XPan 宽幅，无需刷机',
   description:
-    '为理光 GR III、GR IIIx、GR IV 加上胶片滤镜（胶片模拟）、XPan 宽幅等画幅、日期水印和颗粒，也能导入自己的 LUT。从 SD 卡加载，无需刷机。',
+    '为理光 GR III、GR IIIx、GR IV 加上胶片滤镜（胶片模拟）、XPan 宽幅等画幅、日期水印、光晕和颗粒，也能导入自己的 LUT。从 SD 卡加载，无需刷机。',
   lead: ['给理光 GR 加上胶片滤镜和 XPan 宽幅。', '无需刷机。'],
   camera: '相机',
   firmware: '固件',
@@ -394,6 +396,7 @@ const zhHans: Strings = {
     framing: '画幅',
     guides: '辅助线',
     dateStamp: '加印日期',
+    glow: '光晕',
     grain: '颗粒感',
   },
   package: '下载',
@@ -511,6 +514,7 @@ const zhHans: Strings = {
     framing: '拍摄 XPan 65:24、2.35:1、16:9、4:3、5:4 或 1:1 照片。显示屏保持 3:2，画幅外的区域变暗。',
     guides: '在画幅内显示三分法、中心、黄金分割或对角线。',
     dateStamp: '在照片右下角加印日期，字体可选经典、GR1s 点阵或 GR II：彩色照片为橙色，黑白照片为白色。',
+    glow: '柔光让灯光和高光向周围柔和扩散。胶片光晕在明亮光源周围形成橙红色光晕，模拟电影胶片效果。两项各有“启用”和“强度”设置，可同时开启。仅作用于 JPEG 照片，拍摄画面不预览效果。',
     grain: '相机内置的颗粒感，分弱、中、强三档。仅用于照片。',
   },
   steps: [
@@ -691,7 +695,7 @@ const zhHant: Strings = {
   language: '語言',
   title: 'GRKit：理光 GR III / IIIx / IV 底片濾鏡與 XPan 比例，免刷機',
   description:
-    '為理光 GR III、GR IIIx、GR IV 加上底片濾鏡（底片模擬）、XPan 等畫面比例、日期浮水印與顆粒，也能匯入自己的 LUT。從 SD 卡載入，免刷機。',
+    '為理光 GR III、GR IIIx、GR IV 加上底片濾鏡（底片模擬）、XPan 等畫面比例、日期浮水印、光暈與顆粒，也能匯入自己的 LUT。從 SD 卡載入，免刷機。',
   lead: ['為理光 GR 加上底片濾鏡與 XPan 比例。', '免刷機。'],
   camera: '相機',
   firmware: '韌體',
@@ -707,6 +711,7 @@ const zhHant: Strings = {
     framing: '畫幅',
     guides: '輔助線',
     dateStamp: '加印日期',
+    glow: '光暈',
     grain: '粒紋感',
   },
   package: '下載',
@@ -824,6 +829,7 @@ const zhHant: Strings = {
     framing: '拍攝 XPan 65:24、2.35:1、16:9、4:3、5:4 或 1:1 照片。顯示屏保持 3:2，畫幅外的區域變暗。',
     guides: '在畫幅內顯示三分法、中心、黃金分割或對角線。',
     dateStamp: '在照片右下角加印日期，字體可選經典、GR1s 點陣或 GR II：彩色照片為橙色，黑白照片為白色。',
+    glow: '柔光讓燈光和高光向周圍柔和擴散。底片光暈在明亮光源周圍形成橙紅色光暈，模擬電影底片效果。兩項各有「啟用」和「強度」設定，可同時開啟。僅套用於 JPEG 照片，拍攝畫面不預覽效果。',
     grain: '相機內建的粒紋感，分弱、中、強三檔。僅用於照片。',
   },
   steps: [
@@ -1004,7 +1010,7 @@ const ja: Strings = {
   language: '言語',
   title: 'GRKit：RICOH GR III / IIIx / IV にフィルム風の色と XPan を、ファームウェア書き換え不要',
   description:
-    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色（レシピ）、XPan などの比率、日付写し込み、粒状感を追加します。自分の LUT も読み込めます。SDカードから読み込み、ファームウェアの書き換えは不要です。',
+    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色（レシピ）、XPan などの比率、日付写し込み、グロー、粒状感を追加します。自分の LUT も読み込めます。SDカードから読み込み、ファームウェアの書き換えは不要です。',
   lead: ['RICOH GR にフィルム風の色と XPan を。', 'ファームウェアの書き換えは不要です。'],
   camera: 'カメラ',
   firmware: 'ファームウェア',
@@ -1020,6 +1026,7 @@ const ja: Strings = {
     framing: 'フレーミング',
     guides: '構図ガイド',
     dateStamp: '日付入れ撮影',
+    glow: 'グロー',
     grain: '粒状感',
   },
   package: 'ダウンロード',
@@ -1139,6 +1146,7 @@ const ja: Strings = {
     framing: 'XPan 65:24、2.35:1、16:9、4:3、5:4、1:1 の写真を撮影します。撮影画面は 3:2 のままで、範囲外が暗くなります。',
     guides: 'フレーミングの範囲内に、9 分割、画面中央、黄金比、対角線のいずれかを表示します。',
     dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s のドットマトリクス、GR II から選べます。カラー写真ではオレンジ色、白黒写真では白になります。',
+    glow: 'ブルームはライトやハイライトの周囲に柔らかな光を広げます。ハレーションは明るい光源の周囲に赤橙色のにじみを加え、映画用フィルムのような効果を再現します。それぞれ有効・無効と強度を個別に設定でき、同時に使用できます。JPEG 写真にのみ適用され、撮影画面には反映されません。',
     grain: 'カメラ内蔵の粒状感を、弱・中・強の 3 段階で加えます。静止画のみ。',
   },
   steps: [
@@ -1319,7 +1327,7 @@ const ko: Strings = {
   language: '언어',
   title: 'GRKit: RICOH GR III, IIIx, IV를 위한 필름 룩과 XPan, 펌웨어 수정 없이',
   description:
-    'RICOH GR III, GR IIIx, GR IV에 필름 룩, XPan 등 다양한 화면 비율, 날짜 각인, 입자감을 더합니다. 필름 레시피를 쓰거나 직접 만든 LUT를 가져올 수 있습니다. GRKit은 SD 카드에서 실행되며 펌웨어를 수정하지 않습니다.',
+    'RICOH GR III, GR IIIx, GR IV에 필름 룩, XPan 등 다양한 화면 비율, 날짜 각인, 글로우, 입자감을 더합니다. 필름 레시피를 쓰거나 직접 만든 LUT를 가져올 수 있습니다. GRKit은 SD 카드에서 실행되며 펌웨어를 수정하지 않습니다.',
   lead: ['RICOH GR에 필름 룩과 XPan을.', '펌웨어 수정은 필요 없습니다.'],
   camera: '카메라',
   firmware: '펌웨어',
@@ -1335,6 +1343,7 @@ const ko: Strings = {
     framing: '프레이밍',
     guides: '구도 가이드',
     dateStamp: '날짜 각인',
+    glow: '글로우',
     grain: '입자감',
   },
   package: '다운로드',
@@ -1452,6 +1461,7 @@ const ko: Strings = {
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, 1:1 사진을 찍습니다. 촬영 화면은 3:2 그대로이고, 범위 밖은 어둡게 표시됩니다.',
     guides: '프레이밍 범위 안에 9분할, 화면 중앙, 황금비, 대각선 중 하나를 표시합니다.',
     dateStamp: '사진 오른쪽 아래에 날짜를 넣습니다. 글꼴은 클래식, GR1s 도트 매트릭스, GR II 중에서 고릅니다. 컬러 사진에는 주황색, 흑백 사진에는 흰색으로 들어갑니다.',
+    glow: '블룸은 조명과 하이라이트 주변으로 빛을 부드럽게 퍼뜨립니다. 헐레이션은 밝은 광원 주변에 붉은 주황빛 번짐을 더해 영화용 필름의 효과를 재현합니다. 각 효과의 사용 여부와 강도를 따로 설정할 수 있으며 두 효과를 함께 사용할 수 있습니다. JPEG 사진에만 적용되며 촬영 화면에는 효과가 표시되지 않습니다.',
     grain: '카메라 자체의 입자감을 약, 중, 강 3단계로 더합니다. 사진에만 적용됩니다.',
   },
   steps: [

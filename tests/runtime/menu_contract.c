@@ -4,6 +4,9 @@
 #include "menu_text.h"
 /* The family header sends the aspect request; the harness counts requests. */
 #include "firmware.h"
+#undef ADJ_MOVIE
+static unsigned test_movie;
+#define ADJ_MOVIE(controller) ((void)(controller), test_movie)
 #undef MENU_FRAMING_REQUEST
 static unsigned framing_requests;
 #define MENU_FRAMING_REQUEST() (++framing_requests)
@@ -377,7 +380,7 @@ static void reset(void)
     framing_requests = native_aspect_value = native_sets = live_view_stops = 0;
     native_changes = native_applies = native_events = 0;
     factory_calls = factory_top = 0;
-    test_language = 0;
+    test_language = test_movie = 0;
     assert(sizeof(menu_text_table) <= GRKIT_TEXT_SUMMARY);
     memcpy(text_arena, menu_text_table, sizeof(menu_text_table));
     test_header[GRKIT_HOST_COUNT / 4] = 5;
@@ -1289,6 +1292,55 @@ static void adj_reopens_on_the_row_of_the_last_module(void)
     assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
 }
 
+/* A settings entry opens the native rows from the ADJ root. Each row changes
+   only its setting; the root title and tile do not follow the first value. */
+static void direct_settings_have_independent_rows(void)
+{
+    reset();
+    volatile u32 *h = test_header;
+    const u32 address = TEST_PAGE + DATE_MODULE * TEST_PAGE_SIZE;
+    *page_at(address + PAGE_KIND) = PAGE_SETTINGS;
+    *page_at(address + PAGE_FLAGS) = 0;
+    *page_at(address + PAGE_SUMMARIES) = 0;
+    *page_at(address + PAGE_LABELS) = 0;
+    menu_start(h);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = DATE_ROW;
+    assert(settings_target(h, TEST_OBJECTS) == DATE_MODULE);
+    assert(direct_settings_event(h, EV_CONFIRM) && direct_settings_event(h, EV_RIGHT));
+    assert(!direct_settings_event(h, EV_LEFT) && !direct_settings_event(h, EV_UP));
+    h[GRKIT_HOST_MENU_EVENTS / 4] = 2;
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
+    assert(!direct_settings_event(h, EV_CONFIRM));
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
+    test_movie = 1;
+    assert(settings_target(h, TEST_OBJECTS) == MODULE_TOTAL);
+    test_movie = 0;
+    const MenuPage *module = menu_page(h, DATE_MODULE);
+    assert(same(module->summary(h), "Date Imprint"));
+    DATE_STYLE = 4;
+    assert(module->icon(h, 0) == DATE_TILE(0));
+    menu_confirm(h);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
+    const Setting *rows = menu_page(h, DATE_MODULE)->settings;
+    rows[0].set(h, 2);
+    rows[1].set(h, 1);
+    assert(DATE_STYLE == 2 && DATE_LOOK == 1);
+    rows[0].set(h, 0);
+    assert(DATE_STYLE == 0 && DATE_LOOK == 1);
+    h[GRKIT_HOST_MODULE / 4] = DATE_MODULE;
+    menu_reopen(h);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && h[GRKIT_HOST_MENU_CURSOR / 4] == DATE_ROW);
+    assert(DATE_STYLE == 0 && DATE_LOOK == 1);
+    menu_page(h, DATE_MODULE);
+    rows[1].set(h, 0);
+    assert(DATE_STYLE == 0 && DATE_LOOK == 0);
+    /* A single row with a single value remains an ADJ settings entry. */
+    settings_memory[2 + 1 * 3 + 2] = 1;
+    *page_at(address + PAGE_SETTING_ROWS) = 1;
+    assert(visible_modules(h) & (1U << DATE_MODULE));
+    assert(settings_target(h, TEST_OBJECTS) == DATE_MODULE);
+}
+
 static void the_date_imprint_settings_page_reads_and_stores_values(void)
 {
     reset();
@@ -1821,6 +1873,287 @@ static void install_menu_pages(void)
     h[GRKIT_HOST_EFFECTS / 4] = TEST_EFFECTS;
     install_guide_rows(2);
     *page_at(guides + PAGE_FLAGS) |= CHOICE_OPTIONS;
+}
+
+static void settings_entry_enable_preserves_each_value(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU);
+    const u32 address = TEST_PAGE + GUIDES_MODULE * TEST_PAGE_SIZE;
+    *page_at(address + PAGE_KIND) = PAGE_SETTINGS;
+    *page_at(address + PAGE_FLAGS) = 0;
+    *page_at(address + PAGE_SETTING_ROWS) = 2;
+    menu[MENU_ROWS_LISTED / 4] = 2;
+    menu[MENU_ROWS_PAGE / 4] = GUIDES_MODULE;
+    assert(listed_rows(h) == 3);
+    assert(same(listed_label(h, 0), "Enable"));
+    assert(same(listed_label(h, 1), "Style") && same(listed_label(h, 2), "Color"));
+    listed_set(h, 1, 2);
+    listed_set(h, 2, 1);
+    assert(listed_get(h, 1) == 2 && listed_get(h, 2) == 1);
+    listed_set(h, 0, 1);
+    assert(listed_get(h, 1) == 2 && listed_get(h, 2) == 1);
+    listed_set(h, 0, 0);
+    assert(listed_get(h, 1) == 2 && listed_get(h, 2) == 1);
+}
+
+/* A settings-only page has no choice labels. MENU still fills its actual
+   section row: a title with an empty value, or Off while disabled. */
+static void a_settings_section_row_has_no_choice_value(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU), *row = menu_row(h, 0);
+    const u32 address = TEST_PAGE + GUIDES_MODULE * TEST_PAGE_SIZE;
+    *page_at(address + PAGE_KIND) = PAGE_SETTINGS;
+    *page_at(address + PAGE_FLAGS) = 0;
+    *page_at(address + PAGE_LABELS) = 0;
+    *page_at(address + PAGE_SUMMARIES) = 0;
+    *page_at(address + PAGE_SETTING_ROWS) = 2;
+    menu[MENU_ROWS_COUNT / 4] = 1;
+    row[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
+    row[MENU_ROW_MODULE / 4] = 2;
+    object_memory[(0x800 + MENU_ROW_LABEL_VIEW) / 4] = 0x5a000030;
+    object_memory[(0x800 + MENU_ROW_VALUE_VIEW) / 4] = 0x5a000031;
+    GUIDE_STYLE = 2;
+    for (u32 disabled = 0; disabled < 2; ++disabled) {
+        settings_memory[2 + 9 * 3 + 1] = disabled;
+        menu_row_fill(0, TEST_OBJECTS + 0x800);
+        assert(row[MENU_ROW_LABEL_TEXT_AT / 4] == ((6 + 1) | 0x100));
+        assert(row[MENU_ROW_LABEL_TEXT_AT / 4 + 1] == (u32)menu_page(h, GUIDES_MODULE)->title(h));
+        assert(row[MENU_ROW_VALUE_TEXT_AT / 4] == ((disabled ? 4U : 1U) | 0x100));
+        assert(row[MENU_ROW_VALUE_TEXT_AT / 4 + 1] == (u32)(disabled ? on_off_text(h, 1) : no_text));
+        assert(GUIDE_STYLE == 2);
+    }
+}
+
+/* Three registered pages form one ADJ group and one module in MENU.
+   Child settings remain editable when their first (Enable) value is zero. */
+static void install_group_pages(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    const u32 main = TEST_PAGE + GUIDES_MODULE * TEST_PAGE_SIZE, titles = main + 0x380;
+    for (u32 l = 0; l < GRKIT_TEXT_LANGUAGES; ++l)
+        *page_at(titles + l * 4) = *page_at(*page_at(main + PAGE_TITLE) + l * 4);
+    *page_at(main) = 44;
+    *page_at(main + PAGE_KIND) = PAGE_GROUP;
+    *page_at(main + PAGE_FLAGS) = 0;
+    *page_at(main + PAGE_TITLE) = titles;
+    *page_at(main + PAGE_LABELS) = *page_at(main + PAGE_SUMMARIES) = 0;
+    *page_at(main + PAGE_ROWS) = 2;
+    *page_at(main + PAGE_SETTING_ROWS) = 0;
+    *page_at(main + PAGE_CHILDREN) = main + 0x3c0;
+    manage_memory[MANAGE_ENTRY(2) + 1] = titles;
+    h[GRKIT_HOST_MODULE_PAGES / 4 + GUIDES_MODULE * 3 + 1] = 0xffffffffU;
+    static const char *const enabled[] = {"Off", "On"}, *const strength[] = {"Weak", "Medium", "Strong"};
+    for (u32 child = 0; child < 2; ++child) {
+        u32 slot = 5 + child, handle = child ? 16 : 0, power = child ? 17 : 15;
+        u32 address = TEST_PAGE + slot * TEST_PAGE_SIZE, rows = address + 0x200, texts = rows + 32;
+        install_page(slot, child ? "Second" : "First", enabled, 2, handle, 7);
+        *page_at(main + 0x3c0 + child * 4) = address;
+        *page_at(address + PAGE_KIND) = PAGE_SETTINGS;
+        *page_at(address + PAGE_FLAGS) = PAGE_MENU_ONLY;
+        *page_at(address + PAGE_LABELS) = *page_at(address + PAGE_SUMMARIES) = 0;
+        *page_at(address + PAGE_SETTING_ROWS) = 2;
+        *page_at(address + PAGE_SETTING_LIST) = rows;
+        settings_memory[2 + handle * 3 + 1] = 0;
+        settings_memory[2 + handle * 3 + 2] = 2;
+        settings_memory[2 + power * 3 + 1] = 1;
+        settings_memory[2 + power * 3 + 2] = 3;
+        for (u32 row = 0; row < 2; ++row) {
+            *page_at(rows + row * ROW_SIZE) = ROW_SIZE;
+            *page_at(rows + row * ROW_SIZE + ROW_SETTING) = row ? power : handle;
+            *page_at(rows + row * ROW_SIZE + ROW_LABEL) = texts;
+            for (u32 l = 0; l < GRKIT_TEXT_LANGUAGES; ++l)
+                *page_at(texts + l * 4) = page_text(row ? "Strength" : "Enable");
+            texts += TEXT_LIST;
+            *page_at(rows + row * ROW_SIZE + ROW_VALUES) = texts;
+            for (u32 v = 0; v < (row ? 3U : 2U); ++v)
+                for (u32 l = 0; l < GRKIT_TEXT_LANGUAGES; ++l)
+                    *page_at(texts + (v * GRKIT_TEXT_LANGUAGES + l) * 4) = page_text(row ? strength[v] : enabled[v]);
+            texts += (row ? 3U : 2U) * TEXT_LIST;
+        }
+    }
+}
+
+static void group_ok_toggles_each_child_without_closing_adj(void)
+{
+    install_group_pages();
+    volatile u32 *h = test_header;
+    menu_start(h);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = root_row(h, GUIDES_MODULE);
+    assert(!confirm_selection(h));
+    assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    assert(!current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
+    u32 changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(!confirm_selection(h));
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    assert(current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && count(h) == 2);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    assert(!confirm_selection(h));
+    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    /* Fn selects the same child's settings without applying its toggle. */
+    assert(settings_target(h, TEST_OBJECTS) == 6);
+    settings_start(h, 6);
+    assert(settings_rows(h) == 2 && menu_settings_current(1, 0, 0) == 2);
+    assert(menu_settings_current(1, 0, 1) == 2);
+    menu_settings_controller(ADJ_CONTROLLER);
+    menu_return_page(h, 1);
+    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
+    /* A half press or other exit must not toggle the highlighted child. */
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    exit_commit(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
+    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
+    /* The ADJ dial press closes the list, without interpreting its Confirm
+       as a second toggle. Ordinary OK on the same row then disables it. */
+    h[GRKIT_HOST_MENU_EVENTS / 4] = 2;
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
+    assert(confirm_selection(h));
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
+    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
+    assert(!confirm_selection(h));
+    assert(current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
+    assert(settings_memory[2 + 15 * 3 + 1] == 1 && settings_memory[2 + 17 * 3 + 1] == 1);
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(menu_back(h));
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
+}
+
+static void group_pages_open_children_and_return_without_committing(void)
+{
+    install_group_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU), *block = settings_block(h);
+    manage_adj_refresh(h);
+    assert(manage_adj_count(h) == 3 && listed_page(h, 2) == GUIDES_MODULE);
+    assert(!(visible_modules(h) & ((1U << 5) | (1U << 6))));
+    menu_start(h);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = root_row(h, GUIDES_MODULE);
+    assert(current_module(h)->icon(h, 0) == GUIDE_TILE(0));
+    menu_confirm(h);
+    assert(group_settings_row(h) && count(h) == 2);
+    assert(same(current_module(h)->label(h, 0), "First") && same(current_module(h)->label(h, 1), "Second"));
+    assert(current_module(h)->icon(h, 0) == GUIDE_TILE(1) && current_module(h)->icon(h, 1) == GUIDE_TILE(2));
+    /* A navigation group has no setting to preview, but other layers still
+       paint on the ADJ canvas and retain the current controller. */
+    h[GRKIT_HOST_FRAME_RATIO / 4] = 0;
+    h[GRKIT_HOST_MODULE_LAYERS / 4 + 1] = 0xffffffffU;
+    frame_preview_set(h, TEST_OBJECTS, 0);
+    assert(!h[GRKIT_HOST_MODULE_PREVIEW / 4] && h[GRKIT_HOST_FRAME_PREVIEW / 4] == 1);
+    assert(h[GRKIT_HOST_FRAME_PREVIEW_ADJ / 4] == TEST_OBJECTS);
+    h[GRKIT_HOST_MODULE_LAYERS / 4 + 1] = 0;
+
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    assert(settings_target(h, TEST_OBJECTS) == 6);
+    exit_commit(h);
+    assert(settings_memory[2 + 16 * 3 + 1] == 0 && settings_memory[2 + 17 * 3 + 1] == 1);
+    settings_start(h, 6);
+    assert(settings_rows(h) == 2 && same(settings_page(h)[0].label(h), "Enable"));
+    assert(menu_settings_apply(2, 0, 1) && settings_memory[2 + 17 * 3 + 1] == 2);
+    assert(settings_memory[2 + 16 * 3 + 1] == 0);
+    menu_settings_controller(ADJ_CONTROLLER);
+    menu_reopen(h);
+    menu_return_page(h, 1);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(menu_back(h) && h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
+
+    menu[MENU_ROWS_COUNT / 4] = 1;
+    menu_row(h, 0)[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
+    menu_row(h, 0)[MENU_ROW_MODULE / 4] = 2;
+    object_memory[(0x800 + MENU_ROW_LABEL_VIEW) / 4] = 0x5a000030;
+    object_memory[(0x800 + MENU_ROW_VALUE_VIEW) / 4] = 0x5a000031;
+    menu_row_fill(0, TEST_OBJECTS + 0x800);
+    assert(menu_row(h, 0)[MENU_ROW_VALUE_TEXT_AT / 4] == 0x101);
+    assert(menu_settings_controller(MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(settings_rows(h) == 3 && same(listed_label(h, 0), "Enable"));
+    assert(same(listed_label(h, 1), "First") && same(listed_label(h, 2), "Second"));
+    for (u32 row = 1; row <= 2; ++row) {
+        assert(block[SUBMENU_KIND_CONTROLLERS / 4 + row] == MENU_GROUP_TARGET + row);
+        assert(menu_settings_controller(MENU_GROUP_TARGET + row) == SETTINGS_SUBMENU);
+        assert((h[GRKIT_HOST_SETTINGS / 4] & 0xffffU) == 5 + row);
+        assert(h[GRKIT_HOST_SETTINGS / 4] & SETTINGS_PARENT);
+        assert(settings_rows(h) == 2);
+        assert(menu_settings_controller(settings_pages[1]) == settings_pages[1]);
+        assert(menu_settings_apply(0, 0, 1));
+        assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+        assert((h[GRKIT_HOST_SETTINGS / 4] & 0xffffU) == 5 + row);
+        assert(h[GRKIT_HOST_SETTINGS / 4] & SETTINGS_PARENT);
+        /* The firmware remembers the shared submenu as the return target.
+           Unlike the value-page return above, MENU comes from the submenu
+           itself: child -> parent, then parent -> the top-level MENU. */
+        assert(menu[MENU_ROWS_CURRENT / 4] == SETTINGS_SUBMENU);
+        assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+        assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1 && settings_rows(h) == 3);
+    }
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == MENU_RETURN_CONTROLLER);
+    assert(!h[GRKIT_HOST_SETTINGS / 4]);
+    assert(menu[MENU_ROWS_CURRENT / 4] == MENU_RETURN_CONTROLLER);
+    /* Targets that return directly to MENU still unwind the child first. */
+    assert(menu_settings_controller(MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(menu_settings_controller(MENU_GROUP_TARGET + 1) == SETTINGS_SUBMENU);
+    assert(menu_settings_controller(MENU_RETURN_CONTROLLER) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1);
+    assert(menu_settings_controller(MENU_RETURN_CONTROLLER) == MENU_RETURN_CONTROLLER);
+    assert(!h[GRKIT_HOST_SETTINGS / 4]);
+}
+
+/* BaseController::Back marks the source before queuing ChangeController.
+   Completion runs after Start, and invalidates the source's return target.
+   For a self transition, that source is also the newly opened parent. */
+static u32 native_settings_back(u32 controller)
+{
+    u32 target = MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET);
+    assert(target != 0x10000000U);
+    MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING) = 1;
+    target = menu_settings_transition(controller, target);
+    if (MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING))
+        MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = 0x10000000U;
+    MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING) = 0;
+    return target;
+}
+
+static void group_back_keeps_the_shared_native_parent_return_target(void)
+{
+    install_group_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU);
+    const u32 controller = TEST_OBJECTS + 0x3000;
+    menu[MENU_ROWS_COUNT / 4] = 1;
+    menu_row(h, 0)[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
+    menu_row(h, 0)[MENU_ROW_MODULE / 4] = 2;
+    for (u32 child = 1; child <= 2; ++child) {
+        assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+        MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
+        assert(menu_settings_transition(controller, MENU_GROUP_TARGET + child) == SETTINGS_SUBMENU);
+        assert(!MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING));
+        /* A native forward self transition stores its own id as the child
+           return target. Also cover a direct MENU return from the child. */
+        MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = child == 1 ? SETTINGS_SUBMENU : MENU_RETURN_CONTROLLER;
+        assert(native_settings_back(controller) == SETTINGS_SUBMENU);
+        assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1);
+        assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == MENU_RETURN_CONTROLLER);
+        assert(native_settings_back(controller) == MENU_RETURN_CONTROLLER);
+        assert(!h[GRKIT_HOST_SETTINGS / 4]);
+        assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == 0x10000000U);
+    }
+    /* A value page returning to a child keeps the parent marker, but must
+       still release that value controller's native Back target. */
+    assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, settings_pages[1]) == settings_pages[1]);
+    MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
+    assert(native_settings_back(controller) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] & SETTINGS_PARENT);
+    assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == 0x10000000U);
+    /* ADJ opens the same child without a MENU parent. Its return is native. */
+    settings_start(h, 5);
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = ADJ_CONTROLLER;
+    assert(native_settings_back(controller) == ADJ_CONTROLLER);
+    assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == 0x10000000U);
 }
 
 static void the_guides_menu_page_lists_enable_options_and_settings(void)
@@ -2387,6 +2720,7 @@ int main(void)
     the_root_shows_only_visible_module_pages();
     adj_reopens_on_the_row_of_the_last_module();
     the_date_imprint_settings_page_reads_and_stores_values();
+    direct_settings_have_independent_rows();
     the_adj_order_page_moves_modules();
     the_adj_order_page_has_a_row_for_each_module();
     options_hide_values_that_are_off_in_adj();
@@ -2395,6 +2729,11 @@ int main(void)
     film_look_lists_the_installed_effects_that_are_on();
     /* The MENU page blocks after the first continue the screen that the block
        before them leaves. */
+    settings_entry_enable_preserves_each_value();
+    a_settings_section_row_has_no_choice_value();
+    group_ok_toggles_each_child_without_closing_adj();
+    group_pages_open_children_and_return_without_committing();
+    group_back_keeps_the_shared_native_parent_return_target();
     the_guides_menu_page_lists_enable_options_and_settings();
     the_options_page_toggles_its_values();
 #if defined(FW_CHECK_ITEM) && defined(FW_MENU_TABS)

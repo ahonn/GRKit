@@ -1,0 +1,56 @@
+# Glow: independent Bloom and Halation around recorded highlights.
+id = "GLOW"
+version = 1
+order = 45
+sources = ["glow.c", "glow_kernels.c"]
+# The module icon, then the Bloom and Halation entries in ADJ.
+tiles = ["tiles/0-module.png", "tiles/1-bloom.png", "tiles/2-halation.png"]
+
+# Keep the frame filter available when either effect is enabled.
+[[settings]]
+key = "ENABLED"
+values = 2
+default = 1
+
+[[settings]]
+key = "BLOOM_ENABLED"
+values = 2
+saved = true
+public = true
+
+# 0 Weak, 1 Medium, 2 Strong. Disabling the effect keeps this value.
+[[settings]]
+key = "BLOOM_STRENGTH"
+values = 3
+default = 1
+saved = true
+public = true
+
+[[settings]]
+key = "HAL_ENABLED"
+values = 2
+saved = true
+public = true
+
+[[settings]]
+key = "HAL_STRENGTH"
+values = 3
+default = 1
+saved = true
+public = true
+
+[page]
+kind = "group"
+
+[[page.children]]
+key = "BLOOM"
+settings = ["BLOOM_ENABLED", "BLOOM_STRENGTH"]
+
+[[page.children]]
+key = "HALATION"
+settings = ["HAL_ENABLED", "HAL_STRENGTH"]
+
+[[filters]]
+apply = "glow_apply"
+setting = "ENABLED"
+stage = "frame"

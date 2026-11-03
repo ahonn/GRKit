@@ -154,6 +154,139 @@ __attribute__((used)) void grkit_export_local_time(u8 *out) {
     PICTURE_DATE(out);
 }
 __attribute__((used)) u32 grkit_export_divide(u32 n,u32 d) { return core_divide(n,d); }
+/* The white of the effect of a recorded picture: input 255 of the curves of
+   its record, after its post matrix, as R, G, B levels, and 255 each without
+   a record. The Fn adjustments are not in it. runtime/level.h gives the luma
+   of the same white to the live-view highlight warning. */
+__attribute__((used)) void grkit_export_picture_white(const PictureSet *set,u8 *white) {
+    u32 record=set->record, post, k, c;
+    int rgb[3], v;
+    if(!record) { white[0]=white[1]=white[2]=255; return; }
+    post=WORD(record,GRKIT_RECORD_FEATURES)&GRKIT_FEATURE_POST;
+    for(c=0;c<3;++c) rgb[c]=(int)HALF(record,GRKIT_RECORD_CURVES+c*GRKIT_RECORD_CURVE_SIZE+255*2);
+    for(k=0;k<3;++k) {
+        v=rgb[k];
+        if(post) {
+            v=0;
+            for(c=0;c<3;++c) v+=(s16)HALF(record,GRKIT_RECORD_POST+(k*3+c)*2)*rgb[c];
+            v=(v+4096)>>13;
+        }
+        v=v<0 ? 0 : v>16383 ? 16383 : v;
+        white[k]=(u8)(((u32)v*255U+8192U)>>14);
+    }
+}
+/* picture_shot: the shooting data of the shot of a plane set, in the
+   layout of GrkitShot (GRKIT_SHOT_INFO_* in abi.h). */
+#define SHOT_INVALID ((int)0x80000000)
+/* An IEEE single in 1/256 units, rounded, or SHOT_INVALID when it is not
+   finite or not below 2^23. */
+static int shot_q8(u32 bits) {
+    u32 e=(bits>>23)&255, m=(bits&0x7fffffU)|0x800000U;
+    int shift=(int)e-142, v;
+    if(!(bits&0x7fffffffU)) return 0;
+    if(e==255 || shift>7) return SHOT_INVALID;
+    if(shift>=0) v=(int)(m<<shift);
+    else if(shift<-25) v=0;
+    else v=(int)((m+(1U<<(-shift-1)))>>(-shift));
+    return bits>>31 ? -v : v;
+}
+/* base x 2^(x/256), rounded, at most 0xffffffff. */
+static u32 shot_exp2(u32 base,int x) {
+    /* 2^(k/32) in Q16, k = 0 to 32. */
+    static const u32 table[33]={
+        65536,66971,68438,69936,71468,73032,74632,76266,77936,79642,81386,
+        83169,84990,86851,88752,90696,92682,94711,96785,98905,101070,103283,
+        105545,107856,110218,112631,115098,117618,120194,122825,125515,128263,131072};
+    int i=x>>8;
+    u32 f=(u32)x&255, k=f>>3, t=f&7;
+    u32 m=table[k]+(((table[k+1]-table[k])*t+4)>>3);
+    unsigned long long r=(unsigned long long)base*m;
+    int shift=16-i;
+    if(shift<=0) return shift<-16 || (r<<(-shift))>>32 ? 0xffffffffU : (u32)(r<<(-shift));
+    if(shift>=64) return 0;
+    r=(r+(1ULL<<(shift-1)))>>shift;
+    return r>>32 ? 0xffffffffU : (u32)r;
+}
+/* log2(v) in 1/256 units, for v > 0. */
+static int shot_log2(u32 v) {
+    unsigned long long y;
+    int n=31, k, q=0;
+    while(!(v>>n)) --n;
+    /* y in [1, 2) as Q30. */
+    y=n>=30 ? (unsigned long long)(v>>(n-30)) : (unsigned long long)v<<(30-n);
+    for(k=0;k<8;++k) {
+        y=(y*y)>>30;
+        q<<=1;
+        if(y>=(2ULL<<30)) { y>>=1; q|=1; }
+    }
+    return n*256+q;
+}
+static void info_half(u8 *out,u32 at,u32 v) { out[at]=(u8)v; out[at+1]=(u8)(v>>8); }
+static void info_word(u8 *out,u32 at,u32 v) { info_half(out,at,v&0xffff); info_half(out,at+2,v>>16); }
+__attribute__((used)) void grkit_export_picture_shot(const PictureSet *set,u8 *out) {
+    static const u8 program[]={SHOT_PROGRAM_CODES}, metering[]={5,2,3};
+    u8 info[GRKIT_SHOT_INFO_BYTES];
+    u32 shot=set->shot, size=out[0]|out[1]<<8|out[2]<<16|(u32)out[3]<<24, known=0, i, v;
+    for(i=0;i<GRKIT_SHOT_INFO_BYTES;++i) info[i]=0;
+    if(shot>=0x40000000U && shot<=0xbff00000U) {
+        int av=shot_q8(WORD(shot,SHOT_APEX)), tv=shot_q8(WORD(shot,SHOT_APEX+4)), sv=shot_q8(WORD(shot,SHOT_APEX+8));
+        int xv=shot_q8(WORD(shot,SHOT_APEX+12)), focal=shot_q8(WORD(shot,SHOT_FOCAL)), crop=shot_q8(WORD(shot,SHOT_CROP));
+        u32 time=0, mode=BYTE(shot,SHOT_LONG_MODE);
+        if(mode-SHOT_LONG_FIRST<2U) {
+            /* Time or bulb: the time decides the shutter value. */
+            unsigned long long t=(unsigned long long)WORD(shot,SHOT_TIME)|(unsigned long long)WORD(shot,SHOT_TIME+4)<<32;
+            time=t>>32 ? 0xffffffffU : (u32)t;
+            if(time) tv=19*256+238-shot_log2(time); /* log2(1e6) = 19.93 */
+        }
+        else if(BYTE(shot,SHOT_TIME_SET)) time=WORD(shot,SHOT_TIME);
+        /* Av about -1 to 12, Tv -12 to 16, Sv 2 to 20: else no exposure. */
+        if(av>-256 && av<12*256 && tv>-12*256 && tv<16*256 && sv>2*256 && sv<20*256) {
+            if(!time) time=shot_exp2(1000000,-tv);
+            info_word(info,GRKIT_SHOT_INFO_AV,(u32)av);
+            info_word(info,GRKIT_SHOT_INFO_TV,(u32)tv);
+            info_word(info,GRKIT_SHOT_INFO_SV,(u32)sv);
+            info_word(info,GRKIT_SHOT_INFO_SCENE_EV,(u32)(av+tv-sv+5*256));
+            info_word(info,GRKIT_SHOT_INFO_EXPOSURE_US,time);
+            info_half(info,GRKIT_SHOT_INFO_F_NUMBER,shot_exp2(10,av>>1));
+            v=shot_exp2(100,sv-5*256);
+            info_half(info,GRKIT_SHOT_INFO_ISO,v>65535 ? 65535 : v);
+            known|=GRKIT_SHOT_INFO_KNOWN_EXPOSURE;
+        }
+        if(xv>-16*256 && xv<16*256) { info_word(info,GRKIT_SHOT_INFO_COMPENSATION,(u32)xv); known|=GRKIT_SHOT_INFO_KNOWN_COMPENSATION; }
+        if(focal>0 && focal<1000*256) {
+            /* In 1/10 mm, and as 35 mm film: times 1.5339 (Q16 100526) and the crop. */
+            info_half(info,GRKIT_SHOT_INFO_FOCAL,(u32)(focal*10+128)>>8);
+            if(crop>0 && crop<8*256) info_half(info,GRKIT_SHOT_INFO_FOCAL_35MM,(u32)((((unsigned long long)focal*100526U*(u32)crop>>16)+32768)>>16));
+            known|=GRKIT_SHOT_INFO_KNOWN_FOCAL;
+        }
+        v=BYTE(shot,SHOT_PROGRAM);
+        if(v<sizeof(program)) { info[GRKIT_SHOT_INFO_PROGRAM]=program[v]; known|=GRKIT_SHOT_INFO_KNOWN_PROGRAM; }
+        v=BYTE(shot,SHOT_METERING);
+        if(v<sizeof(metering)) { info[GRKIT_SHOT_INFO_METERING]=metering[v]; known|=GRKIT_SHOT_INFO_KNOWN_METERING; }
+        /* EXIF Flash: off 0x10; on 8, with red-eye reduction 0x48; fired +1. */
+        v=!BYTE(shot,SHOT_FLASH_ON) ? 0x10U : (BYTE(shot,SHOT_FLASH_MODE)|2)==3 ? 0x48U : 8U;
+        if(v!=0x10U && BYTE(shot,SHOT_FLASH_FIRED)) v|=1;
+        info_half(info,GRKIT_SHOT_INFO_FLASH,v);
+        known|=GRKIT_SHOT_INFO_KNOWN_FLASH;
+        v=HALF(shot,SHOT_TAKEN);
+        if(v>=2000 && v<2200 && BYTE(shot,SHOT_TAKEN+2)-1U<12U && BYTE(shot,SHOT_TAKEN+3)-1U<31U) {
+            info_half(info,GRKIT_SHOT_INFO_TAKEN,v);
+            info[GRKIT_SHOT_INFO_TAKEN+2]=BYTE(shot,SHOT_TAKEN+2);
+            info[GRKIT_SHOT_INFO_TAKEN+3]=BYTE(shot,SHOT_TAKEN+3);
+            info[GRKIT_SHOT_INFO_TAKEN+4]=BYTE(shot,SHOT_TAKEN+5);
+            info[GRKIT_SHOT_INFO_TAKEN+5]=BYTE(shot,SHOT_TAKEN+6);
+            info[GRKIT_SHOT_INFO_TAKEN+6]=BYTE(shot,SHOT_TAKEN+7);
+            known|=GRKIT_SHOT_INFO_KNOWN_TAKEN;
+        }
+    }
+    /* The fields that the module's GrkitShot has: its size, as the module
+       set it, and the core's, the smaller. */
+    if(size>GRKIT_SHOT_INFO_BYTES) size=GRKIT_SHOT_INFO_BYTES;
+    if(size<8) return;
+    info_word(info,GRKIT_SHOT_INFO_SIZE,size);
+    info_word(info,GRKIT_SHOT_INFO_KNOWN,known);
+    for(i=0;i<size;++i) out[i]=info[i];
+}
 static void flush(const Plane *p) {
     PICTURE_CACHE_FLUSH(p->y,p->pitch*p->height);
     PICTURE_CACHE_FLUSH(p->c,p->pitch*(p->half ? p->height>>1 : p->height));
@@ -328,6 +461,8 @@ static void encode_shot(volatile u32 *h,u32 message) {
     set.scratch=PICTURE_MAP(PICTURE_SCRATCH(h));
     /* A RAW development turns as its DNG records, not as the camera is held. */
     set.turns=PICTURE_DEVELOPING() ? orientation_turns(PICTURE_PHOTO_ORIENTATION()) : picture_turns(h,WORD(config,0x34));
+    /* The shooting data (picture_shot); in a RAW development, that of the DNG. */
+    set.shot=WORD(config,0x34);
     if(owned(h,record)) {
         set.record=record;
         set.mono=WORD(record,GRKIT_RECORD_MONOCHROME)&1;

@@ -457,6 +457,37 @@ pub const SHOT_STRIDE: usize = 16;
 pub const SHOT_KEY: usize = 0;
 pub const SHOT_RECORD: usize = 4;
 pub const SHOT_POSTURE: usize = 8;
+/// The layout of `GrkitShot` (runtime/sdk/grkit.h) that picture_shot fills:
+/// its size in bytes, then the byte offset of each field, then the bits of
+/// `known`. runtime/picture.c writes these offsets, and
+/// tests/runtime/layout_contract.c checks them against the SDK struct.
+pub const SHOT_INFO: [(&str, usize); 25] = [
+    ("BYTES", 52),
+    ("SIZE", 0),
+    ("KNOWN", 4),
+    ("AV", 8),
+    ("TV", 12),
+    ("SV", 16),
+    ("SCENE_EV", 20),
+    ("COMPENSATION", 24),
+    ("EXPOSURE_US", 28),
+    ("F_NUMBER", 32),
+    ("ISO", 34),
+    ("FOCAL", 36),
+    ("FOCAL_35MM", 38),
+    ("PROGRAM", 40),
+    ("METERING", 41),
+    ("FLASH", 42),
+    ("TAKEN", 44),
+    ("KNOWN_EXPOSURE", 0x01),
+    ("KNOWN_COMPENSATION", 0x02),
+    ("KNOWN_FOCAL", 0x04),
+    ("KNOWN_TAKEN", 0x08),
+    ("KNOWN_FLASH", 0x10),
+    ("KNOWN_PROGRAM", 0x20),
+    ("KNOWN_METERING", 0x40),
+    ("KNOWN_ALL", 0x7f),
+];
 /// The picture scratch after the records: the masks, then the shot ring.
 pub const PICTURE_SCRATCH: usize = PICTURE_MASKS + SHOT_ENTRY + SHOT_STRIDE * SHOT_ENTRIES;
 /// Bytes of the live-view labels after the menu text (`artwork::overlay_labels`).
@@ -861,6 +892,16 @@ pub fn header() -> String {
         writeln!(out, "#define GRKIT_SHOT_{name} {value}").unwrap();
     }
     writeln!(out, "#define GRKIT_PICTURE_SCRATCH {PICTURE_SCRATCH}").unwrap();
+    out.push('\n');
+
+    out.push_str(
+        "/* The layout of GrkitShot (runtime/sdk/grkit.h) that picture_shot fills:\n   \
+         its size in bytes, the byte offset of each field, and the bits of\n   \
+         `known`. tests/runtime/layout_contract.c checks them against the SDK. */\n",
+    );
+    for (name, value) in SHOT_INFO {
+        writeln!(out, "#define GRKIT_SHOT_INFO_{name} {value}").unwrap();
+    }
     out.push('\n');
 
     define(

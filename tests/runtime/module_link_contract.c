@@ -175,6 +175,7 @@ int main(void)
     assert(grm_word(data) == CODE_BASE + 1 && grm_word(data + 4) == DATA_BASE + 8);
     assert(setting_count == 2 && strcmp(settings[0].key, "MODE") == 0 && strcmp(settings[1].key, "LOOK") == 0);
     assert(settings[0].values == 2 && settings[0].flags == GRM_SETTING_SAVED);
+    assert(settings[0].default_value == 0 && settings[1].default_value == 0);
     assert(use_count == 1 && strcmp(uses[0], "?CORE.ASPECT") == 0);
     assert(layer_count == 1 && layers[0].paint == CODE_BASE + 1 && layers[0].setting == 0);
     assert(layers[0].flags == GRM_LAYER_FOLLOW_DISP && layers[0].order == 20);
@@ -189,6 +190,45 @@ int main(void)
     /* The state ID is the one of grkit_core::grm::state_id. */
     assert(grm_state_id("GUIDES.STYLE") == 604351797U);
     assert(grm_state_id("PROBE.MODE") == 221689958U);
+
+    /* ABI 2.0 uses 16-byte settings and defaults to zero. */
+    reset(); abi = GRM_ABI_MAJOR << 16;
+    assert(registrations() == 0 && setting_count == 2);
+    assert(settings[0].default_value == 0 && settings[1].default_value == 0);
+
+    /* Extended settings use their size as their stride. Read two defaults,
+       accept a future trailing word, and reject invalid or truncated entries. */
+    reset();
+    code_words[DESCRIPTOR + 4] = TILES * 4;
+    code_words[TILES] = 24; code_words[TILES + 1] = KEY * 4;
+    code_words[TILES + 2] = 2; code_words[TILES + 3] = GRM_SETTING_SAVED;
+    code_words[TILES + 4] = 1;
+    code_words[TILES + 6] = 20; code_words[TILES + 7] = KEY2 * 4;
+    code_words[TILES + 8] = 3; code_words[TILES + 9] = 0; code_words[TILES + 10] = 2;
+    relocations[relocation_count++] = (TILES + 1) * 4;
+    relocations[relocation_count++] = (TILES + 7) * 4;
+    assert(registrations() == 0 && setting_count == 2);
+    assert(settings[0].default_value == 1 && settings[1].default_value == 2);
+    code_words[TILES + 10] = 3;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    code_words[TILES + 10] = 2;
+    code_words[TILES] = 18;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    code_words[TILES] = 0xfffffffcU;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+
+    /* A settings entry has one module tile and no choice texts. Its first
+       native row still owns the setting and the count of its values. */
+    reset(); code_words[PAGE + 1] = GRM_PAGE_SETTINGS; code_words[PAGE + 3] = 0; code_words[PAGE + 8] = 2;
+    code_words[DESCRIPTOR + 9] = 1;
+    code_words[PAGE + 5] = 0; code_words[PAGE + 6] = 0;
+    assert(registrations() == 0 && page_count == 1);
+    code_words[PAGE + 8] = 0;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    code_words[PAGE + 8] = 2; code_words[PAGE + 3] = GRM_CHOICE_OPTIONS;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    code_words[PAGE + 3] = 0; code_words[DESCRIPTOR + 9] = 0;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
 
     /* Settings that the installer does not accept. */
     reset(); bytes(KEY, "Mode", 5);
@@ -262,7 +302,9 @@ int main(void)
     /* A page can have options; another flag is an error. */
     reset(); code_words[PAGE + 3] = GRM_CHOICE_OPTIONS;
     assert(registrations() == 0 && page_count == 1);
-    reset(); code_words[PAGE + 3] = 8;
+    reset(); code_words[PAGE + 3] = GRM_PAGE_MENU_ONLY;
+    assert(registrations() == 0 && pages[0].flags == GRM_PAGE_MENU_ONLY);
+    reset(); code_words[PAGE + 3] = 16;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     /* Filters: a stage of the core, a setting that the module has, and
        apply code. */
