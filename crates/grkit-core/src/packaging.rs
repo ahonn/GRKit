@@ -1,6 +1,6 @@
 //! Deterministic SD package assembly and bounded, strict package verification.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read, Write};
 
 use anyhow::{bail, ensure, Context, Result};
@@ -487,6 +487,8 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     let targets = package_targets(&runtime, camera)?;
     let mut ids = BTreeSet::new();
     let mut module_ids = BTreeSet::new();
+    let mut native_slots = BTreeMap::new();
+    let mut status_icons = 0;
     let mut listed = Vec::new();
     let mut language = None;
     for (name, blob) in contents
@@ -513,6 +515,27 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
                 "The module file {file} is not named by its ID {}",
                 module.id
             );
+            for placement in module
+                .indicator_placements()
+                .with_context(|| format!("Read the viewfinder indicators of {}", module.id))?
+            {
+                match placement {
+                    crate::grm::IndicatorPlacement::NativeSlot(slot) => {
+                        if let Some(owner) = native_slots.insert(slot, module.id.clone()) {
+                            bail!("Viewfinder slot image_control is registered by both {owner} and {}", module.id);
+                        }
+                    }
+                    crate::grm::IndicatorPlacement::StatusRow => {
+                        status_icons += 1;
+                        ensure!(
+                            status_icons <= crate::abi::STATUS_ICONS_MAX,
+                            "The package exceeds the viewfinder status-row capacity of {} icons at module {}",
+                            crate::abi::STATUS_ICONS_MAX,
+                            module.id
+                        );
+                    }
+                }
+            }
             listed.push(file.to_owned());
             module_ids.insert(module.id);
         } else if let Some(guide) = Language::ALL

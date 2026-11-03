@@ -34,14 +34,18 @@ Deleting `SCRIPT` also deletes the settings and the effects of GRKit 1.2. To kee
 
 ## Use
 
-Open ADJ and select the sixth entry, GRK. GRKit loads a few seconds after power-on, so the entry can appear late. When GRKit has loaded, the shooting screen shows **GRKit** at the top for a few seconds. This label needs the Framing or Guides module.
+Open ADJ and select the sixth entry, GRK. GRKit loads a few seconds after power-on, so the entry can appear late. When GRKit has loaded, the shooting screen shows **GRKit** at the top for a few seconds.
 
 - **Film Look:** highlight an effect to preview it. Press OK to keep it. Press Fn to adjust the Standard parameters of the effect. On the GRK menu, press Fn on the Film Look row to adjust the selected effect. Each effect keeps its own adjustments, and they do not change the camera's Image Control settings. The effects were made for GR III, so their colors can differ on GR IV.
 - **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Each ratio sets the native aspect ratio to 3:2. The viewfinder then stays 3:2 and dims the area outside the photo. XPan and 2.35:1 also work when the native aspect ratio is 16:9. Another aspect ratio in the camera menu pauses Framing. DNG files keep the full sensor image and record the crop. A raw converter that applies the recorded crop shows only the photo area.
 - **Guides:** select a guide style. Press Fn to set the color, the opacity, and whether the lines also show while DISP hides the shooting information. The lines show only in the viewfinder.
-- **Date Imprint:** select a date style. Press Fn to set **Date Style** and **Date Font**, the digits: Classic, GR1s, or GR II. Photos get the date at the bottom right. While it is on, the viewfinder shows DATE with the full shooting information.
+- **Date Imprint:** select a date style. Press Fn to set **Date Style** and **Date Font**, the digits: Classic, GR1s, or GR II. Photos get the date at the bottom right.
 - **Glow:** Bloom spreads light around highlights, while Halation adds a red-orange film halo. In ADJ, open Glow and select Bloom or Halation. Press OK to toggle the effect, or Fn to open its Enable and Strength settings. MENU opens the same settings. Each effect starts disabled at Medium strength, which you can set to Weak, Medium, or Strong. Disabling an effect keeps its strength. The effects apply only to JPEG photos, with no live-view preview.
 - **Grain:** select Weak, Medium, Strong, or Extra Strong. Press Fn to set **Size**: Auto (by ISO), Small, Medium, or Large. Only photos get the grain.
+
+With full shooting information, the viewfinder shows icons for enabled Framing, Date Imprint, Grain, Bloom, and Halation. Disabled features leave no icon. Film Look uses the native Image Control icon position.
+
+In ADJ and the viewfinder, Bloom and Halation icons use line thickness and brightness to show strength. Framing’s **Show Icon** setting hides its icon without disabling the crop.
 
 Press MENU to go back one level. GRKit keeps your settings after power-off.
 

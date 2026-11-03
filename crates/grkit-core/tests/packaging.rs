@@ -1150,3 +1150,127 @@ fn module_files_install_from_the_modules_folder() {
     let limit = format!("at most {} modules", grkit_core::runtime::MODULES_MAX);
     assert!(error.to_string().contains(&limit), "{error}");
 }
+
+/// Only placement headers are needed by package preflight. Installer tests
+/// cover the setting and icon descriptors that follow them in real modules.
+fn indicator_module(id: &str, placements: &[(u32, u32)]) -> Vec<u8> {
+    let count = placements.len();
+    let mut code = vec![0; 40 + count * (8 + 24)];
+    let mut put = |offset: usize, value: u32| {
+        code[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+    };
+    put(0, 40);
+    put(
+        4,
+        grkit_core::grm::ABI_MAJOR << 16 | grkit_core::grm::ABI_MINOR,
+    );
+    put(8, 40);
+    put(12, count as u32);
+    let mut relocations = vec![8];
+    for (index, &(placement, slot)) in placements.iter().enumerate() {
+        let entry = 40 + index * 8;
+        let descriptor = 40 + count * 8 + index * 24;
+        put(entry, 5);
+        put(entry + 4, descriptor as u32);
+        put(descriptor, 24);
+        put(descriptor + 4, placement);
+        put(descriptor + 8, slot);
+        relocations.push((entry + 4) as u32);
+    }
+    grkit_core::grm::Module {
+        id: id.into(),
+        code,
+        code_relocations: relocations,
+        ..Default::default()
+    }
+    .encode()
+    .unwrap()
+}
+
+#[test]
+fn package_viewfinder_capacity_is_checked_across_modules() {
+    let build = |modules: &[Vec<u8>]| {
+        assemble(
+            &[runtime()],
+            &EffectSet::default(),
+            modules,
+            &camera::GR3,
+            &english(),
+        )
+    };
+    let first = indicator_module("FIRST", &[(2, 0); 3]);
+    let second = indicator_module("SECOND", &[(2, 0); 3]);
+    let valid = build(&[first.clone(), second]).unwrap();
+    assert_eq!(valid.contents.modules, ["FIRST", "SECOND"]);
+
+    let second = indicator_module("SECOND", &[(2, 0); 4]);
+    let error = build(&[first, second.clone()]).unwrap_err().to_string();
+    assert!(
+        error.contains("capacity of 6") && error.contains("SECOND"),
+        "{error}"
+    );
+
+    // Imported ZIP verification uses the same preflight as assembly.
+    let mut files = unpack(&valid.bytes);
+    files.insert("SD_ROOT/SCRIPT/GRKIT/MODULES/SECOND.GRM".into(), second);
+    let bytes = repack(&with_sums(files), CompressionMethod::Stored);
+    assert!(verify_package(&bytes)
+        .unwrap_err()
+        .to_string()
+        .contains("capacity of 6"));
+}
+
+#[test]
+fn package_viewfinder_slots_have_one_owner() {
+    let build = |modules: &[Vec<u8>]| {
+        assemble(
+            &[runtime()],
+            &EffectSet::default(),
+            modules,
+            &camera::GR3,
+            &english(),
+        )
+    };
+    let first = indicator_module("FIRST", &[(1, 1)]);
+    let second = indicator_module("SECOND", &[(2, 0); 5]);
+    assert!(build(&[first.clone(), second]).is_ok());
+    let second = indicator_module("SECOND", &[(1, 1)]);
+    let error = build(&[first, second]).unwrap_err().to_string();
+    assert!(
+        error.contains("image_control") && error.contains("FIRST") && error.contains("SECOND"),
+        "{error}"
+    );
+    let error = build(&[indicator_module("FIRST", &[(1, 1), (1, 1)])])
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("image_control") && error.contains("FIRST"),
+        "{error}"
+    );
+}
+
+#[test]
+fn package_viewfinder_descriptors_are_bounded_before_reading() {
+    for (offset, value) in [(8, u32::MAX - 3), (12, 17), (44, u32::MAX - 3), (56, 3)] {
+        let mut module =
+            grkit_core::grm::Module::decode(&indicator_module("BROKEN", &[(2, 0)])).unwrap();
+        module.code[offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        // Keep a malformed pointer out of relocation validation to exercise
+        // the descriptor reader, as an untrusted file can do.
+        module.code_relocations.retain(|&at| at != offset as u32);
+        let error = assemble(
+            &[runtime()],
+            &EffectSet::default(),
+            &[module.encode().unwrap()],
+            &camera::GR3,
+            &english(),
+        )
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("viewfinder indicators of BROKEN"),
+            "{error:#}"
+        );
+    }
+}

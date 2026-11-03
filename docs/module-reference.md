@@ -42,11 +42,12 @@ The manifest is TOML. An unknown key is an error.
 | `settings` | array of tables | `[]` | The settings of the module. At most 16. |
 | `page` | table | none | The menu page. A module has at most one. |
 | `layers` | array of tables | `[]` | The live-view layers. |
+| `indicators` | array of tables | `[]` | The viewfinder status icons. |
 | `filters` | array of tables | `[]` | The plane filters. |
 
-A manifest gives at least one page, layer, or filter. Each page, layer, and filter is one registration, and a module has at most 16 registrations.
+A manifest gives at least one page, layer, indicator, filter, or event subscriber. Each entry is one registration, and a module has at most 16 registrations.
 
-A setting reference in `page`, `layers`, or `filters` is a key of `settings`, or a name of `uses` without its `?`.
+A setting reference is a key of `settings`, or a name of `uses` without its `?`.
 
 ### settings
 
@@ -77,12 +78,13 @@ kind = "settings"
 settings = ["BLOOM", "HALATION"]
 ```
 
-A `group` page has no `setting`, `settings`, `off_row`, or `options`. Each `[[page.children]]` table has two fields:
+A `group` page has no `setting`, `settings`, `off_row`, or `options`. Each `[[page.children]]` table has these fields:
 
 | Key | Type | Description |
 | --- | --- | --- |
 | `key` | string | A unique key with 1 to 15 characters `A`-`Z`, `0`-`9`, or `_`. It identifies the child title in the text files. |
 | `settings` | array of strings | The child's 1 to 5 native settings rows. The first setting must have two values: 0 (Off) and 1 (On). It must be available and cannot be an optional use. |
+| `icon` | table | Optional [icon source](#icon-sources). Without it, child n uses tile n + 1. |
 
 This example uses four settings declared elsewhere in the manifest:
 
@@ -99,7 +101,7 @@ key = "HALATION"
 settings = ["HAL_ENABLED", "HAL_STRENGTH"]
 ```
 
-The text files give `title`, `children.<KEY>.title`, and the label and values of each setting. A group has no choice `rows` or `summaries`. Tile 0 identifies the group. Tiles 1 to the child count identify its children in declaration order.
+The text files give `title`, `children.<KEY>.title`, and the label and values of each setting. A group has no choice `rows` or `summaries`. Tile 0 identifies the group. Without an explicit `icon`, tiles 1 to the child count identify its children in declaration order.
 
 The generator registers the group first, then its child settings pages. Each child has `GRKIT_PAGE_MENU_ONLY`, so only the group appears in the ADJ root. A group and its children consume one page slot each from the shared limit of 10 loaded pages.
 
@@ -117,6 +119,49 @@ A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles.
 | `live_only` | boolean | `false` | The layer does not paint on the ADJ canvas. |
 
 A layer has `follow_disp` or `full_disp`, not both.
+
+### indicators
+
+An indicator supplies a status icon without a drawing callback. The viewfinder service owns its placement, display policy, and refresh.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `id` | string | required | A unique identifier within this module: 1 to 32 lowercase letters, digits, or underscores. |
+| `placement` | string | required | `native_slot` or `status_row`. |
+| `slot` | string | none | Required for `native_slot`: `image_control`. Omit it for `status_row`. |
+| `enabled` | table | required | A setting condition, or `all = [condition, ...]` with 1 to 4 conditions. |
+| `icon` | table | required | An [icon source](#icon-sources). |
+
+A condition has `setting` and exactly one of `equals` or `not_equals`. All conditions must hold for the indicator to show. The core also hides indicators of stopped modules or when GRKit is off.
+
+```toml
+[[indicators]]
+id = "framing"
+placement = "status_row"
+enabled = { all = [{ setting = "CORE.ASPECT", not_equals = 0 }, { setting = "LABEL", equals = 0 }] }
+icon = { setting = "CORE.ASPECT" }
+```
+
+The status row uses the module order, then declaration order. Disabled icons leave no gap. It supports at most 6 registered icons across loaded modules. It shows only on the full-information still viewfinder and uses screen coordinates independently of the current photo area.
+
+The `image_control` slot supports one registered indicator. It returns the current native icon when the indicator is disabled or cannot resolve its icon. Its visibility follows the native still-viewfinder position. It does not change the camera's Image Control setting or playback icons.
+
+Indicators use committed settings, not ADJ highlight previews. Their icons indicate enabled settings, including effects without a live preview. Registration conflicts and capacity failures are reported during installation.
+
+### Icon sources
+
+Indicators and group children accept the same `icon` table:
+
+| Form | Meaning |
+| --- | --- |
+| `{ tile = 2 }` | The fixed module tile at index 2. |
+| `{ setting = "STYLE" }` | Module tile n for setting value n. |
+| `{ setting = "STRENGTH", first_tile = 1 }` | Module tile 1 + n for setting value n. |
+| `{ setting = "CORE.TONE" }` | The core icon of the committed Film Look. |
+
+Do not combine `tile` with `setting` or `first_tile`. A tile mapping must cover every value of its setting. `CORE.TONE` uses the core's effect icons and has no tile offset.
+
+An icon source does not decide whether a feature is enabled. For example, Glow keeps the selected strength icon in ADJ while disabled. Its viewfinder indicator uses a separate Enable condition and hides when disabled.
 
 ### filters
 
@@ -167,7 +212,9 @@ values = ["Weak", "Medium", "Strong"]
 
 ## Tiles
 
-A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. A settings page needs only tile 0. A group page needs tile 0 and one tile for each child.
+Built-in artwork follows the [icon design rules](icon-guidelines.md).
+
+A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. A settings page needs only tile 0. A group page needs tile 0 and its child icons, including every tile named by an explicit icon source.
 
 ## Settings
 
@@ -224,6 +271,7 @@ A registration connects a part of the module to an extension point of the core. 
 | --- | --- | --- |
 | `GRKIT_POINT_MENU_PAGE` (menu.page) | `GrkitPage` | `page` |
 | `GRKIT_POINT_OVERLAY_LAYER` (overlay.layer) | `GrkitLayer` | `layers` |
+| `GRKIT_POINT_VIEWFINDER_INDICATOR` (viewfinder.indicator) | `GrkitIndicator` | `indicators` |
 | `GRKIT_POINT_PICTURE_PLANE` (picture.plane) | `GrkitPlaneFilter` | `filters` |
 
 ### Pages
@@ -261,7 +309,6 @@ Layers paint in ascending `order`. A layer with the same order as another paints
 | --- | --- |
 | 10 | the Framing mask |
 | 20 | Guides |
-| 30 | the Framing ratio label |
 
 The manifest keys `follow_disp`, `full_disp`, and `live_only` set the flags `GRKIT_LAYER_FOLLOW_DISP`, `GRKIT_LAYER_FULL_DISP`, and `GRKIT_LAYER_LIVE_ONLY`. While the page of a layer setting is open in ADJ, the core paints the layer with the highlighted value on the ADJ canvas.
 
@@ -355,11 +402,13 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.1: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
+**ABI version.** `GRKIT_ABI` is 2.2: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
 
 In 2.0, each text list also has a Korean text. The installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
 
 ABI 2.1 adds `picture_white`, `picture_shot`, setting defaults, and the settings and group page kinds. `GrkitSetting` appends `default_value`, and `GrkitPage` appends the group `children` pointer. The installer accepts older 16-byte settings and 40-byte pages. Older settings have default 0. A group needs the 44-byte page descriptor and registers each child separately.
+
+ABI 2.2 adds `GrkitIndicator`, `GrkitCondition`, and `GrkitIcon`. `GrkitPage` appends an optional `icon` pointer after `children`. The installer still accepts 40-byte and 44-byte pages. Their icons keep the existing tile rules. `GrkitLayer` and `Surface` keep their existing layouts.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, and the imports. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

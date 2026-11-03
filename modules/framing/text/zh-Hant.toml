@@ -11,5 +11,5 @@ label = "遮罩"
 values = ["暗色", "黑色", "邊框線"]
 
 [settings.LABEL]
-label = "比例顯示"
+label = "圖示顯示"
 values = ["開啟", "關閉"]

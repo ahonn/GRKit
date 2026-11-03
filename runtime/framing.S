@@ -15,6 +15,7 @@
 .text
 /* The installer relocates this literal to the private host header. */
 .global framing_header
+.type framing_header, %function
 framing_header:
     ldr r0, =GRKIT_HEADER_REFERENCE
     bx lr

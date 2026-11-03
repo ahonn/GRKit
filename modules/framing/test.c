@@ -1,10 +1,8 @@
-/* The host test of Framing (grkit module test): the mask and the ratio label
-   of each capture area. */
+/* The host test of Framing (grkit module test): the mask of each capture area. */
 #include <assert.h>
 #include "grkit_module.h"
 
 void framing_mask(const Surface *s, u32 value);
-void framing_badge(const Surface *s, u32 value);
 
 /* The photo area of XPan, and of 4:3, on the 720 x 480 surface. */
 static const u16 xpan[4] = {0, 107, 720, 373};
@@ -26,7 +24,7 @@ static void check_mask(const u16 *box, u32 area)
 int main(void)
 {
     /* The descriptor: MASK and LABEL, a page of CORE.ASPECT with their
-       settings rows, and two layers. */
+       settings rows, a mask layer, and a status indicator. */
     assert(grkit_module.setting_count == 2 && grkit_module.use_count == 1);
     assert(SETTING_MASK == GRKIT_SETTING(0) && SETTING_LABEL == GRKIT_SETTING(1));
     assert(grkit_module.registration_count == 3 && grkit_module.tile_count == 8);
@@ -34,29 +32,15 @@ int main(void)
     check_mask(xpan, 1);
     check_mask(four_three, 3);
     /* A surface of the full 3:2 area, such as for Off, gets no mask and no
-       label. */
+       indicator. */
     {
         static const u16 full[4] = {0, 0, 720, 480};
         Surface s = grkit_test_surface(full);
         grkit_test_clear();
         framing_mask(&s, 5);
-        framing_badge(&s, 5);
         for (u32 y = 0; y < 480; ++y)
             for (u32 x = 0; x < 720; ++x) assert(grkit_test_pixel(x, y) == GRKIT_TEST_CLEAR);
         assert(grkit_test_labels == 0);
-    }
-    /* The label names the capture area, at the left of the second row. */
-    {
-        Surface s = grkit_test_surface(xpan);
-        s.area = 1;
-        framing_badge(&s, 1);
-        assert(grkit_test_labels == 1);
-        assert(grkit_test_label[0] == LABEL_RATIO(1) && grkit_test_label[1] == LABEL_LEFT && grkit_test_label[2] == LABEL_TOP);
-        /* LABEL Off draws no label. */
-        grkit_test_settings[SETTING_LABEL] = 1;
-        framing_badge(&s, 1);
-        assert(grkit_test_labels == 1);
-        grkit_test_settings[SETTING_LABEL] = 0;
     }
     /* MASK Black fills the outside opaque; Frame lines leave it clear and
        draw 2 white pixels inside each edge of the photo area. */

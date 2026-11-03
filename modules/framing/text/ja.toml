@@ -11,5 +11,5 @@ label = "マスク"
 values = ["ダーク", "ブラック", "枠線"]
 
 [settings.LABEL]
-label = "比率表示"
+label = "アイコン表示"
 values = ["オン", "オフ"]

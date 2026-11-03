@@ -9,6 +9,7 @@
 #include "effects.h"
 #include "tone_page.h"
 
+
 #define MODULE_PAGE(slot) (slot)
 #define MANAGE_MODULE MODULE_PAGE(GRKIT_MODULE_PAGES_MAX)
 #define ABOUT_MODULE (MANAGE_MODULE+1U)
@@ -46,6 +47,10 @@ static const MenuPage about_module = ABOUT_PAGE;
 #ifndef PAGE_WORD
 #define PAGE_WORD(p,o) WORD(p,o)
 #endif
+#ifndef MODULE_ICON_WORD
+#define MODULE_ICON_WORD(address,offset) PAGE_WORD(address,offset)
+#endif
+#include "module_icons.h"
 #include "manage.h"
 static const MenuPage manage_module_page = MANAGE_PAGE;
 static const MenuPage switch_module_page = SWITCH_PAGE;
@@ -188,7 +193,14 @@ static const u16 *group_label(volatile u32 *h,u32 row) {
     return MENU_TEXT(PAGE_WORD(PAGE_WORD(child,PAGE_TITLE),menu_language()*4));
 }
 static u32 group_icon(volatile u32 *h,u32 row) {
-    return choice_tile(h,h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? 0 : row+1);
+    u32 child,icon;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,0);
+    child=group_child_address(h,row);
+    /* ABI 2.2 adds an optional icon after children. Older pages retain
+       their fixed tile, and Off keeps the selected strength visible. */
+    if(child && PAGE_WORD(child,0)>=48 && (icon=PAGE_WORD(child,44)))
+        return module_icon_value(h,icon,CHOICE_ENTRY(h)[2]);
+    return choice_tile(h,row+1);
 }
 static u32 group_setting(volatile u32 *h,u32 row) {
     u32 child=group_child(h,row);

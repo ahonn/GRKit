@@ -650,10 +650,3 @@ void date_apply(PictureSet *set, u32 style)
             for (i = 0; i < set->count; ++i) stamp_sample(&set->planes[i], p, &st, set->mono, turns);
     }
 }
-
-/* The live-view sign that Date Imprint is on: "DATE" in the second row of
-   the full display, after the Framing ratio label. Off draws nothing. */
-void date_badge(const Surface *s, u32 style)
-{
-    if (style) overlay_label(s, LABEL_DATE, LABEL_NEXT_LEFT, LABEL_TOP);
-}
