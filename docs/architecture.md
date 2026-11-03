@@ -120,7 +120,8 @@ The menu text follows the camera language.
 ## Pictures
 
 - **Film Look** (`CORE.TONE`) replaces the color matrix and tone curves of Standard for still pictures and the live view. It can also drive the camera's hue-sector stage. Each effect has its own Fn adjustments, kept apart from the native ones. The live-view highlight warning and histogram follow the white of the effect.
-- **Framing** (`CORE.ASPECT`) selects a ratio. `CORE.ASPECT_MODE` selects Crop or Guides Only, with Crop as the default. Crop changes JPEG dimensions and records a default DNG crop while keeping full sensor data. Guides Only marks composition in the native 3:2 live view and keeps the camera's output settings. Its frame is hidden in other native aspects.
+- **Framing** (`CORE.ASPECT`) selects a ratio and sets the native aspect to 3:2. `CORE.ASPECT_MODE` selects Crop or Guides Only, with Crop as the default. Crop changes JPEG dimensions. Guides Only marks composition on the 3:2 live view without applying the selected crop. Off and changes to the mode preserve the current native aspect. A later change to another native aspect hides the composition frame.
+- **RAW default crop**: when Framing crops a shot, DNG defaults to native 3:2 and preserves the shot's digital crop setting. The DNG writer changes only `DefaultCropOrigin` and `DefaultCropSize`. The capture snapshot identifies the shot's Framing crop. Embedded previews keep the selected composition.
 - **Guides** follow the actual photo area, including native aspect ratios. In Guides Only mode, they keep that area rather than following the composition frame.
 - **Recorded pictures**: a hook on the JPEG encode changes the main picture, the screennail, and the thumbnail. It applies the selective color of the effect and the plane filters of the modules. Each shot keeps its own settings, so continuous shooting is correct. Grain uses the camera's grain stage, so the live view and DNG files have no grain.
 

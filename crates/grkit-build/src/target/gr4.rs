@@ -10,7 +10,7 @@
 use super::common::{self, join, len};
 use super::Family;
 use crate::components::{
-    b, bl, HookSpec,
+    b, bl, bl_shared, HookSpec,
     Part::{Framing, Menu, Processing},
     Point::{CaptureAspect, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
 };
@@ -41,7 +41,8 @@ const GROUPS: &[&[HookSpec]] = &[
 /// record and MultiAxial set stores, the last packet field store, the
 /// custom-curve flag, and the BL to the curve getter.
 const PROCESSING: &[HookSpec] = &[
-    bl("module_parameters", Processing, Tuning),
+    // The shot ring records the capture crop even without Film Look.
+    bl_shared("module_parameters", Processing, Tuning, CaptureAspect),
     bl("module_processing", Processing, Tuning),
     bl("module_record", Processing, Tuning),
     bl("module_multiaxial", Processing, Tuning),

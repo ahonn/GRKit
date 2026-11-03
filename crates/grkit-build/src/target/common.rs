@@ -153,6 +153,10 @@ pub const VIEWFINDER: &[HookSpec] = &[
 /// The recorded picture geometry, then the effect extension and picture
 /// processing.
 pub const PICTURE: &[HookSpec] = &[
+    // DNG-only DefaultCropOrigin and DefaultCropSize setters. JPEG output
+    // keeps the capture geometry; RAW defaults use native 3:2 for Framing.
+    bl("picture_dng_origin", Framing, CaptureAspect),
+    bl("picture_dng_size", Framing, CaptureAspect),
     // GetResolution id 2 heights (L, then each smaller size or crop step),
     // then the id 2 top insets of the screennail and the thumbnail.
     bl("framing_height_0", Framing, CaptureAspect),
@@ -262,6 +266,7 @@ pub const fn join<const N: usize>(groups: &[&[HookSpec]]) -> [HookSpec; N] {
                 symbol: hook.symbol,
                 part: hook.part,
                 point: hook.point,
+                also: hook.also,
                 link: hook.link,
             };
             count += 1;

@@ -135,6 +135,9 @@
 #define SHOT_TAKEN 0x944
 #define SHOT_FOCAL 0x694
 #define SHOT_CROP 0x7b8
+/* DNGMetaDataWriter::TiffEntryDataSetter: RAW image info and shot metadata. */
+#define DNG_SETTER_INFO 0x7c
+#define DNG_SETTER_SHOT 0x84
 #define SHOT_FLASH_ON 0xde
 #define SHOT_FLASH_MODE 0x760
 #define SHOT_FLASH_FIRED 0x71aa8

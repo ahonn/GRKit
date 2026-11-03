@@ -453,14 +453,16 @@ pub const PICTURE_MASKS: usize = 141376;
 pub const SHOT_ENTRIES: usize = 8;
 /// The shot ring: a write count, the turns of the last shot with a known
 /// posture (`SHOT_LAST_TURNS`), then entry n at `SHOT_ENTRY + SHOT_STRIDE * n`,
-/// which holds the key at `SHOT_KEY`, the record at `SHOT_RECORD`, and the
-/// posture of the electronic level at `SHOT_POSTURE`.
+/// which holds the key at `SHOT_KEY`, the record at `SHOT_RECORD`, the
+/// posture of the electronic level at `SHOT_POSTURE`, and the effective
+/// capture crop at `SHOT_FRAME_CROP`.
 pub const SHOT_LAST_TURNS: usize = 4;
 pub const SHOT_ENTRY: usize = 8;
 pub const SHOT_STRIDE: usize = 16;
 pub const SHOT_KEY: usize = 0;
 pub const SHOT_RECORD: usize = 4;
 pub const SHOT_POSTURE: usize = 8;
+pub const SHOT_FRAME_CROP: usize = 12;
 /// The layout of `GrkitShot` (runtime/sdk/grkit.h) that picture_shot fills:
 /// its size in bytes, then the byte offset of each field, then the bits of
 /// `known`. runtime/picture.c writes these offsets, and
@@ -879,8 +881,9 @@ pub fn header() -> String {
          word is not enough. Word 0 counts the writes, and word 1 \
          (GRKIT_SHOT_LAST_TURNS) holds the turns of the last shot with a known posture. \
          Entry n is at GRKIT_SHOT_ENTRY + GRKIT_SHOT_STRIDE n and holds the key at \
-         GRKIT_SHOT_KEY, the record at GRKIT_SHOT_RECORD, and the posture of the \
-         electronic level at GRKIT_SHOT_POSTURE (runtime/processing.h).",
+         GRKIT_SHOT_KEY, the record at GRKIT_SHOT_RECORD, the posture of the \
+         electronic level at GRKIT_SHOT_POSTURE, and the effective capture crop \
+         at GRKIT_SHOT_FRAME_CROP (runtime/processing.h).",
         "SHOT_RING",
         PICTURE_MASKS,
     );
@@ -891,6 +894,7 @@ pub fn header() -> String {
         ("KEY", SHOT_KEY),
         ("RECORD", SHOT_RECORD),
         ("POSTURE", SHOT_POSTURE),
+        ("FRAME_CROP", SHOT_FRAME_CROP),
         ("LAST_TURNS", SHOT_LAST_TURNS),
     ] {
         writeln!(out, "#define GRKIT_SHOT_{name} {value}").unwrap();

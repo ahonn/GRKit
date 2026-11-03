@@ -433,8 +433,9 @@
    enough. Word 0 counts the writes, and word 1 (GRKIT_SHOT_LAST_TURNS) holds
    the turns of the last shot with a known posture. Entry n is at
    GRKIT_SHOT_ENTRY + GRKIT_SHOT_STRIDE n and holds the key at GRKIT_SHOT_KEY,
-   the record at GRKIT_SHOT_RECORD, and the posture of the electronic level at
-   GRKIT_SHOT_POSTURE (runtime/processing.h). */
+   the record at GRKIT_SHOT_RECORD, the posture of the electronic level at
+   GRKIT_SHOT_POSTURE, and the effective capture crop at GRKIT_SHOT_FRAME_CROP
+   (runtime/processing.h). */
 #define GRKIT_SHOT_RING 141376
 #define GRKIT_SHOT_ENTRIES 8
 #define GRKIT_SHOT_ENTRY 8
@@ -442,6 +443,7 @@
 #define GRKIT_SHOT_KEY 0
 #define GRKIT_SHOT_RECORD 4
 #define GRKIT_SHOT_POSTURE 8
+#define GRKIT_SHOT_FRAME_CROP 12
 #define GRKIT_SHOT_LAST_TURNS 4
 #define GRKIT_PICTURE_SCRATCH 141512
 

@@ -101,8 +101,9 @@ gamma_hash:
     bx lr
 
 // Store r0, the record of a non-live-view build (0 for native processing),
-// and the posture of the electronic level in the shot ring under the shot
-// settings pointer r7. The live view (context kind 1) stores nothing. A reader
+// the posture of the electronic level, and the effective capture crop in
+// the shot ring under the shot settings pointer r7. The live view (context
+// kind 1) stores nothing. A reader
 // in another task checks the key again after it reads the record, so the key
 // is cleared while the entry changes. FW_LEVEL is a static object whose second
 // word points to the electronic level, or holds 0 before the level exists.
@@ -129,6 +130,13 @@ gamma_hash:
     str r12, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_KEY)]
     dmb ish
     str r0, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_RECORD)]
+    // Only still captures own the selected crop. RAW development and other
+    // non-live-view tasks keep their recorded geometry instead.
+    ldrb r12, [PROCESSING_CONTEXT, #0x2ac]
+    cmp r12, #0
+    ldreq r12, [r1, #GRKIT_HOST_FRAME_CROP]
+    movne r12, #0
+    str r12, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_FRAME_CROP)]
     ldr r1, =FW_LEVEL
     ldr r1, [r1, #4]
     cmp r1, #0

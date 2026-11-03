@@ -94,20 +94,30 @@ fn generated_header_marks_only_rtos_tail_patches_as_unchecked() -> Result<()> {
 fn generated_header_gives_the_points_of_each_patch() -> Result<()> {
     let plan = PatchPlan {
         exports: vec![],
-        patches: vec![Patch {
-            address: target::GR3_210.layout.tail.0,
-            points: 0,
-            before: vec![0; 4],
-            after: vec![1, 2, 3, 4],
-            site: None,
-        }],
+        patches: vec![
+            Patch {
+                address: target::GR3_210.layout.tail.0,
+                points: 0,
+                before: vec![0; 4],
+                after: vec![1, 2, 3, 4],
+                site: None,
+            },
+            Patch {
+                address: 0x531a48f0,
+                points: components::Point::Tuning.bit() | components::Point::CaptureAspect.bit(),
+                before: vec![0; 4],
+                after: vec![1, 2, 3, 4],
+                site: None,
+            },
+        ],
         relocations: vec![],
         references: Vec::new(),
     };
     let header = loader::header(&plan, &synthetic_gr3(), TEST_VERSION)?;
     assert!(header.contains("{0x540b6000,4,1,before_0,after_0},"));
-    // Code in the tail belongs to no extension point.
-    assert!(header.contains("static const u32 patch_points[] = {0x0};"));
+    // Code in the tail is unconditional. A shared hook keeps both bits so
+    // installing either capability installs its shot sampler.
+    assert!(header.contains("static const u32 patch_points[] = {0x0,0xa};"));
     // CORE.TONE needs the tuning and picture encode points (bits 1 and 4),
     // CORE.ASPECT the overlay and capture aspect points (bits 2 and 3),
     // CORE.GRAIN the grain point (bit 5), and CORE.GRAIN_SIZE the grain size

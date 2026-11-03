@@ -40,9 +40,11 @@ Photo: [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/
 - **Film Look:** highlight an effect to preview it. Press OK to keep it. Press Fn to adjust the Standard parameters of the effect. On the GRK menu, press Fn on the Film Look row to adjust the selected effect. Each effect keeps its own adjustments, and they do not change the camera's Image Control settings.
 - **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Press Fn to set **Mode** to **Crop** or **Guides Only**.
 
-The default **Crop** mode keeps the existing behavior. Selecting a ratio sets the camera's aspect ratio to 3:2 and crops JPEG photos. DNG files keep the full sensor data and record a default crop. RAW software that applies this crop initially shows only the selected area. Selecting another native aspect ratio pauses cropping.
+Selecting any ratio sets the camera's aspect ratio to 3:2 in either mode. **Off** and changes to **Mode** keep the camera's current aspect ratio.
 
-In **Guides Only** mode, the live view shows the selected ratio for composition. It does not change the camera's aspect ratio, JPEG dimensions, or RAW crop settings. The frame appears only with the camera's native 3:2 aspect ratio. Other native ratios hide the frame.
+The default **Crop** mode crops JPEG photos to the selected ratio. DNG files keep the native 3:2 default crop, including the camera's digital crop setting. RAW editors that apply this default crop show the 3:2 area. Embedded previews can still show the selected composition. Selecting another native aspect ratio pauses cropping.
+
+In **Guides Only** mode, the live view shows the selected ratio for composition. After the switch to 3:2, the frame does not change JPEG dimensions or RAW crop settings. If you later select another native aspect ratio, the frame hides. Select a Framing ratio again to return to 3:2 and show the frame.
 
 The **Mask** setting selects Dark, Black, or Frame Lines in either mode. Frame Lines alone does not disable cropping. Changing Mode keeps the Mask setting.
 

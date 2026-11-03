@@ -25,14 +25,22 @@ pub enum Part {
 }
 
 /// A hook that each build of a family installs: the symbol of its code, the
-/// component that holds that code, the extension point that needs it, and
+/// component that holds that code, the extension points that need it, and
 /// whether its site gets a BL instead of a B.
 #[derive(Debug, PartialEq, Eq)]
 pub struct HookSpec {
     pub symbol: &'static str,
     pub part: Part,
     pub point: Point,
+    pub also: Option<Point>,
     pub link: bool,
+}
+
+impl HookSpec {
+    /// Install the hook when either extension point is active.
+    pub fn point_mask(&self) -> u32 {
+        self.point.bit() | self.also.map_or(0, Point::bit)
+    }
 }
 
 /// A hook whose site gets a B to its code.
@@ -41,6 +49,7 @@ pub const fn b(symbol: &'static str, part: Part, point: Point) -> HookSpec {
         symbol,
         part,
         point,
+        also: None,
         link: false,
     }
 }
@@ -50,6 +59,14 @@ pub const fn bl(symbol: &'static str, part: Part, point: Point) -> HookSpec {
     HookSpec {
         link: true,
         ..b(symbol, part, point)
+    }
+}
+
+/// A BL hook shared by two extension points.
+pub const fn bl_shared(symbol: &'static str, part: Part, point: Point, also: Point) -> HookSpec {
+    HookSpec {
+        also: Some(also),
+        ..bl(symbol, part, point)
     }
 }
 
@@ -584,7 +601,7 @@ fn push_hook(component: &mut Component, base: u32, hook: &Hook, before: Vec<u8>)
     });
     component.patches.push(Patch {
         address,
-        points: hook.spec.point.bit(),
+        points: hook.spec.point_mask(),
         before,
         after: instruction.to_le_bytes().to_vec(),
         site: Some(Anchor::Firmware(address)),

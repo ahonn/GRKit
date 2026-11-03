@@ -16,6 +16,27 @@ fn synthetic_arm_build_is_reproducible() -> Result<()> {
         assert_eq!(first.manifest["startup_activation"], "Off");
         assert_eq!(first.manifest["profile"], "production");
         assert_eq!(first.manifest["version"], env!("CARGO_PKG_VERSION"));
+        // The parameter sampler is shared: both points count its one patch.
+        for point in components::Point::ALL {
+            let hooks = target
+                .family
+                .hooks
+                .iter()
+                .filter(|hook| hook.point == point || hook.also == Some(point))
+                .count();
+            let instructions = match point {
+                components::Point::Tuning => target.layout.instruction_patches.len(),
+                components::Point::CaptureAspect => target.layout.framing_patches.len(),
+                _ => 0,
+            };
+            assert_eq!(
+                first.manifest["points"][point.name()],
+                hooks + instructions,
+                "{} {}",
+                target.name,
+                point.name()
+            );
+        }
         assert!(first.manifest["source_revision"].is_null());
         assert!(first.manifest["source_dirty"].is_null());
         assert!(
@@ -88,6 +109,32 @@ fn synthetic_hooks(target: &'static target::Target, tools: &Toolchain) -> Result
     let menu = components::menu(directory.path(), &runtime, &body, tools)?;
     let menu_end = menu.patches[0].address + menu.code_size as u32;
     let framing = components::framing(directory.path(), &runtime, &body, tools, menu_end)?;
+
+    // Thumb DNG code calls an ARM assembly export. Without STT_FUNC on that
+    // export, LLD leaves a BL and the camera executes ARM bytes as Thumb.
+    let (code, _, relocations) =
+        arm::elf_text_relocations(&fs::read(directory.path().join("module-framing.elf"))?)?;
+    let calls: Vec<_> = relocations
+        .iter()
+        .filter(|relocation| relocation.kind == 10 && relocation.symbol == "framing_header")
+        .collect();
+    assert!(
+        !calls.is_empty(),
+        "{} has no Thumb header call",
+        target.name
+    );
+    for call in calls {
+        let offset = call.offset as usize;
+        let first = u16::from_le_bytes(code[offset..offset + 2].try_into()?);
+        let second = u16::from_le_bytes(code[offset + 2..offset + 4].try_into()?);
+        assert_eq!(first & 0xf800, 0xf000, "{} Thumb call", target.name);
+        assert_eq!(
+            second & 0xd001,
+            0xc000,
+            "{} requires BLX to ARM",
+            target.name
+        );
+    }
 
     // Reject changes to the widget's input and output context, not just its BL.
     let &(widget, stock) = layout.contexts.last().unwrap();
@@ -162,7 +209,7 @@ fn synthetic_hooks(target: &'static target::Target, tools: &Toolchain) -> Result
             assert_eq!(patch.address, hook.address, "{symbol}");
             assert_eq!(patch.site, Some(Anchor::Firmware(hook.address)), "{symbol}");
             assert_eq!(patch.before, hex::decode(hook.stock)?, "{symbol}");
-            assert_eq!(patch.points, hook.spec.point.bit(), "{symbol}");
+            assert_eq!(patch.points, hook.spec.point_mask(), "{symbol}");
             assert_eq!(patch.after.len(), 4, "{symbol}");
             let instruction = u32::from_le_bytes(patch.after.as_slice().try_into()?);
             assert_eq!(

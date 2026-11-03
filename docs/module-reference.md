@@ -210,13 +210,15 @@ The capabilities are public settings of the core. A module uses one by its name 
 | --- | --- | --- |
 | `CORE.TONE` | 0 Off, then n + 1 for installed effect n | The effect of still pictures and the live view. The core installs the effects only when a loaded module uses `CORE.TONE`. |
 | `CORE.ASPECT` | 8: 0 Off, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The selected crop or composition ratio, according to `CORE.ASPECT_MODE`. |
-| `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops recorded pictures or only marks composition in the live view. The default is Crop. |
+| `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops JPEG photos or only marks composition in the live view. The default is Crop. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
-- `CORE.ASPECT`: a page shows only the ratios that the camera offers. `setting_set` with an unsupported ratio does nothing. In Crop mode, selecting a ratio sets the native aspect to 3:2 and crops recorded pictures. In Guides Only mode, selecting a ratio keeps the native aspect and recorded picture dimensions.
-- `CORE.ASPECT_MODE`: Crop keeps the existing output behavior. Guides Only shows the selected ratio in the native 3:2 live view without setting a recorded crop. Other native aspects hide this composition frame. Changing the mode keeps the Framing mask setting.
+- `CORE.ASPECT`: a page shows only the ratios that the camera offers. `setting_set` with an unsupported ratio does nothing. Selecting a nonzero ratio sets the native aspect to 3:2 in both modes. Crop mode crops JPEG photos to that ratio. Guides Only displays the composition frame without applying that crop. Off clears the selected ratio and preserves the current native aspect.
+- `CORE.ASPECT_MODE`: Crop changes JPEG dimensions. Guides Only shows the selected ratio in the native 3:2 live view without setting a recorded crop. A later change to another native aspect hides this composition frame. Changing only the mode preserves the native aspect and the Framing mask setting.
+
+When Framing crops a shot, DNG defaults to native 3:2 and preserves the camera's digital crop setting. RAW editors that apply the DNG default crop show this 3:2 area. Embedded previews can still show the selected composition.
 
 ## Registrations
 

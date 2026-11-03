@@ -141,6 +141,9 @@
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5324129c)
 #define FW_IFD_SET_SHORT FIRMWARE(0x5380dd48)
+/* DNG LONG tag element writer and native sensor rectangle helper. */
+#define FW_IFD_SET_LONG FIRMWARE(0x5380dd60)
+#define FW_DNG_NATIVE_RECT FIRMWARE(0x538a5a18)
 /* RawDevelopmentModel: the guard of its static instance, and the instance.
    The family header gives its state (DEVELOP_STATE). */
 #define FW_DEVELOP_GUARD FIRMWARE(0x55089270)

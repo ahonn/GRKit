@@ -29,14 +29,13 @@ static __attribute__((unused)) void aspect_refresh(volatile u32 *h) {
     aspect_request();
 }
 
-/* Capture crops use native 3:2. A composition choice preserves the native
-   aspect, even while it cannot display its frame in that aspect. */
+/* Each selected ratio starts from native 3:2, including composition-only
+   frames. Off clears the selection without changing the native aspect. */
 static __attribute__((unused)) void aspect_store(volatile u32 *h,u32 value) {
     h[GRKIT_HOST_FRAME_RATIO/4]=value;
-    if(!framing_guides_only(h) && aspect_native()) {
+    if(value && aspect_native()) {
         h[GRKIT_HOST_FRAME_CROP/4]=framing_crop(h);
         aspect_set_native(0);
-        if(!value) return;
     }
     aspect_refresh(h);
 }

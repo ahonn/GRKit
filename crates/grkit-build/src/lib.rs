@@ -409,7 +409,7 @@ fn build_image(
         // The firmware changes of each extension point, which a package
         // without its modules does not make.
         "points": components::Point::ALL.iter().map(|point| (point.name().to_owned(),
-            json!(plan.patches.iter().filter(|patch| patch.points == point.bit()).count())))
+            json!(plan.patches.iter().filter(|patch| patch.points & point.bit() != 0).count())))
             .collect::<serde_json::Map<_, _>>(),
     }) else {
         unreachable!("an object literal")

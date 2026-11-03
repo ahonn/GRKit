@@ -162,6 +162,8 @@ const SITES: &[Site] = &[
     ("framing_canvas", 0x53391b14, "0dc0a0e1"),
     ("framing_children", 0x53391be0, "500800eb"),
     ("framing_capture_request_hook", 0x535423f4, "0010d4e5"),
+    ("picture_dng_origin", 0x535fb36c, "d9faffeb"),
+    ("picture_dng_size", 0x535fb424, "dffaffeb"),
     ("framing_height_0", 0x536a2e48, "d33ea0e3"),
     ("framing_height_1", 0x536a2e34, "a93ea0e3"),
     ("framing_height_2", 0x536a2e20, "763ea0e3"),

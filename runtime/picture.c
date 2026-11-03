@@ -359,12 +359,17 @@ static u32 plane_of(u32 image,u32 code,Plane *p) {
 /* A word of the shot ring entry (runtime/abi.h) of the still build of a
    shot: 1 with the word in `out`, or 0 without an entry. Newer entries come
    first. The key is read again after the word, because the build writes the
-   ring from another task. */
+   ring from another task. The first barrier acquires the published fields;
+   the second keeps the key check after those reads. */
+#if defined(__arm__)
+__attribute__((target("thumb"),minsize))
+#endif
 static u32 shot_word(volatile u32 *h,u32 shot,u32 field,u32 *out) {
     u32 ring=PICTURE_SCRATCH(h)+GRKIT_SHOT_RING, n=WORD(ring,0), i, entry, value;
     for(i=1;shot && i<=GRKIT_SHOT_ENTRIES;++i) {
         entry=ring+GRKIT_SHOT_ENTRY+((n-i)&(GRKIT_SHOT_ENTRIES-1))*GRKIT_SHOT_STRIDE;
         if(WORD(entry,GRKIT_SHOT_KEY)!=shot) continue;
+        PICTURE_BARRIER();
         value=WORD(entry,field);
         PICTURE_BARRIER();
         if(WORD(entry,GRKIT_SHOT_KEY)==shot) { *out=value; return 1; }
@@ -375,6 +380,35 @@ static u32 shot_word(volatile u32 *h,u32 shot,u32 field,u32 *out) {
 static u32 shot_record(volatile u32 *h,u32 shot) {
     u32 record;
     return shot_word(h,shot,GRKIT_SHOT_RECORD,&record) ? record : 0;
+}
+
+/* The native sensor rectangle for this shot's digital crop and aspect 3:2.
+   The assembly bridge supplies the firmware's hard-float calling convention. */
+#ifndef PICTURE_DNG_RECT
+void picture_dng_rect(u32 shot,u16 *rect);
+#define PICTURE_DNG_RECT(shot,rect) picture_dng_rect((shot),(rect))
+#endif
+#ifndef PICTURE_IFD_SET_LONG
+#define PICTURE_IFD_SET_LONG(entry,index,value) (((void (*)(u32,u32,u32))FW_IFD_SET_LONG)(entry,index,value))
+#endif
+/* Called after the native DNG tag setter. Only a shot captured with a
+   Framing crop overrides its default RAW crop. JPEG geometry, the source
+   descriptor, and embedded previews keep their recorded composition. */
+/* This metadata path uses Thumb to fit beside the pixel-processing hooks. */
+#if defined(__arm__)
+__attribute__((target("thumb"),minsize))
+#endif
+void picture_dng_crop(u32 setter,u32 entry,u32 size) {
+    u32 shot=WORD(setter,DNG_SETTER_SHOT), crop, info, i;
+    u16 rect[4];
+    if(HALF(entry,6)!=4 || WORD(entry,8)!=2 || !shot_word(framing_header(),shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=8) return;
+    PICTURE_DNG_RECT(shot,rect);
+    info=WORD(setter,DNG_SETTER_INFO);
+    for(i=0;i<2;++i) {
+        /* DNG origins are relative to ActiveArea, whose origin is at +8/+12. */
+        u32 value=size ? rect[i] : rect[i+2]-WORD(info,8+i*4);
+        PICTURE_IFD_SET_LONG(entry,i,value);
+    }
 }
 /* The quarter turns clockwise that show the picture of a shot upright, as
    its EXIF Orientation does (1: 0, 6: 1, 3: 2, 8: 3), from the posture of the

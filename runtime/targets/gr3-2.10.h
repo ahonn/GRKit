@@ -294,6 +294,9 @@
 #define DEVELOP_TOP_TITLE mov r3, r6
 /* Maker-note IFD entry setter: (entry, 0, value) stores a u16 value. */
 #define FW_IFD_SET_SHORT FIRMWARE(0x535d02c8)
+/* DNG LONG tag element writer and native sensor rectangle helper. */
+#define FW_IFD_SET_LONG FIRMWARE(0x535d02e0)
+#define FW_DNG_NATIVE_RECT FIRMWARE(0x5365f0ec)
 /* LiveViewController: nonzero in movie mode, and the LCD canvas. */
 #define LIVEVIEW_MOVIE 0x2d2
 #define LIVEVIEW_CANVAS 0x15c

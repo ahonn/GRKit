@@ -113,10 +113,12 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
      CORE.ASPECT  8 values: the composition ratio, 0 Off, 1
                   XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6. Each
                   camera offers some of them, and a choice page shows only
-                  those. Crop mode selects native 3:2 and crops it. Guides-only
-                  mode displays the frame on native 3:2 without cropping.
+                  those. Selecting a nonzero ratio sets native 3:2 in both
+                  modes. Crop mode crops it; guides-only displays the frame
+                  without that crop. Off preserves the current native aspect.
      CORE.ASPECT_MODE  2 values: 0 Crop (default), 1 Guides Only. A module
-                  without this capability retains crop behavior. */
+                  without this capability retains crop behavior. Changing
+                  only this mode preserves the native aspect. */
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */

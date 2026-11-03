@@ -57,6 +57,10 @@ static unsigned photo_orientation = 1;
 static uint32_t ifd_entry, ifd_writes, ifd_values[32];
 #define PICTURE_IFD_SET_SHORT(entry,index,value) do { assert((index) < 32 && !((value) >> 16)); \
     ifd_entry = (entry); ifd_values[(index)] = (value); ++ifd_writes; } while (0)
+#define PICTURE_IFD_SET_LONG(entry,index,value) PICTURE_IFD_SET_SHORT(entry,index,value)
+static uint16_t dng_rect[4];
+static uint32_t dng_rect_shot, dng_rect_calls;
+#define PICTURE_DNG_RECT(shot,rect) do { dng_rect_shot = (shot); ++dng_rect_calls; memcpy((rect),dng_rect,sizeof(dng_rect)); } while (0)
 /* The module settings: those of Date Imprint, STYLE (handle 0, 6 values) and
    LOOK (handle 1, 3 values). */
 #define TEST_SETTINGS 0x5f000000U
@@ -195,6 +199,7 @@ static void store_posed(uint32_t shot, uint32_t r, uint32_t posture)
     WORD(entry, GRKIT_SHOT_KEY) = shot;
     WORD(entry, GRKIT_SHOT_RECORD) = r;
     WORD(entry, GRKIT_SHOT_POSTURE) = posture;
+    WORD(entry, GRKIT_SHOT_FRAME_CROP) = header[GRKIT_HOST_FRAME_CROP / 4];
     WORD(ring, 0) = n + 1;
 }
 static void store_shot(uint32_t shot, uint32_t r) { store_posed(shot, r, 1); }
@@ -556,6 +561,61 @@ static void composition_frames_keep_the_native_photo_area(void)
     native_aspect = 0;
 }
 
+static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
+{
+    const u32 setter = ARENA + 0xa000, info = ARENA + 0xb000, entry = ARENA + 0xc000;
+    reset();
+    WORD(setter, DNG_SETTER_SHOT) = SHOT;
+    WORD(setter, DNG_SETTER_INFO) = info;
+    HALF(entry, 6) = 4;
+    WORD(entry, 8) = 2;
+    WORD(info, 8) = 58; WORD(info, 12) = 28;
+    WORD(info, 0x18) = 68; WORD(info, 0x1c) = 932;
+    WORD(info, 0x20) = 6000; WORD(info, 0x24) = 2216;
+    dng_rect[0] = 6000; dng_rect[1] = 4000;
+    dng_rect[2] = 68; dng_rect[3] = 40;
+    ifd_writes = dng_rect_calls = 0;
+    /* Missing snapshots and native shots keep the native tag setter's values. */
+    picture_dng_crop(setter, entry, 0);
+    store_shot(SHOT, 0);
+    picture_dng_crop(setter, entry, 1);
+    assert(!ifd_writes && !dng_rect_calls);
+    for (u32 crop = 1; crop < 8; ++crop) {
+        header[GRKIT_HOST_FRAME_CROP / 4] = crop;
+        store_shot(SHOT, 0);
+        /* The current selection has changed before this older shot is written. */
+        header[GRKIT_HOST_FRAME_CROP / 4] = 0;
+        header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
+        header[GRKIT_HOST_CAPABILITIES / 4] = 0;
+        picture_dng_crop(setter, entry, 0);
+        assert(ifd_values[0] == 10 && ifd_values[1] == 12 && dng_rect_shot == SHOT);
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
+        assert(WORD(info, 0x1c) == 932 && WORD(info, 0x24) == 2216);
+    }
+    /* Native rectangle computation retains the shot's digital crop. */
+    dng_rect[0] = 4800; dng_rect[1] = 3200;
+    dng_rect[2] = 668; dng_rect[3] = 440;
+    picture_dng_crop(setter, entry, 0);
+    assert(ifd_values[0] == 610 && ifd_values[1] == 412);
+    picture_dng_crop(setter, entry, 1);
+    assert(ifd_values[0] == 4800 && ifd_values[1] == 3200);
+    u32 writes = ifd_writes;
+    HALF(entry, 6) = 3;
+    picture_dng_crop(setter, entry, 0);
+    HALF(entry, 6) = 4; WORD(entry, 8) = 1;
+    picture_dng_crop(setter, entry, 1);
+    assert(ifd_writes == writes);
+    WORD(entry, 8) = 2;
+    /* A reused key must use its newest snapshot, including a later native shot. */
+    store_shot(SHOT, 0);
+    picture_dng_crop(setter, entry, 1);
+    assert(ifd_writes == writes);
+    for (u32 i = 0; i < GRKIT_SHOT_ENTRIES; ++i) store_shot(SHOT + 0x100 + i * 4, 0);
+    picture_dng_crop(setter, entry, 1);
+    assert(ifd_writes == writes);
+}
+
 int main(void)
 {
 #ifdef GRAIN_FILL_PITCH
@@ -564,6 +624,7 @@ int main(void)
     static const short identity[9] = {8192, 0, 0, 0, 8192, 0, 0, 0, 8192};
     shot_contract();
     composition_frames_keep_the_native_photo_area();
+    dng_defaults_follow_the_shot_without_changing_jpeg_geometry();
     /* picture_white: input 255 of the curves after the post matrix, and 255
        each without a record. */
     {

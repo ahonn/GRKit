@@ -55,9 +55,43 @@ fn each_camera_offers_what_its_runtime_has() {
         assert!(layout.sites.len() == target.family.hooks.len());
         // Each extension point has hooks: those of the capabilities, and
         // those of the module pages, layers, and filters.
-        let points: Vec<_> = target.family.hooks.iter().map(|hook| hook.point).collect();
         for point in grkit_core::capabilities::Point::ALL {
-            assert!(points.contains(&point), "{} {point:?}", camera.id);
+            assert!(
+                target
+                    .family
+                    .hooks
+                    .iter()
+                    .any(|hook| hook.point_mask() & point.bit() != 0),
+                "{} {point:?}",
+                camera.id
+            );
+        }
+    }
+}
+
+#[test]
+fn framing_without_film_look_still_records_shot_parameters() {
+    use crate::components::{Part, Point};
+    for target in target::TARGETS {
+        let hook = target
+            .family
+            .hooks
+            .iter()
+            .find(|hook| hook.symbol == "module_parameters")
+            .unwrap();
+        assert_eq!(hook.part, Part::Processing);
+        assert!(hook.link);
+        assert_eq!(
+            hook.point_mask(),
+            Point::Tuning.bit() | Point::CaptureAspect.bit()
+        );
+        for other in target
+            .family
+            .hooks
+            .iter()
+            .filter(|hook| hook.symbol != "module_parameters")
+        {
+            assert_eq!(other.point_mask(), other.point.bit(), "{}", other.symbol);
         }
     }
 }

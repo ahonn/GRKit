@@ -7,6 +7,49 @@
 /* Picture processing hooks for effect extensions. They link into the Framing
    region. */
 
+/* Only the DNG writer's crop tags call these stubs. Keep native validation
+   and unsupported entry types, then restore the RAW crop of a Framing shot. */
+.global picture_dng_origin
+picture_dng_origin:
+    push {r0,r1,r4,lr}
+    ldr r12, =HOOK_PICTURE_DNG_ORIGIN_TARGET
+    blx r12
+    mov r2, #0
+    b .Ldng_crop
+.global picture_dng_size
+picture_dng_size:
+    push {r0,r1,r4,lr}
+    ldr r12, =HOOK_PICTURE_DNG_SIZE_TARGET
+    blx r12
+    mov r2, #1
+.Ldng_crop:
+    pop {r0,r1,r4,lr}
+    b picture_dng_crop
+
+/* C uses soft-float; the native rectangle helper takes crop in s0 and
+   aspect on the stack. rect is {width,height,absolute x,absolute y}. */
+.fpu vfpv3
+.thumb
+.thumb_func
+.global picture_dng_rect
+picture_dng_rect:
+    push {r4,lr}
+    sub sp, sp, #8
+    mov r4, r1
+    add r0, r0, #(SHOT_CROP & ~0xff)
+    vldr s0, [r0, #(SHOT_CROP & 0xff)]
+    movs r0, #0
+    str r0, [sp]
+    mov r0, r4
+    adds r1, r4, #2
+    adds r2, r4, #4
+    adds r3, r4, #6
+    ldr r4, =FW_DNG_NATIVE_RECT
+    blx r4
+    add sp, sp, #8
+    pop {r4,pc}
+.arm
+
 #ifdef HOOK_MODULE_GAMMA_DIRTY
 // Z=1 only for an owned record in r0. Preserves all registers.
 picture_owned:

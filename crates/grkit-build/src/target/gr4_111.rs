@@ -174,6 +174,8 @@ const SITES: &[Site] = &[
     // The live-view mode function (0x5388c7b8) and the mode check (0x5363fa84).
     ("framing_live_mode", 0x5388c7d0, "0d2ffbeb"),
     ("framing_live_check", 0x5363fa9c, "5a6204eb"),
+    ("picture_dng_origin", 0x538039e8, "dafaffeb"),
+    ("picture_dng_size", 0x53803aa0, "e0faffeb"),
     ("framing_height_0", 0x538cfff8, "983d00e3"),
     ("framing_height_1", 0x538cffe4, "ae3ea0e3"),
     ("framing_height_2", 0x538cffcc, "7b3ea0e3"),
