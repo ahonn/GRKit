@@ -445,6 +445,183 @@ fn group_page_registers_ordered_children_with_independent_settings() -> Result<(
     Ok(())
 }
 
+const INDICATOR: &str = r#"
+[[indicators]]
+id = "first"
+placement = "status_row"
+enabled = { setting = "FIRST_ENABLED", equals = 1 }
+icon = { setting = "FIRST_STRENGTH" }
+"#;
+
+#[test]
+fn indicators_and_adj_children_share_strength_icons_without_using_strength_as_enabled() -> Result<()>
+{
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let manifest = GROUP_MANIFEST.replace(
+        "key = \"FIRST\"\nsettings =",
+        "key = \"FIRST\"\nicon = { setting = \"FIRST_STRENGTH\" }\nsettings =",
+    );
+    fs::write(folder.join("module.toml"), format!("{manifest}{INDICATOR}"))?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains("GrkitIcon child_0_icon"));
+    assert!(code.contains(".icon = &child_0_icon"));
+    assert!(code.contains(".kind = GRKIT_ICON_TILE, .setting = 1, .first_tile = 0"));
+    assert!(code.contains(".setting = 0, .comparison = GRKIT_CONDITION_EQUALS, .value = 1"));
+    assert!(code.contains(".placement = GRKIT_INDICATOR_STATUS_ROW, .slot = 0"));
+    assert!(code.contains(".point = GRKIT_POINT_VIEWFINDER_INDICATOR"));
+    assert!(code.contains(".registration_count = 4"));
+    Ok(())
+}
+
+#[test]
+fn indicators_accept_fixed_tiles_combined_conditions_and_native_tone() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let manifest = GROUP_MANIFEST.replace("version = 1", "version = 1\nuses = [\"CORE.TONE\"]");
+    let indicators = r#"
+[[indicators]]
+id = "combined"
+placement = "status_row"
+enabled = { all = [{ setting = "FIRST_ENABLED", not_equals = 0 }, { setting = "SECOND_ENABLED", equals = 0 }] }
+icon = { tile = 2 }
+[[indicators]]
+id = "tone"
+placement = "native_slot"
+slot = "image_control"
+enabled = { setting = "CORE.TONE", not_equals = 0 }
+icon = { setting = "CORE.TONE" }
+"#;
+    fs::write(
+        folder.join("module.toml"),
+        format!("{manifest}{indicators}"),
+    )?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".condition_count = 2"));
+    assert!(code.contains(".kind = GRKIT_ICON_TILE, .setting = GRKIT_NO_SETTING, .first_tile = 2"));
+    assert!(code.contains(".kind = GRKIT_ICON_TONE, .setting = GRKIT_USE(0), .first_tile = 0"));
+    assert!(
+        code.contains(".placement = GRKIT_INDICATOR_NATIVE_SLOT, .slot = GRKIT_SLOT_IMAGE_CONTROL")
+    );
+    Ok(())
+}
+
+#[test]
+fn indicators_reject_invalid_conditions_icons_and_placements() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let invalid = [
+        INDICATOR.replace("id = \"first\"", "id = \"\""),
+        INDICATOR.replace("status_row", "append"),
+        INDICATOR.replace("status_row", "native_slot"),
+        INDICATOR.replace(
+            "placement = \"status_row\"",
+            "placement = \"status_row\"\nslot = \"image_control\"",
+        ),
+        INDICATOR.replace(
+            "placement = \"status_row\"",
+            "placement = \"native_slot\"\nslot = \"unknown\"",
+        ),
+        INDICATOR.replace("equals = 1", "equals = 2"),
+        INDICATOR.replace("equals = 1", "equals = 1, not_equals = 0"),
+        INDICATOR.replace(", equals = 1", ""),
+        INDICATOR.replace("FIRST_ENABLED", "MISSING"),
+        INDICATOR.replace(
+            "{ setting = \"FIRST_ENABLED\", equals = 1 }",
+            "{ all = [] }",
+        ),
+        INDICATOR.replace(
+            "{ setting = \"FIRST_ENABLED\", equals = 1 }",
+            &format!(
+                "{{ all = [{}] }}",
+                ["{ setting = \"FIRST_ENABLED\", equals = 1 }"; 5].join(",")
+            ),
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { tile = 3 }",
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { tile = 1, first_tile = 0 }",
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { setting = \"FIRST_STRENGTH\", first_tile = 1 }",
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { setting = \"FIRST_STRENGTH\", first_tile = 4294967295 }",
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { setting = \"FIRST_STRENGTH\", tile = 0 }",
+        ),
+        INDICATOR.replace(
+            "icon = { setting = \"FIRST_STRENGTH\" }",
+            "icon = { setting = \"MISSING\" }",
+        ),
+        format!("{INDICATOR}{INDICATOR}"),
+        (0..7)
+            .map(|i| INDICATOR.replace("id = \"first\"", &format!("id = \"item{i}\"")))
+            .collect(),
+    ];
+    for indicators in invalid {
+        fs::write(
+            folder.join("module.toml"),
+            format!("{GROUP_MANIFEST}{indicators}"),
+        )?;
+        assert!(module::generate(&folder).is_err(), "accepted {indicators}");
+    }
+    let native = INDICATOR.replace(
+        "placement = \"status_row\"",
+        "placement = \"native_slot\"\nslot = \"image_control\"",
+    );
+    fs::write(
+        folder.join("module.toml"),
+        format!(
+            "{GROUP_MANIFEST}{native}{}",
+            native.replace("id = \"first\"", "id = \"second\"")
+        ),
+    )?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("image_control"));
+
+    let invalid_child = GROUP_MANIFEST.replace(
+        "key = \"FIRST\"\nsettings =",
+        "key = \"FIRST\"\nicon = { setting = \"FIRST_STRENGTH\", first_tile = 1 }\nsettings =",
+    );
+    fs::write(folder.join("module.toml"), invalid_child)?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("needs 3 tiles"));
+    Ok(())
+}
+
+#[test]
+fn indicator_only_module_needs_no_page_or_text_files() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    fs::write(
+        directory.path().join("module.toml"),
+        r#"id = "TONE"
+version = 1
+uses = ["CORE.TONE"]
+[[indicators]]
+id = "tone"
+placement = "native_slot"
+slot = "image_control"
+enabled = { setting = "CORE.TONE", not_equals = 0 }
+icon = { setting = "CORE.TONE" }
+"#,
+    )?;
+    let (_, code, _) = module::generate(directory.path())?;
+    assert!(code.contains(".registration_count = 1"));
+    Ok(())
+}
+
 #[test]
 fn group_page_rejects_invalid_structure_and_text() -> Result<()> {
     let directory = tempfile::tempdir()?;

@@ -11,5 +11,5 @@ label = "마스크"
 values = ["어둡게", "검정", "프레임 선"]
 
 [settings.LABEL]
-label = "비율 표시"
+label = "아이콘 표시"
 values = ["켜짐", "꺼짐"]

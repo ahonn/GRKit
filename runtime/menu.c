@@ -188,20 +188,6 @@ static void level_reapply(volatile u32 *h) {
         MENU_LEVEL_ALARM(h[GRKIT_HOST_LEVEL_SCREEN/4],h[GRKIT_HOST_LEVEL_MODE/4]);
 }
 #include "tone.h"
-/* A soft Off of Film Look, or the GRKit switch, keeps the effect but shows
-   the native icon. */
-static u32 selected_icon(volatile u32 *h) {
-    u32 i=record_index(h,h[GRKIT_HOST_ACTIVE/4]);
-    if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return 0x7fff;
-    return i<GRKIT_TEXT_RECORDS ? 0x8000+i : 0x7fff;
-}
-/* Override only the native still-viewfinder icon result. Off retains stock UI. */
-A32_ENTRY u32 menu_viewfinder_icon_select(u32 native_icon,u32 movie) {
-    volatile u32 *h=menu_header();
-    u32 start=profile_begin(h), icon=selected_icon(h);
-    profile_end(h,start,GRKIT_PROFILE_MENU_ICON);
-    return !movie && icon!=0x7fff ? icon : native_icon;
-}
 #ifndef MENU_FRAMING_REQUEST
 /* The family header sends the native aspect request again after a Framing
    change, so the capture hook maps it to the new ratio. */
@@ -230,6 +216,22 @@ static void aspect_request(void) { MENU_FRAMING_REQUEST(); }
 /* A new effect sets the highlight warning again. */
 static void tone_stored(volatile u32 *h) { level_reapply(h); }
 #include "modules.h"
+#ifndef INDICATOR_WORD
+#define INDICATOR_WORD(address,offset) PAGE_WORD(address,offset)
+#endif
+#include "viewfinder_indicators.h"
+/* Only the still-viewfinder slot consults module state. Playback continues
+   to resolve the icon recorded in the photo metadata. */
+static u32 selected_icon(volatile u32 *h) {
+    return viewfinder_slot_icon(h,INDICATOR_IMAGE_CONTROL,GRKIT_ICON_OFF);
+}
+A32_ENTRY u32 menu_viewfinder_icon_select(u32 native_icon,u32 movie) {
+    volatile u32 *h=menu_header();
+    u32 start=profile_begin(h),icon=movie ? native_icon :
+        viewfinder_slot_icon(h,INDICATOR_IMAGE_CONTROL,native_icon);
+    profile_end(h,start,GRKIT_PROFILE_MENU_ICON);
+    return icon;
+}
 /* The core exports this service to modules (runtime/sdk/grkit.h). It runs
    in the context of its caller. */
 __attribute__((used)) void grkit_export_setting_set(u32 handle,u32 value) { setting_store(menu_header(),handle,value); }
@@ -990,9 +992,7 @@ static u32 icon_address(volatile u32 *h,u32 id) {
     /* Module tiles follow the effect icons in the chunks. slot * 1639 >> 16
        is slot / 40 for each slot of the chunks. */
     if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) {
-        u32 slot=GRKIT_HOST_ICON_COUNT+h[GRKIT_HOST_COUNT/4]+id-GRKIT_ICON_MODULE_TILE(0), chunk=slot*1639U>>16;
-        if(chunk>=GRKIT_HOST_ICON_CHUNKS_WORDS || !h[GRKIT_HOST_ICON_CHUNKS/4+chunk]) return 0;
-        return h[GRKIT_HOST_ICON_CHUNKS/4+chunk]+(slot-chunk*GRKIT_ICONS_PER_CHUNK)*GRKIT_ICON_STRIDE;
+        return module_tile_address(h,id);
     }
     if(id==GRKIT_ICON_GRKIT) return h[GRKIT_HOST_GRKIT_ICON/4];
     /* The installer puts the Version icon after the GRKit icon. */

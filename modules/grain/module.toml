@@ -1,5 +1,5 @@
 # Grain: film grain in recorded pictures. The core applies the level of
-# CORE.GRAIN in the native grain stage, so the module has only its page.
+# CORE.GRAIN in the native grain stage, so the module needs no C code.
 id = "GRAIN"
 version = 1
 # The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
@@ -22,3 +22,9 @@ setting = "CORE.GRAIN"
 off_row = true
 # The level, then the size.
 settings = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
+
+[[indicators]]
+id = "grain"
+placement = "status_row"
+enabled = { setting = "CORE.GRAIN", not_equals = 0 }
+icon = { setting = "CORE.GRAIN" }

@@ -384,6 +384,9 @@ static void reset(void)
     assert(sizeof(menu_text_table) <= GRKIT_TEXT_SUMMARY);
     memcpy(text_arena, menu_text_table, sizeof(menu_text_table));
     test_header[GRKIT_HOST_COUNT / 4] = 5;
+    /* Older modules keep their implicit tone slot. Explicit registrations
+       are exercised separately below. */
+    test_header[GRKIT_HOST_LEGACY_TONE_OWNER / 4] = TEST_PAGE;
     /* The official modules are loaded. */
     install_modules();
     test_header[GRKIT_HOST_OFF_ICON / 4] = 0x59001000;
@@ -1976,6 +1979,27 @@ static void install_group_pages(void)
     }
 }
 
+static void group_icons_keep_the_selected_strength_while_disabled(void)
+{
+    install_group_pages();
+    volatile u32 *h=test_header;
+    u32 child=TEST_PAGE+5*TEST_PAGE_SIZE,icon=child+0x40;
+    PAGE_WORD(child,0)=48; PAGE_WORD(child,44)=icon;
+    PAGE_WORD(icon,0)=16; PAGE_WORD(icon,4)=1; PAGE_WORD(icon,8)=15; PAGE_WORD(icon,12)=1;
+    h[GRKIT_HOST_MODULE_CHOICE/4]=GUIDES_MODULE;
+    h[GRKIT_HOST_MENU_LEVEL/4]=MENU_MODULE;
+    for(u32 enabled=0;enabled<2;++enabled) {
+        settings_memory[SETTINGS_ENTRY(0)+1]=enabled;
+        for(u32 strength=0;strength<3;++strength) {
+            settings_memory[SETTINGS_ENTRY(15)+1]=strength;
+            assert(group_icon(h,0)==GRKIT_ICON_MODULE_TILE(7+1+strength));
+            assert(group_checked(h,0)==enabled);
+        }
+    }
+    h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
+    assert(group_icon(h,0)==GRKIT_ICON_MODULE_TILE(7));
+}
+
 static void group_ok_toggles_each_child_without_closing_adj(void)
 {
     install_group_pages();
@@ -2691,8 +2715,45 @@ static void a_full_tab_gets_no_new_section(void)
 }
 #endif
 
+static void registered_icons_use_committed_values_and_restore_the_native_slot(void)
+{
+    reset();
+    volatile u32 *h=test_header;
+    u32 descriptor=TEST_PAGE+9*TEST_PAGE_SIZE, condition=descriptor+32, icon=descriptor+64;
+    h[GRKIT_HOST_LEGACY_TONE_OWNER/4]=0;
+    h[GRKIT_HOST_ACTIVE/4]=h[GRKIT_HOST_RECORDS/4]+GRKIT_RECORD_SIZE;
+    assert(menu_viewfinder_icon_select(0x166,0)==0x166);
+    PAGE_WORD(descriptor,0)=24; PAGE_WORD(descriptor,4)=1; PAGE_WORD(descriptor,8)=1;
+    PAGE_WORD(descriptor,12)=1; PAGE_WORD(descriptor,16)=condition; PAGE_WORD(descriptor,20)=icon;
+    PAGE_WORD(condition,0)=GRKIT_CORE_TONE; PAGE_WORD(condition,4)=2; PAGE_WORD(condition,8)=0;
+    PAGE_WORD(icon,0)=16; PAGE_WORD(icon,4)=2; PAGE_WORD(icon,8)=GRKIT_CORE_TONE;
+    h[GRKIT_HOST_INDICATOR_COUNT/4]=1;
+    h[GRKIT_HOST_INDICATORS/4]=descriptor; h[GRKIT_HOST_INDICATORS/4+1]=0;
+    assert(menu_viewfinder_icon_select(0x166,0)==0x8001);
+    h[GRKIT_HOST_PREVIEW/4]=h[GRKIT_HOST_RECORDS/4]+3*GRKIT_RECORD_SIZE;
+    assert(menu_viewfinder_icon_select(0x166,0)==0x8001);
+    assert(menu_viewfinder_icon_select(0x166,1)==0x166);
+    h[GRKIT_HOST_ACTIVE/4]=0;
+    assert(menu_viewfinder_icon_select(0x167,0)==0x167);
+    h[GRKIT_HOST_ACTIVE/4]=h[GRKIT_HOST_RECORDS/4];
+    h[GRKIT_HOST_SERVICES/4]=TEST_SERVICES;
+    services_memory[SERVICES_SUSPENDED/4]=1;
+    services_memory[(SERVICES_SUSPENDED+4)/4]=descriptor;
+    services_memory[(SERVICES_SUSPENDED+8)/4]=descriptor+128;
+    assert(menu_viewfinder_icon_select(0x168,0)==0x168);
+    services_memory[SERVICES_SUSPENDED/4]=0;
+    /* A zero-valued strength still selects its weak tile, independent of
+       the separate boolean setting used by its indicator. */
+    PAGE_WORD(icon,4)=1; PAGE_WORD(icon,8)=0; PAGE_WORD(icon,12)=4;
+    settings_memory[SETTINGS_ENTRY(0)+1]=0;
+    assert(module_icon_value(h,icon,10)==GRKIT_ICON_MODULE_TILE(14));
+    settings_memory[SETTINGS_ENTRY(0)+1]=2;
+    assert(module_icon_value(h,icon,10)==GRKIT_ICON_MODULE_TILE(16));
+}
+
 int main(void)
 {
+    registered_icons_use_committed_values_and_restore_the_native_slot();
     the_root_reads_off_without_a_committed_effect();
     each_language_reads_its_own_texts_and_font();
     the_viewfinder_shows_the_committed_record();
@@ -2731,6 +2792,7 @@ int main(void)
        before them leaves. */
     settings_entry_enable_preserves_each_value();
     a_settings_section_row_has_no_choice_value();
+    group_icons_keep_the_selected_strength_while_disabled();
     group_ok_toggles_each_child_without_closing_adj();
     group_pages_open_children_and_return_without_committing();
     group_back_keeps_the_shared_native_parent_return_target();

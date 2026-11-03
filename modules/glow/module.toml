@@ -3,8 +3,16 @@ id = "GLOW"
 version = 1
 order = 45
 sources = ["glow.c", "glow_kernels.c"]
-# The module icon, then the Bloom and Halation entries in ADJ.
-tiles = ["tiles/0-module.png", "tiles/1-bloom.png", "tiles/2-halation.png"]
+# The module icon, then weak, medium, and strong icons for each effect.
+tiles = [
+    "tiles/0-module.png",
+    "tiles/1-bloom-weak.png",
+    "tiles/1-bloom.png",
+    "tiles/3-bloom-strong.png",
+    "tiles/4-halation-weak.png",
+    "tiles/2-halation.png",
+    "tiles/6-halation-strong.png",
+]
 
 # Keep the frame filter available when either effect is enabled.
 [[settings]]
@@ -45,10 +53,24 @@ kind = "group"
 [[page.children]]
 key = "BLOOM"
 settings = ["BLOOM_ENABLED", "BLOOM_STRENGTH"]
+icon = { setting = "BLOOM_STRENGTH", first_tile = 1 }
 
 [[page.children]]
 key = "HALATION"
 settings = ["HAL_ENABLED", "HAL_STRENGTH"]
+icon = { setting = "HAL_STRENGTH", first_tile = 4 }
+
+[[indicators]]
+id = "bloom"
+placement = "status_row"
+enabled = { setting = "BLOOM_ENABLED", equals = 1 }
+icon = { setting = "BLOOM_STRENGTH", first_tile = 1 }
+
+[[indicators]]
+id = "halation"
+placement = "status_row"
+enabled = { setting = "HAL_ENABLED", equals = 1 }
+icon = { setting = "HAL_STRENGTH", first_tile = 4 }
 
 [[filters]]
 apply = "glow_apply"

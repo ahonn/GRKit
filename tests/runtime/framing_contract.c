@@ -18,11 +18,18 @@ static uint32_t record_memory[0x1100 / 4];
 static uint32_t metadata_memory[0x40 / 4];
 static uint32_t pixels[1024 * 480 + 2];
 static uint32_t native_aspect, capture_aspect, capture_requests;
+#define TEST_INDICATOR 0x5b000000U
+#define TEST_ICONS 0x5a000000U
+static uint32_t indicator_memory[256/4], icon_memory[40*6412/4];
 
 static void *mapped(uint32_t address, uint32_t bytes)
 {
     uint32_t *object, size = sizeof(canvas_memory);
-    if (address >= TEST_OWNER && address < TEST_OWNER + sizeof(owner_memory)) {
+    if (address >= TEST_INDICATOR && address < TEST_INDICATOR + sizeof(indicator_memory)) {
+        object = indicator_memory; address -= TEST_INDICATOR; size = sizeof(indicator_memory);
+    } else if (address >= TEST_ICONS && address < TEST_ICONS + sizeof(icon_memory)) {
+        object = icon_memory; address -= TEST_ICONS; size = sizeof(icon_memory);
+    } else if (address >= TEST_OWNER && address < TEST_OWNER + sizeof(owner_memory)) {
         object = owner_memory; address -= TEST_OWNER; size = sizeof(owner_memory);
     } else if (address >= TEST_CANVAS && address < TEST_CANVAS + sizeof(canvas_memory)) {
         object = canvas_memory; address -= TEST_CANVAS;
@@ -79,7 +86,7 @@ static const volatile uint8_t *mapped_labels(uint32_t address)
 #define LABEL_MAP(address) mapped_labels(address)
 /* The module settings table of the harness: one setting, the Guides style. */
 #define TEST_SETTINGS 0x5f000000U
-static uint32_t settings_memory[2 + 3];
+static uint32_t settings_memory[2 + 3 * 4];
 static volatile uint32_t *mapped_settings(uint32_t address)
 {
     assert(address == TEST_SETTINGS);
@@ -114,10 +121,16 @@ static uint32_t level_updates, level_updated;
 #include "../../modules/framing/framing.c"
 #include "../../modules/guides/guides.c"
 #define GUIDES_STYLE_MAX 5U
+/* An ABI 2.1 label layer remains supported after built-ins use indicators. */
+static void legacy_badge(const Surface *surface,u32 value) {
+    (void)value;
+    if(surface->area && !setting_get(SETTING_LABEL))
+        overlay_label(surface,LABEL_RATIO(surface->area),LABEL_LEFT,LABEL_TOP);
+}
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value)
 {
     if (address == TEST_MASK_PAINT) framing_mask(surface, value);
-    else if (address == TEST_BADGE_PAINT) framing_badge(surface, value);
+    else if (address == TEST_BADGE_PAINT) legacy_badge(surface, value);
     else {
         assert(address == TEST_GUIDES_PAINT);
         guides_paint(surface, value);
@@ -403,8 +416,72 @@ static void the_histogram_follows_the_effect_white(void)
     for (i = 0; i < 128; ++i) assert(bins[i] == 7);
     header[GRKIT_HOST_ACTIVE/4] = 0;
 }
+static void status_icons_follow_enable_strength_and_disp(void)
+{
+    reset();
+    header[GRKIT_HOST_MODULE_LAYER_COUNT/4]=0;
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_INDICATOR_COUNT/4]=2;
+    header[GRKIT_HOST_ICON_CHUNKS/4]=TEST_ICONS;
+    settings_memory[0]=4;
+    for(u32 i=0;i<4;++i) {
+        settings_memory[SETTINGS_ENTRY(i)+1]=i%2 ? 0 : 1;
+        settings_memory[SETTINGS_ENTRY(i)+2]=i%2 ? 3 : 2;
+    }
+    for(u32 i=0;i<2;++i) {
+        u32 d=TEST_INDICATOR+i*128,c=d+32,icon=d+64;
+        WORD(d,0)=24; WORD(d,4)=2; WORD(d,8)=0;
+        WORD(d,12)=1; WORD(d,16)=c; WORD(d,20)=icon;
+        WORD(c,0)=i*2; WORD(c,4)=1; WORD(c,8)=1;
+        WORD(icon,0)=16; WORD(icon,4)=1; WORD(icon,8)=i*2+1; WORD(icon,12)=i*3;
+        header[GRKIT_HOST_INDICATORS/4+i*2]=d;
+        header[GRKIT_HOST_INDICATORS/4+i*2+1]=0;
+    }
+    memset(icon_memory,0,sizeof(icon_memory));
+    for(u32 i=0;i<6;++i) {
+        u32 icon=module_tile_address(header,GRKIT_ICON_MODULE_TILE(i));
+        WORD(icon,GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE)=0xff000010U+i;
+    }
+    framing_bind(TEST_OWNER);
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==0xff000010U);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT+STATUS_STEP]==0xff000013U);
+    settings_memory[SETTINGS_ENTRY(1)+1]=2;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==0xff000012U);
+    settings_memory[SETTINGS_ENTRY(0)+1]=0;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==0xff000013U);
+    /* Screen status survives native square, even though photo layers skip it. */
+    native_aspect=3;
+    assert(status_shown(header));
+    pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]=SENTINEL;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==0xff000013U);
+    for(display_mode=1;display_mode<=3;++display_mode) {
+        assert(!status_shown(header));
+        BYTE(TEST_CANVAS,0xa0)=0;
+        /* The last bitmap still requests clearing after the icons hide. */
+        header[GRKIT_HOST_FRAME_BITMAP/4]=TEST_BITMAP;
+        framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==1);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert(!header[GRKIT_HOST_FRAME_BITMAP/4]);
+    }
+    display_mode=0;
+    settings_memory[SETTINGS_ENTRY(2)+1]=0;
+    assert(!status_shown(header));
+    /* Video cannot draw a status row. */
+    settings_memory[SETTINGS_ENTRY(2)+1]=1;
+    BYTE(TEST_OWNER,LIVEVIEW_MOVIE)=1;
+    pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]=SENTINEL;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==SENTINEL);
+}
+
 int main(void)
 {
+    status_icons_follow_enable_strength_and_disp();
     the_highlight_warning_follows_the_effect_white();
     the_histogram_follows_the_effect_white();
     /* Fixed rectangles are independent expected output, not a second renderer. */

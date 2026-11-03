@@ -30,7 +30,7 @@ pub const DATA_LOCATION: u32 = 0x8000_0000;
 /// in the low half. The installer loads a module whose major equals its own
 /// and whose minor is not larger than its own (`runtime/sdk/grkit.h`).
 pub const ABI_MAJOR: u32 = 2;
-pub const ABI_MINOR: u32 = 1;
+pub const ABI_MINOR: u32 = 2;
 /// The largest code, data, or BSS size of one module that the installer
 /// accepts.
 pub const MAX_SEGMENT: usize = 0x10000;
@@ -128,6 +128,14 @@ pub struct Module {
     pub code_relocations: Vec<u32>,
     pub data_relocations: Vec<u32>,
     pub imports: Vec<Import>,
+}
+
+/// The placement declared by a viewfinder indicator. Package verification
+/// checks shared capacity; INSTALL validates its settings and artwork.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum IndicatorPlacement {
+    NativeSlot(u32),
+    StatusRow,
 }
 
 /// Whether `id` is a valid module ID: 1 to 8 characters `A-Z`, `0-9`, or `_`.
@@ -230,6 +238,50 @@ impl Module {
             );
         }
         Ok(())
+    }
+
+    /// Read only the placement of each indicator from the unrelocated code.
+    /// Code pointers in a GRM are offsets from zero. Bound every read before
+    /// package verification uses it; do not execute or link module code.
+    pub(crate) fn indicator_placements(&self) -> Result<Vec<IndicatorPlacement>> {
+        const POINT_INDICATOR: u32 = 5;
+        const REGISTRATIONS_MAX: usize = 16;
+        let descriptor = self.descriptor as usize;
+        let count = word(&self.code, descriptor + 12)? as usize;
+        ensure!(count <= REGISTRATIONS_MAX, "Too many module registrations");
+        if count == 0 {
+            return Ok(Vec::new());
+        }
+        let list = word(&self.code, descriptor + 8)?;
+        ensure!(
+            list % 4 == 0 && inside(list, count * 8, self.code.len()),
+            "Invalid module registration table"
+        );
+        let mut placements = Vec::new();
+        for index in 0..count {
+            let entry = list as usize + index * 8;
+            if word(&self.code, entry)? != POINT_INDICATOR {
+                continue;
+            }
+            let address = word(&self.code, entry + 4)?;
+            ensure!(
+                address % 4 == 0 && inside(address, 24, self.code.len()),
+                "Invalid viewfinder indicator descriptor"
+            );
+            let address = address as usize;
+            ensure!(
+                word(&self.code, address)? >= 24,
+                "Truncated viewfinder indicator descriptor"
+            );
+            let placement = word(&self.code, address + 4)?;
+            let slot = word(&self.code, address + 8)?;
+            placements.push(match (placement, slot) {
+                (1, 1) => IndicatorPlacement::NativeSlot(slot),
+                (2, 0) => IndicatorPlacement::StatusRow,
+                _ => anyhow::bail!("Invalid viewfinder placement {placement} with slot {slot}"),
+            });
+        }
+        Ok(placements)
     }
 
     /// The file bytes.
