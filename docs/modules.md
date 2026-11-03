@@ -10,6 +10,7 @@ The official modules in `modules/` are complete examples:
 | `modules/guides` | an own setting, a choice page, and a layer |
 | `modules/framing` | a page and two layers of a capability, `CORE.ASPECT` |
 | `modules/date` | three settings, a page with a native settings page, and a plane filter |
+| `modules/glow` | a group page with independent Enable and Strength settings and a frame filter that uses NEON and the core services `picture_white` and `picture_shot` |
 | `modules/grain` | a module with only data: a page of `CORE.GRAIN` with a row of `CORE.GRAIN_SIZE` |
 | `modules/film-look` | a page of `CORE.TONE`, whose rows the core gives |
 

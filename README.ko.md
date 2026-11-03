@@ -5,7 +5,7 @@
 [![Tests](https://github.com/ahonn/grkit/actions/workflows/tests.yml/badge.svg)](https://github.com/ahonn/grkit/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GRKit은 RICOH GR III, GR IIIx, GR IV에 필름 느낌의 색감, XPan 같은 화면 비율, 날짜 각인, 입자감을 더해 주는 도구입니다. SD 카드에서 실행되며 펌웨어는 건드리지 않습니다. 카드를 빼면 카메라는 원래 상태로 돌아갑니다.
+GRKit은 RICOH GR III, GR IIIx, GR IV에 필름 느낌의 색감, XPan 같은 화면 비율, 날짜 각인, 글로우, 입자감을 더해 주는 도구입니다. SD 카드에서 실행되며 펌웨어는 건드리지 않습니다. 카드를 빼면 카메라는 원래 상태로 돌아갑니다.
 
 <p>
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-root.ko.jpg" alt="ADJ 모드의 GRKit 페이지" width="49%">
@@ -22,6 +22,7 @@ GRKit은 RICOH GR III, GR IIIx, GR IV에 필름 느낌의 색감, XPan 같은 �
 - **프레이밍**: XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1. 촬영 화면에 마스크나 프레임 선으로 범위를 표시합니다.
 - **구도 가이드**: 9분할, 화면 중앙, 황금비, 대각선.
 - **날짜 각인**: 클래식, GR1s 도트, GR II의 세 가지 글꼴로 사진에 날짜를 넣습니다.
+- **글로우**: 블룸은 조명과 하이라이트 주변으로 빛을 부드럽게 퍼뜨립니다. 헐레이션은 밝은 광원 주변에 붉은 주황빛 번짐을 더해 영화용 필름의 효과를 재현합니다. 각 효과의 사용 여부와 강도를 따로 설정할 수 있으며 두 효과를 함께 사용할 수 있습니다.
 - **입자감**: 강도는 약·중·강·매우 강, 입자 크기는 자동·소·중·대에서 고릅니다.
 
 GRKit은 전원을 켜고 8~10초쯤 뒤에 불러와집니다. GR IV나 설치·업데이트 후 처음 켤 때는 더 걸립니다. 그전까지는 카메라 본래 설정으로 촬영됩니다. 모든 설정은 MENU 사용자 설정 탭 마지막의 GRKit 항목에 있습니다. 모듈을 직접 만들려면 [Writing a module](docs/modules.md)(영어)을 참고하세요.

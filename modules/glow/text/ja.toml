@@ -1,0 +1,23 @@
+title = "グロー"
+
+[children.BLOOM]
+title = "ブルーム"
+
+[children.HALATION]
+title = "ハレーション"
+
+[settings.BLOOM_ENABLED]
+label = "有効"
+values = ["オフ", "オン"]
+
+[settings.BLOOM_STRENGTH]
+label = "強度"
+values = ["弱", "中", "強"]
+
+[settings.HAL_ENABLED]
+label = "有効"
+values = ["オフ", "オン"]
+
+[settings.HAL_STRENGTH]
+label = "強度"
+values = ["弱", "中", "強"]

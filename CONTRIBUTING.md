@@ -35,7 +35,7 @@ cargo deny --locked check
 
 Host C tests compile parts of the runtime with a host C compiler. If no host compiler is available, they are skipped. `GRKIT_REQUIRE_NATIVE_TESTS=1` makes them fail instead.
 
-The ARM builds are ignored tests. The second command needs the firmware:
+The ARM builds are ignored tests. The first command also runs the NEON parity test of Glow, which needs `qemu-arm` (`GRKIT_QEMU_ARM` names another program). The second command needs the firmware:
 
 ```sh
 GRKIT_CLANG=clang GRKIT_LLD=ld.lld cargo test -p grkit-build --locked -- --ignored synthetic_ dump_

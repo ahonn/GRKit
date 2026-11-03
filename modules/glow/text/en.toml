@@ -1,0 +1,23 @@
+title = "Glow"
+
+[children.BLOOM]
+title = "Bloom"
+
+[children.HALATION]
+title = "Halation"
+
+[settings.BLOOM_ENABLED]
+label = "Enable"
+values = ["Off", "On"]
+
+[settings.BLOOM_STRENGTH]
+label = "Strength"
+values = ["Weak", "Medium", "Strong"]
+
+[settings.HAL_ENABLED]
+label = "Enable"
+values = ["Off", "On"]
+
+[settings.HAL_STRENGTH]
+label = "Strength"
+values = ["Weak", "Medium", "Strong"]

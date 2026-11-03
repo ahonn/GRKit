@@ -5,7 +5,7 @@
 [![Tests](https://github.com/ahonn/grkit/actions/workflows/tests.yml/badge.svg)](https://github.com/ahonn/grkit/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GRKit 给理光 GR III、GR IIIx 和 GR IV 加上胶片滤镜、XPan 等画幅、日期水印和颗粒，从存储卡运行，无需刷机。拔掉存储卡，相机就恢复原样。
+GRKit 给理光 GR III、GR IIIx 和 GR IV 加上胶片滤镜、XPan 等画幅、日期水印、光晕和颗粒，从存储卡运行，无需刷机。拔掉存储卡，相机就恢复原样。
 
 <p>
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-root.zh-Hans.jpg" alt="ADJ 模式中的 GRKit 页面" width="49%">
@@ -22,6 +22,7 @@ GRKit 给理光 GR III、GR IIIx 和 GR IV 加上胶片滤镜、XPan 等画幅�
 - **画幅**：XPan、2.35:1、16:9、4:3、5:4、7:6 和 1:1，取景时用遮罩或框线标出范围。
 - **辅助线**：三分法、中心、黄金分割和对角线。
 - **加印日期**：在照片上印日期，有经典、GR1s 点阵和 GR II 三种样式。
+- **光晕**：柔光让灯光和高光向周围柔和扩散。胶片光晕在明亮光源周围形成橙红色光晕，模拟电影胶片效果。两项各有“启用”和“强度”设置，可同时开启。
 - **颗粒感**：弱、中、强、特强四档，颗粒大小可选自动、小、中、大。
 
 开机后 GRKit 需要约 8 到 10 秒加载，GR IV 以及安装或更新后的第一次开机会更久。在此之前相机使用原本的设置。完整设置在 MENU 自定义页最后的 GRKit 小节。想自己写模块，见 [Writing a module](docs/modules.md)（英文）。

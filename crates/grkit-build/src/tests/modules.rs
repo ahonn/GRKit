@@ -197,6 +197,87 @@ fn synthetic_module_rejects_unknown_imports() -> Result<()> {
     Ok(())
 }
 
+/// The kernels of Glow that have NEON code (`modules/glow/glow_kernels.c`)
+/// give the bytes of their C code on random inputs and lengths: the test
+/// program `modules/glow/neon_parity.c` links the file built with NEON and
+/// built with `GLOW_SCALAR`, and runs under qemu-arm (`GRKIT_QEMU_ARM`).
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD and qemu-arm; run with --ignored"]
+fn synthetic_glow_neon_parity() -> Result<()> {
+    const KERNELS: [&str; 7] = [
+        "glow_clip",
+        "glow_clip_total",
+        "glow_rgb",
+        "glow_light",
+        "glow_ycc",
+        "glow_luma",
+        "glow_chroma",
+    ];
+    let tools = tools()?;
+    let directory = tempfile::tempdir()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let glow = root.join("modules/glow");
+    let sdk = root.join("runtime/sdk");
+    let compile = |source: &str, object: &str, mode: &str, extra: &[String]| -> Result<()> {
+        toolchain::run(
+            &tools.clang,
+            toolchain::CAMERA_TARGET
+                .iter()
+                .map(|flag| flag.to_string())
+                .chain(
+                    [
+                        mode,
+                        "-O2",
+                        "-ffreestanding",
+                        "-fno-builtin",
+                        "-fno-stack-protector",
+                        "-c",
+                    ]
+                    .map(String::from),
+                )
+                .chain(extra.iter().cloned())
+                .chain([
+                    "-I".into(),
+                    sdk.display().to_string(),
+                    glow.join(source).display().to_string(),
+                    "-o".into(),
+                    directory.path().join(object).display().to_string(),
+                ]),
+        )
+    };
+    let scalar: Vec<String> = std::iter::once("-DGLOW_SCALAR".to_string())
+        .chain(KERNELS.iter().map(|name| format!("-D{name}=scalar_{name}")))
+        .collect();
+    compile("glow_kernels.c", "neon.o", "-mthumb", &[])?;
+    compile("glow_kernels.c", "scalar.o", "-mthumb", &scalar)?;
+    // ARM mode: the entry point of the program.
+    compile("neon_parity.c", "parity.o", "-marm", &[])?;
+    let program = directory.path().join("parity");
+    toolchain::run(
+        &tools.lld,
+        ["-static", "-e", "_start", "-o"]
+            .map(String::from)
+            .into_iter()
+            .chain([program.display().to_string()])
+            .chain(
+                ["parity.o", "neon.o", "scalar.o"]
+                    .map(|object| directory.path().join(object).display().to_string()),
+            ),
+    )?;
+    let qemu = std::env::var("GRKIT_QEMU_ARM").unwrap_or_else(|_| "qemu-arm".into());
+    let result = std::process::Command::new(&qemu)
+        .arg(&program)
+        .output()
+        .with_context(|| format!("Run {qemu}"))?;
+    let output = String::from_utf8_lossy(&result.stdout);
+    ensure!(
+        result.status.success() && output.contains("NEON == C"),
+        "Glow kernels: {output}{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    Ok(())
+}
+
 /// Defaults are optional, bounded by the setting range, and emitted into the SDK descriptor.
 #[test]
 fn module_setting_defaults_are_validated() -> Result<()> {

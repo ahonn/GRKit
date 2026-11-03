@@ -5,7 +5,7 @@
 [![Tests](https://github.com/ahonn/grkit/actions/workflows/tests.yml/badge.svg)](https://github.com/ahonn/grkit/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面比例、日期浮水印與顆粒，從記憶卡執行，免刷機。拔出記憶卡，相機就恢復原狀。
+GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面比例、日期浮水印、光暈與顆粒，從記憶卡執行，免刷機。拔出記憶卡，相機就恢復原狀。
 
 <p>
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-root.zh-Hant.jpg" alt="ADJ 模式中的 GRKit 頁面" width="49%">
@@ -22,6 +22,7 @@ GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面�
 - **畫幅**：XPan、2.35:1、16:9、4:3、5:4、7:6 與 1:1，取景時以遮罩或框線標出範圍。
 - **輔助線**：三分法、中心、黃金分割與對角線。
 - **加印日期**：在照片上印日期，有經典、GR1s 點陣與 GR II 三種樣式。
+- **光暈**：柔光讓燈光和高光向周圍柔和擴散。底片光暈在明亮光源周圍形成橙紅色光暈，模擬電影底片效果。兩項各有「啟用」和「強度」設定，可同時開啟。
 - **粒紋感**：弱、中、強、特強四段，粒紋大小可選自動、小、中、大。
 
 開機後 GRKit 需要約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。在這之前相機使用原本的設定。完整設定在 MENU 自訂頁最後的 GRKit 小節。想自己寫模組，請見 [Writing a module](docs/modules.md)（英文）。

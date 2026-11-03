@@ -1,0 +1,23 @@
+title = "光暈"
+
+[children.BLOOM]
+title = "柔光"
+
+[children.HALATION]
+title = "底片光暈"
+
+[settings.BLOOM_ENABLED]
+label = "啟用"
+values = ["關閉", "開啟"]
+
+[settings.BLOOM_STRENGTH]
+label = "強度"
+values = ["弱", "中", "強"]
+
+[settings.HAL_ENABLED]
+label = "啟用"
+values = ["關閉", "開啟"]
+
+[settings.HAL_STRENGTH]
+label = "強度"
+values = ["弱", "中", "強"]

@@ -19,6 +19,7 @@ describe('downloadProps', () => {
       framing: 'on',
       guides: 'off',
       dateStamp: 'off',
+      glow: 'off',
       grain: 'off',
     });
   });

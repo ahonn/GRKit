@@ -93,6 +93,7 @@ Each feature is a module, `<ID>.GRM`, linked at power-on. The same file runs on 
 | `FRAMING` | a page of `CORE.ASPECT`, the mask, and the ratio label |
 | `GUIDES` | the guides |
 | `DATE` | the date imprint |
+| `GLOW` | independent Bloom and Halation around the highlights of each recorded picture |
 | `GRAIN` | a page of `CORE.GRAIN` and `CORE.GRAIN_SIZE` |
 
 The core keeps the value of each setting. The capabilities, `CORE.<KEY>`, are settings of the core. The core keeps each in a header word that its hooks read, so module code never runs in a hot path. INSTALL applies the patches of a capability only when a loaded module uses it.
