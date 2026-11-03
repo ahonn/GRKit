@@ -2,4 +2,4 @@
 default: minor
 ---
 
-RAW Development and Resize in the camera keep the Framing ratio of the photo, and RAW Development prints the day that the photo was taken and uses its film look, which you can change to another GRKit effect.
+Keep framing when developing or resizing photos in-camera, and retain the capture date and film look during RAW development while allowing another effect.
