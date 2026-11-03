@@ -534,8 +534,7 @@ parameter_event_resume:
 .type menu_settings_change, %function
 menu_settings_change:
     push {r0-r3, r12, lr}
-    mov r0, r1
-    bl menu_settings_controller
+    bl menu_settings_transition
     /* The C function gives the controller to change to, in r1, or 0: no
        change happens. */
     cmp r0, #0

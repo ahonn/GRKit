@@ -23,6 +23,12 @@ static const MenuPage about_module = ABOUT_PAGE;
    the page, so get a page again after you get another one. */
 #define CHOICE_ENTRY(h) ((h)+GRKIT_HOST_MODULE_PAGES/4+(h)[GRKIT_HOST_MODULE_CHOICE/4]*3)
 /* GrkitPage fields, and GRKIT_CHOICE_OFF_ROW. */
+#define PAGE_KIND 4U
+#define PAGE_SETTINGS 2U
+#define PAGE_GROUP 3U
+#define PAGE_MENU_ONLY 8U
+#define PAGE_ROWS 28U
+#define PAGE_CHILDREN 40U
 #define PAGE_SETTING 8U
 #define PAGE_FLAGS 12U
 #define PAGE_TITLE 16U
@@ -47,6 +53,9 @@ static u32 module_pages(volatile u32 *h) {
     u32 n=h[GRKIT_HOST_MODULE_PAGE_COUNT/4];
     return n<=GRKIT_MODULE_PAGES_MAX ? n : 0;
 }
+static u32 choice_direct(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_KIND)==PAGE_SETTINGS; }
+static u32 choice_group(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_KIND)==PAGE_GROUP; }
+static u32 choice_menu_only(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&PAGE_MENU_ONLY; }
 static u32 choice_value(volatile u32 *h) { return setting_value(h,CHOICE_ENTRY(h)[1]); }
 /* Whether the page has options (GRKIT_CHOICE_OPTIONS). */
 #define CHOICE_OPTIONS 4U
@@ -101,13 +110,13 @@ static u32 choice_tile(volatile u32 *h,u32 n) {
 }
 static u32 choice_off_tile(volatile u32 *h) { return choice_tile(h,0); }
 static const u16 *choice_title(volatile u32 *h) { return choice_text(h,PAGE_TITLE,0); }
-static const u16 *choice_summary(volatile u32 *h) { return choice_text(h,PAGE_SUMMARIES,choice_value(h)); }
+static const u16 *choice_summary(volatile u32 *h) { return choice_direct(h) ? choice_title(h) : choice_text(h,PAGE_SUMMARIES,choice_value(h)); }
 static const u16 *choice_label(volatile u32 *h,u32 row) { return choice_text(h,PAGE_LABELS,choice_row_value(h,row)); }
 /* The root row shows the tile of the value; a row shows the tile of its
    value, or Off for value 0. */
 static u32 choice_icon(volatile u32 *h,u32 row) {
     u32 value;
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,choice_value(h));
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,choice_direct(h) ? 0 : choice_value(h));
     value=choice_row_value(h,row);
     return !value && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&CHOICE_OFF_ROW ? GRKIT_ICON_OFF : choice_tile(h,value);
 }
@@ -162,6 +171,38 @@ static const Setting choice_one[SETTING_ROWS]={
 static const MenuPage choice_settings_module={choice_title,choice_summary,choice_rows,choice_label,choice_icon,
     choice_checked,choice_apply,choice_committed,0,0,choice_settings};
 
+/* A group toggles each child's boolean setting. Fn opens that child's
+   native settings page; the group itself has no setting to preview. */
+static u32 group_rows(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_ROWS); }
+static u32 group_child_address(volatile u32 *h,u32 row) {
+    return row<group_rows(h) ? PAGE_WORD(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_CHILDREN),row*4) : 0;
+}
+static u32 group_child(volatile u32 *h,u32 row) {
+    u32 address=group_child_address(h,row), i;
+    for(i=0;i<module_pages(h);++i)
+        if(h[GRKIT_HOST_MODULE_PAGES/4+i*3]==address) return i;
+    return MODULE_TOTAL;
+}
+static const u16 *group_label(volatile u32 *h,u32 row) {
+    u32 child=group_child_address(h,row);
+    return MENU_TEXT(PAGE_WORD(PAGE_WORD(child,PAGE_TITLE),menu_language()*4));
+}
+static u32 group_icon(volatile u32 *h,u32 row) {
+    return choice_tile(h,h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? 0 : row+1);
+}
+static u32 group_setting(volatile u32 *h,u32 row) {
+    u32 child=group_child(h,row);
+    return child<module_pages(h) ? h[GRKIT_HOST_MODULE_PAGES/4+child*3+1] : 0xffffffffU;
+}
+static u32 group_checked(volatile u32 *h,u32 row) { return setting_value(h,group_setting(h,row))!=0; }
+static void group_apply(volatile u32 *h,u32 row) {
+    u32 handle=group_setting(h,row);
+    setting_store(h,handle,!setting_value(h,handle));
+}
+static u32 group_committed(volatile u32 *h) { (void)h; return 0; }
+static const MenuPage group_module={choice_title,choice_title,group_rows,group_label,group_icon,
+    group_checked,group_apply,group_committed,0,0,0};
+
 /* A page of CORE.TONE gets its rows from the core (runtime/tone.h), and its
    title from the module. */
 static const MenuPage tone_module={choice_title,tone_summary,tone_rows,tone_label,tone_icon,
@@ -175,6 +216,7 @@ static const MenuPage *menu_page(volatile u32 *h,u32 index) {
     h[GRKIT_HOST_MODULE_CHOICE/4]=index;
     /* Only a registered page has a GrkitPage to read. */
     if(index>=module_pages(h)) return &choice_module;
+    if(choice_group(h)) return &group_module;
     if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) return &tone_module;
     if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)) return &choice_settings_module;
     return &choice_module;
@@ -213,11 +255,14 @@ static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {
     if(movie) { h[GRKIT_HOST_FRAME_PREVIEW/4]=0; return; }
     if(choice) {
         menu_page(h,module);
-        handle=CHOICE_ENTRY(h)[1];
-        value=choice_row_value(h,h[GRKIT_HOST_MENU_CURSOR/4]);
-        h[GRKIT_HOST_MODULE_PREVIEW/4]=handle+1;
-        h[GRKIT_HOST_MODULE_PREVIEW/4+1]=value;
-        if(handle==GRKIT_CORE_ASPECT) ratio=value;
+        if(choice_group(h)) choice=0;
+        else {
+            handle=CHOICE_ENTRY(h)[1];
+            value=choice_row_value(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+            h[GRKIT_HOST_MODULE_PREVIEW/4]=handle+1;
+            h[GRKIT_HOST_MODULE_PREVIEW/4+1]=value;
+            if(handle==GRKIT_CORE_ASPECT) ratio=value;
+        }
     }
     /* A highlighted Off keeps the canvas for the next row. */
     h[GRKIT_HOST_FRAME_PREVIEW/4]=ratio || choice || module_layers_on(h) ? ratio+1 : 0;
@@ -251,8 +296,10 @@ static u32 page_listed(volatile u32 *h,u32 slot) {
 static void manage_adj_refresh(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
     for(slot=0;slot<module_pages(h);++slot) {
+        menu_page(h,MODULE_PAGE(slot));
+        if(choice_menu_only(h)) continue;
         listed=page_listed(h,slot);
-        if(listed<MANAGE_MODULES && menu_page(h,MODULE_PAGE(slot))->rows(h)>=2) mask|=1U<<listed;
+        if(listed<MANAGE_MODULES && (menu_page(h,MODULE_PAGE(slot))->rows(h)>=2 || choice_direct(h) || choice_group(h))) mask|=1U<<listed;
     }
     /* menu_page selects a page: keep the page of the caller. */
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
@@ -266,9 +313,11 @@ static u32 manage_adj_modules(volatile u32 *h) { return h[GRKIT_HOST_ADJ_MODULES
 static u32 visible_modules(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
     for(slot=0;slot<module_pages(h);++slot) {
+        menu_page(h,MODULE_PAGE(slot));
+        if(choice_menu_only(h)) continue;
         listed=page_listed(h,slot);
         if(listed<MANAGE_MODULES && manage_stopped(h,listed)) continue;
-        if(menu_page(h,MODULE_PAGE(slot))->rows(h)>=2) mask|=1U<<MODULE_PAGE(slot);
+        if((menu_page(h,MODULE_PAGE(slot))->rows(h)>=2 || choice_direct(h) || choice_group(h))) mask|=1U<<MODULE_PAGE(slot);
     }
     if(manage_switch_shown(h)) mask|=1U<<SWITCH_MODULE;
     /* Module management and the version are in the native MENU (runtime/menu.c).
@@ -347,6 +396,12 @@ static void menu_open(volatile u32 *h,u32 module) {
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_MODULE;
     h[GRKIT_HOST_MENU_CURSOR/4]=menu_page(h,module)->committed(h);
 }
+/* A child settings page returns to the group row that opened it. Choice
+   pages still return to their committed value, which may have changed. */
+static void menu_return_page(volatile u32 *h,u32 row) {
+    menu_open(h,h[GRKIT_HOST_MODULE/4]);
+    if(current_module(h)==&group_module && row<count(h)) h[GRKIT_HOST_MENU_CURSOR/4]=row;
+}
 /* ADJ opens at the root. About always shows there, so the root has a row even
    when no module page is visible. */
 static void menu_start(volatile u32 *h) {
@@ -377,7 +432,8 @@ static void menu_confirm(volatile u32 *h) {
     menu_normalize(h);
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) {
         u32 module=root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]);
-        if(menu_page(h,module)->rows(h)) menu_open(h,module);
+        const MenuPage *page=menu_page(h,module);
+        if(page->rows(h) && (module>=module_pages(h) || !choice_direct(h))) menu_open(h,module);
     }
     else current_module(h)->apply(h,h[GRKIT_HOST_MENU_CURSOR/4]);
 }

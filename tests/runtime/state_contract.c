@@ -33,6 +33,13 @@ int main(void)
     assert(value_of(12) == 3 && value_of(45) == 6 && value_of(789) == 0);
     assert(!has(3));
 
+    /* A missing or invalid value keeps the default; a saved zero overrides it. */
+    assert(state_setting_value(&state, 789, 1, 3) == 0);
+    assert(state_setting_value(&state, 12, 1, 3) == 1);
+    assert(state_setting_value(&state, 999, 2, 3) == 2);
+    assert(state_setting_value(&state, 45, 1, 7) == 6);
+    assert(state_setting_value(&state, 0, 1, 3) == 1);
+
     /* Empty lines do not shift the pairs. */
     parse("\r\n\r\n12\r\n\r\n3\r\n\r\n");
     assert(state.pairs == 1 && value_of(12) == 3);

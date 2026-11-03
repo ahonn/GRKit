@@ -196,3 +196,226 @@ fn synthetic_module_rejects_unknown_imports() -> Result<()> {
     assert!(error.to_string().contains("__aeabi_uidiv"), "{error}");
     Ok(())
 }
+
+/// Defaults are optional, bounded by the setting range, and emitted into the SDK descriptor.
+#[test]
+fn module_setting_defaults_are_validated() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = template_folder(directory.path(), "DEFAULT")?;
+    let path = folder.join("module.toml");
+    let original = fs::read_to_string(&path)?;
+    let (manifest, _, _) = module::generate(&folder)?;
+    assert!(manifest.settings.iter().all(|s| s.default == 0));
+    let text = original.replace("[[settings]]", "[[settings]]\ndefault = 1");
+    fs::write(&path, &text)?;
+    let (manifest, code, _) = module::generate(&folder)?;
+    assert!(manifest.settings.iter().all(|s| s.default == 1));
+    assert!(code.contains(".default_value = 1"));
+    fs::write(&path, text.replace("default = 1", "default = 65536"))?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("default is outside"));
+    Ok(())
+}
+
+#[test]
+fn settings_page_has_independent_rows_and_one_tile() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = template_folder(directory.path(), "SETTINGS")?;
+    let manifest = r#"id = "SETTINGS"
+version = 1
+tiles = ["tiles/0-module.png"]
+[[settings]]
+key = "FIRST"
+values = 4
+[[settings]]
+key = "SECOND"
+values = 4
+[page]
+kind = "settings"
+settings = ["FIRST", "SECOND"]
+"#;
+    fs::write(folder.join("module.toml"), manifest)?;
+    for language in grkit_core::language::Language::ALL {
+        fs::write(
+            folder.join(format!("text/{}.toml", language.code())),
+            r#"title = "Settings"
+[settings.FIRST]
+label = "First"
+values = ["Off", "Weak", "Medium", "Strong"]
+[settings.SECOND]
+label = "Second"
+values = ["Off", "Weak", "Medium", "Strong"]
+"#,
+        )?;
+    }
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".kind = GRKIT_PAGE_SETTINGS"));
+    assert!(code.contains(".setting_rows = 2"));
+    assert!(!code.contains("page_summaries"));
+    for invalid in [
+        manifest.replace(
+            "kind = \"settings\"",
+            "kind = \"settings\"\nsetting = \"FIRST\"",
+        ),
+        manifest.replace("settings = [\"FIRST\", \"SECOND\"]", "settings = []"),
+        manifest.replace("tiles = [\"tiles/0-module.png\"]", "tiles = []"),
+    ] {
+        fs::write(folder.join("module.toml"), invalid)?;
+        assert!(module::generate(&folder).is_err());
+    }
+    Ok(())
+}
+
+const GROUP_MANIFEST: &str = r#"id = "GROUP"
+version = 1
+tiles = ["tiles/0-module.png", "tiles/0-module.png", "tiles/0-module.png"]
+[[settings]]
+key = "FIRST_ENABLED"
+values = 2
+[[settings]]
+key = "FIRST_STRENGTH"
+values = 3
+default = 1
+[[settings]]
+key = "SECOND_ENABLED"
+values = 2
+[[settings]]
+key = "SECOND_STRENGTH"
+values = 3
+default = 1
+[page]
+kind = "group"
+[[page.children]]
+key = "FIRST"
+settings = ["FIRST_ENABLED", "FIRST_STRENGTH"]
+[[page.children]]
+key = "SECOND"
+settings = ["SECOND_ENABLED", "SECOND_STRENGTH"]
+"#;
+
+const GROUP_TEXT: &str = r#"title = "Group"
+[children.FIRST]
+title = "First"
+[children.SECOND]
+title = "Second"
+[settings.FIRST_ENABLED]
+label = "Enable"
+values = ["Off", "On"]
+[settings.FIRST_STRENGTH]
+label = "Strength"
+values = ["Weak", "Medium", "Strong"]
+[settings.SECOND_ENABLED]
+label = "Enable"
+values = ["Off", "On"]
+[settings.SECOND_STRENGTH]
+label = "Strength"
+values = ["Weak", "Medium", "Strong"]
+"#;
+
+fn group_folder(directory: &Path) -> Result<std::path::PathBuf> {
+    let folder = template_folder(directory, "GROUP")?;
+    fs::write(folder.join("module.toml"), GROUP_MANIFEST)?;
+    for language in grkit_core::language::Language::ALL {
+        fs::write(
+            folder.join(format!("text/{}.toml", language.code())),
+            GROUP_TEXT,
+        )?;
+    }
+    Ok(folder)
+}
+
+#[test]
+fn group_page_registers_ordered_children_with_independent_settings() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let (manifest, code, _) = module::generate(&folder)?;
+    let page = manifest.page.unwrap();
+    assert_eq!(page.kind, module::PageKind::Group);
+    assert_eq!(page.children[0].key, "FIRST");
+    assert_eq!(page.children[1].key, "SECOND");
+    assert!(code.contains(".kind = GRKIT_PAGE_GROUP, .setting = GRKIT_NO_SETTING"));
+    assert!(code.contains(".rows = 2, .children = page_children"));
+    assert!(code.contains("page_children[] = {&page_child_0, &page_child_1}"));
+    assert!(
+        code.contains(".setting = 0, .flags = GRKIT_PAGE_MENU_ONLY, .title = child_0_page_title")
+    );
+    assert!(
+        code.contains(".setting = 2, .flags = GRKIT_PAGE_MENU_ONLY, .title = child_1_page_title")
+    );
+    assert!(
+        code.contains(".setting = 1, .label = child_0_row_1_label, .values = child_0_row_1_values")
+    );
+    assert!(
+        code.contains(".setting = 3, .label = child_1_row_1_label, .values = child_1_row_1_values")
+    );
+    assert!(code.contains(".registration_count = 3"));
+    let registrations = code
+        .split("GrkitRegistration registrations[] = ")
+        .nth(1)
+        .unwrap();
+    assert!(registrations.find("&page}").unwrap() < registrations.find("&page_child_0}").unwrap());
+    assert!(
+        registrations.find("&page_child_0}").unwrap()
+            < registrations.find("&page_child_1}").unwrap()
+    );
+    assert!(!code.contains("page_labels") && !code.contains("page_summaries"));
+    Ok(())
+}
+
+#[test]
+fn group_page_rejects_invalid_structure_and_text() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let manifest_path = folder.join("module.toml");
+    let invalid_manifests = [
+        GROUP_MANIFEST.split("[[page.children]]").next().unwrap().to_owned(),
+        GROUP_MANIFEST.replace("kind = \"group\"", "kind = \"settings\""),
+        GROUP_MANIFEST.replace("kind = \"group\"", "kind = \"group\"\nsetting = \"FIRST_ENABLED\""),
+        GROUP_MANIFEST.replace("kind = \"group\"", "kind = \"group\"\nsettings = [\"FIRST_ENABLED\"]"),
+        GROUP_MANIFEST.replace("kind = \"group\"", "kind = \"group\"\noptions = true"),
+        GROUP_MANIFEST.replace("key = \"SECOND\"", "key = \"FIRST\""),
+        GROUP_MANIFEST.replace("values = 2", "values = 3"),
+        GROUP_MANIFEST.replace("key = \"FIRST\"", "key = \"first\""),
+        GROUP_MANIFEST.replace("settings = [\"FIRST_ENABLED\", \"FIRST_STRENGTH\"]", "settings = []"),
+        GROUP_MANIFEST.replace("settings = [\"FIRST_ENABLED\", \"FIRST_STRENGTH\"]", "settings = [\"MISSING\"]"),
+        GROUP_MANIFEST.replace("settings = [\"FIRST_ENABLED\", \"FIRST_STRENGTH\"]", "settings = [\"FIRST_ENABLED\", \"FIRST_ENABLED\", \"FIRST_ENABLED\", \"FIRST_ENABLED\", \"FIRST_ENABLED\", \"FIRST_ENABLED\"]"),
+        GROUP_MANIFEST.replace("tiles = [\"tiles/0-module.png\", \"tiles/0-module.png\", \"tiles/0-module.png\"]", "tiles = [\"tiles/0-module.png\", \"tiles/0-module.png\"]"),
+        GROUP_MANIFEST.replace("version = 1", "version = 1\nuses = [\"?OPTION.ENABLED\"]").replace("settings = [\"FIRST_ENABLED\", \"FIRST_STRENGTH\"]", "settings = [\"OPTION.ENABLED\"]"),
+        format!("{GROUP_MANIFEST}{}", (0..3).map(|i| format!("[[page.children]]\nkey = \"EXTRA{i}\"\nsettings = [\"FIRST_ENABLED\"]\n")).collect::<String>()),
+    ];
+    for manifest in invalid_manifests {
+        fs::write(&manifest_path, &manifest)?;
+        assert!(module::generate(&folder).is_err(), "accepted {manifest}");
+    }
+    fs::write(&manifest_path, GROUP_MANIFEST)?;
+    let text_path = folder.join("text/en.toml");
+    for text in [
+        GROUP_TEXT.replace("children.FIRST", "children.MISSING"),
+        GROUP_TEXT.replace("settings.FIRST_ENABLED", "settings.MISSING"),
+        GROUP_TEXT.replace(
+            "title = \"Group\"",
+            "title = \"Group\"\nrows = [\"First\", \"Second\"]",
+        ),
+        GROUP_TEXT.replace("values = [\"Off\", \"On\"]", "values = [\"Off\"]"),
+        GROUP_TEXT.replace(
+            "title = \"First\"",
+            &format!("title = \"{}\"", "A".repeat(65)),
+        ),
+        format!("{GROUP_TEXT}\n[children.EXTRA]\ntitle = \"Extra\"\n"),
+    ] {
+        fs::write(&text_path, &text)?;
+        assert!(module::generate(&folder).is_err(), "accepted {text}");
+    }
+    fs::write(&text_path, GROUP_TEXT)?;
+    fs::write(
+        folder.join("text/ko.toml"),
+        GROUP_TEXT.replace("title = \"First\"", "title = \"똠\""),
+    )?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("camera cannot draw"));
+    Ok(())
+}

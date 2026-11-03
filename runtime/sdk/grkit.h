@@ -19,7 +19,7 @@ typedef signed int s32;
 
 /* The ABI of this file. The installer loads a module whose major version
    equals that of the core and whose minor version is not larger. A minor
-   version only adds functions and registration types. */
+   version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
 #define GRKIT_ABI_MINOR 1U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
@@ -90,7 +90,7 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
 
    The core stores the value of each setting, and the resident loader saves
    the values of settings with GRKIT_SETTING_SAVED in the state file. A value
-   is 0 to values - 1, and 0 until the user changes it. INSTALL restores
+   is 0 to values - 1, initially default_value (0 for older modules). INSTALL restores
    the saved values before the core starts, and the user can change a value
    at any time, so read a setting each time that you use it, and do not keep
    a copy. A handle names one
@@ -131,6 +131,8 @@ typedef struct {
     /* 1 to 65536. */
     u32 values;
     u32 flags;
+    /* Used when no valid saved value exists. Less than values. Since ABI 2.1. */
+    u32 default_value;
 } GrkitSetting;
 
 /* What the installer gives this module (the import grkit_self). */
@@ -198,6 +200,18 @@ typedef struct {
    core gives its rows, the effects, with their names, icons, live-view
    preview, and Fn adjustments. The page shows only with effects. */
 #define GRKIT_PAGE_CHOICE 1U
+/* ADJ opens the native settings directly. The title and tile 0 identify
+   the entry. No summaries or labels are needed. The first settings row
+   supplies setting and rows. MENU_ONLY hides a child from the ADJ root.
+   Since ABI 2.1. */
+#define GRKIT_PAGE_SETTINGS 2U
+/* An ADJ icon list: OK toggles a child's first setting (0 Off, 1 On),
+   and Fn opens its native settings. Tile 0 is the root; child n uses tile
+   n + 1. Children are registered MENU_ONLY pages whose first setting has
+   two values. */
+#define GRKIT_PAGE_GROUP 3U
+#define GRKIT_PAGE_MENU_ONLY 8U
+#define GRKIT_PAGE_CHILDREN 4U
 #define GRKIT_CHOICE_OFF_ROW 1U
 #define GRKIT_CHOICE_CORE_ROWS 2U
 /* The settings page of the module in the GRKit section of MENU has an
@@ -208,7 +222,7 @@ typedef struct {
    values. */
 #define GRKIT_CHOICE_OPTIONS 4U
 #define GRKIT_SETTING_ROWS 5U
-typedef struct {
+typedef struct GrkitPage {
     u32 size;
     u32 kind;
     u32 setting;
@@ -219,6 +233,8 @@ typedef struct {
     u32 rows;
     u32 setting_rows;            /* 0 to GRKIT_SETTING_ROWS */
     const GrkitSettingRow *settings;
+    /* Since ABI 2.1; read only for GROUP. Older 40-byte pages remain valid. */
+    const struct GrkitPage *const *children;
 } GrkitPage;
 
 /* ---- picture.plane -------------------------------------------------------- */

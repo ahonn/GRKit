@@ -389,7 +389,7 @@ static void apply_state(u32 base, u32 table)
         u32 n = word(table);
         for (u32 k = 0; k < n && k < GRKIT_MODULE_SETTINGS_MAX; ++k) {
             u32 entry = table + 4 * SETTINGS_ENTRY(k), id = word(entry);
-            if (id && state_value(&saved_state, id, &value) && value < word(entry + 8)) store(entry + 4, value);
+            store(entry + 4, state_setting_value(&saved_state, id, word(entry + 4), word(entry + 8)));
         }
         sync_alias(table, 4 * SETTINGS_WORDS(n));
     }

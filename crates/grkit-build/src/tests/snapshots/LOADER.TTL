@@ -207,7 +207,7 @@ if mindex >= mcount goto save_modules_end
 mid = modulecode[2 + mindex * 3]
 mvalue = modulecode[3 + mindex * 3]
 if mid <= 0 goto save_modules_next
-if mvalue <= 0 goto save_modules_next
+if mvalue < 0 goto save_modules_next
 int2str line mid
 filewriteln sfh line
 int2str line mvalue

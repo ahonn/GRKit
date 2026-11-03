@@ -35,6 +35,17 @@ static const Setting tone_settings[2]={
     {film_label,tone_rows,film_text,tone_committed,film_set},
     {adjustments_label,one_value,adjustments_text,no_value,no_set},
 };
+/* Group rows are links, with no selected value. The controller dispatcher
+   opens the child's native settings page. */
+#define GROUP_SETTING(n) \
+    static const u16 *group_label_##n(volatile u32 *h) { return group_label(h,n); }
+GROUP_SETTING(0) GROUP_SETTING(1) GROUP_SETTING(2) GROUP_SETTING(3)
+static const Setting group_settings[SETTING_ROWS]={
+    {group_label_0,one_value,adjustments_text,no_value,no_set},
+    {group_label_1,one_value,adjustments_text,no_value,no_set},
+    {group_label_2,one_value,adjustments_text,no_value,no_set},
+    {group_label_3,one_value,adjustments_text,no_value,no_set},
+};
 /* The settings of the module page of the listed module after its Enable
    row, with menu_page selecting the page, and their count in *n; or 0. */
 static const Setting *listed_base(volatile u32 *h,u32 *n) {
@@ -42,6 +53,7 @@ static const Setting *listed_base(volatile u32 *h,u32 *n) {
     *n=0;
     if(listed_slot(h)>=module_pages(h)) return 0;
     page=menu_page(h,listed_slot(h));
+    if(page==&group_module) { *n=group_rows(h); return group_settings; }
     if(page==&tone_module) {
         /* Without a committed effect, there are no Fn adjustments. */
         *n=1;
@@ -140,6 +152,11 @@ static u32 listed_kind(volatile u32 *h,u32 row,const Setting **base) {
     if(options && row==1) return LISTED_OPTIONS;
     row=row-1-options+first;
     return row<n ? row : LISTED_NONE;
+}
+static u32 listed_child(volatile u32 *h,u32 row) {
+    const Setting *base;
+    u32 kind=listed_kind(h,row,&base);
+    return base==group_settings && kind<LISTED_ENABLE ? group_child(h,kind) : MODULE_TOTAL;
 }
 static u32 listed_rows(volatile u32 *h) {
     u32 n, options;

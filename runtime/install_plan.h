@@ -30,6 +30,7 @@ static struct grm_module module;
    of each module, and the used settings of each module. */
 static char setting_names[GRKIT_MODULE_SETTINGS_MAX][GRM_NAME];
 static u32 setting_values[GRKIT_MODULE_SETTINGS_MAX], setting_flags[GRKIT_MODULE_SETTINGS_MAX], setting_total;
+static u32 setting_defaults[GRKIT_MODULE_SETTINGS_MAX];
 static u32 module_first[GRKIT_MODULES_MAX], module_settings[GRKIT_MODULES_MAX], module_use_count[GRKIT_MODULES_MAX];
 /* The global index of tile 0 of each module (GRKIT_ICON_MODULE_TILE). */
 static u32 module_tile_first[GRKIT_MODULES_MAX];
@@ -277,10 +278,6 @@ static void plan_kept(u32 room)
         }
         kept_values[k] = value;
     }
-    /* A key with the value 0 has no entry in the file. */
-    for (u32 k = 0; k < kept_count;)
-        if (kept_values[k]) ++k;
-        else { kept_ids[k] = kept_ids[--kept_count]; kept_values[k] = kept_values[kept_count]; }
 }
 /* List the modules and find the usable ones and the memory that they need. */
 static void plan_modules(void)
@@ -348,6 +345,7 @@ static void plan_modules(void)
             name_copy(setting_names[setting_total] + a + 1, settings[k].key, b);
             setting_values[setting_total] = settings[k].values;
             setting_flags[setting_total] = settings[k].flags;
+            setting_defaults[setting_total] = settings[k].default_value;
         }
         contexts += CONTEXT_WORDS(uses);
         data += words;

@@ -75,7 +75,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
                 }
         }
         store(entry, id);
-        store(entry + 4, 0);
+        store(entry + 4, setting_defaults[k]);
         store(entry + 8, setting_values[k]);
     }
     for (u32 i = 0; i < module_count; ++i) {
@@ -203,6 +203,8 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
                     status = GRM_BAD_DESCRIPTOR;
             }
         }
+        for (u32 k = 0; !status && k < page_count; ++k)
+            if ((pages[k].flags & GRM_PAGE_MENU_ONLY) && pages[k].setting == GRM_NO_SETTING) status = GRM_MISSING_SETTING;
         for (u32 k = 0; !status && k < layer_count; ++k)
             if (layers[k].setting != GRM_NO_SETTING) {
                 layers[k].setting = module_handle(i, use_handles, layers[k].setting);
@@ -262,7 +264,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         /* The pages in load order, and the layers in painting order: a
            layer goes after the layers with the same or a lower order. */
         for (u32 k = 0; k < page_count; ++k) {
-            if (pages[k].setting == GRM_NO_SETTING) continue;
+            if (pages[k].setting == GRM_NO_SETTING && word(pages[k].address + GRM_PAGE_KIND_AT) != GRM_PAGE_GROUP) continue;
             module_pages[module_page_count * 3] = pages[k].address;
             module_pages[module_page_count * 3 + 1] = pages[k].setting;
             /* A module without tiles has no tile 0 for its root row. */

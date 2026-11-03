@@ -663,6 +663,8 @@ fn the_module_format_constants_agree() {
         assert_eq!(link[name], value, "{name}");
     }
     for (core_name, link_name) in [
+        ("PAGE_KIND", "GRM_PAGE_KIND_AT"),
+        ("PAGE_SETTINGS", "GRM_PAGE_SETTINGS"),
         ("PAGE_SETTING", "GRM_PAGE_SETTING_AT"),
         ("PAGE_FLAGS", "GRM_PAGE_FLAGS_AT"),
         ("PAGE_TITLE", "GRM_PAGE_TITLE_AT"),
@@ -1023,9 +1025,9 @@ fn runtime_c_sources_compile_for_each_target() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("GRKIT_TARGET_"));
 }
 
-/// Modules are target neutral: each module source includes only the module
-/// SDK and the header that `grkit module build` generates, and names no
-/// firmware symbol or address.
+/// Modules are target neutral: sources can include the SDK, the generated
+/// module header, and local headers checked by the same rules. None can name
+/// a firmware symbol or address.
 #[test]
 fn modules_hold_no_firmware_detail() {
     let mut checked = 0;
@@ -1035,7 +1037,19 @@ fn modules_hold_no_firmware_detail() {
     )];
     for (folder, includes) in folders {
         for module in fs::read_dir(root().join(folder)).unwrap() {
-            for file in fs::read_dir(module.unwrap().path()).unwrap() {
+            let module = module.unwrap().path();
+            let local_headers: Vec<String> = fs::read_dir(&module)
+                .unwrap()
+                .map(|file| file.unwrap().path())
+                .filter(|path| path.is_file() && path.extension().is_some_and(|ext| ext == "h"))
+                .map(|path| {
+                    format!(
+                        "#include \"{}\"",
+                        path.file_name().unwrap().to_str().unwrap()
+                    )
+                })
+                .collect();
+            for file in fs::read_dir(&module).unwrap() {
                 let path = file.unwrap().path();
                 // test.c of a module is its host test (`grkit module test`).
                 if !matches!(path.extension().and_then(|e| e.to_str()), Some("c" | "h"))
@@ -1047,7 +1061,11 @@ fn modules_hold_no_firmware_detail() {
                 let name = path.display();
                 for line in text.lines().map(str::trim) {
                     if line.starts_with("#include") {
-                        assert!(includes.contains(&line), "{name}: {line}");
+                        assert!(
+                            includes.contains(&line)
+                                || local_headers.iter().any(|header| header == line),
+                            "{name}: {line}"
+                        );
                     }
                 }
                 for symbol in ["FW_", "HOOK_", "firmware.h", "LIVEVIEW_", "ADJ_"] {
