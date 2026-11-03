@@ -295,6 +295,10 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DEVELOP_TEXT: 4;
     /// The text descriptor of that name.
     HOST_DEVELOP_NAME: 8;
+    /// CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only.
+    HOST_ASPECT_MODE: 4;
+    /// Native aspect + 1 at the last live-view bind, or 0 before the first bind.
+    HOST_FRAME_NATIVE: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

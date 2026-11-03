@@ -175,14 +175,14 @@ static void manage_suspend(volatile u32 *h) {
     h[GRKIT_HOST_CAPABILITIES/4]=uses;
 }
 /* Apply a change of an Enable or of the switch: the soft Off, then the
-   capabilities that start or stop. Framing sends the native 3:2 request
+   capabilities that start or stop. Framing sends the current native request
    again, so the capture hook applies the crop or the full area at once, and
    Film Look sets the highlight warning again. */
 static void manage_off_changed(volatile u32 *h) {
     u32 before=h[GRKIT_HOST_CAPABILITIES/4], changed;
     manage_suspend(h);
     changed=before^h[GRKIT_HOST_CAPABILITIES/4];
-    if(changed&GRKIT_CORE_ASPECT_BIT && !aspect_native()) aspect_request();
+    if(changed&(GRKIT_CORE_ASPECT_BIT|GRKIT_CORE_ASPECT_MODE_BIT)) aspect_refresh(h);
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
 static void manage_set_all_off(volatile u32 *h,u32 off) {

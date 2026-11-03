@@ -186,12 +186,42 @@ static void module_paint(volatile u32 *h,u32 i,const Surface *surface,u32 value)
     MODULE_PAINT(MODULE_LAYER(h,i)[0],surface,value);
     profile_end_module(h,start,MODULE_LAYER(h,i)[0],GRKIT_PROFILE_PAINT);
 }
+/* Photo area {left,top,right,bottom} on the 720x480 canvas: native 3:2,
+   XPan, 16:9, 4:3, 2.35:1, 1:1, 5:4, and 7:6. Both capture and composition
+   layers use this geometry, but they can select different areas. */
+static const u16 photo_boxes[8][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480},
+                                    {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480}};
+/* The native aspect IDs are 3:2, 4:3, 16:9, and 1:1. The caller rejects
+   unknown native aspects before drawing layers. */
+static u32 native_area(void) {
+    static const u8 areas[]={0,3,2,5};
+    u32 native=FRAMING_NATIVE_ASPECT();
+    return native<sizeof(areas) ? areas[native] : 0;
+}
+/* A composition ratio applies to native 3:2. The existing capture modes
+   can also apply their wide crops to native 16:9 on GR IV. */
+static u32 composition_area(volatile u32 *h,u32 ratio) {
+    u32 native=FRAMING_NATIVE_ASPECT();
+    if(!framing_row(ratio)) return 0;
+    return !native || (!framing_guides_only(h) && FRAMING_CROP_KEEPS(native,ratio)) ? ratio : 0;
+}
+/* General overlays use the actual capture area, including native ratios
+   when Framing is off or only supplies a composition frame. */
+static u32 capture_area(volatile u32 *h) {
+    u32 crop=capture_aspect_value(h);
+    return crop ? crop : native_area();
+}
 /* Paint the module layers in their order. In the ADJ preview, the layers of
    the previewed setting paint its highlighted value, DISP does not hide
-   layers, and a live-only layer does not paint. */
-static void module_layers_paint(volatile u32 *h,const Surface *surface,u32 preview) {
+   layers, and a live-only layer does not paint. Only a layer bound to
+   CORE.ASPECT receives the composition area. Other layers keep the capture
+   area, or its hypothetical crop while previewing a capture ratio. */
+static void module_layers_paint(volatile u32 *h,const Surface *surface,u32 preview,u32 composition) {
     u32 i, value;
+    Surface frame=*surface;
+    frame.area=composition; frame.box=photo_boxes[composition];
     for(i=0;i<module_layers(h);++i) {
+        u32 aspect=MODULE_LAYER(h,i)[1]==GRKIT_CORE_ASPECT;
         if(!preview) value=module_layer_value(h,i);
         else if(MODULE_LAYER(h,i)[2]&MODULE_LAYER_LIVE_ONLY) value=0;
         else if(h[GRKIT_HOST_MODULE_PREVIEW/4] && h[GRKIT_HOST_MODULE_PREVIEW/4]-1==MODULE_LAYER(h,i)[1]) {
@@ -199,26 +229,12 @@ static void module_layers_paint(volatile u32 *h,const Surface *surface,u32 previ
             if(value>=setting_limit(h,MODULE_LAYER(h,i)[1])) value=0;
         }
         else value=MODULE_LAYER(h,i)[1]==NO_SETTING ? 1 : setting_value(h,MODULE_LAYER(h,i)[1]);
-        if(value && !services_suspended(h,MODULE_LAYER(h,i)[0])) module_paint(h,i,surface,value);
+        if(aspect && !composition) value=0;
+        if(value && !services_suspended(h,MODULE_LAYER(h,i)[0])) module_paint(h,i,aspect ? &frame : surface,value);
     }
 }
 /* Whether the live view has something to draw: a layer or the cue. */
 static u32 overlay_active(volatile u32 *h) { return cue_shown(h) || layers_active(h); }
-/* The capture area: the crop of CORE.ASPECT, or 0 for the full 3:2 area. */
-static u32 capture_area(volatile u32 *h) { return framing_crop(h); }
-
-#ifdef FRAMING_XPAN_NATIVE
-/* The live view shows the Framing ratio in native 3:2. XPan and 2.35:1 also
-   crop the native aspect FRAMING_XPAN_NATIVE, whose live view shows only
-   them. In other native aspects nothing shows: clear `data`. */
-#define SHOWN_AREA(data,area) do { \
-    u32 native=FRAMING_NATIVE_ASPECT(); \
-    if(native!=0 && (native!=FRAMING_XPAN_NATIVE || ((area)!=1 && (area)!=4))) (data)=0; \
-} while(0)
-#else
-/* canvas_pixels() accepts only the native 3:2 aspect, where each ratio shows. */
-#define SHOWN_AREA(data,area) ((void)0)
-#endif
 
 #ifdef FRAMING_CAPTURE_ASPECT
 /* The still aspect property handler calls this for each requested value. The
@@ -351,13 +367,15 @@ u32 framing_resize_play_aspect(u32 aspect,u32 size) {
 /* The highlight warning after INSTALL (runtime/level.h). */
 static void level_boot(volatile u32 *h,u32 controller);
 static void bind_canvas(volatile u32 *h,u32 controller) {
+    u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=h[GRKIT_HOST_FRAME_NATIVE/4]!=native;
+    h[GRKIT_HOST_FRAME_NATIVE/4]=native;
     h[GRKIT_HOST_FRAME_OWNER/4]=controller;
     h[GRKIT_HOST_FRAME_CANVAS/4]=WORD(controller,LIVEVIEW_CANVAS);
     /* Shooting: the capture sizes follow the crop that applies in the native
        aspect. A native aspect from the camera menu reads as Framing Off and
        keeps its stock sizes. */
     ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=0;
-    h[GRKIT_HOST_FRAME_CROP/4]=aspect_value(h);
+    h[GRKIT_HOST_FRAME_CROP/4]=capture_aspect_value(h);
     capture_sync(controller);
     /* Nothing else invalidates a still live view, so these need a redraw: a
        selection that has not drawn on this canvas yet, such as one restored
@@ -367,7 +385,9 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
     if(h[GRKIT_HOST_FRAME_CANVAS/4]) {
         u32 changes=h[GRKIT_HOST_STATE_CHANGES/4], changed=h[GRKIT_HOST_FRAME_CHANGES/4]!=changes;
         h[GRKIT_HOST_FRAME_CHANGES/4]=changes;
-        if(cue_update(h,controller) || changed || (!h[GRKIT_HOST_FRAME_BITMAP/4] && overlay_active(h)))
+        if(cue_update(h,controller) || changed || (native_changed &&
+           (h[GRKIT_HOST_FRAME_BITMAP/4] || overlay_active(h))) ||
+           (!h[GRKIT_HOST_FRAME_BITMAP/4] && overlay_active(h)))
             FRAMING_INVALIDATE(h[GRKIT_HOST_FRAME_CANVAS/4]);
     }
     /* The first shooting screen after INSTALL: the modules are ready. This
@@ -402,19 +422,11 @@ static u32 canvas_bitmap(u32 canvas,u32 bitmap) {
        WORD(bitmap,4)<stride*480*4) return 0;
     return data;
 }
-/* Pixel data of a supported canvas bitmap, or 0. The layers are defined only
-   for a full canvas and the native 3:2 aspect. */
+/* Layers use a full canvas with a known native photo area. */
 static u32 canvas_pixels(u32 canvas,u32 bitmap) {
-#ifndef FRAMING_XPAN_NATIVE
-    /* Native StillAspectRatio getter: 0 = 3:2, 3 = 1:1. Native square crop is untouched. */
-    if(FRAMING_NATIVE_ASPECT()!=0) return 0;
-#endif
+    if(FRAMING_NATIVE_ASPECT()>3) return 0;
     return canvas_bitmap(canvas,bitmap);
 }
-/* Photo area {left,top,right,bottom} on the 720x480 canvas for each capture
-   area: 3:2, XPan, 16:9, 4:3, 2.35:1, 1:1, 5:4, 7:6. */
-static const u16 photo_boxes[8][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480},
-                                    {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480}};
 /* The ADJ canvas of the preview, or 0 (runtime/modules.h: frame_preview). */
 static u32 preview_canvas(volatile u32 *h) {
     u32 adj=h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4];
@@ -439,16 +451,17 @@ void framing_prepare(u32 canvas) {
    previews the area of its highlighted ratio. After the page ends, one more
    full draw erases the drawing and releases the canvas. */
 static void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {
-    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],data,area;
+    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],data,area,composition;
     Surface surface;
     if(!preview) { h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=0; return; }
     if(preview>sizeof(photo_boxes)/sizeof(photo_boxes[0]) || !module_layers(h)) return;
     data=canvas_pixels(canvas,bitmap);
-    area=preview-1;
-    SHOWN_AREA(data,area);
     if(!data) return;
+    composition=composition_area(h,preview-1);
+    area=capture_area(h);
+    if(!framing_guides_only(h)) area=composition ? composition : native_area();
     surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
-    module_layers_paint(h,&surface,1);
+    module_layers_paint(h,&surface,1,composition);
 }
 static void paint_canvas(volatile u32 *h,u32 canvas,u32 bitmap) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,data,cue,area;
@@ -465,11 +478,10 @@ static void paint_canvas(volatile u32 *h,u32 canvas,u32 bitmap) {
        aspect. It hides only while DISP turns the live view off. */
     cue=full && cue_shown(h) && native_display()!=DISPLAY_OFF ? full : 0;
     area=capture_area(h);
-    SHOWN_AREA(data,area);
     if(!data && !cue) return;
     if(data) {
         surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
-        module_layers_paint(h,&surface,0);
+        module_layers_paint(h,&surface,0,aspect_value(h));
     }
     if(cue) {
         /* Centered, on the baseline of the native focus distance. */

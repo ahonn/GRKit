@@ -3,7 +3,7 @@
 For RICOH GR IV and GR IV HDF firmware 1.11 only.
 One package serves each supported firmware version. At each power-on, GRKit finds the firmware of the camera.
 The update to firmware 1.20 (1.10 on GR IV Monochrome) cannot be undone. After the update, the same package still works.
-GR IV Monochrome runs the GR IV firmware and shows its own version: 1.00 for firmware 1.11, and 1.10 for firmware 1.20. Its package has no Film Look. GR IV Monochrome uses the GR IV runtimes, but has not been tested on a camera itself.
+GR IV Monochrome runs the GR IV firmware and shows its own version: 1.00 for firmware 1.11, and 1.10 for firmware 1.20. Its package has no Film Look. GR IV Monochrome uses the GR IV runtimes. Its Guides behavior has been checked in a firmware simulator with the Monochrome configuration. It has not been tested on a physical GR IV Monochrome.
 
 GRKit is experimental and has no warranty. If GRKit fails, the camera can stop during startup. Read the [recovery guide](https://github.com/ahonn/grkit/blob/main/resources/RECOVERY.md) before you install. When you install GRKit, you accept the [terms of use](https://github.com/ahonn/grkit/blob/main/resources/TERMS.md).
 
@@ -37,8 +37,15 @@ Deleting `SCRIPT` also deletes the settings and the effects of GRKit 1.2. To kee
 Open ADJ and select the sixth entry, GRK. GRKit loads a few seconds after power-on, so the entry can appear late. When GRKit has loaded, the shooting screen shows **GRKit** at the top for a few seconds. This label needs the Framing or Guides module.
 
 - **Film Look:** highlight an effect to preview it. Press OK to keep it. Press Fn to adjust the Standard parameters of the effect. On the GRK menu, press Fn on the Film Look row to adjust the selected effect. Each effect keeps its own adjustments, and they do not change the camera's Image Control settings. The effects were made for GR III, so their colors can differ on GR IV.
-- **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Each ratio sets the native aspect ratio to 3:2. The viewfinder then stays 3:2 and dims the area outside the photo. XPan and 2.35:1 also work when the native aspect ratio is 16:9. Another aspect ratio in the camera menu pauses Framing. DNG files keep the full sensor image and record the crop. A raw converter that applies the recorded crop shows only the photo area.
-- **Guides:** select a guide style. Press Fn to set the color, the opacity, and whether the lines also show while DISP hides the shooting information. The lines show only in the viewfinder.
+- **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Press Fn to set **Mode** to **Crop** or **Guides Only**.
+
+The default **Crop** mode keeps the existing behavior. Selecting a ratio sets the camera's aspect ratio to 3:2 and crops JPEG photos. DNG files keep the full sensor data and record a default crop. RAW software that applies this crop initially shows only the selected area. With native 16:9, XPan and 2.35:1 still crop photos. Other native ratios pause cropping.
+
+In **Guides Only** mode, the live view shows the selected ratio for composition. It does not change the camera's aspect ratio, JPEG dimensions, or RAW crop settings. The frame appears only with the camera's native 3:2 aspect ratio. Other native ratios hide the frame.
+
+The **Mask** setting selects Dark, Black, or Frame Lines in either mode. Frame Lines alone does not disable cropping. Changing Mode keeps the Mask setting.
+
+- **Guides:** select a guide style. Press Fn to set the color, the opacity, and whether the lines also show while DISP hides the shooting information. The lines show only in the viewfinder. Guides follow the actual photo area, including native aspect ratios. In Guides Only mode, they follow the native photo area, not the composition frame.
 - **Date Imprint:** select a date style. Press Fn to set **Date Style** and **Date Font**, the digits: Classic, GR1s, or GR II. Photos get the date at the bottom right. While it is on, the viewfinder shows DATE with the full shooting information.
 - **Glow:** Bloom spreads light around highlights, while Halation adds a red-orange film halo. In ADJ, open Glow and select Bloom or Halation. Press OK to toggle the effect, or Fn to open its Enable and Strength settings. MENU opens the same settings. Each effect starts disabled at Medium strength, which you can set to Weak, Medium, or Strong. Disabling an effect keeps its strength. The effects apply only to JPEG photos, with no live-view preview.
 - **Grain:** select Weak, Medium, Strong, or Extra Strong. Press Fn to set **Size**: Auto (by ISO), Small, Medium, or Large. Only photos get the grain.

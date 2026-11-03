@@ -36,14 +36,14 @@ typedef unsigned int u32;
 #define STATE_PATH CARD "/GRKIT/STATE.TXT"
 #define MODULES_PATH CARD "/GRKIT/MODULES"
 #define LEGACY_EFFECTS_PATH CARD "/SCRIPT/PLUGINS/EFFECTS"
-#define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003
+#define CORE_STATE_IDS 861965461, 484706023, 790270076, 977751003, 826089556
 #define PARAMETER_KEY_BASE 990000000U
 #define STATE_TEXT_MAX 16384U
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
-static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE"};
-static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40};
+static const char *const core_setting_names[] = {"CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE", "CORE.ASPECT_MODE"};
+static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc};
 /* The tail of the core, and its one export, overlay_label. */
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U
@@ -681,6 +681,39 @@ static void setting_defaults_and_saved_zero(void)
     assert(install() == 0);
     assert(kept_count == 1 && kept_ids[0] == pairs[0] && kept_values[0] == 0);
 }
+/* SCAN and INSTALL keep the framing mode available for the state restore,
+   including when Framing loads stopped. This harness does not run the
+   apply_state function that writes the restored values into the header. */
+static void framing_mode_state_survives_install_planning(void)
+{
+    const struct spec framing = {.id = "FRAMING", .uses = {"CORE.ASPECT", "CORE.ASPECT_MODE"}};
+    const u32 capabilities = GRKIT_CORE_ASPECT_BIT | GRKIT_CORE_ASPECT_MODE_BIT;
+    for (u32 scenario = 0; scenario < 3; ++scenario) {
+        reset();
+        add_module(PACKAGE_MODULES_PATH, "FRAMING.GRM", &framing);
+        const u32 pairs[] = {id_of("CORE.ASPECT"), 1, id_of("CORE.ASPECT_MODE"), 1,
+                             id_of("CORE.OFF.FRAMING"), 1};
+        /* An existing state has the selected XPan ratio but no mode key.
+           A newer state saves guide-only, optionally with Framing off. */
+        save_state(pairs, scenario + 1);
+        assert(install() == 0 && module_status[0] == 0);
+        assert(capabilities_used == capabilities);
+        assert(capabilities_running == (scenario == 2 ? 0 : capabilities));
+        u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(word(ARRAY_AT));
+        assert(word(context + 12) == GRKIT_CORE_ASPECT);
+        assert(word(context + 16) == GRKIT_CORE_ASPECT_MODE);
+        u32 value = 99;
+        assert(state_value(&saved_state, pairs[0], &value) && value == 1);
+        assert(state_value(&saved_state, pairs[2], &value) == (scenario != 0));
+        if (scenario) assert(value == 1);
+        assert(state_setting_value(&saved_state, pairs[2], 0, GRKIT_CORE_ASPECT_MODE_VALUES) == (scenario != 0));
+        /* A stopped module still owns its core state. Its saved mode is
+           not reclassified as an unknown setting or removed. */
+        assert(state_taken(pairs[2]) && kept_count == 0);
+        assert(module_off[0] == (scenario == 2));
+        expect_setting(word(module_list + MANAGE_SETTINGS), pairs[4], scenario == 2, 2);
+    }
+}
 /* A settings-only entry links its independent rows with only a module tile. */
 static void install_settings_page(void)
 {
@@ -921,6 +954,7 @@ static void *run(void *unused)
     the_budget_counts_the_services_block();
     install_writes_the_settings_and_the_contexts();
     setting_defaults_and_saved_zero();
+    framing_mode_state_survives_install_planning();
     install_settings_page();
     install_group_page();
     the_switch_stops_each_module();

@@ -294,18 +294,123 @@ static void reset_cue(u32 second)
     invalidations=0;
     invalidated=0;
 }
-static void assert_guides(u32 ratio,u32 style,u32 badge)
+static void assert_overlay(u32 capture,u32 composition,u32 style,u32 badge)
 {
-    const u32 *box=boxes[ratio];
+    const u32 *box=boxes[composition];
     for(u32 y=0; y<480; ++y) for(u32 x=0; x<TEST_STRIDE; ++x) {
         u32 expected=SENTINEL;
         if(x<720) {
-            if(ratio && (x<box[0] || x>=box[2] || y<box[1] || y>=box[3])) expected=0x80000000;
-            if(expected_guide(ratio,style,x,y)) expected=0x80000000U;
-            if(badge) expected=expected_badge(ratio,x,y,expected);
+            if(composition && (x<box[0] || x>=box[2] || y<box[1] || y>=box[3])) expected=0x80000000;
+            if(expected_guide(capture,style,x,y)) expected=0x80000000U;
+            if(badge) expected=expected_badge(composition,x,y,expected);
         }
         assert(pixels[1+y*TEST_STRIDE+x]==expected);
     }
+}
+static void assert_guides(u32 ratio,u32 style,u32 badge)
+{
+    assert_overlay(ratio,ratio,style,badge);
+}
+static void guides_only(u32 enabled)
+{
+    header[GRKIT_HOST_CAPABILITIES/4] |= GRKIT_CORE_ASPECT_MODE_BIT;
+    header[GRKIT_HOST_ASPECT_MODE/4]=enabled;
+}
+static void native_guides_follow_the_photo_area(void)
+{
+    static const u32 areas[]={0,3,2,5};
+    for(u32 native=0;native<4;++native) for(u32 style=1;style<=GUIDES_STYLE_MAX;++style) {
+        reset();
+        register_layers(0);
+        native_aspect=native; capture_aspect=native;
+        GUIDE_STYLE=style;
+        framing_bind(TEST_OWNER);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(areas[native],0,style,0);
+        assert(capture_aspect==native && header[GRKIT_HOST_FRAME_CROP/4]==0);
+        assert(header[GRKIT_HOST_FRAME_DRAWS/4]==1);
+        /* The Guides ADJ page uses the same native photo area. */
+        for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
+        header[GRKIT_HOST_FRAME_PREVIEW/4]=1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4]=1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4+1]=style;
+        header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=TEST_OWNER;
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(areas[native],0,style,0);
+    }
+    /* Native aspect changes redraw an existing canvas without a GRKit
+       setting change, including erasing lines before an unknown aspect. */
+    reset(); register_layers(0); GUIDE_STYLE=1;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    invalidations=0;
+    native_aspect=3; capture_aspect=3;
+    framing_bind(TEST_OWNER);
+    assert(invalidations==1);
+    framing_bind(TEST_OWNER);
+    assert(invalidations==1);
+    for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_overlay(5,0,1,0);
+    native_aspect=4;
+    framing_bind(TEST_OWNER);
+    assert(invalidations==2);
+    for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) assert(pixels[i]==SENTINEL);
+}
+static void composition_frames_keep_the_capture_area(void)
+{
+    for(u32 ratio=1;ratio<RATIO_VALUES;++ratio) {
+        reset();
+        guides_only(1);
+        header[GRKIT_HOST_FRAME_RATIO/4]=ratio;
+        GUIDE_STYLE=1;
+        framing_bind(TEST_OWNER);
+        assert(header[GRKIT_HOST_FRAME_RATIO/4]==ratio);
+        assert(header[GRKIT_HOST_FRAME_CROP/4]==0 && capture_aspect==0);
+        assert(framing_capture_request(0)==0 && framing_capture_request(3)==3);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(0,ratio,1,1);
+        /* Highlighting another ratio changes only its composition frame. */
+        for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
+        header[GRKIT_HOST_FRAME_PREVIEW/4]=3;
+        header[GRKIT_HOST_MODULE_PREVIEW/4]=GRKIT_CORE_ASPECT+1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4+1]=2;
+        header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=TEST_OWNER;
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(0,2,1,0);
+        assert(header[GRKIT_HOST_FRAME_RATIO/4]==ratio && capture_aspect==0);
+        assert(header[GRKIT_HOST_FRAME_CROP/4]==0);
+    }
+    /* Composition frames do not apply to native cropped views. Their
+       Guides still draw within the actual photo, in live view and ADJ. */
+    for(u32 native=1;native<4;++native) {
+        static const u32 areas[]={0,3,2,5};
+        reset(); guides_only(1);
+        native_aspect=native; capture_aspect=native; GUIDE_STYLE=1;
+        framing_bind(TEST_OWNER);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(areas[native],0,1,0);
+        assert(header[GRKIT_HOST_FRAME_CROP/4]==0 && capture_aspect==native);
+        for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
+        header[GRKIT_HOST_FRAME_PREVIEW/4]=2;
+        header[GRKIT_HOST_MODULE_PREVIEW/4]=GRKIT_CORE_ASPECT+1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4+1]=1;
+        header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=TEST_OWNER;
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert_overlay(areas[native],0,1,0);
+    }
+    /* Changing only the mode resends the capture request in both
+       directions, without changing the stored composition ratio. */
+    reset();
+    assert(capture_aspect==2 && capture_requests==1);
+    guides_only(1);
+    framing_bind(TEST_OWNER);
+    assert(capture_aspect==0 && capture_requests==2 && header[GRKIT_HOST_FRAME_CROP/4]==0);
+    guides_only(0);
+    framing_bind(TEST_OWNER);
+    assert(capture_aspect==2 && capture_requests==3 && header[GRKIT_HOST_FRAME_CROP/4]==1);
+    assert(header[GRKIT_HOST_FRAME_RATIO/4]==1);
 }
 /* The white of each record curve: R, G, B at input 255. */
 static void record_white(u32 r, u32 g, u32 b)
@@ -405,6 +510,8 @@ static void the_histogram_follows_the_effect_white(void)
 }
 int main(void)
 {
+    native_guides_follow_the_photo_area();
+    composition_frames_keep_the_capture_area();
     the_highlight_warning_follows_the_effect_white();
     the_histogram_follows_the_effect_white();
     /* Fixed rectangles are independent expected output, not a second renderer. */
@@ -752,24 +859,27 @@ int main(void)
     reset(); WORD(TEST_BITMAP,8)=0x80000000-TEST_STRIDE*480*4+4; assert_rejected();
     reset(); WORD(TEST_BITMAP,8)=TEST_PIXELS+1; assert_rejected();
     reset(); WORD(TEST_BITMAP,4)=TEST_STRIDE*480*4-1; assert_rejected();
-    /* A native 1:1 from the camera menu is no Framing ratio, so only the
-       guides want to draw there, and the layers skip that live view. */
-    reset(); native_aspect=3; GUIDE_STYLE=1; assert_rejected();
+    /* Native 1:1 has its own guide area and no Framing mask. */
+    reset(); native_aspect=3; GUIDE_STYLE=1;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_overlay(5,0,1,0);
 #ifdef FRAMING_XPAN_NATIVE
     /* GR IV: XPan also crops native FRAMING_XPAN_NATIVE photos, so its mask
-       shows there. Other layers do not show in that live view. */
+       shows there. Without that crop, Guides use the native 16:9 area. */
     reset(); native_aspect=FRAMING_XPAN_NATIVE;
     framing_paint(TEST_CANVAS,TEST_BITMAP);
     assert(header[GRKIT_HOST_FRAME_DRAWS/4]==1 && pixels[1]==0x80000000);
     reset(); native_aspect=FRAMING_XPAN_NATIVE;
     header[GRKIT_HOST_FRAME_RATIO/4]=0; GUIDE_STYLE=1;
-    assert_rejected();
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_overlay(2,0,1,0);
 #else
-    /* GR III: the live view shows the layers only in native 3:2. A native
-       aspect without a ratio of its own leaves CORE.ASPECT at 0, so only the
-       guides want to draw there. */
-    reset(); native_aspect=2; GUIDE_STYLE=1; assert_rejected();
+    /* GR III: a native ratio does not activate the stored Framing ratio. */
+    reset(); native_aspect=2; GUIDE_STYLE=1;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    assert_overlay(2,0,1,0);
 #endif
+    reset(); native_aspect=4; GUIDE_STYLE=1; assert_rejected();
     reset(); header[GRKIT_HOST_FRAME_RATIO/4]=RATIO_VALUES;
     framing_paint(TEST_CANVAS,TEST_BITMAP); assert_untouched();
     reset(); framing_paint(TEST_CANVAS+4,TEST_BITMAP); assert_untouched();

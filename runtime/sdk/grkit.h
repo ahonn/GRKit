@@ -29,9 +29,11 @@ typedef signed int s32;
 /* A 32-bit drawing surface of 720 x 480 pixels over the still live view. A
    pixel holds red in its low byte, then green, blue, and alpha in its high
    byte (bytes R, G, B, A in memory), as the native graphics layer reads it.
-   `area` is the capture area that the surface shows: 0 for the full 3:2
-   area, else the ratio value of the crop (CORE.ASPECT). `box` is its photo
-   area {left, top, right, bottom}. */
+   `area` identifies the displayed ratio: 0 for 3:2, otherwise a CORE.ASPECT
+   ratio value. `box` is {left, top, right, bottom}. Layers bound to CORE.ASPECT
+   receive the composition frame; other layers receive the capture area.
+   In guides-only mode, the composition frame can be smaller than the capture
+   area. In crop mode, ADJ previews supply the highlighted crop to both. */
 #ifndef GRKIT_CORE_SURFACE
 typedef struct {
     u32 data;
@@ -108,11 +110,13 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   2 medium, 3 strong, 4 extra strong.
      CORE.GRAIN_SIZE  4 values: the grain size, 0 Auto (by the ISO of the
                   shot), 1 small, 2 medium, 3 large.
-     CORE.ASPECT  8 values: the aspect of still pictures, 0 native 3:2, 1
+     CORE.ASPECT  8 values: the composition ratio, 0 Off, 1
                   XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6. Each
                   camera offers some of them, and a choice page shows only
-                  those. A ratio that the camera has natively sets the native
-                  aspect. The core crops the others (Surface.area). */
+                  those. Crop mode selects native 3:2 and crops it. Guides-only
+                  mode displays the frame on native 3:2 without cropping.
+     CORE.ASPECT_MODE  2 values: 0 Crop (default), 1 Guides Only. A module
+                  without this capability retains crop behavior. */
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */

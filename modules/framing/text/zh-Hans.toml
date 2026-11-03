@@ -6,6 +6,10 @@ summaries = ["关闭", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"]
 [settings."CORE.ASPECT"]
 label = "画幅比例"
 
+[settings."CORE.ASPECT_MODE"]
+label = "模式"
+values = ["裁切拍摄", "仅辅助构图"]
+
 [settings.MASK]
 label = "遮罩"
 values = ["暗色", "黑色", "边框线"]

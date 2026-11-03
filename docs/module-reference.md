@@ -209,12 +209,14 @@ The capabilities are public settings of the core. A module uses one by its name 
 | Name | Values | Meaning |
 | --- | --- | --- |
 | `CORE.TONE` | 0 Off, then n + 1 for installed effect n | The effect of still pictures and the live view. The core installs the effects only when a loaded module uses `CORE.TONE`. |
-| `CORE.ASPECT` | 8: 0 native 3:2, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The aspect of still pictures. |
+| `CORE.ASPECT` | 8: 0 Off, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The selected crop or composition ratio, according to `CORE.ASPECT_MODE`. |
+| `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops recorded pictures or only marks composition in the live view. The default is Crop. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
-- `CORE.ASPECT`: a page shows only the ratios that the camera offers. The core crops each ratio from the native 3:2, also a ratio that the camera has natively. A layer gets the crop in `Surface.area` and `Surface.box`. `setting_set` with a ratio that the camera does not offer does nothing.
+- `CORE.ASPECT`: a page shows only the ratios that the camera offers. `setting_set` with an unsupported ratio does nothing. In Crop mode, selecting a ratio sets the native aspect to 3:2 and crops recorded pictures. In Guides Only mode, selecting a ratio keeps the native aspect and recorded picture dimensions.
+- `CORE.ASPECT_MODE`: Crop keeps the existing output behavior. Guides Only shows the selected ratio in the native 3:2 live view without setting a recorded crop. Other native aspects hide this composition frame. Changing the mode keeps the Framing mask setting.
 
 ## Registrations
 
@@ -252,8 +254,17 @@ The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, 
 | --- | --- |
 | `data` | the address of the pixels. Use `SURFACE_PIXEL(s, x, y)` to address a pixel. |
 | `stride` | the distance between rows, in pixels |
-| `area` | the capture area that the surface shows: 0 for the full 3:2 area, else the `CORE.ASPECT` value of the crop |
-| `box` | the photo area {left, top, right, bottom} |
+| `area` | the displayed area: 0 for full 3:2, otherwise a ratio value from `CORE.ASPECT`. See the layer rules below. |
+| `box` | the displayed area {left, top, right, bottom}, with right and bottom excluded |
+
+A layer normally receives the actual photo area, including the camera's native aspect ratio.
+A layer whose setting is `CORE.ASPECT` receives the selected framing area instead.
+This also applies in Guides Only mode, where the framing area does not change the recorded photo.
+Ordinary Guides keep the native photo area in that mode.
+
+In ADJ, a `CORE.ASPECT` layer previews the highlighted ratio.
+In Crop mode, the other layers also preview that photo area.
+In Guides Only mode, the other layers keep the actual photo area.
 
 Layers paint in ascending `order`. A layer with the same order as another paints after the layers of earlier modules. The official layers use these orders:
 

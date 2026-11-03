@@ -1,6 +1,6 @@
-# Framing: the aspect of still pictures. The page sets CORE.ASPECT, and the
-# core crops each ratio from the native 3:2. The layers show the crop in the
-# live view.
+# Framing: a ratio for cropped pictures or composition only. CORE.ASPECT_MODE
+# selects the output behavior. The layers show the selected ratio in the
+# live view in either mode.
 id = "FRAMING"
 version = 1
 # The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
@@ -17,9 +17,9 @@ tiles = [
     "tiles/6-5-4.png",
     "tiles/7-7-6.png",
 ]
-uses = ["CORE.ASPECT"]
+uses = ["CORE.ASPECT", "CORE.ASPECT_MODE"]
 
-# The mask outside the photo area: 0 dark (black at 50%), 1 black, 2 frame
+# The mask outside the framing area: 0 dark (black at 50%), 1 black, 2 frame
 # lines only.
 [[settings]]
 key = "MASK"
@@ -37,11 +37,11 @@ public = true
 [page]
 setting = "CORE.ASPECT"
 off_row = true
-settings = ["CORE.ASPECT", "MASK", "LABEL"]
+settings = ["CORE.ASPECT", "CORE.ASPECT_MODE", "MASK", "LABEL"]
 # The GRKit section of MENU turns each ratio on or off for ADJ.
 options = true
 
-# The mask stays in each display, because it shows the capture area.
+# The mask stays in each display and shows the selected framing area.
 [[layers]]
 paint = "framing_mask"
 setting = "CORE.ASPECT"

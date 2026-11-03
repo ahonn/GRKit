@@ -22,16 +22,23 @@ static __attribute__((unused)) void tone_store(volatile u32 *h,u32 value) {
     tone_stored(h);
 }
 
-/* Set CORE.ASPECT to a value that the target offers. Each value needs the
-   native 3:2, which the native setter requests. A crop then sends the
-   request again, so the capture hook applies the new crop. */
+/* Publish geometry before requesting a capture change: a shot may start
+   before the next live-view bind updates the cached geometry. */
+static __attribute__((unused)) void aspect_refresh(volatile u32 *h) {
+    h[GRKIT_HOST_FRAME_CROP/4]=capture_aspect_value(h);
+    aspect_request();
+}
+
+/* Capture crops use native 3:2. A composition choice preserves the native
+   aspect, even while it cannot display its frame in that aspect. */
 static __attribute__((unused)) void aspect_store(volatile u32 *h,u32 value) {
     h[GRKIT_HOST_FRAME_RATIO/4]=value;
-    if(aspect_native()) {
+    if(!framing_guides_only(h) && aspect_native()) {
+        h[GRKIT_HOST_FRAME_CROP/4]=framing_crop(h);
         aspect_set_native(0);
         if(!value) return;
     }
-    aspect_request();
+    aspect_refresh(h);
 }
 
 /* Set a setting. A value that the setting does not offer does nothing. A
@@ -39,10 +46,16 @@ static __attribute__((unused)) void aspect_store(volatile u32 *h,u32 value) {
 static __attribute__((unused)) void setting_store(volatile u32 *h,u32 handle,u32 value) {
     volatile u32 *t;
     if(IS_CORE_SETTING(handle)) {
-        u32 old=setting_value(h,handle);
+        /* A saved ratio can be hidden by the native aspect. Compare the
+           stored selection so clearing that hidden ratio is persisted. */
+        u32 old=handle==GRKIT_CORE_ASPECT ? h[GRKIT_HOST_FRAME_RATIO/4] : setting_value(h,handle);
         if(!setting_offered(h,handle,value)) return;
         if(handle==GRKIT_CORE_TONE) tone_store(h,value);
         else if(handle==GRKIT_CORE_ASPECT) aspect_store(h,value);
+        else if(handle==GRKIT_CORE_ASPECT_MODE) {
+            h[GRKIT_HOST_ASPECT_MODE/4]=value;
+            aspect_refresh(h);
+        }
         else h[core_setting_words[CORE_SETTING(handle)]/4]=value;
         if(old!=value) {
             GRKIT_STATE_CHANGED(h);

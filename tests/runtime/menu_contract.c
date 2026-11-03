@@ -8,8 +8,9 @@
 static unsigned test_movie;
 #define ADJ_MOVIE(controller) ((void)(controller), test_movie)
 #undef MENU_FRAMING_REQUEST
-static unsigned framing_requests;
-#define MENU_FRAMING_REQUEST() (++framing_requests)
+static unsigned framing_requests, requested_crop;
+static unsigned record_framing_request(void);
+#define MENU_FRAMING_REQUEST() record_framing_request()
 /* The native aspect that the camera applies, and the native setter calls. */
 #undef MENU_NATIVE_ASPECT
 #undef MENU_SET_NATIVE_ASPECT
@@ -179,6 +180,11 @@ static unsigned char *mapped(unsigned address)
 #define CURRENT_ICON(row) module_icon(current_index(test_header), current_module(test_header)->icon(test_header, (row)))
 
 static volatile u32 test_header[GRKIT_HOST_HEADER_SIZE / 4];
+static unsigned record_framing_request(void)
+{
+    requested_crop = test_header[GRKIT_HOST_FRAME_CROP / 4];
+    return ++framing_requests;
+}
 static u16 text_arena[GRKIT_TEXT_SIZE / 2] __attribute__((aligned(4)));
 static const u16 *text_at(u32 address)
 {
@@ -377,7 +383,7 @@ static void reset(void)
     memset(page_texts, 0, sizeof page_texts);
     text_count = 0;
     view_calls = 0;
-    framing_requests = native_aspect_value = native_sets = live_view_stops = 0;
+    framing_requests = requested_crop = native_aspect_value = native_sets = live_view_stops = 0;
     native_changes = native_applies = native_events = 0;
     factory_calls = factory_top = 0;
     test_language = test_movie = 0;
@@ -910,6 +916,51 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
     assert(!menu_back(test_header));
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = FRAMING_ROW;
     assert(same(current_module(test_header)->summary(test_header), ratio_summaries[CROP_RATIO]));
+}
+
+static void framing_modes_publish_capture_geometry_before_the_next_frame(void)
+{
+    volatile u32 *h = test_header;
+    reset();
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_ASPECT_MODE_BIT;
+    for (u32 row = 1; row < ROW_COUNT; ++row) {
+        u32 ratio = ratio_rows[row], requests;
+        setting_store(h, GRKIT_CORE_ASPECT, ratio);
+        assert(requested_crop == ratio && h[GRKIT_HOST_FRAME_CROP / 4] == ratio);
+        requests = framing_requests;
+        setting_store(h, GRKIT_CORE_ASPECT_MODE, 1);
+        assert(framing_requests == requests + 1 && requested_crop == 0);
+        assert(h[GRKIT_HOST_FRAME_CROP / 4] == 0 && framing_crop(h) == 0);
+        assert(h[GRKIT_HOST_FRAME_RATIO / 4] == ratio && setting_value(h, GRKIT_CORE_ASPECT) == ratio);
+        /* No live-view bind occurs between the setting and these assertions. */
+        setting_store(h, GRKIT_CORE_ASPECT_MODE, 0);
+        assert(framing_requests == requests + 2 && requested_crop == ratio);
+        assert(h[GRKIT_HOST_FRAME_CROP / 4] == ratio);
+    }
+    /* Composition choices and Off preserve the native output aspect. */
+    setting_store(h, GRKIT_CORE_ASPECT_MODE, 1);
+    for (u32 native = 1; native < 4; ++native) {
+        u32 sets = native_sets, stops = live_view_stops;
+        native_aspect_value = native;
+        setting_store(h, GRKIT_CORE_ASPECT, 1);
+        assert(native_aspect_value == native && native_sets == sets && live_view_stops == stops);
+        assert(h[GRKIT_HOST_FRAME_RATIO / 4] == 1 && requested_crop == 0);
+        u32 changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+        setting_store(h, GRKIT_CORE_ASPECT, 0);
+        assert(native_aspect_value == native && native_sets == sets && live_view_stops == stops);
+        assert(h[GRKIT_HOST_FRAME_RATIO / 4] == 0 && requested_crop == 0);
+        /* The hidden stored ratio still changed and must reach STATE.TXT. */
+        assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    }
+#ifdef FRAMING_XPAN_NATIVE
+    /* GR IV keeps capture id 2 while its geometry changes between XPan and 16:9. */
+    native_aspect_value = FRAMING_XPAN_NATIVE;
+    setting_store(h, GRKIT_CORE_ASPECT, 1);
+    setting_store(h, GRKIT_CORE_ASPECT_MODE, 0);
+    assert(native_aspect_value == FRAMING_XPAN_NATIVE && requested_crop == 1);
+    setting_store(h, GRKIT_CORE_ASPECT_MODE, 1);
+    assert(native_aspect_value == FRAMING_XPAN_NATIVE && requested_crop == 0);
+#endif
 }
 
 /* An ADJ exit that GRKit did not start, such as a half-press of the
@@ -1667,17 +1718,61 @@ static void the_switch_stops_each_module_at_once(void)
     assert(selected_icon(h) == 0x8000);
     assert(visible_modules(h) >> 2 & 1 && !(visible_modules(h) >> 3 & 1));
     settings_memory[2 + 6 * 3 + 1] = 0;
-    /* In a native aspect other than 3:2, the capture keeps that aspect:
-       no request. */
+    /* Refresh geometry in other native aspects too, without changing the native choice. */
     native_aspect_value = 1;
     manage_set_all_off(h, 1);
-    assert(framing_requests == 2);
+    assert(framing_requests == 3 && native_aspect_value == 1 && requested_crop == 0);
     manage_set_all_off(h, 0);
+    assert(framing_requests == 4 && native_aspect_value == 1);
     native_aspect_value = 0;
     /* In safe mode no module loads, and the switch does not show. */
     for (u32 i = 0; i < 3; ++i) manage_memory[MANAGE_ENTRY(i)] = MANAGE_SAFE;
     assert(!manage_switch_shown(h) && !(visible_modules(h) >> SWITCH_MODULE & 1));
     h[GRKIT_HOST_ACTIVE / 4] = 0;
+}
+
+static void stopping_the_mode_provider_restores_legacy_capture_geometry(void)
+{
+    volatile u32 *h = test_header;
+    reset();
+    install_module_list();
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] = GRKIT_CORE_ASPECT_BIT;
+    manage_memory[MANAGE_ENTRY(1) + MANAGE_USES / 4] = GRKIT_CORE_ASPECT_MODE_BIT;
+    manage_suspend(h);
+    setting_store(h, GRKIT_CORE_ASPECT, 1);
+    setting_store(h, GRKIT_CORE_ASPECT_MODE, 1);
+    assert(requested_crop == 0);
+    for (u32 native = 0; native < 4; ++native) {
+        u32 requests = framing_requests;
+        u32 crop = !native || FRAMING_CROP_KEEPS(native, 1) ? 1 : 0;
+        native_aspect_value = native;
+        setting_store(h, manage_off_handle(h, 1), 1);
+        manage_off_changed(h);
+        assert(h[GRKIT_HOST_CAPABILITIES / 4] == GRKIT_CORE_ASPECT_BIT);
+        assert(h[GRKIT_HOST_ASPECT_MODE / 4] == 1 && framing_crop(h) == 1);
+        assert(framing_requests == requests + 1 && requested_crop == crop);
+        assert(h[GRKIT_HOST_FRAME_CROP / 4] == crop && native_aspect_value == native);
+        setting_store(h, manage_off_handle(h, 1), 0);
+        manage_off_changed(h);
+        assert(framing_requests == requests + 2 && requested_crop == 0);
+        assert(h[GRKIT_HOST_FRAME_CROP / 4] == 0 && framing_crop(h) == 0);
+    }
+    /* Stopping Framing clears XPan geometry even when GR IV keeps native capture id 2. */
+#ifdef FRAMING_XPAN_NATIVE
+    native_aspect_value = FRAMING_XPAN_NATIVE;
+#else
+    native_aspect_value = 0;
+#endif
+    setting_store(h, GRKIT_CORE_ASPECT_MODE, 0);
+    assert(requested_crop == 1);
+    setting_store(h, manage_off_handle(h, 0), 1);
+    manage_off_changed(h);
+    assert(h[GRKIT_HOST_CAPABILITIES / 4] == GRKIT_CORE_ASPECT_MODE_BIT);
+    assert(requested_crop == 0 && h[GRKIT_HOST_FRAME_CROP / 4] == 0 && framing_selection(h) == 0);
+    setting_store(h, manage_off_handle(h, 0), 0);
+    manage_off_changed(h);
+    assert(requested_crop == 1 && h[GRKIT_HOST_FRAME_CROP / 4] == 1 && framing_selection(h) == 1);
 }
 
 /* ADJ Order has a row for each module that ADJ can show: here each listed
@@ -2709,6 +2804,8 @@ int main(void)
     the_root_lists_the_official_modules();
     module_tiles_follow_the_effect_icons();
     the_framing_page_sets_the_ratios_of_the_target();
+    framing_modes_publish_capture_geometry_before_the_next_frame();
+    stopping_the_mode_provider_restores_legacy_capture_geometry();
     the_guides_page_commits_only_its_style();
     an_exit_from_a_page_commits_the_highlighted_row();
     the_date_imprint_page_lists_its_styles();

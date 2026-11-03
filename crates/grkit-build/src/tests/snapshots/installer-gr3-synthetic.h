@@ -93,7 +93,7 @@ static const u32 guard_symbols[] = {};
 #define LEGACY_STATE_PATH "/media/storage1/SCRIPT/PLUGINS/STATE.TXT"
 #define LEGACY_STATE_TMP_PATH "/media/storage1/SCRIPT/PLUGINS/STATE.TMP"
 #define LEGACY_EFFECTS_PATH "/media/storage1/SCRIPT/PLUGINS/EFFECTS"
-#define CORE_STATE_IDS 861965461,484706023,790270076,977751003
+#define CORE_STATE_IDS 861965461,484706023,790270076,977751003,826089556
 #define LEGACY_STATE_COUNT 6U
 #define LEGACY_STATE_FROM 495043802U,684634731U,161811731U,541741532U,957718554U,733922165U
 #define LEGACY_STATE_TO 861965461U,484706023U,604351797U,157666443U,247126882U,790270076U
@@ -106,8 +106,8 @@ static const u32 guard_symbols[] = {};
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
-static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE"};
-static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40};
+static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE","CORE.ASPECT_MODE"};
+static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc};
 #define RTOS_EXECUTABLE_END 0x55000000U
 #define CORE_EXPORT_COUNT 0U
 static const u32 core_exports[] = {};

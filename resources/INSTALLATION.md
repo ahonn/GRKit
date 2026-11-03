@@ -38,8 +38,15 @@ Open ADJ and select the sixth entry, GRK. GRKit loads a few seconds after power-
 Photo: [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/) by nagi usano, [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 
 - **Film Look:** highlight an effect to preview it. Press OK to keep it. Press Fn to adjust the Standard parameters of the effect. On the GRK menu, press Fn on the Film Look row to adjust the selected effect. Each effect keeps its own adjustments, and they do not change the camera's Image Control settings.
-- **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Each ratio sets the native aspect ratio to 3:2, and the viewfinder dims the area outside the photo. Another aspect ratio in the camera menu pauses Framing. DNG files keep the full sensor image and record the crop. A raw converter that applies the recorded crop shows only the photo area.
-- **Guides:** select a guide style. Press Fn to set the color, the opacity, and whether the lines also show while DISP hides the shooting information. The lines show only in the viewfinder.
+- **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Press Fn to set **Mode** to **Crop** or **Guides Only**.
+
+The default **Crop** mode keeps the existing behavior. Selecting a ratio sets the camera's aspect ratio to 3:2 and crops JPEG photos. DNG files keep the full sensor data and record a default crop. RAW software that applies this crop initially shows only the selected area. Selecting another native aspect ratio pauses cropping.
+
+In **Guides Only** mode, the live view shows the selected ratio for composition. It does not change the camera's aspect ratio, JPEG dimensions, or RAW crop settings. The frame appears only with the camera's native 3:2 aspect ratio. Other native ratios hide the frame.
+
+The **Mask** setting selects Dark, Black, or Frame Lines in either mode. Frame Lines alone does not disable cropping. Changing Mode keeps the Mask setting.
+
+- **Guides:** select a guide style. Press Fn to set the color, the opacity, and whether the lines also show while DISP hides the shooting information. The lines show only in the viewfinder. Guides follow the actual photo area, including native aspect ratios. In Guides Only mode, they follow the native photo area, not the composition frame.
 - **Date Imprint:** select a date style. Press Fn to set **Date Style** and **Date Font**, the digits: Classic, GR1s, or GR II. Photos get the date at the bottom right. While it is on, the viewfinder shows DATE with the full shooting information.
 - **Glow:** Bloom spreads light around highlights, while Halation adds a red-orange film halo. In ADJ, open Glow and select Bloom or Halation. Press OK to toggle the effect, or Fn to open its Enable and Strength settings. MENU opens the same settings. Each effect starts disabled at Medium strength, which you can set to Weak, Medium, or Strong. Disabling an effect keeps its strength. The effects apply only to JPEG photos, with no live-view preview.
 - **Grain:** select Weak, Medium, Strong, or Extra Strong. Press Fn to set **Size**: Auto (by ISO), Small, Medium, or Large. Only photos get the grain.

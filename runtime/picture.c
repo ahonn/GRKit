@@ -313,7 +313,7 @@ static u32 module_filters(volatile u32 *h) {
 /* The visible-area id of a shot: the capture aspect, with the crop of
    CORE.ASPECT when a module uses it. */
 static u32 shot_area(volatile u32 *h) {
-    u32 ratio=CAPABILITY_USED(h,GRKIT_CORE_ASPECT) ? h[GRKIT_HOST_FRAME_RATIO/4] : 0;
+    u32 ratio=framing_crop(h);
     return PICTURE_AREA_ID(PICTURE_NATIVE_ASPECT(),ratio);
 }
 /* The visible-area id of a RAW development, from the size of its main

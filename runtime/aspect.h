@@ -1,14 +1,14 @@
 #ifndef GRKIT_ASPECT_H
 #define GRKIT_ASPECT_H
-/* The capability CORE.ASPECT (grkit_core::capabilities): the aspect of still
-   pictures. Its value is a ratio value: 0 for the native 3:2, then XPan
+/* The capability CORE.ASPECT (grkit_core::capabilities): the selected
+   composition ratio. Its value is 0 for Off, then XPan
    65:24, 16:9, 4:3, 2.35:1, 1:1, 5:4, and 7:6 (GRKIT_CORE_ASPECT_VALUES). Each
    target offers the ratios of FRAMING_RATIO_ROWS.
 
-   The core crops each ratio, also one that the camera has natively, so each
-   ratio has the same live view and mask. The crop (GRKIT_HOST_FRAME_RATIO)
-   is the capture area that the capture.aspect hooks and the overlay read.
-   The camera keeps the native 3:2, and the resident loader saves the crop.
+   CORE.ASPECT_MODE selects cropping (0, the default) or guides only (1).
+   GRKIT_HOST_FRAME_RATIO keeps the selection in both modes. Capture paths
+   use the effective crop, which is zero in guides-only mode. The resident
+   loader saves both settings.
 
    The includer defines u8, u32, the header fields (runtime/abi.h), and
    aspect_native(). runtime/setting_store.h sets the value. */
@@ -30,12 +30,19 @@ static __attribute__((unused)) u32 framing_row(u32 value) {
     for(row=1;row<sizeof(framing_rows);++row) if(framing_rows[row]==value) return row;
     return 0;
 }
-/* The committed crop: a ratio value that the target offers, or 0. Without a
-   module that uses CORE.ASPECT, nothing crops. */
-static __attribute__((unused)) u32 framing_crop(volatile u32 *h) {
+/* The selected ratio, independent of whether it crops recorded pictures. */
+static __attribute__((unused)) u32 framing_selection(volatile u32 *h) {
     u32 ratio=h[GRKIT_HOST_FRAME_RATIO/4];
     if(!CAPABILITY_USED(h,GRKIT_CORE_ASPECT)) return 0;
     return ratio && framing_row(ratio) ? ratio : 0;
+}
+/* A module that does not use ASPECT_MODE keeps the existing crop behavior. */
+static __attribute__((unused)) u32 framing_guides_only(volatile u32 *h) {
+    return CAPABILITY_USED(h,GRKIT_CORE_ASPECT_MODE) && h[GRKIT_HOST_ASPECT_MODE/4]==1;
+}
+/* Only capture paths use this ratio. A composition frame never crops. */
+static __attribute__((unused)) u32 framing_crop(volatile u32 *h) {
+    return framing_guides_only(h) ? 0 : framing_selection(h);
 }
 /* Whether the target offers a ratio value. */
 static __attribute__((unused)) u32 aspect_offered(u32 value) { return !value || framing_row(value); }
@@ -50,12 +57,17 @@ static __attribute__((unused)) u32 aspect_offered(u32 value) { return !value || 
 #endif
 #endif
 
-/* The value of CORE.ASPECT: the crop in native 3:2, or a crop that applies
-   in the native aspect, else Off. A native aspect that the user sets in the
-   camera menu is not a Framing ratio, so it reads as Off. */
+/* CORE.ASPECT shows the selected composition in native 3:2. Crop mode also
+   permits the target's supported native-aspect crops. Other native aspects
+   read as Off without discarding the saved selection. */
 static __attribute__((unused)) u32 aspect_value(volatile u32 *h) {
-    u32 native=aspect_native(), crop=framing_crop(h);
-    return !native || (crop && FRAMING_CROP_KEEPS(native,crop)) ? crop : 0;
+    u32 native=aspect_native(), ratio=framing_selection(h);
+    return !native || (!framing_guides_only(h) && ratio && FRAMING_CROP_KEEPS(native,ratio)) ? ratio : 0;
+}
+
+/* The selected crop that applies to the current native capture geometry. */
+static __attribute__((unused)) u32 capture_aspect_value(volatile u32 *h) {
+    return framing_guides_only(h) ? 0 : aspect_value(h);
 }
 
 #endif

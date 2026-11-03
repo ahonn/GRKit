@@ -518,6 +518,44 @@ static void shot_contract(void)
     grkit_export_picture_shot(&s, (u8 *)&info);
     assert(!(info.known & 1) && info.known & 0x10);
 }
+static void composition_frames_keep_the_native_photo_area(void)
+{
+    static const u32 crop_areas[] = {0, 4, 2, 1, 5, 3, 6, 7};
+    struct box baseline[3];
+    encode_setup();
+    fill_planes(40, 128, 128);
+    STAMP_STYLE = 3;
+    picture_encode(0, MESSAGE);
+    for (u32 plane = 0; plane < 3; ++plane) baseline[plane] = changes(plane, 0);
+    for (u32 ratio = 1; ratio < 8; ++ratio) {
+        encode_setup();
+        fill_planes(40, 128, 128);
+        STAMP_STYLE = 3;
+        header[GRKIT_HOST_FRAME_RATIO / 4] = ratio;
+        header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_ASPECT_MODE_BIT;
+        assert(shot_area(header) == crop_areas[ratio]);
+        header[GRKIT_HOST_ASPECT_MODE / 4] = 1;
+        assert(shot_area(header) == 0);
+        picture_encode(0, MESSAGE);
+        /* Every encoded size places the stamp as for the full native photo. */
+        for (u32 plane = 0; plane < 3; ++plane) {
+            struct box actual = changes(plane, 0), expected = baseline[plane];
+            assert(actual.lit == expected.lit && actual.left == expected.left && actual.top == expected.top);
+            assert(actual.right == expected.right && actual.bottom == expected.bottom);
+        }
+        header[GRKIT_HOST_CAPABILITIES / 4] &= ~GRKIT_CORE_ASPECT_MODE_BIT;
+        assert(shot_area(header) == crop_areas[ratio]);
+    }
+    /* A composition frame never overrides a native aspect chosen by the camera. */
+    header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_ASPECT_MODE_BIT;
+    header[GRKIT_HOST_FRAME_RATIO / 4] = 1;
+    for (u32 native = 1; native < 4; ++native) {
+        native_aspect = native;
+        assert(shot_area(header) == PICTURE_NATIVE_ID(native));
+    }
+    native_aspect = 0;
+}
+
 int main(void)
 {
 #ifdef GRAIN_FILL_PITCH
@@ -525,6 +563,7 @@ int main(void)
 #endif
     static const short identity[9] = {8192, 0, 0, 0, 8192, 0, 0, 0, 8192};
     shot_contract();
+    composition_frames_keep_the_native_photo_area();
     /* picture_white: input 255 of the curves after the post matrix, and 255
        each without a record. */
     {

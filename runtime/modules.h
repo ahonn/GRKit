@@ -250,7 +250,7 @@ static u32 module_layers_on(volatile u32 *h) {
 static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {
     u32 module=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE ? h[GRKIT_HOST_MODULE/4] : 0;
     u32 slot=module, choice=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && slot<module_pages(h);
-    u32 ratio=framing_crop(h), handle, value;
+    u32 ratio=framing_selection(h), handle, value;
     h[GRKIT_HOST_MODULE_PREVIEW/4]=0;
     if(movie) { h[GRKIT_HOST_FRAME_PREVIEW/4]=0; return; }
     if(choice) {

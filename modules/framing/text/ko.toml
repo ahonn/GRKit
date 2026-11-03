@@ -6,6 +6,10 @@ summaries = ["꺼짐", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"]
 [settings."CORE.ASPECT"]
 label = "화상비율"
 
+[settings."CORE.ASPECT_MODE"]
+label = "모드"
+values = ["자르기", "구도 가이드만"]
+
 [settings.MASK]
 label = "마스크"
 values = ["어둡게", "검정", "프레임 선"]
