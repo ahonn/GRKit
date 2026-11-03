@@ -459,9 +459,9 @@ pub fn port(base: &FirmwareImage, other: &[u8], radius: u32) -> Result<Port> {
 /// Whether the installer relocates the base target to the other build: each
 /// address has a port without a review, and the plan of the installer, within
 /// `relocation::RADIUS`, resolves each source of each address to that port,
-/// with room for the private tail. The plan of a build has more symbols, such
-/// as branch targets, so a test of the build on the other firmware must still
-/// confirm it.
+/// with an executable tail. The plan of a build has more symbols, such as
+/// branch targets, and its actual code span must fit. A test of that build on
+/// the other firmware must still confirm both.
 fn relocatable(base: &FirmwareImage, other: &[u8], addresses: &[Ported]) -> Result<bool> {
     if addresses
         .iter()
@@ -480,9 +480,8 @@ fn relocatable(base: &FirmwareImage, other: &[u8], addresses: &[Ported]) -> Resu
         }
     }
     let resolution = relocation::resolve(&planner.finish(), other, relocation::RADIUS)?;
-    let (tail, end) = target.layout.tail;
     Ok(resolution.complete
-        && relocation::DATA_START - resolution.layout.tail >= end - tail
+        && resolution.layout.tail < components::RTOS_EXECUTABLE_END
         && symbols
             .iter()
             .zip(addresses)
@@ -950,7 +949,6 @@ impl Port {
             push(out, 0, "};", "");
         }
 
-        let (tail, end) = layout.tail;
         push(out, 0, "", "");
         push(out, 0, "pub const LAYOUT: Layout = Layout {", "");
         push(
@@ -959,16 +957,7 @@ impl Port {
             &format!("define: {:?},", layout.define),
             &base_note("the definition that selects the new header in runtime/firmware.h"),
         );
-        push(
-            out,
-            4,
-            &format!(
-                "tail: ({:#x}, {:#x}),",
-                self.layout.tail,
-                self.layout.tail + (end - tail)
-            ),
-            "",
-        );
+        push(out, 4, &format!("tail: {:#x},", self.layout.tail), "");
         for field in [
             "contexts: CONTEXTS,",
             "sites: SITES,",

@@ -120,6 +120,7 @@ impl Fit {
     pub fn params(&self) -> Params {
         let unit = |m: [i16; 9]| m.map(|v| v as f64 / 8192.0);
         Params {
+            native: None,
             matrix: unit(self.matrix),
             curves: self.curves.map(|c| c.map(f64::from)),
             post: self.post_matrix.map_or(IDENTITY, unit),
@@ -300,6 +301,7 @@ impl Candidate {
     /// The parameters with the sectors as the camera rounds them.
     fn quantized(&self) -> Params {
         Params {
+            native: None,
             matrix: matrix_from(&self.offsets),
             curves: self.curves,
             post: self.post,
@@ -366,6 +368,7 @@ impl Problem {
     fn matrix(&self, offsets: &[f64], curves: &[[f64; 256]; 3], post: &[f64; 9]) -> Vec<f64> {
         minimize(offsets, 30, &|p, out| {
             let params = Params {
+                native: None,
                 matrix: matrix_from(p),
                 curves: *curves,
                 post: *post,
@@ -398,6 +401,7 @@ impl Problem {
         sectors: Option<&hue::Stage>,
     ) -> f64 {
         let params = Params {
+            native: None,
             matrix: matrix_from(offsets),
             curves: *curves,
             post: *post,
@@ -421,6 +425,7 @@ impl Problem {
         sectors: Option<&hue::Stage>,
     ) -> [f64; 9] {
         let params = Params {
+            native: None,
             matrix: *matrix,
             curves: *curves,
             post: IDENTITY,

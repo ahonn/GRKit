@@ -145,4 +145,8 @@
 #define SHOT_PROGRAM_CODES 2,4,3,0,1,1,1,1,1
 #define SHOT_METERING (SHOT_SETTINGS + 0x8e)
 
+/* The native processing applies saturation before the tone curves. GR IV
+   applies it after them, so a native look moves it (runtime/picture.c). */
+#define NATIVE_SATURATION_BEFORE_CURVES 1
+
 #endif

@@ -1,41 +1,83 @@
 use super::*;
 
 #[test]
-fn every_code_region_lies_in_the_tail() {
+fn every_code_region_lies_in_the_tail() -> Result<()> {
     for target in target::TARGETS {
         let layout = target.layout;
-        let (tail, end) = layout.tail;
-        // The decoded image ends where the startup .data copy source ends.
+        let tail = layout.tail;
         assert!(
             tail >= target.data_source + target.data_size,
             "{}",
             target.name
         );
-        // The processing region, then the menu, then Framing after the menu
-        // code, which shares the menu region.
-        let (menu_start, menu_stop) = layout.menu();
-        let mut next = tail;
-        if target.family.processing_source.is_some() {
-            let (start, stop) = layout.processing();
-            assert!(
-                start >= next && start < stop && stop <= menu_start,
-                "{}",
-                target.name
-            );
-            next = stop;
-        }
-        assert!(
-            menu_start >= next && menu_start < menu_stop && menu_stop == end,
-            "{}",
-            target.name
-        );
-        let (start, stop) = layout.framing(menu_start + 0x10);
-        assert!(
-            start > menu_start && start % 0x100 == 0 && stop == end,
-            "{}",
-            target.name
-        );
+        let (processing_start, end) = layout.processing()?;
+        assert_eq!(processing_start, tail + 0x100);
+        assert_eq!(end, components::RTOS_EXECUTABLE_END);
+        // Growth beyond the former 1 KiB Processing partition and 48 KiB
+        // core budget still leaves room for the following component.
+        let processing_end = processing_start + 0x1004;
+        let (menu_start, _) = layout.menu(processing_end)?;
+        assert_eq!(menu_start, tail + 0x1200);
+        let (framing_start, _) = layout.framing(menu_start + 0xc004)?;
+        assert_eq!(framing_start, tail + 0xd300);
+        assert!(framing_start < end);
+        assert!(layout.menu(end).is_err());
+        assert!(layout.framing(u32::MAX).is_err());
     }
+    Ok(())
+}
+
+#[test]
+fn core_span_covers_payloads_and_rejects_invalid_bounds() -> Result<()> {
+    let tail = target::GR3_210.layout.tail;
+    let payload = |address, size, site| Patch {
+        address,
+        points: 0,
+        before: vec![0; size],
+        after: vec![0; size],
+        site,
+    };
+    let mut plan = PatchPlan {
+        patches: vec![
+            payload(tail + 0x100, 0x1004, Some(Anchor::Tail)),
+            payload(tail + 0x1200, 0xc004, Some(Anchor::Tail)),
+        ],
+        relocations: vec![],
+        references: vec![],
+        exports: vec![],
+    };
+    assert_eq!(plan.core_size(tail)?, 0xd300);
+    validate_plan(&plan)?;
+    plan.patches
+        .push(payload(tail + 0x1200, 4, Some(Anchor::Tail)));
+    assert!(validate_plan(&plan).is_err());
+    plan.patches.pop();
+    // A firmware hook does not change the core high-water mark.
+    plan.patches
+        .push(payload(tail - 4, 4, Some(Anchor::Firmware(tail - 4))));
+    assert_eq!(plan.core_size(tail)?, 0xd300);
+    for patch in [
+        payload(tail - 4, 4, Some(Anchor::Tail)),
+        payload(components::RTOS_EXECUTABLE_END - 4, 8, Some(Anchor::Tail)),
+        payload(u32::MAX - 3, 8, Some(Anchor::Tail)),
+        payload(tail + 0x100, 4, None),
+        payload(tail - 4, 8, None),
+    ] {
+        plan.patches = vec![patch];
+        assert!(plan.core_size(tail).is_err());
+    }
+    plan.patches = vec![payload(
+        components::RTOS_EXECUTABLE_END - 4,
+        4,
+        Some(Anchor::Tail),
+    )];
+    assert_eq!(
+        tail + plan.core_size(tail)?,
+        components::RTOS_EXECUTABLE_END
+    );
+    plan.patches.clear();
+    assert_eq!(plan.core_size(tail)?, 0);
+    Ok(())
 }
 
 #[test]
@@ -538,4 +580,29 @@ fn parameter_rows_are_those_of_their_row_kinds() -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The GR IV sources of `grkit_core::gr4_looks`, which the site reads without the build
+/// targets, name the same files, data sections, and type tables as the targets.
+#[test]
+fn gr4_look_sources_match_their_targets() {
+    for source in &grkit_core::gr4_looks::SOURCES {
+        let target = target::TARGETS
+            .iter()
+            .find(|t| t.firmware_sha256 == source.firmware_sha256)
+            .unwrap_or_else(|| panic!("No target for GR IV {}", source.version));
+        assert_eq!(target.firmware, format!("GR IV {}", source.version));
+        let tables = target.image_control.unwrap().tables;
+        assert_eq!(
+            source.layout(),
+            (
+                target.data_start,
+                target.data_source,
+                target.data_size,
+                [tables[0], tables[1]]
+            ),
+            "{}",
+            target.name
+        );
+    }
 }

@@ -110,7 +110,7 @@ fn gr4_installers_select_their_build() -> Result<()> {
         for (other, image, _) in &builds {
             let (result, symbols) = resolve_image(&built.output, &image.body)?;
             if target.name == other.name {
-                let tail = target.layout.tail.0;
+                let tail = target.layout.tail;
                 assert_eq!(result, format!("ok {tail:#x}"), "{}", target.name);
                 assert!(symbols.iter().all(|(pinned, resolved)| pinned == resolved));
             } else {

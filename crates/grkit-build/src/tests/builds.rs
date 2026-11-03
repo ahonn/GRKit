@@ -15,6 +15,22 @@ fn synthetic_arm_build_is_reproducible() -> Result<()> {
         assert_eq!(first.manifest, second.manifest);
         assert_eq!(first.manifest["startup_activation"], "Off");
         assert_eq!(first.manifest["profile"], "production");
+        let memory = &first.manifest["code_memory"];
+        let base = memory["base"].as_u64().unwrap();
+        let end = memory["end"].as_u64().unwrap();
+        assert_eq!(base, u64::from(target.layout.tail));
+        assert_eq!(end - base, memory["used"].as_u64().unwrap());
+        assert_eq!(end % 0x100, 0);
+        assert_eq!(
+            end + memory["available"].as_u64().unwrap(),
+            u64::from(components::RTOS_EXECUTABLE_END)
+        );
+        for component in first.manifest["components"].as_object().unwrap().values() {
+            let start = component["address"].as_u64().unwrap();
+            let stop = component["end"].as_u64().unwrap();
+            assert!(start >= base && stop <= end);
+            assert_eq!(stop - start, component["size"].as_u64().unwrap());
+        }
         assert_eq!(first.manifest["version"], env!("CARGO_PKG_VERSION"));
         // The parameter sampler is shared: both points count its one patch.
         for point in components::Point::ALL {
@@ -63,7 +79,7 @@ fn synthetic_arm_build_is_reproducible() -> Result<()> {
             assert_eq!(&fs::read(first.output.join("sd").join(path))?, bytes);
         }
         let (result, symbols) = resolve_image(&first.output, &body.body)?;
-        let tail = target.layout.tail.0;
+        let tail = target.layout.tail;
         assert_eq!(result, format!("ok {tail:#x}"), "{}", target.name);
         assert!(!symbols.is_empty());
         assert!(
@@ -80,19 +96,13 @@ fn synthetic_arm_build_is_reproducible() -> Result<()> {
     Ok(())
 }
 
+/// Every target links its components into one executable arena without
+/// fixed per-component budgets.
 #[test]
 #[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
 fn synthetic_arm_hooks_match_the_target_tables() -> Result<()> {
     let tools = tools()?;
-    // The regions of GR III, independent of the layout methods.
-    let gr3 = target::GR3_210.layout;
-    assert_eq!(gr3.processing(), (0x540b6100, 0x540b6500));
-    assert_eq!(gr3.menu(), (0x540b6500, 0x540c2000));
-    // Framing starts after the menu code, at the next 256-byte boundary.
-    assert_eq!(gr3.framing(0x540bb3f4), (0x540bb400, 0x540c2000));
-    assert_eq!(gr3.framing(0x540bb400), (0x540bb400, 0x540c2000));
-    assert_eq!(gr3.framing(0), (0x540b6500, 0x540c2000));
-    for target in SYNTHETIC_TARGETS {
+    for target in target::TARGETS {
         synthetic_hooks(target, &tools)?;
     }
     Ok(())
@@ -106,9 +116,22 @@ fn synthetic_hooks(target: &'static target::Target, tools: &Toolchain) -> Result
     fs::write(runtime.join("hooks.h"), components::hooks_header(&body)?)?;
     let layout = target.layout;
     let processing = components::processing(directory.path(), &runtime, &body, tools)?;
-    let menu = components::menu(directory.path(), &runtime, &body, tools)?;
+    let processing_end = processing.patches[0].address + processing.code_size as u32;
+    let menu = components::menu(directory.path(), &runtime, &body, tools, processing_end)?;
     let menu_end = menu.patches[0].address + menu.code_size as u32;
     let framing = components::framing(directory.path(), &runtime, &body, tools, menu_end)?;
+    let framing_end = framing.patches[0].address + framing.code_size as u32;
+    assert!(processing_end <= menu.patches[0].address);
+    assert!(menu_end <= framing.patches[0].address);
+    assert!(framing_end <= components::RTOS_EXECUTABLE_END);
+    eprintln!(
+        "{}: Processing {} bytes, Menu {} bytes, Framing {} bytes; {} bytes remain",
+        target.name,
+        processing.code_size,
+        menu.code_size,
+        framing.code_size,
+        components::RTOS_EXECUTABLE_END - components::aligned_code_end(framing_end)?
+    );
 
     // Thumb DNG code calls an ARM assembly export. Without STT_FUNC on that
     // export, LLD leaves a BL and the camera executes ARM bytes as Thumb.
@@ -156,19 +179,19 @@ fn synthetic_hooks(target: &'static target::Target, tools: &Toolchain) -> Result
         (
             &processing,
             components::Part::Processing,
-            layout.processing(),
+            layout.processing()?,
             [].as_slice(),
         ),
         (
             &menu,
             components::Part::Menu,
-            layout.menu(),
+            layout.menu(processing_end)?,
             layout.instruction_patches,
         ),
         (
             &framing,
             components::Part::Framing,
-            layout.framing(menu_end),
+            layout.framing(menu_end)?,
             layout.framing_patches,
         ),
     ] {

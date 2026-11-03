@@ -76,6 +76,19 @@ export async function openSession(
 }
 
 /**
+ * The card effects that current imports do not replace. A later import can have the same ID as
+ * an effect that was unknown when the card opened. Keep the session's copies so removing that
+ * import makes the card effect available again.
+ */
+export function extraCardEffects(
+  effects: readonly CardEffect[],
+  imported: readonly ImportedEffect[],
+): readonly CardEffect[] {
+  const ids = new Set(imported.map((effect) => effect.id));
+  return effects.filter((effect) => !ids.has(effect.id));
+}
+
+/**
  * The effects of the package for the card: the checked ones. A card effect goes into the package
  * only when it is a package effect that the camera has not started, because then the package list
  * keeps it on the card. An effect of the library or of GRKit 1.2 stays where it is.

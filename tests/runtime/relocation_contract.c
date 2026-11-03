@@ -191,6 +191,21 @@ int main(void)
     put(RELOCATION_STARTUP, 0x53024000U); put(RELOCATION_STARTUP + 8, DATA_SIZE);
     assert(resolve());
 
+    /* The actual core span can grow past the former fixed reservations.
+       Check the free RX space of the running image, not the pinned base. */
+    startup(0x54fdf000U);
+    tables.tail_size = 0x20000U;
+    assert(relocation_startup(&tables, &state));
+    assert(state.tail == 0x54fe0000U);
+    tables.tail_size += 4;
+    assert(!relocation_startup(&tables, &state));
+    tables.tail_size = 0xffffffffU;
+    assert(!relocation_startup(&tables, &state));
+    /* A different build leaves one less page for the same core. */
+    tables.tail_size = 0x20000U;
+    startup(0x54fe0000U);
+    assert(!relocation_startup(&tables, &state));
+
     /* Moving references: a word adds the delta; a branch adds the delta of
        its target minus that of its site, within the ARM branch range. */
     u8 word[4] = {0x08, 0x00, 0x01, 0x53};

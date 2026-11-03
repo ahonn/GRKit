@@ -23,6 +23,16 @@ static char module_names[GRKIT_MODULES_MAX][CATALOG_NAME_SIZE];
 /* The listed modules, the usable ones (bit i), and what they need: script
    words for their data, and code bytes after the tail. */
 static u32 module_count, module_usable, module_words, module_code_bytes;
+/* Core and module code share the executable tail. Check the remaining
+   bytes before adding either size, including when the running image moves
+   the tail. INSTALL calls this before it writes camera memory. */
+static int plan_code(u32 tail, u32 core_bytes, u32 executable_end, u32 *module_start)
+{
+    if (tail > executable_end || core_bytes > executable_end - tail ||
+        module_code_bytes > executable_end - tail - core_bytes) return GRM_NO_ROOM;
+    *module_start = tail + core_bytes;
+    return 0;
+}
 static u8 module_file[MODULE_FILE_MAX];
 static struct grm_module module;
 /* The settings of the usable modules in module order (runtime/setting_table.h):

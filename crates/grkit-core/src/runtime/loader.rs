@@ -367,7 +367,7 @@ fn state_script() -> Vec<String> {
                 ]);
             }
             lines.extend([
-                "if pvalue = 0 goto save_parameters_next".into(),
+                "if pvalue = 0 goto save_toning".into(),
                 format!(
                     "pkey = {PARAMETER_KEY_BASE} + ({} and 32767)",
                     code_word("pindex")
@@ -375,6 +375,23 @@ fn state_script() -> Vec<String> {
                 "int2str line pkey".into(),
                 "filewriteln sfh line".into(),
                 "int2str line pvalue".into(),
+                "filewriteln sfh line".into(),
+                // The Toning of a native look, a stored byte of 1..8.
+                ":save_toning".into(),
+                format!(
+                    "ptone = ({} >> {}) and 255",
+                    record_word("pindex", RECORD_TONING & !3),
+                    RECORD_TONING % 4 * 8
+                ),
+                "if ptone < 1 goto save_parameters_next".into(),
+                "if ptone > 8 goto save_parameters_next".into(),
+                format!(
+                    "pkey = {TONING_KEY_BASE} + ({} and 32767)",
+                    code_word("pindex")
+                ),
+                "int2str line pkey".into(),
+                "filewriteln sfh line".into(),
+                "int2str line ptone".into(),
                 "filewriteln sfh line".into(),
                 ":save_parameters_next".into(),
                 "pindex = pindex + 1".into(),
@@ -617,6 +634,7 @@ mod tests {
             record("pindex", RECORD_PARAMETERS),
             record("pindex", RECORD_PARAMETERS + 4),
             record("pindex", RECORD_PARAMETERS + 8),
+            record("pindex", RECORD_TONING & !3),
         ];
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
