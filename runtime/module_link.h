@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 0U
+#define GRM_ABI_MINOR 1U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U

@@ -240,6 +240,8 @@ A module calls the core only through these functions. The installer links each c
 | `void overlay_label(const Surface *s, u32 label, u32 left, u32 top)` | Draw a label of the core with its top left at (left, top), in the style of the native live-view text. A label that does not fit draws nothing. |
 | `void local_time(GrkitDateTime *out)` | The local time: year, month, day, hour, minute, and second. |
 | `u32 divide(u32 n, u32 d)` | n / d, rounded down, for d > 0. |
+| `void picture_white(const PictureSet *set, u8 white[3])` | The R, G, B white of the effect of a recorded picture: the levels that its brightest light reaches. 255 each without an effect. A color effect ends below 255. Since ABI 2.1. |
+| `void picture_shot(const PictureSet *set, GrkitShot *shot)` | The shooting data of a recorded picture, as its EXIF records it: the exposure (APEX values, the exposure value of the scene, the f-number, the ISO speed, the exposure time), the exposure compensation, the focal length, the program, the metering, the flash, and the capture time. Set `shot->size` to `sizeof(GrkitShot)` first. `known` has a bit for each group of fields that holds a value. Since ABI 2.1. |
 | `u32 timer_start(u32 ms, void (*fire)(u32 arg), u32 arg)` | Call `fire(arg)` once, `ms` milliseconds later, in the App task. Returns a timer, or 0 when no timer is free or the caller is not in the App task. |
 | `void timer_cancel(u32 timer)` | Stop a timer that has not fired. |
 | `u32 ui_toast(GrkitText text, u32 ms)` | Show a message panel for `ms` milliseconds. See [UI](#ui). |
@@ -292,7 +294,7 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.0: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version only adds functions and registration types. A major version changes a layout. In 2.0, each text list also has a Korean text, so the installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
+**ABI version.** `GRKIT_ABI` is 2.1: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version only adds functions and registration types. A major version changes a layout. In 2.0, each text list also has a Korean text, so the installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`. 2.1 adds `picture_white` and `picture_shot`.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, and the imports. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

@@ -23,6 +23,11 @@ volatile u32 *grkit_test_pixels(u32 address);
 volatile u8 *grkit_test_bytes(u32 address);
 /* The time that local_time gives. */
 extern GrkitDateTime grkit_test_time;
+/* The white that picture_white gives, 255 each at start. */
+extern u8 grkit_test_white[3];
+/* The data that picture_shot gives: none known at start. Its `size` is
+   ignored; picture_shot fills the caller's size. */
+extern GrkitShot grkit_test_shot;
 /* The scratch of a PictureSet, GRKIT_PLANE_SCRATCH bytes. */
 extern u8 grkit_test_scratch[];
 /* The pixel at (x, y), and the value of each pixel after grkit_test_clear. */

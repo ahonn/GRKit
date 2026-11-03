@@ -143,5 +143,36 @@ AT(CorePictureSet, record, __builtin_offsetof(PictureSet, reserved));
 LIKE(PictureSet, CorePictureSet, mono);
 LIKE(PictureSet, CorePictureSet, scratch);
 LIKE(PictureSet, CorePictureSet, turns);
+AT(CorePictureSet, shot, __builtin_offsetof(PictureSet, reserved_shot));
 /* A plane filter may use all of the scratch that the core gives each call. */
 SAME(GRKIT_PLANE_SCRATCH, GRKIT_PICTURE_MASKS);
+
+/* GrkitShot: the bytes that picture_shot writes (GRKIT_SHOT_INFO_* in
+   abi.h, runtime/picture.c) and the bits of `known`. */
+SIZE(GrkitShot, GRKIT_SHOT_INFO_BYTES);
+AT(GrkitShot, size, GRKIT_SHOT_INFO_SIZE);
+AT(GrkitShot, known, GRKIT_SHOT_INFO_KNOWN);
+AT(GrkitShot, av, GRKIT_SHOT_INFO_AV);
+AT(GrkitShot, tv, GRKIT_SHOT_INFO_TV);
+AT(GrkitShot, sv, GRKIT_SHOT_INFO_SV);
+AT(GrkitShot, scene_ev, GRKIT_SHOT_INFO_SCENE_EV);
+AT(GrkitShot, compensation, GRKIT_SHOT_INFO_COMPENSATION);
+AT(GrkitShot, exposure_us, GRKIT_SHOT_INFO_EXPOSURE_US);
+AT(GrkitShot, f_number, GRKIT_SHOT_INFO_F_NUMBER);
+AT(GrkitShot, iso, GRKIT_SHOT_INFO_ISO);
+AT(GrkitShot, focal, GRKIT_SHOT_INFO_FOCAL);
+AT(GrkitShot, focal_35mm, GRKIT_SHOT_INFO_FOCAL_35MM);
+AT(GrkitShot, program, GRKIT_SHOT_INFO_PROGRAM);
+AT(GrkitShot, metering, GRKIT_SHOT_INFO_METERING);
+AT(GrkitShot, flash, GRKIT_SHOT_INFO_FLASH);
+AT(GrkitShot, taken, GRKIT_SHOT_INFO_TAKEN);
+AT(GrkitShot, taken.month, GRKIT_SHOT_INFO_TAKEN + 2);
+AT(GrkitShot, taken.second, GRKIT_SHOT_INFO_TAKEN + 6);
+_Static_assert(GRKIT_SHOT_EXPOSURE == GRKIT_SHOT_INFO_KNOWN_EXPOSURE &&
+               GRKIT_SHOT_COMPENSATION == GRKIT_SHOT_INFO_KNOWN_COMPENSATION &&
+               GRKIT_SHOT_FOCAL == GRKIT_SHOT_INFO_KNOWN_FOCAL &&
+               GRKIT_SHOT_TAKEN == GRKIT_SHOT_INFO_KNOWN_TAKEN &&
+               GRKIT_SHOT_FLASH == GRKIT_SHOT_INFO_KNOWN_FLASH &&
+               GRKIT_SHOT_PROGRAM == GRKIT_SHOT_INFO_KNOWN_PROGRAM &&
+               GRKIT_SHOT_METERING == GRKIT_SHOT_INFO_KNOWN_METERING,
+               "GRKIT_SHOT_* bits moved");

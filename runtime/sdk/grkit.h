@@ -15,12 +15,13 @@
 typedef unsigned int u32;
 typedef unsigned short u16;
 typedef unsigned char u8;
+typedef signed int s32;
 
 /* The ABI of this file. The installer loads a module whose major version
    equals that of the core and whose minor version is not larger. A minor
    version only adds functions and registration types. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 0U
+#define GRKIT_ABI_MINOR 1U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -232,7 +233,9 @@ typedef struct { u32 y, c, width, height, pitch, half, left, top, right, bottom;
    `scratch` holds GRKIT_PLANE_SCRATCH bytes for this call. The planes keep
    the landscape layout of the sensor in each posture of the camera; `turns`
    is the quarter turns clockwise that show the picture upright, as its EXIF
-   Orientation does: 0 (Orientation 1), 1 (6), 2 (3), or 3 (8). */
+   Orientation does: 0 (Orientation 1), 1 (6), 2 (3), or 3 (8). The core
+   reads `reserved_shot` for picture_shot (since ABI 2.1); a module does
+   not use it, as it does not use `reserved`. */
 typedef struct {
     Plane planes[4];
     u32 count;
@@ -240,6 +243,7 @@ typedef struct {
     u32 mono;
     u8 *scratch;
     u32 turns;
+    u32 reserved_shot;
 } PictureSet;
 /* The address of the chroma row of luma row y. */
 static inline u32 chroma_row(const Plane *p, u32 y) { return p->c + (p->half ? y >> 1 : y) * p->pitch; }
@@ -270,6 +274,52 @@ void local_time(GrkitDateTime *out);
 /* n / d, rounded down, for d > 0. The core exports no compiler helper for
    division, so a module divides by a variable only through this function. */
 u32 divide(u32 n, u32 d);
+/* The white of the effect of a recorded picture: the R, G, B levels (0-255)
+   that its brightest light reaches, input 255 of the effect's curves after
+   its post matrix. It is 255 each without an effect. A color effect ends
+   below 255, so a filter that looks for clipped light compares levels with
+   this white. The Fn adjustments are not in it. Since ABI 2.1. */
+void picture_white(const PictureSet *set, u8 white[3]);
+/* The shooting data of a recorded picture, as the camera records it in the
+   EXIF of the picture. Set `size` to sizeof(GrkitShot) before the call:
+   picture_shot fills the fields of that size that the core knows, sets
+   `size` to the bytes it filled, and sets `known` to the GRKIT_SHOT_* bits of
+   the fields that hold a value. A `size` below 8 (no room for `size` and
+   `known`) gets nothing. A later ABI adds fields at the end, so a module
+   built with this header keeps working. Since ABI 2.1.
+   The exposure is in APEX values in 1/256 EV, as the camera computed them.
+   f_number, iso, and exposure_us come from them; the EXIF shows the
+   nominal value of the nearest third of a stop (f/5.6 for f/5.66, ISO 2500
+   for 2780). In a RAW development the data are those of the DNG.
+   scene_ev is the exposure value at ISO 100, the light of the scene: about
+   12 to 15 in sunlight, 8 to 11 indoors or at dusk, and 3 to 7 on a lit
+   street at night. */
+#define GRKIT_SHOT_EXPOSURE 0x01U     /* av to iso */
+#define GRKIT_SHOT_COMPENSATION 0x02U /* compensation */
+#define GRKIT_SHOT_FOCAL 0x04U        /* focal, focal_35mm */
+#define GRKIT_SHOT_TAKEN 0x08U        /* taken */
+#define GRKIT_SHOT_FLASH 0x10U        /* flash */
+#define GRKIT_SHOT_PROGRAM 0x20U      /* program */
+#define GRKIT_SHOT_METERING 0x40U     /* metering */
+typedef struct {
+    u32 size;
+    u32 known;
+    s32 av;           /* Av: the f-number is 2^(Av / 2) */
+    s32 tv;           /* Tv: the exposure time is 2^-Tv s */
+    s32 sv;           /* Sv: the ISO speed is 3.125 x 2^Sv (ISO 100 is 5) */
+    s32 scene_ev;     /* Av + Tv - Sv + 5 */
+    s32 compensation; /* the exposure compensation, 1/256 EV */
+    u32 exposure_us;  /* the exposure time in microseconds, also of a bulb or time exposure */
+    u16 f_number;     /* times 10 */
+    u16 iso;
+    u16 focal;        /* the focal length in 1/10 mm */
+    u16 focal_35mm;   /* in mm, as on 35 mm film */
+    u8 program;       /* EXIF ExposureProgram */
+    u8 metering;      /* EXIF MeteringMode */
+    u16 flash;        /* EXIF Flash */
+    GrkitDateTime taken; /* the capture time, as EXIF DateTimeOriginal */
+} GrkitShot;
+void picture_shot(const PictureSet *set, GrkitShot *shot);
 
 /* ---- events --------------------------------------------------------------
 

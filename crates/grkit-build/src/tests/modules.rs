@@ -33,7 +33,7 @@ fn synthetic_probe_module_builds() -> Result<()> {
     assert_eq!(word(module.descriptor), grkit_core::grm::DESCRIPTOR_SIZE);
     assert_eq!(
         word(module.descriptor + 4),
-        grkit_core::grm::ABI_MAJOR << 16
+        grkit_core::grm::ABI_MAJOR << 16 | grkit_core::grm::ABI_MINOR
     );
     assert_eq!(word(module.descriptor + 12), 1);
     assert_eq!(word(word(module.descriptor + 8)), 1);
