@@ -45,11 +45,11 @@
       "upstream": "https://github.com/t3mujin/t3mujinpack/blob/0b421f3e25209ed78253d1724a29cc6255c5e7fe/LICENSE.txt"
     },
     "CHANGELOG.txt": {
-      "sha256": "1cb1a385ab027f5ed0e9f579a355f8e5f08f8d4d3f21cad73e52846511f02262",
+      "sha256": "854c2850628274d36551c7869713e06a1b29d829f6f6f0d66113ae91da5bd7ed",
       "license": "upstream-changes"
     },
     "bake_spektrafilm.py": {
-      "sha256": "3f3fd813e11895260ee4dea674e1e2958be408a46a0ef3fbc19319b586ae0ec5",
+      "sha256": "ead802e197c19af63f2049427f6f241571f1c4cb2799dd933d2d0abcb743f712",
       "license": "project"
     },
     "bake_spectral_film_lut.py": {
@@ -61,6 +61,10 @@
     "aerocolor-iv-v1.cube": {
       "generator": "spectral_film_lut",
       "sha256": "7079fd3703de7046543b5fb75d74f241092b2d5596cbb74e70e84cc56d442978"
+    },
+    "c200-premier-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "9609c724902417f40da6ffee6155254b2ea6e9c391cf048ba238188adb4f860b"
     },
     "double-x-5222-mono-v1.cube": {
       "generator": "spectral_film_lut",
@@ -107,6 +111,10 @@
       "generator": "spektrafilm",
       "sha256": "66361c619cbc20d8ff1622359947a72e229d3a2ef029b57f54084d9c691bf729"
     },
+    "provia-100f-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "e0fa266bdca080f40d1c01a37a6c3e81b791c0b33aaac53741a103bc4c9d1119"
+    },
     "red-filter-mono-v1.cube": {
       "generator": "spectral_film_lut",
       "sha256": "fb92f310bd4695e53f4c615bf37da594b6f47fdea54db7bee638b945981733af"
@@ -114,6 +122,10 @@
     "trix-400-mono-v1.cube": {
       "generator": "spectral_film_lut",
       "sha256": "b618b9c36de455fa86c31018bde5763e2f17726db5bcf9140a2c6bb410d56910"
+    },
+    "ultramax-400-ultra-v1.cube": {
+      "generator": "spektrafilm",
+      "sha256": "3a41faf373345efd39018eefbe180e14a9bf7127b65b2a5bf22bf54f75980b31"
     },
     "velvia-100-v1.cube": {
       "generator": "spektrafilm",

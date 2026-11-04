@@ -40,6 +40,9 @@ RECIPES = {
     "kodachrome-64-v1": ("kodak_kodachrome_64", "kodak_portra_endura"),
     "velvia-100-v1": ("fujifilm_velvia_100", "kodak_portra_endura"),
     "ektachrome-e100-v1": ("kodak_ektachrome_100", "kodak_portra_endura"),
+    "c200-premier-v1": ("fujifilm_c200", "kodak_endura_premier"),
+    "ultramax-400-ultra-v1": ("kodak_ultramax_400", "kodak_ultra_endura"),
+    "provia-100f-v1": ("fujifilm_provia_100f", "kodak_portra_endura"),
 }
 
 # Effects whose print is scanned with fixed black and white levels.

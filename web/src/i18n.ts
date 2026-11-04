@@ -401,6 +401,9 @@ const en = {
     'instax-v1': 'Fujifilm Instax color instant film',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222 on Polymax Fine-Art paper',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400, after the t3mujinpack darktable style',
+    'c200-premier-v1': 'Fujicolor C200 on Endura Premier paper',
+    'ultramax-400-ultra-v1': 'Kodak UltraMax 400 on Ultra Endura paper',
+    'provia-100f-v1': 'Fujifilm Provia 100F slide film, scanned',
   } as Readonly<Record<string, string>>,
 };
 
@@ -748,6 +751,9 @@ const zhHans: Strings = {
     'instax-v1': 'Fujifilm Instax 彩色即显胶片',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222，Polymax Fine-Art 相纸',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400，基于 t3mujinpack 的 darktable 风格',
+    'c200-premier-v1': 'Fujicolor C200，Endura Premier 相纸',
+    'ultramax-400-ultra-v1': 'Kodak UltraMax 400，Ultra Endura 相纸',
+    'provia-100f-v1': 'Fujifilm Provia 100F 正片，直接扫描',
   },
 };
 
@@ -1089,6 +1095,9 @@ const zhHant: Strings = {
     'instax-v1': 'Fujifilm Instax 彩色即顯底片',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222，Polymax Fine-Art 相紙',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400，基於 t3mujinpack 的 darktable 風格',
+    'c200-premier-v1': 'Fujicolor C200，Endura Premier 相紙',
+    'ultramax-400-ultra-v1': 'Kodak UltraMax 400，Ultra Endura 相紙',
+    'provia-100f-v1': 'Fujifilm Provia 100F 正片，直接掃描',
   },
 };
 
@@ -1434,6 +1443,9 @@ const ja: Strings = {
     'instax-v1': 'Fujifilm Instax カラーインスタントフィルム',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222、Polymax Fine-Art 印画紙',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400、t3mujinpack の darktable スタイルによる',
+    'c200-premier-v1': 'Fujicolor C200、Endura Premier 印画紙',
+    'ultramax-400-ultra-v1': 'Kodak UltraMax 400、Ultra Endura 印画紙',
+    'provia-100f-v1': 'リバーサルフィルム Fujifilm Provia 100F をスキャン',
   },
 };
 
@@ -1795,6 +1807,9 @@ const ko: Strings = {
     'instax-v1': 'Fujifilm Instax 컬러 인스턴트 필름',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222, Polymax Fine-Art 인화지',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400, t3mujinpack의 darktable 스타일 기반',
+    'c200-premier-v1': 'Fujicolor C200, Endura Premier 인화지',
+    'ultramax-400-ultra-v1': 'Kodak UltraMax 400, Ultra Endura 인화지',
+    'provia-100f-v1': '슬라이드 필름 Fujifilm Provia 100F를 스캔',
   },
 };
 
