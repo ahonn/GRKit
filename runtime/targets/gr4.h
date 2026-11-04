@@ -103,6 +103,10 @@
    height of its row views. */
 #define CONTROLLER_ID 0x124
 #define DEVELOP_TONE_LIST 0x4000022U
+/* The ID of the aspect list of the development, and the first instruction
+   of the row value of the model, which its entry hook replaces. */
+#define DEVELOP_ASPECT_LIST 0x400001fU
+#define DEVELOP_ASPECT_VALUE_FIRST "mov ip, sp"
 #define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
 #define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
 #define DEVELOP_TOP_TITLE mov r3, r6

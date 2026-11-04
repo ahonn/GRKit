@@ -483,10 +483,12 @@ static u32 picture_turns(volatile u32 *h,u32 shot) {
 /* The start of a RAW development: its effect is the effect that the DNG
    records (the ImageTone code of the record, picture_capture_tone), or
    native processing for a native photo or an effect that the camera no
-   longer has. */
+   longer has. It develops the native aspect of the DNG until its aspect list
+   selects a Framing ratio (runtime/menu.c). */
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
     u32 value=PICTURE_PLAYBACK_TONE(), record;
+    h[GRKIT_HOST_DEVELOP_RATIO/4]=0;
     h[GRKIT_HOST_DEVELOP/4]=1;
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }

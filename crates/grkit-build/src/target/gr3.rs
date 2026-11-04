@@ -27,6 +27,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::VIEWFINDER,
     common::PICTURE,
     common::DEVELOP_TONE,
+    common::DEVELOP_ASPECT,
     GRAIN,
     TONING,
 ];

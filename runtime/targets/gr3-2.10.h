@@ -281,9 +281,21 @@
    the subtitle of RawDevelopmentTopController in r6. */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x532891f4)
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x532891a8)
+/* RAW development, the aspect list (runtime/menu.c): the row value of the
+   model (model, row), the capture aspect of a development aspect (model,
+   value), and the label and the icon of a development aspect (model,
+   value). */
+#define FW_DEVELOP_ASPECT_VALUE FIRMWARE(0x532833e4)
+#define FW_DEVELOP_ASPECT_CAPTURE FIRMWARE(0x53289e8c)
+#define FW_DEVELOP_ASPECT_TEXT FIRMWARE(0x53289f38)
+#define FW_DEVELOP_ASPECT_ICON FIRMWARE(0x53289efc)
 #define FW_ROW_CHILD FIRMWARE(0x533a1d34)
 #define CONTROLLER_ID 0x124
 #define DEVELOP_TONE_LIST 0x4000025U
+/* The ID of the aspect list of the development, and the first instruction
+   of the row value of the model, which its entry hook replaces. */
+#define DEVELOP_ASPECT_LIST 0x4000022U
+#define DEVELOP_ASPECT_VALUE_FIRST "ldrb r3, [r0, #5]"
 /* The list view of RawDevelopmentParameterSetController, and the style and
    the height of its row views. */
 #define DEVELOP_LIST_VIEW 0x168

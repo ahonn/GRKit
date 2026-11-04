@@ -144,12 +144,23 @@ u32 framing_develop_select(u32 model,u32 aspect) {
     if(aspect==1 && (size&0xffff)==size>>16) return DEVELOP_SQUARE;
     return aspect<4 && DEVELOP_NATIVE_ASPECTS>>aspect&1U ? (u32)-1 : 0;
 }
-/* Each time the development sends its aspect to the pipeline: the recorded
-   aspect (0) takes the geometry of the DNG, an aspect that the user selects
-   the stock sizes. */
+/* Each time the development sends its aspect to the pipeline: a Framing
+   ratio of its aspect list (GRKIT_HOST_DEVELOP_RATIO) takes the geometry of
+   the ratio, the recorded aspect (0) the geometry of the DNG, and a native
+   aspect that the user selects the stock sizes. */
 void framing_develop_geometry(u32 model,u32 value) {
+    volatile u32 *h=framing_header();
+    u32 ratio=h[GRKIT_HOST_DEVELOP_RATIO/4];
     (void)model;
-    ((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE]=(u8)(value ? 1 : develop_file(develop_size()));
+    ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=(u8)(ratio ? develop_file_of(ratio) : value ? 1 : develop_file(develop_size()));
+}
+/* The capture aspect that the development sends for its aspect: the
+   capture aspect of a Framing ratio, else the native conversion. The aspect
+   list keeps a native value for a ratio (runtime/menu.c), which the native
+   conversion accepts. */
+u32 framing_develop_capture(u32 capture) {
+    u32 ratio=framing_header()[GRKIT_HOST_DEVELOP_RATIO/4];
+    return ratio ? develop_capture(ratio) : capture;
 }
 #endif
 

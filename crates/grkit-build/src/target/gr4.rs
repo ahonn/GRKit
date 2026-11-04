@@ -33,6 +33,7 @@ const GROUPS: &[&[HookSpec]] = &[
     LIVE_VIEW,
     common::PICTURE,
     common::DEVELOP_TONE,
+    common::DEVELOP_ASPECT,
     GRAIN,
 ];
 

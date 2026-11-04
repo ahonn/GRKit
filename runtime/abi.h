@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 912
+#define GRKIT_HOST_HEADER_SIZE 936
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -253,6 +253,23 @@
 #define GRKIT_HOST_ASPECT_MODE 904
 /* Native aspect + 1 at the last live-view bind, or 0 before the first bind. */
 #define GRKIT_HOST_FRAME_NATIVE 908
+/* The Framing ratio of the RAW development in playback (a CORE.ASPECT value),
+   or 0 for its native aspect. The start of a development clears it
+   (runtime/picture.c), and the aspect list of the development sets it
+   (runtime/menu.c). The development sends the capture aspect and the geometry
+   of that ratio to the pipeline (runtime/framing.c). */
+#define GRKIT_HOST_DEVELOP_RATIO 912
+/* GRKIT_HOST_DEVELOP_RATIO when the aspect list of the development opened.
+   Cancel restores it, as the list restores its native value. */
+#define GRKIT_HOST_DEVELOP_RATIO_SAVED 916
+/* The native rows of that list. The Framing ratios follow them. */
+#define GRKIT_HOST_DEVELOP_ASPECT_ROWS 920
+/* The text ID of the native aspect label that shows the name of the Framing
+   ratio (GRKIT_HOST_DEVELOP_RATIO_NAME) instead. */
+#define GRKIT_HOST_DEVELOP_RATIO_TEXT 924
+/* The text descriptor of that name. */
+#define GRKIT_HOST_DEVELOP_RATIO_NAME 928
+#define GRKIT_HOST_DEVELOP_RATIO_NAME_WORDS 2
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number

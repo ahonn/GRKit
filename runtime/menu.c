@@ -1077,6 +1077,88 @@ static u32 develop_index(volatile u32 *h) {
     return DEVELOP_NONE;
 }
 static u32 develop_list(u32 controller) { return WORD(controller,CONTROLLER_ID)==DEVELOP_TONE_LIST; }
+/* A GRKit row of a list of the development: `icon`, no text, no mark. */
+static u32 develop_fill(u32 view,u32 icon) {
+    static const u8 empty[1]={0};
+    if(!CALL2(FW_ROW_CHILD)(view,2)) return DEVELOP_NONE;
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,0),icon);
+    CALL2(FW_STRING_VIEW_SET_ASCII)(CALL2(FW_ROW_CHILD)(view,1),(u32)empty);
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,2),0);
+    return 0;
+}
+#ifdef DEVELOP_ASPECT_LIST
+/* ---- RAW development: the Framing ratios in its aspect list -------------
+   The development develops GRKIT_HOST_DEVELOP_RATIO, a Framing ratio, or 0
+   for its native aspect (runtime/framing.c). Its aspect list keeps its
+   native rows and lists after them the ratios that the development can
+   crop (develop_ratio_row, runtime/aspect.h). A ratio row is a native value
+   to the model: the native row of the capture aspect of the ratio, else 3:2.
+   So the native conversions accept it, and the development sends the
+   capture aspect and the geometry of the ratio. The list applies the
+   highlighted row at once for the preview, and Cancel restores the ratio of
+   the list start. The rows show the tiles of the Framing page, and a label
+   of the aspect shows the row label of the ratio on that page. */
+#define ASPECT_MODEL FW_DEVELOP_MODEL
+static u32 aspect_list(u32 controller) { return WORD(controller,CONTROLLER_ID)==DEVELOP_ASPECT_LIST; }
+static u32 aspect_row_value(u32 row) { return CALL2(FW_DEVELOP_ASPECT_VALUE)(ASPECT_MODEL,row); }
+static u32 aspect_row_capture(u32 value) { return CALL2(FW_DEVELOP_ASPECT_CAPTURE)(ASPECT_MODEL,value); }
+/* The module page entry of CORE.ASPECT (the Framing page), or 0. */
+static volatile u32 *aspect_page(volatile u32 *h) {
+    volatile u32 *entry;
+    u32 slot;
+    if(!CAPABILITY_USED(h,GRKIT_CORE_ASPECT)) return 0;
+    for(slot=0;slot<module_pages(h);++slot) {
+        entry=h+GRKIT_HOST_MODULE_PAGES/4+slot*3;
+        if(entry[1]==GRKIT_CORE_ASPECT && PAGE_WORD(entry[0],PAGE_KIND)!=PAGE_GROUP) return entry;
+    }
+    return 0;
+}
+/* Bit n for each native row that develops capture aspect n. The row of the
+   recorded aspect (value 0) does not count. */
+static u32 aspect_captures(volatile u32 *h) {
+    u32 rows=h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4], row, value, captures=0;
+    for(row=0;row<rows;++row)
+        if((value=aspect_row_value(row))) captures|=1U<<(aspect_row_capture(value)&31U);
+    return captures;
+}
+/* The ratio of a list row, or 0 for a native row. */
+static u32 aspect_ratio(volatile u32 *h,u32 row) {
+    u32 rows=h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4];
+    if(!rows || row<rows || !aspect_page(h)) return 0;
+    return develop_ratio_row(aspect_captures(h),row-rows);
+}
+/* The native value of a ratio row. */
+static u32 aspect_native_value(volatile u32 *h,u32 ratio) {
+    u32 rows=h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4], row, value, capture, stock=0;
+    for(row=0;row<rows;++row) {
+        if(!(value=aspect_row_value(row))) continue;
+        capture=aspect_row_capture(value);
+        if(capture==develop_capture(ratio)) return value;
+        if(!capture && !stock) stock=value;
+    }
+    return stock;
+}
+/* The ratio that a label or an icon of native `value` shows, or 0. */
+static u32 aspect_shown(volatile u32 *h,u32 value) {
+    u32 ratio=h[GRKIT_HOST_DEVELOP_RATIO/4];
+    return ratio && aspect_page(h) && value==aspect_native_value(h,ratio) ? ratio : 0;
+}
+static u32 aspect_icon(volatile u32 *h,u32 ratio) {
+    volatile u32 *entry=aspect_page(h);
+    return entry && entry[2]!=MANAGE_NO_TILE ? GRKIT_ICON_MODULE_TILE(entry[2]+ratio) : GRKIT_ICON_OFF;
+}
+/* The row label of a ratio on the Framing page, in the menu language. */
+static const u16 *aspect_name(volatile u32 *h,u32 ratio) {
+    return MENU_TEXT(PAGE_WORD(PAGE_WORD(aspect_page(h)[0],PAGE_LABELS),(ratio*GRKIT_TEXT_LANGUAGES+menu_language())*4));
+}
+/* The text of the label that shows a ratio. */
+static u32 aspect_text(volatile u32 *h,u32 id) {
+    return id && id==h[GRKIT_HOST_DEVELOP_RATIO_TEXT/4] && h[GRKIT_HOST_DEVELOP_RATIO/4] ? (u32)(h+GRKIT_HOST_DEVELOP_RATIO_NAME/4) : 0;
+}
+#else
+#define aspect_list(controller) 0
+#define aspect_text(h,id) 0U
+#endif
 /* The effect of a list row, or DEVELOP_NONE for a native row. */
 static u32 develop_row(volatile u32 *h,u32 row) {
     u32 rows=h[GRKIT_HOST_DEVELOP_ROWS/4];
@@ -1098,6 +1180,15 @@ static void develop_grow(u32 list,u32 rows) {
    a row view for each effect too, once: the list keeps its row views. */
 A32_ENTRY u32 menu_develop_count_after(u32 count,u32 controller) {
     volatile u32 *h=menu_header();
+#ifdef DEVELOP_ASPECT_LIST
+    u32 ratios;
+    if(aspect_list(controller)) {
+        h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4]=count;
+        ratios=aspect_page(h) ? develop_ratio_rows(aspect_captures(h)) : 0;
+        develop_grow(WORD(controller,DEVELOP_LIST_VIEW),count+ratios);
+        return count+ratios;
+    }
+#endif
     if(!develop_list(controller)) return count;
     h[GRKIT_HOST_DEVELOP_ROWS/4]=count;
     develop_grow(WORD(controller,DEVELOP_LIST_VIEW),count+develop_effects(h));
@@ -1112,23 +1203,30 @@ A32_ENTRY u32 menu_develop_value_answer(u32 model,u32 row) {
     (void)model;
     return develop_row(menu_header(),row)==DEVELOP_NONE ? DEVELOP_NONE : DEVELOP_STANDARD;
 }
-/* The fill of an effect row: the effect icon, no text, no mark. */
+/* The fill of an effect row or a ratio row: its icon, no text, no mark. */
 A32_ENTRY u32 menu_develop_row_answer(u32 controller,u32 view,u32 row) {
     volatile u32 *h=menu_header();
-    static const u8 empty[1]={0};
     u32 i;
+#ifdef DEVELOP_ASPECT_LIST
+    if(aspect_list(controller)) return (i=aspect_ratio(h,row)) ? develop_fill(view,aspect_icon(h,i)) : DEVELOP_NONE;
+#endif
     if(!develop_list(controller) || (i=develop_row(h,row))==DEVELOP_NONE) return DEVELOP_NONE;
-    if(!CALL2(FW_ROW_CHILD)(view,2)) return DEVELOP_NONE;
-    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,0),0x8000+i);
-    CALL2(FW_STRING_VIEW_SET_ASCII)(CALL2(FW_ROW_CHILD)(view,1),(u32)empty);
-    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(view,2),0);
-    return 0;
+    return develop_fill(view,0x8000+i);
 }
 /* The current row: the row of the effect of the development, else the
    native row of the native value. */
 A32_ENTRY u32 menu_develop_current_answer(u32 controller,u32 row) {
     volatile u32 *h=menu_header();
     u32 effect;
+#ifdef DEVELOP_ASPECT_LIST
+    /* The row of the ratio of the development, else the native row of the
+       native value. */
+    if(aspect_list(controller)) {
+        u32 ratio=h[GRKIT_HOST_DEVELOP_RATIO/4];
+        if(ratio) return aspect_ratio(h,row)==ratio;
+        return aspect_ratio(h,row) ? 0 : DEVELOP_NONE;
+    }
+#endif
     if(!develop_list(controller)) return DEVELOP_NONE;
     effect=develop_index(h);
     if(effect!=DEVELOP_NONE) return develop_row(h,row)==effect;
@@ -1144,6 +1242,7 @@ A32_ENTRY void menu_develop_choose(u32 controller,u32 row) {
 A32_ENTRY void menu_develop_opened(u32 controller) {
     volatile u32 *h=menu_header();
     if(develop_list(controller)) h[GRKIT_HOST_DEVELOP_SAVED/4]=h[GRKIT_HOST_DEVELOP/4];
+    if(aspect_list(controller)) h[GRKIT_HOST_DEVELOP_RATIO_SAVED/4]=h[GRKIT_HOST_DEVELOP_RATIO/4];
 }
 A32_ENTRY void menu_develop_restored(void) {
     volatile u32 *h=menu_header();
@@ -1173,7 +1272,49 @@ A32_ENTRY u32 menu_develop_top_icon(u32 model,u32 category,u32 value) {
     if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) return 0x8000+i;
     return CALL3(FW_DEVELOP_TONE_ICON)(model,category,value);
 }
+#ifdef DEVELOP_ASPECT_LIST
+/* The native value of a ratio row. */
+A32_ENTRY u32 menu_develop_aspect_value_answer(u32 model,u32 row) {
+    volatile u32 *h=menu_header();
+    u32 ratio=aspect_ratio(h,row);
+    (void)model;
+    return ratio ? aspect_native_value(h,ratio) : DEVELOP_NONE;
+}
+/* The choice of a row, also of each highlighted row for the preview: a
+   ratio row selects its ratio, a native row the native aspect. */
+A32_ENTRY void menu_develop_aspect_choose(u32 controller,u32 row) {
+    volatile u32 *h=menu_header();
+    (void)controller;
+    h[GRKIT_HOST_DEVELOP_RATIO/4]=aspect_ratio(h,row);
+}
+A32_ENTRY void menu_develop_aspect_restored(void) {
+    volatile u32 *h=menu_header();
+    h[GRKIT_HOST_DEVELOP_RATIO/4]=h[GRKIT_HOST_DEVELOP_RATIO_SAVED/4];
+}
+/* The label of an aspect (model, value) in a subtitle. For the native value
+   of the ratio of the development, menu_text_override shows the row label
+   of the ratio. A subtitle draws only a changed text ID, so the view forgets
+   its text whenever it shows that text ID. */
+A32_ENTRY u32 menu_develop_aspect_label(u32 model,u32 value,u32 unused,u32 view) {
+    volatile u32 *h=menu_header();
+    u32 id=CALL2(FW_DEVELOP_ASPECT_TEXT)(model,value), ratio=aspect_shown(h,value);
+    (void)unused;
+    if(ratio) {
+        h[GRKIT_HOST_DEVELOP_RATIO_TEXT/4]=id;
+        descriptor(h+GRKIT_HOST_DEVELOP_RATIO_NAME/4,aspect_name(h,ratio));
+    }
+    if(id && id==h[GRKIT_HOST_DEVELOP_RATIO_TEXT/4]) CALL3(FW_STRING_VIEW_RESET)(view,0,0);
+    return id;
+}
+/* The icon of an aspect in the rows of RawDevelopmentTopController. */
+A32_ENTRY u32 menu_develop_aspect_top_icon(u32 model,u32 value) {
+    volatile u32 *h=menu_header();
+    u32 ratio=aspect_shown(h,value);
+    return ratio ? aspect_icon(h,ratio) : CALL2(FW_DEVELOP_ASPECT_ICON)(model,value);
+}
+#endif
 static u32 develop_text(volatile u32 *h,u32 id) {
-    return id && id==h[GRKIT_HOST_DEVELOP_TEXT/4] && develop_index(h)!=DEVELOP_NONE ? (u32)(h+GRKIT_HOST_DEVELOP_NAME/4) : 0;
+    if(id && id==h[GRKIT_HOST_DEVELOP_TEXT/4] && develop_index(h)!=DEVELOP_NONE) return (u32)(h+GRKIT_HOST_DEVELOP_NAME/4);
+    return aspect_text(h,id);
 }
 #endif

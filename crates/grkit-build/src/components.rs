@@ -62,6 +62,14 @@ pub const fn bl(symbol: &'static str, part: Part, point: Point) -> HookSpec {
     }
 }
 
+/// A B hook shared by two extension points.
+pub const fn b_shared(symbol: &'static str, part: Part, point: Point, also: Point) -> HookSpec {
+    HookSpec {
+        also: Some(also),
+        ..b(symbol, part, point)
+    }
+}
+
 /// A BL hook shared by two extension points.
 pub const fn bl_shared(symbol: &'static str, part: Part, point: Point, also: Point) -> HookSpec {
     HookSpec {

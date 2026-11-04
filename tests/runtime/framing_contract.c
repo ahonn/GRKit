@@ -957,7 +957,46 @@ int main(void)
         assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==1);
         framing_develop_geometry(TEST_OWNER,0);
         assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==2);
+        /* A Framing ratio of the aspect list takes the capture aspect and
+           the geometry of the ratio, whatever native value the model keeps. */
+        {
+            const struct { u32 ratio, capture, file; } ratios[]={
+                {1,2,2}, {4,2,3}, {2,2,1}, {3,1,1}, {6,1,4}, {7,1,5},
+            };
+            for (u32 i = 0; i < sizeof(ratios)/sizeof(ratios[0]); ++i) {
+                header[GRKIT_HOST_DEVELOP_RATIO/4]=ratios[i].ratio;
+                framing_develop_geometry(TEST_OWNER,1);
+                assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==ratios[i].file);
+                assert(framing_develop_capture(0)==ratios[i].capture);
+            }
+            /* The native aspect keeps the native conversion. */
+            header[GRKIT_HOST_DEVELOP_RATIO/4]=0;
+            assert(framing_develop_capture(3)==3);
+            framing_develop_geometry(TEST_OWNER,1);
+            assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==1);
+        }
         ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=0;
+    }
+    /* The ratio rows of the aspect list, by the capture aspects of its native
+       rows: every crop with 3:2, only the crops of the capture aspect without
+       it, never a ratio with a native row of its stock geometry. */
+    {
+        const struct { u32 captures; u8 rows[8]; } lists[]={
+            {1U<<0|1U<<3, {1,4,2,3,6,7,0}},
+            {1U<<0|1U<<1|1U<<2|1U<<3, {1,4,6,7,0}},
+            {1U<<2, {1,4,0}},
+            {1U<<1|1U<<3, {6,7,0}},
+            {1U<<3, {0}},
+        };
+        for (u32 i = 0; i < sizeof(lists)/sizeof(lists[0]); ++i) {
+            u32 n = 0;
+            while (lists[i].rows[n]) {
+                assert(develop_ratio_row(lists[i].captures,n)==lists[i].rows[n]);
+                ++n;
+            }
+            assert(develop_ratio_row(lists[i].captures,n)==0);
+            assert(develop_ratio_rows(lists[i].captures)==n);
+        }
     }
 #endif
     /* Live-view updates resend the 3:2 request only when capture differs. */

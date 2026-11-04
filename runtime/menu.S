@@ -849,4 +849,31 @@ menu_develop_top_text:
     DEVELOP_TOP_TITLE
     b menu_develop_label
 .ltorg
+#ifdef HOOK_MENU_DEVELOP_ASPECT_VALUE
+/* The aspect list of a RAW development (runtime/menu.c): the entry of the
+   row value of the model, the entry of the choice of a row, the BL to the
+   model restore at Cancel, and the BLs to the label (model, value) of an
+   aspect in the subtitles. The BL to the icon of an aspect in the rows of
+   RawDevelopmentTopController goes to menu_develop_aspect_top_icon (C). */
+DEVELOP_ANSWER menu_develop_aspect_value, menu_develop_aspect_value_answer, DEVELOP_ASPECT_VALUE_FIRST, HOOK_MENU_DEVELOP_ASPECT_VALUE_RESUME
+DEVELOP_BEFORE menu_develop_aspect_decide, menu_develop_aspect_choose, HOOK_MENU_DEVELOP_ASPECT_DECIDE_RESUME
+.global menu_develop_aspect_restore
+.type menu_develop_aspect_restore, %function
+menu_develop_aspect_restore:
+    push {r0-r3,r12,lr}
+    bl menu_develop_aspect_restored
+    pop {r0-r3,r12,lr}
+    ldr pc, =HOOK_MENU_DEVELOP_ASPECT_RESTORE_TARGET
+.global menu_develop_aspect_list_text
+.type menu_develop_aspect_list_text, %function
+menu_develop_aspect_list_text:
+    DEVELOP_LIST_TITLE
+    b menu_develop_aspect_label
+.global menu_develop_aspect_top_text
+.type menu_develop_aspect_top_text, %function
+menu_develop_aspect_top_text:
+    DEVELOP_TOP_TITLE
+    b menu_develop_aspect_label
+.ltorg
+#endif
 #endif

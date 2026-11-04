@@ -311,6 +311,22 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_ASPECT_MODE: 4;
     /// Native aspect + 1 at the last live-view bind, or 0 before the first bind.
     HOST_FRAME_NATIVE: 4;
+    /// The Framing ratio of the RAW development in playback (a CORE.ASPECT
+    /// value), or 0 for its native aspect. The start of a development clears
+    /// it (runtime/picture.c), and the aspect list of the development sets it
+    /// (runtime/menu.c). The development sends the capture aspect and the
+    /// geometry of that ratio to the pipeline (runtime/framing.c).
+    HOST_DEVELOP_RATIO: 4;
+    /// GRKIT_HOST_DEVELOP_RATIO when the aspect list of the development
+    /// opened. Cancel restores it, as the list restores its native value.
+    HOST_DEVELOP_RATIO_SAVED: 4;
+    /// The native rows of that list. The Framing ratios follow them.
+    HOST_DEVELOP_ASPECT_ROWS: 4;
+    /// The text ID of the native aspect label that shows the name of the
+    /// Framing ratio (GRKIT_HOST_DEVELOP_RATIO_NAME) instead.
+    HOST_DEVELOP_RATIO_TEXT: 4;
+    /// The text descriptor of that name.
+    HOST_DEVELOP_RATIO_NAME: 8;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

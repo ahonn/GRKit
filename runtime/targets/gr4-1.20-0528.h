@@ -158,6 +158,14 @@
    and of the text). */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x53381ae0)
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x53381a94)
+/* RAW development, the aspect list (runtime/menu.c): the row value of the
+   model (model, row), the capture aspect of a development aspect (model,
+   value), and the label and the icon of a development aspect (model,
+   value). */
+#define FW_DEVELOP_ASPECT_VALUE FIRMWARE(0x53379078)
+#define FW_DEVELOP_ASPECT_CAPTURE FIRMWARE(0x53382854)
+#define FW_DEVELOP_ASPECT_TEXT FIRMWARE(0x53382930)
+#define FW_DEVELOP_ASPECT_ICON FIRMWARE(0x533828ec)
 #define FW_ROW_CHILDREN FIRMWARE(0x5359d8f0)
 #define DEVELOP_ROW_LAYOUT FIRMWARE(0x53dbba48)
 #define FW_ROW_CHILD FIRMWARE(0x5359d49c)

@@ -70,4 +70,41 @@ static __attribute__((unused)) u32 capture_aspect_value(volatile u32 *h) {
     return framing_guides_only(h) ? 0 : aspect_value(h);
 }
 
+/* RAW development of a DNG to a Framing ratio (GRKIT_HOST_DEVELOP_RATIO).
+   The development of a ratio sends a capture aspect id to the pipeline
+   (0 3:2, 1 4:3, 2 16:9, 3 1:1) and sets GRKIT_HOST_FRAME_FILE to the
+   geometry of the ratio: 1 for the stock sizes of that id, 2 XPan, 3 2.35:1,
+   4 5:4, 5 7:6 (runtime/framing.S). 1:1 is the native 1:1 of the camera. */
+static const u8 develop_ratio_capture[GRKIT_CORE_ASPECT_VALUES]={0,2,2,1,2,3,1,1};
+static const u8 develop_ratio_file[GRKIT_CORE_ASPECT_VALUES]={1,2,1,1,3,1,4,5};
+static __attribute__((unused)) u32 develop_capture(u32 ratio) {
+    return ratio<GRKIT_CORE_ASPECT_VALUES ? develop_ratio_capture[ratio] : 0;
+}
+static __attribute__((unused)) u32 develop_file_of(u32 ratio) {
+    return ratio<GRKIT_CORE_ASPECT_VALUES ? develop_ratio_file[ratio] : 1;
+}
+/* The ratio of GRKit row `row` of the aspect list of a development, or 0
+   past the last row. `captures` has bit n set when a native row (not the row
+   of the recorded aspect) develops capture aspect n. A ratio follows the
+   native rows when no native row has its stock geometry, and when the
+   development can crop it: the camera offers 3:2, which keeps the whole
+   sensor, or the capture aspect of the ratio. The rows keep the order of
+   the Framing menu. */
+static __attribute__((unused)) u32 develop_ratio_row(u32 captures,u32 row) {
+    u32 i, ratio, capture;
+    for(i=1;i<sizeof(framing_rows);++i) {
+        ratio=framing_rows[i];
+        capture=develop_capture(ratio);
+        if(develop_file_of(ratio)==1 && captures>>capture&1U) continue;
+        if(!(captures&1U) && !(captures>>capture&1U)) continue;
+        if(!row--) return ratio;
+    }
+    return 0;
+}
+static __attribute__((unused)) u32 develop_ratio_rows(u32 captures) {
+    u32 rows=0;
+    while(develop_ratio_row(captures,rows)) ++rows;
+    return rows;
+}
+
 #endif

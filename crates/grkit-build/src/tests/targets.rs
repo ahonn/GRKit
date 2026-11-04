@@ -127,13 +127,27 @@ fn framing_without_film_look_still_records_shot_parameters() {
             hook.point_mask(),
             Point::Tuning.bit() | Point::CaptureAspect.bit()
         );
+        // The RAW development lists the effects and the Framing ratios with
+        // the same list hooks, and clears both at its start.
+        const DEVELOP: [&str; 5] = [
+            "picture_develop_tone",
+            "menu_develop_count",
+            "menu_develop_row",
+            "menu_develop_current",
+            "menu_develop_open",
+        ];
         for other in target
             .family
             .hooks
             .iter()
             .filter(|hook| hook.symbol != "module_parameters")
         {
-            assert_eq!(other.point_mask(), other.point.bit(), "{}", other.symbol);
+            let expected = if DEVELOP.contains(&other.symbol) {
+                Point::Tuning.bit() | Point::CaptureAspect.bit()
+            } else {
+                other.point.bit()
+            };
+            assert_eq!(other.point_mask(), expected, "{}", other.symbol);
         }
     }
 }

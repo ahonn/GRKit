@@ -332,15 +332,26 @@ framing_develop_aspect:
     popne {r1,r2,r4,pc}
     pop {r0,r1,r4,lr}
     ldr pc, =HOOK_FRAMING_DEVELOP_ASPECT_TARGET
-/* This replaces the BL that turns the development aspect (r1, model r0) into
-   the capture aspect that the development sends to the pipeline. The
-   GetResolution hooks above then give the size of the developed photo. */
-.global framing_develop_push
-framing_develop_push:
+/* These replace the BLs that turn the development aspect (r1, model r0) into
+   a capture aspect: where the development sends it to the pipeline, and
+   where it gives the size of the developed photo. framing_develop_geometry
+   sets the geometry, and framing_develop_capture gives the capture aspect of
+   a Framing ratio. The GetResolution hooks above then give the size of the
+   developed photo. */
+.macro DEVELOP_CAPTURE name, target
+.global \name
+\name:
     push {r0,r1,r4,lr}
     bl framing_develop_geometry
-    pop {r0,r1,r4,lr}
-    ldr pc, =HOOK_FRAMING_DEVELOP_PUSH_TARGET
+    pop {r0,r1}
+    ldr r12, =\target
+    blx r12
+    bl framing_develop_capture
+    pop {r4,pc}
+.endm
+DEVELOP_CAPTURE framing_develop_push, HOOK_FRAMING_DEVELOP_PUSH_TARGET
+DEVELOP_CAPTURE framing_develop_size, HOOK_FRAMING_DEVELOP_SIZE_TARGET
+.ltorg
 #endif
 #ifdef HOOK_FRAMING_RESIZE_SOURCE
 #ifndef RESIZE_SIZE

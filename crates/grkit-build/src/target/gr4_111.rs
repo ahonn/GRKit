@@ -196,6 +196,7 @@ const SITES: &[Site] = &[
     // before the aspect goes to the pipeline.
     ("framing_develop_aspect", 0x53374fb0, "5affffeb"),
     ("framing_develop_push", 0x53375228, "96ffffeb"),
+    ("framing_develop_size", 0x533751dc, "a9ffffeb"),
     ("framing_resize_source", 0x533da26c, "0400a0e1"),
     ("framing_resize_target", 0x533d9b1c, "8e4114eb"),
     ("framing_play_aspect", 0x53696704, "0dc0a0e1"),
@@ -228,6 +229,17 @@ const SITES: &[Site] = &[
     ("menu_develop_list_text", 0x531a2d2c, "784507eb"),
     ("menu_develop_top_text", 0x5319e5e0, "4b5707eb"),
     ("menu_develop_top_icon", 0x5319e874, "935607eb"),
+    // The aspect list of a RAW development: the entries of the row value of
+    // RawDevelopmentModel and of the aspect choice; the BL to the model
+    // restore in Restore; the BLs to the aspect label in UpdateSubTitle of the
+    // list and of RawDevelopmentTopController; the BL to the aspect icon of its
+    // rows.
+    ("menu_develop_aspect_value", 0x5336b8c4, "0dc0a0e1"),
+    ("menu_develop_aspect_decide", 0x531a1eb4, "0dc0a0e1"),
+    ("menu_develop_aspect_restore", 0x531a263c, "084b07eb"),
+    ("menu_develop_aspect_list_text", 0x531a2cc0, "274907eb"),
+    ("menu_develop_aspect_top_text", 0x5319e628, "cd5a07eb"),
+    ("menu_develop_aspect_top_icon", 0x5319e8c8, "145a07eb"),
     // DigitalFilterProcess SetEffectParameter (0x53701c40), and its stage
     // gate (0x537150fc, plan +0x25).
     ("grain_enable", 0x53701e14, "b537d4e5"),
