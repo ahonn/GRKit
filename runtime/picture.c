@@ -656,6 +656,8 @@ static u32 grain_counter(u32 *high) { *high=0; return 0; }
 /* Four xorshift128 generators side by side: generator i gives bytes 4i to
    4i + 3 of each 16 bytes, in little-endian order. */
 typedef struct { u32 a[4],b[4],c[4],d[4]; } GrainRandom;
+/* A word of a byte buffer. */
+typedef u32 __attribute__((may_alias)) GrainWord;
 /* splitmix32 of the count, so that close counts give unrelated states. */
 static u32 grain_mix(u32 *x) {
     u32 z=(*x+=0x9e3779b9U);
@@ -695,12 +697,14 @@ static void grain_random_row(GrainRandom *r,u8 *row,u32 pitch) {
     }
     vst1q_u32(r->a,a); vst1q_u32(r->b,b); vst1q_u32(r->c,c); vst1q_u32(r->d,d);
 #else
-    u32 i,t,v;
+    u32 i,t,v,word=!((u32)row&3U);
     for(;x+16<=pitch;x+=16) for(i=0;i<4;++i) {
         t=r->a[i]^(r->a[i]<<11);
         r->a[i]=r->b[i]; r->b[i]=r->c[i]; r->c[i]=r->d[i];
         v=r->d[i]=r->d[i]^(r->d[i]>>19)^t^(t>>8);
-        row[x+4*i]=(u8)v; row[x+4*i+1]=(u8)(v>>8); row[x+4*i+2]=(u8)(v>>16); row[x+4*i+3]=(u8)(v>>24);
+        /* The camera is little-endian, so a word store writes the four bytes. */
+        if(word) ((GrainWord *)(void *)(row+x))[i]=v;
+        else { row[x+4*i]=(u8)v; row[x+4*i+1]=(u8)(v>>8); row[x+4*i+2]=(u8)(v>>16); row[x+4*i+3]=(u8)(v>>24); }
     }
 #endif
 }
@@ -799,10 +803,19 @@ static void grain_center(u8 *tile,u32 n) {
         for(y=0;y<n;++y) tile[y*n+x]=grain_shift(tile[y*n+x],d);
     }
 }
-/* 16 samples of the plane from two half deviations. */
-static void grain_add16(u8 *out,const u8 *a,const u8 *b) {
+/* The sample of the plane for each sum of two half deviations, 0 to 510:
+   128 plus the deviation of the sum times sqrt 2, limited to 0..255. */
+#define GRAIN_SUMS 511U
+static u8 grain_sample(u32 sum) {
+    int s=(int)sum-256, v=128+s+((2*s*GRAIN_SQRT2_PART+32768)>>16);
+    return (u8)(v<0 ? 0 : v>255 ? 255 : v);
+}
+/* 16 samples of the plane from two half deviations. The scalar code reads
+   the samples from `sums` (grain_sample of each sum). */
+static void grain_add16(u8 *out,const u8 *a,const u8 *b,const u8 *sums) {
 #ifdef GRAIN_NEON
     uint8x16_t va=vld1q_u8(a),vb=vld1q_u8(b);
+    (void)sums;
     int16x8_t lo=vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(va),vget_low_u8(vb))),vdupq_n_s16(256));
     int16x8_t hi=vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(va),vget_high_u8(vb))),vdupq_n_s16(256));
     lo=vaddq_s16(vaddq_s16(lo,vqrdmulhq_s16(lo,vdupq_n_s16(GRAIN_SQRT2_PART))),vdupq_n_s16(128));
@@ -810,27 +823,47 @@ static void grain_add16(u8 *out,const u8 *a,const u8 *b) {
     vst1q_u8(out,vcombine_u8(vqmovun_s16(lo),vqmovun_s16(hi)));
 #else
     u32 i;
-    int v;
-    for(i=0;i<16;++i) {
-        int s=(int)a[i]+(int)b[i]-256;
-        v=128+s+((2*s*GRAIN_SQRT2_PART+32768)>>16);
-        out[i]=(u8)(v<0 ? 0 : v>255 ? 255 : v);
-    }
+    for(i=0;i<16;++i) out[i]=sums[a[i]+b[i]];
 #endif
+}
+/* The sum of the two tiles repeats every GRAIN_PERIOD samples along a row,
+   and every GRAIN_PERIOD rows down the plane: the least common multiple of
+   the tile widths. */
+#define GRAIN_PERIOD 3840U
+_Static_assert(!(GRAIN_PERIOD%GRAIN_TILE_A) && !(GRAIN_PERIOD%GRAIN_TILE_B) && !(GRAIN_PERIOD%16U),
+               "A period holds whole tiles and whole 16-sample blocks");
+/* Copy `n` bytes from `in` to `out` forwards, so a copy onto a later part of
+   its own source repeats it. A multiple of 16 bytes. */
+static void grain_repeat(u8 *out,const u8 *in,u32 n) {
+    u32 i;
+    if(!(((u32)out|(u32)in)&3U)) {
+        GrainWord *o=(GrainWord *)(void *)out;
+        const GrainWord *s=(const GrainWord *)(const void *)in;
+        for(i=0;i<n/4U;++i) o[i]=s[i];
+    } else {
+        for(i=0;i<n;++i) out[i]=in[i];
+    }
 }
 /* Fill the plane with the sum of the two tiles, each from the place that
    `place_a` and `place_b` give: the start column in 16-sample blocks in the
-   low half, the start row in the high half. */
+   low half, the start row in the high half. The samples after the first
+   period of a row, and the rows after the first period, repeat earlier ones. */
 static void grain_layers(u8 *plane,u32 pitch,u32 height,const u8 *a,const u8 *b,u32 place_a,u32 place_b) {
-    u32 y,x,row_a=place_a>>16,row_b=place_b>>16;
+    u32 y,x,row_a=place_a>>16,row_b=place_b>>16,width=pitch<GRAIN_PERIOD ? pitch : GRAIN_PERIOD;
+    u8 sums[GRAIN_SUMS];
+    for(x=0;x<GRAIN_SUMS;++x) sums[x]=grain_sample(x);
     for(y=0;y<height;++y) {
         const u8 *line_a=a+row_a*GRAIN_TILE_A,*line_b=b+row_b*GRAIN_TILE_B;
         u32 column_a=(place_a&0xffffU)*16U,column_b=(place_b&0xffffU)*16U;
         u8 *out=plane+y*pitch;
-        for(x=0;x<pitch;x+=16) {
-            grain_add16(out+x,line_a+column_a,line_b+column_b);
-            column_a+=16; if(column_a==GRAIN_TILE_A) column_a=0;
-            column_b+=16; if(column_b==GRAIN_TILE_B) column_b=0;
+        if(y>=GRAIN_PERIOD) grain_repeat(out,out-GRAIN_PERIOD*pitch,pitch);
+        else {
+            for(x=0;x<width;x+=16) {
+                grain_add16(out+x,line_a+column_a,line_b+column_b,sums);
+                column_a+=16; if(column_a==GRAIN_TILE_A) column_a=0;
+                column_b+=16; if(column_b==GRAIN_TILE_B) column_b=0;
+            }
+            if(pitch>width) grain_repeat(out+width,out,pitch-width);
         }
         if(++row_a==GRAIN_TILE_A) row_a=0;
         if(++row_b==GRAIN_TILE_B) row_b=0;

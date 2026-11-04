@@ -528,6 +528,17 @@ static void grain_contract(void)
             assert(!memcmp(plane, noise, size));
         }
     }
+    /* A row longer than the period of the two tiles (3840 samples), and more
+       rows than that period: the repeated samples are those of the model. */
+    for (uint32_t c = 0; c < 2; ++c) {
+        static const uint32_t pitch[2] = {4096, 48}, rows[2] = {4, 3850};
+        static uint8_t long_want[48 * 3850];
+        uint32_t size = pitch[c] * rows[c];
+        header[GRKIT_HOST_GRAIN_SHOT / 4] = 2;
+        grain_noise(GRAIN_PLANE, size, pitch[c], rows[c]);
+        ref_grain(long_want, pitch[c], rows[c], 3, 0x12345679U);
+        assert(!memcmp(plane, long_want, size));
+    }
     /* The profile counts the microseconds of the generic timer: two reads
        24000 ticks apart at 24 MHz are 1000 us. Without the profile, nothing
        is counted. */

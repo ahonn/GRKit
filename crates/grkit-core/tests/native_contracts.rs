@@ -1078,17 +1078,33 @@ fn native_picture_contract_applies_post_matrix_and_stamp() {
          #define SETTING_POSITION GRKIT_SETTING(2)\n",
     )
     .unwrap();
+    // The camera build runs the scalar grain code (soft float). An ARM host
+    // compiles the NEON code by default, so the scalar code also runs here.
+    let scalar = temporary.path().join("picture_contract_scalar.c");
+    fs::write(
+        &scalar,
+        format!(
+            "#define GRAIN_SCALAR 1\n#include \"{}\"\n",
+            root().join("tests/runtime/picture_contract.c").display()
+        ),
+    )
+    .unwrap();
+    let sources = [root().join("tests/runtime/picture_contract.c"), scalar];
     for (index, target) in targets().iter().enumerate() {
-        let executable = temporary.path().join(format!("picture_contract_{index}"));
-        compile_with(
-            target,
-            &compiler,
-            &root().join("tests/runtime/picture_contract.c"),
-            &executable,
-            &[],
-            Some(temporary.path()),
-        );
-        checked(&mut Command::new(&executable));
+        for (variant, source) in sources.iter().enumerate() {
+            let executable = temporary
+                .path()
+                .join(format!("picture_contract_{index}_{variant}"));
+            compile_with(
+                target,
+                &compiler,
+                source,
+                &executable,
+                &[],
+                Some(temporary.path()),
+            );
+            checked(&mut Command::new(&executable));
+        }
     }
 }
 
