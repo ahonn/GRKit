@@ -127,6 +127,8 @@ export default defineConfig({
     plausible(process.env.PLAUSIBLE_HOST || undefined),
   ],
   define: { __GRKIT_VERSION__: JSON.stringify(workspaceVersion()) },
+  // The landing page shows the camera screens of the README from resources/images.
+  server: { fs: { allow: ['.', '../resources/images'] } },
   build: {
     target: 'es2023',
     // The CSP allows fonts only from the site, so fonts stay files and never become data URLs.

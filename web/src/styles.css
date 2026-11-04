@@ -260,39 +260,9 @@ button {
   height: 44px;
 }
 
-.languages > div {
-  display: flex;
-  flex-wrap: wrap;
-  border: 1px solid var(--ink);
-}
-
-.languages .button {
-  border: 0;
-}
-
-.languages .button:lang(en) {
-  font-family: 'IBM Plex Sans', sans-serif;
-}
-
-.languages .button:lang(zh-Hans) {
-  font-family: 'Noto Sans SC', sans-serif;
-}
-
-.languages .button:lang(zh-Hant) {
-  font-family: 'Noto Sans TC', sans-serif;
-}
-
-.languages .button:lang(ja) {
-  font-family: 'Noto Sans JP', sans-serif;
-}
-
-.languages .button:lang(ko) {
-  font-family: 'Noto Sans KR', sans-serif;
-}
-
-/* A phone has no room for five buttons in a row, so it shows one menu instead. */
+/* The page language, as one menu. */
 .language-select {
-  display: none;
+  display: block;
   position: relative;
 }
 
@@ -315,44 +285,30 @@ button {
   pointer-events: none;
 }
 
-@media (max-width: 560px) {
-  .languages > div {
-    display: none;
-  }
-
-  .language-select {
-    display: block;
-  }
-}
-
 .masthead {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-bottom: 32px;
+  padding-bottom: 40px;
 }
 
-/* The name comes first in the page order. On a wide screen the controls show above it, at the
-   top right. */
+/* One row: the name with the version on the left, the links and the language on the right. */
 .masthead-top {
   display: flex;
-  flex-direction: column-reverse;
-  gap: 24px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
 }
 
 /* The version of the packaged GRKit sits at the top right of the name, as a mark on a box. */
 .masthead-title {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: 6px;
 }
 
 .masthead-version {
-  margin-top: 0.4em;
-  padding: 2px 8px;
+  padding: 1px 5px;
   border: 1px solid var(--ink);
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 12px;
   color: var(--ink);
   text-decoration: none;
 }
@@ -366,9 +322,20 @@ button {
   margin: 0;
   font-family: 'IBM Plex Sans Condensed', sans-serif;
   font-weight: 700;
-  font-size: clamp(64px, 10vw, 140px);
-  line-height: 0.9;
-  letter-spacing: -0.02em;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.masthead-nav {
+  display: flex;
+  gap: 24px;
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.masthead-nav a {
+  text-decoration: none;
 }
 
 /* The dot of the i in Ricoh red. The text keeps its glyph: a gradient fills it, red down to the
@@ -382,44 +349,314 @@ button {
   color: transparent;
 }
 
-.masthead .lead {
+.landing-copy .lead {
   margin: 0;
   font-family: var(--display);
   font-weight: 700;
-  font-size: clamp(26px, 3.4vw, 40px);
-  line-height: 1.2;
-  max-width: 22em;
+  font-size: clamp(30px, 4.2vw, 56px);
+  line-height: 1.12;
+  max-width: 16em;
 }
 
-.masthead .lead-line {
+.landing-copy .lead-line {
   display: block;
 }
 
-/* On a phone, a smaller name sits at the top left, in the row of the controls. */
+/* A phone has no room for the links: the sections follow in the page. */
+@media (max-width: 720px) {
+  .masthead-nav {
+    display: none;
+  }
+}
+
 @media (max-width: 560px) {
-  .masthead {
-    gap: 28px;
-  }
-
-  .masthead-top {
-    flex-direction: row;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .masthead-title {
-    gap: 6px;
-  }
-
   .masthead h1 {
-    font-size: 40px;
+    font-size: 30px;
   }
+}
 
-  .masthead-version {
-    margin-top: 0;
-    padding: 1px 5px;
-    font-size: 11px;
+/* Landing: what GRKit does, above the installer. */
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  align-items: center;
+  gap: 32px 56px;
+  padding-bottom: 48px;
+}
+
+.landing-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.landing-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 34em;
+}
+
+.landing-install {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.landing-install:hover {
+  color: var(--paper);
+  background: var(--ink-2);
+}
+
+.landing-looks {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.landing-looks-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+}
+
+.landing-look-name {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 22px;
+}
+
+/* All five looks in one row: the cells shrink on a phone. */
+.landing-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 84px));
+  gap: 4px;
+}
+
+.landing-film {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 2px;
+  border: 1px solid transparent;
+  border-radius: 0;
+  background: none;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+}
+
+.landing-film:hover {
+  border-color: var(--line);
+}
+
+.landing-film[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--selected);
+}
+
+.landing-text {
+  margin: 0;
+  max-width: 62ch;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.landing-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.landing-choices-label {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.landing-ratio {
+  font-family: var(--mono);
+}
+
+.landing-framing {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.landing-framing-views {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.landing-framing-views figure,
+.landing-screens figure,
+.landing-detail {
+  margin: 0;
+}
+
+.landing-framing-views figcaption {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.landing-framing-views figcaption b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* The display stays 3:2. The area outside the frame is dark, as the camera shows it. */
+.landing-display {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #000;
+}
+
+.landing-display img,
+.landing-shot img,
+.landing-zoom img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.landing-crop {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  outline: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.62);
+}
+
+.landing-crop svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.landing-crop line {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.landing-shot {
+  overflow: hidden;
+  background: #000;
+}
+
+.landing-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 32px;
+}
+
+.landing-detail figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.landing-detail h3,
+.landing-facts h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 19px;
+}
+
+.landing-detail p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.landing-detail .note {
+  color: var(--muted);
+}
+
+/* Narrower choices, so the four Grain strengths fit on one row of a detail. */
+.landing-detail .button.small {
+  padding: 0 8px;
+}
+
+.landing-zoom {
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #000;
+}
+
+.landing-screens {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.landing-screens img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.landing-screens figcaption {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.landing-facts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px 24px;
+}
+
+.landing-facts li {
+  padding-right: 20px;
+}
+
+.landing-facts p {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+/* The title of the installer, and the place where the install link scrolls to. */
+.landing-start {
+  margin: 0;
+  padding: 72px 0 28px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: clamp(30px, 3vw, 40px);
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  scroll-margin-top: 16px;
+}
+
+@media (max-width: 860px) {
+  .landing-hero,
+  .landing-framing-views {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -433,12 +670,32 @@ button {
   gap: 24px;
 }
 
+/* The heading stays at the top of the window while its section scrolls by. */
 .section > h2 {
+  position: sticky;
+  top: 16px;
+  z-index: 5;
+  align-self: flex-start;
+  /* A link to a section heading keeps the rule above the section in view: the section padding,
+     the rule, and a small gap. */
+  scroll-margin-top: 46px;
   margin: 0;
   flex: 0 0 200px;
   font-family: var(--display);
   font-weight: 700;
   font-size: 26px;
+}
+
+/* When the body wraps under the heading, the heading spans the page and covers what scrolls
+   under it. */
+@media (max-width: 900px) {
+  .section > h2 {
+    top: 0;
+    flex-basis: 100%;
+    padding: 12px 0;
+    margin: -12px 0;
+    background: var(--paper);
+  }
 }
 
 .section-body {
@@ -607,6 +864,24 @@ button {
 
 .frame[aria-busy='true'] .comparison-effect {
   opacity: 0.6;
+}
+
+/* The arrows of the comparison handle, in proportion to its small button. react-compare-slider
+   4.0.0 sets their size inline, so only !important overrides it. */
+.image-comparison .__rcs-handle-arrow {
+  width: 0.5rem !important;
+  height: 0.5rem !important;
+}
+
+/* Keyboard focus on a comparison shows on the round button. The focused handle is as tall as the
+   image, which the frame clips, so a ring on it would not show. */
+.image-comparison [data-rcs='handle-root']:focus-visible {
+  outline: none;
+}
+
+.image-comparison [data-rcs='handle-root']:focus-visible .__rcs-handle-button {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .comparison-effect {

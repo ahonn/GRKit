@@ -3,13 +3,13 @@ import { decodeLinear, MAX_EDGE } from './linear';
 import type { Source } from './render';
 
 /**
- * Snow in Akihabara, a GR IIIx JPEG by nagi usano (CC BY 2.0). scripts/build-sample.mjs
+ * Sakiko buys a delicious soup at Kitchen Grizzly, a GR IIIx JPEG by MIKI Yoshihito (CC BY 2.0). scripts/build-sample.mjs
  * estimates its linear pixels by inverting the Standard development of the preview.
  */
 export const DEFAULT_SAMPLE: Source = {
-  key: 'gr-iiix-akihabara-v1',
+  key: 'gr-iiix-kitchen-grizzly-v1',
   load: async () => {
-    const response = await fetch(siteUrl('samples/akihabara.grlinear'));
+    const response = await fetch(siteUrl('samples/kitchen-grizzly.grlinear'));
     if (!response.ok || !response.body) throw new Error('Cannot load sample photo');
     const reader = response.body.pipeThrough(new DecompressionStream('gzip')).getReader();
     const chunks: Uint8Array[] = [];

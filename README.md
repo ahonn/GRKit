@@ -12,7 +12,7 @@ GRKit adds film looks, XPan and other crops, date stamps, glow, and grain to RIC
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.jpg" alt="The GRKit section in the Customize tab of MENU" width="49%">
 </p>
 
-Photo: [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/) by nagi usano, [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
+Photo: [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/) by MIKI Yoshihito, [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 
 ## Features
 

@@ -12,7 +12,7 @@ The text in the menu icons and in the live view uses the [Roboto Condensed](http
 
 The installation guide uses the [Noto Sans CJK](https://github.com/notofonts/noto-cjk) typefaces, which are licensed under the SIL Open Font License 1.1. Its code text uses DejaVu Sans Mono, which is licensed under the DejaVu Fonts License.
 
-The screenshot in the installation guide shows the photo [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/) by nagi usano, which is licensed under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). The photo is cropped and scaled, and the screenshot shows the GRKit menu and the Portra 400 effect over it.
+The screenshots in the README and the installation guide show the photo [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/) by MIKI Yoshihito, which is licensed under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). The photo is cropped and scaled, and the screenshot shows the GRKit menu and the Portra 400 effect over it.
 
 ## Effects
 

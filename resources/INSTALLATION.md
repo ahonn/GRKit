@@ -35,7 +35,7 @@ Open ADJ and select the sixth entry, GRK. GRKit loads a few seconds after power-
 
 ![The GRKit page lists the modules and shows the current effect.](images/grkit-root.jpg)
 
-Photo: [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/) by nagi usano, [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
+Photo: [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/) by MIKI Yoshihito, [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 
 - **Film Look:** highlight an effect to preview it. Press OK to keep it. Press Fn to adjust the Standard parameters of the effect. On the GRK menu, press Fn on the Film Look row to adjust the selected effect. Each effect keeps its own adjustments, and they do not change the camera's Image Control settings.
 - **Framing:** select XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1. Press Fn to set **Mode** to **Crop** or **Guides Only**.

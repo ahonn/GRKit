@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { isAppleMobileDevice, type DeviceNavigator } from '../card';
 import type { Strings } from '../i18n';
+import { LANDING_HERO } from '../landing';
 
 /** GR Snap on the App Store. GR Snap is an iOS app by the same author as GRKit. */
 const APP_URL = 'https://apps.apple.com/app/gr-snap-ricoh-gr-wireless/id6768040383';
@@ -16,13 +17,45 @@ function initiallyShown(): boolean {
   }
 }
 
-/** A bar at the bottom of the screen that links to GR Snap on the App Store. */
+/** Calls `change` when the page scrolls or resizes. */
+function subscribeScroll(change: () => void): () => void {
+  addEventListener('scroll', change, { passive: true });
+  addEventListener('resize', change);
+  return () => {
+    removeEventListener('scroll', change);
+    removeEventListener('resize', change);
+  };
+}
+
+/**
+ * Whether the landing hero has scrolled out of view. Before the hero is in the page (the first
+ * render), it has not: the bar never shows over the hero, even for a frame.
+ */
+function pastHero(): boolean {
+  const hero = document.getElementById(LANDING_HERO);
+  return !!hero && hero.getBoundingClientRect().bottom <= 0;
+}
+
+/**
+ * A bar at the bottom of the screen that links to GR Snap on the App Store, on an iPhone or an iPad
+ * until the user closes it.
+ */
 export function AppPromo({ strings }: { strings: Strings }) {
   const [shown, setShown] = useState(initiallyShown);
   if (!shown) return null;
+  return <PromoBar strings={strings} onClose={() => setShown(false)} />;
+}
+
+/**
+ * The bar, which waits until the landing hero scrolls away, so it does not compete with the install
+ * action or cover the film looks. It follows the scroll only while it can show.
+ */
+function PromoBar({ strings, onClose }: { strings: Strings; onClose: () => void }) {
+  const past = useSyncExternalStore(subscribeScroll, pastHero, () => false);
+  if (!past) return null;
 
   const close = () => {
-    setShown(false);
+    onClose();
     try {
       localStorage.setItem(CLOSED_KEY, 'closed');
     } catch {
