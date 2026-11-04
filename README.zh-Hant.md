@@ -5,21 +5,21 @@
 [![Tests](https://github.com/ahonn/grkit/actions/workflows/tests.yml/badge.svg)](https://github.com/ahonn/grkit/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面比例、日期浮水印、光暈與顆粒，從記憶卡執行，免刷機。拔出記憶卡，相機就恢復原狀。
+GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面比例、日期浮水印、光暈與顆粒，從記憶卡執行，不改韌體。拔出記憶卡，相機就恢復原狀。
 
 <p>
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-root.zh-Hant.jpg" alt="ADJ 模式中的 GRKit 頁面" width="49%">
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.zh-Hant.jpg" alt="MENU 自訂頁中的 GRKit 小節" width="49%">
 </p>
 
-照片：nagi usano 拍攝的 [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+照片：MIKI Yoshihito 拍攝的 [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 ## 功能
 
 拍攝時按下 ADJ 撥桿，選擇第 6 項 GRK。
 
 - **底片風格**：Portra 400、Velvia 100、Tri-X 400 等，取景時即時預覽。也可以在 [grkit.app](https://grkit.app) 匯入自己的 `.cube` LUT 或 Lightroom 預設集。風格由開源底片 LUT 擬合而成，效果接近原 LUT，但不完全相同（[來源](effects/NOTICE.md)）。
-- **畫幅**：XPan、2.35:1、16:9、4:3、5:4、7:6 與 1:1。可裁切 JPEG，也可僅輔助構圖，取景時以遮罩或框線標出範圍。兩種模式下，選擇比例都會把相機設為 3:2。關閉畫幅時保留相機目前的比例。
+- **構圖比例**：XPan、2.35:1、16:9、4:3、5:4、7:6 與 1:1。可裁切 JPEG，也可僅輔助構圖，取景時以遮罩或框線標出範圍。兩種模式下，選擇比例都會把相機設為 3:2。關閉構圖比例時保留相機目前的比例。
 
   RAW 的預設裁切範圍保持原生 3:2，並保留相機的數位裁切設定。內嵌預覽仍可能顯示所選構圖。
 

@@ -12,7 +12,7 @@ GRKit 给理光 GR III、GR IIIx 和 GR IV 加上胶片滤镜、XPan 等画幅�
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.zh-Hans.jpg" alt="MENU 自定义页中的 GRKit 小节" width="49%">
 </p>
 
-照片：nagi usano 拍摄的 [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+照片：MIKI Yoshihito 拍摄的 [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 ## 功能
 

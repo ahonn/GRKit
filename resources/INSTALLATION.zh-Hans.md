@@ -35,7 +35,7 @@ GRKit 把设置、效果和你加入的模块保存在 `GRKIT` 文件夹中，�
 
 ![GRKit 页面列出模块，并显示当前效果。](images/grkit-root.jpg)
 
-照片：nagi usano 拍摄的 [Snow in Akihabara](https://www.flickr.com/photos/cafetricot/51803682755/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+照片：MIKI Yoshihito 拍摄的 [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 - **胶片风格（Film Look）：** 高亮一个效果，即可在实时显示中预览。按 OK 按钮保留这个效果。按 Fn 按钮调整这个效果的 [标准] 参数。在 GRK 菜单的胶片风格一行按 Fn 按钮，可以调整当前选择的效果。每个效果单独保存自己的调整，不会改变相机的影像控制设置。
 - **画幅（Framing）：** 选择 XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1。按 Fn 按钮，将**模式**设为**裁切拍摄**或**仅辅助构图**。

@@ -45,6 +45,7 @@ import {
 import { AppPromo } from './components/AppPromo';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Landing } from './components/Landing';
 import { RichText } from './components/RichText';
 import { TermsNote } from './components/TermsNote';
 import { loadFonts } from './fonts';
@@ -67,8 +68,8 @@ const REPOSITORY = 'https://github.com/ahonn/grkit';
 /** The Tally form for problems, feature ideas, and questions. A plain link, so the page loads nothing from Tally. */
 const FEEDBACK_FORM = 'https://tally.so/r/Z9jRgB';
 const DONATE = 'https://buymeacoffee.com/yuexunjiang';
-/** The release page of the GRKit version that the site packages. */
-const RELEASE_URL = `${REPOSITORY}/releases/tag/v${__GRKIT_VERSION__}`;
+/** The release notes of the GRKit version that the site packages, on the releases page. */
+const RELEASE_URL = `${REPOSITORY}/releases#release-v${__GRKIT_VERSION__}`;
 
 /** A guide in `resources/` in the page language, or in English. */
 function guideUrl(name: 'RECOVERY' | 'DUMP' | 'TERMS', language: Language): string {
@@ -538,8 +539,7 @@ export function App({
       )}
     <div className="page">
       <header className="masthead">
-        {/* The name and the controls share one row on a phone. On a wider screen the controls
-            come first, at the top right, and the name sits under them. */}
+        {/* One row: the name on the left, the links and the language on the right. */}
         <div className="masthead-top">
           <div className="masthead-title">
             <h1>
@@ -550,6 +550,11 @@ export function App({
             </a>
           </div>
           <div className="languages">
+            <nav className="masthead-nav" aria-label="GRKit">
+              <a href="#effects-label">{t.effects}</a>
+              <a href="#modules-label">{t.modules}</a>
+              <a href="#faq-label">{t.faqTitle}</a>
+            </nav>
             <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
               <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
                 <path
@@ -558,20 +563,6 @@ export function App({
                 />
               </svg>
             </a>
-            <div role="group" aria-label={t.language}>
-              {LANGUAGES.map((item) => (
-                <button
-                  key={item.code}
-                  type="button"
-                  lang={item.code}
-                  className="button"
-                  aria-pressed={item.code === language}
-                  onClick={() => chooseLanguage(item.code)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
             <span className="language-select">
               <select
                 className="button"
@@ -588,14 +579,9 @@ export function App({
             </span>
           </div>
         </div>
-        <p className="lead">
-          {t.lead.map((line) => (
-            <span key={line} className="lead-line">
-              {line}
-            </span>
-          ))}
-        </p>
       </header>
+
+      <Landing strings={t} language={language} canWrite={canWriteCards()} />
 
       <main>
         {canWriteCards() && (

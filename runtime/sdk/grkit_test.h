@@ -13,9 +13,12 @@
 /* Each pixel address of a surface maps to the pixel buffer of the harness. */
 #define GRKIT_PIXELS(address) grkit_test_pixels(address)
 /* The plane addresses of the harness: GRKIT_TEST_PLANE_BYTES bytes from
-   GRKIT_TEST_PLANES. */
+   GRKIT_TEST_PLANES. A build that runs a module on a full-size picture
+   defines a larger size. */
 #define GRKIT_TEST_PLANES 0x70000000U
+#ifndef GRKIT_TEST_PLANE_BYTES
 #define GRKIT_TEST_PLANE_BYTES (8U << 20)
+#endif
 #define GRKIT_BYTES(address) grkit_test_bytes(address)
 #include "grkit.h"
 

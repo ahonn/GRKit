@@ -309,19 +309,8 @@ export function EffectsSection({
               </button>
             )}
             <p className="note">
+              {/* The landing hero credits the sample photo where it first shows. */}
               {sentences(t.uploadNote, t.previewNote)}
-              {source === DEFAULT_SAMPLE && (
-                <>
-                  {' '}
-                  <a
-                    href="https://www.flickr.com/photos/cafetricot/51803682755/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {t.sampleCredit}
-                  </a>
-                </>
-              )}
             </p>
           </div>
         </div>
@@ -542,7 +531,7 @@ function PreviewFrame({
             <img src={result.processed} alt={`${originalAlt} — ${effectName}`} />
           </Item>
           <HandleRoot aria-label={compareLabel}>
-            <Handle buttonStyle={{ width: 44, height: 44 }} />
+            <Handle buttonStyle={{ width: 32, height: 32, gap: '0.2rem' }} />
           </HandleRoot>
         </Root>
       </Provider>
