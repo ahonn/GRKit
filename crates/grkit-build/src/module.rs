@@ -381,6 +381,8 @@ pub struct FilterSpec {
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LayerSpec {
+    /// Optional setting conditions, shared with indicator declarations.
+    pub enabled: Option<EnabledSpec>,
     /// The C function `void paint(const Surface *, u32 value)`.
     pub paint: String,
     /// The setting whose value the layer draws: a key of `settings`, or a
@@ -1214,6 +1216,40 @@ fn icon(m: &Manifest, spec: &IconSpec, name: &str, c: &mut String) -> Result<()>
     Ok(())
 }
 
+/// Generate setting conditions shared by indicators and overlay layers.
+fn conditions(m: &Manifest, enabled: &EnabledSpec, name: &str, c: &mut String) -> Result<usize> {
+    let conditions = match enabled {
+        EnabledSpec::Condition(condition) => std::slice::from_ref(condition),
+        EnabledSpec::All(conditions) => conditions.all.as_slice(),
+    };
+    ensure!(
+        (1..=4).contains(&conditions.len()),
+        "Enabled needs 1 to 4 conditions"
+    );
+    writeln!(c, "static const GrkitCondition {name}[] = {{")?;
+    for condition in conditions {
+        let (setting, _) = setting_reference(m, &condition.setting)?;
+        let (comparison, value) = match (condition.equals, condition.not_equals) {
+            (Some(value), None) => ("GRKIT_CONDITION_EQUALS", value),
+            (None, Some(value)) => ("GRKIT_CONDITION_NOT_EQUALS", value),
+            _ => anyhow::bail!("An enabled condition has exactly one of equals or not_equals"),
+        };
+        if let Some(values) = known_setting_values(m, &condition.setting) {
+            ensure!(
+                value < values,
+                "Enabled value {value} is outside setting {}",
+                condition.setting
+            );
+        }
+        writeln!(
+            c,
+            "{{.setting = {setting}, .comparison = {comparison}, .value = {value}}},"
+        )?;
+    }
+    writeln!(c, "}};")?;
+    Ok(conditions.len())
+}
+
 /// Viewfinder indicators are declarative registrations. The core owns
 /// placement, display policy, and redraw; modules provide no paint callback.
 fn indicators(m: &Manifest, c: &mut String) -> Result<Vec<String>> {
@@ -1262,40 +1298,14 @@ fn indicators(m: &Manifest, c: &mut String) -> Result<Vec<String>> {
                 ("GRKIT_INDICATOR_STATUS_ROW", "0")
             }
         };
-        let conditions = match &indicator.enabled {
-            EnabledSpec::Condition(condition) => std::slice::from_ref(condition),
-            EnabledSpec::All(conditions) => conditions.all.as_slice(),
-        };
-        ensure!(
-            (1..=4).contains(&conditions.len()),
-            "An indicator needs 1 to 4 enabled conditions"
-        );
-        writeln!(
+        let count = conditions(
+            m,
+            &indicator.enabled,
+            &format!("indicator_{i}_conditions"),
             c,
-            "static const GrkitCondition indicator_{i}_conditions[] = {{"
         )?;
-        for condition in conditions {
-            let (setting, _) = setting_reference(m, &condition.setting)?;
-            let (comparison, value) = match (condition.equals, condition.not_equals) {
-                (Some(value), None) => ("GRKIT_CONDITION_EQUALS", value),
-                (None, Some(value)) => ("GRKIT_CONDITION_NOT_EQUALS", value),
-                _ => anyhow::bail!("An enabled condition has exactly one of equals or not_equals"),
-            };
-            if let Some(values) = known_setting_values(m, &condition.setting) {
-                ensure!(
-                    value < values,
-                    "Enabled value {value} is outside setting {}",
-                    condition.setting
-                );
-            }
-            writeln!(
-                c,
-                "{{.setting = {setting}, .comparison = {comparison}, .value = {value}}},"
-            )?;
-        }
-        writeln!(c, "}};")?;
         icon(m, &indicator.icon, &format!("indicator_{i}_icon"), c)?;
-        writeln!(c, "static const GrkitIndicator indicator_{i} = {{.size = sizeof(GrkitIndicator), .placement = {placement}, .slot = {slot}, .condition_count = {}, .conditions = indicator_{i}_conditions, .icon = &indicator_{i}_icon}};", conditions.len())?;
+        writeln!(c, "static const GrkitIndicator indicator_{i} = {{.size = sizeof(GrkitIndicator), .placement = {placement}, .slot = {slot}, .condition_count = {}, .conditions = indicator_{i}_conditions, .icon = &indicator_{i}_icon}};", count)?;
         registrations.push(registration(
             "GRKIT_POINT_VIEWFINDER_INDICATOR",
             &format!("indicator_{i}"),
@@ -1334,10 +1344,17 @@ fn layers(m: &Manifest, c: &mut String) -> Result<Vec<String>> {
         } else {
             flags.join(" | ")
         };
+        let (condition_count, condition_pointer) = match &layer.enabled {
+            Some(enabled) => {
+                let name = format!("layer_{i}_conditions");
+                (conditions(m, enabled, &name, c)?, name)
+            }
+            None => (0, "0".to_owned()),
+        };
         writeln!(c, "void {paint}(const Surface *s, u32 value);")?;
         writeln!(
             c,
-            "static const GrkitLayer layer_{i} = {{.size = sizeof(GrkitLayer), .flags = {flags}, .paint = {paint}, .setting = {setting}, .order = {}}};",
+            "static const GrkitLayer layer_{i} = {{.size = sizeof(GrkitLayer), .flags = {flags}, .paint = {paint}, .setting = {setting}, .order = {}, .condition_count = {condition_count}, .conditions = {condition_pointer}}};",
             layer.order
         )?;
         registrations.push(registration(

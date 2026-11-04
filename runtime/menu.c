@@ -221,10 +221,6 @@ static void aspect_request(void) { MENU_FRAMING_REQUEST(); }
 /* A new effect sets the highlight warning again. */
 static void tone_stored(volatile u32 *h) { level_reapply(h); }
 #include "modules.h"
-#ifndef INDICATOR_WORD
-#define INDICATOR_WORD(address,offset) PAGE_WORD(address,offset)
-#endif
-#include "viewfinder_indicators.h"
 /* Only the still-viewfinder slot consults module state. Playback continues
    to resolve the icon recorded in the photo metadata. */
 static u32 selected_icon(volatile u32 *h) {

@@ -117,8 +117,16 @@ A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles.
 | `follow_disp` | boolean | `false` | The layer is off while DISP hides the native information. |
 | `full_disp` | boolean | `false` | The layer is on only while DISP shows the full information. |
 | `live_only` | boolean | `false` | The layer does not paint on the ADJ canvas. |
+| `enabled` | condition or `{ all = [...] }` | none | Optional setting conditions. All must match before the core treats the layer as active. |
 
 A layer has `follow_disp` or `full_disp`, not both.
+The optional `enabled` field uses the same conditions as an indicator, with 1 to 4 conditions.
+An omitted `enabled` field adds no condition.
+The setting value, display flags, and conditions must all permit the layer to draw.
+For example, `enabled = { setting = "DISP", equals = 0 }` selects a layer when `DISP` is zero.
+
+On the ADJ canvas, a condition on the previewed setting reads the highlighted value.
+Other conditions read committed values.
 
 ### indicators
 
@@ -296,7 +304,7 @@ Each module also has a row in the GRKit section of MENU. It opens Enable, then t
 
 ### Layers
 
-A layer paints over the still live view. The core calls `paint` for each draw of the live view with the value of the layer setting. It does not call `paint` while the value is 0.
+A layer paints over the still live view. The core calls `paint` for each draw of the live view with the value of the layer setting. It skips a layer whose setting is zero or whose enabled conditions do not match.
 
 The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, then green, blue, and alpha in its high byte. The bytes in memory are R, G, B, A:
 
@@ -415,13 +423,20 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.2: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
+**ABI version.** `GRKIT_ABI` is 2.3: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
 
 In 2.0, each text list also has a Korean text. The installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
 
 ABI 2.1 adds `picture_white`, `picture_shot`, setting defaults, and the settings and group page kinds. `GrkitSetting` appends `default_value`, and `GrkitPage` appends the group `children` pointer. The installer accepts older 16-byte settings and 40-byte pages. Older settings have default 0. A group needs the 44-byte page descriptor and registers each child separately.
 
 ABI 2.2 adds `GrkitIndicator`, `GrkitCondition`, and `GrkitIcon`. `GrkitPage` appends an optional `icon` pointer after `children`. The installer still accepts 40-byte and 44-byte pages. Their icons keep the existing tile rules. `GrkitLayer` and `Surface` keep their existing layouts.
+
+ABI 2.3 appends `condition_count` and `conditions` to `GrkitLayer`, increasing its descriptor from 20 to 28 bytes.
+The installer still accepts 20-byte layers, which have no enabled conditions.
+A 28-byte layer without conditions has count zero and a null pointer.
+A conditional layer has 1 to 4 `GrkitCondition` entries.
+The installer rejects layer descriptors of 21 to 27 bytes.
+`Surface` keeps its existing layout.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, and the imports. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

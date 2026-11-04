@@ -180,6 +180,58 @@ static void indicator_reset(void)
     code_words[ICON_AT + 1] = GRM_ICON_TILE;
     code_words[ICON_AT + 2] = 0;
 }
+/* Keep the original 20-byte layer fixture intact for compatibility checks. */
+#define CONDITIONAL_LAYER_AT TILES
+#define LAYER_CONDITIONS_AT (TILES + 7)
+static void conditional_layer_reset(void)
+{
+    reset();
+    code_words[REGISTRATIONS + 1] = CONDITIONAL_LAYER_AT * 4;
+    code_words[CONDITIONAL_LAYER_AT] = GRM_LAYER_CONDITIONAL;
+    pointer(CONDITIONAL_LAYER_AT + 2, PAINT, 1);
+    code_words[CONDITIONAL_LAYER_AT + 4] = 20;
+    code_words[CONDITIONAL_LAYER_AT + 5] = 1;
+    pointer(CONDITIONAL_LAYER_AT + 6, LAYER_CONDITIONS_AT, 0);
+    code_words[LAYER_CONDITIONS_AT] = 1;
+    code_words[LAYER_CONDITIONS_AT + 1] = GRM_CONDITION_EQUALS;
+    code_words[LAYER_CONDITIONS_AT + 2] = 0;
+}
+static void layers_validate_optional_conditions(void)
+{
+    reset();
+    abi = GRM_ABI_MAJOR << 16 | 2;
+    assert(registrations() == 0 && layers[0].descriptor == 0);
+    conditional_layer_reset();
+    assert(registrations() == 0 && layers[0].descriptor == CODE_BASE + CONDITIONAL_LAYER_AT * 4);
+    conditional_layer_reset(); code_words[LAYER_CONDITIONS_AT + 1] = GRM_CONDITION_NOT_EQUALS;
+    assert(registrations() == 0);
+    conditional_layer_reset(); code_words[LAYER_CONDITIONS_AT] = GRM_USED;
+    assert(registrations() == 0); /* Resolve the used setting in INSTALL. */
+    conditional_layer_reset(); code_words[CONDITIONAL_LAYER_AT + 5] = 0;
+    assert(registrations() == GRM_BAD_DESCRIPTOR); /* No conditions needs a null pointer. */
+    conditional_layer_reset(); code_words[CONDITIONAL_LAYER_AT + 5] = 0;
+    code_words[CONDITIONAL_LAYER_AT + 6] = 0;
+    /* A null pointer is not a code relocation. */
+    --relocation_count;
+    assert(registrations() == 0 && layers[0].descriptor == 0);
+    for (u32 size = GRM_LAYER + 1; size < GRM_LAYER_CONDITIONAL; ++size) {
+        conditional_layer_reset(); code_words[CONDITIONAL_LAYER_AT] = size;
+        assert(registrations() == GRM_BAD_DESCRIPTOR);
+    }
+    conditional_layer_reset(); code_words[CONDITIONAL_LAYER_AT + 5] = GRM_CONDITIONS_MAX + 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    conditional_layer_reset(); code_words[LAYER_CONDITIONS_AT] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    conditional_layer_reset(); code_words[LAYER_CONDITIONS_AT + 1] = 3;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    conditional_layer_reset(); code_words[LAYER_CONDITIONS_AT + 2] = 3;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    conditional_layer_reset(); ++code_words[CONDITIONAL_LAYER_AT + 6];
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    conditional_layer_reset(); code_words[CONDITIONAL_LAYER_AT + 6] = CODE_WORDS * 4 - 4;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+}
+
 static void indicators_validate_resources_and_conditions(void)
 {
     u32 indicators[GRM_REGISTRATIONS];
@@ -221,6 +273,7 @@ static void indicators_validate_resources_and_conditions(void)
 int main(void)
 {
     indicators_validate_resources_and_conditions();
+    layers_validate_optional_conditions();
     u32 failed = 99;
     const u8 *tiles;
     u32 tile_count;

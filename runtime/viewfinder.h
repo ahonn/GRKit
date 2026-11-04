@@ -89,13 +89,13 @@ static GRKIT_ICON_COMPACT u32 cue_update(volatile u32 *h,u32 controller) {
     return 1;
 }
 /* The module layers that INSTALL registered (GRKIT_HOST_MODULE_LAYERS), or 0
-   for a count out of range. Each has three words: its paint function, its
-   setting handle, and its flags with its order in the high half. */
+   for a count out of range. Each has four words: its paint function, setting
+   handle, flags with order in the high half, and optional conditions descriptor. */
 static GRKIT_ICON_COMPACT u32 module_layers(volatile u32 *h) {
     u32 n=h[GRKIT_HOST_MODULE_LAYER_COUNT/4];
     return n<=GRKIT_MODULE_LAYERS_MAX ? n : 0;
 }
-#define MODULE_LAYER(h,i) ((h)+GRKIT_HOST_MODULE_LAYERS/4+(i)*3)
+#define MODULE_LAYER(h,i) ((h)+GRKIT_HOST_MODULE_LAYERS/4+(i)*4)
 /* The flags of a layer (runtime/sdk/grkit.h). */
 #define MODULE_LAYER_FOLLOW_DISP 1U
 #define MODULE_LAYER_FULL_DISP 2U
@@ -106,7 +106,7 @@ static GRKIT_ICON_COMPACT u32 module_layers(volatile u32 *h) {
    Off stops its module. */
 static GRKIT_ICON_COMPACT u32 module_layer_value(volatile u32 *h,u32 i) {
     volatile u32 *l=MODULE_LAYER(h,i);
-    if(services_suspended(h,l[0])) return 0;
+    if(services_suspended(h,l[0]) || !viewfinder_layer_enabled(h,l[3],0)) return 0;
     if((l[2]&MODULE_LAYER_FOLLOW_DISP) && native_display()>DISPLAY_SIMPLE) return 0;
     if((l[2]&MODULE_LAYER_FULL_DISP) && native_display()!=DISPLAY_FULL) return 0;
     return l[1]==NO_SETTING ? 1 : setting_value(h,l[1]);
@@ -170,6 +170,7 @@ static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface
         }
         else value=MODULE_LAYER(h,i)[1]==NO_SETTING ? 1 : setting_value(h,MODULE_LAYER(h,i)[1]);
         if(aspect && !composition) value=0;
+        if(preview && !viewfinder_layer_enabled(h,MODULE_LAYER(h,i)[3],1)) value=0;
         if(value && !services_suspended(h,MODULE_LAYER(h,i)[0])) module_paint(h,i,aspect ? &frame : surface,value);
     }
 }

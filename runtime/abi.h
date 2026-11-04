@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 848
+#define GRKIT_HOST_HEADER_SIZE 912
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -214,44 +214,45 @@
 #define GRKIT_HOST_MODULE_CHOICE 476
 /* Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it. */
 #define GRKIT_HOST_MODULE_LAYER_COUNT 480
-/* Three words for each module layer, in painting order: its paint function,
-   its setting handle (GRKIT_NO_SETTING paints with the value 1), and its flags
-   in the low half with its order in the high half. */
+/* Four words for each module layer, in painting order: its paint function,
+   setting handle (GRKIT_NO_SETTING paints with value 1), flags in the low half
+   with order in the high half, and an optional GrkitLayer descriptor with
+   enabled conditions (0 for no conditions). */
 #define GRKIT_HOST_MODULE_LAYERS 484
-#define GRKIT_HOST_MODULE_LAYERS_WORDS 48
+#define GRKIT_HOST_MODULE_LAYERS_WORDS 64
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
-#define GRKIT_HOST_GAMMA_KEY 676
+#define GRKIT_HOST_GAMMA_KEY 740
 /* The effect of the RAW development in playback: 1 for native processing, else
    an owned record. The start of a development sets the effect that its DNG
    records (runtime/picture.c), and its Image Control list changes it. The
    still builds of a development apply it instead of the selected effect
    (runtime/processing.h). */
-#define GRKIT_HOST_DEVELOP 680
+#define GRKIT_HOST_DEVELOP 744
 /* GRKIT_HOST_DEVELOP when the Image Control list of the development opened.
    Cancel restores it, as the list restores its native value. */
-#define GRKIT_HOST_DEVELOP_SAVED 684
+#define GRKIT_HOST_DEVELOP_SAVED 748
 /* The native rows of that list. The effects follow them (runtime/menu.c). */
-#define GRKIT_HOST_DEVELOP_ROWS 688
+#define GRKIT_HOST_DEVELOP_ROWS 752
 /* The text ID of the native Standard label of the development, which shows the
    name of a GRKit effect (GRKIT_HOST_DEVELOP_NAME) instead. */
-#define GRKIT_HOST_DEVELOP_TEXT 692
+#define GRKIT_HOST_DEVELOP_TEXT 756
 /* The text descriptor of that name. */
-#define GRKIT_HOST_DEVELOP_NAME 696
+#define GRKIT_HOST_DEVELOP_NAME 760
 #define GRKIT_HOST_DEVELOP_NAME_WORDS 2
 /* Number of registered viewfinder indicators. INSTALL writes it. */
-#define GRKIT_HOST_INDICATOR_COUNT 704
+#define GRKIT_HOST_INDICATOR_COUNT 768
 /* Descriptor address and module tile base for each indicator, in module load
    order and declaration order (runtime/sdk/grkit.h). */
-#define GRKIT_HOST_INDICATORS 708
+#define GRKIT_HOST_INDICATORS 772
 #define GRKIT_HOST_INDICATORS_WORDS 32
 /* Code address of an ABI 2.0/2.1 module that supplies CORE.TONE, or 0. Its
    legacy native icon applies only without an explicit slot owner. */
-#define GRKIT_HOST_LEGACY_TONE_OWNER 836
+#define GRKIT_HOST_LEGACY_TONE_OWNER 900
 /* CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only. */
-#define GRKIT_HOST_ASPECT_MODE 840
+#define GRKIT_HOST_ASPECT_MODE 904
 /* Native aspect + 1 at the last live-view bind, or 0 before the first bind. */
-#define GRKIT_HOST_FRAME_NATIVE 844
+#define GRKIT_HOST_FRAME_NATIVE 908
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
@@ -274,7 +275,7 @@
 #define GRKIT_CORE_ASPECT_MODE 0x104U
 #define GRKIT_CORE_ASPECT_MODE_VALUES 2U
 #define GRKIT_CORE_ASPECT_MODE_BIT 0x10
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,840
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,904
 #define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2
 
 /* An Image Control record. The records follow the header. */

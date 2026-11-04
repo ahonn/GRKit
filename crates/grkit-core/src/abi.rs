@@ -275,10 +275,11 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_MODULE_CHOICE: 4;
     /// Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it.
     HOST_MODULE_LAYER_COUNT: 4;
-    /// Three words for each module layer, in painting order: its paint
-    /// function, its setting handle (GRKIT_NO_SETTING paints with the value
-    /// 1), and its flags in the low half with its order in the high half.
-    HOST_MODULE_LAYERS: 12 * MODULE_LAYERS_MAX;
+    /// Four words for each module layer, in painting order: its paint
+    /// function, setting handle (GRKIT_NO_SETTING paints with value 1),
+    /// flags in the low half with order in the high half, and an optional
+    /// GrkitLayer descriptor with enabled conditions (0 for no conditions).
+    HOST_MODULE_LAYERS: 16 * MODULE_LAYERS_MAX;
     /// Key of the inputs of the last private curve composition in the gamma
     /// stage, or 0 (runtime/processing.h).
     HOST_GAMMA_KEY: 4;

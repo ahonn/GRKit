@@ -50,15 +50,17 @@ settings = ["STYLE", "COLOR", "OPACITY", "DISP"]
 # The GRKit section of MENU turns each style on or off for ADJ.
 options = true
 
-# Above the Framing mask (10), below the Framing ratio label (30). One layer
-# follows DISP and one does not; each paints only for its DISP value.
+# Above the Framing mask (10), below the Framing ratio label (30). The core selects
+# one layer from DISP before deciding whether the canvas needs a full clear.
 [[layers]]
 paint = "guides_paint"
 setting = "STYLE"
 order = 20
 follow_disp = true
+enabled = { setting = "DISP", equals = 0 }
 
 [[layers]]
 paint = "guides_paint_always"
 setting = "STYLE"
 order = 20
+enabled = { setting = "DISP", equals = 1 }

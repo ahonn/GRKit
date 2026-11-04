@@ -21,7 +21,7 @@ typedef signed int s32;
    equals that of the core and whose minor version is not larger. A minor
    version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 2U
+#define GRKIT_ABI_MINOR 3U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -51,6 +51,14 @@ typedef struct {
 /* The pixel at (x, y). */
 #define SURFACE_PIXEL(s,x,y) (GRKIT_PIXELS((s)->data+((y)*(s)->stride+(x))*4)[0])
 
+#define GRKIT_CONDITION_EQUALS 1U
+#define GRKIT_CONDITION_NOT_EQUALS 2U
+typedef struct {
+    u32 setting;
+    u32 comparison;
+    u32 value;
+} GrkitCondition;
+
 /* A drawing layer. The core calls `paint` for each draw of the live view
    with the value of `setting` (see GRKIT_USE), and does not call
    it while the value is 0, so a layer that is off costs nothing. With
@@ -67,6 +75,10 @@ typedef struct {
     void (*paint)(const Surface *s, u32 value);
     u32 setting;
     u32 order;
+    /* Since ABI 2.3. All conditions must match before this layer is active.
+       Zero conditions and a null pointer keep the ABI 2.0 behavior. */
+    u32 condition_count;
+    const GrkitCondition *conditions;
 } GrkitLayer;
 
 /* Live-view labels of the core (overlay_label): the GRKit cue, the name of
@@ -180,14 +192,6 @@ typedef struct {
     u32 setting;
     u32 first_tile;
 } GrkitIcon;
-
-#define GRKIT_CONDITION_EQUALS 1U
-#define GRKIT_CONDITION_NOT_EQUALS 2U
-typedef struct {
-    u32 setting;
-    u32 comparison;
-    u32 value;
-} GrkitCondition;
 
 #define GRKIT_INDICATOR_NATIVE_SLOT 1U
 #define GRKIT_INDICATOR_STATUS_ROW 2U

@@ -1022,7 +1022,7 @@ fn native_framing_contract_preserves_canvas_bounds_and_settings() {
         }
     }
     module += "const GrkitContext grkit_self;\n\
-               u32 setting_get(u32 handle) { (void)handle; return 0; }\n#endif\n";
+               u32 setting_get(u32 handle) { return handle==SETTING_DISP ? setting_value(framing_header(),handle) : 0; }\n#endif\n";
     std::fs::write(temporary.path().join("grkit_module.h"), module).unwrap();
     for (index, target) in targets().iter().enumerate() {
         let executable = temporary.path().join(format!("framing_contract_{index}"));

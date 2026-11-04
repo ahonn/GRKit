@@ -34,12 +34,14 @@ AT(GrkitSetting, values, GRM_SETTING_VALUES_AT);
 AT(GrkitSetting, flags, GRM_SETTING_FLAGS_AT);
 AT(GrkitSetting, default_value, GRM_SETTING_DEFAULT_AT);
 
-SIZE(GrkitLayer, GRM_LAYER);
+SIZE(GrkitLayer, GRM_LAYER_CONDITIONAL);
 AT(GrkitLayer, size, 0);
 AT(GrkitLayer, flags, GRM_LAYER_FLAGS_AT);
 AT(GrkitLayer, paint, GRM_LAYER_PAINT_AT);
 AT(GrkitLayer, setting, GRM_LAYER_SETTING_AT);
 AT(GrkitLayer, order, GRM_LAYER_ORDER_AT);
+AT(GrkitLayer, condition_count, GRM_LAYER_CONDITION_COUNT_AT);
+AT(GrkitLayer, conditions, GRM_LAYER_CONDITIONS_AT);
 
 SIZE(GrkitPage, GRM_PAGE_ICON);
 AT(GrkitPage, size, 0);

@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 2U
+#define GRM_ABI_MINOR 3U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U
@@ -86,11 +86,14 @@
 #define GRM_SETTING_FLAGS_AT 12U
 #define GRM_SETTING_DEFAULT_AT 16U
 /* GrkitLayer. */
-#define GRM_LAYER 20U
+#define GRM_LAYER 20U /* ABI 2.0 minimum */
+#define GRM_LAYER_CONDITIONAL 28U
 #define GRM_LAYER_FLAGS_AT 4U
 #define GRM_LAYER_PAINT_AT 8U
 #define GRM_LAYER_SETTING_AT 12U
 #define GRM_LAYER_ORDER_AT 16U
+#define GRM_LAYER_CONDITION_COUNT_AT 20U
+#define GRM_LAYER_CONDITIONS_AT 24U
 /* The icon shared by an indicator and an ADJ child. */
 #define GRM_ICON 16U
 #define GRM_ICON_KIND_AT 4U
@@ -353,7 +356,7 @@ static int grm_settings(const struct grm_module *m, const u8 *code, u32 base,
    settings of the module, GRM_USED | n for used setting n, or
    GRM_NO_SETTING for a layer without one. A page has one row for each
    value of its setting. */
-struct grm_layer { u32 paint, setting, flags, order; };
+struct grm_layer { u32 paint, setting, flags, order, descriptor; };
 struct grm_page { u32 address, setting, flags, rows; };
 /* A plane filter: its apply function, its setting, and its stage. */
 struct grm_filter { u32 apply, setting, stage; };
@@ -426,6 +429,24 @@ static int grm_icon(const struct grm_module *m, const u8 *code, u32 base, u32 ad
     if (kind != GRM_ICON_TILE || first >= tile_count) return 0;
     return setting == GRM_NO_SETTING || (setting & GRM_USED) || settings[setting].values <= tile_count - first;
 }
+/* Conditions are ANDed; zero is an ordinary setting value, not Off.
+   A descriptor without conditions must also have a null pointer. */
+static int grm_conditions(const struct grm_module *m, const u8 *code, u32 base, u32 address, u32 count,
+                          const struct grm_setting *settings, u32 setting_count, u32 use_count)
+{
+    if (!count) return !address;
+    if (count > GRM_CONDITIONS_MAX) return 0;
+    const u8 *conditions = grm_code_at(m, code, base, address, count * GRM_CONDITION);
+    if (!conditions || (address & 3)) return 0;
+    for (u32 i = 0; i < count; ++i) {
+        const u8 *c = conditions + i * GRM_CONDITION;
+        u32 setting = grm_word(c), comparison = grm_word(c + GRM_CONDITION_COMPARISON_AT);
+        if (!grm_setting_reference(setting, setting_count, use_count) ||
+            (comparison != GRM_CONDITION_EQUALS && comparison != GRM_CONDITION_NOT_EQUALS) ||
+            (!(setting & GRM_USED) && grm_word(c + GRM_CONDITION_VALUE_AT) >= settings[setting].values)) return 0;
+    }
+    return 1;
+}
 /* Validate one indicator. Conditions are ANDed; zero is an ordinary setting
    value, not an implicit Off. */
 static int grm_indicator(const struct grm_module *m, const u8 *code, u32 base, u32 address,
@@ -438,15 +459,8 @@ static int grm_indicator(const struct grm_module *m, const u8 *code, u32 base, u
         placement != GRM_INDICATOR_STATUS_ROW || slot) return 0;
     u32 count = grm_word(p + GRM_INDICATOR_CONDITION_COUNT_AT);
     if (!count || count > GRM_CONDITIONS_MAX) return 0;
-    const u8 *conditions = grm_code_at(m, code, base, grm_word(p + GRM_INDICATOR_CONDITIONS_AT), count * GRM_CONDITION);
-    if (!conditions || (grm_word(p + GRM_INDICATOR_CONDITIONS_AT) & 3)) return 0;
-    for (u32 i = 0; i < count; ++i) {
-        const u8 *c = conditions + i * GRM_CONDITION;
-        u32 setting = grm_word(c), comparison = grm_word(c + GRM_CONDITION_COMPARISON_AT);
-        if (!grm_setting_reference(setting, setting_count, use_count) ||
-            (comparison != GRM_CONDITION_EQUALS && comparison != GRM_CONDITION_NOT_EQUALS) ||
-            (!(setting & GRM_USED) && grm_word(c + GRM_CONDITION_VALUE_AT) >= settings[setting].values)) return 0;
-    }
+    if (!grm_conditions(m, code, base, grm_word(p + GRM_INDICATOR_CONDITIONS_AT), count,
+                        settings, setting_count, use_count)) return 0;
     return grm_icon(m, code, base, grm_word(p + GRM_INDICATOR_ICON_AT), settings, setting_count, use_count, tile_count);
 }
 /* Collect the descriptors in declaration order after registrations passed
@@ -484,6 +498,15 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
         if (point == GRM_POINT_OVERLAY_LAYER) {
             const u8 *layer = grm_code_at(m, code, base, impl, GRM_LAYER);
             if (!layer || grm_word(layer) < GRM_LAYER) return GRM_BAD_DESCRIPTOR;
+            u32 size = grm_word(layer), descriptor = 0;
+            if (size != GRM_LAYER) {
+                if ((impl & 3) || size < GRM_LAYER_CONDITIONAL || !grm_code_at(m, code, base, impl, GRM_LAYER_CONDITIONAL))
+                    return GRM_BAD_DESCRIPTOR;
+                u32 count = grm_word(layer + GRM_LAYER_CONDITION_COUNT_AT);
+                if (!grm_conditions(m, code, base, grm_word(layer + GRM_LAYER_CONDITIONS_AT), count,
+                                    settings, setting_count, use_count)) return GRM_BAD_DESCRIPTOR;
+                if (count) descriptor = impl;
+            }
             u32 flags = grm_word(layer + GRM_LAYER_FLAGS_AT), paint = grm_word(layer + GRM_LAYER_PAINT_AT);
             u32 setting = grm_word(layer + GRM_LAYER_SETTING_AT);
             /* A Thumb function, or an ARM one at a word address. */
@@ -496,6 +519,7 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             if (*layer_count >= max) return GRM_NO_ROOM;
             struct grm_layer *l = layers + (*layer_count)++;
             l->paint = paint; l->setting = setting; l->flags = flags; l->order = grm_word(layer + GRM_LAYER_ORDER_AT);
+            l->descriptor = descriptor;
         } else if (point == GRM_POINT_MENU_PAGE) {
             const u8 *page = grm_code_at(m, code, base, impl, GRM_PAGE);
             if (!page || grm_word(page) < GRM_PAGE) return GRM_BAD_DESCRIPTOR;

@@ -511,6 +511,60 @@ icon = { setting = "FIRST_STRENGTH" }
 "#;
 
 #[test]
+fn layers_share_enabled_conditions_and_allow_unconditional_declarations() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let layers = r#"
+[[layers]]
+paint = "draw_guides"
+setting = "FIRST_STRENGTH"
+order = 20
+follow_disp = true
+enabled = { all = [{ setting = "FIRST_ENABLED", equals = 0 }, { setting = "SECOND_ENABLED", not_equals = 1 }] }
+[[layers]]
+paint = "draw_mask"
+order = 10
+"#;
+    fs::write(
+        folder.join("module.toml"),
+        format!("{GROUP_MANIFEST}{layers}"),
+    )?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".setting = 0, .comparison = GRKIT_CONDITION_EQUALS, .value = 0"));
+    assert!(code.contains(".setting = 2, .comparison = GRKIT_CONDITION_NOT_EQUALS, .value = 1"));
+    assert!(code.contains(".condition_count = 2, .conditions = layer_0_conditions"));
+    assert!(code.contains(".condition_count = 0, .conditions = 0"));
+    Ok(())
+}
+
+#[test]
+fn layers_reject_invalid_enabled_conditions() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let invalid = [
+        "{ all = [] }".to_owned(),
+        "{ setting = \"MISSING\", equals = 0 }".to_owned(),
+        "{ setting = \"FIRST_ENABLED\", equals = 2 }".to_owned(),
+        "{ setting = \"FIRST_ENABLED\" }".to_owned(),
+        "{ setting = \"FIRST_ENABLED\", equals = 0, not_equals = 1 }".to_owned(),
+        format!(
+            "{{ all = [{}] }}",
+            ["{ setting = \"FIRST_ENABLED\", equals = 1 }"; 5].join(",")
+        ),
+    ];
+    for enabled in invalid {
+        fs::write(
+            folder.join("module.toml"),
+            format!(
+                "{GROUP_MANIFEST}\n[[layers]]\npaint = \"draw\"\norder = 0\nenabled = {enabled}\n"
+            ),
+        )?;
+        assert!(module::generate(&folder).is_err(), "accepted {enabled}");
+    }
+    Ok(())
+}
+
+#[test]
 fn indicators_and_adj_children_share_strength_icons_without_using_strength_as_enabled() -> Result<()>
 {
     let directory = tempfile::tempdir()?;

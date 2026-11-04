@@ -20,12 +20,16 @@ static uint32_t pixels[1024 * 480 + 2];
 static uint32_t native_aspect, capture_aspect, capture_requests;
 #define TEST_INDICATOR 0x5b000000U
 #define TEST_ICONS 0x5a000000U
+#define TEST_LAYERS 0x59000000U
+static uint32_t layer_memory[128/4];
 static uint32_t indicator_memory[256/4], icon_memory[40*6412/4];
 
 static void *mapped(uint32_t address, uint32_t bytes)
 {
     uint32_t *object, size = sizeof(canvas_memory);
-    if (address >= TEST_INDICATOR && address < TEST_INDICATOR + sizeof(indicator_memory)) {
+    if (address >= TEST_LAYERS && address < TEST_LAYERS + sizeof(layer_memory)) {
+        object = layer_memory; address -= TEST_LAYERS; size = sizeof(layer_memory);
+    } else if (address >= TEST_INDICATOR && address < TEST_INDICATOR + sizeof(indicator_memory)) {
         object = indicator_memory; address -= TEST_INDICATOR; size = sizeof(indicator_memory);
     } else if (address >= TEST_ICONS && address < TEST_ICONS + sizeof(icon_memory)) {
         object = icon_memory; address -= TEST_ICONS; size = sizeof(icon_memory);
@@ -84,7 +88,7 @@ static const volatile uint8_t *mapped_labels(uint32_t address)
     return overlay_labels;
 }
 #define LABEL_MAP(address) mapped_labels(address)
-/* The module settings table of the harness: one setting, the Guides style. */
+/* The module settings table of the harness: the four Guides settings. */
 #define TEST_SETTINGS 0x5f000000U
 static uint32_t settings_memory[2 + 3 * 4];
 static volatile uint32_t *mapped_settings(uint32_t address)
@@ -111,6 +115,7 @@ static uint32_t profile_core_id;
    Framing (modules/framing) and Guides (modules/guides) modules. */
 #define TEST_MASK_PAINT 0x5e000011U
 #define TEST_GUIDES_PAINT 0x5e000001U
+#define TEST_GUIDES_ALWAYS_PAINT 0x5e000031U
 #define TEST_BADGE_PAINT 0x5e000021U
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value);
 #define MODULE_PAINT(address,surface,value) test_module_paint(address,surface,value)
@@ -130,6 +135,7 @@ static void legacy_badge(const Surface *surface,u32 value) {
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value)
 {
     if (address == TEST_MASK_PAINT) framing_mask(surface, value);
+    else if (address == TEST_GUIDES_ALWAYS_PAINT) guides_paint_always(surface, value);
     else if (address == TEST_BADGE_PAINT) legacy_badge(surface, value);
     else {
         assert(address == TEST_GUIDES_PAINT);
@@ -138,6 +144,7 @@ static void test_module_paint(uint32_t address, const void *surface, uint32_t va
 }
 /* The committed Guides style. */
 #define GUIDE_STYLE settings_memory[3]
+#define GUIDE_DISP settings_memory[12]
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
 volatile u32 *framing_header(void) { return header; }
@@ -149,7 +156,7 @@ volatile u32 *framing_header(void) { return header; }
    CORE.ASPECT. */
 static void register_layers(u32 framing)
 {
-    const u32 layers[3][3] = {
+    const u32 layers[3][4] = {
         {TEST_MASK_PAINT, GRKIT_CORE_ASPECT, 10U << 16},
         {TEST_GUIDES_PAINT, 0, 20U << 16 | MODULE_LAYER_FOLLOW_DISP},
         {TEST_BADGE_PAINT, GRKIT_CORE_ASPECT, 30U << 16 | MODULE_LAYER_FULL_DISP | MODULE_LAYER_LIVE_ONLY},
@@ -157,11 +164,27 @@ static void register_layers(u32 framing)
     u32 n = 0;
     for (u32 i = 0; i < 3; ++i) {
         if (!framing && i != 1) continue;
-        for (u32 w = 0; w < 3; ++w) header[GRKIT_HOST_MODULE_LAYERS/4 + n*3 + w] = layers[i][w];
+        for (u32 w = 0; w < 4; ++w) header[GRKIT_HOST_MODULE_LAYERS/4 + n*4 + w] = layers[i][w];
         ++n;
     }
     header[GRKIT_HOST_MODULE_LAYER_COUNT/4] = n;
     header[GRKIT_HOST_CAPABILITIES/4] = framing ? ASPECT_BIT : 0;
+}
+/* Register the two official Guides layers, including their mutually
+   exclusive enabled conditions. Neither needs the Framing capability. */
+static void register_conditional_guides(void)
+{
+    memset(layer_memory,0,sizeof(layer_memory));
+    for(u32 i=0;i<2;++i) {
+        u32 descriptor=TEST_LAYERS+i*48, condition=descriptor+28;
+        WORD(descriptor,0)=28; WORD(descriptor,20)=1; WORD(descriptor,24)=condition;
+        WORD(condition,0)=3; WORD(condition,4)=1; WORD(condition,8)=i;
+        u32 *entry=(u32 *)MODULE_LAYER(header,i);
+        entry[0]=i ? TEST_GUIDES_ALWAYS_PAINT : TEST_GUIDES_PAINT;
+        entry[1]=0; entry[2]=20U<<16 | (i ? 0 : MODULE_LAYER_FOLLOW_DISP); entry[3]=descriptor;
+    }
+    header[GRKIT_HOST_MODULE_LAYER_COUNT/4]=2;
+    header[GRKIT_HOST_CAPABILITIES/4]=0;
 }
 /* 7:6: a crop on every camera, and the highest ratio value. */
 #define LAST_RATIO 7U
@@ -192,7 +215,9 @@ static void reset(void)
     WORD(TEST_BITMAP, 4)=TEST_STRIDE*480*4;
     WORD(TEST_BITMAP, 8)=TEST_PIXELS;
     /* The Framing and Guides modules are loaded. */
-    settings_memory[0]=1; settings_memory[1]=0; settings_memory[2]=1; settings_memory[3]=0; settings_memory[4]=6;
+    memset(settings_memory,0,sizeof(settings_memory));
+    settings_memory[0]=4;
+    for(u32 i=0;i<4;++i) { settings_memory[2+3*i]=i+1; settings_memory[4+3*i]=i==0 ? 6 : i==1 ? 3 : 2; }
     header[GRKIT_HOST_MODULE_SETTINGS/4]=TEST_SETTINGS;
     register_layers(1);
     header[GRKIT_HOST_ACTIVE/4]=0x59001000;
@@ -1085,6 +1110,63 @@ int main(void)
 
     /* Without the profile, no point reads the counter. */
     assert(profile_clock==0);
+    /* Hidden Guides clear their old pixels once, then stop requesting full
+       clears. Both DISP policies keep the same visible guide pixels. */
+    for(u32 policy=0;policy<2;++policy) for(u32 mode=0;mode<4;++mode) {
+        reset(); register_conditional_guides(); GUIDE_STYLE=1; GUIDE_DISP=policy;
+        framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==1);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert(pixels[1+240]==0x80000000U);
+        display_mode=mode;
+        for(u32 i=1;i<=TEST_STRIDE*480;++i) pixels[i]=SENTINEL;
+        BYTE(TEST_CANVAS,0xa0)=0;
+        framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==1);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        u32 visible=policy || mode<2;
+        assert(pixels[1+240]==(visible ? 0x80000000U : SENTINEL));
+        for(u32 draw=0;draw<3;++draw) {
+            BYTE(TEST_CANVAS,0xa0)=0;
+            framing_prepare(TEST_CANVAS);
+            assert(BYTE(TEST_CANVAS,0xa0)==visible);
+            framing_paint(TEST_CANVAS,TEST_BITMAP);
+        }
+        /* Returning to full information restores the guides. */
+        display_mode=DISPLAY_FULL;
+        framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==1);
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert(pixels[1+240]==0x80000000U);
+        GUIDE_STYLE=0;
+        framing_prepare(TEST_CANVAS); framing_paint(TEST_CANVAS,TEST_BITMAP);
+        BYTE(TEST_CANVAS,0xa0)=0; framing_prepare(TEST_CANVAS);
+        assert(BYTE(TEST_CANVAS,0xa0)==0);
+    }
+    /* ADJ ignores display flags but honors enabled conditions. */
+    for(u32 policy=0;policy<2;++policy) {
+        reset(); register_conditional_guides(); GUIDE_STYLE=0; GUIDE_DISP=policy;
+        display_mode=DISPLAY_OFF;
+        header[GRKIT_HOST_FRAME_PREVIEW/4]=1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4]=1;
+        header[GRKIT_HOST_MODULE_PREVIEW/4+1]=1;
+        header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=TEST_OWNER;
+        framing_paint(TEST_CANVAS,TEST_BITMAP);
+        assert(pixels[1+240]==0x80000000U);
+    }
+    /* A missing optional condition is false even with not_equals. */
+    reset(); register_conditional_guides(); GUIDE_STYLE=1;
+    WORD(TEST_LAYERS+28,0)=NO_SETTING; WORD(TEST_LAYERS+28,4)=2;
+    assert(!layers_active(header));
+    /* Framing already reads as Off with incompatible native geometry.
+       After clearing an old mask once, later draws need no full clear. */
+    reset(); GUIDE_STYLE=0;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    native_aspect=3;
+    framing_prepare(TEST_CANVAS); framing_paint(TEST_CANVAS,TEST_BITMAP);
+    BYTE(TEST_CANVAS,0xa0)=0; framing_prepare(TEST_CANVAS);
+    assert(!layers_active(header) && BYTE(TEST_CANVAS,0xa0)==0);
+
     /* The development profile counts each point, and each module layer in
        the slot of the module whose code holds its paint function: Guides is
        module 0, Framing (the mask and the label) module 1. */

@@ -50,7 +50,10 @@ static const MenuPage about_module = ABOUT_PAGE;
 #ifndef MODULE_ICON_WORD
 #define MODULE_ICON_WORD(address,offset) PAGE_WORD(address,offset)
 #endif
-#include "module_icons.h"
+#ifndef INDICATOR_WORD
+#define INDICATOR_WORD(address,offset) PAGE_WORD(address,offset)
+#endif
+#include "viewfinder_indicators.h"
 #include "manage.h"
 static const MenuPage manage_module_page = MANAGE_PAGE;
 static const MenuPage switch_module_page = SWITCH_PAGE;
@@ -240,8 +243,9 @@ static u32 module_icon(u32 module,u32 icon) { (void)module; return icon; }
 static u32 module_layers_on(volatile u32 *h) {
     u32 i, n=h[GRKIT_HOST_MODULE_LAYER_COUNT/4];
     for(i=0;i<n && i<GRKIT_MODULE_LAYERS_MAX;++i) {
-        u32 handle=h[GRKIT_HOST_MODULE_LAYERS/4+i*3+1];
-        if(services_suspended(h,h[GRKIT_HOST_MODULE_LAYERS/4+i*3])) continue;
+        u32 handle=h[GRKIT_HOST_MODULE_LAYERS/4+i*4+1];
+        if(services_suspended(h,h[GRKIT_HOST_MODULE_LAYERS/4+i*4]) ||
+           !viewfinder_layer_enabled(h,h[GRKIT_HOST_MODULE_LAYERS/4+i*4+3],0)) continue;
         if(handle==0xffffffffU || setting_value(h,handle)) return 1;
     }
     return 0;

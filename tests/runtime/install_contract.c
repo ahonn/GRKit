@@ -268,7 +268,7 @@ struct spec {
     int bad_magic, new_abi, legacy_abi;
     struct { const char *key; u32 values, flags, default_value; } settings[SPEC_ITEMS];
     const char *uses[SPEC_ITEMS], *imports[SPEC_ITEMS];
-    u32 layer_count, filter_count;
+    u32 layer_count, filter_count, layer_conditions;
     struct { u32 order, flags, setting; } layers[SPEC_ITEMS];
     struct { u32 stage, setting; } filters[SPEC_ITEMS];
     /* A choice page of own setting 0 with these native settings rows: row 0
@@ -333,9 +333,13 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     }
     u32 use_list = code_count;
     for (u32 k = 0; k < uses; ++k) emit_pointer(use_names[k], 0);
+    u32 layer_conditions = code_count;
+    if (s->layer_conditions) { emit(s->condition_setting); emit(GRM_CONDITION_EQUALS); emit(s->condition_value); }
     for (u32 k = 0; k < s->layer_count; ++k) {
-        layer_at[k] = emit(GRM_LAYER); emit(s->layers[k].flags); emit_pointer(paint[k], 1);
+        layer_at[k] = emit(s->layer_conditions ? GRM_LAYER_CONDITIONAL : GRM_LAYER);
+        emit(s->layers[k].flags); emit_pointer(paint[k], 1);
         emit(s->layers[k].setting); emit(s->layers[k].order);
+        if (s->layer_conditions) { emit(1); emit_pointer(layer_conditions, 0); }
     }
     for (u32 k = 0; k < s->filter_count; ++k) {
         filter_at[k] = emit(GRM_FILTER); emit(s->filters[k].stage); emit(s->filters[k].setting);
@@ -618,7 +622,7 @@ static void module_code_follows_the_actual_core(void)
         assert(install_with_core(CODE_AT, core, start + first + second) == 0);
         assert(module_code_from[0] == start && module_code_to[0] == start + first);
         assert(module_code_from[1] == start + first && module_code_to[1] == start + first + second);
-        assert(module_layers[0] == start + 1 && module_layers[3] == start + first + 1);
+        assert(module_layers[0] == start + 1 && module_layers[4] == start + first + 1);
     }
 }
 /* A core or module overflow must fail before code, data, icons, or settings
@@ -878,6 +882,38 @@ static void the_switch_stops_each_module(void)
     assert(!all_off && word(services_block + SERVICES_SUSPENDED) == 1);
     assert(capabilities_running == 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE));
 }
+/* Conditions in two descriptors can share one array. Relocation must read
+   original local handles each time, not relocate an already global handle. */
+static void layer_conditions_resolve_shared_and_optional_settings(void)
+{
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){
+        .id="FIRST", .order=1, .settings={{"ON",2,0}}});
+    add_module(PACKAGE_MODULES_PATH, "GUIDES.GRM", &(struct spec){
+        .id="GUIDES", .order=2, .settings={{"STYLE",6,0},{"DISP",2,0}},
+        .layer_count=2, .layer_conditions=1, .condition_setting=1, .condition_value=1,
+        .layers={{20,GRM_LAYER_FOLLOW_DISP,0},{20,0,0}}});
+    assert(install()==0 && module_layer_count==2 && module_status[1]==0);
+    u32 first=module_layers[3], second=module_layers[7];
+    assert(first && second && first!=second);
+    u32 conditions=word(first+GRM_LAYER_CONDITIONS_AT);
+    assert(conditions==word(second+GRM_LAYER_CONDITIONS_AT));
+    assert(word(conditions)==2 && word(conditions+GRM_CONDITION_VALUE_AT)==1);
+    assert(module_layers[1]==1 && module_layers[5]==1);
+
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "OPTIONAL.GRM", &(struct spec){
+        .id="OPTIONAL", .uses={"?MISSING.ON"}, .layer_count=1, .layer_conditions=1,
+        .condition_setting=GRM_USED, .layers={{20,0,GRM_NO_SETTING}}});
+    assert(install()==0 && module_status[0]==0 && module_layer_count==1);
+    assert(word(word(module_layers[3]+GRM_LAYER_CONDITIONS_AT))==GRM_NO_SETTING);
+
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "INVALID.GRM", &(struct spec){
+        .id="INVALID", .uses={"CORE.GRAIN"}, .layer_count=1, .layer_conditions=1,
+        .condition_setting=GRM_USED, .condition_value=5, .layers={{20,0,GRM_NO_SETTING}}});
+    assert(install()==0 && module_status[0]==GRM_BAD_DESCRIPTOR && !module_layer_count);
+}
 static void layers_follow_their_order_and_filters_their_stage(void)
 {
     reset();
@@ -898,8 +934,8 @@ static void layers_follow_their_order_and_filters_their_stage(void)
     const u32 paints[] = {CODE_AT + 4 + 1, second + 1, second + 4 + 1, CODE_AT + 1};
     assert(module_layer_count == 4);
     for (u32 k = 0; k < 4; ++k)
-        assert(module_layers[k * 3] == paints[k] && module_layers[k * 3 + 1] == settings[k] &&
-               module_layers[k * 3 + 2] == keys[k]);
+        assert(module_layers[k * 4] == paints[k] && module_layers[k * 4 + 1] == settings[k] &&
+               module_layers[k * 4 + 2] == keys[k] && module_layers[k * 4 + 3] == 0);
     assert(module_filter_count == 2);
     assert(module_filters[0] == second + 8 + 1 && module_filters[1] == (GRM_STAGE_FRAME << 16 | 1));
     assert(module_filters[2] == CODE_AT + 8 + 1 && module_filters[3] == (GRM_STAGE_MARK << 16 | 0));
@@ -1115,6 +1151,7 @@ static void *run(void *unused)
     install_settings_page();
     install_group_page();
     the_switch_stops_each_module();
+    layer_conditions_resolve_shared_and_optional_settings();
     layers_follow_their_order_and_filters_their_stage();
     the_module_list_shows_each_result();
     the_layers_and_filters_fill_their_slots();
