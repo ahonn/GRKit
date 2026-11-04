@@ -363,6 +363,88 @@ fn synthetic_glow_neon_parity() -> Result<()> {
     Ok(())
 }
 
+/// The NEON code of Date Imprint (`modules/date/stamp.c`) gives the bytes of
+/// its C code: the test program `modules/date/neon_parity.c` links the file
+/// built with NEON and built with `DATE_SCALAR`, stamps the same random
+/// planes with both, and runs under qemu-arm (`GRKIT_QEMU_ARM`).
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD and qemu-arm; run with --ignored"]
+fn synthetic_date_neon_parity() -> Result<()> {
+    let tools = tools()?;
+    let directory = tempfile::tempdir()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let date = root.join("modules/date");
+    let sdk = root.join("runtime/sdk");
+    // The setting handles of modules/date, as `grkit module build` declares them.
+    fs::write(
+        directory.path().join("grkit_module.h"),
+        "#define SETTING_STYLE GRKIT_SETTING(0)\n#define SETTING_LOOK GRKIT_SETTING(1)\n\
+         #define SETTING_POSITION GRKIT_SETTING(2)\n",
+    )?;
+    let compile = |source: &str, object: &str, mode: &str, extra: &[&str]| -> Result<()> {
+        toolchain::run(
+            &tools.clang,
+            toolchain::CAMERA_TARGET
+                .iter()
+                .map(|flag| flag.to_string())
+                .chain(
+                    [
+                        mode,
+                        "-Os",
+                        "-ffreestanding",
+                        "-fno-builtin",
+                        "-fno-stack-protector",
+                        "-c",
+                    ]
+                    .map(String::from),
+                )
+                .chain(extra.iter().map(|flag| flag.to_string()))
+                .chain([
+                    "-I".into(),
+                    sdk.display().to_string(),
+                    "-I".into(),
+                    directory.path().display().to_string(),
+                    date.join(source).display().to_string(),
+                    "-o".into(),
+                    directory.path().join(object).display().to_string(),
+                ]),
+        )
+    };
+    compile("stamp.c", "neon.o", "-mthumb", &[])?;
+    compile(
+        "stamp.c",
+        "scalar.o",
+        "-mthumb",
+        &["-DDATE_SCALAR", "-Ddate_apply=scalar_date_apply"],
+    )?;
+    // ARM mode: the entry point of the program.
+    compile("neon_parity.c", "parity.o", "-marm", &[])?;
+    let program = directory.path().join("parity");
+    toolchain::run(
+        &tools.lld,
+        ["-static", "-e", "_start", "-o"]
+            .map(String::from)
+            .into_iter()
+            .chain([program.display().to_string()])
+            .chain(
+                ["parity.o", "neon.o", "scalar.o"]
+                    .map(|object| directory.path().join(object).display().to_string()),
+            ),
+    )?;
+    let qemu = std::env::var("GRKIT_QEMU_ARM").unwrap_or_else(|_| "qemu-arm".into());
+    let result = std::process::Command::new(&qemu)
+        .arg(&program)
+        .output()
+        .with_context(|| format!("Run {qemu}"))?;
+    let output = String::from_utf8_lossy(&result.stdout);
+    ensure!(
+        result.status.success() && output.contains("NEON == C"),
+        "Date stamp: {output}{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    Ok(())
+}
+
 /// Defaults are optional, bounded by the setting range, and emitted into the SDK descriptor.
 #[test]
 fn module_setting_defaults_are_validated() -> Result<()> {

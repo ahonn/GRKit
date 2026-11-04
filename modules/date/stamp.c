@@ -6,6 +6,346 @@
 /* A byte of a plane. */
 #define BYTE(p,o) (GRKIT_BYTES((p)+(o))[0])
 
+/* The row interpolation of the mask, and the light of the classic and
+   monochrome stamps, run NEON on whole blocks (an assembly part, because
+   the camera objects build soft-float), and C on the rest and on the light
+   of the GR1s look, with the same arithmetic. On the host, and with
+   DATE_SCALAR, C takes every pixel. */
+#if defined(__arm__) && !defined(DATE_SCALAR)
+#define DATE_NEON 1
+#else
+#define DATE_NEON 0
+#endif
+#define DATE_BLOCK_PAIRS 8U
+/* The pixels of a row that one call of light_row takes: its core and halo
+   light fit on the stack. */
+#define ROW_PIXELS_VALUE 256
+#define ROW_PIXELS ((u32)ROW_PIXELS_VALUE)
+/* A number as text, for the assembly. */
+#define DATE_STR_(x) #x
+#define DATE_STR(x) DATE_STR_(x)
+#define DATE_LIGHT_COLOR 0U /* Y, Cb, and Cr */
+#define DATE_LIGHT_LUMA 1U  /* Y of a color picture: a row without its own chroma */
+#define DATE_LIGHT_MONO 2U  /* Y of a monochrome picture */
+/* light_pair for `blocks` blocks of DATE_BLOCK_PAIRS pixel pairs of the
+   classic look (or monochrome): luma and its interleaved Cb Cr from the
+   first pair, and the core and halo light of each pixel. */
+void date_light_blocks(u8 *luma,u8 *cbcr,const u8 *core,const u8 *halo,u32 blocks,u32 mode);
+/* The core and halo light of `blocks` blocks of 16 pixels of a picture row
+   (stamp): from the blends of its two mask rows, `top` and `bottom` (core
+   at 0, halo at `cols`), into `out` (core at 0, halo at ROW_PIXELS). */
+void date_lerp_blocks(const u8 *top,const u8 *bottom,u8 *out,u32 blocks,u32 cols,u32 ty);
+#if DATE_NEON
+/* date_lerp_blocks: (a (65536 - ty) + b ty) >> 16 in 16 x 16 bits, as
+   65536 - ty fits when ty is not 0; the core then times 320 >> 8, which is
+   c + (c >> 2), at most 255. With ty 0 the light is that of `top`. */
+__asm__(
+    ".pushsection .text.date_neon_lerp,\"ax\",%progbits\n"
+    ".syntax unified\n"
+    ".fpu neon\n"
+    ".thumb\n"
+    ".p2align 2\n"
+    ".global date_lerp_blocks\n"
+    ".type date_lerp_blocks, %function\n"
+    ".thumb_func\n"
+    "date_lerp_blocks:\n"
+    "    push {r4, r5, r6, r7, r8, lr}\n"
+    "    ldr r4, [sp, #24]\n"
+    "    ldr r5, [sp, #28]\n"
+    "    cmp r3, #0\n"
+    "    beq 9f\n"
+    "    add r6, r0, r4\n"
+    "    add r7, r1, r4\n"
+    "    add r8, r2, #" DATE_STR(ROW_PIXELS_VALUE) "\n"
+    "    cmp r5, #0\n"
+    "    beq 5f\n"
+    "    rsb r4, r5, #65536\n"
+    "    vdup.16 d0, r4\n"
+    "    vdup.16 d1, r5\n"
+    "1:  vld1.8 {q8}, [r0]!\n"
+    "    vld1.8 {q9}, [r1]!\n"
+    "    vld1.8 {q10}, [r6]!\n"
+    "    vld1.8 {q11}, [r7]!\n"
+    "    vmovl.u8 q12, d16\n"
+    "    vmovl.u8 q13, d18\n"
+    "    vmull.u16 q14, d24, d0[0]\n"
+    "    vmlal.u16 q14, d26, d1[0]\n"
+    "    vmull.u16 q15, d25, d0[0]\n"
+    "    vmlal.u16 q15, d27, d1[0]\n"
+    "    vshrn.u32 d28, q14, #16\n"
+    "    vshrn.u32 d29, q15, #16\n"
+    "    vmovn.i16 d4, q14\n"
+    "    vmovl.u8 q12, d17\n"
+    "    vmovl.u8 q13, d19\n"
+    "    vmull.u16 q14, d24, d0[0]\n"
+    "    vmlal.u16 q14, d26, d1[0]\n"
+    "    vmull.u16 q15, d25, d0[0]\n"
+    "    vmlal.u16 q15, d27, d1[0]\n"
+    "    vshrn.u32 d28, q14, #16\n"
+    "    vshrn.u32 d29, q15, #16\n"
+    "    vmovn.i16 d5, q14\n"
+    "    vshr.u8 q3, q2, #2\n"
+    "    vqadd.u8 q2, q2, q3\n"
+    "    vst1.8 {q2}, [r2]!\n"
+    "    vmovl.u8 q12, d20\n"
+    "    vmovl.u8 q13, d22\n"
+    "    vmull.u16 q14, d24, d0[0]\n"
+    "    vmlal.u16 q14, d26, d1[0]\n"
+    "    vmull.u16 q15, d25, d0[0]\n"
+    "    vmlal.u16 q15, d27, d1[0]\n"
+    "    vshrn.u32 d28, q14, #16\n"
+    "    vshrn.u32 d29, q15, #16\n"
+    "    vmovn.i16 d4, q14\n"
+    "    vmovl.u8 q12, d21\n"
+    "    vmovl.u8 q13, d23\n"
+    "    vmull.u16 q14, d24, d0[0]\n"
+    "    vmlal.u16 q14, d26, d1[0]\n"
+    "    vmull.u16 q15, d25, d0[0]\n"
+    "    vmlal.u16 q15, d27, d1[0]\n"
+    "    vshrn.u32 d28, q14, #16\n"
+    "    vshrn.u32 d29, q15, #16\n"
+    "    vmovn.i16 d5, q14\n"
+    "    vst1.8 {q2}, [r8]!\n"
+    "    subs r3, r3, #1\n"
+    "    bne 1b\n"
+    "    b 9f\n"
+    "5:  vld1.8 {q2}, [r0]!\n"
+    "    vshr.u8 q3, q2, #2\n"
+    "    vqadd.u8 q2, q2, q3\n"
+    "    vst1.8 {q2}, [r2]!\n"
+    "    vld1.8 {q2}, [r6]!\n"
+    "    vst1.8 {q2}, [r8]!\n"
+    "    subs r3, r3, #1\n"
+    "    bne 5b\n"
+    "9:  pop {r4, r5, r6, r7, r8, pc}\n"
+    ".size date_lerp_blocks, .-date_lerp_blocks\n"
+    ".popsection\n");
+#endif
+#if DATE_NEON
+/* One half block (8 pixels, 4 pairs): R, G, and B from Y and the chroma
+   terms of its pairs, each lit by its light (screen), into the scratch at
+   OFF, 16 + OFF, and 32 + OFF. q14 holds Y in 16 bits; q5 and q15 are
+   work registers. The screen of v by l is v + ((x + (x >> 8) + 128) >> 8)
+   for x = (255 - v) l, which equals screen() in C. */
+#define DATE_NEON_SCREEN(L) \
+    "    vmvn d31, d30\n"              \
+    "    vmull.u8 q5, d31, " L "\n"   \
+    "    vsra.u16 q5, q5, #8\n"        \
+    "    vrshrn.u16 d31, q5, #8\n"     \
+    "    vadd.i8 d30, d30, d31\n"
+#define DATE_NEON_TERM(T) \
+    "    vmov d10, " T "\n"            \
+    "    vmov d11, " T "\n"            \
+    "    vzip.16 d10, d11\n"
+#define DATE_NEON_HALF(V, LR, LG, LB, RC, GC, BC, OFF) \
+    "    vmovl.u8 q14, " V "\n"        \
+    DATE_NEON_TERM(RC)                 \
+    "    vadd.i16 q5, q5, q14\n"       \
+    "    vqmovun.s16 d30, q5\n"        \
+    DATE_NEON_SCREEN(LR)               \
+    "    add r6, r8, #" OFF "\n"       \
+    "    vst1.8 {d30}, [r6]\n"         \
+    DATE_NEON_TERM(GC)                 \
+    "    vsub.i16 q5, q14, q5\n"       \
+    "    vqmovun.s16 d30, q5\n"        \
+    DATE_NEON_SCREEN(LG)               \
+    "    add r6, r8, #(16 + " OFF ")\n" \
+    "    vst1.8 {d30}, [r6]\n"         \
+    DATE_NEON_TERM(BC)                 \
+    "    vadd.i16 q5, q5, q14\n"       \
+    "    vqmovun.s16 d30, q5\n"        \
+    DATE_NEON_SCREEN(LB)               \
+    "    add r6, r8, #(32 + " OFF ")\n" \
+    "    vst1.8 {d30}, [r6]\n"
+/* Y of 8 lit pixels into YOUT, and Cb then Cr of their 4 pairs into the
+   scratch at COFF, as light_pair computes them. */
+#define DATE_NEON_YCC(R, G, B, YOUT, COFF) \
+    "    vmovl.u8 q9, " R "\n"         \
+    "    vmovl.u8 q10, " G "\n"        \
+    "    vmovl.u8 q11, " B "\n"        \
+    "    vmull.u16 q12, d18, d1[0]\n"  \
+    "    vmlal.u16 q12, d20, d1[1]\n"  \
+    "    vmlal.u16 q12, d22, d1[2]\n"  \
+    "    vmull.u16 q13, d19, d1[0]\n"  \
+    "    vmlal.u16 q13, d21, d1[1]\n"  \
+    "    vmlal.u16 q13, d23, d1[2]\n"  \
+    "    vrshrn.u32 d24, q12, #16\n"   \
+    "    vrshrn.u32 d25, q13, #16\n"   \
+    "    vmovn.i16 " YOUT ", q12\n"    \
+    "    vshll.u16 q12, d22, #15\n"    \
+    "    vmlsl.u16 q12, d18, d2[0]\n"  \
+    "    vmlsl.u16 q12, d20, d2[1]\n"  \
+    "    vshll.u16 q13, d23, #15\n"    \
+    "    vmlsl.u16 q13, d19, d2[0]\n"  \
+    "    vmlsl.u16 q13, d21, d2[1]\n"  \
+    "    vpadd.i32 d24, d24, d25\n"    \
+    "    vpadd.i32 d25, d26, d27\n"    \
+    "    vrshr.s32 q12, q12, #17\n"    \
+    "    vqmovn.s32 d24, q12\n"        \
+    "    vshll.u16 q13, d18, #15\n"    \
+    "    vmlsl.u16 q13, d20, d2[2]\n"  \
+    "    vmlsl.u16 q13, d22, d2[3]\n"  \
+    "    vshll.u16 q15, d19, #15\n"    \
+    "    vmlsl.u16 q15, d21, d2[2]\n"  \
+    "    vmlsl.u16 q15, d23, d2[3]\n"  \
+    "    vpadd.i32 d26, d26, d27\n"    \
+    "    vpadd.i32 d27, d30, d31\n"    \
+    "    vrshr.s32 q13, q13, #17\n"    \
+    "    vqmovn.s32 d25, q13\n"        \
+    "    vmov.i16 q13, #128\n"         \
+    "    vadd.i16 q12, q12, q13\n"     \
+    "    vqmovun.s16 d24, q12\n"       \
+    "    add r6, r8, #" COFF "\n"      \
+    "    vst1.8 {d24}, [r6]\n"
+/* date_light_blocks(luma, cbcr, core, halo, blocks, mode): 8 pairs at a
+   time. The chroma terms of a pair are those of light_pair in 16 bits:
+   91881 cr >> 16 = cr + (26345 cr >> 16), (22554 cb + 46802 cr) >> 16 =
+   cr + ((22554 cb - 18734 cr) >> 16), and 116130 cb >> 16 = 2 cb +
+   (-14942 cb >> 16). A block without light keeps its bytes. Scratch on
+   the stack: R at 0, G at 16, B at 32, Cb Cr of pairs 0-3 at 48 and of
+   pairs 4-7 at 56. */
+__asm__(
+    ".pushsection .text.date_neon,\"ax\",%progbits\n"
+    ".syntax unified\n"
+    ".fpu neon\n"
+    ".thumb\n"
+    ".p2align 2\n"
+    ".global date_light_blocks\n"
+    ".type date_light_blocks, %function\n"
+    ".thumb_func\n"
+    "date_light_blocks:\n"
+    "    push {r4, r5, r6, r7, r8, lr}\n"
+    "    vpush {d8-d15}\n"
+    "    sub sp, sp, #64\n"
+    "    ldr r4, [sp, #152]\n"
+    "    ldr r5, [sp, #156]\n"
+    "    cmp r4, #0\n"
+    "    beq 9f\n"
+    "    movw r6, #26345\n"
+    "    movt r6, #22554\n"
+    "    movw r7, #18734\n"
+    "    movt r7, #0xc5a2\n"
+    "    vmov d0, r6, r7\n"
+    "    movw r6, #19595\n"
+    "    movt r6, #38470\n"
+    "    movw r7, #7471\n"
+    "    vmov d1, r6, r7\n"
+    "    movw r6, #11059\n"
+    "    movt r6, #21709\n"
+    "    movw r7, #27439\n"
+    "    movt r7, #5329\n"
+    "    vmov d2, r6, r7\n"
+    "    vmov.i8 d3, #180\n"
+    "    vmov.i8 d4, #150\n"
+    "    vmov.i8 d5, #40\n"
+    "    vmov.i8 d6, #128\n"
+    "    mov r8, sp\n"
+    /* q4 Y, q5 core, q6 halo, q7 0xff for each pixel of a lit pair. */
+    "1:  vld1.8 {q4}, [r0]\n"
+    "    vld1.8 {q5}, [r2]!\n"
+    "    vld1.8 {q6}, [r3]!\n"
+    "    vorr q7, q5, q6\n"
+    "    vtst.8 q7, q7, q7\n"
+    "    vrev16.8 q8, q7\n"
+    "    vorr q7, q7, q8\n"
+    "    vorr d16, d14, d15\n"
+    "    vmov r6, r7, d16\n"
+    "    orrs r6, r6, r7\n"
+    "    beq 8f\n"
+    /* q8 red light: core + (halo * 180 >> 8), at most 255. */
+    "    vmull.u8 q8, d12, d3\n"
+    "    vshrn.u16 d16, q8, #8\n"
+    "    vmull.u8 q9, d13, d3\n"
+    "    vshrn.u16 d17, q9, #8\n"
+    "    vqadd.u8 q8, q8, q5\n"
+    "    cmp r5, #" DATE_STR(DATE_LIGHT_MONO) "\n"
+    "    beq 5f\n"
+    /* q9 green light: (core * 150 >> 8) + (halo * 40 >> 8); q10 blue
+       light: core * 40 >> 8. */
+    "    vmull.u8 q9, d10, d4\n"
+    "    vshrn.u16 d18, q9, #8\n"
+    "    vmull.u8 q10, d11, d4\n"
+    "    vshrn.u16 d19, q10, #8\n"
+    "    vmull.u8 q10, d12, d5\n"
+    "    vshrn.u16 d20, q10, #8\n"
+    "    vmull.u8 q11, d13, d5\n"
+    "    vshrn.u16 d21, q11, #8\n"
+    "    vadd.i8 q9, q9, q10\n"
+    "    vmull.u8 q10, d10, d5\n"
+    "    vshrn.u16 d20, q10, #8\n"
+    "    vmull.u8 q11, d11, d5\n"
+    "    vshrn.u16 d21, q11, #8\n"
+    /* The chroma terms of the 8 pairs: q11 red, q12 green, q13 blue. */
+    "    vld2.8 {d22, d23}, [r1]\n"
+    "    vsubl.u8 q5, d22, d6\n"
+    "    vsubl.u8 q6, d23, d6\n"
+    "    vmull.s16 q12, d12, d0[0]\n"
+    "    vmull.s16 q13, d13, d0[0]\n"
+    "    vshrn.i32 d22, q12, #16\n"
+    "    vshrn.i32 d23, q13, #16\n"
+    "    vadd.i16 q11, q11, q6\n"
+    "    vmull.s16 q13, d10, d0[1]\n"
+    "    vmlsl.s16 q13, d12, d0[2]\n"
+    "    vmull.s16 q14, d11, d0[1]\n"
+    "    vmlsl.s16 q14, d13, d0[2]\n"
+    "    vshrn.i32 d24, q13, #16\n"
+    "    vshrn.i32 d25, q14, #16\n"
+    "    vadd.i16 q12, q12, q6\n"
+    "    vmull.s16 q14, d10, d0[3]\n"
+    "    vmull.s16 q15, d11, d0[3]\n"
+    "    vshrn.i32 d26, q14, #16\n"
+    "    vshrn.i32 d27, q15, #16\n"
+    "    vadd.i16 q13, q13, q5\n"
+    "    vadd.i16 q13, q13, q5\n"
+    DATE_NEON_HALF("d8", "d16", "d18", "d20", "d22", "d24", "d26", "0")
+    DATE_NEON_HALF("d9", "d17", "d19", "d21", "d23", "d25", "d27", "8")
+    "    vld1.8 {q5}, [r8]\n"
+    "    add r6, r8, #16\n"
+    "    vld1.8 {q6}, [r6]\n"
+    "    add r6, r8, #32\n"
+    "    vld1.8 {q8}, [r6]\n"
+    DATE_NEON_YCC("d10", "d12", "d16", "d28", "48")
+    DATE_NEON_YCC("d11", "d13", "d17", "d29", "56")
+    "    cmp r5, #" DATE_STR(DATE_LIGHT_COLOR) "\n"
+    "    bne 6f\n"
+    /* Cb and Cr of the lit pairs. */
+    "    add r6, r8, #48\n"
+    "    vld1.8 {d24, d25}, [r6]\n"
+    "    vuzp.32 d24, d25\n"
+    "    vld2.8 {d22, d23}, [r1]\n"
+    "    vmovn.i16 d30, q7\n"
+    "    vmov d31, d30\n"
+    "    vbsl d30, d24, d22\n"
+    "    vbsl d31, d25, d23\n"
+    "    vst2.8 {d30, d31}, [r1]\n"
+    /* Y of the lit pairs. */
+    "6:  vbsl q7, q14, q4\n"
+    "    vst1.8 {q7}, [r0]!\n"
+    "    add r1, r1, #16\n"
+    "    subs r4, r4, #1\n"
+    "    bne 1b\n"
+    "    b 9f\n"
+    /* Monochrome: Y lit by the red light. */
+    "5:  vmvn q9, q4\n"
+    "    vmull.u8 q10, d18, d16\n"
+    "    vsra.u16 q10, q10, #8\n"
+    "    vrshrn.u16 d22, q10, #8\n"
+    "    vmull.u8 q10, d19, d17\n"
+    "    vsra.u16 q10, q10, #8\n"
+    "    vrshrn.u16 d23, q10, #8\n"
+    "    vadd.i8 q14, q4, q11\n"
+    "    b 6b\n"
+    "8:  add r0, r0, #16\n"
+    "    add r1, r1, #16\n"
+    "    subs r4, r4, #1\n"
+    "    bne 1b\n"
+    "9:  add sp, sp, #64\n"
+    "    vpop {d8-d15}\n"
+    "    pop {r4, r5, r6, r7, r8, pc}\n"
+    ".size date_light_blocks, .-date_light_blocks\n"
+    ".popsection\n");
+#endif
+
 /* Longest blurred line of a date stamp mask, and the largest blur radius
    (look_halo). The line copy shares picture scratch with the later row blends. */
 #define BLUR_WIDTH 640U
@@ -284,24 +624,50 @@ static void light_pair(const Plane *p,u32 x,u32 y,const u32 *core,const u32 *hal
         crow[1]=(u8)clamp255(128+((sr+65536)>>17));
     }
 }
-/* The horizontal blend of one mask row for each of `cols` picture columns,
-   core then halo: column x samples cells x / f and the next one, with the
-   weight (x mod f) * step. */
-static void blend_row(u8 *out,const u8 *core,const u8 *halo,u32 mw,u32 f,u32 step,u32 cols) {
+/* Add the light of `pairs` pixel pairs of row y from column x (even): the
+   core and halo light of each pixel. A pair without light stays as it is. */
+static void light_row(const Plane *p,u32 x,u32 y,const u8 *core,const u8 *halo,u32 pairs,u32 mono,u32 chroma,u32 look) {
+    u32 i=0;
+#if DATE_NEON
+    if(look!=LOOK_DOTS) {
+        u32 blocks=pairs/DATE_BLOCK_PAIRS;
+        date_light_blocks((u8 *)(p->y+y*p->pitch+x),(u8 *)(chroma_row(p,y)+x),core,halo,blocks,
+                          mono ? DATE_LIGHT_MONO : chroma ? DATE_LIGHT_COLOR : DATE_LIGHT_LUMA);
+        i=blocks*DATE_BLOCK_PAIRS;
+    }
+#endif
+    for(;i<pairs;++i) {
+        u32 c[2]={core[2*i],core[2*i+1]}, l[2]={halo[2*i],halo[2*i+1]};
+        if(c[0]|c[1]|l[0]|l[1]) light_pair(p,x+2*i,y,c,l,mono,chroma,look);
+    }
+}
+/* The horizontal blend of one row of `mw` mask cells, `column` bytes apart,
+   for each of `cols` picture columns, core then halo: column x samples cells
+   x / f and the next one, with the weight (x mod f) * step. */
+static void blend_row(u8 *out,const u8 *core,const u8 *halo,int column,u32 mw,u32 f,u32 step,u32 cols) {
     u32 x, cx=0, fx=0;
     for(x=0;x<cols;++x) {
         u32 at=cx<mw ? cx : mw-1, next=at+1<mw ? at+1 : at, tx=fx*step;
-        out[x]=(u8)((core[at]*(65536-tx)+core[next]*tx)>>16);
-        out[cols+x]=(u8)((halo[at]*(65536-tx)+halo[next]*tx)>>16);
+        int a=(int)at*column, b=(int)next*column;
+        out[x]=(u8)((core[a]*(65536-tx)+core[b]*tx)>>16);
+        out[cols+x]=(u8)((halo[a]*(65536-tx)+halo[b]*tx)>>16);
         if(++fx==f) { fx=0; ++cx; }
     }
 }
 /* Core and halo masks, followed by workspace reused first for blur, then
-   for the blends of two rows of each mask when scaling up (ss 1). */
-static u32 stamp_bytes(u32 mw,u32 mh,u32 f,u32 ss) {
-    u32 rows=ss==1 ? 4*mw*f : 0;
+   for the blends of two rows of each mask when scaling up (ss 1), the
+   light of a part of a picture row (light_row), and whether each mask row
+   has light. The light of a smaller picture (stamp_sample), and the lit
+   rows of a mask that does not scale up, take the blur workspace. The stack
+   of the JPEG encoder task has no room for them. A mask for a `turned`
+   picture also draws across its rows (mask_view). */
+static u32 stamp_rows(u32 w,u32 h,u32 f) { return 4*w*f+2*ROW_PIXELS+h; }
+static u32 stamp_bytes(u32 mw,u32 mh,u32 f,u32 ss,u32 turned) {
+    u32 rows=ss==1 ? stamp_rows(mw,mh,f) : 0;
+    if(ss==1 && turned && stamp_rows(mh,mw,f)>rows) rows=stamp_rows(mh,mw,f);
     return mw*mh*2+(rows>BLUR_BYTES ? rows : BLUR_BYTES);
 }
+_Static_assert(2*ROW_PIXELS_VALUE<=BLUR_BYTES,"The light of a row fits in the blur workspace");
 /* A rendered stamp mask and where it lies on its picture: one cell spans
    f / ss pixels, and cell (0,0) is at (ox, oy) of the visible area turned
    upright (upright), whose top left is (0, 0). */
@@ -312,7 +678,7 @@ typedef struct { const u8 *core,*halo; u32 mw,mh,f,ss; int ox,oy; u32 look; } St
    twice their resolution and average 2 x 2 cells per pixel, so their strokes
    stay as sharp as on the main picture: there, one mask cell spans several
    pixels instead. Returns 0 when the mask does not fit. */
-static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u32 look,Stamp *out) {
+static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u32 look,u32 turned,Stamp *out) {
     u32 size, f, ss=1, m, pad, cw, mw, mh, margin, rise;
     u32 i, x, y, total;
     int caret;
@@ -328,9 +694,9 @@ static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u3
         total=text_width(text,n,m,look);
         cw=total+1;
         mw=cw+2*pad; mh=m+2*pad;
-        if(mw<=BLUR_WIDTH && stamp_bytes(mw,mh,f,ss)<=GRKIT_PLANE_SCRATCH) break;
+        if(mw<=BLUR_WIDTH && stamp_bytes(mw,mh,f,ss,turned)<=GRKIT_PLANE_SCRATCH) break;
     }
-    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || stamp_bytes(mw,mh,f,ss)>GRKIT_PLANE_SCRATCH) return 0;
+    if(mw>BLUR_WIDTH || mh>BLUR_WIDTH || stamp_bytes(mw,mh,f,ss,turned)>GRKIT_PLANE_SCRATCH) return 0;
     look_margins(look,width<height ? width : height,size,&margin,&rise);
     if((((mw-pad)*f)>>(ss-1))+margin>width || (((mh-pad)*f)>>(ss-1))+rise>height) return 0;
     halo=core+mw*mh;
@@ -351,23 +717,117 @@ static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u3
                  (int)height-(int)rise-(int)(((mh-pad)*f)>>(ss-1)),look};
     return 1;
 }
+/* A mask as a picture shows it: cell (a, b), a across and b down, is at
+   core[b * row + a * column] and halo[b * row + a * column], for w x h
+   cells. */
+typedef struct { const u8 *core,*halo; int row,column; u32 w,h; } MaskView;
+/* The view of the mask of `st` on the stored picture, for a picture that
+   `turns` quarter turns clockwise show upright (upright): the mask turned
+   back by the same turns. */
+static MaskView mask_view(const Stamp *st,u32 turns) {
+    int mw=(int)st->mw, mh=(int)st->mh, at;
+    MaskView v;
+    switch(turns&3) {
+    case 0: at=0; v.row=mw; v.column=1; break;
+    case 1: at=mw-1; v.row=-1; v.column=mw; break;
+    case 2: at=mh*mw-1; v.row=-mw; v.column=-1; break;
+    default: at=(mh-1)*mw; v.row=1; v.column=-mw; break;
+    }
+    v.core=st->core+at; v.halo=st->halo+at;
+    v.w=turns&1 ? st->mh : st->mw;
+    v.h=turns&1 ? st->mw : st->mh;
+    return v;
+}
+/* Draw a mask view whose cells each span f x f pixels (ss 1) on the plane,
+   with cell (0, 0) at pixel (ox, oy) of the plane; `work` is the scratch
+   after the masks (stamp_bytes). Returns the column of cell (0, 0), on an
+   even column so CbCr pairs line up. */
+static int stamp_draw(u8 *work,const Plane *p,const MaskView *v,u32 f,int ox,int oy,u32 mono,u32 look) {
+    u32 x, y, sy, dy, step, w=v->w, h=v->h, cols=w*f, shown=0xffffffffU, start, end;
+    /* The horizontal blends of the two mask rows that a picture row
+       samples, for each column: f picture rows sample the same pair, so
+       each row of the pair blends once (`top`, `bottom`). */
+    u8 *top=work, *bottom=top+2*cols;
+    u8 *row=bottom+2*cols, *row_core=row, *row_halo=row+ROW_PIXELS, *lit=row+2*ROW_PIXELS;
+    /* Whether each mask row has light, in the core or in the halo. A pixel
+       that samples only empty rows, or only empty cells, stays as it is. */
+    for(y=0;y<h;++y) {
+        const u8 *c=v->core+(int)y*v->row, *l=v->halo+(int)y*v->row;
+        u32 any=0;
+        for(x=0;x<w && !any;++x) any=c[(int)x*v->column]|l[(int)x*v->column];
+        lit[y]=(u8)(any!=0);
+    }
+    ox&=~1;
+    step=divide(65536,f);
+    /* The pairs inside the picture: column x (even) from `start`, while
+       x < `end`; the second pixel of a last pair past the mask is dark. */
+    start=(int)p->left>ox ? ((u32)((int)p->left-ox)+1U)&~1U : 0;
+    end=(int)p->right-1>ox ? (u32)((int)p->right-1-ox) : 0;
+    if(end>cols) end=cols;
+    for(y=0,sy=0,dy=0;y<h*f;++y) {
+        int py=oy+(int)y;
+        u32 ty=dy*step, sy1=sy+1<h ? sy+1 : sy, chroma=!p->half || !(py&1);
+        if(py>=(int)p->top && py<(int)p->bottom && (lit[sy] || lit[sy1])) {
+            if(shown!=sy) {
+                blend_row(top,v->core+(int)sy*v->row,v->halo+(int)sy*v->row,v->column,w,f,step,cols);
+                blend_row(bottom,v->core+(int)sy1*v->row,v->halo+(int)sy1*v->row,v->column,w,f,step,cols);
+                shown=sy;
+            }
+            for(x=start;x<end;x+=ROW_PIXELS) {
+                u32 pairs=(end-x+1)/2, j=0;
+                if(pairs>ROW_PIXELS/2) pairs=ROW_PIXELS/2;
+#if DATE_NEON
+                {
+                    u32 inside=x<cols ? cols-x : 0, blocks;
+                    if(inside>2*pairs) inside=2*pairs;
+                    blocks=inside/16U;
+                    date_lerp_blocks(top+x,bottom+x,row,blocks,cols,ty);
+                    j=blocks*16U;
+                }
+#endif
+                for(;j<2*pairs;++j) {
+                    u32 at=x+j, ct, cb, ht, hb;
+                    row_core[j]=row_halo[j]=0;
+                    if(at>=cols) continue;
+                    ct=top[at]; cb=bottom[at]; ht=top[cols+at]; hb=bottom[cols+at];
+                    if(!(ct|cb|ht|hb)) continue;
+                    {
+                        u32 c=(ct*(65536-ty)+cb*ty)>>16;
+                        /* The blur lowers the peak of thin strokes: an LED core saturates. */
+                        c=(c*320)>>8;
+                        row_core[j]=(u8)(c>255 ? 255 : c);
+                        row_halo[j]=(u8)((ht*(65536-ty)+hb*ty)>>16);
+                    }
+                }
+                light_row(p,(u32)(ox+(int)x),(u32)py,row_core,row_halo,pairs,mono,chroma,look);
+            }
+        }
+        if(++dy==f) { dy=0; ++sy; }
+    }
+    return ox;
+}
 /* The stamp on the main picture of a landscape shot, in the layout of its
    mask. Returns 1 and describes the mask in `out` when it drew. */
 static u32 stamp(u8 *scratch,const Plane *p,const char *text,u32 n,u32 mono,u32 look,Stamp *out) {
-    u32 x, y, sy, dy, step, mw, mh, f, ss;
+    u32 x, y, mw, mh;
     const u8 *core, *halo;
-    u8 lit[BLUR_WIDTH];
-    if(!stamp_mask(scratch,p->right-p->left,p->bottom-p->top,text,n,look,out)) return 0;
-    core=out->core; halo=out->halo; mw=out->mw; mh=out->mh; f=out->f; ss=out->ss;
-    /* Whether each mask row has light, in the core or in the halo. A pixel
-       that samples only empty rows, or only empty cells, stays as it is. */
+    u8 *lit;
+    if(!stamp_mask(scratch,p->right-p->left,p->bottom-p->top,text,n,look,0,out)) return 0;
+    core=out->core; halo=out->halo; mw=out->mw; mh=out->mh;
+    if(out->ss==1) {
+        MaskView v=mask_view(out,0);
+        out->ox=stamp_draw(scratch+2*mw*mh,p,&v,out->f,(int)p->left+out->ox,(int)p->top+out->oy,mono,look)-(int)p->left;
+        return 1;
+    }
+    /* Whether each mask row has light (stamp_draw), in the blur workspace. */
+    lit=scratch+2*mw*mh;
     for(y=0;y<mh;++y) {
         const u8 *c=core+y*mw, *h=halo+y*mw;
         u32 any=0;
         for(x=0;x<mw && !any;++x) any=c[x]|h[x];
         lit[y]=(u8)(any!=0);
     }
-    if(ss==2) {
+    {
         /* Pixel origin of the mask, on an even column so CbCr pairs line up. */
         int ox=(int)p->left+out->ox, oy=(int)p->top+out->oy;
         ox&=~1;
@@ -390,50 +850,6 @@ static u32 stamp(u8 *scratch,const Plane *p,const char *text,u32 n,u32 mono,u32 
                     if(any && px>=(int)p->left && px+1<(int)p->right) light_pair(p,(u32)px,(u32)py,c,l,mono,chroma,look);
                 }
             }
-        }
-        return 1;
-    }
-    /* Pixel origin of the mask, on an even column so CbCr pairs line up. */
-    {
-        int ox=(int)p->left+out->ox, oy=(int)p->top+out->oy;
-        u32 cols=mw*f;
-        /* The horizontal blends of the two mask rows that a picture row
-           samples, for each column: f picture rows sample the same pair, so
-           each row of the pair blends once (`top`, `bottom`). They follow the
-           masks in the scratch. */
-        u8 *top=(u8 *)halo+mw*mh, *bottom=top+2*cols;
-        u32 shown=0xffffffffU;
-        ox&=~1;
-        out->ox=ox-(int)p->left;
-        step=divide(65536,f);
-        for(y=0,sy=0,dy=0;y<mh*f;++y) {
-            int py=oy+(int)y;
-            u32 ty=dy*step, sy1=sy+1<mh ? sy+1 : sy, chroma=!p->half || !(py&1);
-            if(py>=(int)p->top && py<(int)p->bottom && (lit[sy] || lit[sy1])) {
-                if(shown!=sy) {
-                    blend_row(top,core+sy*mw,halo+sy*mw,mw,f,step,cols);
-                    blend_row(bottom,core+sy1*mw,halo+sy1*mw,mw,f,step,cols);
-                    shown=sy;
-                }
-                for(x=0;x<cols;x+=2) {
-                    u32 c[2],l[2],k,any=0;
-                    for(k=0;k<2 && x+k<cols;++k) {
-                        u32 ct=top[x+k], cb=bottom[x+k], ht=top[cols+x+k], hb=bottom[cols+x+k];
-                        if(!(ct|cb|ht|hb)) { c[k]=l[k]=0; continue; }
-                        c[k]=(ct*(65536-ty)+cb*ty)>>16;
-                        /* The blur lowers the peak of thin strokes: an LED core saturates. */
-                        c[k]=(c[k]*320)>>8; if(c[k]>255) c[k]=255;
-                        l[k]=(ht*(65536-ty)+hb*ty)>>16;
-                        any|=c[k]|l[k];
-                    }
-                    if(k<2) c[1]=l[1]=0;
-                    {
-                        int px=ox+(int)x;
-                        if(any && px>=(int)p->left && px+1<(int)p->right) light_pair(p,(u32)px,(u32)py,c,l,mono,chroma,look);
-                    }
-                }
-            }
-            if(++dy==f) { dy=0; ++sy; }
         }
     }
     return 1;
@@ -463,16 +879,31 @@ static void stored_box(const Plane *p,u32 turns,int u0,int v0,int u1,int v1,int 
     default: box[0]=l+w-v1; box[1]=t+u0; box[2]=l+w-v0; box[3]=t+u1; break;
     }
 }
-/* Bilinear mask value at cell coordinates (Q16, cell centers at +0.5), or 0 outside. */
-static u32 mask_at(const u8 *mask,u32 mw,u32 mh,int cx,int cy) {
-    int x=cx-32768, y=cy-32768, i=x>>16, j=y>>16;
-    u32 tx=(u32)x&0xffff, ty=(u32)y&0xffff, a, b, c, d;
-    if(i<-1 || j<-1 || i>=(int)mw || j>=(int)mh) return 0;
-    a=i>=0 && j>=0 ? mask[j*mw+i] : 0;
-    b=i+1<(int)mw && j>=0 ? mask[j*mw+i+1] : 0;
-    c=i>=0 && j+1<(int)mh ? mask[(j+1)*mw+i] : 0;
-    d=i+1<(int)mw && j+1<(int)mh ? mask[(j+1)*mw+i+1] : 0;
-    return (((a*(65536-tx)+b*tx)>>16)*(65536-ty)+((c*(65536-tx)+d*tx)>>16)*ty)>>16;
+/* Bilinear core and halo values at cell coordinates (Q16, cell centers at
+   +0.5), added to `core` and `halo`; nothing outside the masks. */
+static void mask_add(const Stamp *st,int cx,int cy,u32 *core,u32 *halo) {
+    int x=cx-32768, y=cy-32768, i=x>>16, j=y>>16, mw=(int)st->mw, mh=(int)st->mh;
+    u32 tx=(u32)x&0xffff, ty=(u32)y&0xffff, k;
+    u32 at, left=i>=0, right=i+1<mw, up=j>=0, down=j+1<mh;
+    if(i<-1 || j<-1 || i>=mw || j>=mh) return;
+    at=(u32)(j*mw+i);
+    for(k=0;k<2;++k) {
+        const u8 *m=k ? st->halo : st->core;
+        u32 a=left && up ? m[at] : 0, b=right && up ? m[at+1] : 0;
+        u32 c=left && down ? m[at+(u32)mw] : 0, d=right && down ? m[at+(u32)mw+1] : 0;
+        u32 v=(((a*(65536-tx)+b*tx)>>16)*(65536-ty)+((c*(65536-tx)+d*tx)>>16)*ty)>>16;
+        if(k) *halo+=v; else *core+=v;
+    }
+}
+/* The products that give the Q16 cell coordinates of one sample point of
+   `src` (Q16 picture point px, py): the cell coordinate is the product >> 16.
+   An upright coordinate depends on one picture coordinate only, so each
+   product is linear in px or in py. */
+static void sample_products(const Plane *src,const Stamp *st,u32 turns,u32 rf,long long px,long long py,long long *pu,long long *pv) {
+    long long u, v, scale=(long long)(st->ss*rf);
+    upright(src,turns,px,py,&u,&v);
+    *pu=(u-((long long)st->ox<<16))*scale;
+    *pv=(v-((long long)st->oy<<16))*scale;
 }
 /* The stamp of the main picture `src` on the picture `dst`: each pixel of
    dst samples the mask at four points, so the stamp keeps the same place and
@@ -482,11 +913,17 @@ static u32 mask_at(const u8 *mask,u32 mw,u32 mh,int cx,int cy) {
 static void stamp_sample(const Plane *dst,const Plane *src,const Stamp *st,u32 mono,u32 turns) {
     u32 sw=src->right-src->left, sh=src->bottom-src->top, dw=dst->right-dst->left, dh=dst->bottom-dst->top;
     u32 kx=divide(sw<<16,dw), ky=divide(sh<<16,dh), rx=divide(dw<<16,sw), ry=divide(dh<<16,sh);
-    u32 rf=divide(65536,st->f), x, y, k;
-    /* Q16 cell coordinate of a Q16 upright coordinate. */
-    #define CELL(v,o) ((int)(((long long)((v)-((long long)(o)<<16))*(long long)(st->ss*rf))>>16))
+    u32 rf=divide(65536,st->f), x, y, q, odd=turns&1;
     int ext=(int)((st->mw*st->f)>>(st->ss-1)), eyt=(int)((st->mh*st->f)>>(st->ss-1)), box[4];
     int x0, x1, y0, y1;
+    /* For each of the two sample columns and rows of a pixel (a quarter
+       pixel left and right, above and below), the product of the column at
+       x0 and its step for each pixel, and the products of the current row.
+       A column gives the cell x of an upright picture, or its cell y after an
+       odd number of quarter turns; a row the other one. */
+    long long column0[2], column_step[2], row[2];
+    /* The light of a part of a row, in the blur workspace after the masks. */
+    u8 *row_core=(u8 *)st->halo+st->mw*st->mh, *row_halo=row_core+ROW_PIXELS;
     stored_box(src,turns,st->ox,st->oy,st->ox+ext,st->oy+eyt,box);
     x0=(int)dst->left+(int)((((long long)(box[0]-(int)src->left))*rx)>>16)-2;
     x1=(int)dst->left+(int)((((long long)(box[2]-(int)src->left))*rx)>>16)+2;
@@ -497,32 +934,46 @@ static void stamp_sample(const Plane *dst,const Plane *src,const Stamp *st,u32 m
     if(x1>(int)dst->right) x1=(int)dst->right;
     if(y1>(int)dst->bottom) y1=(int)dst->bottom;
     x0&=~1;
+    if(x0>=x1 || y0>=y1) return;
+    for(q=0;q<2;++q) {
+        long long dx=q ? (long long)(kx>>2) : -(long long)(kx>>2), pu, pv, nu, nv;
+        long long sx=((long long)src->left<<16)+(long long)((u32)x0-dst->left)*kx+(kx>>1)+dx;
+        long long sy=((long long)src->top<<16)+(kx>>1);
+        sample_products(src,st,turns,rf,sx,sy,&pu,&pv);
+        sample_products(src,st,turns,rf,sx+kx,sy,&nu,&nv);
+        column0[q]=odd ? pv : pu;
+        column_step[q]=odd ? nv-pv : nu-pu;
+    }
     for(y=(u32)y0;(int)y<y1;++y) {
         u32 chroma=!dst->half || !(y&1);
-        for(x=(u32)x0;(int)x+1<x1;x+=2) {
-            u32 c[2],l[2],any=0;
-            for(k=0;k<2;++k) {
-                long long sx=((long long)src->left<<16)+(long long)(x+k-dst->left)*kx+(kx>>1);
-                long long sy=((long long)src->top<<16)+(long long)(y-dst->top)*ky+(ky>>1);
-                u32 core=0, halo=0, q;
-                for(q=0;q<4;++q) {
-                    long long px=sx+(q&1 ? (long long)(kx>>2) : -(long long)(kx>>2));
-                    long long py=sy+(q&2 ? (long long)(ky>>2) : -(long long)(ky>>2));
-                    long long u, v;
-                    int cx, cy;
-                    upright(src,turns,px,py,&u,&v);
-                    cx=CELL(u,st->ox); cy=CELL(v,st->oy);
-                    core+=mask_at(st->core,st->mw,st->mh,cx,cy);
-                    halo+=mask_at(st->halo,st->mw,st->mh,cx,cy);
+        long long column[2]={column0[0],column0[1]};
+        int cy[2], cx[2];
+        for(q=0;q<2;++q) {
+            long long dy=q ? (long long)(ky>>2) : -(long long)(ky>>2), pu, pv;
+            long long sy=((long long)src->top<<16)+(long long)(y-dst->top)*ky+(ky>>1)+dy;
+            sample_products(src,st,turns,rf,((long long)src->left<<16),sy,&pu,&pv);
+            row[q]=odd ? pu : pv;
+        }
+        for(q=0;q<2;++q) (odd ? cx : cy)[q]=(int)(row[q]>>16);
+        for(x=(u32)x0;(int)x+1<x1;x+=ROW_PIXELS) {
+            u32 pairs=((u32)x1-x)/2, j;
+            if(pairs>ROW_PIXELS/2) pairs=ROW_PIXELS/2;
+            for(j=0;j<2*pairs;++j) {
+                u32 core=0, halo=0, c;
+                for(q=0;q<2;++q) {
+                    (odd ? cy : cx)[q]=(int)(column[q]>>16);
+                    column[q]+=column_step[q];
                 }
-                c[k]=((core>>2)*320)>>8; if(c[k]>255) c[k]=255;
-                l[k]=halo>>2;
-                any|=c[k]|l[k];
+                /* Sample q: column q & 1, row q >> 1. */
+                for(q=0;q<4;++q)
+                    mask_add(st,odd ? cx[q>>1] : cx[q&1],odd ? cy[q&1] : cy[q>>1],&core,&halo);
+                c=((core>>2)*320)>>8;
+                row_core[j]=(u8)(c>255 ? 255 : c);
+                row_halo[j]=(u8)(halo>>2);
             }
-            if(any && x+1<dst->right) light_pair(dst,x,y,c,l,mono,chroma,st->look);
+            light_row(dst,x,y,row_core,row_halo,pairs,mono,chroma,st->look);
         }
     }
-    #undef CELL
 }
 
 /* GR II: the date in the order of the style, with slashes and a four-digit
@@ -646,11 +1097,20 @@ void date_apply(PictureSet *set, u32 style)
                 if (i != main) stamp_sample(&set->planes[i], &set->planes[main], &st, set->mono, 0);
         return;
     }
-    /* A turned picture samples the mask on each picture, the main one too. */
+    /* A turned picture renders the mask upright. The smaller pictures sample
+       it; the main picture draws it turned back (mask_view), cell for cell as
+       a landscape picture does. */
     {
         const Plane *p = &set->planes[main];
         u32 w = p->right - p->left, h = p->bottom - p->top;
-        if (stamp_mask(set->scratch, turns & 1 ? h : w, turns & 1 ? w : h, text, n, look, &st))
-            for (i = 0; i < set->count; ++i) stamp_sample(&set->planes[i], p, &st, set->mono, turns);
+        if (!stamp_mask(set->scratch, turns & 1 ? h : w, turns & 1 ? w : h, text, n, look, 1, &st)) return;
+        for (i = 0; i < set->count; ++i)
+            if (i != main || st.ss != 1) stamp_sample(&set->planes[i], p, &st, set->mono, turns);
+        if (st.ss == 1) {
+            MaskView v = mask_view(&st, turns);
+            int box[4];
+            stored_box(p, turns, st.ox, st.oy, st.ox + (int)(st.mw * st.f), st.oy + (int)(st.mh * st.f), box);
+            (void)stamp_draw(set->scratch + 2 * st.mw * st.mh, p, &v, st.f, box[0], box[1], set->mono, look);
+        }
     }
 }
