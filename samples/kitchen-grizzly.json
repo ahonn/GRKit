@@ -1,9 +1,9 @@
 {
-  "source": "https://upload.wikimedia.org/wikipedia/commons/9/97/Snow_in_Akihabara_2022-01-06.jpg",
-  "sourcePage": "https://www.flickr.com/photos/cafetricot/51803682755/",
-  "sourceSha256": "a4f15f37167735876bfc8c7dcd8bf480a7551c51a00d38045ceb4c5d4cecb598",
-  "title": "Snow in Akihabara",
-  "author": "nagi usano",
+  "source": "https://upload.wikimedia.org/wikipedia/commons/7/73/Sakiko_buys_a_delicious_soup_at_Kitchen_Grizzly._%2853311001084%29.jpg",
+  "sourcePage": "https://www.flickr.com/photos/mujitra/53311001084/",
+  "sourceSha256": "e8ae3af72569a1f89c327f6c90cb7bb846a5482592d72cf19e19f0c2ecfd81ae",
+  "title": "Sakiko buys a delicious soup at Kitchen Grizzly",
+  "author": "MIKI Yoshihito",
   "license": "CC-BY-2.0",
   "licenseUrl": "https://creativecommons.org/licenses/by/2.0/",
   "camera": "RICOH GR IIIx",
@@ -17,5 +17,5 @@
   },
   "width": 1200,
   "height": 800,
-  "sha256": "daffc3b15cd801c12658fbf46b3aa04e05b40669bdef9a0d9902a2d732196372"
+  "sha256": "125b4de293abdcb33e3f55fc3a45080977dd7e60b25412c4d4238c3404211059"
 }

@@ -8095,9 +8095,32 @@ venue lying in Santa Clara County, California.
 
 === Default sample photo ===
 
-Snow in Akihabara by nagi usano, taken with a RICOH GR IIIx. CC BY 2.0.
-Source: https://www.flickr.com/photos/cafetricot/51803682755/
+Sakiko buys a delicious soup at Kitchen Grizzly by MIKI Yoshihito, taken with a RICOH GR IIIx. CC BY 2.0.
+Source: https://www.flickr.com/photos/mujitra/53311001084/
 License: https://creativecommons.org/licenses/by/2.0/
 The JPEG was converted to estimated linear sRGB, resized, and gzip compressed.
 The preview shows it with the film effects of GRKit.
-See samples/akihabara.json for the source hash, processing settings, and output hash.
+See samples/kitchen-grizzly.json for the source hash, processing settings, and output hash.
+
+=== Landing page photos ===
+
+The landing page shows these photos, resized and cropped, with the film effects and the modules of GRKit.
+scripts/build-landing.mjs makes the images from them.
+
+Sakiko buys a delicious soup at Kitchen Grizzly by MIKI Yoshihito, taken with a RICOH GR IIIx. CC BY 2.0.
+Source: https://www.flickr.com/photos/mujitra/53311001084/
+License: https://creativecommons.org/licenses/by/2.0/
+
+Tramway by MIKI Yoshihito, taken with a RICOH GR IIIx. CC BY 2.0.
+Source: https://www.flickr.com/photos/mujitra/53731862585/
+License: https://creativecommons.org/licenses/by/2.0/
+
+People dining outside, Rue des Marronniers, Lyon, France by Jules Verne Times Two, taken with a RICOH GR III. CC BY-SA 4.0.
+Source: https://commons.wikimedia.org/wiki/File:People_dining_outside,_Rue_des_Marronniers,_Lyon,_France_julesvernex2.jpg
+License: https://creativecommons.org/licenses/by-sa/4.0/
+The Glow images made from this photo (landing/glow-*.jpg, landing/bloom-*.jpg, landing/halation-*.jpg) are licensed under CC BY-SA 4.0.
+
+Playlist ^4 by Mikhail Matvienko, taken with a RICOH GR IIIx. CC BY-SA 2.0.
+Source: https://commons.wikimedia.org/wiki/File:Playlist_%5E4_-_Flickr_-_Mikhail_Bearr.jpg
+License: https://creativecommons.org/licenses/by-sa/2.0/
+The Grain images made from this photo (landing/grain-*.jpg) are licensed under CC BY-SA 2.0.
