@@ -521,7 +521,7 @@ pub const SHOT_INFO: [(&str, usize); 25] = [
 /// The picture scratch after the records: the masks, then the shot ring.
 pub const PICTURE_SCRATCH: usize = PICTURE_MASKS + SHOT_ENTRY + SHOT_STRIDE * SHOT_ENTRIES;
 /// Bytes of the live-view labels after the menu text (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 16384;
+pub const LABELS_SIZE: usize = 24576;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a

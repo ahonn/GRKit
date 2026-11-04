@@ -101,6 +101,10 @@
 #define GRM_ICON_FIRST_TILE_AT 12U
 #define GRM_ICON_TILE 1U
 #define GRM_ICON_TONE 2U
+/* A core live-view label, for a status-row indicator (GRKIT_ICON_LABEL), and
+   the number of core labels (GRKIT_LABEL_COUNT). */
+#define GRM_ICON_LABEL 3U
+#define GRM_LABELS 14U
 #define GRM_CONDITION 12U
 #define GRM_CONDITION_SETTING_AT 0U
 #define GRM_CONDITION_COMPARISON_AT 4U
@@ -175,8 +179,9 @@ struct grm_module {
     char id[9];
     u32 version, abi;
     u32 code_size, data_size, bss_size, descriptor;
-    u32 code_relocations, data_relocations, imports;
-    const u8 *code, *data, *relocations, *import_entries, *names;
+    u32 code_relocations, data_relocations, imports, tile_count;
+    /* tiles: the artwork after the import names (ABI 2.3), or 0. */
+    const u8 *code, *data, *relocations, *import_entries, *names, *tiles;
 };
 
 /* A symbol that an import can name: the FNV-1a hash of its name and its
@@ -213,12 +218,16 @@ static int grm_parse(const u8 *file, u32 size, struct grm_module *m)
     m->data_relocations = grm_word(file + 44);
     m->imports = grm_word(file + 48);
     u32 names = grm_word(file + 52);
+    /* The tiles that follow the file. Before ABI 2.3 this word is 0. */
+    m->tile_count = grm_word(file + 60);
+    if (m->tile_count > GRM_TILES) return GRM_BAD_FILE;
     if (m->code_size > GRM_MAX_SEGMENT || m->data_size > GRM_MAX_SEGMENT || m->bss_size > GRM_MAX_SEGMENT ||
         (m->code_size | m->data_size | m->bss_size | names) & 3 ||
         m->code_relocations > GRM_MAX_SEGMENT / 4 || m->data_relocations > GRM_MAX_SEGMENT / 4 ||
         m->imports > GRM_MAX_SEGMENT / 4 || names > GRM_MAX_SEGMENT) return GRM_BAD_FILE;
     u32 total = GRM_HEADER + m->code_size + m->data_size +
-                (m->code_relocations + m->data_relocations) * 4 + m->imports * 8 + names;
+                (m->code_relocations + m->data_relocations) * 4 + m->imports * 8 + names +
+                m->tile_count * GRM_TILE_BYTES;
     if (total != size) return GRM_BAD_FILE;
     if ((m->descriptor & 3) || !grm_inside(m->descriptor, GRM_DESCRIPTOR, m->code_size)) return GRM_BAD_FILE;
     m->code = file + GRM_HEADER;
@@ -226,7 +235,9 @@ static int grm_parse(const u8 *file, u32 size, struct grm_module *m)
     m->relocations = m->data + m->data_size;
     m->import_entries = m->relocations + (m->code_relocations + m->data_relocations) * 4;
     m->names = m->import_entries + m->imports * 8;
+    m->tiles = m->tile_count ? m->names + names : 0;
     if (m->abi >> 16 != GRM_ABI_MAJOR || (m->abi & 0xffff) > GRM_ABI_MINOR) return GRM_BAD_ABI;
+    if (m->tile_count && (m->abi & 0xffff) < 3) return GRM_BAD_FILE;
     return 0;
 }
 
@@ -406,19 +417,28 @@ static int grm_texts(const struct grm_module *m, const u8 *code, u32 base, u32 a
 static int grm_tiles(const struct grm_module *m, const u8 *code, u32 base, const u8 **tiles, u32 *count)
 {
     const u8 *d = code + m->descriptor;
-    u32 n = grm_word(d + GRM_DESCRIPTOR_TILE_COUNT_AT);
+    u32 n = grm_word(d + GRM_DESCRIPTOR_TILE_COUNT_AT), address = grm_word(d + GRM_DESCRIPTOR_TILES_AT);
     *count = n;
     *tiles = 0;
-    if (!n) return 0;
+    if (!n) return m->tile_count ? GRM_BAD_DESCRIPTOR : 0;
     if (n > GRM_TILES) return GRM_BAD_DESCRIPTOR;
-    *tiles = grm_code_at(m, code, base, grm_word(d + GRM_DESCRIPTOR_TILES_AT), n * GRM_TILE_BYTES);
+    /* Since ABI 2.3 the tiles follow the file and the descriptor gives only
+       their count. Earlier modules keep them in the code. */
+    if (!address) {
+        if (m->tile_count != n) return GRM_BAD_DESCRIPTOR;
+        *tiles = m->tiles;
+        return 0;
+    }
+    if (m->tile_count) return GRM_BAD_DESCRIPTOR;
+    *tiles = grm_code_at(m, code, base, address, n * GRM_TILE_BYTES);
     return *tiles ? 0 : GRM_BAD_DESCRIPTOR;
 }
 
 /* Validate icon resources before INSTALL resolves used settings. Their
    value counts are checked again after resolution. */
 static int grm_icon(const struct grm_module *m, const u8 *code, u32 base, u32 address,
-                    const struct grm_setting *settings, u32 setting_count, u32 use_count, u32 tile_count)
+                    const struct grm_setting *settings, u32 setting_count, u32 use_count, u32 tile_count,
+                    int labels)
 {
     const u8 *icon = grm_code_at(m, code, base, address, GRM_ICON);
     if ((address & 3) || !icon || grm_word(icon) < GRM_ICON) return 0;
@@ -426,6 +446,10 @@ static int grm_icon(const struct grm_module *m, const u8 *code, u32 base, u32 ad
     u32 first = grm_word(icon + GRM_ICON_FIRST_TILE_AT);
     if (setting != GRM_NO_SETTING && !grm_setting_reference(setting, setting_count, use_count)) return 0;
     if (kind == GRM_ICON_TONE) return setting != GRM_NO_SETTING && (setting & GRM_USED) && !first;
+    /* Only a status-row indicator draws a core label. */
+    if (kind == GRM_ICON_LABEL)
+        return labels && first < GRM_LABELS &&
+               (setting == GRM_NO_SETTING || (setting & GRM_USED) || settings[setting].values <= GRM_LABELS - first);
     if (kind != GRM_ICON_TILE || first >= tile_count) return 0;
     return setting == GRM_NO_SETTING || (setting & GRM_USED) || settings[setting].values <= tile_count - first;
 }
@@ -461,7 +485,8 @@ static int grm_indicator(const struct grm_module *m, const u8 *code, u32 base, u
     if (!count || count > GRM_CONDITIONS_MAX) return 0;
     if (!grm_conditions(m, code, base, grm_word(p + GRM_INDICATOR_CONDITIONS_AT), count,
                         settings, setting_count, use_count)) return 0;
-    return grm_icon(m, code, base, grm_word(p + GRM_INDICATOR_ICON_AT), settings, setting_count, use_count, tile_count);
+    return grm_icon(m, code, base, grm_word(p + GRM_INDICATOR_ICON_AT), settings, setting_count, use_count, tile_count,
+                    placement == GRM_INDICATOR_STATUS_ROW);
 }
 /* Collect the descriptors in declaration order after registrations passed
    validation. No pointer is published to the runtime until the module loads. */
@@ -526,7 +551,7 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             if (grm_word(page) >= GRM_PAGE_ICON) {
                 if (!grm_code_at(m, code, base, impl, GRM_PAGE_ICON)) return GRM_BAD_DESCRIPTOR;
                 u32 icon = grm_word(page + GRM_PAGE_ICON_AT);
-                if (icon && !grm_icon(m, code, base, icon, settings, setting_count, use_count, tile_count))
+                if (icon && !grm_icon(m, code, base, icon, settings, setting_count, use_count, tile_count, 0))
                     return GRM_BAD_DESCRIPTOR;
             }
             u32 kind = grm_word(page + GRM_PAGE_KIND_AT), direct = kind == GRM_PAGE_SETTINGS;

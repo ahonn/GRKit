@@ -619,12 +619,55 @@ static void status_icons_follow_enable_strength_and_disp(void)
     framing_paint(TEST_CANVAS,TEST_BITMAP);
     assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT]==SENTINEL);
 }
+/* A core label (DATE) takes its own width and a gap in the status row, and
+   the next icon follows it. */
+static void status_row_lays_out_core_labels(void)
+{
+    reset();
+    header[GRKIT_HOST_MODULE_LAYER_COUNT/4]=0;
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_INDICATOR_COUNT/4]=2;
+    header[GRKIT_HOST_ICON_CHUNKS/4]=TEST_ICONS;
+    settings_memory[0]=4;
+    for(u32 i=0;i<4;++i) {
+        settings_memory[SETTINGS_ENTRY(i)+1]=i%2 ? 0 : 1;
+        settings_memory[SETTINGS_ENTRY(i)+2]=i%2 ? 3 : 2;
+    }
+    for(u32 i=0;i<2;++i) {
+        u32 d=TEST_INDICATOR+i*128,c=d+32,icon=d+64;
+        WORD(d,0)=24; WORD(d,4)=2; WORD(d,8)=0;
+        WORD(d,12)=1; WORD(d,16)=c; WORD(d,20)=icon;
+        WORD(c,0)=i*2; WORD(c,4)=1; WORD(c,8)=1;
+        WORD(icon,0)=16; WORD(icon,4)=1; WORD(icon,8)=i*2+1; WORD(icon,12)=i*3;
+        header[GRKIT_HOST_INDICATORS/4+i*2]=d;
+        header[GRKIT_HOST_INDICATORS/4+i*2+1]=0;
+    }
+    /* Indicator 0 shows the core DATE label. */
+    WORD(TEST_INDICATOR+64,4)=GRKIT_ICON_LABEL; WORD(TEST_INDICATOR+64,8)=0xffffffffU;
+    WORD(TEST_INDICATOR+64,12)=LABEL_DATE;
+    memset(icon_memory,0,sizeof(icon_memory));
+    for(u32 i=0;i<6;++i) {
+        u32 icon=module_tile_address(header,GRKIT_ICON_MODULE_TILE(i));
+        WORD(icon,GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE)=0xff000010U+i;
+    }
+    framing_bind(TEST_OWNER);
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+    u32 width=label_width(LABEL_DATE),height=label_field(overlay_labels,LABEL_DATE*8+2,2),drawn=0;
+    assert(width>40 && height<40);
+    for(u32 y=0;y<height;++y)
+        for(u32 x=0;x<width;++x)
+            drawn+=pixels[1+(STATUS_TOP+(40-height)/2+y)*TEST_STRIDE+STATUS_LEFT+x]!=SENTINEL;
+    assert(drawn>0);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT+width+STATUS_LABEL_GAP]==0xff000013U);
+    assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_LEFT+STATUS_STEP]!=0xff000013U);
+}
 
 int main(void)
 {
     native_guides_follow_the_photo_area();
     composition_frames_keep_the_capture_area();
     status_icons_follow_enable_strength_and_disp();
+    status_row_lays_out_core_labels();
     the_highlight_warning_follows_the_effect_white();
     the_histogram_follows_the_effect_white();
     /* Fixed rectangles are independent expected output, not a second renderer. */

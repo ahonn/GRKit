@@ -147,7 +147,7 @@ A condition has `setting` and exactly one of `equals` or `not_equals`. All condi
 id = "framing"
 placement = "status_row"
 enabled = { all = [{ setting = "CORE.ASPECT", not_equals = 0 }, { setting = "LABEL", equals = 0 }] }
-icon = { setting = "CORE.ASPECT" }
+icon = { setting = "CORE.ASPECT", label = "ratio" }
 ```
 
 The status row uses the module order, then declaration order. Disabled icons leave no gap. It supports at most 6 registered icons across loaded modules. It shows only on the full-information still viewfinder and uses screen coordinates independently of the current photo area.
@@ -166,6 +166,11 @@ Indicators and group children accept the same `icon` table:
 | `{ setting = "STYLE" }` | Module tile n for setting value n. |
 | `{ setting = "STRENGTH", first_tile = 1 }` | Module tile 1 + n for setting value n. |
 | `{ setting = "CORE.TONE" }` | The core icon of the committed Film Look. |
+| `{ label = "DATE" }` | A core live-view label, by its text. Status-row indicators only. |
+| `{ setting = "STYLE", label = "DATE" }` | The core label n after `DATE` for setting value n. Status-row indicators only. |
+| `{ setting = "CORE.ASPECT", label = "ratio" }` | The core label of the committed Framing ratio. Status-row indicators only. |
+
+A core label is the native live-view text, as in the focus distance `2.5m`. The labels are, in order, `XPan`, `16:9`, `4:3`, `2.35`, `1:1`, `5:4`, `7:6`, `DATE`, `YMD`, `YMD HM`, `MDY`, `DMY`, and `DMY HM`. The Date Imprint formats are smaller, and `YMD HM` and `DMY HM` show `HM` on a second line. With a setting, every value needs a label at or after the named one. A label takes its own width in the status row; an icon takes 44 pixels. The row ends before x = 580, and before the load cue while it shows. An indicator that does not fit is not shown.
 
 Do not combine `tile` with `setting` or `first_tile`. A tile mapping must cover every value of its setting. `CORE.TONE` uses the core's effect icons and has no tile offset.
 
@@ -223,6 +228,8 @@ values = ["Weak", "Medium", "Strong"]
 Built-in artwork follows the [icon design rules](icon-guidelines.md).
 
 A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. A settings page needs only tile 0. A group page needs tile 0 and its child icons, including every tile named by an explicit icon source.
+
+The build stores the tiles after the module file, not in its code. INSTALL copies them to icon slots after the effect icons, so they take no module code memory and do not count toward the 65536-byte code limit. All loaded modules have at most 128 tiles together.
 
 ## Settings
 
@@ -438,9 +445,13 @@ A conditional layer has 1 to 4 `GrkitCondition` entries.
 The installer rejects layer descriptors of 21 to 27 bytes.
 `Surface` keeps its existing layout.
 
-**File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, and the imports. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
+ABI 2.3 also moves the tiles out of the code. The header word at offset 60, which was reserved and 0, gives the number of tiles that follow the import names. The descriptor then gives `tile_count` and a null `tiles` pointer. The installer still accepts tiles in the code, through a `tiles` pointer and a header word of 0. It rejects tiles after the file of a module of ABI 2.2 or earlier, tiles in both places, and a `tile_count` that differs from the header.
 
-**Memory.** The code, with the constant data, goes after the RTOS image and is read-only. The data and BSS go into one script array that all modules share, and INSTALL clears the BSS. The installer runs no module code at power-on: it reads the constant descriptor `grkit_module`.
+ABI 2.3 adds the icon kind `GRKIT_ICON_LABEL` (3) for status-row indicators: a core live-view label, `first_tile` + n for setting value n, or `first_tile` without a setting. The installer rejects it for pages and the Image Control slot, and when the labels of the setting values do not exist.
+
+**File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
+
+**Memory.** The code, with the constant data, goes after the RTOS image and is read-only. The tiles stay out of it: INSTALL copies them from the file to the icon slots. The data and BSS go into one script array that all modules share, and INSTALL clears the BSS. The installer runs no module code at power-on: it reads the constant descriptor `grkit_module`.
 
 **Stack.** Module code runs on the stacks of firmware tasks. The build rejects a function whose stack frame is larger than 1536 bytes. It does not check the total stack of nested calls.
 

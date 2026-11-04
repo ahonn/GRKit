@@ -521,6 +521,81 @@ fn published_cover_icons_show_the_words_of_the_effect_name() {
     }
 }
 
+/// The status row holds every built-in status indicator at once, with the
+/// widest label of each label indicator, before its right edge
+/// (`runtime/viewfinder.h`). A label takes its width and a gap; an icon
+/// takes one step.
+#[test]
+fn built_in_status_row_fits_with_its_widest_labels() {
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let viewfinder = fs::read_to_string(repository.join("runtime/viewfinder.h")).unwrap();
+    let define = |name: &str| -> usize {
+        viewfinder
+            .lines()
+            .find_map(|line| line.strip_prefix(&format!("#define {name} ")))
+            .unwrap_or_else(|| panic!("runtime/viewfinder.h has no {name}"))
+            .trim()
+            .trim_end_matches('U')
+            .parse()
+            .unwrap()
+    };
+    let table = artwork::overlay_labels();
+    let width = |index: usize| artwork::overlay_label_pixels(&table, index).0;
+    let widest = |range: std::ops::RangeInclusive<usize>| range.map(width).max().unwrap();
+    let date = artwork::OVERLAY_LABELS
+        .iter()
+        .position(|label| *label == "DATE")
+        .unwrap();
+    let mut row = define("STATUS_LEFT");
+    let mut indicators = 0;
+    let mut modules: Vec<_> = fs::read_dir(repository.join("modules"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    modules.sort();
+    for folder in modules {
+        let manifest: toml::Table = fs::read_to_string(folder.join("module.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        for indicator in manifest
+            .get("indicators")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+        {
+            if indicator["placement"].as_str() != Some("status_row") {
+                continue;
+            }
+            indicators += 1;
+            let icon = indicator["icon"].as_table().unwrap();
+            row += match icon.get("label").and_then(|v| v.as_str()) {
+                Some("ratio") => widest(1..=7) + define("STATUS_LABEL_GAP"),
+                Some("DATE") if icon.contains_key("setting") => {
+                    widest(date + 1..=artwork::OVERLAY_LABELS.len() - 1)
+                        + define("STATUS_LABEL_GAP")
+                }
+                Some(label) => {
+                    let index = artwork::OVERLAY_LABELS
+                        .iter()
+                        .position(|l| *l == label)
+                        .unwrap();
+                    width(index) + define("STATUS_LABEL_GAP")
+                }
+                None => define("STATUS_STEP"),
+            };
+        }
+    }
+    assert_eq!(
+        indicators, 5,
+        "Framing, Date Imprint, Bloom, Halation, and Grain"
+    );
+    assert!(
+        row <= define("STATUS_RIGHT"),
+        "the status row needs {row} pixels"
+    );
+}
+
 #[test]
 fn overlay_labels_fit_their_area_and_outline_their_text() {
     let table = artwork::overlay_labels();
@@ -539,10 +614,20 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
             (width, height),
             (field(index * 8, 2), field(index * 8 + 2, 2))
         );
-        assert_eq!(height, artwork::OVERLAY_LABEL_HEIGHT);
+        // The Date Imprint formats (after DATE) are smaller, and the formats
+        // with the time have two lines. Each fits the 40-pixel status row.
+        if index <= 8 {
+            assert_eq!(height, artwork::OVERLAY_LABEL_HEIGHT);
+        } else {
+            assert!(height <= 40, "label {index} is {height} high");
+        }
         // A Framing label at the left of the row ends before the centered
-        // load cue starts.
-        let widest = if index == 0 { 200 } else { 80 };
+        // load cue starts. A Date Imprint format with the time is wider.
+        let widest = match index {
+            0 => 200,
+            1..=8 => 80,
+            _ => 120,
+        };
         assert!(
             (30..=widest).contains(&width),
             "label {index} is {width} wide"
@@ -565,24 +650,40 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
         }
     }
     let cue = field(0, 2);
-    let widest = (1..artwork::OVERLAY_LABELS.len())
-        .map(|index| field(index * 8, 2))
-        .max()
-        .unwrap();
+    let widest = (1..=7).map(|index| field(index * 8, 2)).max().unwrap();
     assert!(7 + widest < 360 - cue / 2);
 }
 
 /// Label n names the CORE.ASPECT value n (LABEL_RATIO in runtime/sdk/grkit.h):
 /// it starts the summary of value n of the Framing module. The Date Imprint
-/// sign follows the ratios (LABEL_DATE).
+/// sign follows the ratios (LABEL_DATE), then one label for each format.
 #[test]
 fn overlay_labels_follow_the_aspect_values() {
     let aspect = grkit_core::capabilities::CAPABILITIES
         .iter()
         .find(|capability| capability.key == "ASPECT")
         .unwrap();
-    assert_eq!(artwork::OVERLAY_LABELS.len(), aspect.values as usize + 1);
     assert_eq!(artwork::OVERLAY_LABELS[aspect.values as usize], "DATE");
+    let date = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../modules/date/module.toml"),
+    )
+    .unwrap();
+    let styles: usize = date
+        .split("[[settings]]")
+        .find(|setting| setting.contains("key = \"STYLE\""))
+        .and_then(|setting| {
+            setting
+                .lines()
+                .find_map(|line| line.strip_prefix("values = "))
+        })
+        .unwrap()
+        .trim()
+        .parse()
+        .unwrap();
+    assert_eq!(
+        artwork::OVERLAY_LABELS.len(),
+        aspect.values as usize + styles
+    );
     let text = fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../modules/framing/text/en.toml"),
     )

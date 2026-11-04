@@ -1,4 +1,4 @@
-//! Reproduce Glow, Grain, and Date icons and render module captions.
+//! Reproduce the Glow, Grain, Date, Framing, and Guides icons and the viewfinder status icons.
 //! Run from the repository root with `cargo run -p grkit-core --example module-icons`.
 use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use anyhow::{ensure, Context, Result};
@@ -7,8 +7,14 @@ use std::{f64::consts::TAU, fs, path::Path};
 
 const SIZE: usize = 40;
 const BACKGROUND: u8 = 51;
-const OUTER_RADIUS: f64 = 14.0;
-const LIGHT_RADIUS: f64 = 4.0;
+// Glow strength symbols sit above the strength steps, like the Grain dots.
+const GLOW_CENTER: (f64, f64) = (20.0, 15.0);
+const OUTER_RADIUS: f64 = 8.5;
+const INNER_RADIUS: f64 = 5.5;
+const RING_WIDTH: f64 = 2.0;
+// The center light: small inside Bloom's two rings, larger inside Halation's one.
+const BLOOM_LIGHT: f64 = 1.5;
+const HALATION_LIGHT: f64 = 3.0;
 const SAMPLES: usize = 16;
 
 // Preserve the shared list frame and clear its text to obtain a drawing surface.
@@ -23,29 +29,31 @@ fn list_tile() -> Vec<u8> {
     pixels
 }
 
-fn glow(bloom: bool, width: f64, ink: u8, optical_inset: f64) -> Vec<u8> {
+// Bloom has two rings and Halation one, both around the same center light.
+// The steps below carry the strength, so the symbol stays the same.
+fn glow(bloom: bool) -> Vec<u8> {
     let mut pixels = list_tile();
     let radii: &[f64] = if bloom {
-        &[
-            OUTER_RADIUS - optical_inset,
-            10.5 - optical_inset / 2.0,
-            7.0,
-        ]
+        &[OUTER_RADIUS, INNER_RADIUS]
     } else {
         &[OUTER_RADIUS]
     };
-    for y in 6..34 {
-        for x in 6..34 {
+    let light = if bloom { BLOOM_LIGHT } else { HALATION_LIGHT };
+    for y in 4..26 {
+        for x in 9..31 {
             let mut total = 0u32;
             for sy in 0..SAMPLES {
                 for sx in 0..SAMPLES {
-                    let dx = x as f64 + (sx as f64 + 0.5) / SAMPLES as f64 - 20.0;
-                    let dy = y as f64 + (sy as f64 + 0.5) / SAMPLES as f64 - 20.0;
+                    let dx = x as f64 + (sx as f64 + 0.5) / SAMPLES as f64 - GLOW_CENTER.0;
+                    let dy = y as f64 + (sy as f64 + 0.5) / SAMPLES as f64 - GLOW_CENTER.1;
                     let radius = dx.hypot(dy);
-                    let gray = if radius <= LIGHT_RADIUS {
+                    let gray = if radius <= light {
                         255
-                    } else if radii.iter().any(|r| radius <= *r && radius >= r - width) {
-                        ink
+                    } else if radii
+                        .iter()
+                        .any(|r| radius <= *r && radius >= r - RING_WIDTH)
+                    {
+                        240
                     } else {
                         BACKGROUND
                     };
@@ -69,21 +77,6 @@ fn save(path: &Path, pixels: &[u8]) -> Result<()> {
     fs::write(path, encoded)?;
     println!("Updated {}", path.display());
     Ok(())
-}
-
-// Preserve each diagram and frame. Caption placement uses a font baseline,
-// never the first non-background pixel, which can be a faint antialiased edge.
-fn caption(path: &Path, label: &str) -> Result<()> {
-    let (width, height, mut pixels) = png::decode_rgba8(&fs::read(path)?)?;
-    ensure!((width, height) == (SIZE, SIZE), "Invalid tile size");
-    for y in 24..37 {
-        for x in 2..38 {
-            let offset = (y * SIZE + x) * 4;
-            pixels[offset..offset + 4].copy_from_slice(&[BACKGROUND, BACKGROUND, BACKGROUND, 255]);
-        }
-    }
-    draw_text(&mut pixels, label, 12.0, 32.0, 24.0, 35.0)?;
-    save(path, &pixels)
 }
 
 fn draw_text(
@@ -223,10 +216,268 @@ fn grain(height: usize, count: usize) -> Vec<u8> {
     pixels
 }
 
+// List tiles: strength steps below a symbol, and diagrams with a caption.
+// Diagrams keep 1-pixel lines; captions are larger than the earlier 12.
+const CAPTION_SIZE: f32 = 14.0;
+const CAPTION_BASELINE: f32 = 33.0;
+const DIAGRAM_FILL: u8 = 17;
+// Gray lines read thinner than white ones at 1 pixel.
+const DIAGRAM_FRAME: u8 = 210;
+const DIAGRAM_LINE: u8 = 160;
+
+// The native strength wedge (ISO NR, Shading): one ramp along the bottom,
+// rising to the right and split into `count` segments with 3-pixel gaps.
+// Only the first `level` segments are drawn. Coverage is per sample.
+fn wedge(level: usize, count: usize) -> impl Fn(f64, f64) -> bool {
+    wedge_from(level, count, 4.0, 12.0)
+}
+
+// The wedge with heights from `low` at the left to `high` at the right.
+fn wedge_from(level: usize, count: usize, low: f64, high: f64) -> impl Fn(f64, f64) -> bool {
+    const LEFT: f64 = 2.0;
+    const RIGHT: f64 = 37.0;
+    const BOTTOM: f64 = 37.0;
+    const GAP: f64 = 3.0;
+    let segment = (RIGHT - LEFT - GAP * (count - 1) as f64) / count as f64;
+    move |x, y| {
+        let offset = x - LEFT;
+        if !(0.0..RIGHT - LEFT).contains(&offset) {
+            return false;
+        }
+        let index = (offset / (segment + GAP)) as usize;
+        let inside = offset - index as f64 * (segment + GAP) < segment;
+        let height = low + (high - low) * offset / (RIGHT - LEFT);
+        index < level && inside && y >= BOTTOM - height && y < BOTTOM
+    }
+}
+
+fn list_steps(pixels: &mut [u8], level: usize, count: usize) {
+    paint(pixels, [2, 24, 37, 37], 255, wedge(level, count));
+}
+
+fn fill_rect(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], gray: u8) {
+    for y in top..bottom {
+        for x in left..right {
+            pixels[(y * SIZE + x) * 4..(y * SIZE + x) * 4 + 3].fill(gray);
+        }
+    }
+}
+
+// A dark area with a 1-pixel light border: `[left, top, right, bottom)`.
+fn frame(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4]) {
+    fill_rect(pixels, [left, top, right, bottom], DIAGRAM_FRAME);
+    fill_rect(
+        pixels,
+        [left + 1, top + 1, right - 1, bottom - 1],
+        DIAGRAM_FILL,
+    );
+}
+
+// A photo of `ratio` (width / height), centered in the 30 x 16 area above the
+// caption. The diagram and the caption together are centered on the tile.
+fn ratio_tile(ratio: f64, label: &str) -> Result<Vec<u8>> {
+    let mut pixels = list_tile();
+    let (width, height) = if ratio >= 30.0 / 16.0 {
+        (30, (30.0 / ratio).round() as usize)
+    } else {
+        ((16.0 * ratio).round() as usize, 16)
+    };
+    let left = 20 - width / 2;
+    let top = 5 + (16 - height) / 2;
+    frame(&mut pixels, [left, top, left + width, top + height]);
+    draw_text(
+        &mut pixels,
+        label,
+        CAPTION_SIZE,
+        CAPTION_BASELINE,
+        21.0,
+        36.0,
+    )?;
+    Ok(pixels)
+}
+
+#[derive(Clone, Copy)]
+enum Guide {
+    Thirds,
+    Center,
+    Golden,
+    Diagonals,
+    ThirdsCenter,
+}
+
+// A guide style in the frame `[left, top, right, bottom)`: 1-pixel gray
+// lines inside a 1-pixel border.
+fn guides(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], guide: Guide) {
+    frame(pixels, [left, top, right, bottom]);
+    let (inner_left, inner_top) = (left + 1, top + 1);
+    let (width, height) = (right - left - 2, bottom - top - 2);
+    let lines = |pixels: &mut [u8], fractions: &[f64]| {
+        for &f in fractions {
+            let x = inner_left + (width as f64 * f).round() as usize;
+            let y = inner_top + (height as f64 * f).round() as usize;
+            fill_rect(
+                pixels,
+                [x, inner_top, x + 1, inner_top + height],
+                DIAGRAM_LINE,
+            );
+            fill_rect(
+                pixels,
+                [inner_left, y, inner_left + width, y + 1],
+                DIAGRAM_LINE,
+            );
+        }
+    };
+    let cross = |pixels: &mut [u8], arm: usize, thick: usize| {
+        let (cx, cy) = (inner_left + width / 2, inner_top + height / 2);
+        fill_rect(
+            pixels,
+            [cx - arm, cy - thick / 2, cx + arm, cy - thick / 2 + thick],
+            DIAGRAM_LINE,
+        );
+        fill_rect(
+            pixels,
+            [cx - thick / 2, cy - arm, cx - thick / 2 + thick, cy + arm],
+            DIAGRAM_LINE,
+        );
+    };
+    match guide {
+        Guide::Thirds => lines(pixels, &[1.0 / 3.0, 2.0 / 3.0]),
+        Guide::Golden => lines(pixels, &[0.382, 0.618]),
+        Guide::Center => cross(pixels, 4, 1),
+        Guide::ThirdsCenter => {
+            lines(pixels, &[1.0 / 3.0, 2.0 / 3.0]);
+            cross(pixels, 2, 1);
+        }
+        Guide::Diagonals => {
+            let (x0, y0) = (inner_left as f64, inner_top as f64);
+            let (w, h) = (width as f64, height as f64);
+            paint(
+                pixels,
+                [
+                    inner_left,
+                    inner_top,
+                    inner_left + width,
+                    inner_top + height,
+                ],
+                DIAGRAM_LINE,
+                |x, y| {
+                    let u = (x - x0) / w;
+                    let v = (y - y0) / h;
+                    ((u - v).abs() * h).min((u + v - 1.0).abs() * h) <= 0.6
+                },
+            );
+        }
+    }
+}
+
+fn guides_tile(guide: Guide, label: &str) -> Result<Vec<u8>> {
+    let mut pixels = list_tile();
+    guides(&mut pixels, [6, 5, 34, 21], guide);
+    draw_text(
+        &mut pixels,
+        label,
+        CAPTION_SIZE,
+        CAPTION_BASELINE,
+        21.0,
+        36.0,
+    )?;
+    Ok(pixels)
+}
+
+// Viewfinder status icons: white marks with a one-pixel black outline on a
+// transparent background, like the native status-row icons. Marks use binary
+// coverage, so the outline stays crisp over the live view.
+const VIEWFINDER_SYMBOL: (f64, f64) = (20.0, 13.5);
+
+fn marks() -> Vec<u8> {
+    vec![0; SIZE * SIZE]
+}
+
+fn mark(marks: &mut [u8], ink: u8, inside: impl Fn(f64, f64) -> bool) {
+    for y in 2..38 {
+        for x in 2..38 {
+            let mut count = 0;
+            for sy in 0..SAMPLES {
+                for sx in 0..SAMPLES {
+                    if inside(
+                        x as f64 + (sx as f64 + 0.5) / SAMPLES as f64,
+                        y as f64 + (sy as f64 + 0.5) / SAMPLES as f64,
+                    ) {
+                        count += 1;
+                    }
+                }
+            }
+            if count * 2 >= SAMPLES * SAMPLES {
+                marks[y * SIZE + x] = ink;
+            }
+        }
+    }
+}
+
+// In the viewfinder every segment shows: gray up to the full scale, then
+// white up to the current level, so the strength reads at a glance.
+const INACTIVE_STEP: u8 = 128;
+
+// A lower wedge than in the list leaves room for a symbol of the size of the
+// native status icons.
+fn mark_steps(marks: &mut [u8], level: usize, count: usize) {
+    mark(marks, INACTIVE_STEP, wedge_from(count, count, 3.0, 10.0));
+    mark(marks, 255, wedge_from(level, count, 3.0, 10.0));
+}
+
+fn mark_rings(marks: &mut [u8], radii: &[f64], light: f64) {
+    mark(marks, 255, |x, y| {
+        let radius = (x - VIEWFINDER_SYMBOL.0).hypot(y - VIEWFINDER_SYMBOL.1);
+        radius <= light || radii.iter().any(|r| radius <= *r && radius >= r - 2.0)
+    });
+}
+
+// Sparse 2 x 2 grains whose outlines stay separate.
+fn mark_grain(marks: &mut [u8]) {
+    for (x, y) in [
+        (8, 4),
+        (16, 3),
+        (25, 5),
+        (32, 3),
+        (12, 9),
+        (21, 10),
+        (29, 9),
+        (7, 14),
+        (16, 15),
+        (25, 14),
+        (32, 16),
+        (11, 20),
+        (20, 21),
+        (28, 20),
+    ] {
+        for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+            marks[(y + dy) * SIZE + x + dx] = 255;
+        }
+    }
+}
+
+fn outlined(marks: &[u8]) -> Vec<u8> {
+    let mut pixels = vec![0; SIZE * SIZE * 4];
+    for y in 1..SIZE - 1 {
+        for x in 1..SIZE - 1 {
+            let ink = marks[y * SIZE + x];
+            let offset = (y * SIZE + x) * 4;
+            if ink != 0 {
+                pixels[offset..offset + 4].copy_from_slice(&[ink, ink, ink, 255]);
+            } else if (y - 1..=y + 1).any(|ny| (x - 1..=x + 1).any(|nx| marks[ny * SIZE + nx] != 0))
+            {
+                pixels[offset..offset + 4].copy_from_slice(&[0, 0, 0, 255]);
+            }
+        }
+    }
+    pixels
+}
+
+// Date Imprint formats: the order of year, month, and day, with HM below for
+// the formats that print the time. The text block centers on the list frame.
+// Capitals occupy rows 15..24 for one line, or 10..29 for two lines.
 fn date(order: &str, with_time: bool) -> Result<Vec<u8>> {
     let mut pixels = list_tile();
-    // Center the whole text block on the list frame, not each line separately.
-    // Capitals occupy rows 15..24 for one line, or 10..29 for two lines.
     if with_time {
         draw_text(&mut pixels, order, 16.0, 20.0, 8.0, 20.0)?;
         draw_text(&mut pixels, "HM", 12.0, 30.0, 22.0, 30.0)?;
@@ -238,15 +489,10 @@ fn date(order: &str, with_time: bool) -> Result<Vec<u8>> {
 
 fn main() -> Result<()> {
     let modules = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules");
-    // Dense concentric rings appear larger even at equal diameters. Bloom uses
-    // a small optical inset and restrained stroke growth to balance the family.
-    // The center light and the contrast of the weak contour remain unchanged.
-    for (bloom, files, widths, insets) in [
+    for (bloom, files) in [
         (
             true,
             ["1-bloom-weak.png", "1-bloom.png", "3-bloom-strong.png"],
-            [1.5, 1.8, 2.1],
-            [0.0, 0.5, 1.0],
         ),
         (
             false,
@@ -255,44 +501,37 @@ fn main() -> Result<()> {
                 "2-halation.png",
                 "6-halation-strong.png",
             ],
-            [1.5, 2.25, 3.0],
-            [0.0; 3],
         ),
     ] {
-        for (((file, width), ink), inset) in files
-            .into_iter()
-            .zip(widths)
-            .zip([224, 240, 255])
-            .zip(insets)
-        {
-            let pixels = glow(bloom, width, ink, inset);
-            // Check the rasterized contour, not just the nominal ink. Sample
+        for (level, file) in files.into_iter().enumerate() {
+            let mut pixels = glow(bloom);
+            // Check the rasterized outer ring, not just the nominal ink. Sample
             // every five degrees and find the brightest pixel near the ring.
             for angle in 0..72 {
                 let angle = angle as f64 * TAU / 72.0;
-                let peak = (0..=24)
+                let peak = (0..=16)
                     .map(|step| {
-                        let radius = 11.5 + step as f64 / 8.0;
-                        let x = (19.5 + radius * angle.cos()).round() as usize;
-                        let y = (19.5 + radius * angle.sin()).round() as usize;
+                        let radius = OUTER_RADIUS - RING_WIDTH - 0.5 + step as f64 / 8.0;
+                        let x = (GLOW_CENTER.0 - 0.5 + radius * angle.cos()).round() as usize;
+                        let y = (GLOW_CENTER.1 - 0.5 + radius * angle.sin()).round() as usize;
                         pixels[(y * SIZE + x) * 4]
                     })
                     .max()
                     .unwrap();
                 ensure!(peak >= 176, "Dim contour in {file}: {peak}, angle {angle}");
             }
+            list_steps(&mut pixels, level + 1, 3);
             save(&modules.join("glow/tiles").join(file), &pixels).context(file)?;
         }
     }
     save(&modules.join("grain/tiles/0-module.png"), &grain(28, 70))?;
-    for (file, label, count) in [
-        ("1-weak.png", "Weak", 18),
-        ("2-medium.png", "Med", 32),
-        ("3-strong.png", "Strong", 46),
-        ("4-extra.png", "Extra", 60),
-    ] {
-        let mut pixels = grain(18, count);
-        draw_text(&mut pixels, label, 12.0, 32.0, 24.0, 35.0)?;
+    // One density for every level: the steps give the strength.
+    for (level, file) in ["1-weak.png", "2-medium.png", "3-strong.png", "4-extra.png"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut pixels = grain(16, 32);
+        list_steps(&mut pixels, level + 1, 4);
         save(&modules.join("grain/tiles").join(file), &pixels)?;
     }
     for (file, order, with_time) in [
@@ -307,32 +546,67 @@ fn main() -> Result<()> {
             &date(order, with_time)?,
         )?;
     }
-    for (family, labels) in [
-        (
-            "framing",
-            &[
-                ("1-xpan.png", "XPan"),
-                ("2-16-9.png", "16:9"),
-                ("3-4-3.png", "4:3"),
-                ("4-2-35.png", "2.35"),
-                ("5-1-1.png", "1:1"),
-                ("6-5-4.png", "5:4"),
-                ("7-7-6.png", "7:6"),
-            ][..],
-        ),
-        (
-            "guides",
-            &[
-                ("1-thirds.png", "3x3"),
-                ("2-center.png", "Ctr"),
-                ("3-golden.png", "Phi"),
-                ("4-diagonals.png", "Diag"),
-                ("5-thirds-center.png", "3x3+"),
-            ][..],
-        ),
+    let mut root = list_tile();
+    frame(&mut root, [7, 11, 33, 29]);
+    save(&modules.join("framing/tiles/0-module.png"), &root)?;
+    for (file, ratio, label) in [
+        ("1-xpan.png", 65.0 / 24.0, "XPan"),
+        ("2-16-9.png", 16.0 / 9.0, "16:9"),
+        ("3-4-3.png", 4.0 / 3.0, "4:3"),
+        ("4-2-35.png", 2.35, "2.35"),
+        ("5-1-1.png", 1.0, "1:1"),
+        ("6-5-4.png", 5.0 / 4.0, "5:4"),
+        ("7-7-6.png", 7.0 / 6.0, "7:6"),
     ] {
-        for (file, label) in labels {
-            caption(&modules.join(family).join("tiles").join(file), label)?;
+        save(
+            &modules.join("framing/tiles").join(file),
+            &ratio_tile(ratio, label)?,
+        )?;
+    }
+    let mut root = list_tile();
+    guides(&mut root, [5, 8, 35, 32], Guide::Thirds);
+    save(&modules.join("guides/tiles/0-module.png"), &root)?;
+    for (file, guide, label) in [
+        ("1-thirds.png", Guide::Thirds, "3x3"),
+        ("2-center.png", Guide::Center, "Ctr"),
+        ("3-golden.png", Guide::Golden, "Phi"),
+        ("4-diagonals.png", Guide::Diagonals, "Diag"),
+        ("5-thirds-center.png", Guide::ThirdsCenter, "3x3+"),
+    ] {
+        save(
+            &modules.join("guides/tiles").join(file),
+            &guides_tile(guide, label)?,
+        )?;
+    }
+    // Viewfinder status icons (module.toml `[[indicators]]`).
+    for (level, file) in [
+        "vf-1-weak.png",
+        "vf-2-medium.png",
+        "vf-3-strong.png",
+        "vf-4-extra.png",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let mut m = marks();
+        mark_grain(&mut m);
+        mark_steps(&mut m, level + 1, 4);
+        save(&modules.join("grain/tiles").join(file), &outlined(&m))?;
+    }
+    for (prefix, radii, light) in [
+        ("vf-bloom", &[10.5, 6.0][..], BLOOM_LIGHT),
+        ("vf-halation", &[10.5][..], HALATION_LIGHT),
+    ] {
+        for (level, strength) in ["weak", "medium", "strong"].into_iter().enumerate() {
+            let mut m = marks();
+            mark_rings(&mut m, radii, light);
+            mark_steps(&mut m, level + 1, 3);
+            save(
+                &modules
+                    .join("glow/tiles")
+                    .join(format!("{prefix}-{strength}.png")),
+                &outlined(&m),
+            )?;
         }
     }
     Ok(())

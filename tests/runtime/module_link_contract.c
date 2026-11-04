@@ -37,7 +37,9 @@ static u32 code_words[CODE_WORDS], data_words[2];
 static u32 relocations[128], relocation_count;
 static u32 import_hash, abi;
 static const char *id;
-static u8 file[GRM_HEADER + CODE_WORDS * 4 + 1024];
+static u8 file[GRM_HEADER + CODE_WORDS * 4 + 1024 + 3 * GRM_TILE_BYTES];
+/* The tiles after the import names (ABI 2.3), filled with 0xa5. */
+static u32 file_tiles;
 static u32 file_size;
 
 static u32 fnv(const char *s)
@@ -57,6 +59,7 @@ static void reset(void)
 {
     memset(code_words, 0, sizeof code_words);
     relocation_count = 0;
+    file_tiles = 0;
     abi = GRM_ABI_MAJOR << 16 | GRM_ABI_MINOR;
     id = "PROBE";
     import_hash = fnv("overlay_label");
@@ -123,7 +126,19 @@ static void build(void)
     grm_put(p, 0); grm_put(p + 4, 4); p += 8;
     grm_put(p, import_hash); grm_put(p + 4, IMPORT * 4); p += 8;
     memcpy(p, "overlay_label\0\0\0", 16); p += 16;
+    grm_put(file + 60, file_tiles);
+    memset(p, 0xa5, file_tiles * GRM_TILE_BYTES); p += file_tiles * GRM_TILE_BYTES;
     file_size = (u32)(p - file);
+}
+/* Move the tiles out of the code, as grkit module build does since ABI 2.3:
+   the descriptor has no tile address, and n tiles follow the file. */
+static void tiles_after_file(u32 n)
+{
+    code_words[DESCRIPTOR + 8] = 0;
+    for (u32 i = 0; i < relocation_count; ++i)
+        if (relocations[i] == (DESCRIPTOR + 8) * 4) relocations[i--] = relocations[--relocation_count];
+    code_words[DESCRIPTOR + 9] = n;
+    file_tiles = n;
 }
 
 #define CODE_BASE 0x543dc000U
@@ -267,6 +282,22 @@ static void indicators_validate_resources_and_conditions(void)
     indicator_reset(); code_words[ICON_AT + 2] = GRM_USED;
     assert(registrations() == 0); /* Full range checked when uses resolve. */
     indicator_reset(); code_words[INDICATOR_AT + 4] = CODE_WORDS * 4 - 4;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    /* A status-row indicator can show a core label: label first + value, or
+       the label first without a setting. Every value needs a label. */
+    indicator_reset(); code_words[ICON_AT + 1] = GRM_ICON_LABEL; code_words[ICON_AT + 3] = GRM_LABELS - 2;
+    assert(registrations() == 0); /* MODE has two values: labels 7 and 8. */
+    code_words[ICON_AT + 3] = GRM_LABELS - 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    code_words[ICON_AT + 2] = GRM_NO_SETTING;
+    assert(registrations() == 0);
+    code_words[ICON_AT + 3] = GRM_LABELS;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    indicator_reset(); code_words[ICON_AT + 1] = GRM_ICON_LABEL; code_words[ICON_AT + 2] = GRM_USED;
+    assert(registrations() == 0); /* Checked when uses resolve. */
+    /* The Image Control slot cannot show a label. */
+    indicator_reset(); code_words[ICON_AT + 1] = GRM_ICON_LABEL; code_words[ICON_AT + 2] = GRM_NO_SETTING;
+    code_words[INDICATOR_AT + 1] = GRM_INDICATOR_NATIVE_SLOT; code_words[INDICATOR_AT + 2] = GRM_SLOT_IMAGE_CONTROL;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
 }
 
@@ -494,5 +525,29 @@ int main(void)
     assert(link(&failed) == GRM_BAD_FILE);
     reset(); build(); grm_put(file + 36, 0xffffffdcU);
     assert(grm_parse(file, file_size, &m) == GRM_BAD_FILE);
+
+    /* Since ABI 2.3 the tiles follow the file: the descriptor gives their
+       count and no address, and INSTALL copies them from the file. */
+    reset(); tiles_after_file(2);
+    assert(registrations() == 0);
+    assert(m.tile_count == 2 && m.tiles == file + file_size - 2 * GRM_TILE_BYTES);
+    assert(grm_tiles(&m, code, CODE_BASE, &tiles, &tile_count) == 0 && tile_count == 2 && tiles == m.tiles);
+    assert(tiles[0] == 0xa5 && tiles[2 * GRM_TILE_BYTES - 1] == 0xa5);
+    assert(grm_tiles(&m, m.code, 0, &tiles, &tile_count) == 0 && tiles == m.tiles);
+    /* The descriptor count must match the tiles of the file. */
+    reset(); tiles_after_file(2); code_words[DESCRIPTOR + 9] = 1;
+    assert(link(&failed) == 0 && grm_tiles(&m, code, CODE_BASE, &tiles, &tile_count) == GRM_BAD_DESCRIPTOR);
+    reset(); tiles_after_file(2); file_tiles = 0;
+    assert(link(&failed) == 0 && grm_tiles(&m, code, CODE_BASE, &tiles, &tile_count) == GRM_BAD_DESCRIPTOR);
+    /* Tiles in the code and after the file. */
+    reset(); file_tiles = 2;
+    assert(link(&failed) == 0 && grm_tiles(&m, code, CODE_BASE, &tiles, &tile_count) == GRM_BAD_DESCRIPTOR);
+    /* Tiles after the file of an older ABI, too many tiles, or a short file. */
+    reset(); tiles_after_file(2); abi = GRM_ABI_MAJOR << 16 | 2; build();
+    assert(grm_parse(file, file_size, &m) == GRM_BAD_FILE);
+    reset(); tiles_after_file(2); build(); grm_put(file + 60, GRM_TILES + 1);
+    assert(grm_parse(file, file_size, &m) == GRM_BAD_FILE);
+    reset(); tiles_after_file(2); build();
+    assert(grm_parse(file, file_size - 1, &m) == GRM_BAD_FILE);
     return 0;
 }

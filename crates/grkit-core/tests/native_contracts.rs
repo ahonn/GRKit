@@ -864,6 +864,7 @@ fn the_installer_links_a_module_that_rust_writes() {
                 offset: 4,
             },
         ],
+        tiles: vec![],
     };
     let temporary = tempfile::tempdir().unwrap();
     let file = temporary.path().join("CROSS.GRM");

@@ -46,6 +46,7 @@ static u32 setting_module(u32 k)
     return GRKIT_MODULES_MAX;
 }
 /* Validate the resolved setting of an icon before copying module code. */
+_Static_assert(GRM_LABELS == GRKIT_LABEL_COUNT, "Module label icons name the core labels");
 static int module_icon_valid(u32 i, const u32 *uses, u32 base, u32 address, u32 tile_count)
 {
     const u8 *icon = grm_code_at(&module, module_code, base, address, GRM_ICON);
@@ -54,6 +55,8 @@ static int module_icon_valid(u32 i, const u32 *uses, u32 base, u32 address, u32 
     if (kind == GRM_ICON_TONE) return handle == GRKIT_CORE_TONE;
     if (named == GRM_NO_SETTING || handle == GRM_NO_SETTING) return 1;
     u32 values = handle == GRKIT_CORE_TONE ? count + 1 : handle_values(handle);
+    /* A label needs one core label for each value of its setting. */
+    if (kind == GRM_ICON_LABEL) return values && first < GRKIT_LABEL_COUNT && values <= GRKIT_LABEL_COUNT - first;
     return values && first < tile_count && values <= tile_count - first;
 }
 /* Validate and relocate shared enabled conditions from the unpatched copy. */

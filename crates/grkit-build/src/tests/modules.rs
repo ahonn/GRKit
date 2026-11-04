@@ -618,6 +618,69 @@ icon = { setting = "CORE.TONE" }
 }
 
 #[test]
+fn status_row_indicators_show_core_labels() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let manifest = GROUP_MANIFEST.replace("version = 1", "version = 1\nuses = [\"CORE.ASPECT\"]");
+    let indicators = r#"
+[[indicators]]
+id = "date"
+placement = "status_row"
+enabled = { setting = "FIRST_ENABLED", equals = 1 }
+icon = { label = "DATE" }
+[[indicators]]
+id = "ratio"
+placement = "status_row"
+enabled = { setting = "CORE.ASPECT", not_equals = 0 }
+icon = { setting = "CORE.ASPECT", label = "ratio" }
+"#;
+    fs::write(
+        folder.join("module.toml"),
+        format!("{manifest}{indicators}"),
+    )?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".kind = GRKIT_ICON_LABEL, .setting = GRKIT_NO_SETTING, .first_tile = 8"));
+    assert!(code.contains(".kind = GRKIT_ICON_LABEL, .setting = GRKIT_USE(0), .first_tile = 0"));
+    // With a setting of the module, value n shows the nth label after the named one.
+    let style = format!(
+        "{manifest}\n[[indicators]]\nid = \"strength\"\nplacement = \"status_row\"\nenabled = {{ setting = \"FIRST_ENABLED\", equals = 1 }}\nicon = {{ setting = \"FIRST_STRENGTH\", label = \"DATE\" }}\n"
+    );
+    fs::write(folder.join("module.toml"), style)?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".kind = GRKIT_ICON_LABEL, .setting = 1, .first_tile = 8"));
+    let invalid = [
+        // Not a core label, the load cue, a tile offset, or another setting.
+        "icon = { label = \"XYZ\" }",
+        "icon = { label = \"GRKit Loaded\" }",
+        "icon = { label = \"DATE\", first_tile = 1 }",
+        "icon = { setting = \"FIRST_STRENGTH\", label = \"ratio\" }",
+        "icon = { setting = \"CORE.ASPECT\", label = \"DATE\" }",
+        // Three values from the last label run past the labels.
+        "icon = { setting = \"FIRST_STRENGTH\", label = \"DMY HM\" }",
+    ];
+    for icon in invalid {
+        let manifest = format!(
+            "{manifest}\n[[indicators]]\nid = \"bad\"\nplacement = \"status_row\"\nenabled = {{ setting = \"FIRST_ENABLED\", equals = 1 }}\n{icon}\n"
+        );
+        fs::write(folder.join("module.toml"), manifest)?;
+        assert!(module::generate(&folder).is_err(), "accepted {icon}");
+    }
+    // Only the status row draws a label: not the Image Control slot or ADJ.
+    let slot = format!(
+        "{manifest}\n[[indicators]]\nid = \"slot\"\nplacement = \"native_slot\"\nslot = \"image_control\"\nenabled = {{ setting = \"FIRST_ENABLED\", equals = 1 }}\nicon = {{ label = \"DATE\" }}\n"
+    );
+    fs::write(folder.join("module.toml"), slot)?;
+    assert!(module::generate(&folder).is_err());
+    let child = manifest.replace(
+        "key = \"FIRST\"\nsettings =",
+        "key = \"FIRST\"\nicon = { label = \"DATE\" }\nsettings =",
+    );
+    fs::write(folder.join("module.toml"), child)?;
+    assert!(module::generate(&folder).is_err());
+    Ok(())
+}
+
+#[test]
 fn indicators_reject_invalid_conditions_icons_and_placements() -> Result<()> {
     let directory = tempfile::tempdir()?;
     let folder = group_folder(directory.path())?;

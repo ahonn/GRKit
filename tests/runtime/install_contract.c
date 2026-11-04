@@ -1113,6 +1113,16 @@ static void indicators_reject_conflicts_overflow_and_used_value_ranges(void)
             .indicator_tiles = bad == 1 ? 4 : 5});
         assert(install() == 0 && !module_indicator_count && module_status[0] == GRM_BAD_DESCRIPTOR);
     }
+    /* A label of CORE.ASPECT needs a core label for each of its 8 values:
+       labels 0 to 7 exist, and the last 7 labels and one more do not. */
+    for (u32 first = 0; first <= GRM_LABELS - 7; first += GRM_LABELS - 7) {
+        reset();
+        add_module(PACKAGE_MODULES_PATH, "LABEL.GRM", &(struct spec){.id = "LABEL",
+            .uses = {"CORE.ASPECT"}, .indicator_count = 1, .condition_setting = GRM_USED,
+            .icon_kind = GRM_ICON_LABEL, .icon_setting = GRM_USED, .icon_first = first});
+        assert(install() == 0 && module_status[0] == (first ? GRM_BAD_DESCRIPTOR : 0));
+        assert(module_indicator_count == (first ? 0U : 1U));
+    }
 }
 static void legacy_tone_icon_is_only_for_old_module_abi(void)
 {

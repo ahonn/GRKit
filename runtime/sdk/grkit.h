@@ -87,6 +87,8 @@ typedef struct {
 #define LABEL_GRKIT 0U
 #define LABEL_RATIO(area) (area)
 #define LABEL_DATE 8U
+/* The Date Imprint formats, YMD to DMY HM, follow DATE (since ABI 2.3). */
+#define LABEL_DATE_FORMAT(style) (LABEL_DATE+(style))
 /* The top of a label in the second row of the native live-view text, and
    the left edge of a label that lines up with the native icons. A capture
    area label is at most 80 pixels wide, so a second label of the row starts
@@ -186,6 +188,11 @@ static inline const GrkitContext *grkit_context(void)
    Setting references use the same local/GRKIT_USE form as layers. */
 #define GRKIT_ICON_TILE 1U
 #define GRKIT_ICON_TONE 2U
+/* Since ABI 2.3, for a status_row indicator only: core live-view label
+   first_tile + n for setting value n, or first_tile without a setting. The
+   labels are the Framing ratios (1 to 7, by CORE.ASPECT), DATE (8), and the
+   Date Imprint formats (9 to 13, by Date Imprint STYLE 1 to 5). */
+#define GRKIT_ICON_LABEL 3U
 typedef struct {
     u32 size;
     u32 kind;
@@ -494,7 +501,11 @@ typedef struct {
        A name that starts with '?' is optional. Only public settings. */
     const char *const *uses;
     u32 use_count;
-    /* The artwork tiles of the module, GRKIT_TILE_BYTES each. */
+    /* The artwork tiles of the module, GRKIT_TILE_BYTES each. Since ABI 2.3,
+       `grkit module build` puts them after the module file, where INSTALL
+       copies them to the icons without loading them as code: then `tiles`
+       is 0 and `tile_count` gives their number. Tiles in the code still
+       work. */
     const u8 *tiles;
     u32 tile_count;
 } GrkitModule;

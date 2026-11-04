@@ -569,8 +569,10 @@ fn line(rgba: &mut [u8], from: (f32, f32), to: (f32, f32), half_width: f32, ink:
 /// The live-view labels in label order: the load cue, then the Framing ratios
 /// in capture area order (runtime/framing.c: photo_boxes), so label n names
 /// capture area n, then the sign of Date Imprint (LABEL_DATE in
-/// runtime/sdk/grkit.h).
-pub const OVERLAY_LABELS: [&str; 9] = [
+/// runtime/sdk/grkit.h), then its formats in Date Imprint STYLE order
+/// (label LABEL_DATE + STYLE): the order of year, month, and day, and HM
+/// when the time prints.
+pub const OVERLAY_LABELS: [&str; 14] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -580,6 +582,11 @@ pub const OVERLAY_LABELS: [&str; 9] = [
     "5:4",
     "7:6",
     "DATE",
+    "YMD",
+    "YMD HM",
+    "MDY",
+    "DMY",
+    "DMY HM",
 ];
 /// The width of the black outline around the text. The native live-view text
 /// has one black pixel around the gray edge of each stroke, and keeps the
@@ -607,10 +614,45 @@ const OVERLAY_CONDENSE: f32 = 0.87;
 /// The native text has more space between its characters.
 const OVERLAY_TRACKING: f32 = 3.0;
 
-/// The text coverage of `label`: its width, then one coverage value for each
-/// pixel, row by row. The capitals start `OVERLAY_OUTLINE + OVERLAY_ABOVE`
-/// rows from the top, and the text starts after the left outline.
-fn overlay_coverage(label: &str) -> (usize, Vec<f32>) {
+/// The capital heights of a Date Imprint format and of its time line. The
+/// formats are secondary to a ratio, and a format that prints the time puts
+/// HM on a second line, so the label stays as narrow as a ratio.
+const OVERLAY_DATE_CAPITAL: usize = 16;
+const OVERLAY_TIME_CAPITAL: usize = 11;
+/// Rows between the date line and the time line.
+const OVERLAY_LINE_GAP: usize = 5;
+/// The tracking of the time line. Tracking that scales with its small
+/// capitals merges the outlines of H and M.
+const OVERLAY_TIME_TRACKING: f32 = 3.0;
+
+/// The lines of label `index` with their capital heights and tracking. The
+/// tracking of a date format scales with its capitals.
+fn overlay_lines(index: usize) -> Vec<(&'static str, usize, f32)> {
+    let label = OVERLAY_LABELS[index];
+    let date = OVERLAY_LABELS
+        .iter()
+        .position(|candidate| *candidate == "DATE")
+        .expect("the labels have DATE");
+    let scaled = |capital: usize| OVERLAY_TRACKING * capital as f32 / OVERLAY_CAPITAL as f32;
+    if index <= date {
+        return vec![(label, OVERLAY_CAPITAL, OVERLAY_TRACKING)];
+    }
+    let order = |text: &'static str| (text, OVERLAY_DATE_CAPITAL, scaled(OVERLAY_DATE_CAPITAL));
+    match label.split_once(' ') {
+        Some((date, time)) => vec![
+            order(date),
+            (time, OVERLAY_TIME_CAPITAL, OVERLAY_TIME_TRACKING),
+        ],
+        None => vec![order(label)],
+    }
+}
+
+/// The text coverage of label `index`: its width, its height, then one
+/// coverage value for each pixel, row by row. Each line is centered, its
+/// capitals start below the outline and `OVERLAY_ABOVE` rows, and its tracking
+/// comes from `overlay_lines`. A one-line label of `OVERLAY_CAPITAL` is
+/// `OVERLAY_LABEL_HEIGHT` high.
+fn overlay_coverage(index: usize) -> (usize, usize, Vec<f32>) {
     let font = FontRef::try_from_slice(OVERLAY_FONT).expect("embedded font is valid");
     let unit = font
         .outline_glyph(font.glyph_id('H').with_scale(100.0))
@@ -618,66 +660,87 @@ fn overlay_coverage(label: &str) -> (usize, Vec<f32>) {
         .px_bounds()
         .height()
         / 100.0;
-    let size = OVERLAY_CAPITAL as f32 / unit;
-    let scale = PxScale {
-        x: size * OVERLAY_CONDENSE,
-        y: size,
-    };
-    let scaled = font.as_scaled(scale);
-    let mut caret = 0.0;
-    let mut previous = None;
-    let mut outlines = Vec::new();
-    for character in label.chars() {
-        let id = scaled.glyph_id(character);
-        if let Some(previous) = previous {
-            caret += scaled.kern(previous, id);
-        }
-        outlines.extend(font.outline_glyph(id.with_scale_and_position(scale, point(caret, 0.0))));
-        caret += scaled.h_advance(id) + OVERLAY_TRACKING;
-        previous = Some(id);
-    }
-    let bounds = outlines
-        .iter()
-        .map(|outline| outline.px_bounds())
-        .reduce(|a, b| Rect {
-            min: point(a.min.x.min(b.min.x), a.min.y.min(b.min.y)),
-            max: point(a.max.x.max(b.max.x), a.max.y.max(b.max.y)),
-        })
-        .expect("a label has outlines");
-    let width = bounds.width().ceil() as usize + 2 * OVERLAY_OUTLINE;
-    // Whole-pixel offsets keep vertical and horizontal stems sharp. The
-    // baseline is the row after the capitals.
-    let dx = OVERLAY_OUTLINE as i32 - bounds.min.x.floor() as i32;
-    let dy = (OVERLAY_OUTLINE + OVERLAY_ABOVE + OVERLAY_CAPITAL) as i32;
-    let mut coverage = vec![0f32; width * OVERLAY_LABEL_HEIGHT];
-    for outline in outlines {
-        let origin = outline.px_bounds().min;
-        outline.draw(|x, y, value| {
-            let (x, y) = (
-                origin.x as i32 + x as i32 + dx,
-                origin.y as i32 + y as i32 + dy,
-            );
-            if (0..width as i32).contains(&x) && (0..OVERLAY_LABEL_HEIGHT as i32).contains(&y) {
-                let cell = &mut coverage[y as usize * width + x as usize];
-                *cell = (*cell + value).min(1.0);
+    let mut lines = Vec::new();
+    for (text, capital, tracking) in overlay_lines(index) {
+        let size = capital as f32 / unit;
+        let scale = PxScale {
+            x: size * OVERLAY_CONDENSE,
+            y: size,
+        };
+        let scaled = font.as_scaled(scale);
+        let mut caret = 0.0;
+        let mut previous = None;
+        let mut outlines = Vec::new();
+        for character in text.chars() {
+            let id = scaled.glyph_id(character);
+            if let Some(previous) = previous {
+                caret += scaled.kern(previous, id);
             }
-        });
+            outlines
+                .extend(font.outline_glyph(id.with_scale_and_position(scale, point(caret, 0.0))));
+            caret += scaled.h_advance(id) + tracking;
+            previous = Some(id);
+        }
+        let bounds = outlines
+            .iter()
+            .map(|outline| outline.px_bounds())
+            .reduce(|a, b| Rect {
+                min: point(a.min.x.min(b.min.x), a.min.y.min(b.min.y)),
+                max: point(a.max.x.max(b.max.x), a.max.y.max(b.max.y)),
+            })
+            .expect("a label has outlines");
+        lines.push((outlines, bounds, capital));
     }
-    (width, coverage)
+    let text_width = |bounds: &Rect| bounds.width().ceil() as usize;
+    let width = lines
+        .iter()
+        .map(|(_, bounds, _)| text_width(bounds))
+        .max()
+        .unwrap()
+        + 2 * OVERLAY_OUTLINE;
+    let height = 2 * OVERLAY_OUTLINE
+        + OVERLAY_ABOVE
+        + lines.iter().map(|(_, _, capital)| capital).sum::<usize>()
+        + OVERLAY_LINE_GAP * (lines.len() - 1)
+        + OVERLAY_BELOW;
+    let mut coverage = vec![0f32; width * height];
+    let mut top = OVERLAY_OUTLINE + OVERLAY_ABOVE;
+    for (outlines, bounds, capital) in lines {
+        // Whole-pixel offsets keep vertical and horizontal stems sharp. The
+        // baseline is the row after the capitals.
+        let center = (width - 2 * OVERLAY_OUTLINE - text_width(&bounds)) / 2;
+        let dx = (OVERLAY_OUTLINE + center) as i32 - bounds.min.x.floor() as i32;
+        let dy = (top + capital) as i32;
+        for outline in outlines {
+            let origin = outline.px_bounds().min;
+            outline.draw(|x, y, value| {
+                let (x, y) = (
+                    origin.x as i32 + x as i32 + dx,
+                    origin.y as i32 + y as i32 + dy,
+                );
+                if (0..width as i32).contains(&x) && (0..height as i32).contains(&y) {
+                    let cell = &mut coverage[y as usize * width + x as usize];
+                    *cell = (*cell + value).min(1.0);
+                }
+            });
+        }
+        top += capital + OVERLAY_LINE_GAP;
+    }
+    (width, height, coverage)
 }
 
-/// The pixels of `label`: 0 where the label is transparent, else the gray of
+/// The width, the height, and the pixels of label `index`: 0 where the label is
+/// transparent, else the gray of
 /// an opaque pixel, 1 for the black outline and up to 255 for white text.
 /// Text edges blend toward the outline.
-fn overlay_label(label: &str) -> (usize, Vec<u8>) {
-    let (width, coverage) = overlay_coverage(label);
+fn overlay_label(index: usize) -> (usize, usize, Vec<u8>) {
+    let (width, height, coverage) = overlay_coverage(index);
     // The rasterizer leaves tiny coverage between overlapping contours, so
     // only coverage that rounds to a gray counts as text.
     let coverage: Vec<f32> = coverage
         .into_iter()
         .map(|value| if value * 255.0 < 0.5 { 0.0 } else { value })
         .collect();
-    let height = OVERLAY_LABEL_HEIGHT;
     let radius = OVERLAY_OUTLINE as i32;
     let inked = |x: i32, y: i32| {
         (0..width as i32).contains(&x)
@@ -702,7 +765,7 @@ fn overlay_label(label: &str) -> (usize, Vec<u8>) {
             };
         }
     }
-    (width, pixels)
+    (width, height, pixels)
 }
 
 /// The label table that the installer copies after the menu text
@@ -715,12 +778,11 @@ fn overlay_label(label: &str) -> (usize, Vec<u8>) {
 /// as its own text: white with a black outline, without a background.
 pub fn overlay_labels() -> Vec<u8> {
     let mut table = vec![0; OVERLAY_LABELS.len() * 8];
-    for (index, label) in OVERLAY_LABELS.iter().enumerate() {
-        let (width, pixels) = overlay_label(label);
+    for index in 0..OVERLAY_LABELS.len() {
+        let (width, height, pixels) = overlay_label(index);
         let offset = table.len() as u32;
         table[index * 8..index * 8 + 2].copy_from_slice(&(width as u16).to_le_bytes());
-        table[index * 8 + 2..index * 8 + 4]
-            .copy_from_slice(&(OVERLAY_LABEL_HEIGHT as u16).to_le_bytes());
+        table[index * 8 + 2..index * 8 + 4].copy_from_slice(&(height as u16).to_le_bytes());
         table[index * 8 + 4..index * 8 + 8].copy_from_slice(&offset.to_le_bytes());
         for row in pixels.chunks(width) {
             let mut spans = Vec::new();

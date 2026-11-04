@@ -51,4 +51,5 @@ order = 10
 id = "framing"
 placement = "status_row"
 enabled = { all = [{ setting = "CORE.ASPECT", not_equals = 0 }, { setting = "LABEL", equals = 0 }] }
-icon = { setting = "CORE.ASPECT" }
+# The viewfinder shows the core label of the ratio, as native live-view text.
+icon = { setting = "CORE.ASPECT", label = "ratio" }

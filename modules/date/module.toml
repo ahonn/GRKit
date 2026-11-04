@@ -56,4 +56,7 @@ stage = "mark"
 id = "date"
 placement = "status_row"
 enabled = { setting = "STYLE", not_equals = 0 }
-icon = { setting = "STYLE" }
+# The viewfinder shows the format as live-view text: the core label after DATE
+# for each STYLE (YMD, YMD HM, MDY, DMY, DMY HM). STYLE 0 maps to DATE, but
+# the indicator is hidden while Date Imprint is Off.
+icon = { setting = "STYLE", label = "DATE" }

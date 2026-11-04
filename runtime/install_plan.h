@@ -12,7 +12,8 @@
    The RTOS maps that area read-only and executable, and no firmware code uses
    it, so the code stays valid even if the resident script ends. The data of
    each module goes into the module script array, which the RTOS can write. */
-#define MODULE_FILE_MAX (GRM_HEADER + 4U * GRM_MAX_SEGMENT)
+/* A whole module file: the segments, relocations, imports, names, and tiles. */
+#define MODULE_FILE_MAX (GRM_HEADER + 4U * GRM_MAX_SEGMENT + GRM_TILES * GRM_TILE_BYTES)
 /* The most code bytes of all modules after the tail. The area is larger on
    each target. */
 #define MODULE_CODE_LIMIT 0x100000U

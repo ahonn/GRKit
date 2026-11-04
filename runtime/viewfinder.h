@@ -233,28 +233,50 @@ static GRKIT_ICON_COMPACT u32 canvas_pixels(u32 canvas,u32 bitmap) {
 #define STATUS_LEFT 7U
 #define STATUS_TOP 45U
 #define STATUS_STEP 44U
-_Static_assert(STATUS_LEFT+GRKIT_STATUS_ICONS_MAX*STATUS_STEP<=300,"Status stays left of the load cue");
+/* A core label takes its own width and this gap. */
+#define STATUS_LABEL_GAP 18U
+/* The row ends before the native focus distance at the right of the second
+   row, and left of the load cue while it shows. An indicator that does not
+   fit is not shown. */
+#define STATUS_RIGHT 580U
+#define STATUS_CUE_GAP 8U
+static GRKIT_ICON_COMPACT u32 status_right(volatile u32 *h) {
+    u32 cue=360-label_width(LABEL_GRKIT)/2;
+    return cue_shown(h) && cue<STATUS_RIGHT+STATUS_CUE_GAP ? cue-STATUS_CUE_GAP : STATUS_RIGHT;
+}
 static GRKIT_ICON_COMPACT void viewfinder_status_paint(volatile u32 *h,const Surface *surface) {
-    u32 i,count=0;
+    u32 i,count=0,left=STATUS_LEFT,right=status_right(h);
     for(i=0;i<viewfinder_indicators(h) && count<GRKIT_STATUS_ICONS_MAX;++i) {
         u32 address=INDICATOR_ENTRY(h,i)[0],id,icon=0,x,y;
         if(!address || INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
         id=viewfinder_indicator_icon(h,i);
         if(id==GRKIT_ICON_OFF) continue;
+        /* A core label, centered on the 40-pixel row like the icons. */
+        if(id-GRKIT_ICON_CORE_LABEL(0)<GRKIT_LABEL_COUNT) {
+            u32 label=id-GRKIT_ICON_CORE_LABEL(0),width=label_width(label);
+            u32 height=label_field(LABEL_MAP(GRKIT_LABELS(framing_header())),label*8+2,2);
+            if(!width || height>40 || left+width>right) break;
+            overlay_label(surface,label,left,STATUS_TOP+(40-height)/2);
+            left+=width+STATUS_LABEL_GAP;
+            ++count;
+            continue;
+        }
         if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
         else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
             icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
         if(!icon) continue;
+        if(left+40>right) break;
         /* INSTALL stores the same binary-alpha RGBA pixels after each
            native-compatible descriptor, whose size differs by family. */
         icon+=GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE;
         for(y=0;y<40;++y) {
-            volatile u32 *row=OVERLAY_PIXELS(surface->data+(STATUS_TOP+y)*surface->stride*4)+STATUS_LEFT+count*STATUS_STEP;
+            volatile u32 *row=OVERLAY_PIXELS(surface->data+(STATUS_TOP+y)*surface->stride*4)+left;
             for(x=0;x<40;++x) {
                 u32 pixel=WORD(icon,(y*40+x)*4);
                 if(pixel>>24) row[x]=pixel;
             }
         }
+        left+=STATUS_STEP;
         ++count;
     }
 }

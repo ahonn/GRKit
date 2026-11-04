@@ -93,10 +93,10 @@ An indicator declares its visibility and icon. The core handles its position, DI
 id = "bloom"
 placement = "status_row"
 enabled = { setting = "BLOOM_ENABLED", equals = 1 }
-icon = { setting = "BLOOM_STRENGTH", first_tile = 1 }
+icon = { setting = "BLOOM_STRENGTH", first_tile = 7 }
 ```
 
-This example shows tiles 1, 2, and 3 for strength values 0, 1, and 2. The separate Enable setting controls visibility, so Weak (0) still shows an icon. A group child can use the same `icon` table to show the same strength in ADJ.
+This example shows tiles 7, 8, and 9 for strength values 0, 1, and 2. The separate Enable setting controls visibility, so Weak (0) still shows an icon. The ADJ group child of Bloom shows the same strength with its list tiles 1 to 3. Status-row icons are drawn for the live view, without a frame, and text uses the core live-view labels, as the Framing ratio does ([icon guidelines](icon-guidelines.md)).
 
 Use `status_row` for an additional icon. Use `native_slot` with `slot = "image_control"` to provide the native still-viewfinder icon, as Film Looks does. When that indicator is disabled, the core restores the current native icon. Guides needs no indicator because the lines already show its state.
 

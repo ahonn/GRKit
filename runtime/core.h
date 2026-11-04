@@ -34,6 +34,8 @@ typedef short s16;
 #define GRKIT_ICON_OFF 0x7fffU
 #define GRKIT_ICON_GRKIT 0x7ffeU
 #define GRKIT_ICON_EFFECT(n) (0x8000U+(n))
+/* Core live-view label n in the status row (icon kind GRKIT_ICON_LABEL). */
+#define GRKIT_ICON_CORE_LABEL(n) (0x7f00U+(n))
 /* The Modules tile. The installer puts it after the Version tile, then the
    Modules tile with a line through it (Enable GRKit Off). */
 #define GRKIT_ICON_MODULES 0x7ffcU
@@ -117,7 +119,8 @@ typedef struct {
 #define DISPLAY_OFF 3U
 GRKIT_MAYBE_UNUSED static u32 native_display(void);
 /* Live-view labels (GRKIT_LABELS): the load cue, then capture area n, then
-   the Date Imprint sign (LABEL_DATE in runtime/sdk/grkit.h). */
+   the Date Imprint sign (LABEL_DATE in runtime/sdk/grkit.h), then the Date
+   Imprint formats. */
 #define LABEL_GRKIT 0U
 /* The top of a label in the second row of the native live-view text. Its
    capitals then share the baseline of the focus distance, such as "2.5m". */
