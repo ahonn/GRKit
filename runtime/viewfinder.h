@@ -145,17 +145,17 @@ static GRKIT_ICON_COMPACT u32 composition_area(volatile u32 *h,u32 ratio) {
     if(!framing_row(ratio)) return 0;
     return !native || (!framing_guides_only(h) && FRAMING_CROP_KEEPS(native,ratio)) ? ratio : 0;
 }
-/* General overlays use the actual capture area, including native ratios
-   when Framing is off or only supplies a composition frame. */
-static GRKIT_ICON_COMPACT u32 capture_area(volatile u32 *h) {
-    u32 crop=capture_aspect_value(h);
-    return crop ? crop : native_area();
+/* General overlays use the framing area: the crop, or the composition frame
+   in Guides Only mode, so that guides divide the frame that the photographer
+   composes in. Without one, they use the native area, such as 4:3 or 1:1. */
+static GRKIT_ICON_COMPACT u32 layer_area(u32 framing) {
+    return framing ? framing : native_area();
 }
 /* Paint the module layers in their order. In the ADJ preview, the layers of
    the previewed setting paint its highlighted value, DISP does not hide
-   layers, and a live-only layer does not paint. Only a layer bound to
-   CORE.ASPECT receives the composition area. Other layers keep the capture
-   area, or its hypothetical crop while previewing a capture ratio. */
+   layers, and a live-only layer does not paint. A layer bound to CORE.ASPECT
+   receives the framing area, or 0 without one. Other layers receive
+   layer_area of it. */
 static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface *surface,u32 preview,u32 composition) {
     u32 i, value;
     Surface frame=*surface;
@@ -313,13 +313,12 @@ static GRKIT_ICON_COMPACT void preview_paint(volatile u32 *h,u32 canvas,u32 bitm
     data=canvas_pixels(canvas,bitmap);
     if(!data) return;
     composition=composition_area(h,preview-1);
-    area=capture_area(h);
-    if(!framing_guides_only(h)) area=composition ? composition : native_area();
+    area=layer_area(composition);
     surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
     module_layers_paint(h,&surface,1,composition);
 }
 static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitmap) {
-    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,data,cue,status,area;
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,data,cue,status,framing,area;
     Surface surface;
     if(canvas && canvas==preview_canvas(h)) { preview_paint(h,canvas,bitmap); return; }
     if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;
@@ -333,11 +332,12 @@ static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitma
        aspect. It hides only while DISP turns the live view off. */
     cue=full && cue_shown(h) && native_display()!=DISPLAY_OFF ? full : 0;
     status=full && status_shown(h) ? full : 0;
-    area=capture_area(h);
+    framing=aspect_value(h);
+    area=layer_area(framing);
     if(!data && !cue && !status) return;
     if(data) {
         surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
-        module_layers_paint(h,&surface,0,aspect_value(h));
+        module_layers_paint(h,&surface,0,framing);
     }
     if(status) {
         surface.data=status; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];

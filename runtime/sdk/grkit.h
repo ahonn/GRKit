@@ -30,10 +30,10 @@ typedef signed int s32;
    pixel holds red in its low byte, then green, blue, and alpha in its high
    byte (bytes R, G, B, A in memory), as the native graphics layer reads it.
    `area` identifies the displayed ratio: 0 for 3:2, otherwise a CORE.ASPECT
-   ratio value. `box` is {left, top, right, bottom}. Layers bound to CORE.ASPECT
-   receive the composition frame; other layers receive the capture area.
-   In guides-only mode, the composition frame can be smaller than the capture
-   area. In crop mode, ADJ previews supply the highlighted crop to both. */
+   ratio value. `box` is {left, top, right, bottom}. Each layer receives the
+   framing area: the crop, or the composition frame in guides-only mode.
+   Without one, a layer bound to CORE.ASPECT receives area 0 and other layers
+   receive the native photo area. ADJ previews supply the highlighted ratio. */
 #ifndef GRKIT_CORE_SURFACE
 typedef struct {
     u32 data;

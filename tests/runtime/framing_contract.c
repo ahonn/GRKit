@@ -396,7 +396,7 @@ static void native_guides_follow_the_photo_area(void)
     framing_paint(TEST_CANVAS,TEST_BITMAP);
     for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) assert(pixels[i]==SENTINEL);
 }
-static void composition_frames_keep_the_capture_area(void)
+static void guides_follow_composition_frames(void)
 {
     for(u32 ratio=1;ratio<RATIO_VALUES;++ratio) {
         reset();
@@ -408,15 +408,16 @@ static void composition_frames_keep_the_capture_area(void)
         assert(header[GRKIT_HOST_FRAME_CROP/4]==0 && capture_aspect==0);
         assert(framing_capture_request(0)==0 && framing_capture_request(3)==3);
         framing_paint(TEST_CANVAS,TEST_BITMAP);
-        assert_overlay(0,ratio,1,1);
-        /* Highlighting another ratio changes only its composition frame. */
+        /* The capture stays uncropped, and Guides divide the composition frame. */
+        assert_guides(ratio,1,1);
+        /* Highlighting another ratio previews its frame with its Guides. */
         for(u32 i=0;i<sizeof(pixels)/sizeof(pixels[0]);++i) pixels[i]=SENTINEL;
         header[GRKIT_HOST_FRAME_PREVIEW/4]=3;
         header[GRKIT_HOST_MODULE_PREVIEW/4]=GRKIT_CORE_ASPECT+1;
         header[GRKIT_HOST_MODULE_PREVIEW/4+1]=2;
         header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=TEST_OWNER;
         framing_paint(TEST_CANVAS,TEST_BITMAP);
-        assert_overlay(0,2,1,0);
+        assert_guides(2,1,0);
         assert(header[GRKIT_HOST_FRAME_RATIO/4]==ratio && capture_aspect==0);
         assert(header[GRKIT_HOST_FRAME_CROP/4]==0);
     }
@@ -665,7 +666,7 @@ static void status_row_lays_out_core_labels(void)
 int main(void)
 {
     native_guides_follow_the_photo_area();
-    composition_frames_keep_the_capture_area();
+    guides_follow_composition_frames();
     status_icons_follow_enable_strength_and_disp();
     status_row_lays_out_core_labels();
     the_highlight_warning_follows_the_effect_white();

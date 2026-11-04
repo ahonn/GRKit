@@ -1,7 +1,8 @@
-/* Guides: lines over the still live view, inside the photo area of the
-   capture area. The core calls the two layers with the style, and not at
-   Off; guides_paint also not while DISP hides the native information
-   (module.toml). Each paints only for its value of DISP. */
+/* Guides: lines over the still live view, inside the framing area, or the
+   native photo area without one (Surface.box). The core calls the two
+   layers with the style, and not at Off; guides_paint also not while DISP
+   hides the native information (module.toml). Each paints only for its
+   value of DISP. */
 #include "grkit.h"
 #include "grkit_module.h"
 

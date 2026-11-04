@@ -321,14 +321,11 @@ The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, 
 | `area` | the displayed area: 0 for full 3:2, otherwise a ratio value from `CORE.ASPECT`. See the layer rules below. |
 | `box` | the displayed area {left, top, right, bottom}, with right and bottom excluded |
 
-A layer normally receives the actual photo area, including the camera's native aspect ratio.
-A layer whose setting is `CORE.ASPECT` receives the selected framing area instead.
-This also applies in Guides Only mode, where the framing area does not change the recorded photo.
-Ordinary Guides keep the native photo area in that mode.
+A layer receives the selected framing area, in Crop mode and in Guides Only mode.
+Without a framing area, it receives the photo area of the camera's native aspect ratio.
+A layer whose setting is `CORE.ASPECT` receives area 0 without a framing area.
 
-In ADJ, a `CORE.ASPECT` layer previews the highlighted ratio.
-In Crop mode, the other layers also preview that photo area.
-In Guides Only mode, the other layers keep the actual photo area.
+In ADJ, each layer previews the highlighted ratio.
 
 Layers paint in ascending `order`. A layer with the same order as another paints after the layers of earlier modules. The official layers use these orders:
 
