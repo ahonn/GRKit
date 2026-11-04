@@ -1,3 +1,10 @@
+## 1.4.1 (2026-11-04)
+
+### Fixes
+
+- Photos with Grain or Date Imprint save faster, most of all upright date stamps on portrait photos.
+- In Guides Only mode, guides now line up with the composition frame instead of crossing the dark area outside it.
+
 ## 1.4.0 (2026-11-04)
 
 ### Features
