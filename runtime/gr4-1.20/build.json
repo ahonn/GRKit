@@ -9,10 +9,10 @@
   "components": {
     "framing": {
       "address": 1413564672,
-      "end": 1413581808,
+      "end": 1413581772,
       "limit": 12498688,
-      "sha256": "41659c649f69fd118b17f768de5ddd588adf2f669901a27878c2c451f1d11f27",
-      "size": 17136
+      "sha256": "ef24ef4f276e77eaa70c4edeaee562b5e66662125f20409bf96bbcbb6cee0a16",
+      "size": 17100
     },
     "menu": {
       "address": 1413530880,
@@ -33,8 +33,8 @@
   "files": [
     {
       "path": "SCRIPT/GRKIT/CORE.BIN",
-      "sha256": "e62e617b53a687c751c43ad30eb60dfecc3c48fbe958895ae0513a00fa3752c5",
-      "size": 430684
+      "sha256": "0d9a520450649ec246bde0ea834f7c38cf86ab8d9e5ec8ea23f99b3e1b85933f",
+      "size": 430612
     },
     {
       "path": "SCRIPT/GRKIT/INSTALL.SH",
@@ -58,7 +58,7 @@
     }
   ],
   "firmware_sha256": "7563d7e462f0c53b6ab2fbab7cdfbbb57151a41192ee82f4f3a2108f9d77650d",
-  "generated_header_sha256": "8e8b4a438073a5b9ad206fd0daf99a60755da1111750ec926dd02424d12a0887",
+  "generated_header_sha256": "329f3a08b29b8833d762ac1b385231cb69a1dfeb2cfb51a2eafc52bf5b4fea92",
   "points": {
     "capture.aspect": 38,
     "menu.page": 53,
@@ -73,8 +73,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "83dd4b5679cad35e22f5a85090cd072c6294c4fd96fa6351d51486bdcbadbaa5",
-    "Cargo.toml": "943b9edbcffe499aa61248cc2dd091892df25991fc8db19f11ea43bbcf213e91",
+    "Cargo.lock": "48cd06446bfcc83ddc36367e432d0b7d2701a7149112289b5212f90348c596fe",
+    "Cargo.toml": "c08dcd4d77aa6945edb1adff4da10c330198e9b12b8cc1c74877534debd9bb9c",
     "crates/grkit-build/Cargo.toml": "9a8c29261f78944ee9e1eed9ee46b8b39110ebce1881b09348308ae7da75b0c9",
     "crates/grkit-build/src/arm.rs": "cead1100e35ba8ca8c522ef6d0fb74cd057e549401eba94de76fe6cc45cbfe90",
     "crates/grkit-build/src/components.rs": "288d376a605021e06cf06719e74df265d81a27b5012f739b74004901b838d26b",
@@ -171,12 +171,12 @@
     "runtime/module_link.h": "2a52b125091b3ab8ca1ef01b2de31987c17fb123cc8f4b2f466169297746d72d",
     "runtime/modules.h": "822572e52c4a28ff056563df96e743b3158ba6ff7e81e1f3c2d8176b918ddb39",
     "runtime/picture.S": "0908ff10a26c6cf6bcf8084e0b43b56f99769ee452d65a1d66b9e15bd33b0d12",
-    "runtime/picture.c": "4549f781474808a06a1a7f3c4b35bdea4e4d2b41d27e6c2d2a92fd820ff8805d",
+    "runtime/picture.c": "0162247d98093a3c7fd3acc6682b5461dbf092a38a87c17b6eb1a05c776e6c2b",
     "runtime/processing.S": "cec1bb800287050cc25ec90214be457a4608966fc0fa5265bcebff40ee8ec853",
     "runtime/processing.h": "438d1490f51590f13313347d8d459dc5ab6336d8ff65498492d20bf539422468",
     "runtime/profile.h": "d468ce4afddd458b071789cebc2af6724db5bb1e30e6292841cc43cc5c52b36a",
     "runtime/relocation.h": "a27f3b7032f3ec09d2aeb3a22b15d87c25d8b0033f2a48fac92a21a19952f007",
-    "runtime/sdk/grkit.h": "f54270f88ba2da8004f78a66bcbb364940aa8e97cf29fbde870aa7d6b2949d45",
+    "runtime/sdk/grkit.h": "82ef12ffd89f6e8762b570621b07c498967a5ee32d870ddeeba72057c8f24143",
     "runtime/sdk/grkit_test.c": "ea0e20560a2e5856e6435c9a1428c8a2d47d02a7758dcfd13581d4a1d1ca4dbd",
     "runtime/sdk/grkit_test.h": "bc9f1d97fecbfa2234d802a329d278688b995293cd6ea90dcb8bc8f39871148c",
     "runtime/selective.h": "a7219cf1dae125adf4fa9353f738254421c72de62d4629b2486fe3f03bb467fe",
@@ -196,7 +196,7 @@
     "runtime/tone_page.h": "2e25f0b2b6bb7a376efe7a8c3ffbf81f9acddbaee805c81aa93c7aa5a2d80050",
     "runtime/toning.h": "c511c91b14e1d205f387485fbff788becb055888f9d6588ce14ce9de6fab381f",
     "runtime/ui.h": "6c7b594300773fd645dd10a6f758a382cd95c2a3ac182e8cb3291fa84b52df5e",
-    "runtime/viewfinder.h": "2edb3a779ef034a6d4dfc6c4dcc394cd41f34e578c1b82f17b6e4eefc85c50e2",
+    "runtime/viewfinder.h": "7f78e17966bd46a12da71010bc4ec88e91fe340687f35ddb6ab71f38c310a317",
     "runtime/viewfinder_indicators.h": "6b4f128cfaa984bf8fd302c46f823d0f63765ecf24ec63628945ada4883cff40",
     "runtime/xmp.h": "42d27563b83ec3cc6581d53e84bfdb0b463657801316e00ddfc8a6cc797676b0"
   },
@@ -206,5 +206,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.4.0"
+  "version": "1.4.1"
 }
