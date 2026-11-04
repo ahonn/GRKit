@@ -2,4 +2,4 @@
 default: minor
 ---
 
-Show active Framing, Date Imprint, Grain, Bloom, and Halation effects in the viewfinder, with distinct Bloom and Halation strength icons.
+Show the Framing ratio, Date Imprint format, Grain, Bloom, and Halation in the viewfinder, with clearer Date Imprint, Glow, and Grain icons in ADJ.

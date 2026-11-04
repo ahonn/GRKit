@@ -2,4 +2,4 @@
 default: minor
 ---
 
-Keep framing and the film look when developing or resizing photos in-camera, and retain the capture date during RAW development while allowing another effect.
+In-camera RAW development and Resize keep the framing and film look, and RAW development keeps the capture date and can apply another film look.
