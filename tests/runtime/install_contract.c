@@ -834,9 +834,14 @@ static void install_group_page(void)
         assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR && !module_page_count);
     }
     group.bad_group = 0;
-    /* An otherwise valid child cannot toggle a setting with three values. */
+    /* A child lists the values of its first setting: Off, Weak, Medium,
+       and Strong install. A setting with one value has no Off to list. */
     reset();
-    group.settings[0].values = 3;
+    group.settings[0].values = 4;
+    add_module(PACKAGE_MODULES_PATH, "GROUP.GRM", &group);
+    assert(install() == 0 && module_status[0] == 0 && module_page_count == 3);
+    reset();
+    group.settings[0].values = 1;
     add_module(PACKAGE_MODULES_PATH, "GROUP.GRM", &group);
     assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR && !module_page_count);
     group.settings[0].values = 2;

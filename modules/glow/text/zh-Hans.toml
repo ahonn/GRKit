@@ -6,18 +6,10 @@ title = "柔光"
 [children.HALATION]
 title = "胶片光晕"
 
-[settings.BLOOM_ENABLED]
-label = "启用"
-values = ["关闭", "开启"]
-
-[settings.BLOOM_STRENGTH]
+[settings.BLOOM]
 label = "强度"
-values = ["弱", "中", "强"]
+values = ["关闭", "弱", "中", "强"]
 
-[settings.HAL_ENABLED]
-label = "启用"
-values = ["关闭", "开启"]
-
-[settings.HAL_STRENGTH]
+[settings.HALATION]
 label = "强度"
-values = ["弱", "中", "强"]
+values = ["关闭", "弱", "中", "强"]

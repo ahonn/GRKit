@@ -1781,12 +1781,14 @@ static u32 stream_cells(Fine *f, const PictureSet *set, u8 *at, u32 room)
     return (m.w * m.h * (1 + (look->gate ? 2 : 0) + (look->rim ? 4 : 0)) + 3) & ~3U;
 }
 
+/* The strength of a Glow setting: 1 Weak, 2 Medium, 3 Strong, or 0 for Off
+   and a value outside the setting. */
+static u32 strength_of(u32 value) { return value <= 3 ? value : 0; }
+
 void glow_apply(PictureSet *set, u32 value)
 {
-    if (value != 1) return;
-    u32 b = setting_get(SETTING_BLOOM_STRENGTH), h = setting_get(SETTING_HAL_STRENGTH);
-    b = setting_get(SETTING_BLOOM_ENABLED) == 1 && b < 3 ? b + 1 : 0;
-    h = setting_get(SETTING_HAL_ENABLED) == 1 && h < 3 ? h + 1 : 0;
+    if (!value) return;
+    u32 b = strength_of(setting_get(SETTING_BLOOM)), h = strength_of(setting_get(SETTING_HALATION));
     if (!(b | h)) return;
     const Plane *src = source_plane(set);
     if (!src || src->right - src->left > MAX_SOURCE) return;
@@ -1829,10 +1831,10 @@ void glow_apply(PictureSet *set, u32 value)
     composite(set, f, other, rw);
 }
 
-/* Each enable setting gates a core filter, so both Off skips cache cleaning.
+/* Each setting gates a core filter, so both Off skips cache cleaning.
    Bloom's callback handles both streams together. The Halation callback only
    handles Halation alone, preserving the combined look and shared scratch. */
 void glow_apply_halation(PictureSet *set, u32 value)
 {
-    if (setting_get(SETTING_BLOOM_ENABLED) != 1) glow_apply(set, value);
+    if (!strength_of(setting_get(SETTING_BLOOM))) glow_apply(set, value);
 }

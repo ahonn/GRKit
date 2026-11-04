@@ -579,11 +579,11 @@ pub const TONE_SLOT_SIZE: usize = 2 * 512;
 /// live-view labels, the profile table, then the Toning curves.
 pub const TAIL_SIZE: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
 // The summaries of every record in every menu language end before the
-// parameter page title.
+// value of a group page.
 const _: () = assert!(
     menu_text::TEXT_SUMMARY
         + MAX_COUNT * crate::language::Language::ALL.len() * menu_text::SUMMARY_UNITS * 2
-        <= menu_text::TEXT_SETTINGS
+        <= menu_text::TEXT_GROUP_VALUE
 );
 
 /// Wraps `text` into a C comment.
@@ -1092,6 +1092,20 @@ pub fn header() -> String {
         "TEXT_SETTINGS",
         menu_text::TEXT_SETTINGS,
     );
+    define(
+        &mut out,
+        "The value of a group page in MENU and on the ADJ root, before the \
+         native settings page: the titles of the children that are on, joined \
+         by a slash, GRKIT_TEXT_GROUP_UNITS units with the NUL.",
+        "TEXT_GROUP_VALUE",
+        menu_text::TEXT_GROUP_VALUE,
+    );
+    writeln!(
+        out,
+        "#define GRKIT_TEXT_GROUP_UNITS {}",
+        menu_text::GROUP_UNITS
+    )
+    .unwrap();
     writeln!(
         out,
         "#define GRKIT_TEXT_LANGUAGES {}",

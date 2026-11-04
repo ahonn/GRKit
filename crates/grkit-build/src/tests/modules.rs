@@ -154,6 +154,24 @@ fn synthetic_module_template_builds() -> Result<()> {
 #[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
 fn synthetic_module_folders_build() -> Result<()> {
     let tools = tools()?;
+    // The installer link and registration checks, built for the host
+    // (`tests/runtime/grm_registrations_contract.c`).
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let checker = tempfile::tempdir()?;
+    let contract = checker.path().join("grm_registrations_contract");
+    let cc = std::env::var("GRKIT_HOST_CC").unwrap_or_else(|_| "cc".into());
+    let output = std::process::Command::new(&cc)
+        .arg("-I")
+        .arg(root.join("runtime"))
+        .arg(root.join("tests/runtime/grm_registrations_contract.c"))
+        .arg("-o")
+        .arg(&contract)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     for folder in module_folders() {
         let directory = tempfile::tempdir()?;
         let (id, bytes) = build_module_manifest(
@@ -168,6 +186,16 @@ fn synthetic_module_folders_build() -> Result<()> {
             .imports
             .iter()
             .all(|i| grkit_core::grm::importable(&i.name)));
+        // The installer accepts its pages, layers, filters, and indicators.
+        let file = directory.path().join("MODULE.GRM");
+        fs::write(&file, &bytes)?;
+        let output = std::process::Command::new(&contract).arg(&file).output()?;
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            "status 0",
+            "{}",
+            folder.display()
+        );
     }
     Ok(())
 }

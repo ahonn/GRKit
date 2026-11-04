@@ -306,6 +306,9 @@ pub struct PageSpec {
     /// Native settings pages opened by the rows of a group.
     #[serde(default)]
     pub children: Vec<ChildPageSpec>,
+    /// The icon of row 0 (Off) of a choice page without `off_row`. The root
+    /// row keeps tile 0 while the setting is Off.
+    pub off_icon: Option<IconSpec>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -313,7 +316,8 @@ pub struct PageSpec {
 pub struct ChildPageSpec {
     /// The key of the title in `children.<KEY>` in each text file.
     pub key: String,
-    /// The first row is an Off/On setting, toggled with OK in ADJ.
+    /// The first row is the setting that ADJ lists when OK opens the child:
+    /// value 0 is Off, and the others turn the child on.
     pub settings: Vec<String>,
     pub icon: Option<IconSpec>,
 }
@@ -561,6 +565,13 @@ pub fn generate(directory: &Path) -> Result<(Manifest, String, String)> {
         if page.kind != PageKind::Group {
             ensure!(page.children.is_empty(), "Only a group page has children");
         }
+        ensure!(
+            page.off_icon.is_none()
+                || (page.kind == PageKind::Choice
+                    && !page.off_row
+                    && !CORE_ROWS.contains(&page.setting.as_str())),
+            "Only a choice page without off_row has an off_icon"
+        );
         if page.kind == PageKind::Group {
             group_page(directory, m, page, &mut c)?;
         } else if page.kind == PageKind::Settings {
@@ -820,8 +831,8 @@ fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -
             None => used_values(directory, first)?,
         };
         ensure!(
-            values == 2,
-            "Child {} must start with a two-value Off/On setting",
+            (2..=PAGE_ROWS).contains(&values),
+            "Child {} must start with a setting of 2 to {PAGE_ROWS} values, the first Off",
             child.key
         );
         let child_page = PageSpec {
@@ -831,6 +842,7 @@ fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -
             settings: child.settings.clone(),
             options: false,
             children: Vec::new(),
+            off_icon: None,
         };
         let rows = setting_rows(directory, m, &child_page, &setting, values)?;
         children.push((setting, values, rows));
@@ -903,6 +915,15 @@ fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -
     Ok(())
 }
 
+/// The descriptor of the icon of the Off row, and the field that names it.
+fn off_icon(m: &Manifest, page: &PageSpec, c: &mut String) -> Result<&'static str> {
+    let Some(spec) = &page.off_icon else {
+        return Ok("");
+    };
+    icon(m, spec, "page_off_icon", false, c)?;
+    Ok(", .icon = &page_off_icon")
+}
+
 /// A choice page: a row with a tile and a label for each value of its
 /// setting, and the rows of its native settings page.
 fn choice_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -> Result<()> {
@@ -952,9 +973,10 @@ fn choice_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) 
         (true, false) => "GRKIT_CHOICE_OFF_ROW",
         _ => "0",
     };
+    let off_icon = off_icon(m, page, c)?;
     writeln!(
         c,
-        "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_CHOICE, .setting = {setting}, .flags = {flags}, .title = page_title, .summaries = page_summaries, .labels = page_labels, .rows = {values}{settings}}};"
+        "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_CHOICE, .setting = {setting}, .flags = {flags}, .title = page_title, .summaries = page_summaries, .labels = page_labels, .rows = {values}{settings}{off_icon}}};"
     )?;
     Ok(())
 }

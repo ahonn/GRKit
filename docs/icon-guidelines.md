@@ -68,6 +68,18 @@ bottom of the icon. It rises to the right and has one segment for each level.
 - In the viewfinder, draw all segments. Dim the segments above the current
   level, so the user can read the level without a second icon to compare.
 
+## Off
+
+Draw Off as the native Off icons do: dim the symbol and strike it with the
+native line from corner to corner.
+
+- A root row keeps its module icon while the module is Off. The detail text
+  says Off.
+- A setting with strength steps shows its symbol centered, without steps,
+  and struck, as its Off value.
+- A value list of other settings shows the OFF text tile for Off.
+- The viewfinder hides an indicator that is Off. It needs no Off icon.
+
 ## Viewfinder status
 
 The status row shows indicators over the live view, next to the native status

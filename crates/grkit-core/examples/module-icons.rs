@@ -32,6 +32,10 @@ fn list_tile() -> Vec<u8> {
 // Bloom has two rings and Halation one, both around the same center light.
 // The steps below carry the strength, so the symbol stays the same.
 fn glow(bloom: bool) -> Vec<u8> {
+    glow_at(bloom, GLOW_CENTER)
+}
+
+fn glow_at(bloom: bool, center: (f64, f64)) -> Vec<u8> {
     let mut pixels = list_tile();
     let radii: &[f64] = if bloom {
         &[OUTER_RADIUS, INNER_RADIUS]
@@ -39,13 +43,14 @@ fn glow(bloom: bool) -> Vec<u8> {
         &[OUTER_RADIUS]
     };
     let light = if bloom { BLOOM_LIGHT } else { HALATION_LIGHT };
-    for y in 4..26 {
+    let top = (center.1 - OUTER_RADIUS - 3.0) as usize;
+    for y in top..top + 22 {
         for x in 9..31 {
             let mut total = 0u32;
             for sy in 0..SAMPLES {
                 for sx in 0..SAMPLES {
-                    let dx = x as f64 + (sx as f64 + 0.5) / SAMPLES as f64 - GLOW_CENTER.0;
-                    let dy = y as f64 + (sy as f64 + 0.5) / SAMPLES as f64 - GLOW_CENTER.1;
+                    let dx = x as f64 + (sx as f64 + 0.5) / SAMPLES as f64 - center.0;
+                    let dy = y as f64 + (sy as f64 + 0.5) / SAMPLES as f64 - center.1;
                     let radius = dx.hypot(dy);
                     let gray = if radius <= light {
                         255
@@ -66,6 +71,29 @@ fn glow(bloom: bool) -> Vec<u8> {
         }
     }
     pixels
+}
+
+// Off has no steps: the rings center in the frame, and the native Off line
+// strikes them.
+fn glow_off(bloom: bool) -> Vec<u8> {
+    let mut pixels = glow_at(bloom, (GLOW_CENTER.0, 20.0));
+    artwork::strike(&mut pixels);
+    pixels
+}
+
+// Move the drawing inside the list frame down by `rows`.
+fn shift_down(pixels: &mut [u8], rows: usize) {
+    for y in (3..37).rev() {
+        for x in 2..38 {
+            let offset = (y * SIZE + x) * 4;
+            let value = if y >= 3 + rows {
+                pixels[((y - rows) * SIZE + x) * 4]
+            } else {
+                BACKGROUND
+            };
+            pixels[offset..offset + 3].fill(value);
+        }
+    }
 }
 
 fn save(path: &Path, pixels: &[u8]) -> Result<()> {
@@ -524,6 +552,11 @@ fn main() -> Result<()> {
             save(&modules.join("glow/tiles").join(file), &pixels).context(file)?;
         }
     }
+    save(&modules.join("glow/tiles/off-bloom.png"), &glow_off(true))?;
+    save(
+        &modules.join("glow/tiles/off-halation.png"),
+        &glow_off(false),
+    )?;
     save(&modules.join("grain/tiles/0-module.png"), &grain(28, 70))?;
     // One density for every level: the steps give the strength.
     for (level, file) in ["1-weak.png", "2-medium.png", "3-strong.png", "4-extra.png"]
@@ -534,6 +567,11 @@ fn main() -> Result<()> {
         list_steps(&mut pixels, level + 1, 4);
         save(&modules.join("grain/tiles").join(file), &pixels)?;
     }
+    // Off has no steps: the dots center in the frame, as the Glow rings do.
+    let mut off = grain(16, 32);
+    shift_down(&mut off, 6);
+    artwork::strike(&mut off);
+    save(&modules.join("grain/tiles/off.png"), &off)?;
     for (file, order, with_time) in [
         ("1-yy-m-d.png", "YMD", false),
         ("2-yy-m-d-time.png", "YMD", true),

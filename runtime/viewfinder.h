@@ -233,8 +233,10 @@ static GRKIT_ICON_COMPACT u32 canvas_pixels(u32 canvas,u32 bitmap) {
 #define STATUS_LEFT 7U
 #define STATUS_TOP 45U
 #define STATUS_STEP 44U
-/* A core label takes its own width and this gap. */
-#define STATUS_LABEL_GAP 18U
+/* A core label takes its own width and this gap. The marks of an icon reach
+   one pixel from its tile edge, so the space after a label looks close to
+   the space between two icons. */
+#define STATUS_LABEL_GAP 10U
 /* The row ends before the native focus distance at the right of the second
    row, and left of the load cue while it shows. An indicator that does not
    fit is not shown. */

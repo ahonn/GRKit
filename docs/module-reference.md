@@ -63,12 +63,13 @@ A setting reference is a key of `settings`, or a name of `uses` without its `?`.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `kind` | string | `"choice"` | `"choice"` lists setting values. `"settings"` opens native settings directly. `"group"` lists child settings pages. |
+| `kind` | string | `"choice"` | `"choice"` lists setting values. `"settings"` opens native settings directly. `"group"` lists children, each with its own list of values. |
 | `setting` | string | required for `choice` | The setting of a choice page. Omit it for `settings` and `group`. |
-| `off_row` | boolean | `false` | Row 0 shows the Off icon instead of tile 0. |
+| `off_row` | boolean | `false` | Row 0 shows the core Off icon instead of the Off icon of the page. |
 | `settings` | array of strings | `[]` | Up to 5 native settings rows (`GRKIT_SETTING_ROWS`). A choice page starts with its page setting. A settings page needs at least one row. |
 | `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. |
-| `children` | array of tables | `[]` | A group page has 1 to 4 children, in display order. Each child opens one native settings page. Other page kinds have none. |
+| `children` | array of tables | `[]` | A group page has 1 to 4 children, in display order. Other page kinds have none. |
+| `off_icon` | table | none | Optional [icon source](#icon-sources) of row 0 (Off) of a choice page without `off_row`. Without it, row 0 shows tile 0. The root row shows tile 0 while the setting is 0. Other page kinds have none. |
 
 A `settings` page needs a module tile and has no `setting`, `off_row`, or `options`. Its text gives `title` and `settings.<KEY>.label` and `values` for each row. It has no `rows` or `summaries`. The first row must be available for the page to load. Later optional rows are omitted when unavailable.
 
@@ -83,10 +84,10 @@ A `group` page has no `setting`, `settings`, `off_row`, or `options`. Each `[[pa
 | Key | Type | Description |
 | --- | --- | --- |
 | `key` | string | A unique key with 1 to 15 characters `A`-`Z`, `0`-`9`, or `_`. It identifies the child title in the text files. |
-| `settings` | array of strings | The child's 1 to 5 native settings rows. The first setting must have two values: 0 (Off) and 1 (On). It must be available and cannot be an optional use. |
+| `settings` | array of strings | The child's 1 to 5 native settings rows. The first setting has 2 to 8 values: 0 is Off, and the other values turn the child on. It must be available and cannot be an optional use. |
 | `icon` | table | Optional [icon source](#icon-sources). Without it, child n uses tile n + 1. |
 
-This example uses four settings declared elsewhere in the manifest:
+This example uses two settings declared elsewhere in the manifest, each with the values Off, Weak, Medium, and Strong:
 
 ```toml
 [page]
@@ -94,11 +95,13 @@ kind = "group"
 
 [[page.children]]
 key = "BLOOM"
-settings = ["BLOOM_ENABLED", "BLOOM_STRENGTH"]
+settings = ["BLOOM"]
+icon = { setting = "BLOOM", first_tile = 1 }
 
 [[page.children]]
 key = "HALATION"
-settings = ["HAL_ENABLED", "HAL_STRENGTH"]
+settings = ["HALATION"]
+icon = { setting = "HALATION", first_tile = 5 }
 ```
 
 The text files give `title`, `children.<KEY>.title`, and the label and values of each setting. A group has no choice `rows` or `summaries`. Tile 0 identifies the group. Without an explicit `icon`, tiles 1 to the child count identify its children in declaration order.
@@ -158,7 +161,7 @@ Indicators use committed settings, not ADJ highlight previews. Their icons indic
 
 ### Icon sources
 
-Indicators and group children accept the same `icon` table:
+Indicators, group children, and the `off_icon` of a choice page accept the same `icon` table:
 
 | Form | Meaning |
 | --- | --- |
@@ -170,11 +173,11 @@ Indicators and group children accept the same `icon` table:
 | `{ setting = "STYLE", label = "DATE" }` | The core label n after `DATE` for setting value n. Status-row indicators only. |
 | `{ setting = "CORE.ASPECT", label = "ratio" }` | The core label of the committed Framing ratio. Status-row indicators only. |
 
-A core label is the native live-view text, as in the focus distance `2.5m`. The labels are, in order, `XPan`, `16:9`, `4:3`, `2.35`, `1:1`, `5:4`, `7:6`, `DATE`, `YMD`, `YMD HM`, `MDY`, `DMY`, and `DMY HM`. The Date Imprint formats are smaller, and `YMD HM` and `DMY HM` show `HM` on a second line. With a setting, every value needs a label at or after the named one. A label takes its own width in the status row; an icon takes 44 pixels. The row ends before x = 580, and before the load cue while it shows. An indicator that does not fit is not shown.
+A core label is the native live-view text, as in the focus distance `2.5m`. The labels are, in order, `XPan`, `16:9`, `4:3`, `2.35`, `1:1`, `5:4`, `7:6`, `DATE`, `YMD`, `YMD HM`, `MDY`, `DMY`, and `DMY HM`. `YMD`, `MDY`, and `DMY` are as high as a ratio. `YMD HM` and `DMY HM` show `HM` on a second line and are as high as a status-row icon. With a setting, every value needs a label at or after the named one. A label takes its own width in the status row; an icon takes 44 pixels. The row ends before x = 580, and before the load cue while it shows. An indicator that does not fit is not shown.
 
 Do not combine `tile` with `setting` or `first_tile`. A tile mapping must cover every value of its setting. `CORE.TONE` uses the core's effect icons and has no tile offset.
 
-An icon source does not decide whether a feature is enabled. For example, Glow keeps the selected strength icon in ADJ while disabled. Its viewfinder indicator uses a separate Enable condition and hides when disabled.
+An icon source does not decide whether a feature is enabled. A viewfinder indicator uses its `enabled` condition for that. For example, Glow's Bloom indicator hides while Bloom is Off, and its ADJ child shows the Off tile.
 
 ### filters
 
@@ -206,28 +209,24 @@ A module with a page has one text file for each menu language: `text/en.toml`, `
 | `settings.<KEY>.values` | array of strings | The text of each value of that row. The row of the page setting can omit it and use `rows`. |
 | `children.<KEY>.title` | string | The title of a group child. The ADJ group and the module page in MENU use this title for the child row. |
 
-A choice root row shows `<title><separator><summary>`. A settings or group root row shows only the title. Each text, and the text of the root row, has at most 64 UTF-16 units. For a choice page of a used setting, the build counts `rows` in `text/en.toml`. The installer checks this count against the setting.
+A choice root row shows `<title><separator><summary>`. A group root row shows `<title><separator>` and the titles of the children that are on, joined by a slash, or Off. A settings root row shows only the title. Each text, and the text of the root row, has at most 64 UTF-16 units. For a choice page of a used setting, the build counts `rows` in `text/en.toml`. The installer checks this count against the setting.
 
-For example, these tables name a group child and its two settings:
+For example, these tables name a group child and its setting:
 
 ```toml
 [children.BLOOM]
 title = "Bloom"
 
-[settings.BLOOM_ENABLED]
-label = "Enable"
-values = ["Off", "On"]
-
-[settings.BLOOM_STRENGTH]
+[settings.BLOOM]
 label = "Strength"
-values = ["Weak", "Medium", "Strong"]
+values = ["Off", "Weak", "Medium", "Strong"]
 ```
 
 ## Tiles
 
 Built-in artwork follows the [icon design rules](icon-guidelines.md).
 
-A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. A settings page needs only tile 0. A group page needs tile 0 and its child icons, including every tile named by an explicit icon source.
+A tile is a 40 x 40 PNG file. A choice page needs at least one tile for each setting value. Tile n shows value n on the choice row and on the root row. Tile 0 also identifies the module. An `off_icon` replaces tile 0 on the Off row. A settings page needs only tile 0. A group page needs tile 0 and its child icons, including every tile named by an explicit icon source. A child icon of its first setting needs a tile for Off, value 0.
 
 The build stores the tiles after the module file, not in its code. INSTALL copies them to icon slots after the effect icons, so they take no module code memory and do not count toward the 65536-byte code limit. All loaded modules have at most 128 tiles together.
 
@@ -301,11 +300,11 @@ A page of a setting of the module can also give 2 to 5 rows of a native settings
 
 A `settings` page shows one ADJ entry with its title and module tile. OK, Right, Fn, or a touch opens the native settings directly. Each row changes only its own setting. MENU shows Enable followed by the same rows.
 
-A `group` page shows one ADJ entry. OK opens an icon list of its children. OK on a child toggles its first setting and keeps ADJ open. A selection mark identifies each enabled child.
+A `group` page shows one ADJ entry. OK opens an icon list of its children. A selection mark identifies each child that is on. OK on a child opens a list of the values of its first setting, with the value texts of its settings page and the child icon of each value. OK on a value sets it and closes ADJ, as on a choice page. MENU returns from the value list to the child's row of the group.
 
-Fn opens the child's native settings page. Returning to ADJ restores the selected child. Navigation and Fn do not toggle the setting.
+Fn on a child opens the child's native settings page. Returning to ADJ restores the selected child.
 
-MENU shows the module's Enable row and one row for each child. Each child row opens the same native settings page as ADJ. Returning from that page restores the module page. A child's Enable setting does not prevent changes to its other settings. The module's Enable setting controls the whole module.
+MENU shows the module's Enable row and one row for each child, with the value of the child's first setting. Each child row opens the same native settings page as ADJ. Returning from that page restores the module page. The module's Enable setting controls the whole module.
 
 Each module also has a row in the GRKit section of MENU. It opens Enable, then the rows of the settings page, or the row of the page setting for a page without settings rows. See [GRKit section of MENU](architecture.md#grkit-section-of-menu).
 

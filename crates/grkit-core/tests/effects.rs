@@ -614,20 +614,19 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
             (width, height),
             (field(index * 8, 2), field(index * 8 + 2, 2))
         );
-        // The Date Imprint formats (after DATE) are smaller, and the formats
-        // with the time have two lines. Each fits the 40-pixel status row.
-        if index <= 8 {
-            assert_eq!(height, artwork::OVERLAY_LABEL_HEIGHT);
+        // A one-line label is as high as a ratio. A Date Imprint format with
+        // the time on a second line is as high as a status-row icon, and
+        // fits the 40-pixel status row.
+        let expected = if artwork::OVERLAY_LABELS[index].ends_with(" HM") {
+            artwork::OVERLAY_TWO_LINE_HEIGHT
         } else {
-            assert!(height <= 40, "label {index} is {height} high");
-        }
-        // A Framing label at the left of the row ends before the centered
-        // load cue starts. A Date Imprint format with the time is wider.
-        let widest = match index {
-            0 => 200,
-            1..=8 => 80,
-            _ => 120,
+            artwork::OVERLAY_LABEL_HEIGHT
         };
+        assert_eq!(height, expected, "label {index}");
+        assert!(height <= 40);
+        // A status-row label at the left of the row ends before the centered
+        // load cue starts.
+        let widest = if index == 0 { 200 } else { 80 };
         assert!(
             (30..=widest).contains(&width),
             "label {index} is {width} wide"

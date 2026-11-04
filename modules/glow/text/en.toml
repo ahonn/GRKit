@@ -6,18 +6,10 @@ title = "Bloom"
 [children.HALATION]
 title = "Halation"
 
-[settings.BLOOM_ENABLED]
-label = "Enable"
-values = ["Off", "On"]
-
-[settings.BLOOM_STRENGTH]
+[settings.BLOOM]
 label = "Strength"
-values = ["Weak", "Medium", "Strong"]
+values = ["Off", "Weak", "Medium", "Strong"]
 
-[settings.HAL_ENABLED]
-label = "Enable"
-values = ["Off", "On"]
-
-[settings.HAL_STRENGTH]
+[settings.HALATION]
 label = "Strength"
-values = ["Weak", "Medium", "Strong"]
+values = ["Off", "Weak", "Medium", "Strong"]

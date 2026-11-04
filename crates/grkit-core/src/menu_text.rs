@@ -19,6 +19,11 @@ pub const TEXT_PARAMETER_TITLE: usize = TEXT_SIZE - 16;
 /// The 512 bytes before the parameter page title: the native settings page of
 /// a GRKit session (`runtime/menu.c`).
 pub const TEXT_SETTINGS: usize = TEXT_PARAMETER_TITLE - 512;
+/// The units of the value of a group page in MENU and on the ADJ root, with
+/// its NUL: the titles of its children that are on, joined by a slash.
+pub const GROUP_UNITS: usize = 256;
+/// The value of a group page, before the native settings page.
+pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).

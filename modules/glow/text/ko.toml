@@ -6,18 +6,10 @@ title = "블룸"
 [children.HALATION]
 title = "헐레이션"
 
-[settings.BLOOM_ENABLED]
-label = "사용"
-values = ["꺼짐", "켜짐"]
-
-[settings.BLOOM_STRENGTH]
+[settings.BLOOM]
 label = "강도"
-values = ["약", "중", "강"]
+values = ["꺼짐", "약", "중", "강"]
 
-[settings.HAL_ENABLED]
-label = "사용"
-values = ["꺼짐", "켜짐"]
-
-[settings.HAL_STRENGTH]
+[settings.HALATION]
 label = "강도"
-values = ["약", "중", "강"]
+values = ["꺼짐", "약", "중", "강"]

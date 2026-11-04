@@ -531,36 +531,49 @@ pub fn modules_pixels() -> Vec<u8> {
     rgba
 }
 
-/// The Modules tile with a line through it, from the top left to the bottom
-/// right: the root row of Enable GRKit while it is Off. A band of the body
-/// shade on each side of the white line cuts the text.
+/// The Modules tile with a line through it: the root row of Enable GRKit
+/// while it is Off.
 pub fn modules_off_pixels() -> Vec<u8> {
     let mut rgba = modules_pixels();
-    for (ink, half_width) in [(51, 2.6), (255, 1.1)] {
-        line(&mut rgba, (7.0, 8.0), (32.0, 33.0), half_width, ink);
-    }
+    strike(&mut rgba);
     rgba
 }
 
-/// Blend `ink` over the frame inside, where a pixel is within `half_width`
-/// of the segment `from`-`to`, anti-aliased with 4 x 4 samples.
-fn line(rgba: &mut [u8], from: (f32, f32), to: (f32, f32), half_width: f32, ink: u8) {
-    let (dx, dy) = (to.0 - from.0, to.1 - from.1);
-    let distance = |x: f32, y: f32| {
-        let t = (((x - from.0) * dx + (y - from.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
-        ((x - from.0 - t * dx).powi(2) + (y - from.1 - t * dy).powi(2)).sqrt()
+/// Mark a list tile as Off, as the native Off icons do: dim the drawing
+/// halfway to the body shade, then draw a white line with a black edge on
+/// the diagonal x = y, from the top left to the bottom right of the frame.
+/// Both have square ends, and the black edge passes the white ends. The
+/// widths and the 16 x 16 samples of each pixel reproduce the shades of the
+/// native Off icons. The line stops 1.5 pixels shorter at each end than the
+/// native one, clear of the frame corners.
+pub fn strike(rgba: &mut [u8]) {
+    // Half widths across the line, and the ends along it, as (x + y) / 2.
+    const WHITE: (f32, f32, f32) = (1.55, 5.25, 34.75);
+    const BLACK: (f32, f32, f32) = (2.83, 4.2, 35.8);
+    let inside = |(half, start, end): (f32, f32, f32), x: f32, y: f32| {
+        (x - y).abs() / std::f32::consts::SQRT_2 <= half && (start..=end).contains(&((x + y) / 2.0))
     };
     for y in 3..37 {
         for x in 2..38 {
-            let covered = (0..16)
-                .filter(|sample| {
-                    let sx = x as f32 + (sample % 4) as f32 / 4.0 + 0.125;
-                    let sy = y as f32 + (sample / 4) as f32 / 4.0 + 0.125;
-                    distance(sx, sy) <= half_width
-                })
-                .count();
-            if covered > 0 {
-                blend(rgba, x, y, ink, covered as f32 / 16.0);
+            let at = (y * 40 + x) * 4;
+            for channel in &mut rgba[at..at + 3] {
+                if *channel > BODY {
+                    *channel = BODY + (*channel - BODY) / 2;
+                }
+            }
+            let (mut white, mut black) = (0u32, 0u32);
+            for sample in 0..256 {
+                let sx = x as f32 + ((sample % 16) as f32 + 0.5) / 16.0;
+                let sy = y as f32 + ((sample / 16) as f32 + 0.5) / 16.0;
+                white += u32::from(inside(WHITE, sx, sy));
+                black += u32::from(inside(BLACK, sx, sy));
+            }
+            if black == 0 {
+                continue;
+            }
+            let (white, black) = (white as f32 / 256.0, black as f32 / 256.0);
+            for channel in &mut rgba[at..at + 3] {
+                *channel = (f32::from(*channel) * (1.0 - black) + 255.0 * white).round() as u8;
             }
         }
     }
@@ -614,44 +627,52 @@ const OVERLAY_CONDENSE: f32 = 0.87;
 /// The native text has more space between its characters.
 const OVERLAY_TRACKING: f32 = 3.0;
 
-/// The capital heights of a Date Imprint format and of its time line. The
-/// formats are secondary to a ratio, and a format that prints the time puts
-/// HM on a second line, so the label stays as narrow as a ratio.
-const OVERLAY_DATE_CAPITAL: usize = 16;
-const OVERLAY_TIME_CAPITAL: usize = 11;
-/// Rows between the date line and the time line.
-const OVERLAY_LINE_GAP: usize = 5;
+/// The capital heights of a Date Imprint format that prints the time: the
+/// date on the first line, HM on a smaller second line. The two lines,
+/// with their outline, are as high as the marks of a status-row icon, such
+/// as Grain or Bloom: 36 rows. A format without the time is one line of the
+/// ratio size, as high as XPan.
+const OVERLAY_DATE_CAPITAL: usize = 17;
+const OVERLAY_TIME_CAPITAL: usize = 13;
+/// Rows between the date line and the time line. Fewer rows let the
+/// outlines of the two lines touch.
+const OVERLAY_LINE_GAP: usize = 4;
+/// The height of a two-line label: the marks of a status-row icon, 36 rows
+/// with the outline, and the rows above and below the capitals.
+pub const OVERLAY_TWO_LINE_HEIGHT: usize = OVERLAY_ABOVE + 36 + OVERLAY_BELOW;
+const _: () = assert!(
+    OVERLAY_DATE_CAPITAL + OVERLAY_LINE_GAP + OVERLAY_TIME_CAPITAL + 2 * OVERLAY_OUTLINE == 36
+);
 /// The tracking of the time line. Tracking that scales with its small
 /// capitals merges the outlines of H and M.
 const OVERLAY_TIME_TRACKING: f32 = 3.0;
 
 /// The lines of label `index` with their capital heights and tracking. The
-/// tracking of a date format scales with its capitals.
+/// tracking of the date line scales with its capitals.
 fn overlay_lines(index: usize) -> Vec<(&'static str, usize, f32)> {
     let label = OVERLAY_LABELS[index];
     let date = OVERLAY_LABELS
         .iter()
         .position(|candidate| *candidate == "DATE")
         .expect("the labels have DATE");
-    let scaled = |capital: usize| OVERLAY_TRACKING * capital as f32 / OVERLAY_CAPITAL as f32;
-    if index <= date {
-        return vec![(label, OVERLAY_CAPITAL, OVERLAY_TRACKING)];
-    }
-    let order = |text: &'static str| (text, OVERLAY_DATE_CAPITAL, scaled(OVERLAY_DATE_CAPITAL));
     match label.split_once(' ') {
-        Some((date, time)) => vec![
-            order(date),
+        Some((date_line, time)) if index > date => vec![
+            (
+                date_line,
+                OVERLAY_DATE_CAPITAL,
+                OVERLAY_TRACKING * OVERLAY_DATE_CAPITAL as f32 / OVERLAY_CAPITAL as f32,
+            ),
             (time, OVERLAY_TIME_CAPITAL, OVERLAY_TIME_TRACKING),
         ],
-        None => vec![order(label)],
+        _ => vec![(label, OVERLAY_CAPITAL, OVERLAY_TRACKING)],
     }
 }
 
 /// The text coverage of label `index`: its width, its height, then one
 /// coverage value for each pixel, row by row. Each line is centered, its
 /// capitals start below the outline and `OVERLAY_ABOVE` rows, and its tracking
-/// comes from `overlay_lines`. A one-line label of `OVERLAY_CAPITAL` is
-/// `OVERLAY_LABEL_HEIGHT` high.
+/// comes from `overlay_lines`. A one-line label is `OVERLAY_LABEL_HEIGHT`
+/// high, and a two-line label `OVERLAY_TWO_LINE_HEIGHT`.
 fn overlay_coverage(index: usize) -> (usize, usize, Vec<f32>) {
     let font = FontRef::try_from_slice(OVERLAY_FONT).expect("embedded font is valid");
     let unit = font

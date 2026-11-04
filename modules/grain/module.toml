@@ -6,6 +6,8 @@ version = 1
 order = 50
 sources = []
 # Tile n shows value n. Tile 0 is the module tile, for Off at the root.
+# Tile 9, the centered and struck symbol, shows the Off row, as for Bloom
+# and Halation.
 tiles = [
     "tiles/0-module.png",
     "tiles/1-weak.png",
@@ -16,6 +18,7 @@ tiles = [
     "tiles/vf-2-medium.png",
     "tiles/vf-3-strong.png",
     "tiles/vf-4-extra.png",
+    "tiles/off.png",
 ]
 # CORE.GRAIN: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong.
 # CORE.GRAIN_SIZE: 0 Auto (by ISO), 1 small, 2 medium, 3 large.
@@ -23,7 +26,7 @@ uses = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
 
 [page]
 setting = "CORE.GRAIN"
-off_row = true
+off_icon = { tile = 9 }
 # The level, then the size.
 settings = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
 

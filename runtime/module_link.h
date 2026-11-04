@@ -633,8 +633,10 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
                 return GRM_BAD_DESCRIPTOR;
         } else if (point != GRM_POINT_EVENT) return GRM_BAD_DESCRIPTOR;
     }
-    /* Group links must name registered settings pages in this module. This
-       also rules out cycles and descriptors that the installer never patches. */
+    /* Group links must name registered settings pages in this module, each
+       with 2 or more values of its first setting: Off, then the values that
+       turn it on. This also rules out cycles and descriptors that the
+       installer never patches. */
     for (u32 i = 0; i < *page_count; ++i) {
         const u8 *page = grm_code_at(m, code, base, pages[i].address, GRM_PAGE);
         if (grm_word(page + GRM_PAGE_KIND_AT) != GRM_PAGE_GROUP) continue;
@@ -644,7 +646,7 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             for (u32 k = 0; k < *page_count; ++k) if (pages[k].address == child) {
                 const u8 *p = grm_code_at(m, code, base, child, GRM_PAGE);
                 found = grm_word(p + GRM_PAGE_KIND_AT) == GRM_PAGE_SETTINGS &&
-                    pages[k].flags == GRM_PAGE_MENU_ONLY && pages[k].rows == 2;
+                    pages[k].flags == GRM_PAGE_MENU_ONLY && pages[k].rows >= 2;
             }
             if (!found) return GRM_BAD_DESCRIPTOR;
         }

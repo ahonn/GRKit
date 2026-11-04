@@ -117,16 +117,23 @@ static u32 choice_tile(volatile u32 *h,u32 n) {
     return CHOICE_ENTRY(h)[2]!=MANAGE_NO_TILE ? GRKIT_ICON_MODULE_TILE(CHOICE_ENTRY(h)[2]+n) : GRKIT_ICON_OFF;
 }
 static u32 choice_off_tile(volatile u32 *h) { return choice_tile(h,0); }
+/* The optional icon after children (ABI 2.2): a child's icon, or for a
+   choice page without an Off row, the icon of its Off row. */
+static u32 page_icon(u32 page) { return page && PAGE_WORD(page,0)>=48 ? PAGE_WORD(page,44) : 0; }
 static const u16 *choice_title(volatile u32 *h) { return choice_text(h,PAGE_TITLE,0); }
 static const u16 *choice_summary(volatile u32 *h) { return choice_direct(h) ? choice_title(h) : choice_text(h,PAGE_SUMMARIES,choice_value(h)); }
 static const u16 *choice_label(volatile u32 *h,u32 row) { return choice_text(h,PAGE_LABELS,choice_row_value(h,row)); }
-/* The root row shows the tile of the value; a row shows the tile of its
-   value, or Off for value 0. */
+/* The root row shows the tile of the value, and a row the tile of its
+   value. Row 0 shows the core Off icon on a page with an Off row, else the
+   Off icon of the page, else tile 0. */
 static u32 choice_icon(volatile u32 *h,u32 row) {
-    u32 value;
+    u32 value, icon;
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,choice_direct(h) ? 0 : choice_value(h));
     value=choice_row_value(h,row);
-    return !value && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&CHOICE_OFF_ROW ? GRKIT_ICON_OFF : choice_tile(h,value);
+    if(value) return choice_tile(h,value);
+    if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&CHOICE_OFF_ROW) return GRKIT_ICON_OFF;
+    icon=page_icon(CHOICE_ENTRY(h)[0]);
+    return icon ? module_icon_value(h,icon,CHOICE_ENTRY(h)[2]) : choice_tile(h,0);
 }
 static u32 choice_checked(volatile u32 *h,u32 row) { return choice_row_value(h,row)==choice_value(h); }
 static void choice_apply(volatile u32 *h,u32 row) { setting_store(h,CHOICE_ENTRY(h)[1],choice_row_value(h,row)); }
@@ -179,8 +186,9 @@ static const Setting choice_one[SETTING_ROWS]={
 static const MenuPage choice_settings_module={choice_title,choice_summary,choice_rows,choice_label,choice_icon,
     choice_checked,choice_apply,choice_committed,0,0,choice_settings};
 
-/* A group toggles each child's boolean setting. Fn opens that child's
-   native settings page; the group itself has no setting to preview. */
+/* A group lists its children. OK opens a child: a row for each value of
+   the child's first setting, 0 being Off. Fn on a child opens its native
+   settings page; the group itself has no setting to preview. */
 static u32 group_rows(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_ROWS); }
 static u32 group_child_address(volatile u32 *h,u32 row) {
     return row<group_rows(h) ? PAGE_WORD(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_CHILDREN),row*4) : 0;
@@ -195,28 +203,66 @@ static const u16 *group_label(volatile u32 *h,u32 row) {
     u32 child=group_child_address(h,row);
     return MENU_TEXT(PAGE_WORD(PAGE_WORD(child,PAGE_TITLE),menu_language()*4));
 }
-static u32 group_icon(volatile u32 *h,u32 row) {
-    u32 child,icon;
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,0);
-    child=group_child_address(h,row);
-    /* ABI 2.2 adds an optional icon after children. Older pages retain
-       their fixed tile, and Off keeps the selected strength visible. */
-    if(child && PAGE_WORD(child,0)>=48 && (icon=PAGE_WORD(child,44)))
-        return module_icon_value(h,icon,CHOICE_ENTRY(h)[2]);
-    return choice_tile(h,row+1);
-}
 static u32 group_setting(volatile u32 *h,u32 row) {
     u32 child=group_child(h,row);
     return child<module_pages(h) ? h[GRKIT_HOST_MODULE_PAGES/4+child*3+1] : 0xffffffffU;
 }
 static u32 group_checked(volatile u32 *h,u32 row) { return setting_value(h,group_setting(h,row))!=0; }
+static u32 group_icon(volatile u32 *h,u32 row) {
+    u32 icon;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,0);
+    if((icon=page_icon(group_child_address(h,row)))) return module_icon_value(h,icon,CHOICE_ENTRY(h)[2]);
+    return choice_tile(h,row+1);
+}
+/* The value of a group in MENU and on the ADJ root: the titles of the
+   children that are on, joined by a slash, or Off. */
+static const u16 *group_summary(volatile u32 *h) {
+    volatile u16 *out=(volatile u16 *)MENU_TEXT(GRKIT_TEXT(h)+GRKIT_TEXT_GROUP_VALUE);
+    u32 row, n=0, i;
+    for(row=0;row<group_rows(h) && row<4;++row) {
+        const u16 *title;
+        if(!group_checked(h,row)) continue;
+        if(n && n<GRKIT_TEXT_GROUP_UNITS-1) out[n++]='/';
+        title=group_label(h,row);
+        for(i=0;title[i] && n<GRKIT_TEXT_GROUP_UNITS-1;++i) out[n++]=title[i];
+    }
+    out[n]=0;
+    return n ? (const u16 *)out : text(h,TEXT_OFF);
+}
+static void menu_open(volatile u32 *h,u32 module);
 static void group_apply(volatile u32 *h,u32 row) {
-    u32 handle=group_setting(h,row);
-    setting_store(h,handle,!setting_value(h,handle));
+    u32 child=group_child(h,row);
+    if(child<module_pages(h)) menu_open(h,child);
 }
 static u32 group_committed(volatile u32 *h) { (void)h; return 0; }
-static const MenuPage group_module={choice_title,choice_title,group_rows,group_label,group_icon,
+static const MenuPage group_module={choice_title,group_summary,group_rows,group_label,group_icon,
     group_checked,group_apply,group_committed,0,0,0};
+/* The group that lists page `slot` as a child, with the child's row in
+   `row`, or MODULE_TOTAL. */
+static u32 group_parent(volatile u32 *h,u32 slot,u32 *row) {
+    u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], parent=MODULE_TOTAL, address, i, r;
+    if(slot<module_pages(h)) {
+        address=h[GRKIT_HOST_MODULE_PAGES/4+slot*3];
+        for(i=0;i<module_pages(h) && parent==MODULE_TOTAL;++i) {
+            h[GRKIT_HOST_MODULE_CHOICE/4]=i;
+            if(!choice_group(h)) continue;
+            for(r=0;r<group_rows(h) && r<4;++r)
+                if(group_child_address(h,r)==address) { parent=i; *row=r; break; }
+        }
+    }
+    h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
+    return parent;
+}
+/* A child in ADJ: its rows are the values of its first setting, with the
+   value texts of its settings page and the child icon of each value. */
+static const u16 *child_summary(volatile u32 *h) { return choice_row_text(h,0,ROW_VALUES,choice_value(h)); }
+static u32 child_icon(volatile u32 *h,u32 row) {
+    u32 icon=page_icon(CHOICE_ENTRY(h)[0]), value=choice_row_value(h,row);
+    if(icon) return module_icon_row(h,icon,CHOICE_ENTRY(h)[2],CHOICE_ENTRY(h)[1],value);
+    return value ? choice_tile(h,0) : GRKIT_ICON_OFF;
+}
+static const MenuPage child_module={choice_title,child_summary,choice_rows,choice_value_0,child_icon,
+    choice_checked,choice_apply,choice_committed,0,0,choice_settings};
 
 /* A page of CORE.TONE gets its rows from the core (runtime/tone.h), and its
    title from the module. */
@@ -232,6 +278,7 @@ static const MenuPage *menu_page(volatile u32 *h,u32 index) {
     /* Only a registered page has a GrkitPage to read. */
     if(index>=module_pages(h)) return &choice_module;
     if(choice_group(h)) return &group_module;
+    if(choice_direct(h) && choice_menu_only(h)) return &child_module;
     if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) return &tone_module;
     if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)) return &choice_settings_module;
     return &choice_module;
@@ -429,13 +476,17 @@ static void menu_start(volatile u32 *h) {
    highlighted or open when the last session ended. */
 static void menu_normalize(volatile u32 *h);
 static void menu_reopen(volatile u32 *h) {
-    u32 module=h[GRKIT_HOST_MODULE/4];
+    u32 module=h[GRKIT_HOST_MODULE/4], row, parent=group_parent(h,module,&row);
+    if(parent<MODULE_TOTAL) module=parent;
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
     h[GRKIT_HOST_MENU_CURSOR/4]=module<MODULE_TOTAL && visible_modules(h)>>module&1 ? root_row(h,module) : 0;
     menu_normalize(h);
 }
-/* Whether a page can be open: a visible module. */
-static u32 page_reachable(volatile u32 *h,u32 module) { return visible_modules(h)>>module&1; }
+/* Whether a page can be open: a visible module, or a child of a visible group. */
+static u32 page_reachable(volatile u32 *h,u32 module) {
+    u32 row, parent=group_parent(h,module,&row);
+    return visible_modules(h)>>(parent<MODULE_TOTAL ? parent : module)&1;
+}
 static void menu_normalize(volatile u32 *h) {
     u32 module=h[GRKIT_HOST_MODULE/4];
     if(h[GRKIT_HOST_MENU_LEVEL/4]<MENU_ROOT || h[GRKIT_HOST_MENU_LEVEL/4]>MENU_MODULE || module>=MODULE_TOTAL ||
@@ -459,6 +510,15 @@ static u32 menu_back(volatile u32 *h) {
     h[GRKIT_HOST_PREVIEW/4]=0;
     menu_normalize(h);
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return 0;
+    /* A child returns to its row of the group. */
+    {
+        u32 row, parent=group_parent(h,h[GRKIT_HOST_MODULE/4],&row);
+        if(parent<MODULE_TOTAL) {
+            menu_open(h,parent);
+            h[GRKIT_HOST_MENU_CURSOR/4]=row;
+            return 1;
+        }
+    }
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
     h[GRKIT_HOST_MENU_CURSOR/4]=root_row(h,h[GRKIT_HOST_MODULE/4]);
     return 1;

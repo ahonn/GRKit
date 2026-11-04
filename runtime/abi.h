@@ -590,6 +590,11 @@
    title: the borrowed submenu entry, the text descriptors, and the views that
    show settings (runtime/menu.c). */
 #define GRKIT_TEXT_SETTINGS 24048
+/* The value of a group page in MENU and on the ADJ root, before the native
+   settings page: the titles of the children that are on, joined by a slash,
+   GRKIT_TEXT_GROUP_UNITS units with the NUL. */
+#define GRKIT_TEXT_GROUP_VALUE 23536
+#define GRKIT_TEXT_GROUP_UNITS 256
 #define GRKIT_TEXT_LANGUAGES 5
 #define GRKIT_TEXT_RECORDS 40
 #define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)

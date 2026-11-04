@@ -11,20 +11,16 @@ static u32 test_strength = 1;
 static void set_strength(u32 strength) { test_strength = strength; }
 static void apply_look(PictureSet *set, u32 look)
 {
-    setting_set(SETTING_BLOOM_ENABLED, look == 1 || look == 3);
-    setting_set(SETTING_HAL_ENABLED, look == 2 || look == 3);
-    setting_set(SETTING_BLOOM_STRENGTH, test_strength);
-    setting_set(SETTING_HAL_STRENGTH, test_strength);
+    setting_set(SETTING_BLOOM, look == 1 || look == 3 ? test_strength + 1 : 0);
+    setting_set(SETTING_HALATION, look == 2 || look == 3 ? test_strength + 1 : 0);
     glow_apply(set, look >= 1 && look <= 3);
 }
 
 /* Compact optical case notation: 0 Off, 1 Weak, 2 Medium, 3 Strong. */
 static void set_pair(u32 bloom, u32 halation)
 {
-    setting_set(SETTING_BLOOM_ENABLED, bloom != 0);
-    setting_set(SETTING_HAL_ENABLED, halation != 0);
-    setting_set(SETTING_BLOOM_STRENGTH, bloom ? bloom - 1 : 1);
-    setting_set(SETTING_HAL_STRENGTH, halation ? halation - 1 : 1);
+    setting_set(SETTING_BLOOM, bloom);
+    setting_set(SETTING_HALATION, halation);
 }
 
 #define W 640U
@@ -782,9 +778,7 @@ static void test_combined_strengths(PictureSet *set)
             glow_apply(set, 1);
             hashes[b][h] = plane_sum(&set->planes[0]);
             energy[b][h] = halo_energy(304, 224, 32, 40);
-            assert(setting_get(SETTING_BLOOM_ENABLED) == (b != 0) && setting_get(SETTING_HAL_ENABLED) == (h != 0));
-            assert(setting_get(SETTING_BLOOM_STRENGTH) == (b ? b - 1 : 1));
-            assert(setting_get(SETTING_HAL_STRENGTH) == (h ? h - 1 : 1));
+            assert(setting_get(SETTING_BLOOM) == b && setting_get(SETTING_HALATION) == h);
             if (b) assert(energy[b][h] > energy[b - 1][h]);
             if (h) assert(energy[b][h] > energy[b][h - 1]);
             for (u32 i = 0; i <= b; ++i)
@@ -792,28 +786,24 @@ static void test_combined_strengths(PictureSet *set)
                     assert(hashes[b][h] != hashes[i][j]);
         }
     assert(energy[0][0] == 0);
-    /* The hidden enable and invalid choices must never edit a pixel. */
-    for (u32 enabled = 0; enabled <= 2; ++enabled) {
-        if (enabled == 1) continue;
-        set_pair(3, 3);
-        fill(40, 120, 140); square();
-        u32 before = plane_sum(&set->planes[0]);
-        glow_apply(set, enabled);
-        assert(plane_sum(&set->planes[0]) == before);
-    }
-    /* Invalid enable or strength disables only that stream. */
-    const u32 invalid[][2] = {{2, 0}, {~0U, 2}, {1, 3}, {1, ~0U}};
+    /* A filter value of 0 never edits a pixel. */
+    set_pair(3, 3);
+    fill(40, 120, 140); square();
+    u32 unfiltered = plane_sum(&set->planes[0]);
+    glow_apply(set, 0);
+    assert(plane_sum(&set->planes[0]) == unfiltered);
+    /* A value outside a setting disables only that stream. */
+    const u32 invalid[] = {4, ~0U};
     for (u32 i = 0; i < sizeof invalid / sizeof invalid[0]; ++i)
         for (u32 stream = 0; stream < 2; ++stream) {
             set_pair(3, 3);
-            setting_set(stream ? SETTING_HAL_ENABLED : SETTING_BLOOM_ENABLED, invalid[i][0]);
-            setting_set(stream ? SETTING_HAL_STRENGTH : SETTING_BLOOM_STRENGTH, invalid[i][1]);
+            setting_set(stream ? SETTING_HALATION : SETTING_BLOOM, invalid[i]);
             fill(40, 128, 128); square();
             glow_apply(set, 1);
             assert(plane_sum(&set->planes[0]) == (stream ? hashes[3][0] : hashes[0][3]));
         }
-    setting_set(SETTING_BLOOM_ENABLED, 2);
-    setting_set(SETTING_HAL_ENABLED, ~0U);
+    setting_set(SETTING_BLOOM, 4);
+    setting_set(SETTING_HALATION, ~0U);
     fill(40, 120, 140); square();
     u32 before = plane_sum(&set->planes[0]);
     glow_apply(set, 1);
@@ -992,41 +982,35 @@ static void test_filter_gate(PictureSet *set)
         }
 }
 
-/* Enabling a stream uses its retained strength. Disabling it never resets
-   that value, and the other stream's enable and strength stay independent. */
-static void test_enable_and_strength(PictureSet *set)
+/* Each effect has one setting: 0 Off, then Weak, Medium, and Strong. Turning
+   one effect off leaves the look of the other unchanged. */
+static void test_settings(PictureSet *set)
 {
-    assert(grkit_module.setting_count == 4);
-    assert_setting_default("BLOOM_ENABLED", 2, 0);
-    assert_setting_default("HAL_ENABLED", 2, 0);
-    assert_setting_default("BLOOM_STRENGTH", 3, 1);
-    assert_setting_default("HAL_STRENGTH", 3, 1);
+    assert(grkit_module.setting_count == 2);
+    assert_setting_default("BLOOM", 4, 0);
+    assert_setting_default("HALATION", 4, 0);
     set_pair(0, 0);
     fill(40, 128, 128); square();
     u32 off = plane_sum(&set->planes[0]);
     glow_apply(set, 1);
     assert(plane_sum(&set->planes[0]) == off);
-    for (u32 b = 0; b < 3; ++b)
-        for (u32 h = 0; h < 3; ++h) {
-            setting_set(SETTING_BLOOM_STRENGTH, b);
-            setting_set(SETTING_HAL_STRENGTH, h);
-            setting_set(SETTING_BLOOM_ENABLED, 1);
-            setting_set(SETTING_HAL_ENABLED, 1);
+    for (u32 b = 1; b <= 3; ++b)
+        for (u32 h = 1; h <= 3; ++h) {
+            set_pair(b, h);
             fill(40, 128, 128); square();
             glow_apply(set, 1);
             u32 both = plane_sum(&set->planes[0]);
-            setting_set(SETTING_BLOOM_ENABLED, 0);
+            set_pair(0, h);
             fill(40, 128, 128); square();
             glow_apply(set, 1);
-            assert(setting_get(SETTING_BLOOM_STRENGTH) == b && setting_get(SETTING_HAL_STRENGTH) == h);
-            assert(setting_get(SETTING_HAL_ENABLED) == 1);
-            setting_set(SETTING_HAL_ENABLED, 0);
+            u32 halation_only = plane_sum(&set->planes[0]);
+            set_pair(b, 0);
             fill(40, 128, 128); square();
             glow_apply(set, 1);
-            assert(plane_sum(&set->planes[0]) == off);
-            assert(setting_get(SETTING_BLOOM_STRENGTH) == b && setting_get(SETTING_HAL_STRENGTH) == h);
-            setting_set(SETTING_BLOOM_ENABLED, 1);
-            setting_set(SETTING_HAL_ENABLED, 1);
+            u32 bloom_only = plane_sum(&set->planes[0]);
+            assert(halation_only != off && bloom_only != off);
+            assert(halation_only != both && bloom_only != both);
+            set_pair(b, h);
             fill(40, 128, 128); square();
             glow_apply(set, 1);
             assert(plane_sum(&set->planes[0]) == both);
@@ -1037,7 +1021,7 @@ int main(void)
 {
     PictureSet set = {{plane()}, 1, 0, 0, grkit_test_scratch, 0};
     test_filter_gate(&set);
-    test_enable_and_strength(&set);
+    test_settings(&set);
     set_strength(1);
 
     test_off(&set);

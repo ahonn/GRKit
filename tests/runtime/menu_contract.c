@@ -2190,72 +2190,132 @@ static void install_group_pages(void)
     }
 }
 
-static void group_icons_keep_the_selected_strength_while_disabled(void)
+/* A child row shows its icon for the value of its setting, and the list
+   that OK opens shows each value with the icon of that value. The root
+   keeps tile 0. */
+static void group_icons_follow_child_values(void)
 {
     install_group_pages();
     volatile u32 *h=test_header;
     u32 child=TEST_PAGE+5*TEST_PAGE_SIZE,icon=child+0x40;
     PAGE_WORD(child,0)=48; PAGE_WORD(child,44)=icon;
-    PAGE_WORD(icon,0)=16; PAGE_WORD(icon,4)=1; PAGE_WORD(icon,8)=15; PAGE_WORD(icon,12)=1;
+    PAGE_WORD(icon,0)=16; PAGE_WORD(icon,4)=1; PAGE_WORD(icon,8)=0; PAGE_WORD(icon,12)=1;
     h[GRKIT_HOST_MODULE_CHOICE/4]=GUIDES_MODULE;
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_MODULE;
-    for(u32 enabled=0;enabled<2;++enabled) {
-        settings_memory[SETTINGS_ENTRY(0)+1]=enabled;
-        for(u32 strength=0;strength<3;++strength) {
-            settings_memory[SETTINGS_ENTRY(15)+1]=strength;
-            assert(group_icon(h,0)==GRKIT_ICON_MODULE_TILE(7+1+strength));
-            assert(group_checked(h,0)==enabled);
-        }
+    for(u32 value=0;value<2;++value) {
+        settings_memory[SETTINGS_ENTRY(0)+1]=value;
+        assert(group_icon(h,0)==GRKIT_ICON_MODULE_TILE(7+1+value));
+        assert(group_checked(h,0)==value);
     }
+    /* The value list of the child: each row the icon of its own value. */
+    settings_memory[SETTINGS_ENTRY(0)+1]=0;
+    assert(menu_page(h,5)==&child_module);
+    assert(child_icon(h,0)==GRKIT_ICON_MODULE_TILE(8) && child_icon(h,1)==GRKIT_ICON_MODULE_TILE(9));
+    /* Without an icon, Off shows the core Off icon and a value tile 0. */
+    assert(menu_page(h,6)==&child_module);
+    assert(child_icon(h,0)==GRKIT_ICON_OFF && child_icon(h,1)==GRKIT_ICON_MODULE_TILE(7));
+    h[GRKIT_HOST_MODULE_CHOICE/4]=GUIDES_MODULE;
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
     assert(group_icon(h,0)==GRKIT_ICON_MODULE_TILE(7));
 }
 
-static void group_ok_toggles_each_child_without_closing_adj(void)
+/* A choice page without an Off row shows its Off icon on row 0, as Grain
+   shows its struck symbol. An Off row keeps the core Off icon, and the
+   root keeps tile 0 while the setting is Off. */
+static void choice_off_row_shows_the_page_off_icon(void)
+{
+    install_group_pages();
+    volatile u32 *h=test_header;
+    u32 page=TEST_PAGE+7*TEST_PAGE_SIZE,off=page+0x3e0;
+    install_page(7,"Grain",grain_names,3,15,7);
+    settings_memory[SETTINGS_ENTRY(15)+1]=0;
+    PAGE_WORD(page,0)=48; PAGE_WORD(page,PAGE_FLAGS)=0; PAGE_WORD(page,44)=off;
+    PAGE_WORD(off,0)=16; PAGE_WORD(off,4)=1; PAGE_WORD(off,8)=0xffffffffU; PAGE_WORD(off,12)=9;
+    h[GRKIT_HOST_MENU_LEVEL/4]=MENU_MODULE;
+    assert(menu_page(h,7)==&choice_module);
+    assert(choice_icon(h,0)==GRKIT_ICON_MODULE_TILE(7+9) && choice_icon(h,1)==GRKIT_ICON_MODULE_TILE(8));
+    PAGE_WORD(page,PAGE_FLAGS)=CHOICE_OFF_ROW;
+    assert(choice_icon(h,0)==GRKIT_ICON_OFF);
+    PAGE_WORD(page,44)=0;
+    PAGE_WORD(page,PAGE_FLAGS)=0;
+    assert(choice_icon(h,0)==GRKIT_ICON_MODULE_TILE(7));
+    PAGE_WORD(page,44)=off;
+    h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
+    assert(choice_icon(h,0)==GRKIT_ICON_MODULE_TILE(7));
+    settings_memory[SETTINGS_ENTRY(15)+1]=2;
+    assert(choice_icon(h,0)==GRKIT_ICON_MODULE_TILE(9));
+}
+
+/* OK on a child opens the values of its first setting. OK on a value sets
+   it and closes ADJ, as on a choice page; MENU returns to the child's row
+   of the group without a change. */
+static void group_ok_opens_each_child_and_returns_to_its_row(void)
 {
     install_group_pages();
     volatile u32 *h = test_header;
     menu_start(h);
     h[GRKIT_HOST_MENU_CURSOR / 4] = root_row(h, GUIDES_MODULE);
+    assert(current_module(h)->summary(h) == text(h, TEXT_OFF));
     assert(!confirm_selection(h));
     assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
     assert(!current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
     u32 changes = h[GRKIT_HOST_STATE_CHANGES / 4];
     assert(!confirm_selection(h));
-    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MODULE / 4] == 5);
+    assert(current_module(h) == &child_module && count(h) == 2);
+    assert(h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    assert(same(current_module(h)->title(h), "First"));
+    assert(same(current_module(h)->label(h, 0), "Off") && same(current_module(h)->label(h, 1), "On"));
     assert(current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
-    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && count(h) == 2);
+    /* Up and Down keep a child open: menu_normalize finds its group. */
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    menu_normalize(h);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MODULE / 4] == 5);
+    assert(menu_back(h));
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
+    assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    /* The second child: OK on On sets it and closes ADJ. */
     h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
     assert(!confirm_selection(h));
-    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
-    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MENU_CURSOR / 4] == 1);
-    /* Fn selects the same child's settings without applying its toggle. */
-    assert(settings_target(h, TEST_OBJECTS) == 6);
-    settings_start(h, 6);
-    assert(settings_rows(h) == 2 && menu_settings_current(1, 0, 0) == 2);
-    assert(menu_settings_current(1, 0, 1) == 2);
-    menu_settings_controller(ADJ_CONTROLLER);
-    menu_return_page(h, 1);
-    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
-    /* A half press or other exit must not toggle the highlighted child. */
+    assert(h[GRKIT_HOST_MODULE / 4] == 6 && same(current_module(h)->title(h), "Second"));
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    assert(confirm_selection(h));
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    assert(settings_memory[SETTINGS_ENTRY(16) + 1] == 1 && settings_memory[SETTINGS_ENTRY(0) + 1] == 0);
+    /* The next ADJ opens on the row of the group. */
+    menu_reopen(h);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && h[GRKIT_HOST_MENU_CURSOR / 4] == root_row(h, GUIDES_MODULE));
+    /* The value of the group: the titles of the children that are on. */
+    assert(same(current_module(h)->summary(h), "Second"));
+    settings_memory[SETTINGS_ENTRY(0) + 1] = 1;
+    assert(same(current_module(h)->summary(h), "First/Second"));
+    /* A half press on the group list changes nothing. Fn on a child row
+       opens that child's settings. */
+    menu_open(h, GUIDES_MODULE);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
     changes = h[GRKIT_HOST_STATE_CHANGES / 4];
     exit_commit(h);
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
-    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
-    /* The ADJ dial press closes the list, without interpreting its Confirm
-       as a second toggle. Ordinary OK on the same row then disables it. */
+    assert(settings_target(h, TEST_OBJECTS) == 6);
+    /* Fn on the open child also opens its settings, and the settings page
+       returns to the child. */
+    assert(!confirm_selection(h));
+    assert(settings_target(h, TEST_OBJECTS) == 6);
+    settings_start(h, 6);
+    assert(settings_rows(h) == 2);
+    menu_settings_controller(ADJ_CONTROLLER);
+    menu_return_page(h, 1);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MODULE / 4] == 6);
+    assert(h[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    /* The ADJ dial press closes the group list without opening a child. */
+    menu_open(h, GUIDES_MODULE);
     h[GRKIT_HOST_MENU_EVENTS / 4] = 2;
     h[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
     assert(confirm_selection(h));
-    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
-    assert(current_module(h)->checked(h, 0) && current_module(h)->checked(h, 1));
+    assert(h[GRKIT_HOST_MODULE / 4] == GUIDES_MODULE && h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
     h[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
-    assert(!confirm_selection(h));
-    assert(current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
-    assert(settings_memory[2 + 15 * 3 + 1] == 1 && settings_memory[2 + 17 * 3 + 1] == 1);
-    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
     assert(menu_back(h));
-    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
     assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
 }
 
@@ -2302,7 +2362,14 @@ static void group_pages_open_children_and_return_without_committing(void)
     object_memory[(0x800 + MENU_ROW_LABEL_VIEW) / 4] = 0x5a000030;
     object_memory[(0x800 + MENU_ROW_VALUE_VIEW) / 4] = 0x5a000031;
     menu_row_fill(0, TEST_OBJECTS + 0x800);
-    assert(menu_row(h, 0)[MENU_ROW_VALUE_TEXT_AT / 4] == 0x101);
+    /* The row of a group shows the children that are on: none, so Off. */
+    {
+        const u16 *value = menu_page(h, GUIDES_MODULE)->summary(h);
+        u32 length = 0;
+        while (value[length]) ++length;
+        assert(value == text(h, TEXT_OFF));
+        assert(menu_row(h, 0)[MENU_ROW_VALUE_TEXT_AT / 4] == ((length + 1) | 0x100));
+    }
     assert(menu_settings_controller(MENU_ROW_TARGET) == SETTINGS_SUBMENU);
     assert(settings_rows(h) == 3 && same(listed_label(h, 0), "Enable"));
     assert(same(listed_label(h, 1), "First") && same(listed_label(h, 2), "Second"));
@@ -3008,8 +3075,9 @@ int main(void)
        before them leaves. */
     settings_entry_enable_preserves_each_value();
     a_settings_section_row_has_no_choice_value();
-    group_icons_keep_the_selected_strength_while_disabled();
-    group_ok_toggles_each_child_without_closing_adj();
+    group_icons_follow_child_values();
+    choice_off_row_shows_the_page_off_icon();
+    group_ok_opens_each_child_and_returns_to_its_row();
     group_pages_open_children_and_return_without_committing();
     group_back_keeps_the_shared_native_parent_return_target();
     the_guides_menu_page_lists_enable_options_and_settings();

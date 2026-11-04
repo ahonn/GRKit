@@ -3,13 +3,16 @@ id = "GLOW"
 version = 1
 order = 45
 sources = ["glow.c", "glow_kernels.c"]
-# The module icon, then weak, medium, and strong icons for each effect in
-# ADJ (tiles 1 to 6) and in the viewfinder (tiles 7 to 12).
+# The module icon, the Off, Weak, Medium, and Strong icons of each effect
+# in ADJ (tiles 1 to 8), then the Weak, Medium, and Strong icons of each
+# effect in the viewfinder (tiles 9 to 14).
 tiles = [
     "tiles/0-module.png",
+    "tiles/off-bloom.png",
     "tiles/1-bloom-weak.png",
     "tiles/1-bloom.png",
     "tiles/3-bloom-strong.png",
+    "tiles/off-halation.png",
     "tiles/4-halation-weak.png",
     "tiles/2-halation.png",
     "tiles/6-halation-strong.png",
@@ -21,30 +24,16 @@ tiles = [
     "tiles/vf-halation-strong.png",
 ]
 
+# 0 Off, 1 Weak, 2 Medium, 3 Strong.
 [[settings]]
-key = "BLOOM_ENABLED"
-values = 2
-saved = true
-public = true
-
-# 0 Weak, 1 Medium, 2 Strong. Disabling the effect keeps this value.
-[[settings]]
-key = "BLOOM_STRENGTH"
-values = 3
-default = 1
+key = "BLOOM"
+values = 4
 saved = true
 public = true
 
 [[settings]]
-key = "HAL_ENABLED"
-values = 2
-saved = true
-public = true
-
-[[settings]]
-key = "HAL_STRENGTH"
-values = 3
-default = 1
+key = "HALATION"
+values = 4
 saved = true
 public = true
 
@@ -53,32 +42,33 @@ kind = "group"
 
 [[page.children]]
 key = "BLOOM"
-settings = ["BLOOM_ENABLED", "BLOOM_STRENGTH"]
-icon = { setting = "BLOOM_STRENGTH", first_tile = 1 }
+settings = ["BLOOM"]
+icon = { setting = "BLOOM", first_tile = 1 }
 
 [[page.children]]
 key = "HALATION"
-settings = ["HAL_ENABLED", "HAL_STRENGTH"]
-icon = { setting = "HAL_STRENGTH", first_tile = 4 }
+settings = ["HALATION"]
+icon = { setting = "HALATION", first_tile = 5 }
 
+# Value n shows tile first_tile + n; value 0 does not show.
 [[indicators]]
 id = "bloom"
 placement = "status_row"
-enabled = { setting = "BLOOM_ENABLED", equals = 1 }
-icon = { setting = "BLOOM_STRENGTH", first_tile = 7 }
+enabled = { setting = "BLOOM", not_equals = 0 }
+icon = { setting = "BLOOM", first_tile = 8 }
 
 [[indicators]]
 id = "halation"
 placement = "status_row"
-enabled = { setting = "HAL_ENABLED", equals = 1 }
-icon = { setting = "HAL_STRENGTH", first_tile = 10 }
+enabled = { setting = "HALATION", not_equals = 0 }
+icon = { setting = "HALATION", first_tile = 11 }
 
 [[filters]]
 apply = "glow_apply"
-setting = "BLOOM_ENABLED"
+setting = "BLOOM"
 stage = "frame"
 
 [[filters]]
 apply = "glow_apply_halation"
-setting = "HAL_ENABLED"
+setting = "HALATION"
 stage = "frame"

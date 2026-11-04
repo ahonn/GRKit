@@ -243,8 +243,9 @@ typedef struct {
 
 /* A choice page: one row for each value of `setting` (see GRKIT_USE),
    `rows` rows. OK on a row sets the value. The root row shows the summary and
-   the tile of the value; row n shows tile n, or the Off icon for row 0 with
-   GRKIT_CHOICE_OFF_ROW. Each text is one UTF-16 string for each language.
+   the tile of the value; row n shows tile n. Row 0 shows the core Off icon
+   with GRKIT_CHOICE_OFF_ROW, else the page `icon` if there is one.
+   Each text is one UTF-16 string for each language.
    The installer rejects the module if `rows` is not the number of values.
 
    A page of a setting of this module can also have 1 to GRKIT_SETTING_ROWS
@@ -295,8 +296,9 @@ typedef struct GrkitPage {
     const GrkitSettingRow *settings;
     /* Since ABI 2.1; read only for GROUP. Older 40-byte pages remain valid. */
     const struct GrkitPage *const *children;
-    /* Since ABI 2.2; optional icon for a GROUP child. Unlike its indicator,
-       this icon remains visible while the child's first setting is Off. */
+    /* Since ABI 2.2; optional. For a GROUP child, its icon in the group
+       and in its value list, also while its first setting is Off. For a
+       CHOICE page without GRKIT_CHOICE_OFF_ROW, the icon of row 0. */
     const GrkitIcon *icon;
 } GrkitPage;
 

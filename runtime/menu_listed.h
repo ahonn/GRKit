@@ -35,16 +35,22 @@ static const Setting tone_settings[2]={
     {film_label,tone_rows,film_text,tone_committed,film_set},
     {adjustments_label,one_value,adjustments_text,no_value,no_set},
 };
-/* Group rows are links, with no selected value. The controller dispatcher
-   opens the child's native settings page. */
+/* Group rows are links that show the value of the child's first setting.
+   The controller dispatcher opens the child's native settings page. */
+static const u16 *group_value(volatile u32 *h,u32 row) {
+    u32 child=group_child_address(h,row), value=setting_value(h,group_setting(h,row));
+    return MENU_TEXT(PAGE_WORD(PAGE_WORD(PAGE_WORD(child,PAGE_SETTING_LIST),ROW_VALUES),
+                               (value*GRKIT_TEXT_LANGUAGES+menu_language())*4));
+}
 #define GROUP_SETTING(n) \
-    static const u16 *group_label_##n(volatile u32 *h) { return group_label(h,n); }
+    static const u16 *group_label_##n(volatile u32 *h) { return group_label(h,n); } \
+    static const u16 *group_text_##n(volatile u32 *h,u32 value) { (void)value; return group_value(h,n); }
 GROUP_SETTING(0) GROUP_SETTING(1) GROUP_SETTING(2) GROUP_SETTING(3)
 static const Setting group_settings[SETTING_ROWS]={
-    {group_label_0,one_value,adjustments_text,no_value,no_set},
-    {group_label_1,one_value,adjustments_text,no_value,no_set},
-    {group_label_2,one_value,adjustments_text,no_value,no_set},
-    {group_label_3,one_value,adjustments_text,no_value,no_set},
+    {group_label_0,one_value,group_text_0,no_value,no_set},
+    {group_label_1,one_value,group_text_1,no_value,no_set},
+    {group_label_2,one_value,group_text_2,no_value,no_set},
+    {group_label_3,one_value,group_text_3,no_value,no_set},
 };
 /* The settings of the module page of the listed module after its Enable
    row, with menu_page selecting the page, and their count in *n; or 0. */
