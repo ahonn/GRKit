@@ -312,12 +312,13 @@ grain_fill:
 /* Capture: record the effect of this shot as the Image Control tag. Replaces
    the ImageTone BL in PentaxMakernoteEntryDataSetter. r1 is the IFD entry, and
    r2 the shot settings. FW_IFD_SET_SHORT(entry, 0, value) stores the u16 tag
-   value. A shot without a private record keeps the native tag. */
+   value. A shot without a private record keeps the native tag. A playback
+   edit keeps the effect of its photo (picture_capture_tone_record). */
 .global picture_capture_tone
 picture_capture_tone:
     push {r0-r4, lr}
     mov r0, r2
-    bl picture_capture_record
+    bl picture_capture_tone_record
     mov r12, r0
     pop {r0-r4, lr}
     cmp r12, #0

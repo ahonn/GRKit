@@ -97,6 +97,9 @@ static uint32_t grain_counter_value, grain_counter_step;
 #define GRAIN_COUNTER_MHZ 24U
 #define TEST_PROFILE (ARENA + 0x4f0000)
 #define PROFILE_MAP(address) ((volatile u32 *)region((address), 4))
+/* Key 0x25 of the playback metadata: the ImageTone code of the photo shown. */
+static uint32_t playback_tone;
+#define PICTURE_PLAYBACK_TONE() playback_tone
 /* The JPEG header buffer of the XMP segment (runtime/xmp.h). */
 #define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)region((address), (size)))
 #include "picture.c"
@@ -766,6 +769,37 @@ static const char *jpeg_keyword(uint32_t code)
     keyword[end - start] = 0;
     return keyword;
 }
+/* The effect that a maker note records: the record of the build of the shot,
+   or in playback, for a write without a build such as Resize, the record of
+   the code of the photo shown. */
+static void capture_tone_contract(void)
+{
+    reset();
+    HALF(record(2), GRKIT_RECORD_CODE) = 0x9235;
+    /* A capture with an effect, and a native capture. */
+    store_shot(SHOT, record(1));
+    assert(picture_capture_tone_record(SHOT) == record(1));
+    store_shot(SHOT + 0x100, 0);
+    playback_tone = 0x10000 | (0x9235 - 0x100);
+    assert(picture_capture_tone_record(SHOT + 0x100) == 0);
+    /* A write without a build while shooting: native. */
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
+    assert(picture_capture_tone_record(SHOT + 0x200) == 0);
+    /* In playback: the effect of the photo shown, if the camera has it. */
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 1;
+    assert(picture_capture_tone_record(SHOT + 0x200) == record(2));
+    assert(picture_capture_record(SHOT + 0x200) == 0);
+    playback_tone = 0x10000 | (0x9236 - 0x100);
+    assert(picture_capture_tone_record(SHOT + 0x200) == 0);
+    playback_tone = 6;
+    assert(picture_capture_tone_record(SHOT + 0x200) == 0);
+    /* A build in playback, such as a RAW development, keeps its own record. */
+    playback_tone = 0x10000 | (0x9235 - 0x100);
+    store_shot(SHOT + 0x300, 0);
+    assert(picture_capture_tone_record(SHOT + 0x300) == 0);
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
+    playback_tone = 0;
+}
 static void jpeg_xmp_contract(void)
 {
     static const uint16_t trix[] = {'T', 'r', 'i', '-', 'X', ' ', '<', '4', '0', '0', '>', ' ', '&', ' ', '"', 0xdc, '"', 0};
@@ -843,6 +877,7 @@ static void jpeg_xmp_contract(void)
 
 int main(void)
 {
+    capture_tone_contract();
     jpeg_xmp_contract();
 #ifdef GRAIN_FILL_PITCH
     grain_contract();

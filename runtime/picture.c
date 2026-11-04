@@ -495,8 +495,26 @@ void picture_develop_start(void) {
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
 }
-/* For picture_capture_tone: the record of a shot, or 0. */
+/* The record of a shot, or 0: the Fn adjustments of the shot (tag 0x247). */
 u32 picture_capture_record(u32 shot) { return shot_record(framing_header(),shot); }
+/* For picture_capture_tone: the record whose code the picture records, or 0.
+   A capture or a RAW development has the entry of its build in the shot
+   ring. A write without one in playback (GRKIT_HOST_FRAME_FILE is not 0
+   there, and 0 while shooting) is an edit of the photo shown, such as Resize,
+   which does not run Image Control: it keeps the GRKit effect that the photo
+   records. The native tag would record Standard. */
+u32 picture_capture_tone_record(u32 shot) {
+    volatile u32 *h=framing_header();
+    u32 record;
+    if(shot_word(h,shot,GRKIT_SHOT_RECORD,&record)) return record;
+#ifdef FW_DEVELOP_MODEL
+    if(((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]) {
+        u32 value=PICTURE_PLAYBACK_TONE();
+        if(value>>16==1) return record_of_code(h,(value+0x100)&0xffffU);
+    }
+#endif
+    return 0;
+}
 #ifndef PICTURE_IFD_SET_SHORT
 #define PICTURE_IFD_SET_SHORT(entry,index,value) (((void (*)(u32,u32,u32))FW_IFD_SET_SHORT)(entry,index,value))
 #endif
