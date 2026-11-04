@@ -45,7 +45,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/llvm.gpg] https://apt.llvm.org/noble/ llvm-toolchain-noble-21 main" \
             | sudo tee /etc/apt/sources.list.d/llvm-21.list
           sudo apt-get update
-          sudo apt-get install --yes clang-21 lld-21
+          sudo apt-get install --yes clang-21 lld-21 libclang-rt-21-dev
       # qemu-arm runs the NEON parity test of Glow (synthetic_glow_neon_parity).
       - if: runner.os == 'Linux'
         run: sudo apt-get install --yes qemu-user
@@ -57,6 +57,26 @@ jobs:
       - run: cargo build -p grkit-wasm --target wasm32-unknown-unknown --release --locked
       - if: runner.os == 'Linux'
         run: GRKIT_CLANG=clang-21 GRKIT_LLD=ld.lld-21 cargo test -p grkit-build --locked -- --ignored synthetic_ dump_
+      - if: runner.os == 'Linux'
+        name: Check the Date Imprint ARM stack budget
+        env:
+          GRKIT_CLANG: clang-21
+          GRKIT_LLD: ld.lld-21
+        run: |
+          test_name=tests::modules::date_blur_stays_within_stack_budget
+          cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name" --list \
+            | grep -Fx "$test_name: test"
+          cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name"
+      - if: runner.os == 'Linux'
+        name: Check native memory safety
+        env:
+          GRKIT_SANITIZER_CC: clang-21
+          GRKIT_HOST_CC: ${{ github.workspace }}/.github/scripts/clang-sanitized.sh
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          cargo run --locked -p grkit-cli -- module test --dir modules/glow --cc "$GRKIT_HOST_CC"
+          cargo run --locked -p grkit-cli -- module test --dir modules/date --cc "$GRKIT_HOST_CC"
+          cargo test --locked -p grkit-core --test native_contracts
       - run: cargo build --release --locked -p grkit-cli
       - run: target/release/grkit --help
   guides:

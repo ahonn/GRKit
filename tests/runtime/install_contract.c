@@ -74,6 +74,18 @@ static void *host(u32 address)
     else if (at + 0x80000000U < near) at += (uintptr_t)1 << 32;
     return (void *)at;
 }
+/* AddressSanitizer can move the locals of the parts to a fake stack that it
+   maps far from the image (Linux), where host() cannot find them again. Keep
+   the locals on the stack of the thread. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define TEST_ADDRESS_SANITIZER 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__) || defined(TEST_ADDRESS_SANITIZER)
+const char *__asan_default_options(void);
+const char *__asan_default_options(void) { return "detect_stack_use_after_return=0"; }
+#endif
 
 /* The card: each file with its path and bytes. A folder exists while it
    holds a file, and it lists its files in the order that they were added,
