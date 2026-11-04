@@ -1,3 +1,19 @@
+## 1.4.0 (2026-11-04)
+
+### Features
+
+- Add the Fujicolor C200, UltraMax 400, and Provia 100F film looks, and Cinema Yellow and Cinema Green from GR IV firmware for GR III and GR IIIx.
+- Add a Guides Only mode for composition without cropping photos, with guides that also follow the camera’s native aspect ratio.
+- Add Bloom and Halation to JPEG photos, with separate strength controls and the option to use both effects together.
+- Write the name of the film look into each JPEG as a keyword, so that Lightroom and other photo catalogs can find photos by look.
+- In-camera RAW development and Resize keep the framing and film look, and RAW development keeps the capture date and can apply another film look or Framing ratio.
+- Show the Framing ratio, Date Imprint format, Grain, Bloom, and Halation in the viewfinder, with clearer Date Imprint, Glow, and Grain icons in ADJ.
+
+### Fixes
+
+- Fix missing composition guides after aspect ratio changes and preserve native RAW framing and digital crop settings when cropping JPEG photos.
+- Make date stamps more reliable when photos are saved.
+
 ## 1.3.5 (2026-10-31)
 
 ### Fixes
