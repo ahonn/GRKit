@@ -12,7 +12,7 @@ GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面�
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.zh-Hant.jpg" alt="MENU 自訂頁中的 GRKit 小節" width="49%">
 </p>
 
-照片：MIKI Yoshihito 拍攝的 [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+照片：[MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 ## 功能
 

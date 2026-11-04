@@ -12,7 +12,7 @@ GRKit は、RICOH GR III・GR IIIx・GR IV に、フィルム風の色、XPan �
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.ja.jpg" alt="MENU のカスタマイズタブにある GRKit" width="49%">
 </p>
 
-写真：MIKI Yoshihito「[Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)」、[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
+写真：[MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/)、[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
 
 ## 機能
 

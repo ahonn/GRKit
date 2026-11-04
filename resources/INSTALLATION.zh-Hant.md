@@ -35,7 +35,7 @@ GRKit 把設定、效果和你加入的模組保存在 `GRKIT` 資料夾中，�
 
 ![GRKit 頁面列出模組，並顯示目前的效果。](images/grkit-root.jpg)
 
-照片：MIKI Yoshihito 拍攝的 [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+照片：[MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/)，[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 - **底片風格（Film Look）：** 反白一個效果，即可在實時顯示中預覽。按 OK 按鈕保留這個效果。按 Fn 按鈕調整這個效果的 [標準] 參數。在 GRK 選單的底片風格一列按 Fn 按鈕，可以調整目前選擇的效果。每個效果單獨保存自己的調整，不會改變相機的影像控制設定。
 - **構圖比例（Framing）：** 選擇 XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1。按 Fn 按鈕，將**模式**設為**裁切拍攝**或**僅輔助構圖**。

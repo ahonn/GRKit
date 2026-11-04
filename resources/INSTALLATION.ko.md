@@ -34,7 +34,7 @@ GRKit은 설정, 효과, 추가한 모듈을 `GRKIT` 폴더에 저장하므로 �
 
 ![GRKit 페이지에 모듈 목록과 현재 효과가 표시되어 있습니다.](images/grkit-root.jpg)
 
-사진: MIKI Yoshihito, [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/), [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
+사진: [MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/), [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/).
 
 - **필름 룩(Film Look):** 효과에 커서를 맞추면 미리 보기가 표시됩니다. OK 버튼을 누르면 확정됩니다. Fn 버튼을 누르면 그 효과의 [표준] 파라미터를 조정할 수 있습니다. GRK 메뉴의 필름 룩 행에서 Fn 버튼을 누르면 선택한 효과를 조정할 수 있습니다. 조정 내용은 효과마다 저장되며, 카메라의 화상 컨트롤 설정은 바뀌지 않습니다.
 - **프레이밍(Framing):** XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1 중에서 선택합니다. Fn 버튼으로 **모드**를 **자르기** 또는 **구도 가이드만**으로 설정합니다.

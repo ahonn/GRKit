@@ -12,7 +12,7 @@ GRKit은 RICOH GR III, GR IIIx, GR IV에 필름 느낌의 색감, XPan 같은 �
   <img src="https://github.com/ahonn/grkit/raw/main/resources/images/grkit-menu.ko.jpg" alt="MENU 사용자 설정 탭의 GRKit 항목" width="49%">
 </p>
 
-사진: MIKI Yoshihito, [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/), [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
+사진: [MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/), [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)
 
 ## 기능
 

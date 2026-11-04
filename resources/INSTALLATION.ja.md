@@ -35,7 +35,7 @@ GRKit は設定、エフェクト、追加したモジュールを `GRKIT` フ�
 
 ![GRKit のページに、モジュールの一覧と現在のエフェクトが表示されています。](images/grkit-root.jpg)
 
-写真：MIKI Yoshihito による [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/)、[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
+写真：[MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/)、[CC BY 2.0](https://creativecommons.org/licenses/by/2.0/)。
 
 - **フィルムルック（Film Look）：** エフェクトにカーソルを合わせると、プレビューが表示されます。OK ボタンで確定します。Fn ボタンを押すと、そのエフェクトの［スタンダード］のパラメーターを調整できます。GRK メニューのフィルムルックの行で Fn ボタンを押すと、選択中のエフェクトを調整できます。調整内容はエフェクトごとに保存され、カメラのイメージコントロールの設定は変わりません。
 - **フレーミング（Framing）：** XPan、2.35:1、16:9、4:3、5:4、7:6、1:1 から選びます。Fn ボタンで**モード**を**切り抜き**または**構図ガイドのみ**に設定します。
