@@ -402,10 +402,15 @@ static void test_daylight_fade(PictureSet *set)
             u8 expected = x >= 304 && x < 336 && y >= 224 && y < 256 ? 255 : 128;
             assert(luma(x, y) == expected && chroma(x, y, 0) == 128 && chroma(x, y, 1) == 128);
         }
-    /* A dark picture keeps its glow at a daylight EV. */
-    assert(ev_energy(set, 2, 14, 20) == ev_energy(set, 2, 9, 20) && ev_energy(set, 2, 9, 20) > 0);
-    /* Bloom keeps its glow at any EV. */
-    assert(ev_energy(set, 1, 14, 128) == ev_energy(set, 1, 9, 128) && ev_energy(set, 1, 9, 128) > 0);
+    u32 saved_strength = test_strength;
+    for (u32 strength = 0; strength < 3; ++strength) {
+        set_strength(strength);
+        /* A dark picture keeps its glow at a daylight EV. */
+        assert(ev_energy(set, 2, 14, 20) == ev_energy(set, 2, 9, 20) && ev_energy(set, 2, 9, 20) > 0);
+        /* Bloom keeps its glow at any EV. */
+        assert(ev_energy(set, 1, 14, 128) == ev_energy(set, 1, 9, 128) && ev_energy(set, 1, 9, 128) > 0);
+    }
+    set_strength(saved_strength);
 }
 
 /* Bloom: a lamp clipped to a white core, with an unclipped orange
@@ -856,6 +861,7 @@ static void test_combined_scratch(void)
    must then leave Bloom byte-identical, including film-white protection. */
 static void test_empty_halation(void)
 {
+    static u8 expected[W * H * 2];
     grkit_test_shot.known = GRKIT_SHOT_EXPOSURE;
     grkit_test_shot.scene_ev = 14 * 256;
     for (u32 mode = 0; mode < 4; ++mode) {
@@ -863,18 +869,81 @@ static void test_empty_halation(void)
         set.planes[0].half = mode >> 1;
         grkit_test_white[0] = 212; grkit_test_white[1] = 216; grkit_test_white[2] = 206;
         for (u32 b = 1; b <= 3; ++b) {
-            u32 expected = 0;
             for (u32 h = 0; h <= 3; ++h) {
                 fill(100, 128, 128); square();
                 set_pair(b, h);
                 glow_apply(&set, 1);
-                u32 actual = plane_sum(&set.planes[0]);
-                if (!h) expected = actual;
-                else assert(actual == expected);
+                for (u32 i = 0; i < sizeof expected; ++i) {
+                    u8 actual = *grkit_test_bytes(GRKIT_TEST_PLANES + i);
+                    if (!h) expected[i] = actual;
+                    else assert(actual == expected[i]);
+                }
             }
+        }
+        for (u32 h = 1; h <= 3; ++h) {
+            fill(100, 128, 128); square();
+            for (u32 i = 0; i < sizeof expected; ++i)
+                expected[i] = *grkit_test_bytes(GRKIT_TEST_PLANES + i);
+            set_pair(0, h);
+            glow_apply(&set, 1);
+            for (u32 i = 0; i < sizeof expected; ++i)
+                assert(expected[i] == *grkit_test_bytes(GRKIT_TEST_PLANES + i));
         }
     }
     grkit_test_shot.known = 0;
+    grkit_test_white[0] = grkit_test_white[1] = grkit_test_white[2] = 255;
+}
+
+/* Separated light bands repeatedly reuse both fine-row buffers and the
+   seven-row rings. Empty spans must not retain a previous band's glow or
+   protection, and a previous shot's scratch must not change the output. */
+static void test_sparse_glow_rows(void)
+{
+    static const u32 bands[] = {32, 112, 208, 312, 416};
+    static u8 expected[W * H * 2];
+    grkit_test_shot.known = 0;
+    for (u32 mode = 0; mode < 4; ++mode) {
+        PictureSet set = {{plane()}, 1, 0, mode & 1, grkit_test_scratch, 0};
+        set.planes[0].half = mode >> 1;
+        grkit_test_white[0] = 212; grkit_test_white[1] = 216; grkit_test_white[2] = 206;
+        for (u32 streams = 1; streams <= 3; ++streams) {
+            set_pair(streams & 1 ? 2 : 0, streams & 2 ? 2 : 0);
+            for (u32 phase = 0; phase <= 3; phase += 3) {
+                for (u32 reused = 0; reused < 2; ++reused) {
+                    if (!reused) memset(grkit_test_scratch, 0xa5, GRKIT_PLANE_SCRATCH);
+                    fill(40, 128, 128);
+                    for (u32 b = 0; b < sizeof bands / sizeof bands[0]; ++b)
+                        for (u32 y = bands[b] + phase; y < bands[b] + phase + 4; ++y)
+                            for (u32 x = 304; x < 336; ++x)
+                                *grkit_test_bytes(GRKIT_TEST_PLANES + y * W + x) = 255;
+                    glow_apply(&set, 1);
+                    u32 halo = 0;
+                    for (u32 y = 0; y < H; ++y) {
+                        u32 near = 0, source = 0;
+                        for (u32 b = 0; b < sizeof bands / sizeof bands[0]; ++b) {
+                            u32 top = bands[b] + phase;
+                            near |= y + 28 >= top && y < top + 32;
+                            source |= y >= top && y < top + 4;
+                        }
+                        for (u32 x = 0; x < W; ++x) {
+                            if (!near) {
+                                assert(luma(x, y) == 40);
+                                assert(chroma(x, set.planes[0].half ? y >> 1 : y, 0) == 128);
+                                assert(chroma(x, set.planes[0].half ? y >> 1 : y, 1) == 128);
+                            }
+                            if (!source && luma(x, y) > 40) ++halo;
+                        }
+                    }
+                    assert(halo > 0);
+                    for (u32 i = 0; i < sizeof expected; ++i) {
+                        u8 actual = *grkit_test_bytes(GRKIT_TEST_PLANES + i);
+                        if (reused) assert(expected[i] == actual);
+                        else expected[i] = actual;
+                    }
+                }
+            }
+        }
+    }
     grkit_test_white[0] = grkit_test_white[1] = grkit_test_white[2] = 255;
 }
 
@@ -889,16 +958,49 @@ static void assert_setting_default(const char *key, u32 values, u32 initial)
     assert(!"missing setting");
 }
 
+/* Exercise the generated registrations, as the core does after loading saved
+   settings. No viewfinder or setting-change event is needed for this gate. */
+static void test_filter_gate(PictureSet *set)
+{
+    static u8 expected[W * H * 2];
+    for (u32 i = 0; i < grkit_module.setting_count; ++i)
+        setting_set(GRKIT_SETTING(i), grkit_module.settings[i].default_value);
+    for (u32 b = 0; b <= 3; ++b)
+        for (u32 h = 0; h <= 3; ++h) {
+            set_pair(b, h);
+            fill(40, 128, 128); square();
+            glow_apply(set, 1);
+            memcpy(expected, (const void *)grkit_test_bytes(GRKIT_TEST_PLANES), sizeof(expected));
+            fill(40, 128, 128); square();
+            u32 active = 0, filters = 0;
+            for (u32 i = 0; i < grkit_module.registration_count; ++i) {
+                const GrkitRegistration *r = &grkit_module.registrations[i];
+                if (r->point != GRKIT_POINT_PICTURE_PLANE) continue;
+                const GrkitPlaneFilter *f = r->impl;
+                ++filters;
+                u32 value = setting_get(GRKIT_SETTING(f->setting));
+                if (value) {
+                    ++active;
+                    f->apply(set, value);
+                }
+            }
+            /* The core skips plane access and cache cleaning without an
+               active filter. Both enabled must still apply the look once. */
+            assert(active == (u32)(b != 0) + (u32)(h != 0));
+            assert(filters == 2);
+            assert(!memcmp(expected, (const void *)grkit_test_bytes(GRKIT_TEST_PLANES), sizeof(expected)));
+        }
+}
+
 /* Enabling a stream uses its retained strength. Disabling it never resets
    that value, and the other stream's enable and strength stay independent. */
 static void test_enable_and_strength(PictureSet *set)
 {
-    assert(grkit_module.setting_count == 5);
+    assert(grkit_module.setting_count == 4);
     assert_setting_default("BLOOM_ENABLED", 2, 0);
     assert_setting_default("HAL_ENABLED", 2, 0);
     assert_setting_default("BLOOM_STRENGTH", 3, 1);
     assert_setting_default("HAL_STRENGTH", 3, 1);
-    assert_setting_default("ENABLED", 2, 1);
     set_pair(0, 0);
     fill(40, 128, 128); square();
     u32 off = plane_sum(&set->planes[0]);
@@ -934,6 +1036,7 @@ static void test_enable_and_strength(PictureSet *set)
 int main(void)
 {
     PictureSet set = {{plane()}, 1, 0, 0, grkit_test_scratch, 0};
+    test_filter_gate(&set);
     test_enable_and_strength(&set);
     set_strength(1);
 
@@ -958,6 +1061,7 @@ int main(void)
     test_combined_strengths(&set);
     test_combined_scratch();
     test_empty_halation();
+    test_sparse_glow_rows();
     set_strength(1);
 
     /* A dark picture has too little light: no change. */

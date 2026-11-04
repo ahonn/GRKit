@@ -14,12 +14,6 @@ tiles = [
     "tiles/6-halation-strong.png",
 ]
 
-# Keep the frame filter available when either effect is enabled.
-[[settings]]
-key = "ENABLED"
-values = 2
-default = 1
-
 [[settings]]
 key = "BLOOM_ENABLED"
 values = 2
@@ -74,5 +68,10 @@ icon = { setting = "HAL_STRENGTH", first_tile = 4 }
 
 [[filters]]
 apply = "glow_apply"
-setting = "ENABLED"
+setting = "BLOOM_ENABLED"
+stage = "frame"
+
+[[filters]]
+apply = "glow_apply_halation"
+setting = "HAL_ENABLED"
 stage = "frame"

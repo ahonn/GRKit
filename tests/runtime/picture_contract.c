@@ -78,6 +78,8 @@ static volatile uint32_t *mapped_settings(uint32_t address)
 /* The plane filter of Date Imprint (modules/date): the harness maps its
    apply address to the module function. */
 #define TEST_DATE_APPLY 0x5e000031U
+#define TEST_FRAME_APPLY 0x5e000035U
+static unsigned frame_calls[2];
 static void test_apply(uint32_t address, void *set, uint32_t value);
 #define MODULE_APPLY(address,set,value) test_apply(address,set,value)
 /* The GR III noise fill: the native fill writes 0x77, the allocator hands out
@@ -114,6 +116,11 @@ u32 divide(u32 n, u32 d) { return core_divide(n, d); }
 static uint32_t applied_turns = 0xffffffffU;
 static void test_apply(uint32_t address, void *set, uint32_t value)
 {
+    if (address == TEST_FRAME_APPLY || address == TEST_FRAME_APPLY + 4) {
+        assert(value == 1);
+        ++frame_calls[(address - TEST_FRAME_APPLY) / 4];
+        return;
+    }
     assert(address == TEST_DATE_APPLY);
     applied_turns = ((PictureSet *)set)->turns;
     date_apply(set, value);
@@ -275,6 +282,25 @@ static void encode_setup(void)
     /* Descriptor 3 is the second full-size encode of the main planes. */
     WORD(CONFIG, 0x48) = WORD(CONFIG, 0x3c); WORD(CONFIG, 0x58) = WORD(CONFIG, 0x4c);
     flushes = 0; native_aspect = 0;
+}
+/* Independent frame filters read their current settings on every encode. */
+static void frame_filter_switches(void)
+{
+    static const unsigned states[] = {0, 1, 3, 2, 0};
+    encode_setup();
+    header[GRKIT_HOST_MODULE_FILTER_COUNT / 4] = 2;
+    for (u32 i = 0; i < 2; ++i) {
+        header[GRKIT_HOST_MODULE_FILTERS / 4 + i * 2] = TEST_FRAME_APPLY + i * 4;
+        header[GRKIT_HOST_MODULE_FILTERS / 4 + i * 2 + 1] = GRKIT_STAGE_FRAME << 16 | i;
+    }
+    for (u32 i = 0; i < sizeof(states) / sizeof(*states); ++i) {
+        STAMP_STYLE = states[i] & 1;
+        STAMP_LOOK = (states[i] >> 1) & 1;
+        flushes = frame_calls[0] = frame_calls[1] = 0;
+        picture_encode(0, MESSAGE);
+        assert(frame_calls[0] == STAMP_STYLE && frame_calls[1] == STAMP_LOOK);
+        assert(flushes == (states[i] ? 12 : 0));
+    }
 }
 static void fill_planes(uint8_t luma, uint8_t cb, uint8_t cr)
 {
@@ -682,6 +708,7 @@ int main(void)
     grain_contract();
 #endif
     static const short identity[9] = {8192, 0, 0, 0, 8192, 0, 0, 0, 8192};
+    frame_filter_switches();
     shot_contract();
     composition_frames_keep_the_native_photo_area();
     dng_defaults_follow_the_shot_without_changing_jpeg_geometry();

@@ -7,16 +7,16 @@
 #define BYTE(p,o) (GRKIT_BYTES((p)+(o))[0])
 
 /* Longest blurred line of a date stamp mask, and the largest blur radius
-   (look_halo). The line copy lives on the stack, because the code region is
-   read-only. */
+   (look_halo). The line copy shares picture scratch with the later row blends. */
 #define BLUR_WIDTH 640U
 #define BLUR_RADIUS 32U
+#define BLUR_BYTES (BLUR_WIDTH+2*BLUR_RADIUS+2)
 
 /* Spread a mask line in place: three box passes, radius r. A line of zeros
    stays zero. The copy repeats the end values for r + 1 places on each side,
    so the window needs no test at the ends. */
-static void blur_line(u8 *line,u32 step,u32 n,u32 r) {
-    u16 copy[BLUR_WIDTH+2*BLUR_RADIUS+2], *at=copy+BLUR_RADIUS+1;
+static void blur_line(u8 *line,u32 step,u32 n,u32 r,u8 *copy) {
+    u8 *at=copy+BLUR_RADIUS+1;
     u32 i,pass,sum,window=2*r+1,reciprocal;
     for(i=0;i<n && !line[i*step];++i) {}
     if(i==n || r>BLUR_RADIUS) return;
@@ -296,9 +296,12 @@ static void blend_row(u8 *out,const u8 *core,const u8 *halo,u32 mw,u32 f,u32 ste
         if(++fx==f) { fx=0; ++cx; }
     }
 }
-/* The scratch bytes of a stamp: the core and halo masks, then for a mask
-   that scales up (ss 1), the blends of two rows of each (blend_row). */
-static u32 stamp_bytes(u32 mw,u32 mh,u32 f,u32 ss) { return mw*mh*2+(ss==1 ? 4*mw*f : 0); }
+/* Core and halo masks, followed by workspace reused first for blur, then
+   for the blends of two rows of each mask when scaling up (ss 1). */
+static u32 stamp_bytes(u32 mw,u32 mh,u32 f,u32 ss) {
+    u32 rows=ss==1 ? 4*mw*f : 0;
+    return mw*mh*2+(rows>BLUR_BYTES ? rows : BLUR_BYTES);
+}
 /* A rendered stamp mask and where it lies on its picture: one cell spans
    f / ss pixels, and cell (0,0) is at (ox, oy) of the visible area turned
    upright (upright), whose top left is (0, 0). */
@@ -313,7 +316,7 @@ static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u3
     u32 size, f, ss=1, m, pad, cw, mw, mh, margin, rise;
     u32 i, x, y, total;
     int caret;
-    u8 *core=scratch, *halo;
+    u8 *core=scratch, *halo, *copy;
     size=((width<height ? width : height)*look_size(look))>>16;
     if(size<look_least(look)) size=look_least(look);
     for(i=0;i<2;++i) {
@@ -331,17 +334,18 @@ static u32 stamp_mask(u8 *scratch,u32 width,u32 height,const char *text,u32 n,u3
     look_margins(look,width<height ? width : height,size,&margin,&rise);
     if((((mw-pad)*f)>>(ss-1))+margin>width || (((mh-pad)*f)>>(ss-1))+rise>height) return 0;
     halo=core+mw*mh;
+    copy=halo+mw*mh;
     for(i=0;i<mw*mh;++i) core[i]=0;
     for(i=0,caret=(int)pad<<8;i<n;++i) { glyph(core,mw,mh,text[i],caret,pad,m,look); caret+=advance(text[i],m,look); }
     for(i=0;i<mw*mh;++i) halo[i]=core[i];
     /* Classic strokes soften with a core blur. The dots are anti-aliased. */
     for(y=0;y<mh;++y) {
-        if(look!=LOOK_DOTS) blur_line(core+y*mw,1,mw,1);
-        blur_line(halo+y*mw,1,mw,look_halo(m,look));
+        if(look!=LOOK_DOTS) blur_line(core+y*mw,1,mw,1,copy);
+        blur_line(halo+y*mw,1,mw,look_halo(m,look),copy);
     }
     for(x=0;x<mw;++x) {
-        if(look!=LOOK_DOTS) blur_line(core+x,mw,mh,1);
-        blur_line(halo+x,mw,mh,look_halo(m,look));
+        if(look!=LOOK_DOTS) blur_line(core+x,mw,mh,1,copy);
+        blur_line(halo+x,mw,mh,look_halo(m,look),copy);
     }
     *out=(Stamp){core,halo,mw,mh,f,ss,(int)width-(int)margin-(int)(((mw-pad)*f)>>(ss-1)),
                  (int)height-(int)rise-(int)(((mh-pad)*f)>>(ss-1)),look};

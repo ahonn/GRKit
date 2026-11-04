@@ -1210,6 +1210,16 @@ static u32 glow_row(Fine *f, Fine *other, u32 t, GlowRow *out)
 {
     u32 first = light_row(f, t), second = other ? light_row(other, t) : 0;
     u32 x, k, any = 0;
+    if (!(first | second)) {
+        /* A neighboring row can still glow, so interpolation needs zero
+           values and protection even when this reused buffer was not empty. */
+        for (x = 0; x < f->w; ++x) {
+            for (k = 0; k < 3; ++k) out->v[k][x] = 0;
+            out->protect[x] = 0;
+        }
+        out->zero = 1;
+        return 0;
+    }
     for (x = 0; x < f->w; ++x) {
         u32 energy = 0, extra = 0;
         for (k = 0; k < 3; ++k) {
@@ -1812,5 +1822,17 @@ void glow_apply(PictureSet *set, u32 value)
     if (!used) return;
     at += used;
     if (other && !stream_cells(other, set, at, (u32)(end - at))) return;
+    /* Daylight can remove Halation completely. Keep the shared maps and
+       skip only streams whose three linear-light weights are all zero. */
+    if (other && !(other->part[0] | other->part[1] | other->part[2])) other = 0;
+    if (!other && !(f->part[0] | f->part[1] | f->part[2])) return;
     composite(set, f, other, rw);
+}
+
+/* Each enable setting gates a core filter, so both Off skips cache cleaning.
+   Bloom's callback handles both streams together. The Halation callback only
+   handles Halation alone, preserving the combined look and shared scratch. */
+void glow_apply_halation(PictureSet *set, u32 value)
+{
+    if (setting_get(SETTING_BLOOM_ENABLED) != 1) glow_apply(set, value);
 }

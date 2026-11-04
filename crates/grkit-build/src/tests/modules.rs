@@ -172,6 +172,63 @@ fn synthetic_module_folders_build() -> Result<()> {
     Ok(())
 }
 
+/// Date blur runs beneath the firmware JPEG encoder. Its line workspace must
+/// stay in picture scratch, rather than consume that task's remaining stack.
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
+fn date_blur_stays_within_stack_budget() -> Result<()> {
+    let tools = tools()?;
+    let directory = tempfile::tempdir()?;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let folder = root.join("modules/date");
+    fs::write(
+        directory.path().join("grkit_module.h"),
+        module::generate(&folder)?.2,
+    )?;
+    let object = directory.path().join("stamp.o");
+    let output = std::process::Command::new(&tools.clang)
+        .args(crate::toolchain::CAMERA_TARGET)
+        .args([
+            "-mthumb",
+            "-Os",
+            "-ffreestanding",
+            "-fno-builtin",
+            "-fno-common",
+            "-fno-stack-protector",
+            "-fno-unwind-tables",
+            "-fno-asynchronous-unwind-tables",
+            "-mlong-calls",
+            "-mno-movt",
+            "-fstack-usage",
+        ])
+        .arg("-I")
+        .arg(root.join("runtime/sdk"))
+        .arg("-I")
+        .arg(directory.path())
+        .arg("-c")
+        .arg(folder.join("stamp.c"))
+        .arg("-o")
+        .arg(&object)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let usage = fs::read_to_string(object.with_extension("su"))?;
+    assert!(!usage.trim().is_empty(), "Missing Date stack measurements");
+    for line in usage.lines() {
+        let fields: Vec<_> = line.split('\t').collect();
+        let bytes: usize = fields[1].parse()?;
+        // Also catch a large workspace if the compiler inlines the blur.
+        assert!(bytes <= 1024, "Date stack frame exceeds budget: {line}");
+        if fields[0].ends_with(":blur_line") {
+            assert!(bytes <= 128, "Date blur stack frame exceeds budget: {line}");
+        }
+    }
+    Ok(())
+}
+
 /// A module that needs a compiler helper does not build, because the core does
 /// not export it.
 #[test]

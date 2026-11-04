@@ -39,8 +39,26 @@ static u32 changed(const Plane *p, u32 *left, u32 *top)
     return bounds(p, left, top, &right, &bottom);
 }
 
+static u32 pixels_hash(const Plane *p)
+{
+    u32 hash = 2166136261U;
+    for (u32 i = 0; i < WIDTH * HEIGHT; ++i) {
+        hash = (hash ^ GRKIT_BYTES(p->y + i)[0]) * 16777619U;
+        hash = (hash ^ GRKIT_BYTES(p->c + i)[0]) * 16777619U;
+    }
+    return hash;
+}
+
 int main(void)
 {
+    /* Baseline pixels at the harness clock (2026-10-25 09:05), before the
+       blur workspace moved from the task stack to picture scratch. */
+    static const u32 expected[3][5] = {
+        {1184513837U,809389240U,2473835757U,755202461U,321906744U},
+        {1950141043U,2516237631U,3262944462U,4264252730U,2226400522U},
+        {666516357U,2337147665U,679377069U,3903426885U,2609955457U}
+    };
+    static u8 guarded[GRKIT_PLANE_SCRATCH + 2];
     u32 left, top;
     /* The descriptor: STYLE (6 values), LOOK (3), and POSITION (2), a page
        with its native settings rows, one filter, and one status indicator. */
@@ -53,11 +71,15 @@ int main(void)
        and nothing else. */
     for (u32 look = 0; look < 3; ++look)
         for (u32 style = 1; style < 6; ++style) {
-            PictureSet set = {{gray_plane(GRKIT_TEST_PLANES)}, 1, 0, 0, grkit_test_scratch};
+            PictureSet set = {{gray_plane(GRKIT_TEST_PLANES)}, 1, 0, 0, guarded + 1};
+            for (u32 i = 0; i < sizeof guarded; ++i) guarded[i] = 0xa5;
             grkit_test_settings[SETTING_LOOK] = look;
             date_apply(&set, style);
             assert(changed(&set.planes[0], &left, &top) > 100);
             assert(left > WIDTH / 2 && top > HEIGHT / 2);
+            /* Preserve every luma/chroma byte while reusing dirty scratch. */
+            assert(pixels_hash(&set.planes[0]) == expected[look][style - 1]);
+            assert(guarded[0] == 0xa5 && guarded[sizeof guarded - 1] == 0xa5);
         }
     /* Film: the stamp stays at the bottom right of the sensor frame in each
        posture. Upright: it goes to the bottom right of the picture turned
