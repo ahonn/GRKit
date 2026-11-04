@@ -7,7 +7,7 @@ const imported: ImportedEffect<NativeImport> = {
   id: 'gr4-cinema-yellow',
   name: 'Cinema Yellow',
   icon: '',
-  cover: { template: 'cine', brand: 'GR IV', name: 'CINEMA', number: 'YELLOW' },
+  cover: { template: 'cine', brand: 'RICOH', name: 'CINEMA', number: 'YELLOW' },
   monochrome: false,
   preview: 'native/gr4-cinema-yellow/1',
   imported: {

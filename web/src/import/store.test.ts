@@ -26,7 +26,7 @@ const native = () => ({
   id: 'gr4-cinema-yellow',
   name: 'Cinema Yellow',
   icon: '',
-  cover: { template: 'cine', brand: 'GR IV', name: 'CINEMA', number: 'YELLOW' },
+  cover: { template: 'cine', brand: 'RICOH', name: 'CINEMA', number: 'YELLOW' },
   monochrome: false,
   preview: 'native/gr4-cinema-yellow/1',
   imported: { kind: 'native', blob: blob(), table: new Uint8Array(3), version: '1.20', source: 'gr4_v120.zip' },

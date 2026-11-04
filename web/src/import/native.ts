@@ -14,7 +14,7 @@ let tableCount = 0;
 export const FIRMWARE_PAGE = 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html';
 
 /** A cover of a native look. The icon that grkit-wasm draws has the same fields. */
-const cinema = (number: string): Cover => ({ template: 'cine', brand: 'GR IV', name: 'CINEMA', number });
+const cinema = (number: string): Cover => ({ template: 'cine', brand: 'RICOH', name: 'CINEMA', number });
 
 /**
  * The native looks that `nativeLooks` reads (the offered looks of grkit-core

@@ -532,7 +532,7 @@ impl Image {
                 if let Some(object) = value.as_object_mut() {
                     object.insert("schema".to_owned(), json!("grkit-effect-v1"));
                     let (template, name, number) = look.cover;
-                    let mut icon = json!({"template": template, "brand": "GR IV", "name": name, "number": number});
+                    let mut icon = json!({"template": template, "brand": "RICOH", "name": name, "number": number});
                     if template == "box" {
                         icon["band"] = json!(false);
                     }
