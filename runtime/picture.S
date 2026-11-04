@@ -328,6 +328,31 @@ picture_capture_tone:
     ldrh r2, [r12, #(GRKIT_RECORD_CODE & 0xff)]
     ldr pc, =FW_IFD_SET_SHORT
 
+/* JPEG header setup of a write and of an in-camera rewrite: the BL to the
+   APP1 Exif setup, r0 = writer, r1 = image information. After a successful
+   setup, picture_jpeg_xmp (picture.c) adds the XMP segment of the look before
+   APP7. The setup result returns. */
+.macro JPEG_HEADER_STUB name, target
+.global \name
+\name:
+    push {r0, r1, r4, lr}
+    ldr r12, =\target
+    blx r12
+    movs r4, r0
+    beq 1f
+    ldr r0, [sp]
+    bl picture_jpeg_xmp
+1:  mov r0, r4
+    add sp, sp, #8
+    pop {r4, pc}
+.endm
+#ifdef HOOK_PICTURE_JPEG_HEADER_TARGET
+JPEG_HEADER_STUB picture_jpeg_header, HOOK_PICTURE_JPEG_HEADER_TARGET
+#endif
+#ifdef HOOK_PICTURE_JPEG_REWRITE_TARGET
+JPEG_HEADER_STUB picture_jpeg_rewrite, HOOK_PICTURE_JPEG_REWRITE_TARGET
+#endif
+
 /* Capture: the maker-note adjustments (tag 0x247) of a GRKit shot. Replaces
    the BL to the native fill: r0 = the setter + 8, r1 is the IFD entry, and r2
    the shot settings. The native fill runs first, and its result returns. */

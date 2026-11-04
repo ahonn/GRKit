@@ -19,6 +19,10 @@
    native Image Control type at +0x79c. Standard is type 11. The shot settings
    hold the type at the same offset as the settings payload. */
 #define SETTINGS_IC_TYPE 0x79c
+/* The ImageTone code of the first look of GR IV Monochrome. Its looks record
+   0x8100 and up, in the order Standard, Solid, Soft, Hi-Contrast, Grainy,
+   HDR Tone, and Solarized Effect (types 25, 29, 26, 27, 28, 30, and 32). */
+#define NATIVE_TONE_MONOCHROME 0x8100U
 /* Framing: the rows of every family (runtime/firmware.h). GR IV has the
    native aspects 3:2, 4:3, 16:9, and 1:1, but Framing crops each ratio from
    native 3:2, as on GR III, so each ratio has the same live view. 16:9,

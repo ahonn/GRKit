@@ -198,6 +198,11 @@ const SITES: &[Site] = &[
     // the BL to the adjustments fill of tag 0x247 (handler 0x536078e8).
     ("picture_capture_tone", 0x53608080, "e1fdfeeb"),
     ("picture_capture_parameters", 0x536078f4, "3302ffeb"),
+    // The JPEG header setup (0x53603844 for a write, 0x53603aa4 for a rewrite):
+    // the BL to the APP1 Exif setup (0x536036a8), which sets the APP7 offset
+    // at writer +0x48.
+    ("picture_jpeg_header", 0x53603898, "82ffffeb"),
+    ("picture_jpeg_rewrite", 0x53603af0, "ecfeffeb"),
     // RawDevelopmentModel: the BL to the Image Control conversion of the start.
     ("picture_develop_tone", 0x53289bc8, "63fcffeb"),
     ("framing_level_threshold", 0x536ce194, "fe5ca0e3"),

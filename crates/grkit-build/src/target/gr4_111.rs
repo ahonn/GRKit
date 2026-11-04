@@ -206,6 +206,11 @@ const SITES: &[Site] = &[
     // of tag 0x247 (handler 0x53810074).
     ("picture_capture_tone", 0x53810804, "1a37ffeb"),
     ("picture_capture_parameters", 0x53810080, "6a3bffeb"),
+    // The JPEG header setup (0x5380bf9c for a write, 0x5380c1fc for a rewrite):
+    // the BL to the APP1 Exif setup (0x5380be00), which sets the APP7 offset
+    // at writer +0x48.
+    ("picture_jpeg_header", 0x5380bff0, "82ffffeb"),
+    ("picture_jpeg_rewrite", 0x5380c248, "ecfeffeb"),
     ("picture_develop_tone", 0x5337506c, "d3faffeb"),
     ("framing_level_threshold", 0x539033f8, "fe5ca0e3"),
     ("framing_level_mode", 0x539032e4, "0610a0e1"),

@@ -205,6 +205,11 @@ pub const PICTURE: &[HookSpec] = &[
     b("picture_encode_entry", Framing, PictureEncode),
     bl("picture_capture_tone", Framing, Tuning),
     bl("picture_capture_parameters", Framing, Tuning),
+    // The JPEG header setup of a write and of an in-camera rewrite: the BL to
+    // the APP1 Exif setup, after which the XMP segment with the name of the
+    // look goes before APP7.
+    bl("picture_jpeg_header", Framing, Tuning),
+    bl("picture_jpeg_rewrite", Framing, Tuning),
     // RawDevelopmentModel: the BL that gives the initial Image Control of a
     // development, where the development takes the effect of its DNG.
     bl("picture_develop_tone", Framing, Tuning),

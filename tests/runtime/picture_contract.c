@@ -97,6 +97,8 @@ static uint32_t grain_counter_value, grain_counter_step;
 #define GRAIN_COUNTER_MHZ 24U
 #define TEST_PROFILE (ARENA + 0x4f0000)
 #define PROFILE_MAP(address) ((volatile u32 *)region((address), 4))
+/* The JPEG header buffer of the XMP segment (runtime/xmp.h). */
+#define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)region((address), (size)))
 #include "picture.c"
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
@@ -702,8 +704,146 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     assert(ifd_writes == writes);
 }
 
+/* The XMP segment of a JPEG header (runtime/xmp.h, picture_jpeg_xmp). The
+   header buffer holds a TIFF block whose Ricoh maker note gives ImageTone. */
+#define JPEG_WRITER (ARENA + 0x30000)
+#define JPEG_BUFFER (ARENA + 0x40000)
+#define JPEG_APP7 0x100U
+static void put16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
+static void put32(uint8_t *p, uint32_t v) { put16(p, v); put16(p + 2, v >> 16); }
+static void jpeg_header(uint32_t code, uint32_t size)
+{
+    uint8_t *t = (uint8_t *)region(JPEG_BUFFER, size);
+    memset(t, 0xff, size);
+    t += JPEG_TIFF;
+    memcpy(t, "II*\0", 4); put32(t + 4, 8);
+    put16(t + 8, 1); put16(t + 10, XMP_EXIF_IFD_TAG); put16(t + 12, 4); put32(t + 14, 1); put32(t + 18, 26); put32(t + 22, 0);
+    put16(t + 26, 1); put16(t + 28, XMP_MAKERNOTE_TAG); put16(t + 30, 7); put32(t + 32, 30); put32(t + 36, 44); put32(t + 40, 0);
+    memcpy(t + 44, "RICOH\0II", 8);
+    put16(t + 52, 2); put16(t + 54, 0x0001); put16(t + 56, 3); put32(t + 58, 1); put32(t + 62, 0x1234);
+    put16(t + 66, XMP_TONE_TAG); put16(t + 68, 3); put32(t + 70, 1); put32(t + 74, code); put32(t + 78, 0);
+    WORD(JPEG_WRITER, JPEG_WRITER_BUFFER) = JPEG_BUFFER;
+    WORD(JPEG_WRITER, JPEG_WRITER_SIZE) = size;
+    WORD(JPEG_WRITER, JPEG_WRITER_APP7) = JPEG_APP7;
+}
+static void effect_name(uint32_t r, const uint16_t *name, uint32_t units)
+{
+    for (uint32_t i = 0; i < XMP_NAME_UNITS; ++i) HALF(r, GRKIT_RECORD_NAME + i * 2) = i < units ? name[i] : 0;
+}
+/* The packet text of the segment at the APP7 offset, NUL-terminated, or 0
+   without a segment. */
+static const char *jpeg_packet(uint32_t *segment)
+{
+    static char text[0x1000];
+    const uint8_t *p;
+    *segment = WORD(JPEG_WRITER, JPEG_WRITER_APP7) - JPEG_APP7;
+    if (!*segment) return 0;
+    p = (const uint8_t *)region(JPEG_BUFFER + JPEG_APP7, *segment);
+    assert(p[0] == 0xff && p[1] == 0xe1 && (uint32_t)(p[2] << 8 | p[3]) == *segment - 2);
+    assert(!memcmp(p + 4, "http://ns.adobe.com/xap/1.0/", 29));
+    assert(*segment - 33 < sizeof(text));
+    memcpy(text, p + 33, *segment - 33);
+    text[*segment - 33] = 0;
+    assert(strstr(text, "<?xpacket end=\"w\"?>") == text + *segment - 33 - 19);
+    return text;
+}
+/* The keyword of the segment that picture_jpeg_xmp writes for `code`, or 0. */
+static const char *jpeg_keyword(uint32_t code)
+{
+    static char keyword[256];
+    uint32_t segment;
+    const char *text, *start, *end;
+    jpeg_header(code, 0x20000);
+    picture_jpeg_xmp(JPEG_WRITER);
+    if (!(text = jpeg_packet(&segment))) return 0;
+    assert(!(segment % XMP_ALIGN) && segment < 0x300);
+    assert(!strstr(text, "dc:description"));
+    start = strstr(text, "<dc:subject><rdf:Bag><rdf:li>");
+    end = strstr(text, "</rdf:li></rdf:Bag></dc:subject>");
+    assert(start && end && end > start && (size_t)(end - start) < sizeof(keyword) + 29);
+    start += 29;
+    memcpy(keyword, start, (size_t)(end - start));
+    keyword[end - start] = 0;
+    return keyword;
+}
+static void jpeg_xmp_contract(void)
+{
+    static const uint16_t trix[] = {'T', 'r', 'i', '-', 'X', ' ', '<', '4', '0', '0', '>', ' ', '&', ' ', '"', 0xdc, '"', 0};
+    static const uint16_t portra[] = {'P', 'o', 'r', 't', 'r', 'a', ' ', '4', '0', '0', 0};
+    uint32_t segment;
+    reset();
+    HALF(record(1), GRKIT_RECORD_CODE) = 0x9234;
+    HALF(record(2), GRKIT_RECORD_CODE) = 0x9235;
+    effect_name(record(1), trix, 18);
+    effect_name(record(2), portra, 11);
+    /* The name of the effect with the code, as escaped UTF-8. */
+    assert(!strcmp(jpeg_keyword(0x9234), "Tri-X &lt;400&gt; &amp; &quot;\xc3\x9c&quot;"));
+    assert(!strcmp(jpeg_keyword(0x9235), "Portra 400"));
+    /* A native look gets its menu name; a code without a name gets no segment. */
+    assert(!strcmp(jpeg_keyword(0x100), "Standard"));
+    assert(!strcmp(jpeg_keyword(0x105), "Hi-Contrast B&amp;W"));
+    assert(!strcmp(jpeg_keyword(0x10b), "Negative Film"));
+    assert(!strcmp(jpeg_keyword(0x10c), "Cinema Yellow"));
+    assert(!strcmp(jpeg_keyword(0x10d), "Cinema Green"));
+    assert(!jpeg_keyword(0x10e) && !jpeg_keyword(0xff) && !jpeg_keyword(0x9236));
+#ifdef NATIVE_TONE_MONOCHROME
+    /* GR IV: the looks of GR IV Monochrome. */
+    assert(!strcmp(jpeg_keyword(0x8100), "Monochrome Standard"));
+    assert(!strcmp(jpeg_keyword(0x8101), "Monochrome Solid"));
+    assert(!strcmp(jpeg_keyword(0x8105), "Monochrome HDR Tone"));
+    assert(!strcmp(jpeg_keyword(0x8106), "Monochrome Solarized Effect"));
+    assert(!jpeg_keyword(0x8107));
+#else
+    /* GR III records no native code with bit 15: a code without a record has no name. */
+    assert(!jpeg_keyword(0x8100));
+#endif
+    /* No module runs (the GRKit switch is Off): no segment. */
+    header[GRKIT_HOST_CAPABILITIES / 4] = 0;
+    assert(!jpeg_keyword(0x9235) && !jpeg_keyword(0x100));
+    reset();
+    HALF(record(2), GRKIT_RECORD_CODE) = 0x9235;
+    effect_name(record(2), portra, 11);
+    /* The segment leaves room for the largest APP7. */
+    jpeg_header(0x9235, 0x20000);
+    picture_jpeg_xmp(JPEG_WRITER);
+    segment = WORD(JPEG_WRITER, JPEG_WRITER_APP7) - JPEG_APP7;
+    jpeg_header(0x9235, JPEG_APP7 + segment + XMP_APP7_RESERVE - 1);
+    picture_jpeg_xmp(JPEG_WRITER);
+    assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7);
+    jpeg_header(0x9235, JPEG_APP7 + segment + XMP_APP7_RESERVE);
+    picture_jpeg_xmp(JPEG_WRITER);
+    assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7 + segment);
+    /* An APP7 offset off 32 bytes is not a firmware header: no segment. */
+    jpeg_header(0x9235, 0x20000);
+    WORD(JPEG_WRITER, JPEG_WRITER_APP7) = JPEG_APP7 + 4;
+    picture_jpeg_xmp(JPEG_WRITER);
+    assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7 + 4);
+    /* A header without a Ricoh maker note: no segment. */
+    jpeg_header(0x9235, 0x20000);
+    memcpy(region(JPEG_BUFFER + JPEG_TIFF + 44, 8), "PENTAX\0\0", 8);
+    picture_jpeg_xmp(JPEG_WRITER);
+    assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7);
+    /* UTF-16 to UTF-8: a pair, a lone surrogate, a control, and a name without NUL. */
+    static const uint16_t pair[] = {0xd83c, 0xdf9e, 0xd800, 'A', 0x0a, 0};
+    static const uint16_t full[XMP_NAME_UNITS] = {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
+                                                  'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A'};
+    uint8_t out[64];
+    assert(xmp_put_name(out, pair, 6) == 9 && !memcmp(out, "\xf0\x9f\x8e\x9e\xef\xbf\xbd" "A ", 9));
+    assert(xmp_put_name(0, full, XMP_NAME_UNITS) == XMP_NAME_UNITS);
+    assert(!xmp_segment_size(pair + 5, 1));
+    /* Each native name fits a record name. */
+    uint16_t name[XMP_NATIVE_UNITS];
+    for (uint32_t code = XMP_NATIVE_FIRST; code < XMP_NATIVE_FIRST + 14; ++code) assert(xmp_native_name(code, name, XMP_NATIVE_UNITS));
+    assert(!xmp_native_name(XMP_NATIVE_FIRST + 14, name, XMP_NATIVE_UNITS));
+#ifdef NATIVE_TONE_MONOCHROME
+    for (uint32_t code = NATIVE_TONE_MONOCHROME; code < NATIVE_TONE_MONOCHROME + 7; ++code)
+        assert(xmp_native_name(code, name, XMP_NATIVE_UNITS));
+#endif
+}
+
 int main(void)
 {
+    jpeg_xmp_contract();
 #ifdef GRAIN_FILL_PITCH
     grain_contract();
 #endif

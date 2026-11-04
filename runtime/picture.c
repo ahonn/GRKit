@@ -27,6 +27,17 @@ static u32 owned(volatile u32 *h,u32 record) { return record_index(h,record)<GRK
 static u32 record_features(volatile u32 *h,u32 record) {
     return owned(h,record) ? WORD(record,GRKIT_RECORD_FEATURES) : 0;
 }
+/* The record whose ImageTone code is `code`, or 0. The installer gives each
+   record a distinct code with bit 15 set. */
+static u32 record_of_code(volatile u32 *h,u32 code) {
+    u32 n=h[GRKIT_HOST_COUNT/4], i, record;
+    if(!(code&0x8000U) || n>GRKIT_TEXT_RECORDS) return 0;
+    for(i=0;i<n;++i) {
+        record=h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE;
+        if(HALF(record,GRKIT_RECORD_CODE)==code) return record;
+    }
+    return 0;
+}
 /* The tuning context byte of a build, from the Make's third argument (settings +
    0x120): 1 for ImageTuningLiveview, 0 for a still build. module_parameters reads
    the same byte at settings + 0x82ac. */
@@ -475,13 +486,9 @@ static u32 picture_turns(volatile u32 *h,u32 shot) {
    longer has. */
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
-    u32 value=PICTURE_PLAYBACK_TONE(), code=(value+0x100)&0xffffU, i, record;
+    u32 value=PICTURE_PLAYBACK_TONE(), record;
     h[GRKIT_HOST_DEVELOP/4]=1;
-    if(value>>16!=1 || !(code&0x8000U)) return;
-    for(i=0;i<h[GRKIT_HOST_COUNT/4];++i) {
-        record=h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE;
-        if(HALF(record,GRKIT_RECORD_CODE)==code) { h[GRKIT_HOST_DEVELOP/4]=record; return; }
-    }
+    if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }
 #endif
 /* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
@@ -852,3 +859,43 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
     if(table) profile_add(table,GRKIT_PROFILE_PICTURE_GRAIN,core_divide(GRAIN_COUNTER(&high)-low,GRAIN_COUNTER_MHZ));
 }
 #endif
+
+#include "xmp.h"
+/* The JPEG header writer of the firmware: +0x18 the header buffer, +0x1c its
+   size, and +0x48 the offset of the APP7 preview segment. The header starts
+   with SOI, the APP1 marker and length, and "Exif\0\0", so the TIFF block
+   starts at JPEG_TIFF. GR III and GR IV share the layout. */
+#define JPEG_WRITER_BUFFER 0x18
+#define JPEG_WRITER_SIZE 0x1c
+#define JPEG_WRITER_APP7 0x48
+#define JPEG_TIFF 12U
+#ifndef PICTURE_JPEG_MAP
+#define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)(address))
+#endif
+#define XMP_NAME_UNITS ((GRKIT_RECORD_MONOCHROME-GRKIT_RECORD_NAME)/2)
+/* For picture_jpeg_header and picture_jpeg_rewrite (runtime/picture.S),
+   after the firmware set up the APP1 Exif segment: an XMP segment with the
+   name of the look of the picture goes at +0x48, and +0x48 moves past it. The
+   APP7 setup, the maker-note offset of APP7, and the place of the main image
+   all follow +0x48. No segment is written while no module runs (the GRKit
+   switch is Off, or safe mode), for a code without a name, or into a buffer
+   without room for the largest APP7. */
+void picture_jpeg_xmp(u32 writer) {
+    volatile u32 *h=framing_header();
+    u32 buffer=WORD(writer,JPEG_WRITER_BUFFER), size=WORD(writer,JPEG_WRITER_SIZE), at=WORD(writer,JPEG_WRITER_APP7);
+    u32 code, record, segment, units=XMP_NAME_UNITS, i;
+    u16 name[XMP_NATIVE_UNITS>XMP_NAME_UNITS ? XMP_NATIVE_UNITS : XMP_NAME_UNITS];
+    if(!h || !h[GRKIT_HOST_CAPABILITIES/4] || !buffer || at<=JPEG_TIFF || at>size || (at&(XMP_ALIGN-1))) return;
+    if(!xmp_tone_code(PICTURE_JPEG_MAP(buffer+JPEG_TIFF,at-JPEG_TIFF),at-JPEG_TIFF,&code)) return;
+    if((record=record_of_code(h,code))) {
+        for(i=0;i<XMP_NAME_UNITS;++i) name[i]=HALF(record,GRKIT_RECORD_NAME+i*2);
+    } else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) {
+        units=XMP_NATIVE_UNITS;
+    } else {
+        return;
+    }
+    segment=xmp_segment_size(name,units);
+    if(!segment || segment>size-at || size-at-segment<XMP_APP7_RESERVE) return;
+    xmp_write_segment(PICTURE_JPEG_MAP(buffer+at,segment),segment,name,units);
+    WORD(writer,JPEG_WRITER_APP7)=at+segment;
+}
