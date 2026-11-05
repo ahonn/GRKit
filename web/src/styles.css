@@ -2239,3 +2239,17 @@ button.row-body {
   line-height: 1.7;
   color: var(--ink-2);
 }
+
+/* The page of an address without a file (404.html). It has the styles and no script. */
+.not-found {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 64px 24px;
+}
+
+.not-found h1 {
+  margin: 0 0 16px;
+  font-family: var(--display);
+  font-size: 48px;
+  font-weight: 700;
+}

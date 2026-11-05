@@ -105,13 +105,14 @@ function plausible(host: string | undefined): Plugin {
     name: 'grkit-plausible',
     apply: 'build',
     configResolved(config) {
-      outDir = resolve(config.root, config.build.outDir);
+      // The Node build of scripts/prerender.mjs writes no page and no `_headers`.
+      outDir = config.build.ssr ? '' : resolve(config.root, config.build.outDir);
     },
     transformIndexHtml(html) {
       return origin ? addPlausible(html, origin) : html;
     },
     closeBundle() {
-      if (!origin) return;
+      if (!origin || !outDir) return;
       const headers = resolve(outDir, '_headers');
       writeFileSync(headers, allowPlausible(readFileSync(headers, 'utf8'), origin));
     },

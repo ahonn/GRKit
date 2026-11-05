@@ -1,5 +1,6 @@
 import type { Grade } from './catalog';
 import type { NativeProblem } from './import/native';
+import { cookieValue, isLanguage, LANGUAGE_COOKIE, LANGUAGE_PATHS, pathLanguage } from './languagePage';
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -17,10 +18,10 @@ export type RichText = readonly string[];
 const en = {
   language: 'Language',
   /** The document title. */
-  title: 'GRKit: film looks and XPan for RICOH GR III, IIIx, and IV, no firmware flashing',
+  title: 'GRKit: film looks and XPan for RICOH GR III, IIIx, and IV',
   /** The search result and link preview text of the page. */
   description:
-    'Film looks, XPan and other crops, date stamps, glow, and grain for RICOH GR III, GR IIIx, and GR IV. Use film simulation recipes or import your own LUT. GRKit runs from the SD card, with no firmware flashing.',
+    'Film looks, XPan crops, date stamps, glow, and grain for RICOH GR III, IIIx, and IV. Use film simulation recipes or your own LUT. No firmware flashing.',
   /** The hero lines under the GRKit heading, one line each. */
   lead: ['Film looks and XPan for your RICOH GR.', 'No firmware flashing.'] as readonly string[],
   /** The landing page above the installer. */
@@ -1238,9 +1239,9 @@ const zhHant: Strings = {
 
 const ja: Strings = {
   language: '言語',
-  title: 'GRKit：RICOH GR III / IIIx / IV にフィルム風の色味と XPan を。ファームウェア書き換え不要',
+  title: 'GRKit：RICOH GR III / IIIx / IV にフィルム風の色味と XPan を',
   description:
-    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色味、XPan などのアスペクト比、日付写し込み、グロー、粒状感を追加します。フィルムシミュレーションのレシピも、自分の LUT も使えます。SD カードから読み込むので、ファームウェアの書き換えは不要です。',
+    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色味、XPan などのアスペクト比、日付写し込み、グロー、粒状感を追加します。フィルムシミュレーションのレシピも、自分の LUT も使えます。ファームウェアの書き換えは不要です。',
   lead: ['RICOH GR にフィルム風の色味と XPan を。', 'ファームウェアの書き換えは不要です。'],
   landing: {
     install: 'インストール',
@@ -1630,7 +1631,7 @@ const ko: Strings = {
   language: '언어',
   title: 'GRKit: RICOH GR III, IIIx, IV용 필름 룩과 XPan, 펌웨어 수정 없이',
   description:
-    'RICOH GR III, GR IIIx, GR IV에 필름 룩, XPan 등 여러 비율, 날짜 각인, 글로우, 입자감을 더합니다. 필름 레시피를 쓰거나 가지고 있는 LUT를 가져올 수 있습니다. GRKit은 SD 카드에서 실행되며 펌웨어를 수정하지 않습니다.',
+    'RICOH GR III, GR IIIx, GR IV에 필름 룩, XPan 등 여러 비율, 날짜 각인, 글로우, 입자감을 더합니다. 필름 레시피를 쓰거나 가지고 있는 LUT를 가져올 수 있습니다. 펌웨어는 수정하지 않습니다.',
   lead: ['RICOH GR에 필름 룩과 XPan을.', '펌웨어는 건드리지 않습니다.'],
   landing: {
     install: '설치하기',
@@ -2040,57 +2041,55 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
   ko,
 };
 
-const STORAGE_KEY = 'grkit.language';
+/** Where the page kept the chosen language before each language had its own page. */
+const LEGACY_STORAGE_KEY = 'grkit.language';
 
-function isLanguage(value: unknown): value is Language {
-  return LANGUAGES.some((language) => language.code === value);
+export { matchLanguage } from './languagePage';
+
+/** The language of this page, from its address. */
+export function pageLanguage(): Language {
+  return pathLanguage(location.pathname);
 }
 
-/** Maps browser language tags to a supported language. Traditional script wins for TW, HK, and MO. */
-export function matchLanguage(tags: readonly string[]): Language {
-  for (const tag of tags) {
-    const lower = tag.toLowerCase();
-    if (lower.startsWith('zh')) {
-      return /hant|-(tw|hk|mo)\b/.test(lower) ? 'zh-Hant' : 'zh-Hans';
-    }
-    if (lower === 'ja' || lower.startsWith('ja-')) {
-      return 'ja';
-    }
-    if (lower === 'ko' || lower.startsWith('ko-')) {
-      return 'ko';
-    }
-    if (lower.startsWith('en')) {
-      return 'en';
-    }
-  }
-  return 'en';
-}
-
-export function initialLanguage(): Language {
+/**
+ * The language that an earlier visit chose and kept in the browser storage. The cookie of the
+ * language pages replaces it, so this moves the choice to the cookie and gives it once.
+ */
+export function takeLegacyLanguage(): Language | null {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (isLanguage(saved)) {
-      return saved;
-    }
+    const saved = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (saved === null) return null;
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    if (!isLanguage(saved) || cookieValue(document.cookie, LANGUAGE_COOKIE) !== null) return null;
+    saveLanguage(saved);
+    return saved;
   } catch {
     // Storage can be unavailable, for example in a private window.
+    return null;
   }
-  return matchLanguage(navigator.languages ?? [navigator.language]);
 }
 
-/** Sets the language and the title of the document. */
+/** Keeps the chosen language for a year, so the root page sends the visitor to it. */
+function saveLanguage(language: Language): void {
+  const secure = location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${LANGUAGE_COOKIE}=${language}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+}
+
+/** Sets the language, the title, and the description of the document. */
 export function showLanguage(language: Language): void {
   document.documentElement.lang = language;
   document.title = STRINGS[language].title;
   document.querySelector('meta[name="description"]')?.setAttribute('content', STRINGS[language].description);
+  // The canonical address stays on grkit.app, also for a preview deployment of the site.
+  const canonical = document.querySelector('link[rel="canonical"]');
+  if (canonical) {
+    canonical.setAttribute('href', new URL(LANGUAGE_PATHS[language], canonical.getAttribute('href') ?? location.href).href);
+  }
 }
 
-/** Applies a language to the document and remembers it for the next visit. */
+/** Applies a language, moves to its page address, and remembers it for the next visit. */
 export function applyLanguage(language: Language): void {
+  history.replaceState(history.state, '', `${LANGUAGE_PATHS[language]}${location.search}${location.hash}`);
   showLanguage(language);
-  try {
-    localStorage.setItem(STORAGE_KEY, language);
-  } catch {
-    // The choice then lasts only for this page view.
-  }
+  saveLanguage(language);
 }

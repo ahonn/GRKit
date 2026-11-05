@@ -56,7 +56,7 @@ import { restoreImports } from './import/lut';
 import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
 import { isLutImportId } from './import/names';
 import { deleteImport, saveImport } from './import/store';
-import { applyLanguage, initialLanguage, LANGUAGES, sentences, STRINGS, type Language, type Strings } from './i18n';
+import { applyLanguage, LANGUAGES, sentences, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 import {
   buildCardFiles,
@@ -94,9 +94,12 @@ type Build =
 const megabytes = (bytes: number) => (bytes / 1_000_000).toFixed(1);
 
 export function App({
+  initialLanguage,
   initialImports = [],
   initialCard = null,
 }: {
+  /** The language of the page address. */
+  initialLanguage: Language;
   initialImports?: readonly ImportedEffect[];
   /** The card connected on an earlier visit, which a click reconnects. */
   initialCard?: CardDirectory | null;

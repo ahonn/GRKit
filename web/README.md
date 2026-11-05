@@ -1,14 +1,16 @@
 # GRKit site
 
-The site lets a user select a camera, the modules, and the effects, preview the effects, and download `GRKit.zip` or write it to an SD card. The browser builds the package with `grkit-wasm`. No server code runs.
+The site lets a user select a camera, the modules, and the effects, preview the effects, and download `GRKit.zip` or write it to an SD card. The browser builds the package with `grkit-wasm`. The only server code is the Cloudflare Pages worker of the root page, which sends a visitor to the page of their language.
 
 The site serves these files:
 
 | Path | Source |
 |---|---|
-| `index.html`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
+| `index.html`, `zh-hans/`, `zh-hant/`, `ja/`, `ko/`, `404.html`, `sitemap.xml`, `robots.txt`, `_worker.js`, `_routes.json`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
 | `runtime/<target>/` | `grkit site`, for each runtime build of `grkit release-plan` |
 | `effects/<target>/` | `grkit effects publish`, for each runtime build of `grkit release-plan` |
+
+Each language has its own page. `scripts/prerender.mjs` renders the first screen of each page into its HTML, with the canonical and hreflang links, so search engines read the text without the script. The worker (`src/edge.ts`) runs only for `/`. It sends the visitor to the language that they chose before, else to the browser language. The country of the IP address decides only when the browser sends no language.
 
 `THIRD_PARTY_LICENSES.txt` gives the licenses of the bundled JavaScript packages and fonts, and of the Rust crates in the WebAssembly module. `pnpm build` writes it with `scripts/third-party-licenses.mjs`. The script reads the JavaScript licenses from the Vite build and the crate licenses from `cargo metadata`, so Cargo must be on `PATH`.
 

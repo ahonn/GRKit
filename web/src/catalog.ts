@@ -154,7 +154,10 @@ export function readBaseGamma(value: unknown): Uint16Array | undefined {
 
 
 export function siteUrl(path: string): string {
-  return new URL(path, document.baseURI).href;
+  // Site files sit under the root, also for a language page such as /ja/. The build renders the
+  // page without a document and gives the root-relative address there.
+  const root = `${import.meta.env.BASE_URL}${path}`;
+  return typeof document === 'undefined' ? root : new URL(root, document.baseURI).href;
 }
 
 export function effectUrl(target: string, path: string): string {

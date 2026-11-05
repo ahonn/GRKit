@@ -1,3 +1,4 @@
+import { siteUrl } from './catalog';
 import type { Language } from './i18n';
 export { LANDING_LOOKS, LANDING_PHOTOS } from './landing-data';
 import menuEn from '../../resources/images/grkit-menu.jpg';
@@ -31,7 +32,7 @@ export type LandingGuide = (typeof LANDING_GUIDES)[number];
 
 /** The image of the landing page with the name `name` in public/landing/. */
 export function landingImage(name: string): string {
-  return new URL(`landing/${name}`, document.baseURI).href;
+  return siteUrl(`landing/${name}`);
 }
 
 /** The camera screens of the README in each language: the ADJ page and the MENU section. */

@@ -5,7 +5,8 @@ import { canWriteCards } from './card';
 import { loadLastCard } from './cardStore';
 import { loadImports } from './import/store';
 import { loadFonts } from './fonts';
-import { initialLanguage, showLanguage } from './i18n';
+import { pageLanguage, showLanguage, takeLegacyLanguage } from './i18n';
+import { LANGUAGE_PATHS } from './languagePage';
 // The site serves its fonts itself, so a page view sends no request to a font host.
 // loadFonts adds the Chinese, Japanese, or Korean fonts when a page in that language needs them.
 import '@fontsource/ibm-plex-sans/400.css';
@@ -17,7 +18,12 @@ import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import './styles.css';
 
-const language = initialLanguage();
+const language = pageLanguage();
+// A visitor who chose a language before each language had its own page goes to that page once.
+const legacy = takeLegacyLanguage();
+if (legacy !== null && legacy !== language && location.pathname === '/') {
+  location.replace(`${LANGUAGE_PATHS[legacy]}${location.search}${location.hash}`);
+}
 showLanguage(language);
 loadFonts(language);
 
@@ -31,8 +37,10 @@ const [imports, lastCard] = await Promise.all([
   canWriteCards() ? soon(loadLastCard(), null) : null,
 ]);
 
+// The build fills the root with the page of this language for search engines. The first render
+// replaces it.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App initialImports={imports} initialCard={lastCard} />
+    <App initialLanguage={language} initialImports={imports} initialCard={lastCard} />
   </StrictMode>,
 );
