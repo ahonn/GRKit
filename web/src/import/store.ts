@@ -1,6 +1,7 @@
 import type { ImportedEffect } from '../catalog';
 import { IMPORTS, run } from '../database';
 import { provideTable } from '../preview/render';
+import { isTone } from './names';
 
 // Keeps the effects that this page imported from LUTs and the native looks that it read from a
 // firmware file in the browser, so a later visit has them without a new import. Each call fails
@@ -17,7 +18,7 @@ interface Stored extends ImportedEffect {
 /**
  * A stored import that this version of the page can use, with the fields and a compiled effect,
  * or null. Pages before the native looks stored LUT imports without `kind`, so a record without
- * it is a LUT import.
+ * it is a LUT import. Older pages do not read a restored import, and leave it in the store.
  */
 export function storedImport(value: unknown): Stored | null {
   const item = value as Partial<Stored> | null;
@@ -27,7 +28,6 @@ export function storedImport(value: unknown): Stored | null {
     typeof item.name !== 'string' ||
     typeof item.icon !== 'string' ||
     typeof item.preview !== 'string' ||
-    !item.cover ||
     !imported ||
     !(imported.blob instanceof Uint8Array) ||
     !(imported.table instanceof Uint8Array) ||
@@ -36,8 +36,15 @@ export function storedImport(value: unknown): Stored | null {
     return null;
   }
   const kind = imported.kind ?? 'lut';
-  if (kind !== 'lut' && kind !== 'native') return null;
+  if (kind !== 'lut' && kind !== 'native' && kind !== 'restored') return null;
   if (kind === 'native' && typeof imported.version !== 'string') return null;
+  // A native look without valid tone curves stays, with no curves: it cannot go into a library.
+  if (kind === 'native' && imported.tone !== undefined && !isTone(imported.tone)) {
+    const { tone: _, ...rest } = imported;
+    return { ...item, imported: { ...rest, kind } } as Stored;
+  }
+  // A restored effect has the icon pixels of its file, and no cover fields.
+  if (kind === 'restored' ? typeof imported.source !== 'string' : !item.cover) return null;
   return { ...item, imported: { ...imported, kind } } as Stored;
 }
 

@@ -72,6 +72,10 @@ interface StartProps {
   onConnect: () => void;
   onReconnect: () => void;
   onDisconnect: () => void;
+  /** What the ZIP mode shows under the modes, such as the open of an earlier GRKit.zip. */
+  zip?: ReactNode;
+  /** The next step with a connected card: what a write would do. */
+  next?: ReactNode;
 }
 
 /**
@@ -93,6 +97,8 @@ export function StartSection({
   onConnect,
   onReconnect,
   onDisconnect,
+  zip,
+  next,
 }: StartProps) {
   const state = session?.state;
   return (
@@ -129,6 +135,8 @@ export function StartSection({
             </span>
           </label>
         </div>
+
+        {mode === 'zip' && zip}
 
         {mode === 'card' &&
           (!session || !state ? (
@@ -203,6 +211,7 @@ export function StartSection({
               {state.install === 'current' && !cardStarted(state) && !session.written && (
                 <p className="note">{t.cardDoneFirst}</p>
               )}
+              {next}
               {state.userModules.length > 0 && (
                 <p className="note">
                   {t.cardUserModules} {state.userModules.map((name) => name.replace(/\.GRM$/i, '')).join(t.listSeparator)}
@@ -231,6 +240,9 @@ interface ChangesProps {
   session: CardSession;
   changes: CardChanges;
   version: string;
+  /** The camera and its firmware that the write installs for, as the ZIP summary names them. */
+  camera: string;
+  firmware: string;
   /** The names of the modules of the package, in menu order. */
   modules: readonly string[];
   /** The number of effects of the package. */
@@ -282,6 +294,8 @@ export function CardChangesView({
   onApply,
   links,
   termsUrl,
+  camera,
+  firmware,
 }: ChangesProps) {
   const fresh = changes.grkit !== 'same';
   const any = hasChanges(changes);
@@ -291,6 +305,10 @@ export function CardChangesView({
   return (
     <div className="card-changes">
       <dl className="card-facts changes">
+        <dt>{t.camera}</dt>
+        <dd>{camera}</dd>
+        <dt>{t.firmware}</dt>
+        <dd>{firmware}</dd>
         <dt>{t.cardGrkit}</dt>
         <dd>
           {changes.grkit === 'install'
@@ -362,6 +380,7 @@ export function CardChangesView({
                   ? t.cardApplyUpdate
                   : t.cardApply}
             </button>
+            <p className="note">{t.cardSafe}</p>
             <TermsNote text={t.termsNote} href={termsUrl} />
             <Status task={task} message={message} strings={t} />
           </div>

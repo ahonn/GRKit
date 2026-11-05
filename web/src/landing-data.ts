@@ -41,10 +41,4 @@ export const LANDING_PHOTOS = {
     camera: 'RICOH GR III',
     source: 'https://commons.wikimedia.org/wiki/File:People_dining_outside,_Rue_des_Marronniers,_Lyon,_France_julesvernex2.jpg',
   },
-  light: {
-    author: 'Mikhail Matvienko',
-    license: 'CC BY-SA 2.0',
-    camera: 'RICOH GR IIIx',
-    source: 'https://commons.wikimedia.org/wiki/File:Playlist_%5E4_-_Flickr_-_Mikhail_Bearr.jpg',
-  },
 } as const;

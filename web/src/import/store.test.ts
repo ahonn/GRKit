@@ -46,6 +46,27 @@ describe('storedImport', () => {
     expect(item?.savedAt).toBe(2);
   });
 
+  it('keeps the tone curves of a native look, and drops curves of another size', () => {
+    const tone = new Uint16Array(512).fill(7);
+    const withTone = { ...native(), imported: { ...native().imported, tone } };
+    expect((storedImport(withTone)?.imported as { tone?: Uint16Array }).tone).toEqual(tone);
+    const bad = { ...native(), imported: { ...native().imported, tone: new Uint16Array(3) } };
+    const item = storedImport(bad);
+    expect(item?.imported).toMatchObject({ kind: 'native', version: '1.20' });
+    expect(item?.imported).not.toHaveProperty('tone');
+  });
+
+  it('keeps a restored import without cover fields, and drops other imports without them', () => {
+    const restored = {
+      ...legacy(),
+      cover: undefined,
+      imported: { kind: 'restored', blob: blob(), table: new Uint8Array(3), source: 'GRKit.zip' },
+    };
+    expect(storedImport(restored)?.imported).toMatchObject({ kind: 'restored', source: 'GRKit.zip' });
+    expect(storedImport({ ...legacy(), cover: undefined })).toBeNull();
+    expect(storedImport({ ...restored, imported: { ...restored.imported, source: 1 } })).toBeNull();
+  });
+
   it('drops a native look without a version, an unknown kind, and a blob that is not an effect', () => {
     const noVersion = native();
     delete (noVersion.imported as Partial<typeof noVersion.imported>).version;

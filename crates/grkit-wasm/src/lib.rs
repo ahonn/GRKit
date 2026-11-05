@@ -122,6 +122,9 @@ pub struct NativeEffect {
     pub blob: Vec<u8>,
     /// The RAW preview table with the look's default tone steps.
     pub preview: Vec<u8>,
+    /// The tone curves of the preview (`site::ToneCurves::to_values`), or none for a look
+    /// without default tone steps. `effect_preview` draws the preview again from them.
+    pub tone: Vec<u16>,
     /// The ADJ icon: 40 x 40 RGBA pixels.
     pub icon: Vec<u8>,
     pub monochrome: bool,
@@ -140,9 +143,11 @@ pub fn native_looks(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeEffect
         .map(|definition| {
             let blob = effects::compile_definition(&definition)?;
             let (effect, icon) = effects::decode(&blob)?;
+            let curves = site::native_tone_curves(&effect, &tables);
             Ok(NativeEffect {
                 version: image.source.version,
-                preview: site::native_preview_lut(&base_gamma, &effect, &tables)?,
+                preview: site::native_preview_lut(&base_gamma, &effect, curves.as_ref())?,
+                tone: curves.map(|curves| curves.to_values()).unwrap_or_default(),
                 monochrome: effect.monochrome(),
                 id: effect.id,
                 name: effect.name,
@@ -187,6 +192,8 @@ pub struct Builder {
     camera: &'static Camera,
     language: Language,
     guide: Option<Vec<u8>>,
+    /// The import library of the site (`grkit_core::imports`), which the camera does not read.
+    imports: Option<Vec<u8>>,
 }
 
 impl Builder {
@@ -200,6 +207,7 @@ impl Builder {
             camera: &camera::GR3,
             language: Language::English,
             guide: None,
+            imports: None,
         })
     }
 
@@ -280,6 +288,14 @@ impl Builder {
         self.guide = Some(pdf.to_vec());
     }
 
+    /// Sets the import library of the package (`grkit_core::imports`). The package keeps it for
+    /// another browser, and the camera does not read it.
+    pub fn set_imports(&mut self, library: &[u8]) -> Result<()> {
+        grkit_core::imports::decode(library)?;
+        self.imports = Some(library.to_vec());
+        Ok(())
+    }
+
     /// Verifies each runtime build against its manifest and returns the verified
     /// package ZIP.
     pub fn build(&self) -> Result<Vec<u8>> {
@@ -288,7 +304,7 @@ impl Builder {
             .iter()
             .map(|build| packaging::load_runtime(&build.manifest, &build.files))
             .collect::<Result<Vec<_>>>()?;
-        let package = packaging::assemble(
+        let package = packaging::assemble_with(
             &runtimes,
             &self.effects,
             &self.modules,
@@ -299,6 +315,9 @@ impl Builder {
                     .guide
                     .as_deref()
                     .context("Set the installation guide first")?,
+            },
+            packaging::Extras {
+                imports: self.imports.as_deref(),
             },
         )?;
         Ok(package.bytes)
@@ -329,6 +348,25 @@ pub fn effect_label(blob: &[u8]) -> Result<Label> {
         icon,
         monochrome: effect.flags & effects::MONOCHROME != 0,
     })
+}
+
+/// The files that a GRKit ZIP of any release puts on the card, at their paths from the card
+/// root, so the page can read the ZIP as a card (`packaging::package_files`).
+pub fn package_files(bytes: &[u8]) -> Result<Files> {
+    packaging::package_files(bytes)
+}
+
+/// The RAW preview table of a compiled `.GRF` effect over `base_gamma`, the table of the site
+/// catalog. Without `tone`, it is the table that `import_lut` gives for the same effect. With
+/// the tone curves of a native look (`NativeEffect::tone`), it is the table of its unlock.
+pub fn effect_preview(blob: &[u8], base_gamma: &[u16], tone: &[u16]) -> Result<Vec<u8>> {
+    let base_gamma = site::base_gamma(base_gamma)?;
+    let (effect, _) = effects::decode(blob)?;
+    let curves = match tone {
+        [] => None,
+        values => Some(site::ToneCurves::from_values(values)?),
+    };
+    site::native_preview_lut(&base_gamma, &effect, curves.as_ref())
 }
 
 /// Builds a GRKit SD package from the runtime build of each firmware build of
@@ -408,6 +446,13 @@ impl Package {
         self.0.set_guide(pdf);
     }
 
+    /// Sets the import library (`ImportLibrary.bytes`), which the package keeps for another
+    /// browser. The camera does not read it.
+    #[wasm_bindgen(js_name = setImports)]
+    pub fn set_imports(&mut self, library: &[u8]) -> Result<(), JsError> {
+        self.0.set_imports(library).map_err(js_error)
+    }
+
     /// Returns the verified package as ZIP bytes.
     pub fn build(&self) -> Result<Vec<u8>, JsError> {
         self.0.build().map_err(js_error)
@@ -485,6 +530,85 @@ pub fn effect_label_js(blob: &[u8]) -> Result<EffectLabel, JsError> {
     effect_label(blob).map(EffectLabel).map_err(js_error)
 }
 
+/// Returns the files that a GRKit ZIP of any release puts on the card, at their paths from the
+/// card root, in path order. It fails for a file that is not a ZIP within the package limits.
+#[wasm_bindgen(js_name = packageFiles)]
+pub fn package_files_js(bytes: &[u8]) -> Result<Vec<CardFile>, JsError> {
+    package_files(bytes)
+        .map(|files| {
+            files
+                .into_iter()
+                .map(|(path, bytes)| CardFile { path, bytes })
+                .collect()
+        })
+        .map_err(js_error)
+}
+
+/// Collects the imports of a browser for the import library of a package
+/// (`grkit_core::imports`).
+#[wasm_bindgen]
+#[derive(Default)]
+pub struct ImportLibrary(Vec<grkit_core::imports::Import>);
+
+#[wasm_bindgen]
+impl ImportLibrary {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds an import: the JSON object text of its details and its compiled `.GRF` effect.
+    pub fn add(&mut self, details: String, effect: Vec<u8>) {
+        self.0.push(grkit_core::imports::Import { details, effect });
+    }
+
+    /// Returns the library file. It fails for details that are not a JSON object, an effect
+    /// that is not complete, or an ID that occurs twice.
+    pub fn bytes(&self) -> Result<Vec<u8>, JsError> {
+        grkit_core::imports::encode(&self.0).map_err(js_error)
+    }
+}
+
+/// One import of an import library. See `readImportLibrary`.
+#[wasm_bindgen]
+pub struct LibraryImport(grkit_core::imports::Import);
+
+#[wasm_bindgen]
+impl LibraryImport {
+    /// The JSON object text of the details.
+    #[wasm_bindgen(getter)]
+    pub fn details(&self) -> String {
+        self.0.details.clone()
+    }
+
+    /// The compiled `.GRF` effect.
+    #[wasm_bindgen(getter)]
+    pub fn effect(&self) -> Vec<u8> {
+        self.0.effect.clone()
+    }
+}
+
+/// Returns the imports of an import library file, in file order. It fails for a file that is
+/// not a complete library.
+#[wasm_bindgen(js_name = readImportLibrary)]
+pub fn read_import_library(bytes: &[u8]) -> Result<Vec<LibraryImport>, JsError> {
+    grkit_core::imports::decode(bytes)
+        .map(|imports| imports.into_iter().map(LibraryImport).collect())
+        .map_err(js_error)
+}
+
+/// Returns the RAW preview table of a compiled `.GRF` effect. `baseGamma` is the `base_gamma`
+/// array of the site catalog. `tone` is empty, or the tone curves of a native look
+/// (`NativeLookEffect.tone`).
+#[wasm_bindgen(js_name = effectPreview)]
+pub fn effect_preview_js(
+    blob: &[u8],
+    base_gamma: &[u16],
+    tone: &[u16],
+) -> Result<Vec<u8>, JsError> {
+    effect_preview(blob, base_gamma, tone).map_err(js_error)
+}
+
 /// Returns the ZIP that turns SD scripts off on a camera, by
 /// its key in `CAMERA_RELEASES` (`generated/cameras.ts`).
 #[wasm_bindgen(js_name = scriptsOffPackage)]
@@ -546,6 +670,13 @@ impl NativeLookEffect {
     #[wasm_bindgen(getter)]
     pub fn preview(&self) -> Vec<u8> {
         self.0.preview.clone()
+    }
+
+    /// The tone curves of the preview, empty for a look without default tone steps. Keep them
+    /// to draw the preview again with `effectPreview`.
+    #[wasm_bindgen(getter)]
+    pub fn tone(&self) -> Vec<u16> {
+        self.0.tone.clone()
     }
 
     /// The ADJ icon: 40 x 40 RGBA pixels.

@@ -124,6 +124,7 @@ export async function unlockNativeLooks(
         table: look.table,
         version: look.version,
         source: file.name,
+        tone: look.tone,
       },
     };
   });

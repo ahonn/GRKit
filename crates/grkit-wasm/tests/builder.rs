@@ -263,3 +263,28 @@ fn an_effect_label_gives_the_id_the_name_and_the_icon() {
     assert!(!label.monochrome);
     assert!(error(grkit_wasm::effect_label(b"not an effect")).contains("GRFX0001"));
 }
+
+#[test]
+fn a_package_keeps_the_import_library() {
+    use grkit_core::imports::{encode, Import};
+    let mut builder = builder_with_runtime(&runtime_files());
+    builder.add_effect(&effect("lut-warm")).unwrap();
+    assert!(builder.set_imports(b"not a library").is_err());
+    let library = encode(&[
+        Import {
+            details: "{}".into(),
+            effect: effect("lut-warm"),
+        },
+        Import {
+            details: "{}".into(),
+            effect: effect("lut-cold"),
+        },
+    ])
+    .unwrap();
+    builder.set_imports(&library).unwrap();
+    let verified = packaging::verify_package(&builder.build().unwrap()).unwrap();
+    assert_eq!(verified.effect_ids, ["lut-warm"]);
+    assert_eq!(verified.imports, 2);
+    let card = builder.card_files().unwrap();
+    assert_eq!(card[grkit_core::card::IMPORTS_FILE], library);
+}

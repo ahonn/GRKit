@@ -44,7 +44,11 @@ export interface CatalogEffect extends EffectFields {
  * file that the user chose. It has no site files.
  */
 export interface ImportedEffect<I extends Imported = Imported> extends EffectFields {
-  cover: Cover;
+  /**
+   * Can be missing for an effect restored from a package without its details: the effect file
+   * keeps only the icon pixels.
+   */
+  cover: I extends RestoredImport ? Cover | undefined : Cover;
   /** The key of the preview table in the preview cache (`provideTable`). */
   preview: string;
   imported: I;
@@ -104,10 +108,25 @@ export interface NativeImport extends ImportData {
   version: string;
   /** The firmware file name. */
   source: string;
+  /**
+   * The tone curves of the preview (`NativeLookEffect.tone`), which redraw it without the
+   * firmware file. A look unlocked before the page kept them has none.
+   */
+  tone?: Uint16Array;
 }
 
-/** `kind` tells the two sources apart. */
-export type Imported = LutImport | NativeImport;
+/**
+ * A LUT import that the page read back from a GRKit.zip, for a browser that lost its imports. The
+ * file keeps the effect, its name, and its icon, but not the fit details of the import.
+ */
+export interface RestoredImport extends ImportData {
+  kind: 'restored';
+  /** The ZIP file name. */
+  source: string;
+}
+
+/** `kind` tells the sources apart. */
+export type Imported = LutImport | NativeImport | RestoredImport;
 
 export interface Catalog {
   target: string;

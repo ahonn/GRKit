@@ -1,5 +1,5 @@
 use grkit_core::{effects, site};
-use grkit_wasm::native_looks;
+use grkit_wasm::{effect_preview, native_looks};
 
 fn base() -> [u16; 256] {
     // The analytic stand-in of the import tests: any rising table works for the checks.
@@ -18,7 +18,7 @@ fn other_files_fail_with_the_supported_versions() {
 }
 
 /// The page gets every look with compiled effects, icons, and previews that follow the
-/// default tone steps.
+/// default tone steps. The tone curves of a look draw its preview again without the file.
 #[test]
 #[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR4"]
 fn a_gr4_file_gives_its_looks() {
@@ -41,6 +41,18 @@ fn a_gr4_file_gives_its_looks() {
         let plain = site::linear_preview_lut(&base(), &effect).unwrap();
         let steps = effect.fn_defaults.is_some_and(|d| d[2..6] != [0; 4]);
         assert_eq!(plain != look.preview, steps, "{}", look.id);
+        assert_eq!(
+            look.tone.is_empty(),
+            effect.fn_defaults.is_none(),
+            "{}",
+            look.id
+        );
+        assert_eq!(
+            effect_preview(&look.blob, &base(), &look.tone).unwrap(),
+            look.preview,
+            "{}",
+            look.id
+        );
         assert_eq!(effect.native_look.is_some(), !effect.monochrome());
     }
 }

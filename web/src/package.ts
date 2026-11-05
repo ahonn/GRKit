@@ -108,6 +108,7 @@ type Packager = InstanceType<Wasm['Package']>;
  * camera have the same effects, so the effects come from the first build.
  * `camera` selects the ModeSet file. `modules` names the module files that the package holds.
  * `language` selects the installation guide, which the site publishes as `guides/<camera>/<language>.pdf`.
+ * `imports` is the import library of the browser (`import/library.ts`), or null without imports.
  * grkit-wasm checks each runtime file against `build.json` and each effect's format.
  * `onProgress` receives the number of bytes of the files of this package that have arrived, and
  * whether a file of it waits for a new attempt.
@@ -118,6 +119,7 @@ async function assemble<T>(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
+  imports: Uint8Array | null,
   onProgress: (received: number, retrying: boolean) => void,
   finish: (builder: Packager) => T,
 ): Promise<T> {
@@ -171,6 +173,7 @@ async function assemble<T>(
       builder.setCamera(camera);
       builder.setLanguage(language);
       builder.setGuide(guide);
+      if (imports) builder.setImports(imports);
       for (const build of builds.slice(1)) builder.addBuild(build);
       for (const [number, target] of targets.entries()) {
         const paths = builder.runtimePaths(number);
@@ -212,9 +215,10 @@ export function buildPackage(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
+  imports: Uint8Array | null,
   onProgress: (received: number, retrying: boolean) => void,
 ): Promise<Blob> {
-  return assemble(targets, camera, effects, modules, language, onProgress, (builder) => {
+  return assemble(targets, camera, effects, modules, language, imports, onProgress, (builder) => {
     const zip = builder.build();
     return new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' });
   });
@@ -230,9 +234,10 @@ export function buildCardFiles(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
+  imports: Uint8Array | null,
   onProgress: (received: number) => void,
 ): Promise<CardFile[]> {
-  return assemble(targets, camera, effects, modules, language, onProgress, (builder) =>
+  return assemble(targets, camera, effects, modules, language, imports, onProgress, (builder) =>
     builder.cardFiles().map((file) => {
       const item = { path: file.path, bytes: file.bytes };
       file.free();
@@ -280,6 +285,16 @@ export async function buildScriptsOff(camera: string): Promise<Blob> {
   return new Blob([module.scriptsOffPackage(camera) as Uint8Array<ArrayBuffer>], {
     type: 'application/zip',
   });
+}
+
+/**
+ * The file name of a downloaded package: the GRKit version and the local time of the download,
+ * such as `GRKit-1.4.2-20261105-1830.zip`, so the user can tell downloads apart.
+ */
+export function packageFilename(version: string, time: Date): string {
+  const two = (value: number) => String(value).padStart(2, '0');
+  const date = `${time.getFullYear()}${two(time.getMonth() + 1)}${two(time.getDate())}`;
+  return `GRKit-${version}-${date}-${two(time.getHours())}${two(time.getMinutes())}.zip`;
 }
 
 /** Starts the download of a blob as a file. */

@@ -6,7 +6,7 @@
 // the effects section does. Date Imprint and Glow run the module code on the full-size photo,
 // built for this computer like `grkit module test` (it needs cargo and a C compiler). Grain comes
 // from the camera's own grain stage, so GRAIN holds pictures that GR III firmware 2.10 recorded of
-// the Playlist ^4 photo, with Film Look Tri-X 400 and each Grain strength (GRAIN_FILES).
+// the tram photo at ISO 100, with Film Look Tri-X 400 and each Grain strength (GRAIN_FILES).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -141,24 +141,23 @@ try {
   });
 
   // Glow on the street at night (EXIF 7.2 EV at ISO 100), cut to 3:2 as the camera records it:
-  // Off, then Bloom and Halation at each strength, the lamps at one third.
+  // Off, then Bloom and Halation at the Medium strength, the lamps at one third.
   const glow = renderer('glow', []);
   const full = decoded('street');
   const street = part(full, (full.width - 5916) >> 1, (full.height - 3944) >> 1, 5916, 3944);
   const lamps = (picture) => crop(picture, 1740, 720, 2160, 1620, 3);
   save('glow-off.jpg', lamps(glow(street, [0, 0, 7.2])));
-  for (let strength = 1; strength <= 3; strength++) {
-    save(`bloom-${strength}.jpg`, lamps(glow(street, [strength, 0, 7.2])));
-    save(`halation-${strength}.jpg`, lamps(glow(street, [0, strength, 7.2])));
-  }
+  save('bloom.jpg', lamps(glow(street, [2, 0, 7.2])));
+  save('halation.jpg', lamps(glow(street, [0, 2, 7.2])));
   console.log('Date Imprint and Glow: done.');
 
-  // Grain: the head in the stripe of light, at half size.
+  // Grain: the light grey footbridge girder, at full size. A smaller size averages the grain
+  // away, and the grain shows most on light mid tones.
   if (grain) {
     GRAIN_FILES.forEach((file, index) => {
       const picture = jpeg.decode(readFileSync(join(grain, file)), { useTArray: true, formatAsRGBA: false, maxMemoryUsageInMB: 1024 });
       if (picture.width !== 6000 || picture.height !== 4000) throw new Error(`${file} is not a 6000 x 4000 picture`);
-      save(`grain-${index + 1}.jpg`, crop(picture, 2160, 1260, 1440, 1080, 2));
+      save(`grain-${index + 1}.jpg`, crop(picture, 1950, 450, 720, 540, 1));
     });
     console.log('Grain: done.');
   }

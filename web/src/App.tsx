@@ -15,6 +15,7 @@ import {
   cardModules,
   pickCard,
   planChanges,
+  readFile,
   removeGrkit,
   removeModesetFiles,
   writeFiles,
@@ -32,7 +33,7 @@ import {
   PREVIEW_TARGET,
   type Camera,
 } from './cameras';
-import { loadCatalog, siteUrl, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
+import { loadCatalog, siteUrl, type Catalog, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
 import {
   CardChangesView,
   CardUninstall,
@@ -44,23 +45,30 @@ import {
 } from './components/CardPanel';
 import { AppPromo } from './components/AppPromo';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
+import { PackageOpen, type PackageStatus } from './components/PackageOpen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Landing } from './components/Landing';
 import { RichText } from './components/RichText';
 import { TermsNote } from './components/TermsNote';
 import { loadFonts } from './fonts';
-import { importsForCamera, takesNativeLooks } from './import/native';
+import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails, type LibraryDetails } from './import/library';
+import { restoreImports } from './import/lut';
+import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
+import { isLutImportId } from './import/names';
 import { deleteImport, saveImport } from './import/store';
-import { applyLanguage, initialLanguage, LANGUAGES, STRINGS, type Language, type Strings } from './i18n';
+import { applyLanguage, initialLanguage, LANGUAGES, sentences, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 import {
   buildCardFiles,
   buildPackage,
   buildScriptsOff,
+  effectLabel,
   prefetchPackage,
+  packageFilename,
   save,
   scriptsOffCardFiles,
 } from './package';
+import { packageCard } from './packageCard';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
@@ -108,6 +116,7 @@ export function App({
   // A newer build or a changed selection makes the result of an older build stale.
   const buildRun = useRef(0);
   const [mode, setMode] = useState<InstallMode>(initialMode);
+  const [packageStatus, setPackageStatus] = useState<PackageStatus>({ state: 'idle' });
   // The connected SD card. The page changes it only when the user confirms the changes.
   const [card, setCard] = useState<CardSession | null>(null);
   const [lastCard, setLastCard] = useState<CardDirectory | null>(initialCard);
@@ -121,6 +130,7 @@ export function App({
   const cardRun = useRef(0);
 
   const t = STRINGS[language];
+  const packageOpen = <PackageOpen strings={t} status={packageStatus} onOpen={openPackage} />;
   // An app browser, such as WeChat's, often saves no GRKit.zip, so the page asks for a browser.
   const appBrowser = suggestOwnBrowser();
   // Without an app browser, the page tells how to write to the card: on a computer from a phone,
@@ -308,6 +318,96 @@ export function App({
     await openCard(lastCard, t.cardNotInserted);
   }
 
+  /**
+   * Shows what a card or a package holds: its camera, its modules, and its effects as the
+   * selection. Returns the camera.
+   */
+  function adoptCard(session: CardSession): Camera {
+    const state = session.state;
+    const fit = cameraForCard(camera, cardBuilds(state), state.rootNames) ?? camera;
+    setCameraKey(fit.key);
+    if (state.install !== 'none') {
+      keepSelection(new Set(session.effects.keys()));
+      const ids = new Set(cardModules(state));
+      setEnabled(new Set(MODULES.filter((module) => ids.has(module.id)).map((module) => module.key)));
+    }
+    return fit;
+  }
+
+  /**
+   * Adds the LUT imports that a card or a package keeps and this browser lacks: each import of
+   * its import library, or without one, its effect files of LUT imports. Returns the added
+   * imports. `source` names the card or the ZIP.
+   */
+  async function adoptImports(
+    root: CardDirectory,
+    session: CardSession,
+    source: string,
+    catalog: Catalog,
+  ): Promise<ImportedEffect[]> {
+    if (!catalog.baseGamma) return [];
+    const library = await readFile(root, IMPORTS_FILE);
+    const entries = library ? await readLibrary(library).catch(() => []) : [];
+    // The details join the restored imports by the ID of each library effect.
+    const details = new Map<string, LibraryDetails>();
+    for (const entry of entries) {
+      const label = await effectLabel(entry.effect);
+      if (label) details.set(label.id, entry.details);
+    }
+    const files = [
+      ...entries.map((entry) => ({ bytes: entry.effect, tone: nativeTone(entry.details) })),
+      ...session.extra
+        .filter((effect) => isLutImportId(effect.id))
+        .map((effect) => ({ bytes: effect.card.bytes })),
+    ];
+    const { effects } = await restoreImports(
+      files,
+      source,
+      catalog.baseGamma,
+      [...catalog.effects, ...allImported].map((effect) => effect.id),
+      new AbortController().signal,
+    );
+    const added = effects.map((effect) => withDetails(effect, details.get(effect.id)));
+    for (const effect of added) addImported(effect);
+    return added;
+  }
+
+  /** Reads a GRKit.zip of an earlier download as the card that it makes, or fails for another file. */
+  async function readPackage(file: File) {
+    const root = await packageCard(file);
+    const catalog = await loadCatalog(PREVIEW_TARGET);
+    const session = await openSession(root, [...catalog.effects, ...imported]);
+    if (session.state.install !== 'current') throw new Error('The ZIP is not a GRKit package');
+    return { root, session, catalog };
+  }
+
+  /**
+   * True when `session` installs a native look that neither this browser nor `added` has: a look
+   * unlocked before the page kept it in the import library, so it needs an unlock again.
+   */
+  const lockedLooks = (session: CardSession, added: readonly ImportedEffect[]) =>
+    NATIVE_LOOKS.some(
+      (look) =>
+        session.effects.has(look.id) &&
+        !allImported.some((effect) => effect.id === look.id) &&
+        !added.some((effect) => effect.id === look.id),
+    );
+
+  /** Reads a GRKit.zip of an earlier download and shows what it holds, as a card does. */
+  async function openPackage(file: File) {
+    setPackageStatus({ state: 'reading' });
+    try {
+      const { root, session, catalog } = await readPackage(file);
+      adoptCard(session);
+      const added = await adoptImports(root, session, file.name, catalog);
+      resetBuild();
+      setPackageStatus({ state: 'done', added: added.length, locked: lockedLooks(session, added) });
+    } catch (error) {
+      console.error(error);
+      setPackageStatus({ state: 'error' });
+    }
+  }
+
   /** Reads the card and shows what it holds as the selection. `failure` is the error text. */
   async function openCard(root: CardDirectory, failure = t.cardConnectError) {
     const run = (cardRun.current += 1);
@@ -319,19 +419,14 @@ export function App({
       const catalog = await loadCatalog(PREVIEW_TARGET);
       const session = await openSession(root, [...catalog.effects, ...imported]);
       if (run !== cardRun.current) return;
-      const state = session.state;
-      const fit = cameraForCard(camera, cardBuilds(state), state.rootNames) ?? camera;
-      setCameraKey(fit.key);
-      if (state.install !== 'none') keepSelection(new Set(session.effects.keys()));
-      if (state.install !== 'none') {
-        const ids = new Set(cardModules(state));
-        setEnabled(new Set(MODULES.filter((module) => ids.has(module.id)).map((module) => module.key)));
-      }
+      const fit = adoptCard(session);
       setCard(session);
       setLastCard(root);
       void saveLastCard(root);
       resetBuild();
       if (fit.support) prefetchPackage(fit.support.targets, fit.id, language);
+      // The imports of an earlier browser come back with the card. The card works without them.
+      await adoptImports(root, session, root.name, catalog).catch((error) => console.warn(error));
     } catch (error) {
       console.error(error);
       if (run === cardRun.current) setConnectMessage({ tone: 'error', lines: [failure] });
@@ -436,7 +531,8 @@ export function App({
     try {
       const checked = await checkedEffects();
       const effects = plan.includeEffects ? cardPackageEffects(checked) : [];
-      const files = await buildCardFiles(targets, camera.id, effects, plan.modules, language, (received) => {
+      const imports = await encodeLibrary(allImported);
+      const files = await buildCardFiles(targets, camera.id, effects, plan.modules, language, imports, (received) => {
         if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
       });
       const changes = cardChanges(
@@ -497,12 +593,13 @@ export function App({
         effects,
         plan.modules,
         language,
+        await encodeLibrary(allImported),
         (received, retrying) => {
           if (run === buildRun.current) setBuild({ state: 'building', received, retrying });
         },
       );
       if (run === buildRun.current) {
-        save(blob, 'GRKit.zip');
+        save(blob, packageFilename(__GRKIT_VERSION__, new Date()));
         trackDownload(camera, plan, effects.length, language);
         setBuild({ state: 'ready' });
       }
@@ -602,6 +699,23 @@ export function App({
             onConnect={connectCard}
             onReconnect={reconnectCard}
             onDisconnect={disconnectCard}
+            zip={packageOpen}
+            next={
+              card && (
+                <ErrorBoundary resetKey={String(catalogAttempt)} fallback={null}>
+                  <Suspense fallback={null}>
+                    <CardNext
+                      strings={t}
+                      session={card}
+                      selection={selection}
+                      imported={imported}
+                      cardEffects={cardExtra}
+                      changes={cardChanges}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )
+            }
           />
         )}
 
@@ -609,6 +723,8 @@ export function App({
           <section className="section" aria-labelledby="camera-label">
             <h2 id="camera-label">{t.camera}</h2>
             <div className="section-body">
+              {/* Without the mode section, the ZIP is the only mode, and this is the first section. */}
+              {!canWriteCards() && packageOpen}
               <div role="radiogroup" aria-labelledby="camera-label" className="cameras">
                 {CAMERAS.map((item) => (
                   <label key={item.key} className="camera">
@@ -735,6 +851,7 @@ export function App({
                   {lastCard ? t.cardReconnect(lastCard.name) : t.cardConnect}
                 </button>
               </div>
+              <p className="note">{t.cardConnectNext}</p>
             </div>
           ) : mode === 'card' && card ? (
             <div className="section-body">
@@ -757,6 +874,8 @@ export function App({
                     onApply={applyCard}
                     links={packageLinks}
                     termsUrl={guideUrl('TERMS', language)}
+                    camera={camera.name}
+                    firmware={support?.firmware ?? '—'}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -874,29 +993,31 @@ export function App({
         {mode === 'zip' && (
           <section className="section" aria-labelledby="remove-label">
             <h2 id="remove-label">{t.remove}</h2>
-            <ol className="steps">
-              {t.removeSteps.map((parts, index) => (
-                <li key={index}>
-                  <RichText
-                    parts={parts.map((part) =>
-                      part === MODESET_TOKEN ? `\`${support?.modeset ?? ''}` : part,
-                    )}
-                  />
-                </li>
-              ))}
-            </ol>
-            <div className="package-action">
-              <button
-                type="button"
-                className="download secondary"
-                disabled={!support || scriptsOff === 'building'}
-                aria-busy={scriptsOff === 'building'}
-                onClick={downloadScriptsOff}
-              >
-                {t.scriptsOff(camera.name)}
-              </button>
-              <div aria-live="polite">
-                {scriptsOff === 'failed' && <p className="status error">{t.scriptsOffError}</p>}
+            <div className="section-body">
+              <ol className="steps">
+                {t.removeSteps.map((parts, index) => (
+                  <li key={index}>
+                    <RichText
+                      parts={parts.map((part) =>
+                        part === MODESET_TOKEN ? `\`${support?.modeset ?? ''}` : part,
+                      )}
+                    />
+                  </li>
+                ))}
+              </ol>
+              <div className="package-action">
+                <button
+                  type="button"
+                  className="download secondary"
+                  disabled={!support || scriptsOff === 'building'}
+                  aria-busy={scriptsOff === 'building'}
+                  onClick={downloadScriptsOff}
+                >
+                  {t.scriptsOff(camera.name)}
+                </button>
+                <div aria-live="polite">
+                  {scriptsOff === 'failed' && <p className="status error">{t.scriptsOffError}</p>}
+                </div>
               </div>
             </div>
           </section>
@@ -1030,16 +1151,62 @@ interface ChangesSectionProps {
   onApply: () => void;
   links: ReactNode;
   termsUrl: string;
+  camera: string;
+  firmware: string;
+}
+
+/** The checked effect IDs of `selection`. Before the first change, it needs the catalog. */
+function useChecked(selection: Selection, others: readonly { id: string }[]) {
+  const catalog = use(loadCatalog(PREVIEW_TARGET));
+  return {
+    catalog,
+    checked: resolveSelection(
+      selection,
+      catalog.effects.map((effect) => effect.id),
+      others.map((effect) => effect.id),
+    ),
+  };
+}
+
+/**
+ * The next step after a card connects: what a write would do, with a link down to the changes
+ * and the write button, so a returning user does not scroll past every section to find them.
+ */
+function CardNext({
+  strings: t,
+  session,
+  selection,
+  imported,
+  cardEffects,
+  changes,
+}: Pick<ChangesSectionProps, 'strings' | 'session' | 'selection' | 'imported' | 'cardEffects' | 'changes'>) {
+  const { checked } = useChecked(selection, [...imported, ...cardEffects]);
+  const next = changes(session, [...checked]);
+  const count =
+    next.addModules.length +
+    next.removeModules.length +
+    next.addEffects.length +
+    next.removeEffects.length +
+    (next.scriptsOn ? 1 : 0) +
+    (next.cleanLegacy ? 1 : 0);
+  const lines =
+    next.grkit === 'install'
+      ? [t.cardNextInstall(__GRKIT_VERSION__)]
+      : [
+          ...(next.grkit === 'update' ? [t.cardNextUpdate(__GRKIT_VERSION__)] : []),
+          ...(count > 0 ? [t.cardNextChanges(count)] : []),
+        ];
+  if (lines.length === 0) return <p className="status">{t.cardNextNone}</p>;
+  return (
+    <p className="status">
+      {sentences(...lines)} <a href="#package-label">{t.cardNextReview}</a>
+    </p>
+  );
 }
 
 /** The changes from the card to the selection. Before the first change, it needs the catalog. */
 function CardChangesSection({ strings: t, session, selection, imported, cardEffects, changes, ...rest }: ChangesSectionProps) {
-  const catalog = use(loadCatalog(PREVIEW_TARGET));
-  const checked = resolveSelection(
-    selection,
-    catalog.effects.map((effect) => effect.id),
-    [...imported, ...cardEffects].map((effect) => effect.id),
-  );
+  const { catalog, checked } = useChecked(selection, [...imported, ...cardEffects]);
   const effects = [...catalog.effects, ...imported, ...cardEffects];
   const effectName = (id: string) => effects.find((effect) => effect.id === id)?.name ?? id;
   const moduleName = (id: string) => {

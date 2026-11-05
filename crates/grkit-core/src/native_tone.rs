@@ -262,6 +262,21 @@ mod tests {
     }
 
     #[test]
+    fn tone_curves_keep_the_preview_base_without_the_tables() {
+        use crate::site::ToneCurves;
+        let base: [u16; 256] = std::array::from_fn(|i| (i * 64) as u16);
+        let curves = ToneCurves::new(&tables(), &[0, 0, 2, 1, -1, 1, 0, 0, 0]);
+        let kept = ToneCurves::from_values(&curves.to_values()).unwrap();
+        assert_eq!(kept, curves);
+        assert_eq!(kept.base(&base), curves.base(&base));
+        // Steps change the base; neutral steps keep it.
+        assert_ne!(curves.base(&base), base);
+        let neutral = ToneCurves::new(&tables(), &[0; 9]);
+        assert_eq!(neutral.base(&base), base);
+        assert!(ToneCurves::from_values(&[0; 256]).is_err());
+    }
+
+    #[test]
     fn neutral_steps_put_mid_gray_at_the_key_input() {
         let t = tables();
         t.validate().unwrap();

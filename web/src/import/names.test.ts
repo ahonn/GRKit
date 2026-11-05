@@ -7,6 +7,7 @@ import {
   coverIcon,
   effectFilename,
   effectId,
+  isLutImportId,
   lutAccept,
   nameFromFile,
   validCover,
@@ -54,6 +55,10 @@ describe('imported effect names', () => {
     expect(effectId('Warm', taken)).toBe('lut-warm-2');
     expect(effectId('Warm', new Set([...taken, 'lut-warm-2']))).toBe('lut-warm-3');
     expect(effectId('***', new Set())).toBe('lut-effect');
+    // A package effect with such an ID came from a browser, so a restore reads it back.
+    expect(isLutImportId(effectId('Warm', new Set()))).toBe(true);
+    expect(isLutImportId('gr4-cinema-yellow')).toBe(false);
+    expect(isLutImportId('portra-400-v1')).toBe(false);
     const long = effectId('An extremely long name here', new Set());
     expect(long.length).toBeLessThanOrEqual(28);
     expect(effectId('An extremely long name here', new Set([long])).length).toBeLessThanOrEqual(31);

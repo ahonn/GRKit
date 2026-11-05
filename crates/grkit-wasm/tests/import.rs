@@ -1,5 +1,5 @@
 use grkit_core::{cube, effects, fit, site};
-use grkit_wasm::{guess_input, import_lut, ImportRequest, MAX_LUT_SIZE};
+use grkit_wasm::{effect_preview, guess_input, import_lut, ImportRequest, MAX_LUT_SIZE};
 use serde_json::{json, Value};
 use std::sync::LazyLock;
 
@@ -127,4 +127,18 @@ fn guesses_the_input_from_the_lut_data() {
     }
     assert_eq!(guess_input(text.as_bytes(), &base).unwrap(), "vlog");
     assert!(guess_input(b"not a LUT", &base).is_err());
+}
+
+#[test]
+fn the_preview_of_an_effect_file_is_the_preview_of_its_import() {
+    let base = synthetic_base();
+    let imported = import_lut(&warm_cube(), &base, &request("lut-warm", "Warm")).unwrap();
+    assert_eq!(
+        effect_preview(&imported.blob, &base, &[]).unwrap(),
+        imported.preview
+    );
+    assert!(effect_preview(b"GRFX0001 not an effect", &base, &[]).is_err());
+    assert!(effect_preview(&imported.blob, &base[..255], &[]).is_err());
+    // Tone curves are 512 values: the neutral curve, then the look curve.
+    assert!(effect_preview(&imported.blob, &base, &[0; 511]).is_err());
 }

@@ -1,7 +1,7 @@
-import type { ImportedEffect, LutImport } from '../catalog';
+import type { ImportedEffect, LutImport, RestoredImport } from '../catalog';
 import { loadWasm, save } from '../package';
 import { provideTable } from '../preview/render';
-import type { GuessRequest, ImportRequest, ImportResponse } from './lut.worker';
+import type { GuessRequest, ImportRequest, ImportResponse, RestoreRequest } from './lut.worker';
 import { base64, coverIcon, effectId, type CoverFields, type Input } from './names';
 
 /** grkit-wasm `MAX_LUT_SIZE`. */
@@ -13,7 +13,7 @@ export const HALD_LEVEL = 12;
 /** Makes each preview table key new, so a later import with the same ID gets no cached preview. */
 let tableCount = 0;
 
-type WorkerRequest = ImportRequest | GuessRequest;
+type WorkerRequest = ImportRequest | GuessRequest | RestoreRequest;
 /** The response to a request of kind `K`. */
 type Reply<K extends WorkerRequest['kind']> = Extract<ImportResponse, { kind: K }>;
 
@@ -46,7 +46,7 @@ function run<K extends WorkerRequest['kind']>(
     };
     worker.onerror = () => finish(undefined, new Error('The import failed'));
     worker.onmessageerror = () => finish(undefined, new Error('Invalid import response'));
-    worker.postMessage(request, [request.bytes]);
+    worker.postMessage(request, 'files' in request ? request.files.map((file) => file.bytes) : [request.bytes]);
   });
 }
 
@@ -139,6 +139,39 @@ export async function importLut(
       warnings: result.warnings,
       source: file.name,
     },
+  };
+}
+
+/**
+ * The imports among the effect files `files` of a package or a card that `known`, the IDs of the
+ * page, does not have, and the number of imports that the page already has. A native look comes
+ * back only with its `tone` curves. `source` names where they came from, such as the ZIP file
+ * name.
+ */
+export async function restoreImports(
+  files: readonly { bytes: Uint8Array; tone?: Uint16Array }[],
+  source: string,
+  baseGamma: Uint16Array,
+  known: readonly string[],
+  signal: AbortSignal,
+): Promise<{ effects: ImportedEffect<RestoredImport>[]; kept: number }> {
+  const copies = files.map(({ bytes, tone }) => ({ bytes: bytes.slice().buffer, tone: tone?.slice() }));
+  const { effects, kept } = await run({ kind: 'restore', files: copies, baseGamma, known }, signal);
+  return {
+    kept,
+    effects: effects.map((effect) => {
+      const table = `restored/${effect.id}/${++tableCount}`;
+      provideTable(table, effect.table);
+      return {
+        id: effect.id,
+        name: effect.name,
+        icon: base64(effect.icon),
+        cover: undefined,
+        monochrome: effect.monochrome,
+        preview: table,
+        imported: { kind: 'restored', blob: effect.blob, table: effect.table, source },
+      };
+    }),
   };
 }
 

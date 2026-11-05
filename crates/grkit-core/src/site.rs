@@ -86,57 +86,105 @@ fn native_saturation(effect: &Effect) -> [f64; 9] {
 /// computes it for a daylight scene. Previews use it to place the tone steps of a native look.
 pub const GR3_STILL_SCALE: u32 = 17829;
 
-/// The base gamma of a native look's preview: `base_gamma` after the change that its
-/// default tone steps (key, contrast, highlight, shadow) make to the camera's base curve.
-/// A Standard code `v` becomes `S'(S^-1(v))`, where `S` and `S'` are the base curves of
-/// neutral and of the look's steps, so the preview keeps the coordinates of the Standard
-/// baseline.
-pub fn native_tone_base(
-    base_gamma: &[u16; 256],
-    tables: &crate::native_tone::ToneTables,
-    defaults: &[i8; 9],
-) -> [u16; 256] {
-    use crate::native_tone::ToneSteps;
-    let steps = |key: i8, contrast: i8, shadow: i8, highlight: i8| ToneSteps {
-        key: key.into(),
-        contrast: contrast.into(),
-        shadow: shadow.into(),
-        highlight: highlight.into(),
-        input_scale: GR3_STILL_SCALE,
-    };
-    // effects::FN_KEYS: saturation, hue, key, contrast, highlight, shadow, ...
-    let neutral = tables.base_curve(&steps(0, 0, 0, 0));
-    let look = tables.base_curve(&steps(defaults[2], defaults[3], defaults[5], defaults[4]));
-    let at = |curve: &[u16; 256], x: f64| {
-        let x = x.clamp(0.0, 255.0);
-        let low = (x as usize).min(254);
-        let t = x - low as f64;
-        f64::from(curve[low]) * (1.0 - t) + f64::from(curve[low + 1]) * t
-    };
-    // The input of the neutral curve that gives `v`; the curve rises monotonically.
-    let inverse = |v: f64| {
-        let i = neutral.partition_point(|&c| f64::from(c) < v);
-        match i {
-            0 => 0.0,
-            256 => 255.0,
-            i => {
-                let (a, b) = (f64::from(neutral[i - 1]), f64::from(neutral[i]));
-                (i - 1) as f64 + if b > a { (v - a) / (b - a) } else { 0.0 }
-            }
+/// The two base curves that place a native look's default tone steps (key, contrast,
+/// highlight, shadow) in its preview: the camera's base curve at neutral steps and at the
+/// look's steps. They come from the firmware of the look, so a page that keeps them can
+/// draw the preview again without the firmware.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToneCurves {
+    pub neutral: [u16; 256],
+    pub look: [u16; 256],
+}
+
+impl ToneCurves {
+    /// The number of values of `to_values`: the neutral curve, then the look curve.
+    pub const VALUES: usize = 512;
+
+    /// The curves of the default tone steps `defaults` (`effects::FN_KEYS` order).
+    pub fn new(tables: &crate::native_tone::ToneTables, defaults: &[i8; 9]) -> Self {
+        use crate::native_tone::ToneSteps;
+        let steps = |key: i8, contrast: i8, shadow: i8, highlight: i8| ToneSteps {
+            key: key.into(),
+            contrast: contrast.into(),
+            shadow: shadow.into(),
+            highlight: highlight.into(),
+            input_scale: GR3_STILL_SCALE,
+        };
+        // effects::FN_KEYS: saturation, hue, key, contrast, highlight, shadow, ...
+        Self {
+            neutral: tables.base_curve(&steps(0, 0, 0, 0)),
+            look: tables.base_curve(&steps(defaults[2], defaults[3], defaults[5], defaults[4])),
         }
-    };
-    base_gamma.map(|v| at(&look, inverse(f64::from(v))).round().clamp(0.0, 16384.0) as u16)
+    }
+
+    pub fn to_values(&self) -> Vec<u16> {
+        [self.neutral, self.look].concat()
+    }
+
+    /// The curves of `to_values`. It fails for another number of values.
+    pub fn from_values(values: &[u16]) -> Result<Self> {
+        ensure!(
+            values.len() == Self::VALUES,
+            "Tone curves need {} values, not {}",
+            Self::VALUES,
+            values.len()
+        );
+        let (neutral, look) = values.split_at(256);
+        Ok(Self {
+            neutral: neutral.try_into()?,
+            look: look.try_into()?,
+        })
+    }
+
+    /// The base gamma of the preview: `base_gamma` after the change that the look's steps
+    /// make to the base curve. A Standard code `v` becomes `S'(S^-1(v))`, where `S` and `S'`
+    /// are the neutral and look curves, so the preview keeps the coordinates of the Standard
+    /// baseline.
+    pub fn base(&self, base_gamma: &[u16; 256]) -> [u16; 256] {
+        let (neutral, look) = (&self.neutral, &self.look);
+        let at = |curve: &[u16; 256], x: f64| {
+            let x = x.clamp(0.0, 255.0);
+            let low = (x as usize).min(254);
+            let t = x - low as f64;
+            f64::from(curve[low]) * (1.0 - t) + f64::from(curve[low + 1]) * t
+        };
+        // The input of the neutral curve that gives `v`; the curve rises monotonically.
+        let inverse = |v: f64| {
+            let i = neutral.partition_point(|&c| f64::from(c) < v);
+            match i {
+                0 => 0.0,
+                256 => 255.0,
+                i => {
+                    let (a, b) = (f64::from(neutral[i - 1]), f64::from(neutral[i]));
+                    (i - 1) as f64 + if b > a { (v - a) / (b - a) } else { 0.0 }
+                }
+            }
+        };
+        base_gamma.map(|v| at(look, inverse(f64::from(v))).round().clamp(0.0, 16384.0) as u16)
+    }
+}
+
+/// The tone curves of a native look from the tone tables of its firmware, or None for a
+/// look without default tone steps.
+pub fn native_tone_curves(
+    effect: &Effect,
+    tables: &crate::native_tone::ToneTables,
+) -> Option<ToneCurves> {
+    effect
+        .fn_defaults
+        .as_ref()
+        .map(|defaults| ToneCurves::new(tables, defaults))
 }
 
 /// The RAW preview table of an effect with Fn defaults (`linear_preview_lut`) after its
-/// default tone steps, from the tone tables of the firmware that the effect came from.
+/// default tone steps, from the tone curves of the firmware that the effect came from.
 pub fn native_preview_lut(
     base_gamma: &[u16; 256],
     effect: &Effect,
-    tables: &crate::native_tone::ToneTables,
+    curves: Option<&ToneCurves>,
 ) -> Result<Vec<u8>> {
-    let base = match &effect.fn_defaults {
-        Some(defaults) => native_tone_base(base_gamma, tables, defaults),
+    let base = match curves {
+        Some(curves) => curves.base(base_gamma),
         None => *base_gamma,
     };
     linear_preview_lut(&base, effect)

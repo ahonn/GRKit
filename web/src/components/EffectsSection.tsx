@@ -57,6 +57,7 @@ interface Props {
 }
 
 /** The change badge of an effect or a module: what a write to the card does with it. */
+
 export function ChangeBadge({ on, checked, strings: t }: { on: boolean; checked: boolean; strings: Strings }) {
   if (checked && !on) return <span className="change add">{t.changeAdds}</span>;
   if (!checked && on) return <span className="change remove">{t.changeRemoves}</span>;
@@ -125,9 +126,11 @@ export function EffectsSection({
     ? ''
     : requested.imported?.kind === 'native'
       ? t.nativeFrom(requested.imported.version)
-      : requested.imported
-        ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
-        : (t.looks[requested.id] ?? requested.look);
+      : requested.imported?.kind === 'restored'
+        ? t.restoredFrom(requested.imported.source)
+        : requested.imported
+          ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
+          : (t.looks[requested.id] ?? requested.look);
   // The native looks wait behind one locked row until they are on the page. The row opens
   // to list them.
   const locked = nativeLooks && catalog.baseGamma ? missingNativeLooks(imported) : [];
@@ -180,6 +183,10 @@ export function EffectsSection({
     importer.current?.open();
   }
 
+  /**
+   * Adds the imports of a GRKit.zip. The ones that the ZIP installs are checked again while the
+   * package has room, and the others wait for the user.
+   */
   function openUnlock() {
     unlocker.current?.open();
   }
@@ -343,16 +350,18 @@ export function EffectsSection({
             </button>
           </div>
         </div>
-        <p className="note">{t.countLimit(MAX_EFFECTS)}</p>
-        {catalog.baseGamma && (
-          <p className="note">
-            {t.importHint}{' '}
-            <button type="button" className="link-button" onClick={openImport}>
-              {t.importOpen}
-            </button>
-          </p>
-        )}
-        {onCard && <p className="note">{t.effectsCardNote}</p>}
+        <div className="note-group">
+          <p className="note">{t.countLimit(MAX_EFFECTS)}</p>
+          {catalog.baseGamma && (
+            <p className="note">
+              {t.importHint}{' '}
+              <button type="button" className="link-button" onClick={openImport}>
+                {t.importOpen}
+              </button>
+            </p>
+          )}
+          {onCard && <p className="note">{t.effectsCardNote}</p>}
+        </div>
 
         <ul className="effects-list" aria-label={t.effects}>
           {[...effects, ...cardEffects].map((effect) => {

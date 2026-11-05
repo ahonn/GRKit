@@ -284,10 +284,9 @@ function DateDetail({ strings }: { strings: Strings }) {
 
 function GlowDetail({ strings }: { strings: Strings }) {
   const t = strings.landing;
-  // 0 Off, 1 Bloom, 2 Halation; strength 1 to 3.
+  // 0 Off, 1 Bloom, 2 Halation, each at the Medium strength.
   const [kind, setKind] = useState(1);
-  const [strength, setStrength] = useState(2);
-  const image = kind === 0 ? 'glow-off.jpg' : `${kind === 1 ? 'bloom' : 'halation'}-${strength}.jpg`;
+  const image = ['glow-off.jpg', 'bloom.jpg', 'halation.jpg'][kind]!;
   return (
     <figure className="landing-detail">
       <div className="landing-zoom">
@@ -303,13 +302,6 @@ function GlowDetail({ strings }: { strings: Strings }) {
         <h3>{strings.moduleNames.glow}</h3>
         <p>{t.glowText}</p>
         <Choices labels={t.glowKinds} value={kind} onChange={setKind} label={strings.moduleNames.glow} />
-        <Choices
-          labels={t.strengths}
-          value={strength - 1}
-          onChange={(value) => setStrength(value + 1)}
-          label={strings.moduleNames.glow}
-          disabled={kind === 0}
-        />
         <p className="note"><Credit photo="street" /></p>
       </figcaption>
     </figure>
@@ -340,7 +332,7 @@ function GrainDetail({ strings }: { strings: Strings }) {
           onChange={(value) => setLevel(value + 1)}
           label={strings.moduleNames.grain}
         />
-        <p className="note"><Credit photo="light" /></p>
+        <p className="note"><Credit photo="tram" /></p>
       </figcaption>
     </figure>
   );
@@ -351,13 +343,11 @@ function Choices({
   value,
   onChange,
   label,
-  disabled = false,
 }: {
   labels: readonly string[];
   value: number;
   onChange: (value: number) => void;
   label: string;
-  disabled?: boolean;
 }) {
   return (
     <div className="landing-choices" role="group" aria-label={label}>
@@ -367,7 +357,6 @@ function Choices({
           type="button"
           className="button small"
           aria-pressed={index === value}
-          disabled={disabled}
           onClick={() => onChange(index)}
         >
           {text}

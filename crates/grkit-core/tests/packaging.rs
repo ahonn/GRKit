@@ -1273,3 +1273,80 @@ fn package_viewfinder_descriptors_are_bounded_before_reading() {
         );
     }
 }
+
+#[test]
+fn package_files_gives_the_card_files_of_a_package_from_any_release() {
+    let files = unpack(&package());
+    let card = package_files(&package()).unwrap();
+    assert_eq!(card, card_files(&package()).unwrap());
+    assert!(card
+        .keys()
+        .any(|path| path.starts_with("SCRIPT/GRKIT/EFFECTS/") && path.ends_with(".GRF")));
+
+    // A runtime that this version does not know, as in a ZIP of an older release, fails the
+    // package checks but still gives the files.
+    let mut older = files.clone();
+    older.retain(|name, _| !name.ends_with(".BIN"));
+    let older = repack(&older, CompressionMethod::Deflated);
+    assert!(verify_package(&older).is_err());
+    let kept = package_files(&older).unwrap();
+    assert!(kept
+        .keys()
+        .all(|path| card.contains_key(path) && !path.ends_with(".BIN")));
+    assert_eq!(
+        kept.len(),
+        files
+            .keys()
+            .filter(|name| name.starts_with("SD_ROOT/") && !name.ends_with(".BIN"))
+            .count()
+    );
+
+    // Entries outside SD_ROOT are left out, and a file that is not a ZIP fails.
+    let mut other = Files::new();
+    other.insert("LICENSES.md".into(), b"licenses".to_vec());
+    assert!(package_files(&repack(&other, CompressionMethod::Stored))
+        .unwrap()
+        .is_empty());
+    assert!(package_files(b"not a zip").is_err());
+}
+
+#[test]
+fn a_package_keeps_the_import_library_that_the_camera_does_not_install() {
+    use grkit_core::{card::IMPORTS_FILE, imports};
+    let library = imports::encode(&[
+        imports::Import {
+            details: "{}".into(),
+            effect: testing::effect("lut-warm"),
+        },
+        imports::Import {
+            details: "{}".into(),
+            effect: testing::effect("lut-cold"),
+        },
+    ])
+    .unwrap();
+    let built = assemble_with(
+        &[runtime()],
+        &testing::effect_set(&["test-effect"]),
+        &testing::official_modules(),
+        &camera::GR3,
+        &english(),
+        Extras {
+            imports: Some(&library),
+        },
+    )
+    .unwrap();
+    // The library holds more imports than the package installs, and the list leaves it out.
+    assert_eq!(built.contents.imports, 2);
+    assert_eq!(built.contents.effect_ids, ["test-effect"]);
+    let files = unpack(&built.bytes);
+    assert_eq!(files[&format!("SD_ROOT/{IMPORTS_FILE}")], library);
+    let list = String::from_utf8(files[&format!("SD_ROOT/{PACKAGE_LIST}")].clone()).unwrap();
+    assert!(!list.contains("IMPORTS"));
+    assert_eq!(verify_package(&built.bytes).unwrap().imports, 2);
+    assert_eq!(verify_package(&package()).unwrap().imports, 0);
+
+    // A damaged library fails the package checks.
+    let mut damaged = files.clone();
+    damaged.insert(format!("SD_ROOT/{IMPORTS_FILE}"), b"GRKIMP01".to_vec());
+    assert!(verify_package(&repack(&with_sums(damaged), CompressionMethod::Stored)).is_err());
+}

@@ -56,11 +56,14 @@ export function saveSelection(storage: Pick<Storage, 'setItem'> | null, selectio
   }
 }
 
-/** How closely an import follows its source: the grade of a LUT fit, or `exact` for a native look. */
+/**
+ * How closely an import follows its source: the grade of a LUT fit, or `exact` for a native look
+ * and for an effect restored from a package, which is the same effect as before.
+ */
 export type ImportFit = Grade | 'exact';
 
 export const importFit = (imported: Imported): ImportFit =>
-  imported.kind === 'native' ? 'exact' : imported.grade;
+  imported.kind === 'lut' ? imported.grade : 'exact';
 
 /**
  * The selection after an import of the effects `ids`. They are checked when they follow their

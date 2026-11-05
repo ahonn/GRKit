@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ImportedEffect } from '../catalog';
+import { NATIVE_LOOK_IDS } from './names';
 import { hasNativeLooks, importsForCamera, missingNativeLooks, NATIVE_LOOKS, nativeProblem, takesNativeLooks } from './native';
 
 const effect = (id: string, kind: 'lut' | 'native') => ({ id, imported: { kind } }) as ImportedEffect;
@@ -24,6 +25,7 @@ describe('importsForCamera', () => {
 
   it('tells which native looks the page lacks', () => {
     expect(NATIVE_LOOKS.map((look) => look.id)).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green']);
+    expect(NATIVE_LOOKS.map((look) => look.id)).toEqual(NATIVE_LOOK_IDS);
     expect(missingNativeLooks(imported.slice(0, 1)).map((look) => look.id)).toEqual(
       NATIVE_LOOKS.map((look) => look.id),
     );

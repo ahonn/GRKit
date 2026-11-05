@@ -10,7 +10,7 @@ use zip::{write::SimpleFileOptions, CompressionMethod, DateTime, ZipArchive, Zip
 
 use crate::{
     camera::{self, Camera},
-    card, effects,
+    card, effects, imports,
     language::Language,
     modules, runtime, Files,
 };
@@ -424,6 +424,9 @@ pub struct Contents {
     pub modules: Vec<String>,
     /// The language of the guide.
     pub language: Language,
+    /// The number of imports of the import library (`card::IMPORTS_FILE`), which the camera
+    /// does not install, or 0 without one.
+    pub imports: usize,
     /// The number of package entries, the runtime included.
     pub entries: usize,
 }
@@ -491,6 +494,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     let mut status_icons = 0;
     let mut listed = Vec::new();
     let mut language = None;
+    let mut library = 0;
     for (name, blob) in contents
         .iter()
         .filter(|(name, _)| !mandatory.contains(*name))
@@ -545,6 +549,10 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
             ensure!(language.is_none(), "Package has more than one guide");
             check_guide(blob)?;
             language = Some(guide);
+        } else if *name == format!("SD_ROOT/{}", card::IMPORTS_FILE) {
+            library = imports::decode(blob)
+                .context("Read the import library")?
+                .len();
         } else {
             bail!("Package contains unexpected files: {name}");
         }
@@ -582,6 +590,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         effect_ids: ids.into_iter().collect(),
         modules: module_ids.into_iter().collect(),
         language: language.context("Package has no installation guide")?,
+        imports: library,
         entries: contents.len(),
     })
 }
@@ -634,6 +643,13 @@ pub struct Package {
     pub contents: Contents,
 }
 
+/// The files of a package that the camera does not install.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Extras<'a> {
+    /// The import library of the site (`card::IMPORTS_FILE`, `crate::imports`).
+    pub imports: Option<&'a [u8]>,
+}
+
 /// Builds the package ZIP for one camera from the runtime of each of its
 /// builds, in release order. `modules` holds the module files
 /// (`grkit_core::grm`).
@@ -643,6 +659,18 @@ pub fn assemble(
     modules: &[Vec<u8>],
     camera: &Camera,
     guide: &Guide,
+) -> Result<Package> {
+    assemble_with(runtimes, effects, modules, camera, guide, Extras::default())
+}
+
+/// `assemble`, with the files of `extras`.
+pub fn assemble_with(
+    runtimes: &[VerifiedRuntime],
+    effects: &EffectSet,
+    modules: &[Vec<u8>],
+    camera: &Camera,
+    guide: &Guide,
+    extras: Extras,
 ) -> Result<Package> {
     let mut contents: Files = package_runtime(runtimes, camera)?
         .iter()
@@ -678,6 +706,9 @@ pub fn assemble(
     );
     check_guide(guide.pdf)?;
     contents.insert(guide.language.guide_path(), guide.pdf.to_vec());
+    if let Some(bytes) = extras.imports {
+        contents.insert(format!("SD_ROOT/{}", card::IMPORTS_FILE), bytes.to_vec());
+    }
     contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());
     contents.insert("SHA256SUMS".into(), checksum_list(&contents));
     validate_contents(&contents)?;
@@ -761,8 +792,34 @@ pub fn card_files(bytes: &[u8]) -> Result<Files> {
         .collect())
 }
 
+/// The files that a GRKit ZIP of any release puts on the card, at their paths from the card
+/// root, so the site can read a ZIP as the card that holds it. The archive limits apply, but the
+/// package checks do not: a ZIP of an older release, whose runtime this version does not know,
+/// still gives its files. The caller checks each file that it reads.
+pub fn package_files(bytes: &[u8]) -> Result<Files> {
+    Ok(read_entries(bytes)?
+        .into_iter()
+        .filter_map(|(name, blob)| {
+            name.strip_prefix("SD_ROOT/")
+                .map(|path| (path.to_owned(), blob))
+        })
+        .collect())
+}
+
 /// Reads and checks a package ZIP, and returns what it holds and its entries.
 fn read_package(bytes: &[u8]) -> Result<(Contents, Files)> {
+    let contents = read_entries(bytes)?;
+    let result = validate_contents(&contents)?;
+    ensure!(
+        contents["SHA256SUMS"] == checksum_list(&contents),
+        "SHA256SUMS differs from package"
+    );
+    Ok((result, contents))
+}
+
+/// The entries of a ZIP within the package limits: safe, unique names, no links, and bounded
+/// sizes.
+fn read_entries(bytes: &[u8]) -> Result<Files> {
     let declared_entries = declared_entry_count(bytes)?;
     let mut archive = ZipArchive::new(Cursor::new(bytes)).context("Invalid ZIP archive")?;
     // zip indexes names in a map. Check the raw count so duplicate names cannot disappear.
@@ -806,12 +863,7 @@ fn read_package(bytes: &[u8]) -> Result<(Contents, Files)> {
         );
         contents.insert(name, blob);
     }
-    let result = validate_contents(&contents)?;
-    ensure!(
-        contents["SHA256SUMS"] == checksum_list(&contents),
-        "SHA256SUMS differs from package"
-    );
-    Ok((result, contents))
+    Ok(contents)
 }
 
 fn declared_entry_count(bytes: &[u8]) -> Result<usize> {

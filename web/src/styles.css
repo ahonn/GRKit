@@ -15,6 +15,8 @@
   --display: 'IBM Plex Sans Condensed', var(--cjk), sans-serif;
   --mono: 'IBM Plex Mono', var(--cjk), monospace;
   color-scheme: light;
+  /* The line height of a section heading that stays at the top of a narrow window. */
+  --stuck-heading-line: 36px;
 }
 
 :root[lang='zh-Hant'] {
@@ -160,6 +162,45 @@ button {
 .download.secondary:disabled {
   border-color: var(--line);
   background: transparent;
+}
+
+/* Hover and press feedback. The controls keep their square shape: only the fill changes, and
+   rows underline their name, as the import rows do. Touch screens get the press state only. */
+.button,
+.download,
+.camera {
+  transition: background-color 120ms;
+}
+
+@media (hover: hover) {
+  .button:not(:disabled):not([aria-pressed='true']):not(.primary):not(.danger):hover,
+  .download.outline:not(:disabled):hover,
+  .download.secondary:not(:disabled):hover,
+  .camera:not(:has(input:checked)):not(:has(input:disabled)):hover {
+    background: var(--code);
+  }
+
+  .download:not(.outline):not(.secondary):not(:disabled):hover,
+  .button.primary:not(:disabled):hover {
+    background: var(--ink-2);
+  }
+
+  .module:hover .module-name,
+  .effect-row .row-body:hover .row-name {
+    text-decoration: underline;
+  }
+}
+
+.button:not(:disabled):not([aria-pressed='true']):not(.primary):not(.danger):active,
+.download.outline:not(:disabled):active,
+.download.secondary:not(:disabled):active,
+.camera:not(:has(input:checked)):not(:has(input:disabled)):active {
+  background: var(--line);
+}
+
+.download:not(.outline):not(.secondary):not(:disabled):active,
+.button.primary:not(:disabled):active {
+  background: var(--muted);
 }
 
 /* A banner above the page, in a browser of a computer that cannot write to a card. */
@@ -694,6 +735,8 @@ button {
     flex-basis: 100%;
     padding: 12px 0;
     margin: -12px 0;
+    /* A fixed height, so the film look preview can stay in view right under it. */
+    line-height: var(--stuck-heading-line);
     background: var(--paper);
   }
 }
@@ -712,6 +755,13 @@ button {
   font-size: 13px;
   line-height: 1.6;
   color: var(--muted);
+}
+
+/* Notes that belong together, such as the two ways to add film looks, closer than sections. */
+.note-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .status {
@@ -1416,6 +1466,17 @@ td input[type='checkbox'] {
   line-height: 1.6;
 }
 
+/* Steps with an action under them share a section body, which sets the width. In its column
+   the flex sizes of a row would be heights. */
+.section-body > .steps,
+.section-body > .package-action {
+  flex: none;
+}
+
+.section-body > .package-action {
+  align-items: flex-start;
+}
+
 code {
   font-family: 'IBM Plex Mono', monospace;
   font-size: 14px;
@@ -1740,8 +1801,9 @@ code {
   background: var(--selected);
 }
 
+/* The row of the look in the preview: a full ring, so it shows on checked rows too. */
 .effect-row[data-previewed] {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 0 0 0 2px var(--ink);
 }
 
 .row-check {
@@ -2009,6 +2071,34 @@ button.row-body {
   flex-direction: column;
   gap: 24px;
   min-width: 0;
+}
+
+/* On narrow screens the list sits under the preview. The picture stays in view, under the
+   section heading, while the user scrolls the list, so a tap on a look shows it. It takes at
+   most two fifths of the window height. */
+@media (max-width: 1023.98px) {
+  .effects-body .preview-row {
+    display: contents;
+  }
+
+  .effects-body .viewer {
+    position: sticky;
+    top: 16px;
+    /* Under the section heading, which is 5. */
+    z-index: 4;
+    flex: none;
+    align-self: center;
+    width: min(100%, 60svh);
+    padding-bottom: 8px;
+    background: var(--paper);
+  }
+}
+
+@media (max-width: 900px) {
+  .effects-body .viewer {
+    /* Under the heading, which spans the page here: its line and its padding. */
+    top: calc(var(--stuck-heading-line) + 24px);
+  }
 }
 
 /* On wide screens the list sits beside the preview, and the preview stays in view while the

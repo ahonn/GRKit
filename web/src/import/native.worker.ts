@@ -14,6 +14,7 @@ export interface NativeLook {
   version: string;
   blob: Uint8Array;
   table: Uint8Array;
+  tone: Uint16Array;
   icon: Uint8Array;
   monochrome: boolean;
 }
@@ -37,6 +38,7 @@ self.onmessage = async ({ data }: MessageEvent<NativeRequest>) => {
           version: effect.version,
           blob: effect.blob,
           table: effect.preview,
+          tone: effect.tone,
           icon: effect.icon,
           monochrome: effect.monochrome,
         };
@@ -45,7 +47,7 @@ self.onmessage = async ({ data }: MessageEvent<NativeRequest>) => {
       }
     });
     self.postMessage({ kind: 'looks', looks } satisfies NativeResponse, {
-      transfer: looks.flatMap((look) => [look.blob.buffer, look.table.buffer, look.icon.buffer]),
+      transfer: looks.flatMap((look) => [look.blob.buffer, look.table.buffer, look.tone.buffer, look.icon.buffer]),
     });
   } catch (error) {
     self.postMessage({

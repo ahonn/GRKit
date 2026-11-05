@@ -86,6 +86,25 @@ function fitWords(words: readonly string[], limit: number, separator: string): s
   return text.trim();
 }
 
+/** The start of the ID of each LUT import (`effectId`). No catalog ID starts with it. */
+const LUT_PREFIX = 'lut-';
+
+/** True when `id` is the ID of a LUT import, so a package effect with it came from a browser. */
+export const isLutImportId = (id: string): boolean => id.startsWith(LUT_PREFIX);
+
+/** The IDs of the native looks (`NATIVE_LOOKS` of `native.ts`, which a worker cannot load). */
+export const NATIVE_LOOK_IDS: readonly string[] = ['gr4-cinema-yellow', 'gr4-cinema-green'];
+
+/** True for the effect ID of a native look. */
+export const isNativeLookId = (id: string): boolean => NATIVE_LOOK_IDS.includes(id);
+
+/** The number of values of tone curves (grkit-core `site::ToneCurves::VALUES`). */
+const TONE_VALUES = 512;
+
+/** True for the tone curves of a native look: none (an empty array) or both curves. */
+export const isTone = (value: unknown): value is Uint16Array =>
+  value instanceof Uint16Array && (value.length === 0 || value.length === TONE_VALUES);
+
 /**
  * A new effect ID for `name`: `lut-` and the lowercase letters and digits of the name, with a
  * number when the ID is taken. The prefix keeps imported IDs apart from the catalog IDs.
@@ -97,7 +116,7 @@ export function effectId(name: string, taken: ReadonlySet<string>): string {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'effect';
   // Room for "-" and two digits.
-  const base = `lut-${slug}`.slice(0, MAX_ID - 3).replace(/-+$/, '');
+  const base = `${LUT_PREFIX}${slug}`.slice(0, MAX_ID - 3).replace(/-+$/, '');
   let id = base;
   for (let number = 2; taken.has(id); number += 1) {
     id = `${base}-${number}`;

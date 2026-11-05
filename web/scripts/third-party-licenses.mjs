@@ -144,11 +144,7 @@ const text = [
   'People dining outside, Rue des Marronniers, Lyon, France by Jules Verne Times Two, taken with a RICOH GR III. CC BY-SA 4.0.',
   'Source: https://commons.wikimedia.org/wiki/File:People_dining_outside,_Rue_des_Marronniers,_Lyon,_France_julesvernex2.jpg',
   'License: https://creativecommons.org/licenses/by-sa/4.0/',
-  'The Glow images made from this photo (landing/glow-*.jpg, landing/bloom-*.jpg, landing/halation-*.jpg) are licensed under CC BY-SA 4.0.\n',
-  'Playlist ^4 by Mikhail Matvienko, taken with a RICOH GR IIIx. CC BY-SA 2.0.',
-  'Source: https://commons.wikimedia.org/wiki/File:Playlist_%5E4_-_Flickr_-_Mikhail_Bearr.jpg',
-  'License: https://creativecommons.org/licenses/by-sa/2.0/',
-  'The Grain images made from this photo (landing/grain-*.jpg) are licensed under CC BY-SA 2.0.',
+  'The Glow images made from this photo (landing/glow-off.jpg, landing/bloom.jpg, landing/halation.jpg) are licensed under CC BY-SA 4.0.',
 ].join('\n');
 writeFileSync(join(dist, 'THIRD_PARTY_LICENSES.txt'), text);
 // The site serves dist/ as it is. The intermediate list is not a site file.
