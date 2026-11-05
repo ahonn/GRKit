@@ -1,3 +1,11 @@
+## 1.4.2 (2026-11-05)
+
+### Fixes
+
+- In ADJ, Glow shows its name before its value, for example "Glow: Off", as the other modules do.
+- Choose the color of Halation: Red, Orange, Gold, or White.
+- GR IV Monochrome no longer loads Film Look, whose effects are made for color sensors.
+
 ## 1.4.1 (2026-11-04)
 
 ### Fixes
