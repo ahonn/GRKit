@@ -9,7 +9,7 @@ import { provideTable } from '../preview/render';
 /** The start of each compiled effect (`grkit_core::effects::MAGIC`). */
 const MAGIC = 'GRFX0001';
 
-interface Stored extends ImportedEffect {
+export interface StoredImport extends ImportedEffect {
   /** The time of the import, so the page shows the imports in their order. */
   savedAt: number;
 }
@@ -19,8 +19,8 @@ interface Stored extends ImportedEffect {
  * or null. Pages before the native looks stored LUT imports without `kind`, so a record without
  * it is a LUT import.
  */
-export function storedImport(value: unknown): Stored | null {
-  const item = value as Partial<Stored> | null;
+export function storedImport(value: unknown): StoredImport | null {
+  const item = value as Partial<StoredImport> | null;
   const imported = item?.imported as Record<string, unknown> | undefined;
   if (
     typeof item?.id !== 'string' ||
@@ -38,7 +38,7 @@ export function storedImport(value: unknown): Stored | null {
   const kind = imported.kind ?? 'lut';
   if (kind !== 'lut' && kind !== 'native') return null;
   if (kind === 'native' && typeof imported.version !== 'string') return null;
-  return { ...item, imported: { ...imported, kind } } as Stored;
+  return { ...item, imported: { ...imported, kind } } as StoredImport;
 }
 
 /**
@@ -61,9 +61,10 @@ export async function loadImports(): Promise<ImportedEffect[]> {
   }
 }
 
-export async function saveImport(effect: ImportedEffect): Promise<void> {
+/** Keeps `effect`. `savedAt` orders the imports: a restore keeps the order of its backup. */
+export async function saveImport(effect: ImportedEffect, savedAt = Date.now()): Promise<void> {
   try {
-    await run(IMPORTS, 'readwrite', (store) => store.put({ ...effect, savedAt: Date.now() } satisfies Stored));
+    await run(IMPORTS, 'readwrite', (store) => store.put({ ...effect, savedAt } satisfies StoredImport));
   } catch (error) {
     console.warn('The imported effect cannot be kept in this browser.', error);
   }

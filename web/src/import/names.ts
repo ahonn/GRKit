@@ -213,3 +213,18 @@ export function base64(bytes: Uint8Array): string {
   }
   return btoa(text);
 }
+
+/** The bytes of standard base64 with padding, or null when `text` is not base64. */
+export function unbase64(text: string): Uint8Array | null {
+  if (text.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(text)) return null;
+  try {
+    const binary = atob(text);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
