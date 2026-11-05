@@ -150,6 +150,7 @@ const en = {
   packageDone: 'The camera, modules, and film looks of this GRKit.zip are back.',
   packageImports: (count: number) =>
     count === 1 ? '1 imported film look is back.' : `${count} imported film looks are back.`,
+  packageRecipes: (count: number) => (count === 1 ? '1 recipe is back.' : `${count} recipes are back.`),
   packageLocked: 'Unlock the GR IV looks again to include them.',
   packageError: 'This file is not a GRKit.zip.',
   /** How closely an imported effect follows its LUT, by its grade (`fit::Grade`). The page
@@ -650,6 +651,7 @@ const zhHans: Strings = {
   packageReading: '正在读取 GRKit.zip…',
   packageDone: '已恢复这个 GRKit.zip 的机型、模块和胶片风格。',
   packageImports: (count) => `已恢复 ${count} 种导入的胶片风格。`,
+  packageRecipes: (count) => `已恢复 ${count} 个配方。`,
   packageLocked: '要加入 GR IV 色彩，请重新解锁。',
   packageError: '这个文件不是 GRKit.zip。',
   fitText: {
@@ -1084,6 +1086,7 @@ const zhHant: Strings = {
   packageReading: '正在讀取 GRKit.zip…',
   packageDone: '已還原這個 GRKit.zip 的機型、模組和底片風格。',
   packageImports: (count) => `已還原 ${count} 種匯入的底片風格。`,
+  packageRecipes: (count) => `已還原 ${count} 個配方。`,
   packageLocked: '要加入 GR IV 色彩，請重新解鎖。',
   packageError: '這個檔案不是 GRKit.zip。',
   fitText: {
@@ -1519,6 +1522,7 @@ const ja: Strings = {
   packageReading: 'GRKit.zip を読み込んでいます…',
   packageDone: 'この GRKit.zip のカメラ、モジュール、フィルムルックを復元しました。',
   packageImports: (count) => `読み込んだフィルムルックを ${count} 個復元しました。`,
+  packageRecipes: (count) => `レシピを ${count} 個復元しました。`,
   packageLocked: 'GR IV のルックを入れるには、もう一度ロックを解除してください。',
   packageError: 'このファイルは GRKit.zip ではありません。',
   fitText: {
@@ -1956,6 +1960,7 @@ const ko: Strings = {
   packageReading: 'GRKit.zip을 읽는 중…',
   packageDone: '이 GRKit.zip의 카메라, 모듈, 필름 룩을 복원했습니다.',
   packageImports: (count) => `가져온 필름 룩 ${count}개를 복원했습니다.`,
+  packageRecipes: (count) => `레시피 ${count}개를 복원했습니다.`,
   packageLocked: 'GR IV 색감을 넣으려면 다시 잠금 해제하세요.',
   packageError: '이 파일은 GRKit.zip이 아닙니다.',
   fitText: {

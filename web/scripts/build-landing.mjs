@@ -1,12 +1,15 @@
-// Builds the images of the landing page in public/landing/ from the source photos, which stay
-// outside the repository:
-//   node scripts/build-landing.mjs PHOTOS EFFECTS [GRAIN]
+// Builds the images of the landing page in public/landing/, and the pictures of the recipe
+// presets in public/recipes/, from the source photos, which stay outside the repository:
+//   node scripts/build-landing.mjs PHOTOS EFFECTS [GRAIN [RECIPES]]
 // PHOTOS holds the JPEGs of SOURCES under their `file` names. EFFECTS is the site effects folder
 // of the preview target (catalog.json and preview/). The film looks use the preview tables, as
 // the effects section does. Date Imprint and Glow run the module code on the full-size photo,
 // built for this computer like `grkit module test` (it needs cargo and a C compiler). Grain comes
 // from the camera's own grain stage, so GRAIN holds pictures that GR III firmware 2.10 recorded of
 // the tram photo at ISO 100, with Film Look Tri-X 400 and each Grain strength (GRAIN_FILES).
+// The recipe presets also come from the camera: the preview tables end at diffuse white, so they
+// cannot show the lights that Glow needs. RECIPES holds pictures that GR III firmware 2.10
+// developed from GR III DNGs, without a recipe and with each preset (RECIPE_FILES).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -20,6 +23,7 @@ import { linearSample } from './linear-sample.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const OUTPUT = fileURLToPath(new URL('../public/landing/', import.meta.url));
+const RECIPES = fileURLToPath(new URL('../public/recipes/', import.meta.url));
 const QUALITY = 80;
 
 /** The source photos. The page credits each one; src/landing-data.ts holds the credits. */
@@ -39,9 +43,22 @@ const SOURCES = {
 };
 /** The recorded Grain pictures in GRAIN, Weak to Extra Strong, 6000 x 4000. */
 const GRAIN_FILES = ['grain-1-weak.jpg', 'grain-2-medium.jpg', 'grain-3-strong.jpg', 'grain-4-extra.jpg'];
+/**
+ * The developed pictures in RECIPES, 6000 x 4000, each with the top left of its crop: a photo
+ * without a recipe, then the presets that use the photo. The site credits each photo
+ * (src/landing-data.ts): the takeaway is Tony Barrett's night-takeaway-queue.dng of
+ * discuss.pixls.us/t/40918, and the dunes are R0000357.DNG of raw.pixls.us.
+ */
+const RECIPE_FILES = [
+  ['takeaway.jpg', 620, 330],
+  ['cinestill-800t.jpg', 620, 330],
+  ['dunes.jpg', 1200, 700],
+  ['bennet-800.jpg', 1200, 700],
+  ['reggie-negative.jpg', 1200, 700],
+];
 
-const [photos, effects, grain] = process.argv.slice(2);
-if (!photos || !effects) throw new Error('Usage: node scripts/build-landing.mjs PHOTOS EFFECTS [GRAIN]');
+const [photos, effects, grain, recipes] = process.argv.slice(2);
+if (!photos || !effects) throw new Error('Usage: node scripts/build-landing.mjs PHOTOS EFFECTS [GRAIN [RECIPES]]');
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 function photo(key) {
   const { file, sha256: expected } = SOURCES[key];
@@ -150,6 +167,18 @@ try {
   save('bloom.jpg', lamps(glow(street, [2, 0, 7.2])));
   save('halation.jpg', lamps(glow(street, [0, 2, 7.2])));
   console.log('Date Imprint and Glow: done.');
+
+  // The recipe presets: a 4:3 part of each developed picture, at a third of its size.
+  if (recipes) {
+    mkdirSync(RECIPES, { recursive: true });
+    RECIPE_FILES.forEach(([file, left, top]) => {
+      const picture = jpeg.decode(readFileSync(join(recipes, file)), { useTArray: true, formatAsRGBA: false, maxMemoryUsageInMB: 1024 });
+      if (picture.width !== 6000 || picture.height !== 4000) throw new Error(`${file} is not a 6000 x 4000 picture`);
+      const { width, height, rgba } = crop(picture, left, top, 2160, 1620, 3);
+      writeFileSync(join(RECIPES, file), encode(width, height, rgba));
+    });
+    console.log('Recipe presets: done.');
+  }
 
   // Grain: the light grey footbridge girder, at full size. A smaller size averages the grain
   // away, and the grain shows most on light mid tones.
