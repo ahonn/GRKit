@@ -112,6 +112,8 @@ type Packager = InstanceType<Wasm['Package']>;
  * grkit-wasm checks each runtime file against `build.json` and each effect's format.
  * `onProgress` receives the number of bytes of the files of this package that have arrived, and
  * whether a file of it waits for a new attempt.
+ * `recipes` is the recipe library (`RECIPES.BIN`) that the package puts in its package folder, or
+ * null. INSTALL copies it to the data folder.
  */
 async function assemble<T>(
   targets: readonly string[],
@@ -122,6 +124,7 @@ async function assemble<T>(
   imports: Uint8Array | null,
   onProgress: (received: number, retrying: boolean) => void,
   finish: (builder: Packager) => T,
+  recipes: Uint8Array | null = null,
 ): Promise<T> {
   const used = new Set<string>([wasmUrl]);
   const use = (url: string) => {
@@ -174,6 +177,7 @@ async function assemble<T>(
       builder.setLanguage(language);
       builder.setGuide(guide);
       if (imports) builder.setImports(imports);
+      if (recipes) builder.setRecipes(recipes);
       for (const build of builds.slice(1)) builder.addBuild(build);
       for (const [number, target] of targets.entries()) {
         const paths = builder.runtimePaths(number);
@@ -217,11 +221,22 @@ export function buildPackage(
   language: string,
   imports: Uint8Array | null,
   onProgress: (received: number, retrying: boolean) => void,
+  recipes: Uint8Array | null = null,
 ): Promise<Blob> {
-  return assemble(targets, camera, effects, modules, language, imports, onProgress, (builder) => {
-    const zip = builder.build();
-    return new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' });
-  });
+  return assemble(
+    targets,
+    camera,
+    effects,
+    modules,
+    language,
+    imports,
+    onProgress,
+    (builder) => {
+      const zip = builder.build();
+      return new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' });
+    },
+    recipes,
+  );
 }
 
 /**
@@ -236,13 +251,23 @@ export function buildCardFiles(
   language: string,
   imports: Uint8Array | null,
   onProgress: (received: number) => void,
+  recipes: Uint8Array | null = null,
 ): Promise<CardFile[]> {
-  return assemble(targets, camera, effects, modules, language, imports, onProgress, (builder) =>
-    builder.cardFiles().map((file) => {
-      const item = { path: file.path, bytes: file.bytes };
-      file.free();
-      return item;
-    }),
+  return assemble(
+    targets,
+    camera,
+    effects,
+    modules,
+    language,
+    imports,
+    onProgress,
+    (builder) =>
+      builder.cardFiles().map((file) => {
+        const item = { path: file.path, bytes: file.bytes };
+        file.free();
+        return item;
+      }),
+    recipes,
   );
 }
 

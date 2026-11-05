@@ -4,12 +4,15 @@ import { sentences, type Strings } from '../i18n';
 /** The read of a GRKit.zip of an earlier download. */
 export type PackageStatus =
   | { state: 'idle' | 'reading' | 'error' }
-  /** `added` imports came back, and `locked` is true when native looks need an unlock again. */
-  | { state: 'done'; added: number; locked: boolean };
+  /**
+   * `added` imports and `recipes` recipes came back, and `locked` is true when native looks need
+   * an unlock again.
+   */
+  | { state: 'done'; added: number; recipes: number; locked: boolean };
 
 /**
  * Opens a GRKit.zip of an earlier download, so the page shows what it holds: its camera, its
- * modules, its film looks, and the imports of the browser that made it.
+ * modules, its film looks, its recipes, and the imports of the browser that made it.
  */
 export function PackageOpen({
   strings: t,
@@ -55,6 +58,7 @@ export function PackageOpen({
             {sentences(
               t.packageDone,
               ...(status.added > 0 ? [t.packageImports(status.added)] : []),
+              ...(status.recipes > 0 ? [t.packageRecipes(status.recipes)] : []),
               ...(status.locked ? [t.packageLocked] : []),
             )}
           </p>
