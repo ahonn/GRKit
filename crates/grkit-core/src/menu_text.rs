@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 24;
+pub const STRINGS: usize = 25;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -277,6 +277,11 @@ pub const RUNS: &[Run] = &[
         3,
         "The switch that stops each module at once: its ADJ summary while on, and while off, then its MENU row.",
     ),
+    run(
+        "SEPARATOR",
+        1,
+        "Between a group title and its value in the ADJ root summary.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -327,6 +332,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
             summary(w.enable, w.off),
             w.enable_grkit.into(),
         ],
+        "SEPARATOR" => vec![w.separator.into()],
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -436,6 +442,11 @@ mod tests {
         assert_eq!(english[id("OFF")], "Off");
         assert_eq!(english[id("IMAGE_OFF_SUMMARY")], "Film Look: Off");
         assert_eq!(english[id("IMAGE_PREFIX")], "Film Look: ");
+        assert_eq!(english[id("SEPARATOR")], ": ");
+        assert_eq!(
+            strings(Language::SimplifiedChinese, VERSION)[id("SEPARATOR")],
+            "："
+        );
     }
 
     #[test]

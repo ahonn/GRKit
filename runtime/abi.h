@@ -634,6 +634,8 @@
 /* The switch that stops each module at once: its ADJ summary while on, and
    while off, then its MENU row. */
 #define TEXT_SWITCH 21
-#define GRKIT_TEXT_STRINGS 24
+/* Between a group title and its value in the ADJ root summary. */
+#define TEXT_SEPARATOR 24
+#define GRKIT_TEXT_STRINGS 25
 
 #endif

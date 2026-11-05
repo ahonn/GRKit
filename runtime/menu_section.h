@@ -217,7 +217,7 @@ static void menu_row_fill(u32 slot,u32 row) {
         if(page<module_pages(h)) {
             const MenuPage *m=menu_page(h,page);
             label=m->title(h);
-            value=manage_halted(h,module) ? on_off_text(h,1) : choice_group(h) ? m->summary(h) : choice_direct(h) ? no_text : m->label(h,m->committed(h));
+            value=manage_halted(h,module) ? on_off_text(h,1) : choice_group(h) ? group_value_text(h) : choice_direct(h) ? no_text : m->label(h,m->committed(h));
         }
         else { label=manage_name(h,module); value=on_off_text(h,manage_off(h,module)); }
     }

@@ -214,20 +214,35 @@ static u32 group_icon(volatile u32 *h,u32 row) {
     if((icon=page_icon(group_child_address(h,row)))) return module_icon_value(h,icon,CHOICE_ENTRY(h)[2]);
     return choice_tile(h,row+1);
 }
-/* The value of a group in MENU and on the ADJ root: the titles of the
-   children that are on, joined by a slash, or Off. */
+/* Copies `from` to the group value buffer after `n` units, and returns
+   the new length. The NUL stays inside the buffer. */
+static u32 group_copy(volatile u16 *out,u32 n,const u16 *from) {
+    u32 i;
+    for(i=0;from[i] && n<GRKIT_TEXT_GROUP_UNITS-1;++i) out[n++]=from[i];
+    return n;
+}
+/* Writes the titles of the children that are on, joined by a slash, or
+   Off, after `n` units of the group value buffer, with the NUL. */
+static const u16 *group_join(volatile u32 *h,u32 n) {
+    volatile u16 *out=(volatile u16 *)MENU_TEXT(GRKIT_TEXT(h)+GRKIT_TEXT_GROUP_VALUE);
+    u32 row, start=n;
+    for(row=0;row<group_rows(h) && row<4;++row) {
+        if(!group_checked(h,row)) continue;
+        if(n>start && n<GRKIT_TEXT_GROUP_UNITS-1) out[n++]='/';
+        n=group_copy(out,n,group_label(h,row));
+    }
+    if(n==start) n=group_copy(out,n,text(h,TEXT_OFF));
+    out[n]=0;
+    return (const u16 *)out;
+}
+/* The value of a group in MENU. */
+static const u16 *group_value_text(volatile u32 *h) { return group_join(h,0); }
+/* The summary of a group on the ADJ root: the title, then the value, as
+   the summary of a choice page. */
 static const u16 *group_summary(volatile u32 *h) {
     volatile u16 *out=(volatile u16 *)MENU_TEXT(GRKIT_TEXT(h)+GRKIT_TEXT_GROUP_VALUE);
-    u32 row, n=0, i;
-    for(row=0;row<group_rows(h) && row<4;++row) {
-        const u16 *title;
-        if(!group_checked(h,row)) continue;
-        if(n && n<GRKIT_TEXT_GROUP_UNITS-1) out[n++]='/';
-        title=group_label(h,row);
-        for(i=0;title[i] && n<GRKIT_TEXT_GROUP_UNITS-1;++i) out[n++]=title[i];
-    }
-    out[n]=0;
-    return n ? (const u16 *)out : text(h,TEXT_OFF);
+    u32 n=group_copy(out,0,choice_title(h));
+    return group_join(h,group_copy(out,n,text(h,TEXT_SEPARATOR)));
 }
 static void menu_open(volatile u32 *h,u32 module);
 static void group_apply(volatile u32 *h,u32 row) {

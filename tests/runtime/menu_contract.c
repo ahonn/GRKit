@@ -2255,7 +2255,9 @@ static void group_ok_opens_each_child_and_returns_to_its_row(void)
     volatile u32 *h = test_header;
     menu_start(h);
     h[GRKIT_HOST_MENU_CURSOR / 4] = root_row(h, GUIDES_MODULE);
-    assert(current_module(h)->summary(h) == text(h, TEXT_OFF));
+    /* On the ADJ root, a group names itself before its value, as a choice
+       page does: Off while no child is on. */
+    assert(same(current_module(h)->summary(h), "Guides: Off"));
     assert(!confirm_selection(h));
     assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
     assert(!current_module(h)->checked(h, 0) && !current_module(h)->checked(h, 1));
@@ -2287,9 +2289,11 @@ static void group_ok_opens_each_child_and_returns_to_its_row(void)
     menu_reopen(h);
     assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && h[GRKIT_HOST_MENU_CURSOR / 4] == root_row(h, GUIDES_MODULE));
     /* The value of the group: the titles of the children that are on. */
-    assert(same(current_module(h)->summary(h), "Second"));
+    assert(same(current_module(h)->summary(h), "Guides: Second"));
+    assert(same(group_value_text(h), "Second"));
     settings_memory[SETTINGS_ENTRY(0) + 1] = 1;
-    assert(same(current_module(h)->summary(h), "First/Second"));
+    assert(same(current_module(h)->summary(h), "Guides: First/Second"));
+    assert(same(group_value_text(h), "First/Second"));
     /* A half press on the group list changes nothing. Fn on a child row
        opens that child's settings. */
     menu_open(h, GUIDES_MODULE);
@@ -2364,10 +2368,12 @@ static void group_pages_open_children_and_return_without_committing(void)
     menu_row_fill(0, TEST_OBJECTS + 0x800);
     /* The row of a group shows the children that are on: none, so Off. */
     {
-        const u16 *value = menu_page(h, GUIDES_MODULE)->summary(h);
+        const u16 *value;
+        (void)menu_page(h, GUIDES_MODULE);
+        value = group_value_text(h);
         u32 length = 0;
         while (value[length]) ++length;
-        assert(value == text(h, TEXT_OFF));
+        assert(same(value, "Off"));
         assert(menu_row(h, 0)[MENU_ROW_VALUE_TEXT_AT / 4] == ((length + 1) | 0x100));
     }
     assert(menu_settings_controller(MENU_ROW_TARGET) == SETTINGS_SUBMENU);
