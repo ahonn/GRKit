@@ -1,25 +1,25 @@
 {
   "code_memory": {
-    "available": 12481280,
+    "available": 12481024,
     "base": 1413529600,
-    "end": 1413582080,
+    "end": 1413582336,
     "limit": 1426063360,
-    "used": 52480
+    "used": 52736
   },
   "components": {
     "framing": {
-      "address": 1413564928,
-      "end": 1413582028,
-      "limit": 12498432,
-      "sha256": "55baccc0b21e8353a26439a0c78d24732e143990f131f770f70daa3b0434d7d7",
+      "address": 1413565184,
+      "end": 1413582284,
+      "limit": 12498176,
+      "sha256": "8a2555582eb2f29bad50ce801e3bf2e9e5f19f6db8e46b4ddebbf113357374a5",
       "size": 17100
     },
     "menu": {
       "address": 1413530880,
-      "end": 1413564766,
+      "end": 1413564930,
       "limit": 12532480,
-      "sha256": "bcce1fc6bf957edba4ccac7959a66c940ae2a014f50db832175a345bbf8a8ab4",
-      "size": 33886
+      "sha256": "34be4ff9f65d3c0dc606d4861f7b397c1f25d4fb17ed9626d47538089937fdbf",
+      "size": 34050
     },
     "processing": {
       "address": 1413529856,
@@ -33,8 +33,8 @@
   "files": [
     {
       "path": "SCRIPT/GRKIT/CORE.BIN",
-      "sha256": "7849219c24f9f058cf3a37df3588cbc1553e33f80084a5020b185fa77c3222db",
-      "size": 432732
+      "sha256": "75d1243459c156f4737879481e2029a528f6663d740edee5374d720d0291b390",
+      "size": 432916
     },
     {
       "path": "SCRIPT/GRKIT/INSTALL.SH",
@@ -58,7 +58,7 @@
     }
   ],
   "firmware_sha256": "7563d7e462f0c53b6ab2fbab7cdfbbb57151a41192ee82f4f3a2108f9d77650d",
-  "generated_header_sha256": "c2b186c317281878a642d6f665e541e8e605755d6e8e8f38d0e93b857c356e8f",
+  "generated_header_sha256": "ee5c999ca39148a303680b4e6ab11c52abd2e07129e4b01ba1b7e18ad8a43ed8",
   "points": {
     "capture.aspect": 38,
     "menu.page": 53,
@@ -73,8 +73,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "098913de0978d8963b0c07e784618c2a9bb8637db227464189e17ff0d95d6e92",
-    "Cargo.toml": "d2affb7fabc793e71b0028808cbe333fb207c242f795127f439e3628d1226f08",
+    "Cargo.lock": "10acc5112ebca16757829783d18ee04499526019d7beaf006464d2a7ac63387c",
+    "Cargo.toml": "52bccb96a3247568885e3aadf825d1a901317c51fbb1d64274331f8d319f9f87",
     "crates/grkit-build/Cargo.toml": "9a8c29261f78944ee9e1eed9ee46b8b39110ebce1881b09348308ae7da75b0c9",
     "crates/grkit-build/src/arm.rs": "cead1100e35ba8ca8c522ef6d0fb74cd057e549401eba94de76fe6cc45cbfe90",
     "crates/grkit-build/src/components.rs": "288d376a605021e06cf06719e74df265d81a27b5012f739b74004901b838d26b",
@@ -103,7 +103,7 @@
     "crates/grkit-core/src/artwork.rs": "580e282857b71939e926292c9c257fc2250bd6f6db895baf84bfce6765340cdc",
     "crates/grkit-core/src/camera.rs": "d7c0edb620955377f59bd6c170dc92ddb36afc924f46decd9b5a02b616fc7967",
     "crates/grkit-core/src/capabilities.rs": "29fc13d69b23f90f2750e660d301df559db6d963f5ba4be77df422e444722829",
-    "crates/grkit-core/src/card.rs": "50026130f38dcd2b0b707877b265cb332b632cb159169dbcc08df3905846e3aa",
+    "crates/grkit-core/src/card.rs": "d2db9fdf8004ddf43102ecf774b71a0c650c4b93b0b0186ba05b2010991e2825",
     "crates/grkit-core/src/color.rs": "1c81635b14bbd5086ba91a79d85b6fdbf8b14950f871fac95b434e8883a2fcb8",
     "crates/grkit-core/src/cube.rs": "9b5b523700d12a0311335d707fecd0a96a35478dca3c5a66b7f473a3c3149f20",
     "crates/grkit-core/src/effects.rs": "ada8ed519a6f2d707f41100577955747237d83cd1277529ee7f7ad90e4af3f89",
@@ -117,22 +117,23 @@
     "crates/grkit-core/src/grm.rs": "86c4284a8b26af23e6aa821dc4ade1230a761166d665b945f946af5a98c89b5b",
     "crates/grkit-core/src/guide.rs": "788866dc1dc12a236e0a55dda3aaae498e0b4783758caee80a5ebdc95cd29c58",
     "crates/grkit-core/src/hue.rs": "4ff7496c4246473db7a364899e2291d26183a0ae35b5ec6119dcbaa2405053eb",
+    "crates/grkit-core/src/imports.rs": "681ccff0db9b32b93172e658d1f7f85361471f78ef6332a6d5ea3703b953fdcc",
     "crates/grkit-core/src/korean_font.txt": "3c63ca3341d581cbf9018e4a8b08671d43b3fd82d58623b174712be9556f1908",
     "crates/grkit-core/src/language.rs": "a4c0019a3735f383afef555a707bc00cc85630edcad58932ee59c9fa9fdde713",
-    "crates/grkit-core/src/lib.rs": "69c60403b0c4486720f8cf315fa98312b54fd18e828d032a13aecffd7ad010b0",
+    "crates/grkit-core/src/lib.rs": "a924d5790825b266d1c3c5c1303eef09230bc5c68914da19c7a6a988ab2c4930",
     "crates/grkit-core/src/lut_image.rs": "4a66bdbd1a085534bbfbe3c814f06721871e5bb24d67690aee89f27fccc3d6b8",
     "crates/grkit-core/src/menu_text.rs": "7d82e90202f3eea052c8893869c75d92a5619022657a87faae36eb68dc1988aa",
     "crates/grkit-core/src/modules.rs": "3ca02be3eb56e936a51fb8edda1b74c020e8f4bcc5b3ac7ed52d99a79699face",
     "crates/grkit-core/src/native_look.rs": "69783e59361389f5cc4eea1cbc03667ac4726b114d85d2fb1b71211646746cab",
-    "crates/grkit-core/src/native_tone.rs": "709adf8e25099cf2cee54afb9027fcf70e35e9b1519d32784f395b74734c908b",
-    "crates/grkit-core/src/packaging.rs": "be9a58748637ee9c2a6a92fa0064f59d085f67201666a4df01a4877af1ef111f",
+    "crates/grkit-core/src/native_tone.rs": "719858c8ad497378bfbdcac6ea978c35332db197e23b3fdf602848a9983239f0",
+    "crates/grkit-core/src/packaging.rs": "c2684c6b82dba3ac389c165dfadbcfb71458f773c8d05b027746572dabff46ef",
     "crates/grkit-core/src/png.rs": "4472f768b82a53ab180e46498819a5daeb9d9ef39727e7595a0a511afeca552e",
     "crates/grkit-core/src/runtime/files.rs": "2dc7d900aee3f7c64dc796252d345a9fdb3792c7e0bbcf091ff5f1dd91446dc1",
     "crates/grkit-core/src/runtime/loader.rs": "502e2ff4b826b24db42e54c612bf1460123159fe349b7b8e065295bf857f82cf",
     "crates/grkit-core/src/runtime/mod.rs": "9c68736588c60d86adaceeb6862633415bc43e5b145622666f4c6875e1547889",
     "crates/grkit-core/src/runtime/state.rs": "47dd4c0cc75071f6938d85db86c6263f33bd5f0b45d81e0ad5a286b2c951f30e",
     "crates/grkit-core/src/selective.rs": "b3e635e07dcc3747171cbce63f240b69cb0063e6825ee80e8745d94987e21788",
-    "crates/grkit-core/src/site.rs": "77804e7eab3bdb48ed83df30f641f726bcb077e1cd93b50f5519b7de600f02ca",
+    "crates/grkit-core/src/site.rs": "70159dccfc1bb7480338717f72d2856e8e5915ec48ad34bac28db647b026c80b",
     "crates/grkit-core/src/testing.rs": "fb64ecf7f22b0ab0dbfcdfa48c4c089616f9f347f6e1531f007b108e952b6cda",
     "crates/grkit-core/src/tiff.rs": "aa3e294faaaba567b6bee4092a3a28b627bdc11fc01b30af68c170c08b4afd75",
     "runtime/abi.h": "b6cb6f7bc6d522f660c98a864588acbc051b65c4580d44ff142f13708b8477a6",
@@ -165,8 +166,8 @@
     "runtime/menu.c": "1150a306f21be71c901f3c87e9896a18fee211e18f691d595ac2e00fe70bd84e",
     "runtime/menu_about.h": "3070248f879cbe447e27a938b6566c336503eebf19358b0c57f8e6e894d3dc85",
     "runtime/menu_listed.h": "7ba72443678d9d28df8b033119c1d5b49f2a27313aab4504ee94c906311b4323",
-    "runtime/menu_section.h": "375b392f0ce90a26921b08bcf327ab7d09d6b5cf625f61d36e12927a8f4f4fef",
-    "runtime/menu_settings.h": "968c581a16d3542bd2481d97fb0ecafeb0136a9c2be79c34ab158ed033204a5d",
+    "runtime/menu_section.h": "f9acc026a559a4a42a07a9aba158528806ef9ae53d2fafeb7ddf1e0cb1881416",
+    "runtime/menu_settings.h": "07e0cc3a1ca728b137309ebff83f57269b8be3fa626a7488a4d30bc5ec110612",
     "runtime/module_icons.h": "49f4546207e270658ab43368aa725251d9f0b9d67aceee4c69ba239de5c7aa92",
     "runtime/module_link.h": "54e5ed570a352ccb974f8628b3d593de71e5f26bb83bb22efefacd26f9ee1394",
     "runtime/modules.h": "87c52c9d77cca427607dbac1df7571a5dbe3452974d45ea645a65591ed97a8de",
@@ -180,7 +181,7 @@
     "runtime/sdk/grkit_test.c": "ea0e20560a2e5856e6435c9a1428c8a2d47d02a7758dcfd13581d4a1d1ca4dbd",
     "runtime/sdk/grkit_test.h": "bc9f1d97fecbfa2234d802a329d278688b995293cd6ea90dcb8bc8f39871148c",
     "runtime/selective.h": "a7219cf1dae125adf4fa9353f738254421c72de62d4629b2486fe3f03bb467fe",
-    "runtime/services.h": "d5f53aa66896a33be74ab2b0d1f8271cf64a7b7c29761391843da1f7ee7c7327",
+    "runtime/services.h": "8f79800bd29cf6beed9b97facfd41d3c711ce32ed67a3a5abdf0d1c2d6f439c4",
     "runtime/setting_store.h": "fb0bb1b11ba4afd0cdcdedcf7656024725fc5cfe6df170f6694ac6e685de7a1f",
     "runtime/setting_table.h": "c1a5a89e64653db474025683c27d10cd2ec0a0b0c1af53c62ce5cf84e7758a9f",
     "runtime/settings.h": "dab6993c76713877c4203c2d756ad6f31e623833618151b0fe88f5cb560f36d3",
@@ -206,5 +207,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.4.2"
+  "version": "1.4.3"
 }
