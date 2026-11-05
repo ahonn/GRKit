@@ -13,3 +13,7 @@ values = ["關閉", "弱", "中", "強"]
 [settings.HALATION]
 label = "強度"
 values = ["關閉", "弱", "中", "強"]
+
+[settings.HALATION_COLOR]
+label = "顏色"
+values = ["紅色", "橙色", "金色", "白色"]

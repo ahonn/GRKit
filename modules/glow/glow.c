@@ -263,6 +263,9 @@ static inline u32 encode_glow(u32 v) { return v < 1024 ? encode_low[v] : encode_
      the light also reaches the red layer. The fine channel weights then
      set the rim color: red dominates for white and red sources, while
      blue or cyan sources contribute little).
+   - neutral: 0, or 1 for a glow without color: each channel takes the
+     light of the brightest one (a White Halation, as black-and-white film
+     gives). A look with `red` has no `neutral`.
    - point: how many times the light of a clipped pixel a light source
      gives that the screennail shows mixed with its dark surround (a lamp
      of a few main pixels): its light is that of the clipped part of the
@@ -310,6 +313,7 @@ typedef struct {
     u32 clip;
     u32 knee;
     u32 red;
+    u32 neutral;
     u32 point;
     u32 area;
     u32 chroma;
@@ -331,12 +335,29 @@ typedef struct {
    rejection grows from 10 EV, and the whole glow fades from 11 EV to none
    at 13 EV (day_keep). The film simulation supplies the base color and
    tone response. Weak is lighter than half of Medium, to keep the rim
-   subtle on top of a film simulation. */
-static const Look halation = {
-    .fine = {520, 56, 0}, .strength = {128, 256, 576}, .cell = 13,
-    .boost = 4, .floor = 210, .clip = 224, .knee = 24, .red = 26,
-    .point = 4, .area = 240, .chroma = 64, .gate = 160, .vivid = 256, .protect = 1,
+   subtle on top of a film simulation.
+
+   The colors of the setting HALATION_COLOR differ only in the light of
+   each channel. Each keeps about the luma of Orange, so that a strength
+   looks alike in every color:
+   - Red: almost no green, as a film without an anti-halation backing gives.
+   - Orange: the orange-red rim above.
+   - Gold: green at about half of red, as a very bright source gives when
+     the reflected light also exposes the green layer.
+   - White: no color (neutral), as black-and-white film gives.
+   A monochrome picture has only luma, so it takes Orange in every color. */
+#define HALATION_LOOK(r, g, b, red_mix, no_color) { \
+    .fine = {r, g, b}, .strength = {128, 256, 576}, .cell = 13, \
+    .boost = 4, .floor = 210, .clip = 224, .knee = 24, .red = red_mix, .neutral = no_color, \
+    .point = 4, .area = 240, .chroma = 64, .gate = 160, .vivid = 256, .protect = 1, }
+#define HALATION_ORANGE 1U
+static const Look halation_looks[] = {
+    HALATION_LOOK(700, 14, 0, 26, 0),
+    HALATION_LOOK(520, 56, 0, 26, 0),
+    HALATION_LOOK(290, 150, 0, 26, 0),
+    HALATION_LOOK(140, 140, 140, 0, 1),
 };
+#define HALATION_COLORS (sizeof halation_looks / sizeof halation_looks[0])
 /* Bloom spreads all channels equally in a compact halo, as a highlight
    diffusion filter does, with a high floor. Lit surfaces and mid-tones
    keep their level, and the surround and area cut reduce broad bright
@@ -396,11 +417,20 @@ INLINE void red_light(const Look *look, u32 out[3])
     out[2] = 0;
 }
 
+/* The light of a look with `neutral`: each channel that of the brightest. */
+INLINE void neutral_light(u32 out[3])
+{
+    u32 top = out[0] > out[1] ? out[0] : out[1];
+    top = top > out[2] ? top : out[2];
+    out[0] = out[1] = out[2] = top;
+}
+
 /* The light of the channels of a pixel: their linear light, all scaled by
    the part that glows (light_scale), so the light keeps the hue of the
    pixel, with a continuous highlight gain (at most MAX_LIGHT).
    A look with `red` adds some green to red, takes green only up to red,
-   and takes no blue. */
+   and takes no blue. A look with `neutral` gives each channel the light of
+   the brightest. */
 INLINE void pixel_light(u32 r, u32 g, u32 b, const Look *look, const u16 *scale, const u16 *gain, u32 out[3])
 {
     u32 top = r > g ? r : g, source_top, s, times;
@@ -422,6 +452,7 @@ INLINE void pixel_light(u32 r, u32 g, u32 b, const Look *look, const u16 *scale,
     out[1] = ((((linear[g] * s + 16384) >> 15) * times) + 128) >> 8;
     out[2] = ((((linear[b] * s + 16384) >> 15) * times) + 128) >> 8;
     if (look->red) red_light(look, out);
+    else if (look->neutral) neutral_light(out);
 }
 
 /* a + b, at most 65535: a sum of the light of several pixels. */
@@ -657,6 +688,7 @@ static void point_light(const Fine *f, u32 density, u32 r, u32 g, u32 b, u32 top
         out[2] = (t * ((linear[b] * inv) >> 7)) >> 8;
     }
     if (look->red) red_light(look, out);
+    else if (look->neutral) neutral_light(out);
 }
 
 /* R, G, B and their largest of n screennail pixels of a row into
@@ -1785,6 +1817,14 @@ static u32 stream_cells(Fine *f, const PictureSet *set, u8 *at, u32 room)
    and a value outside the setting. */
 static u32 strength_of(u32 value) { return value <= 3 ? value : 0; }
 
+/* The Halation look of the color setting. A monochrome picture, and a value
+   outside the setting, take Orange. */
+static const Look *halation_of(const PictureSet *set)
+{
+    u32 color = setting_get(SETTING_HALATION_COLOR);
+    return &halation_looks[set->mono || color >= HALATION_COLORS ? HALATION_ORANGE : color];
+}
+
 void glow_apply(PictureSet *set, u32 value)
 {
     if (!value) return;
@@ -1797,11 +1837,12 @@ void glow_apply(PictureSet *set, u32 value)
     at += (sizeof(Rows) + 3) & ~3U;
     Fine *f = (Fine *)(void *)at, *other = 0;
     at += (sizeof(Fine) + 3) & ~3U;
-    stream_setup(f, set, src, b ? &bloom : &halation, b ? b : h);
+    const Look *halation = halation_of(set);
+    stream_setup(f, set, src, b ? &bloom : halation, b ? b : h);
     if (b && h) {
         other = (Fine *)(void *)at;
         at += (sizeof(Fine) + 3) & ~3U;
-        stream_setup(other, set, src, &halation, h);
+        stream_setup(other, set, src, halation, h);
     }
     rw->chroma_bytes = chroma_bytes(set);
     rw->chroma_used = 0;

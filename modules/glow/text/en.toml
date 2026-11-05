@@ -13,3 +13,7 @@ values = ["Off", "Weak", "Medium", "Strong"]
 [settings.HALATION]
 label = "Strength"
 values = ["Off", "Weak", "Medium", "Strong"]
+
+[settings.HALATION_COLOR]
+label = "Color"
+values = ["Red", "Orange", "Gold", "White"]

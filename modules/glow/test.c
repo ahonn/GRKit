@@ -233,6 +233,84 @@ static void test_halation_red_rim(PictureSet *set)
     set_strength(1);
 }
 
+/* The displayed red, green, and blue that a halo adds outside a source on a
+   gray 40 background, summed over the halo window, and its luma energy. */
+typedef struct { u32 red, green, blue, energy; } Rim;
+static Rim halation_rim(PictureSet *set, u32 color, u8 l, u8 cb, u8 cr)
+{
+    Rim rim = {0, 0, 0, 0};
+    setting_set(SETTING_HALATION_COLOR, color);
+    fill(40, 128, 128);
+    colored_square(l, cb, cr);
+    apply_look(set, 2);
+    for (u32 y = HALO_TOP; y < HALO_TOP + HALO_SIZE; ++y)
+        for (u32 x = HALO_LEFT; x < HALO_LEFT + HALO_SIZE; x += 2) {
+            if (x >= 304 && x < 336 && y >= 224 && y < 256) continue;
+            int dy = ((int)luma(x, y) + luma(x + 1, y) + 1) / 2 - 40;
+            int c_b = (int)chroma(x, y, 0) - 128, c_r = (int)chroma(x, y, 1) - 128;
+            int red = dy + ((359 * c_r) >> 8), green = dy - ((88 * c_b + 183 * c_r) >> 8), blue = dy + ((454 * c_b) >> 8);
+            if (red > 0) rim.red += (u32)red;
+            if (green > 0) rim.green += (u32)green;
+            if (blue > 0) rim.blue += (u32)blue;
+        }
+    rim.energy = halo_energy(304, 224, 32, 40);
+    setting_set(SETTING_HALATION_COLOR, 1);
+    return rim;
+}
+
+/* Red, Orange, Gold, and White differ in the green of the rim: Red has
+   almost none, Gold about two thirds of red, and White as much as red and
+   blue. Each keeps about the luma of Orange. A monochrome picture, and a
+   value outside the setting, take Orange. */
+static void test_halation_colors(PictureSet *set)
+{
+    for (u32 strength = 0; strength < 3; ++strength) {
+        set_strength(strength);
+        Rim rim[4];
+        for (u32 color = 0; color < 4; ++color) rim[color] = halation_rim(set, color, 255, 128, 128);
+        assert(rim[0].red > 8 * rim[0].green);
+        assert(rim[1].red > 3 * rim[1].green && rim[1].red < 6 * rim[1].green);
+        assert(2 * rim[2].green > rim[2].red && 5 * rim[2].green < 4 * rim[2].red);
+        assert(rim[3].red == rim[3].green && rim[3].green == rim[3].blue);
+        for (u32 color = 0; color < 4; ++color) {
+            assert(4 * rim[color].energy > 3 * rim[1].energy);
+            assert(4 * rim[color].energy < 5 * rim[1].energy);
+        }
+        /* White has no color around a colored light either. */
+        setting_set(SETTING_HALATION_COLOR, 3);
+        fill(40, 128, 128);
+        colored_square(180, 76, 181);
+        apply_look(set, 2);
+        for (u32 y = HALO_TOP; y < HALO_TOP + HALO_SIZE; ++y)
+            for (u32 x = HALO_LEFT; x < HALO_LEFT + HALO_SIZE; x += 2) {
+                if (x >= 304 && x < 336 && y >= 224 && y < 256) continue;
+                assert(chroma(x, y, 0) == 128 && chroma(x, y, 1) == 128);
+            }
+        setting_set(SETTING_HALATION_COLOR, 1);
+    }
+    /* A monochrome picture and an invalid value give the Orange picture. */
+    static u8 orange[W * H * 2];
+    PictureSet mono = *set;
+    mono.mono = 1;
+    for (u32 pass = 0; pass < 2; ++pass) {
+        PictureSet *target = pass ? &mono : set;
+        setting_set(SETTING_HALATION_COLOR, 1);
+        fill(40, 128, 128); square();
+        apply_look(target, 2);
+        memcpy(orange, (const void *)grkit_test_bytes(GRKIT_TEST_PLANES), sizeof(orange));
+        const u32 colors[] = {0, 2, 3, 4, ~0U};
+        for (u32 k = 0; k < 5; ++k) {
+            if (!pass && k < 3) continue;
+            setting_set(SETTING_HALATION_COLOR, colors[k]);
+            fill(40, 128, 128); square();
+            apply_look(target, 2);
+            assert(!memcmp(orange, (const void *)grkit_test_bytes(GRKIT_TEST_PLANES), sizeof(orange)));
+        }
+    }
+    setting_set(SETTING_HALATION_COLOR, 1);
+    set_strength(1);
+}
+
 /* A fixed light map isolates output compositing from source detection. */
 static PictureSet composite_fixture(u8 y, u8 cb, u8 cr, u32 half)
 {
@@ -986,9 +1064,10 @@ static void test_filter_gate(PictureSet *set)
    one effect off leaves the look of the other unchanged. */
 static void test_settings(PictureSet *set)
 {
-    assert(grkit_module.setting_count == 2);
+    assert(grkit_module.setting_count == 3);
     assert_setting_default("BLOOM", 4, 0);
     assert_setting_default("HALATION", 4, 0);
+    assert_setting_default("HALATION_COLOR", 4, 1);
     set_pair(0, 0);
     fill(40, 128, 128); square();
     u32 off = plane_sum(&set->planes[0]);
@@ -1027,6 +1106,7 @@ int main(void)
     test_off(&set);
     test_halation_preserves_background(&set);
     test_halation_red_rim(&set);
+    test_halation_colors(&set);
     test_halation_source_response(&set);
     test_halation_film_white();
     test_halation_half_core();

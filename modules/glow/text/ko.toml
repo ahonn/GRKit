@@ -13,3 +13,7 @@ values = ["꺼짐", "약", "중", "강"]
 [settings.HALATION]
 label = "강도"
 values = ["꺼짐", "약", "중", "강"]
+
+[settings.HALATION_COLOR]
+label = "색상"
+values = ["빨강", "주황", "금색", "흰색"]
