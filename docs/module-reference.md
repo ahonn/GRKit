@@ -39,6 +39,7 @@ The manifest is TOML. An unknown key is an error.
 | `sources` | array of strings | `[]` | The C source files, relative to the manifest. |
 | `tiles` | array of strings | `[]` | The tile files, relative to the manifest. Each is a 40 x 40 PNG. At most 64. |
 | `uses` | array of strings | `[]` | The settings of other modules or of the core that the module uses: `MODULE.KEY`, or `?MODULE.KEY` for an optional one. At most 8. See [Used settings](#used-settings). |
+| `color_only` | boolean | `false` | The module loads only on a camera with a color sensor. GR IV Monochrome does not load it, and the GRKit section of MENU does not list it. Needs ABI 2.4. |
 | `settings` | array of tables | `[]` | The settings of the module. At most 16. |
 | `page` | table | none | The menu page. A module has at most one. |
 | `layers` | array of tables | `[]` | The live-view layers. |
@@ -448,6 +449,8 @@ ABI 2.3 adds the icon kind `GRKIT_ICON_LABEL` (3) for status-row indicators: a c
 
 ABI 2.4 adds the setting flag `GRKIT_SETTING_COLOR_ONLY` (4). The installer of an earlier core rejects a setting with this flag.
 
+ABI 2.4 also appends `flags` to `GrkitModule`, increasing its descriptor from 40 to 44 bytes. The flag `GRKIT_MODULE_COLOR_ONLY` (1) makes a module color-only. The installer still accepts 40-byte descriptors, which have no flags, and rejects an unknown flag.
+
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 
 **Memory.** The code, with the constant data, goes after the RTOS image and is read-only. The tiles stay out of it: INSTALL copies them from the file to the icon slots. The data and BSS go into one script array that all modules share, and INSTALL clears the BSS. The installer runs no module code at power-on: it reads the constant descriptor `grkit_module`.
@@ -505,5 +508,8 @@ Other lines:
 | `loaded, stopped: Enable is Off in the GRKit section of MENU` | The module loaded, but Enable is Off, so the core calls none of its code. On applies at once. |
 | `loaded, stopped: Enable GRKit is Off in the GRKit section of MENU` | The module loaded, but Enable GRKit is Off, so the core calls none of its code. On applies at once. |
 | `not loaded: safe mode` | GRKit is in the safe mode, so no module loads. See [Report and safe mode](architecture.md#report-and-safe-mode). |
+| `not loaded: it needs a camera with a color sensor` | The module is `color_only`, and the camera is GR IV Monochrome. The GRKit section of MENU does not list it. |
+
+When no loaded module uses the effects, as on GR IV Monochrome without Film Look, each effect line says `not used: no loaded module uses effects`.
 
 When a module does not load, the other modules still load. A module that requires a setting of it gets error 55. A page, a layer, or a filter of an optional setting of it is not registered.

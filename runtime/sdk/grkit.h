@@ -514,7 +514,15 @@ typedef struct {
        work. */
     const u8 *tiles;
     u32 tile_count;
+    /* Since ABI 2.4: GRKIT_MODULE_COLOR_ONLY, or 0. A 40-byte descriptor of
+       an earlier ABI has no flags. */
+    u32 flags;
 } GrkitModule;
+
+/* The module loads only on a camera with a color sensor. On GR IV
+   Monochrome the installer does not load it, and the GRKit section of MENU
+   does not list it. */
+#define GRKIT_MODULE_COLOR_ONLY 1U
 
 /* The descriptor of this module. */
 extern const GrkitModule grkit_module;

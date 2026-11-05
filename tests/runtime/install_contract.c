@@ -279,6 +279,8 @@ struct spec {
     u32 page_rows, rows[SPEC_ITEMS], settings_page, group_page, bad_group;
     u32 indicator_count, indicator_slot, condition_setting, condition_value;
     u32 icon_kind, icon_setting, icon_first, indicator_tiles, page_icon;
+    /* The flags of a 44-byte descriptor (ABI 2.4), or 0 for a 40-byte one. */
+    u32 module_flags;
 };
 static u32 code_words[GRM_MAX_SEGMENT / 4], code_count, relocations[256], relocation_count;
 static u32 emit(u32 value)
@@ -410,12 +412,13 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     if (s->page_rows) { emit(GRM_POINT_MENU_PAGE); emit_pointer(page_at, 0); }
     if (s->group_page) for (u32 k = 0; k < 2; ++k) { emit(GRM_POINT_MENU_PAGE); emit_pointer(child_at[k], 0); }
     for (u32 k = 0; k < s->indicator_count; ++k) { emit(GRM_POINT_VIEWFINDER_INDICATOR); emit_pointer(indicator_at[k], 0); }
-    u32 descriptor = emit(GRM_DESCRIPTOR);
+    u32 descriptor = emit(s->module_flags ? GRM_DESCRIPTOR_FLAGS : GRM_DESCRIPTOR);
     emit(abi);
     emit_list(registrations, s->layer_count + s->filter_count + s->indicator_count + (s->page_rows ? 1 : 0) + (s->group_page ? 2 : 0));
     emit_list(setting_list, settings);
     emit_list(use_list, uses);
     emit_list(tiles_at, tile_count);
+    if (s->module_flags) emit(s->module_flags);
 
     u32 names = 0;
     for (u32 k = 0; k < imports; ++k) names += (u32)strlen(s->imports[k]) + 1;
@@ -832,6 +835,26 @@ static void install_color_only_rows(void)
     }
     test_monochrome = 0;
 }
+/* On a monochrome camera a color-only module does not load (GRM_COLOR_ONLY),
+   and the other modules load. MENU does not list it (menu_contract.c). A
+   color camera loads it. */
+static void a_color_only_module_needs_a_color_camera(void)
+{
+    for (int monochrome = 0; monochrome < 2; ++monochrome) {
+        reset();
+        test_monochrome = monochrome;
+        add_module(PACKAGE_MODULES_PATH, "FILM.GRM", &(struct spec){.id = "FILM", .order = 1, .module_flags = GRM_MODULE_COLOR_ONLY});
+        add_module(PACKAGE_MODULES_PATH, "OTHER.GRM", &(struct spec){.id = "OTHER", .order = 2});
+        assert(install() == 0 && module_count == 2);
+        assert(module_status[0] == (monochrome ? (u32)GRM_COLOR_ONLY : 0) && module_status[1] == 0);
+        expect_listed(0, monochrome ? MANAGE_COLOR_ONLY : MANAGE_LOADED, monochrome ? "FILM (56)" : "FILM");
+    }
+    /* A flag that this GRKit does not know. */
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "NEW.GRM", &(struct spec){.id = "NEW", .module_flags = 2});
+    assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR);
+    test_monochrome = 0;
+}
 /* A group and both children install atomically; children keep independent
    handles, and descriptors remain inside the owning module's code. */
 static void install_group_page(void)
@@ -1189,6 +1212,7 @@ static void *run(void *unused)
     framing_mode_state_survives_install_planning();
     install_settings_page();
     install_color_only_rows();
+    a_color_only_module_needs_a_color_camera();
     install_group_page();
     the_switch_stops_each_module();
     layer_conditions_resolve_shared_and_optional_settings();

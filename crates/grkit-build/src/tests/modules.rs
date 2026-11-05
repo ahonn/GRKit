@@ -30,7 +30,7 @@ fn synthetic_probe_module_builds() -> Result<()> {
     // The descriptor: its size, the ABI, then one registration of a layer.
     let word =
         |offset: u32| u32::from_le_bytes(module.code[offset as usize..][..4].try_into().unwrap());
-    assert_eq!(word(module.descriptor), grkit_core::grm::DESCRIPTOR_SIZE);
+    assert_eq!(word(module.descriptor), grkit_core::grm::DESCRIPTOR_FLAGS_SIZE);
     assert_eq!(
         word(module.descriptor + 4),
         grkit_core::grm::ABI_MAJOR << 16 | grkit_core::grm::ABI_MINOR
@@ -609,6 +609,23 @@ fn group_page_registers_ordered_children_with_independent_settings() -> Result<(
             < registrations.find("&page_child_1}").unwrap()
     );
     assert!(!code.contains("page_labels") && !code.contains("page_summaries"));
+    Ok(())
+}
+
+/// A color-only module gets the flag in its descriptor; others have none.
+#[test]
+fn color_only_modules_get_the_descriptor_flag() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(!code.contains(".flags = GRKIT_MODULE_COLOR_ONLY"));
+    fs::write(
+        folder.join("module.toml"),
+        GROUP_MANIFEST.replace("version = 1\n", "version = 1\ncolor_only = true\n"),
+    )?;
+    let (manifest, code, _) = module::generate(&folder)?;
+    assert!(manifest.color_only);
+    assert!(code.contains(".flags = GRKIT_MODULE_COLOR_ONLY}"));
     Ok(())
 }
 

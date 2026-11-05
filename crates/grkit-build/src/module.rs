@@ -234,6 +234,10 @@ pub struct Manifest {
     /// with '?' first for an optional one.
     #[serde(default)]
     pub uses: Vec<String>,
+    /// The module loads only on a camera with a color sensor: GR IV
+    /// Monochrome does not load it (`GRKIT_MODULE_COLOR_ONLY`).
+    #[serde(default)]
+    pub color_only: bool,
     #[serde(default)]
     pub settings: Vec<SettingSpec>,
     pub page: Option<PageSpec>,
@@ -1579,6 +1583,9 @@ fn descriptor(m: &Manifest, registrations: &[String], c: &mut String) -> Result<
     // descriptor gives their count and no address.
     if !m.tiles.is_empty() {
         write!(fields, ", .tile_count = {}", m.tiles.len())?;
+    }
+    if m.color_only {
+        fields.push_str(", .flags = GRKIT_MODULE_COLOR_ONLY");
     }
     writeln!(
         c,

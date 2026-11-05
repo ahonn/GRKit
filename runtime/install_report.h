@@ -51,6 +51,7 @@ static void write_report(int status)
             say(module_off[i] ? "  loaded, stopped: Enable is Off in the GRKit section of MENU\r\n" :
                 all_off ? "  loaded, stopped: Enable GRKit is Off in the GRKit section of MENU\r\n" : "  loaded\r\n");
         else if (result == MANAGE_SAFE) say("  not loaded: safe mode\r\n");
+        else if (result == GRM_COLOR_ONLY) say("  not loaded: it needs a camera with a color sensor\r\n");
         else {
             say("  not loaded: error "); say_number(result); say(", "); say(module_reason(result));
             say(module_detail[i]); say("\r\n");
@@ -67,7 +68,10 @@ static void write_report(int status)
         while (k < CATALOG_EFFECT_NAME_MAX && listed[i][CATALOG_EFFECT_NAME + k]) { name[k] = (char)listed[i][CATALOG_EFFECT_NAME + k]; ++k; }
         name[k] = 0;
         say(name); say(" ("); say(names[i]); say(")");
-        if (listed_status[i] == EFFECT_LOADED) say("  loaded\r\n");
+        if (listed_status[i] == EFFECT_LOADED)
+            /* After INSTALL, the effects are of no use without a loaded
+               module that uses them, such as Film Look on GR IV Monochrome. */
+            say(status || (capabilities_used & GRKIT_CORE_TONE_BIT) ? "  loaded\r\n" : "  not used: no loaded module uses effects\r\n");
         else if (listed_status[i] == EFFECT_OFF && listed_record[i] != EFFECTS_NO_RECORD)
             say("  loaded, hidden: Off in the GRKit section of MENU\r\n");
         else if (listed_status[i] == EFFECT_OFF) say("  not loaded: Off in the GRKit section of MENU\r\n");

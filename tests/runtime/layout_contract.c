@@ -11,7 +11,7 @@ typedef unsigned int u32;
     _Static_assert(__builtin_offsetof(type, field) == (offset), #type "." #field " moved")
 #define SIZE(type, size) _Static_assert(sizeof(type) == (size), #type " changed its size")
 
-SIZE(GrkitModule, GRM_DESCRIPTOR);
+SIZE(GrkitModule, GRM_DESCRIPTOR_FLAGS);
 AT(GrkitModule, size, 0);
 AT(GrkitModule, abi, GRM_DESCRIPTOR_ABI_AT);
 AT(GrkitModule, registrations, GRM_DESCRIPTOR_REGISTRATIONS_AT);
@@ -22,6 +22,8 @@ AT(GrkitModule, uses, GRM_DESCRIPTOR_USES_AT);
 AT(GrkitModule, use_count, GRM_DESCRIPTOR_USE_COUNT_AT);
 AT(GrkitModule, tiles, GRM_DESCRIPTOR_TILES_AT);
 AT(GrkitModule, tile_count, GRM_DESCRIPTOR_TILE_COUNT_AT);
+AT(GrkitModule, flags, GRM_DESCRIPTOR_FLAGS_AT);
+_Static_assert(GRKIT_MODULE_COLOR_ONLY == GRM_MODULE_COLOR_ONLY, "the module flags agree");
 
 SIZE(GrkitRegistration, GRM_REGISTRATION);
 AT(GrkitRegistration, point, 0);

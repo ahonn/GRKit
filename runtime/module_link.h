@@ -75,6 +75,11 @@
 #define GRM_DESCRIPTOR_USE_COUNT_AT 28U
 #define GRM_DESCRIPTOR_TILES_AT 32U
 #define GRM_DESCRIPTOR_TILE_COUNT_AT 36U
+/* ABI 2.4 appends the flags of the module: a descriptor of GRM_DESCRIPTOR_FLAGS
+   bytes or more has them. */
+#define GRM_DESCRIPTOR_FLAGS_AT 40U
+#define GRM_DESCRIPTOR_FLAGS 44U
+#define GRM_MODULE_COLOR_ONLY 1U
 /* GrkitRegistration (no size word). */
 #define GRM_REGISTRATION 8U
 #define GRM_REGISTRATION_IMPL_AT 4U
@@ -176,6 +181,9 @@
 #define GRM_BAD_DESCRIPTOR 53
 #define GRM_NO_ROOM 54
 #define GRM_MISSING_SETTING 55
+/* A color-only module on a camera with a monochrome sensor. It is not an
+   error: the GRKit section of MENU does not list the module. */
+#define GRM_COLOR_ONLY 56
 
 struct grm_module {
     char id[9];
@@ -321,6 +329,20 @@ static u32 grm_string(const struct grm_module *m, const u8 *code, u32 base, u32 
 
 /* A setting of a module: its key, range, flags, and initial value. */
 struct grm_setting { char key[GRM_KEY]; u32 values, flags, default_value; };
+
+/* The flags of the descriptor of a module in `code` (its file code, or the
+   linked copy): GRM_MODULE_COLOR_ONLY, or 0
+   for a descriptor without flags. Return 0, or GRM_BAD_DESCRIPTOR for a flag
+   that this GRKit does not know. */
+static int grm_module_flags(const struct grm_module *m, const u8 *code, u32 *flags)
+{
+    const u8 *d = code + m->descriptor;
+    *flags = 0;
+    if (grm_word(d) < GRM_DESCRIPTOR_FLAGS) return 0;
+    if (!grm_inside(m->descriptor, GRM_DESCRIPTOR_FLAGS, m->code_size)) return GRM_BAD_DESCRIPTOR;
+    *flags = grm_word(d + GRM_DESCRIPTOR_FLAGS_AT);
+    return *flags & ~GRM_MODULE_COLOR_ONLY ? GRM_BAD_DESCRIPTOR : 0;
+}
 
 /* Read the settings and the used settings of the descriptor of a module whose
    code was linked for `base` (0 for the file itself). A used setting is a

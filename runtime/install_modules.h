@@ -1,5 +1,6 @@
 #ifndef GRKIT_INSTALL_MODULES_H
 #define GRKIT_INSTALL_MODULES_H
+_Static_assert(MANAGE_COLOR_ONLY == GRM_COLOR_ONLY, "MENU knows the status of a color-only module");
 /* A part of the installer: the link of the modules and the module array.
    installer.c includes it once, in its order, after the helpers and the state
    that this part uses. */
@@ -167,6 +168,9 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     if (!sync_alias(array, list_at - array)) return STATUS_SYNC;
     module_page_count = module_layer_count = module_filter_count = capabilities_used = capabilities_running = 0;
     module_indicator_count = module_status_icons = module_native_slots = module_legacy_tone_owner = 0;
+    /* A color-only module does not load on a monochrome camera, and the
+       rows of a color-only setting do not show there. */
+    int monochrome = monochrome_camera();
     for (u32 i = 0; i < module_count; ++i) {
         if (!(module_usable >> i & 1) || read_module(i)) continue;
         u32 context = context_at, code_base = code_at, data_base = data_at, data_bytes = module.data_size + module.bss_size;
@@ -217,6 +221,10 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         }
         if (!sync_alias(context, 4 * CONTEXT_WORDS(module_use_count[i]))) return STATUS_SYNC;
         symbols[self].value = context;
+        u32 module_flags = 0;
+        /* The file itself: module_code gets the code of this module at its link. */
+        if (!status) status = grm_module_flags(&module, module.code, &module_flags);
+        if (!status && monochrome && (module_flags & GRM_MODULE_COLOR_ONLY)) status = GRM_COLOR_ONLY;
         if (!status) status = grm_link(&module, module_code, module_data, code_base, data_base, symbols, n, &failed);
         if (!status) status = grm_settings(&module, module_code, code_base, own, &own_count, own_names, &own_uses);
         if (!status) status = grm_tiles(&module, module_code, code_base, &tiles, &tile_count);
@@ -328,7 +336,6 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
            the module or used settings. A row of an optional used setting
            that no module has is left out, and so is a row of a color-only
            setting on a monochrome camera. The rows after it move up. */
-        int monochrome = monochrome_camera();
         for (u32 k = 0; k < page_count; ++k) {
             u32 rows = word(pages[k].address + GRM_PAGE_SETTING_ROWS_AT), list = word(pages[k].address + GRM_PAGE_SETTINGS_AT), kept = 0;
             if (pages[k].setting == GRM_NO_SETTING) continue;

@@ -61,6 +61,9 @@
    mode kept out. Other values are the errors of runtime/module_link.h. */
 #define MANAGE_LOADED 0U
 #define MANAGE_SAFE 1U
+/* A color-only module on a monochrome camera (GRM_COLOR_ONLY): MENU does not
+   list it. */
+#define MANAGE_COLOR_ONLY 56U
 /* The most listed modules (MODULES_MAX of the installer). */
 #define MANAGE_MODULES GRKIT_MODULES_MAX
 /* A position without a CORE.POS value sorts after each position. */

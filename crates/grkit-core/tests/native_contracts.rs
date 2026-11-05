@@ -760,6 +760,7 @@ fn the_module_format_constants_agree() {
         ("GRM_ABI_MAJOR", grm::ABI_MAJOR.into()),
         ("GRM_ABI_MINOR", grm::ABI_MINOR.into()),
         ("GRM_DESCRIPTOR", grm::DESCRIPTOR_SIZE.into()),
+        ("GRM_DESCRIPTOR_FLAGS", grm::DESCRIPTOR_FLAGS_SIZE.into()),
         ("GRM_MAX_ORDER", grm::MAX_ORDER.into()),
     ] {
         assert_eq!(link[name], value, "{name}");

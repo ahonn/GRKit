@@ -79,8 +79,10 @@ _Static_assert(MENU_TAB_STOCK_ROWS+MENU_ROWS_SLOTS<=MENU_TAB_MAX_ROWS,"The Custo
 static void menu_rows_install(volatile u32 *h) {
     volatile u32 *state=services_word(h,SERVICES_MENU);
     u32 copy=(u32)services_word(h,SERVICES_MENU+MENU_ROWS_TAB), stock, rows, sections, slots=0, i, top;
-    u32 listed=manage_count(h), adj, on=manage_switch_shown(h);
+    u32 listed=0, adj, on=manage_switch_shown(h), n;
     if(state[MENU_ROWS_DONE/4]) return;
+    /* A color-only module on a monochrome camera gets no row. */
+    for(i=0;i<manage_count(h);++i) listed+=manage_status(h,i)!=MANAGE_COLOR_ONLY;
     state[MENU_ROWS_DONE/4]=1;
     manage_adj_refresh(h);
     adj=manage_adj_count(h)>0;
@@ -106,7 +108,11 @@ static void menu_rows_install(volatile u32 *h) {
     if(on) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_SWITCH,0);
     /* The modules in their default order, which the ADJ Order row changes
        only in ADJ. */
-    for(i=0;i<listed;++i) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_LISTED,i);
+    for(i=0,n=0;i<manage_count(h) && n<listed;++i) {
+        if(manage_status(h,i)==MANAGE_COLOR_ONLY) continue;
+        slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_LISTED,i);
+        ++n;
+    }
     if(adj) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_ADJ,0);
     slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_GRKIT,0);
     state[MENU_ROWS_COUNT/4]=slots;

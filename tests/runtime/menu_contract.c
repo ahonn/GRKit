@@ -2920,6 +2920,21 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
 }
+/* A color-only module that a monochrome camera did not load gets no row; the
+   rows of the other modules keep their module. */
+static void a_color_only_module_gets_no_row(void)
+{
+    volatile u32 *h = test_header, *menu;
+    install_stock_tab(10, 3);
+    manage_memory[MANAGE_ENTRY(1)] = MANAGE_COLOR_ONLY;
+    menu = services_word(h, SERVICES_MENU);
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 4);
+    assert(menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 0)[MENU_ROW_MODULE / 4] == 0);
+    assert(menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 1)[MENU_ROW_MODULE / 4] == 2);
+    assert(menu_row(h, 2)[MENU_ROW_KIND / 4] == MENU_ROW_ADJ && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
+    assert(BYTE(tab_copy(), MENU_TAB_ROWS) == 14);
+}
 /* While a module loaded, the section starts with the GRKit switch. OK on it
    opens its value page. A tab without room for each row keeps the switch,
    ADJ Order, and About GRKit. */
@@ -3091,6 +3106,7 @@ int main(void)
     about_grkit_shows_the_version_and_address();
 #ifdef FW_MENU_TABS
     the_section_rows_follow_the_listed_modules();
+    a_color_only_module_gets_no_row();
     a_full_tab_gets_no_new_section();
     the_section_starts_with_the_switch();
 #endif

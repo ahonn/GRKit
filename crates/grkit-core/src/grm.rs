@@ -76,8 +76,11 @@ pub const EXPORTS: &[(&str, &str)] = &[
 /// The import that the installer fills with the context of each module
 /// (`GrkitContext` in `runtime/sdk/grkit.h`).
 pub const CONTEXT: &str = "grkit_self";
-/// The size of a module descriptor (`GrkitModule`).
+/// The smallest module descriptor: `GrkitModule` before ABI 2.4.
 pub const DESCRIPTOR_SIZE: u32 = 40;
+/// The size of a descriptor with the module flags (ABI 2.4), which the
+/// build writes (`GRM_DESCRIPTOR_FLAGS`).
+pub const DESCRIPTOR_FLAGS_SIZE: u32 = 44;
 
 /// Whether a module can import `name`.
 pub fn importable(name: &str) -> bool {

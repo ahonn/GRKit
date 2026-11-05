@@ -386,6 +386,20 @@ int main(void)
     reset(); code_words[SETTING + 3] = GRM_SETTING_SAVED | GRM_SETTING_COLOR_ONLY;
     assert(registrations() == 0);
 
+    /* ABI 2.4: the flags of a module after the 40 bytes of the descriptor. A
+       40-byte descriptor has none. The word after it (here the size of the
+       first setting) is the flags of a 44-byte one. */
+    {
+        u32 flags = 99;
+        reset(); build();
+        assert(grm_parse(file, file_size, &m) == 0 && grm_module_flags(&m, m.code, &flags) == 0 && flags == 0);
+        reset(); code_words[DESCRIPTOR] = GRM_DESCRIPTOR_FLAGS; code_words[SETTING] = GRM_MODULE_COLOR_ONLY; build();
+        assert(grm_parse(file, file_size, &m) == 0 && grm_module_flags(&m, m.code, &flags) == 0);
+        assert(flags == GRM_MODULE_COLOR_ONLY);
+        reset(); code_words[DESCRIPTOR] = GRM_DESCRIPTOR_FLAGS; code_words[SETTING] = 2; build();
+        assert(grm_parse(file, file_size, &m) == 0 && grm_module_flags(&m, m.code, &flags) == GRM_BAD_DESCRIPTOR);
+    }
+
     /* Layers: an unknown flag, a setting that the module does not have. A
        layer without a setting is valid. */
     reset(); code_words[LAYER + 1] = 8;
