@@ -348,6 +348,18 @@ static int read_plan(void)
     }
     return 0;
 }
+/* Whether the camera has a monochrome sensor, as GR IV Monochrome: the sensor
+   color byte of the current model record is 1. A build without the model
+   record (MODEL_RECORD), or a record that is not set, counts as color. */
+static int monochrome_camera(void)
+{
+#ifdef MODEL_RECORD
+    u32 record = word(MODEL_RECORD);
+    return record >= RELOCATION_RTOS_BASE && record < relocation.image_end && at(record + MODEL_SENSOR_COLOR)[0] == 1;
+#else
+    return 0;
+#endif
+}
 #include "install_modules.h"
 /* ---- State (runtime/state.h) ----------------------------------------------
    A missing STATE.TXT reads STATE.TMP, which a save that the power cut

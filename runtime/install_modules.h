@@ -326,7 +326,9 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         /* The native settings rows of each page get absolute setting handles
            (runtime/modules.h): row 0 the page setting, the others settings of
            the module or used settings. A row of an optional used setting
-           that no module has is left out, and the rows after it move up. */
+           that no module has is left out, and so is a row of a color-only
+           setting on a monochrome camera. The rows after it move up. */
+        int monochrome = monochrome_camera();
         for (u32 k = 0; k < page_count; ++k) {
             u32 rows = word(pages[k].address + GRM_PAGE_SETTING_ROWS_AT), list = word(pages[k].address + GRM_PAGE_SETTINGS_AT), kept = 0;
             if (pages[k].setting == GRM_NO_SETTING) continue;
@@ -334,6 +336,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
                 u32 row = list + r * GRM_ROW, to = list + kept * GRM_ROW;
                 u32 handle = r ? module_handle(i, use_handles, word(row + GRM_ROW_SETTING_AT)) : pages[k].setting;
                 if (handle == GRM_NO_SETTING) continue;
+                if (r && monochrome && handle < setting_total && (setting_flags[handle] & GRM_SETTING_COLOR_ONLY)) continue;
                 for (u32 w = 0; to != row && w < GRM_ROW; w += 4) store(to + w, word(row + w));
                 store(to + GRM_ROW_SETTING_AT, handle);
                 ++kept;

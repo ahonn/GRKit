@@ -89,6 +89,10 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         "ICON_PIXEL_BASE_SLOT"
     };
     addresses.push((name, target.pixel_base_slot));
+    if let Some((record, sensor_color)) = target.model_record {
+        addresses.push(("MODEL_RECORD", record));
+        constants.push(("MODEL_SENSOR_COLOR", sensor_color));
+    }
     // The code, the data, and the BSS of the firmware end at `heap_min`. A
     // constant in that range is a firmware address that would not move with
     // the build.

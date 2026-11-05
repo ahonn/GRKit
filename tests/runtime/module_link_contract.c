@@ -380,8 +380,11 @@ int main(void)
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     reset(); code_words[SETTING + 2] = GRM_SETTING_VALUES + 1;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
-    reset(); code_words[SETTING + 3] = 4;
+    reset(); code_words[SETTING + 3] = 8;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
+    /* ABI 2.4: a color-only setting. */
+    reset(); code_words[SETTING + 3] = GRM_SETTING_SAVED | GRM_SETTING_COLOR_ONLY;
+    assert(registrations() == 0);
 
     /* Layers: an unknown flag, a setting that the module does not have. A
        layer without a setting is valid. */

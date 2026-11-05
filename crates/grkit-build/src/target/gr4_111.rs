@@ -32,6 +32,7 @@ pub const TARGET: Target = Target {
     pixel_base_slot: 0x55082038,
     pixel_base_indirect: true,
     native_tone_page: Some(0x81),
+    model_record: Some((0x553a0850, 0x19)),
     layout: &LAYOUT,
     image_control: Some(&IMAGE_CONTROL),
     // The settings domain follows the vtable of the capture property

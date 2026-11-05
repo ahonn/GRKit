@@ -28,6 +28,7 @@ pub const TARGET: Target = Target {
     pixel_base_slot: 0x55018734,
     pixel_base_indirect: false,
     native_tone_page: None,
+    model_record: None,
     layout: &LAYOUT,
     image_control: Some(&IMAGE_CONTROL),
     // The English entry is +4 in the language table, which the text hooks load.

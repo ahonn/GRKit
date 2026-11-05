@@ -271,6 +271,10 @@ pub struct SettingSpec {
     pub saved: bool,
     #[serde(default)]
     pub public: bool,
+    /// The rows of the setting show only on a camera with a color sensor:
+    /// GR IV Monochrome leaves them out (`GRKIT_SETTING_COLOR_ONLY`).
+    #[serde(default)]
+    pub color_only: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize)]
@@ -639,6 +643,25 @@ fn validate(m: &Manifest) -> Result<()> {
             "Setting {} is twice in module.toml",
             setting.key
         );
+    }
+    // A page needs its first row on every camera.
+    let color_only = |name: &str| m.settings.iter().any(|s| s.key == name && s.color_only);
+    if let Some(page) = &m.page {
+        let first = match page.kind {
+            PageKind::Choice => Some(page.setting.as_str()),
+            PageKind::Settings => page.settings.first().map(String::as_str),
+            PageKind::Group => None,
+        };
+        let children = page
+            .children
+            .iter()
+            .filter_map(|child| child.settings.first().map(String::as_str));
+        for name in first.into_iter().chain(children) {
+            ensure!(
+                !color_only(name),
+                "Setting {name} is color_only, so it cannot be the first row of a page"
+            );
+        }
     }
     for name in &m.uses {
         let full = name.strip_prefix('?').unwrap_or(name);
@@ -1513,11 +1536,18 @@ fn descriptor(m: &Manifest, registrations: &[String], c: &mut String) -> Result<
             .settings
             .iter()
             .map(|s| {
-                let flags = match (s.saved, s.public) {
-                    (true, true) => "GRKIT_SETTING_SAVED | GRKIT_SETTING_PUBLIC",
-                    (true, false) => "GRKIT_SETTING_SAVED",
-                    (false, true) => "GRKIT_SETTING_PUBLIC",
-                    (false, false) => "0",
+                let flags: Vec<_> = [
+                    (s.saved, "GRKIT_SETTING_SAVED"),
+                    (s.public, "GRKIT_SETTING_PUBLIC"),
+                    (s.color_only, "GRKIT_SETTING_COLOR_ONLY"),
+                ]
+                .into_iter()
+                .filter_map(|(set, flag)| set.then_some(flag))
+                .collect();
+                let flags = if flags.is_empty() {
+                    "0".to_owned()
+                } else {
+                    flags.join(" | ")
                 };
                 format!(
                     "{{.size = sizeof(GrkitSetting), .key = \"{}\", .values = {}, .flags = {flags}, .default_value = {}}}",

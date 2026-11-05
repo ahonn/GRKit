@@ -612,6 +612,37 @@ fn group_page_registers_ordered_children_with_independent_settings() -> Result<(
     Ok(())
 }
 
+/// A color-only setting gets its flag. It may be a later row of a page, but
+/// not the first row of a page or of a group child.
+#[test]
+fn color_only_settings_are_later_rows() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = group_folder(directory.path())?;
+    let path = folder.join("module.toml");
+    let color = GROUP_MANIFEST.replace(
+        "key = \"FIRST_STRENGTH\"\nvalues = 3",
+        "key = \"FIRST_STRENGTH\"\nvalues = 3\nsaved = true\ncolor_only = true",
+    );
+    fs::write(&path, &color)?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(
+        ".key = \"FIRST_STRENGTH\", .values = 3, .flags = GRKIT_SETTING_SAVED | GRKIT_SETTING_COLOR_ONLY"
+    ));
+    assert!(code.contains(".key = \"FIRST_ENABLED\", .values = 2, .flags = 0"));
+    fs::write(
+        &path,
+        color.replace(
+            "settings = [\"FIRST_ENABLED\", \"FIRST_STRENGTH\"]",
+            "settings = [\"FIRST_STRENGTH\", \"FIRST_ENABLED\"]",
+        ),
+    )?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("cannot be the first row"));
+    Ok(())
+}
+
 const INDICATOR: &str = r#"
 [[indicators]]
 id = "first"

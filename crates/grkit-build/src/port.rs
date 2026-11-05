@@ -198,6 +198,9 @@ pub fn addresses(target: &Target) -> Result<Vec<Address>> {
         ("english_slot".to_string(), target.english_slot),
         ("pixel_base_slot".to_string(), target.pixel_base_slot),
     ];
+    if let Some((record, _)) = target.model_record {
+        data.push(("model_record".to_string(), record));
+    }
     if let Some(native) = target.image_control {
         for (index, &table) in native.tables.iter().enumerate() {
             data.push((format!("image_control.tables[{index}]"), table));
@@ -879,6 +882,18 @@ impl Port {
             .native_tone_page
             .map_or("None".to_string(), |page| format!("Some({page:#x})"));
         push(out, 4, &format!("native_tone_page: {page},"), "");
+        match base.model_record {
+            Some((_, sensor_color)) => {
+                let (value, note) = self.value(Kind::Target, "model_record")?;
+                push(
+                    out,
+                    4,
+                    &format!("model_record: Some(({value:#x}, {sensor_color:#x})),"),
+                    &note,
+                );
+            }
+            None => push(out, 4, "model_record: None,", ""),
+        }
         push(out, 4, "layout: &LAYOUT,", "");
         let image_control = match base.image_control {
             Some(_) => "image_control: Some(&IMAGE_CONTROL),",

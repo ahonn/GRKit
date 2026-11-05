@@ -95,6 +95,12 @@ pub struct Target {
     /// The high byte of the native ImageTone values that photos record
     /// besides the GR III values, if any: 0x81 on GR IV (0x8100 and up).
     pub native_tone_page: Option<u32>,
+    /// The pointer to the current model record, and the offset of the byte
+    /// of the record that `SystemConfig_GetImageSensorColorType` returns: 1
+    /// on GR IV Monochrome. The installer leaves out color-only module
+    /// settings rows on a monochrome camera. None for a camera line without
+    /// a monochrome model.
+    pub model_record: Option<(u32, u32)>,
     /// The runtime components and their hooks.
     pub layout: &'static Layout,
     /// Native Image Control data, if the family has processing hooks.

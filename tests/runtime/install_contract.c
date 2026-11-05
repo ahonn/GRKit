@@ -249,6 +249,9 @@ static int sync_alias(u32 address, u32 n)
 }
 #define ICON_PIXELS 8
 static void icon_header(u32 icon, u32 pixels) { store(icon, pixels); }
+/* installer.c reads the model record of the camera. */
+static int test_monochrome;
+static int monochrome_camera(void) { return test_monochrome; }
 #include "install_modules.h"
 /* installer.c also reads STATE.TMP and the state of GRKit 1.2. */
 static void read_state(void)
@@ -808,6 +811,27 @@ static void install_settings_page(void)
     assert(word(page + GRM_PAGE_KIND_AT) == GRM_PAGE_SETTINGS && word(page + GRM_PAGE_SETTING_ROWS_AT) == 2);
     assert(word(rows + GRM_ROW_SETTING_AT) == 0 && word(rows + GRM_ROW + GRM_ROW_SETTING_AT) == 1);
 }
+/* On a monochrome camera a row of a color-only setting is left out, and the
+   rows after it move up. A color camera keeps every row. */
+static void install_color_only_rows(void)
+{
+    const struct spec module = {
+        .id = "COLOR", .settings = {{"FIRST", 4, GRM_SETTING_SAVED}, {"TINT", 4, GRM_SETTING_SAVED | GRM_SETTING_COLOR_ONLY},
+                                    {"LAST", 2, GRM_SETTING_SAVED}},
+        .page_rows = 3, .rows = {0, 1, 2}, .settings_page = 1,
+    };
+    for (int monochrome = 0; monochrome < 2; ++monochrome) {
+        reset();
+        test_monochrome = monochrome;
+        add_module(PACKAGE_MODULES_PATH, "COLOR.GRM", &module);
+        assert(install() == 0 && module_status[0] == 0 && module_page_count == 1);
+        u32 page = module_pages[0], rows = word(page + GRM_PAGE_SETTINGS_AT);
+        assert(word(page + GRM_PAGE_SETTING_ROWS_AT) == (monochrome ? 2U : 3U));
+        assert(word(rows + GRM_ROW_SETTING_AT) == 0);
+        assert(word(rows + GRM_ROW + GRM_ROW_SETTING_AT) == (monochrome ? 2U : 1U));
+    }
+    test_monochrome = 0;
+}
 /* A group and both children install atomically; children keep independent
    handles, and descriptors remain inside the owning module's code. */
 static void install_group_page(void)
@@ -1164,6 +1188,7 @@ static void *run(void *unused)
     setting_defaults_and_saved_zero();
     framing_mode_state_survives_install_planning();
     install_settings_page();
+    install_color_only_rows();
     install_group_page();
     the_switch_stops_each_module();
     layer_conditions_resolve_shared_and_optional_settings();

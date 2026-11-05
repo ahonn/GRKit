@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 3U
+#define GRM_ABI_MINOR 4U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U
@@ -160,6 +160,8 @@
 #define GRM_NAME (8U + 1U + GRM_KEY)
 #define GRM_SETTING_PUBLIC 1U
 #define GRM_SETTING_SAVED 2U
+/* The rows of the setting show only on a camera with a color sensor (ABI 2.4). */
+#define GRM_SETTING_COLOR_ONLY 4U
 /* A used setting that is optional: its name starts with '?'. Its handle is
    GRM_NO_SETTING when no module has it. */
 #define GRM_NO_SETTING 0xffffffffU
@@ -346,7 +348,7 @@ static int grm_settings(const struct grm_module *m, const u8 *code, u32 base,
         s->flags = grm_word(e + GRM_SETTING_FLAGS_AT);
         s->default_value = size >= GRM_SETTING_DEFAULT ? grm_word(e + GRM_SETTING_DEFAULT_AT) : 0;
         if (!s->values || s->values > GRM_SETTING_VALUES || s->default_value >= s->values ||
-            (s->flags & ~(GRM_SETTING_PUBLIC | GRM_SETTING_SAVED)) ||
+            (s->flags & ~(GRM_SETTING_PUBLIC | GRM_SETTING_SAVED | GRM_SETTING_COLOR_ONLY)) ||
             !grm_string(m, code, base, grm_word(e + GRM_SETTING_KEY_AT), s->key, GRM_KEY, 0)) return GRM_BAD_DESCRIPTOR;
         for (u32 j = 0; j < i; ++j) {
             u32 k = 0;

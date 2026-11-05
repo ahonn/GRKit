@@ -58,6 +58,7 @@ A setting reference is a key of `settings`, or a name of `uses` without its `?`.
 | `default` | integer | `0` | The initial value, from 0 to `values` - 1. Used when no valid saved value exists. |
 | `saved` | boolean | `false` | The state file keeps the value, including 0. |
 | `public` | boolean | `false` | Other modules can use the setting. |
+| `color_only` | boolean | `false` | The rows of the setting show only on a camera with a color sensor. On GR IV Monochrome, the installer leaves them out of each page, and the setting keeps its value. It cannot be the first row of a page or of a group child. Needs ABI 2.4. |
 
 ### page
 
@@ -426,7 +427,7 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.3: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
+**ABI version.** `GRKIT_ABI` is 2.4: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
 
 In 2.0, each text list also has a Korean text. The installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
 
@@ -444,6 +445,8 @@ The installer rejects layer descriptors of 21 to 27 bytes.
 ABI 2.3 also moves the tiles out of the code. The header word at offset 60, which was reserved and 0, gives the number of tiles that follow the import names. The descriptor then gives `tile_count` and a null `tiles` pointer. The installer still accepts tiles in the code, through a `tiles` pointer and a header word of 0. It rejects tiles after the file of a module of ABI 2.2 or earlier, tiles in both places, and a `tile_count` that differs from the header.
 
 ABI 2.3 adds the icon kind `GRKIT_ICON_LABEL` (3) for status-row indicators: a core live-view label, `first_tile` + n for setting value n, or `first_tile` without a setting. The installer rejects it for pages and the Image Control slot, and when the labels of the setting values do not exist.
+
+ABI 2.4 adds the setting flag `GRKIT_SETTING_COLOR_ONLY` (4). The installer of an earlier core rejects a setting with this flag.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

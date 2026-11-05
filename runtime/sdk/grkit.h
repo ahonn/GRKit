@@ -21,7 +21,7 @@ typedef signed int s32;
    equals that of the core and whose minor version is not larger. A minor
    version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 3U
+#define GRKIT_ABI_MINOR 4U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -136,6 +136,10 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */
+/* Since ABI 2.4: the rows of the setting show only on a camera with a color
+   sensor. On GR IV Monochrome the installer leaves them out of each page, and
+   the setting keeps its value. It cannot be the first row of a page. */
+#define GRKIT_SETTING_COLOR_ONLY 4U
 /* The handle of an optional used setting that no module has. */
 #define GRKIT_NO_SETTING 0xffffffffU
 /* The setting of a page or a layer: n for setting n of
