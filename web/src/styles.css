@@ -104,6 +104,14 @@ button {
   cursor: pointer;
 }
 
+/* A square button with an icon and an accessible label, such as New recipe (+). */
+.button.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  padding: 0;
+}
+
 .button.small {
   min-height: 40px;
   padding: 0 12px;
@@ -2573,4 +2581,130 @@ button.row-body {
     font-size: 13px;
     line-height: 1.5;
   }
+}
+
+/* The Recipes section: the library in camera order, and the editor. */
+.recipes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recipe-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.recipe-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'check name actions'
+    'check look actions';
+  align-items: center;
+  gap: 4px 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.recipe-check {
+  grid-area: check;
+}
+
+/* A recipe that is off stays on the card, and the camera does not list it. */
+.recipe-row[data-off] .recipe-name,
+.recipe-row[data-off] .recipe-look {
+  color: var(--muted);
+}
+
+.recipe-name {
+  grid-area: name;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.recipe-look {
+  grid-area: look;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.recipe-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .recipe-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      'check name'
+      'check look'
+      'check actions';
+  }
+
+  .recipe-actions {
+    justify-content: flex-start;
+  }
+}
+
+.recipe-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* The name of a recipe opens its settings. */
+.recipe-name.link-button {
+  justify-self: start;
+  color: var(--ink);
+  font-size: inherit;
+  font-weight: 700;
+  text-align: left;
+}
+
+/* The pictures of a preset and the settings of a recipe, in its dialog. */
+.preset-picture {
+  margin: 0;
+}
+
+/* The preset pictures are 4:3, as the camera records them. */
+.preset-frame {
+  aspect-ratio: 4 / 3;
+}
+
+.preset-caption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.recipe-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.recipe-details div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.recipe-details dt {
+  color: var(--muted);
+}
+
+.recipe-details dd {
+  margin: 0;
 }

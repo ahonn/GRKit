@@ -41,4 +41,16 @@ export const LANDING_PHOTOS = {
     camera: 'RICOH GR III',
     source: 'https://commons.wikimedia.org/wiki/File:People_dining_outside,_Rue_des_Marronniers,_Lyon,_France_julesvernex2.jpg',
   },
+  takeaway: {
+    author: 'Tony Barrett',
+    license: 'CC BY-SA 4.0',
+    camera: 'RICOH GR III',
+    source: 'https://discuss.pixls.us/t/40918',
+  },
+  dunes: {
+    author: 'raw.pixls.us',
+    license: 'CC0 1.0',
+    camera: 'RICOH GR III',
+    source: 'https://raw.pixls.us/',
+  },
 } as const;

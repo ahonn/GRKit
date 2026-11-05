@@ -72,14 +72,15 @@ A package holds only `SCRIPT`. `GRKIT` at the card root is the data folder: no p
 
 | Path | Contents |
 | --- | --- |
-| `SCRIPT/GRKIT` | the loader, the installers, the package list, and the modules and effects of the package |
+| `SCRIPT/GRKIT` | the loader, the installers, the package list, and the modules, effects, and recipe library of the package |
 | `GRKIT/EFFECTS` | the effects library |
 | `GRKIT/MODULES` | the modules that a person adds |
 | `GRKIT/STATE.TXT` | the saved settings |
+| `GRKIT/RECIPES.TXT` | the recipes |
 | `GRKIT/REPORT.TXT`, `GRKIT/BOOT.TXT` | the result and the boot log of the last starts |
 | `GRKIT/SAFE` | starts the safe mode |
 
-A package module loads only if the package list names it, and a module in `GRKIT/MODULES` replaces the package module with the same name. A new package copies its effects into the library once, so an effect that a person deleted stays deleted. The installer never renames or deletes a file in the data folder, because the camera's file systems do not support it reliably.
+A package module loads only if the package list names it, and a module in `GRKIT/MODULES` replaces the package module with the same name. A new package copies its effects into the library once, so an effect that a person deleted stays deleted. INSTALL adds the recipes of a package library to `GRKIT/RECIPES.TXT` once for each library, so a recipe that a person deleted stays deleted. The installer never renames or deletes a file in the data folder, because the camera's file systems do not support it reliably.
 
 ### Report and safe mode
 
@@ -99,6 +100,7 @@ Each feature is a module, `<ID>.GRM`, linked at power-on. The same file runs on 
 | `DATE` | the date imprint |
 | `GLOW` | independent Bloom and Halation around the highlights of each recorded picture |
 | `GRAIN` | a page of `CORE.GRAIN` and `CORE.GRAIN_SIZE` |
+| `RECIPES` | a page of `CORE.RECIPE` ([Recipes](#recipes)) |
 
 The core keeps the value of each setting. The capabilities, `CORE.<KEY>`, are settings of the core. The core keeps each in a header word that its hooks read, so module code never runs in a hot path. INSTALL applies the patches of a capability only when a loaded module uses it.
 
@@ -128,6 +130,16 @@ The menu text follows the camera language.
 - **RAW default crop**: when Framing crops a shot, DNG defaults to native 3:2 and preserves the shot's digital crop setting. The DNG writer changes only `DefaultCropOrigin` and `DefaultCropSize`. The capture snapshot identifies the shot's Framing crop. Embedded previews keep the selected composition.
 - **Guides** follow the framing area in both Framing modes, so that they divide the frame that the photographer composes in. Without a framing area, they follow the native aspect ratio.
 - **Recorded pictures**: a hook on the JPEG encode changes the main picture, the screennail, and the thumbnail. It applies the selective color of the effect and the plane filters of the modules. Each shot keeps its own settings, so continuous shooting is correct. Grain uses the camera's grain stage, so the live view and DNG files have no grain.
+
+## Recipes
+
+A recipe is a named set of picture settings that OK applies in one step: the look (a Film Look effect with its Fn adjustments, or a native Image Control type with its parameters), Grain, Glow, white balance, the correction and noise reduction settings, and the exposure settings. The capability is `CORE.RECIPE`; the `RECIPES` module is its page in ADJ and in MENU. In MENU a person chooses a recipe, then Apply, Rename, or Delete.
+
+- **Store.** The camera keeps at most 64 recipes in `GRKIT/RECIPES.TXT`, with its own change count, so a change of a setting does not write the recipes again. At most 40 are on; the camera lists only those and keeps the others for the site. Undo steps stay in memory.
+- **Record.** A recipe is the same five words in the core, in the recipe file, and in the package library. `grkit_core::recipes` defines them, generates their layout for the core, and gives the site the same codec through the wasm build. The words hold portable values, so a recipe of one camera line fails the checks of another. An effect recipe finds its effect by a hash of the effect ID.
+- **Whole look.** A recipe holds each setting of the picture, so it gives the same picture after any other recipe. A save on the camera also holds the exposure settings, and apply sets them. A preset can leave the exposure settings out; apply then keeps those of the camera. The exposure settings do not decide which recipe matches the current settings (`runtime/recipes.h`).
+- **Apply.** Apply checks each value against the tables of the running build first, so a value that the camera does not have changes nothing. It sets the settings of the capabilities and modules that run, writes the native settings by name and label as the native menu does (the build generates those tables from each firmware, `grkit_build::userdata`), and reports what it left out.
+- **Site and packages.** The camera makes and edits recipes. The site turns them on and off, adds presets, and writes the recipe file again in full, keeping each recipe that it cannot read. A ZIP package carries a library in `SCRIPT/GRKIT/RECIPES.BIN`; INSTALL adds the recipes of the camera's line that the list does not hold, once for each library.
 
 ## Relocation
 

@@ -7,6 +7,8 @@
 #define GRKIT_TARGET_H
 
 #include "gr3.h"
+/* The native settings of recipes (runtime/native.h), from the firmware. */
+#include "gr3-2.10-native.h"
 
 /* Camera settings and the still aspect property. */
 #define FW_SETTINGS FIRMWARE(0x5320b31c)
@@ -272,6 +274,9 @@
 /* AdjModeController events (the first halfword of an event). */
 #define EV_SWITCH 5
 #define EV_SWITCH_END 8
+/* A half-press of the shutter on a MENU value page, before the confirm that
+   OK also sends. */
+#define EV_HALF_PRESS 2
 #define EV_FN 0x1b
 /* An ADJ press, before the confirm that OK also sends. */
 #define EV_ADJ_PRESS 0x1e
@@ -420,5 +425,13 @@
 #define FW_SLIDER_FLAG FIRMWARE(0x5339f210)
 #define FW_SLIDER_APPLY FIRMWARE(0x5339f328)
 #define UI_SLIDER_ICONS {0x230,0x40,0xc7,0x240}
+/* The keyboard of the camera (runtime/ui.h): the controller ID of its
+   copyright use, which the Copyright Information page opens.
+   SoftwareKeyboardController sets its use from the controller ID at its
+   start, in the byte KEYBOARD_FUNCTION; the copyright use is
+   KEYBOARD_COPYRIGHT. */
+#define KEYBOARD_CONTROLLER 0x2000105U
+#define KEYBOARD_FUNCTION 0x1f0
+#define KEYBOARD_COPYRIGHT 2U
 
 #endif

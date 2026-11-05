@@ -1,7 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { INBOX } from './card';
-import { changedImports, extraCardEffects, packageEffects, type CardSession } from './cardSession';
+import { describe, expect, it, vi } from 'vitest';
+import { INBOX, RECIPE_FILE, type CardDirectory, type CardFileHandle } from './card';
+import {
+  changedImports,
+  extraCardEffects,
+  openSession,
+  packageEffects,
+  withFamily,
+  type CardSession,
+} from './cardSession';
 import type { CardEffect, ImportedEffect, NativeImport } from './catalog';
+import type { Family } from './recipes';
+
+// The wasm build reads the recipe file. Here each read gives one recipe that names the text and
+// the camera line.
+vi.mock('./recipes', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./recipes')>()),
+  readRecipeFile: async (text: string, family: Family) => [{ name: `${text} ${family}`, family }],
+}));
 
 const imported: ImportedEffect<NativeImport> = {
   id: 'gr4-cinema-yellow',
@@ -65,5 +80,56 @@ describe('changedImports', () => {
     expect([...changedImports(session, [imported, renamed, absent])]).toEqual(['lut-old']);
     // A session read before the page kept card files changes nothing.
     expect(changedImports({} as CardSession, [renamed]).size).toBe(0);
+  });
+});
+
+const notFound = () => Object.assign(new Error('NotFoundError'), { name: 'NotFoundError' });
+
+/** A card that holds only `files`, by their paths from the root. A write fails. */
+function memoryCard(files: Record<string, string>, prefix = ''): CardDirectory {
+  const paths = Object.keys(files).filter((path) => path.startsWith(prefix));
+  const isFolder = (name: string) => paths.some((path) => path.startsWith(`${prefix}${name}/`));
+  const file = (name: string): CardFileHandle => ({
+    kind: 'file',
+    name,
+    getFile: async () => new Blob([files[`${prefix}${name}`]!]),
+    createWritable: () => Promise.reject(new Error('read-only')),
+  });
+  return {
+    kind: 'directory',
+    name: prefix,
+    getDirectoryHandle: async (name) => {
+      if (!isFolder(name)) throw notFound();
+      return memoryCard(files, `${prefix}${name}/`);
+    },
+    getFileHandle: async (name) => {
+      if (!(`${prefix}${name}` in files)) throw notFound();
+      return file(name);
+    },
+    removeEntry: () => Promise.reject(new Error('read-only')),
+    async *entries() {
+      for (const name of new Set(paths.map((path) => path.slice(prefix.length).split('/')[0]!))) {
+        yield [name, isFolder(name) ? memoryCard(files, `${prefix}${name}/`) : file(name)];
+      }
+    },
+  };
+}
+
+describe('openSession', () => {
+  it('reads the recipes of the card for a camera line', async () => {
+    const session = await openSession(memoryCard({ [RECIPE_FILE]: 'file' }), [], 'gr4');
+    expect(session).toMatchObject({ family: 'gr4', recipes: [{ name: 'file gr4', family: 'gr4' }] });
+    // One card fits GR IV and GR IV Monochrome: a change of camera reads the file again.
+    expect(await withFamily(session, 'gr4Monochrome')).toMatchObject({
+      family: 'gr4Monochrome',
+      recipes: [{ name: 'file gr4Monochrome' }],
+    });
+    expect(await withFamily(session, 'gr4')).toBe(session);
+  });
+
+  it('has no recipes without a recipe file', async () => {
+    const session = await openSession(memoryCard({ 'DCIM/100RICOH/R0000001.JPG': 'jpeg' }), [], 'gr3');
+    expect(session.recipes).toBeNull();
+    expect((await withFamily(session, 'gr4')).recipes).toBeNull();
   });
 });

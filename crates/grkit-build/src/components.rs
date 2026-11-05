@@ -222,7 +222,7 @@ pub fn hooks_header(body: &FirmwareImage) -> Result<String> {
         writeln!(result, "#define HOOK_{name} {address:#x}")?;
         writeln!(result, "#define HOOK_{name}_RESUME {}", value(address + 4))?;
         writeln!(result, "#define HOOK_{name}_STOCK {word:#010x}")?;
-        if let Some(target) = crate::relocation::branch_target(address, word) {
+        if let Some(target) = crate::arm::branch_target(address, word) {
             writeln!(result, "#define HOOK_{name}_TARGET {}", value(target))?;
         }
     }

@@ -7,6 +7,7 @@
 //! `import_lut` fits a LUT as `grkit effects import` does, over the base gamma of the catalog.
 
 use anyhow::{ensure, Context, Result};
+use grkit_core::recipes;
 use grkit_core::{
     camera::{self, Camera},
     cube::Cube,
@@ -194,6 +195,8 @@ pub struct Builder {
     guide: Option<Vec<u8>>,
     /// The import library of the site (`grkit_core::imports`), which the camera does not read.
     imports: Option<Vec<u8>>,
+    /// The recipe library of the package (`grkit_core::recipes`), which INSTALL merges.
+    recipes: Option<Vec<u8>>,
 }
 
 impl Builder {
@@ -208,6 +211,7 @@ impl Builder {
             language: Language::English,
             guide: None,
             imports: None,
+            recipes: None,
         })
     }
 
@@ -296,6 +300,11 @@ impl Builder {
         Ok(())
     }
 
+    /// Puts the recipe library (`RECIPES.BIN`) in the package.
+    pub fn set_recipes(&mut self, bytes: &[u8]) {
+        self.recipes = Some(bytes.to_vec());
+    }
+
     /// Verifies each runtime build against its manifest and returns the verified
     /// package ZIP.
     pub fn build(&self) -> Result<Vec<u8>> {
@@ -318,6 +327,7 @@ impl Builder {
             },
             packaging::Extras {
                 imports: self.imports.as_deref(),
+                recipes: self.recipes.as_deref(),
             },
         )?;
         Ok(package.bytes)
@@ -461,6 +471,13 @@ impl Package {
     #[wasm_bindgen(js_name = setImports)]
     pub fn set_imports(&mut self, library: &[u8]) -> Result<(), JsError> {
         self.0.set_imports(library).map_err(js_error)
+    }
+
+    /// Puts the recipe library (`encodeRecipes`) in the package, at
+    /// `GRKIT/RECIPES.BIN` on the card.
+    #[wasm_bindgen(js_name = setRecipes)]
+    pub fn set_recipes(&mut self, bytes: &[u8]) {
+        self.0.set_recipes(bytes);
     }
 
     /// Returns the verified package as ZIP bytes.
@@ -721,6 +738,64 @@ pub fn native_looks_js(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeLoo
     native_looks(bytes, base_gamma)
         .map(|looks| looks.into_iter().map(NativeLookEffect).collect())
         .map_err(js_error)
+}
+
+/// The bytes of `GRKIT/RECIPES.BIN` for a library: a JSON array of recipes
+/// (`grkit_core::recipes::Recipe`). Throws for a recipe that the camera
+/// cannot hold.
+#[wasm_bindgen(js_name = encodeRecipes)]
+pub fn encode_recipes(json: &str) -> Result<Vec<u8>, JsError> {
+    serde_json::from_str::<Vec<recipes::Recipe>>(json)
+        .map_err(anyhow::Error::from)
+        .and_then(|library| recipes::encode(&library))
+        .map_err(js_error)
+}
+
+/// The recipes of a recipe library (`RECIPES.BIN`), as a JSON array of recipes.
+/// Throws for a damaged library.
+#[wasm_bindgen(js_name = decodeRecipes)]
+pub fn decode_recipes(bytes: &[u8]) -> Result<String, JsError> {
+    recipes::decode(bytes)
+        .and_then(|library| Ok(serde_json::to_string(&library)?))
+        .map_err(js_error)
+}
+
+/// The recipes of the recipe file (`GRKIT/RECIPES.TXT`) in its text, as a
+/// JSON array of recipes. `family` is the camera line of the card, as the
+/// JSON of `Family` names it.
+#[wasm_bindgen(js_name = readRecipeFile)]
+pub fn read_recipe_file(text: &str, family: &str) -> Result<String, JsError> {
+    serde_json::from_value::<recipes::Family>(serde_json::Value::String(family.into()))
+        .map_err(anyhow::Error::from)
+        .and_then(|family| {
+            Ok(serde_json::to_string(&recipes::read_recipe_file(
+                text, family,
+            ))?)
+        })
+        .map_err(js_error)
+}
+
+/// The text of the recipe file for a JSON array of recipes of the camera
+/// line `family`, which replaces `previous`, the text of the file on the
+/// card: it keeps the import hash, the user modes of the mode dial, and the
+/// recipes of `previous` that `readRecipeFile` leaves out
+/// (`grkit_core::recipes::write_recipe_file`). Throws for a recipe that the
+/// camera cannot hold, or for more recipes than the file holds.
+#[wasm_bindgen(js_name = writeRecipeFile)]
+pub fn write_recipe_file(json: &str, family: &str, previous: &str) -> Result<String, JsError> {
+    let family =
+        serde_json::from_value::<recipes::Family>(serde_json::Value::String(family.into()));
+    serde_json::from_str::<Vec<recipes::Recipe>>(json)
+        .and_then(|recipes| Ok((recipes, family?)))
+        .map_err(anyhow::Error::from)
+        .and_then(|(recipes, family)| recipes::write_recipe_file(&recipes, family, previous))
+        .map_err(js_error)
+}
+
+/// The code of an effect ID in recipes.
+#[wasm_bindgen(js_name = effectCode)]
+pub fn effect_code(id: &str) -> u16 {
+    recipes::effect_code(id)
 }
 
 /// An effect fitted from a LUT. See `importLut`.

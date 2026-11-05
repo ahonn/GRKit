@@ -112,6 +112,7 @@ static unsigned menu_tabs[8];
 static unsigned *object_at(unsigned address);
 #define MENU_OBJECT_WORD(a,o) (*object_at((a)+(o)))
 #define MENU_OBJECT_BYTE(a,o) (((unsigned char *)object_at(((a)+(o)) & ~3U))[((a)+(o)) & 3U])
+#define MENU_OBJECT_HALF(a,o) (((unsigned short *)object_at(((a)+(o)) & ~3U))[(((a)+(o)) & 3U) >> 1])
 /* The memory of WORD, HALF, and BYTE: the services block by the address that
    services_word gives, or a firmware object. */
 static unsigned char *mapped(unsigned address);
@@ -147,6 +148,24 @@ static unsigned level_calls, level_screen, level_mode;
 #define MENU_LEVEL_ALARM(screen,mode) (++level_calls, level_screen = (screen), level_mode = (mode))
 static unsigned preview_invalidations, preview_invalidated;
 #define MENU_PREVIEW_INVALIDATE(view) (++preview_invalidations, preview_invalidated = (view))
+/* The native settings of recipes (runtime/native_look.h): no settings
+   record, and each UserData Set counted. */
+static unsigned native_sets_count;
+#define NATIVE_SETTINGS() 0U
+#define NATIVE_SET(argv) ((void)(argv), ++native_sets_count)
+#define NATIVE_MONOCHROME() 0U
+#define NATIVE_SET_TYPE(code) ((void)(code), ++native_sets_count)
+/* On GR IV, a model holds the use of the keyboard: an object of the test
+   holds it. */
+#ifdef FW_KEYBOARD_MODEL
+#undef FW_KEYBOARD_MODEL
+#undef FW_KEYBOARD_SET_FUNCTION
+#define TEST_KEYBOARD_MODEL (TEST_OBJECTS + 0x600U)
+static unsigned keyboard_model(void) { return TEST_KEYBOARD_MODEL; }
+static unsigned keyboard_set_function(unsigned model, unsigned function) { BYTE(model, KEYBOARD_MODEL_FUNCTION) = (unsigned char)function; return 0; }
+#define FW_KEYBOARD_MODEL keyboard_model
+#define FW_KEYBOARD_SET_FUNCTION keyboard_set_function
+#endif
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
@@ -1329,6 +1348,333 @@ static void the_grain_page_changes_only_the_grain_word(void)
     assert(test_header[GRKIT_HOST_GRAIN / 4] == 1);
     /* A handle after the capabilities is no setting. */
     assert(setting_limit(test_header, GRKIT_CORE_SETTING_BASE + GRKIT_CORE_SETTING_COUNT) == 0);
+}
+
+/* The page of CORE.RECIPE in place of Grain: Undo while an undo step
+   exists, the camera recipes, then Save. The rows are actions: an ADJ exit
+   applies none, and the page shows with Save alone. The recipes here hold
+   Film Look Off and the grain, so no record is read. */
+static void the_recipe_page_saves_applies_and_deletes(void)
+{
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    test_header[GRKIT_HOST_ACTIVE / 4] = 0;
+    test_header[GRKIT_HOST_GRAIN / 4] = 0;
+    assert(MODULE(GRAIN_MODULE).rows(test_header) == 1);
+    assert(visible_modules(test_header) >> GRAIN_MODULE & 1);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    assert(same(current_module(test_header)->summary(test_header), "Recipes"));
+    assert(PAGE_ICON(GRAIN_MODULE, GRAIN_ROW) == GRAIN_TILE(0));
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    assert(same(current_module(test_header)->label(test_header, 0), "Save Settings"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(2));
+    /* OK on Save adds a recipe and puts the cursor on it. The second of a
+       look gets a number. */
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    test_header[GRKIT_HOST_GRAIN / 4] = 3;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 2 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(count(test_header) == 3);
+    assert(same(current_module(test_header)->label(test_header, 0), "Film Look: Off"));
+    assert(same(current_module(test_header)->label(test_header, 1), "Film Look: Off 2"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(3));
+    assert(!current_module(test_header)->checked(test_header, 0) && current_module(test_header)->checked(test_header, 1));
+    assert(same(current_module(test_header)->summary(test_header), "Recipes: Film Look: Off 2"));
+    /* OK on a recipe applies it and stores an undo step, which adds the Undo
+       row first. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    assert(count(test_header) == 4);
+    assert(same(current_module(test_header)->label(test_header, 0), "Undo (1)"));
+    assert(CURRENT_ICON(0) == GRAIN_TILE(1));
+    assert(same(current_module(test_header)->label(test_header, 2), "Film Look: Off 2"));
+    assert(current_module(test_header)->committed(test_header) == 1);
+    /* An ADJ exit on a recipe applies nothing, and an ADJ press closes ADJ
+       without applying it: its confirm is not OK. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 2;
+    exit_commit(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    test_header[GRKIT_HOST_MENU_EVENTS / 4] = 2;
+    test_header[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
+    assert(confirm_selection(test_header));
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    assert(recipe_count(test_header) == 2 && test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE);
+    test_header[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
+    test_header[GRKIT_HOST_MENU_EVENTS / 4] = 0;
+    /* Fn on a recipe shows its name with Rename and Delete; Fn on Undo or
+       Save does nothing. Delete asks to delete it. */
+    assert(current_module(test_header)->fn(test_header, 2));
+    assert(same((const u16 *)recipe_text_at(test_header, RECIPE_BOX_AT), "Film Look: Off 2"));
+    assert(same(text(test_header, RECIPE_TEXT_RENAME), "Rename") && same(text(test_header, RECIPE_TEXT_REMOVE), "Delete"));
+    assert(!current_module(test_header)->fn(test_header, 0) && !current_module(test_header)->fn(test_header, 3));
+    recipe_action_done(2, 1);
+    assert(same((const u16 *)recipe_text_at(test_header, RECIPE_BOX_AT), "Film Look: Off 2"));
+    recipe_action_done(1, 1);
+    assert(same((const u16 *)recipe_text_at(test_header, RECIPE_BOX_AT), "Delete Film Look: Off 2?"));
+    /* A typed name replaces the automatic name in the label, the summary,
+       and the texts of the boxes. */
+    recipe_name_set(test_header, 1, (const volatile u8 *)"  Street  Nega  ");
+    assert(same(current_module(test_header)->label(test_header, 2), "Street  Nega"));
+    recipe_action_done(1, 1);
+    assert(same((const u16 *)recipe_text_at(test_header, RECIPE_BOX_AT), "Delete Street  Nega?"));
+    recipe_name_set(test_header, 1, (const volatile u8 *)"   ");
+    assert(same(current_module(test_header)->label(test_header, 2), "Film Look: Off 2"));
+    recipe_name_set(test_header, 1, (const volatile u8 *)"Street Nega");
+    recipe_delete_done(0, 1);
+    assert(recipe_count(test_header) == 2);
+    /* The name of a deleted recipe goes with it, and the names after it
+       move up. */
+    recipe_name_set(test_header, 0, (const volatile u8 *)"First");
+    recipe_delete_done(1, 1);
+    assert(recipe_count(test_header) == 1 && count(test_header) == 3);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == 2);
+    assert(same(current_module(test_header)->label(test_header, 1), "First"));
+    assert(!recipe_name_length(test_header, 1) && !test_header[GRKIT_HOST_RECIPE_NAMES / 4 + GRKIT_RECIPE_NAME_WORDS]);
+    recipe_delete_done(1, 0);
+    assert(!recipe_count(test_header) && !recipe_name_length(test_header, 0));
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 1 && !recipe_name_length(test_header, 0));
+    /* OK on Undo keeps ADJ open, and on a recipe closes it. */
+    assert(current_module(test_header)->stays(test_header, 0));
+    assert(!current_module(test_header)->stays(test_header, 1) && !current_module(test_header)->stays(test_header, 2));
+    /* OK on Undo restores the grain before the apply. The last undo step
+       takes the Undo row away, and the cursor moves to the page's row. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 3 && recipe_undo_count(test_header) == 0);
+    assert(count(test_header) == 2);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == current_module(test_header)->committed(test_header));
+    /* With undo steps left, the cursor stays on Undo for the next one. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 2);
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 0);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == current_module(test_header)->committed(test_header));
+    /* CORE.RECIPE has no value, and a store does nothing. */
+    assert(setting_value(test_header, GRKIT_CORE_RECIPE) == 0 && setting_limit(test_header, GRKIT_CORE_RECIPE) == 0);
+    setting_store(test_header, GRKIT_CORE_RECIPE, 0);
+    assert(recipe_count(test_header) == 1);
+}
+
+/* Recipe i in the header (runtime/recipes.h), with its name. */
+static void header_recipe(u32 i, const char *name, u32 first)
+{
+    volatile u32 *w = test_header + GRKIT_HOST_RECIPES / 4 + i * GRKIT_RECIPE_WORDS;
+    volatile u32 *n = test_header + GRKIT_HOST_RECIPE_NAMES / 4 + i * GRKIT_RECIPE_NAME_WORDS;
+    for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) w[k] = 0;
+    for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) n[k] = 0;
+    w[0] = first;
+    for (u32 c = 0; name[c] && c < GRKIT_RECIPE_NAME_CHARS; ++c) n[c / 4] |= (u32)name[c] << (7U * (c % 4));
+}
+
+/* The keyboard of the camera (runtime/ui_keyboard.h): its hooks serve the GRKit text
+   only while GRKit borrows the keyboard, so the copyright text never meets
+   a GRKit text. OK gives the typed text to the call after the return, which
+   names the recipe. */
+static void the_keyboard_serves_the_grkit_text_only_while_borrowed(void)
+{
+    const u32 keyboard = TEST_OBJECTS + 0x100U, buffer = TEST_OBJECTS + 0x200U;
+    volatile u8 *grkit;
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    grkit = (volatile u8 *)ui_word(test_header, UI_KEYBOARD_TEXT);
+    BYTE(keyboard, KEYBOARD_FUNCTION) = KEYBOARD_COPYRIGHT;
+    for (u32 i = 0; i < 6; ++i) BYTE(buffer, i) = (u8)"Owner"[i];
+    /* Not borrowed: the native getter, setter, and length run. */
+    assert(!menu_keyboard_text_in(0, buffer) && !menu_keyboard_text_out(0, buffer) && !menu_keyboard_limit(keyboard));
+    assert(BYTE(buffer, 0) == 'O' && !ui_keyboard_result(test_header));
+    /* Borrowed: the keyboard shows the GRKit text, with at most 16
+       characters, and only for its copyright use. */
+    ui_word(test_header, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
+    strcpy((char *)grkit, "Nega");
+    assert(menu_keyboard_text_in(0, buffer) && BYTE(buffer, 0) == 'N' && BYTE(buffer, 4) == 0);
+    assert(ui_word(test_header, UI_KEYBOARD)[0] == UI_KEYBOARD_SHOWN);
+    assert(menu_keyboard_limit(keyboard) == GRKIT_RECIPE_NAME_CHARS);
+    BYTE(keyboard, KEYBOARD_FUNCTION) = KEYBOARD_COPYRIGHT + 1U;
+    assert(!menu_keyboard_limit(keyboard));
+    BYTE(keyboard, KEYBOARD_FUNCTION) = KEYBOARD_COPYRIGHT;
+    /* OK: GRKit takes the text, and the borrow ends. */
+    for (u32 i = 0; i < 9; ++i) BYTE(buffer, i) = (u8)"Nega Two"[i];
+    assert(menu_keyboard_text_out(0, buffer));
+    assert(!ui_word(test_header, UI_KEYBOARD)[0] && ui_keyboard_result(test_header));
+    assert(!strcmp((const char *)ui_keyboard_result(test_header), "Nega Two"));
+    assert(!menu_keyboard_text_out(0, buffer) && !menu_keyboard_text_in(0, buffer) && !menu_keyboard_limit(keyboard));
+    /* The call after the return names the new recipe. */
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(test_header);
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 1);
+    recipe_saved_back(0);
+    assert(same(current_module(test_header)->label(test_header, 0), "Nega Two"));
+    /* MENU on the keyboard keeps the name. */
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 0;
+    recipe_renamed_back(0);
+    assert(same(current_module(test_header)->label(test_header, 0), "Nega Two"));
+    strcpy((char *)grkit, "Rio");
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
+    recipe_renamed_back(0);
+    assert(same(current_module(test_header)->label(test_header, 0), "Rio"));
+    /* A change to another controller ends a borrow; the change to the
+       keyboard keeps it. */
+    ui_word(test_header, UI_KEYBOARD)[0] = UI_KEYBOARD_SHOWN;
+    ui_keyboard_change(test_header, KEYBOARD_CONTROLLER);
+    assert(ui_word(test_header, UI_KEYBOARD)[0] == UI_KEYBOARD_SHOWN);
+    ui_keyboard_change(test_header, KEYBOARD_CONTROLLER + 1U);
+    assert(!ui_word(test_header, UI_KEYBOARD)[0] && !menu_keyboard_text_in(0, buffer));
+}
+
+
+/* OK on the keyboard with the text that it started with keeps the automatic
+   name of a recipe, so the name follows its look and is not cut to the
+   keyboard length. A changed text names the recipe, in ADJ and in MENU. */
+static void the_keyboard_keeps_an_unchanged_automatic_name(void)
+{
+    volatile u8 *grkit;
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    grkit = (volatile u8 *)ui_word(test_header, UI_KEYBOARD_TEXT);
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_OFF | 12U << RECIPE_NUMBER_SHIFT);
+    header_recipe(1, "", RECIPE_USED | RECIPE_LOOK_OFF | 2U << RECIPE_NUMBER_SHIFT);
+    /* The keyboard starts with the automatic name, cut to its length. */
+    ui_keyboard_text(test_header, recipe_keyboard_text(test_header, 0));
+    assert(!strcmp((const char *)grkit, "Film Look: Off 1"));
+    /* OK without a change: after Save and Rename in ADJ, and in MENU. */
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
+    recipe_saved_back(0);
+    recipe_renamed_back(0);
+    recipe_named(0);
+    assert(!recipe_name_length(test_header, 0));
+    assert(same(menu_recipe_name(test_header, 0), "Film Look: Off 12"));
+    ui_keyboard_text(test_header, recipe_keyboard_text(test_header, 1));
+    assert(!strcmp((const char *)grkit, "Film Look: Off 2"));
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
+    recipe_named(1);
+    assert(!recipe_name_length(test_header, 1));
+    /* MENU on the keyboard gives no text. */
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 0;
+    strcpy((char *)grkit, "Other");
+    recipe_named(1);
+    assert(!recipe_name_length(test_header, 1));
+    /* A changed text names the recipe; a shorter one too. */
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
+    recipe_named(1);
+    assert(same(menu_recipe_name(test_header, 1), "Other"));
+    strcpy((char *)grkit, "Film Look: Off");
+    recipe_saved_back(0);
+    assert(same(menu_recipe_name(test_header, 0), "Film Look: Off") && recipe_name_length(test_header, 0) == 14);
+    /* A recipe with a typed name keeps the text as its name. */
+    ui_keyboard_text(test_header, recipe_keyboard_text(test_header, 1));
+    ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
+    recipe_renamed_back(1);
+    assert(same(menu_recipe_name(test_header, 1), "Other") && recipe_name_length(test_header, 1) == 5);
+}
+
+/* The page lists the recipes that show in ADJ, by their names. OK on one
+   applies it, and Fn offers Rename and Delete. */
+static void the_recipe_page_lists_the_shown_recipes(void)
+{
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    test_header[GRKIT_HOST_ACTIVE / 4] = 0;
+    test_header[GRKIT_HOST_GRAIN / 4] = 3;
+    /* Film Look Off and Grain 0; a hidden one. */
+    header_recipe(0, "Far Away", RECIPE_USED | RECIPE_HIDDEN | RECIPE_LOOK_OFF);
+    header_recipe(1, "Street", RECIPE_USED | RECIPE_LOOK_OFF | RECIPE_GRAIN);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(test_header);
+    assert(count(test_header) == 2);
+    assert(same(current_module(test_header)->label(test_header, 0), "Street"));
+    assert(same(current_module(test_header)->label(test_header, 1), "Save Settings"));
+    /* Save goes after the recipes, and the cursor shows it. */
+    u32 recipes = test_header[GRKIT_HOST_RECIPE_CHANGES / 4];
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    menu_confirm(test_header);
+    assert(recipe_count(test_header) == 3 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(test_header[GRKIT_HOST_RECIPE_CHANGES / 4] == recipes + 1);
+    assert(current_module(test_header)->checked(test_header, 1) && !current_module(test_header)->checked(test_header, 0));
+    /* Street: applied. An apply saves no recipe. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    assert(test_header[GRKIT_HOST_RECIPE_CHANGES / 4] == recipes + 1);
+    /* The Undo row came first, and the cursor stays on the recipe. */
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(same(current_module(test_header)->summary(test_header), "Recipes: Street"));
+    /* Undo, Street, the saved recipe, Save. */
+    assert(count(test_header) == 4 && current_module(test_header)->committed(test_header) == 1);
+}
+
+/* A recipe with a name whose effect is not installed shows a mark after its
+   name, before OK tells why it does not apply. */
+static void the_recipe_page_marks_a_missing_effect(void)
+{
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    /* Film Look does not run, so the effect is missing. */
+    test_header[GRKIT_HOST_CAPABILITIES / 4] &= ~(u32)GRKIT_CORE_TONE_BIT;
+    header_recipe(0, "Street", RECIPE_USED | RECIPE_LOOK_OFF);
+    header_recipe(1, "Gone", RECIPE_USED | RECIPE_LOOK_EFFECT | 0x7777U << RECIPE_CODE_SHIFT);
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(test_header);
+    assert(same(current_module(test_header)->label(test_header, 0), "Street"));
+    assert(same(current_module(test_header)->label(test_header, 1), "Gone (effect missing)"));
+}
+
+/* A recipe of a native type shows the native Image Control icon of the type
+   (NATIVE_TYPE_ICONS). A type without an icon on the camera, or a type
+   after the table, and Film Look Off show the recipe tile. */
+static void the_recipe_page_shows_native_type_icons(void)
+{
+    static const u16 icons[NATIVE_TYPES] = {NATIVE_TYPE_ICONS};
+    u32 missing = NATIVE_TYPES;
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    test_header[GRKIT_HOST_ACTIVE / 4] = 0;
+    /* GR III has no Cinema types, GR IV 1.11 no Solarization; GR IV 1.20
+       has an icon for each type. */
+    for (u32 t = 0; t < NATIVE_TYPES; ++t)
+        if (!icons[t] && missing == NATIVE_TYPES) missing = t;
+    header_recipe(0, "Standard", RECIPE_USED);
+    header_recipe(1, "Missing", RECIPE_USED);
+    header_recipe(2, "Off", RECIPE_USED | RECIPE_LOOK_OFF);
+    for (u32 i = 0; i < 2; ++i)
+        test_header[GRKIT_HOST_RECIPES / 4 + i * GRKIT_RECIPE_WORDS + RECIPE_NATIVE_WORD] =
+            ((i ? missing : 0U) + 1U) << NATIVE_TYPE_SHIFT;
+    test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(test_header);
+    assert(count(test_header) == 4);
+    assert(icons[0] && icons[0] < 0x7000U);
+    assert(CURRENT_ICON(0) == icons[0]);
+    assert(CURRENT_ICON(1) == GRAIN_TILE(3));
+    assert(CURRENT_ICON(2) == GRAIN_TILE(3));
+    assert(CURRENT_ICON(3) == GRAIN_TILE(2));
 }
 
 static void invalid_cursors_form_no_effect_pointer(void)
@@ -2534,6 +2880,152 @@ static void group_back_keeps_the_shared_native_parent_return_target(void)
     assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == 0x10000000U);
 }
 
+/* The MENU page of Recipes (runtime/menu_recipes.h): Enable, Options,
+   Recipes, whose value page lists the recipes and shows the page of the
+   recipe that OK chooses, then Save Settings. */
+static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU), *block = settings_block(h);
+    volatile u32 *state = menu + MENU_ROWS_PAGE_STATE / 4;
+    const u32 buffer = TEST_OBJECTS + 0x200U, controller = TEST_OBJECTS + 0x800U;
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    h[GRKIT_HOST_ACTIVE / 4] = 0;
+    h[GRKIT_HOST_GRAIN / 4] = 3;
+    /* The own page without a canvas shows no box. */
+    MENU_OBJECT_WORD(controller, ADJ_CANVAS) = 0;
+    header_recipe(0, "Far Away", RECIPE_USED | RECIPE_HIDDEN | RECIPE_LOOK_OFF | RECIPE_GRAIN | 4U << RECIPE_GRAIN_LEVEL_SHIFT);
+    header_recipe(1, "Street", RECIPE_USED | RECIPE_LOOK_OFF | RECIPE_GRAIN);
+    header_recipe(2, "Corner", RECIPE_USED | RECIPE_LOOK_OFF | RECIPE_GRAIN | 2U << RECIPE_GRAIN_LEVEL_SHIFT);
+    /* A recipe that is off stays for the site: no list of the camera has it. */
+    header_recipe(3, "Archive", RECIPE_USED | RECIPE_LOOK_OFF);
+    h[GRKIT_HOST_RECIPES / 4 + 3 * GRKIT_RECIPE_WORDS + RECIPE_MODULE_WORD] = RECIPE_OFF;
+    menu[MENU_ROWS_LISTED / 4] = 0;
+    menu[MENU_ROWS_PAGE / 4] = 4;
+    /* The Options row shows as the manifest declares it (options = true). */
+    settings_open(h, LISTED_PAGE, 0);
+    assert(settings_rows(h) == 3 && same(listed_label(h, 1), "Recipes"));
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    *page_at(TEST_PAGE + 4 * TEST_PAGE_SIZE + PAGE_FLAGS) |= CHOICE_OPTIONS;
+    *state = 7;
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    /* A start of the settings page clears the state of the value page. */
+    assert(!*state);
+    const Setting *page = settings_page(h);
+    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Options"));
+    assert(same(listed_label(h, 2), "Recipes") && same(listed_label(h, 3), "Save Settings"));
+    assert(same(listed_text(h, 3, 0), "3/40"));
+    /* Options: each recipe, on while ADJ shows it. OK turns it on or off. */
+    assert(options_count(h) == 3 && option_off(h, 0) && !option_off(h, 1));
+    assert(same(option_label(h, 1), "Street"));
+    listed_set(h, 1, 0);
+    assert(recipe_shown(h, 0));
+    listed_set(h, 1, 0);
+    assert(!recipe_shown(h, 0));
+    menu[MENU_ROWS_STAY / 4] = 0;
+    /* Recipes shows on the own value page; Save acts at OK. */
+    for (u32 row = 0; row < 4; ++row) {
+        u32 flags = settings_flags(h, page, row);
+        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2));
+        assert(settings_long(h, page, row) == (row == 1 || row == 2));
+        assert(!!(flags & SETTING_ACTION) == (row == 3));
+    }
+    assert(listed_setting(h, 0) == 0 && listed_setting(h, 1) == 0);
+    assert(menu_settings_row_controller(settings_pages[0], 3) == MENU_ACTION_TARGET + 3);
+    assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 2] == settings_pages[2]);
+    const Setting *recipes = listed_setting(h, 2);
+    /* The list has each recipe, also one that ADJ does not show. Without a
+       recipe that the settings match, the row shows no value, the page has
+       no mark, and the cursor is on the first recipe. */
+    assert(listed_values(h, 2) == 3 && same(listed_text(h, 2, 0), "Far Away") && same(listed_text(h, 2, 2), "Corner"));
+    assert(listed_get(h, 2) == RECIPE_NONE && same(listed_text(h, 2, listed_get(h, 2)), ""));
+    assert(recipes->cursor(h) == 0 && !recipes->title(h));
+    /* Grain 2 matches Corner: the row shows it, and the list has the mark
+       and the cursor on it. */
+    h[GRKIT_HOST_GRAIN / 4] = 2;
+    assert(listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && same(listed_text(h, 2, 2), "Corner"));
+    assert(menu_settings_current(2, 0, 2) == 2 && menu_settings_current(1, 0, 2) == 1);
+    /* MENU lists the recipes that ADJ does not show, so its mark can be on
+       one of them, while ADJ names the first recipe that it shows. */
+    volatile u32 *far = h + GRKIT_HOST_RECIPES / 4;
+    far[0] = (far[0] & ~(7U << RECIPE_GRAIN_LEVEL_SHIFT)) | 2U << RECIPE_GRAIN_LEVEL_SHIFT;
+    assert(listed_get(h, 2) == 0 && recipes->cursor(h) == 0 && same(recipe_menu_value(h), "Far Away"));
+    assert(recipe_current(h) == 2);
+    far[0] = (far[0] & ~(7U << RECIPE_GRAIN_LEVEL_SHIFT)) | 4U << RECIPE_GRAIN_LEVEL_SHIFT;
+    assert(listed_get(h, 2) == 2);
+    /* MENU on the list returns to the page as MENU does. */
+    assert(!recipes->select(h, 0, SETTING_BACK) && !recipes->select(h, 0, 3));
+    /* OK on Street shows its page: its name, Apply, Rename, and Delete,
+       the cursor on Apply and no mark. */
+    assert(recipes->select(h, 0, 1));
+    assert(*state == (RECIPE_PAGE_SHOWN | 1U) && same(recipes->title(h), "Street"));
+    assert(listed_values(h, 2) == 3 && same(listed_text(h, 2, 0), "Apply"));
+    assert(same(listed_text(h, 2, 1), "Rename") && same(listed_text(h, 2, 2), "Delete"));
+    assert(recipes->cursor(h) == 0 && recipes->get(h) == RECIPE_NONE);
+    menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
+    assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    /* MENU returns to the list with the cursor on Corner, which the
+       settings match: the camera shows the mark only on the row where the
+       cursor starts. Without a match, the cursor is on Street. */
+    assert(recipes->select(h, 0, SETTING_BACK));
+    assert(*state == 2 && listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && menu_settings_current(2, 0, 2) == 2);
+    h[GRKIT_HOST_GRAIN / 4] = 3;
+    assert(listed_get(h, 2) == RECIPE_NONE && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Street"));
+    h[GRKIT_HOST_GRAIN / 4] = 2;
+    /* Rename: the return from the keyboard names the recipe after an OK,
+       keeps the name after MENU, and the page shows the new name. The
+       change from the keyboard calls the callback (ui_keyboard_change); a
+       host pointer does not fit the services word, so the test calls it. */
+    assert(recipes->select(h, 0, 1));
+    ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
+    assert(menu_keyboard_text_in(0, buffer));
+    for (u32 i = 0; i < sizeof "Night"; ++i) BYTE(buffer, i) = (u8)"Night"[i];
+    assert(menu_keyboard_text_out(0, buffer));
+    recipe_menu_renamed(1);
+    assert(same(recipes->title(h), "Night"));
+    ui_word(h, UI_KEYBOARD_RESULT)[0] = 0;
+    recipe_menu_renamed(1);
+    assert(same(recipes->title(h), "Night") && *state == (RECIPE_PAGE_SHOWN | 1U));
+    ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
+    ui_keyboard_change(h, KEYBOARD_CONTROLLER);
+    assert(ui_keyboard_borrowed(h));
+    ui_keyboard_change(h, settings_pages[2]);
+    assert(!ui_keyboard_borrowed(h));
+    /* The page keeps the settings while the keyboard that it opened shows. */
+    ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
+    assert(menu_settings_controller(KEYBOARD_CONTROLLER) == KEYBOARD_CONTROLLER);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1);
+    ui_word(h, UI_KEYBOARD)[0] = 0;
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    /* Apply applies the recipe and returns to the Recipes page, whose row
+       shows it. */
+    assert(recipes->select(h, 0, 0));
+    assert(h[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(h) == 1 && !*state);
+    assert(listed_get(h, 2) == 1 && same(listed_text(h, 2, listed_get(h, 2)), "Night"));
+    /* Delete asks first: Cancel keeps the recipe, and Execute returns to
+       the list with the cursor on the recipe after it. */
+    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 2));
+    recipe_menu_deleted(0, 1);
+    assert(recipe_entries(h) == 3 && *state == (RECIPE_PAGE_SHOWN | 1U));
+    recipe_menu_deleted(1, 1);
+    assert(recipe_entries(h) == 2 && *state == 2 && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Corner"));
+    /* The last recipe: the cursor goes to the one before it. */
+    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 2));
+    recipe_menu_deleted(1, 1);
+    assert(recipe_entries(h) == 1 && *state == 1 && recipes->cursor(h) == 0);
+    /* After the last recipe, the page returns to the Recipes page, which
+       has Enable and Save Settings. */
+    assert(recipes->select(h, 0, 0) && recipes->select(h, controller, 2));
+    recipe_menu_deleted(1, 0);
+    assert(!recipe_entries(h) && !*state && recipe_count(h) == 1);
+    settings_open(h, LISTED_PAGE, 0);
+    assert(settings_rows(h) == 2 && same(listed_label(h, 1), "Save Settings"));
+    assert(settings_flags(h, listed_settings, 1) == SETTING_ACTION);
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+}
+
 /* A camera whose MENU has another controller ID, as GR IV: the parent page
    returns to the controller that the submenu holds, not to the one of GR III,
    which is another screen there. */
@@ -2729,6 +3221,17 @@ static void the_options_page_shows_checkboxes(void)
     assert(check[CHECK_PAGE / 4] == TEST_CHECK_PAGE && !check[CHECK_BUILD / 4]);
     view_calls = 0;
     assert(menu_check_controller(0, pages[1]) == TEST_CHECK_PAGE && !view_calls);
+    /* Each open sets the title ID of the page again: own pages share one
+       title ID, so the title measures the text of this page. */
+    const u32 title = TEST_OBJECTS + 0x3c00U;
+    MENU_OBJECT_WORD(TEST_CHECK_PAGE, SELECT_TITLE_STRING) = title;
+    MENU_OBJECT_HALF(title, STRING_VIEW_TEXT) = 0x217;
+    assert(menu_check_controller(0, pages[1]) == TEST_CHECK_PAGE);
+    assert(view_calls == 2 && view_functions[0] == FW_STRING_VIEW_RESET && view_args[0][0] == title &&
+           !view_args[0][1] && view_functions[1] == FW_STRING_VIEW_RESET && view_args[1][0] == title &&
+           view_args[1][1] == 0x217 && !view_args[1][2]);
+    MENU_OBJECT_WORD(TEST_CHECK_PAGE, SELECT_TITLE_STRING) = 0;
+    MENU_OBJECT_HALF(title, STRING_VIEW_TEXT) = 0;
     /* A native list keeps its radio rows. */
     MENU_OBJECT_BYTE(TEST_CHECK_KINDS, 0) = 0x15;
     menu_check_lines(TEST_OBJECTS + 0x3400, TEST_CHECK_KINDS, 1, 50);
@@ -3230,6 +3733,12 @@ int main(void)
     an_exit_from_a_page_commits_the_highlighted_row();
     the_date_imprint_page_lists_its_styles();
     the_grain_page_changes_only_the_grain_word();
+    the_recipe_page_saves_applies_and_deletes();
+    the_keyboard_serves_the_grkit_text_only_while_borrowed();
+    the_keyboard_keeps_an_unchanged_automatic_name();
+    the_recipe_page_lists_the_shown_recipes();
+    the_recipe_page_marks_a_missing_effect();
+    the_recipe_page_shows_native_type_icons();
     invalid_cursors_form_no_effect_pointer();
     film_look_previews_and_commits_the_highlighted_effect();
     the_root_has_no_about_row();
@@ -3261,6 +3770,7 @@ int main(void)
 #endif
     reused_row_views_show_the_page_that_reuses_them();
     the_film_look_menu_page_lists_film_stocks();
+    the_recipes_menu_page_chooses_a_recipe_then_an_action();
     a_section_row_shows_its_module_and_value();
     about_grkit_shows_the_version_and_address();
 #ifdef FW_MENU_TABS

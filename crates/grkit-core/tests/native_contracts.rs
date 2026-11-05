@@ -727,6 +727,75 @@ fn native_state_contract_reads_the_pairs_of_the_loader() {
     checked(&mut Command::new(&executable));
 }
 
+/// Each target, because the native tables and the grain form differ by
+/// camera family. The Rust codec and the camera agree on the words: the
+/// camera has each value of the recipes of the site (the presets and a
+/// library), and the site reads each recipe that the camera saves.
+#[test]
+fn native_recipes_contract_saves_applies_and_undoes_recipes() {
+    use grkit_core::recipes::{presets, Family, Recipe};
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let site: Vec<Recipe> = presets()
+        .into_iter()
+        .flat_map(|preset| preset.recipes)
+        .chain(library_recipes())
+        .collect();
+    let words = temporary.path().join("recipe-words.txt");
+    let mut lines = String::new();
+    for recipe in &site {
+        let w = recipe.words().unwrap();
+        let family = serde_json::to_value(recipe.family).unwrap();
+        lines.push_str(&format!(
+            "{} {} {} {} {} {}\n",
+            family.as_str().unwrap(),
+            w[0],
+            w[1],
+            w[2],
+            w[3],
+            w[4]
+        ));
+    }
+    fs::write(&words, lines).unwrap();
+    for target in targets() {
+        let executable = temporary
+            .path()
+            .join(format!("recipes_contract{}", target.to_lowercase()));
+        compile_for(
+            &target,
+            &compiler,
+            &root().join("tests/runtime/recipes_contract.c"),
+            &executable,
+            &[],
+        );
+        let output = checked(Command::new(&executable).env("GRKIT_TEST_RECIPE_WORDS", &words));
+        let saves: Vec<String> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .filter_map(|line| line.strip_prefix("save ").map(str::to_owned))
+            .collect();
+        assert!(saves.len() >= 3, "{target}: {saves:?}");
+        for (index, save) in saves.iter().enumerate() {
+            let mut fields = save.split_whitespace();
+            let family: Family =
+                serde_json::from_value(serde_json::Value::from(fields.next().unwrap())).unwrap();
+            let w: Vec<u32> = fields.map(|field| field.parse().unwrap()).collect();
+            let recipe = Recipe::from_words(String::new(), family, w.try_into().unwrap())
+                .unwrap_or_else(|error| panic!("{target}: the site cannot read {save}: {error:#}"));
+            // The first save has the stored Fn bytes 3 and 7 of the effect,
+            // which the site keeps as they are (0 is the Fn default).
+            if index == 0 {
+                let grkit_core::recipes::Look::Effect { adjustments, .. } = recipe.look else {
+                    panic!("{target}: the first save holds an effect");
+                };
+                assert_eq!(adjustments, [3, 0, 0, 0, 0, 0, 0, 0, 7], "{target}");
+            }
+        }
+    }
+}
+
 /// The numeric `#define`s of a runtime header: name and value.
 fn defines(path: &str) -> std::collections::HashMap<String, u64> {
     let text = fs::read_to_string(root().join(path)).unwrap();
@@ -990,7 +1059,120 @@ fn native_install_contract_plans_and_links_the_modules_of_the_card() {
         &executable,
         &[],
     );
-    checked(&mut Command::new(&executable));
+    // A package library of the Rust codec, which INSTALL imports.
+    let library = library_recipes();
+    let file = temporary.path().join("RECIPES.BIN");
+    fs::write(&file, grkit_core::recipes::encode(&library).unwrap()).unwrap();
+    let output = checked(Command::new(&executable).env("GRKIT_TEST_RECIPES", &file));
+    let entries: Vec<String> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| line.strip_prefix("recipe ").map(str::to_owned))
+        .collect();
+    // INSTALL adds the GR III recipes of the library after the recipe of
+    // the recipe file.
+    let expected: Vec<String> = library
+        .iter()
+        .filter(|recipe| recipe.family == grkit_core::recipes::Family::Gr3)
+        .map(|recipe| {
+            let w = recipe.words().unwrap();
+            format!(
+                "{}|{}|{} {} {} {} {}",
+                recipe.name,
+                recipe.family.code(),
+                w[0],
+                w[1],
+                w[2],
+                w[3],
+                w[4]
+            )
+        })
+        .collect();
+    assert_eq!(entries, expected);
+}
+
+/// A library with an effect recipe of GR III, a native recipe of GR IV, and a
+/// GR IV Monochrome recipe, with exposure settings.
+fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
+    use grkit_core::recipes::*;
+    let negative = grkit_core::native::TYPES
+        .iter()
+        .position(|t| t.label == "NegativeFilm")
+        .unwrap();
+    vec![
+        Recipe {
+            name: "Portra Days".into(),
+            family: Family::Gr3,
+            look: Look::Effect {
+                code: 0x1234,
+                adjustments: [4, 5, 3, 4, 4, 4, 4, 8, 0],
+            },
+            grain: Some(Grain { level: 2, size: 1 }),
+            glow: Some(Glow {
+                bloom: 1,
+                halation: 3,
+                halation_color: Some(2),
+            }),
+            white_balance: Some(WhiteBalance {
+                mode: 4,
+                shift_ba: 17,
+                shift_gm: 12,
+                kelvin: 5500,
+            }),
+            corrections: [Some(2), None, Some(1), Some(0)],
+            exposure: Exposure {
+                compensation: Some(-2),
+                iso_limit: Some(3200),
+                metering: Some(Metering::Spot),
+                nd: Some(Nd::Auto),
+            },
+            enabled: true,
+            hidden: false,
+            number: 0,
+            id: 0,
+        },
+        Recipe {
+            name: "Nega 2".into(),
+            family: Family::Gr4,
+            look: Look::Native(NativeLook {
+                image_type: negative,
+                levels: [6, 3, 4, 2, 4, 4, 5, 4, 7],
+                tone: 0,
+                intensity: 0,
+                filter: 0,
+                grain_strength: 2,
+                grain_size: 1,
+                solarization: 0,
+            }),
+            grain: None,
+            glow: None,
+            white_balance: None,
+            corrections: [None; 4],
+            exposure: Exposure::default(),
+            enabled: true,
+            hidden: false,
+            number: 0,
+            id: 0,
+        },
+        Recipe {
+            name: "Mono Glow".into(),
+            family: Family::Gr4Monochrome,
+            look: Look::Off,
+            grain: Some(Grain { level: 1, size: 0 }),
+            glow: Some(Glow {
+                bloom: 2,
+                halation: 1,
+                halation_color: None,
+            }),
+            white_balance: None,
+            corrections: [None; 4],
+            exposure: Exposure::default(),
+            enabled: true,
+            hidden: false,
+            number: 0,
+            id: 0,
+        },
+    ]
 }
 
 #[test]

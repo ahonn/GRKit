@@ -11,7 +11,7 @@
 
 /* The most pairs that INSTALL keeps. The largest file of the loader has fewer
    (grkit_core::runtime::worst_state_size). */
-#define STATE_PAIRS 512U
+#define STATE_PAIRS 704U
 
 struct state {
     u32 ids[STATE_PAIRS], values[STATE_PAIRS], pairs;

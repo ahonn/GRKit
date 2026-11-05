@@ -46,7 +46,25 @@ typedef short s16;
 
 /* One setting of a native settings page: its row label, its values (at most
    SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a
-   value, and the stored value. */
+   value, and the stored value. A setting of MENU can also give `select`,
+   `flags`, `cursor`, and `title` (runtime/menu_settings.h):
+   - SETTING_OWN_PAGE: the value page shows on an own page, where the boxes
+     of the core show (runtime/ui.h). OK on value v calls select(h, the
+     page, v): 1 when the setting took it and the page stays, or 0 for the
+     native OK, which sets the value and returns. MENU calls select(h, the
+     page, SETTING_BACK): 1 when the setting took it, or 0 for the native
+     return to the settings page. The page can show other values after a
+     select, such as the actions on one of its values, and starts again
+     (settings_value_again).
+   - SETTING_ACTION: the row has no value page. OK on it calls select(h, 0,
+     0), which gives the controller to change to, or 0 to stay.
+   - SETTING_FN: the row opens the Fn adjustments of the committed effect
+     instead of a value page.
+   - cursor, optional for an own page: the value that the page puts its
+     cursor on, else the stored value. The mark shows only while the two are
+     the same value.
+   - title, optional for an own page: the title of the page, or 0 for the
+     row label. A text hook reads it, so it gives a text that is ready. */
 #define SETTING_VALUES 8U
 typedef struct {
     const u16 *(*label)(volatile u32 *);
@@ -54,7 +72,15 @@ typedef struct {
     const u16 *(*value_text)(volatile u32 *,u32);
     u32 (*get)(volatile u32 *);
     void (*set)(volatile u32 *,u32);
+    u32 (*select)(volatile u32 *,u32,u32);
+    u32 flags;
+    u32 (*cursor)(volatile u32 *);
+    const u16 *(*title)(volatile u32 *);
 } Setting;
+#define SETTING_OWN_PAGE 1U
+#define SETTING_ACTION 4U
+#define SETTING_FN 8U
+#define SETTING_BACK 0xffffffffU
 /* The most rows of the settings page of a module: its settings
    (GRM_SETTING_ROWS) and the Enable row before them in MENU. */
 #define SETTING_ROWS 6U
@@ -91,7 +117,36 @@ typedef struct {
        settings instead of the page of the module. The page title is the
        module title. */
     const Setting *settings;
+    /* Optional: Fn on a row of the page. It returns 1 when it took the key. */
+    u32 (*fn)(volatile u32 *,u32);
+    /* MENU_PAGE_* flags. */
+    u32 flags;
+    /* Optional: how the GRKit section of MENU shows the page, where it
+       differs from a page of a module setting. */
+    const struct MenuListing *menu;
+    /* Optional: whether OK on a row of the page keeps ADJ open, as for a
+       row that a person may choose again. */
+    u32 (*stays)(volatile u32 *,u32);
 } MenuPage;
+/* The parts of the page of a module in the GRKit section of MENU
+   (runtime/menu_listed.h) that a page gives itself. Each hook is optional:
+   without it, MENU shows the page as the page of its module setting. */
+typedef struct MenuListing {
+    /* The settings after Enable and Options, and their count in *n. */
+    const Setting *(*settings)(volatile u32 *,u32 *);
+    /* The value of the row of the module in the GRKit section. */
+    const u16 *(*value)(volatile u32 *);
+    /* The options, which choose what ADJ shows: their count, then the
+       label of option k, whether it is off, and a change to on (0) or off
+       (1). A page with `options` gives the other three. */
+    u32 (*options)(volatile u32 *);
+    const u16 *(*option_label)(volatile u32 *,u32);
+    u32 (*option_off)(volatile u32 *,u32);
+    void (*option_set)(volatile u32 *,u32,u32);
+} MenuListing;
+/* The rows are actions, not values: an ADJ exit, such as a half-press of
+   the shutter, applies no row, and the page shows with one row. */
+#define MENU_PAGE_ACTIONS 1U
 
 /* Core services for pages. */
 /* One string of the menu text table in the menu language (runtime/abi.h). */
