@@ -43,7 +43,16 @@ typedef short s16;
 
 /* One setting of a native settings page: its row label, its values (at most
    SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a
-   value, and the stored value. */
+   value, and the stored value. A setting of MENU can also give `select` and
+   `flags` (runtime/menu_settings.h):
+   - SETTING_OWN_PAGE: the value page shows on an own page, where the boxes
+     of the core show (runtime/ui.h). OK on value v calls select(h, the
+     page, v): 1 when the setting took it and the page stays, or 0 for the
+     native OK, which sets the value and returns.
+   - SETTING_CURSOR: the value is the row of the cursor, so the value page
+     has no mark and the row of the settings page shows no value.
+   - SETTING_ACTION: the row has no value page. OK on it calls select(h, 0,
+     0), which gives the controller to change to, or 0 to stay. */
 #define SETTING_VALUES 8U
 typedef struct {
     const u16 *(*label)(volatile u32 *);
@@ -51,7 +60,12 @@ typedef struct {
     const u16 *(*value_text)(volatile u32 *,u32);
     u32 (*get)(volatile u32 *);
     void (*set)(volatile u32 *,u32);
+    u32 (*select)(volatile u32 *,u32,u32);
+    u32 flags;
 } Setting;
+#define SETTING_OWN_PAGE 1U
+#define SETTING_CURSOR 2U
+#define SETTING_ACTION 4U
 /* The most rows of the settings page of a module: its settings
    (GRM_SETTING_ROWS) and the Enable row before them in MENU. */
 #define SETTING_ROWS 6U
@@ -88,7 +102,14 @@ typedef struct {
        settings instead of the page of the module. The page title is the
        module title. */
     const Setting *settings;
+    /* Optional: Fn on a row of the page. It returns 1 when it took the key. */
+    u32 (*fn)(volatile u32 *,u32);
+    /* MENU_PAGE_* flags. */
+    u32 flags;
 } MenuPage;
+/* The rows are actions, not values: an ADJ exit, such as a half-press of
+   the shutter, applies no row, and the page shows with one row. */
+#define MENU_PAGE_ACTIONS 1U
 
 /* Core services for pages. */
 /* One string of the menu text table in the menu language (runtime/abi.h). */

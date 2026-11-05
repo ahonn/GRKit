@@ -110,7 +110,7 @@ The text files give `title`, `children.<KEY>.title`, and the label and values of
 
 The generator registers the group first, then its child settings pages. Each child has `GRKIT_PAGE_MENU_ONLY`, so only the group appears in the ADJ root. A group and its children consume one page slot each from the shared limit of 10 loaded pages.
 
-A page of `CORE.TONE` has no `off_row` and no `settings`, and it needs no tiles. Its text has only `title`. If tile 0 exists, the root row shows that tile while the setting is Off. Otherwise, the root row shows the Off icon.
+A page of `CORE.TONE` or `CORE.RECIPE` has no `off_row` and no `settings`. Its text has only `title`. A page of `CORE.TONE` needs no tiles. If tile 0 exists, the root row shows that tile while the setting is Off. Otherwise, the root row shows the Off icon. With `options = true`, Options of a page of `CORE.RECIPE` lists each recipe that is on and chooses the ones that ADJ shows.
 
 ### layers
 
@@ -276,8 +276,10 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops JPEG photos or only marks composition in the live view. The default is Crop. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
+| `CORE.RECIPE` | none | The recipes: saved sets of the other capabilities that OK applies in one step. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
+- `CORE.RECIPE`: a page gives only its title and four tiles: the module, Undo, Save, and a recipe without an effect icon or a native Image Control icon. The core gives the rows: Undo, the recipes that ADJ shows, and Save Current Settings. In MENU, the core gives the page of the module: Enable, Options (with `options = true`), Apply, Rename, and Delete, each a list of the recipes that are on, and Save Current Settings. A recipe holds and sets only the capabilities that other loaded modules use. `setting_get` gives 0, and `setting_set` does nothing.
 - `CORE.ASPECT`: a page shows only the ratios that the camera offers. `setting_set` with an unsupported ratio does nothing. Selecting a nonzero ratio sets the native aspect to 3:2 in both modes. Crop mode crops JPEG photos to that ratio. Guides Only displays the composition frame without applying that crop. Off clears the selected ratio and preserves the current native aspect.
 - `CORE.ASPECT_MODE`: Crop changes JPEG dimensions. Guides Only shows the selected ratio in the native 3:2 live view without setting a recorded crop. A later change to another native aspect hides this composition frame. Changing only the mode preserves the native aspect and the Framing mask setting.
 

@@ -34,6 +34,40 @@ static const char *module_reason(u32 status)
     default: return "INSTALL stopped";
     }
 }
+/* The recipes part of REPORT.TXT: the count, the recipes that are on, those
+   that INSTALL turned off past GRKIT_RECIPE_ON_MAX, the import of a package
+   library, then each recipe that is on and cannot apply in full
+   (check_recipes). */
+static void say_recipes(void)
+{
+    if (!recipes_count && recipes_import == RECIPES_IMPORT_NONE) return;
+    say("\r\nRecipes (GRKIT\\RECIPES.TXT): "); say_number(recipes_count); say(" of "); say_number(GRKIT_RECIPE_SLOTS);
+    say(", "); say_number(recipes_on); say(" on of "); say_number(GRKIT_RECIPE_ON_MAX);
+    if (recipes_turned_off) { say(", "); say_number(recipes_turned_off); say(" turned off"); }
+    say("\r\n");
+    if (recipes_import == RECIPES_IMPORT_DAMAGED)
+        say("The recipes of the package are damaged: none added. Download GRKit again.\r\n");
+    else if (recipes_import == RECIPES_IMPORT_READ) {
+        say("From the package: "); say_number(recipes_added); say(" added");
+        if (recipes_same) { say(", "); say_number(recipes_same); say(" already there"); }
+        if (recipes_switched) { say(", "); say_number(recipes_switched); say(" turned on or off"); }
+        if (recipes_full) { say(", "); say_number(recipes_full); say(" left out: at most "); say_number(GRKIT_RECIPE_SLOTS); }
+        if (recipes_other) { say(", "); say_number(recipes_other); say(" of another camera"); }
+        if (recipes_bad) { say(", "); say_number(recipes_bad); say(" not valid"); }
+        say("\r\n");
+    }
+    if (!recipe_problem_count) return;
+    say("Recipes that do not apply in full:\r\n");
+    for (u32 i = 0; i < recipe_problem_count; ++i) {
+        const struct recipe_problem *p = &recipe_problems[i];
+        if (p->name[0]) say(p->name);
+        else { say("recipe "); say_number(p->recipe); }
+        say(p->problem == RECIPE_PROBLEM_EFFECT ? ": its effect is not installed, or Film Look does not run\r\n" :
+            p->problem == RECIPE_PROBLEM_GRAIN ? ": its Grain needs the Grain module\r\n" :
+            ": its Glow needs the Glow module\r\n");
+    }
+    if (recipe_problems_more) { say("and "); say_number(recipe_problems_more); say(" more\r\n"); }
+}
 static void write_report(int status)
 {
     report_length = 0;
@@ -82,6 +116,7 @@ static void write_report(int status)
         say_number(overflow_count);
         say(" more effect files are not listed. GRKit lists at most "); say_number(EFFECTS_LISTED); say(" effects.\r\n");
     }
+    say_recipes();
     /* A new card has no GRKIT folder until this start. */
     long made = syscall6(39, (u32)data_path, 0755, 0, 0, 0, 0);
     if (made < 0 && made != -17) return;

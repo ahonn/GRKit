@@ -132,7 +132,10 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   without that crop. Off preserves the current native aspect.
      CORE.ASPECT_MODE  2 values: 0 Crop (default), 1 Guides Only. A module
                   without this capability retains crop behavior. Changing
-                  only this mode preserves the native aspect. */
+                  only this mode preserves the native aspect.
+     CORE.RECIPE  no value: the camera recipes, which hold and set the
+                  other capabilities that loaded modules use. A page of
+                  CORE.RECIPE gets its rows from the core. */
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */

@@ -727,6 +727,29 @@ fn native_state_contract_reads_the_pairs_of_the_loader() {
     checked(&mut Command::new(&executable));
 }
 
+/// Each target, because the native tables and the grain form differ by
+/// camera family.
+#[test]
+fn native_recipes_contract_saves_applies_and_undoes_recipes() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    for target in targets() {
+        let executable = temporary
+            .path()
+            .join(format!("recipes_contract{}", target.to_lowercase()));
+        compile_for(
+            &target,
+            &compiler,
+            &root().join("tests/runtime/recipes_contract.c"),
+            &executable,
+            &[],
+        );
+        checked(&mut Command::new(&executable));
+    }
+}
+
 /// The numeric `#define`s of a runtime header: name and value.
 fn defines(path: &str) -> std::collections::HashMap<String, u64> {
     let text = fs::read_to_string(root().join(path)).unwrap();
@@ -971,7 +994,99 @@ fn native_install_contract_plans_and_links_the_modules_of_the_card() {
         &executable,
         &[],
     );
-    checked(&mut Command::new(&executable));
+    // A package library of the Rust codec, which INSTALL imports.
+    let library = library_recipes();
+    let file = temporary.path().join("RECIPES.BIN");
+    fs::write(&file, grkit_core::recipes::encode(&library).unwrap()).unwrap();
+    let output = checked(Command::new(&executable).env("GRKIT_TEST_RECIPES", &file));
+    let entries: Vec<String> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| line.strip_prefix("recipe ").map(str::to_owned))
+        .collect();
+    // INSTALL adds the GR III recipes of the library after the recipe of
+    // the recipe file.
+    let expected: Vec<String> = library
+        .iter()
+        .filter(|recipe| recipe.family == grkit_core::recipes::Family::Gr3)
+        .map(|recipe| {
+            let w = recipe.words().unwrap();
+            format!(
+                "{}|{}|{} {} {} {} {}",
+                recipe.name,
+                recipe.family.code(),
+                w[0],
+                w[1],
+                w[2],
+                w[3],
+                w[4]
+            )
+        })
+        .collect();
+    assert_eq!(entries, expected);
+}
+
+/// A library with an effect recipe and a native recipe, with exposure settings.
+fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
+    use grkit_core::recipes::*;
+    let negative = grkit_core::native::TYPES
+        .iter()
+        .position(|t| t.label == "NegativeFilm")
+        .unwrap();
+    vec![
+        Recipe {
+            name: "Portra Days".into(),
+            family: Family::Gr3,
+            look: Look::Effect {
+                code: 0x1234,
+                adjustments: [4, 5, 3, 4, 4, 4, 4, 8, 0],
+            },
+            grain: Some(Grain { level: 2, size: 1 }),
+            glow: Some(Glow {
+                bloom: 1,
+                halation: 3,
+                halation_color: Some(2),
+            }),
+            white_balance: Some(WhiteBalance {
+                mode: 4,
+                shift_ba: 17,
+                shift_gm: 12,
+                kelvin: 5500,
+            }),
+            corrections: [Some(2), None, Some(1), Some(0)],
+            exposure: Exposure {
+                compensation: Some(-2),
+                iso_limit: Some(3200),
+                metering: Some(Metering::Spot),
+                nd: Some(Nd::Auto),
+            },
+            enabled: true,
+            hidden: false,
+            number: 0,
+        },
+        Recipe {
+            name: "Nega 2".into(),
+            family: Family::Gr4,
+            look: Look::Native(NativeLook {
+                image_type: negative,
+                levels: [6, 3, 4, 2, 4, 4, 5, 4, 7],
+                tone: 0,
+                intensity: 0,
+                filter: 0,
+                grain_strength: 2,
+                grain_size: 1,
+                solarization: 0,
+            }),
+            grain: None,
+            glow: None,
+            white_balance: None,
+            corrections: [None; 4],
+            exposure: Exposure::default(),
+            enabled: true,
+            hidden: false,
+            number: 0,
+        },
+    ]
 }
 
 #[test]

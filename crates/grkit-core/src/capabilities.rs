@@ -74,6 +74,10 @@ pub enum State {
     /// The active Image Control record. The state file keeps its ImageTone
     /// code, so the value stays with its effect when the effects change.
     Effect,
+    /// No value of its own: the page rows are the camera recipes
+    /// (`runtime/recipes.h`), which the state file keeps as recipe entries
+    /// (`runtime::RECIPE_KEY_BASE`). It has no state key.
+    Recipes,
 }
 
 pub struct Capability {
@@ -98,7 +102,7 @@ impl Capability {
 }
 
 /// The capabilities in handle order.
-pub const CAPABILITIES: [Capability; 5] = [
+pub const CAPABILITIES: [Capability; 6] = [
     Capability {
         // The effect of still pictures and the live view: 0 Off, then effect
         // n - 1 of the installed effects (runtime/tone.h). The core gives
@@ -144,6 +148,15 @@ pub const CAPABILITIES: [Capability; 5] = [
         state: State::Word(HOST_ASPECT_MODE),
         points: &[Point::ViewfinderOverlay, Point::CaptureAspect],
     },
+    Capability {
+        // The camera recipes (runtime/recipes.h). The core gives the rows of
+        // its page: undo, the recipes, and save. A recipe sets the other
+        // capabilities only while a module uses them, so it needs no point.
+        key: "RECIPE",
+        values: 0,
+        state: State::Recipes,
+        points: &[],
+    },
 ];
 
 /// A state file of the resident loader in `card::DATA_FOLDER`. The loader
@@ -154,16 +167,20 @@ pub enum StateFile {
     /// The values of the capabilities and the settings of the modules, and
     /// the Fn adjustments of the effects.
     Main,
+    /// The recipes, their names, and the hash of the last imported package
+    /// library (`runtime::recipe_key`). The site reads and writes it too.
+    Recipes,
 }
 
 impl StateFile {
-    pub const ALL: [StateFile; 1] = [StateFile::Main];
+    pub const ALL: [StateFile; 2] = [StateFile::Main, StateFile::Recipes];
 
     /// The file name without its extension. The file is `<stem>.TXT`, and the
     /// loader writes `<stem>.TMP` before it replaces the file.
     pub fn stem(self) -> &'static str {
         match self {
             Self::Main => "STATE",
+            Self::Recipes => "RECIPES",
         }
     }
 }
@@ -183,22 +200,25 @@ pub struct StateEntry {
 }
 
 /// The state keys of the capabilities, in handle order. The effect is first.
+/// `CORE.RECIPE` has none: the capabilities with a key come first, so key n
+/// is capability n.
 pub fn state_keys() -> Vec<StateEntry> {
     CAPABILITIES
         .iter()
         .enumerate()
-        .map(|(index, capability)| StateEntry {
-            name: capability.name(),
-            word: match capability.state {
-                State::Word(offset) => Some(offset),
-                State::Effect => None,
-            },
-            max: match capability.state {
-                State::Word(_) => capability.values - 1,
-                State::Effect => 0xffff,
-            },
-            bit: index as u32,
-            file: StateFile::Main,
+        .filter_map(|(index, capability)| {
+            let (word, max) = match capability.state {
+                State::Word(offset) => (Some(offset), capability.values - 1),
+                State::Effect => (None, 0xffff),
+                State::Recipes => return None,
+            };
+            Some(StateEntry {
+                name: capability.name(),
+                word,
+                max,
+                bit: index as u32,
+                file: StateFile::Main,
+            })
         })
         .collect()
 }
@@ -214,10 +234,16 @@ mod tests {
             assert!(CAPABILITIES[..i].iter().all(|c| c.key != capability.key));
             match capability.state {
                 State::Word(_) => assert!(capability.values >= 2),
-                State::Effect => assert_eq!(capability.values, 0),
+                State::Effect | State::Recipes => assert_eq!(capability.values, 0),
             }
         }
         // The resident loader keeps the effect in key 0.
         assert_eq!(CAPABILITIES[0].state, State::Effect);
+        // The capabilities without a state key come last, so the state key
+        // of index n is capability n (CORE_STATE_IDS in runtime/installer.c).
+        let keyed = state_keys().len();
+        assert!(CAPABILITIES[keyed..]
+            .iter()
+            .all(|capability| capability.state == State::Recipes));
     }
 }

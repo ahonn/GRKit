@@ -209,15 +209,17 @@ static void menu_row_fill(u32 slot,u32 row) {
     if(kind==MENU_ROW_ADJ) { label=text(h,TEXT_ADJ); value=no_text; }
     else if(kind==MENU_ROW_SWITCH) { label=switch_menu_label(h); value=on_off_text(h,manage_all_off(h)); }
     else if(kind==MENU_ROW_LISTED) {
-        /* A loaded choice page shows its value, and a group the children
-           that are on; a settings-only page has no summary value. Each
-           shows Off while the module or switch is Off. Another module
-           shows its Enable value. */
+        /* A loaded choice page shows its value, a group the children that
+           are on, and Recipes the recipe that the settings match; a
+           settings-only page has no summary value. Each shows Off while
+           the module or switch is Off. Another module shows its Enable
+           value. */
         page=listed_page(h,module);
         if(page<module_pages(h)) {
             const MenuPage *m=menu_page(h,page);
             label=m->title(h);
-            value=manage_halted(h,module) ? on_off_text(h,1) : choice_group(h) ? group_value_text(h) : choice_direct(h) ? no_text : m->label(h,m->committed(h));
+            value=manage_halted(h,module) ? on_off_text(h,1) : m==&recipe_module ? recipe_list_text(h,recipe_current(h)) :
+                  choice_group(h) ? group_value_text(h) : choice_direct(h) ? no_text : m->label(h,m->committed(h));
         }
         else { label=manage_name(h,module); value=on_off_text(h,manage_off(h,module)); }
     }

@@ -157,10 +157,17 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         ("FAILED_PATH", LINUX_DIRECTORY, "/INSTALL.ERR"),
         ("INBOX_PATH", LINUX_DIRECTORY, "/EFFECTS"),
         ("PACKAGE_PATH", LINUX_DIRECTORY, "/PACKAGE.TXT"),
+        ("RECIPES_INBOX_PATH", LINUX_DIRECTORY, "/RECIPES.BIN"),
         ("DATA_PATH", LINUX_DATA_DIRECTORY, ""),
         ("IMPORTED_PATH", LINUX_DATA_DIRECTORY, "/IMPORTED.TXT"),
         ("LIBRARY_PATH", LINUX_DATA_DIRECTORY, "/EFFECTS"),
         ("STATE_PATH", LINUX_DATA_DIRECTORY, "/STATE.TXT"),
+        ("RECIPES_STATE_PATH", LINUX_DATA_DIRECTORY, "/RECIPES.TXT"),
+        (
+            "RECIPES_STATE_TMP_PATH",
+            LINUX_DATA_DIRECTORY,
+            "/RECIPES.TMP",
+        ),
         ("STATE_TMP_PATH", LINUX_DATA_DIRECTORY, "/STATE.TMP"),
         ("REPORT_PATH", LINUX_DATA_DIRECTORY, "/REPORT.TXT"),
         ("RELOCATION_PATH", LINUX_DATA_DIRECTORY, "/RELOC.BIN"),
@@ -184,11 +191,14 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         )?;
     }
     // The state keys of the capabilities, in handle order, and the keys of
-    // the Fn adjustments (grkit_core::runtime).
+    // the Fn adjustments (grkit_core::runtime). The capabilities without a
+    // state key, such as CORE.RECIPE, come after the others.
+    let state_keys = grkit_core::capabilities::state_keys();
     writeln!(
         result,
-        "#define CORE_STATE_IDS {}",
-        grkit_core::capabilities::state_keys()
+        "#define CORE_STATE_COUNT {}U\n#define CORE_STATE_IDS {}",
+        state_keys.len(),
+        state_keys
             .iter()
             .map(|key| grkit_core::runtime::state_key_id(&key.name).to_string())
             .collect::<Vec<_>>()
@@ -208,10 +218,11 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     )?;
     writeln!(
         result,
-        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U\n#define TONING_KEY_BASE {}U",
+        "#define PARAMETER_KEY_BASE {}U\n#define PARAMETER_VALUE_MAX {}U\n#define TONING_KEY_BASE {}U\n#define RECIPE_VALUE_MAX {}U",
         grkit_core::runtime::PARAMETER_KEY_BASE,
         grkit_core::runtime::PARAMETER_VALUE_MAX,
-        grkit_core::runtime::TONING_KEY_BASE
+        grkit_core::runtime::TONING_KEY_BASE,
+        grkit_core::runtime::RECIPE_VALUE_MAX
     )?;
     writeln!(
         result,

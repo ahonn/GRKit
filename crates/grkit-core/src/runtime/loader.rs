@@ -3,8 +3,8 @@
 
 use super::*;
 use crate::abi::{
-    HOST_PROCESSING_CALLS, HOST_PROFILE, PROFILE, PROFILE_KINDS, PROFILE_MODULES,
-    PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
+    HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, PROFILE, PROFILE_KINDS,
+    PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
 };
 use crate::capabilities::{self, StateFile};
 use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
@@ -352,7 +352,6 @@ fn state_script() -> Vec<String> {
     // read the same count and the file does not have it yet. A series of
     // changes, such as Fn adjustments, then writes the card once after its
     // last change.
-    let changes = word(HOST_STATE_CHANGES);
     let mut lines: Vec<String> = vec![
         ":resident".into(),
         "stateok = 1".into(),
@@ -360,9 +359,19 @@ fn state_script() -> Vec<String> {
         format!("if result = 0 foldercreate '{DATA_FOLDER}'"),
         format!("foldersearch '{DATA_FOLDER}'"),
         "if result = 0 stateok = 0".into(),
-        format!("changes = {changes}"),
-        "saved = changes".into(),
-        "last = changes".into(),
+    ];
+    // Each file starts saved, the main file unless it is missing. The
+    // recipe file saves when INSTALL set its count after an import.
+    for file in StateFile::ALL {
+        let (changes, at, saved, _) = watch_names(file);
+        lines.push(format!("{changes} = {}", word(at)));
+        lines.push(match file {
+            StateFile::Main => format!("{saved} = {changes}"),
+            StateFile::Recipes => format!("{saved} = 0"),
+        });
+    }
+    lines.extend([
+        format!("last = {}", watch_total()),
         format!("filesearch '{}'", state_path(StateFile::Main, "TXT")),
         "if result = 0 saved = changes - 1".into(),
         // The development profile has its own loop, so the usual poll
@@ -371,20 +380,8 @@ fn state_script() -> Vec<String> {
         "if profile <> 0 goto profile_watch".into(),
         ":watch".into(),
         format!("mpause {STATE_POLL_MS}"),
-        format!("changes = {changes}"),
-        "if changes <> last goto watch_moved".into(),
-        "if changes = saved goto watch".into(),
-        "stamp = changes".into(),
-    ];
-    for file in StateFile::ALL {
-        lines.push(format!("call save_{}", label(file)));
-    }
-    lines.extend([
-        "goto watch".into(),
-        ":watch_moved".into(),
-        "last = changes".into(),
-        "goto watch".into(),
     ]);
+    lines.extend(watch_poll("watch"));
 
     // Save each file after a change of one of its keys. `filerename` cannot
     // replace a file, and its result is 0 for success and failure, so each
@@ -399,7 +396,11 @@ fn state_script() -> Vec<String> {
         lines.extend([
             format!(":save_{name}"),
             format!("if stateok = 0 goto {end}"),
-            "call snapshot".into(),
+            if main {
+                "call snapshot".into()
+            } else {
+                format!(":save_{name}_start")
+            },
             format!("filedelete '{temporary}'"),
             format!("filecreate sfh '{temporary}'"),
             format!("if sfh < 0 goto {end}"),
@@ -488,6 +489,43 @@ fn state_script() -> Vec<String> {
                 ":save_modules_end".into(),
             ]);
         }
+        if file == StateFile::Recipes {
+            // The recipes, their names, and the import hash: each word that
+            // is not 0 (runtime/recipes.h), at its key (state::recipe_key).
+            let words = RECIPE_WORDS * RECIPE_SLOTS;
+            let names = words + RECIPE_NAME_WORDS * RECIPE_SLOTS;
+            lines.extend([
+                "rindex = 0".into(),
+                ":recipe_word".into(),
+                format!("if rindex >= {RECIPE_STATE_WORDS} goto recipe_word_end"),
+                format!("rvalue = registry[{} + rindex]", HOST_RECIPES / 4),
+                "if rvalue <= 0 goto recipe_word_next".into(),
+                format!("if rvalue > {RECIPE_VALUE_MAX} goto recipe_word_next"),
+                format!("rkey = rindex % {RECIPE_WORDS}"),
+                format!("rkey = rkey * {RECIPE_KEY_STRIDE}"),
+                format!("rslot = rindex / {RECIPE_WORDS}"),
+                format!("rkey = rkey + {RECIPE_KEY_BASE}"),
+                "rkey = rkey + rslot".into(),
+                format!("if rindex < {words} goto recipe_key"),
+                format!("rkey = {RECIPE_IMPORTED_KEY}"),
+                format!("if rindex >= {names} goto recipe_key"),
+                format!("rslot = rindex - {words}"),
+                format!("rkey = rslot % {RECIPE_NAME_WORDS}"),
+                format!("rkey = rkey * {RECIPE_KEY_STRIDE}"),
+                format!("rslot = rslot / {RECIPE_NAME_WORDS}"),
+                format!("rkey = rkey + {RECIPE_NAME_KEY_BASE}"),
+                "rkey = rkey + rslot".into(),
+                ":recipe_key".into(),
+                "int2str line rkey".into(),
+                "filewriteln sfh line".into(),
+                "int2str line rvalue".into(),
+                "filewriteln sfh line".into(),
+                ":recipe_word_next".into(),
+                "rindex = rindex + 1".into(),
+                "goto recipe_word".into(),
+                ":recipe_word_end".into(),
+            ]);
+        }
         lines.extend([
             "fileclose sfh".into(),
             format!("filesearch '{temporary}'"),
@@ -499,7 +537,12 @@ fn state_script() -> Vec<String> {
             format!("filesearch '{state}'"),
             format!("if result = 0 goto {end}"),
         ]);
-        lines.extend(["saved = stamp".into(), format!(":{end}"), "return".into()]);
+        let (_, _, saved, stamp) = watch_names(file);
+        lines.extend([
+            format!("{saved} = {stamp}"),
+            format!(":{end}"),
+            "return".into(),
+        ]);
     }
 
     // The current selections. The effect is the ImageTone code of the active
@@ -585,19 +628,9 @@ fn profile_script() -> Vec<String> {
         format!("mpause {STATE_POLL_MS}"),
         "ppolls = ppolls + 1".into(),
         format!("if ppolls >= {PROFILE_POLLS} call profile_write"),
-        format!("changes = registry[{}]", HOST_STATE_CHANGES / 4),
-        "if changes <> last goto profile_moved".into(),
-        "if changes = saved goto profile_poll".into(),
-        "stamp = changes".into(),
     ]);
-    for file in StateFile::ALL {
-        lines.push(format!("call save_{}", label(file)));
-    }
+    lines.extend(watch_poll("profile_poll"));
     lines.extend([
-        "goto profile_poll".into(),
-        ":profile_moved".into(),
-        "last = changes".into(),
-        "goto profile_poll".into(),
         ":profile_write".into(),
         "ppolls = 0".into(),
         "pperiod = pperiod + 1".into(),
@@ -665,6 +698,58 @@ fn label(file: StateFile) -> String {
     file.stem().to_ascii_lowercase()
 }
 
+/// The variables of the watch of a state file: its count of changes and the
+/// header field of it, the count that the file has, and the count of the
+/// save that runs.
+fn watch_names(file: StateFile) -> (&'static str, usize, &'static str, &'static str) {
+    match file {
+        StateFile::Main => ("changes", HOST_STATE_CHANGES, "saved", "stamp"),
+        StateFile::Recipes => ("rchanges", HOST_RECIPE_CHANGES, "rsaved", "rstamp"),
+    }
+}
+
+/// The sum of the counts of all files, which moves with any change.
+fn watch_total() -> String {
+    StateFile::ALL
+        .iter()
+        .map(|&file| watch_names(file).0)
+        .collect::<Vec<_>>()
+        .join(" + ")
+}
+
+/// One poll of the watch loop `name`: it reads the counts, waits while they
+/// move, then saves each file whose count it does not have. A series of
+/// changes, such as Fn adjustments, writes the card once after its last
+/// change, and a change of one file writes only that file.
+fn watch_poll(name: &str) -> Vec<String> {
+    let mut lines = Vec::new();
+    for file in StateFile::ALL {
+        let (changes, at, _, _) = watch_names(file);
+        lines.push(format!("{changes} = registry[{}]", at / 4));
+    }
+    lines.extend([
+        format!("total = {}", watch_total()),
+        format!("if total <> last goto {name}_moved"),
+    ]);
+    for file in StateFile::ALL {
+        let (changes, _, saved, stamp) = watch_names(file);
+        let next = format!("{name}_{}_saved", label(file));
+        lines.extend([
+            format!("if {changes} = {saved} goto {next}"),
+            format!("{stamp} = {changes}"),
+            format!("call save_{}", label(file)),
+            format!(":{next}"),
+        ]);
+    }
+    lines.extend([
+        format!("goto {name}"),
+        format!(":{name}_moved"),
+        "last = total".into(),
+        format!("goto {name}"),
+    ]);
+    lines
+}
+
 /// The loader path of a state file with the extension `extension`.
 fn state_path(file: StateFile, extension: &str) -> String {
     format!("{DATA_FOLDER}\\{}.{extension}", file.stem())
@@ -693,7 +778,9 @@ mod tests {
             )
         };
         // The computed indexes are words of a record below `count` or `pcount`:
-        // its code, and the three words of its adjustments.
+        // its code, and the three words of its adjustments; and the recipe
+        // words of the header below RECIPE_STATE_WORDS.
+        let recipes = format!("{} + rindex", HOST_RECIPES / 4);
         let allowed = [
             record("index", RECORD_CODE),
             record("pindex", RECORD_CODE),
@@ -701,6 +788,7 @@ mod tests {
             record("pindex", RECORD_PARAMETERS + 4),
             record("pindex", RECORD_PARAMETERS + 8),
             record("pindex", RECORD_TONING & !3),
+            recipes.clone(),
         ];
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
@@ -728,13 +816,36 @@ mod tests {
         assert!(script.contains("if pcount < 0 pcount = 0"));
         assert!(script.contains(&format!("if pcount > {MAX_COUNT} pcount = 0")));
         assert_eq!(script.matches("if pindex >= pcount goto").count(), 1);
+        // Each recipe index is below RECIPE_STATE_WORDS, which ends in the
+        // header.
+        assert!(script.contains(&format!(
+            "if rindex >= {RECIPE_STATE_WORDS} goto recipe_word_end"
+        )));
+        const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
+        // The names and the import hash follow the recipe words, so one run
+        // of words holds them.
+        const {
+            assert!(crate::abi::HOST_RECIPE_NAMES == HOST_RECIPES + 4 * RECIPE_WORDS * RECIPE_SLOTS)
+        };
+        const {
+            assert!(
+                crate::abi::HOST_RECIPE_IMPORTED
+                    == crate::abi::HOST_RECIPE_NAMES + 4 * RECIPE_NAME_WORDS * RECIPE_SLOTS
+            )
+        };
+        const {
+            assert!(
+                crate::abi::HOST_RECIPE_IMPORTED / 4 + 1 == HOST_RECIPES / 4 + RECIPE_STATE_WORDS
+            )
+        };
+        assert_eq!(script.matches(&recipes).count(), 1);
     }
 
-    /// A series of changes writes the card once: each poll reads only the
-    /// change count of the core, and the watch loop calls the saves only when
-    /// two polls in a row read the same count and the file does not have it.
-    /// The start sets each variable that the loop reads, because an unset
-    /// variable is a runtime error.
+    /// A series of changes writes the card once: each poll reads the change
+    /// count of each state file, and the watch loop saves only when two polls
+    /// in a row read the same counts, and then only the files whose count it
+    /// does not have. The start sets each variable that the loop reads,
+    /// because an unset variable is a runtime error.
     #[test]
     fn the_resident_script_saves_after_the_selections_settle() {
         let script = state_script();
@@ -745,31 +856,36 @@ mod tests {
                 .unwrap_or_else(|| panic!("{line}"))
         };
         let read = format!("changes = registry[{}]", HOST_STATE_CHANGES / 4);
+        let read_recipes = format!("rchanges = registry[{}]", HOST_RECIPE_CHANGES / 4);
         let (start, watch) = (at(":resident"), at(":watch"));
         let poll = at(&format!("mpause {STATE_POLL_MS}"));
         assert_eq!(script[poll + 1], read);
-        let moved = at("if changes <> last goto watch_moved");
-        let settled = at("if changes = saved goto watch");
-        assert!(watch < poll && poll < moved && moved < settled);
+        assert_eq!(script[poll + 2], read_recipes);
+        assert_eq!(script[poll + 3], "total = changes + rchanges");
+        let moved = at("if total <> last goto watch_moved");
+        let settled = at("if changes = saved goto watch_state_saved");
+        let settled_recipes = at("if rchanges = rsaved goto watch_recipes_saved");
+        assert!(watch < poll && poll < moved && moved < settled && settled < settled_recipes);
         assert_eq!(script[settled + 1], "stamp = changes");
-        for file in StateFile::ALL {
-            assert!(settled < at(&format!("call save_{}", label(file))));
-        }
-        // An idle poll runs four lines: the pause, the read, two compares.
-        assert_eq!(settled - poll + 1, 4);
-        assert_eq!(script[at(":watch_moved") + 1], "last = changes");
-        for name in ["last", "saved"] {
+        assert_eq!(script[settled + 2], "call save_state");
+        assert_eq!(script[settled_recipes + 1], "rstamp = rchanges");
+        assert_eq!(script[settled_recipes + 2], "call save_recipes");
+        // An idle poll runs eight lines: the pause, two reads, the sum, three
+        // compares that jump past the saves, and the jump back.
+        assert_eq!(script[at(":watch_recipes_saved") + 1], "goto watch");
+        assert_eq!(at(":watch_state_saved"), settled + 3);
+        assert_eq!(at(":watch_recipes_saved"), settled_recipes + 3);
+        assert_eq!(script[at(":watch_moved") + 1], "last = total");
+        for name in ["last", "saved", "rsaved", "changes", "rchanges"] {
             assert!(script[start..watch]
                 .iter()
                 .any(|l| l.starts_with(&format!("{name} ="))));
         }
-        assert!(script[start..watch].contains(&read));
-        // A save reads the selections, and records the count that it saved.
-        for file in StateFile::ALL {
-            let save = at(&format!(":save_{}", label(file)));
-            assert_eq!(script[save + 2], "call snapshot");
-        }
+        // A save of the main file reads the selections, and each save records
+        // the count that it saved.
+        assert_eq!(script[at(":save_state") + 2], "call snapshot");
         assert!(script.iter().any(|l| l == "saved = stamp"));
+        assert!(script.iter().any(|l| l == "rsaved = rstamp"));
     }
 
     fn at(script: &[String], line: &str) -> usize {

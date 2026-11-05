@@ -181,6 +181,12 @@
    setter (1.11: 0x5357f2b0) sets the text ID of this view. */
 #define SUBMENU_TITLE_STRING 0xf0
 #define SELECT_MENU_SIZE 0x1e4U
+/* The methods of the SelectMenuController vtable. */
+#define SELECT_VTABLE_SLOTS 16U
+/* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
+   and MENU (DONE): DONE returns the page. */
+#define SELECT_EV_CANCEL 0xe2U
+#define SELECT_EV_DONE 0xa9U
 /* The fewest row views of a SelectMenuController. Its constructor builds a
    view for each row of its longest kind (+0x1a5). The longest native kind has
    21 rows on each build, and no GRKit hook borrows it (1.11: kind table
@@ -309,6 +315,15 @@
 #define GAMMA_UPLOAD 0x380a
 /* DigitalFilterProcess plan: the grain stage flag that the stage gate sets. */
 #define GRAIN_GATE_FLAG 0x25
+
+/* The keyboard of the camera (runtime/ui.h): SoftwareKeyboardController
+   copies its use from the model at its start (OnStart) to the byte
+   KEYBOARD_FUNCTION; the copyright use is KEYBOARD_COPYRIGHT. The model
+   (FW_KEYBOARD_MODEL) holds the use in its byte KEYBOARD_MODEL_FUNCTION, 0
+   for none, and the keyboard clears it when it stops. */
+#define KEYBOARD_FUNCTION 0x240
+#define KEYBOARD_COPYRIGHT 3U
+#define KEYBOARD_MODEL_FUNCTION 0
 
 /* Each native aspect has its own visible area in a preview picture. */
 #define PICTURE_NATIVE_ID(native) ((native)<=3 ? (native) : 0)

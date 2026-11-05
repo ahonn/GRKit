@@ -23,6 +23,8 @@ static u32 no_value(volatile u32 *h) { (void)h; return 0; }
 static void no_set(volatile u32 *h,u32 value) { (void)h; (void)value; }
 static const u16 *adjustments_label(volatile u32 *h) { return text(h,TEXT_ADJUSTMENTS); }
 static const u16 no_value_text[1]={0};
+static void settings_start(volatile u32 *h,u32 module);
+#include "menu_recipes.h"
 /* The rows of a page of CORE.TONE: Film Stock, the effect, whose value page
    lists Off and the shown effects in their ADJ order, then Parameters, the
    Fn adjustments of the committed effect, which open the native parameter
@@ -71,13 +73,17 @@ static const Setting *listed_base(volatile u32 *h,u32 *n) {
         if(*n>SETTING_ROWS-1) *n=SETTING_ROWS-1;
         return page->settings;
     }
-    if(page->rows(h)>MENU_VALUES_MAX) return 0;
+    if(page==&recipe_module) return recipe_menu_base(h,n);
+    /* The rows of another page of actions are no setting: MENU shows only
+       Enable. */
+    if(page->flags&MENU_PAGE_ACTIONS || page->rows(h)>MENU_VALUES_MAX) return 0;
     *n=1;
     return choice_one;
 }
 /* The options of the listed module: menu_page selects its page. A page of
-   CORE.TONE has the listed effects in the order of the Effects choices,
-   another page its values but Off. */
+   CORE.TONE has the listed effects in the order of the Effects choices, a
+   page of CORE.RECIPE each recipe that is on, which is on while ADJ shows
+   it, and another page its values but Off. */
 static u32 option_tone(volatile u32 *h) { return menu_page(h,listed_slot(h))==&tone_module; }
 /* The number of options of page `slot`, or 0 for a page without options. */
 static u32 options_of(volatile u32 *h,u32 slot) {
@@ -85,6 +91,7 @@ static u32 options_of(volatile u32 *h,u32 slot) {
     if(slot>=module_pages(h)) return 0;
     page=menu_page(h,slot);
     if(!choice_options(h)) return 0;
+    if(page==&recipe_module) return recipe_entries(h);
     if(page==&tone_module) return effects_count(h);
     return setting_rows(h,CHOICE_ENTRY(h)[1])-1;
 }
@@ -95,18 +102,24 @@ static u32 option_item(volatile u32 *h,u32 k) {
     return setting_row_value(h,CHOICE_ENTRY(h)[1],k+1);
 }
 static const u16 *option_label(volatile u32 *h,u32 k) {
-    u32 item=option_item(h,k);
+    u32 item;
+    if(recipe_listed(h)) return menu_recipe_name(h,k);
+    item=option_item(h,k);
     return option_tone(h) ? effects_name(h,item) : choice_text(h,PAGE_LABELS,item);
 }
 static u32 option_off(volatile u32 *h,u32 k) {
-    u32 item=option_item(h,k);
+    u32 item;
+    if(recipe_listed(h)) return !recipe_shown(h,k);
+    item=option_item(h,k);
     if(option_tone(h)) return effects_off(h,item);
     return item<MANAGE_OPTION_VALUES && manage_hidden_values(h,listed(h))>>item&1;
 }
 /* Off of the value that the setting has sets the setting to Off. */
 static void option_set(volatile u32 *h,u32 k,u32 off) {
-    u32 item=option_item(h,k), handle, mask;
+    u32 item, handle, mask;
     if(off>=2) return;
+    if(recipe_listed(h)) { recipe_show_in_adj(h,k,!off); return; }
+    item=option_item(h,k);
     if(option_tone(h)) { effects_turn(h,item,off); return; }
     if(item>=MANAGE_OPTION_VALUES) return;
     handle=CHOICE_ENTRY(h)[1];
@@ -227,5 +240,12 @@ static const Setting listed_settings[SETTING_ROWS]={
 static u32 settings_fn_row(volatile u32 *h,const Setting *page,u32 row) {
     const Setting *b;
     return page==listed_settings && listed_kind(h,row,&b)==1 && b==tone_settings;
+}
+/* The setting that row `row` of the listed page shows, or 0 for Enable,
+   Options, and a row past the settings. */
+static const Setting *listed_setting(volatile u32 *h,u32 row) {
+    const Setting *b;
+    u32 k=listed_kind(h,row,&b);
+    return k<LISTED_ENABLE && b ? b+k : 0;
 }
 #endif /* GRKIT_MENU_LISTED_H */
