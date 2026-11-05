@@ -2464,6 +2464,31 @@ static void group_back_keeps_the_shared_native_parent_return_target(void)
     assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == 0x10000000U);
 }
 
+/* A camera whose MENU has another controller ID, as GR IV: the parent page
+   returns to the controller that the submenu holds, not to the one of GR III,
+   which is another screen there. */
+static void group_back_returns_to_the_menu_of_the_camera(void)
+{
+    install_group_pages();
+    volatile u32 *h = test_header, *menu = services_word(h, SERVICES_MENU);
+    const u32 controller = TEST_OBJECTS + 0x3000, top = 0x2000e00U;
+    menu[MENU_ROWS_COUNT / 4] = 1;
+    menu_row(h, 0)[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
+    menu_row(h, 0)[MENU_ROW_MODULE / 4] = 2;
+    assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = top;
+    assert(menu_return(h) == MENU_RETURN_CONTROLLER);
+    /* The change to the child notes the controller. */
+    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1) == SETTINGS_SUBMENU);
+    assert(menu_return(h) == top);
+    MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
+    assert(native_settings_back(controller) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1);
+    assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == top);
+    assert(native_settings_back(controller) == top);
+    assert(!h[GRKIT_HOST_SETTINGS / 4]);
+}
+
 static void the_guides_menu_page_lists_enable_options_and_settings(void)
 {
     install_menu_pages();
@@ -3101,6 +3126,7 @@ int main(void)
     group_ok_opens_each_child_and_returns_to_its_row();
     group_pages_open_children_and_return_without_committing();
     group_back_keeps_the_shared_native_parent_return_target();
+    group_back_returns_to_the_menu_of_the_camera();
     the_guides_menu_page_lists_enable_options_and_settings();
     the_options_page_toggles_its_values();
 #if defined(FW_CHECK_ITEM) && defined(FW_MENU_TABS)

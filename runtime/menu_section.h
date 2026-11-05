@@ -131,12 +131,12 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
        to that same controller. Check the incoming target before translating
        a child link; a value page returning to the submenu is not a Back. */
     u32 self_back=id==SETTINGS_SUBMENU && services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU;
-    if((id==MENU_RETURN_CONTROLLER || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) {
+    if((id==menu_return(h) || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) {
         settings_start(h,LISTED_PAGE);
         return SETTINGS_SUBMENU;
     }
     if(self_back && (h[GRKIT_HOST_SETTINGS/4]&0xffffU)==LISTED_PAGE+1 &&
-       listed_slot(h)<module_pages(h) && menu_page(h,listed_slot(h))==&group_module) return MENU_RETURN_CONTROLLER;
+       listed_slot(h)<module_pages(h) && menu_page(h,listed_slot(h))==&group_module) return menu_return(h);
     if(id>=MENU_GROUP_TARGET && id<MENU_GROUP_TARGET+SETTING_ROWS && settings_page(h)==listed_settings) {
         u32 child=listed_child(h,id-MENU_GROUP_TARGET);
         if(child<module_pages(h)) {

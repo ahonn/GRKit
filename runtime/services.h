@@ -109,10 +109,14 @@
 #define MENU_ROWS_FIRST (MENU_ROWS_PAGE_TITLE + 2U * MENU_PAGE_TITLE_UNITS)
 #define MENU_ROWS_TAB (MENU_ROWS_FIRST + MENU_ROWS_SLOTS * MENU_ROW_SIZE)
 #define MENU_ROWS_TAB_SIZE 0x384U
+/* The MENU controller that the pages of the GRKit rows return to
+   (runtime/menu_settings.h: menu_return), or 0 before the first change from
+   one. */
+#define MENU_ROWS_RETURN (MENU_ROWS_TAB + MENU_ROWS_TAB_SIZE)
 /* The code of the modules that a soft Off stopped at this start
    (runtime/manage.h): their count, then the start and the end of the code of
    each. The core calls no module code in these ranges. */
-#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_TAB + MENU_ROWS_TAB_SIZE)
+#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_RETURN + 4U)
 #define SERVICES_SUSPENDED_MAX GRKIT_MODULES_MAX
 /* The own SelectMenuControllers of the long value pages
    (runtime/menu_settings.h): the checkbox page of options pages, or 0 before

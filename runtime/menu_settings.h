@@ -66,6 +66,14 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
 #define SETTINGS_PARENT 0x40000U
 #define MENU_GROUP_TARGET 0x2000f60U
 #define MENU_RETURN_CONTROLLER 0x200004aU
+/* The MENU controller that a module page returns to, as the submenu holds
+   it (settings_note_return): the ID differs between the cameras.
+   MENU_RETURN_CONTROLLER, the one of GR III, serves until a change from a
+   page of MENU. */
+static u32 menu_return(volatile u32 *h) {
+    u32 id=h[GRKIT_HOST_SERVICES/4] ? services_word(h,SERVICES_MENU+MENU_ROWS_RETURN)[0] : 0;
+    return id ? id : MENU_RETURN_CONTROLLER;
+}
 /* BaseController fields shared by the four supported firmware builds. Back
    sets the flag before ChangeController; its asynchronous completion clears
    the old instance's return target when that flag is still set. */
@@ -283,17 +291,33 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
    parent, leaving its next MENU press with nowhere to go. Treat only this
    self transition as a fresh start and restore the parent's top-level MENU
    target. ADJ and value-page returns keep their native Back semantics. */
+/* A change from the submenu while it shows a page of MENU: keep the MENU
+   controller that the submenu returns to (menu_return). A page that ADJ
+   opened returns to ADJ, and a child to its parent, which is the submenu. */
+static void settings_note_return(volatile u32 *h,u32 controller) {
+    u32 module=h[GRKIT_HOST_SETTINGS/4]&0xffffU, target;
+    if(!controller || !h[GRKIT_HOST_SERVICES/4] ||
+       services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]!=SETTINGS_SUBMENU) return;
+    if(module!=LISTED_PAGE+1 && !(h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) return;
+    target=MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET);
+    /* The targets of GRKit rows (0x2000f00 and later) are no controller. */
+    if(target>>12!=SETTINGS_SUBMENU>>12 || (target&0xf00U)==0xf00U || settings_shows(target) ||
+       target==ADJ_CONTROLLER || target==IC_PARAMETERS_CONTROLLER) return;
+    services_word(h,SERVICES_MENU+MENU_ROWS_RETURN)[0]=target;
+}
 A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id) {
     volatile u32 *h=menu_header();
-    u32 parent_back=controller && h[GRKIT_HOST_SERVICES/4] &&
-        (id==SETTINGS_SUBMENU || id==MENU_RETURN_CONTROLLER) &&
+    u32 parent_back;
+    settings_note_return(h,controller);
+    parent_back=controller && h[GRKIT_HOST_SERVICES/4] &&
+        (id==SETTINGS_SUBMENU || id==menu_return(h)) &&
         (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT) &&
         services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU &&
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING);
     id=menu_settings_controller(id);
     if(parent_back && id==SETTINGS_SUBMENU) {
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING)=0;
-        MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET)=MENU_RETURN_CONTROLLER;
+        MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET)=menu_return(h);
     }
     return id;
 }
