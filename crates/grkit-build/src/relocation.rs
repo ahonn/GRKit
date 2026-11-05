@@ -15,6 +15,7 @@
 //! so a window also checks the instructions, offsets, and constants around a
 //! hook or in a called function.
 
+use crate::arm::{branch_target, move_immediate};
 use crate::firmware::FirmwareImage;
 use crate::target::RTOS_BASE;
 use anyhow::{bail, ensure, Context, Result};
@@ -52,19 +53,6 @@ pub fn mask(word: u32) -> u32 {
     } else {
         word
     }
-}
-
-/// The target of an ARM B or BL at `address`, if `word` is one.
-pub fn branch_target(address: u32, word: u32) -> Option<u32> {
-    ((word >> 25) & 7 == 5 && word >> 28 != 0xf).then(|| {
-        let offset = ((word << 8) as i32 >> 6) as u32;
-        address.wrapping_add(8).wrapping_add(offset)
-    })
-}
-
-/// The 16-bit immediate of an ARM MOVW or MOVT.
-pub fn move_immediate(word: u32) -> u32 {
-    ((word >> 4) & 0xf000) | (word & 0xfff)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

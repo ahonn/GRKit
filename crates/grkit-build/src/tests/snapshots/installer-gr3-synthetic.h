@@ -81,10 +81,13 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define FAILED_PATH "/media/storage1/SCRIPT/GRKIT/INSTALL.ERR"
 #define INBOX_PATH "/media/storage1/SCRIPT/GRKIT/EFFECTS"
 #define PACKAGE_PATH "/media/storage1/SCRIPT/GRKIT/PACKAGE.TXT"
+#define RECIPES_INBOX_PATH "/media/storage1/SCRIPT/GRKIT/RECIPES.BIN"
 #define DATA_PATH "/media/storage1/GRKIT"
 #define IMPORTED_PATH "/media/storage1/GRKIT/IMPORTED.TXT"
 #define LIBRARY_PATH "/media/storage1/GRKIT/EFFECTS"
 #define STATE_PATH "/media/storage1/GRKIT/STATE.TXT"
+#define RECIPES_STATE_PATH "/media/storage1/GRKIT/RECIPES.TXT"
+#define RECIPES_STATE_TMP_PATH "/media/storage1/GRKIT/RECIPES.TMP"
 #define STATE_TMP_PATH "/media/storage1/GRKIT/STATE.TMP"
 #define REPORT_PATH "/media/storage1/GRKIT/REPORT.TXT"
 #define RELOCATION_PATH "/media/storage1/GRKIT/RELOC.BIN"
@@ -95,6 +98,7 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define LEGACY_STATE_PATH "/media/storage1/SCRIPT/PLUGINS/STATE.TXT"
 #define LEGACY_STATE_TMP_PATH "/media/storage1/SCRIPT/PLUGINS/STATE.TMP"
 #define LEGACY_EFFECTS_PATH "/media/storage1/SCRIPT/PLUGINS/EFFECTS"
+#define CORE_STATE_COUNT 9U
 #define CORE_STATE_IDS 861965461,484706023,790270076,977751003,826089556,458876999,697053196,660632122,618415657
 #define LEGACY_STATE_COUNT 6U
 #define LEGACY_STATE_FROM 495043802U,684634731U,161811731U,541741532U,957718554U,733922165U
@@ -102,6 +106,7 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define PARAMETER_KEY_BASE 990000000U
 #define PARAMETER_VALUE_MAX 387420488U
 #define TONING_KEY_BASE 990032768U
+#define RECIPE_VALUE_MAX 536870911U
 #define STATE_TEXT_MAX 16384U
 #define GRKIT_VERSION "0.0.0"
 #define MODULES_PATH "/media/storage1/GRKIT/MODULES"
@@ -109,8 +114,8 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
-static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE","CORE.ASPECT_MODE","CORE.ADJ","CORE.ADJ_MODULE","CORE.CROP","CORE.CROP_MODE"};
-static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84};
+static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE","CORE.ASPECT_MODE","CORE.ADJ","CORE.ADJ_MODULE","CORE.CROP","CORE.CROP_MODE","CORE.RECIPE"};
+static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x0};
 #define RTOS_EXECUTABLE_END 0x55000000U
 #define CORE_EXPORT_COUNT 0U
 static const u32 core_exports[] = {};
@@ -121,8 +126,8 @@ static const u8 version_pixels[] __attribute__((aligned(4))) = { /* 6400 values,
 static const u8 modules_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 c63d6fe4548456b6724e152bfa63bdadcf44163e6bb2b9e13a1842e9a9a4acea */ };
 static const u8 modules_off_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 b9fbdee6ffee02a4e4663ecd9b3ef74a8216ce39f2bb8495dab46a7fb7e942c2 */ };
 static const u8 rotate_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8a5f3688e3432fc4c20d670e4b092cf937baf93ebd9db2e934d4e3ce63ae2d56 */ };
-#define MENU_TEXT_BYTES 2068U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 2068 values, SHA-256 423c20f1522aeb5d231cd8542f28e589a958d8c3c071b91d05625a86c76346ce */ };
+#define MENU_TEXT_BYTES 5198U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5198 values, SHA-256 9fb6fb25df0dd05a70dd516c59d91e9609d1f2d158afcd0c60239e795054781a */ };
 #define LABELS_BYTES 27644U
 static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 27644 values, SHA-256 0bd6591e8d980e29f058122e96da8e55d0cbf92f5937f612cd20041a7b5d5794 */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };

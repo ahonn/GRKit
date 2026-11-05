@@ -447,6 +447,7 @@ static void read_camera(int with_record)
 #endif
 }
 #include "install_modules.h"
+#include "install_recipes.h"
 /* ---- State (runtime/state.h) ----------------------------------------------
    A missing STATE.TXT reads STATE.TMP, which a save that the power cut
    left. */
@@ -469,13 +470,14 @@ static void read_state(void)
 }
 /* Restore the values of the capabilities that loaded modules use, the saved
    module settings in `table` (0 without one), and the Fn adjustments of the
-   records. */
+   records. The recipes have their own file (runtime/install_recipes.h). */
 static void apply_state(u32 base, u32 table)
 {
     static const u32 ids[] = {CORE_STATE_IDS};
     static const u16 words[] = {GRKIT_CORE_SETTING_WORDS}, values[] = {GRKIT_CORE_SETTING_VALUES};
     u32 value;
-    for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) {
+    _Static_assert(sizeof(ids) / sizeof(ids[0]) == CORE_STATE_COUNT, "a state key for each keyed capability");
+    for (u32 k = 0; k < CORE_STATE_COUNT; ++k) {
         /* UI-only keys (no firmware points) always restore: ADJ open preference
            and the last GRKit root module. Module capabilities still need a
            loaded module that uses them. */
@@ -844,6 +846,13 @@ static int install(void)
     if (profile_mode) write_profile(&arrays);
     /* The saved values, before the hooks start (plan_modules read them). */
     apply_state(arrays.base, module_count ? arrays.module_array : 0);
+    /* The recipes and those of a new package library of this camera line,
+       then the ones that REPORT.TXT names. */
+    u32 recipe_family = target_marker[sizeof("GRKIT_TARGET=gr") - 1] == '3' ? GRKIT_RCP_FAMILY_GR3
+                        : monochrome_camera() ? GRKIT_RCP_FAMILY_GR4_MONOCHROME
+                                              : GRKIT_RCP_FAMILY_GR4;
+    install_recipes(arrays.base, recipe_family);
+    check_recipes(arrays.base, count, module_count ? arrays.module_array : 0, capabilities_running);
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
         u32 patch_index = code_relocations[i * 2], offset = code_relocations[i * 2 + 1];
         put32(patches[patch_index].after + offset, arrays.base);

@@ -61,6 +61,8 @@ static __attribute__((unused)) u32 setting_value(volatile u32 *h,u32 handle) {
     volatile u32 *t;
     u32 value;
     if(handle==GRKIT_CORE_TONE) return tone_value(h);
+    /* A core setting without values, such as CORE.RECIPE, whose rows are
+       the recipes (runtime/recipes.h), has value 0. */
     if(IS_CORE_SETTING(handle)) {
         if(handle==GRKIT_CORE_ASPECT) return aspect_value(h);
         value=h[core_setting_words[CORE_SETTING(handle)]/4];

@@ -125,8 +125,19 @@ static u32 settings_options(volatile u32 *h,const Setting *page,u32 setting) {
     const Setting *b;
     return page==listed_settings && listed_kind(h,setting,&b)==LISTED_OPTIONS;
 }
+/* The setting that row `setting` of `page` shows: listed_setting on the
+   listed page, which delegates its rows. */
+static const Setting *settings_row_setting(volatile u32 *h,const Setting *page,u32 setting) {
+    if(!page) return 0;
+    return page==listed_settings ? listed_setting(h,setting) : page+setting;
+}
+static u32 settings_flags(volatile u32 *h,const Setting *page,u32 setting) {
+    const Setting *s=settings_row_setting(h,page,setting);
+    return s ? s->flags : 0;
+}
 static u32 settings_long(volatile u32 *h,const Setting *page,u32 setting) {
-    return settings_options(h,page,setting) || page[setting].values(h)>SETTING_VALUES;
+    return settings_options(h,page,setting) || page[setting].values(h)>SETTING_VALUES ||
+           settings_flags(h,page,setting)&SETTING_OWN_PAGE;
 }
 /* Each SelectMenu of the camera shares one SelectMenuController. Its
    constructor builds a radio row view for each row of the longest native
@@ -171,12 +182,114 @@ static void check_rows(volatile u32 *h,u32 which,u32 need) {
     MENU_VIEW4(FW_LIST_INIT,list[0],(u32)types,add,check_word(h,CHECK_HEIGHT)[0]);
     list[1]=need;
 }
+/* The event method of an own page is menu_select_event: the vtable of the
+   page is a copy with slot SELECT_EVENT_SLOT replaced, so a box can show on
+   the page and the page can take OK. The vtable layout of the controllers
+   is the same on each supported build. */
+#define SELECT_EVENT_SLOT 10U
+/* The rows of an action target MENU_ACTION_TARGET + the row, which no
+   controller has. */
+#define MENU_ACTION_TARGET 0x2000f80U
+/* Start the open own value page again, as its values changed, or return to
+   the settings page (`back`). Both keep the return of the value page. */
+static void settings_value_again(volatile u32 *h,u32 back) {
+    u32 setting=check_word(h,CHECK_SETTING)[0];
+    u32 page=check_word(h,settings_options(h,settings_page(h),setting) ? CHECK_PAGE : CHECK_RADIO)[0];
+    if(!page || !check_word(h,CHECK_ID)[0]) return;
+    CALL3(FW_CHANGE_CONTROLLER)(page,back ? SETTINGS_SUBMENU : check_word(h,CHECK_ID)[0],0x10000000);
+}
+/* Open the keyboard from the own value page `controller` of MENU, which
+   the keyboard returns to: 1, or 0 as ui_keyboard_prepare refuses. */
+static u32 ui_keyboard_on(volatile u32 *h,u32 controller,const volatile u16 *text,void (*done)(u32),u32 arg) {
+    if(!ui_keyboard_prepare(h,text,done,arg)) return 0;
+    CALL3(FW_CHANGE_CONTROLLER)(controller,KEYBOARD_CONTROLLER,check_word(h,CHECK_ID)[0]);
+    return 1;
+}
+/* A controller change to `id`: a box on an own page ends unless the page
+   stays, as a half-press leaves it. */
+static void ui_page_box_leave(volatile u32 *h,u32 id) {
+    u32 i, page;
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    /* A change to another controller, as to the keyboard, ends the wait for
+       the events that follow a taken OK; they reached the page before it.
+       A start of the same page again (settings_value_again) keeps it: they
+       reach the page after. */
+    if(id!=check_word(h,CHECK_ID)[0]) check_word(h,CHECK_EAT)[0]=0;
+    for(i=0;i<2;++i) {
+        page=check_word(h,i==CHECK_PAGE_RADIO ? CHECK_RADIO : CHECK_PAGE)[0];
+        if(ui_box_on(h,page) && id!=check_word(h,CHECK_ID)[0]) ui_close(h);
+    }
+}
+/* The events of an own value page. While a box of the core shows on the
+   page, the box takes the keys; MENU is Cancel. The page can take OK for a
+   row (Setting::select). The firmware gives an event that the method
+   returns 0 for to its default handler, so a taken event returns 1. After
+   OK and MENU, the page also gets SELECT_EV_CANCEL (MENU only) and
+   SELECT_EV_DONE, which would return the page: after a taken OK or MENU,
+   they are taken too. A half-press sends EV_HALF_PRESS and then the same
+   confirm, which leaves MENU with the value under the cursor, as on a
+   native page: that confirm is not OK, so the page does nothing with it,
+   and a box on the page closes without its action as the page ends
+   (ui_page_box_leave). */
+#define EAT_HALF_PRESS 2U
+A32_ENTRY u32 menu_select_event(u32 controller,const u16 *event) {
+    volatile u32 *h=menu_header();
+    u32 kind=*event, which=controller==check_word(h,CHECK_RADIO)[0] ? CHECK_PAGE_RADIO : CHECK_PAGE_CHECKBOX;
+    u32 native=check_word(h,CHECK_VTABLES+which*CHECK_VTABLE_SIZE)[0], back;
+    volatile u32 *eat=check_word(h,CHECK_EAT);
+    const Setting *setting;
+    if(h[GRKIT_HOST_SERVICES/4]) {
+        if(kind==EV_HALF_PRESS) {
+            eat[0]=EAT_HALF_PRESS;
+            return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
+        }
+        if(eat[0]==EAT_HALF_PRESS) {
+            eat[0]=0;
+            if(kind==EV_CONFIRM) return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
+        }
+        if(eat[0] && (kind==SELECT_EV_CANCEL || kind==SELECT_EV_DONE)) {
+            if(kind==SELECT_EV_DONE) eat[0]=0;
+            return 1;
+        }
+        if(ui_box_on(h,controller)) {
+            back=kind==EV_SWITCH && menu_press(BYTE(WORD((u32)event,4),0),WORD(WORD((u32)event,4),4));
+            /* Another switch leaves the page. */
+            if(kind==EV_SWITCH && !back) return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
+            if(kind==EV_CONFIRM || back) eat[0]=1;
+            if(ui_modal(h)) ui_event(h,kind,back);
+            return 1;
+        }
+        /* OK on a value, or MENU, of a setting that takes it
+           (Setting::select). */
+        back=kind==EV_SWITCH && menu_press(BYTE(WORD((u32)event,4),0),WORD(WORD((u32)event,4),4));
+        if(kind==EV_CONFIRM || back) {
+            if(!back) eat[0]=0;
+            setting=settings_row_setting(h,settings_page(h),check_word(h,CHECK_SETTING)[0]);
+            if(setting && setting->flags&SETTING_OWN_PAGE && setting->select &&
+               setting->select(h,controller,back ? SETTING_BACK : CALL1(FW_LIST_CURSOR)(check_list(h,which)[0]))) {
+                eat[0]=1;
+                return 1;
+            }
+        }
+    }
+    return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
+}
+_Static_assert(SELECT_VTABLE_SLOTS<=CHECK_VTABLE_SLOTS,"The services block holds the vtable copy");
+static void check_override(volatile u32 *h,u32 which,u32 controller) {
+    volatile u32 *at=check_word(h,CHECK_VTABLES+which*CHECK_VTABLE_SIZE);
+    u32 vtable=MENU_OBJECT_WORD(controller,0), i;
+    if(!vtable) return;
+    at[0]=vtable;
+    for(i=0;i<1U+SELECT_VTABLE_SLOTS;++i) at[1+i]=WORD(vtable-4U,4U*i);
+    at[2+SELECT_EVENT_SLOT]=(u32)menu_select_event;
+    MENU_OBJECT_WORD(controller,0)=(u32)(at+2);
+}
 /* The controller of `id` (menu.S: menu_check_factory): the own page of the
    open long value page, else 0 for the native one. */
 A32_ENTRY u32 menu_check_controller(u32 factory,u32 id) {
     volatile u32 *h=menu_header();
     const Setting *page;
-    u32 which,setting,controller;
+    u32 which,setting,controller,title;
     volatile u32 *slot;
     (void)factory;
     if(!h[GRKIT_HOST_SERVICES/4] || !id || id!=check_word(h,CHECK_ID)[0]) return 0;
@@ -192,7 +305,19 @@ A32_ENTRY u32 menu_check_controller(u32 factory,u32 id) {
         check_word(h,CHECK_BUILD)[0]=1+which;
         MENU_VIEW1(FW_SELECT_MENU_NEW,controller);
         check_word(h,CHECK_BUILD)[0]=0;
+        check_override(h,which,controller);
         slot[0]=controller;
+    }
+    /* The controller keeps its views and the text ID of its title, and its
+       title view measures its text only when that ID changes. Each own page
+       has the same title ID, so a longer title was cut to the width of the
+       title before it, as the name of a recipe after Recipes. Set the ID
+       again, so that the title measures the text of this page. */
+    title=MENU_OBJECT_WORD(controller,SELECT_TITLE_STRING);
+    if(title) {
+        u32 text=MENU_OBJECT_HALF(title,STRING_VIEW_TEXT);
+        MENU_VIEW3(FW_STRING_VIEW_RESET,title,0,0);
+        MENU_VIEW3(FW_STRING_VIEW_RESET,title,text,0);
     }
     check_rows(h,which,page[setting].values(h));
     return controller;
@@ -217,7 +342,14 @@ A32_ENTRY void menu_check_lines(u32 list,u32 types,u32 count,u32 height) {
 /* The start shows the radio dot of the current value only: a checkbox row
    keeps its checkbox. */
 A32_ENTRY void menu_check_dot(u32 line,u32 shown) {
+    volatile u32 *h=menu_header();
     if(check_row(line)) return;
+    /* The cursor of a page with its own cursor (Setting::cursor) shows the
+       mark only on the stored value. */
+    if(shown && h[GRKIT_HOST_SERVICES/4] && check_word(h,CHECK_ID)[0]) {
+        const Setting *s=settings_row_setting(h,settings_page(h),check_word(h,CHECK_SETTING)[0]);
+        if(s && s->cursor && s->cursor(h)!=s->get(h)) shown=0;
+    }
     MENU_VIEW2(FW_ROW_DOT,line,shown);
 }
 /* A controller change to `id`: returns the controller to change to. A MENU
@@ -226,10 +358,22 @@ A32_ENTRY void menu_check_dot(u32 line,u32 shown) {
 A32_ENTRY u32 menu_settings_controller(u32 id) {
     volatile u32 *h=menu_header();
     u32 i;
+    /* A change to another controller ends a borrow of the keyboard
+       (runtime/ui_keyboard.h). */
+    ui_keyboard_change(h,id);
     /* OK on an option: the value page stays, so the change does not happen. */
     if(h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_MENU+MENU_ROWS_STAY)[0]) {
         services_word(h,SERVICES_MENU+MENU_ROWS_STAY)[0]=0;
         return 0;
+    }
+    /* A box on an own value page ends when the page does. */
+    ui_page_box_leave(h,id);
+    /* OK on a row of an action: Setting::select gives the controller to
+       change to, or 0, and the page stays. */
+    if(h[GRKIT_HOST_SERVICES/4] && id>=MENU_ACTION_TARGET && id<MENU_ACTION_TARGET+SUBMENU_ROWS) {
+        const Setting *s=settings_row_setting(h,settings_page(h),id-MENU_ACTION_TARGET);
+        id=s && s->flags&SETTING_ACTION && s->select ? s->select(h,0,0) : 0;
+        if(!id) return 0;
     }
     id=menu_rows_controller(h,id);
     menu_parameter_controller(h,id);
@@ -254,6 +398,9 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
     }
     if(id==SETTINGS_SUBMENU) {
         h[GRKIT_HOST_SETTINGS/4]&=~(SETTINGS_FN|SETTINGS_OPEN_ROWS);
+        /* A value page that opens from the settings page starts without
+           the state of the last one. */
+        if(h[GRKIT_HOST_SERVICES/4]) services_word(h,SERVICES_MENU+MENU_ROWS_PAGE_STATE)[0]=0;
         if(settings_page(h)) settings_forget_all(h);
         /* The page shows its rows and labels again on each start, as a value
            page can change them: Film Stock adds Parameters once an effect is
@@ -277,6 +424,8 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
        also after a half-press, which shows the shooting screen over them. */
     if((id==IC_PARAMETERS_CONTROLLER || (id==SHOOTING_CONTROLLER && menu_parameter_session())) &&
        h[GRKIT_HOST_SETTINGS/4]&SETTINGS_FN) return id;
+    /* The keyboard that a page opened returns to it (ui_keyboard_prepare). */
+    if(id==KEYBOARD_CONTROLLER && h[GRKIT_HOST_SERVICES/4] && ui_keyboard_borrowed(h)) return id;
     h[GRKIT_HOST_SETTINGS/4]=0;
     /* A native page that GRKit opened from ADJ returns to GRKit at the next
        ADJ (RETURN_PARAMETERS). The page, the shooting screen of a half-press,
@@ -302,7 +451,7 @@ static void settings_note_return(volatile u32 *h,u32 controller) {
     target=MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET);
     /* The targets of GRKit rows (0x2000f00 and later) are no controller. */
     if(target>>12!=SETTINGS_SUBMENU>>12 || (target&0xf00U)==0xf00U || settings_shows(target) ||
-       target==ADJ_CONTROLLER || target==IC_PARAMETERS_CONTROLLER) return;
+       target==ADJ_CONTROLLER || target==KEYBOARD_CONTROLLER || target==IC_PARAMETERS_CONTROLLER) return;
     services_word(h,SERVICES_MENU+MENU_ROWS_RETURN)[0]=target;
 }
 /* `arg` is the third argument of ChangeController (CONTROLLER_BACK for a
@@ -391,13 +540,19 @@ static void settings_view(volatile u32 *h,u32 slot,u32 view,const u16 *name) {
 /* OK on row `row` of the submenu: the controller that the row opens, which
    the entry gives (`native`) for a row up to SETTINGS_BORROWED. A later row
    opens its Fn adjustments, or the value page of SETTINGS_ALIAS for that
-   row. */
+   row. A row of an action targets MENU_ACTION_TARGET + the row instead
+   (menu_settings_controller). */
 A32_ENTRY u32 menu_settings_row_controller(u32 native,u32 row) {
     volatile u32 *h=menu_header();
     const Setting *page=settings_page(h);
+    u32 target;
     if(!page) return native;
     h[GRKIT_HOST_SETTINGS/4]&=~SETTINGS_OPEN_ROWS;
-    if(row<SETTINGS_BORROWED || row>=settings_rows(h)) return native;
+    if(row>=settings_rows(h)) return native;
+    /* A row of an action has no value page (SETTING_ACTION). */
+    target=settings_flags(h,page,row)&SETTING_ACTION ? MENU_ACTION_TARGET+row : 0;
+    if(target) return target;
+    if(row<SETTINGS_BORROWED) return native;
     h[GRKIT_HOST_SETTINGS/4]|=row<<SETTINGS_OPEN_ROW;
     return settings_fn_row(h,page,row) ? MENU_FN_TARGET : settings_pages[SETTINGS_ALIAS];
 }
@@ -463,6 +618,12 @@ static u32 settings_text(volatile u32 *h,u32 view,u32 id) {
             /* The OK guide keeps the width of the native word. */
             if(id==SELECT_GUIDE_OK_TEXT && *text(h,TEXT_GUIDE)) return options_page_text(h,1,text(h,TEXT_GUIDE));
             if(id==SELECT_GUIDE_BACK_TEXT) return options_page_text(h,2,text(h,TEXT_GUIDE+1));
+        }
+        /* An own page with its own title (Setting::title). */
+        if(row<settings_rows(h) && id==settings_row_texts[settings_borrowed(row)]) {
+            const Setting *s=settings_row_setting(h,page,row);
+            const u16 *title=s && s->title ? s->title(h) : 0;
+            if(title) return options_page_text(h,0,title);
         }
     }
     if(id==SETTINGS_TITLE_TEXT)
@@ -560,12 +721,14 @@ A32_ENTRY u32 menu_settings_apply(u32 value,u32 unused,u32 setting) {
    is On: */
 A32_ENTRY u32 menu_settings_current(u32 value,u32 unused,u32 setting) {
     volatile u32 *h=menu_header();
-    const Setting *page;
+    const Setting *page, *s;
     (void)unused;
     setting=settings_alias(h,setting);
     page=settings_row_page(h,setting);
     if(!page) return 0;
     if(settings_options(h,page,setting)) return (services_word(h,SERVICES_MENU+MENU_ROWS_STAY_ROW)[0]==value)+1;
+    s=settings_row_setting(h,page,setting);
+    if(s && s->cursor) return (s->cursor(h)==value)+1;
     return (page[setting].get(h)==value)+1;
 }
 /* The settings of a page: those of a module page give their count, the

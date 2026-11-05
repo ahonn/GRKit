@@ -1,6 +1,9 @@
 use anyhow::{ensure, Context, Result};
 use std::collections::BTreeMap;
 
+pub mod decode;
+pub use decode::{branch_target, modified_immediate, move_immediate};
+
 pub fn branch(source: u32, target: u32, condition: u8) -> Result<[u8; 4]> {
     let displacement = i64::from(target) - i64::from(source) - 8;
     ensure!(

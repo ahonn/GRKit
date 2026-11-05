@@ -275,8 +275,10 @@ static void group_apply(volatile u32 *h,u32 row) {
     if(child<module_pages(h)) menu_open(h,child);
 }
 static u32 group_committed(volatile u32 *h) { (void)h; return 0; }
+/* The MENU parts of the pages of the core follow in runtime/menu_listed.h. */
+static const MenuListing group_listing;
 static const MenuPage group_module={choice_title,group_summary,group_rows,group_label,group_icon,
-    group_checked,group_apply,group_committed,0,0,0};
+    group_checked,group_apply,group_committed,0,0,0,0,0,&group_listing};
 /* The group that lists page `slot` as a child, with the child's row in
    `row`, or MODULE_TOTAL. */
 static u32 group_parent(volatile u32 *h,u32 slot,u32 *row) {
@@ -306,11 +308,19 @@ static const MenuPage child_module={choice_title,child_summary,choice_rows,choic
 
 /* A page of CORE.TONE gets its rows from the core (runtime/tone.h), and its
    title from the module. */
+static const MenuListing tone_listing;
 static const MenuPage tone_module={choice_title,tone_summary,tone_rows,tone_label,tone_icon,
-    tone_checked,tone_apply,tone_committed,tone_preview,tone_parameters,0};
+    tone_checked,tone_apply,tone_committed,tone_preview,tone_parameters,0,0,0,&tone_listing};
+/* A page of CORE.RECIPE too (runtime/recipes.h). */
+#include "recipe_page.h"
+/* The pages of the core settings whose rows the core gives. */
+static const struct { u32 handle; const MenuPage *page; } core_pages[]={
+    {GRKIT_CORE_TONE,&tone_module},{GRKIT_CORE_RECIPE,&recipe_module},
+};
 
 /* The page of module `index`. */
 static const MenuPage *menu_page(volatile u32 *h,u32 index) {
+    u32 i;
     if(index==SWITCH_MODULE) return &switch_module_page;
     if(index>=ABOUT_MODULE) return &about_module;
     if(index==MANAGE_MODULE) return &manage_module_page;
@@ -319,7 +329,8 @@ static const MenuPage *menu_page(volatile u32 *h,u32 index) {
     if(index>=module_pages(h)) return &choice_module;
     if(choice_group(h)) return &group_module;
     if(choice_direct(h) && choice_menu_only(h)) return &child_module;
-    if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) return &tone_module;
+    for(i=0;i<sizeof(core_pages)/sizeof(core_pages[0]);++i)
+        if(CHOICE_ENTRY(h)[1]==core_pages[i].handle) return core_pages[i].page;
     if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)) return &choice_settings_module;
     return &choice_module;
 }
@@ -391,18 +402,23 @@ static u32 page_listed(volatile u32 *h,u32 slot) {
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
     return listed;
 }
+/* Whether ADJ shows `page`, the selected module page: two rows or more, one
+   row for a page of actions, or a page of settings or of a group. */
+static u32 page_shown(volatile u32 *h,const MenuPage *page) {
+    return page->rows(h)>=(page->flags&MENU_PAGE_ACTIONS ? 1U : 2U) || choice_direct(h) || choice_group(h);
+}
 /* The listed modules that the root of ADJ can show (runtime/manage.h): each
-   with a module page of two rows or more, also while a soft Off stops it.
-   The search reads each module page, so only the menu runs it, when the
-   GRKit section is added and when ADJ Order opens. The text hooks of the
-   page read the result (GRKIT_HOST_ADJ_MODULES). */
+   with a module page that ADJ shows (page_shown), also while a soft Off
+   stops it. The search reads each module page, so only the menu runs it,
+   when the GRKit section is added and when ADJ Order opens. The text hooks
+   of the page read the result (GRKIT_HOST_ADJ_MODULES). */
 static void manage_adj_refresh(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
     for(slot=0;slot<module_pages(h);++slot) {
         menu_page(h,MODULE_PAGE(slot));
         if(choice_menu_only(h)) continue;
         listed=page_listed(h,slot);
-        if(listed<MANAGE_MODULES && (menu_page(h,MODULE_PAGE(slot))->rows(h)>=2 || choice_direct(h) || choice_group(h))) mask|=1U<<listed;
+        if(listed<MANAGE_MODULES && page_shown(h,menu_page(h,MODULE_PAGE(slot)))) mask|=1U<<listed;
     }
     /* menu_page selects a page: keep the page of the caller. */
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
@@ -410,9 +426,10 @@ static void manage_adj_refresh(volatile u32 *h) {
 }
 static u32 manage_adj_modules(volatile u32 *h) { return h[GRKIT_HOST_ADJ_MODULES/4]; }
 /* Visible modules as a bit mask: each module page with two rows or more,
-   unless a soft Off stopped its module, and the GRKit switch while a module
-   loaded. A page of CORE.TONE has rows only with effects. Without such a
-   page, About shows alone, so that the root has a row. */
+   or one row for a page of actions, unless a soft Off stopped its module,
+   and the GRKit switch while a module loaded. A page of CORE.TONE has rows
+   only with effects. Without such a page, About shows alone, so that the
+   root has a row. */
 static u32 visible_modules(volatile u32 *h) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], mask=0, slot, listed;
     for(slot=0;slot<module_pages(h);++slot) {
@@ -420,7 +437,7 @@ static u32 visible_modules(volatile u32 *h) {
         if(choice_menu_only(h)) continue;
         listed=page_listed(h,slot);
         if(listed<MANAGE_MODULES && manage_stopped(h,listed)) continue;
-        if((menu_page(h,MODULE_PAGE(slot))->rows(h)>=2 || choice_direct(h) || choice_group(h))) mask|=1U<<MODULE_PAGE(slot);
+        if(page_shown(h,menu_page(h,MODULE_PAGE(slot)))) mask|=1U<<MODULE_PAGE(slot);
     }
     if(manage_switch_shown(h)) mask|=1U<<SWITCH_MODULE;
     /* Module management and the version are in the native MENU (runtime/menu.c).

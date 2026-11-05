@@ -1353,6 +1353,7 @@ fn a_package_keeps_the_import_library_that_the_camera_does_not_install() {
         &english(),
         Extras {
             imports: Some(&library),
+            ..Extras::default()
         },
     )
     .unwrap();
@@ -1516,4 +1517,60 @@ fn a_package_holds_the_fast_boot_files_of_its_camera() {
 
 fn card_loader() -> &'static str {
     grkit_core::card::LOADER_FILE
+}
+
+/// A package can hold the recipe library of its camera line in its package
+/// folder, which INSTALL copies to the data folder. A recipe of another
+/// camera line fails the check.
+#[test]
+fn a_package_holds_the_recipe_library_of_its_camera() {
+    use grkit_core::recipes::{encode, Exposure, Family, Look, Recipe};
+    let recipe = |family| Recipe {
+        name: "Street".into(),
+        family,
+        look: Look::Off,
+        grain: None,
+        glow: None,
+        white_balance: None,
+        corrections: [None; 4],
+        exposure: Exposure::default(),
+        enabled: true,
+        hidden: false,
+        number: 0,
+    };
+    let library = encode(&[recipe(Family::Gr3), recipe(Family::Gr3)]).unwrap();
+    let with_library = assemble_with(
+        &gr3_runtimes(),
+        &testing::effect_set(&["test-effect"]),
+        &testing::official_modules(),
+        &camera::GR3,
+        &english(),
+        Extras {
+            recipes: Some(&library),
+            ..Extras::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(with_library.contents.recipes, 2);
+    // The package folder holds the library; no package file is in the data
+    // folder, so a copy that replaces folders keeps the state of the person.
+    let files = card_files(&with_library.bytes).unwrap();
+    assert_eq!(files[RECIPES_PACKAGE_PATH], library);
+    assert!(!files.contains_key(RECIPES_PATH));
+    assert!(files.keys().all(|path| !path.starts_with("GRKIT/")));
+    let other = encode(&[recipe(Family::Gr4)]).unwrap();
+    let error = assemble_with(
+        &gr3_runtimes(),
+        &testing::effect_set(&["test-effect"]),
+        &testing::official_modules(),
+        &camera::GR3,
+        &english(),
+        Extras {
+            recipes: Some(&other),
+            ..Extras::default()
+        },
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("another camera"), "{error:#}");
+    assert_eq!(verify_package(&package()).unwrap().recipes, 0);
 }

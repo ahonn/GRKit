@@ -52,7 +52,19 @@
 #define UI_VALUE 64U
 #define UI_START 68U
 #define UI_CHANGED 72U
-#define UI_SIZE 76U
+/* A choice box (ui_choice): the text descriptors of its two buttons. */
+#define UI_CHOICE_TEXTS 76U
+/* The keyboard of the camera (ui_keyboard_open): its state, whether OK gave
+   a text, the callback for the change from a keyboard that a page of MENU
+   opened (ui_keyboard_prepare) and its argument, and the text,
+   NUL-terminated ASCII of at most UI_KEYBOARD_CHARS. */
+#define UI_KEYBOARD 92U
+#define UI_KEYBOARD_RESULT 96U
+#define UI_KEYBOARD_DONE 100U
+#define UI_KEYBOARD_ARG 104U
+#define UI_KEYBOARD_TEXT 108U
+#define UI_KEYBOARD_CHARS 16U
+#define UI_SIZE (UI_KEYBOARD_TEXT + ((UI_KEYBOARD_CHARS + 4U) & ~3U))
 /* The GRKit section of the native MENU (runtime/menu_section.h): whether the Customize
    tab has been patched, the number of rows, the controller of the last
    controller change,
@@ -65,6 +77,11 @@
 #define SERVICES_MENU (SERVICES_UI + UI_SIZE)
 #define MENU_ROWS_DONE 0U
 #define MENU_ROWS_COUNT 4U
+/* The state of the open own value page, which its setting keeps
+   (Setting::select), such as the recipe whose actions the Recipes page
+   shows (runtime/menu_recipes.h). Each start of the settings page clears
+   it. */
+#define MENU_ROWS_PAGE_STATE 8U
 #define MENU_ROWS_CURRENT 12U
 #define MENU_ROWS_LISTED 16U
 #define MENU_ROWS_PAGE 20U
@@ -137,7 +154,31 @@
 #define CHECK_LISTS 28U
 #define CHECK_PAGE_CHECKBOX 0U
 #define CHECK_PAGE_RADIO 1U
-#define SERVICES_SIZE (SERVICES_CHECK + CHECK_LISTS + 2U * 8U)
+/* For each own page, the native vtable and a copy whose event method is
+   menu_select_event (runtime/menu_settings.h): the word before the vtable,
+   then SELECT_VTABLE_SLOTS methods. */
+#define CHECK_VTABLES (CHECK_LISTS + 2U * 8U)
+/* Room for the methods of each family (SELECT_VTABLE_SLOTS of the target). */
+#define CHECK_VTABLE_SLOTS 16U
+#define CHECK_VTABLE_SIZE (4U * (2U + CHECK_VTABLE_SLOTS))
+/* Whether the page takes the events that follow a taken OK or MENU, or
+   EAT_HALF_PRESS after a half-press (runtime/menu_settings.h:
+   menu_select_event). */
+#define CHECK_EAT (CHECK_VTABLES + 2U * CHECK_VTABLE_SIZE)
+/* The texts of the page of CORE.RECIPE (runtime/recipe_page.h), which the
+   native list reads after the page gives them: the label of Undo and of
+   each recipe, the summary of the root row, and the text of a box with a
+   pointer to it for each language (GrkitText). Each text has RECIPE_UNITS
+   units. */
+#define SERVICES_RECIPES (SERVICES_CHECK + CHECK_EAT + 4U)
+#define RECIPE_UNITS 96U
+#define RECIPE_TEXT_SIZE (2U * RECIPE_UNITS)
+#define RECIPE_ROWS_MAX (GRKIT_RECIPE_ON_MAX + 2U)
+#define RECIPE_SUMMARY_AT (RECIPE_ROWS_MAX * RECIPE_TEXT_SIZE)
+#define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
+#define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
+#define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
+#define SERVICES_SIZE (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

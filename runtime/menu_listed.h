@@ -33,8 +33,19 @@ static void film_set(volatile u32 *h,u32 value) { tone_apply(h,value); }
 static const u16 *adjustments_text(volatile u32 *h,u32 value) { (void)h; (void)value; return no_value_text; }
 static const Setting tone_settings[2]={
     {film_label,tone_rows,film_text,tone_committed,film_set},
-    {adjustments_label,one_value,adjustments_text,no_value,no_set},
+    {adjustments_label,one_value,adjustments_text,no_value,no_set,0,SETTING_FN},
 };
+static const Setting *tone_listed(volatile u32 *h,u32 *n) {
+    /* Without a committed effect, there are no Fn adjustments. */
+    *n=h[GRKIT_HOST_ACTIVE/4] ? 2U : 1U;
+    return tone_settings;
+}
+/* The options of a page of CORE.TONE are the listed effects in the order of
+   the Effects choices. */
+static const u16 *tone_option_label(volatile u32 *h,u32 k) { return effects_name(h,effects_at(h,k)); }
+static u32 tone_option_off(volatile u32 *h,u32 k) { return effects_off(h,effects_at(h,k)); }
+static void tone_option_set(volatile u32 *h,u32 k,u32 off) { effects_turn(h,effects_at(h,k),off); }
+static const MenuListing tone_listing={tone_listed,0,effects_count,tone_option_label,tone_option_off,tone_option_set};
 /* Group rows are links that show the value of the child's first setting.
    The controller dispatcher opens the child's native settings page. */
 static const u16 *group_value(volatile u32 *h,u32 row) {
@@ -52,6 +63,11 @@ static const Setting group_settings[SETTING_ROWS]={
     {group_label_2,one_value,group_text_2,no_value,no_set},
     {group_label_3,one_value,group_text_3,no_value,no_set},
 };
+static const Setting *group_listed(volatile u32 *h,u32 *n) { *n=group_rows(h); return group_settings; }
+/* A group shows the children that are on. */
+static const MenuListing group_listing={group_listed,group_value_text};
+/* The MENU parts of the listed page, or 0. menu_page selects the page. */
+static const MenuListing *listed_menu(volatile u32 *h) { return menu_page(h,listed_slot(h))->menu; }
 /* The settings of the module page of the listed module after its Enable
    row, with menu_page selecting the page, and their count in *n; or 0. */
 static const Setting *listed_base(volatile u32 *h,u32 *n) {
@@ -59,55 +75,52 @@ static const Setting *listed_base(volatile u32 *h,u32 *n) {
     *n=0;
     if(listed_slot(h)>=module_pages(h)) return 0;
     page=menu_page(h,listed_slot(h));
-    if(page==&group_module) { *n=group_rows(h); return group_settings; }
-    if(page==&tone_module) {
-        /* Without a committed effect, there are no Fn adjustments. */
-        *n=1;
-        if(h[GRKIT_HOST_ACTIVE/4]) *n=2;
-        return tone_settings;
-    }
+    if(page->menu && page->menu->settings) return page->menu->settings(h,n);
     if(page->settings) {
         *n=PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS);
         if(*n>SETTING_ROWS-1) *n=SETTING_ROWS-1;
         return page->settings;
     }
-    if(page->rows(h)>MENU_VALUES_MAX) return 0;
+    /* The rows of another page of actions are no setting: MENU shows only
+       Enable. */
+    if(page->flags&MENU_PAGE_ACTIONS || page->rows(h)>MENU_VALUES_MAX) return 0;
     *n=1;
     return choice_one;
 }
-/* The options of the listed module: menu_page selects its page. A page of
-   CORE.TONE has the listed effects in the order of the Effects choices,
-   another page its values but Off. */
-static u32 option_tone(volatile u32 *h) { return menu_page(h,listed_slot(h))==&tone_module; }
+/* The options of the listed module: menu_page selects its page. A page
+   gives its options (MenuListing), and the page of another module setting
+   has its values but Off. */
 /* The number of options of page `slot`, or 0 for a page without options. */
 static u32 options_of(volatile u32 *h,u32 slot) {
     const MenuPage *page;
     if(slot>=module_pages(h)) return 0;
     page=menu_page(h,slot);
     if(!choice_options(h)) return 0;
-    if(page==&tone_module) return effects_count(h);
+    if(page->menu && page->menu->options) return page->menu->options(h);
     return setting_rows(h,CHOICE_ENTRY(h)[1])-1;
 }
 static u32 options_count(volatile u32 *h) { return options_of(h,listed_slot(h)); }
-/* The effect or the value of option `k`. */
-static u32 option_item(volatile u32 *h,u32 k) {
-    if(option_tone(h)) return effects_at(h,k);
-    return setting_row_value(h,CHOICE_ENTRY(h)[1],k+1);
-}
+/* The value of option `k` of a module setting. */
+static u32 option_item(volatile u32 *h,u32 k) { return setting_row_value(h,CHOICE_ENTRY(h)[1],k+1); }
 static const u16 *option_label(volatile u32 *h,u32 k) {
-    u32 item=option_item(h,k);
-    return option_tone(h) ? effects_name(h,item) : choice_text(h,PAGE_LABELS,item);
+    const MenuListing *menu=listed_menu(h);
+    if(menu && menu->options) return menu->option_label(h,k);
+    return choice_text(h,PAGE_LABELS,option_item(h,k));
 }
 static u32 option_off(volatile u32 *h,u32 k) {
-    u32 item=option_item(h,k);
-    if(option_tone(h)) return effects_off(h,item);
+    const MenuListing *menu=listed_menu(h);
+    u32 item;
+    if(menu && menu->options) return menu->option_off(h,k);
+    item=option_item(h,k);
     return item<MANAGE_OPTION_VALUES && manage_hidden_values(h,listed(h))>>item&1;
 }
 /* Off of the value that the setting has sets the setting to Off. */
 static void option_set(volatile u32 *h,u32 k,u32 off) {
-    u32 item=option_item(h,k), handle, mask;
+    const MenuListing *menu=listed_menu(h);
+    u32 item, handle, mask;
     if(off>=2) return;
-    if(option_tone(h)) { effects_turn(h,item,off); return; }
+    if(menu && menu->options) { menu->option_set(h,k,off); return; }
+    item=option_item(h,k);
     if(item>=MANAGE_OPTION_VALUES) return;
     handle=CHOICE_ENTRY(h)[1];
     mask=manage_hidden_values(h,listed(h));
@@ -226,6 +239,16 @@ static const Setting listed_settings[SETTING_ROWS]={
    page. */
 static u32 settings_fn_row(volatile u32 *h,const Setting *page,u32 row) {
     const Setting *b;
-    return page==listed_settings && listed_kind(h,row,&b)==1 && b==tone_settings;
+    u32 k;
+    if(page!=listed_settings) return 0;
+    k=listed_kind(h,row,&b);
+    return k<LISTED_ENABLE && b && b[k].flags&SETTING_FN;
+}
+/* The setting that row `row` of the listed page shows, or 0 for Enable,
+   Options, and a row past the settings. */
+static const Setting *listed_setting(volatile u32 *h,u32 row) {
+    const Setting *b;
+    u32 k=listed_kind(h,row,&b);
+    return k<LISTED_ENABLE && b ? b+k : 0;
 }
 #endif /* GRKIT_MENU_LISTED_H */

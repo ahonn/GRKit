@@ -105,6 +105,18 @@
    setter (2.10: 0x533a2ba0) sets the text ID of this view. */
 #define SUBMENU_TITLE_STRING 0xf0
 #define SELECT_MENU_SIZE 0x1d4U
+/* The string view of the SelectMenuController title, whose text ID its
+   start sets from its kind. */
+#define SELECT_TITLE_STRING 0x160
+/* The text ID of a string view (a halfword), which FW_STRING_VIEW_RESET sets:
+   the view measures its text when the ID changes. */
+#define STRING_VIEW_TEXT 0xea
+/* The methods of the SelectMenuController vtable. */
+#define SELECT_VTABLE_SLOTS 15U
+/* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
+   and MENU (DONE): DONE returns the page. */
+#define SELECT_EV_CANCEL 0xdaU
+#define SELECT_EV_DONE 0xa2U
 /* The fewest row views of a SelectMenuController. Its constructor builds a
    view for each row of its longest kind (+0x199). The longest native kind has
    21 rows, and no GRKit hook borrows it (2.10: kind table 0x53b3c6c0). The

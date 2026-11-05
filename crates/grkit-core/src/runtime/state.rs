@@ -1,7 +1,10 @@
 //! The state files of the resident loader: the key IDs, the GRKit 1.2 keys,
 //! and the largest file.
 
-use super::{MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES};
+use super::{
+    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_NAME_WORDS, RECIPE_SLOTS,
+    RECIPE_WORDS,
+};
 use crate::capabilities::{self, StateFile};
 
 /// The largest main state file that INSTALL reads (`STATE_TEXT_MAX` in
@@ -33,6 +36,51 @@ pub fn state_key_id(name: &str) -> u32 {
 /// value is the nine stored bytes (`RECORD_PARAMETERS`) as base-9 digits, the
 /// first adjustment lowest. Neutral adjustments have no entry.
 pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
+/// The recipes (`runtime/recipes.h`) have the recipe file
+/// (`StateFile::Recipes`). Each word of a recipe has its own range of keys:
+/// word w of recipe n has the key ID this base + w * `RECIPE_KEY_STRIDE` + n.
+/// Word w of the name of recipe n has `RECIPE_NAME_KEY_BASE` + w *
+/// `RECIPE_KEY_STRIDE` + n, and the hash of the imported package library
+/// `RECIPE_IMPORTED_KEY`. A later word of a recipe or a name gets the next
+/// range, so the keys of a saved file stay valid. The header holds the words
+/// recipe by recipe (`HOST_RECIPES`, `HOST_RECIPE_NAMES`, then
+/// `HOST_RECIPE_IMPORTED`). A word that is 0 has no entry. The undo steps are
+/// not saved.
+pub const RECIPE_KEY_BASE: u32 = 991_000_000;
+pub const RECIPE_KEY_STRIDE: u32 = 100;
+pub const RECIPE_NAME_KEY_BASE: u32 = RECIPE_KEY_BASE + 50 * RECIPE_KEY_STRIDE;
+pub const RECIPE_IMPORTED_KEY: u32 = RECIPE_KEY_BASE + 90 * RECIPE_KEY_STRIDE;
+const _: () = assert!(RECIPE_SLOTS <= RECIPE_KEY_STRIDE as usize);
+const _: () = assert!(RECIPE_WORDS <= 50 && RECIPE_NAME_WORDS <= 40);
+
+/// The state key of header word `index` of the recipe run (`HOST_RECIPES`,
+/// the names, then the import hash).
+pub fn recipe_key(index: usize) -> u32 {
+    let words = RECIPE_WORDS * RECIPE_SLOTS;
+    if index < words {
+        RECIPE_KEY_BASE
+            + (index % RECIPE_WORDS) as u32 * RECIPE_KEY_STRIDE
+            + (index / RECIPE_WORDS) as u32
+    } else if index < words + RECIPE_NAME_WORDS * RECIPE_SLOTS {
+        let name = index - words;
+        RECIPE_NAME_KEY_BASE
+            + (name % RECIPE_NAME_WORDS) as u32 * RECIPE_KEY_STRIDE
+            + (name / RECIPE_NAME_WORDS) as u32
+    } else {
+        RECIPE_IMPORTED_KEY
+    }
+}
+/// The largest recipe key.
+pub fn recipe_key_max() -> u32 {
+    (0..RECIPE_STATE_WORDS).map(recipe_key).max().unwrap()
+}
+/// The number of saved recipe words: the recipes, their names, and the
+/// import hash.
+pub const RECIPE_STATE_WORDS: usize =
+    RECIPE_WORDS * RECIPE_SLOTS + RECIPE_NAME_WORDS * RECIPE_SLOTS + 1;
+/// The largest value of a recipe word. Each word holds at most 29 bits, and
+/// a name word 28 bits.
+pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
 /// The largest packed adjustment value: 9^9 - 1.
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
@@ -85,6 +133,9 @@ pub fn worst_state_size(file: StateFile) -> usize {
                 + MAX_COUNT * (line(TONING_KEY_BASE + 32767) + line(8))
                 + MODULE_SETTINGS_MAX
                     * (line(PARAMETER_KEY_BASE - 1) + line(MODULE_SETTING_VALUES as u32 - 1))
+        }
+        StateFile::Recipes => {
+            RECIPE_STATE_WORDS * (line(recipe_key_max()) + line(RECIPE_VALUE_MAX))
         }
     };
     keys + parameters
@@ -200,5 +251,33 @@ mod tests {
             .and_then(|value| value.trim_end_matches('U').parse().ok())
             .unwrap();
         assert!(MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX <= pairs);
+        assert!(RECIPE_STATE_WORDS <= pairs);
+    }
+
+    /// The recipe entries keep apart from the Fn adjustment entries and the
+    /// IDs of names, and fit the digits of the state file. Each word has its
+    /// own key.
+    #[test]
+    fn recipe_entries_fit_the_state_file() {
+        let keys: std::collections::BTreeSet<u32> =
+            (0..RECIPE_STATE_WORDS).map(recipe_key).collect();
+        assert_eq!(keys.len(), RECIPE_STATE_WORDS);
+        let last = recipe_key_max();
+        const { assert!(RECIPE_KEY_BASE > PARAMETER_KEY_BASE + 32767) };
+        assert!(last.to_string().len() <= STATE_DIGITS);
+        assert!(RECIPE_VALUE_MAX.to_string().len() <= STATE_DIGITS);
+        assert!(capabilities::state_keys().iter().all(|key| {
+            let id = state_key_id(&key.name);
+            !(RECIPE_KEY_BASE..=last).contains(&id)
+        }));
+        // Word 1 of recipe 2, word 0 of recipe 39, word 3 of the name of
+        // recipe 7, and the import hash.
+        assert_eq!(recipe_key(2 * RECIPE_WORDS + 1), 991_000_102);
+        assert_eq!(recipe_key(39 * RECIPE_WORDS), 991_000_039);
+        assert_eq!(
+            recipe_key(RECIPE_WORDS * RECIPE_SLOTS + 7 * RECIPE_NAME_WORDS + 3),
+            991_005_307
+        );
+        assert_eq!(recipe_key(RECIPE_STATE_WORDS - 1), RECIPE_IMPORTED_KEY);
     }
 }

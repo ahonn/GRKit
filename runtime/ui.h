@@ -2,7 +2,7 @@
 #define GRKIT_UI_H
 /* The timer and UI services (runtime/sdk/grkit.h), part of the menu, which
    runs in the App task. The state is in the services block
-   (runtime/services.h). The includer is runtime/menu.c.
+   (runtime/services.h).
 
    The timers are firmware App timers: a one-shot timer calls vtable slot 2
    of its handler with the handler and the timer id, in the App task.
@@ -19,7 +19,14 @@
       a delete, each view of the subtree is hidden and purged from the lists
       (canvas vtable +0x38), children first.
    The box text is the text ID SETTINGS_TITLE_TEXT, which the text hook
-   (menu_text_override) gives while the box shows, in the menu language. */
+   (menu_text_override) gives while the box shows, in the menu language.
+
+   The keyboard of the camera follows in runtime/ui_keyboard.h. The includer
+   is runtime/menu.c, before the menu pages that show the boxes. */
+#include "services.h"
+/* The menu code that leaves the GRKit page for a native screen
+   (runtime/menu.c). */
+static void leave(u32 controller);
 #define UI_NONE 0U
 #define UI_TOAST 1U
 #define UI_MESSAGE 2U
@@ -33,6 +40,8 @@
 /* A message with a native slider (ui_slider). */
 #define UI_SLIDER 6U
 #define UI_VIEW_SLIDER 0x16U
+/* A message with two buttons of other texts (ui_choice). */
+#define UI_CHOICE 7U
 
 static volatile u32 *ui_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_UI+offset); }
 
@@ -112,22 +121,34 @@ static void ui_close(volatile u32 *h) {
     ui_word(h,UI_BAR)[0]=ui_word(h,UI_VIEW)[0]=ui_word(h,UI_PARENT)[0]=0;
     ui_word(h,UI_MODE)[0]=UI_NONE;
 }
-/* The text of the box for the text hook, or 0. */
-static u32 ui_text_override(volatile u32 *h,u32 id) {
-    if(id!=SETTINGS_TITLE_TEXT || !h[GRKIT_HOST_SERVICES/4] || ui_word(h,UI_MODE)[0]==UI_NONE) return 0;
-    return (u32)ui_word(h,UI_DESCRIPTOR)|1U;
+/* Whether `view` is the box or one of its views: a settings page of MENU
+   under the box shows the same text IDs. */
+static u32 ui_box_view(volatile u32 *h,u32 view) {
+    u32 box=ui_word(h,UI_VIEW)[0], depth;
+    for(depth=0;view && depth<6;++depth,view=WORD(view,4)) if(view==box) return 1;
+    return 0;
+}
+/* The text of the box for the text hook, or 0. The buttons of a choice box
+   keep the IDs of Execute and Cancel and show the texts of the choice. */
+static u32 ui_text_override(volatile u32 *h,u32 view,u32 id) {
+    u32 mode;
+    if(!h[GRKIT_HOST_SERVICES/4]) return 0;
+    mode=ui_word(h,UI_MODE)[0];
+    if(mode==UI_NONE || !ui_box_view(h,view)) return 0;
+    if(id==SETTINGS_TITLE_TEXT) return (u32)ui_word(h,UI_DESCRIPTOR)|1U;
+    if(mode==UI_CHOICE && id==UI_EXECUTE_TEXT) return (u32)ui_word(h,UI_CHOICE_TEXTS)|1U;
+    if(mode==UI_CHOICE && id==UI_CANCEL_TEXT) return (u32)ui_word(h,UI_CHOICE_TEXTS+8U)|1U;
+    return 0;
 }
 static void ui_set_text(volatile u32 *h,const u16 *const *text) {
     ui_word(h,UI_TEXT)[0]=(u32)text;
     descriptor(ui_word(h,UI_DESCRIPTOR),text[menu_language()]);
     CALL2(FW_MESSAGE_SET)(ui_word(h,UI_VIEW)[0],SETTINGS_TITLE_TEXT);
 }
-/* Open a box of `mode` on the ADJ canvas of the GRKit page: 1, or 0 when
-   the caller is not module code in the App task, GRKit is not open, or
-   another box shows. */
-static u32 ui_open(volatile u32 *h,u32 mode,const u16 *const *text,u32 background) {
-    u32 controller=h[GRKIT_HOST_MENU_CONTROLLER/4], parent, view;
-    if(!services_in_app(h) || !text || !controller || !h[GRKIT_HOST_MENU_LEVEL/4]) return 0;
+/* Open a box of `mode` on the canvas of `controller`: the GRKit page of ADJ,
+   or an own value page of MENU (menu_select_event). */
+static u32 ui_open_on(volatile u32 *h,u32 controller,u32 mode,const u16 *const *text,u32 background) {
+    u32 parent, view;
     if(ui_word(h,UI_MODE)[0]==UI_TOAST || ui_word(h,UI_MODE)[0]==UI_DONE_TEXT) ui_close(h);
     if(ui_word(h,UI_MODE)[0]!=UI_NONE) return 0;
     parent=WORD(controller,ADJ_CANVAS);
@@ -142,6 +163,14 @@ static u32 ui_open(volatile u32 *h,u32 mode,const u16 *const *text,u32 backgroun
     ui_attach(parent,view);
     return 1;
 }
+/* Open a box of `mode` on the ADJ canvas of the GRKit page: 1, or 0 when
+   the caller is not module code in the App task, GRKit is not open, or
+   another box shows. */
+static u32 ui_open(volatile u32 *h,u32 mode,const u16 *const *text,u32 background) {
+    u32 controller=h[GRKIT_HOST_MENU_CONTROLLER/4];
+    if(!services_in_app(h) || !text || !controller || !h[GRKIT_HOST_MENU_LEVEL/4]) return 0;
+    return ui_open_on(h,controller,mode,text,background);
+}
 __attribute__((used)) u32 grkit_export_ui_toast(const u16 *const *text,u32 ms) {
     volatile u32 *h=menu_header();
     if(!ui_open(h,UI_TOAST,text,1)) return 0;
@@ -154,16 +183,40 @@ __attribute__((used)) u32 grkit_export_ui_message(const u16 *const *text,void (*
     ui_word(h,UI_DONE)[0]=(u32)done; ui_word(h,UI_ARG)[0]=arg;
     return 1;
 }
+/* The two buttons of a confirm or a choice box that just opened, with the
+   cursor on the second button (Cancel) for `second`, else on the first:
+   OK calls done(the button, arg) (ui_event). */
+static u32 ui_buttons(volatile u32 *h,void (*done)(u32,u32),u32 arg,u32 second) {
+    u32 view=ui_word(h,UI_VIEW)[0];
+    ui_word(h,UI_DONE)[0]=(u32)done; ui_word(h,UI_ARG)[0]=arg;
+    CALL3(FW_MESSAGE_BUTTONS)(view,UI_EXECUTE_TEXT,UI_CANCEL_TEXT);
+    CALL3(FW_MESSAGE_ENABLE_BUTTONS)(view,1,second);
+    return 1;
+}
 __attribute__((used)) u32 grkit_export_ui_confirm(const u16 *const *text,void (*done)(u32,u32),u32 arg) {
     volatile u32 *h=menu_header();
-    u32 view;
-    if(!ui_open(h,UI_CONFIRM,text,0)) return 0;
-    ui_word(h,UI_DONE)[0]=(u32)done; ui_word(h,UI_ARG)[0]=arg;
-    view=ui_word(h,UI_VIEW)[0];
-    CALL3(FW_MESSAGE_BUTTONS)(view,UI_EXECUTE_TEXT,UI_CANCEL_TEXT);
-    /* Both buttons, the cursor on Cancel. */
-    CALL3(FW_MESSAGE_ENABLE_BUTTONS)(view,1,1);
-    return 1;
+    return ui_open(h,UI_CONFIRM,text,0) && ui_buttons(h,done,arg,1);
+}
+/* A confirm box of the core on the canvas of `controller`, such as an own
+   value page of MENU (menu_select_event), the cursor on Cancel: OK calls
+   done(1 for Execute, arg). */
+static u32 ui_confirm_on(volatile u32 *h,u32 controller,const u16 *const *text,void (*done)(u32,u32),u32 arg) {
+    return ui_open_on(h,controller,UI_CONFIRM,text,0) && ui_buttons(h,done,arg,1);
+}
+/* Whether a box shows on the canvas of `controller`. */
+static u32 ui_box_on(volatile u32 *h,u32 controller) {
+    return controller && ui_word(h,UI_MODE)[0]!=UI_NONE && ui_word(h,UI_PARENT)[0]==WORD(controller,ADJ_CANVAS);
+}
+/* A box of the core with two buttons, `first` and `second`, in the menu
+   language, and the cursor on `first`. OK calls done(0 or 1, arg) for the
+   button under the cursor, and MENU done(2, arg). The native message box
+   has two buttons at most, so a third choice is MENU. */
+static u32 ui_choice(volatile u32 *h,const u16 *const *text,const u16 *first,const u16 *second,
+                     void (*done)(u32,u32),u32 arg) {
+    if(!ui_open(h,UI_CHOICE,text,0)) return 0;
+    descriptor(ui_word(h,UI_CHOICE_TEXTS),first);
+    descriptor(ui_word(h,UI_CHOICE_TEXTS+8U),second);
+    return ui_buttons(h,done,arg,0);
 }
 __attribute__((used)) u32 grkit_export_ui_progress_open(const u16 *const *text) {
     volatile u32 *h=menu_header();
@@ -290,18 +343,25 @@ static void ui_slider_event(volatile u32 *h,u32 kind,u32 back) {
    The box takes each key. `back` is 1 for MENU (back_event). */
 static u32 ui_modal(volatile u32 *h) {
     u32 mode=h[GRKIT_HOST_SERVICES/4] ? ui_word(h,UI_MODE)[0] : UI_NONE;
-    return mode==UI_MESSAGE || mode==UI_CONFIRM || mode==UI_PROGRESS || mode==UI_SLIDER;
+    return mode==UI_MESSAGE || mode==UI_CONFIRM || mode==UI_PROGRESS || mode==UI_SLIDER || mode==UI_CHOICE;
 }
 static void ui_event(volatile u32 *h,u32 kind,u32 back) {
     u32 mode=ui_word(h,UI_MODE)[0], view=ui_word(h,UI_VIEW)[0], done=ui_word(h,UI_DONE)[0], arg=ui_word(h,UI_ARG)[0], executed;
     if(mode==UI_PROGRESS) return;
     if(mode==UI_SLIDER) { ui_slider_event(h,kind,back); return; }
-    if(mode==UI_CONFIRM && (kind==EV_UP || kind==EV_DOWN || kind==EV_DIAL_UP || kind==EV_DIAL_DOWN ||
-                            kind==EV_LEFT || kind==EV_RIGHT)) {
+    if((mode==UI_CONFIRM || mode==UI_CHOICE) && (kind==EV_UP || kind==EV_DOWN || kind==EV_DIAL_UP || kind==EV_DIAL_DOWN ||
+                                                  kind==EV_LEFT || kind==EV_RIGHT)) {
         CALL3(FW_MESSAGE_CURSOR)(view,CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff ? 0 : 1,1);
         return;
     }
     if(kind!=EV_CONFIRM && !back) return;
+    if(mode==UI_CHOICE) {
+        /* Cursor 0 is the first button. MENU is the third choice. */
+        executed=back ? 2U : CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff ? 1U : 0U;
+        ui_close(h);
+        if(done) services_call2(h,done,executed,arg);
+        return;
+    }
     /* Cursor 0 is Execute. MENU cancels. */
     executed=mode==UI_CONFIRM && !back && !(CALL1(FW_MESSAGE_GET_CURSOR)(view)&0xff);
     ui_close(h);
@@ -330,9 +390,8 @@ static u32 ui_native_screen(u32 screen) {
     default: return 0;
     }
 }
-__attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u32),u32 arg) {
-    volatile u32 *h=menu_header();
-    u32 id=ui_native_screen(screen);
+/* Record the controller `id` to open, for the core and for modules. */
+static u32 ui_native_request(volatile u32 *h,u32 id,void (*back)(u32),u32 arg) {
     if(!services_in_app(h) || !id || !h[GRKIT_HOST_MENU_CONTROLLER/4] || !h[GRKIT_HOST_MENU_LEVEL/4] ||
        ui_word(h,UI_NATIVE)[0] || ui_modal(h)) return 0;
     ui_word(h,UI_NATIVE_TIMER)[0]=ui_timer_start(1);
@@ -341,16 +400,28 @@ __attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u3
     ui_word(h,UI_BACK)[0]=(u32)back; ui_word(h,UI_BACK_ARG)[0]=arg;
     return 1;
 }
+__attribute__((used)) u32 grkit_export_ui_open_native(u32 screen,void (*back)(u32),u32 arg) {
+    return ui_native_request(menu_header(),ui_native_screen(screen),back,arg);
+}
+static u32 ui_keyboard_arm(volatile u32 *h);
 static void ui_native_open(volatile u32 *h) {
     u32 id=ui_word(h,UI_NATIVE)[0], controller=h[GRKIT_HOST_MENU_CONTROLLER/4], root, back=ui_word(h,UI_BACK)[0];
     ui_word(h,UI_NATIVE)[0]=0;
     if(id==UI_NATIVE_BACK) {
         ui_word(h,UI_BACK)[0]=0;
         if(back) services_call1(h,back,ui_word(h,UI_BACK_ARG)[0]);
+        /* A keyboard text is for this call only. */
+        ui_word(h,UI_KEYBOARD_RESULT)[0]=0;
         return;
     }
     /* ADJ closed before the timer: drop the request. */
     if(!id || !controller || !h[GRKIT_HOST_MENU_LEVEL/4]) { ui_word(h,UI_BACK)[0]=0; return; }
+    /* The keyboard is busy: GRKit stays, and back runs without a text. */
+    if(id==KEYBOARD_CONTROLLER && !ui_keyboard_arm(h)) {
+        ui_word(h,UI_BACK)[0]=0;
+        if(back) services_call1(h,back,ui_word(h,UI_BACK_ARG)[0]);
+        return;
+    }
     ui_close(h);
     /* leave() clears the level, so read it first. */
     root=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ? RETURN_ROOT : 0;
