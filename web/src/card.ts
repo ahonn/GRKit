@@ -54,6 +54,13 @@ export const PACKAGE_MODULES = 'SCRIPT/GRKIT/MODULES';
 export const LIBRARY = 'GRKIT/EFFECTS';
 const USER_MODULES = 'GRKIT/MODULES';
 const REPORT = 'GRKIT/REPORT.TXT';
+/** The recipes of the camera (`grkit_core::recipes::read_recipe_file`), which the site reads and writes. */
+export const RECIPE_FILE = 'GRKIT/RECIPES.TXT';
+/**
+ * The recipe library of a ZIP package. A package holds no file of the data folder, so INSTALL adds
+ * the recipes of this file to `RECIPE_FILE` once. A card write has no use for it and deletes it.
+ */
+export const RECIPES_PACKAGE = 'SCRIPT/GRKIT/RECIPES.BIN';
 
 /**
  * The files that a write puts on the card last, in this order. Until `STARTUP.TTL` changes, an
@@ -120,6 +127,8 @@ export interface CardState {
    * off. Null without a ModeSet file.
    */
   modeset: { name: string; command: 'on' | 'off' | 'other' } | null;
+  /** The text of the recipe file (`RECIPE_FILE`), or null without one. */
+  recipeText: string | null;
 }
 
 /** A ModeSet file name: 8 digits, a dot, and 3 digits, such as `00078350.588`. */
@@ -212,6 +221,7 @@ export async function readCard(root: CardDirectory): Promise<CardState> {
     ),
     rootNames: rootNames.filter(visible),
     modeset: await readModeset(root, rootNames.filter((name) => visible(name) && isModeset(name))),
+    recipeText: await readText(root, RECIPE_FILE),
   };
 }
 
@@ -418,6 +428,8 @@ export interface CardChanges {
   removeEffects: string[];
   /** The effects on the card whose files the write replaces, such as an import with a new name. */
   updateEffects: string[];
+  /** The recipe file: the write replaces it with the library of the site, or leaves it. */
+  recipes: 'same' | 'write';
 }
 
 /**
@@ -430,6 +442,7 @@ export function planChanges(
   version: string,
   modules: readonly string[],
   effects: { before: readonly string[]; after: readonly string[]; changed?: readonly string[] } | null,
+  recipes: 'same' | 'write' = 'same',
 ): CardChanges {
   const onCard = cardModules(state);
   return {
@@ -448,6 +461,7 @@ export function planChanges(
     updateEffects: effects
       ? (effects.changed ?? []).filter((id) => effects.before.includes(id) && effects.after.includes(id))
       : [],
+    recipes,
   };
 }
 
@@ -470,12 +484,13 @@ export function hasChanges(changes: CardChanges): boolean {
     changes.grkit !== 'same' ||
     changes.scriptsOn ||
     changes.cleanLegacy ||
-    changes.addModules.length +
-      changes.removeModules.length +
-      changes.addEffects.length +
-      changes.removeEffects.length +
-      changes.updateEffects.length >
-      0
+    changes.recipes !== 'same' ||
+      changes.addModules.length +
+        changes.removeModules.length +
+        changes.addEffects.length +
+        changes.removeEffects.length +
+        changes.updateEffects.length >
+        0
   );
 }
 

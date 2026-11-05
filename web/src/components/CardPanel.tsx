@@ -267,6 +267,8 @@ interface ChangesProps {
   hint?: ReactNode;
   /** The terms of use, which the line under the button links to. */
   termsUrl: string;
+  /** The label and the text of the change of the recipe library, or null without one. */
+  recipes?: { label: string; text: string } | null;
 }
 
 function Change({ label, items, separator }: { label: string; items: readonly string[]; separator: string }) {
@@ -300,6 +302,7 @@ export function CardChangesView({
   termsUrl,
   camera,
   firmware,
+  recipes = null,
 }: ChangesProps) {
   const fresh = changes.grkit !== 'same';
   const any = hasChanges(changes);
@@ -343,6 +346,12 @@ export function CardChangesView({
             <Change label={t.changeAddEffects} items={changes.addEffects.map(effectName)} separator={t.listSeparator} />
             <Change label={t.changeRemoveEffects} items={changes.removeEffects.map(effectName)} separator={t.listSeparator} />
             <Change label={t.changeUpdateEffects} items={changes.updateEffects.map(effectName)} separator={t.listSeparator} />
+          </>
+        )}
+        {recipes && (
+          <>
+            <dt>{recipes.label}</dt>
+            <dd>{recipes.text}</dd>
           </>
         )}
         {changes.scriptsOn && (
