@@ -191,7 +191,9 @@ jobs:
             exit 1
           fi
           for attempt in $(seq 90); do
-            if curl --fail --silent --show-error "$SITE_URL/?run=$GITHUB_RUN_ID-$attempt" | grep -q "$entry"; then
+            # grep reads the whole page: `grep -q` stops at the match, and curl then fails to write
+            # the rest of the page, which pipefail turns into a failed check.
+            if curl --fail --silent --show-error "$SITE_URL/?run=$GITHUB_RUN_ID-$attempt" | grep -F "$entry" > /dev/null; then
               echo "$SITE_URL serves $entry."
               exit 0
             fi
