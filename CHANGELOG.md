@@ -1,3 +1,9 @@
+## 1.4.3 (2026-11-05)
+
+### Fixes
+
+- On GR IV, MENU on the Glow page after Bloom or Halation returns to the GRKit section instead of playback.
+
 ## 1.4.2 (2026-11-05)
 
 ### Fixes
