@@ -9,6 +9,7 @@ import {
   effectId,
   lutAccept,
   nameFromFile,
+  unbase64,
   validCover,
   validCoverText,
   validName,
@@ -108,6 +109,10 @@ describe('imported effect names', () => {
   it('encodes icons as the catalog does', () => {
     expect(base64(new Uint8Array([0, 1, 2, 255]))).toBe('AAEC/w==');
     expect(base64(new Uint8Array(40 * 40 * 4)).length).toBe(8536);
+    expect(unbase64('AAEC/w==')).toEqual(new Uint8Array([0, 1, 2, 255]));
+    expect(unbase64('')).toEqual(new Uint8Array());
+    expect(unbase64('AAEC/w')).toBeNull();
+    expect(unbase64('AAEC/w=*')).toBeNull();
   });
 });
 

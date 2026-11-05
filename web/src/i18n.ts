@@ -156,6 +156,15 @@ const en = {
   close: 'Close',
   removeEffect: 'Remove',
   removeOf: (name: string) => `Remove ${name}`,
+  /** The backup of the imported effects and the settings of this browser, for another browser. */
+  backupTitle: 'Backup',
+  backupNote:
+    'Save your imported film looks and the settings of this page in one file, then restore them in another browser.',
+  backupExport: 'Save a backup',
+  backupImport: 'Restore a backup',
+  backupSaved: 'The backup is saved.',
+  backupDone: 'The backup is restored.',
+  backupError: 'This file is not a GRKit backup.',
   haldSummary: 'Importing a Lightroom preset?',
   haldNote:
     'Download the HALD image and open it in the editor. Apply the preset with grain, sharpening, and vignette off. Export it at full size as a 16-bit TIFF or PNG in sRGB, then import the export with Standard input.',
@@ -574,6 +583,13 @@ const zhHans: Strings = {
   close: '关闭',
   removeEffect: '移除',
   removeOf: (name) => `移除 ${name}`,
+  backupTitle: '备份',
+  backupNote: '将导入的胶片风格与此页面的设置保存为一个文件，再在另一个浏览器中恢复。',
+  backupExport: '保存备份',
+  backupImport: '恢复备份',
+  backupSaved: '备份已保存。',
+  backupDone: '备份已恢复。',
+  backupError: '此文件不是 GRKit 备份。',
   haldSummary: '要导入 Lightroom 预设？',
   haldNote:
     '下载 HALD 图像并在软件中打开，关闭颗粒、锐化和暗角后应用预设。以原尺寸导出为 sRGB 的 16 位 TIFF 或 PNG，再选择 Standard 输入导入。',
@@ -946,6 +962,13 @@ const zhHant: Strings = {
   close: '關閉',
   removeEffect: '移除',
   removeOf: (name) => `移除 ${name}`,
+  backupTitle: '備份',
+  backupNote: '將匯入的底片風格與此頁面的設定存成一個檔案，再在另一個瀏覽器還原。',
+  backupExport: '儲存備份',
+  backupImport: '還原備份',
+  backupSaved: '備份已儲存。',
+  backupDone: '備份已還原。',
+  backupError: '此檔案不是 GRKit 備份。',
   haldSummary: '要匯入 Lightroom 預設集？',
   haldNote:
     '下載 HALD 影像並在軟體中開啟，關閉顆粒、銳利化和暗角後套用預設。以原尺寸匯出為 sRGB 的 16 位元 TIFF 或 PNG，再選擇 Standard 輸入匯入。',
@@ -1319,6 +1342,14 @@ const ja: Strings = {
   close: '閉じる',
   removeEffect: '削除',
   removeOf: (name) => `${name} を削除`,
+  backupTitle: 'バックアップ',
+  backupNote:
+    '読み込んだフィルムルックとこのページの設定を 1 つのファイルに保存し、別のブラウザーで復元できます。',
+  backupExport: 'バックアップを保存',
+  backupImport: 'バックアップを復元',
+  backupSaved: 'バックアップを保存しました。',
+  backupDone: 'バックアップを復元しました。',
+  backupError: 'このファイルは GRKit のバックアップではありません。',
   haldSummary: 'Lightroom のプリセットを読み込む場合',
   haldNote:
     'HALD 画像をダウンロードしてソフトで開き、粒子、シャープ、周辺光量補正をオフにしてプリセットを適用します。原寸の sRGB 16 ビット TIFF または PNG で書き出し、Standard 入力で読み込みます。',
@@ -1694,6 +1725,13 @@ const ko: Strings = {
   close: '닫기',
   removeEffect: '삭제',
   removeOf: (name) => `${name} 삭제`,
+  backupTitle: '백업',
+  backupNote: '가져온 필름 룩과 이 페이지의 설정을 하나의 파일로 저장하고 다른 브라우저에서 복원합니다.',
+  backupExport: '백업 저장',
+  backupImport: '백업 복원',
+  backupSaved: '백업을 저장했습니다.',
+  backupDone: '백업을 복원했습니다.',
+  backupError: '이 파일은 GRKit 백업이 아닙니다.',
   haldSummary: 'Lightroom 프리셋을 가져오나요?',
   haldNote:
     'HALD 이미지를 다운로드해 편집 프로그램에서 엽니다. 그레인, 샤프닝, 비네팅을 끄고 프리셋을 적용합니다. 원본 크기의 sRGB 16비트 TIFF 또는 PNG로 내보낸 뒤, Standard 입력으로 가져옵니다.',
@@ -1966,7 +2004,7 @@ export const STRINGS: Readonly<Record<Language, Strings>> = {
 
 const STORAGE_KEY = 'grkit.language';
 
-function isLanguage(value: unknown): value is Language {
+export function isLanguage(value: unknown): value is Language {
   return LANGUAGES.some((language) => language.code === value);
 }
 

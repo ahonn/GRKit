@@ -65,6 +65,10 @@ The Import a LUT row at the end of the effect list, and the link under the selec
 
 The page checks every catalog effect until the user changes the selection. A user can import any number of LUTs, but a package holds at most 20 effects, so at most 20 can be checked. The browser keeps the imported effects in IndexedDB (`src/import/store.ts`), so a later visit has them. The store is a convenience of one browser: without it, the page works as before. For an editor preset, the dialog offers an identity HALD image. The user applies the preset to it and imports the export with Standard input.
 
+## Backup
+
+The imported effects and the settings of the page (the language, the install mode, and the checked effects) belong to one browser: IndexedDB holds the effects, and localStorage holds the settings. The Backup section saves both in one JSON file (`src/backup.ts`), and restores them in another browser. The file keeps the compiled effects and their preview tables as base64, so a restore needs no LUT files. A connected card is not part of the backup.
+
 ## SD card
 
 The first section of the page selects how to install: write to an SD card in a card reader, through the File System Access API, or download `GRKit.zip`. The section shows only in a browser that can write to a card, Chrome and Edge on a computer, where the card mode is the default. In other browsers, the page has only the download. The page remembers the choice in `localStorage`.

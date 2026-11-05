@@ -6,6 +6,7 @@ import {
   trackDownloadError,
   trackScriptsOff,
 } from './analytics';
+import type { BackupContents } from './backup';
 import { suggestOwnBrowser } from './browser';
 import {
   applyChanges,
@@ -43,6 +44,7 @@ import {
   type InstallMode,
 } from './components/CardPanel';
 import { AppPromo } from './components/AppPromo';
+import { BackupSection } from './components/BackupSection';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Landing } from './components/Landing';
@@ -61,6 +63,7 @@ import {
   save,
   scriptsOffCardFiles,
 } from './package';
+import { provideTable } from './preview/render';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
@@ -231,6 +234,33 @@ export function App({
     } else {
       resetBuild();
     }
+  }
+
+  /**
+   * Adds the imports of a backup and applies its settings. An import with the ID of an earlier
+   * one takes its place, as an import does, and the backup order gets new times after the
+   * imports that this browser already has.
+   */
+  function restoreBackup(backup: BackupContents) {
+    const base = Date.now();
+    const restored = [...backup.imports]
+      .sort((a, b) => a.savedAt - b.savedAt)
+      .map((effect, index) => ({ ...effect, savedAt: base + index }));
+    if (restored.length > 0) {
+      for (const effect of restored) {
+        provideTable(effect.preview, effect.imported.table);
+        void saveImport(effect, effect.savedAt);
+      }
+      setImported((current) => {
+        const ids = new Set(restored.map((effect) => effect.id));
+        return [...current.filter((effect) => !ids.has(effect.id)), ...restored];
+      });
+      resetBuild();
+    }
+    const { language: nextLanguage, installMode, selection: nextSelection } = backup.settings;
+    if (nextLanguage && nextLanguage !== language) chooseLanguage(nextLanguage);
+    if (installMode) chooseMode(installMode === 'card' && !canWriteCards() ? 'zip' : installMode);
+    if (nextSelection) changeSelection(new Set(nextSelection));
   }
 
   function toggleModule(key: ModuleKey) {
@@ -901,6 +931,13 @@ export function App({
             </div>
           </section>
         )}
+
+        <BackupSection
+          strings={t}
+          imports={allImported}
+          settings={{ language, installMode: mode, selection: selection ? [...selection] : null }}
+          onRestore={restoreBackup}
+        />
 
         <section className="section" aria-labelledby="faq-label">
           <h2 id="faq-label">{t.faqTitle}</h2>
