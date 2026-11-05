@@ -4,6 +4,7 @@
 // browser, so this script renders the first screen of each language into its own page:
 // dist/index.html (English) and dist/<language>/index.html. Each page names the others with
 // hreflang links. The edge worker sends a visitor of the root page to the page of their language.
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -133,11 +134,41 @@ function page(code) {
   return replaceOne(html, /<div id="root"><\/div>/, `<div id="root">${render(code)}</div>`);
 }
 
+/** The value of an HTML attribute as the browser reads it. */
+const unescape = (text) =>
+  text.replaceAll('&quot;', '"').replaceAll('&#x27;', "'").replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&amp;', '&');
+
+/**
+ * Allows the style attributes of the rendered pages in the Content-Security-Policy of `_headers`.
+ * The page itself sets styles through the DOM, which the policy allows, but a style attribute
+ * in the HTML needs its hash. Without them, the compare slider and the frames lose their layout
+ * until the script runs.
+ */
+function allowStyleAttributes(file, pages) {
+  const styles = new Set();
+  for (const html of pages) {
+    for (const match of html.matchAll(/\sstyle="([^"]*)"/g)) styles.add(unescape(match[1]));
+  }
+  if (styles.size === 0) return;
+  const hashes = [...styles]
+    .sort()
+    .map((style) => `'sha256-${createHash('sha256').update(style).digest('base64')}'`)
+    .join(' ');
+  const headers = readFileSync(file, 'utf8');
+  const policy = /(Content-Security-Policy:[^\n]*style-src 'self')/;
+  if (!policy.test(headers)) throw new Error("_headers has no style-src 'self' in its Content-Security-Policy");
+  writeFileSync(file, headers.replace(policy, `$1 'unsafe-hashes' ${hashes}`));
+}
+
+const pages = [];
 for (const code of codes) {
   const file = join(dist, `.${LANGUAGE_PATHS[code]}`, 'index.html');
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, page(code));
+  const html = page(code);
+  writeFileSync(file, html);
+  pages.push(html);
 }
+allowStyleAttributes(join(dist, '_headers'), pages);
 
 // Pages serves 404.html with status 404 for a path without a file. Without it, Pages serves the
 // root page for every path, and search engines see each wrong address as a copy of the site.
