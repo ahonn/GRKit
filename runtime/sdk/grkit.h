@@ -141,7 +141,10 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   and 90 mm of a 28 mm lens (the same factors of the 40 mm
                   lens of GR IIIx). The live view shows its frame (Surface).
      CORE.CROP_MODE  2 values: 0 crops photos where the camera can
-                  (default), 1 shows the frame only. Since ABI 2.6. */
+                  (default), 1 shows the frame only. Since ABI 2.6.
+     CORE.RECIPE  no value: the camera recipes, which hold and set the
+                  other capabilities that loaded modules use. A page of
+                  CORE.RECIPE gets its rows from the core. Since ABI 2.6. */
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */

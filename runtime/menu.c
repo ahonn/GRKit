@@ -32,6 +32,7 @@ extern u32 menu_destroy_original(u32);
 #ifndef MENU_OBJECT_WORD
 #define MENU_OBJECT_WORD(a,o) WORD(a,o)
 #define MENU_OBJECT_BYTE(a,o) BYTE(a,o)
+#define MENU_OBJECT_HALF(a,o) HALF(a,o)
 #endif
 /* Memory access. A host test maps it to its own buffers. */
 #ifndef WORD
@@ -116,7 +117,6 @@ static void grkit_touch(u32 controller);
 static void render(u32 controller);
 static void render_step(u32 controller,u32 step);
 static void enter(u32 controller,u32 edge);
-static void ui_native_returned(volatile u32 *h);
 static const u16 grkit_title[] = {'G','R','K','i','t',0};
 #ifndef MENU_TEXT
 /* The menu text at a camera address. Host tests map the address. */
@@ -270,6 +270,16 @@ static void aspect_set_native(u32 id) { MENU_STOP_LIVE_VIEW(); MENU_SET_NATIVE_A
 static void aspect_request(void) { MENU_FRAMING_REQUEST(); }
 /* A new effect sets the highlight warning again. */
 static void tone_stored(volatile u32 *h) { level_reapply(h); }
+/* The text descriptor of a text view: the length with its NUL, and the
+   text. */
+static void descriptor(volatile u32 *at, const u16 *name) {
+    u32 length=0;
+    while (length<GRKIT_SUMMARY_UNITS-1 && name[length]) ++length;
+    at[0]=(length+1)|0x100; at[1]=(u32)name;
+}
+/* The timer and UI services for modules and the pages of the core. */
+#include "ui.h"
+#include "ui_keyboard.h"
 #include "modules.h"
 /* Only the still-viewfinder slot consults module state. Playback continues
    to resolve the icon recorded in the photo metadata. */
@@ -448,11 +458,6 @@ static void list_grow_rows(u32 view,u32 rows,u32 style,u32 height) {
 static void list_grow(u32 view,u32 rows) { list_grow_rows(view,rows,ADJ_ROW_STYLE,ADJ_ROW_HEIGHT); }
 static u32 list_start(volatile u32 *h,u32 view) {
     return count(h)>list_capacity(view) ? page_start(h[GRKIT_HOST_MENU_CURSOR/4]) : 0;
-}
-static void descriptor(volatile u32 *at, const u16 *name) {
-    u32 length=0;
-    while (length<GRKIT_SUMMARY_UNITS-1 && name[length]) ++length;
-    at[0]=(length+1)|0x100; at[1]=(u32)name;
 }
 static void label(u32 object) {
     CALL3(FW_STRING_VIEW_RESET)(object,0,0);
@@ -747,10 +752,9 @@ static void fit_value(u32 view) {
     CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
 }
 #include "menu_settings.h"
+#include "menu_recipes.h"
 #include "menu_section.h"
 #include "menu_about.h"
-/* The timer and UI services for modules. */
-#include "ui.h"
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.
    Bit 0 selects the font of the menu language. GRKit gives the texts of one
    screen, which the last controller change selects (MENU_ROWS_CURRENT): the
@@ -769,7 +773,7 @@ A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
     if(title) return title;
     title=develop_text(h,id);
     if(title) return title;
-    title=ui_text_override(h,id);
+    title=ui_text_override(h,view,id);
     if(title) return title;
     if(h[GRKIT_HOST_SERVICES/4]) {
         u32 current=services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0];
@@ -886,11 +890,14 @@ A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
    keeps the highlighted row of a page, as a native ADJ keeps the value under
    its cursor. The Modules page opens settings on OK, so it commits nothing.
    The GRKit switch and group toggles commit only on OK or a touch: leaving
-   their pages must not change an Enable setting. */
+   their pages must not change an Enable setting. A page of actions, such as
+   the camera recipes, acts only on OK. */
 static void exit_commit(volatile u32 *h) {
     u32 module=h[GRKIT_HOST_MODULE/4];
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && module!=MANAGE_MODULE && module!=SWITCH_MODULE &&
-       menu_page(h,module)!=&group_module) menu_confirm(h);
+    const MenuPage *page;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_MODULE || module==MANAGE_MODULE || module==SWITCH_MODULE) return;
+    page=menu_page(h,module);
+    if(page!=&group_module && !(page->flags&MENU_PAGE_ACTIONS)) menu_confirm(h);
 }
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
@@ -1045,6 +1052,13 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         }
     }
     menu_normalize(h);
+    /* Fn on a row of a page that takes it, such as a delete on the page of
+       recipes. */
+    if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
+       current_module(h)->fn && current_module(h)->fn(h,h[GRKIT_HOST_MENU_CURSOR/4])) {
+        render(controller);
+        return 0;
+    }
     /* On an effect row, commit the highlighted row, then adjust its parameters.
        On the root row, adjust the committed effect. Fn on Off does nothing. */
     if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && parameters_row(h)) {

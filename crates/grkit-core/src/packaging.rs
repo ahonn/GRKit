@@ -12,7 +12,7 @@ use crate::{
     camera::{self, Camera},
     card, effects, imports,
     language::Language,
-    modules, runtime, Files,
+    modules, recipes, runtime, Files,
 };
 
 pub const RUNTIME_PATHS: [&str; 6] = [
@@ -498,9 +498,21 @@ pub struct Contents {
     /// The number of imports of the import library (`card::IMPORTS_FILE`), which the camera
     /// does not install, or 0 without one.
     pub imports: usize,
+    /// The number of recipes of the recipe library, which a package can hold
+    /// at `RECIPES_PACKAGE_PATH`.
+    pub recipes: usize,
     /// The number of package entries, the runtime included.
     pub entries: usize,
 }
+
+/// The path of a recipe library (`grkit_core::recipes`) in the data folder,
+/// which no package holds: the camera keeps its recipes in
+/// `GRKIT/RECIPES.TXT`, and a copy of a package must not replace them.
+pub const RECIPES_PATH: &str = "GRKIT/RECIPES.BIN";
+/// A package holds no file of the data folder, so a package with a recipe
+/// library holds it in the package folder. INSTALL reads it there and adds
+/// its new recipes to the recipe file (runtime/install_recipes.h).
+pub const RECIPES_PACKAGE_PATH: &str = crate::card::RECIPES_PACKAGE_FILE;
 
 /// Checks the package entries.
 pub fn validate_contents(contents: &Files) -> Result<Contents> {
@@ -578,11 +590,26 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     let mut listed = Vec::new();
     let mut language = None;
     let mut library = 0;
+    let mut recipe_count = 0;
     for (name, blob) in contents
         .iter()
         .filter(|(name, _)| !mandatory.contains(*name))
     {
-        if is_effect_path(name) {
+        ensure!(
+            !name.starts_with(&format!("SD_ROOT/{}/", crate::card::DATA_FOLDER_PATH)),
+            "A package holds no file of the data folder: {name}"
+        );
+        if *name == format!("SD_ROOT/{RECIPES_PACKAGE_PATH}") {
+            let library = recipes::decode(blob).context("Read the recipe library")?;
+            ensure!(
+                library.iter().all(|recipe| camera
+                    .targets()
+                    .iter()
+                    .all(|target| target.starts_with(recipe.family.native().key()))),
+                "The recipe library has a recipe of another camera"
+            );
+            recipe_count = library.len();
+        } else if is_effect_path(name) {
             let id = effects::decode(blob)?.0.id;
             ensure!(
                 name.rsplit('/').next() == Some(effects::filename(&id)?.as_str()),
@@ -674,6 +701,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         modules: module_ids.into_iter().collect(),
         language: language.context("Package has no installation guide")?,
         imports: library,
+        recipes: recipe_count,
         entries: contents.len(),
     })
 }
@@ -726,11 +754,15 @@ pub struct Package {
     pub contents: Contents,
 }
 
-/// The files of a package that the camera does not install.
+/// The optional library files of a package.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Extras<'a> {
-    /// The import library of the site (`card::IMPORTS_FILE`, `crate::imports`).
+    /// The import library of the site (`card::IMPORTS_FILE`, `crate::imports`), which the
+    /// camera does not read.
     pub imports: Option<&'a [u8]>,
+    /// The recipe library (`RECIPES_PACKAGE_PATH`, `crate::recipes`), which INSTALL merges
+    /// into the recipes of the camera.
+    pub recipes: Option<&'a [u8]>,
 }
 
 /// Builds the package ZIP for one camera from the runtime of each of its
@@ -787,6 +819,9 @@ pub fn assemble_with(
         format!("SD_ROOT/{PACKAGE_LIST}"),
         package_list(listed.iter()),
     );
+    if let Some(bytes) = extras.recipes {
+        contents.insert(format!("SD_ROOT/{RECIPES_PACKAGE_PATH}"), bytes.to_vec());
+    }
     check_guide(guide.pdf)?;
     contents.insert(guide.language.guide_path(), guide.pdf.to_vec());
     if let Some(bytes) = extras.imports {

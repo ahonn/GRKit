@@ -72,6 +72,10 @@ pub const PACKAGE_LIST: &str = concat!(package_folder!("/"), "/PACKAGE.TXT");
 /// effect into the effects library, `GRKIT/EFFECTS`, where a person adds or
 /// deletes effect files.
 pub const EFFECTS_FOLDER: &str = concat!(package_folder!("/"), "/EFFECTS");
+/// The recipe library of a package (`packaging::RECIPES_PACKAGE_PATH`).
+pub const RECIPES_PACKAGE_FILE: &str = concat!(package_folder!("/"), "/RECIPES.BIN");
+/// The data folder on the card, as a package path names it.
+pub const DATA_FOLDER_PATH: &str = data_folder!();
 /// The modules of a package (`grm`).
 pub const MODULES_FOLDER: &str = concat!(package_folder!("/"), "/MODULES");
 

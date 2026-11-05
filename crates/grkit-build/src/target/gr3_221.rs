@@ -158,6 +158,12 @@ const SITES: &[Site] = &[
     ("menu_settings_draw_4", 0x531b6ca0, "0dc0a0e1"),
     ("menu_settings_apply_4", 0x531b8630, "0dc0a0e1"),
     ("menu_settings_current_4", 0x531b9e14, "0dc0a0e1"),
+    // SoftwareKeyboardController: the entry of its text length method, then
+    // the tail calls of its copyright text load and store to the settings
+    // getter (0x53248bb4) and setter (0x5326f39c).
+    ("menu_keyboard_length", 0x531dbfa4, "0dc0a0e1"),
+    ("menu_keyboard_load", 0x531dcb78, "0db001ea"),
+    ("menu_keyboard_store", 0x531dcda8, "7b4902ea"),
     ("framing_update", 0x53177984, "0dc0a0e1"),
     ("framing_exit", 0x53177f4c, "0dc0a0e1"),
     ("framing_destroy", 0x53171cbc, "0dc0a0e1"),
