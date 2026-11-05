@@ -30,7 +30,10 @@ fn synthetic_probe_module_builds() -> Result<()> {
     // The descriptor: its size, the ABI, then one registration of a layer.
     let word =
         |offset: u32| u32::from_le_bytes(module.code[offset as usize..][..4].try_into().unwrap());
-    assert_eq!(word(module.descriptor), grkit_core::grm::DESCRIPTOR_FLAGS_SIZE);
+    assert_eq!(
+        word(module.descriptor),
+        grkit_core::grm::DESCRIPTOR_FLAGS_SIZE
+    );
     assert_eq!(
         word(module.descriptor + 4),
         grkit_core::grm::ABI_MAJOR << 16 | grkit_core::grm::ABI_MINOR
