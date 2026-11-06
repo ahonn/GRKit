@@ -3,12 +3,13 @@
    this file in place of the module's test.c: the module sources, their
    generated descriptor, and the SDK host harness.
 
-   landing-render IN.rgb WIDTH HEIGHT OUT.rgb A B [SCENE_EV]
+   landing-render IN.rgb WIDTH HEIGHT OUT.rgb A B [SCENE_EV [COLOR]]
    IN and OUT hold 8-bit RGB pixels, row by row.
    Date (RENDER_DATE): A = STYLE, B = LOOK. The time comes from RENDER_TIME,
    "YYYY M D H MM".
    Glow: A = Bloom, B = Halation, each 0 Off or 1 to 3 Weak to Strong.
-   SCENE_EV is the scene EV at ISO 100 of the shot. */
+   SCENE_EV is the scene EV at ISO 100 of the shot, and COLOR the Halation
+   color: 0 Red, 1 Orange (the default), 2 Gold, 3 White. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,8 +83,8 @@ static u8 *screennail(const u8 *rgb, u32 w, u32 h)
 
 int main(int argc, char **argv)
 {
-    if (argc != 7 && argc != 8) {
-        fprintf(stderr, "usage: landing-render IN.rgb WIDTH HEIGHT OUT.rgb A B [SCENE_EV]\n");
+    if (argc < 7 || argc > 9) {
+        fprintf(stderr, "usage: landing-render IN.rgb WIDTH HEIGHT OUT.rgb A B [SCENE_EV [COLOR]]\n");
         return 2;
     }
     u32 w = (u32)atoi(argv[2]), h = (u32)atoi(argv[3]), a = (u32)atoi(argv[5]), b = (u32)atoi(argv[6]);
@@ -126,11 +127,10 @@ int main(int argc, char **argv)
     setting_set(SETTING_POSITION, 0);
     date_apply(&set, a);
 #else
-    setting_set(SETTING_BLOOM_ENABLED, a != 0);
-    setting_set(SETTING_BLOOM_STRENGTH, a ? a - 1 : 1);
-    setting_set(SETTING_HAL_ENABLED, b != 0);
-    setting_set(SETTING_HAL_STRENGTH, b ? b - 1 : 1);
-    if (argc == 8) {
+    setting_set(SETTING_BLOOM, a);
+    setting_set(SETTING_HALATION, b);
+    setting_set(SETTING_HALATION_COLOR, argc >= 9 ? (u32)atoi(argv[8]) : 1);
+    if (argc >= 8) {
         grkit_test_shot.known = GRKIT_SHOT_EXPOSURE;
         grkit_test_shot.scene_ev = (s32)(atof(argv[7]) * 256);
     }
