@@ -1,6 +1,7 @@
 /* Host behavior tests for Glow (grkit module test). */
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "grkit_module.h"
 
@@ -1015,6 +1016,66 @@ static void test_sparse_glow_rows(void)
     grkit_test_white[0] = grkit_test_white[1] = grkit_test_white[2] = 255;
 }
 
+/* A smooth bright screen in a dark room under a film white below 255.
+   Halation starts inside Bloom's glow there, and Bloom must keep a smooth
+   glow across that start: the change between neighbors steps at most one
+   level more than with Bloom alone, and Halation does not take Bloom's
+   light away. */
+#define SKY_LEFT 180U
+#define SKY_TOP 84U
+#define SKY_RIGHT 520U
+#define SKY_BOTTOM 312U
+static u32 sky_change(PictureSet *set, u32 bloom, u32 halation, u8 *jump)
+{
+    static u8 before[W * H * 2];
+    fill(38, 128, 128);
+    for (u32 y = SKY_TOP; y < SKY_BOTTOM; ++y)
+        for (u32 x = SKY_LEFT; x < SKY_RIGHT; x += 2) {
+            int cb = 0, cr = 0;
+            for (u32 k = 0; k < 2; ++k) {
+                /* Clouds of two slow waves, so that the level lines of the
+                   light are not along the fine grid, darker to the bottom. */
+                u32 tx = (x + k) % 128 < 64 ? (x + k) % 128 : 128 - (x + k) % 128, ty = y % 96 < 48 ? y % 96 : 96 - y % 96;
+                int c = (int)(2 * tx + 2 * ty + 24), v = 256 - (int)((y - SKY_TOP) * 64 / (SKY_BOTTOM - SKY_TOP));
+                int r = (110 + c * 100 / 255) * v >> 8, g = (175 + c * 70 / 255) * v >> 8, b = (222 + c * 33 / 255) * v >> 8;
+                *grkit_test_bytes(GRKIT_TEST_PLANES + y * W + x + k) = (u8)((77 * r + 150 * g + 29 * b + 128) >> 8);
+                cb += -43 * r - 85 * g + 128 * b;
+                cr += 128 * r - 107 * g - 21 * b;
+            }
+            *grkit_test_bytes(GRKIT_TEST_PLANES + W * H + y * W + x) = (u8)(128 + ((cb / 2 + 128) >> 8));
+            *grkit_test_bytes(GRKIT_TEST_PLANES + W * H + y * W + x + 1) = (u8)(128 + ((cr / 2 + 128) >> 8));
+        }
+    for (u32 i = 0; i < sizeof before; ++i) before[i] = *grkit_test_bytes(GRKIT_TEST_PLANES + i);
+    set_pair(bloom, halation);
+    glow_apply(set, 1);
+    u32 sum = 0;
+    *jump = 0;
+    for (u32 y = SKY_TOP + 8; y + 9 < SKY_BOTTOM; ++y)
+        for (u32 x = SKY_LEFT + 8; x + 9 < SKY_RIGHT; ++x) {
+            int d = luma(x, y) - before[y * W + x];
+            int right = luma(x + 1, y) - before[y * W + x + 1], down = luma(x, y + 1) - before[(y + 1) * W + x];
+            u32 j = (u32)(abs(d - right) > abs(d - down) ? abs(d - right) : abs(d - down));
+            if (j > *jump) *jump = (u8)j;
+            sum += (u32)d;
+        }
+    return sum;
+}
+
+static void test_combined_film_white(PictureSet *set)
+{
+    grkit_test_shot.known = 0;
+    grkit_test_white[0] = 212; grkit_test_white[1] = 216; grkit_test_white[2] = 206;
+    for (u32 strength = 1; strength <= 3; ++strength) {
+        u8 bloom_jump, both_jump;
+        u32 bloom = sky_change(set, strength, 0, &bloom_jump);
+        u32 both = sky_change(set, strength, strength, &both_jump);
+        assert(bloom > 0 && bloom_jump <= 2);
+        assert(both_jump <= bloom_jump + 1);
+        assert(both * 10 >= bloom * 9);
+    }
+    grkit_test_white[0] = grkit_test_white[1] = grkit_test_white[2] = 255;
+}
+
 static void assert_setting_default(const char *key, u32 values, u32 initial)
 {
     for (u32 i = 0; i < grkit_module.setting_count; ++i)
@@ -1126,6 +1187,7 @@ int main(void)
     test_combined_scratch();
     test_empty_halation();
     test_sparse_glow_rows();
+    test_combined_film_white(&set);
     set_strength(1);
 
     /* A dark picture has too little light: no change. */

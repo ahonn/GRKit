@@ -301,7 +301,10 @@ static inline u32 encode_glow(u32 v) { return v < 1024 ? encode_low[v] : encode_
    - protect: 0, or 1 to keep a colored glow off saturated cores: the
      headroom of a pixel is measured against the white of the effect, and
      a shared chroma pair of a half-height plane takes the brighter core of
-     its two rows and is not tinted across the bottom crop edge.
+     its two rows and is not tinted across the bottom crop edge. With
+     Bloom, a place measures against a white between 255 and that white by
+     the part of its light from Halation, so the headroom of Bloom has no
+     edge where Halation starts.
    Each pixel takes the glow scaled by its maximum-channel headroom.
    Both chroma components share the mean headroom of their pixel pair. */
 typedef struct {
@@ -1161,7 +1164,7 @@ static void fine_feed(Fine *f, u32 y)
 /* For one fine row: Y, Cb, Cr changes (times 128) at each fine column. */
 typedef struct {
     s16 v[3][MAX_GRID];
-    u8 protect[MAX_GRID]; /* Halation contributes to this sample. */
+    u8 protect[MAX_GRID]; /* the part (of 255) of the light of this sample from a Look.protect stream */
     u32 zero; /* all changes are 0 */
 } GlowRow;
 
@@ -1235,9 +1238,10 @@ static u32 light_row(Fine *f, u32 t)
 }
 
 /* Both streams read the same unmodified source rows before the composite
-   writes them. Add their linear light, then encode once. Chroma gain is
-   weighted by each stream's light. Core protection belongs to Halation
-   only where it contributes; an empty Halation leaves Bloom unchanged. */
+   writes them. Add their linear light, then encode once. Chroma gain and
+   core protection are weighted by each stream's light: a boolean
+   protection would cut Bloom's headroom in steps of fine pixels where
+   Halation starts. An empty Halation leaves Bloom unchanged. */
 static u32 glow_row(Fine *f, Fine *other, u32 t, GlowRow *out)
 {
     u32 first = light_row(f, t), second = other ? light_row(other, t) : 0;
@@ -1262,7 +1266,9 @@ static u32 glow_row(Fine *f, Fine *other, u32 t, GlowRow *out)
             f->rgb[k][x] = (u8)(e < FAINT ? 0 : e);
             any |= f->rgb[k][x];
         }
-        out->protect[x] = (u8)(other ? extra != 0 : f->look->protect && energy != 0);
+        /* Halation's part of the light, at least 1 where it has any. */
+        if (other) out->protect[x] = (u8)(extra ? 1 + divide(extra * 254, energy + extra) : 0);
+        else out->protect[x] = (u8)(f->look->protect && energy ? 255 : 0);
         /* Save the local chroma gain until glow_ycc has converted the row. */
         f->light[0][x] = (u16)(extra ? divide(energy * f->look->vivid + extra * other->look->vivid, energy + extra) : f->look->vivid);
     }
@@ -1286,7 +1292,20 @@ static u32 glow_row(Fine *f, Fine *other, u32 t, GlowRow *out)
 /* Derive core protection before either output plane changes. With
    Look.protect the headroom uses the same film white as source detection:
    a print white below 255 must not leave room to tint an already
-   saturated core. */
+   saturated core. A pixel with a partial protection (Bloom and Halation)
+   takes its brightest channel between the two whites by that part. */
+INLINE u32 protect_of(const u8 *protect, u32 x)
+{
+    u32 a = protect[x >> 2], b = protect[(x >> 2) + 1];
+    return a > b ? a : b;
+}
+
+INLINE u8 protected_top(u32 top, u32 white_top, u32 part)
+{
+    /* part 255 takes white_top exactly; white_top >= top. */
+    return (u8)(top + (((white_top - top) * (part + (part >> 7)) + 128) >> 8));
+}
+
 static void composite_top(const u32 *luma, const u8 *chroma, u8 *top, u32 words, const Fine *f, const u8 *protect)
 {
     const u8 *y = (const u8 *)(const void *)luma;
@@ -1297,19 +1316,20 @@ static void composite_top(const u32 *luma, const u8 *chroma, u8 *top, u32 words,
         glow_rgb(y, chroma, &out, words * 4);
         if (normalize)
             for (x = 0; x < words * 4; ++x) {
-                if (!(protect[x >> 2] | protect[(x >> 2) + 1])) continue;
+                u32 part = protect_of(protect, x);
+                if (!part) continue;
                 u32 r = f->norm[0][rgb[0][x]], g = f->norm[1][rgb[1][x]], b = f->norm[2][rgb[2][x]];
                 u32 v = r > g ? r : g;
-                top[x] = (u8)(b > v ? b : v);
+                top[x] = protected_top(top[x], b > v ? b : v, part);
             }
         return;
     }
     for (x = 0; x < words * 4; ++x) {
-        u32 v = y[x], rgb[3] = {v, v, v};
-        if (normalize && (protect[x >> 2] | protect[(x >> 2) + 1])) WHITE_RGB(f, rgb);
-        v = rgb[0] > rgb[1] ? rgb[0] : rgb[1];
-        if (rgb[2] > v) v = rgb[2];
-        top[x] = (u8)v;
+        u32 v = y[x], rgb[3] = {v, v, v}, part = normalize ? protect_of(protect, x) : 0;
+        if (part) WHITE_RGB(f, rgb);
+        u32 w = rgb[0] > rgb[1] ? rgb[0] : rgb[1];
+        if (rgb[2] > w) w = rgb[2];
+        top[x] = part ? protected_top(v, w, part) : (u8)w;
     }
 }
 
@@ -1355,7 +1375,12 @@ static void span_values(Lane *rw, const u32 *glow, u32 fw, int g, const GlowRow 
         /* The preceding word interpolates toward value[k], even when its
            own sample is zero. Keep its block to avoid a 32-pixel cutoff. */
         for (block = (k ? k - 1 : 0) / BLOCK_WORDS; block <= (end - 1) / BLOCK_WORDS; ++block) active[block] = 1;
-        for (c = k; c < end; ++c) rw->protect[c] = up->protect[i] | down->protect[i] | up->protect[j] | down->protect[j];
+        {
+            u8 part = up->protect[i] > down->protect[i] ? up->protect[i] : down->protect[i];
+            if (up->protect[j] > part) part = up->protect[j];
+            if (down->protect[j] > part) part = down->protect[j];
+            for (c = k; c < end; ++c) rw->protect[c] = part;
+        }
         df = n > 1 ? (u32)(rw->fraction[k + 1] - f0) : 0;
         for (ch = 0; ch < 3; ++ch) {
             int rows = (int)(ch ? chroma_step : step_y);
@@ -1553,7 +1578,9 @@ static u32 grid_row(Fine *f, Fine *other, Rows *rw, u32 r, GlowRow *out)
     out->zero = 0;
     for (x = 0; x < n; ++x) {
         u32 j = x + 1 < n ? x + 1 : x;
-        u8 protect = fa->protect[x] | fb->protect[x] | fa->protect[j] | fb->protect[j];
+        u8 protect = fa->protect[x] > fb->protect[x] ? fa->protect[x] : fb->protect[x];
+        if (fa->protect[j] > protect) protect = fa->protect[j];
+        if (fb->protect[j] > protect) protect = fb->protect[j];
         out->protect[2 * x] = out->protect[2 * x + 1] = protect;
     }
     for (k = 0; k < 3; ++k) {
