@@ -822,3 +822,43 @@ pub fn hald_image(level: usize) -> Result<Vec<u8>, JsError> {
 fn js_error(error: anyhow::Error) -> JsError {
     JsError::new(&format!("{error:#}"))
 }
+
+/// A fast-boot update file (`grkit_firmware`), which the page writes under the name of
+/// the official file.
+#[wasm_bindgen]
+pub struct FastbootFirmware(grkit_firmware::Patched);
+
+#[wasm_bindgen]
+impl FastbootFirmware {
+    /// The release, such as `gr3-2.10`.
+    #[wasm_bindgen(getter)]
+    pub fn release(&self) -> String {
+        self.0.release.name()
+    }
+
+    /// The name of the update file, such as `fwdc239b.bin`.
+    #[wasm_bindgen(getter, js_name = fileName)]
+    pub fn file_name(&self) -> String {
+        self.0.release.update.name.clone().unwrap_or_default()
+    }
+
+    /// The SHA-256 of the new file.
+    #[wasm_bindgen(getter)]
+    pub fn sha256(&self) -> String {
+        self.0.release.result.sha256.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn bytes(&self) -> Vec<u8> {
+        self.0.bytes.clone()
+    }
+}
+
+/// Returns the fast-boot update file of an official update file, or of the official ZIP that
+/// holds it. It fails for any file that is not the official file of a supported release.
+#[wasm_bindgen(js_name = patchFirmware)]
+pub fn patch_firmware(bytes: &[u8]) -> Result<FastbootFirmware, JsError> {
+    grkit_firmware::patch(bytes)
+        .map(FastbootFirmware)
+        .map_err(js_error)
+}

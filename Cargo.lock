@@ -261,6 +261,7 @@ dependencies = [
  "clap",
  "grkit-build",
  "grkit-core",
+ "grkit-firmware",
  "serde_json",
  "tempfile",
 ]
@@ -283,11 +284,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "grkit-firmware"
+version = "1.4.4"
+dependencies = [
+ "anyhow",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "zip",
+]
+
+[[package]]
 name = "grkit-wasm"
 version = "1.4.4"
 dependencies = [
  "anyhow",
  "grkit-core",
+ "grkit-firmware",
  "serde_json",
  "wasm-bindgen",
 ]
