@@ -2,6 +2,7 @@
 pub mod arm;
 pub mod components;
 pub mod dump;
+pub mod fastboot;
 pub mod firmware;
 pub mod loader;
 pub mod module;
@@ -14,7 +15,7 @@ use anyhow::{ensure, Context, Result};
 use firmware::sha256;
 pub use firmware::verify_firmware;
 use grkit_core::{
-    runtime::{icon_stride, runtime_files_for},
+    runtime::{icon_stride, runtime_files_with},
     Files,
 };
 use serde_json::{json, Value};
@@ -423,7 +424,8 @@ fn build_image(
             path(&object)?,
         ],
     )?;
-    let files = runtime_files_for(&fs::read(binary)?, icon_stride(image.target.name)?);
+    let fast = fastboot::files(tools, &objects, &runtime, image.target.name)?;
+    let files = runtime_files_with(&fs::read(binary)?, &fast, icon_stride(image.target.name)?);
     ensure!(
         !files
             .values()

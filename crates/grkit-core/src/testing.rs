@@ -18,6 +18,45 @@ pub fn runtime_files(installer: &[u8], target: &str) -> Files {
     runtime::runtime_files_for(installer, runtime::icon_stride(target).unwrap())
 }
 
+/// A stand-in fast-boot file of `release`, which `runtime::check_fast_file`
+/// accepts: a head that names the file's path, then the marker of its
+/// runtime build.
+pub fn fast_file(release: &runtime::FastRelease) -> Vec<u8> {
+    let mut bytes = vec![0; runtime::FAST_HEAD_SIZE];
+    let path = release.rtos_path();
+    bytes[..path.len()].copy_from_slice(path.as_bytes());
+    bytes.extend_from_slice(
+        format!("{}{}\0", packaging::TARGET_MARKER, release.target()).as_bytes(),
+    );
+    bytes
+}
+
+/// The stand-in fast-boot file of each release of `target`, by its path.
+pub fn fast_files(target: &str) -> Files {
+    crate::camera::CAMERAS
+        .into_iter()
+        .flat_map(|camera| {
+            camera
+                .versions()
+                .into_iter()
+                .filter_map(move |firmware| runtime::FastRelease::new(camera, firmware).ok())
+        })
+        .filter(|release| release.target() == target)
+        .map(|release| (release.path(), fast_file(&release)))
+        .collect()
+}
+
+/// The verified runtime of `target` with `marked_installer(target)` and
+/// `fast_files(target)`, as a build with fast-boot files has them.
+pub fn fast_runtime(target: &str) -> packaging::VerifiedRuntime {
+    let files = runtime::runtime_files_with(
+        &marked_installer(target),
+        &fast_files(target),
+        runtime::icon_stride(target).unwrap(),
+    );
+    packaging::load_runtime(&manifest(target, &files), &files).unwrap()
+}
+
 /// The `build.json` bytes of a runtime build of `target` with the `sd/` files `files`.
 pub fn manifest(target: &str, files: &Files) -> Vec<u8> {
     packaging::json_bytes(&Value::Object(packaging::manifest(target, files))).unwrap()
