@@ -1,9 +1,20 @@
-mpause 2000
-sendln 'lcmd_resp on'
 filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
 filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
+intdim ba 256
+fast = 0
+ba[0] = 0
+ba[1] = 0
+sendln 'SYS_buildinfo 0'
+if ba[0] <> 1129202771 goto probed
+if ba[1] <> 1 goto probed
+release = ba[2] * 1000 + ba[3]
+if release <> 636111 goto probe1
+filesearch 'C:\SCRIPT\GRKIT\F636111.BIN'
+if result <> 0 fast = 636111
+:probe1
+:probed
 attempts = 0
 failure = 60
 call write_error
@@ -11,6 +22,14 @@ filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
 if result != 0 goto reject
 filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
 if result != 0 goto reject
+if fast = 0 goto linux
+if fast = 636111 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F636111.BIN 0 call'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto plan_ready
+fast = 0
+:linux
+mpause 2000
+sendln 'lcmd_resp on'
 :scan
 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/SCAN.SH'
 filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
@@ -79,19 +98,23 @@ intdim modulecode modulewords
 :modules_ready
 intdim tailarea 48815
 attempts = 0
+waits = 60
+if fast <> 0 waits = 300
 failure = 62
 call write_error
 :install
-sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
+if fast <> 0 sendln 'SYS_memovr C:\SCRIPT\GRKIT\FRUN.BIN 0 call'
+if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
 filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
 if result != 0 goto installed
 call read_error
 if errorstatus = 62 goto install_wait
 if errorstatus != 0 goto reject
 :install_wait
-mpause 500
+mpause 100
+if fast = 0 mpause 400
 attempts = attempts + 1
-if attempts > 60 mpause 9500
+if attempts > waits mpause 9500
 goto install
 :installed
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
