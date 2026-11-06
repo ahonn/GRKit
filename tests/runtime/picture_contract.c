@@ -1614,6 +1614,41 @@ int main(void)
         picture_record_parameters(0x1234, SHOT + 4);
         assert(ifd_writes == 0);
     }
+    /* The stage gate of the grain stage reads the shot settings before the
+       parameter build of the shot. A GRKit effect gets the rule of Standard
+       with the Shading (7) and Clarity (8) of its record. Native processing
+       keeps the native result. */
+    {
+        reset();
+        header[GRKIT_HOST_ACTIVE / 4] = record(1);
+        /* Without a module that uses CORE.TONE, the native result stays. */
+        assert(picture_gate_flag(0) == 0 && picture_gate_flag(1) == 1);
+        header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
+        /* Neutral Shading and Clarity: off, whatever the native type gives. */
+        assert(picture_gate_flag(1) == 0);
+        BYTE(record(1), GRKIT_RECORD_PARAMETERS + 7) = 4;
+        assert(picture_gate_flag(0) == 1);
+        BYTE(record(1), GRKIT_RECORD_PARAMETERS + 7) = 0;
+        BYTE(record(1), GRKIT_RECORD_PARAMETERS + 8) = 8;
+        assert(picture_gate_flag(0) == 1);
+        /* A Fn default of +1 and a change of -1 give the neutral value. */
+        BYTE(record(1), GRKIT_RECORD_FN_DEFAULTS + 8) = 1;
+        assert(picture_gate_flag(1) == 0);
+        BYTE(record(1), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;
+        BYTE(record(1), GRKIT_RECORD_PARAMETERS + 8) = 0;
+        /* Film Look Off: the native result. */
+        header[GRKIT_HOST_ACTIVE / 4] = 0;
+        assert(picture_gate_flag(1) == 1 && picture_gate_flag(0) == 0);
+        /* A RAW development takes its own effect, and 1 is native processing. */
+        header[GRKIT_HOST_ACTIVE / 4] = record(1);
+        BYTE(record(2), GRKIT_RECORD_PARAMETERS + 7) = 4;
+        developing = 1;
+        header[GRKIT_HOST_DEVELOP / 4] = record(2);
+        assert(picture_gate_flag(0) == 1);
+        header[GRKIT_HOST_DEVELOP / 4] = 1;
+        assert(picture_gate_flag(1) == 1 && picture_gate_flag(0) == 0);
+        developing = 0;
+    }
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);
     return 0;

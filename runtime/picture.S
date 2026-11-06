@@ -120,9 +120,11 @@ dirty_resume:
    recorded pictures only. SetEffectParameter reads the grain settings from the
    shot settings (r4 on GR IV, r5 on GR III); these hooks replace each load with
    the Grain level, and Off keeps the native value. The stage gate ignores grain
-   for Standard, so the gate wrapper turns the stage on for any level. Extra
-   Strong (level 4) takes the native strong grain, and the amplitude hooks
-   scale its tables by GRAIN_EXTRA / 256. */
+   for Standard, so the gate wrapper turns the stage on for any level. The gate
+   runs before the parameter build of the shot, so for a GRKit effect it reads
+   the Shading and Clarity of the native type; the wrapper decides from the
+   record instead (picture_gate_flag). Extra Strong (level 4) takes the native
+   strong grain, and the amplitude hooks scale its tables by GRAIN_EXTRA / 256. */
 #ifndef GRAIN_EXTRA
 #define GRAIN_EXTRA 384
 #endif
@@ -149,6 +151,11 @@ grain_gate:
     push {r0, lr}
     ldr r12, =HOOK_GRAIN_GATE_TARGET
     blx r12
+    ldr r0, [sp]
+    ldrb r0, [r0, #GRAIN_GATE_FLAG]
+    bl picture_gate_flag
+    ldr r1, [sp]
+    strb r0, [r1, #GRAIN_GATE_FLAG]
     bl grain_level
     pop {r0, lr}
     movls r3, #1

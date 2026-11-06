@@ -28,6 +28,14 @@
    to 261, table 0x53d2b6f4). The shot settings hold the type at the same
    offset as the settings payload. */
 #define NATIVE_MONOCHROME_TYPES 0x0001e000U
+/* The digital filter values of the shot settings, which the grain stage of
+   recorded pictures reads: Shading and Clarity (0 to 8, 4 is neutral),
+   Particle (0 is no grain), and the HDR Tone strength (0 is off). The native
+   parameter build writes them for its Image Control type. */
+#define SETTINGS_SHADING 0x793
+#define SETTINGS_CLARITY 0x794
+#define SETTINGS_GRAIN 0x795
+#define SETTINGS_HDR 0x796
 
 /* Allocation and the vector helpers of View children. */
 #define FW_ALLOCATE FIRMWARE(0x536af2a8)

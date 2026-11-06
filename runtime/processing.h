@@ -10,6 +10,9 @@
 #if !defined(PROCESSING_CONTEXT) || !defined(PROCESSING_OBJECT)
 #error "Define the registers of the parameter build before processing.h"
 #endif
+#if !defined(SETTINGS_SHADING) || !defined(SETTINGS_CLARITY) || !defined(SETTINGS_GRAIN) || !defined(SETTINGS_HDR)
+#error "The build header defines the digital filter values of the shot settings"
+#endif
 
 // Return Z=1 only for an owned record pointer in r0. Preserve all registers.
 // The live view asks several times a frame. The active record, a record
@@ -243,6 +246,18 @@ parameters_store:
     movne r2, #4
     strhne r2, [r1, #-0x20]
 #endif
+    // The grain stage of recorded pictures reads Shading, Clarity, grain, and
+    // HDR Tone from the shot settings r7, which the native build writes for
+    // the Image Control type. Write them as its Standard branch does: the
+    // Shading (+0x1f4) and Clarity (+0x1f6) of the record, no grain (CORE.GRAIN
+    // gives its own), and no HDR Tone. Else the native type's values apply.
+    ldrh r2, [r1, #-0xc]
+    ldrh r3, [r1, #-0xa]
+    strb r2, [r7, #SETTINGS_SHADING]
+    strb r3, [r7, #SETTINGS_CLARITY]
+    mov r2, #0
+    strb r2, [r7, #SETTINGS_GRAIN]
+    strb r2, [r7, #SETTINGS_HDR]
 #ifdef PROCESSING_KEPT_BYTE
     pop {r2}
     strb r2, [PROCESSING_OBJECT, #PROCESSING_KEPT_BYTE]

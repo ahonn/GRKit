@@ -533,6 +533,22 @@ void picture_record_parameters(u32 entry,u32 shot) {
     for(i=0;i<sizeof(elements);++i)
         PICTURE_IFD_SET_SHORT(entry,elements[i],(record_parameter(record,i)-4)&0xffffU);
 }
+/* For grain_gate (runtime/picture.S): the stage flag of the grain stage of a
+   recorded picture. The stage gate runs before the parameter build of the
+   shot, so it reads the Shading and Clarity of the native Image Control type.
+   A GRKit effect gets the rule of the native Standard type with the values of
+   its record: the stage runs when Shading or Clarity (adjustments 7 and 8) is
+   not neutral. The record is the one that the build takes (module_parameters
+   in runtime/processing.h): the effect of a RAW development, or the
+   committed effect. Native processing keeps `flag`, the native result. */
+u32 picture_gate_flag(u32 flag) {
+    volatile u32 *h=framing_header();
+    u32 record;
+    if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return flag;
+    record=PICTURE_DEVELOPING() ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
+    if(!owned(h,record)) return flag;
+    return record_parameter(record,7)!=4 || record_parameter(record,8)!=4;
+}
 /* Whether the native Image Control type of a shot makes a monochrome picture,
    such as Monotone or a type of GR IV Monochrome. */
 static u32 native_monochrome(u32 shot) {

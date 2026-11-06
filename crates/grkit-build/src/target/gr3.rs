@@ -58,7 +58,8 @@ const ICONS: &[HookSpec] = &[
 /// Extra Strong.
 const GRAIN: &[HookSpec] = &[
     bl("grain_particle", Framing, PipelineGrain),
-    bl("grain_gate", Framing, PipelineGrain),
+    // Film Look needs the gate for the Shading and Clarity of its effects.
+    bl_shared("grain_gate", Framing, PipelineGrain, Tuning),
     bl("grain_fill", Framing, PipelineGrainSize),
     b("grain_amplitude", Framing, PipelineGrain),
 ];

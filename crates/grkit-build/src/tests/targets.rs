@@ -144,6 +144,9 @@ fn framing_without_film_look_still_records_shot_parameters() {
         {
             let expected = if DEVELOP.contains(&other.symbol) {
                 Point::Tuning.bit() | Point::CaptureAspect.bit()
+            } else if other.symbol == "grain_gate" {
+                // Film Look gives the gate the Shading and Clarity of its effect.
+                Point::PipelineGrain.bit() | Point::Tuning.bit()
             } else {
                 other.point.bit()
             };

@@ -77,6 +77,7 @@ const GRAIN: &[HookSpec] = &[
     bl("grain_enable", Framing, PipelineGrain),
     bl("grain_strength", Framing, PipelineGrain),
     bl("grain_size", Framing, PipelineGrainSize),
-    bl("grain_gate", Framing, PipelineGrain),
+    // Film Look needs the gate for the Shading and Clarity of its effects.
+    bl_shared("grain_gate", Framing, PipelineGrain, Tuning),
     bl("grain_amplitude", Framing, PipelineGrain),
 ];

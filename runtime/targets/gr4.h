@@ -19,6 +19,14 @@
    native Image Control type at +0x79c. Standard is type 11. The shot settings
    hold the type at the same offset as the settings payload. */
 #define SETTINGS_IC_TYPE 0x79c
+/* The digital filter values of the shot settings, which the grain stage of
+   recorded pictures reads: Shading and Clarity (0 to 8, 4 is neutral), grain
+   on (0 is off), and the HDR Tone strength (0 is off). The native parameter
+   build writes them for its Image Control type. */
+#define SETTINGS_SHADING 0x7b3
+#define SETTINGS_CLARITY 0x7b4
+#define SETTINGS_GRAIN 0x7b5
+#define SETTINGS_HDR 0x7b8
 /* The ImageTone code of the first look of GR IV Monochrome. Its looks record
    0x8100 and up, in the order Standard, Solid, Soft, Hi-Contrast, Grainy,
    HDR Tone, and Solarized Effect (types 25, 29, 26, 27, 28, 30, and 32). */
