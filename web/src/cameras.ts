@@ -10,6 +10,8 @@ export interface Camera {
   /** The camera of the package (`camera.rs`): it selects the ModeSet file and the guide. */
   id: keyof typeof CAMERA_MODULES;
   name: string;
+  /** True when the fast-boot firmware has releases for the camera (`fastboot/releases`). */
+  fastboot?: boolean;
   /**
    * The supported firmware versions (`camera.rs` releases), the runtime builds for them, and the
    * ModeSet file that enables SD scripts (`support`). A camera without it is planned and cannot be
@@ -52,6 +54,7 @@ export const CAMERAS: readonly Camera[] = [
   {
     key: 'gr3',
     id: 'gr3',
+    fastboot: true,
     name: 'GR III / GR III HDF',
     // 2.20 changes only the end screen; the installer relocates the 2.10 runtime to it.
     support: { ...releases('gr3'), modules: CAMERA_MODULES.gr3 },
@@ -60,6 +63,7 @@ export const CAMERAS: readonly Camera[] = [
   {
     key: 'gr3x',
     id: 'gr3x',
+    fastboot: true,
     name: 'GR IIIx / GR IIIx HDF',
     support: { ...releases('gr3x'), modules: CAMERA_MODULES.gr3x },
   },
@@ -67,6 +71,7 @@ export const CAMERAS: readonly Camera[] = [
   {
     key: 'gr4',
     id: 'gr4',
+    fastboot: true,
     name: 'GR IV / GR IV HDF',
     support: { ...releases('gr4'), modules: CAMERA_MODULES.gr4 },
   },

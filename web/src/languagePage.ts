@@ -20,10 +20,27 @@ export function isLanguage(value: unknown): value is Language {
   return CODES.some((code) => code === value);
 }
 
-/** The language of the page at `pathname`. Any other path is English. */
+/** The page of the fast-boot firmware under each language page. */
+const FASTBOOT_PAGE = 'fastboot/';
+
+/** The path of `pathname` with one trailing slash, in lower case. */
+const normalized = (pathname: string) => pathname.toLowerCase().replace(/\/?$/, '/');
+
+/** Whether `pathname` is the fast-boot firmware page of a language. */
+export function isFastbootPath(pathname: string): boolean {
+  const path = normalized(pathname);
+  return CODES.some((code) => path === `${LANGUAGE_PATHS[code]}${FASTBOOT_PAGE}`);
+}
+
+/** The address of the fast-boot firmware page in `language`. */
+export function fastbootPath(language: Language): string {
+  return `${LANGUAGE_PATHS[language]}${FASTBOOT_PAGE}`;
+}
+
+/** The language of the page at `pathname`, a language page or its fast-boot page. Any other path is English. */
 export function pathLanguage(pathname: string): Language {
-  const path = pathname.toLowerCase().replace(/\/?$/, '/');
-  return CODES.find((code) => LANGUAGE_PATHS[code] === path) ?? 'en';
+  const path = normalized(pathname);
+  return CODES.find((code) => LANGUAGE_PATHS[code] === path || fastbootPath(code) === path) ?? 'en';
 }
 
 /** Countries where Traditional Chinese is the usual script. */

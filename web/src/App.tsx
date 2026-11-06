@@ -48,8 +48,11 @@ import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { PackageOpen, type PackageStatus } from './components/PackageOpen';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Landing } from './components/Landing';
+import { FastbootHint } from './components/FastbootHint';
 import { RichText } from './components/RichText';
 import { TermsNote } from './components/TermsNote';
+import { guideUrl, REPOSITORY } from './links';
+import { fastbootPath } from './languagePage';
 import { loadFonts } from './fonts';
 import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails, type LibraryDetails } from './import/library';
 import { restoreImports } from './import/lut';
@@ -72,17 +75,12 @@ import { packageCard } from './packageCard';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
-const REPOSITORY = 'https://github.com/ahonn/grkit';
 /** The Tally form for problems, feature ideas, and questions. A plain link, so the page loads nothing from Tally. */
 const FEEDBACK_FORM = 'https://tally.so/r/Z9jRgB';
 const DONATE = 'https://buymeacoffee.com/yuexunjiang';
 /** The release notes of the GRKit version that the site packages, on the releases page. */
 const RELEASE_URL = `${REPOSITORY}/releases#release-v${__GRKIT_VERSION__}`;
 
-/** A guide in `resources/` in the page language, or in English. */
-function guideUrl(name: 'RECOVERY' | 'DUMP' | 'TERMS', language: Language): string {
-  return `${REPOSITORY}/blob/main/resources/${name}${language === 'en' ? '' : `.${language}`}.md`;
-}
 
 type Build =
   | { state: 'idle' }
@@ -615,6 +613,10 @@ export function App({
     }
   }
 
+  // The camera steps end with the wait after power-on: a camera with fast-boot releases points to
+  // the fast-boot firmware there.
+  const fastbootHint = camera.fastboot ? <FastbootHint text={t.fastbootHint} href={fastbootPath(language)} /> : null;
+
   const packageLinks = (
     <ul className="package-links">
       <li>
@@ -654,6 +656,7 @@ export function App({
               <a href="#effects-label">{t.effects}</a>
               <a href="#modules-label">{t.modules}</a>
               <a href="#faq-label">{t.faqTitle}</a>
+              <a href={fastbootPath(language)}>{t.fastbootLink}</a>
             </nav>
             <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
               <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
@@ -876,6 +879,7 @@ export function App({
                     message={applyMessage}
                     onApply={applyCard}
                     links={packageLinks}
+                    hint={fastbootHint}
                     termsUrl={guideUrl('TERMS', language)}
                     camera={camera.name}
                     firmware={support?.firmware ?? '—'}
@@ -959,6 +963,7 @@ export function App({
                       part === MODESET_TOKEN ? `\`${support?.modeset ?? ''}` : part,
                     )}
                   />
+                  {index === 3 && fastbootHint}
                 </li>
               ))}
             </ol>
@@ -1033,7 +1038,7 @@ export function App({
               <details key={item.q}>
                 <summary>{item.q}</summary>
                 <p>
-                  <RichText parts={item.a} />
+                  <RichText parts={item.a} link={fastbootPath(language)} />
                 </p>
               </details>
             ))}
@@ -1049,6 +1054,9 @@ export function App({
             </li>
             <li>
               <a href={guideUrl('DUMP', language)}>{t.firmwareDump}</a>
+            </li>
+            <li>
+              <a href={fastbootPath(language)}>{t.fastbootLink}</a>
             </li>
           </ul>
           <ul>
@@ -1153,6 +1161,7 @@ interface ChangesSectionProps {
   message: CardMessage;
   onApply: () => void;
   links: ReactNode;
+  hint?: ReactNode;
   termsUrl: string;
   camera: string;
   firmware: string;

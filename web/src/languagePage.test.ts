@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import edge from './edge';
-import { acceptedLanguages, cookieValue, pathLanguage, visitorLanguage, type Visitor } from './languagePage';
+import {
+  acceptedLanguages,
+  cookieValue,
+  fastbootPath,
+  isFastbootPath,
+  pathLanguage,
+  visitorLanguage,
+  type Visitor,
+} from './languagePage';
 
 const visitor = (fields: Partial<Visitor>): Visitor => ({ cookie: null, acceptLanguage: null, country: null, ...fields });
 
@@ -12,6 +20,17 @@ describe('pathLanguage', () => {
     expect(pathLanguage('/ja/')).toBe('ja');
     expect(pathLanguage('/ko')).toBe('ko');
     expect(pathLanguage('/faq')).toBe('en');
+  });
+
+  it('reads the language of a fast-boot firmware page', () => {
+    expect(pathLanguage('/fastboot/')).toBe('en');
+    expect(pathLanguage('/zh-hans/fastboot')).toBe('zh-Hans');
+    expect(pathLanguage('/ko/fastboot/')).toBe('ko');
+    expect(isFastbootPath('/ja/fastboot')).toBe(true);
+    expect(isFastbootPath('/ja/')).toBe(false);
+    expect(isFastbootPath('/faq/fastboot/')).toBe(false);
+    expect(fastbootPath('zh-Hant')).toBe('/zh-hant/fastboot/');
+    expect(fastbootPath('en')).toBe('/fastboot/');
   });
 });
 

@@ -262,6 +262,8 @@ interface ChangesProps {
   onApply: () => void;
   /** The links that the success state shows, as the download has them. */
   links: ReactNode;
+  /** A line under the next steps of the success state, if any. */
+  hint?: ReactNode;
   /** The terms of use, which the line under the button links to. */
   termsUrl: string;
 }
@@ -293,6 +295,7 @@ export function CardChangesView({
   message,
   onApply,
   links,
+  hint,
   termsUrl,
   camera,
   firmware,
@@ -361,6 +364,7 @@ export function CardChangesView({
               <li key={line}>{line}</li>
             ))}
           </ol>
+          {hint}
           {links}
         </div>
       ) : (
