@@ -30,6 +30,8 @@ GRKit は、RICOH GR III・GR IIIx・GR IV に、フィルム風の色、XPan �
 
 GRKit の読み込みには、電源を入れてから約 8〜10 秒かかります。GR IV や、インストール・アップデート後の最初の起動ではもう少しかかります。それまではカメラ本来の設定で撮影されます。すべての設定は MENU のカスタマイズタブの最後にある GRKit にあります。モジュールを自作する場合は [Writing a module](docs/modules.md)（英語）をご覧ください。
 
+**高速起動**：オプションの[高速起動ファームウェア](resources/FASTBOOT.ja.md)を使うと、同じ GRKit パッケージが電源を入れてすぐに読み込まれます。grkit.app の[高速起動のページ](https://grkit.app/ja/fastboot/)で Ricoh の公式ファームウェアから作成し、ファームウェアの更新としてインストールします。GRKit 自体はファームウェアに書き込みません。
+
 ## 対応カメラ
 
 | カメラ | 実機で確認済み | 対応 |
@@ -82,6 +84,7 @@ grkit verify dist/GRKit.zip
 
 - [アーキテクチャ](docs/architecture.md)
 - [モジュールの作り方](docs/modules.md)と[モジュールリファレンス](docs/module-reference.md)
+- [高速起動ファームウェア](docs/fastboot.md)：SD スクリプト向けのインターフェース
 - [リリース手順](docs/releasing.md)
 - [エフェクト](effects/README.md)
 - [ウェブサイト](web/README.md)
