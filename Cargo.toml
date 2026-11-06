@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crates/grkit-wasm"]
+members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crates/grkit-wasm", "crates/grkit-firmware"]
 resolver = "2"
 
 [workspace.package]
@@ -29,6 +29,7 @@ wasm-bindgen = "=0.2.128"
 zip = { version = "9.0", default-features = false, features = ["deflate"] }
 grkit-core = { path = "crates/grkit-core" }
 grkit-build = { path = "crates/grkit-build" }
+grkit-firmware = { path = "crates/grkit-firmware" }
 
 [profile.release]
 lto = "thin"

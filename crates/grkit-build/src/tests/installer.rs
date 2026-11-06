@@ -207,6 +207,14 @@ fn production_scripts_and_activation_match_fixed_contracts() {
     assert!(!files
         .values()
         .any(|data| data.windows(8).any(|part| part == b"--select")));
+    // The loader of a GR III package with its fast-boot files.
+    let fast: Vec<_> = ["2.10", "2.20"]
+        .map(|firmware| {
+            grkit_core::runtime::FastRelease::new(&grkit_core::camera::GR3, firmware).unwrap()
+        })
+        .into();
+    let loader = grkit_core::runtime::loader_with(grkit_core::runtime::ICON_STRIDE, &fast);
+    snapshot("LOADER-FAST.TTL", std::str::from_utf8(&loader).unwrap());
     // Each camera gets the same files under its own ModeSet name.
     for (camera, modeset) in [
         (&grkit_core::camera::GR3, "00078350.588"),

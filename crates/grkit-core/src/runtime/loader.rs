@@ -48,13 +48,49 @@ pub const STATUS_LOADER_NO_INSTALL: u32 = 62;
 
 /// The loader for a target with `icon_stride`-byte icon slots.
 pub fn loader_for(icon_stride: usize) -> Vec<u8> {
+    loader_with(icon_stride, &[])
+}
+
+/// The loader for a target with `icon_stride`-byte icon slots and the
+/// fast-boot files of `fast` (`runtime::fastboot`).
+///
+/// The first script array (`ba`) comes before the planned arrays, as the
+/// installer expects (`ARRAY_LEAD`). With fast-boot files, the loader first
+/// asks the firmware for the probe words in `ba`. On a firmware build with the
+/// fast-boot loader and a fast-boot file for its release, the loader runs
+/// SCAN and INSTALL through that file, with no Linux command and no wait. If
+/// that SCAN writes no plan, the loader runs SCAN.SH and INSTALL.SH as on the
+/// official firmware.
+pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     let path = core_path;
     let (plan, done, failed) = (path("PLAN.BIN"), path("INSTALL.OK"), path("INSTALL.ERR"));
-    // Wait for the host command tables of the RTOS before lcmd_resp.
-    let mut lines: Vec<String> = vec!["mpause 2000".into(), "sendln 'lcmd_resp on'".into()];
+    let mut lines: Vec<String> = Vec::new();
     // The results of the last start. write_error replaces INSTALL.ERR.
     for name in ["PLAN.BIN", "PLAN.TMP", "INSTALL.OK", "INSTALL.LCK"] {
         lines.push(format!("filedelete '{}'", path(name)));
+    }
+    lines.extend(["intdim ba 256".into(), "fast = 0".into()]);
+    if !fast.is_empty() {
+        lines.extend([
+            // The probe words stay 0 on the official firmware, whatever the
+            // memory of the array held.
+            "ba[0] = 0".into(),
+            "ba[1] = 0".into(),
+            "sendln 'SYS_buildinfo 0'".into(),
+            format!("if ba[0] <> {FAST_PROBE_MAGIC} goto probed"),
+            format!("if ba[1] <> {FAST_INTERFACE} goto probed"),
+            "release = ba[2] * 1000 + ba[3]".into(),
+        ]);
+        for (index, release) in fast.iter().enumerate() {
+            let next = format!("probe{}", index + 1);
+            lines.extend([
+                format!("if release <> {} goto {next}", release.number()),
+                format!("filesearch '{}'", release.rtos_path()),
+                format!("if result <> 0 fast = {}", release.number()),
+                format!(":{next}"),
+            ]);
+        }
+        lines.push(":probed".into());
     }
     lines.extend([
         "attempts = 0".into(),
@@ -64,6 +100,27 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         "if result != 0 goto reject".into(),
         format!("filesearch '{done}'"),
         "if result != 0 goto reject".into(),
+    ]);
+    if !fast.is_empty() {
+        lines.push("if fast = 0 goto linux".into());
+        for release in fast {
+            lines.push(format!(
+                "if fast = {} sendln 'SYS_memovr {} 0 call'",
+                release.number(),
+                release.rtos_path()
+            ));
+        }
+        lines.extend([
+            format!("filesearch '{plan}'"),
+            "if result != 0 goto plan_ready".into(),
+            "fast = 0".into(),
+            ":linux".into(),
+        ]);
+    }
+    lines.extend([
+        // Wait for the host command tables of the RTOS before lcmd_resp.
+        "mpause 2000".into(),
+        "sendln 'lcmd_resp on'".into(),
         // Early requests fail before Linux mounts the card. Give up after 150 attempts.
         ":scan".into(),
         format!("sendln 'lcmd sh {LINUX_DIRECTORY}/SCAN.SH'"),
@@ -135,13 +192,21 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         ":modules_ready".into(),
         // The tail: the picture scratch, the menu text, and the labels.
         format!("intdim tailarea {TAIL_WORDS}"),
-        // Not-ready attempts release the install lock. Retry every 0.5 s for about
-        // 30 s, then every 10 s, so a later shooting-mode start can still install.
+        // Not-ready attempts release the install lock. Retry for about 30 s,
+        // every 0.5 s through Linux and every 0.1 s through the fast-boot
+        // file, then every 10 s, so a later shooting-mode start can still
+        // install.
         "attempts = 0".into(),
+        "waits = 60".into(),
+        "if fast <> 0 waits = 300".into(),
         format!("failure = {STATUS_LOADER_NO_INSTALL}"),
         "call write_error".into(),
         ":install".into(),
-        format!("sendln 'lcmd sh {LINUX_DIRECTORY}/INSTALL.SH'"),
+        format!(
+            "if fast <> 0 sendln 'SYS_memovr {} 0 call'",
+            path(FAST_RUN_NAME)
+        ),
+        format!("if fast = 0 sendln 'lcmd sh {LINUX_DIRECTORY}/INSTALL.SH'"),
         format!("filesearch '{done}'"),
         "if result != 0 goto installed".into(),
         // INSTALL replaces the status of the loader with its own when it fails.
@@ -149,9 +214,10 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
         format!("if errorstatus = {STATUS_LOADER_NO_INSTALL} goto install_wait"),
         "if errorstatus != 0 goto reject".into(),
         ":install_wait".into(),
-        "mpause 500".into(),
+        "mpause 100".into(),
+        "if fast = 0 mpause 400".into(),
         "attempts = attempts + 1".into(),
-        "if attempts > 60 mpause 9500".into(),
+        "if attempts > waits mpause 9500".into(),
         "goto install".into(),
         ":installed".into(),
         format!("filedelete '{failed}'"),
@@ -860,5 +926,81 @@ mod tests {
         assert!(lines.contains(&"if mvalue < 0 goto save_modules_next".to_owned()));
         assert!(!lines.contains(&"if mvalue <= 0 goto save_modules_next".to_owned()));
         assert!(lines.contains(&"int2str line mvalue".to_owned()));
+    }
+
+    /// The official firmware has another command under the name of the
+    /// fast-boot loader, so the loader sends it only after the probe found
+    /// the fast-boot loader and its file is on the card. A first array comes
+    /// before the planned arrays, with or without fast-boot files.
+    #[test]
+    fn the_loader_runs_code_from_the_card_only_after_the_probe() {
+        use crate::camera::GR3;
+        let releases = ["2.10", "2.20"].map(|firmware| FastRelease::new(&GR3, firmware).unwrap());
+        let script = String::from_utf8(loader_with(ICON_STRIDE, &releases)).unwrap();
+        let lines: Vec<_> = script.lines().collect();
+        let at = |line: &str| {
+            lines
+                .iter()
+                .position(|l| *l == line)
+                .unwrap_or_else(|| panic!("{line}"))
+        };
+        let first_array = lines.iter().position(|l| l.starts_with("intdim ")).unwrap();
+        assert_eq!(lines[first_array], "intdim ba 256");
+        let probe = at("sendln 'SYS_buildinfo 0'");
+        assert!(first_array < probe);
+        // The probe words are 0 before the probe, so stale memory never
+        // passes it on the official firmware.
+        assert_eq!(lines[probe - 2..probe], ["ba[0] = 0", "ba[1] = 0"]);
+        assert_eq!(lines[probe + 1], "if ba[0] <> 1129202771 goto probed");
+        assert_eq!(lines[probe + 2], "if ba[1] <> 1 goto probed");
+        let probed = at(":probed");
+        // Only the probe sets a release, and only with its file on the card.
+        for (index, line) in lines.iter().enumerate() {
+            if line.contains("fast = ")
+                && !line.ends_with("fast = 0")
+                && !line.starts_with("if fast")
+            {
+                assert!(probe < index && index < probed, "{line}");
+                assert!(lines[index - 1].starts_with("filesearch "), "{line}");
+            }
+        }
+        for release in &releases {
+            let number = release.number();
+            let path = release.rtos_path();
+            assert_eq!(
+                lines[at(&format!("if result <> 0 fast = {number}")) - 1],
+                format!("filesearch '{path}'")
+            );
+            at(&format!(
+                "if fast = {number} sendln 'SYS_memovr {path} 0 call'"
+            ));
+        }
+        for line in lines.iter().filter(|l| l.contains("SYS_memovr")) {
+            assert!(line.starts_with("if fast "), "{line}");
+        }
+        // A fast-boot SCAN without a plan falls back to Linux.
+        let linux = at(":linux");
+        assert_eq!(
+            &lines[linux - 2..linux + 4],
+            [
+                "if result != 0 goto plan_ready",
+                "fast = 0",
+                ":linux",
+                "mpause 2000",
+                "sendln 'lcmd_resp on'",
+                ":scan",
+            ]
+        );
+        assert!(at("if fast = 0 goto linux") < linux);
+        at("if fast <> 0 sendln 'SYS_memovr C:\\SCRIPT\\GRKIT\\FRUN.BIN 0 call'");
+        at("if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'");
+
+        // Without fast-boot files, the loader asks for no probe.
+        let plain = String::from_utf8(loader()).unwrap();
+        assert!(!plain.contains("SYS_buildinfo"));
+        assert!(plain.contains("\r\nintdim ba 256\r\nfast = 0\r\n"));
+        assert!(!plain
+            .lines()
+            .any(|l| l.contains("SYS_memovr") && !l.starts_with("if fast <> 0")));
     }
 }

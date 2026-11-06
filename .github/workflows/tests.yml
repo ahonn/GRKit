@@ -58,6 +58,8 @@ jobs:
       - if: runner.os == 'Linux'
         run: GRKIT_CLANG=clang-21 GRKIT_LLD=ld.lld-21 cargo test -p grkit-build --locked -- --ignored synthetic_ dump_
       - if: runner.os == 'Linux'
+        run: GRKIT_CLANG=clang-21 GRKIT_LLD=ld.lld-21 cargo test -p grkit-firmware --locked -- --ignored fastboot_code_
+      - if: runner.os == 'Linux'
         name: Check the Date Imprint ARM stack budget
         env:
           GRKIT_CLANG: clang-21

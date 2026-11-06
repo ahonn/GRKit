@@ -131,6 +131,15 @@ impl Camera {
         self.releases.iter().any(|release| release.target == target)
     }
 
+    /// The project number of the camera: the extension of its ModeSet file,
+    /// such as 588 for GR III.
+    pub fn project(&self) -> u32 {
+        self.modeset
+            .rsplit_once('.')
+            .and_then(|(_, number)| number.parse().ok())
+            .expect("a ModeSet file with a project number")
+    }
+
     /// The firmware versions of the releases, oldest first, each once.
     pub fn versions(&self) -> Vec<&'static str> {
         let mut versions = Vec::new();

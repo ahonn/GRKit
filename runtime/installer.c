@@ -17,6 +17,18 @@ struct patch { u32 address, size, kind; const u8 *before; u8 *after; };
 #include "services.h"
 #include "install_status.h"
 
+/* RTOS_NATIVE builds the installer into the RTOS-side loader of
+   runtime/fastboot/, whose backend.c serves the same calls without Linux. */
+#ifdef RTOS_NATIVE
+/* The loader runs from FAST_BASE up to RTOS_EXECUTABLE_END (fast.ld), so the
+   code of GRKit ends before it. */
+#define CODE_END FAST_BASE
+#else
+#define CODE_END RTOS_EXECUTABLE_END
+#endif
+#ifdef RTOS_NATIVE
+extern long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f);
+#else
 static long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
 {
     register u32 r0 __asm__("r0") = a;
@@ -30,6 +42,11 @@ static long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
                      "r"(r4), "r"(r5), "r"(r7) : "memory", "cc");
     return (long)r0;
 }
+#endif
+/* The loader script allocates one array before the planned ones: the array
+   of the firmware probe and the fast-boot head (runtime::fast). */
+#define ARRAY_LEAD 1U
+#define ARRAYS (ARRAY_TABLE + ARRAY_LEAD * 8U)
 static volatile u8 *mapping;
 /* One profile more than MAX_COUNT shows that the effects do not all fit. */
 static u8 profiles[MAX_COUNT + 1][GRKIT_GRF_MAX_SIZE];
@@ -431,13 +448,13 @@ struct arrays { u32 base, tail, module_array, icon_bases[MAX_CHUNKS]; };
 /* Check that each array has its planned size and that no two overlap. */
 static int check_arrays(struct arrays *a)
 {
-    if (*(volatile u16 *)at(ARRAY_COUNT) != 2 + icon_chunks + (module_words != 0) || word(ARRAY_TABLE) != size / 4) return STATUS_ARRAYS;
-    u32 base = a->base = word(ARRAY_TABLE + 4), *icon_bases = a->icon_bases;
+    if (*(volatile u16 *)at(ARRAY_COUNT) != ARRAY_LEAD + 2 + icon_chunks + (module_words != 0) || word(ARRAYS) != size / 4) return STATUS_ARRAYS;
+    u32 base = a->base = word(ARRAYS + 4), *icon_bases = a->icon_bases;
     if (!heap(base, size)) return STATUS_ARRAY_MEMORY;
     for (u32 i = 0; i < icon_chunks; ++i) {
         u32 bytes = chunk_count(i) * ICON_STRIDE;
-        u32 ptr = word(ARRAY_TABLE + (i + 1) * 8 + 4);
-        if (word(ARRAY_TABLE + (i + 1) * 8) != bytes / 4 || !heap(ptr, bytes) ||
+        u32 ptr = word(ARRAYS + (i + 1) * 8 + 4);
+        if (word(ARRAYS + (i + 1) * 8) != bytes / 4 || !heap(ptr, bytes) ||
             (ptr < base + size && base < ptr + bytes)) return STATUS_ARRAY_MEMORY;
         for (u32 j = 0; j < i; ++j)
             if (ptr < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < ptr + bytes) return STATUS_ARRAY_MEMORY;
@@ -446,7 +463,7 @@ static int check_arrays(struct arrays *a)
     /* The module array follows the icon chunks. */
     u32 module_array = a->module_array = 0;
     if (module_words) {
-        u32 entry = ARRAY_TABLE + (1 + icon_chunks) * 8, bytes = module_words * 4;
+        u32 entry = ARRAYS + (1 + icon_chunks) * 8, bytes = module_words * 4;
         module_array = a->module_array = word(entry + 4);
         if (word(entry) != module_words || !heap(module_array, bytes) ||
             (module_array < base + size && base < module_array + bytes)) return STATUS_ARRAY_MEMORY;
@@ -454,8 +471,8 @@ static int check_arrays(struct arrays *a)
             if (module_array < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < module_array + bytes) return STATUS_ARRAY_MEMORY;
     }
     /* The tail follows the other arrays and overlaps none of them. */
-    u32 tail = a->tail = word(ARRAY_TABLE + (2 + icon_chunks + (module_words != 0) - 1) * 8 + 4);
-    if (word(ARRAY_TABLE + (2 + icon_chunks + (module_words != 0) - 1) * 8) != GRKIT_TAIL_SIZE / 4 ||
+    u32 tail = a->tail = word(ARRAYS + (2 + icon_chunks + (module_words != 0) - 1) * 8 + 4);
+    if (word(ARRAYS + (2 + icon_chunks + (module_words != 0) - 1) * 8) != GRKIT_TAIL_SIZE / 4 ||
         !heap(tail, GRKIT_TAIL_SIZE) || (tail < base + size && base < tail + GRKIT_TAIL_SIZE) ||
         (module_array && tail < module_array + module_words * 4 && module_array < tail + GRKIT_TAIL_SIZE)) return STATUS_ARRAY_MEMORY;
     for (u32 j = 0; j < icon_chunks; ++j)
@@ -728,7 +745,7 @@ static int install(void)
         get32(plan + GRKIT_PLAN_MODULE_WORDS) != module_words || get32(plan + GRKIT_PLAN_MODULE_TILES) != module_tiles)
         return STATUS_PLAN;
     if ((status = relocate())) return status;
-    if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, RTOS_EXECUTABLE_END, &module_start))) return status;
+    if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, CODE_END, &module_start))) return status;
     if ((status = check_arrays(&arrays))) return status;
     if ((status = check_firmware())) return status;
     u32 pixels = icon_pixels();
@@ -766,7 +783,7 @@ static int select_profile(const char *id)
     relocation.window_at = window_at;
     relocation.symbol_at = relocated;
     if (!relocation_resolve(&relocation_tables, &relocation)) return STATUS_RELOCATION;
-    u32 base = word(ARRAY_TABLE + 4);
+    u32 base = word(ARRAYS + 4);
     if (!heap(base, GRKIT_HOST_HEADER_SIZE) || word(base + GRKIT_HOST_MAGIC) != GRKIT_HOST_MAGIC_VALUE || word(base + GRKIT_HOST_VERSION) != GRKIT_HOST_VERSION_VALUE) return STATUS_NO_HEADER;
     u32 n = word(base + GRKIT_HOST_COUNT), records = word(base + GRKIT_HOST_RECORDS), selected = 0;
     if (n > MAX_COUNT || records != base + GRKIT_HOST_HEADER_SIZE || !heap(base, GRKIT_HOST_HEADER_SIZE + n * GRKIT_RECORD_SIZE)) return STATUS_NO_HEADER;
@@ -865,9 +882,15 @@ static int other_build(enum install_mode mode)
     syscall6(6, fd, 0, 0, 0, 0, 0);
     return other;
 }
+#ifdef RTOS_NATIVE
+__attribute__((used)) int grkit_install_entry(u32 argc, char **argv)
+{
+    int status = STATUS_USAGE;
+#else
 __attribute__((used)) void start(u32 *stack)
 {
     u32 argc = stack[0]; char **argv = (char **)(stack + 1); int status = STATUS_USAGE;
+#endif
     enum install_mode mode = INSTALL_LAST;
     if (argc == 2 && text_equal(argv[1], "--known")) mode = INSTALL_KNOWN;
     else if (argc == 2 && text_equal(argv[1], "--try")) mode = INSTALL_TRY;
@@ -908,6 +931,11 @@ __attribute__((used)) void start(u32 *stack)
         }
     }
     if (status) { print("GR_MODULE_REJECTED "); number(status); print("\n"); }
+#ifdef RTOS_NATIVE
+    return status;
+}
+#else
     syscall6(1, status, 0, 0, 0, 0, 0); for (;;) {}
 }
 __attribute__((naked)) void _start(void) { __asm__ volatile("mov r0, sp\nb start"); }
+#endif

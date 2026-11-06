@@ -80,7 +80,7 @@ async function edgeWorker(headers) {
 }
 
 const template = readFileSync(join(dist, 'index.html'), 'utf8');
-const { render, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION } = await renderer();
+const { render, renderFastboot, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION, pageText } = await renderer();
 const codes = LANGUAGES.map((language) => language.code);
 const pageUrl = (code) => `${SITE}${LANGUAGE_PATHS[code]}`;
 const alternates = [
@@ -165,6 +165,35 @@ for (const code of codes) {
   const file = join(dist, `.${LANGUAGE_PATHS[code]}`, 'index.html');
   mkdirSync(dirname(file), { recursive: true });
   const html = page(code);
+  writeFileSync(file, html);
+  pages.push(html);
+}
+
+// The fast-boot firmware page of each language. Search engines do not index it.
+const fastbootUrl = (code) => `${SITE}${pageText(code, true).path}`;
+function fastbootPage(code) {
+  const text = pageText(code, true);
+  const title = escape(text.title);
+  const description = escape(text.description);
+  let html = template;
+  html = replaceOne(html, /<html lang="[^"]*">/, `<html lang="${code}">`);
+  html = replaceOne(html, /<title>[^<]*<\/title>/, `<title>${title}</title>`);
+  html = replaceOne(html, /(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`);
+  html = replaceOne(html, /(<meta property="og:url" content=")[^"]*(")/, `$1${fastbootUrl(code)}$2`);
+  html = replaceOne(html, /(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`);
+  html = replaceOne(html, /(<meta property="og:description" content=")[^"]*(")/, `$1${description}$2`);
+  const head = [
+    '<meta name="robots" content="noindex" />',
+    `<link rel="canonical" href="${fastbootUrl(code)}" />`,
+    ...codes.map((other) => `<link rel="alternate" hreflang="${other}" href="${fastbootUrl(other)}" />`),
+  ].join('\n    ');
+  html = replaceOne(html, /<\/head>/, `  ${head}\n  </head>`);
+  return replaceOne(html, /<div id="root"><\/div>/, `<div id="root">${renderFastboot(code)}</div>`);
+}
+for (const code of codes) {
+  const file = join(dist, `.${pageText(code, true).path}`, 'index.html');
+  mkdirSync(dirname(file), { recursive: true });
+  const html = fastbootPage(code);
   writeFileSync(file, html);
   pages.push(html);
 }

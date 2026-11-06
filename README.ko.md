@@ -30,6 +30,8 @@ GRKit은 RICOH GR III, GR IIIx, GR IV에 필름 느낌의 색감, XPan 같은 �
 
 GRKit은 전원을 켜고 8~10초쯤 뒤에 불러와집니다. GR IV나 설치·업데이트 후 처음 켤 때는 더 걸립니다. 그전까지는 카메라 본래 설정으로 촬영됩니다. 모든 설정은 MENU 사용자 설정 탭 마지막의 GRKit 항목에 있습니다. 모듈을 직접 만들려면 [Writing a module](docs/modules.md)(영어)을 참고하세요.
 
+**빠른 시작**: 선택 사항인 [빠른 시작 펌웨어](resources/FASTBOOT.ko.md)를 쓰면 같은 GRKit 패키지가 전원을 켠 직후에 불러와집니다. grkit.app의 [빠른 시작 페이지](https://grkit.app/ko/fastboot/)에서 리코 공식 펌웨어로 만들고 펌웨어 업데이트로 설치합니다. GRKit 자체는 펌웨어에 아무것도 쓰지 않습니다.
+
 ## 지원 카메라
 
 | 카메라 | 실제 카메라에서 확인 | 지원 |
@@ -82,6 +84,7 @@ grkit verify dist/GRKit.zip
 
 - [아키텍처](docs/architecture.md)
 - [모듈 만들기](docs/modules.md)와 [모듈 레퍼런스](docs/module-reference.md)
+- [빠른 시작 펌웨어](docs/fastboot.md): SD 스크립트용 인터페이스
 - [릴리스 절차](docs/releasing.md)
 - [효과](effects/README.md)
 - [웹사이트](web/README.md)

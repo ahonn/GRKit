@@ -6,7 +6,7 @@ The site serves these files:
 
 | Path | Source |
 |---|---|
-| `index.html`, `zh-hans/`, `zh-hant/`, `ja/`, `ko/`, `404.html`, `sitemap.xml`, `robots.txt`, `_worker.js`, `_routes.json`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
+| `index.html`, `zh-hans/`, `zh-hant/`, `ja/`, `ko/`, the `fastboot/` page of each, `404.html`, `sitemap.xml`, `robots.txt`, `_worker.js`, `_routes.json`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
 | `runtime/<target>/` | `grkit site`, for each runtime build of `grkit release-plan` |
 | `effects/<target>/` | `grkit effects publish`, for each runtime build of `grkit release-plan` |
 
@@ -55,6 +55,10 @@ The page opens with a GR IIIx sample photo. A user can also select a DNG from an
 The effects are fitted to the GR III, and LibRaw's color processing differs from the camera's. The previews are therefore approximations.
 
 LibRaw is distributed under CDDL-1.0. `THIRD_PARTY_LICENSES.txt` includes its notices and a link to its source.
+
+## Fast start
+
+The Fast start page (`/fastboot/` under each language page) makes the fast-boot firmware (`docs/fastboot.md`) from an official firmware update file that the user selects. `patchFirmware` of `grkit-wasm` refuses any other file and checks the result against its SHA-256. The file is not uploaded.
 
 ## LUT import
 

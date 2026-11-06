@@ -30,6 +30,8 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 
 GRKit takes about 8 to 10 seconds to load after power-on, and longer on GR IV or on the first start after an install or update. Until then, the camera uses its own settings. All the settings are in the GRKit section at the end of the Customize tab in MENU. To write your own module, see [Writing a module](docs/modules.md).
 
+**Fast start:** with the optional [fast-boot firmware](resources/FASTBOOT.md), the same GRKit package loads soon after power-on. You make it on the [Fast start page](https://grkit.app/fastboot/) of grkit.app from the official Ricoh firmware and install it as a firmware update. GRKit itself never writes to the firmware.
+
 ## Supported cameras
 
 | Camera | Tested on a camera | Supported |
@@ -82,6 +84,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Device reports are welcome whether GRKit
 
 - [Architecture](docs/architecture.md)
 - [Writing a module](docs/modules.md) and the [module reference](docs/module-reference.md)
+- [Fast-boot firmware](docs/fastboot.md): the script interface for SD scripts
 - [Release process](docs/releasing.md)
 - [Effects](effects/README.md)
 - [Web site](web/README.md)

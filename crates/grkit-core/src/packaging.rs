@@ -176,6 +176,7 @@ fn runtime_target(runtime: &Files, camera: &Camera) -> Result<&'static str> {
 /// release order, each named by its marker. A camera with one build has one
 /// core file.
 fn package_targets(runtime: &Files, camera: &Camera) -> Result<Vec<&'static str>> {
+    let fast = camera_fast_files(runtime, camera)?;
     let targets = camera.targets();
     if targets.len() == 1 {
         return Ok(vec![runtime_target(runtime, camera)?]);
@@ -204,7 +205,12 @@ fn package_targets(runtime: &Files, camera: &Camera) -> Result<Vec<&'static str>
         check_installer(binary)?;
     }
     ensure!(
-        *runtime == runtime::package_runtime_files(&binaries, runtime::icon_stride(targets[0])?),
+        *runtime
+            == runtime::package_runtime_files_with(
+                &binaries,
+                &fast,
+                runtime::icon_stride(targets[0])?
+            ),
         "Runtime scripts differ from the production templates"
     );
     Ok(targets)
@@ -236,14 +242,36 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
         .iter()
         .map(|runtime| runtime.files()[card::CORE_FILE].as_slice())
         .collect();
-    let files = runtime::package_runtime_files(&binaries, runtime::icon_stride(targets[0])?);
-    // The builds of a camera share every file but the core file. The package
-    // has its own scripts that run the core files.
-    let own = [card::CORE_FILE, card::INSTALL_FILE, card::SCAN_FILE];
+    // The fast-boot files of the camera's releases. A build for two cameras
+    // has those of both.
+    let mut fast = Files::new();
+    for runtime in runtimes {
+        let own = runtime
+            .files()
+            .iter()
+            .filter(|(path, _)| {
+                runtime::FastRelease::of_path(path).is_some_and(|release| release.camera == camera)
+            })
+            .map(|(path, bytes)| (path.clone(), bytes.clone()));
+        fast.extend(own);
+    }
+    let files =
+        runtime::package_runtime_files_with(&binaries, &fast, runtime::icon_stride(targets[0])?);
+    // The builds of a camera share every file but the core file and the
+    // fast-boot files. The package has its own scripts that run them.
+    let own = [
+        card::CORE_FILE,
+        card::INSTALL_FILE,
+        card::SCAN_FILE,
+        card::LOADER_FILE,
+    ];
     for runtime in runtimes {
         for (name, blob) in runtime.files() {
             ensure!(
-                own.contains(&name.as_str()) || files.get(name) == Some(blob),
+                own.contains(&name.as_str())
+                    || name == &runtime::fast_run_path()
+                    || runtime::FastRelease::of_path(name).is_some()
+                    || files.get(name) == Some(blob),
                 "The {} runtime has another {name} than {}",
                 runtime.target(),
                 targets[0]
@@ -253,16 +281,59 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
     Ok(files)
 }
 
-/// Checks the runtime files of a build for `target`.
+/// Whether `name` is the path of a runtime file: one of `RUNTIME_PATHS`, a
+/// fast-boot file, or the file that installs through one
+/// (`runtime::fastboot`).
+pub fn is_runtime_path(name: &str) -> bool {
+    RUNTIME_PATHS.contains(&name)
+        || runtime::FastRelease::of_path(name).is_some()
+        || name == runtime::fast_run_path()
+}
+
+/// The fast-boot files of `files` (`runtime::fast_files`), each checked as
+/// one of `camera` built by its runtime build.
+fn camera_fast_files(files: &Files, camera: &Camera) -> Result<Files> {
+    let mut fast = Files::new();
+    for (release, bytes) in runtime::fast_files(files) {
+        ensure!(
+            release.camera == camera,
+            "{} is a fast-boot file of {}, not {}",
+            release.name(),
+            release.camera.name,
+            camera.name
+        );
+        runtime::check_fast_file(&release, bytes)?;
+        fast.insert(release.path(), bytes.clone());
+    }
+    Ok(fast)
+}
+
+/// Checks the runtime files of a build for `target`. A build has the
+/// fast-boot files of its releases that have one (`runtime::fastboot`).
 pub fn validate_runtime(files: &Files, target: &str) -> Result<()> {
+    let fast: Files = files
+        .iter()
+        .filter(|(path, _)| runtime::FastRelease::of_path(path).is_some())
+        .map(|(path, bytes)| (path.clone(), bytes.clone()))
+        .collect();
+    for (release, bytes) in runtime::fast_files(&fast) {
+        ensure!(
+            release.target() == target,
+            "{} is a fast-boot file of the {} runtime, not {target}",
+            release.name(),
+            release.target()
+        );
+        runtime::check_fast_file(&release, bytes)?;
+    }
     ensure!(
-        files.len() == RUNTIME_PATHS.len() && RUNTIME_PATHS.iter().all(|p| files.contains_key(*p)),
+        RUNTIME_PATHS.iter().all(|p| files.contains_key(*p))
+            && files.keys().all(|path| is_runtime_path(path)),
         "Expected the complete production runtime file set"
     );
     let binary = &files[card::CORE_FILE];
     check_installer(binary)?;
     ensure!(
-        *files == runtime::runtime_files_for(binary, runtime::icon_stride(target)?),
+        *files == runtime::runtime_files_with(binary, &fast, runtime::icon_stride(target)?),
         "Runtime scripts differ from the production templates"
     );
     if let Some(name) = marked_target(binary) {
@@ -332,7 +403,7 @@ pub fn load_runtime(manifest: &[u8], files: &Files) -> Result<VerifiedRuntime> {
     {
         let name = item["path"].as_str().context("Expected a runtime path")?;
         ensure!(
-            RUNTIME_PATHS.contains(&name) && !runtime.contains_key(name),
+            is_runtime_path(name) && !runtime.contains_key(name),
             "Invalid runtime manifest entries"
         );
         let bytes = files
@@ -460,11 +531,21 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     };
     let activation = runtime::activation_files(camera);
     let cores = camera.targets().len();
+    // The fast-boot files and FRUN.BIN, which package_targets checks.
+    let fast_paths: Vec<String> = contents
+        .keys()
+        .filter_map(|name| name.strip_prefix("SD_ROOT/"))
+        .filter(|path| {
+            runtime::FastRelease::of_path(path).is_some() || *path == runtime::fast_run_path()
+        })
+        .map(str::to_owned)
+        .collect();
     let runtime_paths: Vec<String> = RUNTIME_PATHS
         .iter()
         .filter(|name| **name != card::CORE_FILE)
         .map(|name| (*name).to_owned())
         .chain((0..cores).map(|index| runtime::core_path_of(index, cores)))
+        .chain(fast_paths)
         .collect();
     let mut mandatory: BTreeSet<String> = runtime_paths
         .iter()

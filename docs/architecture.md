@@ -19,7 +19,7 @@ This document describes the parts and the approach. The source code and its comm
 There are three execution domains:
 
 - Rust tools run on the developer computer or, through WebAssembly, in the browser.
-- The installer runs in the camera's Linux, started by an SD script. Only Linux can write the RTOS code region.
+- The installer runs in the camera's Linux, started by an SD script. On the official firmware, only Linux can write the RTOS code region. On the optional [fast-boot firmware](fastboot.md), the installer runs in the RTOS.
 - The hooks, the core, and the modules run in the camera's RTOS.
 
 The core is per target. It owns the firmware hooks, the state of each capability, and the hot paths. A module is the same file on each camera. It gives data, such as settings, pages, and text, and callbacks that the core calls. A module reaches the firmware only through the core.
@@ -59,6 +59,8 @@ At each power-on, a loader script in the RTOS waits until the camera mounts the 
 The resident loader then saves the settings when they change.
 
 INSTALL changes nothing on a firmware that it does not expect. Each address must resolve in the running image, and each hook site must hold its stock instruction. Each hook belongs to one extension point, and INSTALL installs only the points that the loaded modules need. When a camera has several targets, its package holds the installer of each, and the installer of the running build runs.
+
+On the optional [fast-boot firmware](fastboot.md), the loader runs SCAN and INSTALL on the RTOS side right after power-on, through the fast-boot files of the package. It falls back to Linux if that SCAN writes no plan.
 
 The loader writes `INSTALL.ERR` from the RTOS before each step and removes it after the install. So a start that stops leaves its step on the card. The scripts also write a boot log, `GRKIT/BOOT.TXT`, with the time of each step.
 

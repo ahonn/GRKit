@@ -933,3 +933,22 @@ fn native_looks_need_a_supported_gr4_file() {
     assert!(error.contains("1.11, 1.20"), "{error}");
     assert!(!tmp.path().join("out").exists());
 }
+
+#[test]
+fn firmware_patch_takes_only_an_official_update_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("fwdc239b.bin");
+    fs::write(&input, vec![0u8; 4096]).unwrap();
+    let out = directory.path().join("out.bin");
+    let output = run(&[
+        "firmware",
+        "patch",
+        "--firmware",
+        text(&input),
+        "--out",
+        text(&out),
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Not an official update file"));
+    assert!(!out.exists());
+}

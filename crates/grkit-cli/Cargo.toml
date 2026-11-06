@@ -16,5 +16,6 @@ anyhow.workspace = true
 clap.workspace = true
 grkit-core.workspace = true
 grkit-build.workspace = true
+grkit-firmware.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true

@@ -30,6 +30,8 @@ GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面�
 
 開機後 GRKit 需要約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。在這之前相機使用原本的設定。完整設定在 MENU 自訂頁最後的 GRKit 小節。想自己寫模組，請見 [Writing a module](docs/modules.md)（英文）。
 
+**快速啟動**：使用選用的[快速啟動韌體](resources/FASTBOOT.zh-Hant.md)，同一個 GRKit 安裝包在開機後很快就能載入。它在 grkit.app 的[快速啟動頁面](https://grkit.app/zh-hant/fastboot/)上以 Ricoh 官方韌體製作，以韌體更新的方式安裝。GRKit 本身從不寫入韌體。
+
 ## 支援機型
 
 | 機型 | 實機測試 | 已支援 |
@@ -82,6 +84,7 @@ grkit verify dist/GRKit.zip
 
 - [架構](docs/architecture.md)
 - [撰寫模組](docs/modules.md)與[模組參考](docs/module-reference.md)
+- [快速啟動韌體](docs/fastboot.md)：供 SD 腳本使用的介面
 - [發布流程](docs/releasing.md)
 - [效果](effects/README.md)
 - [網站](web/README.md)

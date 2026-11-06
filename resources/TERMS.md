@@ -15,6 +15,15 @@ GRKit runs from the SD card. It changes the camera only until the camera turns o
 - Ricoh may decline warranty or repair service for a camera that used third-party software.
 - Before you install or update GRKit, copy your photos from the SD card.
 
+## Fast-boot firmware
+
+The fast-boot firmware is optional. grkit.app makes it on your device from the official Ricoh firmware, and you install it as a firmware update. Unlike GRKit, it stays in the camera until you install another firmware. The [fast start guide](FASTBOOT.md) tells you how to go back to the official firmware.
+
+- If the update stops, or if the fast-boot firmware fails, the camera may not start. The recovery guide may not help in that case.
+- The fast-boot firmware was tested on a GR III only. On another camera, it can fail.
+- Ricoh may decline warranty or repair service for a camera that used modified firmware.
+- You install the fast-boot firmware at your own risk. The sections below apply to it as they apply to GRKit.
+
 ## No warranty
 
 GRKit and grkit.app are provided "as is", without warranty of any kind. The authors do not promise that GRKit works on your camera, that it has no errors, or that photos look as the preview shows.

@@ -1350,3 +1350,127 @@ fn a_package_keeps_the_import_library_that_the_camera_does_not_install() {
     damaged.insert(format!("SD_ROOT/{IMPORTS_FILE}"), b"GRKIMP01".to_vec());
     assert!(verify_package(&repack(&with_sums(damaged), CompressionMethod::Stored)).is_err());
 }
+
+/// A runtime build has the fast-boot files of each release that it runs, and
+/// a package has those of its camera, with FRUN.BIN and a loader that runs
+/// them.
+#[test]
+fn a_package_holds_the_fast_boot_files_of_its_camera() {
+    let names = |bytes: &[u8]| -> Vec<String> {
+        files_of(bytes)
+            .keys()
+            .filter_map(|path| path.strip_prefix("SD_ROOT/SCRIPT/GRKIT/F"))
+            .map(|name| format!("F{name}"))
+            .collect()
+    };
+    let gr3 = testing::fast_runtime("gr3-2.10");
+    for name in ["F588210", "F588220", "F609160", "F609170"] {
+        assert!(gr3
+            .files()
+            .contains_key(&format!("SCRIPT/GRKIT/{name}.BIN")));
+    }
+    let package = |runtimes: &[VerifiedRuntime], camera: &camera::Camera| {
+        assemble(
+            runtimes,
+            &EffectSet::default(),
+            &testing::official_modules(),
+            camera,
+            &english(),
+        )
+        .unwrap()
+        .bytes
+    };
+    let cases = [
+        (
+            &camera::GR3,
+            vec![gr3.clone()],
+            vec!["F588210.BIN", "F588220.BIN"],
+        ),
+        (
+            &camera::GR3X,
+            vec![gr3.clone()],
+            vec!["F609160.BIN", "F609170.BIN"],
+        ),
+        (
+            &camera::GR4,
+            vec![
+                testing::fast_runtime("gr4-1.11"),
+                testing::fast_runtime("gr4-1.20"),
+                testing::marked_runtime("gr4-1.20-0528"),
+            ],
+            vec!["F636111.BIN", "F636120.BIN"],
+        ),
+    ];
+    for (camera, runtimes, expected) in cases {
+        let bytes = package(&runtimes, camera);
+        let mut expected: Vec<String> = expected.into_iter().map(String::from).collect();
+        expected.push("FRUN.BIN".into());
+        expected.sort();
+        assert_eq!(names(&bytes), expected, "{}", camera.name);
+        let files = files_of(&bytes);
+        assert_eq!(files["SD_ROOT/SCRIPT/GRKIT/FRUN.BIN"], runtime::FAST_RUN);
+        let loader = String::from_utf8(files["SD_ROOT/SCRIPT/GRKIT/LOADER.TTL"].clone()).unwrap();
+        for name in expected.iter().filter(|name| *name != "FRUN.BIN") {
+            assert!(
+                loader.contains(&format!("SYS_memovr C:\\SCRIPT\\GRKIT\\{name} 0 call")),
+                "{name}"
+            );
+        }
+        verify_package(&bytes).unwrap();
+
+        // A package without the fast-boot files is still a package.
+        let mut plain = files.clone();
+        plain.retain(|path, _| !path.starts_with("SD_ROOT/SCRIPT/GRKIT/F"));
+        assert!(validate_contents(&with_sums(plain.clone())).is_err());
+        let plain_loader = runtime::package_runtime_files(
+            &camera
+                .targets()
+                .iter()
+                .enumerate()
+                .map(|(index, _)| {
+                    files[&format!(
+                        "SD_ROOT/{}",
+                        runtime::core_path_of(index, camera.targets().len())
+                    )]
+                        .as_slice()
+                })
+                .collect::<Vec<_>>(),
+            runtime::icon_stride(camera.targets()[0]).unwrap(),
+        )[card_loader()]
+        .clone();
+        plain.insert(format!("SD_ROOT/{}", card_loader()), plain_loader);
+        validate_contents(&with_sums(plain)).unwrap();
+
+        // A fast-boot file of another camera, or without FRUN.BIN, is refused.
+        let mut foreign = files.clone();
+        let other = if camera.id == "gr3" {
+            "F609160.BIN"
+        } else {
+            "F588210.BIN"
+        };
+        let release = runtime::FastRelease::of_path(&format!("SCRIPT/GRKIT/{other}")).unwrap();
+        foreign.insert(
+            format!("SD_ROOT/SCRIPT/GRKIT/{other}"),
+            testing::fast_file(&release),
+        );
+        assert!(validate_contents(&with_sums(foreign)).is_err());
+        let mut no_run = files.clone();
+        no_run.remove("SD_ROOT/SCRIPT/GRKIT/FRUN.BIN");
+        assert!(validate_contents(&with_sums(no_run)).is_err());
+    }
+
+    // A fast-boot file must be that of its build, with its own path.
+    let mut files = gr3.files().clone();
+    let release = runtime::FastRelease::new(&camera::GR4, "1.11").unwrap();
+    files.insert(release.path(), testing::fast_file(&release));
+    assert!(load_runtime(&testing::manifest("gr3-2.10", &files), &files).is_err());
+    let mut files = gr3.files().clone();
+    let path = "SCRIPT/GRKIT/F588220.BIN";
+    let moved = files["SCRIPT/GRKIT/F588210.BIN"].clone();
+    files.insert(path.into(), moved);
+    assert!(load_runtime(&testing::manifest("gr3-2.10", &files), &files).is_err());
+}
+
+fn card_loader() -> &'static str {
+    grkit_core::card::LOADER_FILE
+}

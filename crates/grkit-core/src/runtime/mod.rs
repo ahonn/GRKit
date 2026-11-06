@@ -18,10 +18,12 @@ pub use crate::abi::{
     MODULE_SETTINGS_MAX, MODULE_TILES_MAX,
 };
 
+mod fastboot;
 mod files;
 mod loader;
 mod state;
 
+pub use fastboot::*;
 pub use files::*;
 pub use loader::*;
 pub use state::*;

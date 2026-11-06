@@ -288,13 +288,16 @@ export async function buildScriptsOff(camera: string): Promise<Blob> {
 }
 
 /**
- * The file name of a downloaded package: the GRKit version and the local time of the download,
- * such as `GRKit-1.4.2-20261105-1830.zip`, so the user can tell downloads apart.
+ * The file name of a downloaded package: the GRKit version, the camera, and the local time of the
+ * download, such as `GRKit-1.4.2-GR-III-20261105-1830.zip`, so the user can tell downloads apart.
+ * `camera` is the name of a camera entry: its first model, such as `GR III` of
+ * `GR III / GR III HDF`, names the file.
  */
-export function packageFilename(version: string, time: Date): string {
+export function packageFilename(version: string, camera: string, time: Date): string {
   const two = (value: number) => String(value).padStart(2, '0');
   const date = `${time.getFullYear()}${two(time.getMonth() + 1)}${two(time.getDate())}`;
-  return `GRKit-${version}-${date}-${two(time.getHours())}${two(time.getMinutes())}.zip`;
+  const model = (camera.split(' / ')[0] ?? camera).trim().replace(/\s+/g, '-');
+  return `GRKit-${version}-${model}-${date}-${two(time.getHours())}${two(time.getMinutes())}.zip`;
 }
 
 /** Starts the download of a blob as a file. */

@@ -81,6 +81,12 @@ enum Command {
         #[command(subcommand)]
         command: EffectsCommand,
     },
+    /// Make the fast-boot firmware from an official firmware update file
+    /// (docs/fastboot.md).
+    Firmware {
+        #[command(subcommand)]
+        command: FirmwareCommand,
+    },
     /// Package verified local runtimes and effects.
     Package {
         /// The runtime build of each firmware build of the camera, in release
@@ -199,6 +205,20 @@ enum ModuleCommand {
         /// The host C compiler.
         #[arg(long, default_value = "cc")]
         cc: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum FirmwareCommand {
+    /// Write the fast-boot update file of an official update file, such as
+    /// fwdc239b.bin of GR III 2.10, or of the official ZIP that holds it. The
+    /// command refuses any other file.
+    Patch {
+        #[arg(long)]
+        firmware: PathBuf,
+        /// A new file, with the name of the official file for the camera.
+        #[arg(long)]
+        out: PathBuf,
     },
 }
 
@@ -662,6 +682,18 @@ fn run(command: Command) -> Result<Value> {
             let bytes = packaging::assemble_dump(grkit_build::dump::files(&tools)?)?;
             storage::write_new(&out, &bytes)?;
             Ok(json!({"path": out, "sha256": packaging::sha256(&bytes)}))
+        }
+        Command::Firmware {
+            command: FirmwareCommand::Patch { firmware, out },
+        } => {
+            let official = storage::read_bounded(&firmware, 64 * 1024 * 1024)?;
+            let patched = grkit_firmware::patch(&official)?;
+            storage::write_new(&out, &patched.bytes)?;
+            Ok(json!({
+                "path": out, "release": patched.release.name(),
+                "update_file": patched.release.update.name, "size": patched.bytes.len(),
+                "sha256": patched.release.result.sha256,
+            }))
         }
         Command::Site { build, out } => {
             let (target, files) = storage::export_runtime(&build, &out)?;

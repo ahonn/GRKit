@@ -1,6 +1,6 @@
 import type { Grade } from './catalog';
 import type { NativeProblem } from './import/native';
-import { cookieValue, isLanguage, LANGUAGE_COOKIE, LANGUAGE_PATHS, pathLanguage } from './languagePage';
+import { cookieValue, fastbootPath, isLanguage, LANGUAGE_COOKIE, LANGUAGE_PATHS, pathLanguage } from './languagePage';
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -278,17 +278,24 @@ const en = {
       q: 'GRK does not show up in ADJ.',
       a: [
         'GRKit loads about 8 to 10 seconds after power-on. It takes longer on GR IV and on the first start after an install or update. Wait, then press ADJ while you shoot and select the sixth entry, GRK. The first time, SD scripts must be on: hold MENU while you turn the camera on.',
+        ' To load it sooner, try ',
+        '[Fast start',
+        '.',
       ],
     },
     {
       q: 'Why do my first photos after power-on have no film look?',
-      a: ['Until GRKit has loaded, the camera uses its own settings. Wait a few seconds after power-on.'],
+      a: ['Until GRKit has loaded, the camera uses its own settings. Wait a few seconds after power-on, or try ', '[Fast start', '.'],
     },
     {
       q: 'Does GRKit change the camera firmware?',
       a: [
-        'No. GRKit loads from the SD card while the camera is on. Without the card, or after you uninstall GRKit, the camera works as before. The SD script setting stays on until you turn it off.',
+        'No. GRKit loads from the SD card while the camera is on. Without the card, or after you uninstall GRKit, the camera works as before. The SD script setting stays on until you turn it off. Only the optional fast-boot firmware changes the firmware, and only if you install it.',
       ],
+    },
+    {
+      q: 'Can GRKit load faster?',
+      a: ['Yes, with the optional ', '[fast-boot firmware', '. It needs a firmware update.'],
     },
     {
       q: 'Does a film look change my Image Control settings?',
@@ -321,6 +328,58 @@ const en = {
       a: ['In the camera, open MENU. About GRKit is at the end of the GRKit section in the Customize tab.'],
     },
   ] as readonly { q: string; a: RichText }[],
+  /** The section of the fast-boot firmware: the text, then the patch of an official file. */
+  fastboot: {
+    title: 'Fast start',
+    back: 'Back to GRKit',
+    /** The first line of the page, also its search result text. */
+    lead: 'GRKit loads one to two seconds after power-on.',
+    /** The two firmwares side by side: the column names, then a row name and a cell for each.
+     A null cell is the list of versions that the page makes. */
+    compareHead: ['Official firmware', 'Fast-boot firmware'],
+    /** Between the versions in the versions row. */
+    versionSeparator: ', ',
+    compare: [
+      ['GRKit loads', 'About 8 to 10 seconds after power-on', 'One to two seconds after power-on'],
+      ['Shooting at power-on', 'No GRKit effects until GRKit loads', 'GRKit effects almost at once'],
+      ['GRKit features', 'All', 'The same, with the same package'],
+      ['Install', 'Copy GRKit to the card', 'Update the firmware once, then copy GRKit to the card'],
+      ['Versions', 'All that GRKit supports', null],
+      ['Risk', 'The firmware does not change', 'If the update stops, the camera may not start. Ricoh may decline repairs.'],
+      ['Official updates', 'Install as usual', 'Replace the fast-boot firmware'],
+    ] as readonly (readonly [string, string, string | null])[],
+    /** The section with the steps and the file button. */
+    make: 'Make the firmware',
+    makeSteps: [
+      'Download the latest firmware of your camera from Ricoh.',
+      'Select the downloaded ZIP file. The fast-boot firmware downloads.',
+    ] as readonly string[],
+    /** The name of the link to the Ricoh page of a camera with its latest version, for screen readers. */
+    ricohPage: (camera: string) => `Ricoh download page of ${camera}`,
+    choose: 'Select the firmware file',
+    note: 'The file is not uploaded.',
+    working: 'Making the fast-boot firmware…',
+    ready: (camera: string) => `The fast-boot firmware for ${camera} is downloaded. Install it as described below.`,
+    /** An official file of an older version, then the latest version of the camera. */
+    outdated: (release: string, latest: string) => `${release} is not the latest version. Download ${latest} from Ricoh.`,
+    unknown: 'This is not the official firmware of a supported camera and version. Download it from Ricoh again.',
+    error: 'The fast-boot firmware could not be made. Try again.',
+    /** The section with the steps that install the firmware on the camera, after the warning. */
+    install: 'Install the firmware',
+    warning: 'Installing it updates the camera firmware. If the update stops, the camera may not start.',
+    installSteps: [
+      'Charge the battery fully. Copy your photos from the card.',
+      'Copy the fast-boot firmware to the card root. Remove other firmware files from the card root.',
+      'Turn the camera off. Hold MENU and press the power button, then follow the screen. Do not turn the camera off or open the battery cover until the update is complete.',
+      'Turn the camera on, and make sure that it takes and plays back photos. Then delete the firmware file from the card, and install GRKit as usual.',
+    ] as readonly string[],
+    installDone: 'After that, GRK shows in ADJ soon after power-on.',
+    restore: 'Go back to the official firmware',
+    restoreText: 'Update the camera with the official firmware of the same version, in the same way. A later official update also replaces the fast-boot firmware.',
+  },
+  fastbootLink: 'Fast start',
+  /** The line after the step that turns the camera on: the text before the link to the fast-boot page, the link, and the text after it. */
+  fastbootHint: ['To load GRKit sooner, try ', 'Fast start', '.'] as readonly [string, string, string],
   remove: 'Uninstall',
   removeSteps: [
     ['Turn the camera off. Delete the ', '`SCRIPT', ' and ', '`GRKIT', ' folders from the card. ', '`GRKIT', ' holds your GRKit settings.'],
@@ -686,15 +745,19 @@ const zhHans: Strings = {
   faq: [
     {
       q: 'ADJ 里没有 GRK？',
-      a: ['GRKit 在开机后约 8 到 10 秒加载，GR IV 以及安装或更新后的第一次开机会更久。稍等片刻，然后在拍摄时按 ADJ，选择第 6 项 GRK。首次使用前，需要按住 MENU 开机，打开 SD 脚本。'],
+      a: ['GRKit 在开机后约 8 到 10 秒加载，GR IV 以及安装或更新后的第一次开机会更久。稍等片刻，然后在拍摄时按 ADJ，选择第 6 项 GRK。首次使用前，需要按住 MENU 开机，打开 SD 脚本。', '想更快加载，可以试试', '[快速启动', '。'],
     },
     {
       q: '为什么开机后头几张照片没有胶片风格？',
-      a: ['GRKit 加载完成前，相机使用自身的设置。开机后稍等几秒再拍。'],
+      a: ['GRKit 加载完成前，相机使用自身的设置。开机后稍等几秒再拍，或者试试', '[快速启动', '。'],
     },
     {
       q: 'GRKit 会修改相机固件吗？',
-      a: ['不会。GRKit 在开机时从存储卡加载。取出存储卡或卸载 GRKit 后，相机和原来一样。SD 脚本设置会一直开启，直到手动关闭。'],
+      a: ['不会。GRKit 在开机时从存储卡加载。取出存储卡或卸载 GRKit 后，相机和原来一样。SD 脚本设置会一直开启，直到手动关闭。只有可选的快速启动固件会修改固件，而且只在你安装它之后。'],
+    },
+    {
+      q: '能让 GRKit 加载得更快吗？',
+      a: ['可以，使用可选的', '[快速启动固件', '。它需要更新一次固件。'],
     },
     {
       q: '胶片风格会改掉我的影像控制设置吗？',
@@ -725,6 +788,48 @@ const zhHans: Strings = {
       a: ['在相机上打开 MENU，“关于 GRKit”在自定义页 GRKit 小节的最后。'],
     },
   ],
+  fastboot: {
+    title: '快速启动',
+    back: '返回 GRKit',
+    lead: 'GRKit 开机后一到两秒加载。',
+    compareHead: ['官方固件', '快速启动固件'],
+    versionSeparator: '、',
+    compare: [
+      ['GRKit 加载', '开机后约 8 到 10 秒', '开机后一到两秒'],
+      ['开机就拍', '加载完成前的照片没有 GRKit 效果', '很快就能用 GRKit 效果拍'],
+      ['GRKit 功能', '全部', '相同，用同一个安装包'],
+      ['安装', '复制到存储卡', '先更新一次固件，再复制到存储卡'],
+      ['支持版本', 'GRKit 支持的所有版本', null],
+      ['风险', '不修改固件', '更新中断，相机可能无法开机。Ricoh 可能拒绝保修。'],
+      ['官方固件更新', '照常更新', '更新后恢复为官方固件'],
+    ],
+    make: '制作固件',
+    makeSteps: [
+      '从 Ricoh 官网下载相机的最新固件。',
+      '选择下载的 ZIP 文件，下载快速启动固件。',
+    ],
+    ricohPage: (camera: string) => `${camera} 的 Ricoh 下载页面`,
+    choose: '选择官方固件文件',
+    note: '文件不会上传。',
+    working: '正在制作快速启动固件…',
+    ready: (camera: string) => `已下载 ${camera} 的快速启动固件。请按下面的步骤安装。`,
+    outdated: (release: string, latest: string) => `${release} 不是最新版本。请从 Ricoh 下载 ${latest}。`,
+    unknown: '这不是受支持的相机和版本的官方固件。请从 Ricoh 重新下载。',
+    error: '无法制作快速启动固件，请重试。',
+    install: '安装固件',
+    warning: '安装需要更新相机固件。更新中断，相机可能无法开机。',
+    installSteps: [
+      '充满电池，备份存储卡里的照片。',
+      '把快速启动固件复制到存储卡根目录，并删除根目录里的其他固件文件。',
+      '关机。按住 MENU 再按电源键，按屏幕提示更新。更新完成前，不要关机或打开电池仓。',
+      '开机，确认能正常拍照和回放。然后删除卡上的固件文件，照常安装 GRKit。',
+    ],
+    installDone: '之后开机，ADJ 里很快就会出现 GRK。',
+    restore: '恢复官方固件',
+    restoreText: '用同版本的官方固件，按同样的方法更新即可。以后的官方固件更新也会替换快速启动固件。',
+  },
+  fastbootLink: '快速启动',
+  fastbootHint: ['想更快加载 GRKit？试试', '快速启动', '。'],
   remove: '卸载',
   removeSteps: [
     ['关闭相机。从存储卡删除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 文件夹。', '`GRKIT', ' 保存 GRKit 的设置。'],
@@ -1072,15 +1177,19 @@ const zhHant: Strings = {
   faq: [
     {
       q: 'ADJ 裡沒有 GRK？',
-      a: ['GRKit 在開機後約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。稍等片刻，然後在拍攝時按 ADJ，選擇第 6 項 GRK。首次使用前，需要按住 MENU 開機，開啟 SD 腳本。'],
+      a: ['GRKit 在開機後約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。稍等片刻，然後在拍攝時按 ADJ，選擇第 6 項 GRK。首次使用前，需要按住 MENU 開機，開啟 SD 腳本。', '想更快載入，可以試試', '[快速啟動', '。'],
     },
     {
       q: '為什麼開機後頭幾張照片沒有底片風格？',
-      a: ['GRKit 載入完成前，相機使用原本的設定。開機後稍等幾秒再拍。'],
+      a: ['GRKit 載入完成前，相機使用原本的設定。開機後稍等幾秒再拍，或者試試', '[快速啟動', '。'],
     },
     {
       q: 'GRKit 會修改相機韌體嗎？',
-      a: ['不會。GRKit 在開機時從記憶卡載入。取出記憶卡或解除安裝 GRKit 後，相機和原來一樣。SD 腳本設定會一直開啟，直到你關閉它。'],
+      a: ['不會。GRKit 在開機時從記憶卡載入。取出記憶卡或解除安裝 GRKit 後，相機和原來一樣。SD 腳本設定會一直開啟，直到你關閉它。只有選用的快速啟動韌體會修改韌體，而且只在你安裝它之後。'],
+    },
+    {
+      q: '能讓 GRKit 載入得更快嗎？',
+      a: ['可以，使用選用的', '[快速啟動韌體', '。它需要更新一次韌體。'],
     },
     {
       q: '底片風格會改掉我的 影像控制 設定嗎？',
@@ -1111,6 +1220,48 @@ const zhHant: Strings = {
       a: ['在相機上開啟 MENU，「自定義設定」功能表中 GRKit 小節的最後有「關於 GRKit」。'],
     },
   ],
+  fastboot: {
+    title: '快速啟動',
+    back: '返回 GRKit',
+    lead: 'GRKit 開機後一到兩秒載入。',
+    compareHead: ['官方韌體', '快速啟動韌體'],
+    versionSeparator: '、',
+    compare: [
+      ['GRKit 載入', '開機後約 8 到 10 秒', '開機後一到兩秒'],
+      ['開機就拍', '載入完成前的照片沒有 GRKit 效果', '很快就能用 GRKit 效果拍'],
+      ['GRKit 功能', '全部', '相同，用同一個安裝包'],
+      ['安裝', '複製到記憶卡', '先更新一次韌體，再複製到記憶卡'],
+      ['支援版本', 'GRKit 支援的所有版本', null],
+      ['風險', '不修改韌體', '更新中斷，相機可能無法開機。Ricoh 可能拒絕保固。'],
+      ['官方韌體更新', '照常更新', '更新後恢復為官方韌體'],
+    ],
+    make: '製作韌體',
+    makeSteps: [
+      '從 Ricoh 官網下載相機的最新韌體。',
+      '選擇下載的 ZIP 檔案，下載快速啟動韌體。',
+    ],
+    ricohPage: (camera: string) => `${camera} 的 Ricoh 下載頁面`,
+    choose: '選擇官方韌體檔案',
+    note: '檔案不會上傳。',
+    working: '正在製作快速啟動韌體…',
+    ready: (camera: string) => `已下載 ${camera} 的快速啟動韌體。請依下面的步驟安裝。`,
+    outdated: (release: string, latest: string) => `${release} 不是最新版本。請從 Ricoh 下載 ${latest}。`,
+    unknown: '這不是受支援的相機與版本的官方韌體。請從 Ricoh 重新下載。',
+    error: '無法製作快速啟動韌體，請再試一次。',
+    install: '安裝韌體',
+    warning: '安裝需要更新相機韌體。更新中斷，相機可能無法開機。',
+    installSteps: [
+      '充飽電池，備份記憶卡裡的照片。',
+      '把快速啟動韌體複製到記憶卡根目錄，並刪除根目錄裡的其他韌體檔案。',
+      '關機。按住 MENU 再按電源鍵，依畫面提示更新。更新完成前，不要關機或打開電池蓋。',
+      '開機，確認能正常拍照與播放。然後刪除卡上的韌體檔案，照常安裝 GRKit。',
+    ],
+    installDone: '之後開機，ADJ 裡很快就會出現 GRK。',
+    restore: '恢復官方韌體',
+    restoreText: '用同版本的官方韌體，依同樣的方法更新即可。之後的官方韌體更新也會取代快速啟動韌體。',
+  },
+  fastbootLink: '快速啟動',
+  fastbootHint: ['想更快載入 GRKit？試試', '快速啟動', '。'],
   remove: '解除安裝',
   removeSteps: [
     ['關閉相機。從記憶卡刪除 ', '`SCRIPT', ' 和 ', '`GRKIT', ' 資料夾。', '`GRKIT', ' 保存 GRKit 的設定。'],
@@ -1462,15 +1613,19 @@ const ja: Strings = {
   faq: [
     {
       q: 'ADJ に GRK が表示されない',
-      a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。GR IV や、インストール・アップデート後の最初の起動ではもう少しかかります。少し待ってから、撮影画面で ADJ を押し、6 番目の項目「GRK」を選びます。初回は SD スクリプトをオンにする必要があります。MENU ボタンを押したまま電源を入れてください。'],
+      a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。GR IV や、インストール・アップデート後の最初の起動ではもう少しかかります。少し待ってから、撮影画面で ADJ を押し、6 番目の項目「GRK」を選びます。初回は SD スクリプトをオンにする必要があります。MENU ボタンを押したまま電源を入れてください。', 'もっと早く読み込むには、', '[高速起動', 'をお試しください。'],
     },
     {
       q: '電源を入れた直後の写真にフィルムルックがかからない',
-      a: ['GRKit が読み込まれるまでは、カメラ本来の設定で撮影されます。電源を入れてから数秒待ってください。'],
+      a: ['GRKit が読み込まれるまでは、カメラ本来の設定で撮影されます。電源を入れてから数秒待つか、', '[高速起動', 'をお試しください。'],
     },
     {
       q: 'GRKit はカメラのファームウェアを変更しますか？',
-      a: ['いいえ。GRKit は電源を入れるたびに SD カードから読み込まれます。カードを抜くか GRKit をアンインストールすると、カメラは元どおりに動きます。SD スクリプトの設定は、オフにするまでオンのままです。'],
+      a: ['いいえ。GRKit は電源を入れるたびに SD カードから読み込まれます。カードを抜くか GRKit をアンインストールすると、カメラは元どおりに動きます。SD スクリプトの設定は、オフにするまでオンのままです。ファームウェアを変更するのは、オプションの高速起動ファームウェアをインストールした場合だけです。'],
+    },
+    {
+      q: 'GRKit をもっと早く読み込めますか？',
+      a: ['はい。オプションの', '[高速起動ファームウェア', 'を使います。ファームウェアの更新が一度必要です。'],
     },
     {
       q: 'フィルムルックでイメージコントロールの設定は変わりますか？',
@@ -1501,6 +1656,48 @@ const ja: Strings = {
       a: ['カメラで MENU を開き、「カスタマイズ設定」の GRKit の最後にある「GRKit について」で確認できます。'],
     },
   ],
+  fastboot: {
+    title: '高速起動',
+    back: 'GRKit のトップへ',
+    lead: '電源を入れて 1〜2 秒で GRKit が読み込まれます。',
+    compareHead: ['公式ファームウェア', '高速起動ファームウェア'],
+    versionSeparator: '、',
+    compare: [
+      ['GRKit の読み込み', '電源を入れてから約 8〜10 秒', '電源を入れて 1〜2 秒'],
+      ['電源を入れてすぐの撮影', '読み込みまでは GRKit の効果なし', 'すぐに GRKit の効果で撮影'],
+      ['GRKit の機能', 'すべて', '同じ（同じパッケージ）'],
+      ['インストール', 'カードにコピー', '一度ファームウェアを更新してから、カードにコピー'],
+      ['対応バージョン', 'GRKit が対応するすべてのバージョン', null],
+      ['リスク', 'ファームウェアを変更しない', '更新が止まるとカメラが起動しなくなるおそれがあります。Ricoh の修理を受けられない場合があります。'],
+      ['公式アップデート', 'いつもどおり更新', '公式ファームウェアに置き換わる'],
+    ],
+    make: 'ファームウェアを作る',
+    makeSteps: [
+      'カメラの最新ファームウェアを Ricoh からダウンロードします。',
+      'ダウンロードした ZIP ファイルを選択すると、高速起動ファームウェアがダウンロードされます。',
+    ],
+    ricohPage: (camera: string) => `${camera} の Ricoh ダウンロードページ`,
+    choose: '公式ファームウェアのファイルを選択',
+    note: 'ファイルはアップロードされません。',
+    working: '高速起動ファームウェアを作成しています…',
+    ready: (camera: string) => `${camera} の高速起動ファームウェアをダウンロードしました。下の手順でインストールしてください。`,
+    outdated: (release: string, latest: string) => `${release} は最新バージョンではありません。Ricoh から ${latest} をダウンロードしてください。`,
+    unknown: '対応するカメラとバージョンの公式ファームウェアではありません。Ricoh からダウンロードし直してください。',
+    error: '高速起動ファームウェアを作成できませんでした。もう一度お試しください。',
+    install: 'ファームウェアをインストール',
+    warning: 'インストールにはファームウェア更新が必要です。更新が止まると、カメラが起動しなくなるおそれがあります。',
+    installSteps: [
+      'バッテリーを満充電し、カードの写真をバックアップします。',
+      '高速起動ファームウェアをカードのルートにコピーし、ルートにあるほかのファームウェアのファイルを削除します。',
+      '電源を切ります。MENU を押したまま電源ボタンを押し、画面の指示に従って更新します。更新が終わるまで、電源を切ったりバッテリーカバーを開けたりしないでください。',
+      '電源を入れ、撮影と再生ができることを確かめます。そのあとカードのファームウェアのファイルを削除し、いつもどおり GRKit をインストールします。',
+    ],
+    installDone: 'これで、電源を入れてすぐ ADJ に GRK が表示されます。',
+    restore: '公式ファームウェアに戻す',
+    restoreText: '同じバージョンの公式ファームウェアで、同じ手順で更新します。今後の公式アップデートでも、高速起動ファームウェアは置き換わります。',
+  },
+  fastbootLink: '高速起動',
+  fastbootHint: ['GRKit をもっと早く読み込むには、', '高速起動', 'をお試しください。'],
   remove: 'アンインストール',
   removeSteps: [
     ['カメラの電源を切ります。カードから ', '`SCRIPT', ' フォルダーと ', '`GRKIT', ' フォルダーを削除します。', '`GRKIT', ' には GRKit の設定が入っています。'],
@@ -1863,17 +2060,24 @@ const ko: Strings = {
       q: 'ADJ 모드에 GRK가 보이지 않습니다.',
       a: [
         'GRKit은 전원을 켜고 8~10초쯤 뒤에 실행됩니다. GR IV나 설치·업데이트 후 처음 켤 때는 더 걸립니다. 잠시 기다린 뒤 촬영 중에 ADJ를 누르고 여섯 번째 항목인 GRK를 선택하세요. 처음에는 SD 스크립트를 켜야 합니다. MENU 버튼을 누른 채 전원을 켜세요.',
+        ' 더 빨리 불러오려면 ',
+        '[빠른 시작',
+        '을 써 보세요.',
       ],
     },
     {
       q: '전원을 켠 직후 찍은 사진에 필름 룩이 적용되지 않습니다.',
-      a: ['GRKit을 불러오기 전에는 카메라 본래 설정으로 찍힙니다. 전원을 켜고 몇 초 기다리세요.'],
+      a: ['GRKit을 불러오기 전에는 카메라 본래 설정으로 찍힙니다. 전원을 켜고 몇 초 기다리거나 ', '[빠른 시작', '을 써 보세요.'],
     },
     {
       q: 'GRKit이 카메라 펌웨어를 바꾸나요?',
       a: [
-        '아니요. GRKit은 카메라가 켜져 있는 동안 SD 카드에서 실행됩니다. 카드를 빼거나 GRKit을 제거하면 카메라는 원래대로 동작합니다. SD 스크립트 설정은 끌 때까지 켜진 상태로 남습니다.',
+        '아니요. GRKit은 카메라가 켜져 있는 동안 SD 카드에서 실행됩니다. 카드를 빼거나 GRKit을 제거하면 카메라는 원래대로 동작합니다. SD 스크립트 설정은 끌 때까지 켜진 상태로 남습니다. 펌웨어를 바꾸는 것은 선택 사항인 빠른 시작 펌웨어를 설치했을 때뿐입니다.',
       ],
+    },
+    {
+      q: 'GRKit을 더 빨리 불러올 수 있나요?',
+      a: ['네. 선택 사항인 ', '[빠른 시작 펌웨어', '를 쓰면 됩니다. 펌웨어를 한 번 업데이트해야 합니다.'],
     },
     {
       q: '필름 룩을 쓰면 화상 컨트롤 설정이 바뀌나요?',
@@ -1906,6 +2110,48 @@ const ko: Strings = {
       a: ['카메라에서 MENU를 엽니다. 사용자 설정 탭의 GRKit 항목 맨 끝에 있는 GRKit 정보에서 확인할 수 있습니다.'],
     },
   ],
+  fastboot: {
+    title: '빠른 시작',
+    back: 'GRKit 홈으로',
+    lead: '전원을 켜고 1~2초 만에 GRKit이 불러와집니다.',
+    compareHead: ['공식 펌웨어', '빠른 시작 펌웨어'],
+    versionSeparator: ', ',
+    compare: [
+      ['GRKit 불러오기', '전원을 켜고 약 8~10초 뒤', '전원을 켜고 1~2초'],
+      ['켜자마자 촬영', '불러오기 전에는 GRKit 효과 없음', '곧바로 GRKit 효과로 촬영'],
+      ['GRKit 기능', '전부', '같음(같은 패키지)'],
+      ['설치', '카드에 복사', '펌웨어를 한 번 업데이트한 뒤 카드에 복사'],
+      ['지원 버전', 'GRKit이 지원하는 모든 버전', null],
+      ['위험', '펌웨어를 바꾸지 않음', '업데이트가 멈추면 카메라가 켜지지 않을 수 있습니다. Ricoh에서 수리를 거절할 수 있습니다.'],
+      ['공식 업데이트', '평소처럼 업데이트', '공식 펌웨어로 바뀜'],
+    ],
+    make: '펌웨어 만들기',
+    makeSteps: [
+      '카메라의 최신 펌웨어를 Ricoh에서 내려받습니다.',
+      '내려받은 ZIP 파일을 선택하면 빠른 시작 펌웨어가 내려받아집니다.',
+    ],
+    ricohPage: (camera: string) => `${camera} Ricoh 다운로드 페이지`,
+    choose: '공식 펌웨어 파일 선택',
+    note: '파일은 업로드되지 않습니다.',
+    working: '빠른 시작 펌웨어를 만드는 중…',
+    ready: (camera: string) => `${camera}용 빠른 시작 펌웨어를 내려받았습니다. 아래 단계에 따라 설치하세요.`,
+    outdated: (release: string, latest: string) => `${release}은(는) 최신 버전이 아닙니다. Ricoh에서 ${latest}을(를) 내려받으세요.`,
+    unknown: '지원하는 카메라와 버전의 공식 펌웨어가 아닙니다. Ricoh에서 다시 내려받으세요.',
+    error: '빠른 시작 펌웨어를 만들지 못했습니다. 다시 시도하세요.',
+    install: '펌웨어 설치',
+    warning: '설치하려면 펌웨어를 업데이트해야 합니다. 업데이트가 멈추면 카메라가 켜지지 않을 수 있습니다.',
+    installSteps: [
+      '배터리를 완전히 충전하고 카드의 사진을 백업합니다.',
+      '빠른 시작 펌웨어를 카드 루트에 복사하고, 루트에 있는 다른 펌웨어 파일을 지웁니다.',
+      '전원을 끕니다. MENU를 누른 채 전원 버튼을 누르고 화면 안내에 따라 업데이트합니다. 업데이트가 끝날 때까지 전원을 끄거나 배터리 덮개를 열지 마세요.',
+      '전원을 켜고 촬영과 재생이 되는지 확인합니다. 그다음 카드에서 펌웨어 파일을 지우고 평소처럼 GRKit을 설치합니다.',
+    ],
+    installDone: '이후에는 전원을 켜자마자 ADJ에 GRK가 나타납니다.',
+    restore: '공식 펌웨어로 되돌리기',
+    restoreText: '같은 버전의 공식 펌웨어로 같은 방법으로 업데이트합니다. 이후의 공식 업데이트도 빠른 시작 펌웨어를 대체합니다.',
+  },
+  fastbootLink: '빠른 시작',
+  fastbootHint: ['GRKit을 더 빨리 불러오려면 ', '빠른 시작', '을 써 보세요.'],
   remove: '제거',
   removeSteps: [
     ['카메라 전원을 끕니다. 카드에서 ', '`SCRIPT', ' 폴더와 ', '`GRKIT', ' 폴더를 삭제합니다. ', '`GRKIT', '에는 GRKit 설정이 들어 있습니다.'],
@@ -2076,20 +2322,29 @@ function saveLanguage(language: Language): void {
 }
 
 /** Sets the language, the title, and the description of the document. */
-export function showLanguage(language: Language): void {
+/** The title, the description, and the address of a page: the language page, or with `fastboot` its fast-boot firmware page. */
+export function pageText(language: Language, fastboot = false): { title: string; description: string; path: string } {
+  const strings = STRINGS[language];
+  return fastboot
+    ? { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path: fastbootPath(language) }
+    : { title: strings.title, description: strings.description, path: LANGUAGE_PATHS[language] };
+}
+
+export function showLanguage(language: Language, fastboot = false): void {
+  const page = pageText(language, fastboot);
   document.documentElement.lang = language;
-  document.title = STRINGS[language].title;
-  document.querySelector('meta[name="description"]')?.setAttribute('content', STRINGS[language].description);
+  document.title = page.title;
+  document.querySelector('meta[name="description"]')?.setAttribute('content', page.description);
   // The canonical address stays on grkit.app, also for a preview deployment of the site.
   const canonical = document.querySelector('link[rel="canonical"]');
   if (canonical) {
-    canonical.setAttribute('href', new URL(LANGUAGE_PATHS[language], canonical.getAttribute('href') ?? location.href).href);
+    canonical.setAttribute('href', new URL(page.path, canonical.getAttribute('href') ?? location.href).href);
   }
 }
 
 /** Applies a language, moves to its page address, and remembers it for the next visit. */
-export function applyLanguage(language: Language): void {
-  history.replaceState(history.state, '', `${LANGUAGE_PATHS[language]}${location.search}${location.hash}`);
-  showLanguage(language);
+export function applyLanguage(language: Language, fastboot = false): void {
+  history.replaceState(history.state, '', `${pageText(language, fastboot).path}${location.search}${location.hash}`);
+  showLanguage(language, fastboot);
   saveLanguage(language);
 }
