@@ -53,3 +53,17 @@ describe('STRINGS', () => {
     }
   });
 });
+
+describe('module descriptions', () => {
+  // A module description is one short line under the module name: at most 80 columns, where a
+  // wide (Chinese, Japanese, or Korean) character takes two.
+  it('keeps each module description short', () => {
+    const width = (text: string) =>
+      [...text].reduce((n, c) => n + (/[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6]/.test(c) ? 2 : 1), 0);
+    for (const [language, strings] of Object.entries(STRINGS)) {
+      for (const [module, text] of Object.entries(strings.modulesText)) {
+        expect(width(text), `${language} ${module}: ${text}`).toBeLessThanOrEqual(80);
+      }
+    }
+  });
+});
