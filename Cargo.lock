@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-build"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "grkit-core",
@@ -255,7 +255,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-cli"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -268,7 +268,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-core"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-firmware"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "hex",
@@ -298,7 +298,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-wasm"
-version = "1.4.4"
+version = "1.5.0"
 dependencies = [
  "anyhow",
  "grkit-core",
