@@ -600,7 +600,7 @@ export function App({
         },
       );
       if (run === buildRun.current) {
-        save(blob, packageFilename(__GRKIT_VERSION__, new Date()));
+        save(blob, packageFilename(__GRKIT_VERSION__, camera.name, new Date()));
         trackDownload(camera, plan, effects.length, language);
         setBuild({ state: 'ready' });
       }
