@@ -20,6 +20,13 @@ struct patch { u32 address, size, kind; const u8 *before; u8 *after; };
 /* RTOS_NATIVE builds the installer into the RTOS-side loader of
    runtime/fastboot/, whose backend.c serves the same calls without Linux. */
 #ifdef RTOS_NATIVE
+/* The loader runs from FAST_BASE up to RTOS_EXECUTABLE_END (fast.ld), so the
+   code of GRKit ends before it. */
+#define CODE_END FAST_BASE
+#else
+#define CODE_END RTOS_EXECUTABLE_END
+#endif
+#ifdef RTOS_NATIVE
 extern long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f);
 #else
 static long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
@@ -738,7 +745,7 @@ static int install(void)
         get32(plan + GRKIT_PLAN_MODULE_WORDS) != module_words || get32(plan + GRKIT_PLAN_MODULE_TILES) != module_tiles)
         return STATUS_PLAN;
     if ((status = relocate())) return status;
-    if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, RTOS_EXECUTABLE_END, &module_start))) return status;
+    if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, CODE_END, &module_start))) return status;
     if ((status = check_arrays(&arrays))) return status;
     if ((status = check_firmware())) return status;
     u32 pixels = icon_pixels();

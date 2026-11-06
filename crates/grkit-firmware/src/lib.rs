@@ -214,11 +214,21 @@ pub struct Patched {
 pub fn patch(file: &[u8]) -> Result<Patched> {
     let update = official_update(file)?;
     let release = release_of(&update)?;
-    let bytes = patch_release(&update, &release)?;
+    patch_with(&update, release)
+}
+
+/// The fast-boot update file of `update`, the official update file of
+/// `release` (`release_of`).
+pub fn patch_with(update: &[u8], release: Release) -> Result<Patched> {
+    let bytes = patch_release(update, &release)?;
+    // The message gives the size and SHA-256 of the new file, which a new
+    // table records as its result.
     ensure!(
         release.result.matches(&bytes),
-        "The patched file of {} differs from the expected file",
-        release.name()
+        "The patched file of {} has {} bytes and SHA-256 {}, not the result of its table",
+        release.name(),
+        bytes.len(),
+        sha256(&bytes)
     );
     Ok(Patched { release, bytes })
 }

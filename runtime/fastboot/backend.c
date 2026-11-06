@@ -160,7 +160,9 @@ static long slot(void)
 }
 static u32 card_size(const char *dos, int *exists)
 {
-    u32 st[8] = {0};
+    /* The file status: 64 bytes, as the head and SYS_memovr give it. The
+       call fills it, so it has no initializer, which would need memset. */
+    u32 st[16];
     *exists = FS_SIZE(dos, st) == 0;
     return *exists ? st[2] : 0;
 }

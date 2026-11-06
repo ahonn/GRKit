@@ -72,6 +72,10 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     lines.extend(["intdim ba 256".into(), "fast = 0".into()]);
     if !fast.is_empty() {
         lines.extend([
+            // The probe words stay 0 on the official firmware, whatever the
+            // memory of the array held.
+            "ba[0] = 0".into(),
+            "ba[1] = 0".into(),
             "sendln 'SYS_buildinfo 0'".into(),
             format!("if ba[0] <> {FAST_PROBE_MAGIC} goto probed"),
             format!("if ba[1] <> {FAST_INTERFACE} goto probed"),
@@ -944,6 +948,9 @@ mod tests {
         assert_eq!(lines[first_array], "intdim ba 256");
         let probe = at("sendln 'SYS_buildinfo 0'");
         assert!(first_array < probe);
+        // The probe words are 0 before the probe, so stale memory never
+        // passes it on the official firmware.
+        assert_eq!(lines[probe - 2..probe], ["ba[0] = 0", "ba[1] = 0"]);
         assert_eq!(lines[probe + 1], "if ba[0] <> 1129202771 goto probed");
         assert_eq!(lines[probe + 2], "if ba[1] <> 1 goto probed");
         let probed = at(":probed");

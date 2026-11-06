@@ -12,7 +12,7 @@
    FRUN.BIN calls the install vector later (runtime::FAST_RUN). */
 #include "target.h"
 #include "fast.h"
-#define FAST_BASE 0x54c00000
+/* The build defines FAST_BASE (runtime::FAST_BASE), the address of fast.ld. */
 
         .syntax unified
         .arm

@@ -41,6 +41,8 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
     }
     let directory = objects.join("fastboot");
     fs::create_dir_all(&directory)?;
+    // The address of the loader for head.S and the installer (fast.ld).
+    let fast_base = format!("-DFAST_BASE={:#x}", grkit_core::runtime::FAST_BASE);
     // The flags of the production installer, with RTOS_NATIVE.
     let compile = |source: &Path, include: &Path, output: &Path| {
         toolchain::run(
@@ -56,6 +58,7 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                 "-fomit-frame-pointer",
                 "-fno-pic",
                 "-DRTOS_NATIVE",
+                fast_base.as_str(),
                 "-I",
                 path(include)?,
                 "-c",

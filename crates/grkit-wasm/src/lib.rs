@@ -855,10 +855,17 @@ impl FastbootFirmware {
 }
 
 /// Returns the fast-boot update file of an official update file, or of the official ZIP that
-/// holds it. It fails for any file that is not the official file of a supported release.
+/// holds it, and undefined for any other file. It fails only when the patch of an official file
+/// fails.
 #[wasm_bindgen(js_name = patchFirmware)]
-pub fn patch_firmware(bytes: &[u8]) -> Result<FastbootFirmware, JsError> {
-    grkit_firmware::patch(bytes)
-        .map(FastbootFirmware)
+pub fn patch_firmware(bytes: &[u8]) -> Result<Option<FastbootFirmware>, JsError> {
+    let Ok(update) = grkit_firmware::official_update(bytes) else {
+        return Ok(None);
+    };
+    let Ok(release) = grkit_firmware::release_of(&update) else {
+        return Ok(None);
+    };
+    grkit_firmware::patch_with(&update, release)
+        .map(|patched| Some(FastbootFirmware(patched)))
         .map_err(js_error)
 }

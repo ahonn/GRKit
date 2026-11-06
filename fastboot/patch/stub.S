@@ -25,7 +25,7 @@
         .global stub
 stub:
         push    {r4-r9, lr}
-        sub     sp, sp, #44             @ [sp] the read length, [sp+8] the file status
+        sub     sp, sp, #76             @ [sp] the read length, [sp+8] the file status (64 bytes); 8-byte aligned with the push
         mov     r4, r0                  @ argc
         mov     r5, r1                  @ argv
         cmp     r4, #3
@@ -73,7 +73,7 @@ stub:
         blx     ip
         cmp     r7, #0
         bne     done
-        mov     r0, r6
+        bic     r0, r6, #31             @ from the cache line of the first byte
         add     r1, r6, r8
 1:      cmp     r0, r1
         mcrlo   p15, 0, r0, c7, c11, 1  @ DCCMVAU
@@ -92,6 +92,6 @@ stub:
         blx     r6
 done:
         mov     r0, #0
-        add     sp, sp, #44
+        add     sp, sp, #76
         pop     {r4-r9, pc}
         .ltorg
