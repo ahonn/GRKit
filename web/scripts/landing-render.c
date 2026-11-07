@@ -126,10 +126,9 @@ int main(int argc, char **argv)
     setting_set(SETTING_POSITION, 0);
     date_apply(&set, a);
 #else
-    setting_set(SETTING_BLOOM_ENABLED, a != 0);
-    setting_set(SETTING_BLOOM_STRENGTH, a ? a - 1 : 1);
-    setting_set(SETTING_HAL_ENABLED, b != 0);
-    setting_set(SETTING_HAL_STRENGTH, b ? b - 1 : 1);
+    setting_set(SETTING_BLOOM, a);
+    setting_set(SETTING_HALATION, b);
+    setting_set(SETTING_HALATION_COLOR, 1); /* Orange, the default */
     if (argc == 8) {
         grkit_test_shot.known = GRKIT_SHOT_EXPOSURE;
         grkit_test_shot.scene_ev = (s32)(atof(argv[7]) * 256);
