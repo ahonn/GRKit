@@ -1,3 +1,9 @@
+## 1.5.1 (2026-11-07)
+
+### Fixes
+
+- Bloom and Halation at Strong now glow visibly around lamps indoors and at dusk.
+
 ## 1.5.0 (2026-11-06)
 
 ### Features
