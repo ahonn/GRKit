@@ -1,45 +1,45 @@
 {
   "code_memory": {
-    "available": 12714496,
+    "available": 12713728,
     "base": 1413296128,
-    "end": 1413348864,
+    "end": 1413349632,
     "limit": 1426063360,
-    "used": 52736
+    "used": 53504
   },
   "components": {
     "framing": {
-      "address": 1413331456,
-      "end": 1413348816,
-      "limit": 12731904,
-      "sha256": "a6cf095129935c82587815d827d3967f225d7af0fa2de3350a2156f6454c2b80",
-      "size": 17360
+      "address": 1413331968,
+      "end": 1413349458,
+      "limit": 12731392,
+      "sha256": "a12a7df5e4bdf8009ca05fe5d6636951c69efdec3ee66ff28cfb01bf8736781c",
+      "size": 17490
     },
     "menu": {
-      "address": 1413297408,
-      "end": 1413331446,
-      "limit": 12765952,
-      "sha256": "a173fb3a0dc148240bac4b77d4056b8c4d890a24e319442415f1b64e0e1e6486",
-      "size": 34038
+      "address": 1413297664,
+      "end": 1413331966,
+      "limit": 12765696,
+      "sha256": "e596c0a318241a1a41293eeab3a7b54bffb4ddf7f068cd3cd8a3bea60e3c6007",
+      "size": 34302
     },
     "processing": {
       "address": 1413296384,
-      "end": 1413297384,
+      "end": 1413297520,
       "limit": 12766976,
-      "sha256": "f9ff43a66629e7f6b5f8363e4b4c4b82cce83f9849934e75ff0b403fcc209887",
-      "size": 1000
+      "sha256": "cbea71b765b1c7e038a9ef6b0c5deb623005ba82df2f23776a31cbd3f63731a9",
+      "size": 1136
     }
   },
   "decoded_firmware_sha256": "c4e597c7c9ca1bc181b30e35139ed90a4fd876ddcca14f12be0e00b6702233ae",
   "files": [
     {
       "path": "SCRIPT/GRKIT/CORE.BIN",
-      "sha256": "9661aa670945f2642e966a1f0697448ef092228463a57d709bbcf817c7409448",
-      "size": 425784
+      "sha256": "218c49112dc1e058763cdcbda664fe4617e9373b4805d334cd5a572ab3aa4d6b",
+      "size": 426428
     },
     {
       "path": "SCRIPT/GRKIT/F636111.BIN",
-      "sha256": "845de075320f1ce28f1dd3091ca73d2cccb27f320072796e6a98fb9f7caa63c4",
-      "size": 350188
+      "sha256": "a20e6019d9c8f56c6472740ccb5dde342e50e478da5e4cb90c7ebf40a94f1831",
+      "size": 350832
     },
     {
       "path": "SCRIPT/GRKIT/FRUN.BIN",
@@ -53,7 +53,7 @@
     },
     {
       "path": "SCRIPT/GRKIT/LOADER.TTL",
-      "sha256": "63c32ecc7d256dd36478611ceec20f3cb0b58f2c7b3d3ee8329347f5d7bd3c82",
+      "sha256": "d74cd6e3ccbb9eb3cb3edaa56eb4b038d54cc3311105112dd5b9439ab1f26e67",
       "size": 28885
     },
     {
@@ -68,7 +68,7 @@
     }
   ],
   "firmware_sha256": "a2f664dfca034059eb0fd6e18ab08684c326b4a034d85c164dad7e1ec9b5655f",
-  "generated_header_sha256": "93bc3c74cc94a5003050d40c1ab5152ec064abea99b2acc6c15ad29f4946ed8d",
+  "generated_header_sha256": "fb7b1731d40d35ad0ca3e7263f6e5a059b259c7061d7671a1e1dee44ffbd17e4",
   "points": {
     "capture.aspect": 38,
     "menu.page": 53,
@@ -83,8 +83,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "6ecf4c86864df1e8a9c99c07ff13b12f815f5a5a406ec816af32b06a4a2ccc2a",
-    "Cargo.toml": "ef4832517940a202bcba455b03cd6251d0d9f31c88fd76a92eb80a49b825e688",
+    "Cargo.lock": "b86ed4bab953937ffbbea59b2ce18cbdd118e60cbb4adb5df389cf5c51ad6593",
+    "Cargo.toml": "e33d50a386c2059a352f40ca9cbca8b68aadae709eb4e9ddb1900b4da5db2a60",
     "crates/grkit-build/Cargo.toml": "9a8c29261f78944ee9e1eed9ee46b8b39110ebce1881b09348308ae7da75b0c9",
     "crates/grkit-build/src/arm.rs": "cead1100e35ba8ca8c522ef6d0fb74cd057e549401eba94de76fe6cc45cbfe90",
     "crates/grkit-build/src/components.rs": "288d376a605021e06cf06719e74df265d81a27b5012f739b74004901b838d26b",
@@ -110,7 +110,7 @@
     "crates/grkit-core/assets/RobotoCondensed-Bold.ttf": "095a8d4d5b6ab85e38ec3ab08442771a4614e533136cb03dd10d08335ca4e2a5",
     "crates/grkit-core/assets/RobotoCondensed-LICENSE.txt": "0e4cc6ece88573545be2ed25835363662a6182ba4a4c1b5c8feda52add30e8a6",
     "crates/grkit-core/assets/RobotoCondensed-Light.ttf": "e00475060f292e7a7254bd9a882cb744d97574b533d3da0fff203faf3d1f55a2",
-    "crates/grkit-core/src/abi.rs": "e48b565210d421df2db6c53352d149e699f71394592a21bf1c39a053a3f84e56",
+    "crates/grkit-core/src/abi.rs": "6e0c74c11dc5fcd9daa29d3ecaafdd5df8b61253aa48f88a2621b1ec5e372036",
     "crates/grkit-core/src/artwork.rs": "580e282857b71939e926292c9c257fc2250bd6f6db895baf84bfce6765340cdc",
     "crates/grkit-core/src/camera.rs": "83be72945abe032de894ab66078be2dbdc588531ac3d54d32b5f6a95f044759f",
     "crates/grkit-core/src/capabilities.rs": "29fc13d69b23f90f2750e660d301df559db6d963f5ba4be77df422e444722829",
@@ -148,11 +148,12 @@
     "crates/grkit-core/src/site.rs": "70159dccfc1bb7480338717f72d2856e8e5915ec48ad34bac28db647b026c80b",
     "crates/grkit-core/src/testing.rs": "2664360a6b6f73faffd1db7e13bce00207b94238ea0cb4d9dd01be4bf8739f0f",
     "crates/grkit-core/src/tiff.rs": "aa3e294faaaba567b6bee4092a3a28b627bdc11fc01b30af68c170c08b4afd75",
-    "runtime/abi.h": "b6cb6f7bc6d522f660c98a864588acbc051b65c4580d44ff142f13708b8477a6",
+    "runtime/abi.h": "ae7f13d2b781491e00d8736b3b3748d4a3abd8e32295457d60e129900819f11e",
     "runtime/about.h": "37df00143bd042f2210949773623ecca4c83e135b1ec4cc07da448cec137051c",
     "runtime/aspect.h": "8bf02d1f5687f0f4b586455138d4d981cf439d47ebfccb6a9f46c1770818c055",
     "runtime/catalog.h": "2acd0ddb0dad82d28e8a364e39744c170f4050ea09e1236f683c8f957c5db5e3",
     "runtime/core.h": "d2040a53808f73a1f845c1a6e7713ed4cac16fc31f40ad4e7ff4fe48a01fb9e4",
+    "runtime/develop.h": "d1684f60ccf74869c8691230a15f47b87f58a4ed24e4c59ca76bc3e6804aee4d",
     "runtime/directory.h": "3624facd5f087370b5d6423e30ed75e042285abcf8a9fbd93cde51a4febc1fb0",
     "runtime/dump/DUMP.SH": "835c8bf0af0b93bdd71f95556f0b347570fe29f7b191eb449ed0bb4f8d508746",
     "runtime/dump/README.txt": "625e4e873030fa081180370c7b6f37379a283cb340e9004f20cf8c2e37d0fba7",
@@ -184,7 +185,7 @@
     "runtime/level.h": "c8afad1eb6560c997e9e624775255b231dcffe98d9cb948f378b7a0385938a19",
     "runtime/manage.h": "aef6929a6951502a2190c70c2cc88729c42dbc262e9f4b7b46a400b638b17564",
     "runtime/menu.S": "06d0e112c96e18bf489d63318ed450fc65aa5b8c7a8f0d83dd2d5465ad14d2f4",
-    "runtime/menu.c": "1150a306f21be71c901f3c87e9896a18fee211e18f691d595ac2e00fe70bd84e",
+    "runtime/menu.c": "9f5887c44407d292089eaa17ca590d022bdd4a8b11f2d2fb9ce5590c4bc6f024",
     "runtime/menu_about.h": "3070248f879cbe447e27a938b6566c336503eebf19358b0c57f8e6e894d3dc85",
     "runtime/menu_listed.h": "7ba72443678d9d28df8b033119c1d5b49f2a27313aab4504ee94c906311b4323",
     "runtime/menu_section.h": "f9acc026a559a4a42a07a9aba158528806ef9ae53d2fafeb7ddf1e0cb1881416",
@@ -193,9 +194,9 @@
     "runtime/module_link.h": "54e5ed570a352ccb974f8628b3d593de71e5f26bb83bb22efefacd26f9ee1394",
     "runtime/modules.h": "87c52c9d77cca427607dbac1df7571a5dbe3452974d45ea645a65591ed97a8de",
     "runtime/picture.S": "4a27f5d63f1a701f887ffcf0635d742a7fbfcf7e09931435578429b46125b070",
-    "runtime/picture.c": "b13dbca61f0737873db19a571e64e7030f98224ff93a17097d218edc2de295f3",
+    "runtime/picture.c": "03d02d5b8829e88c3c1df8f040469c4c3ae9b3f842199d7d90ffe397b1ea738e",
     "runtime/processing.S": "cec1bb800287050cc25ec90214be457a4608966fc0fa5265bcebff40ee8ec853",
-    "runtime/processing.h": "7fbd804ced2cebf206b3d0f47a3aa7f32917f1fa6572457b977a0e71ad6bab43",
+    "runtime/processing.h": "2e9be89abc20cf2bc4f0462bdaddeb8e0c95fa396d37d84d0bc393c9a031ad58",
     "runtime/profile.h": "d468ce4afddd458b071789cebc2af6724db5bb1e30e6292841cc43cc5c52b36a",
     "runtime/relocation.h": "a27f3b7032f3ec09d2aeb3a22b15d87c25d8b0033f2a48fac92a21a19952f007",
     "runtime/sdk/grkit.h": "0f386e08e5481cb6684a6f2d56dee947aa14c997a399a983df5b93ef18628428",
@@ -207,13 +208,13 @@
     "runtime/setting_table.h": "c1a5a89e64653db474025683c27d10cd2ec0a0b0c1af53c62ce5cf84e7758a9f",
     "runtime/settings.h": "dab6993c76713877c4203c2d756ad6f31e623833618151b0fe88f5cb560f36d3",
     "runtime/state.h": "2e81c6cd6cd36da7d43421b8865dd23601c4151f41ce458de0767958f79ae148",
-    "runtime/targets/gr3-2.10.h": "4b662c173172b980796741068f1b151962b1bf5e3e535e9809c8307ffe1b6941",
+    "runtime/targets/gr3-2.10.h": "04e5004edd4905afed1bf00f598d645a9d351d7d2ac81d8c5a408095901dbdec",
     "runtime/targets/gr3.h": "b0afeebae4a539318926bbe8cc75d4b5ef1d4c34b098fd3368a51a7009a8a9e8",
-    "runtime/targets/gr4-1.11.h": "abc1ae5623583443f2d101d19ae62fb461e6c140cd016975fe99fcca72642e58",
-    "runtime/targets/gr4-1.20-0528.h": "ed362b4758208587bd7a96cd33134f54464a527873518a3793bbed5c446df2de",
-    "runtime/targets/gr4-1.20.h": "bfd8ae2aabd9185abd9d76df146fd473ddaa0b1a6b01d41b3ed86946667da898",
+    "runtime/targets/gr4-1.11.h": "2bc7878a518e2dedab280bc80da31653b19a5b8202d6cf7b22f02d265f8e1c56",
+    "runtime/targets/gr4-1.20-0528.h": "c4869d41534b13f58536b3ae2231d9380ab91c78d0c029ebb7225f73ebb9601f",
+    "runtime/targets/gr4-1.20.h": "7982d2a9c0328cfee0858d0b32ed83147f049c776cea804c8e885a56887939ec",
     "runtime/targets/gr4-processing.S": "e6d350dfa9d0959676d5fc06269f7f6fc5876e3918a8bf24e7c8e41f0775b39d",
-    "runtime/targets/gr4.h": "26d0785353660c5c83ba99749def8aaefebeda47e8b5289ffcb5e044f5847a76",
+    "runtime/targets/gr4.h": "25b82c77caf72ccdf2274bc9036b473780b0180291a9fbe6c4a0f1fc86eed5dc",
     "runtime/tone.h": "16139ee04aebf537d7969cae9f6affae18173b3e1c78e92d99517d9b33d9ee2e",
     "runtime/tone_page.h": "2e25f0b2b6bb7a376efe7a8c3ffbf81f9acddbaee805c81aa93c7aa5a2d80050",
     "runtime/toning.h": "c511c91b14e1d205f387485fbff788becb055888f9d6588ce14ce9de6fab381f",
@@ -228,5 +229,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.5.0"
+  "version": "1.5.1"
 }
