@@ -544,7 +544,11 @@ pub fn effect_label_js(blob: &[u8]) -> Result<EffectLabel, JsError> {
 /// from `iconPixels`) as its icon when it is given. The ID stays. It fails for a file that is not
 /// an effect, a name that the camera cannot show, or an icon of another size.
 #[wasm_bindgen(js_name = relabelEffect)]
-pub fn relabel_effect_js(blob: &[u8], name: &str, icon: Option<Vec<u8>>) -> Result<Vec<u8>, JsError> {
+pub fn relabel_effect_js(
+    blob: &[u8],
+    name: &str,
+    icon: Option<Vec<u8>>,
+) -> Result<Vec<u8>, JsError> {
     relabel_effect(blob, name, icon.as_deref()).map_err(js_error)
 }
 

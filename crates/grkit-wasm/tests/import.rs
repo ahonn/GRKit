@@ -1,5 +1,7 @@
 use grkit_core::{cube, effects, fit, site};
-use grkit_wasm::{effect_preview, guess_input, import_lut, relabel_effect, ImportRequest, MAX_LUT_SIZE};
+use grkit_wasm::{
+    effect_preview, guess_input, import_lut, relabel_effect, ImportRequest, MAX_LUT_SIZE,
+};
 use serde_json::{json, Value};
 use std::sync::LazyLock;
 
@@ -151,24 +153,34 @@ fn a_relabeled_effect_keeps_its_id_and_its_look() {
     // A new name keeps the ID, the icon, and every value of the look.
     let renamed = relabel_effect(&imported.blob, "Warm Day", None).unwrap();
     let (after, same_icon) = effects::decode(&renamed).unwrap();
-    assert_eq!((after.id.as_str(), after.name.as_str()), ("warm-v1", "Warm Day"));
+    assert_eq!(
+        (after.id.as_str(), after.name.as_str()),
+        ("warm-v1", "Warm Day")
+    );
     assert_eq!(same_icon, icon);
     assert_eq!(after.to_json()["name"], "Warm Day");
     let mut look = before.to_json();
     look["name"] = json!("Warm Day");
     assert_eq!(after.to_json(), look);
     // Back to the old name, the file is the same again.
-    assert_eq!(relabel_effect(&renamed, "Warm", None).unwrap(), imported.blob);
+    assert_eq!(
+        relabel_effect(&renamed, "Warm", None).unwrap(),
+        imported.blob
+    );
     // A new icon replaces the old one.
     let cover = json!({"template": "box", "brand": "Kodak", "name": "DAY", "band": false});
     let pixels = effects::icon_pixels(&cover).unwrap();
-    let (_, new_icon) = effects::decode(&relabel_effect(&imported.blob, "Warm", Some(&pixels)).unwrap()).unwrap();
+    let (_, new_icon) =
+        effects::decode(&relabel_effect(&imported.blob, "Warm", Some(&pixels)).unwrap()).unwrap();
     assert_eq!(new_icon, pixels);
     assert_ne!(new_icon, icon);
     // A name that the camera cannot show, an icon of another size, and a file that is not an
     // effect fail.
     for name in ["", " Warm", "Warm 1234567890123", "Wärm"] {
-        assert!(relabel_effect(&imported.blob, name, None).is_err(), "{name:?}");
+        assert!(
+            relabel_effect(&imported.blob, name, None).is_err(),
+            "{name:?}"
+        );
     }
     assert!(relabel_effect(&imported.blob, "Warm", Some(&[0; 16])).is_err());
     assert!(relabel_effect(b"GRFX0001", "Warm", None).is_err());
