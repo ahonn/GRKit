@@ -1,3 +1,11 @@
+## 1.5.1 (2026-11-07)
+
+### Fixes
+
+- Bloom and Halation at Strong now glow visibly around lamps indoors and at dusk.
+- In in-camera RAW Development, Fn on a Film Look adjusts its settings for that picture, as it does for a native Image Control.
+- On the site, Edit changes the name and the icon of an imported LUT film look, without a new import.
+
 ## 1.5.0 (2026-11-06)
 
 ### Features
