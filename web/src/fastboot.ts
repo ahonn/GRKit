@@ -33,7 +33,8 @@ export function newerRelease(release: string): string | null {
 }
 
 export type FastbootResult =
-  | { state: 'ready'; release: string }
+  /** `fileName` is the name of the official update file, which the camera looks for. */
+  | { state: 'ready'; release: string; fileName: string }
   /** The official update file of an older release: the page asks for `latest`. */
   | { state: 'outdated'; release: string; latest: string }
   /** The file is not the official update file of a supported release. */
@@ -53,8 +54,9 @@ export async function makeFastbootFirmware(file: Blob): Promise<FastbootResult> 
   try {
     const latest = newerRelease(firmware.release);
     if (latest) return { state: 'outdated', release: firmware.release, latest };
-    save(new Blob([firmware.bytes as Uint8Array<ArrayBuffer>]), firmware.fileName);
-    return { state: 'ready', release: firmware.release };
+    const fileName = firmware.fileName;
+    save(new Blob([firmware.bytes as Uint8Array<ArrayBuffer>]), fileName);
+    return { state: 'ready', release: firmware.release, fileName };
   } finally {
     firmware.free();
   }

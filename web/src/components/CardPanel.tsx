@@ -119,6 +119,7 @@ export function StartSection({
               <span className="camera-status">
                 <span className="badge supported">{t.recommended}</span>
               </span>
+              <span className="mode-text">{t.modeCardText}</span>
             </span>
           </label>
           <label className="camera">

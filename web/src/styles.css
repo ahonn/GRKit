@@ -423,10 +423,10 @@ label.download[aria-disabled='true'] {
   display: block;
 }
 
-/* A phone has no room for the links: the sections follow in the page. */
-/* The links stay on one line; a narrower window hides them, as the footer has them too. */
+/* The links stay on one line; a narrower window hides them, as the footer has them too. The
+   one link back from the fast-boot firmware page stays. */
 @media (max-width: 900px) {
-  .masthead-nav {
+  .masthead-nav:not(.masthead-back) {
     display: none;
   }
 }

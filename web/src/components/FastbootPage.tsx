@@ -31,7 +31,7 @@ export function FastbootPage({ initialLanguage }: { initialLanguage: Language })
             </h1>
           </div>
           <div className="languages">
-            <nav className="masthead-nav" aria-label="GRKit">
+            <nav className="masthead-nav masthead-back" aria-label="GRKit">
               <a href={LANGUAGE_PATHS[language]}>{t.fastboot.back}</a>
             </nav>
             <span className="language-select">

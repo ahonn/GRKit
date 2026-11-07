@@ -6,7 +6,7 @@ import { TermsNote } from './TermsNote';
 type State =
   | { state: 'idle' }
   | { state: 'working' }
-  | { state: 'ready'; release: string }
+  | { state: 'ready'; release: string; fileName: string }
   | { state: 'outdated'; release: string; latest: string }
   | { state: 'unknown' }
   | { state: 'failed' };
@@ -106,7 +106,7 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                       {t.working}
                     </p>
                   )}
-                  {state.state === 'ready' && <p className="status">{t.ready(releaseName(state.release))}</p>}
+                  {state.state === 'ready' && <p className="status">{t.ready(releaseName(state.release), state.fileName)}</p>}
                   {state.state === 'outdated' && (
                     <p className="status error">{t.outdated(releaseName(state.release), releaseName(state.latest))}</p>
                   )}

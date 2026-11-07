@@ -748,14 +748,13 @@ export function App({
                           {t.firmware} {item.support.firmware}
                         </span>
                       )}
-                      <span className="camera-status">
-                        <span className={item.support ? 'badge supported' : 'badge'}>
-                          {item.support ? t.supported : t.planned}
+                      {/* A badge marks only a camera that GRKit does not support yet. */}
+                      {!item.support && (
+                        <span className="camera-status">
+                          <span className="badge">{t.planned}</span>
                         </span>
-                        {item.support?.noEffects && (
-                          <span className="camera-firmware">{t.noEffects}</span>
-                        )}
-                      </span>
+                      )}
+                      {item.support?.noEffects && <span className="camera-firmware">{t.noEffects}</span>}
                     </span>
                   </label>
                 ))}
