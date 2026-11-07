@@ -4,21 +4,33 @@ filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
 intdim ba 256
 fast = 0
+allocated = 0
+fastreason = 1
 ba[0] = 0
 ba[1] = 0
 sendln 'SYS_buildinfo 0'
 if ba[0] <> 1129202771 goto probed
+fastreason = 2
+fastinterface = ba[1]
 if ba[1] <> 1 goto probed
+fastreason = 3
 release = ba[2] * 1000 + ba[3]
 if release <> 588210 goto probe1
+fastreason = 4
 filesearch 'C:\SCRIPT\GRKIT\F588210.BIN'
+if result = 0 goto probe1
+filesearch 'C:\SCRIPT\GRKIT\I588210.BIN'
 if result <> 0 fast = 588210
 :probe1
 if release <> 588220 goto probe2
+fastreason = 4
 filesearch 'C:\SCRIPT\GRKIT\F588220.BIN'
+if result = 0 goto probe2
+filesearch 'C:\SCRIPT\GRKIT\I588220.BIN'
 if result <> 0 fast = 588220
 :probe2
 :probed
+if fast = 0 call fast_log
 attempts = 0
 failure = 60
 call write_error
@@ -27,10 +39,14 @@ if result != 0 goto reject
 filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
 if result != 0 goto reject
 if fast = 0 goto linux
+ba[254] = 999
 if fast = 588210 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F588210.BIN 0 call'
 if fast = 588220 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F588220.BIN 0 call'
+faststatus = ba[254]
 filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
 if result != 0 goto plan_ready
+fastreason = 5
+call fast_log
 fast = 0
 :linux
 mpause 2000
@@ -71,6 +87,7 @@ expected = 242 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 44) / 40
 if chunks != expectedchunks goto reject
+if allocated <> 0 goto check_arrays
 intdim registry words
 if chunks <= 0 goto icons_ready
 items = count + moduletiles + 5 - 0
@@ -102,19 +119,38 @@ if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
 intdim tailarea 48815
+allocated = 1
+hadcount = count
+hadwords = words
+hadchunks = chunks
+hadmodwords = modulewords
+hadmodtiles = moduletiles
+goto arrays_ready
+:check_arrays
+if count <> hadcount goto reject
+if words <> hadwords goto reject
+if chunks <> hadchunks goto reject
+if modulewords <> hadmodwords goto reject
+if moduletiles <> hadmodtiles goto reject
+:arrays_ready
 attempts = 0
 waits = 60
 if fast <> 0 waits = 300
 failure = 62
 call write_error
 :install
-if fast <> 0 sendln 'SYS_memovr C:\SCRIPT\GRKIT\FRUN.BIN 0 call'
+ba[254] = 999
+if fast = 588210 sendln 'SYS_memovr C:\SCRIPT\GRKIT\I588210.BIN 0 call'
+if fast = 588220 sendln 'SYS_memovr C:\SCRIPT\GRKIT\I588220.BIN 0 call'
 if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
+faststatus = ba[254]
+if fast = 0 faststatus = 0
+if faststatus >= 998 goto install_not_run
 filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
 if result != 0 goto installed
 call read_error
 if errorstatus = 62 goto install_wait
-if errorstatus != 0 goto reject
+if errorstatus != 0 goto install_failed
 :install_wait
 mpause 100
 if fast = 0 mpause 400
@@ -124,6 +160,22 @@ goto install
 :installed
 filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
 goto resident
+:install_not_run
+errorstatus = faststatus
+:install_failed
+if fast = 0 goto reject
+if errorstatus = 24 goto reject
+faststatus = errorstatus
+fastreason = 6
+call fast_log
+fast = 0
+filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
+attempts = 0
+failure = 60
+call write_error
+goto linux
 :resident
 stateok = 1
 foldersearch 'C:\GRKIT'
@@ -1236,4 +1288,34 @@ errorstatus = errorstatus + bytevalue - 48
 :read_error_close
 fileclose efh
 :read_error_end
+return
+:fast_log
+foldersearch 'C:\GRKIT'
+if result = 0 foldercreate 'C:\GRKIT'
+filesearch 'C:\GRKIT\BOOT.TXT'
+if result != 0 goto fast_log_append
+filecreate lfh 'C:\GRKIT\BOOT.TXT'
+goto fast_log_opened
+:fast_log_append
+fileopen lfh 'C:\GRKIT\BOOT.TXT' 1
+:fast_log_opened
+if lfh < 0 goto fast_log_end
+filewrite lfh 'fast-boot'
+if fastreason = 1 filewrite lfh ' off: official firmware'
+if fastreason = 2 filewrite lfh ' off: interface '
+if fastreason = 2 int2str line fastinterface
+if fastreason = 2 filewrite lfh line
+if fastreason >= 3 filewrite lfh ' '
+if fastreason >= 3 int2str line release
+if fastreason >= 3 filewrite lfh line
+if fastreason = 3 filewrite lfh ' off: not in this package'
+if fastreason = 4 filewrite lfh ' off: files missing'
+if fastreason = 5 filewrite lfh ' scan '
+if fastreason = 6 filewrite lfh ' install '
+if fastreason >= 5 int2str line faststatus
+if fastreason >= 5 filewrite lfh line
+if fastreason >= 5 filewrite lfh ', Linux used'
+filewriteln lfh ''
+fileclose lfh
+:fast_log_end
 return

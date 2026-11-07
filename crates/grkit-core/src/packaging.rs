@@ -269,8 +269,8 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
         for (name, blob) in runtime.files() {
             ensure!(
                 own.contains(&name.as_str())
-                    || name == &runtime::fast_run_path()
                     || runtime::FastRelease::of_path(name).is_some()
+                    || runtime::FastRelease::of_install_path(name).is_some()
                     || files.get(name) == Some(blob),
                 "The {} runtime has another {name} than {}",
                 runtime.target(),
@@ -282,12 +282,11 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
 }
 
 /// Whether `name` is the path of a runtime file: one of `RUNTIME_PATHS`, a
-/// fast-boot file, or the file that installs through one
-/// (`runtime::fastboot`).
+/// fast-boot file, or the install file of one (`runtime::fastboot`).
 pub fn is_runtime_path(name: &str) -> bool {
     RUNTIME_PATHS.contains(&name)
         || runtime::FastRelease::of_path(name).is_some()
-        || name == runtime::fast_run_path()
+        || runtime::FastRelease::of_install_path(name).is_some()
 }
 
 /// The fast-boot files of `files` (`runtime::fast_files`), each checked as
@@ -531,12 +530,14 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
     };
     let activation = runtime::activation_files(camera);
     let cores = camera.targets().len();
-    // The fast-boot files and FRUN.BIN, which package_targets checks.
+    // The fast-boot files and their install files, which package_targets
+    // checks.
     let fast_paths: Vec<String> = contents
         .keys()
         .filter_map(|name| name.strip_prefix("SD_ROOT/"))
         .filter(|path| {
-            runtime::FastRelease::of_path(path).is_some() || *path == runtime::fast_run_path()
+            runtime::FastRelease::of_path(path).is_some()
+                || runtime::FastRelease::of_install_path(path).is_some()
         })
         .map(str::to_owned)
         .collect();

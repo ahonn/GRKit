@@ -4,12 +4,16 @@
    The loader script reads the first 1 KB of the file into its first script
    array and calls it there with r0 = that array (SYS_memovr PATH 0 call).
    The head reads the whole file to its link address, clears the BSS, makes
-   the code visible to instruction fetch, and calls the scan vector with
-   r0 = the array. It does nothing if the file does not have the size of
-   this build. The head runs from the script array, so it uses PC-relative
-   addresses only, and absolute addresses from its literal pool.
+   the code visible to instruction fetch, and calls the vector in its entry
+   word with r0 = the array. It does nothing if the file does not have the
+   size of this build. The head runs from the script array, so it uses
+   PC-relative addresses only, and absolute addresses from its literal pool.
 
-   FRUN.BIN calls the install vector later (runtime::FAST_RUN). */
+   The entry word is the last word of the head (runtime::FAST_ENTRY_OFFSET).
+   In this file it is the scan vector. The install file of the release
+   (I<project><version>.BIN) is this head with the install vector there
+   (runtime::install_file), so INSTALL loads the whole file again and uses
+   no memory that SCAN left. */
 #include "target.h"
 #include "fast.h"
 /* The build defines FAST_BASE (runtime::FAST_BASE), the address of fast.ld. */
@@ -68,7 +72,7 @@ fast_head:
         dsb
         isb
         mov     r0, r7
-        ldr     ip, =fast_scan
+        ldr     ip, fast_entry
         blx     ip
         b       done
 fail:
@@ -82,6 +86,18 @@ done:
 name:   .asciz FAST_PATH
 failed: .asciz "GRKit: the fast-boot file is not complete\n"
         .balign 4
+/* The status word: SCAN or INSTALL writes its status here, in the script
+   array, for the loader (runtime::FAST_STATUS_OFFSET). It keeps this value
+   when the head does not call the vector. */
+        .org    0x3f8
+        .global fast_status
+fast_status:
+        .word   998
+/* The vector that the head calls: scan here, install in the install file. */
+        .org    0x3fc
+        .global fast_entry
+fast_entry:
+        .word   fast_scan
 
 /* The vector table at FAST_BASE + 0x400: scan, then install. */
         .section .vectors, "ax"

@@ -86,7 +86,6 @@ if fast <> 0 waits = 300
 failure = 62
 call write_error
 :install
-if fast <> 0 sendln 'SYS_memovr C:\SCRIPT\GRKIT\FRUN.BIN 0 call'
 if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
 filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
 if result != 0 goto installed

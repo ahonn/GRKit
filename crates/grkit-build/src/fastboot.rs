@@ -80,8 +80,11 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
             build.join("fast.h"),
             format!(
                 "/* The path of this fast-boot file, which its head reads. */\n\
-                 #define FAST_PATH {:?}\n",
-                release.rtos_path()
+                 #define FAST_PATH {:?}\n\
+                 /* The status word of the head in the script array. */\n\
+                 #define FAST_STATUS_INDEX {}\n",
+                release.rtos_path(),
+                grkit_core::runtime::FAST_STATUS_INDEX
             ),
         )?;
         let (backend, head) = (build.join("backend.o"), build.join("head.o"));

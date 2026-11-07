@@ -1352,15 +1352,17 @@ fn a_package_keeps_the_import_library_that_the_camera_does_not_install() {
 }
 
 /// A runtime build has the fast-boot files of each release that it runs, and
-/// a package has those of its camera, with FRUN.BIN and a loader that runs
-/// them.
+/// a package has those of its camera, with their install files and a loader
+/// that runs them.
 #[test]
 fn a_package_holds_the_fast_boot_files_of_its_camera() {
-    let names = |bytes: &[u8]| -> Vec<String> {
+    // The files of a release: the prefix, then the release number.
+    let names = |bytes: &[u8], prefix: &str| -> Vec<String> {
         files_of(bytes)
             .keys()
-            .filter_map(|path| path.strip_prefix("SD_ROOT/SCRIPT/GRKIT/F"))
-            .map(|name| format!("F{name}"))
+            .filter_map(|path| path.strip_prefix(&format!("SD_ROOT/SCRIPT/GRKIT/{prefix}")))
+            .filter(|name| name.starts_with(|c: char| c.is_ascii_digit()))
+            .map(|name| format!("{prefix}{name}"))
             .collect()
     };
     let gr3 = testing::fast_runtime("gr3-2.10");
@@ -1403,24 +1405,38 @@ fn a_package_holds_the_fast_boot_files_of_its_camera() {
     ];
     for (camera, runtimes, expected) in cases {
         let bytes = package(&runtimes, camera);
-        let mut expected: Vec<String> = expected.into_iter().map(String::from).collect();
-        expected.push("FRUN.BIN".into());
-        expected.sort();
-        assert_eq!(names(&bytes), expected, "{}", camera.name);
+        let expected: Vec<String> = expected.into_iter().map(String::from).collect();
+        let installs: Vec<String> = expected
+            .iter()
+            .map(|name| name.replacen('F', "I", 1))
+            .collect();
+        assert_eq!(names(&bytes, "F"), expected, "{}", camera.name);
+        assert_eq!(names(&bytes, "I"), installs, "{}", camera.name);
         let files = files_of(&bytes);
-        assert_eq!(files["SD_ROOT/SCRIPT/GRKIT/FRUN.BIN"], runtime::FAST_RUN);
+        assert!(!files.contains_key("SD_ROOT/SCRIPT/GRKIT/FRUN.BIN"));
         let loader = String::from_utf8(files["SD_ROOT/SCRIPT/GRKIT/LOADER.TTL"].clone()).unwrap();
-        for name in expected.iter().filter(|name| *name != "FRUN.BIN") {
-            assert!(
-                loader.contains(&format!("SYS_memovr C:\\SCRIPT\\GRKIT\\{name} 0 call")),
-                "{name}"
+        for (name, install) in expected.iter().zip(&installs) {
+            let fast = &files[&format!("SD_ROOT/SCRIPT/GRKIT/{name}")];
+            assert_eq!(
+                files[&format!("SD_ROOT/SCRIPT/GRKIT/{install}")],
+                runtime::install_file(fast).unwrap()
             );
+            for file in [name, install] {
+                assert!(
+                    loader.contains(&format!("SYS_memovr C:\\SCRIPT\\GRKIT\\{file} 0 call")),
+                    "{file}"
+                );
+            }
         }
         verify_package(&bytes).unwrap();
 
         // A package without the fast-boot files is still a package.
         let mut plain = files.clone();
-        plain.retain(|path, _| !path.starts_with("SD_ROOT/SCRIPT/GRKIT/F"));
+        plain.retain(|path, _| {
+            let path = path.trim_start_matches("SD_ROOT/");
+            runtime::FastRelease::of_path(path).is_none()
+                && runtime::FastRelease::of_install_path(path).is_none()
+        });
         assert!(validate_contents(&with_sums(plain.clone())).is_err());
         let plain_loader = runtime::package_runtime_files(
             &camera
@@ -1441,7 +1457,8 @@ fn a_package_holds_the_fast_boot_files_of_its_camera() {
         plain.insert(format!("SD_ROOT/{}", card_loader()), plain_loader);
         validate_contents(&with_sums(plain)).unwrap();
 
-        // A fast-boot file of another camera, or without FRUN.BIN, is refused.
+        // A fast-boot file of another camera, a missing install file, or
+        // another install file is refused.
         let mut foreign = files.clone();
         let other = if camera.id == "gr3" {
             "F609160.BIN"
@@ -1454,9 +1471,13 @@ fn a_package_holds_the_fast_boot_files_of_its_camera() {
             testing::fast_file(&release),
         );
         assert!(validate_contents(&with_sums(foreign)).is_err());
-        let mut no_run = files.clone();
-        no_run.remove("SD_ROOT/SCRIPT/GRKIT/FRUN.BIN");
-        assert!(validate_contents(&with_sums(no_run)).is_err());
+        let install = format!("SD_ROOT/SCRIPT/GRKIT/{}", installs[0]);
+        let mut no_install = files.clone();
+        no_install.remove(&install);
+        assert!(validate_contents(&with_sums(no_install)).is_err());
+        let mut changed = files.clone();
+        changed.get_mut(&install).unwrap()[0] ^= 1;
+        assert!(validate_contents(&with_sums(changed)).is_err());
     }
 
     // A fast-boot file must be that of its build, with its own path.

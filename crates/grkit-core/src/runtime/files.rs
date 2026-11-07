@@ -2,7 +2,7 @@
 //! package scripts, the core files, and the files that turn SD scripts on or
 //! off.
 
-use super::fastboot::{fast_files, fast_run_path, FAST_RUN};
+use super::fastboot::{fast_files, install_file};
 use super::loader::{core_path, loader_with};
 use super::ICON_STRIDE;
 use crate::camera::Camera;
@@ -113,7 +113,8 @@ pub fn package_runtime_files(binaries: &[&[u8]], icon_stride: usize) -> Files {
 
 /// `package_runtime_files`, with the fast-boot files of `fast` by their path
 /// (`runtime::fastboot`). The loader runs each of them on its firmware
-/// release, and `FRUN.BIN` comes with them. `fast` holds no other file.
+/// release, and the install file of each comes with it. `fast` holds no
+/// other file, and each passed `runtime::check_fast_file`.
 pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride: usize) -> Files {
     let releases: Vec<_> = fast_files(fast)
         .into_iter()
@@ -206,9 +207,10 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
     for (index, binary) in binaries.iter().enumerate() {
         files.insert(core_path_of(index, count), binary.to_vec());
     }
-    if !fast.is_empty() {
-        files.extend(fast.clone());
-        files.insert(fast_run_path(), FAST_RUN.to_vec());
+    for (release, bytes) in fast_files(fast) {
+        files.insert(release.path(), bytes.clone());
+        let install = install_file(bytes).expect("a checked fast-boot file");
+        files.insert(release.install_path(), install);
     }
     files
 }

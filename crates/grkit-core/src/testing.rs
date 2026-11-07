@@ -19,12 +19,15 @@ pub fn runtime_files(installer: &[u8], target: &str) -> Files {
 }
 
 /// A stand-in fast-boot file of `release`, which `runtime::check_fast_file`
-/// accepts: a head that names the file's path, then the marker of its
-/// runtime build.
+/// accepts: a head that names the file's path, has the status word, and
+/// calls the scan vector, then the marker of its runtime build.
 pub fn fast_file(release: &runtime::FastRelease) -> Vec<u8> {
     let mut bytes = vec![0; runtime::FAST_HEAD_SIZE];
     let path = release.rtos_path();
     bytes[..path.len()].copy_from_slice(path.as_bytes());
+    bytes[runtime::FAST_STATUS_OFFSET..runtime::FAST_ENTRY_OFFSET]
+        .copy_from_slice(&runtime::FAST_STATUS_NOT_RUN.to_le_bytes());
+    bytes[runtime::FAST_ENTRY_OFFSET..].copy_from_slice(&runtime::FAST_SCAN_VECTOR.to_le_bytes());
     bytes.extend_from_slice(
         format!("{}{}\0", packaging::TARGET_MARKER, release.target()).as_bytes(),
     );

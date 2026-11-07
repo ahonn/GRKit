@@ -7,7 +7,8 @@
  *   - serves the card paths (/media/storage1/...) from the SD card through the
  *     RTOS file API (C:\...), so every file the installer writes reaches the
  *     card as on Linux;
- *   - keeps /tmp files in RAM (the plan copy that INSTALL reads after SCAN);
+ *   - keeps no file in memory: the head loads the whole file again for
+ *     INSTALL, so nothing lasts from SCAN to INSTALL but the card;
  *   - returns the physical map base from mmap, so at(p) == (u8*)p;
  *   - implements msync as a real cache clean + instruction-cache invalidate;
  *   - routes stdout to the RTOS printf and the exit markers to the RTOS log.
@@ -22,6 +23,8 @@ typedef unsigned int u32;
 
 /* The RTOS calls of the firmware build (targets/<camera>-<version>.h). */
 #include "target.h"
+/* The status word of the head in the script array (FAST_STATUS_INDEX). */
+#include "fast.h"
 
 typedef int (*printf_fn)(const char *, ...);
 typedef void (*log_fn)(u32, u32, u32, u32, const char *, ...);
@@ -89,31 +92,6 @@ static int dos_path(const char *path, char *out)
     return 1;
 }
 
-/* ---- RAM files (/tmp) ---------------------------------------------------- */
-#define RAM_FILES 2U
-#define RAM_CAP (512U * 1024U)
-#define PATH_SIZE 96U
-struct ram_file { char path[PATH_SIZE]; u32 size; int present; u8 bytes[RAM_CAP]; };
-static struct ram_file ram[RAM_FILES];
-static struct ram_file *ram_find(const char *path)
-{
-    for (u32 i = 0; i < RAM_FILES; ++i) if (ram[i].present && seq(ram[i].path, path)) return &ram[i];
-    return 0;
-}
-static struct ram_file *ram_make(const char *path)
-{
-    struct ram_file *f = ram_find(path);
-    if (!f) {
-        if (slen(path) >= PATH_SIZE) return 0;
-        for (u32 i = 0; i < RAM_FILES && !f; ++i) if (!ram[i].present) f = &ram[i];
-        if (!f) return 0;
-        u32 i = 0; for (; path[i]; ++i) f->path[i] = path[i]; f->path[i] = 0;
-        f->present = 1;
-    }
-    f->size = 0;
-    return f;
-}
-
 /* ---- directory listings --------------------------------------------------- */
 #define LIST_NAMES 256U
 #define NAME_SIZE 16U    /* 8.3 names */
@@ -142,8 +120,8 @@ static int list_directory(const char *dos, struct listing *l)
 }
 
 /* ---- open-file table ------------------------------------------------------ */
-enum kind { FREE, CARD_FILE, CARD_DIR, RAM_FILE, MEMORY };
-struct open_file { enum kind kind; u32 fno; u32 size; u32 position; int writing; struct ram_file *ram; struct listing *list; };
+enum kind { FREE, CARD_FILE, CARD_DIR, MEMORY };
+struct open_file { enum kind kind; u32 fno; u32 size; u32 position; int writing; struct listing *list; };
 #define OPEN_FILES 12U
 #define FIRST_FD 3U
 static struct open_file open_files[OPEN_FILES];
@@ -180,19 +158,6 @@ static long do_open(const char *path, u32 flags)
     char dos[DOS_SIZE];
     if (seq(path, "/dev/mem")) {
         o->kind = MEMORY;
-    } else if (prefix(path, "/tmp/")) {
-        if (flags == 0x8800) {
-            o->ram = ram_find(path);
-            if (!o->ram) return ENOENT_ERROR;
-        } else if (flags == 0xc1 || flags == 0x241) {
-            if (flags == 0xc1 && ram_find(path)) return EEXIST_ERROR;
-            o->ram = ram_make(path);
-            if (!o->ram) return EIO_ERROR;
-            o->writing = 1;
-        } else {
-            return EBADF_ERROR;
-        }
-        o->kind = RAM_FILE;
     } else if (dos_path(path, dos)) {
         int exists = 0;
         if (flags == 0xc000) {
@@ -275,11 +240,6 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
     case 3: /* read */
         o = opened(a);
         if (!o) return EBADF_ERROR;
-        if (o->kind == RAM_FILE) {
-            u32 left = o->ram->size - o->position, k = left < c ? left : c;
-            for (u32 i = 0; i < k; ++i) ((u8 *)b)[i] = o->ram->bytes[o->position + i];
-            o->position += k; return (long)k;
-        }
         if (o->kind != CARD_FILE || o->writing) return EBADF_ERROR;
         { u32 left = o->size - o->position, k = left < c ? left : c, len = 0;
           /* The RTOS read reports the requested count, so read exactly what is left. */
@@ -289,12 +249,6 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
         if (a == 1 || a == 2) { putbytes((const char *)b, c); return (long)c; }
         o = opened(a);
         if (!o || !o->writing) return EBADF_ERROR;
-        if (o->kind == RAM_FILE) {
-            u32 room = RAM_CAP - o->position, k = room < c ? room : c;
-            for (u32 i = 0; i < k; ++i) o->ram->bytes[o->position + i] = ((const u8 *)b)[i];
-            o->position += k; if (o->position > o->ram->size) o->ram->size = o->position;
-            return (long)k;
-        }
         { u32 len = 0;
           if (c && FS_WRITE(o->fno, (void *)b, c, &len)) return EIO_ERROR;
           o->position += c; return (long)c; }
@@ -307,7 +261,6 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
         o->kind = FREE;
         return 0;
     case 10: /* unlink */
-        if (prefix((const char *)a, "/tmp/")) { struct ram_file *g = ram_find((const char *)a); if (!g) return ENOENT_ERROR; g->present = 0; return 0; }
         if (!dos_path((const char *)a, dos)) return ENOENT_ERROR;
         return FS_REMOVE(dos) ? ENOENT_ERROR : 0;
     case 19: /* lseek: directories only (rewind, tell, skip) */
@@ -381,19 +334,20 @@ static int run(const char *mode)
 /* The first call, from the head (head.S): scan the package on the card. */
 static int scan(u32 *array)
 {
-    (void)array;
     int s = run("--scan");
     RLOG(0, 0, 0, 0, "GR_MODULE_SCAN_EXIT_%d", s);
+    array[FAST_STATUS_INDEX] = (u32)s;
     return s;
 }
 
-/* The later calls, from FRUN.BIN after the script allocated the planned
-   arrays: install. */
+/* The later calls, from the install file of the release after the script
+   allocated the planned arrays: install. The head loaded this file again
+   and cleared the BSS, so INSTALL reads its plan from the card. */
 static int install(u32 *array)
 {
-    (void)array;
     int s = run("--install");
     RLOG(0, 0, 0, 0, "GR_MODULE_INSTALL_EXIT_%d", s);
+    array[FAST_STATUS_INDEX] = (u32)s;
     return s;
 }
 

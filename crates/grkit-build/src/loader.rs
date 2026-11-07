@@ -151,6 +151,9 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     let paths = [
         ("PLAN_PATH", LINUX_DIRECTORY, "/PLAN.BIN"),
         ("RAM_PLAN_PATH", LINUX_RAM_PLAN, ""),
+        // The whole plan of the RTOS side (runtime/fastboot/), which keeps
+        // no memory from SCAN to INSTALL.
+        ("CARD_PLAN_PATH", LINUX_DIRECTORY, "/PLANFULL.BIN"),
         ("PLAN_TMP_PATH", LINUX_DIRECTORY, "/PLAN.TMP"),
         ("LOCK_PATH", LINUX_DIRECTORY, "/INSTALL.LCK"),
         ("DONE_PATH", LINUX_DIRECTORY, "/INSTALL.OK"),

@@ -68,7 +68,14 @@ static const char imported_path[] = IMPORTED_PATH;
 static const char data_path[] = DATA_PATH;
 static const char plan_path[] = PLAN_PATH;
 static const char plan_tmp[] = PLAN_TMP_PATH;
-static const char ram_plan_path[] = RAM_PLAN_PATH;
+/* The whole plan, which INSTALL reads: in RAM on Linux. On the RTOS side
+   (runtime/fastboot/) it is on the card, because the head loads the fast-boot
+   file again for INSTALL and no memory lasts from SCAN to INSTALL. */
+#ifdef RTOS_NATIVE
+static const char full_plan_path[] = CARD_PLAN_PATH;
+#else
+static const char full_plan_path[] = RAM_PLAN_PATH;
+#endif
 static const char lock_path[] = LOCK_PATH;
 static const char done_path[] = DONE_PATH;
 static const char failed_path[] = FAILED_PATH;
@@ -180,12 +187,12 @@ static int scan(void)
         put32(entry + GRKIT_PLANNED_CHOICE, listed_choice[i]);
         put32(entry + GRKIT_PLANNED_RECORD, listed_record[i]);
     }
-    /* The whole plan goes to RAM, then only its header to the card. The
-       loader starts INSTALL when the header appears on the card, so INSTALL
-       always finds the whole plan. A card write of the plan takes about
-       0.35 s on a camera. */
+    /* The whole plan goes to full_plan_path, then only its header to the
+       card. The loader starts INSTALL when the header appears on the card,
+       so INSTALL always finds the whole plan. On Linux, a card write of the
+       whole plan takes about 0.35 s on a camera, so it goes to RAM. */
     u32 done = 0, total = effects_at + listed_count * GRKIT_PLANNED_EFFECT_SIZE;
-    if (!write_file(ram_plan_path, plan, total)) {
+    if (!write_file(full_plan_path, plan, total)) {
         syscall6(6, fd, 0, 0, 0, 0, 0);
         syscall6(10, (u32)plan_tmp, 0, 0, 0, 0, 0);
         return STATUS_PLAN_WRITE;
@@ -319,12 +326,12 @@ static int relocate(void)
 /* SCAN wrote the plan at this power-on, and the loader allocated the arrays
    for it. INSTALL takes the effects from the plan, so that both steps install
    the same effects. */
-/* The plan of this start from RAM. Its header must be the header on the card,
-   which the loader allocated the arrays from. */
+/* The whole plan of this start (full_plan_path). Its header must be the
+   header on the card, which the loader allocated the arrays from. */
 static int read_plan(void)
 {
     u32 have = 0; long got = 0; u8 extra, header[GRKIT_PLAN_HEADER_SIZE];
-    long fd = syscall6(5, (u32)ram_plan_path, 0x8800, 0, 0, 0, 0);
+    long fd = syscall6(5, (u32)full_plan_path, 0x8800, 0, 0, 0, 0);
     if (fd < 0) return STATUS_PLAN;
     while (have < sizeof(plan)) {
         got = syscall6(3, fd, (u32)(plan + have), sizeof(plan) - have, 0, 0, 0);

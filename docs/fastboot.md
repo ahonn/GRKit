@@ -64,14 +64,27 @@ A later interface has another version in word 1. A script that does not know the
 
 ## How GRKit uses it
 
-A GRKit package has a fast-boot file for each release of its camera, `SCRIPT/GRKIT/F<project><version>.BIN`, and `SCRIPT/GRKIT/FRUN.BIN`. The same package works on the official firmware.
+A GRKit package has two files for each release of its camera: the fast-boot file `SCRIPT/GRKIT/F<project><version>.BIN` and its install file `SCRIPT/GRKIT/I<project><version>.BIN`. The same package works on the official firmware.
 
 1. The loader script probes the firmware.
-2. On the fast-boot firmware, it reads the first 1 KB of the fast-boot file of the release and calls it. That head loads the whole file to the top of the RTOS code region and runs SCAN.
-3. The loader allocates the arrays of the plan and calls `FRUN.BIN`, which runs INSTALL.
-4. If SCAN writes no plan, the loader runs SCAN and INSTALL on Linux, as on the official firmware.
+2. On the fast-boot firmware, it reads the first 1 KB of the fast-boot file of the release and calls it. That head loads the whole file to the top of the RTOS code region and runs SCAN. SCAN writes the whole plan to the card.
+3. The loader allocates the arrays of the plan and calls the install file. The install file is the same head with another entry vector: it loads the fast-boot file again and runs INSTALL, which reads the plan from the card. So INSTALL uses no memory that SCAN left.
+4. If SCAN writes no plan, or INSTALL fails, the loader runs SCAN and INSTALL on Linux, as on the official firmware. After a failed INSTALL, the new plan must have the sizes of the arrays that the loader already allocated. A failed rollback (status 24) stops the loader instead.
 
-After a fast SCAN writes a plan, INSTALL runs only from `FRUN.BIN`. If that INSTALL fails, the loader reports the error and does not try the Linux path. If `FRUN.BIN` is missing, the loader waits for it as for `INSTALL.SH`. The code of GRKit ends before the fast-boot file, which runs from 0x54c00000 (`runtime::FAST_BASE`).
+When a start does not use the fast-boot files, or stops using them, the loader adds one line to `GRKIT/BOOT.TXT`. A start that installs through them adds no line.
+
+| Line | Meaning |
+|---|---|
+| `fast-boot off: official firmware` | The probe found no fast-boot firmware. |
+| `fast-boot off: interface N` | The fast-boot firmware has another interface version. |
+| `fast-boot RELEASE off: not in this package` | The package has no fast-boot file for the firmware release. |
+| `fast-boot RELEASE off: files missing` | The fast-boot file or its install file is not on the card. |
+| `fast-boot RELEASE scan STATUS, Linux used` | SCAN wrote no plan. |
+| `fast-boot RELEASE install STATUS, Linux used` | INSTALL failed. |
+
+STATUS is an installer status (`runtime/install_status.h`), 998 when the head did not run SCAN or INSTALL (the file is not complete), or 999 when the firmware did not read the file.
+
+The code of GRKit ends before the fast-boot file, which runs from 0x54c00000 (`runtime::FAST_BASE`).
 
 `runtime/fastboot/` has the RTOS side of the installer and the head. `runtime::fastboot` in `grkit-core` names the files.
 
