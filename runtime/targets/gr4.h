@@ -158,6 +158,9 @@
 #define DETAIL_BASE_KIND 0x19e
 #define MODEL_SNAPSHOT 3
 #define PARAMETER_KINDS {0,1,2,3,4,5,6,14,15}
+/* The last two of them, Shading and Clarity, for assembly (runtime/processing.h). */
+#define PARAMETER_KIND_SHADING 14
+#define PARAMETER_KIND_CLARITY 15
 #define DETAIL_EV_SUBPAGE 0x8c
 /* The native settings page of a GRKit root row, as on GR III: the MENU
    submenu Instant Review (0x20000d4, entry 11 of FW_SUBMENU_KINDS), its three

@@ -191,6 +191,7 @@ static void level_reapply(volatile u32 *h) {
         MENU_LEVEL_ALARM(h[GRKIT_HOST_LEVEL_SCREEN/4],h[GRKIT_HOST_LEVEL_MODE/4]);
 }
 #include "tone.h"
+#include "develop.h"
 #define TONING_HALF(address) HALF(address,0)
 #include "toning.h"
 #ifndef MENU_FRAMING_REQUEST
@@ -1232,12 +1233,23 @@ A32_ENTRY u32 menu_develop_current_answer(u32 controller,u32 row) {
     if(effect!=DEVELOP_NONE) return develop_row(h,row)==effect;
     return develop_row(h,row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
 }
-/* The choice of a row, also of each highlighted row for the preview. */
+/* Fill the Standard set of the model for the effect of the development, or
+   give it its own values back for native processing (runtime/develop.h). */
+static void develop_set(volatile u32 *h) {
+#ifdef DEVELOP_PARAMETERS
+    develop_hold(h,h[GRKIT_HOST_DEVELOP/4]);
+#else
+    (void)h;
+#endif
+}
+/* The choice of a row, also of each highlighted row for the preview. It runs
+   before the native choice, which passes the parameter set of the row on. */
 A32_ENTRY void menu_develop_choose(u32 controller,u32 row) {
     volatile u32 *h=menu_header();
     u32 i=develop_row(h,row);
     (void)controller;
     h[GRKIT_HOST_DEVELOP/4]=i==DEVELOP_NONE ? 1 : develop_record(h,i);
+    develop_set(h);
 }
 A32_ENTRY void menu_develop_opened(u32 controller) {
     volatile u32 *h=menu_header();
@@ -1247,10 +1259,26 @@ A32_ENTRY void menu_develop_opened(u32 controller) {
 A32_ENTRY void menu_develop_restored(void) {
     volatile u32 *h=menu_header();
     h[GRKIT_HOST_DEVELOP/4]=h[GRKIT_HOST_DEVELOP_SAVED/4];
+    develop_set(h);
 }
-/* An effect has no native parameter page: Fn does nothing on its row. */
+/* Fn on the row of an effect opens the parameter page of the development for
+   native Standard, whose set then holds the Fn adjustments of the effect
+   (runtime/develop.h). The list may open on the effect that the DNG records
+   without a native choice, so the model selects Standard first. The builds
+   of an effect read the set, not the processing that a selection passes it
+   to. A target without the set has no page for an effect: Fn does nothing on
+   its row. */
 A32_ENTRY u32 menu_develop_fn_answer(u32 controller) {
-    return develop_list(controller) && develop_index(menu_header())!=DEVELOP_NONE ? 0 : DEVELOP_NONE;
+    volatile u32 *h=menu_header();
+    if(!develop_list(controller) || develop_index(h)==DEVELOP_NONE) return DEVELOP_NONE;
+#ifdef DEVELOP_PARAMETERS
+    develop_set(h);
+    BYTE(FW_DEVELOP_MODEL,DEVELOP_CATEGORY)=0;
+    BYTE(FW_DEVELOP_MODEL,DEVELOP_VALUES)=DEVELOP_STANDARD;
+    return 1;
+#else
+    return 0;
+#endif
 }
 /* The label of an Image Control in a subtitle. For the effect of the
    development it is the Standard label, which menu_text_override shows as

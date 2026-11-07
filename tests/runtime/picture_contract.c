@@ -102,6 +102,10 @@ static uint32_t playback_tone;
 #define PICTURE_PLAYBACK_TONE() playback_tone
 /* The JPEG header buffer of the XMP segment (runtime/xmp.h). */
 #define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)region((address), (size)))
+/* The Standard parameter set of the development model (runtime/develop.h),
+   one byte for each parameter kind. */
+static uint8_t develop_set[17];
+#define DEVELOP_SET(kind) develop_set[(kind)]
 #include "picture.c"
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
@@ -1614,6 +1618,69 @@ int main(void)
         picture_record_parameters(0x1234, SHOT + 4);
         assert(ifd_writes == 0);
     }
+#ifdef DEVELOP_PARAMETERS
+    /* Fn in a RAW development: while the Standard set of the development
+       model holds the adjustments of the effect, the stage gate and the
+       maker note read the set. The Fn adjustments of the record do
+       not change, and a native row gets the own values of the set back. */
+    {
+        static const uint8_t kinds[9] = PARAMETER_KINDS;
+        reset();
+        header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
+        memset(develop_set, 3, sizeof(develop_set));
+        /* Saturation +2 and a Clarity default of +1 in the record. */
+        BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 2;
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 1;
+        developing = 1;
+        header[GRKIT_HOST_DEVELOP / 4] = record(2);
+        develop_hold(header, record(2));
+        assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == record(2));
+        assert(develop_set[kinds[0]] == 6 && develop_set[kinds[7]] == 4 && develop_set[kinds[8]] == 5);
+        /* The page sets Shading 0 and Clarity neutral. */
+        develop_set[kinds[7]] = 0;
+        develop_set[kinds[8]] = 4;
+        assert(picture_gate_flag(0) == 1);
+        develop_set[kinds[7]] = 4;
+        assert(picture_gate_flag(1) == 0);
+        develop_set[kinds[6]] = 8;
+        /* The maker note of the developed picture records the set. */
+        developing = 1;
+        memset(ifd_values, 0xaa, sizeof(ifd_values));
+        still(record(2));
+        picture_record_parameters(0x1234, SHOT);
+        assert(ifd_values[0] == 2 && ifd_values[6] == 4 && ifd_values[9] == 0 && ifd_values[10] == 0);
+        /* The record keeps its own adjustments. */
+        assert(BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) == 2 && record_parameter(record(2), 6) == 4);
+        /* A native row: the own values come back, and the builds read the record. */
+        develop_hold(header, 1);
+        assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0);
+        for (u32 i = 0; i < 9; ++i) assert(develop_set[kinds[i]] == 3);
+        assert(develop_parameter(header, record(2), 0, 1) == 6);
+        /* Another effect after one: the own values stay those of the start. */
+        develop_hold(header, record(2));
+        develop_hold(header, record(1));
+        develop_hold(header, 0);
+        for (u32 i = 0; i < 9; ++i) assert(develop_set[kinds[i]] == 3);
+        /* Changed adjustments come back with their effect, also after other
+           effects that the page did not change. */
+        develop_hold(header, record(2));
+        develop_set[kinds[2]] = 7;
+        develop_hold(header, record(1));
+        assert(develop_set[kinds[2]] == 4 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == record(2));
+        develop_hold(header, 1);
+        develop_hold(header, record(1));
+        develop_hold(header, record(2));
+        assert(develop_set[kinds[2]] == 7 && develop_set[kinds[0]] == 6);
+        develop_hold(header, 0);
+        /* A new development starts without an effect in the set. */
+        develop_hold(header, record(2));
+        picture_develop_start();
+        assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
+        developing = 0;
+        BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 0;
+        BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;
+    }
+#endif
     /* The stage gate of the grain stage reads the shot settings before the
        parameter build of the shot. A GRKit effect gets the rule of Standard
        with the Shading (7) and Clarity (8) of its record. Native processing

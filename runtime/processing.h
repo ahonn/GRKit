@@ -237,6 +237,44 @@ parameters_store:
     strh r2, [r1], #2
     cmp r1, r0
     bne parameters_fill
+#ifdef DEVELOP_PARAMETERS
+    // A RAW development takes the Fn adjustments of the record from the
+    // Standard parameter set of the development model while the set holds
+    // them, so that the parameter page of the development edits them
+    // (runtime/develop.h). A value above 8 counts as neutral. r1 is at
+    // +0x200, r3 at the adjustments of the record.
+    push {r1, r3}
+    ldr r0, =GRKIT_HEADER_REFERENCE
+    ldr r2, [r0, #GRKIT_HOST_DEVELOP_FILLED]
+    sub r12, r3, #(GRKIT_RECORD_PARAMETERS & ~0xff)
+    sub r12, r12, #(GRKIT_RECORD_PARAMETERS & 0xff)
+    cmp r2, r12
+    bne develop_done
+    ldr r2, =FW_DEVELOP_GUARD
+    ldr r2, [r2]
+    tst r2, #1
+    beq develop_done
+    ldr r2, =FW_DEVELOP_MODEL
+    ldrb r12, [r2, #DEVELOP_STATE]
+    cmp r12, #0
+    beq develop_done
+    add r2, r2, #DEVELOP_PARAMETERS
+    sub r1, r1, #0x20
+    adr r12, develop_slots
+develop_copy:
+    ldrb r0, [r12], #1
+    cmp r0, #0xff
+    beq develop_done
+    ldrb r3, [r12], #1
+    ldrb r0, [r2, r0]
+    cmp r0, #8
+    movhi r0, #4
+    lsl r3, r3, #1
+    strh r0, [r1, r3]
+    b develop_copy
+develop_done:
+    pop {r1, r3}
+#endif
 #ifdef NATIVE_SATURATION_BEFORE_CURVES
     // A native look applies saturation after the tone curves, as GR IV does:
     // picture_post applies it, and the native processing gets the neutral
@@ -268,6 +306,14 @@ parameters_store:
 // sharpness, 0, 0, shading, clarity, 0, 0, 0, 0.
 parameters_sources:
     .byte 0, 1, 2, 3, 4, 5, 0x11, 6, 0x10, 0x10, 7, 8, 0x10, 0x10, 0x10, 0x10
+#ifdef DEVELOP_PARAMETERS
+// The parameter kind of each Fn adjustment in the set of the development
+// model, then its halfword at +0x1e0 (parameters_sources), and 0xff.
+develop_slots:
+    .byte 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7
+    .byte PARAMETER_KIND_SHADING, 10, PARAMETER_KIND_CLARITY, 11, 0xff
+    .balign 4
+#endif
 parameters_stock:
     mov r0, #0
     str r0, [r4, #8]

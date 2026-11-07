@@ -109,6 +109,9 @@
 #define MODEL_SNAPSHOT 3
 /* The row kinds of the Standard adjustments, in GRKIT_RECORD_PARAMETERS order. */
 #define PARAMETER_KINDS {0,1,2,3,4,5,6,13,14}
+/* The last two of them, Shading and Clarity, for assembly (runtime/processing.h). */
+#define PARAMETER_KIND_SHADING 13
+#define PARAMETER_KIND_CLARITY 14
 /* Toning (runtime/toning.h): base kind 9 of the row lists at 0x53b3488c,
    the rows of Retro, adds Toning, row kind 9, to the Standard rows. Its model
    getter and setter and row read hook as adjustment 9. The page keeps the
@@ -289,6 +292,15 @@
    the subtitle of RawDevelopmentTopController in r6. */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x532891f4)
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x532891a8)
+/* RAW development, the Fn adjustments (runtime/develop.h). RawDevelopmentModel
+   holds the selected Image Control: the category at DEVELOP_CATEGORY and the
+   value of each category from DEVELOP_VALUES. Each Image Control has a
+   parameter set of a byte for each parameter kind; that of Standard is at
+   DEVELOP_PARAMETERS. The parameter page of the development edits the set of
+   the selected Image Control. */
+#define DEVELOP_CATEGORY 0x82
+#define DEVELOP_VALUES 0x83
+#define DEVELOP_PARAMETERS 0x97
 /* RAW development, the aspect list (runtime/menu.c): the row value of the
    model (model, row), the capture aspect of a development aspect (model,
    value), and the label and the icon of a development aspect (model,

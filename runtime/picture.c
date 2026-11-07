@@ -22,6 +22,24 @@
 extern volatile u32 *framing_header(void);
 
 #include "tone.h"
+#include "develop.h"
+/* A RAW development encodes the DNG in playback, not a new shot. Its picture
+   takes the time of that DNG from the playback metadata (runtime/targets). */
+#ifndef PICTURE_DEVELOPING
+#ifdef FW_DEVELOP_MODEL
+#define PICTURE_DEVELOPING() ((BYTE(FW_DEVELOP_GUARD,0)&1U) && BYTE(FW_DEVELOP_MODEL,DEVELOP_STATE))
+#define PICTURE_PHOTO_TIME(out) do { \
+    u32 data_=((u32 (*)(void))FW_PLAYBACK_METADATA)(), i_; \
+    for(i_=0;i_<8;++i_) (out)[i_]=BYTE(data_,METADATA_TIME+i_); \
+} while(0)
+/* The EXIF Orientation of that DNG. */
+#define PICTURE_PHOTO_ORIENTATION() BYTE(((u32 (*)(void))FW_PLAYBACK_METADATA)(),METADATA_ORIENTATION)
+#else
+#define PICTURE_DEVELOPING() 0
+#define PICTURE_PHOTO_TIME(out) PICTURE_DATE(out)
+#define PICTURE_PHOTO_ORIENTATION() 1
+#endif
+#endif
 static u32 owned(volatile u32 *h,u32 record) { return record_index(h,record)<GRKIT_TEXT_RECORDS; }
 /* Features of an owned record, or 0 for a native one. */
 static u32 record_features(volatile u32 *h,u32 record) {
@@ -82,7 +100,7 @@ static void post_matrix(volatile u32 *h,u32 object,u32 context,u32 settings) {
     /* A native look applies saturation after the tone curves and the post
        matrix, as GR IV does. module_parameters gives the native processing
        the neutral value. */
-    if((features&GRKIT_FEATURE_NATIVE_LOOK) && (i=record_parameter(record,0))!=4) {
+    if((features&GRKIT_FEATURE_NATIVE_LOOK) && (i=develop_parameter(h,record,0,PICTURE_DEVELOPING()))!=4) {
         int saturation[9],product[9];
         picture_saturation(i,saturation);
         if(apply) {
@@ -170,23 +188,6 @@ static u32 core_divide(u32 n,u32 d) {
     while(bit) { if(n>=d) { n-=d; q|=bit; } d>>=1; bit>>=1; }
     return q;
 }
-/* A RAW development encodes the DNG in playback, not a new shot. Its picture
-   takes the time of that DNG from the playback metadata (runtime/targets). */
-#ifndef PICTURE_DEVELOPING
-#ifdef FW_DEVELOP_MODEL
-#define PICTURE_DEVELOPING() ((BYTE(FW_DEVELOP_GUARD,0)&1U) && BYTE(FW_DEVELOP_MODEL,DEVELOP_STATE))
-#define PICTURE_PHOTO_TIME(out) do { \
-    u32 data_=((u32 (*)(void))FW_PLAYBACK_METADATA)(), i_; \
-    for(i_=0;i_<8;++i_) (out)[i_]=BYTE(data_,METADATA_TIME+i_); \
-} while(0)
-/* The EXIF Orientation of that DNG. */
-#define PICTURE_PHOTO_ORIENTATION() BYTE(((u32 (*)(void))FW_PLAYBACK_METADATA)(),METADATA_ORIENTATION)
-#else
-#define PICTURE_DEVELOPING() 0
-#define PICTURE_PHOTO_TIME(out) PICTURE_DATE(out)
-#define PICTURE_PHOTO_ORIENTATION() 1
-#endif
-#endif
 /* The core exports these services to modules (runtime/sdk/grkit.h). The local
    time is the time of the picture: the clock for a shot, the time of the DNG
    for a RAW development, so that Date Imprint prints the day of the photo. */
@@ -490,6 +491,11 @@ void picture_develop_start(void) {
     u32 value=PICTURE_PLAYBACK_TONE(), record;
     h[GRKIT_HOST_DEVELOP_RATIO/4]=0;
     h[GRKIT_HOST_DEVELOP/4]=1;
+    /* The model gives each parameter set its values after this, so the
+       Standard set holds no effect's adjustments, and no effect keeps changed
+       ones (runtime/develop.h). */
+    h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
+    h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }
 #endif
@@ -528,10 +534,11 @@ u32 picture_capture_tone_record(u32 shot) {
    (-4 to 4), as camera photos show. */
 void picture_record_parameters(u32 entry,u32 shot) {
     static const u8 elements[9]={0,1,2,3,4,5,6,9,10};
-    u32 record=picture_capture_record(shot), i;
+    volatile u32 *h=framing_header();
+    u32 record=picture_capture_record(shot), running=PICTURE_DEVELOPING(), i;
     if(!record) return;
     for(i=0;i<sizeof(elements);++i)
-        PICTURE_IFD_SET_SHORT(entry,elements[i],(record_parameter(record,i)-4)&0xffffU);
+        PICTURE_IFD_SET_SHORT(entry,elements[i],(develop_parameter(h,record,i,running)-4)&0xffffU);
 }
 /* For grain_gate (runtime/picture.S): the stage flag of the grain stage of a
    recorded picture. The stage gate runs before the parameter build of the
@@ -543,11 +550,12 @@ void picture_record_parameters(u32 entry,u32 shot) {
    committed effect. Native processing keeps `flag`, the native result. */
 u32 picture_gate_flag(u32 flag) {
     volatile u32 *h=framing_header();
-    u32 record;
+    u32 record, running;
     if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return flag;
-    record=PICTURE_DEVELOPING() ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
+    running=PICTURE_DEVELOPING();
+    record=running ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
     if(!owned(h,record)) return flag;
-    return record_parameter(record,7)!=4 || record_parameter(record,8)!=4;
+    return develop_parameter(h,record,7,running)!=4 || develop_parameter(h,record,8,running)!=4;
 }
 /* Whether the native Image Control type of a shot makes a monochrome picture,
    such as Monotone or a type of GR IV Monochrome. */

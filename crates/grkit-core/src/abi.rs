@@ -327,6 +327,19 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DEVELOP_RATIO_TEXT: 4;
     /// The text descriptor of that name.
     HOST_DEVELOP_RATIO_NAME: 8;
+    /// The effect record whose Fn adjustments the Standard parameter set of
+    /// the development model holds, or 0 while the set holds its own values
+    /// (runtime/develop.h).
+    HOST_DEVELOP_FILLED: 4;
+    /// The own values of that set while GRKIT_HOST_DEVELOP_FILLED is not 0:
+    /// one byte for each Fn adjustment, in GRKIT_RECORD_PARAMETERS order.
+    HOST_DEVELOP_NATIVE: 12;
+    /// The effect record whose changed adjustments the development keeps
+    /// while the set holds another one, or 0. The start of a development
+    /// clears it.
+    HOST_DEVELOP_CHANGED: 4;
+    /// Those adjustments, as GRKIT_HOST_DEVELOP_NATIVE.
+    HOST_DEVELOP_CHANGES: 12;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

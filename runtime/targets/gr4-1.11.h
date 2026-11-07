@@ -146,6 +146,12 @@
    and of the text). */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x53374314)
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x533742c8)
+/* RAW development, the Fn adjustments (runtime/develop.h): the category
+   and the values of the selected Image Control in RawDevelopmentModel,
+   and the parameter set of Standard (runtime/targets/gr3-2.10.h). */
+#define DEVELOP_CATEGORY 0x9c
+#define DEVELOP_VALUES 0x9d
+#define DEVELOP_PARAMETERS 0xb3
 /* RAW development, the aspect list (runtime/menu.c): the row value of the
    model (model, row), the capture aspect of a development aspect (model,
    value), and the label and the icon of a development aspect (model,
