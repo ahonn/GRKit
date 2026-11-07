@@ -482,10 +482,70 @@ static void test_daylight_fade(PictureSet *set)
         set_strength(strength);
         /* A dark picture keeps its glow at a daylight EV. */
         assert(ev_energy(set, 2, 14, 20) == ev_energy(set, 2, 9, 20) && ev_energy(set, 2, 9, 20) > 0);
-        /* Bloom keeps its glow at any EV. */
-        assert(ev_energy(set, 1, 14, 128) == ev_energy(set, 1, 9, 128) && ev_energy(set, 1, 9, 128) > 0);
+        /* Bloom keeps its glow at any EV. Strong adds its lift below 10 EV. */
+        u32 day = ev_energy(set, 1, 14, 128), dusk = ev_energy(set, 1, 9, 128);
+        assert(day > 0 && (strength == 2 ? dusk > day : dusk == day));
+        if (strength == 2) assert(ev_energy(set, 1, 10, 128) == day);
     }
     set_strength(saved_strength);
+}
+
+/* The halo of a light square on a background, at a scene EV (1/256 EV), or
+   without one when ev < 0. */
+static u32 shot_energy(PictureSet *set, u32 look, s32 ev, u8 background)
+{
+    grkit_test_shot.known = ev < 0 ? 0 : GRKIT_SHOT_EXPOSURE;
+    grkit_test_shot.scene_ev = ev;
+    fill(background, 128, 128);
+    square();
+    apply_look(set, look);
+    grkit_test_shot.known = 0;
+    return halo_energy(304, 224, 32, background);
+}
+
+/* Strong lifts a lamp in a lit room (a light surround) below 10 EV. Weak and
+   Medium, and a shot without an EV, keep the surround weight alone. */
+static void test_strong_lift(PictureSet *set)
+{
+    for (u32 look = 1; look <= 2; ++look) {
+        set_strength(1);
+        assert(shot_energy(set, look, 7 << 8, 180) == shot_energy(set, look, -1, 180));
+        set_strength(2);
+        u32 room = shot_energy(set, look, 7 << 8, 180), plain = shot_energy(set, look, -1, 180);
+        assert(room > 4 * plain && room > 0);
+        /* The lift fades out by 10 EV. */
+        assert(shot_energy(set, look, 10 << 8, 180) == plain);
+    }
+    set_strength(1);
+}
+
+/* The light that a large light area (the left half) gives the dark side next
+   to it, at a scene EV (1/256 EV), or without one when ev < 0. */
+static u32 veil_energy(PictureSet *set, u32 look, s32 ev)
+{
+    grkit_test_shot.known = ev < 0 ? 0 : GRKIT_SHOT_EXPOSURE;
+    grkit_test_shot.scene_ev = ev;
+    fill(30, 128, 128);
+    for (u32 y = 0; y < H; ++y)
+        for (u32 x = 0; x < W / 2; ++x) *grkit_test_bytes(GRKIT_TEST_PLANES + y * W + x) = 255;
+    apply_look(set, look);
+    grkit_test_shot.known = 0;
+    u32 energy = 0;
+    for (u32 y = 0; y < H; ++y)
+        for (u32 x = W / 2; x < W / 2 + 96; ++x) energy += luma(x, y) - 30U;
+    return energy;
+}
+
+/* Strong does not lay its lift over the dark side of a large light area:
+   without veil_guard, that side takes more than three times the light. */
+static void test_strong_veil(PictureSet *set)
+{
+    set_strength(2);
+    for (u32 look = 1; look <= 2; ++look) {
+        u32 lifted = veil_energy(set, look, 7 << 8), plain = veil_energy(set, look, -1);
+        assert(plain > 0 && 4 * lifted < 5 * plain);
+    }
+    set_strength(1);
 }
 
 /* Bloom: a lamp clipped to a white core, with an unclipped orange
@@ -1174,6 +1234,8 @@ int main(void)
     test_composite_protection();
     test_daylight_transition(&set);
     test_daylight_fade(&set);
+    test_strong_lift(&set);
+    test_strong_veil(&set);
     test_local_daylight_gate(&set);
     test_halo_block_edges(&set);
     test_bloom_broad_source(&set);

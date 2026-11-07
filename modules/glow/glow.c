@@ -74,6 +74,14 @@
 #define CLIP_SHIFT 2U     /* a clip map cell: 4 x 4 screennail pixels */
 #define CLIP_AREA 32U     /* a mean density of 3 x 3 cells from which they are a bright area */
 #define MAX_CLIP_BLOCKS (MAX_WORDS * 4U / 16U) /* 16-pixel blocks of a main row */
+#define LIFT_FROM 128     /* 1/16 EV (8 EV) up to which Strong takes all of its lift */
+#define LIFT_RANGE 32     /* 1/16 EV over which the lift fades out, to none from 10 EV */
+#define LARGE_KEEP 224U   /* the blur of the light density of the cells (blur keep) */
+#define LARGE_FROM 8U     /* the blurred light density (of 255) from which light is a large area */
+#define LARGE_RANGE 32U   /* the density over which it becomes fully large */
+#define VEIL_DARK 60U     /* the screennail luma of a receiver up to which the veil guard is full */
+#define VEIL_LIGHT 150U   /* the luma from which it does nothing */
+#define VEIL_CUT 230U     /* the most (of 256) of the glow that the veil guard takes away */
 
 /* Linear light of a channel value, (c / 255)^2.2 x 255. */
 static const u8 linear[256] = {
@@ -242,7 +250,9 @@ static inline u32 encode_glow(u32 v) { return v < 1024 ? encode_low[v] : encode_
      the fine layer (of 256), at Medium strength.
    - strength: the scale of `fine` (Q8) at Weak, Medium, and Strong. The
      glow saturates toward its top, so Strong takes more than twice Medium
-     to look as far from it as Weak.
+     to look as far from it as Weak. Strong also lifts the surround weight
+     in low-EV scenes (surround_weight) and guards dark receivers next to
+     a large light area (veil_guard).
    - cell: the side of a coarse cell in screennail pixels. The surround,
      the area cut, the local daylight gate, and the rim color work in
      cells, so the cell sets their reach in the picture.
@@ -378,6 +388,11 @@ static const Look bloom = {
    brightness `top` (the mean luma of the cells around, blurred wide): the
    darkness to the fourth power, so that a light source in the dark glows,
    and a wide bright area (sky, wall) and what is next to it much less. */
+/* Strong lifts this weight in a scene up to 10 EV (lift_keep): a place
+   gives at least its darkness squared, so that a lamp in a lit room or at
+   dusk glows visibly. The lift fades out from 8 EV to 10 EV, so a daylight
+   picture keeps the weight above. veil_guard keeps the lifted light of a
+   large light area off the dark things next to it. */
 INLINE u32 surround_weight(u32 top)
 {
     u32 d = 255 - top, q = (d * d + 128) >> 8;
@@ -516,6 +531,13 @@ typedef struct {
     /* Look.rim: the color and confidence of each coarse cell (Coarse.rim),
        and the cells of the source row in fine_feed. */
     const u8 *rim, *rim_row;
+    /* Strong: the part (of 256) of the lift that the scene EV keeps (0: no
+       lift and no veil guard), the lift and the large light share of each
+       cell (coarse_surround), and the mean screennail luma of each fine
+       pixel of the ring rows (veil_guard). */
+    u32 lift_ev;
+    const u8 *lift, *large;
+    u8 receiver[RING][MAX_FINE];
     u32 hot; /* the lowest channel level with light */
     u16 scale[256]; /* light_scale of the look */
     u16 gain[256]; /* Q8 highlight gain, continuous from clip to white */
@@ -753,6 +775,8 @@ typedef struct {
     u8 *around; /* Look.gate: the luma of the pixels below the floor (times dim) */
     u8 *dim; /* Look.gate: the part of the cell below the floor (of 255) */
     u8 *rim; /* Look.rim: R, G, B (the largest 255) and confidence of the light of each cell */
+    u8 *lift; /* Strong: the surround weight (of 255) that the lift gives each cell */
+    u8 *large; /* Strong: the light part of each cell (of 255); then its large light share */
 } Coarse;
 
 /* The cells: the mean luma of each (for the surround and day_keep), the
@@ -823,6 +847,12 @@ static void coarse_light(Fine *f, Coarse *m, const Look *look)
                 u32 part = (c->lit * m->recip) >> 8, keep = 255;
                 if (counted && part > 64) keep = 255 - divide(look->area * (part > 256 ? 192 : part - 64), 192);
                 m->surround[cy * m->w + cx] = (u8)keep;
+            }
+            if (m->large) {
+                /* The part of the cell that is light (of 255), for the
+                   large light share of the veil guard. */
+                u32 part = (c->lit * m->recip) >> 8;
+                m->large[cy * m->w + cx] = (u8)(part > 255 ? 255 : part);
             }
             if (look->gate) {
                 /* The mean luma of the pixels below the floor times their
@@ -942,6 +972,26 @@ static void blur(u16 *map, u32 w, u32 h, u32 keep)
     }
 }
 
+/* The blur of `blur` for a map of bytes. Each pass rounds to a byte, which
+   is enough for the light density that it spreads. */
+static void blur_bytes(u8 *map, u32 w, u32 h, u32 keep)
+{
+    u32 x, y, v;
+    for (y = 0; y < h; ++y) {
+        u8 *row = map + y * w;
+        v = (u32)row[0] << 8;
+        for (x = 0; x < w; ++x) { v = ((v * keep) >> 8) + (u32)row[x] * (256 - keep); row[x] = (u8)((v + 128) >> 8); }
+        v = (u32)row[w - 1] << 8;
+        for (x = w; x-- > 0;) { v = ((v * keep) >> 8) + (u32)row[x] * (256 - keep); row[x] = (u8)((v + 128) >> 8); }
+    }
+    for (x = 0; x < w; ++x) {
+        v = (u32)map[x] << 8;
+        for (y = 0; y < h; ++y) { u8 *c = map + y * w + x; v = ((v * keep) >> 8) + (u32)*c * (256 - keep); *c = (u8)((v + 128) >> 8); }
+        v = (u32)map[(h - 1) * w + x] << 8;
+        for (y = h; y-- > 0;) { u8 *c = map + y * w + x; v = ((v * keep) >> 8) + (u32)*c * (256 - keep); *c = (u8)((v + 128) >> 8); }
+    }
+}
+
 /* 1 2 1 along the rows, then along the columns: the cuts of Look.area over
    the cells around. */
 static void smooth_cells(u8 *a, u32 w, u32 h)
@@ -977,7 +1027,8 @@ static u32 surround_cut(u32 s, u32 keep)
 
 /* The surround brightness of each cell: its mean luma, blurred wide, made
    brighter by the cuts of Look.area and the local daylight gate, so that
-   surround_weight applies them in fine_feed. */
+   surround_weight applies them in fine_feed. With Strong, also the lift of
+   each cell (surround_weight) and its large light share (veil_guard). */
 static void coarse_surround(Fine *f, Coarse *m, const Look *look)
 {
     u16 *luma64 = f->ring.cells.luma64;
@@ -994,26 +1045,60 @@ static void coarse_surround(Fine *f, Coarse *m, const Look *look)
         smooth_cells(m->dim, m->w, m->h);
         smooth_cells(m->dim, m->w, m->h);
     }
+    if (m->lift) {
+        blur_bytes(m->large, m->w, m->h, LARGE_KEEP);
+        blur_bytes(m->large, m->w, m->h, LARGE_KEEP);
+    }
     for (i = 0; i < n; ++i) {
-        u32 s = (luma64[i] + 32) >> 6;
+        u32 s = (luma64[i] + 32) >> 6, dark = 255 - s, area = look->area ? m->surround[i] : 255, keep = 256;
         /* Look.area: a mostly light cell counts as a brighter surround, by
            the fourth root of its cut, so that the surround weight (darkness
            to the fourth power) applies the cut once. */
-        if (look->area && m->surround[i] < 255) s = surround_cut(s, m->surround[i]);
+        if (area < 255) s = surround_cut(s, area);
         if (f->daylight) {
             /* Use only non-highlight pixels around the source. A dark
                surround still admits a specular highlight in daylight.
                An entirely bright neighborhood supplies no such evidence. */
             u32 a = m->dim[i] ? divide((u32)m->around[i] << 8, m->dim[i]) : 255;
             u32 local = a <= 96 ? 256 : a >= 208 ? 0 : divide((208 - a) << 8, 112);
-            u32 keep = 256 - ((f->daylight * (256 - local) + 128) >> 8);
+            keep = 256 - ((f->daylight * (256 - local) + 128) >> 8);
             s = surround_cut(s, keep);
+        }
+        if (m->lift) {
+            /* The lift: the darkness squared, with the same cuts, each once.
+               A light area is large from LARGE_FROM of blurred density. */
+            u32 w = (dark * dark + 127) / 255, d = m->large[i];
+            w = (((w * area + 127) / 255) * keep) >> 8;
+            m->lift[i] = (u8)((w * f->lift_ev) >> 8);
+            m->large[i] = (u8)(d <= LARGE_FROM ? 0 : d >= LARGE_FROM + LARGE_RANGE ? 255 : (d - LARGE_FROM) * 255 / LARGE_RANGE);
         }
         m->surround[i] = (u8)s;
     }
 }
 
 /* ---- fine layer -------------------------------------------------------- */
+
+/* The two cell rows of the coarse maps around fine row y, and the fraction
+   (of 256) of the lower one. */
+static u32 cell_rows(const Fine *f, u32 y, u32 *c0, u32 *c1)
+{
+    int pos = (int)divide((((y << 1) + 1) << f->shift) << 7, f->surround_step) - 128;
+    u32 cy;
+    if (pos < 0) pos = 0;
+    cy = (u32)pos >> 8;
+    *c0 = cy < f->surround_h ? cy : f->surround_h - 1;
+    *c1 = *c0 + 1 < f->surround_h ? *c0 + 1 : *c0;
+    return cy < f->surround_h ? (u32)pos & 255 : 0;
+}
+
+/* A coarse map at fine column x, between the cell rows t0 and t1 (fraction
+   cf of t1), of 255. */
+INLINE u32 cell_value(const Fine *f, const u8 *t0, const u8 *t1, u32 cf, u32 x)
+{
+    u32 ci = f->surround_column[x], cj = ci + 1 < f->surround_w ? ci + 1 : ci, fx = f->surround_fraction[x];
+    u32 a = t0[ci] * (256 - fx) + t0[cj] * fx, b = t1[ci] * (256 - fx) + t1[cj] * fx;
+    return (a * (256 - cf) + b * cf + 32768) >> 16;
+}
 
 /* Source row y into its ring slot: the light of each fine pixel, at least
    that of the point sources in it (point_light), blurred along the row
@@ -1038,6 +1123,7 @@ static void fine_feed(Fine *f, u32 y)
         u32 shift = f->shift << 1, any = 0, width = f->w << f->shift;
         u32 hot = f->hot ? (f->hot - 1) * 0x01010101U : 0, points = 0, lit_channel[3];
         u8 *best0 = f->best[0], *best1 = f->best[1], *best2 = f->best[2], *best3 = f->best[3];
+        u16 seen[MAX_FINE]; /* Strong: the luma sum of each fine pixel (veil_guard) */
         for (k = 0; k < 3; ++k)
             for (x = 0; x < f->w; ++x) f->light[k][x] = 0;
         /* The clip density of each fine pixel, and its brightest pixel. */
@@ -1054,9 +1140,13 @@ static void fine_feed(Fine *f, u32 y)
                 points |= d;
             }
         }
+        if (f->lift_ev)
+            for (x = 0; x < f->w; ++x) seen[x] = 0;
         for (j = 0; j < n; ++j) {
             const u8 *row, *crow;
             source_row(f, (y << f->shift) + j, width, &row, &crow);
+            if (f->lift_ev)
+                for (x = 0; x < width; ++x) seen[x >> f->shift] = (u16)(seen[x >> f->shift] + row[x]);
             if (f->rim) {
                 u32 cy = divide((y << f->shift) + j, f->surround_step);
                 f->rim_row = f->rim + 4 * f->surround_w * (cy < f->surround_h ? cy : f->surround_h - 1);
@@ -1104,6 +1194,8 @@ static void fine_feed(Fine *f, u32 y)
         }
         for (k = 0; k < 3; ++k)
             for (x = 0; x < f->w; ++x) f->light[k][x] = (u16)(f->light[k][x] >> shift);
+        if (f->lift_ev)
+            for (x = 0; x < f->w; ++x) f->receiver[slot][x] = (u8)(seen[x] >> shift);
         if (points)
             for (x = 0; x < f->w; ++x) {
                 u32 l[3];
@@ -1120,21 +1212,16 @@ static void fine_feed(Fine *f, u32 y)
         }
         f->empty[slot] = (u8)!any;
         if (any) {
-            /* The surround at this row: the coarse map, between two cell rows. */
-            int pos = (int)divide((((y << 1) + 1) << f->shift) << 7, f->surround_step) - 128;
-            u32 cy, cf, c0, c1;
-            const u8 *t0, *t1;
-            if (pos < 0) pos = 0;
-            cy = (u32)pos >> 8;
-            cf = cy < f->surround_h ? (u32)pos & 255 : 0;
-            c0 = cy < f->surround_h ? cy : f->surround_h - 1;
-            c1 = c0 + 1 < f->surround_h ? c0 + 1 : c0;
-            t0 = f->surround + c0 * f->surround_w;
-            t1 = f->surround + c1 * f->surround_w;
+            /* The surround at this row: the coarse map, between two cell
+               rows. With Strong, the larger of the surround weight and the
+               lift. */
+            u32 c0, c1, cf = cell_rows(f, y, &c0, &c1), row0 = c0 * f->surround_w, row1 = c1 * f->surround_w;
             for (x = 0; x < f->w; ++x) {
-                u32 ci = f->surround_column[x], cj = ci + 1 < f->surround_w ? ci + 1 : ci, fx = f->surround_fraction[x];
-                u32 a = t0[ci] * (256 - fx) + t0[cj] * fx, b = t1[ci] * (256 - fx) + t1[cj] * fx;
-                u32 w = surround_weight((a * (256 - cf) + b * cf + 32768) >> 16);
+                u32 w = surround_weight(cell_value(f, f->surround + row0, f->surround + row1, cf, x));
+                if (f->lift_ev) {
+                    u32 lift = cell_value(f, f->lift + row0, f->lift + row1, cf, x) * 257;
+                    if (lift > w) w = lift;
+                }
                 for (k = 0; k < 3; ++k) f->light[k][x] = (u16)((f->light[k][x] * w) >> 16);
             }
         }
@@ -1201,6 +1288,27 @@ typedef struct {
 } Rows;
 
 
+/* Strong: less glow on a dark receiver next to a large light area (a
+   backlit window or a white wall in shade beside a dark coat), where the
+   lift would otherwise lay a veil. A small light keeps its glow, and so
+   does a light receiver (the wall around a lamp). The share of a large
+   light area comes from the cells; the receiver is the mean screennail
+   luma of each fine pixel, kept from fine_feed. */
+static void veil_guard(Fine *f, u32 t)
+{
+    u32 x, k, c0, c1, cf;
+    const u8 *receiver = f->receiver[t % RING];
+    if (t >= f->h) return;
+    cf = cell_rows(f, t, &c0, &c1);
+    for (x = 0; x < f->w; ++x) {
+        u32 large = cell_value(f, f->large + c0 * f->surround_w, f->large + c1 * f->surround_w, cf, x), y = receiver[x];
+        u32 dark = y <= VEIL_DARK ? 256 : y >= VEIL_LIGHT ? 0 : divide((VEIL_LIGHT - y) << 8, VEIL_LIGHT - VEIL_DARK);
+        u32 keep = 256 - ((((large * dark) >> 8) * VEIL_CUT) >> 8);
+        if (keep < 256)
+            for (k = 0; k < 3; ++k) f->light[k][x] = (u16)((f->light[k][x] * keep) >> 8);
+    }
+}
+
 /* Fine row t as linear light, blurred down the ring columns. An empty
    ring returns zero without reading or changing the light buffers. */
 static u32 light_row(Fine *f, u32 t)
@@ -1234,6 +1342,7 @@ static u32 light_row(Fine *f, u32 t)
         rows.out = f->light[k];
         glow_light(&rows, f->part[k], f->w);
     }
+    if (f->lift_ev) veil_guard(f, t);
     return 1;
 }
 
@@ -1680,7 +1789,7 @@ static u32 day_keep(const Fine *f, const Coarse *m, int ev, int gate)
    coarse maps retain independent cell sizes and thresholds. */
 _Static_assert(((sizeof(Rows) + 3) & ~3U) + 2 * ((sizeof(Fine) + 3) & ~3U) + 2 * sizeof(GlowRow) + ALL_WORDS * 4U +
                (720U >> CLIP_SHIFT) * ((480U >> CLIP_SHIFT) + 1) + 4U +
-               (720U / 14) * (480U / 14) * 5U + (720U / 13) * (480U / 13) * 3U + 32U <=
+               (720U / 14) * (480U / 14) * 7U + (720U / 13) * (480U / 13) * 5U + 32U <=
                GRKIT_PLANE_SCRATCH, "both glow streams fit the screennail scratch");
 
 /* Look.gate: the strength (Q8) of local background rejection from the
@@ -1697,6 +1806,22 @@ static u32 shot_gate(const PictureSet *set, const Look *look, u32 *daylight, int
     if (*ev >= from + (int)GATE_RANGE) *daylight = 256;
     else if (*ev > from) *daylight += divide((u32)(*ev - from) * (256 - LOCAL_GATE_MIN), GATE_RANGE);
     return 1;
+}
+
+/* Strong: the part (of 256) of the lift that the scene EV of the shot keeps
+   (surround_weight), all of it up to LIFT_FROM, none from LIFT_FROM +
+   LIFT_RANGE, and none when the shot has no EV. */
+static u32 lift_keep(const PictureSet *set)
+{
+    GrkitShot shot;
+    int ev;
+    shot.size = sizeof shot;
+    picture_shot(set, &shot);
+    if (!(shot.known & GRKIT_SHOT_EXPOSURE)) return 0;
+    ev = shot.scene_ev >> 4;
+    if (ev <= LIFT_FROM) return 256;
+    if (ev >= LIFT_FROM + LIFT_RANGE) return 0;
+    return 256 - divide((u32)(ev - LIFT_FROM) << 8, LIFT_RANGE);
 }
 
 /* The light model of the look: the light of each level (light_scale), the
@@ -1772,13 +1897,17 @@ static u32 clip_setup(Fine *f, const PictureSet *set, const Look *look, u8 *at, 
     return (f->clip_w * (f->clip_h + 1) + 3) & ~3U;
 }
 
+/* The bytes of each coarse cell: 1 of surround, (Look.gate) 2 of the luma
+   around, (Look.rim) 4 of color, and (the Strong lift) 1 of lift and 1 of
+   large light share. */
+static u32 cells_bytes(const Look *look, u32 lift) { return 1 + (look->gate ? 2 : 0) + (look->rim ? 4 : 0) + (lift ? 2 : 0); }
+
 /* The coarse cells at `at`: Look.cell screennail pixels, or larger if they
-   do not fit in `room`: 1 byte of surround, (Look.gate) 2 of the luma
-   around, and (Look.rim) 4 of color for each cell, at most MAX_COARSE wide
+   do not fit in `room`, cells_bytes for each cell, at most MAX_COARSE wide
    and MAX_CELLS. Returns whether they fit. */
-static u32 cells_setup(Coarse *m, const Plane *src, const Look *look, u8 *at, u32 room)
+static u32 cells_setup(Coarse *m, const Plane *src, const Look *look, u32 lift, u8 *at, u32 room)
 {
-    u32 n, bytes = 1 + (look->gate ? 2 : 0) + (look->rim ? 4 : 0);
+    u32 n, bytes = cells_bytes(look, lift);
     for (m->step = look->cell;; ++m->step) {
         m->w = divide(src->right - src->left, m->step);
         m->h = divide(src->bottom - src->top, m->step);
@@ -1791,6 +1920,8 @@ static u32 cells_setup(Coarse *m, const Plane *src, const Look *look, u8 *at, u3
     m->around = m->surround + n;
     m->dim = m->around + n;
     m->rim = m->surround + n + (look->gate ? 2 * n : 0);
+    m->lift = lift ? m->surround + n * (bytes - 2) : 0;
+    m->large = lift ? m->lift + n : 0;
     return 1;
 }
 
@@ -1804,6 +1935,7 @@ static void stream_setup(Fine *f, const PictureSet *set, const Plane *src, const
     f->w = (src->right - src->left) >> FINE_SHIFT;
     f->h = (src->bottom - src->top) >> FINE_SHIFT;
     f->daylight = 0;
+    f->lift_ev = strength == 3 ? lift_keep(set) : 0;
     for (u32 k = 0; k < 3; ++k) f->part[k] = (look->fine[k] * look->strength[strength - 1] + 128) >> 8;
     light_setup(f, look);
     white_setup(f, set);
@@ -1817,7 +1949,7 @@ static u32 stream_cells(Fine *f, const PictureSet *set, u8 *at, u32 room)
     const Look *look = f->look;
     int ev = 0;
     u32 known = look->gate ? shot_gate(set, look, &f->daylight, &ev) : 0;
-    if (!cells_setup(&m, f->p, look, at, room)) return 0;
+    if (!cells_setup(&m, f->p, look, f->lift_ev, at, room)) return 0;
     coarse_light(f, &m, look);
     if (look->rim) rim_fill(&m);
     if (known) {
@@ -1837,7 +1969,9 @@ static u32 stream_cells(Fine *f, const PictureSet *set, u8 *at, u32 room)
     f->surround_h = m.h;
     f->surround_step = m.step;
     f->rim = look->rim ? m.rim : 0;
-    return (m.w * m.h * (1 + (look->gate ? 2 : 0) + (look->rim ? 4 : 0)) + 3) & ~3U;
+    f->lift = m.lift;
+    f->large = m.large;
+    return (m.w * m.h * cells_bytes(look, f->lift_ev) + 3) & ~3U;
 }
 
 /* The strength of a Glow setting: 1 Weak, 2 Medium, 3 Strong, or 0 for Off
