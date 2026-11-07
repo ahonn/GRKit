@@ -76,6 +76,22 @@ export async function saveImport(effect: ImportedEffect): Promise<void> {
   }
 }
 
+/** Keeps a changed import, such as a new name, in its place: with the time of its import. */
+export async function updateImport(effect: ImportedEffect): Promise<void> {
+  try {
+    await run(IMPORTS, 'readwrite', (store) => {
+      const request = store.get(effect.id);
+      request.onsuccess = () => {
+        const savedAt = storedImport(request.result)?.savedAt ?? Date.now();
+        store.put({ ...effect, savedAt } satisfies Stored);
+      };
+      return request;
+    });
+  } catch (error) {
+    console.warn('The changed effect cannot be kept in this browser.', error);
+  }
+}
+
 export async function deleteImport(id: string): Promise<void> {
   try {
     await run(IMPORTS, 'readwrite', (store) => store.delete(id));

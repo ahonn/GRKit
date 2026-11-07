@@ -11,21 +11,20 @@ import {
 import { MAX_EFFECTS, type ImportedEffect, type LutImport } from '../catalog';
 import type { Strings } from '../i18n';
 import { trackHaldImage, trackImport } from '../analytics';
-import { coverProblem, guessInput, importLut, saveHaldImage } from '../import/lut';
+import { guessInput, importLut, saveHaldImage } from '../import/lut';
 import {
   coverFromFile,
-  coverIcon,
   INPUT_NAMES,
   INPUTS,
   lutAccept,
   nameFromFile,
   validCover,
-  validCoverText,
   validName,
   type CoverFields,
   type Input,
 } from '../import/names';
-import { TaskSlot, type TaskResult } from '../import/task';
+import { TaskSlot } from '../import/task';
+import { CoverFieldset, useCoverEditor } from './CoverEditor';
 import { CoverIcon } from './EffectIcon';
 
 interface Props {
@@ -74,16 +73,14 @@ export function ImportDialog({ strings: t, baseGamma, taken, onImport, ref }: Pr
   const [choice, setChoice] = useState<InputChoice>('auto');
   // The input that the LUT data suggests, or null while the worker reads the file.
   const [guessed, setGuessed] = useState<Input | null>('standard');
-  const [cover, setCover] = useState<CoverFields>(EMPTY_COVER);
-  // Why the camera cannot draw the cover, from the same check as the import.
-  const [coverError, setCoverError] = useState<string | null>(null);
+  const coverEditor = useCoverEditor(EMPTY_COVER);
+  const { cover } = coverEditor;
   const [status, setStatus] = useState<Status>({ state: 'idle' });
   // A new key empties the file input for the next import.
   const [fileKey, setFileKey] = useState(0);
   // Only the newest guess, fit, and cover check change the dialog.
   const [guess] = useState(() => new TaskSlot());
   const [fit] = useState(() => new TaskSlot());
-  const [coverCheck] = useState(() => new TaskSlot());
   // An unmount stops a running guess and fit, as a new photo stops a RAW decode.
   const ownDialog = useCallback(
     (element: HTMLDialogElement | null) => {
@@ -101,12 +98,11 @@ export function ImportDialog({ strings: t, baseGamma, taken, onImport, ref }: Pr
   const reading = choice === 'auto' && guessed === null;
   const input: Input = choice === 'auto' ? (guessed ?? 'standard') : choice;
   const badName = file !== null && !validName(name);
-  const badCover = !validCover(cover);
   const ready =
     file !== null &&
     validName(name) &&
     validCover(cover) &&
-    coverError === null &&
+    coverEditor.error === null &&
     !reading &&
     !importing;
 
@@ -116,9 +112,8 @@ export function ImportDialog({ strings: t, baseGamma, taken, onImport, ref }: Pr
     setChoice('auto');
     guess.cancel();
     setGuessed('standard');
-    coverCheck.cancel();
-    setCover(EMPTY_COVER);
-    setCoverError(null);
+    coverEditor.cancel();
+    void coverEditor.show(EMPTY_COVER);
     setStatus({ state: 'idle' });
     setFileKey((key) => key + 1);
   }
@@ -163,35 +158,16 @@ export function ImportDialog({ strings: t, baseGamma, taken, onImport, ref }: Pr
    * becomes the film name when the name is only the placeholder.
    */
   async function fillCover(fields: CoverFields) {
-    const checked = await showCover(fields);
+    const checked = await coverEditor.show(fields);
     if (fields.number === '' || !checked.current || checked.value === null) return;
     const withoutNumber = { ...fields, number: '' };
     if (fields.name !== EMPTY_COVER.name) {
-      void showCover(withoutNumber);
+      void coverEditor.show(withoutNumber);
       return;
     }
     const numberAsName = { ...fields, name: fields.number, number: '' };
-    const fits = await coverCheck.run(() => coverProblem(numberAsName));
-    if (fits.current) void showCover(fits.value === null ? numberAsName : withoutNumber);
-  }
-
-  /** Sets the cover and checks that the camera can draw it. */
-  function showCover(next: CoverFields): Promise<TaskResult<string | null>> {
-    setCover(next);
-    setCoverError(null);
-    if (!validCover(next)) {
-      coverCheck.cancel();
-      return Promise.resolve({ current: false });
-    }
-    const checked = coverCheck.run(() => coverProblem(next));
-    void checked.then((result) => {
-      if (result.current) setCoverError(result.value);
-    });
-    return checked;
-  }
-
-  function editCover<K extends keyof CoverFields>(key: K, value: CoverFields[K]) {
-    void showCover({ ...cover, [key]: value });
+    const fits = await coverEditor.probe(numberAsName);
+    if (fits.current) void coverEditor.show(fits.value === null ? numberAsName : withoutNumber);
   }
 
   async function submit(event: FormEvent) {
@@ -343,48 +319,7 @@ export function ImportDialog({ strings: t, baseGamma, taken, onImport, ref }: Pr
             </label>
           </div>
 
-          <fieldset className="import-icon" disabled={importing}>
-            <legend className="field-label">{t.iconHeading}</legend>
-            <div className="import-icon-preview">
-              <CoverIcon cover={coverIcon(cover)} />
-            </div>
-            <details className="import-icon-edit" open>
-              <summary>{t.iconEdit}</summary>
-              <div className="import-icon-fields">
-                {(
-                  [
-                    ['brand', t.iconBrand, true],
-                    ['name', t.iconFilm, true],
-                    ['number', t.iconNumber, false],
-                  ] as const
-                ).map(([key, label, required]) => (
-                  <label key={key} className="field">
-                    <span className="field-label">{label}</span>
-                    <input
-                      className="import-text"
-                      type="text"
-                      value={cover[key]}
-                      maxLength={12}
-                      aria-invalid={(required || cover[key] !== '') && !validCoverText(cover[key])}
-                      onChange={(event) => editCover(key, event.target.value)}
-                    />
-                  </label>
-                ))}
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={cover.band}
-                    onChange={(event) => editCover('band', event.target.checked)}
-                  />
-                  <span>{t.iconBand}</span>
-                </label>
-                {badCover && <p className="note error">{t.iconNote}</p>}
-              </div>
-            </details>
-            {coverError && (
-              <p className="note error import-icon-error">{t.iconTooWide}</p>
-            )}
-          </fieldset>
+          <CoverFieldset strings={t} editor={coverEditor} disabled={importing} />
 
           <details className="hald">
             <summary>{t.haldSummary}</summary>

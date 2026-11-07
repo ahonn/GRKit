@@ -342,6 +342,7 @@ export function CardChangesView({
             <Change label={t.changeRemoveModules} items={changes.removeModules.map(moduleName)} separator={t.listSeparator} />
             <Change label={t.changeAddEffects} items={changes.addEffects.map(effectName)} separator={t.listSeparator} />
             <Change label={t.changeRemoveEffects} items={changes.removeEffects.map(effectName)} separator={t.listSeparator} />
+            <Change label={t.changeUpdateEffects} items={changes.updateEffects.map(effectName)} separator={t.listSeparator} />
           </>
         )}
         {changes.scriptsOn && (

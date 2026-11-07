@@ -350,6 +350,16 @@ pub fn effect_label(blob: &[u8]) -> Result<Label> {
     })
 }
 
+/// A compiled `.GRF` effect with a new name, and a new icon when `icon` is given (40 x 40 RGBA
+/// pixels, as `iconPixels` gives them). The ID, and so the file name and the ImageTone code of the
+/// effect, stay, so the camera keeps its Fn adjustments.
+pub fn relabel_effect(blob: &[u8], name: &str, icon: Option<&[u8]>) -> Result<Vec<u8>> {
+    let (mut effect, own_icon) = effects::decode(blob)?;
+    effects::check_identity(&effect.id, name)?;
+    effect.name = name.to_owned();
+    effect.encode(icon.unwrap_or(&own_icon))
+}
+
 /// The files that a GRKit ZIP of any release puts on the card, at their paths from the card
 /// root, so the page can read the ZIP as a card (`packaging::package_files`).
 pub fn package_files(bytes: &[u8]) -> Result<Files> {
@@ -528,6 +538,14 @@ impl EffectLabel {
 #[wasm_bindgen(js_name = effectLabel)]
 pub fn effect_label_js(blob: &[u8]) -> Result<EffectLabel, JsError> {
     effect_label(blob).map(EffectLabel).map_err(js_error)
+}
+
+/// Returns a compiled `.GRF` effect with the name `name`, and with `icon` (40 x 40 RGBA pixels
+/// from `iconPixels`) as its icon when it is given. The ID stays. It fails for a file that is not
+/// an effect, a name that the camera cannot show, or an icon of another size.
+#[wasm_bindgen(js_name = relabelEffect)]
+pub fn relabel_effect_js(blob: &[u8], name: &str, icon: Option<Vec<u8>>) -> Result<Vec<u8>, JsError> {
+    relabel_effect(blob, name, icon.as_deref()).map_err(js_error)
 }
 
 /// Returns the files that a GRKit ZIP of any release puts on the card, at their paths from the

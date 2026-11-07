@@ -23,11 +23,13 @@ import { sentences, type Language, type Strings } from '../i18n';
 import { forget, prefetchTable, preview, type PreviewEffect, type Source } from '../preview/render';
 import { DEFAULT_SAMPLE } from '../preview/samples';
 import { PhotoLoader } from '../preview/raw';
+import { editable } from '../import/edit';
 import { missingNativeLooks } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
 import { STOCKS } from '../stocks';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
+import { EditDialog, type EditDialogHandle } from './EditDialog';
 import { ImportDialog, type ImportDialogHandle } from './ImportDialog';
 import { NativeLookDialog, type NativeLookDialogHandle } from './NativeLookDialog';
 
@@ -50,17 +52,33 @@ interface Props {
   /** The selected camera can use the native looks of GR IV, so the list offers to unlock them. */
   nativeLooks: boolean;
   onRemove: (effect: ImportedEffect) => void;
+  /** Keeps an import with a new name or icon in its place. */
+  onEdit: (effect: ImportedEffect) => void;
   /** The effect files on the connected card that the catalog and the imports do not have. */
   cardEffects: readonly CardEffect[];
   /** The IDs of the effects on the connected card, or null without a card. */
   onCard: ReadonlySet<string> | null;
+  /** The IDs of the imports whose file on the card differs, such as after a new name. */
+  changedOnCard?: ReadonlySet<string>;
 }
 
 /** The change badge of an effect or a module: what a write to the card does with it. */
 
-export function ChangeBadge({ on, checked, strings: t }: { on: boolean; checked: boolean; strings: Strings }) {
+export function ChangeBadge({
+  on,
+  checked,
+  changed = false,
+  strings: t,
+}: {
+  on: boolean;
+  checked: boolean;
+  /** The file on the card differs from the effect of the page. */
+  changed?: boolean;
+  strings: Strings;
+}) {
   if (checked && !on) return <span className="change add">{t.changeAdds}</span>;
   if (!checked && on) return <span className="change remove">{t.changeRemoves}</span>;
+  if (checked && changed) return <span className="change add">{t.changeUpdates}</span>;
   return null;
 }
 
@@ -71,9 +89,11 @@ export function EffectsSection({
   imported,
   onImport,
   onRemove,
+  onEdit,
   nativeLooks,
   cardEffects,
   onCard,
+  changedOnCard,
 }: Props) {
   const catalog = use(loadCatalog(PREVIEW_TARGET));
   const effects: readonly Effect[] = [...catalog.effects, ...imported];
@@ -95,6 +115,7 @@ export function EffectsSection({
   const photo = useRef<Source | null>(null);
   const importer = useRef<ImportDialogHandle>(null);
   const unlocker = useRef<NativeLookDialogHandle>(null);
+  const editor = useRef<EditDialogHandle>(null);
   const [loader] = useState(() => new PhotoLoader());
   const [decoding, setDecoding] = useState(false);
   const ownPhoto = useCallback(
@@ -411,7 +432,24 @@ export function EffectsSection({
                     {body}
                   </button>
                 )}
-                {onCard && <ChangeBadge on={onCard.has(effect.id)} checked={isChecked} strings={t} />}
+                {onCard && (
+                  <ChangeBadge
+                    on={onCard.has(effect.id)}
+                    checked={isChecked}
+                    changed={changedOnCard?.has(effect.id)}
+                    strings={t}
+                  />
+                )}
+                {effect.imported && editable(effect) && (
+                  <button
+                    type="button"
+                    className="row-remove"
+                    aria-label={t.editOf(effect.name)}
+                    onClick={() => editor.current?.open(effect)}
+                  >
+                    {t.editEffect}
+                  </button>
+                )}
                 {effect.imported && (
                   <button
                     type="button"
@@ -491,6 +529,7 @@ export function EffectsSection({
             onImport={(effect) => importEffects([effect])}
           />
         )}
+        <EditDialog ref={editor} strings={t} onSave={onEdit} />
         {nativeLooks && catalog.baseGamma && (
           <NativeLookDialog
             ref={unlocker}

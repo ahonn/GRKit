@@ -416,18 +416,20 @@ export interface CardChanges {
   removeModules: string[];
   addEffects: string[];
   removeEffects: string[];
+  /** The effects on the card whose files the write replaces, such as an import with a new name. */
+  updateEffects: string[];
 }
 
 /**
  * The changes from the card to the selection. `modules` are the module IDs of the package.
  * `effects` gives the effects on the card and the checked effects, each by the same kind of key,
- * or it is null to leave the effects as they are.
+ * and the effects whose files changed, or it is null to leave the effects as they are.
  */
 export function planChanges(
   state: CardState,
   version: string,
   modules: readonly string[],
-  effects: { before: readonly string[]; after: readonly string[] } | null,
+  effects: { before: readonly string[]; after: readonly string[]; changed?: readonly string[] } | null,
 ): CardChanges {
   const onCard = cardModules(state);
   return {
@@ -443,6 +445,9 @@ export function planChanges(
     removeModules: minus(onCard, modules),
     addEffects: effects ? minus(effects.after, effects.before) : [],
     removeEffects: effects ? minus(effects.before, effects.after) : [],
+    updateEffects: effects
+      ? (effects.changed ?? []).filter((id) => effects.before.includes(id) && effects.after.includes(id))
+      : [],
   };
 }
 
@@ -465,7 +470,12 @@ export function hasChanges(changes: CardChanges): boolean {
     changes.grkit !== 'same' ||
     changes.scriptsOn ||
     changes.cleanLegacy ||
-    changes.addModules.length + changes.removeModules.length + changes.addEffects.length + changes.removeEffects.length > 0
+    changes.addModules.length +
+      changes.removeModules.length +
+      changes.addEffects.length +
+      changes.removeEffects.length +
+      changes.updateEffects.length >
+      0
   );
 }
 

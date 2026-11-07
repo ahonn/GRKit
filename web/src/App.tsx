@@ -23,7 +23,14 @@ import {
   type CardDirectory,
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
-import { extraCardEffects, libraryChanges, openSession, packageEffects as cardPackageEffects, type CardSession } from './cardSession';
+import {
+  changedImports,
+  extraCardEffects,
+  libraryChanges,
+  openSession,
+  packageEffects as cardPackageEffects,
+  type CardSession,
+} from './cardSession';
 import {
   cameraForCard,
   CAMERAS,
@@ -58,7 +65,7 @@ import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails, type
 import { restoreImports } from './import/lut';
 import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
 import { isLutImportId } from './import/names';
-import { deleteImport, saveImport } from './import/store';
+import { deleteImport, saveImport, updateImport } from './import/store';
 import { applyLanguage, LANGUAGES, sentences, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 import {
@@ -229,6 +236,13 @@ export function App({
   function addImported(effect: ImportedEffect) {
     setImported((current) => [...current.filter((item) => item.id !== effect.id), effect]);
     void saveImport(effect);
+    resetBuild();
+  }
+
+  // A new name or icon keeps the import in its place and keeps its ID.
+  function editImported(effect: ImportedEffect) {
+    setImported((current) => current.map((item) => (item.id === effect.id ? effect : item)));
+    void updateImport(effect);
     resetBuild();
   }
 
@@ -515,7 +529,9 @@ export function App({
       session.state,
       __GRKIT_VERSION__,
       plan.modules,
-      plan.includeEffects ? { before: [...session.effects.keys()], after: checked } : null,
+      plan.includeEffects
+        ? { before: [...session.effects.keys()], after: checked, changed: [...changedImports(session, imported)] }
+        : null,
     );
     return session.written && changes.grkit === 'update' ? { ...changes, grkit: 'same' } : changes;
   }
@@ -540,7 +556,13 @@ export function App({
         session,
         checked.map((effect) => effect.id),
       );
-      const library = await libraryChanges(session, files, checked, changes.addEffects, changes.removeEffects);
+      const library = await libraryChanges(
+        session,
+        files,
+        checked,
+        [...changes.addEffects, ...changes.updateEffects],
+        changes.removeEffects,
+      );
       await applyChanges(session.root, session.state, files, library, ({ written, total }) => {
         if (run !== cardRun.current) return;
         setCardTask(written < total ? { kind: 'writing', written, total } : { kind: 'finishing' });
@@ -831,9 +853,11 @@ export function App({
                   imported={imported}
                   onImport={addImported}
                   onRemove={removeImported}
+                  onEdit={editImported}
                   nativeLooks={takesNativeLooks(camera.key)}
                   cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
+                  changedOnCard={active ? changedImports(active, imported) : undefined}
                 />
               </Suspense>
             </ErrorBoundary>
@@ -1198,6 +1222,7 @@ function CardNext({
     next.removeModules.length +
     next.addEffects.length +
     next.removeEffects.length +
+    next.updateEffects.length +
     (next.scriptsOn ? 1 : 0) +
     (next.cleanLegacy ? 1 : 0);
   const lines =

@@ -18,6 +18,8 @@ export interface CardSession {
   effects: ReadonlyMap<string, readonly string[]>;
   /** The effects on the card that the catalog and the imports do not have. */
   extra: readonly CardEffect[];
+  /** The file on the card of each import that the card has, to find the changed ones. */
+  contents?: ReadonlyMap<string, Uint8Array>;
   /**
    * The page wrote the GRKit of this site to the card. The report shows the new version only
    * after the next power-on.
@@ -44,7 +46,9 @@ export async function openSession(
   const byFile = new Map<string, string>();
   for (const effect of known) byFile.set((await effectFile(effect)).toUpperCase(), effect.id);
   const ids = new Set(known.map((effect) => effect.id));
+  const imports = new Set(known.flatMap((effect) => ('imported' in effect && effect.imported ? [effect.id] : [])));
   const effects = new Map<string, string[]>();
+  const contents = new Map<string, Uint8Array>();
   const extra: CardEffect[] = [];
   for (const path of cardEffects(state)) {
     const file = path.split('/').at(-1)!;
@@ -65,6 +69,10 @@ export async function openSession(
         });
       }
     }
+    if (imports.has(id) && !contents.has(id)) {
+      const bytes = await readFile(root, path);
+      if (bytes) contents.set(id, bytes);
+    }
     effects.set(id, [...(effects.get(id) ?? []), path]);
   }
   return {
@@ -72,7 +80,25 @@ export async function openSession(
     state,
     effects,
     extra,
+    contents,
   };
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((byte, i) => byte === b[i]);
+}
+
+/**
+ * The IDs of the imports whose file on the card differs from the effect of the page, such as an
+ * import with a new name. A write puts the new file on the card.
+ */
+export function changedImports(session: CardSession, imported: readonly ImportedEffect[]): Set<string> {
+  const changed = new Set<string>();
+  for (const effect of imported) {
+    const bytes = session.contents?.get(effect.id);
+    if (bytes && !sameBytes(bytes, effect.imported.blob)) changed.add(effect.id);
+  }
+  return changed;
 }
 
 /**
