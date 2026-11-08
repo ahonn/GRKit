@@ -32,6 +32,7 @@ const recipe = (name: string, change: Partial<Recipe> = {}): Recipe => ({
   enabled: true,
   hidden: false,
   number: 0,
+  id: 0,
   ...change,
 });
 
@@ -109,7 +110,7 @@ describe('recipes', () => {
     expect(added.map((item) => item.name)).toEqual(['A', 'Preset', 'Off']);
     expect(added[1]).toEqual(preset);
     // The library holds it whatever its place on the camera.
-    expect(holdsRecipe([{ ...preset, enabled: false, number: 2 }], preset)).toBe(true);
+    expect(holdsRecipe([{ ...preset, enabled: false, number: 2, id: 7 }], preset)).toBe(true);
     expect(holdsRecipe([recipe('Preset')], preset)).toBe(false);
     const full = Array.from({ length: ON_MAX }, (_, index) => recipe(`R${index}`));
     expect(withPreset(full, preset).at(-1)).toEqual({ ...preset, enabled: false });

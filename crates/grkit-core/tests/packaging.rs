@@ -1537,6 +1537,7 @@ fn a_package_holds_the_recipe_library_of_its_camera() {
         enabled: true,
         hidden: false,
         number: 0,
+        id: 0,
     };
     let library = encode(&[recipe(Family::Gr3), recipe(Family::Gr3)]).unwrap();
     let with_library = assemble_with(

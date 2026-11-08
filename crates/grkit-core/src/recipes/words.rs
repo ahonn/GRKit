@@ -199,6 +199,8 @@ impl Recipe {
             enabled: w[MODULE_WORD] & OFF == 0,
             hidden: w[0] & HIDDEN != 0,
             number: (w[0] >> NUMBER_SHIFT & NUMBER_MAX) as u8,
+            // The words hold no ID: the recipe file keeps it apart.
+            id: 0,
         };
         recipe.check()?;
         ensure!(

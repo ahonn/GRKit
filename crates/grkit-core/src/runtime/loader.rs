@@ -745,8 +745,9 @@ fn state_script() -> Vec<String> {
             ]);
         }
         if file == StateFile::Recipes {
-            // The recipes, their names, and the import hash: each word that
-            // is not 0 (runtime/recipes.h), at its key (state::recipe_key).
+            // The recipes, their names, and the words from the import hash
+            // to the next ID: each word that is not 0 (runtime/recipes.h), at
+            // its key (state::recipe_key).
             let words = RECIPE_WORDS * RECIPE_SLOTS;
             let names = words + RECIPE_NAME_WORDS * RECIPE_SLOTS;
             lines.extend([
@@ -762,7 +763,8 @@ fn state_script() -> Vec<String> {
                 format!("rkey = rkey + {RECIPE_KEY_BASE}"),
                 "rkey = rkey + rslot".into(),
                 format!("if rindex < {words} goto recipe_key"),
-                format!("rkey = {RECIPE_IMPORTED_KEY}"),
+                format!("rkey = rindex - {names}"),
+                format!("rkey = rkey + {RECIPE_IMPORTED_KEY}"),
                 format!("if rindex >= {names} goto recipe_key"),
                 format!("rslot = rindex - {words}"),
                 format!("rkey = rslot % {RECIPE_NAME_WORDS}"),
@@ -1077,8 +1079,8 @@ mod tests {
             "if rindex >= {RECIPE_STATE_WORDS} goto recipe_word_end"
         )));
         const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
-        // The names and the import hash follow the recipe words, so one run
-        // of words holds them.
+        // The names and the words from the import hash to the next ID follow
+        // the recipe words, so one run of words holds them.
         const {
             assert!(crate::abi::HOST_RECIPE_NAMES == HOST_RECIPES + 4 * RECIPE_WORDS * RECIPE_SLOTS)
         };
@@ -1089,9 +1091,14 @@ mod tests {
             )
         };
         const {
-            assert!(
-                crate::abi::HOST_RECIPE_IMPORTED / 4 + 1 == HOST_RECIPES / 4 + RECIPE_STATE_WORDS
-            )
+            use crate::abi::{
+                HOST_RECIPE_DIAL, HOST_RECIPE_IDS, HOST_RECIPE_IMPORTED, HOST_RECIPE_NEXT_ID,
+                RECIPE_DIAL_POSITIONS,
+            };
+            assert!(HOST_RECIPE_IDS == HOST_RECIPE_IMPORTED + 4);
+            assert!(HOST_RECIPE_DIAL == HOST_RECIPE_IDS + 4 * RECIPE_SLOTS);
+            assert!(HOST_RECIPE_NEXT_ID == HOST_RECIPE_DIAL + 4 * RECIPE_DIAL_POSITIONS);
+            assert!(HOST_RECIPE_NEXT_ID / 4 + 1 == HOST_RECIPES / 4 + RECIPE_STATE_WORDS)
         };
         assert_eq!(script.matches(&recipes).count(), 1);
     }

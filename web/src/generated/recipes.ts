@@ -65,7 +65,8 @@ export const PRESETS: readonly Preset[] = [
         },
         "enabled": true,
         "hidden": false,
-        "number": 0
+        "number": 0,
+        "id": 0
       }
     ]
   },
@@ -128,7 +129,8 @@ export const PRESETS: readonly Preset[] = [
         },
         "enabled": true,
         "hidden": false,
-        "number": 0
+        "number": 0,
+        "id": 0
       }
     ]
   },
@@ -185,7 +187,8 @@ export const PRESETS: readonly Preset[] = [
         },
         "enabled": true,
         "hidden": false,
-        "number": 0
+        "number": 0,
+        "id": 0
       },
       {
         "name": "CineStill 800T",
@@ -234,7 +237,8 @@ export const PRESETS: readonly Preset[] = [
         },
         "enabled": true,
         "hidden": false,
-        "number": 0
+        "number": 0,
+        "id": 0
       }
     ]
   }

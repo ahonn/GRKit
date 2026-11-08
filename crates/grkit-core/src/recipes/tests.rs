@@ -41,6 +41,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
             enabled: true,
             hidden: false,
             number: 0,
+            id: 0,
         },
         Recipe {
             name: "Nega 2".into(),
@@ -68,6 +69,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
             enabled: true,
             hidden: false,
             number: 0,
+            id: 0,
         },
         Recipe {
             name: "Solar".into(),
@@ -94,6 +96,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
             enabled: true,
             hidden: false,
             number: 0,
+            id: 0,
         },
     ]
 }
@@ -171,12 +174,16 @@ fn the_recipe_file_round_trips_and_keeps_the_import() {
         "{}\r\n123\r\n991000000\r\n5\r\n",
         crate::runtime::RECIPE_IMPORTED_KEY
     );
-    let text = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
+    let file = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
+    let text = file.text;
     assert!(text.contains(&format!(
         "{}\r\n123\r\n",
         crate::runtime::RECIPE_IMPORTED_KEY
     )));
-    assert_eq!(read_recipe_file(&text, Family::Gr3), recipes);
+    // The recipes come back with the IDs that the file gave them.
+    assert_eq!(read_recipe_file(&text, Family::Gr3), file.recipes);
+    let ids: Vec<u32> = file.recipes.iter().map(|recipe| recipe.id).collect();
+    assert_eq!(ids, [1, 2]);
     // Recipe 1 has the automatic name and number 2, and is hidden.
     let w0 = recipes[1].words().unwrap()[0];
     assert_eq!(w0 >> NUMBER_SHIFT & 15, 2);
@@ -195,7 +202,8 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
     let recipes: Vec<Recipe> = sample().into_iter().filter(gr3).collect();
     let mut card = recipes.clone();
     card[0].name = "Card".into();
-    let mut previous = write_recipe_file(&card, Family::Gr3, "").unwrap();
+    let written = write_recipe_file(&card, Family::Gr3, "").unwrap();
+    let mut previous = written.text;
     // A recipe word with a look that no build has, which is on, and its
     // name "Odd".
     let odd = USED | 3;
@@ -211,9 +219,10 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
     ] {
         previous.push_str(&format!("{key}\r\n{value}\r\n"));
     }
-    assert_eq!(read_recipe_file(&previous, Family::Gr3), card);
-    let text = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
-    assert_eq!(read_recipe_file(&text, Family::Gr3), recipes);
+    assert_eq!(read_recipe_file(&previous, Family::Gr3), written.recipes);
+    let file = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
+    let text = file.text;
+    assert_eq!(read_recipe_file(&text, Family::Gr3), file.recipes);
     let records = file_records(&text);
     assert_eq!(records.len(), recipes.len() + 1);
     let last = &records[recipes.len()];
@@ -222,7 +231,9 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
     // With `ON_MAX` recipes on, it turns off; with `LIBRARY_MAX` recipes,
     // it does not fit.
     let mut full = vec![recipes[0].clone(); ON_MAX];
-    let text = write_recipe_file(&full, Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&full, Family::Gr3, &previous)
+        .unwrap()
+        .text;
     assert!(!file_records(&text)[ON_MAX].on());
     full.resize(
         LIBRARY_MAX,
@@ -302,7 +313,7 @@ fn recipes_that_are_off_follow_those_that_are_on() {
         recipe.enabled = index >= LIBRARY_MAX - ON_MAX;
     }
     assert!(encode(&recipes).is_ok());
-    let text = write_recipe_file(&recipes, Family::Gr3, "").unwrap();
+    let text = write_recipe_file(&recipes, Family::Gr3, "").unwrap().text;
     let read = read_recipe_file(&text, Family::Gr3);
     assert_eq!(read.len(), LIBRARY_MAX);
     assert!(read[..ON_MAX].iter().all(|recipe| recipe.enabled));
@@ -433,4 +444,114 @@ fn a_damaged_file_is_rejected() {
     assert!(decode(&bytes).is_err());
     let bytes = encode(&sample()).unwrap();
     assert!(decode(&bytes[..bytes.len() - 1]).is_err());
+}
+
+/// Two recipes of the sample line GR III that differ in their name.
+fn named(names: &[&str]) -> Vec<Recipe> {
+    let base = sample()
+        .into_iter()
+        .find(|recipe| recipe.family == Family::Gr3)
+        .unwrap();
+    names
+        .iter()
+        .map(|name| Recipe {
+            name: (*name).into(),
+            ..base.clone()
+        })
+        .collect()
+}
+
+/// A recipe keeps its ID. A recipe without one, or with the ID of an
+/// earlier recipe, gets the next ID, which stays above each ID that the
+/// card gave: a deleted recipe's ID does not come back.
+#[test]
+fn a_write_keeps_each_id_and_gives_new_ones_above_the_old() {
+    use crate::runtime::{RECIPE_ID_MAX, RECIPE_NEXT_ID_KEY};
+    let first = write_recipe_file(&named(&["A", "B"]), Family::Gr3, "").unwrap();
+    let ids = |file: &RecipeFile| file.recipes.iter().map(|r| r.id).collect::<Vec<_>>();
+    assert_eq!(ids(&first), [1, 2]);
+    assert!(first
+        .text
+        .contains(&format!("{RECIPE_NEXT_ID_KEY}\r\n3\r\n")));
+    // The site deletes A and adds C: B keeps 2, C gets 3, not the free 1.
+    let mut next = vec![first.recipes[1].clone()];
+    next.extend(named(&["C"]));
+    let second = write_recipe_file(&next, Family::Gr3, &first.text).unwrap();
+    assert_eq!(ids(&second), [2, 3]);
+    // A copy of B with B's ID gets a new one.
+    let copy = Recipe {
+        name: "B2".into(),
+        ..second.recipes[0].clone()
+    };
+    let third = write_recipe_file(
+        &[second.recipes[0].clone(), copy],
+        Family::Gr3,
+        &second.text,
+    )
+    .unwrap();
+    assert_eq!(ids(&third), [2, 4]);
+    // A file without the next ID: the next ID is still above each ID of the
+    // file, so C does not get B's 2 after the site deletes B.
+    let without_next = first
+        .text
+        .replace(&format!("{RECIPE_NEXT_ID_KEY}\r\n3\r\n"), "");
+    let mut kept_a = vec![first.recipes[0].clone()];
+    kept_a.extend(named(&["C"]));
+    let fourth = write_recipe_file(&kept_a, Family::Gr3, &without_next).unwrap();
+    assert_eq!(ids(&fourth), [1, 3]);
+    // An ID out of range is no ID.
+    let mut wrong = named(&["D"]);
+    wrong[0].id = RECIPE_ID_MAX + 1;
+    assert!(wrong[0].check().is_err());
+}
+
+/// The user modes of the mode dial stay as the card has them. A user mode
+/// whose recipe the write leaves out follows; GRKit Off stays.
+#[test]
+fn a_write_keeps_the_user_modes_of_the_mode_dial() {
+    use crate::runtime::{RECIPE_DIAL_FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF};
+    let card = write_recipe_file(&named(&["A", "B"]), Family::Gr3, "").unwrap();
+    // U1 applies B (ID 2), U2 turns GRKit off, U3 applies A (ID 1).
+    let mut previous = card.text.clone();
+    for (u, value) in [2, RECIPE_DIAL_OFF, 1].into_iter().enumerate() {
+        previous.push_str(&format!(
+            "{}\r\n{value}\r\n",
+            RECIPE_DIAL_KEY_BASE + u as u32
+        ));
+    }
+    let dial = |text: &str| -> Vec<u32> {
+        (0..3)
+            .map(|u| {
+                let key = format!("{}\r\n", RECIPE_DIAL_KEY_BASE + u);
+                text.find(&key).map_or(RECIPE_DIAL_FOLLOW, |at| {
+                    text[at + key.len()..]
+                        .lines()
+                        .next()
+                        .unwrap()
+                        .parse()
+                        .unwrap()
+                })
+            })
+            .collect()
+    };
+    // The site writes the same recipes in another order: nothing changes.
+    let swapped = [card.recipes[1].clone(), card.recipes[0].clone()];
+    let same = write_recipe_file(&swapped, Family::Gr3, &previous).unwrap();
+    assert_eq!(dial(&same.text), [2, RECIPE_DIAL_OFF, 1]);
+    // The site deletes A: U3 follows.
+    let without = write_recipe_file(&card.recipes[1..], Family::Gr3, &previous).unwrap();
+    assert_eq!(
+        dial(&without.text),
+        [2, RECIPE_DIAL_OFF, RECIPE_DIAL_FOLLOW]
+    );
+}
+
+/// A package library holds no IDs: INSTALL gives each added recipe its own.
+#[test]
+fn a_package_library_holds_no_ids() {
+    let file = write_recipe_file(&named(&["A", "B"]), Family::Gr3, "").unwrap();
+    assert!(file.recipes.iter().all(|recipe| recipe.id != 0));
+    let decoded = decode(&encode(&file.recipes).unwrap()).unwrap();
+    assert!(decoded.iter().all(|recipe| recipe.id == 0));
+    assert_eq!(decoded, named(&["A", "B"]));
 }

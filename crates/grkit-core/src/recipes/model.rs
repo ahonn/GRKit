@@ -226,6 +226,13 @@ pub struct Recipe {
     /// for none, 2 for the second recipe of a look, at most 15.
     #[serde(default)]
     pub number: u8,
+    /// The ID of the recipe on the card, 1 to `runtime::RECIPE_ID_MAX`, or 0
+    /// for a recipe that the card does not hold yet. The ID stays with the
+    /// recipe, so a reference to it, such as a user mode of the mode dial,
+    /// stays valid when the recipes move. `write_recipe_file` gives each
+    /// recipe without one the next ID. A package library holds no IDs.
+    #[serde(default)]
+    pub id: u32,
 }
 
 fn on() -> bool {
@@ -255,6 +262,11 @@ impl Recipe {
     /// checks the same values and shows a recipe that fails as unavailable.
     pub fn check(&self) -> Result<()> {
         check_name(&self.name)?;
+        ensure!(
+            self.id <= crate::runtime::RECIPE_ID_MAX,
+            "Recipe ID {} is out of range",
+            self.id
+        );
         let family = self.family.native();
         match &self.look {
             Look::Effect { code, adjustments } => {

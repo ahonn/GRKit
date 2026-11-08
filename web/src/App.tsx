@@ -609,15 +609,20 @@ export function InstallPage({
       );
       // The recipes of the site replace the recipe file of the camera, which keeps its import
       // record; the library of a ZIP package has no more use.
-      if (changes.recipes === 'write' && recipeLibrary.packageRecipes) {
-        const text = await writeRecipeFile(recipeLibrary.packageRecipes, family, session.state.recipeText ?? '');
-        files.push({ path: RECIPE_FILE, bytes: new TextEncoder().encode(text) });
+      const recipeFile =
+        changes.recipes === 'write' && recipeLibrary.packageRecipes
+          ? await writeRecipeFile(recipeLibrary.packageRecipes, family, session.state.recipeText ?? '')
+          : null;
+      if (recipeFile) {
+        files.push({ path: RECIPE_FILE, bytes: new TextEncoder().encode(recipeFile.text) });
         library.remove.push(RECIPES_PACKAGE);
       }
       await applyChanges(session.root, session.state, files, library, ({ written, total }) => {
         if (run !== cardRun.current) return;
         setCardTask(written < total ? { kind: 'writing', written, total } : { kind: 'finishing' });
       });
+      // The library takes the IDs that the card now holds, so it stays the same as the card.
+      if (recipeFile) recipeLibrary.change(recipeFile.recipes);
       const catalog = await loadCatalog(PREVIEW_TARGET);
       const next = await openSession(session.root, [...catalog.effects, ...imported], family);
       if (run !== cardRun.current) return;

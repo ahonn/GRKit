@@ -72,6 +72,7 @@ pub fn presets() -> Vec<Preset> {
         enabled: true,
         hidden: false,
         number: 0,
+        id: 0,
     };
     // A community recipe of Negative Film with its nine levels as the camera
     // shows them, -4 to +4, the Auto white balance with its shifts (stored
@@ -108,6 +109,7 @@ pub fn presets() -> Vec<Preset> {
             enabled: true,
             hidden: false,
             number: 0,
+            id: 0,
         };
     vec![
         // Highlight correction On, shadow correction Off; AWB G2 A14.
