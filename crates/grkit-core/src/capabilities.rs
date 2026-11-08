@@ -8,8 +8,8 @@
 //! `CORE.<KEY>`, and restores it only while a loaded module uses it.
 
 use crate::abi::{
-    HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE, HOST_MODULE,
-    MODULES_MAX,
+    HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_CROP, HOST_CROP_MODE, HOST_FRAME_RATIO, HOST_GRAIN,
+    HOST_GRAIN_SIZE, HOST_MODULE, MODULES_MAX,
 };
 
 /// An extension point: the firmware changes that a group of features needs.
@@ -101,7 +101,7 @@ impl Capability {
 }
 
 /// The capabilities in handle order.
-pub const CAPABILITIES: [Capability; 7] = [
+pub const CAPABILITIES: [Capability; 9] = [
     Capability {
         // The effect of still pictures and the live view: 0 Off, then effect
         // n - 1 of the installed effects (runtime/tone.h). The core gives
@@ -163,6 +163,22 @@ pub const CAPABILITIES: [Capability; 7] = [
         values: MODULES_MAX as u32,
         state: State::Word(HOST_MODULE),
         points: &[],
+    },
+    Capability {
+        // A focal-length crop of the lens (runtime/crop.h): 0 Off, then 35,
+        // 40, 50, 70, and 90 mm of a 28 mm lens, the same factors of the
+        // 40 mm lens of GR IIIx. The live view shows the frame of the crop.
+        key: "CROP",
+        values: 6,
+        state: State::Word(HOST_CROP),
+        points: &[Point::ViewfinderOverlay],
+    },
+    Capability {
+        // 0 crops the photo where the camera can, 1 draws the frame only.
+        key: "CROP_MODE",
+        values: 2,
+        state: State::Word(HOST_CROP_MODE),
+        points: &[Point::ViewfinderOverlay],
     },
 ];
 

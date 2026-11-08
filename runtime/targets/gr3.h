@@ -28,6 +28,11 @@
 /* The native StillAspectRatio, and its setter as the native menu calls it:
    a change posts the UI change event and switches the live view. */
 #define MENU_NATIVE_ASPECT() CALL1(FW_STILL_ASPECT_GET)(CALL0(FW_SETTINGS)())
+/* GR IIIx runs this runtime with its 40 mm lens: the crops of CORE.CROP
+   are 50, 57, 71, 100, and 128 mm there (runtime/crop.h). */
+#ifndef CROP_LENS_40MM
+#define CROP_LENS_40MM() ((((u32 (*)(void))FW_PROJECT_TYPE)()&0xffU)==0)
+#endif
 #define MENU_SET_NATIVE_ASPECT(id) CALL2(FW_STILL_ASPECT_SET)(CALL0(FW_SETTINGS)(),(id))
 /* GR III picks the live-view mode of the native aspect when the live view
    starts, so a native aspect change needs a stopped live view, as the native

@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 976
+#define GRKIT_HOST_HEADER_SIZE 984
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -294,13 +294,17 @@
    not readable. A half-press on the native Image Control slot with another
    type selects that type, as OK does (runtime/menu.c). */
 #define GRKIT_HOST_ADJ_IC_TYPE 972
+/* CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h). */
+#define GRKIT_HOST_CROP 976
+/* CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the frame only. */
+#define GRKIT_HOST_CROP_MODE 980
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
    of values. CORE.TONE has neither: its value is the active record, and the
    effects give its number of values (runtime/tone.h). */
 #define GRKIT_CORE_SETTING_BASE 0x100U
-#define GRKIT_CORE_SETTING_COUNT 7U
+#define GRKIT_CORE_SETTING_COUNT 9U
 #define GRKIT_CORE_TONE 0x100U
 #define GRKIT_CORE_TONE_VALUES 0U
 #define GRKIT_CORE_TONE_BIT 0x1
@@ -322,8 +326,14 @@
 #define GRKIT_CORE_ADJ_MODULE 0x106U
 #define GRKIT_CORE_ADJ_MODULE_VALUES 10U
 #define GRKIT_CORE_ADJ_MODULE_BIT 0x40
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,908,256,188
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,10
+#define GRKIT_CORE_CROP 0x107U
+#define GRKIT_CORE_CROP_VALUES 6U
+#define GRKIT_CORE_CROP_BIT 0x80
+#define GRKIT_CORE_CROP_MODE 0x108U
+#define GRKIT_CORE_CROP_MODE_VALUES 2U
+#define GRKIT_CORE_CROP_MODE_BIT 0x100
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,908,256,188,976,980
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,10,6,2
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100

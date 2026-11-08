@@ -126,6 +126,9 @@ static uint32_t profile_core_id;
 #define TEST_GUIDES_PAINT 0x5e000001U
 #define TEST_GUIDES_ALWAYS_PAINT 0x5e000031U
 #define TEST_BADGE_PAINT 0x5e000021U
+/* A layer bound to CORE.CROP: it records the surface that the core gives
+   it. The module test of Crop checks its mask. */
+#define TEST_CROP_PAINT 0x5e000041U
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value);
 #define MODULE_PAINT(address,surface,value) test_module_paint(address,surface,value)
 static uint32_t level_updates, level_updated;
@@ -144,8 +147,19 @@ static void legacy_badge(const Surface *surface,u32 value) {
     if(surface->area && !setting_get(SETTING_LABEL))
         overlay_label(surface,LABEL_RATIO(surface->area),LABEL_LEFT,LABEL_TOP);
 }
+/* The last surface of the crop layer and of the Guides layer. */
+static u32 crop_calls, crop_area, crop_value;
+static u16 crop_box_seen[4], guides_box_seen[4];
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value)
 {
+    const Surface *s = surface;
+    if (address == TEST_CROP_PAINT) {
+        ++crop_calls; crop_area = s->area; crop_value = value;
+        memcpy(crop_box_seen, s->box, sizeof(crop_box_seen));
+        return;
+    }
+    if (address == TEST_GUIDES_PAINT || address == TEST_GUIDES_ALWAYS_PAINT)
+        memcpy(guides_box_seen, s->box, sizeof(guides_box_seen));
     if (address == TEST_MASK_PAINT) framing_mask(surface, value);
     else if (address == TEST_GUIDES_ALWAYS_PAINT) guides_paint_always(surface, value);
     else if (address == TEST_BADGE_PAINT) legacy_badge(surface, value);
@@ -811,8 +825,73 @@ static void status_row_fits_the_official_indicators(void)
     assert(ratio+STATUS_LABEL_GAP+date+STATUS_LABEL_GAP+2*STATUS_STEP+40<=STATUS_RIGHT-STATUS_LEFT);
 }
 
+/* A crop frames the center of the layer area. The crop layer gets the
+   frame with the crop as its area, and Guides draw inside the frame. */
+#define CROP_BIT (1U << (GRKIT_CORE_CROP - GRKIT_CORE_SETTING_BASE))
+static void add_crop_layer(void)
+{
+    u32 n = header[GRKIT_HOST_MODULE_LAYER_COUNT/4];
+    header[GRKIT_HOST_MODULE_LAYERS/4 + n*4] = TEST_CROP_PAINT;
+    header[GRKIT_HOST_MODULE_LAYERS/4 + n*4 + 1] = GRKIT_CORE_CROP;
+    header[GRKIT_HOST_MODULE_LAYERS/4 + n*4 + 2] = 15U << 16;
+    header[GRKIT_HOST_MODULE_LAYERS/4 + n*4 + 3] = 0;
+    header[GRKIT_HOST_MODULE_LAYER_COUNT/4] = n + 1;
+    header[GRKIT_HOST_CAPABILITIES/4] |= CROP_BIT;
+}
+static void assert_box(const u16 *box, u32 left, u32 top, u32 right, u32 bottom)
+{
+    assert(box[0] == left && box[1] == top && box[2] == right && box[3] == bottom);
+}
+static void crop_frames_the_layers(void)
+{
+    /* 50 mm in the full 3:2 view: 28/50 of each side, at the center. */
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 3;
+    GUIDE_STYLE = 1;
+    crop_calls = 0;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 1 && crop_area == 3 && crop_value == 3);
+    assert_box(crop_box_seen, 158, 105, 561, 374);
+    assert_box(guides_box_seen, 158, 105, 561, 374);
+    /* Inside the XPan crop of Framing, the frame is 28/50 of that area. */
+    reset();
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 3;
+    GUIDE_STYLE = 1;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert_box(crop_box_seen, 158, 165, 561, 314);
+    assert_box(guides_box_seen, 158, 165, 561, 314);
+    /* Off, or a crop without a module that uses it, frames nothing: the
+       crop layer does not paint, and Guides divide the whole area. */
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    GUIDE_STYLE = 1;
+    crop_calls = 0;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 0);
+    assert_box(guides_box_seen, 0, 0, 720, 480);
+    header[GRKIT_HOST_CROP/4] = 3;
+    header[GRKIT_HOST_CAPABILITIES/4] &= ~CROP_BIT;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 0);
+    assert_box(guides_box_seen, 0, 0, 720, 480);
+    /* The ADJ preview of the crop page frames the highlighted crop: 90 mm. */
+    header[GRKIT_HOST_CAPABILITIES/4] |= CROP_BIT;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 5;
+    header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4] = TEST_OWNER;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 1 && crop_area == 5);
+    assert_box(crop_box_seen, 248, 165, 472, 314);
+    assert_box(guides_box_seen, 248, 165, 472, 314);
+}
 int main(void)
 {
+    crop_frames_the_layers();
     native_guides_follow_the_photo_area();
     guides_follow_composition_frames();
     status_icons_follow_enable_strength_and_disp();

@@ -1,0 +1,16 @@
+title = "Crop"
+# GR IIIx shows the focal lengths of its 40 mm lens instead: 50, 57, 71, 100, and 128 mm.
+rows = ["Off", "35mm", "40mm", "50mm", "70mm", "90mm"]
+# The value in the root row, which has less room than a row.
+summaries = ["Off", "35mm", "40mm", "50mm", "70mm", "90mm"]
+
+[settings."CORE.CROP"]
+label = "Focal Length"
+
+[settings."CORE.CROP_MODE"]
+label = "Mode"
+values = ["Crop", "Frame Only"]
+
+[settings.MASK]
+label = "Mask"
+values = ["Dark", "Black", "Frame Lines"]
