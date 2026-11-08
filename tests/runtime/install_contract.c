@@ -1254,13 +1254,13 @@ static void *run(void *unused)
     the_module_list_shows_each_result();
     the_layers_and_filters_fill_their_slots();
     settings_rows_of_used_settings();
+    the_fn_setting_of_a_page_gets_its_handle();
     a_setting_of_a_module_that_did_not_link_is_missing();
     reset();
     return 0;
 }
 int main(void)
 {
-    the_fn_setting_of_a_page_gets_its_handle();
     pthread_attr_t attributes;
     pthread_t thread;
     assert(!pthread_attr_init(&attributes) && !pthread_attr_setstack(&attributes, test_stack, sizeof test_stack));
