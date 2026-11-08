@@ -79,6 +79,23 @@ static __attribute__((unused)) u32 crop_scale(u32 crop,u32 native) {
     return (u32)(((unsigned long long)crop_scales[crop]*native)>>16);
 }
 
+/* The crop badge of the live view: the camera shows its own for 35 and 50
+   mm (GR IIIx 50 and 71 mm). For 40, 70, and 90 mm, the core hides it
+   (runtime/framing.S: crop_badge) and draws its label LABEL_CROP + n
+   (grkit_core::artwork::OVERLAY_LABELS) in its place: n is 0 to 2 for 40,
+   70, and 90 mm, and 3 to 5 for 57, 100, and 128 mm of GR IIIx. Returns
+   GRKIT_LABEL_COUNT without one. */
+#define LABEL_CROP GRKIT_MODULE_LABEL_COUNT
+#define CROP_BADGE_LEFT 662U
+#define CROP_BADGE_TOP 80U
+static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h,u32 native_aspect) {
+    static const u8 badges[GRKIT_CORE_CROP_VALUES]={0xff,0xff,0,0xff,1,2};
+    u32 badge=badges[crop_capture(h,native_aspect)];
+    if(badge==0xff) return GRKIT_LABEL_COUNT;
+    return LABEL_CROP+badge+(CROP_LENS_40MM() ? 3U : 0U);
+}
+_Static_assert(LABEL_CROP+6U==GRKIT_LABEL_COUNT,"The crop badges end the labels");
+
 /* The camera's own crop factor: its float bits, and its setter as the
    native menu calls it (runtime/framing.S, runtime/menu.S). */
 #if defined(FW_CROP_SET) && !defined(CROP_NATIVE_BITS)

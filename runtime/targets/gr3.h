@@ -141,15 +141,19 @@
 #define SHOT_FOCAL 0x694
 #define SHOT_CROP 0x7b8
 /* CORE.CROP (runtime/crop.h): the size of 3:2 L, which the sensor crops
-   by the factor of a crop; the factor of each value as float bits: Off, the
-   native 35 mm, 40 mm (35 mm x 8 / 7), the native 50 mm, 70 mm (50 mm x 1.4),
-   and 90 mm (50 mm x 1.8); and the side of its frame in 1/65536 of the
-   uncropped view. The shot request object holds the copy of the capture
+   by the factor of a crop; the factor of each value as float bits: Off,
+   the native 35 mm, 40 mm, the native 50 mm, 70 mm, and 90 mm, so that the
+   Exif focal length (18.3 mm x 1.5339 x the factor) names each crop; and
+   the side of its frame in 1/65536 of the uncropped view. The shot request object holds the copy of the capture
    settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
 #define CROP_WIDTH 6000
 #define CROP_HEIGHT 4000
 #define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000,0x404db6db
 #define CROP_SCALES 65536,52429,45875,36700,26214,20389
+/* The JPEG codec takes sizes in multiples of 16. */
+#define CROP_ALIGN 16
+/* The icon of no crop, which hides the live-view crop badge. */
+#define CROP_BADGE_OFF 0
 /* The native factors of 35 and 50 mm, which the camera's own crop code
    takes (runtime/framing.S). */
 #define CROP_NATIVE_35 0x3fa00000

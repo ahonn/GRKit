@@ -55,13 +55,20 @@ ENTRY framing_update, framing_bind, HOOK_FRAMING_UPDATE_RESUME
 ENTRY framing_exit, framing_leave, HOOK_FRAMING_EXIT_RESUME
 ENTRY framing_destroy, framing_leave, HOOK_FRAMING_DESTROY_RESUME
 ENTRY framing_canvas, framing_prepare, HOOK_FRAMING_CANVAS_RESUME
-/* Replaces the Canvas::Draw BL after its native full-background clear. */
+/* Replaces the Canvas::Draw BL after its native full-background clear. The
+   private layers draw before the native children, and the crop badge after
+   them, so that it covers the camera's own (runtime/crop.h). */
 .global framing_children
 framing_children:
     push {r0-r3,r12,lr}
     bl framing_paint
+    ldmia sp, {r0-r3}
+    ldr r12,=HOOK_FRAMING_CHILDREN_TARGET
+    blx r12
+    ldmia sp, {r0-r3}
+    bl framing_paint_after
     pop {r0-r3,r12,lr}
-    ldr pc,=HOOK_FRAMING_CHILDREN_TARGET
+    bx lr
 #ifdef HOOK_FRAMING_CLASSIFY
 /* XPan (65:24) and 2.35:1 share capture aspect id 2 with 16:9. These hooks
    switch the id 2 geometry: shooting follows the Framing ratio, playback
@@ -428,7 +435,7 @@ framing_histogram:
    after its first instruction. The camera knows only its native factors.
    For another factor of CORE.CROP (runtime/crop.h), the sizes up to its
    crop step in 3:2 are the sensor size of 3:2 L divided by the factor,
-   rounded to a multiple of 8: the window and the photo of the crop, one
+   rounded to a multiple of CROP_ALIGN: the window and the photo of the crop, one
    pixel each, as a native crop gives its own size for L. A smaller size or
    another aspect gets the native size of the factor of its step. */
 .global crop_resolution
@@ -460,8 +467,8 @@ crop_resolution:
     vdiv.f32 s1, s1, s0
     vcvt.u32.f32 s1, s1
     vmov r5, s1
-    add r5, r5, #4
-    bic r5, r5, #7
+    add r5, r5, #(CROP_ALIGN / 2)
+    bic r5, r5, #(CROP_ALIGN - 1)
     strh r5, [r3]
     ldr r5, =CROP_HEIGHT
     vmov s1, r5
@@ -469,8 +476,8 @@ crop_resolution:
     vdiv.f32 s1, s1, s0
     vcvt.u32.f32 s1, s1
     vmov r5, s1
-    add r5, r5, #4
-    bic r5, r5, #7
+    add r5, r5, #(CROP_ALIGN / 2)
+    bic r5, r5, #(CROP_ALIGN - 1)
     ldr r6, [sp, #12]
     strh r5, [r6]
     pop {r4-r6}
@@ -545,6 +552,26 @@ crop_shot:
     streq r1, [r2, #(SHOT_CROP & 0xff)]
 1:  pop {r0-r3}
     CROP_SHOT_DISPLACED
+    bx lr
+.ltorg
+#endif
+#ifdef HOOK_CROP_BADGE
+.fpu vfpv3
+.arm
+/* Replaces the BL to the crop badge icon of a crop factor (s0) in the
+   live-view crop badge update. Where the core draws its own badge
+   (runtime/crop.h), the icon is that of no crop, CROP_BADGE_OFF. */
+.global crop_badge
+.type crop_badge, %function
+crop_badge:
+    push {r0-r3,r12,lr}
+    vpush {d0}
+    bl crop_badge_native
+    vpop {d0}
+    cmp r0, #0
+    pop {r0-r3,r12,lr}
+    ldrne pc, =HOOK_CROP_BADGE_TARGET
+    mov r0, #CROP_BADGE_OFF
     bx lr
 .ltorg
 #endif

@@ -593,7 +593,7 @@
    of the build (grkit_core::artwork::overlay_labels): for label n, a u16
    width, a u16 height, and the u32 offset of its pixels from the table start
    at 8 n. Each pixel is one byte of text coverage, row by row. */
-#define GRKIT_LABELS_SIZE 24576
+#define GRKIT_LABELS_SIZE 28672
 /* The profile table after the labels (runtime/profile.h). For each of the
    first GRKIT_PROFILE_MODULES listed modules, at GRKIT_PROFILE_MODULE_SIZE n:
    its code start, its code end, and GRKIT_PROFILE_NAME_BYTES ASCII bytes of
@@ -601,7 +601,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 190664
+#define GRKIT_PROFILE 194760
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -622,10 +622,10 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 195260
+#define GRKIT_TAIL_SIZE 199356
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 191164
+#define GRKIT_TONE_CURVES 195260
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192
@@ -645,7 +645,8 @@
 #define GRKIT_TEXT_RECORDS 40
 #define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)
 #define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)
-#define GRKIT_LABEL_COUNT 14
+#define GRKIT_LABEL_COUNT 20
+#define GRKIT_MODULE_LABEL_COUNT 14
 /* String IDs of the label table, in grkit_core::menu_text order. A run of IDs
    follows the rows or values that it names. */
 #define TEXT_OFF 0
