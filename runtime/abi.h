@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 992
+#define GRKIT_HOST_HEADER_SIZE 1000
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -304,6 +304,13 @@
 /* The crop factor of the next shot, as float bits, where it is longer than the
    native factor of the live view (70 and 90 mm), or 0. */
 #define GRKIT_HOST_CROP_SHOT 988
+/* GR IV: the back end of the last shot, whose queue completion the core can
+   post when a crop shot finishes before the shutter release stops
+   (runtime/crop_queue.S). */
+#define GRKIT_HOST_CROP_QUEUE_OWNER 992
+/* GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
+   CROP_QUEUE_RECOVERED. */
+#define GRKIT_HOST_CROP_QUEUE_FLAGS 996
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number

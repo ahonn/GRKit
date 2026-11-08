@@ -427,6 +427,7 @@ framing_histogram:
 #endif
 .ltorg
 #include "crop.S"
+#include "crop_queue.S"
 #ifdef HOOK_CROP_RESOLUTION
 .fpu vfpv3
 .arm

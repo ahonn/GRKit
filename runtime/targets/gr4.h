@@ -360,6 +360,27 @@
 #define CROP_SHOT_COPY 0x4688
 /* The instruction that the shot hook displaces (runtime/framing.S). */
 #define CROP_SHOT_DISPLACED mov r1, r5
+/* The queue completion of a crop shot (runtime/crop_queue.S). The back end
+   of a shot: the byte that the release stop sets (CROP_BACKEND_RELEASED),
+   the byte that the completion check requires to be zero, the owner of its
+   events, its recipe queue, and the recipe of the shot. A recipe: its
+   state, its progress, and its table ID. A recipe table: an opcode word for
+   each step from CROP_TABLE_OPS, and a halfword argument for each step from
+   CROP_TABLE_ARGS. The step with opcode 1 and argument 8 is the completion
+   step of a shot, and opcode 12 ends the table. The event poster takes
+   CROP_QUEUE_EVENT for the queue completion. */
+#define CROP_BACKEND_RELEASED 0x2dd
+#define CROP_BACKEND_HELD 0x2de
+#define CROP_BACKEND_OWNER 0x7b4
+#define CROP_BACKEND_QUEUE 0x7b8
+#define CROP_BACKEND_RECIPE 0x620
+#define CROP_RECIPE_STATE 0x4
+#define CROP_RECIPE_PROGRESS 0x14
+#define CROP_RECIPE_TABLE 0x18
+#define CROP_TABLE_OPS 0x4
+#define CROP_TABLE_ARGS 0x204
+#define CROP_TABLE_STEPS 128
+#define CROP_QUEUE_EVENT 21
 /* DNGMetaDataWriter::TiffEntryDataSetter: RAW image info and shot metadata. */
 #define DNG_SETTER_INFO 0x8c
 #define DNG_SETTER_SHOT 0x94
