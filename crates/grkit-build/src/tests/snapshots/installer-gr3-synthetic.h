@@ -110,7 +110,7 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
 static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE","CORE.ASPECT_MODE","CORE.ADJ","CORE.ADJ_MODULE","CORE.CROP","CORE.CROP_MODE"};
-static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x4,0x4};
+static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84};
 #define RTOS_EXECUTABLE_END 0x55000000U
 #define CORE_EXPORT_COUNT 0U
 static const u32 core_exports[] = {};

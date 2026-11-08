@@ -224,6 +224,10 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
     ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=0;
     h[GRKIT_HOST_FRAME_CROP/4]=capture_aspect_value(h);
     capture_sync(controller);
+    /* The camera's crop factor follows CORE.CROP in the still live view. */
+#ifdef CROP_NATIVE_BITS
+    if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h,FRAMING_NATIVE_ASPECT());
+#endif
     viewfinder_bind(h,controller);
     level_boot(h,controller);
 }

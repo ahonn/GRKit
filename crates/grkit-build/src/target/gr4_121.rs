@@ -213,6 +213,12 @@ const SITES: &[Site] = &[
     ("framing_level_mode", 0x5392c5f8, "0610a0e1"),
     // LiveViewController histogram update: the BL to the 256-to-128 bin copy.
     ("framing_histogram", 0x53188cbc, "546418eb"),
+    // CORE.CROP: `mov r12, sp` after the first instruction of GetResolution,
+    // `mov r1, r5` after the copy of the capture settings of a shot, and
+    // `mov r12, sp` at the entry of ChangeCrop.
+    ("crop_resolution", 0x538f81bc, "0dc0a0e1"),
+    ("crop_shot", 0x53736950, "0510a0e1"),
+    ("crop_button", 0x5325d378, "0dc0a0e1"),
     ("menu_develop_count", 0x531a2bcc, "0dc0a0e1"),
     ("menu_develop_category", 0x5337a6b4, "0530d0e5"),
     ("menu_develop_value", 0x5337a6e4, "0dc0a0e1"),

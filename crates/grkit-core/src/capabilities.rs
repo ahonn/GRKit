@@ -33,10 +33,13 @@ pub enum Point {
     /// The grain size: the native size on GR IV, and the noise fill of the
     /// grain stage on GR III.
     PipelineGrainSize,
+    /// The focal-length crop of recorded pictures: the window and the size
+    /// of a crop factor, the factor of a shot, and the crop button.
+    CaptureCrop,
 }
 
 impl Point {
-    pub const ALL: [Point; 7] = [
+    pub const ALL: [Point; 8] = [
         Point::MenuPage,
         Point::Tuning,
         Point::ViewfinderOverlay,
@@ -44,6 +47,7 @@ impl Point {
         Point::PictureEncode,
         Point::PipelineGrain,
         Point::PipelineGrainSize,
+        Point::CaptureCrop,
     ];
 
     pub fn name(self) -> &'static str {
@@ -55,6 +59,7 @@ impl Point {
             Point::PictureEncode => "picture.encode",
             Point::PipelineGrain => "pipeline.grain",
             Point::PipelineGrainSize => "pipeline.grain-size",
+            Point::CaptureCrop => "capture.crop",
         }
     }
 
@@ -167,18 +172,19 @@ pub const CAPABILITIES: [Capability; 9] = [
     Capability {
         // A focal-length crop of the lens (runtime/crop.h): 0 Off, then 35,
         // 40, 50, 70, and 90 mm of a 28 mm lens, the same factors of the
-        // 40 mm lens of GR IIIx. The live view shows the frame of the crop.
+        // 40 mm lens of GR IIIx. The live view shows the frame of the crop,
+        // and the camera crops 3:2 pictures (runtime/crop.h).
         key: "CROP",
         values: 6,
         state: State::Word(HOST_CROP),
-        points: &[Point::ViewfinderOverlay],
+        points: &[Point::ViewfinderOverlay, Point::CaptureCrop],
     },
     Capability {
         // 0 crops the photo where the camera can, 1 draws the frame only.
         key: "CROP_MODE",
         values: 2,
         state: State::Word(HOST_CROP_MODE),
-        points: &[Point::ViewfinderOverlay],
+        points: &[Point::ViewfinderOverlay, Point::CaptureCrop],
     },
 ];
 

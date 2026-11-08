@@ -339,6 +339,23 @@
 #define SHOT_TAKEN 0x96c
 #define SHOT_FOCAL 0x6b4
 #define SHOT_CROP 0x7dc
+/* CORE.CROP (runtime/crop.h): the size of 3:2 L, which the sensor crops
+   by the factor of a crop; the factor of each value as float bits: Off, the
+   native 35 mm, 40 mm (35 mm x 8 / 7), the native 50 mm, 70 mm (50 mm x 1.4),
+   and 90 mm (50 mm x 1.8); and the side of its frame in 1/65536 of the
+   uncropped view. The shot request object holds the copy of the capture
+   settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
+#define CROP_WIDTH 6192
+#define CROP_HEIGHT 4128
+#define CROP_FACTORS 0x3f800000,0x3fa04f89,0x3fb73653,0x3fe23119,0x401e5592,0x404b9296
+#define CROP_SCALES 65536,52327,45786,37086,26490,20603
+/* The native factors of 35 and 50 mm, which the camera's own crop code
+   takes (runtime/framing.S). */
+#define CROP_NATIVE_35 0x3fa04f89
+#define CROP_NATIVE_50 0x3fe23119
+#define CROP_SHOT_COPY 0x4688
+/* The instruction that the shot hook displaces (runtime/framing.S). */
+#define CROP_SHOT_DISPLACED mov r1, r5
 /* DNGMetaDataWriter::TiffEntryDataSetter: RAW image info and shot metadata. */
 #define DNG_SETTER_INFO 0x8c
 #define DNG_SETTER_SHOT 0x94

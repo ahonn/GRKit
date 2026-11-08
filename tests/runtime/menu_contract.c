@@ -27,6 +27,10 @@ static unsigned native_ic_value;
 #undef CROP_LENS_40MM
 static unsigned test_lens_40mm;
 #define CROP_LENS_40MM() (test_lens_40mm)
+/* The camera's crop factor that the crop button sets (runtime/crop.h). */
+static unsigned test_crop_bits = 0x3f800000U, test_crop_sets;
+#define CROP_NATIVE_BITS() (test_crop_bits)
+#define CROP_NATIVE_SET(bits) (test_crop_bits = (bits), ++test_crop_sets)
 /* The controller factory gives the TopMenu instance, which the GRKit section
    takes out of it (runtime/menu_section.h). */
 #undef FW_CONTROLLER_FACTORY

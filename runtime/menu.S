@@ -878,3 +878,21 @@ menu_develop_aspect_top_text:
 .ltorg
 #endif
 #endif
+#include "crop.S"
+#ifdef HOOK_CROP_BUTTON
+.arm
+/* The entry of the camera's crop button (ChangeCrop): with CORE.CROP in
+   use, the button steps its crops (runtime/menu.c: crop_button_press) and
+   the camera's own step does not run. */
+.global crop_button
+.type crop_button, %function
+crop_button:
+    push {r0-r3,r12,lr}
+    bl crop_button_press
+    cmp r0, #0
+    pop {r0-r3,r12,lr}
+    bxne lr
+    mov r12, sp
+    ldr pc, =HOOK_CROP_BUTTON_RESUME
+.ltorg
+#endif

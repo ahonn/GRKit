@@ -419,3 +419,132 @@ framing_histogram:
     b framing_histogram_remap
 #endif
 .ltorg
+#include "crop.S"
+#ifdef HOOK_CROP_RESOLUTION
+.fpu vfpv3
+.arm
+/* GetResolution(translator r0, size r1, aspect r2, u16 *width r3,
+   u16 *height at [sp]) with the crop factor in s0. Replaces `mov r12, sp`
+   after its first instruction. The camera knows only its native factors.
+   For another factor of CORE.CROP (runtime/crop.h), the sizes up to its
+   crop step in 3:2 are the sensor size of 3:2 L divided by the factor,
+   rounded to a multiple of 8: the window and the photo of the crop, one
+   pixel each, as a native crop gives its own size for L. A smaller size or
+   another aspect gets the native size of the factor of its step. */
+.global crop_resolution
+.type crop_resolution, %function
+crop_resolution:
+    push {r4-r6}
+    vmov r4, s0
+    ldr r5, =0x3f800000
+    cmp r4, r5
+    ldrne r5, =CROP_NATIVE_35
+    cmpne r4, r5
+    ldrne r5, =CROP_NATIVE_50
+    cmpne r4, r5
+    beq 2f
+    cmp r2, #0
+    bne 1f
+    /* The crop step: 2 from the factor of 50 mm, else 1. */
+    ldr r5, =CROP_NATIVE_50
+    vmov s1, r5
+    vcmp.f32 s0, s1
+    vmrs APSR_nzcv, fpscr
+    movge r5, #2
+    movlt r5, #1
+    cmp r1, r5
+    bhi 1f
+    ldr r5, =CROP_WIDTH
+    vmov s1, r5
+    vcvt.f32.u32 s1, s1
+    vdiv.f32 s1, s1, s0
+    vcvt.u32.f32 s1, s1
+    vmov r5, s1
+    add r5, r5, #4
+    bic r5, r5, #7
+    strh r5, [r3]
+    ldr r5, =CROP_HEIGHT
+    vmov s1, r5
+    vcvt.f32.u32 s1, s1
+    vdiv.f32 s1, s1, s0
+    vcvt.u32.f32 s1, s1
+    vmov r5, s1
+    add r5, r5, #4
+    bic r5, r5, #7
+    ldr r6, [sp, #12]
+    strh r5, [r6]
+    pop {r4-r6}
+    bx lr
+1:  ldr r5, =CROP_NATIVE_50
+    vmov s1, r5
+    vcmp.f32 s0, s1
+    vmrs APSR_nzcv, fpscr
+    ldrlt r5, =CROP_NATIVE_35
+    vmov s0, r5
+2:  pop {r4-r6}
+    mov r12, sp
+    ldr pc, =HOOK_CROP_RESOLUTION_RESUME
+.ltorg
+#endif
+#ifdef HOOK_CROP_IMAGE_CROP
+/* GetImageCrop with the crop factor in s0 (GR III): the step of the maps of
+   the factor, 0, 1, or 2. Replaces `mov r12, sp` after its first
+   instruction. It knows only the native factors; another factor of
+   CORE.CROP takes the maps of its crop step. */
+.global crop_image_crop
+.type crop_image_crop, %function
+crop_image_crop:
+    push {r4,r5}
+    vmov r4, s0
+    ldr r5, =0x3f800000
+    cmp r4, r5
+    ldrne r5, =CROP_NATIVE_35
+    cmpne r4, r5
+    ldrne r5, =CROP_NATIVE_50
+    cmpne r4, r5
+    beq 1f
+    ldr r5, =CROP_NATIVE_50
+    vmov s1, r5
+    vcmp.f32 s0, s1
+    vmrs APSR_nzcv, fpscr
+    movge r0, #2
+    movlt r0, #1
+    pop {r4,r5}
+    bx lr
+1:  pop {r4,r5}
+    mov r12, sp
+    ldr pc, =HOOK_CROP_IMAGE_CROP_RESUME
+.ltorg
+#endif
+#ifdef HOOK_CROP_SHOT
+/* After the copy of the capture settings of a shot into the shot request
+   object (r4): the factor of a 70 or 90 mm crop (GRKIT_HOST_CROP_SHOT)
+   replaces the 50 mm factor of the live view in that copy, so that the
+   window, the size, the Exif focal length, and the DNG crop of the shot
+   follow it. Only while the still live view is bound, so a RAW development
+   keeps the factor of its photo. Then the displaced instruction. */
+.global crop_shot
+.type crop_shot, %function
+crop_shot:
+    push {r0-r3}
+    ldr r0, =GRKIT_HEADER_REFERENCE
+    ldr r1, [r0, #GRKIT_HOST_CROP_SHOT]
+    cmp r1, #0
+    beq 1f
+    ldr r2, [r0, #GRKIT_HOST_FRAME_OWNER]
+    cmp r2, #0
+    beq 1f
+    add r2, r4, #(CROP_SHOT_COPY & ~0xff)
+    ldr r2, [r2, #(CROP_SHOT_COPY & 0xff)]
+    cmp r2, #0
+    beq 1f
+    add r2, r2, #(SHOT_CROP & ~0xff)
+    ldr r3, [r2, #(SHOT_CROP & 0xff)]
+    ldr r0, =CROP_NATIVE_50
+    cmp r3, r0
+    streq r1, [r2, #(SHOT_CROP & 0xff)]
+1:  pop {r0-r3}
+    CROP_SHOT_DISPLACED
+    bx lr
+.ltorg
+#endif
