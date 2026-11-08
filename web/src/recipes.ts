@@ -143,16 +143,29 @@ export function familyOf(cameraKey: string): Family {
   return cameraKey.startsWith('gr4') ? 'gr4' : 'gr3';
 }
 
-/** The bytes of `RECIPES.BIN` for a library. */
-export async function encodeLibrary(recipes: readonly Recipe[]): Promise<Uint8Array> {
-  const wasm = await loadWasm();
-  return wasm.encodeRecipes(JSON.stringify(recipes));
+/**
+ * What INSTALL sets a user mode of the mode dial to when it imports a package library
+ * (`grkit_core::recipes::DialStep`): keep the camera's value, follow the dial, turn GRKit off, or
+ * apply the recipe of a record of the library.
+ */
+export type DialStep = 'keep' | 'follow' | 'off' | { record: number };
+
+/** A package library: its recipes, and what INSTALL sets U1 to U3 of the mode dial to. */
+export interface Library {
+  recipes: Recipe[];
+  dial: DialStep[];
 }
 
-/** The recipes of the bytes of a `RECIPES.BIN`. Throws for a damaged library. */
-export async function decodeLibrary(bytes: Uint8Array): Promise<Recipe[]> {
+/** The bytes of `RECIPES.BIN` for a library that sets U1 to U3 as `dial` gives. */
+export async function encodeLibrary(recipes: readonly Recipe[], dial: readonly DialStep[]): Promise<Uint8Array> {
   const wasm = await loadWasm();
-  return JSON.parse(wasm.decodeRecipes(bytes)) as Recipe[];
+  return wasm.encodeRecipes(JSON.stringify(recipes), JSON.stringify(dial));
+}
+
+/** The library of the bytes of a `RECIPES.BIN`. Throws for a damaged library. */
+export async function decodeLibrary(bytes: Uint8Array): Promise<Library> {
+  const wasm = await loadWasm();
+  return JSON.parse(wasm.decodeRecipes(bytes)) as Library;
 }
 
 /** The recipes of the recipe file of the camera (`RECIPE_FILE`) for a camera line. */
@@ -193,12 +206,78 @@ export function dialChoices(library: readonly Recipe[]): Recipe[] {
 
 /**
  * What each user mode of `dial` does with the recipes of `library`, as the camera shows it: a user
- * mode whose recipe the library does not have on follows. The camera keeps the recipe of a user
- * mode while the recipe is off, so `dial` keeps it too.
+ * mode whose recipe the library does not have on follows. A write of the recipe file also lets it
+ * follow (`writeRecipeFile`).
  */
 export function shownDial(dial: Dial, library: readonly Recipe[]): Dial {
-  const ids = new Set(dialChoices(library).map((recipe) => recipe.id));
-  return dial.map((value) => (value === DIAL_OFF || ids.has(value) ? value : DIAL_FOLLOW));
+  return dial.map((value) => shownValue(value, library));
+}
+
+function shownValue(value: number, library: readonly Recipe[]): number {
+  return value === DIAL_OFF || dialChoices(library).some((recipe) => recipe.id === value) ? value : DIAL_FOLLOW;
+}
+
+/**
+ * What a ZIP package sets U1 to U3 of the mode dial to: a value of `Dial` for each user mode, or
+ * null to keep the camera's value. The site keeps one for each camera line (`loadDialChoice`).
+ */
+export type DialChoice = readonly (number | null)[];
+
+/** The choice that changes nothing on the camera. */
+export const KEEP_DIAL: DialChoice = [null, null, null];
+
+/** `choice` as the camera would show it after the import: a recipe that is not on follows. */
+export function shownChoice(choice: DialChoice, library: readonly Recipe[]): DialChoice {
+  return choice.map((value) => (value === null ? null : shownValue(value, library)));
+}
+
+/** The steps of a package library of `recipes` for `choice`: a recipe names its record. */
+export function libraryDial(choice: DialChoice, recipes: readonly Recipe[]): DialStep[] {
+  return choice.map((value) => {
+    if (value === null) return 'keep';
+    if (value === DIAL_OFF) return 'off';
+    const record = recipes.findIndex((recipe) => recipe.enabled && recipe.id === value);
+    return value !== DIAL_FOLLOW && record >= 0 ? { record } : 'follow';
+  });
+}
+
+/**
+ * The choice of the steps of a package library for the camera line `family`: a record names the ID
+ * of its recipe in `recipes`, the recipes of the library with their IDs. A record of another camera
+ * line follows, as INSTALL does on this line.
+ */
+export function choiceOfLibrary(dial: readonly DialStep[], recipes: readonly Recipe[], family: Family): DialChoice {
+  return dial.map((step) => {
+    if (step === 'keep') return null;
+    if (step === 'off') return DIAL_OFF;
+    if (step === 'follow') return DIAL_FOLLOW;
+    const recipe = recipes[step.record];
+    return recipe?.family === family ? recipe.id : DIAL_FOLLOW;
+  });
+}
+
+const DIAL_KEY = (family: Family) => `grkit.recipeDial.${family}`;
+
+/** The choice of the mode dial of a family that this browser keeps, or `KEEP_DIAL`. */
+export function loadDialChoice(storage: Pick<Storage, 'getItem'> | null, family: Family): DialChoice {
+  try {
+    const value: unknown = JSON.parse(storage?.getItem(DIAL_KEY(family)) ?? 'null');
+    const valid = (item: unknown) =>
+      item === null || (Number.isInteger(item) && (item as number) >= 0 && (item as number) <= DIAL_OFF);
+    return Array.isArray(value) && value.length === KEEP_DIAL.length && value.every(valid)
+      ? (value as (number | null)[])
+      : KEEP_DIAL;
+  } catch {
+    return KEEP_DIAL;
+  }
+}
+
+export function saveDialChoice(storage: Pick<Storage, 'setItem'> | null, family: Family, choice: DialChoice): void {
+  try {
+    storage?.setItem(DIAL_KEY(family), JSON.stringify(choice));
+  } catch {
+    // A full or blocked storage keeps the choice for this visit only.
+  }
 }
 
 export function sameDial(a: Dial, b: Dial): boolean {
@@ -285,8 +364,8 @@ export function cameraOrder(library: readonly Recipe[]): Recipe[] {
 }
 
 /**
- * The library of each camera line in a package library (`decodeLibrary`), in the order of the
- * camera. A record holds its camera line.
+ * The library of each camera line in the recipes of a package library (`decodeLibrary`), in the
+ * order of the camera. A record holds its camera line.
  */
 export function packageLibraries(recipes: readonly Recipe[]): Partial<Record<Family, Recipe[]>> {
   const out: Partial<Record<Family, Recipe[]>> = {};

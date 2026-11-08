@@ -607,6 +607,13 @@
 #define GRKIT_RCP_RECORD_SIZE 64U
 #define GRKIT_RCP_MAX 64U
 #define GRKIT_RCP_NAME_UNITS 16U
+/* A user mode of the mode dial in the header (GRKIT_RCP_DIAL): keep the value
+   of the camera, follow the dial, turn GRKit off, or apply record k at
+   GRKIT_RCP_DIAL_RECORD + k. */
+#define GRKIT_RCP_DIAL_KEEP 0U
+#define GRKIT_RCP_DIAL_FOLLOW 1U
+#define GRKIT_RCP_DIAL_OFF 2U
+#define GRKIT_RCP_DIAL_RECORD 3U
 /* The family byte of a record: the camera line whose INSTALL imports it. */
 #define GRKIT_RCP_FAMILY_GR3 1U
 #define GRKIT_RCP_FAMILY_GR4 2U
@@ -619,6 +626,9 @@
 #define GRKIT_RCP_CRC 12U
 /* u32 number of recipes. */
 #define GRKIT_RCP_COUNT 16U
+/* u32 for each user mode of the mode dial, U1 to U3: what INSTALL sets it to
+   when it imports the library (`recipes::DialStep`). */
+#define GRKIT_RCP_DIAL 20U
 /* The name: UTF-16LE units, zero-padded, without a NUL at 16 units. */
 #define GRKIT_RCP_RECORD_NAME 0U
 /* The RECIPE_WORDS words of the recipe (runtime/recipes.h). */

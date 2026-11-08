@@ -1539,7 +1539,11 @@ fn a_package_holds_the_recipe_library_of_its_camera() {
         number: 0,
         id: 0,
     };
-    let library = encode(&[recipe(Family::Gr3), recipe(Family::Gr3)]).unwrap();
+    let library = encode(
+        &[recipe(Family::Gr3), recipe(Family::Gr3)],
+        &Default::default(),
+    )
+    .unwrap();
     let with_library = assemble_with(
         &gr3_runtimes(),
         &testing::effect_set(&["test-effect"]),
@@ -1559,7 +1563,7 @@ fn a_package_holds_the_recipe_library_of_its_camera() {
     assert_eq!(files[RECIPES_PACKAGE_PATH], library);
     assert!(!files.contains_key(RECIPES_PATH));
     assert!(files.keys().all(|path| !path.starts_with("GRKIT/")));
-    let other = encode(&[recipe(Family::Gr4)]).unwrap();
+    let other = encode(&[recipe(Family::Gr4)], &Default::default()).unwrap();
     let error = assemble_with(
         &gr3_runtimes(),
         &testing::effect_set(&["test-effect"]),

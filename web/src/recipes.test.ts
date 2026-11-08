@@ -23,6 +23,12 @@ import {
   DIAL_FOLLOW,
   DIAL_OFF,
   dialChoices,
+  choiceOfLibrary,
+  KEEP_DIAL,
+  libraryDial,
+  loadDialChoice,
+  saveDialChoice,
+  shownChoice,
   NO_DIAL,
   sameDial,
   shownDial,
@@ -220,6 +226,32 @@ describe('mode dial', () => {
     expect(shownDial([DIAL_OFF, 5, DIAL_FOLLOW], library)).toEqual([DIAL_OFF, 5, DIAL_FOLLOW]);
     // A deleted recipe shows None.
     expect(shownDial([5, DIAL_FOLLOW, DIAL_FOLLOW], library.slice(1))).toEqual(NO_DIAL);
+  });
+
+  it('carries the choice of a ZIP package by record', () => {
+    // C (7) is on and the third record; B (6) is off; 9 left the library.
+    expect(libraryDial([null, DIAL_OFF, DIAL_FOLLOW], library)).toEqual(['keep', 'off', 'follow']);
+    expect(libraryDial([7, 6, 9], library)).toEqual([{ record: 2 }, 'follow', 'follow']);
+    expect(libraryDial(KEEP_DIAL, [])).toEqual(['keep', 'keep', 'keep']);
+    expect(shownChoice([null, 6, 7], library)).toEqual([null, DIAL_FOLLOW, 7]);
+  });
+
+  it('reads the choice of a package library for a camera line', () => {
+    const recipes = [...library, recipe('D', { id: 8, family: 'gr4' })];
+    expect(choiceOfLibrary(['keep', { record: 0 }, { record: 3 }], recipes, 'gr3')).toEqual([null, 5, DIAL_FOLLOW]);
+    expect(choiceOfLibrary(['off', 'follow', { record: 3 }], recipes, 'gr4')).toEqual([DIAL_OFF, DIAL_FOLLOW, 8]);
+  });
+
+  it('keeps a choice for each camera line', () => {
+    const storage = memoryStorage();
+    expect(loadDialChoice(storage, 'gr3')).toEqual(KEEP_DIAL);
+    saveDialChoice(storage, 'gr3', [5, null, DIAL_OFF]);
+    expect(loadDialChoice(storage, 'gr3')).toEqual([5, null, DIAL_OFF]);
+    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
+    storage.setItem('grkit.recipeDial.gr4', JSON.stringify([1, 2]));
+    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
+    storage.setItem('grkit.recipeDial.gr4', JSON.stringify([-1, null, null]));
+    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
   });
 
   it('marks GRKit Off past the recipe IDs', () => {

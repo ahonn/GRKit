@@ -547,6 +547,9 @@ fields!(RCP_FIELDS {
     RCP_CRC = 12, 4;
     /// u32 number of recipes.
     RCP_COUNT = 16, 4;
+    /// u32 for each user mode of the mode dial, U1 to U3: what INSTALL sets
+    /// it to when it imports the library (`recipes::DialStep`).
+    RCP_DIAL = 20, 12;
 });
 
 fields!(RCP_RECORD_FIELDS {
@@ -782,6 +785,19 @@ fn recipe_table(out: &mut String) {
     .unwrap();
     writeln!(out, "#define GRKIT_RCP_MAX {}U", recipes::LIBRARY_MAX).unwrap();
     writeln!(out, "#define GRKIT_RCP_NAME_UNITS {}U", recipes::NAME_UNITS).unwrap();
+    comment(
+        out,
+        "A user mode of the mode dial in the header (GRKIT_RCP_DIAL): keep the value of the \
+         camera, follow the dial, turn GRKit off, or apply record k at GRKIT_RCP_DIAL_RECORD + k.",
+    );
+    for (name, value) in [
+        ("KEEP", recipes::DialStep::Keep),
+        ("FOLLOW", recipes::DialStep::Follow),
+        ("OFF", recipes::DialStep::Off),
+        ("RECORD", recipes::DialStep::Record(0)),
+    ] {
+        writeln!(out, "#define GRKIT_RCP_DIAL_{name} {}U", value.code()).unwrap();
+    }
     comment(
         out,
         "The family byte of a record: the camera line whose INSTALL imports it.",

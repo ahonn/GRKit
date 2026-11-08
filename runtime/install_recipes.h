@@ -27,7 +27,12 @@
      the file. An added recipe keeps its on or off; one that is on goes after
      the recipes that are on. A recipe that the list holds takes the on or
      off of the library, because the site turns recipes on and off. A recipe that a person deleted on the camera does not come
-     back from the same package. A record is usable if its name is at most
+     back from the same package. The header of the library also sets the
+     user modes of the mode dial (GRKIT_RCP_DIAL), once with the recipes: a
+     user mode keeps the value of the camera, follows, turns GRKit off, or
+     applies the recipe that record k became, by its ID. A record that INSTALL
+     does not import, or a recipe that ends up off, makes the user mode
+     follow. A record is usable if its name is at most
      GRKIT_RCP_NAME_UNITS printable ASCII characters (none for the automatic
      name, as in the recipe file), its family is known,
      its first word is that of a recipe, and each word stays below 2^29. The
@@ -87,15 +92,19 @@ static u32 recipes_crc(const u8 *data, u32 size)
     return ~crc;
 }
 /* Whether the `size` bytes are a whole library file: the magic, the size
-   of its count of records, and its CRC. */
+   of its count of records, its CRC, and a user mode step for each user mode
+   (a record that the file has). */
 static int recipes_whole(const u8 *file, u32 size)
 {
     u32 count;
     if (size < GRKIT_RCP_HEADER_SIZE || !equal(file + GRKIT_RCP_MAGIC, (const u8 *)"GRKR0001", 8)) return 0;
     count = get32(file + GRKIT_RCP_COUNT);
-    return count <= GRKIT_RCP_MAX && get32(file + GRKIT_RCP_BYTES) == size &&
-           size == GRKIT_RCP_HEADER_SIZE + count * GRKIT_RCP_RECORD_SIZE &&
-           get32(file + GRKIT_RCP_CRC) == recipes_crc(file, size);
+    if (count > GRKIT_RCP_MAX || get32(file + GRKIT_RCP_BYTES) != size ||
+        size != GRKIT_RCP_HEADER_SIZE + count * GRKIT_RCP_RECORD_SIZE || get32(file + GRKIT_RCP_CRC) != recipes_crc(file, size))
+        return 0;
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u)
+        if (get32(file + GRKIT_RCP_DIAL + 4U * u) >= GRKIT_RCP_DIAL_RECORD + count) return 0;
+    return 1;
 }
 /* Whether a record is usable. */
 static int recipe_record_usable(const u8 *record)
@@ -210,6 +219,9 @@ static u32 recipes_hash(const u8 *file, u32 size) { return (recipes_crc(file, si
 static void install_recipes(u32 base, u32 family)
 {
     static u8 text[STATE_TEXT_MAX];
+    /* The recipe that each record of the library became, or
+       GRKIT_RECIPE_SLOTS for a record that INSTALL did not import. */
+    static u8 record_recipe[GRKIT_RCP_MAX];
     u32 value, imported = 0, hash = 0, dial[GRKIT_RECIPE_DIAL_POSITIONS];
     recipes_import = recipes_added = recipes_full = recipes_other = recipes_same = recipes_bad = recipes_switched = 0;
     long n = read_text(recipes_state_path, text, sizeof(text));
@@ -228,12 +240,11 @@ static void install_recipes(u32 base, u32 family)
             state_value(&saved_recipes, GRKIT_RECIPE_ID_KEY_BASE + slot, &value) && value <= RECIPE_VALUE_MAX ? value : 0;
     }
     if (state_value(&saved_recipes, GRKIT_RECIPE_IMPORTED_KEY, &value) && value <= RECIPE_VALUE_MAX) imported = value;
-    /* The user modes of the mode dial stay as the file has them. A user mode
-       whose recipe is gone follows (runtime/abi.h). */
-    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) {
+    /* The user modes of the mode dial stay as the file has them, unless a
+       new library sets them. A user mode whose recipe is gone follows
+       (runtime/abi.h). */
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u)
         dial[u] = state_value(&saved_recipes, GRKIT_RECIPE_DIAL_KEY_BASE + u, &value) && value <= RECIPE_VALUE_MAX ? value : 0;
-        store(base + GRKIT_HOST_RECIPE_DIAL + 4U * u, dial[u]);
-    }
     /* The recipes: the run of recipe words. */
     recipes_count = 0;
     while (recipes_count < GRKIT_RECIPE_SLOTS && recipe_first_word(recipes_list[recipes_count].words[0])) ++recipes_count;
@@ -246,6 +257,7 @@ static void install_recipes(u32 base, u32 family)
         for (u32 i = 0; i < records; ++i) {
             const u8 *record = recipes_inbox + GRKIT_RCP_HEADER_SIZE + i * GRKIT_RCP_RECORD_SIZE;
             u32 w[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS];
+            record_recipe[i] = GRKIT_RECIPE_SLOTS;
             if (!recipe_record_usable(record)) { ++recipes_bad; continue; }
             if (record[GRKIT_RCP_RECORD_FAMILY] != family) { ++recipes_other; continue; }
             for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) w[k] = get32(record + GRKIT_RCP_RECORD_WORDS + 4 * k);
@@ -260,9 +272,11 @@ static void install_recipes(u32 base, u32 family)
                     ++recipes_switched;
                 }
                 ++recipes_same;
+                record_recipe[i] = (u8)known;
                 continue;
             }
             if (recipes_count == GRKIT_RECIPE_SLOTS) { ++recipes_full; continue; }
+            record_recipe[i] = (u8)recipes_count;
             for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) recipes_list[recipes_count].words[k] = w[k];
             for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) recipes_list[recipes_count].name[k] = name[k];
             recipes_list[recipes_count].id = 0;
@@ -271,11 +285,26 @@ static void install_recipes(u32 base, u32 family)
         }
         imported = hash;
     }
-    int given = recipes_give_ids(dial);
-    /* The loader saves the recipe file with the hash (StateFile::Recipes)
-       after an import, a change of the order, or new IDs. */
+    int given = recipes_give_ids(dial), changed = recipes_store(base);
+    /* The user modes that the new library sets. recipes_store turned off
+       each recipe on past GRKIT_RECIPE_ON_MAX, so a recipe that is off now
+       makes its user mode follow. */
+    if (recipes_import == RECIPES_IMPORT_READ)
+        for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) {
+            u32 step = get32(recipes_inbox + GRKIT_RCP_DIAL + 4U * u), recipe;
+            if (step == GRKIT_RCP_DIAL_KEEP) continue;
+            dial[u] = step == GRKIT_RCP_DIAL_OFF ? GRKIT_RECIPE_DIAL_OFF : GRKIT_RECIPE_DIAL_FOLLOW;
+            if (step < GRKIT_RCP_DIAL_RECORD) continue;
+            recipe = record_recipe[step - GRKIT_RCP_DIAL_RECORD];
+            if (recipe < recipes_count && !(recipes_list[recipe].words[GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF))
+                dial[u] = recipes_list[recipe].id;
+        }
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) store(base + GRKIT_HOST_RECIPE_DIAL + 4U * u, dial[u]);
+    /* The loader saves the recipe file with the hash and the user modes
+       (StateFile::Recipes) after an import, a change of the order, or new
+       IDs. */
     store(base + GRKIT_HOST_RECIPE_IMPORTED, imported);
-    if (recipes_store(base) || given || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
+    if (changed || given || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
 }
 
 /* The recipes that cannot apply in full on this camera, which REPORT.TXT

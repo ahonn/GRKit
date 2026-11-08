@@ -18,7 +18,7 @@ import {
   onCount,
   presetOf,
   presetRows,
-  type Dial,
+  type DialChoice,
   type Family,
   type Preset,
   type Recipe,
@@ -45,10 +45,11 @@ interface Props {
   /** Adds the recipe of a preset to the library, and its effect to the package. */
   onAddPreset: (recipe: Recipe, effect: string | null) => void;
   /**
-   * What the user modes of the mode dial of the connected card do, as the camera shows them, and
-   * the change of user mode `u` (0 for U1); null without a card to write.
+   * What the user modes of the mode dial do, as the camera shows them, and the change of user mode
+   * `u` (0 for U1): for a ZIP package, null keeps the camera's value; on a card, each user mode has
+   * a value. Null when the page writes no recipes.
    */
-  dial?: { shown: Dial; onChange: (u: number, value: number) => void } | null;
+  dial?: { shown: DialChoice; canKeep: boolean; onChange: (u: number, value: number | null) => void } | null;
 }
 
 /**
@@ -144,6 +145,9 @@ function summary(recipe: Recipe, r: RecipeStrings, language: Language, effects: 
   if (Object.values(recipe.exposure).some((value) => value !== null)) parts.push(r.exposure);
   return parts.join(' · ');
 }
+
+/** The value of the option that keeps the camera's value of a user mode. */
+const KEEP_VALUE = 'keep';
 
 /**
  * The recipes of the selected camera line, in the order of the camera, then the presets that the
@@ -279,9 +283,12 @@ export function RecipesSection({
                 <span className="field-label">U{u + 1}</span>
                 <select
                   className="import-text"
-                  value={value}
-                  onChange={(event) => dial.onChange(u, Number(event.target.value))}
+                  value={value ?? KEEP_VALUE}
+                  onChange={(event) =>
+                    dial.onChange(u, event.target.value === KEEP_VALUE ? null : Number(event.target.value))
+                  }
                 >
+                  {dial.canKeep && <option value={KEEP_VALUE}>{r.dialKeep}</option>}
                   <option value={DIAL_FOLLOW}>{r.dialNone}</option>
                   <option value={DIAL_OFF}>{r.dialOff}</option>
                   {dialChoices(library).map((recipe) => (

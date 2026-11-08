@@ -85,7 +85,8 @@ pub fn read_recipe_file(text: &str, family: Family) -> Vec<Recipe> {
 ///
 /// The user modes of the mode dial do what `dial` gives, which the site reads
 /// with `read_recipe_dial` and the person can change. A user mode whose
-/// recipe the file does not hold follows (`runtime::RECIPE_DIAL_FOLLOW`).
+/// recipe the file does not hold, or holds off, follows
+/// (`runtime::RECIPE_DIAL_FOLLOW`).
 ///
 /// Each recipe keeps its ID, which the site generates when the recipe joins
 /// its library. The file holds each ID once: a recipe without an ID, or with
@@ -177,9 +178,9 @@ pub fn write_recipe_file(
 pub type Dial = [u32; RECIPE_DIAL_POSITIONS];
 
 /// What each user mode of the mode dial does in the recipe file text. A
-/// user mode whose recipe the file does not hold follows, as on the camera.
-/// A recipe that is off, or that the site cannot read, still holds its user
-/// modes; the camera lets them follow until the recipe is on.
+/// user mode whose recipe the file does not hold, or holds off, follows, as
+/// on the camera. A recipe that the site cannot read holds its user modes
+/// while it is on.
 pub fn read_recipe_dial(text: &str) -> Dial {
     let values = file_values(text);
     let dial = std::array::from_fn(|u| {
@@ -191,11 +192,15 @@ pub fn read_recipe_dial(text: &str) -> Dial {
     held_dial(&dial, &file_records(text))
 }
 
-/// `dial` with each user mode whose recipe `records` do not hold as follow.
+/// `dial` with each user mode whose recipe `records` do not hold on as
+/// follow.
 fn held_dial(dial: &Dial, records: &[FileRecord]) -> Dial {
     dial.map(|value| {
         let held = value == RECIPE_DIAL_OFF
-            || (value != RECIPE_DIAL_FOLLOW && records.iter().any(|record| record.id == value));
+            || (value != RECIPE_DIAL_FOLLOW
+                && records
+                    .iter()
+                    .any(|record| record.id == value && record.on()));
         if held {
             value
         } else {

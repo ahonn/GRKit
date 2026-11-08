@@ -104,9 +104,9 @@ pub(crate) fn sample() -> Vec<Recipe> {
 #[test]
 fn a_library_round_trips() {
     let recipes = sample();
-    let bytes = encode(&recipes).unwrap();
+    let bytes = encode(&recipes, &KEEP).unwrap();
     assert_eq!(bytes.len(), HEADER_SIZE + 3 * RECORD_SIZE);
-    assert_eq!(decode(&bytes).unwrap(), recipes);
+    assert_eq!(decode(&bytes).unwrap().recipes, recipes);
     // Each word stays below 2^29, as the camera checks.
     for recipe in &recipes {
         assert!(recipe.words().unwrap().iter().all(|&w| w < WORD_LIMIT));
@@ -186,7 +186,10 @@ fn the_recipe_file_round_trips_and_keeps_the_import() {
     assert_eq!(w0 >> 28 & 1, 1);
     assert!(text.contains(&format!("991000001\r\n{w0}\r\n")));
     // A package record keeps the automatic name, as the recipe file does.
-    assert_eq!(decode(&encode(&recipes).unwrap()).unwrap(), recipes);
+    assert_eq!(
+        decode(&encode(&recipes, &KEEP).unwrap()).unwrap().recipes,
+        recipes
+    );
 }
 
 /// A recipe of the card that the site cannot read stays in the file
@@ -291,7 +294,7 @@ fn values_that_the_camera_does_not_have_are_rejected() {
         recipes[0].check().is_err(),
         "the English font draws only ASCII"
     );
-    assert!(encode(&vec![sample()[0].clone(); LIBRARY_MAX + 1]).is_err());
+    assert!(encode(&vec![sample()[0].clone(); LIBRARY_MAX + 1], &KEEP).is_err());
 }
 
 /// A library holds `LIBRARY_MAX` recipes, at most `ON_MAX` of them on. The
@@ -304,7 +307,7 @@ fn recipes_that_are_off_follow_those_that_are_on() {
         recipe.name = format!("R{index}");
         recipe.enabled = index >= LIBRARY_MAX - ON_MAX;
     }
-    assert!(encode(&recipes).is_ok());
+    assert!(encode(&recipes, &KEEP).is_ok());
     let text = write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).unwrap();
     let read = read_recipe_file(&text, Family::Gr3);
     assert_eq!(read.len(), LIBRARY_MAX);
@@ -312,11 +315,14 @@ fn recipes_that_are_off_follow_those_that_are_on() {
     assert!(read[ON_MAX..].iter().all(|recipe| !recipe.enabled));
     assert_eq!(read[0].name, format!("R{}", LIBRARY_MAX - ON_MAX));
     assert_eq!(read[ON_MAX].name, "R0");
-    assert_eq!(decode(&encode(&recipes).unwrap()).unwrap(), recipes);
+    assert_eq!(
+        decode(&encode(&recipes, &KEEP).unwrap()).unwrap().recipes,
+        recipes
+    );
     // The off bit is bit 28 of word 4, past the exposure settings.
     assert_eq!(recipes[0].words().unwrap()[MODULE_WORD] >> 28, 1);
     recipes[0].enabled = true;
-    let error = encode(&recipes).unwrap_err();
+    let error = encode(&recipes, &KEEP).unwrap_err();
     assert!(format!("{error:#}").contains("At most 40"), "{error:#}");
     assert!(write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).is_err());
 }
@@ -337,7 +343,7 @@ fn the_effect_code_is_that_of_the_installer() {
 fn the_presets_are_recipes_of_the_camera() {
     assert_eq!(native::TYPES[NEGATIVE_FILM].label, "NegativeFilm");
     for preset in presets() {
-        assert!(encode(&preset.recipes).is_ok(), "{}", preset.id);
+        assert!(encode(&preset.recipes, &KEEP).is_ok(), "{}", preset.id);
         let families: std::collections::BTreeSet<_> = preset
             .recipes
             .iter()
@@ -431,10 +437,10 @@ fn the_cinestill_preset_holds_its_camera_settings() {
 
 #[test]
 fn a_damaged_file_is_rejected() {
-    let mut bytes = encode(&sample()).unwrap();
+    let mut bytes = encode(&sample(), &KEEP).unwrap();
     bytes[HEADER_SIZE + 5] ^= 1;
     assert!(decode(&bytes).is_err());
-    let bytes = encode(&sample()).unwrap();
+    let bytes = encode(&sample(), &KEEP).unwrap();
     assert!(decode(&bytes[..bytes.len() - 1]).is_err());
 }
 
@@ -511,6 +517,9 @@ fn a_kept_recipe_keeps_its_id_unless_the_site_has_it() {
     assert_eq!((file_ids(&text), kept_id(&text)), (vec![6], 0));
 }
 
+/// The mode dial of a library that changes nothing on the camera.
+const KEEP: LibraryDial = [DialStep::Keep; 3];
+
 /// The mode dial of a file text that does nothing: each user mode follows.
 const NO_DIAL: Dial = [crate::runtime::RECIPE_DIAL_FOLLOW; 3];
 
@@ -537,12 +546,11 @@ fn a_write_gives_the_user_modes_of_the_mode_dial() {
     // the write does not hold follows too.
     let without = write_recipe_file(&recipes[1..], Family::Gr3, &card, &[33, OFF, 11]).unwrap();
     assert_eq!(read_recipe_dial(&without), [FOLLOW, OFF, FOLLOW]);
-    // A recipe that is off keeps its user modes: the camera lets them follow
-    // until the recipe is on again.
+    // A recipe that is off clears its user modes: they follow.
     let mut off = recipes.clone();
     off[0].enabled = false;
     let text = write_recipe_file(&off, Family::Gr3, &card, &[22, OFF, 11]).unwrap();
-    assert_eq!(read_recipe_dial(&text), [22, OFF, 11]);
+    assert_eq!(read_recipe_dial(&text), [22, OFF, FOLLOW]);
 }
 
 /// A read of the mode dial gives follow for a user mode whose recipe the
@@ -578,12 +586,86 @@ fn a_kept_recipe_keeps_its_user_modes() {
     }
     let text = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, &previous, &[6, 5, 7]).unwrap();
     assert_eq!(read_recipe_dial(&text), [6, 5, FOLLOW]);
+    // Turned off past ON_MAX, it no longer holds them.
+    let mut full = named(&[("A", 5)]);
+    full.resize(ON_MAX, full[0].clone());
+    let text = write_recipe_file(&full, Family::Gr3, &previous, &[6, 5, 7]).unwrap();
+    assert!(!file_records(&text)[ON_MAX].on());
+    assert_eq!(read_recipe_dial(&text), [FOLLOW, 5, FOLLOW]);
+}
+
+/// A read of the mode dial gives follow for a user mode whose recipe the
+/// file holds off, as the camera does.
+#[test]
+fn a_read_of_the_mode_dial_follows_a_recipe_that_is_off() {
+    use crate::runtime::{RECIPE_DIAL_FOLLOW as FOLLOW, RECIPE_DIAL_KEY_BASE};
+    let mut recipes = named(&[("A", 11), ("B", 22)]);
+    recipes[1].enabled = false;
+    let mut text = write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).unwrap();
+    for (u, value) in [11, 22].into_iter().enumerate() {
+        text.push_str(&format!(
+            "{}\r\n{value}\r\n",
+            RECIPE_DIAL_KEY_BASE + u as u32
+        ));
+    }
+    assert_eq!(read_recipe_dial(&text), [11, FOLLOW, FOLLOW]);
+}
+
+/// A library carries what INSTALL sets the user modes to: keep, follow,
+/// GRKit Off, or a record. A record that is off follows; a record that the
+/// library does not have is an error, as a damaged step is.
+#[test]
+fn a_library_carries_the_mode_dial() {
+    let mut recipes = named(&[("A", 11), ("B", 22), ("C", 33)]);
+    recipes[2].enabled = false;
+    let dial = [DialStep::Record(1), DialStep::Off, DialStep::Keep];
+    let bytes = encode(&recipes, &dial).unwrap();
+    let dial_at = |bytes: &[u8], u: usize| {
+        u32::from_le_bytes(
+            bytes[crate::abi::RCP_DIAL + 4 * u..][..4]
+                .try_into()
+                .unwrap(),
+        )
+    };
+    assert_eq!(
+        (dial_at(&bytes, 0), dial_at(&bytes, 1), dial_at(&bytes, 2)),
+        (4, 2, 0)
+    );
+    assert_eq!(decode(&bytes).unwrap().dial, dial);
+    let off = encode(
+        &recipes,
+        &[DialStep::Record(2), DialStep::Follow, DialStep::Record(0)],
+    )
+    .unwrap();
+    assert_eq!(
+        decode(&off).unwrap().dial,
+        [DialStep::Follow, DialStep::Follow, DialStep::Record(0)]
+    );
+    assert!(encode(
+        &recipes,
+        &[DialStep::Record(3), DialStep::Keep, DialStep::Keep]
+    )
+    .is_err());
+    // A step past the records is damage, also with a right CRC.
+    let mut damaged = bytes.clone();
+    damaged[crate::abi::RCP_DIAL..][..4].copy_from_slice(&6u32.to_le_bytes());
+    let crc = checksum(&damaged);
+    damaged[crate::abi::RCP_CRC..][..4].copy_from_slice(&crc.to_le_bytes());
+    assert!(decode(&damaged).is_err());
+    // An empty library can set the dial.
+    let empty = encode(&[], &[DialStep::Off, DialStep::Keep, DialStep::Follow]).unwrap();
+    assert_eq!(
+        decode(&empty).unwrap().dial,
+        [DialStep::Off, DialStep::Keep, DialStep::Follow]
+    );
 }
 
 /// A package library holds no IDs: INSTALL generates one for each recipe
 /// that it adds.
 #[test]
 fn a_package_library_holds_no_ids() {
-    let decoded = decode(&encode(&named(&[("A", 11), ("B", 22)])).unwrap()).unwrap();
+    let decoded = decode(&encode(&named(&[("A", 11), ("B", 22)]), &KEEP).unwrap())
+        .unwrap()
+        .recipes;
     assert_eq!(decoded, named(&[("A", 0), ("B", 0)]));
 }

@@ -600,7 +600,9 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
             "A package holds no file of the data folder: {name}"
         );
         if *name == format!("SD_ROOT/{RECIPES_PACKAGE_PATH}") {
-            let library = recipes::decode(blob).context("Read the recipe library")?;
+            let library = recipes::decode(blob)
+                .context("Read the recipe library")?
+                .recipes;
             ensure!(
                 library.iter().all(|recipe| camera
                     .targets()
