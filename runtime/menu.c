@@ -853,6 +853,14 @@ static u32 group_settings_row(volatile u32 *h) {
 static u32 direct_settings_event(volatile u32 *h,u32 kind) {
     return (kind==EV_RIGHT || (kind==EV_CONFIRM && !after_adj_press(h))) && direct_settings_root(h);
 }
+/* Whether OK on the highlighted row keeps ADJ open (MenuPage::stays). An
+   ADJ press closes ADJ still. */
+static u32 row_stays(volatile u32 *h) {
+    const MenuPage *page;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_MODULE || after_adj_press(h)) return 0;
+    page=current_module(h);
+    return page->stays && page->stays(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+}
 /* Confirm the current selection and return whether ADJ should close.
    Group OK toggles a child in place; an ADJ press only closes its list. */
 static u32 confirm_selection(volatile u32 *h) {
@@ -1103,10 +1111,11 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
        the list open. An ADJ press closes that list without another toggle;
        on other pages it commits the row first.
        If the commit made a module show a UI box or ask for a native screen,
-       ADJ stays open on the page instead (ui_holds_page). */
+       ADJ stays open on the page instead (ui_holds_page), as it does for a
+       row whose page keeps it open (row_stays). */
     if(kind==EV_CONFIRM) {
-        u32 close=confirm_selection(h);
-        if(close && ui_holds_page(h)) close=0;
+        u32 stays=row_stays(h), close=confirm_selection(h);
+        if(close && (stays || ui_holds_page(h))) close=0;
         if(close) {
             leave(controller);
             h[GRKIT_HOST_RETURN/4]=RETURN_CLOSING;
