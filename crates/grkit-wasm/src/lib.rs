@@ -775,20 +775,39 @@ pub fn read_recipe_file(text: &str, family: &str) -> Result<String, JsError> {
         .map_err(js_error)
 }
 
+/// What each user mode of the mode dial does, U1 to U3, in the text of the
+/// recipe file (`grkit_core::recipes::read_recipe_dial`): 0 to follow the
+/// dial, `RECIPE_DIAL_OFF` to turn GRKit off, or a recipe ID.
+#[wasm_bindgen(js_name = readRecipeDial)]
+pub fn read_recipe_dial(text: &str) -> Vec<u32> {
+    recipes::read_recipe_dial(text).to_vec()
+}
+
 /// The text of the recipe file for a JSON array of recipes of the camera
 /// line `family`, which replaces `previous`, the text of the file on the
-/// card: it keeps the import hash, the user modes of the mode dial, and the
-/// recipes of `previous` that `readRecipeFile` leaves out
+/// card: it keeps the import hash and the recipes of `previous` that
+/// `readRecipeFile` leaves out, and gives the user modes of the mode dial
+/// what `dial` holds, U1 to U3 as `readRecipeDial` gives them
 /// (`grkit_core::recipes::write_recipe_file`). Throws for a recipe that the
-/// camera cannot hold, or for more recipes than the file holds.
+/// camera cannot hold, for more recipes than the file holds, or for a dial
+/// without one value for each user mode.
 #[wasm_bindgen(js_name = writeRecipeFile)]
-pub fn write_recipe_file(json: &str, family: &str, previous: &str) -> Result<String, JsError> {
+pub fn write_recipe_file(
+    json: &str,
+    family: &str,
+    previous: &str,
+    dial: &[u32],
+) -> Result<String, JsError> {
     let family =
         serde_json::from_value::<recipes::Family>(serde_json::Value::String(family.into()));
+    let dial = recipes::Dial::try_from(dial)
+        .map_err(|_| anyhow::anyhow!("The mode dial needs 3 user modes, not {}", dial.len()));
     serde_json::from_str::<Vec<recipes::Recipe>>(json)
-        .and_then(|recipes| Ok((recipes, family?)))
         .map_err(anyhow::Error::from)
-        .and_then(|(recipes, family)| recipes::write_recipe_file(&recipes, family, previous))
+        .and_then(|recipes| Ok((recipes, family?, dial?)))
+        .and_then(|(recipes, family, dial)| {
+            recipes::write_recipe_file(&recipes, family, previous, &dial)
+        })
         .map_err(js_error)
 }
 

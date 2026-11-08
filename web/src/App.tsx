@@ -610,7 +610,12 @@ export function InstallPage({
       // The recipes of the site replace the recipe file of the camera, which keeps its import
       // record; the library of a ZIP package has no more use.
       if (changes.recipes === 'write' && recipeLibrary.packageRecipes) {
-        const text = await writeRecipeFile(recipeLibrary.packageRecipes, family, session.state.recipeText ?? '');
+        const text = await writeRecipeFile(
+          recipeLibrary.packageRecipes,
+          family,
+          session.state.recipeText ?? '',
+          recipeLibrary.dial(session),
+        );
         files.push({ path: RECIPE_FILE, bytes: new TextEncoder().encode(text) });
         library.remove.push(RECIPES_PACKAGE);
       }
@@ -915,6 +920,14 @@ export function InstallPage({
                   others={[...imported, ...(active?.extra ?? [])]}
                   grainModule={plan.modules.includes('GRAIN')}
                   glowModule={plan.modules.includes('GLOW')}
+                  dial={
+                    active && recipeLibrary.packageRecipes
+                      ? {
+                          shown: recipeLibrary.shownDial(active),
+                          onChange: (u, value) => recipeLibrary.changeDial(active, u, value),
+                        }
+                      : null
+                  }
                 />
               </Suspense>
             </ErrorBoundary>

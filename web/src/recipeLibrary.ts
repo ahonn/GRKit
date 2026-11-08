@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { readFile, RECIPES_PACKAGE, type CardChanges, type CardDirectory } from './card';
+import { readFile, RECIPES_PACKAGE, type CardChanges, type CardDirectory, type CardState } from './card';
 import { recipeChange, type CardSession } from './cardSession';
 import type { Language } from './i18n';
 import { RECIPE_STRINGS } from './recipeStrings';
@@ -9,9 +9,12 @@ import {
   encodeLibrary,
   loadLibrary,
   packageLibraries,
+  sameDial,
   sameRecipes,
   saveLibrary,
+  shownDial,
   withIds,
+  type Dial,
   type Family,
   type Recipe,
 } from './recipes';
@@ -50,6 +53,15 @@ export interface RecipeLibrary {
    * automatic name of the camera keeps it, so INSTALL finds the recipe that the camera holds.
    */
   packageBytes: () => Promise<Uint8Array | null>;
+  /**
+   * What the user modes of the mode dial do for the card `session` after a write: the dial of the
+   * card until the person changes it. A user mode keeps a recipe that is off, as the camera does.
+   */
+  dial: (session: CardSession) => Dial;
+  /** What the user modes of the mode dial show for the card `session`, as the camera shows them. */
+  shownDial: (session: CardSession) => Dial;
+  /** Sets what user mode `u` (0 for U1) of the mode dial does for the card `session`. */
+  changeDial: (session: CardSession, u: number, value: number) => void;
   /** The change of the recipe file of `session` that a write makes. */
   cardChange: (session: CardSession) => CardChanges['recipes'];
   /** The line of the change list for the change of the recipe file of `session`, or null. */
@@ -83,6 +95,10 @@ export function useRecipeLibrary({
   // The recipes of a connected card that differ from the library of their camera line: the
   // person chooses which ones to keep.
   const [cardRecipes, setCardRecipes] = useState<{ family: Family; recipes: Recipe[] } | null>(null);
+  // The mode dial that the person set for the card whose read gave `state`. Another read of the
+  // card, such as the one after a write, gives the dial of the card again.
+  const [dialEdit, setDialEdit] = useState<{ state: CardState; dial: Dial } | null>(null);
+  const dialOf = (session: CardSession) => (dialEdit?.state === session.state ? dialEdit.dial : session.dial);
 
   const library = libraries[family];
   const packageRecipes = inPackage ? library : null;
@@ -127,10 +143,20 @@ export function useRecipeLibrary({
     },
     packageBytes: () =>
       packageRecipes && packageRecipes.length > 0 ? encodeLibrary(packageRecipes) : Promise.resolve(null),
-    cardChange: (session) => recipeChange(session, packageRecipes),
+    dial: dialOf,
+    shownDial: (session) => shownDial(dialOf(session), library),
+    changeDial(session, u, value) {
+      const dial = dialOf(session).map((item, other) => (other === u ? value : item));
+      if (sameDial(dial, dialOf(session))) return;
+      setDialEdit({ state: session.state, dial });
+      onChange();
+    },
+    cardChange: (session) => recipeChange(session, packageRecipes, dialOf(session)),
     changeLine(session, language, label) {
-      if (recipeChange(session, packageRecipes) === 'same') return null;
+      if (recipeChange(session, packageRecipes, dialOf(session)) === 'same') return null;
       const r = RECIPE_STRINGS[language];
+      // A change of the mode dial alone keeps the recipes of the card.
+      if (sameRecipes(session.recipes ?? [], library)) return { label, text: r.changeDial };
       return { label, text: library.length ? r.changeWrite(library.length) : r.changeRemove };
     },
   };

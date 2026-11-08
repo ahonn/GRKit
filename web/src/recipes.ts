@@ -166,14 +166,59 @@ export async function readRecipeFile(text: string, family: Family): Promise<Reci
 }
 
 /**
- * The text of the recipe file for `recipes` of the camera line `family`, which replaces
- * `previous`. It keeps the import record and the user modes of the mode dial of `previous`, and
- * each recipe of it that `readRecipeFile` leaves out, so a write never deletes a recipe that the
- * site cannot show.
+ * What each user mode of the mode dial does, U1 to U3 (`grkit_core::recipes::Dial`): it follows
+ * the dial (`DIAL_FOLLOW`), turns GRKit off (`DIAL_OFF`), or applies the recipe with that ID.
  */
-export async function writeRecipeFile(recipes: readonly Recipe[], family: Family, previous: string): Promise<string> {
+export type Dial = readonly number[];
+
+export const DIAL_FOLLOW = 0;
+/** `grkit_core::runtime::RECIPE_DIAL_OFF`: one past the largest recipe ID. */
+export const DIAL_OFF = RECIPE_ID_MAX + 1;
+/** The mode dial of a card without a recipe file: each user mode follows. */
+export const NO_DIAL: Dial = [DIAL_FOLLOW, DIAL_FOLLOW, DIAL_FOLLOW];
+
+/**
+ * The mode dial of the recipe file of the camera (`RECIPE_FILE`). A user mode whose recipe the file
+ * does not hold follows.
+ */
+export async function readRecipeDial(text: string): Promise<Dial> {
   const wasm = await loadWasm();
-  return wasm.writeRecipeFile(JSON.stringify(recipes), family, previous);
+  return [...wasm.readRecipeDial(text)];
+}
+
+/** The recipes that a user mode can apply: those that are on, which the camera lists. */
+export function dialChoices(library: readonly Recipe[]): Recipe[] {
+  return library.filter((recipe) => recipe.enabled);
+}
+
+/**
+ * What each user mode of `dial` does with the recipes of `library`, as the camera shows it: a user
+ * mode whose recipe the library does not have on follows. The camera keeps the recipe of a user
+ * mode while the recipe is off, so `dial` keeps it too.
+ */
+export function shownDial(dial: Dial, library: readonly Recipe[]): Dial {
+  const ids = new Set(dialChoices(library).map((recipe) => recipe.id));
+  return dial.map((value) => (value === DIAL_OFF || ids.has(value) ? value : DIAL_FOLLOW));
+}
+
+export function sameDial(a: Dial, b: Dial): boolean {
+  return a.length === b.length && a.every((value, u) => value === b[u]);
+}
+
+/**
+ * The text of the recipe file for `recipes` of the camera line `family`, which replaces
+ * `previous`. It keeps the import record of `previous` and each recipe of it that `readRecipeFile`
+ * leaves out, so a write never deletes a recipe that the site cannot show. The user modes of the
+ * mode dial do what `dial` gives; a user mode whose recipe the file does not hold follows.
+ */
+export async function writeRecipeFile(
+  recipes: readonly Recipe[],
+  family: Family,
+  previous: string,
+  dial: Dial,
+): Promise<string> {
+  const wasm = await loadWasm();
+  return wasm.writeRecipeFile(JSON.stringify(recipes), family, previous, Uint32Array.from(dial));
 }
 
 /** The automatic name of a recipe: its look and its number, or "Recipe". */
