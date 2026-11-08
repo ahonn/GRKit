@@ -16,8 +16,10 @@
 #define RECIPE_ID_ATTEMPTS 256U
 
 /* The value behind a new ID, which differs between calls: on the camera,
-   the 64-bit count of the generic timer (CNTPCT, 40 MHz). A host build has
-   no camera timer, and a test defines RECIPE_ID_SOURCE. */
+   the 64-bit count of the generic timer (CNTPCT, 40 MHz). INSTALL, a Linux
+   process that cannot read the timer, defines RECIPE_ID_SOURCE from
+   clock_gettime (runtime/installer.c). A host build has no camera timer,
+   and a test defines RECIPE_ID_SOURCE. */
 #ifndef RECIPE_ID_SOURCE
 #ifdef __arm__
 static u32 recipe_id_source(u32 *high) {

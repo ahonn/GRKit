@@ -447,6 +447,19 @@ static void read_camera(int with_record)
 #endif
 }
 #include "install_modules.h"
+#ifndef RTOS_NATIVE
+/* The value behind new recipe IDs (runtime/recipe_id.h). INSTALL runs as a
+   Linux process, which cannot read the generic timer: CNTPCT is undefined in
+   user mode (SIGILL). It takes CLOCK_MONOTONIC from clock_gettime instead. */
+static u32 install_id_source(u32 *high)
+{
+    u32 time[2] = {0, 0};
+    syscall6(263, 1, (u32)time, 0, 0, 0, 0);
+    *high = time[0];
+    return time[1];
+}
+#define RECIPE_ID_SOURCE(high) install_id_source(high)
+#endif
 #include "install_recipes.h"
 /* ---- State (runtime/state.h) ----------------------------------------------
    A missing STATE.TXT reads STATE.TMP, which a save that the power cut
