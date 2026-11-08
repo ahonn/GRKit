@@ -369,6 +369,58 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
             }
         }
     }
+    // The Custom sets. StillActiveImageControlSet selects set k with label
+    // Nok and value k, and set k has the names of the main set with its own
+    // number. Each field of set k is the field of the main set plus k times
+    // one stride of that field, so a save reads the active set.
+    let Kind::Labels(set_labels) = &active.kind else {
+        bail!("{}: the active set is not a label setting", target.name);
+    };
+    for (k, (label, value)) in set_labels.iter().enumerate() {
+        ensure!(
+            *label == format!("No{k}") && usize::try_from(*value) == Ok(k),
+            "{}: set {label} is not No{k} = {k}",
+            target.name
+        );
+    }
+    let sets = set_labels.len() as u32;
+    let stride = |name: &str| -> Result<u32> {
+        let main = get(name)?;
+        let mut stride = 0;
+        for k in 1..sets {
+            let set_name = name.replacen("No0", &format!("No{k}"), 1);
+            let other = get(&set_name)?;
+            ensure!(
+                other.kind == main.kind
+                    && other.field.record == main.field.record
+                    && other.field.width == main.field.width,
+                "{}: {set_name} is not a setting of the shape of {name}",
+                target.name
+            );
+            if k == 1 {
+                stride = other.field.offset.saturating_sub(main.field.offset);
+            }
+            ensure!(
+                (1..=0xff).contains(&stride)
+                    && other.field.offset == main.field.offset + k * stride,
+                "{}: {set_name} is not one stride of one byte after the set before it",
+                target.name
+            );
+        }
+        Ok(stride)
+    };
+    let type_stride = stride(native::TYPE_SETTING)?;
+    let mut strides = Vec::new();
+    for (index, _) in native::TYPES.iter().enumerate() {
+        for parameter in 0..native::PARAMETERS.len() {
+            strides.push(
+                match native::parameter_name(family, index, parameter).filter(|_| present[index]) {
+                    Some(name) => stride(&name)?,
+                    None => 0,
+                },
+            );
+        }
+    }
     // The stored value of each type: the label of StillImageControlNo0, or
     // for a Monochrome type, the value that the functions of its parameters
     // check. The other types check that the two agree.
@@ -517,10 +569,14 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
          exposure step, the Auto ISO limits, and the ISO step are four-byte\n   \
          floats. Each offset of a parameter that a type\n   \
          does not have is 0, and each code of a type or mode that the camera does\n   \
-         not have is all ones. NATIVE_TYPE_ICONS gives the native icon ID of each\n   \
-         type, as the native Image Control list shows it, or 0. On GR IV, the byte\n   \
-         at NATIVE_SENSOR_COLOR_FIELD of the model record (FW_MODEL_RECORD) is 1\n   \
-         on GR IV Monochrome. */\n",
+         not have is all ones. StillActiveImageControlSet (NATIVE_ACTIVE_SET_FIELD)\n   \
+         selects one of NATIVE_SETS sets: 0 is the main set, and the others are the\n   \
+         Custom sets. Set k keeps its type at NATIVE_TYPE_FIELD + k *\n   \
+         NATIVE_TYPE_SET_STRIDE, and each parameter at its offset + k * its stride\n   \
+         of NATIVE_PARAMETER_SET_STRIDES. NATIVE_TYPE_ICONS gives the native icon\n   \
+         ID of each type, as the native Image Control list shows it, or 0. On GR\n   \
+         IV, the byte at NATIVE_SENSOR_COLOR_FIELD of the model record\n   \
+         (FW_MODEL_RECORD) is 1 on GR IV Monochrome. */\n",
         target.name
     );
     out.push_str("#ifndef GRKIT_TARGET_NATIVE_H\n#define GRKIT_TARGET_NATIVE_H\n");
@@ -542,6 +598,11 @@ pub fn native_header(image: &FirmwareImage) -> Result<String> {
     out.push_str(&format!(
         "#define NATIVE_PARAMETER_FIELDS {}\n",
         list(&fields)
+    ));
+    out.push_str(&format!(
+        "#define NATIVE_SETS {sets}U\n#define NATIVE_TYPE_SET_STRIDE {type_stride}U\n\
+         #define NATIVE_PARAMETER_SET_STRIDES {}\n",
+        list(&strides)
     ));
     out.push_str(&format!(
         "#define NATIVE_MODE_FIELD {}U\n#define NATIVE_MODE_CODES {}\n",

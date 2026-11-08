@@ -199,11 +199,13 @@ pub fn extract_each(
 /// type and the parameters of set No0, the white balance, the correction and
 /// noise reduction settings, and the exposure settings of still pictures.
 pub fn recipe_setting(name: &str) -> bool {
+    // The main set No0 and each Custom set, which a recipe reads while it is
+    // active.
     const PREFIXES: [&str; 5] = [
         "StillActiveImageControlSet",
-        "StillImageControlNo0",
-        "AfterReleaseStillImageControlNo0Param",
-        "StillFwupImageControlNo0Param",
+        "StillImageControlNo",
+        "AfterReleaseStillImageControlNo",
+        "StillFwupImageControlNo",
         "StillWhiteBalance",
     ];
     const NAMES: [&str; 11] = [
@@ -252,10 +254,11 @@ mod tests {
         ));
         assert!(recipe_setting("StillWhiteBalanceDaylightAdjustBA"));
         assert!(recipe_setting("StillHighIsoNR"));
-        assert!(!recipe_setting("StillImageControlNo1"));
-        assert!(!recipe_setting(
+        assert!(recipe_setting("StillImageControlNo1"));
+        assert!(recipe_setting(
             "StillImageControlNo1ParamStandardSaturation"
         ));
+        assert!(!recipe_setting("StillImageControlNo1UserCustomName"));
         assert!(recipe_setting(
             "AfterReleaseStillImageControlNo0ParamMonochromeGrainyParticle"
         ));

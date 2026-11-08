@@ -353,6 +353,27 @@ fn the_presets_are_recipes_of_the_camera() {
             preset.id
         );
         for recipe in &preset.recipes {
+            // A whole look (runtime/recipes.h): each setting of the picture,
+            // so the preset gives the same picture after any other recipe.
+            // The exposure settings belong to one scene and stay out.
+            assert!(
+                matches!(recipe.look, Look::Effect { .. } | Look::Native(_)),
+                "{}",
+                preset.id
+            );
+            assert!(recipe.grain.is_some(), "{}", preset.id);
+            let glow = recipe
+                .glow
+                .unwrap_or_else(|| panic!("{} has no Glow", preset.id));
+            let color = !recipe.family.monochrome();
+            assert_eq!(glow.halation_color.is_some(), color, "{}", preset.id);
+            assert_eq!(recipe.white_balance.is_some(), color, "{}", preset.id);
+            assert!(
+                recipe.corrections.iter().all(Option::is_some),
+                "{}",
+                preset.id
+            );
+            assert_eq!(recipe.exposure, Exposure::default(), "{}", preset.id);
             match (&recipe.look, preset.effect) {
                 (Look::Effect { code, adjustments }, Some(effect)) => {
                     assert_eq!(*code, effect_code(effect));
@@ -370,6 +391,38 @@ fn the_presets_are_recipes_of_the_camera() {
                 (_, effect) => assert!(effect.is_none(), "{}", preset.id),
             }
         }
+    }
+}
+
+/// The stored values of the CineStill preset name the settings that its
+/// comment gives.
+#[test]
+fn the_cinestill_preset_holds_its_camera_settings() {
+    let label = |labels: &native::Labels, stored: u8| {
+        labels
+            .values()
+            .find(|(_, value)| *value == u32::from(stored))
+            .map(|(label, _)| label)
+    };
+    let preset = presets()
+        .into_iter()
+        .find(|preset| preset.id == "cinestill-800t")
+        .unwrap();
+    for recipe in &preset.recipes {
+        let balance = recipe.white_balance.unwrap();
+        assert_eq!(native::WHITE_BALANCE[balance.mode].labels[0], Some("Auto"));
+        assert_eq!(label(&native::SHIFT_BA, balance.shift_ba), Some("B10"));
+        assert_eq!(label(&native::SHIFT_GM, balance.shift_gm), Some("NORMAL"));
+        let corrections: Vec<_> = recipe
+            .corrections
+            .iter()
+            .zip(&native::CORRECTIONS)
+            .map(|(stored, correction)| label(&correction.labels, stored.unwrap()))
+            .collect();
+        assert_eq!(
+            corrections,
+            [Some("Auto"), Some("Off"), Some("Off"), Some("Low")]
+        );
     }
 }
 

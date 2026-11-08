@@ -485,9 +485,15 @@ static void native_looks_save_and_apply(void)
     assert(!called("StillActiveImageControlSet=No0"));
 }
 
+/* Parameter p of type t in set `set` of the settings record. */
+static void set_parameter(u32 set, u32 t, u32 p, u8 v)
+{
+    native_record_bytes[native_field(t, p) + set * native_parameter_strides[t * NATIVE_PARAMETERS + p]] = v;
+}
+
 /* An effect replaces the native type: the recipe holds the white balance
-   only, and a Custom set holds no type. */
-static void effects_and_custom_sets_hold_no_type(void)
+   only. */
+static void effects_hold_no_type(void)
 {
     reset();
     set_native_look();
@@ -495,17 +501,73 @@ static void effects_and_custom_sets_hold_no_type(void)
     assert(recipe_save(header) == 0);
     assert(NATIVE_TYPE(recipe_at(header, 0)[RECIPE_NATIVE_WORD]) == 0);
     assert(NATIVE_MODE(recipe_at(header, 0)[RECIPE_NATIVE_WORD]) == MODE_DAYLIGHT + 1);
+}
+
+/* A Custom set is active: a save holds its type and parameters, from the
+   fields of that set, so the recipe is the look that the camera shows.
+   Apply selects the main set and writes them there. */
+static void custom_sets_hold_their_type(void)
+{
+    reset();
+    set_native_look();
     select_effect(TEST_COUNT);
-    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 1;
+    u32 set = NATIVE_SETS - 1;
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = (u8)set;
+    native_record_bytes[NATIVE_TYPE_FIELD + set * NATIVE_TYPE_SET_STRIDE] = native_type_codes[TYPE_STANDARD];
+    for (u32 p = 0; p < NATIVE_LEVELS; ++p)
+        if (native_field(TYPE_STANDARD, p)) set_parameter(set, TYPE_STANDARD, p, 4);
+    set_parameter(set, TYPE_STANDARD, NATIVE_PARAMETER_SATURATION, 7);
+    assert(recipe_save(header) == 0);
+    volatile u32 *w = recipe_at(header, 0);
+    assert(RECIPE_LOOK(w[0]) == RECIPE_LOOK_OFF);
+    assert(NATIVE_TYPE(w[RECIPE_NATIVE_WORD]) == TYPE_STANDARD + 1);
+    /* Saturation 3, the first digit. */
+    assert(w[RECIPE_FN_WORD] == 3U);
+    assert(recipe_matches(header, 0));
+    /* The main set is Positive Film: apply selects it, then writes the
+       Custom look to it. */
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 0;
+    assert(!recipe_matches(header, 0));
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = (u8)set;
+    native_call_count = 0;
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(!strcmp(native_calls[0], "StillActiveImageControlSet=No0"));
+    assert(called("StillImageControlNo0=Standard"));
+    assert(called("StillImageControlNo0ParamStandardSaturation=P3"));
+    /* A set after the sets of the build holds no type. */
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = (u8)NATIVE_SETS;
     assert(recipe_save(header) == 1);
     assert(NATIVE_TYPE(recipe_at(header, 1)[RECIPE_NATIVE_WORD]) == 0);
-    /* A write of a type selects the main set first. */
-    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 0;
-    assert(recipe_save(header) == 2);
-    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 2;
-    native_call_count = 0;
-    assert(recipe_apply(header, 2) == RECIPE_READY);
-    assert(!strcmp(native_calls[0], "StillActiveImageControlSet=No0"));
+}
+
+/* A save without the Grain and Glow modules holds them at Off, as the
+   picture had none: after another recipe, apply turns them off once the
+   modules run, so the recipe gives the picture that it was saved from. */
+static void saves_hold_modules_that_do_not_run_at_off(void)
+{
+    reset();
+    header[GRKIT_HOST_CAPABILITIES / 4] = GRKIT_CORE_RECIPE_BIT | GRKIT_CORE_TONE_BIT;
+    select_effect(1); set_grain(3, 0);
+    assert(recipe_save(header) == 0);
+    volatile u32 *w = recipe_at(header, 0);
+    assert((w[0] & RECIPE_GRAIN) && RECIPE_GRAIN_LEVEL(w[0]) == 0 && RECIPE_GRAIN_SIZE(w[0]) == 0);
+    u32 m = w[RECIPE_MODULE_WORD];
+    assert(RECIPE_MODULE_HELD(m, 0) && RECIPE_MODULE_VALUE(m, 0) == 0);
+    assert(RECIPE_MODULE_HELD(m, 1) && RECIPE_MODULE_VALUE(m, 1) == 0);
+    assert(!RECIPE_MODULE_HELD(m, 2));
+    /* The modules that do not run decide no match. */
+    assert(recipe_matches(header, 0));
+    /* The modules run, with Grain and Glow of another recipe. */
+    header[GRKIT_HOST_CAPABILITIES / 4] = RUNNING;
+    load_glow(1);
+    set_grain(3, 2); set_glow(2, 1, 1);
+    assert(!recipe_matches(header, 0));
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(header[GRKIT_HOST_GRAIN / 4] == 0 && header[GRKIT_HOST_GRAIN_SIZE / 4] == 0);
+    assert(glow_value(0) == 0 && glow_value(1) == 0);
+    /* Halation is off, so its color does not change the picture. */
+    assert(glow_value(2) == 1);
+    assert(recipe_matches(header, 0));
 }
 
 /* A native value that the camera does not have: a type or a mode of the
@@ -809,12 +871,14 @@ static void glow_saves_applies_and_undoes(void)
     m = recipe_at(header, 0)[RECIPE_MODULE_WORD];
     assert(RECIPE_MODULE_HELD(m, 1) && !RECIPE_MODULE_HELD(m, 2));
 
-    /* Without the Glow module: nothing held, and a recipe with Glow applies
-       the rest and reports the module setting that it left out. */
+    /* Without the Glow module the picture has no Glow: a save holds Bloom
+       and Halation at Off, and no color, which has no Off. A recipe with
+       Glow applies the rest and reports the module setting that it left
+       out. */
     reset();
     select_effect(2); set_grain(2, 0);
     assert(recipe_save(header) == 0);
-    assert(recipe_at(header, 0)[RECIPE_MODULE_WORD] == 0);
+    assert(recipe_at(header, 0)[RECIPE_MODULE_WORD] == (1U | 1U << RECIPE_MODULE_BITS));
     recipe_at(header, 0)[RECIPE_MODULE_WORD] = 1U | 3U << RECIPE_MODULE_BITS;
     select_effect(0); set_grain(0, 0);
     assert(recipe_apply(header, 0) == (RECIPE_READY | RECIPE_SKIPPED_MODULE));
@@ -1046,7 +1110,9 @@ int main(void)
     delete_and_damaged_words();
     empty_recipe_matches_nothing();
     native_looks_save_and_apply();
-    effects_and_custom_sets_hold_no_type();
+    effects_hold_no_type();
+    custom_sets_hold_their_type();
+    saves_hold_modules_that_do_not_run_at_off();
     unsupported_native_values_change_nothing();
     corrections_save_apply_and_unset();
     native_grain_saves_and_applies();

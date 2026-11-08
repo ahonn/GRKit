@@ -14,8 +14,9 @@
      the native menu sets them. The dispatcher refuses a label that it does
      not know, and each value comes from the label tables.
 
-   The settings of a Custom set are not read: while a Custom set is active,
-   a recipe holds no type. A write selects the main set first.
+   A read takes the type and its parameters from the active set: the main
+   set or a Custom set. A write selects the main set first, so a recipe
+   saved from a Custom set sets its type in the main set.
 
    GR IV Monochrome (the model record of FW_MODEL_RECORD) has its own types
    and no white balance. StillImageControlNo0 has no label for its types, so
@@ -118,6 +119,7 @@ _Static_assert(NATIVE_TYPES<GRKIT_RECIPE_TYPE_MASK,"word 2 holds the type + 1");
 static const u8 native_type_codes[NATIVE_TYPES]={NATIVE_TYPE_CODES};
 static const u16 native_mode_codes[NATIVE_MODES]={NATIVE_MODE_CODES};
 static const u16 native_parameter_fields[NATIVE_TYPES*NATIVE_PARAMETERS]={NATIVE_PARAMETER_FIELDS};
+static const u8 native_parameter_strides[NATIVE_TYPES*NATIVE_PARAMETERS]={NATIVE_PARAMETER_SET_STRIDES};
 static const u16 native_shift_fields[NATIVE_MODES*2U]={NATIVE_SHIFT_FIELDS};
 static const char *const native_prefixes[]={NATIVE_PREFIXES};
 static const char *const native_keys[NATIVE_PARAMETERS]={NATIVE_PARAMETER_KEYS};
@@ -246,8 +248,12 @@ static u32 native_record(void) {
     return settings;
 #endif
 }
-/* The field offset of parameter p of type t, or 0. */
+/* The field offset of parameter p of type t in the main set, or 0. */
 static u32 native_field(u32 t,u32 p) { return native_parameter_fields[t*NATIVE_PARAMETERS+p]; }
+/* The stored value of parameter p of type t in set `set` of the record. */
+static u32 native_value(u32 record,u32 set,u32 t,u32 p) {
+    return BYTE(record,native_field(t,p)+set*native_parameter_strides[t*NATIVE_PARAMETERS+p]);
+}
 /* The label of stored value v of parameter p, or 0. */
 static const char *native_label(u32 p,u32 v) {
     return v<native_label_counts[p] ? native_labels[native_label_starts[p]+v] : 0;
@@ -272,17 +278,17 @@ static u32 native_tone(u32 t) {
 static u32 native_grain_sized(u32 t) { return native_field(t,NATIVE_PARAMETER_PARTICLESTRENGTH)!=0; }
 /* The stored GR III Particle of strength s, and back: the same mapping. */
 static u32 native_grain_particle(u32 s) { return s ? 4U-s : 0U; }
-/* The native grain of type t in the record as word-3 bits, or 0xffffffff
-   for a value out of the tables. */
-static u32 native_grain_read(u32 record,u32 t) {
+/* The native grain of type t in set `set` of the record as word-3 bits, or
+   0xffffffff for a value out of the tables. */
+static u32 native_grain_read(u32 record,u32 set,u32 t) {
     u32 particle, strength, size;
     if(!native_field(t,NATIVE_PARAMETER_PARTICLE)) return 0;
-    particle=BYTE(record,native_field(t,NATIVE_PARAMETER_PARTICLE));
+    particle=native_value(record,set,t,NATIVE_PARAMETER_PARTICLE);
     if(!native_label(NATIVE_PARAMETER_PARTICLE,particle)) return 0xffffffffU;
     if(!native_grain_sized(t)) return native_grain_particle(particle)<<NATIVE_GRAIN_SHIFT;
     if(!particle) return 0;
-    strength=BYTE(record,native_field(t,NATIVE_PARAMETER_PARTICLESTRENGTH));
-    size=BYTE(record,native_field(t,NATIVE_PARAMETER_PARTICLESIZE));
+    strength=native_value(record,set,t,NATIVE_PARAMETER_PARTICLESTRENGTH);
+    size=native_value(record,set,t,NATIVE_PARAMETER_PARTICLESIZE);
     if(!native_label(NATIVE_PARAMETER_PARTICLESTRENGTH,strength) ||
        !native_label(NATIVE_PARAMETER_PARTICLESIZE,size)) return 0xffffffffU;
     return (strength+1U)<<NATIVE_GRAIN_SHIFT|size<<NATIVE_GRAIN_SIZE_SHIFT;
@@ -296,45 +302,47 @@ static u32 native_grain_fits(u32 t,u32 s,u32 size) {
     return native_label(NATIVE_PARAMETER_PARTICLESIZE,size)!=0;
 }
 
-/* Read the native settings into the record words: the type, its
-   parameters, and its native grain in words 1 to 3 when `look` is set, the
+/* Read the native settings into the record words: the type of the active
+   set, its parameters, and its native grain in words 1 to 3 when `look` is
+   set, the
    white balance in words 2 and 3, each correction setting in word 3, and
    the exposure settings in word 4.
    A value out of the tables is not held, and GR IV Monochrome holds no
    white balance. */
 static void native_read(u32 *w,u32 look) {
-    u32 record=native_record(), t, p, v, digits=0, code, mode, kelvin, grain, c, monochrome;
+    u32 record=native_record(), t, p, v, digits=0, code, mode, kelvin, grain, c, monochrome, set;
     if(!record) return;
     monochrome=NATIVE_MONOCHROME();
-    if(look && !BYTE(record,NATIVE_ACTIVE_SET_FIELD)) {
-        code=BYTE(record,NATIVE_TYPE_FIELD);
+    set=BYTE(record,NATIVE_ACTIVE_SET_FIELD);
+    if(look && set<NATIVE_SETS) {
+        code=BYTE(record,NATIVE_TYPE_FIELD+set*NATIVE_TYPE_SET_STRIDE);
         for(t=0;t<NATIVE_TYPES && native_type_codes[t]!=code;++t) {}
         if(code!=0xffU && native_type_fits(t,monochrome)) {
             u32 word=(t+1U)<<NATIVE_TYPE_SHIFT, ok=1, tone=native_tone(t);
             for(p=NATIVE_LEVELS;p--;) {
-                v=native_field(t,p) ? BYTE(record,native_field(t,p)) : 4U;
+                v=native_field(t,p) ? native_value(record,set,t,p) : 4U;
                 if(v>8U) ok=0;
                 digits=digits*9U+native_digit(v);
             }
             if(tone<NATIVE_PARAMETERS) {
-                v=BYTE(record,native_field(t,tone));
+                v=native_value(record,set,t,tone);
                 if(!native_label(tone,v)) ok=0;
                 word|=v<<NATIVE_TONE_SHIFT;
             }
             if(native_field(t,NATIVE_PARAMETER_HDRINTENSE)) {
-                v=BYTE(record,native_field(t,NATIVE_PARAMETER_HDRINTENSE));
+                v=native_value(record,set,t,NATIVE_PARAMETER_HDRINTENSE);
                 if(!native_label(NATIVE_PARAMETER_HDRINTENSE,v)) ok=0;
                 word|=v<<NATIVE_INTENSITY_SHIFT;
             }
             if(native_field(t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM)) {
-                v=BYTE(record,native_field(t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM));
+                v=native_value(record,set,t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM);
                 if(!native_label(NATIVE_PARAMETER_FILTEREFFECTCUSTOM,v)) ok=0;
                 word|=v<<NATIVE_FILTER_SHIFT;
             }
-            grain=native_grain_read(record,t);
+            grain=native_grain_read(record,set,t);
             if(grain==0xffffffffU) ok=0;
             if(native_field(t,NATIVE_PARAMETER_SOLARIZATIONTYPE)) {
-                v=BYTE(record,native_field(t,NATIVE_PARAMETER_SOLARIZATIONTYPE));
+                v=native_value(record,set,t,NATIVE_PARAMETER_SOLARIZATIONTYPE);
                 if(!native_label(NATIVE_PARAMETER_SOLARIZATIONTYPE,v)) ok=0;
                 else grain|=v<<NATIVE_SOLARIZATION_SHIFT;
             }
