@@ -70,6 +70,10 @@ pub struct PatchPlan {
     /// The services that modules import: the hash of each name
     /// (`grkit_core::grm::symbol_hash`) and the offset of its code in the tail.
     pub exports: Vec<(u32, u32)>,
+    /// The offset in the tail of the entry of the menu component for the
+    /// shooting screen (`runtime/menu.c`: `menu_viewfinder`), which INSTALL
+    /// writes into the services block, as the components link apart.
+    pub viewfinder: u32,
 }
 impl PatchPlan {
     /// The aligned span of the core payloads. Modules start immediately after it.
@@ -293,22 +297,29 @@ fn core_exports(
     grkit_core::grm::EXPORTS
         .iter()
         .map(|&(name, symbol)| {
-            let (base, offset) = components
-                .iter()
-                .find_map(|c| {
-                    c.symbols
-                        .get(symbol)
-                        .map(|offset| (c.patches[0].address, *offset))
-                })
-                .with_context(|| {
-                    format!("The core has no symbol {symbol} for the export {name}")
-                })?;
-            Ok((
-                grkit_core::grm::symbol_hash(name),
-                base - layout.tail + offset,
-            ))
+            let offset = core_symbol(layout, components, symbol)
+                .with_context(|| format!("For the export {name}"))?;
+            Ok((grkit_core::grm::symbol_hash(name), offset))
         })
         .collect()
+}
+
+/// The offset of the code of `symbol` of a core component from the start of
+/// the tail.
+fn core_symbol(
+    layout: &components::Layout,
+    components: &[&components::Component],
+    symbol: &str,
+) -> Result<u32> {
+    let (base, offset) = components
+        .iter()
+        .find_map(|c| {
+            c.symbols
+                .get(symbol)
+                .map(|offset| (c.patches[0].address, *offset))
+        })
+        .with_context(|| format!("The core has no symbol {symbol}"))?;
+    Ok(base - layout.tail + offset)
 }
 
 /// Internal build entry; only the public firmware entry verifies release identity.
@@ -375,11 +386,13 @@ fn build_image(
         })
         .collect();
     let exports = core_exports(image.target.layout, &components)?;
+    let viewfinder = core_symbol(image.target.layout, &components, "menu_viewfinder")?;
     let plan = PatchPlan {
         patches,
         relocations,
         references,
         exports,
+        viewfinder,
     };
     validate_plan(&plan)?;
     let core_size = plan.core_size(image.target.layout.tail)?;

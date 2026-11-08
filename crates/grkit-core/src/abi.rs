@@ -114,6 +114,32 @@ pub const RECIPE_NAME_WORDS: usize = RECIPE_NAME_CHARS / 4;
 /// The user modes of the mode dial, U1 to U3, that the recipe file assigns
 /// (`HOST_RECIPE_DIAL`).
 pub const RECIPE_DIAL_POSITIONS: usize = 3;
+/// The settings that the camera saves in a user mode of the mode dial
+/// (`HOST_DIAL_SETS`, runtime/mode_dial.h): a set of `DIAL_SET_WORDS` words.
+/// Word `DIAL_SET_COUNT` holds the number of its pairs + 1, or 0 without a
+/// set. A word for each capability follows at `DIAL_SET_CORE`, in the order
+/// of `capabilities::CAPABILITIES`: the effect as `DIAL_SET_EFFECT` with the
+/// recipe code of its ID (`recipes::effect_code`), or 0 for Off, and the
+/// value of each other capability. Then the Fn adjustments of the effect
+/// (`DIAL_SET_FN`, base-9 digits as a recipe holds them) and its Toning byte
+/// (`DIAL_SET_TONING`), and from `DIAL_SET_PAIR` the pairs of a state file ID
+/// of a setting and its value: the saved module settings, the Enable of each
+/// listed module, and the switch Enable GRKit.
+///
+/// The settings table holds at most `DIAL_SET_PAIRS` such settings: it keeps
+/// a choice for each listed effect, at most 64 (runtime/effects.h), and the
+/// position, the options, and the Enable of each module, and Enable at Start,
+/// among its `MODULE_SETTINGS_MAX` entries (runtime/install_plan.h checks
+/// the bound).
+pub const DIAL_SET_PAIRS: usize = 93;
+pub const DIAL_SET_COUNT: usize = 0;
+pub const DIAL_SET_CORE: usize = 1;
+pub const DIAL_SET_FN: usize = DIAL_SET_CORE + crate::capabilities::CAPABILITIES.len();
+pub const DIAL_SET_TONING: usize = DIAL_SET_FN + 1;
+pub const DIAL_SET_PAIR: usize = DIAL_SET_TONING + 1;
+pub const DIAL_SET_WORDS: usize = DIAL_SET_PAIR + 2 * DIAL_SET_PAIRS;
+pub const DIAL_SET_EFFECT: u32 = 0x8000;
+const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
 
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
@@ -420,6 +446,21 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// The undo steps, the oldest first, RECIPE_WORDS words each. They are
     /// not saved: a start begins without them.
     HOST_RECIPE_UNDO: 4 * RECIPE_WORDS * RECIPE_UNDO;
+    /// Nonzero while the mode dial is on a user mode whose settings are
+    /// temporary (runtime/mode_dial.h): the resident loader then does not
+    /// save the main state file, so the file keeps the settings of the other
+    /// positions. The recipe file still saves.
+    HOST_STATE_HOLD: 4;
+    /// The count of changes of the saved settings of the user modes
+    /// (`HOST_DIAL_SETS`): the loader saves their file after it changes.
+    HOST_DIAL_SET_CHANGES: 4;
+    /// The settings that the camera saved in each user mode of the mode
+    /// dial, U1 to U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A
+    /// user mode applies them while it has `runtime::RECIPE_DIAL_SAVED`
+    /// (`HOST_RECIPE_DIAL`). The resident loader saves each word that is not
+    /// 0 in their file (`capabilities::StateFile::DialSets`), and INSTALL
+    /// restores them.
+    HOST_DIAL_SETS: 4 * DIAL_SET_WORDS * RECIPE_DIAL_POSITIONS;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
@@ -542,6 +583,9 @@ fields!(RCP_FIELDS {
     RCP_CRC = 12, 4;
     /// u32 number of recipes.
     RCP_COUNT = 16, 4;
+    /// u32 for each user mode of the mode dial, U1 to U3: what INSTALL sets
+    /// it to when it imports the library (`recipes::DialStep`).
+    RCP_DIAL = 20, 12;
 });
 
 fields!(RCP_RECORD_FIELDS {
@@ -777,6 +821,19 @@ fn recipe_table(out: &mut String) {
     .unwrap();
     writeln!(out, "#define GRKIT_RCP_MAX {}U", recipes::LIBRARY_MAX).unwrap();
     writeln!(out, "#define GRKIT_RCP_NAME_UNITS {}U", recipes::NAME_UNITS).unwrap();
+    comment(
+        out,
+        "A user mode of the mode dial in the header (GRKIT_RCP_DIAL): keep the value of the \
+         camera, follow the dial, turn GRKit off, or apply record k at GRKIT_RCP_DIAL_RECORD + k.",
+    );
+    for (name, value) in [
+        ("KEEP", recipes::DialStep::Keep),
+        ("FOLLOW", recipes::DialStep::Follow),
+        ("OFF", recipes::DialStep::Off),
+        ("RECORD", recipes::DialStep::Record(0)),
+    ] {
+        writeln!(out, "#define GRKIT_RCP_DIAL_{name} {}U", value.code()).unwrap();
+    }
     comment(
         out,
         "The family byte of a record: the camera line whose INSTALL imports it.",
@@ -1053,9 +1110,37 @@ pub fn header() -> String {
         ("DIAL_KEY_BASE", crate::runtime::RECIPE_DIAL_KEY_BASE),
         ("ID_MAX", crate::runtime::RECIPE_ID_MAX),
         ("DIAL_FOLLOW", crate::runtime::RECIPE_DIAL_FOLLOW),
+        ("DIAL_SAVED", crate::runtime::RECIPE_DIAL_SAVED),
         ("DIAL_OFF", crate::runtime::RECIPE_DIAL_OFF),
     ] {
         writeln!(out, "#define GRKIT_RECIPE_{name} {value}U").unwrap();
+    }
+    comment(
+        &mut out,
+        "The settings that the camera saves in a user mode of the mode dial \
+         (runtime/mode_dial.h, grkit_core::abi::DIAL_SET_WORDS): GRKIT_DIAL_SET_WORDS \
+         words, the number of pairs + 1 (0 without a set), a word for each \
+         capability, the Fn adjustments and the Toning of the effect, then \
+         GRKIT_DIAL_SET_PAIRS pairs of a state file ID and a value. The effect \
+         word is 0 for Off, else GRKIT_DIAL_SET_EFFECT with the recipe code of \
+         the effect. In their file, word w of user mode u (0 for U1) has the key \
+         GRKIT_DIAL_SET_KEY_BASE + u * GRKIT_DIAL_SET_KEY_STRIDE + w, and a word \
+         is at most GRKIT_DIAL_SET_VALUE_MAX.",
+    );
+    for (name, value) in [
+        ("PAIRS", DIAL_SET_PAIRS as u32),
+        ("COUNT", DIAL_SET_COUNT as u32),
+        ("CORE", DIAL_SET_CORE as u32),
+        ("FN", DIAL_SET_FN as u32),
+        ("TONING", DIAL_SET_TONING as u32),
+        ("PAIR", DIAL_SET_PAIR as u32),
+        ("WORDS", DIAL_SET_WORDS as u32),
+        ("EFFECT", DIAL_SET_EFFECT),
+        ("KEY_BASE", crate::runtime::DIAL_SET_KEY_BASE),
+        ("KEY_STRIDE", crate::runtime::DIAL_SET_KEY_STRIDE),
+        ("VALUE_MAX", crate::runtime::DIAL_SET_VALUE_MAX),
+    ] {
+        writeln!(out, "#define GRKIT_DIAL_SET_{name} {value}U").unwrap();
     }
     writeln!(
         out,

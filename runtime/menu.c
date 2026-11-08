@@ -752,9 +752,23 @@ static void fit_value(u32 view) {
     CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
 }
 #include "menu_settings.h"
+#include "mode_dial.h"
+#include "menu_dial.h"
 #include "menu_recipes.h"
 #include "menu_section.h"
 #include "menu_about.h"
+/* The shooting screen: the framing component calls this entry, whose
+   address INSTALL writes (SERVICES_CORE_VIEWFINDER), in the App task with
+   an event (runtime/services.h): the first shooting screen after INSTALL,
+   and the label of the mode dial (runtime/mode_dial.h). */
+A32_ENTRY void menu_viewfinder(u32 event) {
+    volatile u32 *h=menu_header();
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    if(event==VIEWFINDER_READY) dial_ready(h);
+    else if(event==VIEWFINDER_LABEL_SHOW) dial_label_show(h);
+    /* The live view hides its text or ends. */
+    else if(event==VIEWFINDER_LABEL_DROP) dial_label_end(h);
+}
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.
    Bit 0 selects the font of the menu language. GRKit gives the texts of one
    screen, which the last controller change selects (MENU_ROWS_CURRENT): the
@@ -776,7 +790,8 @@ A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
     title=ui_text_override(h,view,id);
     if(title) return title;
     if(h[GRKIT_HOST_SERVICES/4]) {
-        u32 current=services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0];
+        u32 current=services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0], label=dial_label_text(h,view,id);
+        if(label) return label;
         if(current==INFO_CONTROLLER) return info_text(h,id);
         if(settings_shows(current)) return settings_text(h,view,id);
         return menu_rows_text(h,view,id);

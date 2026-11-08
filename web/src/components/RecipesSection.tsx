@@ -9,12 +9,17 @@ import { RECIPE_STRINGS, type RecipeStrings } from '../recipeStrings';
 import {
   automaticName,
   cameraOrder,
+  DIAL_FOLLOW,
+  DIAL_OFF,
+  DIAL_SAVED,
+  dialChoices,
   LIBRARY_MAX,
   libraryWarnings,
   ON_MAX,
   onCount,
   presetOf,
   presetRows,
+  type DialChoice,
   type Family,
   type Preset,
   type Recipe,
@@ -40,6 +45,18 @@ interface Props {
   glowModule: boolean;
   /** Adds the recipe of a preset to the library, and its effect to the package. */
   onAddPreset: (recipe: Recipe, effect: string | null) => void;
+  /**
+   * What the user modes of the mode dial do, as the camera shows them, and the change of user mode
+   * `u` (0 for U1): for a ZIP package, null keeps the camera's value; on a card, each user mode has
+   * a value. `saved` tells the user modes of the card that apply settings that the camera saved in
+   * them, which the site can keep but not make. Null when the page writes no recipes.
+   */
+  dial?: {
+    shown: DialChoice;
+    canKeep: boolean;
+    saved?: readonly boolean[];
+    onChange: (u: number, value: number | null) => void;
+  } | null;
 }
 
 /**
@@ -136,6 +153,9 @@ function summary(recipe: Recipe, r: RecipeStrings, language: Language, effects: 
   return parts.join(' · ');
 }
 
+/** The value of the option that keeps the camera's value of a user mode. */
+const KEEP_VALUE = 'keep';
+
 /**
  * The recipes of the selected camera line, in the order of the camera, then the presets that the
  * library does not hold, off. The camera makes and edits recipes; the site turns them on and off
@@ -157,6 +177,7 @@ export function RecipesSection({
   grainModule,
   glowModule,
   onAddPreset,
+  dial = null,
 }: Props) {
   const r = RECIPE_STRINGS[language];
   const on = onCount(library);
@@ -260,6 +281,35 @@ export function RecipesSection({
         <p className="note warning">{r.warnMissing(warnings.missing.join(t.listSeparator))}</p>
       )}
       <div aria-live="polite">{library.length >= LIBRARY_MAX && <p className="status">{r.full(LIBRARY_MAX)}</p>}</div>
+      {dial && (
+        <div className="recipe-dial">
+          <h3 className="card-heading">{r.modeDial}</h3>
+          <div className="recipe-dial-modes">
+            {dial.shown.map((value, u) => (
+              <label key={u} className="field">
+                <span className="field-label">U{u + 1}</span>
+                <select
+                  className="import-text"
+                  value={value ?? KEEP_VALUE}
+                  onChange={(event) =>
+                    dial.onChange(u, event.target.value === KEEP_VALUE ? null : Number(event.target.value))
+                  }
+                >
+                  {dial.canKeep && <option value={KEEP_VALUE}>{r.dialKeep}</option>}
+                  <option value={DIAL_FOLLOW}>{r.dialNone}</option>
+                  <option value={DIAL_OFF}>{r.dialOff}</option>
+                  {dial.saved?.[u] && <option value={DIAL_SAVED}>{r.dialSaved}</option>}
+                  {dialChoices(library).map((recipe) => (
+                    <option key={recipe.id} value={recipe.id}>
+                      {nameOf(recipe)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <dialog
         ref={dialog}
         className="dialog"

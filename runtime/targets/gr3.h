@@ -111,6 +111,17 @@
 /* The text ID of a string view (a halfword), which FW_STRING_VIEW_RESET sets:
    the view measures its text when the ID changes. */
 #define STRING_VIEW_TEXT 0xea
+/* A string view of its own: its type for FW_VIEW_FACTORY, and the bytes of
+   its font and of its horizontal and vertical alignment, which a new view
+   measures at its first layout. STRING_VIEW_LIVE_FONT is the font of the
+   live-view text, such as the focus distance, and STRING_VIEW_CENTER
+   centers the text in the view. */
+#define STRING_VIEW_TYPE 0x11U
+#define STRING_VIEW_FONT 0xf0
+#define STRING_VIEW_ALIGN 0xf1
+#define STRING_VIEW_VERTICAL 0xf2
+#define STRING_VIEW_LIVE_FONT 1U
+#define STRING_VIEW_CENTER 1U
 /* The methods of the SelectMenuController vtable. */
 #define SELECT_VTABLE_SLOTS 15U
 /* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
@@ -186,5 +197,20 @@
 /* The native processing applies saturation before the tone curves. GR IV
    applies it after them, so a native look moves it (runtime/picture.c). */
 #define NATIVE_SATURATION_BEFORE_CURVES 1
+
+/* The mode dial (runtime/mode_dial.h). The switch model of the App
+   (DIAL_SWITCHES, build header) keeps the state of each switch in a byte at
+   DIAL_SWITCH_STATES + 8 x its ID. The mode dial is switch DIAL_SWITCH: P 3,
+   Tv 5, Av 6, M 8, and U1 to U3 from DIAL_CODE_U1. The first byte of the
+   header of the settings object (DIAL_SETTINGS, build header) is the user
+   mode box that the camera loaded, 0 for P to M. The settings of a position
+   are loaded when that box is not 0 for a user mode, and 0 for another
+   position. */
+#define DIAL_SWITCH_STATES 0x114
+#define DIAL_SWITCH 38
+#define DIAL_CODE_U1 10U
+#define DIAL_POSITION() BYTE(DIAL_SWITCHES,DIAL_SWITCH_STATES+DIAL_SWITCH*8)
+#define DIAL_NATIVE_SETTLED(position) \
+    ((BYTE(WORD(DIAL_SETTINGS,0),0)!=0)==((u32)((position)-DIAL_CODE_U1)<3U))
 
 #endif

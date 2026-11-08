@@ -2,7 +2,7 @@
 //! and the largest file.
 
 use super::{
-    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_DIAL_POSITIONS,
+    DIAL_SET_WORDS, MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_DIAL_POSITIONS,
     RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS,
 };
 use crate::capabilities::{self, StateFile};
@@ -93,11 +93,36 @@ pub const RECIPE_STATE_WORDS: usize = RECIPE_WORDS * RECIPE_SLOTS
 pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
 /// The IDs of recipes: generated numbers, 1 to `RECIPE_ID_MAX`
 /// (`abi::HOST_RECIPE_IDS`).
-pub const RECIPE_ID_MAX: u32 = RECIPE_VALUE_MAX - 1;
+pub const RECIPE_ID_MAX: u32 = RECIPE_VALUE_MAX - 2;
 /// What a user mode of the mode dial does (`abi::HOST_RECIPE_DIAL`): the
-/// camera stays as it is (0), GRKit is off, or the ID of a recipe applies.
+/// camera stays as it is (0), the settings that the camera saved in the user
+/// mode apply (`abi::HOST_DIAL_SETS`), GRKit is off, or the ID of a recipe
+/// applies. The values above `RECIPE_ID_MAX` are no ID.
 pub const RECIPE_DIAL_FOLLOW: u32 = 0;
+pub const RECIPE_DIAL_SAVED: u32 = RECIPE_VALUE_MAX - 1;
 pub const RECIPE_DIAL_OFF: u32 = RECIPE_VALUE_MAX;
+const _: () = assert!(RECIPE_DIAL_SAVED > RECIPE_ID_MAX && RECIPE_DIAL_OFF > RECIPE_DIAL_SAVED);
+
+/// The saved settings of the user modes of the mode dial (`abi::HOST_DIAL_SETS`,
+/// runtime/mode_dial.h) have their own file (`StateFile::DialSets`): word w
+/// of the set of user mode u (0 for U1) has the key ID this base + u *
+/// `DIAL_SET_KEY_STRIDE` + w. A later word of a set gets the next key, so the
+/// keys of a saved file stay valid. A word that is 0 has no entry.
+pub const DIAL_SET_KEY_BASE: u32 = 992_000_000;
+pub const DIAL_SET_KEY_STRIDE: u32 = 1000;
+const _: () = assert!(DIAL_SET_WORDS <= DIAL_SET_KEY_STRIDE as usize);
+/// The number of saved words: each word of the set of each user mode.
+pub const DIAL_SET_STATE_WORDS: usize = DIAL_SET_WORDS * RECIPE_DIAL_POSITIONS;
+/// The largest value of a word of a set: a state file ID of a setting
+/// (below `PARAMETER_KEY_BASE`), or a value of at most `STATE_DIGITS` digits.
+pub const DIAL_SET_VALUE_MAX: u32 = 999_999_999;
+
+/// The state key of word `index` of the sets (`abi::HOST_DIAL_SETS`).
+pub fn dial_set_key(index: usize) -> u32 {
+    DIAL_SET_KEY_BASE
+        + (index / DIAL_SET_WORDS) as u32 * DIAL_SET_KEY_STRIDE
+        + (index % DIAL_SET_WORDS) as u32
+}
 /// The largest packed adjustment value: 9^9 - 1.
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
@@ -153,6 +178,10 @@ pub fn worst_state_size(file: StateFile) -> usize {
         }
         StateFile::Recipes => {
             RECIPE_STATE_WORDS * (line(recipe_key_max()) + line(RECIPE_VALUE_MAX))
+        }
+        StateFile::DialSets => {
+            DIAL_SET_STATE_WORDS
+                * (line(dial_set_key(DIAL_SET_STATE_WORDS - 1)) + line(DIAL_SET_VALUE_MAX))
         }
     };
     keys + parameters
@@ -269,6 +298,31 @@ mod tests {
             .unwrap();
         assert!(MAX_COUNT + capabilities::state_keys().len() + MODULE_SETTINGS_MAX <= pairs);
         assert!(RECIPE_STATE_WORDS <= pairs);
+        assert!(DIAL_SET_STATE_WORDS <= pairs);
+    }
+
+    /// Each word of the sets of the user modes has its own key, out of the
+    /// ranges of the other entries, and fits the digits of the state file,
+    /// as each value of a set does.
+    #[test]
+    fn dial_set_entries_fit_the_state_file() {
+        let keys: std::collections::BTreeSet<u32> =
+            (0..DIAL_SET_STATE_WORDS).map(dial_set_key).collect();
+        assert_eq!(keys.len(), DIAL_SET_STATE_WORDS);
+        let last = dial_set_key(DIAL_SET_STATE_WORDS - 1);
+        assert!(*keys.last().unwrap() == last && last.to_string().len() <= STATE_DIGITS);
+        assert!(DIAL_SET_KEY_BASE > recipe_key_max());
+        assert!(DIAL_SET_VALUE_MAX.to_string().len() <= STATE_DIGITS);
+        // A state file ID of a setting and a packed Fn value fit a word.
+        const {
+            assert!(
+                PARAMETER_KEY_BASE <= DIAL_SET_VALUE_MAX
+                    && PARAMETER_VALUE_MAX <= DIAL_SET_VALUE_MAX
+            )
+        };
+        // Word 4 of U1 and word 0 of U3.
+        assert_eq!(dial_set_key(4), 992_000_004);
+        assert_eq!(dial_set_key(2 * DIAL_SET_WORDS), 992_002_000);
     }
 
     /// The recipe entries keep apart from the Fn adjustment entries and the

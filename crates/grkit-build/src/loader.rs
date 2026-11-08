@@ -197,6 +197,8 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
             "/RECIPES.TMP",
         ),
         ("STATE_TMP_PATH", LINUX_DATA_DIRECTORY, "/STATE.TMP"),
+        ("DIAL_SETS_PATH", LINUX_DATA_DIRECTORY, "/USERMODE.TXT"),
+        ("DIAL_SETS_TMP_PATH", LINUX_DATA_DIRECTORY, "/USERMODE.TMP"),
         ("REPORT_PATH", LINUX_DATA_DIRECTORY, "/REPORT.TXT"),
         ("RELOCATION_PATH", LINUX_DATA_DIRECTORY, "/RELOC.BIN"),
         ("SAFE_PATH", LINUX_DATA_DIRECTORY, "/SAFE"),
@@ -309,6 +311,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         "#define RTOS_EXECUTABLE_END {:#x}U",
         crate::components::RTOS_EXECUTABLE_END
     )?;
+    writeln!(result, "#define CORE_VIEWFINDER {:#x}U", plan.viewfinder)?;
     writeln!(result, "#define CORE_EXPORT_COUNT {}U", plan.exports.len())?;
     words(
         &mut result,

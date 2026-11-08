@@ -36,10 +36,14 @@ pub enum Point {
     /// The focal-length crop of recorded pictures: the window and the size
     /// of a crop factor, the factor of a shot, and the crop button.
     CaptureCrop,
+    /// The mode dial: the firmware's apply of a dial position, after which
+    /// the core applies what a user mode of the dial does
+    /// (`runtime/mode_dial.h`).
+    ModeDial,
 }
 
 impl Point {
-    pub const ALL: [Point; 8] = [
+    pub const ALL: [Point; 9] = [
         Point::MenuPage,
         Point::Tuning,
         Point::ViewfinderOverlay,
@@ -48,6 +52,7 @@ impl Point {
         Point::PipelineGrain,
         Point::PipelineGrainSize,
         Point::CaptureCrop,
+        Point::ModeDial,
     ];
 
     pub fn name(self) -> &'static str {
@@ -60,6 +65,7 @@ impl Point {
             Point::PipelineGrain => "pipeline.grain",
             Point::PipelineGrainSize => "pipeline.grain-size",
             Point::CaptureCrop => "capture.crop",
+            Point::ModeDial => "mode.dial",
         }
     }
 
@@ -193,11 +199,16 @@ pub const CAPABILITIES: [Capability; 10] = [
     Capability {
         // The camera recipes (runtime/recipes.h). The core gives the rows of
         // its page: undo, the recipes, and save. A recipe sets the other
-        // capabilities only while a module uses them, so it needs no point.
+        // capabilities only while a module uses them, so applying one needs
+        // no point. The user modes of the mode dial apply recipes
+        // (runtime/mode_dial.h), which needs the hook of the dial, and the
+        // hooks of the shooting screen: the dial acts on a start in a user
+        // mode at the first shooting screen, and its label shows on the
+        // live view.
         key: "RECIPE",
         values: 0,
         state: State::Recipes,
-        points: &[],
+        points: &[Point::ModeDial, Point::ViewfinderOverlay],
     },
 ];
 
@@ -212,10 +223,13 @@ pub enum StateFile {
     /// The recipes, their names, and the hash of the last imported package
     /// library (`runtime::recipe_key`). The site reads and writes it too.
     Recipes,
+    /// The settings that the camera saved in the user modes of the mode dial
+    /// (`runtime::dial_set_key`). Only the camera writes it.
+    DialSets,
 }
 
 impl StateFile {
-    pub const ALL: [StateFile; 2] = [StateFile::Main, StateFile::Recipes];
+    pub const ALL: [StateFile; 3] = [StateFile::Main, StateFile::Recipes, StateFile::DialSets];
 
     /// The file name without its extension. The file is `<stem>.TXT`, and the
     /// loader writes `<stem>.TMP` before it replaces the file.
@@ -223,6 +237,7 @@ impl StateFile {
         match self {
             Self::Main => "STATE",
             Self::Recipes => "RECIPES",
+            Self::DialSets => "USERMODE",
         }
     }
 }

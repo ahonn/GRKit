@@ -14,22 +14,22 @@ static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10
 #define CODE_RELOCATION_COUNT 0x1U
 #define TAIL_SYMBOL 0U
 #define TAIL_BYTES 0x0U
-static const u32 relocation_words[] = { /* 2072 values, SHA-256 0c26301df724148f3338a98aa57add6eba6f6e28d82348928885122438325efb */ };
+static const u32 relocation_words[] = { /* 2456 values, SHA-256 b011814bb832414d8519c417e9fa6b06cb5b03813fa9ce37a958e1911009bdb2 */ };
 static const struct relocation_window relocation_windows[] = {
-{0x53010100,0,448,1,0,1},
-{0x53010200,448,384,1,0,1},
-{0x530003f0,832,24,0,0,0},
-{0x55002b6c,856,64,0,1,1},
-{0x55018fcc,920,64,0,1,1},
-{0x5300ff00,984,576,2,0,1},
-{0x550186f4,1560,64,0,1,1},
-{0x55018d54,1624,64,1,1,1},
-{0x55018cb0,1688,64,0,1,1},
-{0x55018e0c,1752,64,0,1,1},
-{0x53dc2774,1816,64,0,0,1},
-{0x53dc28f8,1880,64,0,0,1},
-{0x53dc299c,1944,64,1,0,1},
-{0x53dc2404,2008,64,0,0,1},
+{0x53010200,0,576,1,0,1},
+{0x53010300,576,512,1,0,1},
+{0x530003f0,1088,24,0,0,0},
+{0x55002b6c,1112,64,0,1,1},
+{0x55018fcc,1176,64,0,1,1},
+{0x53010000,1240,704,1,0,1},
+{0x550186f4,1944,64,0,1,1},
+{0x55018d54,2008,64,1,1,1},
+{0x55018cb0,2072,64,0,1,1},
+{0x55018e0c,2136,64,0,1,1},
+{0x53dc2774,2200,64,0,0,1},
+{0x53dc28f8,2264,64,0,0,1},
+{0x53dc299c,2328,64,1,0,1},
+{0x53dc2404,2392,64,0,0,1},
 };
 static const u32 relocation_symbols[] = { /* 15 values, SHA-256 cb2b3274bda7d58aaaa1998a9b17324e3c26a9d27974571a603ef9833ce6bf59 */ };
 static const struct relocation_source relocation_sources[] = {
@@ -89,6 +89,8 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define RECIPES_STATE_PATH "/media/storage1/GRKIT/RECIPES.TXT"
 #define RECIPES_STATE_TMP_PATH "/media/storage1/GRKIT/RECIPES.TMP"
 #define STATE_TMP_PATH "/media/storage1/GRKIT/STATE.TMP"
+#define DIAL_SETS_PATH "/media/storage1/GRKIT/USERMODE.TXT"
+#define DIAL_SETS_TMP_PATH "/media/storage1/GRKIT/USERMODE.TMP"
 #define REPORT_PATH "/media/storage1/GRKIT/REPORT.TXT"
 #define RELOCATION_PATH "/media/storage1/GRKIT/RELOC.BIN"
 #define SAFE_PATH "/media/storage1/GRKIT/SAFE"
@@ -115,8 +117,9 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
 static const char *const core_setting_names[] = {"CORE.TONE","CORE.ASPECT","CORE.GRAIN","CORE.GRAIN_SIZE","CORE.ASPECT_MODE","CORE.ADJ","CORE.ADJ_MODULE","CORE.CROP","CORE.CROP_MODE","CORE.RECIPE"};
-static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x0};
+static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x104};
 #define RTOS_EXECUTABLE_END 0x55000000U
+#define CORE_VIEWFINDER 0x0U
 #define CORE_EXPORT_COUNT 0U
 static const u32 core_exports[] = {};
 static const u8 stock_record[] __attribute__((aligned(4))) = { /* 84 values, SHA-256 d1c1719f675e9a47d0e29a12b89645cbca01118d5b0fd6199887c85748f5e795 */ };
@@ -126,8 +129,8 @@ static const u8 version_pixels[] __attribute__((aligned(4))) = { /* 6400 values,
 static const u8 modules_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 c63d6fe4548456b6724e152bfa63bdadcf44163e6bb2b9e13a1842e9a9a4acea */ };
 static const u8 modules_off_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 b9fbdee6ffee02a4e4663ecd9b3ef74a8216ce39f2bb8495dab46a7fb7e942c2 */ };
 static const u8 rotate_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8a5f3688e3432fc4c20d670e4b092cf937baf93ebd9db2e934d4e3ce63ae2d56 */ };
-#define MENU_TEXT_BYTES 5364U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5364 values, SHA-256 d95ae3e5ed737484c4846990e8a912817caba43fe0c5fc9f63cdaa04f95547b5 */ };
+#define MENU_TEXT_BYTES 5678U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5678 values, SHA-256 528bec1de240a0a837755dae1e4761cabd8ec2bb607691ee04dc717b337df6a8 */ };
 #define LABELS_BYTES 27644U
 static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 27644 values, SHA-256 0bd6591e8d980e29f058122e96da8e55d0cbf92f5937f612cd20041a7b5d5794 */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };
