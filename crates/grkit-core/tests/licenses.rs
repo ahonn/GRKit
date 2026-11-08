@@ -110,6 +110,8 @@ fn each_catalog_effect_has_the_attribution_of_its_source() {
             ("Spectral Film LUT", "MIT")
         } else if generator.starts_with("t3mujinpack ") {
             ("t3mujinpack", "MIT")
+        } else if generator.starts_with("GRKit look ") {
+            ("GRKit looks", "MIT")
         } else {
             panic!("{name}: no attribution for {generator}");
         };

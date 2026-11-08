@@ -32,6 +32,16 @@ HP5 Plus 400 derives from a HaldCLUT of the darktable styles of
 License. `sources/T3MUJINPACK_LICENSE.txt` contains its notice. This effect definition is also
 licensed under the MIT License.
 
+## GRKit looks
+
+Positive GRII is a look of this repository, in the spirit of the Positive Film image setting of the
+RICOH GR II: deep blacks, a hard curve around the midtones, a warm cast that fades toward white,
+more saturation, blues toward teal, greens toward yellow-olive, reds toward orange.
+`sources/make_positive_grii.py` writes its LUT, a HaldCLUT on the Standard JPEG, from parameters set
+by eye against GR II photographs, not from camera data, and `grkit effects import --input standard`
+fits it. This effect definition is licensed under the MIT License of GRKit. RICOH and GR are
+trademarks of RICOH IMAGING COMPANY, LTD.; the name says which camera setting the look follows.
+
 ## Names and limits
 
 Effect names and film, paper, and filter names identify the simulated materials. Some of these

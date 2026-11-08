@@ -25,6 +25,12 @@
       "author": "João Almeida",
       "license": "MIT",
       "license_notice": "T3MUJINPACK_LICENSE.txt"
+    },
+    "grkit": {
+      "repository": "https://github.com/ahonn/GRKit",
+      "author": "GRKit contributors",
+      "license": "MIT",
+      "script": "make_positive_grii.py"
     }
   },
   "upstream_changes": "CHANGELOG.txt",
@@ -55,6 +61,9 @@
     "bake_spectral_film_lut.py": {
       "sha256": "979a529bfdcf4d8681385a0ff2d698374d8003c9580a6d4d4a9b4123d104f69c",
       "license": "project"
+    },
+    "make_positive_grii.py": {
+      "sha256": "b0037354d6e7ee13a23809b34fa92ca587de290a09e5e9173743b739c8f87bfb"
     }
   },
   "luts": {
@@ -106,6 +115,11 @@
     "portra-800-push2-v1.cube": {
       "generator": "spektrafilm",
       "sha256": "b00d80ceb876c28912d619f2a6f6ad9dc1cf7d58cb0e729738039793174ba800"
+    },
+    "positive-film-grii-v1.png": {
+      "generator": "grkit",
+      "sha256": "0fa03747bb3f9a2f47147f0ce3267d43512c469b5a47438d333455a35d74e1e9",
+      "script": "make_positive_grii.py"
     },
     "pro-400h-crystal-v1.cube": {
       "generator": "spektrafilm",

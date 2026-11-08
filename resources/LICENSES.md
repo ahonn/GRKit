@@ -38,6 +38,12 @@ HP5 Plus 400 derives from a HaldCLUT of [t3mujinpack](https://github.com/t3mujin
 
 This effect is licensed under the MIT License. The copyright and permission notice is in "t3mujinpack license" below.
 
+### GRKit looks
+
+Positive GRII is a look of this repository, in the spirit of the Positive Film image setting of the RICOH GR II. `effects/sources/make_positive_grii.py` writes its LUT from parameters set by eye against GR II photographs, not from camera data, and `grkit effects import` fits it.
+
+This effect is licensed under the MIT License of GRKit, in "GRKit" above.
+
 ### Names
 
 Effect names and film, paper, and filter names identify the simulated materials. Some of these names are trademarks of their owners. GRKit is not affiliated with or endorsed by RICOH IMAGING COMPANY, LTD., Eastman Kodak Company, Kodak Alaris, Fujifilm, or HARMAN technology Limited (Ilford Photo). The simulations are models of published data or hand-made styles, not measured equivalents of the products.
