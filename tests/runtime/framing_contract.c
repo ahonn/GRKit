@@ -135,6 +135,10 @@ static uint32_t native_crop_bits = 0x3f800000U, native_crop_sets, native_crop_q1
 #define CROP_NATIVE_BITS() (native_crop_bits)
 #define CROP_NATIVE_SET(bits) (native_crop_bits = (bits), ++native_crop_sets)
 #define CROP_NATIVE_Q16() (native_crop_q16)
+/* GR IIIx: the lens of 40 mm that the GR III family runtime asks for. */
+#undef CROP_LENS_40MM
+static uint32_t lens_40mm;
+#define CROP_LENS_40MM() (lens_40mm)
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value);
 #define MODULE_PAINT(address,surface,value) test_module_paint(address,surface,value)
 static uint32_t level_updates, level_updated;
@@ -964,9 +968,54 @@ static void crop_sets_the_camera_factor(void)
     assert_box(guides_box_seen, 0, 0, 720, 480);
     native_crop_q16 = 65536U;
 }
+/* 40, 70, and 90 mm show the core's crop badge in the place of the camera's
+   own, which crop_badge hides; 35 and 50 mm keep the camera's. GR IIIx
+   shows its focal lengths. The badge shows only with the native
+   information, and a Framing ratio or Frame Only shows none. */
+static void crop_badges_replace_the_camera_badge(void)
+{
+    static const u32 labels[] = {GRKIT_LABEL_COUNT, GRKIT_LABEL_COUNT, LABEL_CROP, GRKIT_LABEL_COUNT, LABEL_CROP + 1, LABEL_CROP + 2};
+    for (u32 lens = 0; lens < 2; ++lens)
+        for (u32 crop = 0; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
+            reset();
+            header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+            add_crop_layer();
+            lens_40mm = lens;
+            header[GRKIT_HOST_CROP/4] = crop;
+            u32 expected = labels[crop] < GRKIT_LABEL_COUNT ? labels[crop] + 3 * lens : GRKIT_LABEL_COUNT;
+            assert(crop_badge_shown(header) == expected);
+            assert(crop_badge_native() == (expected >= GRKIT_LABEL_COUNT));
+            if (expected >= GRKIT_LABEL_COUNT) continue;
+            for (u32 i = 0; i < sizeof(pixels) / sizeof(pixels[0]); ++i) pixels[i] = SENTINEL;
+            framing_paint(TEST_CANVAS, TEST_BITMAP);
+            /* The badge draws after the native children. */
+            assert(pixels[1 + CROP_BADGE_TOP * TEST_STRIDE + CROP_BADGE_LEFT] != 0xff808080U);
+            framing_paint_after(TEST_CANVAS, TEST_BITMAP);
+            /* The border of the badge at its top left and bottom right. */
+            assert(pixels[1 + CROP_BADGE_TOP * TEST_STRIDE + CROP_BADGE_LEFT] == 0xff808080U);
+            assert(pixels[1 + (CROP_BADGE_TOP + 19) * TEST_STRIDE + CROP_BADGE_LEFT + 55] == 0xff808080U);
+            assert(pixels[1 + (CROP_BADGE_TOP + 1) * TEST_STRIDE + CROP_BADGE_LEFT + 1] == 0xff353535U);
+        }
+    lens_40mm = 0;
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 4;
+    display_mode = DISPLAY_SIMPLE;
+    assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT);
+    display_mode = 0;
+    header[GRKIT_HOST_CROP_MODE/4] = 1;
+    header[GRKIT_HOST_CAPABILITIES/4] |= GRKIT_CORE_CROP_MODE_BIT;
+    assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT && crop_badge_native());
+    reset();
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 4;
+    assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT);
+}
 int main(void)
 {
     crop_frames_the_layers();
+    crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
     native_guides_follow_the_photo_area();
     guides_follow_composition_frames();

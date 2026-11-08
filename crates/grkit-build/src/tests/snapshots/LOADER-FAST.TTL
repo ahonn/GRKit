@@ -128,7 +128,7 @@ intdim artwork4 iconwords
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
-intdim tailarea 48815
+intdim tailarea 49839
 allocated = 1
 hadcount = count
 hadwords = words

@@ -196,8 +196,18 @@ static GRKIT_ICON_COMPACT u32 status_shown(volatile u32 *h) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
     return owner && !BYTE(owner,LIVEVIEW_MOVIE) && native_display()==DISPLAY_FULL && viewfinder_status_active(h);
 }
-/* Whether the live view has something to draw: layers, status or the cue. */
-static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) { return cue_shown(h) || layers_active(h) || status_shown(h); }
+/* The crop badge that the live view shows (runtime/crop.h), or
+   GRKIT_LABEL_COUNT: only with the native information, as the camera's own. */
+static GRKIT_ICON_COMPACT u32 crop_badge_shown(volatile u32 *h) {
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
+    if(!owner || BYTE(owner,LIVEVIEW_MOVIE) || native_display()!=DISPLAY_FULL) return GRKIT_LABEL_COUNT;
+    return crop_badge_label(h,FRAMING_NATIVE_ASPECT());
+}
+/* Whether the live view has something to draw: layers, status, the crop
+   badge, or the cue. */
+static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) {
+    return cue_shown(h) || layers_active(h) || status_shown(h) || crop_badge_shown(h)<GRKIT_LABEL_COUNT;
+}
 static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
     u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=h[GRKIT_HOST_FRAME_NATIVE/4]!=native;
     h[GRKIT_HOST_FRAME_NATIVE/4]=native;
@@ -455,6 +465,21 @@ static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitma
         overlay_label(&surface,LABEL_GRKIT,360-label_width(LABEL_GRKIT)/2,LABEL_TOP);
     }
     ++h[GRKIT_HOST_FRAME_DRAWS/4];
+}
+
+/* After the native children of the canvas: the crop badge, opaque, in the
+   place of the camera's own, which it covers where the camera does not hide
+   it (runtime/crop.h). */
+static GRKIT_ICON_COMPACT void paint_after(volatile u32 *h,u32 canvas,u32 bitmap) {
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,badge;
+    Surface surface;
+    if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;
+    badge=crop_badge_shown(h);
+    if(badge>=GRKIT_LABEL_COUNT) return;
+    full=WORD(owner,4)==canvas ? canvas_bitmap(canvas,bitmap) : 0;
+    if(!full) return;
+    surface.data=full; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
+    overlay_label(&surface,badge,CROP_BADGE_LEFT,CROP_BADGE_TOP);
 }
 
 #endif

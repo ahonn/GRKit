@@ -80,7 +80,7 @@ intdim artwork4 iconwords
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
-intdim tailarea 48815
+intdim tailarea 49839
 attempts = 0
 waits = 60
 if fast <> 0 waits = 300

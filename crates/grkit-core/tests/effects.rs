@@ -614,6 +614,24 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
             (width, height),
             (field(index * 8, 2), field(index * 8 + 2, 2))
         );
+        // A crop badge has the size and the grays of the camera's own badge:
+        // an opaque 56 x 20 box with a 1-pixel border, a dark fill, and white
+        // text.
+        if artwork::OVERLAY_LABELS[index].ends_with("mm") {
+            assert_eq!((width, height), (56, 20), "badge {index}");
+            for y in 0..height {
+                for x in 0..width {
+                    let value = pixels[y * width + x];
+                    if y == 0 || x == 0 || y + 1 == height || x + 1 == width {
+                        assert_eq!(value, 128, "badge {index} at {x},{y}");
+                    } else {
+                        assert!(value >= 53, "badge {index} at {x},{y}");
+                    }
+                }
+            }
+            assert!(pixels.contains(&53) && pixels.contains(&255));
+            continue;
+        }
         // A one-line label is as high as a ratio. A Date Imprint format with
         // the time on a second line is as high as a status-row icon, and
         // fits the 40-pixel status row.
@@ -679,9 +697,19 @@ fn overlay_labels_follow_the_aspect_values() {
         .trim()
         .parse()
         .unwrap();
+    // Then the crop badges: 40, 70, and 90 mm, and those of GR IIIx.
+    let crop = grkit_core::capabilities::CAPABILITIES
+        .iter()
+        .find(|capability| capability.key == "CROP")
+        .unwrap();
+    let badges = artwork::OVERLAY_LABELS
+        .iter()
+        .filter(|label| label.ends_with("mm"))
+        .count();
+    assert_eq!(badges, 2 * (crop.values as usize - 3));
     assert_eq!(
         artwork::OVERLAY_LABELS.len(),
-        aspect.values as usize + styles
+        aspect.values as usize + styles + badges
     );
     let text = fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../modules/framing/text/en.toml"),

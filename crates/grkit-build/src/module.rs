@@ -1300,7 +1300,7 @@ fn icon(m: &Manifest, spec: &IconSpec, name: &str, labels: bool, c: &mut String)
                 "A label icon has no tile or first_tile"
             );
             let first = |name: &str| -> Result<u32> {
-                grkit_core::artwork::OVERLAY_LABELS
+                grkit_core::artwork::OVERLAY_LABELS[..grkit_core::artwork::MODULE_LABELS]
                     .iter()
                     .skip(1)
                     .position(|candidate| *candidate == name)
@@ -1321,8 +1321,7 @@ fn icon(m: &Manifest, spec: &IconSpec, name: &str, labels: bool, c: &mut String)
                         format!("The values of {key} are unknown, so its labels cannot be checked")
                     })?;
                     ensure!(
-                        first as usize + values as usize
-                            <= grkit_core::artwork::OVERLAY_LABELS.len(),
+                        first as usize + values as usize <= grkit_core::artwork::MODULE_LABELS,
                         "{key} has {values} values, more than the labels from {label:?}"
                     );
                     ("GRKIT_ICON_LABEL", setting, first)
