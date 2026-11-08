@@ -2912,7 +2912,7 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     menu[MENU_ROWS_PAGE / 4] = 4;
     /* The Options row shows as the manifest declares it (options = true). */
     settings_open(h, LISTED_PAGE, 0);
-    assert(settings_rows(h) == 3 && same(listed_label(h, 1), "Recipes"));
+    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Recipes"));
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
     *page_at(TEST_PAGE + 4 * TEST_PAGE_SIZE + PAGE_FLAGS) |= CHOICE_OPTIONS;
     *state = 7;
@@ -2920,9 +2920,9 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     /* A start of the settings page clears the state of the value page. */
     assert(!*state);
     const Setting *page = settings_page(h);
-    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Options"));
-    assert(same(listed_label(h, 2), "Recipes") && same(listed_label(h, 3), "Save Settings"));
-    assert(same(listed_text(h, 3, 0), "3/40"));
+    assert(settings_rows(h) == 5 && same(listed_label(h, 1), "Options"));
+    assert(same(listed_label(h, 2), "Recipes") && same(listed_label(h, 3), "Mode Dial"));
+    assert(same(listed_label(h, 4), "Save Settings") && same(listed_text(h, 4, 0), "3/40"));
     /* Options: each recipe, on while ADJ shows it. OK turns it on or off. */
     assert(options_count(h) == 3 && option_off(h, 0) && !option_off(h, 1));
     assert(same(option_label(h, 1), "Street"));
@@ -2931,16 +2931,39 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     listed_set(h, 1, 0);
     assert(!recipe_shown(h, 0));
     menu[MENU_ROWS_STAY / 4] = 0;
-    /* Recipes shows on the own value page; Save acts at OK. */
-    for (u32 row = 0; row < 4; ++row) {
+    /* Recipes and Mode Dial show on the own value page; Save acts at OK. */
+    for (u32 row = 0; row < 5; ++row) {
         u32 flags = settings_flags(h, page, row);
-        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2));
-        assert(settings_long(h, page, row) == (row == 1 || row == 2));
-        assert(!!(flags & SETTING_ACTION) == (row == 3));
+        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2 || row == 3));
+        assert(settings_long(h, page, row) == (row >= 1 && row <= 3));
+        assert(!!(flags & SETTING_ACTION) == (row == 4));
     }
     assert(listed_setting(h, 0) == 0 && listed_setting(h, 1) == 0);
-    assert(menu_settings_row_controller(settings_pages[0], 3) == MENU_ACTION_TARGET + 3);
+    assert(menu_settings_row_controller(settings_pages[0], 4) == MENU_ACTION_TARGET + 4);
     assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 2] == settings_pages[2]);
+    assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 3] == settings_pages[3]);
+    /* Mode Dial (runtime/menu_dial.h): the row shows no value, and its list
+       has no mark. The values of U1 have U1 as the title, None, GRKit Off,
+       and each recipe that is on, with the mark and the cursor on None. */
+    const Setting *dial = listed_setting(h, 3);
+    assert(listed_get(h, 3) == DIAL_NO_MARK && same(listed_text(h, 3, listed_get(h, 3)), ""));
+    assert(listed_values(h, 3) == 3 && same(listed_text(h, 3, 0), "U1: None") && !dial->title(h));
+    assert(dial->select(h, 0, 0) && *state == DIAL_PAGE_SHOWN);
+    assert(listed_values(h, 3) == 5 && same(listed_text(h, 3, 1), "GRKit Off"));
+    assert(same(listed_text(h, 3, 2), "Far Away") && same(listed_text(h, 3, 4), "Corner"));
+    assert(menu_settings_current(0, 0, 3) == 2 && menu_settings_current(3, 0, 3) == 1);
+    menu[MENU_ROWS_CURRENT / 4] = settings_pages[3];
+    assert(settings_text(h, 0, settings_row_texts[3]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
+    assert(same(dial->title(h), "U1"));
+    menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    /* A half-press confirms the value under the cursor with the native set,
+       which sets nothing. OK sets it and returns to the list. */
+    assert(menu_settings_apply(3, 0, 3) && h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
+    assert(dial->select(h, 0, 3) && *state == 1 && h[GRKIT_HOST_RECIPE_DIAL / 4] == *recipe_id_at(h, 1));
+    assert(same(listed_text(h, 3, 0), "U1: Street"));
+    assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_NONE));
+    assert(h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
+    *state = 0;
     const Setting *recipes = listed_setting(h, 2);
     /* The list has each recipe, also one that ADJ does not show. Without a
        recipe that the settings match, the row shows no value, the page has
@@ -3024,8 +3047,9 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     recipe_menu_deleted(1, 0);
     assert(!recipe_entries(h) && !*state && recipe_count(h) == 1);
     settings_open(h, LISTED_PAGE, 0);
-    assert(settings_rows(h) == 2 && same(listed_label(h, 1), "Save Settings"));
-    assert(settings_flags(h, listed_settings, 1) == SETTING_ACTION);
+    assert(settings_rows(h) == 3 && same(listed_label(h, 1), "Mode Dial"));
+    assert(settings_flags(h, listed_settings, 1) == SETTING_OWN_PAGE);
+    assert(same(listed_label(h, 2), "Save Settings") && settings_flags(h, listed_settings, 2) == SETTING_ACTION);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
 }
 
@@ -3683,6 +3707,98 @@ static void the_mode_dial_applies_a_user_mode_at_a_start(void)
     assert(dial_base());
 }
 
+/* The Mode Dial page of MENU (runtime/menu_dial.h) shows and sets what each
+   user mode does, and a new value applies at once while the dial is on that
+   user mode. */
+static void the_mode_dial_page_sets_what_each_user_mode_does(void)
+{
+    volatile u32 *h = test_header, *dials = h + GRKIT_HOST_RECIPE_DIAL / 4;
+    volatile u32 *state = services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_STATE);
+    const Setting *dial = &recipe_menu_settings[1];
+    u32 changes;
+    dial_reset();
+    recipe_name_set(h, 0, (const volatile u8 *)"Street");
+    recipe_name_set(h, 1, (const volatile u8 *)"Coarse");
+    recipe_name_set(h, 2, (const volatile u8 *)"Lost");
+    *state = 0;
+    /* The list: each user mode with its value, the cursor on U1, no mark,
+       and the row label as the title. */
+    assert(same(dial->label(h), "Mode Dial") && dial->values(h) == 3 && !dial->title(h));
+    assert(same(dial->value_text(h, 0), "U1: Street") && same(dial->value_text(h, 1), "U2: Coarse"));
+    assert(same(dial->value_text(h, 2), "U3: GRKit Off") && same(dial->value_text(h, 3), ""));
+    assert(dial->get(h) == DIAL_NO_MARK && dial->cursor(h) == 0);
+    /* A recipe that the camera does not list shows None, as the dial then
+       follows: a deleted recipe, and one that is off. */
+    dials[1] = 4242;
+    assert(same(dial->value_text(h, 1), "U2: None"));
+    dials[1] = 1002;
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] |= RECIPE_OFF;
+    assert(same(dial->value_text(h, 1), "U2: None"));
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] &= ~RECIPE_OFF;
+    /* MENU on the list returns as MENU does. */
+    assert(!dial->select(h, 0, SETTING_BACK) && !dial->select(h, 0, 3));
+    /* OK on U2: its values, with U2 as the title, the mark and the cursor
+       on its recipe. */
+    assert(dial->select(h, 0, 1) && *state == (DIAL_PAGE_SHOWN | 1U) && same(dial->title(h), "U2"));
+    assert(dial->values(h) == 5 && same(dial->value_text(h, 0), "None") && same(dial->value_text(h, 1), "GRKit Off"));
+    assert(same(dial->value_text(h, 2), "Street") && same(dial->value_text(h, 4), "Lost"));
+    assert(dial->get(h) == 3 && dial->cursor(h) == 3 && same(dial->value_text(h, 5), ""));
+    /* MENU returns to the list, with the cursor on U2, and changes nothing. */
+    changes = h[GRKIT_HOST_RECIPE_CHANGES / 4];
+    assert(dial->select(h, 0, SETTING_BACK) && *state == 2 && dial->cursor(h) == 1 && dial->get(h) == DIAL_NO_MARK);
+    assert(dials[1] == 1002 && h[GRKIT_HOST_RECIPE_CHANGES / 4] == changes);
+    /* OK on a value sets it, so the recipe file saves, and returns to the
+       list. The same value again changes nothing. */
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_RECIPE));
+    assert(dials[1] == 1001 && h[GRKIT_HOST_RECIPE_CHANGES / 4] == changes + 1 && *state == 2);
+    assert(same(dial->value_text(h, 1), "U2: Street"));
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_RECIPE));
+    assert(h[GRKIT_HOST_RECIPE_CHANGES / 4] == changes + 1);
+    /* None follows; a recipe without an ID gets one. */
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_NONE) && dials[1] == GRKIT_RECIPE_DIAL_FOLLOW);
+    *recipe_id_at(h, 2) = 0;
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_RECIPE + 2));
+    assert(dials[1] && dials[1] == *recipe_id_at(h, 2) && dials[1] != 1001 && dials[1] != 1002);
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_OFF) && dials[1] == GRKIT_RECIPE_DIAL_OFF);
+    /* While the dial is elsewhere, a value applies nothing. */
+    assert(dial_base());
+
+    /* The dial on U1: a new value of U1 applies at once, through the same
+       steps as a move of the dial. A value of another user mode does not. */
+    dial_reset();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 3 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    setting_store(h, 0, 1);
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_NONE));
+    assert(h[GRKIT_HOST_GRAIN / 4] == 3);
+    /* Another recipe for U1 applies on the settings of U1 and keeps the copy
+       of the base state. */
+    assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_RECIPE + 1));
+    assert(dials[0] == 1002 && h[GRKIT_HOST_GRAIN / 4] == 4 && GUIDE_STYLE == 1);
+    assert(h[GRKIT_HOST_STATE_HOLD / 4] == 1 && services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0] == 1);
+    /* GRKit Off turns the switch off; None restores the base state. */
+    assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_OFF));
+    assert(DIAL_SWITCH_OFF == 1 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_NONE));
+    assert(dial_base());
+    /* From None, a recipe takes the copy of the base state, and P restores
+       it. */
+    assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_RECIPE));
+    assert(h[GRKIT_HOST_GRAIN / 4] == 3 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    dial_to(DIAL_P);
+    dial_fire();
+    assert(dial_base());
+    /* With the Recipes module Off, a new value of U2 applies nothing: the
+       core leaves the user mode, as at a move of the dial. */
+    dial_to(DIAL_U(2));
+    dial_fire();
+    DIAL_RECIPES_OFF = 1;
+    manage_off_changed(h);
+    assert(dial->select(h, 0, 1) && dial->select(h, 0, DIAL_VALUE_RECIPE));
+    assert(dials[1] == 1001 && h[GRKIT_HOST_GRAIN / 4] == 1 && !h[GRKIT_HOST_STATE_HOLD / 4]);
+}
+
 static void record_index_finds_each_record_start(void)
 {
     reset();
@@ -4077,5 +4193,6 @@ int main(void)
     the_mode_dial_follows_without_a_recipe_that_applies();
     the_mode_dial_belongs_to_the_recipes_module();
     the_mode_dial_applies_a_user_mode_at_a_start();
+    the_mode_dial_page_sets_what_each_user_mode_does();
     return 0;
 }

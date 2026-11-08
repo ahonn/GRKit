@@ -3,7 +3,8 @@
 /* The mode dial: what the user modes U1 to U3 do (GRKIT_HOST_RECIPE_DIAL,
    which the recipe file keeps). A user mode follows (GRKIT_RECIPE_DIAL_FOLLOW,
    and an ID that no recipe that is on has), turns GRKit off
-   (GRKIT_RECIPE_DIAL_OFF), or applies a recipe by its ID. A user mode that
+   (GRKIT_RECIPE_DIAL_OFF), or applies a recipe by its ID. The Mode Dial page
+   of MENU sets them (runtime/menu_dial.h). A user mode that
    does not follow is bound. The dial is part of CORE.RECIPE: its hook
    installs with the Recipes module (point mode.dial), also when the module
    loads stopped, and it acts while the Enable of that module is On. The
@@ -184,6 +185,11 @@ static void dial_settle(volatile u32 *h,u32 u) {
     dial_word(h,DIAL_AT)[0]=u;
     if(u && dial_enabled(h)) dial_enter(h,u);
     else dial_leave(h);
+}
+/* What user mode u (1 to 3) does changed (runtime/menu_dial.h): while the
+   core acted on the dial there last, the new value applies at once. */
+static void dial_assigned(volatile u32 *h,u32 u) {
+    if(dial_word(h,DIAL_AT)[0]==u) dial_settle(h,u);
 }
 /* (Re)start the timer of the dial. */
 static void dial_arm(volatile u32 *h,u32 ms) {

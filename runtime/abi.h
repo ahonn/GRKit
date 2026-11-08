@@ -877,6 +877,9 @@
 /* Enable at Start, which decides the switch at each start: its MENU row, then
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
 #define TEXT_START 61
-#define GRKIT_TEXT_STRINGS 63
+/* The Mode Dial row of the Recipes page of MENU, then the values of a user
+   mode besides a recipe: None and GRKit Off. */
+#define TEXT_DIAL 63
+#define GRKIT_TEXT_STRINGS 66
 
 #endif
