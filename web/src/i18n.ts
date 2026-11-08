@@ -271,7 +271,7 @@ const en = {
   modulesText: {
     filmLook: 'The film looks below, with live-view preview.',
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos. The screen stays 3:2 and dims the rest.',
-    crop: 'Crop photos to 35, 40, or 50 mm, or show a 70 or 90 mm frame. GR IIIx has 50 to 128 mm.',
+    crop: 'Crop photos to 35, 40, 50, 70, or 90 mm. GR IIIx has 50 to 128 mm.',
     guides: 'Thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry inside the Framing area.',
     dateStamp: 'A date at the bottom right of photos, with classic, GR1s dot-matrix, or GR II digits: orange on color photos, white on black-and-white photos.',
     glow: 'Bloom and film halation with independent strengths, used alone or together. No live-view preview.',
@@ -805,7 +805,7 @@ const zhHans: Strings = {
   modulesText: {
     filmLook: '使用下方选择的胶片风格，可在实时显示中预览。',
     framing: '拍摄 XPan 65:24、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片。显示屏保持 3:2，画幅外的区域变暗。',
-    crop: '把照片裁切为 35、40 或 50mm，或只显示 70、90mm 的取景框。GR IIIx 为 50 至 128mm。',
+    crop: '把照片裁切为 35、40、50、70 或 90mm。GR IIIx 为 50 至 128mm。',
     guides: '在画幅内显示三分法、中心、黄金分割、对角线、黄金螺线或动态对称。',
     dateStamp: '在照片右下角加印日期，字体可选经典、GR1s 点阵或 GR II：彩色照片为橙色，黑白照片为白色。',
     glow: '柔光与胶片光晕，可独立调节或叠加使用，无法实时预览。',
@@ -1282,7 +1282,7 @@ const zhHant: Strings = {
   modulesText: {
     filmLook: '使用下方選擇的底片風格，可在實時顯示中預覽。',
     framing: '拍攝 XPan 65:24、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片。顯示屏維持 3:2，構圖框外的區域變暗。',
-    crop: '把照片裁切為 35、40 或 50mm，或只顯示 70、90mm 的取景框。GR IIIx 為 50 至 128mm。',
+    crop: '把照片裁切為 35、40、50、70 或 90mm。GR IIIx 為 50 至 128mm。',
     guides: '在構圖框內顯示三分法、中心、黃金分割、對角線、黃金螺旋或動態對稱。',
     dateStamp: '在照片右下角加印日期，字體可選經典、GR1s 點陣或 GR II：彩色照片為橘色，黑白照片為白色。',
     glow: '柔光與底片光暈，可獨立調整或疊加使用，實時顯示中無法預覽。',
@@ -1763,7 +1763,7 @@ const ja: Strings = {
   modulesText: {
     filmLook: '下で選んだフィルムルックを使います。ライブビューでプレビューできます。',
     framing: 'XPan 65:24、2.35:1、16:9、4:3、5:4、7:6、1:1 の写真を撮影します。撮影画面は 3:2 のままで、範囲外が暗くなります。',
-    crop: '写真を 35、40、50mm にクロップするか、70、90mm の枠だけを表示します。GR IIIx では 50〜128mm です。',
+    crop: '写真を 35、40、50、70、90mm にクロップします。GR IIIx では 50〜128mm です。',
     guides: 'フレーミングの範囲内に、9分割、画面中央、黄金比、対角線、黄金螺旋、ダイナミックシンメトリーのいずれかを表示します。',
     dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s のドットマトリクス、GR II から選べます。カラー写真ではオレンジ色、白黒写真では白になります。',
     glow: 'ブルームとハレーションを個別に調整・併用できます。ライブビューには反映されません。',
@@ -2241,7 +2241,7 @@ const ko: Strings = {
   modulesText: {
     filmLook: '아래에서 고른 필름 룩을 라이브 뷰 미리 보기와 함께 씁니다.',
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1 사진을 찍습니다. 촬영 화면은 3:2 그대로이고, 범위 밖은 어둡게 표시됩니다.',
-    crop: '사진을 35, 40, 50mm로 크롭하거나 70, 90mm 프레임만 표시합니다. GR IIIx는 50~128mm입니다.',
+    crop: '사진을 35, 40, 50, 70, 90mm로 크롭합니다. GR IIIx는 50~128mm입니다.',
     guides: '프레이밍 범위 안에 9분할, 화면 중앙, 황금비, 대각선, 황금 나선, 동적 대칭 중 하나를 표시합니다.',
     dateStamp: '사진 오른쪽 아래에 날짜를 넣습니다. 글꼴은 클래식, GR1s 도트 매트릭스, GR II 중에서 고릅니다. 컬러 사진에는 주황색, 흑백 사진에는 흰색으로 들어갑니다.',
     glow: '블룸과 필름 헐레이션의 강도를 따로 정하고, 하나만 쓰거나 함께 쓸 수 있습니다. 라이브 뷰에서는 미리 볼 수 없습니다.',

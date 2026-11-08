@@ -1442,3 +1442,26 @@ static u32 develop_text(volatile u32 *h,u32 id) {
     return aspect_text(h,id);
 }
 #endif
+#ifdef CROP_NATIVE_BITS
+/* The camera's crop button (runtime/menu.S: crop_button). With CORE.CROP
+   in use, the button steps it to its next crop that ADJ shows, then to Off,
+   and sets the camera's crop factor at once. Returns 0 without CORE.CROP,
+   so that the camera steps its own crops. */
+u32 crop_button_press(void) {
+    volatile u32 *h=menu_header();
+    u32 slot, hidden=0, value, i;
+    if(!CAPABILITY_USED(h,GRKIT_CORE_CROP)) return 0;
+    for(slot=0;slot<module_pages(h);++slot) {
+        menu_page(h,slot);
+        if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_CROP && !choice_group(h)) { hidden=choice_hidden(h); break; }
+    }
+    value=crop_selection(h);
+    for(i=0;i<GRKIT_CORE_CROP_VALUES;++i) {
+        if(++value>=GRKIT_CORE_CROP_VALUES) value=0;
+        if(!value || !(hidden>>value&1U)) break;
+    }
+    setting_store(h,GRKIT_CORE_CROP,value);
+    crop_sync(h,aspect_native());
+    return 1;
+}
+#endif

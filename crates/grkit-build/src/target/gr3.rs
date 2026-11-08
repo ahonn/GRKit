@@ -7,7 +7,7 @@ use super::Family;
 use crate::components::{
     b, bl, bl_shared, HookSpec,
     Part::{Framing, Menu, Processing},
-    Point::{CaptureAspect, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
+    Point::{CaptureAspect, CaptureCrop, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
 };
 
 pub const FAMILY: Family = Family {
@@ -26,6 +26,8 @@ const GROUPS: &[&[HookSpec]] = &[
     common::MENU,
     common::VIEWFINDER,
     common::PICTURE,
+    common::CROP,
+    CROP,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
     GRAIN,
@@ -43,6 +45,11 @@ const PROCESSING: &[HookSpec] = &[
     b("module_gamma_flag", Processing, Tuning),
     bl("module_gamma_curves", Processing, Tuning),
 ];
+
+/// GetImageCrop after its first instruction: GR III maps only its native
+/// crop factors to the maps of their crop step, and a crop factor of
+/// CORE.CROP takes the maps of its step (`runtime/framing.S`).
+const CROP: &[HookSpec] = &[b("crop_image_crop", Framing, CaptureCrop)];
 
 /// The icon width, height, and limit checks, and the descriptor load.
 const ICONS: &[HookSpec] = &[

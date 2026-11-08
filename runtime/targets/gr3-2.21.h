@@ -14,6 +14,10 @@
 #define FW_SETTINGS FIRMWARE(0x5320d6f4)
 #define FW_STILL_ASPECT_GET FIRMWARE(0x532479e8)
 #define FW_STILL_ASPECT_SET FIRMWARE(0x53254d2c)
+/* The crop factor of CORE.CROP (runtime/crop.h): its getter and setter on
+   the camera settings (FW_SETTINGS), with the factor as a float in s0. */
+#define FW_CROP_GET FIRMWARE(0x532479f4)
+#define FW_CROP_SET FIRMWARE(0x53254e0c)
 /* The project type that the RTOS sets at boot: 1 on GR III, 0 on GR IIIx
    (2 before it is set). It takes no lock. */
 #define FW_PROJECT_TYPE FIRMWARE(0x536b7ac4)

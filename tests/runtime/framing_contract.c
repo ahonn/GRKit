@@ -129,6 +129,12 @@ static uint32_t profile_core_id;
 /* A layer bound to CORE.CROP: it records the surface that the core gives
    it. The module test of Crop checks its mask. */
 #define TEST_CROP_PAINT 0x5e000041U
+/* The camera's crop factor (runtime/crop.h): float bits, the setter calls,
+   and the factor in 1/65536 that the frames take. */
+static uint32_t native_crop_bits = 0x3f800000U, native_crop_sets, native_crop_q16 = 65536U;
+#define CROP_NATIVE_BITS() (native_crop_bits)
+#define CROP_NATIVE_SET(bits) (native_crop_bits = (bits), ++native_crop_sets)
+#define CROP_NATIVE_Q16() (native_crop_q16)
 static void test_module_paint(uint32_t address, const void *surface, uint32_t value);
 #define MODULE_PAINT(address,surface,value) test_module_paint(address,surface,value)
 static uint32_t level_updates, level_updated;
@@ -842,6 +848,15 @@ static void assert_box(const u16 *box, u32 left, u32 top, u32 right, u32 bottom)
 {
     assert(box[0] == left && box[1] == top && box[2] == right && box[3] == bottom);
 }
+/* The frame of `crop` in `outer` in a live view of the factor `native`, as
+   runtime/crop.h makes it, which the layers get. */
+static void assert_frame(const u16 *box, u32 left, u32 top, u32 right, u32 bottom, u32 crop, u32 native)
+{
+    const u16 outer[4] = {(u16)left, (u16)top, (u16)right, (u16)bottom};
+    u16 frame[4];
+    assert(crop_box(outer, crop_scale(crop, native), frame));
+    assert_box(box, frame[0], frame[1], frame[2], frame[3]);
+}
 static void crop_frames_the_layers(void)
 {
     /* 50 mm in the full 3:2 view: 28/50 of each side, at the center. */
@@ -853,16 +868,19 @@ static void crop_frames_the_layers(void)
     crop_calls = 0;
     framing_paint(TEST_CANVAS, TEST_BITMAP);
     assert(crop_calls == 1 && crop_area == 3 && crop_value == 3);
+    assert_frame(crop_box_seen, 0, 0, 720, 480, 3, 65536);
+    assert_frame(guides_box_seen, 0, 0, 720, 480, 3, 65536);
+#ifdef GRKIT_TARGET_GR3_210
     assert_box(crop_box_seen, 158, 105, 561, 374);
-    assert_box(guides_box_seen, 158, 105, 561, 374);
+#endif
     /* Inside the XPan crop of Framing, the frame is 28/50 of that area. */
     reset();
     add_crop_layer();
     header[GRKIT_HOST_CROP/4] = 3;
     GUIDE_STYLE = 1;
     framing_paint(TEST_CANVAS, TEST_BITMAP);
-    assert_box(crop_box_seen, 158, 165, 561, 314);
-    assert_box(guides_box_seen, 158, 165, 561, 314);
+    assert_frame(crop_box_seen, 0, 107, 720, 373, 3, 65536);
+    assert_frame(guides_box_seen, 0, 107, 720, 373, 3, 65536);
     /* Off, or a crop without a module that uses it, frames nothing: the
        crop layer does not paint, and Guides divide the whole area. */
     reset();
@@ -886,12 +904,70 @@ static void crop_frames_the_layers(void)
     header[GRKIT_HOST_FRAME_PREVIEW_ADJ/4] = TEST_OWNER;
     framing_paint(TEST_CANVAS, TEST_BITMAP);
     assert(crop_calls == 1 && crop_area == 5);
-    assert_box(crop_box_seen, 248, 165, 472, 314);
-    assert_box(guides_box_seen, 248, 165, 472, 314);
+    assert_frame(crop_box_seen, 0, 0, 720, 480, 5, 65536);
+    assert_frame(guides_box_seen, 0, 0, 720, 480, 5, 65536);
+}
+/* In 3:2 without a Framing ratio, the camera crops: the bind sets the
+   camera's factor of 35, 40, or 50 mm, and arms the factor of a 70 or 90 mm
+   shot. Frame Only, a Framing ratio, or Off return a factor that the core
+   set to Off, and a crop of the camera menu stays. */
+static void crop_sets_the_camera_factor(void)
+{
+    static const u8 lives[] = {0, 1, 2, 3, 3, 3};
+    for (u32 crop = 1; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
+        u32 native = crop_factors[lives[crop]], shot = crop > 3 ? crop_factors[crop] : 0;
+        reset();
+        header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+        add_crop_layer();
+        native_crop_bits = 0x3f800000U; native_crop_sets = 0;
+        header[GRKIT_HOST_CROP/4] = crop;
+        framing_bind(TEST_OWNER);
+        assert(native_crop_bits == native && native_crop_sets == 1);
+        assert(header[GRKIT_HOST_CROP_NATIVE/4] == native && header[GRKIT_HOST_CROP_SHOT/4] == shot);
+        framing_bind(TEST_OWNER);
+        assert(native_crop_sets == 1);
+        header[GRKIT_HOST_CROP_MODE/4] = 1;
+        header[GRKIT_HOST_CAPABILITIES/4] |= GRKIT_CORE_CROP_MODE_BIT;
+        framing_bind(TEST_OWNER);
+        assert(native_crop_bits == 0x3f800000U && header[GRKIT_HOST_CROP_NATIVE/4] == 0 && header[GRKIT_HOST_CROP_SHOT/4] == 0);
+    }
+#ifdef GRKIT_TARGET_GR3_210
+    /* GR III: 35, 40, and 50 mm are 1.25, 1.4286, and 1.7857; 70 and 90 mm
+       shoot at 2.5 and 3.2143. */
+    assert(crop_factors[1] == 0x3fa00000U && crop_factors[2] == 0x3fb6db6eU && crop_factors[3] == 0x3fe49249U);
+    assert(crop_factors[4] == 0x40200000U && crop_factors[5] == 0x404db6dbU);
+#endif
+    /* A Framing ratio: the frame only, and the camera keeps its own crop. */
+    reset();
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 2;
+    native_crop_bits = 0x3fa00000U; native_crop_sets = 0;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_sets == 0 && native_crop_bits == 0x3fa00000U);
+    /* 70 mm in the live view of the 50 mm factor: the frame is 50/70 of
+       it. 50 mm there has no frame. */
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 4;
+    GUIDE_STYLE = 1;
+    native_crop_q16 = (u32)(((unsigned long long)crop_scales[0] << 16) / crop_scales[3]);
+    crop_calls = 0;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 1);
+    assert_frame(crop_box_seen, 0, 0, 720, 480, 4, native_crop_q16);
+    assert(crop_box_seen[2] - crop_box_seen[0] > 500 && crop_box_seen[2] - crop_box_seen[0] < 530);
+    header[GRKIT_HOST_CROP/4] = 3;
+    crop_calls = 0;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 0);
+    assert_box(guides_box_seen, 0, 0, 720, 480);
+    native_crop_q16 = 65536U;
 }
 int main(void)
 {
     crop_frames_the_layers();
+    crop_sets_the_camera_factor();
     native_guides_follow_the_photo_area();
     guides_follow_composition_frames();
     status_icons_follow_enable_strength_and_disp();

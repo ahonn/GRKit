@@ -32,6 +32,10 @@
 #define FW_CAPTURE_ASPECT_GET FIRMWARE(0x537785f8)
 #define FW_STILL_ASPECT_RESEND FIRMWARE(0x53285744)
 #define FW_STILL_ASPECT_SET FIRMWARE(0x532fc78c)
+/* The crop factor of CORE.CROP (runtime/crop.h): its getter and setter on
+   the camera settings (FW_SETTINGS), with the factor as a float in s0. */
+#define FW_CROP_GET FIRMWARE(0x5329f7e0)
+#define FW_CROP_SET FIRMWARE(0x532fc928)
 /* The size classifier is 0x533b0144. */
 
 /* Allocation and the vector helpers of View children. */

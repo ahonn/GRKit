@@ -32,6 +32,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::VIEWFINDER,
     LIVE_VIEW,
     common::PICTURE,
+    common::CROP,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
     GRAIN,

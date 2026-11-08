@@ -357,6 +357,12 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the
     /// frame only.
     HOST_CROP_MODE: 4;
+    /// The native crop factor that the core set for CORE.CROP, as float
+    /// bits, or 0 while the camera keeps its own (runtime/crop.h).
+    HOST_CROP_NATIVE: 4;
+    /// The crop factor of the next shot, as float bits, where it is longer
+    /// than the native factor of the live view (70 and 90 mm), or 0.
+    HOST_CROP_SHOT: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
