@@ -140,6 +140,11 @@ static volatile u32 *recipe_at(volatile u32 *h,u32 slot) {
 static volatile u32 *recipe_name_at(volatile u32 *h,u32 slot) {
     return h+GRKIT_HOST_RECIPE_NAMES/4+slot*GRKIT_RECIPE_NAME_WORDS;
 }
+/* The ID of recipe `slot` (GRKIT_HOST_RECIPE_IDS): it stays with the recipe
+   when the recipe moves, so a reference to the recipe holds it. */
+static volatile u32 *recipe_id_at(volatile u32 *h,u32 slot) {
+    return h+GRKIT_HOST_RECIPE_IDS/4+slot;
+}
 _Static_assert(GRKIT_RECIPE_NAME_CHARS==4U*GRKIT_RECIPE_NAME_WORDS,"four characters in each name word");
 /* The length of the name of recipe `slot`, 0 for the automatic name: the
    characters up to the first 0. A name with a character that is not
@@ -449,20 +454,39 @@ static void recipe_clear(volatile u32 *w) {
     u32 i;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=0;
 }
-/* Move slots first + 1 .. first + n - 1 down by one and clear the last.
-   The names of the recipes move with them. */
+/* Move slot `from` to slot `to`, both recipes or both undo steps. A recipe
+   takes its name and its ID with it: each part of a recipe that the header
+   keeps by slot moves here. */
+static void recipe_slot_move(volatile u32 *h,u32 to,u32 from) {
+    u32 w;
+    recipe_copy(recipe_at(h,to),recipe_at(h,from));
+    if(to>=GRKIT_RECIPE_SLOTS) return;
+    for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,to)[w]=recipe_name_at(h,from)[w];
+    *recipe_id_at(h,to)=*recipe_id_at(h,from);
+}
+/* Empty slot `slot`: its words, and for a recipe its name and ID. */
+static void recipe_slot_clear(volatile u32 *h,u32 slot) {
+    u32 w;
+    recipe_clear(recipe_at(h,slot));
+    if(slot>=GRKIT_RECIPE_SLOTS) return;
+    for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,slot)[w]=0;
+    *recipe_id_at(h,slot)=0;
+}
+/* Move slots first + 1 .. first + n - 1 down by one and clear the last. */
 static void recipe_close_gap(volatile u32 *h,u32 first,u32 n) {
-    u32 i, w;
-    for(i=first;i+1<n;++i) {
-        recipe_copy(recipe_at(h,i),recipe_at(h,i+1));
-        if(i+1<GRKIT_RECIPE_SLOTS)
-            for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,i)[w]=recipe_name_at(h,i+1)[w];
-    }
-    if(!n) return;
-    recipe_clear(recipe_at(h,n-1));
-    if(n-1<GRKIT_RECIPE_SLOTS) for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,n-1)[w]=0;
+    u32 i;
+    for(i=first;i+1<n;++i) recipe_slot_move(h,i,i+1);
+    if(n) recipe_slot_clear(h,n-1);
 }
 
+/* The ID of a new recipe: the next ID, which then grows. INSTALL keeps the
+   next ID above each ID of the recipes (runtime/install_recipes.h). */
+static u32 recipe_take_id(volatile u32 *h) {
+    u32 id=h[GRKIT_HOST_RECIPE_NEXT_ID/4];
+    if(!id || id>GRKIT_RECIPE_ID_MAX) id=1;
+    h[GRKIT_HOST_RECIPE_NEXT_ID/4]=id<GRKIT_RECIPE_ID_MAX ? id+1U : GRKIT_RECIPE_ID_MAX;
+    return id;
+}
 /* Two recipes have the same name base: the same look and effect, or the
    same native type (runtime/recipe_page.h names them). */
 static u32 recipe_same_base(const volatile u32 *a,const u32 *b) {
@@ -478,7 +502,7 @@ static u32 recipe_same_base(const volatile u32 *a,const u32 *b) {
    by one. The first recipe of a look has no number, the next one the
    largest number of that look plus 1 (2 after the first). */
 static u32 recipe_save(volatile u32 *h) {
-    u32 n=recipe_count(h), e=recipe_entries(h), w[GRKIT_RECIPE_WORDS], i, k, number=0, other;
+    u32 n=recipe_count(h), e=recipe_entries(h), w[GRKIT_RECIPE_WORDS], i, number=0, other;
     if(n>=GRKIT_RECIPE_SLOTS || e>=GRKIT_RECIPE_ON_MAX) return RECIPE_FULL;
     /* A whole look: without the exposure settings, and with Off for each
        module that does not run. */
@@ -493,13 +517,11 @@ static u32 recipe_save(volatile u32 *h) {
     }
     if(number) number=number<RECIPE_NUMBER_MAX ? number+1U : RECIPE_NUMBER_MAX;
     w[0]|=number<<RECIPE_NUMBER_SHIFT;
-    for(i=n;i>e;--i) {
-        recipe_copy(recipe_at(h,i),recipe_at(h,i-1U));
-        for(k=0;k<GRKIT_RECIPE_NAME_WORDS;++k) recipe_name_at(h,i)[k]=recipe_name_at(h,i-1U)[k];
-    }
+    for(i=n;i>e;--i) recipe_slot_move(h,i,i-1U);
+    /* A new recipe has the automatic name and the next ID. */
+    recipe_slot_clear(h,e);
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,e)[i]=w[i];
-    /* A new recipe has the automatic name. */
-    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,e)[i]=0;
+    *recipe_id_at(h,e)=recipe_take_id(h);
     GRKIT_RECIPES_CHANGED(h);
     return e;
 }

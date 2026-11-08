@@ -82,6 +82,11 @@ export interface Recipe {
   hidden: boolean;
   /** The number after the automatic name of a recipe without a name, 0 for none. */
   number: number;
+  /**
+   * The ID of the recipe on the card, or 0 for a recipe that the card does not hold yet. The card
+   * keeps the ID with the recipe, so the user modes of the mode dial keep their recipes.
+   */
+  id: number;
 }
 
 /**
@@ -133,13 +138,21 @@ export async function readRecipeFile(text: string, family: Family): Promise<Reci
 }
 
 /**
- * The text of the recipe file for `recipes` of the camera line `family`, which replaces
- * `previous`. It keeps the import record of `previous` and each recipe of it that
- * `readRecipeFile` leaves out, so a write never deletes a recipe that the site cannot show.
+ * The recipe file for `recipes` of the camera line `family`, which replaces `previous`: its text,
+ * and the recipes in their order with the ID that the file gives each. It keeps the import record
+ * and the user modes of the mode dial of `previous`, and each recipe of it that `readRecipeFile`
+ * leaves out, so a write never deletes a recipe that the site cannot show.
  */
-export async function writeRecipeFile(recipes: readonly Recipe[], family: Family, previous: string): Promise<string> {
+export async function writeRecipeFile(
+  recipes: readonly Recipe[],
+  family: Family,
+  previous: string,
+): Promise<{ text: string; recipes: Recipe[] }> {
   const wasm = await loadWasm();
-  return wasm.writeRecipeFile(JSON.stringify(recipes), family, previous);
+  return JSON.parse(wasm.writeRecipeFile(JSON.stringify(recipes), family, previous)) as {
+    text: string;
+    recipes: Recipe[];
+  };
 }
 
 /** The automatic name of a recipe: its look and its number, or "Recipe". */
@@ -225,8 +238,8 @@ export function cardNeedsChoice(library: readonly Recipe[], card: readonly Recip
   return library.length > 0 && !sameRecipes(library, card);
 }
 
-/** The settings of a recipe, without its place on the camera: on or off, ADJ, and its number. */
-const settings = (recipe: Recipe) => canonical({ ...recipe, enabled: true, hidden: false, number: 0 });
+/** The settings of a recipe, without its place on the camera: on or off, ADJ, its number, and its ID. */
+const settings = (recipe: Recipe) => canonical({ ...recipe, enabled: true, hidden: false, number: 0, id: 0 });
 
 /** Whether the library holds a recipe with the settings and the name of `recipe`. */
 export function holdsRecipe(library: readonly Recipe[], recipe: Recipe): boolean {
@@ -260,7 +273,7 @@ export function presetRows(
  * shown in ADJ. The camera chooses the recipes that ADJ shows.
  */
 export function withPreset(library: readonly Recipe[], recipe: Recipe): Recipe[] {
-  return cameraOrder([...library, { ...recipe, enabled: onCount(library) < ON_MAX, hidden: false, number: 0 }]);
+  return cameraOrder([...library, { ...recipe, enabled: onCount(library) < ON_MAX, hidden: false, number: 0, id: 0 }]);
 }
 
 /** Whether two libraries hold the same recipes in the same order. */

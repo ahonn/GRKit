@@ -287,6 +287,38 @@ static void recipes_that_are_off_stay_for_the_site(void)
     assert(recipe_save(header) == RECIPE_FULL && recipe_entries(header) == 2);
 }
 
+/* Each recipe keeps its ID and its name when Save and Delete move the
+   recipes, and a new recipe takes the next ID, which only grows. */
+static void each_recipe_keeps_its_id(void)
+{
+    reset();
+    select_effect(0);
+    assert(recipe_save(header) == 0 && *recipe_id_at(header, 0) == 1);
+    /* Two recipes that are off, from the site, with IDs 40 and 41. */
+    for (u32 slot = 1; slot < 3; ++slot) {
+        recipe_at(header, slot)[0] = RECIPE_USED | RECIPE_LOOK_OFF;
+        recipe_at(header, slot)[RECIPE_MODULE_WORD] = RECIPE_OFF;
+        *recipe_id_at(header, slot) = 39 + slot;
+    }
+    recipe_name_set(header, 2, (const u8 *)"B");
+    /* A save goes after the recipe that is on: the others move down with
+       their IDs and names. */
+    select_effect(1);
+    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == 2);
+    assert(*recipe_id_at(header, 2) == 40 && *recipe_id_at(header, 3) == 41 && recipe_name_char(header, 3, 0) == 'B');
+    assert(header[GRKIT_HOST_RECIPE_NEXT_ID / 4] == 3);
+    /* Delete moves them up again and clears the last slot. */
+    recipe_delete(header, 0);
+    assert(*recipe_id_at(header, 0) == 2 && *recipe_id_at(header, 1) == 40 && *recipe_id_at(header, 2) == 41);
+    assert(recipe_name_char(header, 2, 0) == 'B' && !*recipe_id_at(header, 3) && !recipe_name_length(header, 3));
+    /* A deleted ID does not come back. */
+    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == 3);
+    /* The largest ID stays the next one. */
+    header[GRKIT_HOST_RECIPE_NEXT_ID / 4] = GRKIT_RECIPE_ID_MAX;
+    assert(recipe_save(header) == 2 && *recipe_id_at(header, 2) == GRKIT_RECIPE_ID_MAX);
+    assert(header[GRKIT_HOST_RECIPE_NEXT_ID / 4] == GRKIT_RECIPE_ID_MAX);
+}
+
 /* Apply writes the Fn adjustments before it selects the effect, counts the
    change for the live view, and stores the settings before it as an undo
    step. */
@@ -1103,6 +1135,7 @@ int main(void)
     save_holds_only_running_capabilities();
     save_stops_when_full();
     recipes_that_are_off_stay_for_the_site();
+    each_recipe_keeps_its_id();
     apply_sets_the_look_and_stores_an_undo_step();
     undo_keeps_the_newest_steps();
     missing_effect_changes_nothing();

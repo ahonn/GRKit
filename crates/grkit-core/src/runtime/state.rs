@@ -2,8 +2,8 @@
 //! and the largest file.
 
 use super::{
-    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_NAME_WORDS, RECIPE_SLOTS,
-    RECIPE_WORDS,
+    MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_DIAL_POSITIONS,
+    RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS,
 };
 use crate::capabilities::{self, StateFile};
 
@@ -40,21 +40,27 @@ pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
 /// (`StateFile::Recipes`). Each word of a recipe has its own range of keys:
 /// word w of recipe n has the key ID this base + w * `RECIPE_KEY_STRIDE` + n.
 /// Word w of the name of recipe n has `RECIPE_NAME_KEY_BASE` + w *
-/// `RECIPE_KEY_STRIDE` + n, and the hash of the imported package library
-/// `RECIPE_IMPORTED_KEY`. A later word of a recipe or a name gets the next
-/// range, so the keys of a saved file stay valid. The header holds the words
-/// recipe by recipe (`HOST_RECIPES`, `HOST_RECIPE_NAMES`, then
-/// `HOST_RECIPE_IMPORTED`). A word that is 0 has no entry. The undo steps are
-/// not saved.
+/// `RECIPE_KEY_STRIDE` + n. A later word of a recipe or a name gets the next
+/// range, so the keys of a saved file stay valid. The words after the names
+/// have one key each from `RECIPE_IMPORTED_KEY`, in the order of the header:
+/// the hash of the imported package library, the ID of each recipe, the
+/// assignment of each user mode of the mode dial, and the next ID. The header
+/// holds the words recipe by recipe (`HOST_RECIPES`, `HOST_RECIPE_NAMES`,
+/// then `HOST_RECIPE_IMPORTED` to `HOST_RECIPE_NEXT_ID`). A word that is 0
+/// has no entry. The undo steps are not saved.
 pub const RECIPE_KEY_BASE: u32 = 991_000_000;
 pub const RECIPE_KEY_STRIDE: u32 = 100;
 pub const RECIPE_NAME_KEY_BASE: u32 = RECIPE_KEY_BASE + 50 * RECIPE_KEY_STRIDE;
 pub const RECIPE_IMPORTED_KEY: u32 = RECIPE_KEY_BASE + 90 * RECIPE_KEY_STRIDE;
+pub const RECIPE_ID_KEY_BASE: u32 = RECIPE_IMPORTED_KEY + 1;
+pub const RECIPE_DIAL_KEY_BASE: u32 = RECIPE_ID_KEY_BASE + RECIPE_SLOTS as u32;
+pub const RECIPE_NEXT_ID_KEY: u32 = RECIPE_DIAL_KEY_BASE + RECIPE_DIAL_POSITIONS as u32;
+const _: () = assert!(RECIPE_NEXT_ID_KEY < RECIPE_IMPORTED_KEY + RECIPE_KEY_STRIDE);
 const _: () = assert!(RECIPE_SLOTS <= RECIPE_KEY_STRIDE as usize);
 const _: () = assert!(RECIPE_WORDS <= 50 && RECIPE_NAME_WORDS <= 40);
 
 /// The state key of header word `index` of the recipe run (`HOST_RECIPES`,
-/// the names, then the import hash).
+/// the names, then the words from the import hash to the next ID).
 pub fn recipe_key(index: usize) -> u32 {
     let words = RECIPE_WORDS * RECIPE_SLOTS;
     if index < words {
@@ -67,20 +73,30 @@ pub fn recipe_key(index: usize) -> u32 {
             + (name % RECIPE_NAME_WORDS) as u32 * RECIPE_KEY_STRIDE
             + (name / RECIPE_NAME_WORDS) as u32
     } else {
-        RECIPE_IMPORTED_KEY
+        RECIPE_IMPORTED_KEY + (index - words - RECIPE_NAME_WORDS * RECIPE_SLOTS) as u32
     }
 }
 /// The largest recipe key.
 pub fn recipe_key_max() -> u32 {
     (0..RECIPE_STATE_WORDS).map(recipe_key).max().unwrap()
 }
-/// The number of saved recipe words: the recipes, their names, and the
-/// import hash.
-pub const RECIPE_STATE_WORDS: usize =
-    RECIPE_WORDS * RECIPE_SLOTS + RECIPE_NAME_WORDS * RECIPE_SLOTS + 1;
+/// The number of saved recipe words: the recipes, their names, the import
+/// hash, the IDs, the user modes of the mode dial, and the next ID.
+pub const RECIPE_STATE_WORDS: usize = RECIPE_WORDS * RECIPE_SLOTS
+    + RECIPE_NAME_WORDS * RECIPE_SLOTS
+    + 1
+    + RECIPE_SLOTS
+    + RECIPE_DIAL_POSITIONS
+    + 1;
 /// The largest value of a recipe word. Each word holds at most 29 bits, and
 /// a name word 28 bits.
 pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
+/// The IDs of recipes: 1 to `RECIPE_ID_MAX` (`abi::HOST_RECIPE_IDS`).
+pub const RECIPE_ID_MAX: u32 = RECIPE_VALUE_MAX - 1;
+/// What a user mode of the mode dial does (`abi::HOST_RECIPE_DIAL`): the
+/// camera stays as it is (0), GRKit is off, or the ID of a recipe applies.
+pub const RECIPE_DIAL_FOLLOW: u32 = 0;
+pub const RECIPE_DIAL_OFF: u32 = RECIPE_VALUE_MAX;
 /// The largest packed adjustment value: 9^9 - 1.
 pub const PARAMETER_VALUE_MAX: u32 = 387_420_488;
 /// The number of adjustments of an effect.
@@ -278,6 +294,13 @@ mod tests {
             recipe_key(RECIPE_WORDS * RECIPE_SLOTS + 7 * RECIPE_NAME_WORDS + 3),
             991_005_307
         );
-        assert_eq!(recipe_key(RECIPE_STATE_WORDS - 1), RECIPE_IMPORTED_KEY);
+        let tail = RECIPE_WORDS * RECIPE_SLOTS + RECIPE_NAME_WORDS * RECIPE_SLOTS;
+        assert_eq!(recipe_key(tail), RECIPE_IMPORTED_KEY);
+        assert_eq!(recipe_key(tail + 1 + 5), RECIPE_ID_KEY_BASE + 5);
+        assert_eq!(
+            recipe_key(tail + 1 + RECIPE_SLOTS + 2),
+            RECIPE_DIAL_KEY_BASE + 2
+        );
+        assert_eq!(recipe_key(RECIPE_STATE_WORDS - 1), RECIPE_NEXT_ID_KEY);
     }
 }

@@ -4,8 +4,10 @@
    includes it once, after the helpers, the state parser, and the effects.
 
    - The recipe file (GRKIT/RECIPES.TXT, or RECIPES.TMP that a save cut by
-     the power left) holds the recipes, their names, and the hash of the last
-     package library that INSTALL imported (grkit_core::runtime::recipe_key).
+     the power left) holds the recipes, their names and IDs, the hash of the
+     last package library that INSTALL imported, the user modes of the mode
+     dial, and the next ID (grkit_core::runtime::recipe_key). INSTALL gives
+     an ID to each recipe without one, such as an added recipe.
      INSTALL restores them into the header, also without a module that uses
      CORE.RECIPE, so the loader saves them again. The undo steps are not
      saved.
@@ -43,8 +45,12 @@ static struct state saved_recipes;
 static u32 recipes_count, recipes_on, recipes_import, recipes_added, recipes_full, recipes_other, recipes_same,
     recipes_bad, recipes_turned_off, recipes_switched;
 /* The recipes while INSTALL reads them, in the order of the file, then the
-   added ones. */
-static u32 recipes_words[GRKIT_RECIPE_SLOTS][GRKIT_RECIPE_WORDS], recipes_names[GRKIT_RECIPE_SLOTS][GRKIT_RECIPE_NAME_WORDS];
+   added ones. Each part of a recipe that the header keeps by slot is here,
+   so a recipe moves as one. */
+struct install_recipe {
+    u32 words[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS], id;
+};
+static struct install_recipe recipes_list[GRKIT_RECIPE_SLOTS];
 
 /* The installer reads the recipe words by the layout of runtime/abi.h
    (GRKIT_RECIPE_*, grkit_core::recipes::layout): the look, the Grain, the
@@ -59,6 +65,7 @@ static u32 recipe_name_word(u32 base, u32 slot, u32 w)
 {
     return base + GRKIT_HOST_RECIPE_NAMES + 4U * (slot * GRKIT_RECIPE_NAME_WORDS + w);
 }
+static u32 recipe_id_word(u32 base, u32 slot) { return base + GRKIT_HOST_RECIPE_IDS + 4U * slot; }
 /* Whether word 0 is that of a recipe. */
 static int recipe_first_word(u32 w)
 {
@@ -121,9 +128,9 @@ static u32 recipe_known(u32 count, const u32 *w, const u32 *name)
         int same = 1;
         for (u32 k = 0; k < GRKIT_RECIPE_WORDS && same; ++k) {
             u32 ignored = !k ? RECIPE_WORD_NUMBER | GRKIT_RECIPE_HIDDEN : k == GRKIT_RECIPE_MODULE_WORD ? GRKIT_RECIPE_OFF : 0U;
-            same = (recipes_words[slot][k] & ~ignored) == (w[k] & ~ignored);
+            same = (recipes_list[slot].words[k] & ~ignored) == (w[k] & ~ignored);
         }
-        for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS && same; ++k) same = recipes_names[slot][k] == name[k];
+        for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS && same; ++k) same = recipes_list[slot].name[k] == name[k];
         if (same) return slot;
     }
     return count;
@@ -138,25 +145,50 @@ static int recipes_store(u32 base)
     recipes_on = recipes_turned_off = 0;
     /* Past GRKIT_RECIPE_ON_MAX, a recipe that is on turns off. */
     for (u32 i = 0; i < recipes_count; ++i) {
-        if (recipes_words[i][GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF) continue;
+        if (recipes_list[i].words[GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF) continue;
         if (recipes_on < GRKIT_RECIPE_ON_MAX) { ++recipes_on; continue; }
-        recipes_words[i][GRKIT_RECIPE_MODULE_WORD] |= GRKIT_RECIPE_OFF;
+        recipes_list[i].words[GRKIT_RECIPE_MODULE_WORD] |= GRKIT_RECIPE_OFF;
         ++recipes_turned_off;
         changed = 1;
     }
     /* The recipes that are on in pass 0, then those that are off. */
     for (u32 pass = 0; pass < 2; ++pass)
         for (u32 i = 0; i < recipes_count; ++i) {
-            u32 on = !(recipes_words[i][GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF);
+            u32 on = !(recipes_list[i].words[GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF);
             if (on != !pass) continue;
             if (slot != i) changed = 1;
-            for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) store(recipe_slot_word(base, slot, k), recipes_words[i][k]);
-            for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) store(recipe_name_word(base, slot, k), recipes_names[i][k]);
+            for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) store(recipe_slot_word(base, slot, k), recipes_list[i].words[k]);
+            for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) store(recipe_name_word(base, slot, k), recipes_list[i].name[k]);
+            store(recipe_id_word(base, slot), recipes_list[i].id);
             ++slot;
         }
     for (; slot < GRKIT_RECIPE_SLOTS; ++slot) {
         for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) store(recipe_slot_word(base, slot, k), 0);
         for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) store(recipe_name_word(base, slot, k), 0);
+        store(recipe_id_word(base, slot), 0);
+    }
+    return changed;
+}
+/* Give an ID to each recipe that has none, or one that an earlier recipe
+   has: a recipe of a package, or of a recipe file from before the IDs.
+   `next` is the next ID of the file, and stays above each ID. 1 when a
+   recipe got an ID. */
+static int recipes_give_ids(u32 *next)
+{
+    int changed = 0;
+    if (!*next || *next > GRKIT_RECIPE_ID_MAX) *next = 1;
+    for (u32 i = 0; i < recipes_count; ++i) {
+        u32 id = recipes_list[i].id;
+        if (id && id <= GRKIT_RECIPE_ID_MAX && id >= *next) *next = id < GRKIT_RECIPE_ID_MAX ? id + 1U : id;
+    }
+    for (u32 i = 0; i < recipes_count; ++i) {
+        u32 id = recipes_list[i].id;
+        int taken = !id || id > GRKIT_RECIPE_ID_MAX;
+        for (u32 j = 0; j < i && !taken; ++j) taken = recipes_list[j].id == id;
+        if (!taken) continue;
+        recipes_list[i].id = *next;
+        if (*next < GRKIT_RECIPE_ID_MAX) ++*next;
+        changed = 1;
     }
     return changed;
 }
@@ -170,25 +202,33 @@ static u32 recipes_hash(const u8 *file, u32 size) { return (recipes_crc(file, si
 static void install_recipes(u32 base, u32 family)
 {
     static u8 text[STATE_TEXT_MAX];
-    u32 value, imported = 0, hash = 0;
+    u32 value, imported = 0, hash = 0, next = 0;
     recipes_import = recipes_added = recipes_full = recipes_other = recipes_same = recipes_bad = recipes_switched = 0;
     long n = read_text(recipes_state_path, text, sizeof(text));
     if (n < 0) n = read_text(recipes_state_tmp_path, text, sizeof(text));
     state_parse(&saved_recipes, text, n);
     for (u32 slot = 0; slot < GRKIT_RECIPE_SLOTS; ++slot) {
         for (u32 w = 0; w < GRKIT_RECIPE_WORDS; ++w)
-            recipes_words[slot][w] =
+            recipes_list[slot].words[w] =
                 state_value(&saved_recipes, GRKIT_RECIPE_KEY_BASE + w * GRKIT_RECIPE_KEY_STRIDE + slot, &value) &&
                         value <= RECIPE_VALUE_MAX ? value : 0;
         for (u32 w = 0; w < GRKIT_RECIPE_NAME_WORDS; ++w)
-            recipes_names[slot][w] =
+            recipes_list[slot].name[w] =
                 state_value(&saved_recipes, GRKIT_RECIPE_NAME_KEY_BASE + w * GRKIT_RECIPE_KEY_STRIDE + slot, &value) &&
                         value <= RECIPE_VALUE_MAX ? value : 0;
+        recipes_list[slot].id =
+            state_value(&saved_recipes, GRKIT_RECIPE_ID_KEY_BASE + slot, &value) && value <= RECIPE_VALUE_MAX ? value : 0;
     }
     if (state_value(&saved_recipes, GRKIT_RECIPE_IMPORTED_KEY, &value) && value <= RECIPE_VALUE_MAX) imported = value;
+    if (state_value(&saved_recipes, GRKIT_RECIPE_NEXT_ID_KEY, &value) && value <= RECIPE_VALUE_MAX) next = value;
+    /* The user modes of the mode dial stay as the file has them. A user mode
+       whose recipe is gone follows (runtime/abi.h). */
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u)
+        store(base + GRKIT_HOST_RECIPE_DIAL + 4U * u,
+              state_value(&saved_recipes, GRKIT_RECIPE_DIAL_KEY_BASE + u, &value) && value <= RECIPE_VALUE_MAX ? value : 0);
     /* The recipes: the run of recipe words. */
     recipes_count = 0;
-    while (recipes_count < GRKIT_RECIPE_SLOTS && recipe_first_word(recipes_words[recipes_count][0])) ++recipes_count;
+    while (recipes_count < GRKIT_RECIPE_SLOTS && recipe_first_word(recipes_list[recipes_count].words[0])) ++recipes_count;
 
     long size = read_text(recipes_inbox_path, recipes_inbox, sizeof(recipes_inbox));
     if (size >= 0 && !recipes_whole(recipes_inbox, (u32)size)) recipes_import = RECIPES_IMPORT_DAMAGED;
@@ -207,25 +247,28 @@ static void install_recipes(u32 base, u32 family)
             u32 known = recipe_known(recipes_count, w, name);
             if (known < recipes_count) {
                 u32 off = w[GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF;
-                if ((recipes_words[known][GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF) != off) {
-                    recipes_words[known][GRKIT_RECIPE_MODULE_WORD] = (recipes_words[known][GRKIT_RECIPE_MODULE_WORD] & ~GRKIT_RECIPE_OFF) | off;
+                if ((recipes_list[known].words[GRKIT_RECIPE_MODULE_WORD] & GRKIT_RECIPE_OFF) != off) {
+                    recipes_list[known].words[GRKIT_RECIPE_MODULE_WORD] = (recipes_list[known].words[GRKIT_RECIPE_MODULE_WORD] & ~GRKIT_RECIPE_OFF) | off;
                     ++recipes_switched;
                 }
                 ++recipes_same;
                 continue;
             }
             if (recipes_count == GRKIT_RECIPE_SLOTS) { ++recipes_full; continue; }
-            for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) recipes_words[recipes_count][k] = w[k];
-            for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) recipes_names[recipes_count][k] = name[k];
+            for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) recipes_list[recipes_count].words[k] = w[k];
+            for (u32 k = 0; k < GRKIT_RECIPE_NAME_WORDS; ++k) recipes_list[recipes_count].name[k] = name[k];
+            recipes_list[recipes_count].id = 0;
             ++recipes_count;
             ++recipes_added;
         }
         imported = hash;
     }
+    int given = recipes_give_ids(&next);
     /* The loader saves the recipe file with the hash (StateFile::Recipes)
-       after an import or a change of the order. */
+       after an import, a change of the order, or new IDs. */
     store(base + GRKIT_HOST_RECIPE_IMPORTED, imported);
-    if (recipes_store(base) || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
+    store(base + GRKIT_HOST_RECIPE_NEXT_ID, next);
+    if (recipes_store(base) || given || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
 }
 
 /* The recipes that cannot apply in full on this camera, which REPORT.TXT
