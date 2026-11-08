@@ -36,8 +36,15 @@ export const PRESETS: readonly Preset[] = [
           "grainSize": 0,
           "solarization": 0
         },
-        "grain": null,
-        "glow": null,
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
         "whiteBalance": {
           "mode": 0,
           "shiftBa": 28,
@@ -47,8 +54,8 @@ export const PRESETS: readonly Preset[] = [
         "corrections": [
           1,
           4,
-          null,
-          null
+          0,
+          0
         ],
         "exposure": {
           "compensation": null,
@@ -92,8 +99,15 @@ export const PRESETS: readonly Preset[] = [
           "grainSize": 0,
           "solarization": 0
         },
-        "grain": null,
-        "glow": null,
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
         "whiteBalance": {
           "mode": 0,
           "shiftBa": 20,
@@ -103,8 +117,8 @@ export const PRESETS: readonly Preset[] = [
         "corrections": [
           0,
           2,
-          null,
-          null
+          0,
+          0
         ],
         "exposure": {
           "compensation": null,
@@ -151,12 +165,17 @@ export const PRESETS: readonly Preset[] = [
           "halation": 2,
           "halationColor": 0
         },
-        "whiteBalance": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 4,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
         "corrections": [
-          null,
-          null,
-          null,
-          null
+          0,
+          4,
+          0,
+          1
         ],
         "exposure": {
           "compensation": null,
@@ -195,12 +214,17 @@ export const PRESETS: readonly Preset[] = [
           "halation": 2,
           "halationColor": 0
         },
-        "whiteBalance": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 4,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
         "corrections": [
-          null,
-          null,
-          null,
-          null
+          0,
+          4,
+          0,
+          1
         ],
         "exposure": {
           "compensation": null,

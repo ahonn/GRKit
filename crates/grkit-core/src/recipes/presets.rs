@@ -19,11 +19,36 @@ pub struct Preset {
     pub recipes: Vec<Recipe>,
 }
 
+/// The white balance and the correction settings of a recipe that sets no
+/// others: Auto with no shift, highlight and shadow correction Auto,
+/// peripheral illumination correction Off, and high-ISO noise reduction
+/// Auto. A preset holds each setting of the look (runtime/recipes.h), so it
+/// gives the same picture after any other recipe.
+const AUTO_WHITE_BALANCE: WhiteBalance = WhiteBalance {
+    mode: 0,
+    shift_ba: 14,
+    shift_gm: 14,
+    kelvin: 5500,
+};
+const NEUTRAL_CORRECTIONS: [Option<u8>; 4] = [Some(0), Some(0), Some(0), Some(0)];
+const GRAIN_OFF: Grain = Grain { level: 0, size: 0 };
+const GLOW_OFF: Glow = Glow {
+    bloom: 0,
+    halation: 0,
+    halation_color: Some(0),
+};
+
 /// The recipes that the site offers.
 pub fn presets() -> Vec<Preset> {
     // CineStill 800T is Vision3 500T without its anti-halation layer: the
     // film look and a red halation close around the lights, without the
-    // wide glow of Bloom.
+    // wide glow of Bloom. The film is balanced for tungsten light. Auto white
+    // balance shifted to B10 (about 30 mired toward blue) puts night scenes
+    // in the colors of CineStill 800T scans and keeps daylight usable, where
+    // a fixed 3200 K turns blue. Shadow correction Off keeps the deep
+    // shadows, peripheral illumination correction Off keeps the falloff of
+    // the lens, and high-ISO noise reduction Low keeps the texture under the
+    // Grain.
     let cinestill = |family| Recipe {
         name: "CineStill 800T".into(),
         family,
@@ -37,8 +62,12 @@ pub fn presets() -> Vec<Preset> {
             halation: 2,
             halation_color: Some(0),
         }),
-        white_balance: None,
-        corrections: [None; 4],
+        white_balance: Some(WhiteBalance {
+            shift_ba: CINESTILL_SHIFT_BA,
+            ..AUTO_WHITE_BALANCE
+        }),
+        // Highlight Auto, shadow Off, peripheral illumination Off, NR Low.
+        corrections: [Some(0), Some(4), Some(0), Some(1)],
         exposure: Exposure::default(),
         enabled: true,
         hidden: false,
@@ -46,7 +75,8 @@ pub fn presets() -> Vec<Preset> {
     };
     // A community recipe of Negative Film with its nine levels as the camera
     // shows them, -4 to +4, the Auto white balance with its shifts (stored
-    // 14 is none), and the highlight and shadow corrections.
+    // 14 is none), and the highlight and shadow corrections. It has no
+    // GRKit Grain or Glow.
     let negative =
         |name: &str, levels: [i8; 9], shift_gm: i8, shift_ba: i8, corrections: [u8; 2]| Recipe {
             name: name.into(),
@@ -61,15 +91,19 @@ pub fn presets() -> Vec<Preset> {
                 grain_size: 0,
                 solarization: 0,
             }),
-            grain: None,
-            glow: None,
+            grain: Some(GRAIN_OFF),
+            glow: Some(GLOW_OFF),
             white_balance: Some(WhiteBalance {
-                mode: 0,
                 shift_ba: (shift_ba + 14) as u8,
                 shift_gm: (shift_gm + 14) as u8,
-                kelvin: 5500,
+                ..AUTO_WHITE_BALANCE
             }),
-            corrections: [Some(corrections[0]), Some(corrections[1]), None, None],
+            corrections: [
+                Some(corrections[0]),
+                Some(corrections[1]),
+                NEUTRAL_CORRECTIONS[2],
+                NEUTRAL_CORRECTIONS[3],
+            ],
             exposure: Exposure::default(),
             enabled: true,
             hidden: false,
@@ -113,6 +147,9 @@ pub fn presets() -> Vec<Preset> {
         },
     ]
 }
+
+/// B10: stored A-B shifts run from B14 (0) through none (14) to A14 (28).
+const CINESTILL_SHIFT_BA: u8 = 4;
 
 /// The portable index of Negative Film (`native::TYPES`).
 pub(super) const NEGATIVE_FILM: usize = 6;

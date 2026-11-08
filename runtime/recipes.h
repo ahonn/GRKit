@@ -17,18 +17,23 @@
    file, and INSTALL adds the recipes of a package
    (runtime/install_recipes.h).
 
-   A recipe holds the settings of the capabilities that run when it is
-   saved: the look of CORE.TONE (Off, or an effect and its Fn adjustments)
-   and the grain of CORE.GRAIN and CORE.GRAIN_SIZE. A recipe with a native
-   type has the look Off also without CORE.TONE. Apply sets each held
-   setting whose capability runs, so a recipe never turns on a capability.
-   It also holds the module settings of GRKIT_RECIPE_MODULE_SETTINGS (Glow)
-   whose module is loaded, and the native settings (runtime/native_look.h):
-   the native type, its parameters, and its native grain while no effect is
-   active, the white balance, the correction and noise reduction settings,
-   and the exposure settings. A save on the camera holds no exposure
-   settings: a recipe of the camera is a look, and its exposure belonged to
-   one scene. An undo step holds them, and a library recipe can.
+   A recipe is a whole look: it holds each setting of the picture, so it
+   gives the same picture after any other recipe. Those are the look of
+   CORE.TONE (Off, or an effect and its Fn adjustments), the grain of
+   CORE.GRAIN and CORE.GRAIN_SIZE, the module settings of
+   GRKIT_RECIPE_MODULE_SETTINGS (Glow), and the native settings
+   (runtime/native_look.h): the native type of the active set, its
+   parameters, and its native grain while no effect is active, the white
+   balance, and the correction and noise reduction settings. A recipe with
+   a native type has the look Off also without CORE.TONE. A save holds
+   Grain and each module setting at Off when its module does not run, as
+   the picture has none; a color-only setting has no Off and stays out.
+   Apply sets each held setting whose capability runs, so a recipe never
+   turns on a capability.
+
+   The exposure settings are not part of the look: they belong to one
+   scene. A save on the camera holds none, an undo step holds them, and a
+   library recipe can. Apply keeps each one that a recipe does not hold.
 
    Without a running Grain module, CORE.GRAIN has no effect on pictures
    (grain_level in runtime/picture.S), so apply skips the Grain of a recipe
@@ -323,6 +328,15 @@ static void recipe_capture(volatile u32 *h,u32 *out) {
        and leaves Film Look as it is. */
     if(RECIPE_LOOK(out[0])==RECIPE_LOOK_KEPT && NATIVE_TYPE(out[RECIPE_NATIVE_WORD])) out[0]|=RECIPE_LOOK_OFF;
 }
+/* Hold Grain and each module setting that `w` does not hold at 0 (Off): the
+   module does not run, so the picture has none. A color-only setting has no
+   Off and stays out. */
+static void recipe_hold_off(u32 *w) {
+    u32 i;
+    w[0]|=RECIPE_GRAIN;
+    for(i=0;i<GRKIT_RECIPE_MODULE_SETTINGS;++i)
+        if(!(GRKIT_RECIPE_MODULE_COLOR_ONLY>>i&1U)) w[RECIPE_MODULE_WORD]|=1U<<(RECIPE_MODULE_BITS*i);
+}
 /* Whether the recipe in `w` can apply: RECIPE_READY or the reason. */
 static u32 recipe_reason(volatile u32 *h,const volatile u32 *w) {
     if(RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT &&
@@ -466,8 +480,11 @@ static u32 recipe_same_base(const volatile u32 *a,const u32 *b) {
 static u32 recipe_save(volatile u32 *h) {
     u32 n=recipe_count(h), e=recipe_entries(h), w[GRKIT_RECIPE_WORDS], i, k, number=0, other;
     if(n>=GRKIT_RECIPE_SLOTS || e>=GRKIT_RECIPE_ON_MAX) return RECIPE_FULL;
+    /* A whole look: without the exposure settings, and with Off for each
+       module that does not run. */
     recipe_capture(h,w);
     w[RECIPE_MODULE_WORD]&=~NATIVE_EXPOSURE_BITS;
+    recipe_hold_off(w);
     for(i=0;i<n;++i) {
         if(!recipe_same_base(recipe_at(h,i),w)) continue;
         other=recipe_at(h,i)[0];

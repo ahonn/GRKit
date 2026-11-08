@@ -65,11 +65,13 @@ impl Family {
     }
 }
 
-/// The look of a recipe.
+/// The look of a recipe. A recipe holds a whole look (`runtime/recipes.h`):
+/// an effect or a native type. Only a save on the camera that could not read
+/// the native type holds `Kept` or `Off`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum Look {
-    /// The look stays as it is.
+    /// The look stays as it is: a save without Film Look.
     Kept,
     /// Film Look Off, and the native type stays as it is.
     Off,
