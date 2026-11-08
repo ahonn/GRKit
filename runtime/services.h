@@ -102,9 +102,9 @@
 #define MENU_VALUE_TEXT_AT 8U
 #define MENU_VALUE_TEXT 16U
 #define MENU_VALUE_SIZE (MENU_VALUE_TEXT + 2U * MENU_VALUE_UNITS)
-/* A row for the GRKit switch, each listed module, ADJ Order, and About
-   GRKit. */
-#define MENU_ROWS_SLOTS 13U
+/* A row for the GRKit switch, Enable at Start, each listed module, ADJ
+   Order, and About GRKit. */
+#define MENU_ROWS_SLOTS 14U
 #define MENU_ROW_MODULE 0U
 #define MENU_ROW_LABEL 4U
 #define MENU_ROW_VALUE 8U

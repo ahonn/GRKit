@@ -70,6 +70,11 @@ int main(void)
     parse("");
     assert(state.pairs == 0);
 
+    /* A set value replaces the last pair of its key, or adds a pair. */
+    parse("12\r\n3\r\n12\r\n4\r\n");
+    assert(state_set(&state, 12, 1) && state.pairs == 2 && value_of(12) == 1);
+    assert(state_set(&state, 13, 0) && state.pairs == 3 && value_of(13) == 0);
+
     /* The pairs stop at STATE_PAIRS. */
     {
         static char text[STATE_PAIRS * 2 * 8 + 64];
@@ -86,6 +91,10 @@ int main(void)
         parse(text);
         assert(state.pairs == STATE_PAIRS);
         assert(has(1000 + STATE_PAIRS - 1) && !has(1000 + STATE_PAIRS));
+        /* A full state takes no new pair, and a key that it holds still
+           takes its value. */
+        assert(!state_set(&state, 7, 1) && !has(7) && state.pairs == STATE_PAIRS);
+        assert(state_set(&state, 1000, 0) && value_of(1000) == 0);
     }
 
     /* A GRKit 1.2 file: the known keys take the current keys, the Fn

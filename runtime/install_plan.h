@@ -61,6 +61,9 @@ static u32 module_title[GRKIT_MODULES_MAX], module_tile[GRKIT_MODULES_MAX];
 /* The GRKit switch: 1 while it is Off, which stops each module as its own
    Off does, and keeps the Enable of each. */
 static u32 all_off;
+/* Enable at Start at this start: MANAGE_START_ON, MANAGE_START_OFF, or
+   MANAGE_START_KEEP (start_switch). */
+static u32 start_choice;
 /* Whether module i loads stopped: its Enable or the switch is Off. */
 static u32 module_stopped(u32 i) { return module_off[i] || all_off; }
 /* The code range and the used capabilities of each loaded module, for the
@@ -74,8 +77,8 @@ static u32 capabilities_running;
 static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
    choices of each module, the choices of `effects` effects, then the
-   switch. */
-#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 1U + (effects))
+   switch and Enable at Start. */
+#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 2U + (effects))
 /* The words of the module list and of the effect list. */
 #define MANAGE_WORDS(n) ((MANAGE_HEADER + (n) * MANAGE_STRIDE) / 4U)
 #define EFFECT_LIST_WORDS(n) ((EFFECTS_HEADER + (n) * EFFECTS_STRIDE) / 4U)
@@ -235,12 +238,39 @@ static u32 manage_id(u32 i, const char *key)
     name[n] = 0;
     return grm_state_id(name);
 }
+/* Enable at Start (runtime/manage.h) decides the switch of this start. On
+   and Off give their value to the saved switch, CORE.OFF, as if the state
+   file held it, and Keep Last leaves it. So the switch of order_modules,
+   the modules that load stopped, and the value that installer.c restores
+   (apply_state) agree, as with a saved switch. This is the one place of the
+   rule; the next save of the loader writes the switch of the session.
+
+   Without a saved value, a camera that ran an earlier GRKit keeps its switch
+   (Keep Last), and a new camera gets On. INSTALL tells them apart by the
+   saved pairs that it restores: the resident loader writes the state file
+   at the first start (crates/grkit-core/src/runtime/loader.rs), with the
+   choices of each module, so an earlier GRKit left pairs, and a new card or
+   a card without the data folder has none. A switch that is Off is always a
+   saved pair, so the two defaults give the same switch to a camera without
+   pairs, also when its file was lost: they differ only in the value that
+   Enable at Start shows and that the loader then saves. */
+static void start_switch(void)
+{
+    u32 value;
+    if (state_value(&saved_state, grm_state_id(MANAGE_START_KEY), &value) && value < MANAGE_START_VALUES)
+        start_choice = value;
+    else
+        start_choice = saved_state.pairs ? MANAGE_START_KEEP : MANAGE_START_ON;
+    if (start_choice != MANAGE_START_KEEP)
+        state_set(&saved_state, grm_state_id(MANAGE_SWITCH_KEY), start_choice == MANAGE_START_OFF);
+}
 /* Read the choices of the GRKit section. The list keeps the default order,
    which the GRKit section of MENU shows. The core orders the GRKit root of
    ADJ by the positions (runtime/manage.h: manage_key). */
 static void order_modules(void)
 {
     u32 value;
+    start_switch();
     all_off = state_value(&saved_state, grm_state_id(MANAGE_SWITCH_KEY), &value) && value == 1;
     for (u32 i = 0; i < module_count; ++i) {
         module_off[i] = state_value(&saved_state, manage_id(i, "OFF"), &value) && value == 1;
@@ -273,7 +303,7 @@ static int state_taken(u32 id)
         if ((setting_flags[k] & GRM_SETTING_SAVED) && grm_state_id(setting_names[k]) == id) return 1;
     for (u32 i = 0; i < module_count; ++i)
         if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id) return 1;
-    if (grm_state_id(MANAGE_SWITCH_KEY) == id) return 1;
+    if (grm_state_id(MANAGE_SWITCH_KEY) == id || grm_state_id(MANAGE_START_KEY) == id) return 1;
     for (u32 i = 0; i < listed_count; ++i)
         if (effect_choice_id(i) == id) return 1;
     return 0;

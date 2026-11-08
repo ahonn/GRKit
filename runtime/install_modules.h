@@ -142,13 +142,18 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 4, listed_choice[i]);
         store(entry + 8, EFFECT_CHOICE_VALUES);
     }
-    /* The GRKit switch follows the choices of the effects. */
-    u32 switch_handle = setting_total + choices - 1;
+    /* The GRKit switch and Enable at Start follow the choices of the
+       effects. */
+    u32 switch_handle = setting_total + choices - 2, start_handle = switch_handle + 1;
     {
         u32 entry = array + 4 * SETTINGS_ENTRY(switch_handle);
         store(entry, grm_state_id(MANAGE_SWITCH_KEY));
         store(entry + 4, all_off);
         store(entry + 8, 2);
+        entry = array + 4 * SETTINGS_ENTRY(start_handle);
+        store(entry, grm_state_id(MANAGE_START_KEY));
+        store(entry + 4, start_choice);
+        store(entry + 8, MANAGE_START_VALUES);
     }
     for (u32 k = 0; k < kept_count; ++k) {
         u32 entry = array + 4 * SETTINGS_ENTRY(setting_total + choices + k);
@@ -436,6 +441,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     store(list_at + MANAGE_FLAGS, safe_mode ? MANAGE_SAFE_MODE : 0);
     store(list_at + MANAGE_OPEN, 0);
     store(list_at + MANAGE_SWITCH, switch_handle + 1);
+    store(list_at + MANAGE_START, start_handle + 1);
     for (u32 i = 0; i < module_count; ++i) {
         u32 entry = list_at + MANAGE_HEADER + i * MANAGE_STRIDE, n = 0;
         volatile u16 *name = (volatile u16 *)at(entry + MANAGE_NAME);

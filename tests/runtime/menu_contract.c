@@ -81,7 +81,7 @@ static volatile unsigned *mapped_settings(unsigned address)
 #define TEST_EFFECTS (TEST_MANAGE + 0x300U)
 static unsigned manage_memory[(TEST_EFFECTS - TEST_MANAGE + 12 + 3 * 44) / 4];
 /* The module list: the header, then module i at word MANAGE_ENTRY(i). */
-#define MANAGE_ENTRY(i) (5 + (i) * 14)
+#define MANAGE_ENTRY(i) (MANAGE_HEADER / 4 + (i) * 14)
 static volatile unsigned *mapped_manage(unsigned address)
 {
     assert(address >= TEST_MANAGE && address < TEST_MANAGE + sizeof(manage_memory) && !(address & 3));
@@ -2013,7 +2013,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 20, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 24, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -3539,23 +3539,28 @@ static void a_color_only_module_gets_no_row(void)
     assert(menu_row(h, 2)[MENU_ROW_KIND / 4] == MENU_ROW_ADJ && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
     assert(BYTE(tab_copy(), MENU_TAB_ROWS) == 14);
 }
-/* While a module loaded, the section starts with the GRKit switch. OK on it
-   opens its value page. A tab without room for each row keeps the switch,
-   ADJ Order, and About GRKit. */
+/* While a module loaded, the section starts with the GRKit switch, then
+   Enable at Start. OK on either opens its value page. A tab without room for
+   each row keeps the switch, Enable at Start, ADJ Order, and About GRKit. */
 static void the_section_starts_with_the_switch(void)
 {
-    static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_ADJ,
-                                MENU_ROW_GRKIT},
-                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
+    static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_START, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED,
+                                MENU_ROW_ADJ, MENU_ROW_GRKIT},
+                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_START, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
     volatile u32 *h = test_header, *menu;
+    u32 n;
+    /* The switch is setting 12 and Enable at Start setting 13
+       (runtime/install_modules.h). */
     install_stock_tab(10, 3);
-    settings_memory[0] = 13;
+    settings_memory[0] = 14;
     settings_memory[2 + 12 * 3 + 2] = 2;
+    settings_memory[2 + 13 * 3 + 2] = MANAGE_START_VALUES;
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    manage_memory[MANAGE_START / 4] = 13 + 1;
     menu = services_word(h, SERVICES_MENU);
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 6 && BYTE(tab_copy(), MENU_TAB_ROWS) == 16);
-    for (u32 slot = 0; slot < 6; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
+    assert(menu[MENU_ROWS_COUNT / 4] == 7 && BYTE(tab_copy(), MENU_TAB_ROWS) == 17);
+    for (u32 slot = 0; slot < 7; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
     /* The row, Enable GRKit, opens its value page at once: On, then Off,
        as the Enable of a module. */
     assert(menu_rows_controller(h, MENU_ROW_TARGET) == settings_pages[0]);
@@ -3567,12 +3572,37 @@ static void the_section_starts_with_the_switch(void)
     switch_settings[0].set(h, 1);
     assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
     switch_settings[0].set(h, 0);
+    /* Enable at Start opens its value page at once too: On, Off, then Keep
+       Last. A choice is a saved change for the next start, and the switch
+       keeps its value in this session. */
+    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == settings_pages[0]);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == START_PAGE + 1 && settings_page(h) == start_settings);
+    assert(settings_rows(h) == 1 && same(start_settings[0].label(h), "Enable at Start"));
+    assert(start_settings[0].values(h) == 3 && same(start_settings[0].value_text(h, MANAGE_START_ON), "On") &&
+           same(start_settings[0].value_text(h, MANAGE_START_OFF), "Off") &&
+           same(start_settings[0].value_text(h, MANAGE_START_KEEP), "Keep Last"));
+    assert(start_settings[0].get(h) == MANAGE_START_ON);
+    n = h[GRKIT_HOST_STATE_CHANGES / 4];
+    start_settings[0].set(h, MANAGE_START_OFF);
+    assert(start_settings[0].get(h) == MANAGE_START_OFF && settings_memory[2 + 13 * 3 + 1] == MANAGE_START_OFF);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1 && !manage_all_off(h));
+    /* The row shows the value. */
+    assert(same(start_value_text(h, start_value(h)), "Off"));
+    start_settings[0].set(h, MANAGE_START_KEEP);
+    assert(same(start_value_text(h, start_value(h)), "Keep Last"));
+    start_settings[0].set(h, MANAGE_START_ON);
     h[GRKIT_HOST_SETTINGS / 4] = 0;
-    install_stock_tab(MENU_TAB_MAX_ROWS - 4, 3);
+    install_stock_tab(MENU_TAB_MAX_ROWS - 5, 3);
+    manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    manage_memory[MANAGE_START / 4] = 13 + 1;
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 5 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
+    for (u32 slot = 0; slot < 5; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
+    /* Without Enable at Start in the module list, the switch shows alone. */
+    install_stock_tab(10, 3);
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 4 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
-    for (u32 slot = 0; slot < 4; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
+    assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED);
 }
 /* A tab with all its sections gets the rows in its last section. A tab
    without room for each row keeps ADJ Order and About GRKit, and gives rows
