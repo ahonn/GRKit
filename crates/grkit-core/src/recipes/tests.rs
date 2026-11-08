@@ -174,7 +174,7 @@ fn the_recipe_file_round_trips_and_keeps_the_import() {
         "{}\r\n123\r\n991000000\r\n5\r\n",
         crate::runtime::RECIPE_IMPORTED_KEY
     );
-    let text = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&recipes, Family::Gr3, &previous, &NO_DIAL).unwrap();
     assert!(text.contains(&format!(
         "{}\r\n123\r\n",
         crate::runtime::RECIPE_IMPORTED_KEY
@@ -198,7 +198,7 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
     let recipes: Vec<Recipe> = sample().into_iter().filter(gr3).collect();
     let mut card = recipes.clone();
     card[0].name = "Card".into();
-    let mut previous = write_recipe_file(&card, Family::Gr3, "").unwrap();
+    let mut previous = write_recipe_file(&card, Family::Gr3, "", &NO_DIAL).unwrap();
     // A recipe word with a look that no build has, which is on, and its
     // name "Odd".
     let odd = USED | 3;
@@ -215,7 +215,7 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
         previous.push_str(&format!("{key}\r\n{value}\r\n"));
     }
     assert_eq!(read_recipe_file(&previous, Family::Gr3), card);
-    let text = write_recipe_file(&recipes, Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&recipes, Family::Gr3, &previous, &NO_DIAL).unwrap();
     assert_eq!(read_recipe_file(&text, Family::Gr3), recipes);
     let records = file_records(&text);
     assert_eq!(records.len(), recipes.len() + 1);
@@ -225,7 +225,7 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
     // With `ON_MAX` recipes on, it turns off; with `LIBRARY_MAX` recipes,
     // it does not fit.
     let mut full = vec![recipes[0].clone(); ON_MAX];
-    let text = write_recipe_file(&full, Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&full, Family::Gr3, &previous, &NO_DIAL).unwrap();
     assert!(!file_records(&text)[ON_MAX].on());
     full.resize(
         LIBRARY_MAX,
@@ -234,7 +234,7 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
             ..recipes[0].clone()
         },
     );
-    assert!(write_recipe_file(&full, Family::Gr3, &previous).is_err());
+    assert!(write_recipe_file(&full, Family::Gr3, &previous, &NO_DIAL).is_err());
 }
 
 #[test]
@@ -305,7 +305,7 @@ fn recipes_that_are_off_follow_those_that_are_on() {
         recipe.enabled = index >= LIBRARY_MAX - ON_MAX;
     }
     assert!(encode(&recipes).is_ok());
-    let text = write_recipe_file(&recipes, Family::Gr3, "").unwrap();
+    let text = write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).unwrap();
     let read = read_recipe_file(&text, Family::Gr3);
     assert_eq!(read.len(), LIBRARY_MAX);
     assert!(read[..ON_MAX].iter().all(|recipe| recipe.enabled));
@@ -318,7 +318,7 @@ fn recipes_that_are_off_follow_those_that_are_on() {
     recipes[0].enabled = true;
     let error = encode(&recipes).unwrap_err();
     assert!(format!("{error:#}").contains("At most 40"), "{error:#}");
-    assert!(write_recipe_file(&recipes, Family::Gr3, "").is_err());
+    assert!(write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).is_err());
 }
 
 #[test]
@@ -467,10 +467,21 @@ fn file_ids(text: &str) -> Vec<u32> {
 /// has, goes without one, and INSTALL generates it.
 #[test]
 fn a_write_holds_each_id_once() {
-    let text = write_recipe_file(&named(&[("A", 70_001), ("B", 9)]), Family::Gr3, "").unwrap();
+    let text = write_recipe_file(
+        &named(&[("A", 70_001), ("B", 9)]),
+        Family::Gr3,
+        "",
+        &NO_DIAL,
+    )
+    .unwrap();
     assert_eq!(file_ids(&text), [70_001, 9]);
-    let text =
-        write_recipe_file(&named(&[("A", 9), ("B", 9), ("C", 0)]), Family::Gr3, &text).unwrap();
+    let text = write_recipe_file(
+        &named(&[("A", 9), ("B", 9), ("C", 0)]),
+        Family::Gr3,
+        &text,
+        &NO_DIAL,
+    )
+    .unwrap();
     assert_eq!(file_ids(&text), [9, 0, 0]);
     // An ID out of range is no ID.
     let mut wrong = named(&[("D", crate::runtime::RECIPE_ID_MAX + 1)]);
@@ -484,7 +495,7 @@ fn a_write_holds_each_id_once() {
 #[test]
 fn a_kept_recipe_keeps_its_id_unless_the_site_has_it() {
     use crate::runtime::{recipe_key, RECIPE_ID_KEY_BASE};
-    let card = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, "").unwrap();
+    let card = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, "", &NO_DIAL).unwrap();
     // A record with a look that no build has, with ID 6.
     let mut previous = card.clone();
     for (key, value) in [
@@ -494,49 +505,79 @@ fn a_kept_recipe_keeps_its_id_unless_the_site_has_it() {
         previous.push_str(&format!("{key}\r\n{value}\r\n"));
     }
     let kept_id = |text: &str| file_records(text).last().unwrap().id;
-    let text = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, &previous, &NO_DIAL).unwrap();
     assert_eq!(kept_id(&text), 6);
-    let text = write_recipe_file(&named(&[("A", 6)]), Family::Gr3, &previous).unwrap();
+    let text = write_recipe_file(&named(&[("A", 6)]), Family::Gr3, &previous, &NO_DIAL).unwrap();
     assert_eq!((file_ids(&text), kept_id(&text)), (vec![6], 0));
 }
 
-/// The user modes of the mode dial stay as the card has them. A user mode
-/// whose recipe the write leaves out follows; GRKit Off stays.
+/// The mode dial of a file text that does nothing: each user mode follows.
+const NO_DIAL: Dial = [crate::runtime::RECIPE_DIAL_FOLLOW; 3];
+
+/// A write gives the user modes of the mode dial what the site gives, and a
+/// read gives them back. A user mode whose recipe the file does not hold
+/// follows; GRKit Off stays.
 #[test]
-fn a_write_keeps_the_user_modes_of_the_mode_dial() {
-    use crate::runtime::{RECIPE_DIAL_FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF};
+fn a_write_gives_the_user_modes_of_the_mode_dial() {
+    use crate::runtime::{RECIPE_DIAL_FOLLOW as FOLLOW, RECIPE_DIAL_OFF as OFF};
     let recipes = named(&[("A", 11), ("B", 22)]);
-    let card = write_recipe_file(&recipes, Family::Gr3, "").unwrap();
     // U1 applies B, U2 turns GRKit off, U3 applies A.
-    let mut previous = card.clone();
-    for (u, value) in [22, RECIPE_DIAL_OFF, 11].into_iter().enumerate() {
-        previous.push_str(&format!(
+    let card = write_recipe_file(&recipes, Family::Gr3, "", &[22, OFF, 11]).unwrap();
+    assert_eq!(read_recipe_dial(&card), [22, OFF, 11]);
+    assert_eq!(read_recipe_file(&card, Family::Gr3), recipes);
+    // The site writes the same recipes in another order: nothing changes.
+    let swapped = [recipes[1].clone(), recipes[0].clone()];
+    let same = write_recipe_file(&swapped, Family::Gr3, &card, &read_recipe_dial(&card)).unwrap();
+    assert_eq!(read_recipe_dial(&same), [22, OFF, 11]);
+    // The person changes the dial alone: the recipes stay.
+    let changed = write_recipe_file(&recipes, Family::Gr3, &card, &[OFF, FOLLOW, 22]).unwrap();
+    assert_eq!(read_recipe_dial(&changed), [OFF, FOLLOW, 22]);
+    assert_eq!(read_recipe_file(&changed, Family::Gr3), recipes);
+    // The site deletes A: U3 follows. A user mode that names a recipe that
+    // the write does not hold follows too.
+    let without = write_recipe_file(&recipes[1..], Family::Gr3, &card, &[33, OFF, 11]).unwrap();
+    assert_eq!(read_recipe_dial(&without), [FOLLOW, OFF, FOLLOW]);
+    // A recipe that is off keeps its user modes: the camera lets them follow
+    // until the recipe is on again.
+    let mut off = recipes.clone();
+    off[0].enabled = false;
+    let text = write_recipe_file(&off, Family::Gr3, &card, &[22, OFF, 11]).unwrap();
+    assert_eq!(read_recipe_dial(&text), [22, OFF, 11]);
+}
+
+/// A read of the mode dial gives follow for a user mode whose recipe the
+/// file does not hold, and for a file without user modes.
+#[test]
+fn a_read_of_the_mode_dial_follows_a_recipe_that_the_file_does_not_hold() {
+    use crate::runtime::{
+        RECIPE_DIAL_FOLLOW as FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF as OFF,
+    };
+    assert_eq!(read_recipe_dial(""), NO_DIAL);
+    let mut text = write_recipe_file(&named(&[("A", 11)]), Family::Gr3, "", &NO_DIAL).unwrap();
+    for (u, value) in [11, 44, OFF].into_iter().enumerate() {
+        text.push_str(&format!(
             "{}\r\n{value}\r\n",
             RECIPE_DIAL_KEY_BASE + u as u32
         ));
     }
-    let dial = |text: &str| -> Vec<u32> {
-        (0..3)
-            .map(|u| {
-                let key = format!("{}\r\n", RECIPE_DIAL_KEY_BASE + u);
-                text.find(&key).map_or(RECIPE_DIAL_FOLLOW, |at| {
-                    text[at + key.len()..]
-                        .lines()
-                        .next()
-                        .unwrap()
-                        .parse()
-                        .unwrap()
-                })
-            })
-            .collect()
-    };
-    // The site writes the same recipes in another order: nothing changes.
-    let swapped = [recipes[1].clone(), recipes[0].clone()];
-    let same = write_recipe_file(&swapped, Family::Gr3, &previous).unwrap();
-    assert_eq!(dial(&same), [22, RECIPE_DIAL_OFF, 11]);
-    // The site deletes A: U3 follows.
-    let without = write_recipe_file(&recipes[1..], Family::Gr3, &previous).unwrap();
-    assert_eq!(dial(&without), [22, RECIPE_DIAL_OFF, RECIPE_DIAL_FOLLOW]);
+    assert_eq!(read_recipe_dial(&text), [11, FOLLOW, OFF]);
+}
+
+/// A recipe of the card that the site cannot read keeps the user modes
+/// that name it.
+#[test]
+fn a_kept_recipe_keeps_its_user_modes() {
+    use crate::runtime::{recipe_key, RECIPE_DIAL_FOLLOW as FOLLOW, RECIPE_ID_KEY_BASE};
+    let mut previous = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, "", &NO_DIAL).unwrap();
+    // A record with a look that no build has, with ID 6.
+    for (key, value) in [
+        (recipe_key(RECIPE_WORDS), USED | 3),
+        (RECIPE_ID_KEY_BASE + 1, 6),
+    ] {
+        previous.push_str(&format!("{key}\r\n{value}\r\n"));
+    }
+    let text = write_recipe_file(&named(&[("A", 5)]), Family::Gr3, &previous, &[6, 5, 7]).unwrap();
+    assert_eq!(read_recipe_dial(&text), [6, 5, FOLLOW]);
 }
 
 /// A package library holds no IDs: INSTALL generates one for each recipe

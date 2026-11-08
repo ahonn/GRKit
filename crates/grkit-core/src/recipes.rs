@@ -21,7 +21,7 @@ mod site;
 mod tests;
 mod words;
 
-pub use file::{read_recipe_file, write_recipe_file};
+pub use file::{read_recipe_dial, read_recipe_file, write_recipe_file, Dial};
 pub use library::{check_library, checksum, decode, encode, HEADER_SIZE, MAGIC, RECORD_SIZE};
 pub use model::*;
 pub use presets::{presets, Preset};

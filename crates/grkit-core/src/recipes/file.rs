@@ -82,14 +82,21 @@ pub fn read_recipe_file(text: &str, family: Family) -> Vec<Recipe> {
 /// - Each recipe that `read_recipe_file` leaves out, so that a write never
 ///   deletes a recipe that the site cannot show. Such a recipe goes after
 ///   the recipes of its on or off, and turns off past `ON_MAX`.
-/// - The user modes of the mode dial. A user mode whose recipe the file no
-///   longer holds follows (`runtime::RECIPE_DIAL_FOLLOW`).
+///
+/// The user modes of the mode dial do what `dial` gives, which the site reads
+/// with `read_recipe_dial` and the person can change. A user mode whose
+/// recipe the file does not hold follows (`runtime::RECIPE_DIAL_FOLLOW`).
 ///
 /// Each recipe keeps its ID, which the site generates when the recipe joins
 /// its library. The file holds each ID once: a recipe without an ID, or with
 /// one that an earlier recipe of the file has, goes without one, and INSTALL
 /// generates it at the next start.
-pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> Result<String> {
+pub fn write_recipe_file(
+    recipes: &[Recipe],
+    family: Family,
+    previous: &str,
+    dial: &Dial,
+) -> Result<String> {
     check_library(recipes)?;
     let values = file_values(previous);
     let value = |key: u32| values.get(&key).copied().unwrap_or(0);
@@ -158,16 +165,43 @@ pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> 
         put(RECIPE_ID_KEY_BASE + slot as u32, record.id);
     }
     put(RECIPE_IMPORTED_KEY, value(RECIPE_IMPORTED_KEY));
-    for u in 0..RECIPE_DIAL_POSITIONS as u32 {
-        let assignment = value(RECIPE_DIAL_KEY_BASE + u);
-        let held =
-            assignment == RECIPE_DIAL_OFF || records.iter().any(|record| record.id == assignment);
-        put(
-            RECIPE_DIAL_KEY_BASE + u,
-            if held { assignment } else { RECIPE_DIAL_FOLLOW },
-        );
+    for (u, value) in held_dial(dial, &records).into_iter().enumerate() {
+        put(RECIPE_DIAL_KEY_BASE + u as u32, value);
     }
     Ok(text)
+}
+
+/// What each user mode of the mode dial does, U1 to U3: it follows the dial
+/// (`runtime::RECIPE_DIAL_FOLLOW`), turns GRKit off
+/// (`runtime::RECIPE_DIAL_OFF`), or applies the recipe with that ID.
+pub type Dial = [u32; RECIPE_DIAL_POSITIONS];
+
+/// What each user mode of the mode dial does in the recipe file text. A
+/// user mode whose recipe the file does not hold follows, as on the camera.
+/// A recipe that is off, or that the site cannot read, still holds its user
+/// modes; the camera lets them follow until the recipe is on.
+pub fn read_recipe_dial(text: &str) -> Dial {
+    let values = file_values(text);
+    let dial = std::array::from_fn(|u| {
+        values
+            .get(&(RECIPE_DIAL_KEY_BASE + u as u32))
+            .copied()
+            .unwrap_or(RECIPE_DIAL_FOLLOW)
+    });
+    held_dial(&dial, &file_records(text))
+}
+
+/// `dial` with each user mode whose recipe `records` do not hold as follow.
+fn held_dial(dial: &Dial, records: &[FileRecord]) -> Dial {
+    dial.map(|value| {
+        let held = value == RECIPE_DIAL_OFF
+            || (value != RECIPE_DIAL_FOLLOW && records.iter().any(|record| record.id == value));
+        if held {
+            value
+        } else {
+            RECIPE_DIAL_FOLLOW
+        }
+    })
 }
 
 /// The key and value pairs of a state file text.

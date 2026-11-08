@@ -52,6 +52,10 @@ const en = {
   warnMissing: (names: string) => `These recipes need an effect that the package does not have: ${names}.`,
   changeWrite: (count: number) => (count === 1 ? 'Writes 1 recipe' : `Writes ${count} recipes`),
   changeRemove: 'Deletes all recipes on the camera',
+  changeDial: 'Writes the Mode Dial settings',
+  modeDial: 'Mode Dial',
+  dialNone: 'None',
+  dialOff: 'GRKit Off',
 };
 
 export type RecipeStrings = typeof en;
@@ -104,6 +108,10 @@ const zhHans: RecipeStrings = {
   warnMissing: (names) => `以下配方需要的效果不在这个包中：${names}。`,
   changeWrite: (count) => `写入 ${count} 个配方`,
   changeRemove: '删除相机上的全部配方',
+  changeDial: '写入模式转盘设置',
+  modeDial: '模式转盘',
+  dialNone: '无',
+  dialOff: '关闭 GRKit',
 };
 
 const zhHant: RecipeStrings = {
@@ -154,6 +162,10 @@ const zhHant: RecipeStrings = {
   warnMissing: (names) => `以下配方需要的效果不在這個套件中：${names}。`,
   changeWrite: (count) => `寫入 ${count} 個配方`,
   changeRemove: '刪除相機上的全部配方',
+  changeDial: '寫入模式轉盤設定',
+  modeDial: '模式轉盤',
+  dialNone: '無',
+  dialOff: '關閉 GRKit',
 };
 
 const ja: RecipeStrings = {
@@ -204,6 +216,10 @@ const ja: RecipeStrings = {
   warnMissing: (names) => `次のレシピが使うエフェクトはこのパッケージにありません：${names}。`,
   changeWrite: (count) => `${count} 件のレシピを書き込みます`,
   changeRemove: 'カメラのレシピをすべて削除します',
+  changeDial: 'モードダイヤルの設定を書き込みます',
+  modeDial: 'モードダイヤル',
+  dialNone: 'なし',
+  dialOff: 'GRKit オフ',
 };
 
 const ko: RecipeStrings = {
@@ -254,6 +270,10 @@ const ko: RecipeStrings = {
   warnMissing: (names) => `다음 레시피에 필요한 효과가 이 패키지에 없습니다: ${names}.`,
   changeWrite: (count) => `레시피 ${count}개를 씁니다`,
   changeRemove: '카메라의 레시피를 모두 삭제합니다',
+  changeDial: '모드 다이얼 설정을 씁니다',
+  modeDial: '모드 다이얼',
+  dialNone: '없음',
+  dialOff: 'GRKit 끄기',
 };
 
 export const RECIPE_STRINGS: Readonly<Record<Language, RecipeStrings>> = {

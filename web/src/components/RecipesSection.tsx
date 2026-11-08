@@ -9,12 +9,16 @@ import { RECIPE_STRINGS, type RecipeStrings } from '../recipeStrings';
 import {
   automaticName,
   cameraOrder,
+  DIAL_FOLLOW,
+  DIAL_OFF,
+  dialChoices,
   LIBRARY_MAX,
   libraryWarnings,
   ON_MAX,
   onCount,
   presetOf,
   presetRows,
+  type Dial,
   type Family,
   type Preset,
   type Recipe,
@@ -40,6 +44,11 @@ interface Props {
   glowModule: boolean;
   /** Adds the recipe of a preset to the library, and its effect to the package. */
   onAddPreset: (recipe: Recipe, effect: string | null) => void;
+  /**
+   * What the user modes of the mode dial of the connected card do, as the camera shows them, and
+   * the change of user mode `u` (0 for U1); null without a card to write.
+   */
+  dial?: { shown: Dial; onChange: (u: number, value: number) => void } | null;
 }
 
 /**
@@ -157,6 +166,7 @@ export function RecipesSection({
   grainModule,
   glowModule,
   onAddPreset,
+  dial = null,
 }: Props) {
   const r = RECIPE_STRINGS[language];
   const on = onCount(library);
@@ -260,6 +270,31 @@ export function RecipesSection({
         <p className="note warning">{r.warnMissing(warnings.missing.join(t.listSeparator))}</p>
       )}
       <div aria-live="polite">{library.length >= LIBRARY_MAX && <p className="status">{r.full(LIBRARY_MAX)}</p>}</div>
+      {dial && (
+        <div className="recipe-dial">
+          <h3 className="card-heading">{r.modeDial}</h3>
+          <div className="recipe-dial-modes">
+            {dial.shown.map((value, u) => (
+              <label key={u} className="field">
+                <span className="field-label">U{u + 1}</span>
+                <select
+                  className="import-text"
+                  value={value}
+                  onChange={(event) => dial.onChange(u, Number(event.target.value))}
+                >
+                  <option value={DIAL_FOLLOW}>{r.dialNone}</option>
+                  <option value={DIAL_OFF}>{r.dialOff}</option>
+                  {dialChoices(library).map((recipe) => (
+                    <option key={recipe.id} value={recipe.id}>
+                      {nameOf(recipe)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       <dialog
         ref={dialog}
         className="dialog"
