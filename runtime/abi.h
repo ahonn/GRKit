@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 3684
+#define GRKIT_HOST_HEADER_SIZE 3680
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -24,9 +24,9 @@
    after the names have one key each from GRKIT_RECIPE_IMPORTED_KEY: the hash
    of the imported package library, the ID of recipe n at
    GRKIT_RECIPE_ID_KEY_BASE + n, the assignment of user mode u at
-   GRKIT_RECIPE_DIAL_KEY_BASE + u, and the next ID at GRKIT_RECIPE_NEXT_ID_KEY
-   (grkit_core::runtime::recipe_key). A recipe ID is 1 to GRKIT_RECIPE_ID_MAX.
-   A user mode follows (GRKIT_RECIPE_DIAL_FOLLOW), turns GRKit off
+   GRKIT_RECIPE_DIAL_KEY_BASE + u (grkit_core::runtime::recipe_key). A recipe
+   ID is a generated number, 1 to GRKIT_RECIPE_ID_MAX (runtime/recipe_id.h). A
+   user mode follows (GRKIT_RECIPE_DIAL_FOLLOW), turns GRKit off
    (GRKIT_RECIPE_DIAL_OFF), or applies the recipe with its ID. The undo steps
    are not saved. */
 #define GRKIT_RECIPE_SLOTS 64U
@@ -113,7 +113,6 @@
 #define GRKIT_RECIPE_IMPORTED_KEY 991009000U
 #define GRKIT_RECIPE_ID_KEY_BASE 991009001U
 #define GRKIT_RECIPE_DIAL_KEY_BASE 991009065U
-#define GRKIT_RECIPE_NEXT_ID_KEY 991009068U
 #define GRKIT_RECIPE_ID_MAX 536870910U
 #define GRKIT_RECIPE_DIAL_FOLLOW 0U
 #define GRKIT_RECIPE_DIAL_OFF 536870911U
@@ -430,27 +429,27 @@
    (runtime/install_recipes.h), after the names: the loader saves it with the
    recipes, so a package imports once. */
 #define GRKIT_HOST_RECIPE_IMPORTED 3304
-/* The ID of each recipe, by slot: a number from 1 that no other recipe of the
-   camera has had. A reference to a recipe holds its ID, so that it stays valid
-   when the recipes move. Each part that creates a recipe (the camera, INSTALL,
-   the site) gives it `HOST_RECIPE_NEXT_ID`. The loader saves the IDs after the
-   import hash. */
+/* The ID of each recipe, by slot, 1 to `runtime::RECIPE_ID_MAX`: a generated
+   number, so that a recipe that the site moves to another card keeps an ID
+   that no recipe of that card had. A reference to a recipe holds its ID, so
+   that it stays valid when the recipes move. Each part that creates a recipe
+   (the camera, INSTALL, the site) generates its ID. The loader saves the IDs
+   after the import hash. */
 #define GRKIT_HOST_RECIPE_IDS 3308
 #define GRKIT_HOST_RECIPE_IDS_WORDS 64
 /* What each user mode of the mode dial, U1 to U3, does
    (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a recipe).
-   An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. */
+   An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A generated ID is
+   never one of these values, so a deleted recipe never gets the references of
+   another. */
 #define GRKIT_HOST_RECIPE_DIAL 3564
 #define GRKIT_HOST_RECIPE_DIAL_WORDS 3
-/* The ID that the next new recipe takes. IDs only grow, so a deleted recipe
-   never gets the references of another. */
-#define GRKIT_HOST_RECIPE_NEXT_ID 3576
 /* The count of changes of the recipes: the loader saves the recipe file after
    it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an import. */
-#define GRKIT_HOST_RECIPE_CHANGES 3580
+#define GRKIT_HOST_RECIPE_CHANGES 3576
 /* The undo steps, the oldest first, RECIPE_WORDS words each. They are not
    saved: a start begins without them. */
-#define GRKIT_HOST_RECIPE_UNDO 3584
+#define GRKIT_HOST_RECIPE_UNDO 3580
 #define GRKIT_HOST_RECIPE_UNDO_WORDS 25
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each

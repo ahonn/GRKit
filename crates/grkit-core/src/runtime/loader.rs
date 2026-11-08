@@ -746,8 +746,8 @@ fn state_script() -> Vec<String> {
         }
         if file == StateFile::Recipes {
             // The recipes, their names, and the words from the import hash
-            // to the next ID: each word that is not 0 (runtime/recipes.h), at
-            // its key (state::recipe_key).
+            // to the user modes: each word that is not 0 (runtime/recipes.h),
+            // at its key (state::recipe_key).
             let words = RECIPE_WORDS * RECIPE_SLOTS;
             let names = words + RECIPE_NAME_WORDS * RECIPE_SLOTS;
             lines.extend([
@@ -1079,8 +1079,8 @@ mod tests {
             "if rindex >= {RECIPE_STATE_WORDS} goto recipe_word_end"
         )));
         const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
-        // The names and the words from the import hash to the next ID follow
-        // the recipe words, so one run of words holds them.
+        // The names and the words from the import hash to the user modes
+        // follow the recipe words, so one run of words holds them.
         const {
             assert!(crate::abi::HOST_RECIPE_NAMES == HOST_RECIPES + 4 * RECIPE_WORDS * RECIPE_SLOTS)
         };
@@ -1092,13 +1092,14 @@ mod tests {
         };
         const {
             use crate::abi::{
-                HOST_RECIPE_DIAL, HOST_RECIPE_IDS, HOST_RECIPE_IMPORTED, HOST_RECIPE_NEXT_ID,
-                RECIPE_DIAL_POSITIONS,
+                HOST_RECIPE_DIAL, HOST_RECIPE_IDS, HOST_RECIPE_IMPORTED, RECIPE_DIAL_POSITIONS,
             };
             assert!(HOST_RECIPE_IDS == HOST_RECIPE_IMPORTED + 4);
             assert!(HOST_RECIPE_DIAL == HOST_RECIPE_IDS + 4 * RECIPE_SLOTS);
-            assert!(HOST_RECIPE_NEXT_ID == HOST_RECIPE_DIAL + 4 * RECIPE_DIAL_POSITIONS);
-            assert!(HOST_RECIPE_NEXT_ID / 4 + 1 == HOST_RECIPES / 4 + RECIPE_STATE_WORDS)
+            assert!(
+                HOST_RECIPE_DIAL / 4 + RECIPE_DIAL_POSITIONS
+                    == HOST_RECIPES / 4 + RECIPE_STATE_WORDS
+            )
         };
         assert_eq!(script.matches(&recipes).count(), 1);
     }

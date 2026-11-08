@@ -55,6 +55,7 @@
    record_index (runtime/tone.h), settings_table (runtime/settings.h),
    setting_store (runtime/setting_store.h), and the native settings
    (runtime/native_look.h). */
+#include "recipe_id.h"
 
 /* The bit layout of the words is GRKIT_RECIPE_* of runtime/abi.h
    (grkit_core::recipes::layout); these are the short names of the core.
@@ -140,8 +141,9 @@ static volatile u32 *recipe_at(volatile u32 *h,u32 slot) {
 static volatile u32 *recipe_name_at(volatile u32 *h,u32 slot) {
     return h+GRKIT_HOST_RECIPE_NAMES/4+slot*GRKIT_RECIPE_NAME_WORDS;
 }
-/* The ID of recipe `slot` (GRKIT_HOST_RECIPE_IDS): it stays with the recipe
-   when the recipe moves, so a reference to the recipe holds it. */
+/* The ID of recipe `slot` (GRKIT_HOST_RECIPE_IDS, runtime/recipe_id.h): it
+   stays with the recipe when the recipe moves, so a reference to the recipe
+   holds it. */
 static volatile u32 *recipe_id_at(volatile u32 *h,u32 slot) {
     return h+GRKIT_HOST_RECIPE_IDS/4+slot;
 }
@@ -479,13 +481,19 @@ static void recipe_close_gap(volatile u32 *h,u32 first,u32 n) {
     if(n) recipe_slot_clear(h,n-1);
 }
 
-/* The ID of a new recipe: the next ID, which then grows. INSTALL keeps the
-   next ID above each ID of the recipes (runtime/install_recipes.h). */
-static u32 recipe_take_id(volatile u32 *h) {
-    u32 id=h[GRKIT_HOST_RECIPE_NEXT_ID/4];
-    if(!id || id>GRKIT_RECIPE_ID_MAX) id=1;
-    h[GRKIT_HOST_RECIPE_NEXT_ID/4]=id<GRKIT_RECIPE_ID_MAX ? id+1U : GRKIT_RECIPE_ID_MAX;
-    return id;
+/* A generated ID for a new recipe (runtime/recipe_id.h): none of the IDs of
+   the recipes and none of the user modes of the mode dial. 0 when each
+   candidate is taken, and INSTALL generates one at the next start. */
+static u32 recipe_new_id(volatile u32 *h) {
+    u32 attempt, id, i, taken;
+    for(attempt=0;attempt<RECIPE_ID_ATTEMPTS;++attempt) {
+        id=recipe_id_candidate(attempt);
+        taken=!id || id>GRKIT_RECIPE_ID_MAX;
+        for(i=0;i<GRKIT_RECIPE_SLOTS && !taken;++i) taken=*recipe_id_at(h,i)==id;
+        for(i=0;i<GRKIT_RECIPE_DIAL_POSITIONS && !taken;++i) taken=h[GRKIT_HOST_RECIPE_DIAL/4+i]==id;
+        if(!taken) return id;
+    }
+    return 0;
 }
 /* Two recipes have the same name base: the same look and effect, or the
    same native type (runtime/recipe_page.h names them). */
@@ -518,10 +526,10 @@ static u32 recipe_save(volatile u32 *h) {
     if(number) number=number<RECIPE_NUMBER_MAX ? number+1U : RECIPE_NUMBER_MAX;
     w[0]|=number<<RECIPE_NUMBER_SHIFT;
     for(i=n;i>e;--i) recipe_slot_move(h,i,i-1U);
-    /* A new recipe has the automatic name and the next ID. */
+    /* A new recipe has the automatic name and a new ID. */
     recipe_slot_clear(h,e);
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,e)[i]=w[i];
-    *recipe_id_at(h,e)=recipe_take_id(h);
+    *recipe_id_at(h,e)=recipe_new_id(h);
     GRKIT_RECIPES_CHANGED(h);
     return e;
 }

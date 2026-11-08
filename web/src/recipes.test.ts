@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PRESETS } from './generated/recipes';
 import { recipeChange, type CardSession } from './cardSession';
 import {
@@ -17,6 +17,9 @@ import {
   packageLibraries,
   sameRecipes,
   saveLibrary,
+  newRecipeId,
+  RECIPE_ID_MAX,
+  withIds,
   type Recipe,
 } from './recipes';
 
@@ -75,9 +78,13 @@ describe('recipes', () => {
 
   it('keeps the library of each camera line in the browser', () => {
     const storage = memoryStorage();
-    const library = [recipe('A')];
+    const library = [recipe('A', { id: 3 })];
     saveLibrary(storage, 'gr3', library);
     expect(loadLibrary(storage, 'gr3')).toEqual(library);
+    // A stored recipe without an ID gets one.
+    saveLibrary(storage, 'gr4', [recipe('B', { family: 'gr4' })]);
+    expect(loadLibrary(storage, 'gr4')[0]!.id).toBeGreaterThan(0);
+    storage.removeItem('grkit.recipes.gr4');
     expect(loadLibrary(storage, 'gr4')).toEqual([]);
     storage.setItem('grkit.recipes.gr4', '{broken');
     expect(loadLibrary(storage, 'gr4')).toEqual([]);
@@ -176,5 +183,34 @@ describe('recipes', () => {
     expect(recipeChange(session([recipe('A')]), [recipe('A')])).toBe('same');
     expect(recipeChange(session([recipe('A')]), [recipe('B')])).toBe('write');
     expect(recipeChange(session(null), [recipe('B')])).toBe('write');
+  });
+});
+
+describe('recipe IDs', () => {
+  it('keeps each ID once and generates the others', () => {
+    const recipes = withIds([
+      recipe('A', { id: 7 }),
+      recipe('B', { id: 7 }),
+      recipe('C', { id: 0 }),
+      recipe('D', { id: RECIPE_ID_MAX + 1 }),
+    ]);
+    expect(recipes[0]!.id).toBe(7);
+    const ids = recipes.map((item) => item.id);
+    expect(new Set(ids).size).toBe(4);
+    expect(ids.every((id) => Number.isInteger(id) && id >= 1 && id <= RECIPE_ID_MAX)).toBe(true);
+    // A recipe that has its own ID stays the same object.
+    const kept = recipe('E', { id: 9 });
+    expect(withIds([kept])[0]).toBe(kept);
+  });
+
+  it('generates an ID that is not taken', () => {
+    const values = [5, 0, 0x1fffffff, 9];
+    const spy = vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+      (array as Uint32Array)[0] = values.shift()!;
+      return array;
+    });
+    // 5 is taken, 0 and 2^29 - 1 are no IDs.
+    expect(newRecipeId(new Set([5]))).toBe(9);
+    spy.mockRestore();
   });
 });

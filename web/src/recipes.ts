@@ -83,10 +83,38 @@ export interface Recipe {
   /** The number after the automatic name of a recipe without a name, 0 for none. */
   number: number;
   /**
-   * The ID of the recipe on the card, or 0 for a recipe that the card does not hold yet. The card
-   * keeps the ID with the recipe, so the user modes of the mode dial keep their recipes.
+   * The ID of the recipe, a generated number (`newRecipeId`), or 0 for none. It stays with the
+   * recipe on each card, so the user modes of the mode dial keep their recipes.
    */
   id: number;
+}
+
+/** The largest recipe ID (`grkit_core::runtime::RECIPE_ID_MAX`). */
+export const RECIPE_ID_MAX = 2 ** 29 - 2;
+
+/** A generated recipe ID, 1 to `RECIPE_ID_MAX`, that `taken` does not hold. */
+export function newRecipeId(taken: ReadonlySet<number>): number {
+  const word = new Uint32Array(1);
+  for (;;) {
+    crypto.getRandomValues(word);
+    const id = word[0]! & 0x1fffffff;
+    if (id >= 1 && id <= RECIPE_ID_MAX && !taken.has(id)) return id;
+  }
+}
+
+/**
+ * The recipes, each with its own ID: a recipe without one, or with the ID of an earlier recipe, gets
+ * a generated one. A recipe gets its ID when it joins a library, so the card and the library hold the
+ * same IDs.
+ */
+export function withIds(recipes: readonly Recipe[]): Recipe[] {
+  const taken = new Set<number>();
+  return recipes.map((recipe) => {
+    const own = Number.isInteger(recipe.id) && recipe.id >= 1 && recipe.id <= RECIPE_ID_MAX && !taken.has(recipe.id);
+    const id = own ? recipe.id : newRecipeId(taken);
+    taken.add(id);
+    return own ? recipe : { ...recipe, id };
+  });
 }
 
 /**
@@ -138,21 +166,14 @@ export async function readRecipeFile(text: string, family: Family): Promise<Reci
 }
 
 /**
- * The recipe file for `recipes` of the camera line `family`, which replaces `previous`: its text,
- * and the recipes in their order with the ID that the file gives each. It keeps the import record
- * and the user modes of the mode dial of `previous`, and each recipe of it that `readRecipeFile`
- * leaves out, so a write never deletes a recipe that the site cannot show.
+ * The text of the recipe file for `recipes` of the camera line `family`, which replaces
+ * `previous`. It keeps the import record and the user modes of the mode dial of `previous`, and
+ * each recipe of it that `readRecipeFile` leaves out, so a write never deletes a recipe that the
+ * site cannot show.
  */
-export async function writeRecipeFile(
-  recipes: readonly Recipe[],
-  family: Family,
-  previous: string,
-): Promise<{ text: string; recipes: Recipe[] }> {
+export async function writeRecipeFile(recipes: readonly Recipe[], family: Family, previous: string): Promise<string> {
   const wasm = await loadWasm();
-  return JSON.parse(wasm.writeRecipeFile(JSON.stringify(recipes), family, previous)) as {
-    text: string;
-    recipes: Recipe[];
-  };
+  return wasm.writeRecipeFile(JSON.stringify(recipes), family, previous);
 }
 
 /** The automatic name of a recipe: its look and its number, or "Recipe". */
@@ -173,7 +194,7 @@ export function loadLibrary(storage: Pick<Storage, 'getItem'> | null, family: Fa
     const recipes = (value as Recipe[])
       .filter((recipe) => typeof recipe?.name === 'string' && recipe.family === family)
       .slice(0, LIBRARY_MAX);
-    return cameraOrder(recipes);
+    return withIds(cameraOrder(recipes));
   } catch {
     return [];
   }

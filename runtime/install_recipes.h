@@ -5,9 +5,10 @@
 
    - The recipe file (GRKIT/RECIPES.TXT, or RECIPES.TMP that a save cut by
      the power left) holds the recipes, their names and IDs, the hash of the
-     last package library that INSTALL imported, the user modes of the mode
-     dial, and the next ID (grkit_core::runtime::recipe_key). INSTALL gives
-     an ID to each recipe without one, such as an added recipe.
+     last package library that INSTALL imported, and the user modes of the
+     mode dial (grkit_core::runtime::recipe_key). INSTALL generates an ID
+     (runtime/recipe_id.h) for each recipe without one, such as an added
+     recipe.
      INSTALL restores them into the header, also without a module that uses
      CORE.RECIPE, so the loader saves them again. The undo steps are not
      saved.
@@ -33,6 +34,7 @@
      core checks the values for the camera when a person applies the recipe.
    - REPORT.TXT tells the count, the import, and each recipe that cannot
      apply in full (check_recipes). The installer deletes no file. */
+#include "recipe_id.h"
 static const char recipes_state_path[] = RECIPES_STATE_PATH, recipes_state_tmp_path[] = RECIPES_STATE_TMP_PATH;
 static const char recipes_inbox_path[] = RECIPES_INBOX_PATH;
 static u8 recipes_inbox[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_MAX * GRKIT_RCP_RECORD_SIZE];
@@ -169,25 +171,31 @@ static int recipes_store(u32 base)
     }
     return changed;
 }
-/* Give an ID to each recipe that has none, or one that an earlier recipe
-   has: a recipe of a package, or of a recipe file from before the IDs.
-   `next` is the next ID of the file, and stays above each ID. 1 when a
-   recipe got an ID. */
-static int recipes_give_ids(u32 *next)
+/* A generated ID (runtime/recipe_id.h) that no recipe of the list has and
+   that no user mode of `dial` names, or 0 when each candidate is taken. */
+static u32 recipes_new_id(const u32 *dial)
+{
+    for (u32 attempt = 0; attempt < RECIPE_ID_ATTEMPTS; ++attempt) {
+        u32 id = recipe_id_candidate(attempt);
+        int taken = !id || id > GRKIT_RECIPE_ID_MAX;
+        for (u32 i = 0; i < recipes_count && !taken; ++i) taken = recipes_list[i].id == id;
+        for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS && !taken; ++u) taken = dial[u] == id;
+        if (!taken) return id;
+    }
+    return 0;
+}
+/* Generate an ID for each recipe that has none, or one that an earlier
+   recipe has: a recipe of a package, or of a recipe file from before the
+   IDs. 1 when a recipe got an ID. */
+static int recipes_give_ids(const u32 *dial)
 {
     int changed = 0;
-    if (!*next || *next > GRKIT_RECIPE_ID_MAX) *next = 1;
-    for (u32 i = 0; i < recipes_count; ++i) {
-        u32 id = recipes_list[i].id;
-        if (id && id <= GRKIT_RECIPE_ID_MAX && id >= *next) *next = id < GRKIT_RECIPE_ID_MAX ? id + 1U : id;
-    }
     for (u32 i = 0; i < recipes_count; ++i) {
         u32 id = recipes_list[i].id;
         int taken = !id || id > GRKIT_RECIPE_ID_MAX;
         for (u32 j = 0; j < i && !taken; ++j) taken = recipes_list[j].id == id;
         if (!taken) continue;
-        recipes_list[i].id = *next;
-        if (*next < GRKIT_RECIPE_ID_MAX) ++*next;
+        recipes_list[i].id = recipes_new_id(dial);
         changed = 1;
     }
     return changed;
@@ -202,7 +210,7 @@ static u32 recipes_hash(const u8 *file, u32 size) { return (recipes_crc(file, si
 static void install_recipes(u32 base, u32 family)
 {
     static u8 text[STATE_TEXT_MAX];
-    u32 value, imported = 0, hash = 0, next = 0;
+    u32 value, imported = 0, hash = 0, dial[GRKIT_RECIPE_DIAL_POSITIONS];
     recipes_import = recipes_added = recipes_full = recipes_other = recipes_same = recipes_bad = recipes_switched = 0;
     long n = read_text(recipes_state_path, text, sizeof(text));
     if (n < 0) n = read_text(recipes_state_tmp_path, text, sizeof(text));
@@ -220,12 +228,12 @@ static void install_recipes(u32 base, u32 family)
             state_value(&saved_recipes, GRKIT_RECIPE_ID_KEY_BASE + slot, &value) && value <= RECIPE_VALUE_MAX ? value : 0;
     }
     if (state_value(&saved_recipes, GRKIT_RECIPE_IMPORTED_KEY, &value) && value <= RECIPE_VALUE_MAX) imported = value;
-    if (state_value(&saved_recipes, GRKIT_RECIPE_NEXT_ID_KEY, &value) && value <= RECIPE_VALUE_MAX) next = value;
     /* The user modes of the mode dial stay as the file has them. A user mode
        whose recipe is gone follows (runtime/abi.h). */
-    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u)
-        store(base + GRKIT_HOST_RECIPE_DIAL + 4U * u,
-              state_value(&saved_recipes, GRKIT_RECIPE_DIAL_KEY_BASE + u, &value) && value <= RECIPE_VALUE_MAX ? value : 0);
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) {
+        dial[u] = state_value(&saved_recipes, GRKIT_RECIPE_DIAL_KEY_BASE + u, &value) && value <= RECIPE_VALUE_MAX ? value : 0;
+        store(base + GRKIT_HOST_RECIPE_DIAL + 4U * u, dial[u]);
+    }
     /* The recipes: the run of recipe words. */
     recipes_count = 0;
     while (recipes_count < GRKIT_RECIPE_SLOTS && recipe_first_word(recipes_list[recipes_count].words[0])) ++recipes_count;
@@ -263,11 +271,10 @@ static void install_recipes(u32 base, u32 family)
         }
         imported = hash;
     }
-    int given = recipes_give_ids(&next);
+    int given = recipes_give_ids(dial);
     /* The loader saves the recipe file with the hash (StateFile::Recipes)
        after an import, a change of the order, or new IDs. */
     store(base + GRKIT_HOST_RECIPE_IMPORTED, imported);
-    store(base + GRKIT_HOST_RECIPE_NEXT_ID, next);
     if (recipes_store(base) || given || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
 }
 
