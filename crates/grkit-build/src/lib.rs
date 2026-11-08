@@ -70,10 +70,10 @@ pub struct PatchPlan {
     /// The services that modules import: the hash of each name
     /// (`grkit_core::grm::symbol_hash`) and the offset of its code in the tail.
     pub exports: Vec<(u32, u32)>,
-    /// The offset in the tail of the entry of the menu component for
-    /// SYSTEM_READY (`runtime/menu.c`: `menu_ready`), which INSTALL writes
-    /// into the services block, as the components link apart.
-    pub ready: u32,
+    /// The offset in the tail of the entry of the menu component for the
+    /// shooting screen (`runtime/menu.c`: `menu_viewfinder`), which INSTALL
+    /// writes into the services block, as the components link apart.
+    pub viewfinder: u32,
 }
 impl PatchPlan {
     /// The aligned span of the core payloads. Modules start immediately after it.
@@ -386,13 +386,13 @@ fn build_image(
         })
         .collect();
     let exports = core_exports(image.target.layout, &components)?;
-    let ready = core_symbol(image.target.layout, &components, "menu_ready")?;
+    let viewfinder = core_symbol(image.target.layout, &components, "menu_viewfinder")?;
     let plan = PatchPlan {
         patches,
         relocations,
         references,
         exports,
-        ready,
+        viewfinder,
     };
     validate_plan(&plan)?;
     let core_size = plan.core_size(image.target.layout.tail)?;

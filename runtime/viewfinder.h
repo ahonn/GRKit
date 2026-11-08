@@ -208,6 +208,19 @@ static GRKIT_ICON_COMPACT u32 crop_badge_shown(volatile u32 *h) {
 static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) {
     return cue_shown(h) || layers_active(h) || status_shown(h) || crop_badge_shown(h)<GRKIT_LABEL_COUNT;
 }
+/* The label of the mode dial (runtime/mode_dial.h), which the menu
+   component shows as native views: a waiting label shows when a still live
+   view shows its text (DISP Full or Simple), and the label ends when the
+   live view hides its text, as the Guides do, or records a movie. */
+static GRKIT_ICON_COMPACT void viewfinder_dial_label(volatile u32 *h,u32 controller) {
+    u32 label;
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    label=services_word(h,SERVICES_DIAL+DIAL_LABEL)[0];
+    if(label==DIAL_LABEL_NONE) return;
+    if(BYTE(controller,LIVEVIEW_MOVIE) || native_display()>DISPLAY_SIMPLE)
+        services_viewfinder(h,VIEWFINDER_LABEL_DROP);
+    else if(label==DIAL_LABEL_WAITS) services_viewfinder(h,VIEWFINDER_LABEL_SHOW);
+}
 static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
     u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=h[GRKIT_HOST_FRAME_NATIVE/4]!=native;
     h[GRKIT_HOST_FRAME_NATIVE/4]=native;
@@ -228,10 +241,17 @@ static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
     }
     /* The first shooting screen after INSTALL: the modules are ready. This
        hook runs in the App task. */
-    if(h[GRKIT_HOST_FRAME_CANVAS/4]) services_ready(h);
+    if(h[GRKIT_HOST_FRAME_CANVAS/4]) {
+        services_ready(h);
+        viewfinder_dial_label(h,controller);
+    }
 }
 static GRKIT_ICON_COMPACT void viewfinder_leave(volatile u32 *h,u32 controller) {
     if(h[GRKIT_HOST_FRAME_OWNER/4]!=controller) return;
+    /* The views of a label that shows leave the canvas before the live
+       view ends (the hooks run at the entry of its exit and destroy). */
+    if(h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_DIAL+DIAL_LABEL)[0]==DIAL_LABEL_SHOWN)
+        services_viewfinder(h,VIEWFINDER_LABEL_DROP);
     h[GRKIT_HOST_FRAME_OWNER/4]=0;
     h[GRKIT_HOST_FRAME_CANVAS/4]=0;
     h[GRKIT_HOST_FRAME_BITMAP/4]=0;

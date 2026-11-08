@@ -178,24 +178,46 @@
 #define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
-/* The entry of the menu component for SYSTEM_READY (runtime/menu.c:
-   menu_ready), which INSTALL writes: services_ready calls it in the App
-   task, as the components link apart. */
-#define SERVICES_CORE_READY (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+/* The entry of the menu component for the shooting screen (runtime/menu.c:
+   menu_viewfinder), which INSTALL writes: the framing component calls it
+   in the App task with an event, as the components link apart. The first
+   shooting screen after INSTALL (services_ready), and the label of the mode
+   dial (runtime/viewfinder.h: viewfinder_dial_label): a still live view that
+   shows its text while the label waits, and a live view that hides its text
+   or ends while the label waits or shows. */
+#define SERVICES_CORE_VIEWFINDER (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+#define VIEWFINDER_READY 0U
+#define VIEWFINDER_LABEL_SHOW 1U
+#define VIEWFINDER_LABEL_DROP 2U
 /* The mode dial (runtime/mode_dial.h): the firmware timer of the dial (0
    when none runs), the number of tries while the firmware loads the native
    settings, the user mode that the core acted on last (0 for another
    position), and the bound user mode that applies (0 in the base state).
+   Then the label of the dial: its state (DIAL_LABEL_*), its firmware timer,
+   its number of lines, the string view of each line and their parent, the
+   text descriptor of each line, and the text of the first line.
    Then the copy of the base state: the value of each capability; the number
    of module settings and the value of each; and the number of effects, the
    Fn adjustments of each (base-9 digits, as a recipe holds them), and its
    Toning byte. */
-#define SERVICES_DIAL (SERVICES_CORE_READY + 4U)
+#define SERVICES_DIAL (SERVICES_CORE_VIEWFINDER + 4U)
 #define DIAL_TIMER 0U
 #define DIAL_TRY 4U
 #define DIAL_AT 8U
 #define DIAL_ACTIVE 12U
-#define DIAL_BASE_CORE 16U
+#define DIAL_LABEL 16U
+#define DIAL_LABEL_TIMER 20U
+#define DIAL_LABEL_LINES 24U
+#define DIAL_LABEL_LINES_MAX 3U
+#define DIAL_LABEL_VIEWS 28U
+#define DIAL_LABEL_PARENT (DIAL_LABEL_VIEWS + 4U * DIAL_LABEL_LINES_MAX)
+#define DIAL_LABEL_TEXTS (DIAL_LABEL_PARENT + 4U)
+#define DIAL_LABEL_NAME (DIAL_LABEL_TEXTS + 8U * DIAL_LABEL_LINES_MAX)
+#define DIAL_LABEL_UNITS GRKIT_SUMMARY_UNITS
+#define DIAL_LABEL_NONE 0U
+#define DIAL_LABEL_WAITS 1U
+#define DIAL_LABEL_SHOWN 2U
+#define DIAL_BASE_CORE (DIAL_LABEL_NAME + 2U * DIAL_LABEL_UNITS)
 #define DIAL_BASE_COUNT (DIAL_BASE_CORE + 4U * GRKIT_CORE_SETTING_COUNT)
 #define DIAL_BASE_SETTINGS (DIAL_BASE_COUNT + 4U)
 #define DIAL_BASE_RECORDS (DIAL_BASE_SETTINGS + 4U * GRKIT_MODULE_SETTINGS_MAX)
@@ -277,14 +299,21 @@ static __attribute__((unused)) void services_emit(volatile u32 *h,u32 event,u32 
     }
     services_word(h,SERVICES_DEPTH)[0]=0;
 }
+/* Call the entry of the menu component for the shooting screen with
+   `event` (VIEWFINDER_*). A host test maps the call. */
+#ifndef SERVICES_CORE_CALL
+#define SERVICES_CORE_CALL(address,event) ((void (*)(u32))(address))(event)
+#endif
+static __attribute__((unused)) void services_viewfinder(volatile u32 *h,u32 event) {
+    u32 core=services_word(h,SERVICES_CORE_VIEWFINDER)[0];
+    if(core) SERVICES_CORE_CALL(core,event);
+}
 /* SYSTEM_READY, once after INSTALL: the core calls it when the shooting
    screen first shows (runtime/framing.c). */
 static __attribute__((unused)) void services_ready(volatile u32 *h) {
-    u32 core;
     if(!h[GRKIT_HOST_SERVICES/4] || services_word(h,SERVICES_READY)[0]) return;
     services_word(h,SERVICES_READY)[0]=1;
-    core=services_word(h,SERVICES_CORE_READY)[0];
-    if(core) ((void (*)(void))core)();
+    services_viewfinder(h,VIEWFINDER_READY);
     services_emit(h,SERVICE_EVENT_SYSTEM_READY,0,0);
 }
 #endif

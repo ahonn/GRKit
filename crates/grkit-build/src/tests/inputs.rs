@@ -62,7 +62,7 @@ fn patch_and_branch_validation() {
     };
     let mut plan = PatchPlan {
         exports: vec![],
-        ready: 0,
+        viewfinder: 0,
         patches: vec![patch.clone()],
         relocations: vec![(0, 0)],
         references: Vec::new(),

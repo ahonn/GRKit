@@ -191,6 +191,17 @@
 /* The text ID of a string view (a halfword), which FW_STRING_VIEW_RESET sets:
    the view measures its text when the ID changes. */
 #define STRING_VIEW_TEXT 0xea
+/* A string view of its own: its type for FW_VIEW_FACTORY, and the bytes of
+   its font and of its horizontal and vertical alignment, which a new view
+   measures at its first layout. STRING_VIEW_LIVE_FONT is the font of the
+   live-view text, such as the focus distance, and STRING_VIEW_CENTER
+   centers the text in the view. */
+#define STRING_VIEW_TYPE 0x11U
+#define STRING_VIEW_FONT 0xf0
+#define STRING_VIEW_ALIGN 0xf1
+#define STRING_VIEW_VERTICAL 0xf2
+#define STRING_VIEW_LIVE_FONT 1U
+#define STRING_VIEW_CENTER 1U
 /* The methods of the SelectMenuController vtable. */
 #define SELECT_VTABLE_SLOTS 16U
 /* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
