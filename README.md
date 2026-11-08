@@ -56,6 +56,8 @@ Pick your camera, modules, and effects on [grkit.app](https://grkit.app), then e
 
 The first time only, hold MENU while you turn the camera on. To update from a ZIP, replace the `SCRIPT` folder on the card. Your settings stay in `GRKIT`. Formatting the card removes GRKit, so copy `GRKIT` to a computer first.
 
+To read the Snap Focus Distance in feet, create an empty file `GRKIT/FEET.TXT` on the card: at the next power-on the choices read 1', 3', 5', 7', 8', and 16' instead of 0.3m to 5m. Delete the file to go back to meters. The MF distance scale stays in meters.
+
 If GRK doesn't show up, check the FAQ on [grkit.app](https://grkit.app). If that doesn't help, send `GRKIT/REPORT.TXT`, `GRKIT/BOOT.TXT`, and `SCRIPT/GRKIT/INSTALL.ERR` (if it exists) in a [device report](https://github.com/ahonn/grkit/issues/new?template=device-report.yml).
 
 ## Build from source

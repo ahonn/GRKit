@@ -76,12 +76,16 @@ A package holds only `SCRIPT`. `GRKIT` at the card root is the data folder: no p
 | `GRKIT/STATE.TXT` | the saved settings |
 | `GRKIT/REPORT.TXT`, `GRKIT/BOOT.TXT` | the result and the boot log of the last starts |
 | `GRKIT/SAFE` | starts the safe mode |
+| `GRKIT/FEET.TXT` | labels the snap focus distances in feet |
+| `GRKIT/FEET.BIN` | the addresses of those labels in the running build, which INSTALL keeps after a search |
 
 A package module loads only if the package list names it, and a module in `GRKIT/MODULES` replaces the package module with the same name. A new package copies its effects into the library once, so an effect that a person deleted stays deleted. The installer never renames or deletes a file in the data folder, because the camera's file systems do not support it reliably.
 
 ### Report and safe mode
 
 `GRKIT/REPORT.TXT` gives the GRKit version and target, the result of each module, and the installed effects.
+
+While `GRKIT/FEET.TXT` exists, INSTALL writes the snap focus distance labels of the firmware in feet: 1', 3', 5', 7', 8', and 16' in place of 0.3m to 5m, in each menu language. The labels are UTF-16 strings in the RTOS image, which the camera loads again at each power-on, so a start without the file shows meters. The MF distance scale is drawn, not text, and stays in meters.
 
 While `GRKIT/SAFE` exists, no module loads, and only module management stays in MENU, so a person can turn off the module that stopped the camera. The safe mode does not start by itself, because a count of unfinished starts also counts each quick power-off.
 

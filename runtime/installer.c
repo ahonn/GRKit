@@ -91,6 +91,10 @@ static const char legacy_state_path[] = LEGACY_STATE_PATH;
 static const char legacy_state_tmp_path[] = LEGACY_STATE_TMP_PATH;
 static const char legacy_effects_path[] = LEGACY_EFFECTS_PATH;
 static const char report_path[] = REPORT_PATH;
+/* The distance unit marker and its hint: while GRKIT/FEET.TXT is on the
+   card, INSTALL labels the snap focus distances in feet (apply_units), and
+   GRKIT/FEET.BIN keeps the addresses of the labels of the running build. */
+static const char feet_path[] = DATA_PATH "/FEET.TXT", feet_hint_path[] = DATA_PATH "/FEET.BIN";
 static const char relocation_path[] = RELOCATION_PATH;
 static volatile u8 *at(u32 physical) { return mapping + physical - MAP_BASE; }
 static u32 word(u32 p) { return *(volatile u32 *)at(p); }
@@ -737,6 +741,106 @@ static int publish_patches(void)
     return 0;
 }
 
+/* The snap focus distance labels in feet while GRKIT/FEET.TXT is on the card
+   (ahonn/GRKit#71). The firmware keeps the labels as NUL-terminated UTF-16
+   strings in the read-only part of the RTOS image, one set for each menu
+   language: 0.3m, 1m, 1.5m, 2m, 2.5m, and 5m. INSTALL writes the feet label
+   over each whole string: 1', 3', 5', 7', 8', and 16', which fit in the
+   string, its terminator, and its pad. The MF distance scale is drawn, not
+   text, so it stays in meters. The camera loads the image again at each
+   power-on, so a start without the marker shows meters.
+
+   A search of the image reads about 20 MB uncached, so the start that
+   searches keeps the addresses in GRKIT/FEET.BIN with the identity of the
+   build, as RELOC.BIN keeps the relocation windows. A later start checks the
+   labels at those addresses and searches again only when one is not there. */
+#ifndef RTOS_NATIVE
+struct unit_label { const char *meters, *feet; };
+static const struct unit_label unit_labels[] = {
+    {"0.3m", "1'"}, {"1m", "3'"}, {"1.5m", "5'"}, {"2m", "7'"}, {"2.5m", "8'"}, {"5m", "16'"},
+};
+#define UNIT_LABELS (sizeof(unit_labels) / sizeof(unit_labels[0]))
+#define UNITS_MAX 128U
+#define UNITS_MAGIC 0x54464b47U
+/* FEET.BIN: the magic word, the identity of the build, the count, then the
+   address of each label. */
+static u32 unit_words[3 + UNITS_MAX];
+/* Whether the UTF-16 string at `a` is exactly the ASCII `s`, preceded by a
+   NUL unit and followed by its terminator; `pad` gets the number of NUL units
+   after the terminator, up to 2. */
+static int utf16_whole_at(u32 a, const char *s, u32 *pad)
+{
+    u32 n = length(s);
+    if (*(volatile u16 *)at(a - 2) != 0) return 0;
+    for (u32 i = 0; i < n; ++i)
+        if (*(volatile u16 *)at(a + i * 2) != (u16)(u8)s[i]) return 0;
+    if (*(volatile u16 *)at(a + n * 2) != 0) return 0;
+    *pad = 0;
+    while (*pad < 2 && *(volatile u16 *)at(a + (n + 1 + *pad) * 2) == 0) ++*pad;
+    return 1;
+}
+/* The label whose meters string is whole at `a` and whose feet string fits
+   in its place, or UNIT_LABELS. */
+static u32 unit_label_at(u32 a, u32 *pad)
+{
+    for (u32 k = 0; k < UNIT_LABELS; ++k)
+        if (utf16_whole_at(a, unit_labels[k].meters, pad))
+            return length(unit_labels[k].feet) <= length(unit_labels[k].meters) + *pad ? k : UNIT_LABELS;
+    return UNIT_LABELS;
+}
+static int unit_address_valid(u32 a)
+{
+    return a >= RELOCATION_RTOS_BASE + 4 && a + 16 < relocation.image_end && !(a & 1);
+}
+/* The addresses of the labels into unit_words: from FEET.BIN while each
+   still holds its label, else from a search of the image, which FEET.BIN then
+   keeps. Returns the count. */
+static u32 find_units(void)
+{
+    u32 count = 0, pad;
+    long have = read_text(feet_hint_path, (u8 *)unit_words, sizeof(unit_words));
+    if (have >= 12 && unit_words[0] == UNITS_MAGIC && unit_words[1] == word(RTOS_IDENTITY) &&
+        unit_words[2] <= UNITS_MAX && (u32)have == (3 + unit_words[2]) * 4) {
+        for (count = 0; count < unit_words[2]; ++count) {
+            u32 a = unit_words[3 + count];
+            if (!unit_address_valid(a) || unit_label_at(a, &pad) == UNIT_LABELS) break;
+        }
+        if (count == unit_words[2]) return count;
+    }
+    /* A label starts after a NUL unit with a digit, at a word or at its
+       upper half. */
+    count = 0;
+    for (u32 w = RELOCATION_RTOS_BASE + 4; w + 16 < relocation.image_end && count < UNITS_MAX; w += 4) {
+        u32 v = word(w), low = v & 0xffffU, high = v >> 16, a;
+        if (low >= '0' && low <= '9' && word(w - 4) >> 16 == 0) a = w;
+        else if (high >= '0' && high <= '9' && low == 0) a = w + 2;
+        else continue;
+        if (unit_label_at(a, &pad) != UNIT_LABELS) unit_words[3 + count++] = a;
+    }
+    unit_words[0] = UNITS_MAGIC; unit_words[1] = word(RTOS_IDENTITY); unit_words[2] = count;
+    write_file(feet_hint_path, (const u8 *)unit_words, (3 + count) * 4);
+    return count;
+}
+static void apply_units(void)
+{
+    u32 changed = 0;
+    if (!present(feet_path)) return;
+    u32 count = find_units();
+    for (u32 i = 0; i < count; ++i) {
+        u32 a = unit_words[3 + i], pad, k = unit_label_at(a, &pad);
+        if (k == UNIT_LABELS) continue;
+        u32 n = length(unit_labels[k].meters), m = length(unit_labels[k].feet);
+        for (u32 j = 0; j <= n + pad; ++j)
+            *(volatile u16 *)at(a + j * 2) = j < m ? (u16)(u8)unit_labels[k].feet[j] : 0;
+        sync_alias(a, (n + pad + 1) * 2);
+        ++changed;
+    }
+    print("GR_UNITS_FEET "); number(changed); print("\n");
+}
+#else
+static void apply_units(void) {}
+#endif
+
 static int install(void)
 {
     struct arrays arrays;
@@ -780,6 +884,7 @@ static int install(void)
     for (u32 i = 0; i < icon_chunks; ++i)
         if (!sync_alias(arrays.icon_bases[i], chunk_count(i) * ICON_STRIDE)) return STATUS_SYNC;
     if ((status = publish_patches())) return status;
+    apply_units();
     print("GR_MODULE_INSTALLED "); number(count); print("\n");
     return 0;
 }
