@@ -36,7 +36,7 @@ static GRKIT_MAYBE_UNUSED GRKIT_ICON_COMPACT u32 module_icon_row(volatile u32 *h
         if(!setting_offered(h,setting,value)) return GRKIT_ICON_OFF;
     }
     tile=MODULE_ICON_WORD(address,MODULE_ICON_FIRST);
-    if(kind==3) return tile<GRKIT_LABEL_COUNT && value<GRKIT_LABEL_COUNT-tile ? GRKIT_ICON_CORE_LABEL(tile+value) : GRKIT_ICON_OFF;
+    if(kind==3) return tile<GRKIT_MODULE_LABEL_COUNT && value<GRKIT_MODULE_LABEL_COUNT-tile ? GRKIT_ICON_CORE_LABEL(tile+value) : GRKIT_ICON_OFF;
     if(tile_base>=GRKIT_MODULE_TILES_MAX || tile>=GRKIT_MODULE_TILES_MAX-tile_base ||
        value>=GRKIT_MODULE_TILES_MAX-tile_base-tile) return GRKIT_ICON_OFF;
     return GRKIT_ICON_MODULE_TILE(tile_base+tile+value);

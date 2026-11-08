@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 976
+#define GRKIT_HOST_HEADER_SIZE 1000
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -294,13 +294,30 @@
    not readable. A half-press on the native Image Control slot with another
    type selects that type, as OK does (runtime/menu.c). */
 #define GRKIT_HOST_ADJ_IC_TYPE 972
+/* CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h). */
+#define GRKIT_HOST_CROP 976
+/* CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the frame only. */
+#define GRKIT_HOST_CROP_MODE 980
+/* The native crop factor that the core set for CORE.CROP, as float bits, or 0
+   while the camera keeps its own (runtime/crop.h). */
+#define GRKIT_HOST_CROP_NATIVE 984
+/* The crop factor of the next shot, as float bits, where it is longer than the
+   native factor of the live view (40, 70, and 90 mm), or 0. */
+#define GRKIT_HOST_CROP_SHOT 988
+/* GR IV: the back end of the last shot, whose queue completion the core can
+   post when a crop shot finishes before the shutter release stops
+   (runtime/crop_queue.S). */
+#define GRKIT_HOST_CROP_QUEUE_OWNER 992
+/* GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
+   CROP_QUEUE_RECOVERED. */
+#define GRKIT_HOST_CROP_QUEUE_FLAGS 996
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
    of values. CORE.TONE has neither: its value is the active record, and the
    effects give its number of values (runtime/tone.h). */
 #define GRKIT_CORE_SETTING_BASE 0x100U
-#define GRKIT_CORE_SETTING_COUNT 7U
+#define GRKIT_CORE_SETTING_COUNT 9U
 #define GRKIT_CORE_TONE 0x100U
 #define GRKIT_CORE_TONE_VALUES 0U
 #define GRKIT_CORE_TONE_BIT 0x1
@@ -322,8 +339,14 @@
 #define GRKIT_CORE_ADJ_MODULE 0x106U
 #define GRKIT_CORE_ADJ_MODULE_VALUES 10U
 #define GRKIT_CORE_ADJ_MODULE_BIT 0x40
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,908,256,188
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,10
+#define GRKIT_CORE_CROP 0x107U
+#define GRKIT_CORE_CROP_VALUES 6U
+#define GRKIT_CORE_CROP_BIT 0x80
+#define GRKIT_CORE_CROP_MODE 0x108U
+#define GRKIT_CORE_CROP_MODE_VALUES 2U
+#define GRKIT_CORE_CROP_MODE_BIT 0x100
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,908,256,188,976,980
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,10,6,2
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100
@@ -577,7 +600,7 @@
    of the build (grkit_core::artwork::overlay_labels): for label n, a u16
    width, a u16 height, and the u32 offset of its pixels from the table start
    at 8 n. Each pixel is one byte of text coverage, row by row. */
-#define GRKIT_LABELS_SIZE 24576
+#define GRKIT_LABELS_SIZE 28672
 /* The profile table after the labels (runtime/profile.h). For each of the
    first GRKIT_PROFILE_MODULES listed modules, at GRKIT_PROFILE_MODULE_SIZE n:
    its code start, its code end, and GRKIT_PROFILE_NAME_BYTES ASCII bytes of
@@ -585,7 +608,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 190664
+#define GRKIT_PROFILE 194760
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -606,10 +629,10 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 195260
+#define GRKIT_TAIL_SIZE 199356
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 191164
+#define GRKIT_TONE_CURVES 195260
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192
@@ -629,7 +652,8 @@
 #define GRKIT_TEXT_RECORDS 40
 #define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)
 #define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)
-#define GRKIT_LABEL_COUNT 14
+#define GRKIT_LABEL_COUNT 20
+#define GRKIT_MODULE_LABEL_COUNT 14
 /* String IDs of the label table, in grkit_core::menu_text order. A run of IDs
    follows the rows or values that it names. */
 #define TEXT_OFF 0

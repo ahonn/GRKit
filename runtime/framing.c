@@ -224,6 +224,10 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
     ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=0;
     h[GRKIT_HOST_FRAME_CROP/4]=capture_aspect_value(h);
     capture_sync(controller);
+    /* The camera's crop factor follows CORE.CROP in the still live view. */
+#ifdef CROP_NATIVE_BITS
+    if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h,FRAMING_NATIVE_ASPECT());
+#endif
     viewfinder_bind(h,controller);
     level_boot(h,controller);
 }
@@ -246,6 +250,13 @@ void framing_paint(u32 canvas,u32 bitmap) {
     paint_canvas(h,canvas,bitmap);
     profile_end(h,start,GRKIT_PROFILE_FRAME_PAINT);
 }
+/* The paint after the native children of the canvas (runtime/framing.S). */
+void framing_paint_after(u32 canvas,u32 bitmap) { paint_after(framing_header(),canvas,bitmap); }
 #ifdef __arm__
 #pragma clang attribute pop
 #endif
+/* The live-view crop badge of the camera (runtime/framing.S: crop_badge):
+   0 hides it where the core draws its own (runtime/crop.h). */
+u32 crop_badge_native(void) {
+    return crop_badge_label(framing_header(),FRAMING_NATIVE_ASPECT())>=GRKIT_LABEL_COUNT;
+}

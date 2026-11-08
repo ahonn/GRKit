@@ -28,6 +28,11 @@
 /* The native StillAspectRatio, and its setter as the native menu calls it:
    a change posts the UI change event and switches the live view. */
 #define MENU_NATIVE_ASPECT() CALL1(FW_STILL_ASPECT_GET)(CALL0(FW_SETTINGS)())
+/* GR IIIx runs this runtime with its 40 mm lens: the crops of CORE.CROP
+   are 50, 57, 71, 100, and 128 mm there (runtime/crop.h). */
+#ifndef CROP_LENS_40MM
+#define CROP_LENS_40MM() ((((u32 (*)(void))FW_PROJECT_TYPE)()&0xffU)==0)
+#endif
 #define MENU_SET_NATIVE_ASPECT(id) CALL2(FW_STILL_ASPECT_SET)(CALL0(FW_SETTINGS)(),(id))
 /* GR III picks the live-view mode of the native aspect when the live view
    starts, so a native aspect change needs a stopped live view, as the native
@@ -135,6 +140,27 @@
 #define SHOT_TAKEN 0x944
 #define SHOT_FOCAL 0x694
 #define SHOT_CROP 0x7b8
+/* CORE.CROP (runtime/crop.h): the size of 3:2 L, which the sensor crops
+   by the factor of a crop; the factor of each value as float bits: Off,
+   the native 35 mm, 40 mm, the native 50 mm, 70 mm, and 90 mm, so that the
+   Exif focal length (18.3 mm x 1.5339 x the factor) names each crop; and
+   the side of its frame in 1/65536 of the uncropped view. The shot request object holds the copy of the capture
+   settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
+#define CROP_WIDTH 6000
+#define CROP_HEIGHT 4000
+#define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000,0x404db6db
+#define CROP_SCALES 65536,52429,45875,36700,26214,20389
+/* The JPEG codec takes sizes in multiples of 16. */
+#define CROP_ALIGN 16
+/* The icon of no crop, which hides the live-view crop badge. */
+#define CROP_BADGE_OFF 0
+/* The native factors of 35 and 50 mm, which the camera's own crop code
+   takes (runtime/framing.S). */
+#define CROP_NATIVE_35 0x3fa00000
+#define CROP_NATIVE_50 0x3fe49249
+#define CROP_SHOT_COPY 0x44c8
+/* The instruction that the shot hook displaces (runtime/framing.S). */
+#define CROP_SHOT_DISPLACED mov r0, r4
 /* DNGMetaDataWriter::TiffEntryDataSetter: RAW image info and shot metadata. */
 #define DNG_SETTER_INFO 0x7c
 #define DNG_SETTER_SHOT 0x84

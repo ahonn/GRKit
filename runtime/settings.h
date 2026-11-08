@@ -10,9 +10,11 @@
    functions that runtime/aspect.h names. */
 #include "setting_table.h"
 /* CORE.TONE: its value is the active record (runtime/tone.h). CORE.ASPECT:
-   its value comes from the native aspect and the crop (runtime/aspect.h). */
+   its value comes from the native aspect and the crop (runtime/aspect.h).
+   CORE.CROP: runtime/crop.h. */
 #include "tone.h"
 #include "aspect.h"
+#include "crop.h"
 #ifndef MODULE_SETTINGS_MAP
 #define MODULE_SETTINGS_MAP(address) ((volatile u32 *)(address))
 #endif

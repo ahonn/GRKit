@@ -682,8 +682,10 @@ pub fn strike(rgba: &mut [u8]) {
 /// capture area n, then the sign of Date Imprint (LABEL_DATE in
 /// runtime/sdk/grkit.h), then its formats in Date Imprint STYLE order
 /// (label LABEL_DATE + STYLE): the order of year, month, and day, and HM
-/// when the time prints.
-pub const OVERLAY_LABELS: [&str; 14] = [
+/// when the time prints. Then the crop badges (`crop_badge`): 40, 70, and
+/// 90 mm of a 28 mm lens, then 57, 100, and 128 mm of the 40 mm lens of GR
+/// IIIx (runtime/crop.h: LABEL_CROP).
+pub const OVERLAY_LABELS: [&str; 20] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -698,7 +700,17 @@ pub const OVERLAY_LABELS: [&str; 14] = [
     "MDY",
     "DMY",
     "DMY HM",
+    "40mm",
+    "70mm",
+    "90mm",
+    "57mm",
+    "100mm",
+    "128mm",
 ];
+/// The labels that a module can name: the live-view text before the crop
+/// badges, which only the core draws.
+pub const MODULE_LABELS: usize = 14;
+const _: () = assert!(OVERLAY_LABELS.len() == MODULE_LABELS + 6);
 /// The width of the black outline around the text. The native live-view text
 /// has one black pixel around the gray edge of each stroke, and keeps the
 /// gaps between characters transparent.
@@ -887,6 +899,102 @@ fn overlay_label(index: usize) -> (usize, usize, Vec<u8>) {
     (width, height, pixels)
 }
 
+/// A crop badge: the size and the grays of the camera's own crop badge,
+/// which the live view shows at its right for a crop of the camera. A
+/// 1-pixel border, a dark fill, the focal length in bold digits as high as
+/// `BADGE_CAPITAL`, and "mm" with letters as high as `BADGE_X_HEIGHT` on the
+/// same baseline, centered.
+const BADGE_WIDTH: usize = 56;
+const BADGE_HEIGHT: usize = 20;
+const BADGE_BORDER: u8 = 128;
+const BADGE_FILL: u8 = 53;
+const BADGE_CAPITAL: f32 = 14.0;
+const BADGE_X_HEIGHT: f32 = 8.0;
+/// The row after the capitals.
+const BADGE_BASELINE: f32 = 17.0;
+/// The native badge letters are wider than Roboto Condensed Bold.
+const BADGE_STRETCH: f32 = 1.2;
+/// Pixels added between the digits, and between the digits and "mm".
+const BADGE_TRACKING: f32 = 0.0;
+const BADGE_GAP: f32 = 2.0;
+/// The text stays inside the border with a margin of at least this.
+const BADGE_MARGIN: usize = 3;
+
+/// The pixels of crop badge `text`, such as "40mm" (`OVERLAY_LABELS`).
+fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
+    let font = FontRef::try_from_slice(FONT).expect("embedded font is valid");
+    let height_of = |character: char| {
+        font.outline_glyph(font.glyph_id(character).with_scale(100.0))
+            .expect("the font has the character")
+            .px_bounds()
+            .height()
+            / 100.0
+    };
+    let digits = text.trim_end_matches("mm");
+    // The parts: the digits at their capital height, then "mm" at its
+    // x-height, each as glyphs with their advance from the start.
+    let parts = [
+        (digits, BADGE_CAPITAL / height_of('0')),
+        ("mm", BADGE_X_HEIGHT / height_of('x')),
+    ];
+    let mut glyphs = Vec::new();
+    let mut caret = 0.0;
+    for (index, (part, size)) in parts.into_iter().enumerate() {
+        if index > 0 {
+            caret += BADGE_GAP;
+        }
+        let scaled = font.as_scaled(PxScale {
+            x: size * BADGE_STRETCH,
+            y: size,
+        });
+        for (n, character) in part.chars().enumerate() {
+            let id = scaled.glyph_id(character);
+            if n > 0 && index == 0 {
+                caret += BADGE_TRACKING;
+            }
+            glyphs.push((id, size, caret));
+            caret += scaled.h_advance(id);
+        }
+    }
+    // Condense a text wider than the inside of the border.
+    let room = (BADGE_WIDTH - 2 - 2 * BADGE_MARGIN) as f32;
+    let condense = (room / caret).min(1.0);
+    let width = caret * condense;
+    let left = 1.0 + ((BADGE_WIDTH - 2) as f32 - width) / 2.0;
+    let mut coverage = vec![0f32; BADGE_WIDTH * BADGE_HEIGHT];
+    for (id, size, x) in glyphs {
+        let scale = PxScale {
+            x: size * BADGE_STRETCH * condense,
+            y: size,
+        };
+        let position = point((left + x * condense).round(), BADGE_BASELINE);
+        if let Some(outline) = font.outline_glyph(id.with_scale_and_position(scale, position)) {
+            let origin = outline.px_bounds().min;
+            outline.draw(|x, y, value| {
+                let (x, y) = (origin.x as i32 + x as i32, origin.y as i32 + y as i32);
+                if (1..BADGE_WIDTH as i32 - 1).contains(&x)
+                    && (1..BADGE_HEIGHT as i32 - 1).contains(&y)
+                {
+                    let cell = &mut coverage[y as usize * BADGE_WIDTH + x as usize];
+                    *cell = (*cell + value).min(1.0);
+                }
+            });
+        }
+    }
+    let mut pixels = vec![BADGE_FILL; BADGE_WIDTH * BADGE_HEIGHT];
+    for y in 0..BADGE_HEIGHT {
+        for x in 0..BADGE_WIDTH {
+            let at = y * BADGE_WIDTH + x;
+            pixels[at] = if y == 0 || y == BADGE_HEIGHT - 1 || x == 0 || x == BADGE_WIDTH - 1 {
+                BADGE_BORDER
+            } else {
+                (f32::from(BADGE_FILL) + coverage[at] * f32::from(255 - BADGE_FILL)).round() as u8
+            };
+        }
+    }
+    (BADGE_WIDTH, BADGE_HEIGHT, pixels)
+}
+
 /// The label table that the installer copies after the menu text
 /// (`GRKIT_LABELS` in `runtime/abi.h`): for label n, a u16 width, a u16
 /// height, and the u32 offset of its rows at 8 n, then the rows of each
@@ -898,7 +1006,11 @@ fn overlay_label(index: usize) -> (usize, usize, Vec<u8>) {
 pub fn overlay_labels() -> Vec<u8> {
     let mut table = vec![0; OVERLAY_LABELS.len() * 8];
     for index in 0..OVERLAY_LABELS.len() {
-        let (width, height, pixels) = overlay_label(index);
+        let (width, height, pixels) = if OVERLAY_LABELS[index].ends_with("mm") {
+            crop_badge(OVERLAY_LABELS[index])
+        } else {
+            overlay_label(index)
+        };
         let offset = table.len() as u32;
         table[index * 8..index * 8 + 2].copy_from_slice(&(width as u16).to_le_bytes());
         table[index * 8 + 2..index * 8 + 4].copy_from_slice(&(height as u16).to_le_bytes());

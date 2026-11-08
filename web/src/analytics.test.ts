@@ -17,6 +17,7 @@ describe('downloadProps', () => {
       language: 'zh-Hans',
       filmLook: 'on',
       framing: 'on',
+      crop: 'off',
       guides: 'off',
       dateStamp: 'off',
       glow: 'off',

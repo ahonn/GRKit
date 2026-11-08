@@ -9,6 +9,7 @@ The official modules in `modules/` are complete examples:
 | --- | --- |
 | `modules/guides` | an own setting, a choice page, and a layer |
 | `modules/framing` | a page, mask layer, and status icon of the capability `CORE.ASPECT` |
+| `modules/crop` | a page and mask layer of the capabilities `CORE.CROP` and `CORE.CROP_MODE` |
 | `modules/date` | three settings, a page, a status icon, and a plane filter |
 | `modules/glow` | independent Enable and Strength settings, strength icons shared by ADJ and the viewfinder, and a frame filter |
 | `modules/grain` | a module with only data: a page and status icon of `CORE.GRAIN` |

@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 5U
+#define GRM_ABI_MINOR 6U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U
@@ -107,7 +107,8 @@
 #define GRM_ICON_TILE 1U
 #define GRM_ICON_TONE 2U
 /* A core live-view label, for a status-row indicator (GRKIT_ICON_LABEL), and
-   the number of core labels (GRKIT_LABEL_COUNT). */
+   the number of core labels that a module can name
+   (GRKIT_MODULE_LABEL_COUNT). */
 #define GRM_ICON_LABEL 3U
 #define GRM_LABELS 14U
 #define GRM_CONDITION 12U

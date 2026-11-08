@@ -12,6 +12,13 @@
 #define FW_SETTINGS FIRMWARE(0x5320b31c)
 #define FW_STILL_ASPECT_GET FIRMWARE(0x53245260)
 #define FW_STILL_ASPECT_SET FIRMWARE(0x532525a4)
+/* The crop factor of CORE.CROP (runtime/crop.h): its getter and setter on
+   the camera settings (FW_SETTINGS), with the factor as a float in s0. */
+#define FW_CROP_GET FIRMWARE(0x5324526c)
+#define FW_CROP_SET FIRMWARE(0x53252684)
+/* The project type that the RTOS sets at boot: 1 on GR III, 0 on GR IIIx
+   (2 before it is set). It takes no lock. */
+#define FW_PROJECT_TYPE FIRMWARE(0x536b44ec)
 /* ShootingModel singleton, and the two requests with which a controller that
    needs no live view stops it (Controller live-view dispatch 0x5316d9b4,
    state 1). Each takes the model and a completion callback. */

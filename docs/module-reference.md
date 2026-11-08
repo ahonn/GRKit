@@ -275,12 +275,16 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.TONE` | 0 Off, then n + 1 for installed effect n | The effect of still pictures and the live view. The core installs the effects only when a loaded module uses `CORE.TONE`. |
 | `CORE.ASPECT` | 8: 0 Off, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The selected crop or composition ratio, according to `CORE.ASPECT_MODE`. |
 | `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops JPEG photos or only marks composition in the live view. The default is Crop. |
+| `CORE.CROP` | 6: 0 Off, 1 35 mm, 2 40 mm, 3 50 mm, 4 70 mm, 5 90 mm | A focal-length crop of the lens, according to `CORE.CROP_MODE`. The focal lengths are those of a 28 mm lens. GR IIIx has the same crops of its 40 mm lens: 50, 57, 71, 100, and 128 mm. |
+| `CORE.CROP_MODE` | 2: 0 Crop, 1 Frame Only | Whether the camera crops photos to the selected focal length or the live view only shows its frame. The default is Crop. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
 
 - `CORE.TONE`: a page gives only its title, and the core gives the rows: the effects, their icons, the preview, and the Fn adjustments. The value of an effect is valid only during one start, because the effects and their order can change. Keep no value across a restart.
 - `CORE.ASPECT`: a page shows only the ratios that the camera offers. `setting_set` with an unsupported ratio does nothing. Selecting a nonzero ratio sets the native aspect to 3:2 in both modes. Crop mode crops JPEG photos to that ratio. Guides Only displays the composition frame without applying that crop. Off clears the selected ratio and preserves the current native aspect.
 - `CORE.ASPECT_MODE`: Crop changes JPEG dimensions. Guides Only shows the selected ratio in the native 3:2 live view without setting a recorded crop. A later change to another native aspect hides this composition frame. Changing only the mode preserves the native aspect and the Framing mask setting.
+
+- `CORE.CROP`: a page shows only the crops that the camera offers, and the core gives the texts of GR IIIx. In Crop mode, in native 3:2 without a `CORE.ASPECT` ratio, the camera crops JPEG and DNG to the focal length, one pixel each, and Exif names it. The live view magnifies to 35 or 50 mm, and shows the frame of 40 mm in the 35 mm view and of 70 and 90 mm in the 50 mm view. The camera's crop button steps through the crops. With a `CORE.ASPECT` ratio, in another native aspect, or in Frame Only mode, the live view shows the frame of the crop and photos are not cropped.
 
 When Framing crops a shot, DNG defaults to native 3:2 and preserves the camera's digital crop setting. RAW editors that apply the DNG default crop show this 3:2 area. Embedded previews can still show the selected composition.
 
@@ -327,6 +331,7 @@ The surface has 720 x 480 pixels of 32 bits. A pixel holds red in its low byte, 
 A layer receives the selected framing area, in Crop mode and in Guides Only mode.
 Without a framing area, it receives the photo area of the camera's native aspect ratio.
 A layer whose setting is `CORE.ASPECT` receives area 0 without a framing area.
+A frame of `CORE.CROP` is the center of that area. A layer whose setting is `CORE.CROP` receives the frame as `box` and the crop as `area`, or area 0 without a frame, such as a crop that the live view already shows. The other layers, except those of `CORE.ASPECT`, receive the frame as `box`.
 
 In ADJ, each layer previews the highlighted ratio.
 
@@ -335,6 +340,7 @@ Layers paint in ascending `order`. A layer with the same order as another paints
 | Order | Layer |
 | --- | --- |
 | 10 | the Framing mask |
+| 15 | the Crop mask |
 | 20 | Guides |
 
 The manifest keys `follow_disp`, `full_disp`, and `live_only` set the flags `GRKIT_LAYER_FOLLOW_DISP`, `GRKIT_LAYER_FULL_DISP`, and `GRKIT_LAYER_LIVE_ONLY`. While the page of a layer setting is open in ADJ, the core paints the layer with the highlighted value on the ADJ canvas.
@@ -429,7 +435,7 @@ The UI services work only in an event handler, a timer callback, or a UI callbac
 
 ## ABI and compatibility
 
-**ABI version.** `GRKIT_ABI` is 2.4: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
+**ABI version.** `GRKIT_ABI` is 2.6: the major version in the high 16 bits, the minor version in the low 16 bits. The build writes it into the file header and into the descriptor. The installer loads a module whose major version equals that of the core and whose minor version is not larger. A minor version adds capabilities without changing existing contracts. A major version can change an existing layout.
 
 In 2.0, each text list also has a Korean text. The installer rejects a module with ABI 1.0 (status 51). Build such a module again with a `text/ko.toml`.
 
@@ -451,6 +457,10 @@ ABI 2.3 adds the icon kind `GRKIT_ICON_LABEL` (3) for status-row indicators: a c
 ABI 2.4 adds the setting flag `GRKIT_SETTING_COLOR_ONLY` (4). The installer of an earlier core rejects a setting with this flag.
 
 ABI 2.4 also appends `flags` to `GrkitModule`, increasing its descriptor from 40 to 44 bytes. The flag `GRKIT_MODULE_COLOR_ONLY` (1) makes a module color-only. The installer still accepts 40-byte descriptors, which have no flags, and rejects an unknown flag.
+
+ABI 2.5 appends the Fn value and setting of `fn_cycle` to `GrkitPage`, increasing its descriptor to 56 bytes.
+
+ABI 2.6 adds the capabilities `CORE.CROP` and `CORE.CROP_MODE`. `Surface` keeps its layout.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

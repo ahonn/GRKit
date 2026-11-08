@@ -339,6 +339,48 @@
 #define SHOT_TAKEN 0x96c
 #define SHOT_FOCAL 0x6b4
 #define SHOT_CROP 0x7dc
+/* CORE.CROP (runtime/crop.h): the size of 3:2 L, which the sensor crops
+   by the factor of a crop; the factor of each value as float bits: Off,
+   the native 35 mm, 40 mm, the native 50 mm, 70 mm, and 90 mm, so that the
+   Exif focal length (18.3 mm x 1.5339 x the factor) names each crop; and
+   the side of its frame in 1/65536 of the uncropped view. The shot request object holds the copy of the capture
+   settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
+#define CROP_WIDTH 6192
+#define CROP_HEIGHT 4128
+#define CROP_FACTORS 0x3f800000,0x3fa04f89,0x3fb66614,0x3fe23119,0x401f9951,0x404d32d6
+#define CROP_SCALES 65536,52327,45990,37086,26280,20440
+/* The JPEG codec takes sizes in multiples of 16. */
+#define CROP_ALIGN 16
+/* The icon of no crop, which hides the live-view crop badge. */
+#define CROP_BADGE_OFF 0
+/* The native factors of 35 and 50 mm, which the camera's own crop code
+   takes (runtime/framing.S). */
+#define CROP_NATIVE_35 0x3fa04f89
+#define CROP_NATIVE_50 0x3fe23119
+#define CROP_SHOT_COPY 0x4688
+/* The instruction that the shot hook displaces (runtime/framing.S). */
+#define CROP_SHOT_DISPLACED mov r1, r5
+/* The queue completion of a crop shot (runtime/crop_queue.S). The back end
+   of a shot: the byte that the release stop sets (CROP_BACKEND_RELEASED),
+   the byte that the completion check requires to be zero, the owner of its
+   events, its recipe queue, and the recipe of the shot. A recipe: its
+   state, its progress, and its table ID. A recipe table: an opcode word for
+   each step from CROP_TABLE_OPS, and a halfword argument for each step from
+   CROP_TABLE_ARGS. The step with opcode 1 and argument 8 is the completion
+   step of a shot, and opcode 12 ends the table. The event poster takes
+   CROP_QUEUE_EVENT for the queue completion. */
+#define CROP_BACKEND_RELEASED 0x2dd
+#define CROP_BACKEND_HELD 0x2de
+#define CROP_BACKEND_OWNER 0x7b4
+#define CROP_BACKEND_QUEUE 0x7b8
+#define CROP_BACKEND_RECIPE 0x620
+#define CROP_RECIPE_STATE 0x4
+#define CROP_RECIPE_PROGRESS 0x14
+#define CROP_RECIPE_TABLE 0x18
+#define CROP_TABLE_OPS 0x4
+#define CROP_TABLE_ARGS 0x204
+#define CROP_TABLE_STEPS 128
+#define CROP_QUEUE_EVENT 21
 /* DNGMetaDataWriter::TiffEntryDataSetter: RAW image info and shot metadata. */
 #define DNG_SETTER_INFO 0x8c
 #define DNG_SETTER_SHOT 0x94

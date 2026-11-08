@@ -352,6 +352,24 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// it was not readable. A half-press on the native Image Control slot
     /// with another type selects that type, as OK does (runtime/menu.c).
     HOST_ADJ_IC_TYPE: 4;
+    /// CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h).
+    HOST_CROP: 4;
+    /// CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the
+    /// frame only.
+    HOST_CROP_MODE: 4;
+    /// The native crop factor that the core set for CORE.CROP, as float
+    /// bits, or 0 while the camera keeps its own (runtime/crop.h).
+    HOST_CROP_NATIVE: 4;
+    /// The crop factor of the next shot, as float bits, where it is longer
+    /// than the native factor of the live view (40, 70, and 90 mm), or 0.
+    HOST_CROP_SHOT: 4;
+    /// GR IV: the back end of the last shot, whose queue completion the core
+    /// can post when a crop shot finishes before the shutter release stops
+    /// (runtime/crop_queue.S).
+    HOST_CROP_QUEUE_OWNER: 4;
+    /// GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
+    /// CROP_QUEUE_RECOVERED.
+    HOST_CROP_QUEUE_FLAGS: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
@@ -562,7 +580,7 @@ pub const SHOT_INFO: [(&str, usize); 25] = [
 /// The picture scratch after the records: the masks, then the shot ring.
 pub const PICTURE_SCRATCH: usize = PICTURE_MASKS + SHOT_ENTRY + SHOT_STRIDE * SHOT_ENTRIES;
 /// Bytes of the live-view labels after the menu text (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 24576;
+pub const LABELS_SIZE: usize = 28672;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
@@ -1144,6 +1162,13 @@ pub fn header() -> String {
         out,
         "#define GRKIT_LABEL_COUNT {}",
         crate::artwork::OVERLAY_LABELS.len()
+    )
+    .unwrap();
+    // The labels that a module can name; the crop badges follow them.
+    writeln!(
+        out,
+        "#define GRKIT_MODULE_LABEL_COUNT {}",
+        crate::artwork::MODULE_LABELS
     )
     .unwrap();
     comment(

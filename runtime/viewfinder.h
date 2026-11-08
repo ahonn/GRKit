@@ -151,17 +151,32 @@ static GRKIT_ICON_COMPACT u32 composition_area(volatile u32 *h,u32 ratio) {
 static GRKIT_ICON_COMPACT u32 layer_area(u32 framing) {
     return framing ? framing : native_area();
 }
+/* The CORE.CROP value that the layers paint: the highlighted value in the
+   ADJ preview of its page, else the selection. A crop that the camera
+   applies to the live view already has no frame (runtime/crop.h). */
+static GRKIT_ICON_COMPACT u32 crop_painted(volatile u32 *h,u32 preview) {
+    u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value;
+    if(!preview || !handle || handle-1!=GRKIT_CORE_CROP) return crop_selection(h);
+    value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
+    return value<GRKIT_CORE_CROP_VALUES ? value : 0;
+}
 /* Paint the module layers in their order. In the ADJ preview, the layers of
    the previewed setting paint its highlighted value, DISP does not hide
    layers, and a live-only layer does not paint. A layer bound to CORE.ASPECT
-   receives the framing area, or 0 without one. Other layers receive
-   layer_area of it. */
+   receives the framing area, or 0 without one. A crop (CORE.CROP) frames a
+   part of the layer area: a layer bound to CORE.CROP receives that frame
+   with the crop as its area, or area 0 without one, and the other layers
+   receive the frame instead of the layer area. */
 static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface *surface,u32 preview,u32 composition) {
-    u32 i, value;
-    Surface frame=*surface;
+    u32 i, value, crop=crop_painted(h,preview), framed;
+    u16 crop_frame[4];
+    Surface frame=*surface, focal=*surface, cropped=*surface;
     frame.area=composition; frame.box=photo_boxes[composition];
+    framed=crop && crop_box(surface->box,crop_scale(crop,CROP_NATIVE_Q16()),crop_frame);
+    if(framed) { focal.box=crop_frame; cropped.box=crop_frame; }
+    cropped.area=framed ? crop : 0;
     for(i=0;i<module_layers(h);++i) {
-        u32 aspect=MODULE_LAYER(h,i)[1]==GRKIT_CORE_ASPECT;
+        u32 aspect=MODULE_LAYER(h,i)[1]==GRKIT_CORE_ASPECT, crop_layer=MODULE_LAYER(h,i)[1]==GRKIT_CORE_CROP;
         if(!preview) value=module_layer_value(h,i);
         else if(MODULE_LAYER(h,i)[2]&MODULE_LAYER_LIVE_ONLY) value=0;
         else if(h[GRKIT_HOST_MODULE_PREVIEW/4] && h[GRKIT_HOST_MODULE_PREVIEW/4]-1==MODULE_LAYER(h,i)[1]) {
@@ -170,8 +185,10 @@ static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface
         }
         else value=MODULE_LAYER(h,i)[1]==NO_SETTING ? 1 : setting_value(h,MODULE_LAYER(h,i)[1]);
         if(aspect && !composition) value=0;
+        if(crop_layer && !framed) value=0;
         if(preview && !viewfinder_layer_enabled(h,MODULE_LAYER(h,i)[3],1)) value=0;
-        if(value && !services_suspended(h,MODULE_LAYER(h,i)[0])) module_paint(h,i,aspect ? &frame : surface,value);
+        if(value && !services_suspended(h,MODULE_LAYER(h,i)[0]))
+            module_paint(h,i,aspect ? &frame : crop_layer ? &cropped : framed ? &focal : surface,value);
     }
 }
 /* Status is screen information, independent of the capture area's geometry. */
@@ -179,8 +196,18 @@ static GRKIT_ICON_COMPACT u32 status_shown(volatile u32 *h) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
     return owner && !BYTE(owner,LIVEVIEW_MOVIE) && native_display()==DISPLAY_FULL && viewfinder_status_active(h);
 }
-/* Whether the live view has something to draw: layers, status or the cue. */
-static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) { return cue_shown(h) || layers_active(h) || status_shown(h); }
+/* The crop badge that the live view shows (runtime/crop.h), or
+   GRKIT_LABEL_COUNT: only with the native information, as the camera's own. */
+static GRKIT_ICON_COMPACT u32 crop_badge_shown(volatile u32 *h) {
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
+    if(!owner || BYTE(owner,LIVEVIEW_MOVIE) || native_display()!=DISPLAY_FULL) return GRKIT_LABEL_COUNT;
+    return crop_badge_label(h,FRAMING_NATIVE_ASPECT());
+}
+/* Whether the live view has something to draw: layers, status, the crop
+   badge, or the cue. */
+static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) {
+    return cue_shown(h) || layers_active(h) || status_shown(h) || crop_badge_shown(h)<GRKIT_LABEL_COUNT;
+}
 static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
     u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=h[GRKIT_HOST_FRAME_NATIVE/4]!=native;
     h[GRKIT_HOST_FRAME_NATIVE/4]=native;
@@ -438,6 +465,21 @@ static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitma
         overlay_label(&surface,LABEL_GRKIT,360-label_width(LABEL_GRKIT)/2,LABEL_TOP);
     }
     ++h[GRKIT_HOST_FRAME_DRAWS/4];
+}
+
+/* After the native children of the canvas: the crop badge, opaque, in the
+   place of the camera's own, which it covers where the camera does not hide
+   it (runtime/crop.h). */
+static GRKIT_ICON_COMPACT void paint_after(volatile u32 *h,u32 canvas,u32 bitmap) {
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,badge;
+    Surface surface;
+    if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;
+    badge=crop_badge_shown(h);
+    if(badge>=GRKIT_LABEL_COUNT) return;
+    full=WORD(owner,4)==canvas ? canvas_bitmap(canvas,bitmap) : 0;
+    if(!full) return;
+    surface.data=full; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
+    overlay_label(&surface,badge,CROP_BADGE_LEFT,CROP_BADGE_TOP);
 }
 
 #endif

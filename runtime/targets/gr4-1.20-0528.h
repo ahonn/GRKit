@@ -32,6 +32,21 @@
 #define FW_CAPTURE_ASPECT_GET FIRMWARE(0x537785f8)
 #define FW_STILL_ASPECT_RESEND FIRMWARE(0x53285744)
 #define FW_STILL_ASPECT_SET FIRMWARE(0x532fc78c)
+/* The crop factor of CORE.CROP (runtime/crop.h): its getter and setter on
+   the camera settings (FW_SETTINGS), with the factor as a float in s0. */
+#define FW_CROP_GET FIRMWARE(0x5329f7e0)
+#define FW_CROP_SET FIRMWARE(0x532fc928)
+/* The queue completion of a crop shot (runtime/crop_queue.S): the counts
+   of the recipes of a queue in states 1, 2, and 3, the recipes in states
+   2 and 3, the recipe bank and its table of a recipe ID, and the
+   completion check of the back end. */
+#define FW_QUEUE_COUNT1 FIRMWARE(0x53747318)
+#define FW_QUEUE_COUNT2 FIRMWARE(0x537473a8)
+#define FW_QUEUE_COUNT3 FIRMWARE(0x53747438)
+#define FW_QUEUE_RECIPES FIRMWARE(0x537478ec)
+#define FW_RECIPE_BANK FIRMWARE(0x53731a24)
+#define FW_RECIPE_TABLE FIRMWARE(0x53733b1c)
+#define FW_QUEUE_COMPLETE FIRMWARE(0x53739014)
 /* The size classifier is 0x533b0144. */
 
 /* Allocation and the vector helpers of View children. */

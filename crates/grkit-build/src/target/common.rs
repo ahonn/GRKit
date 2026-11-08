@@ -5,7 +5,7 @@
 use crate::components::{
     b, b_shared, bl, bl_shared, HookSpec,
     Part::{Framing, Menu},
-    Point::{CaptureAspect, MenuPage, PictureEncode, Tuning, ViewfinderOverlay},
+    Point::{CaptureAspect, CaptureCrop, MenuPage, PictureEncode, Tuning, ViewfinderOverlay},
 };
 
 /// AdjModeController: the touch thunks of the five slots, destroy, refresh,
@@ -148,6 +148,19 @@ pub const VIEWFINDER: &[HookSpec] = &[
     b("framing_canvas", Framing, ViewfinderOverlay),
     bl("framing_children", Framing, ViewfinderOverlay),
     bl("framing_capture_request_hook", Framing, CaptureAspect),
+];
+
+/// CORE.CROP (`runtime/crop.h`): the entry of GetResolution after its first
+/// instruction, which gives the window and the size of a crop factor that
+/// the camera does not know; the instruction after the copy of the capture
+/// settings of a shot, where a 70 or 90 mm crop sets the factor of the shot;
+/// the entry of the camera's crop button; and the BL to the icon of the
+/// live-view crop badge, which the core draws itself for 40, 70, and 90 mm.
+pub const CROP: &[HookSpec] = &[
+    b("crop_resolution", Framing, CaptureCrop),
+    bl("crop_shot", Framing, CaptureCrop),
+    b("crop_button", Menu, CaptureCrop),
+    bl("crop_badge", Framing, CaptureCrop),
 ];
 
 /// The recorded picture geometry, then the effect extension and picture

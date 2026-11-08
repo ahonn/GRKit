@@ -108,8 +108,18 @@ static u32 choice_value_row(volatile u32 *h,u32 value) {
     }
     return 0;
 }
+/* The text of a crop (CORE.CROP value) on GR IIIx, whose module texts name
+   the focal lengths of a 28 mm lens, or 0 for the module text. */
+static const u16 crop_texts_40mm[GRKIT_CORE_CROP_VALUES-1][6]={
+    {'5','0','m','m',0},{'5','7','m','m',0},{'7','1','m','m',0},{'1','0','0','m','m',0},{'1','2','8','m','m',0}};
+static const u16 *crop_text(u32 handle,u32 value) {
+    if(handle!=GRKIT_CORE_CROP || !value || value>=GRKIT_CORE_CROP_VALUES || !CROP_LENS_40MM()) return 0;
+    return crop_texts_40mm[value-1];
+}
 /* Text `index` of a text list of the page, in the menu language. */
 static const u16 *choice_text(volatile u32 *h,u32 field,u32 index) {
+    const u16 *crop=field!=PAGE_TITLE ? crop_text(CHOICE_ENTRY(h)[1],index) : 0;
+    if(crop) return crop;
     return MENU_TEXT(PAGE_WORD(PAGE_WORD(CHOICE_ENTRY(h)[0],field),(index*GRKIT_TEXT_LANGUAGES+menu_language())*4));
 }
 /* Tile n of the module of the page. A module without tiles shows Off. */
@@ -166,6 +176,8 @@ static u32 choice_row_handle(volatile u32 *h,u32 row) {
     return PAGE_WORD(choice_row(h,row),ROW_SETTING);
 }
 static const u16 *choice_row_text(volatile u32 *h,u32 row,u32 field,u32 index) {
+    const u16 *crop=field==ROW_VALUES ? crop_text(choice_row_handle(h,row),index) : 0;
+    if(crop) return crop;
     return MENU_TEXT(PAGE_WORD(PAGE_WORD(choice_row(h,row),field),(index*GRKIT_TEXT_LANGUAGES+menu_language())*4));
 }
 #define CHOICE_SETTING(row) \
