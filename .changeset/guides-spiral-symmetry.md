@@ -1,5 +1,5 @@
 ---
-default: minor
+default: patch
 ---
 
-Guides adds a golden spiral, which Fn in ADJ turns to the next corner, and dynamic symmetry.
+Guides adds a golden spiral and dynamic symmetry, and in ADJ, Fn turns the spiral to the next corner.
