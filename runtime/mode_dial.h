@@ -31,7 +31,7 @@
      releases the file. The changes that the hold kept from the file then
      save at the next poll of the loader.
    - At a start with the dial on a bound user mode, the core applies it once
-     the shooting screen shows (menu_ready): the firmware sends no dial event
+     the shooting screen shows (menu_viewfinder): the firmware sends no dial event
      at power-on. The restored state file is the base state.
 
    The hook (menu_dial_moved) runs when the firmware applies a dial
@@ -41,6 +41,19 @@
    native settings of a user mode in steps, so the timer waits until they
    are loaded (DIAL_NATIVE_SETTLED) and tries again a bounded number of
    times. The timer and the hook run in the App task.
+
+   Each time the core acts on a bound user mode, a label in the live view
+   says what applies, for DIAL_LABEL_MS: the user mode and the name of its
+   recipe, or GRKit Off, then a line for each part of the recipe that did
+   not apply, or for the reason that the recipe cannot apply. A user mode
+   that follows, and a move to another position, show no label, and end a
+   label that shows. The label is native string views on the live-view
+   canvas, in the font of the native live-view text and in the menu
+   language. The framing component shows a waiting label when a still live
+   view shows its text, and drops it when the live view hides its text
+   (DISP No Info or Off) or ends (runtime/viewfinder.h:
+   viewfinder_dial_label). So a label waits while MENU shows, as after a
+   change on the Mode Dial page, and shows on the return.
 
    The family header gives DIAL_POSITION(), the code of the dial position,
    DIAL_CODE_U1, the code of U1 (U2 and U3 follow), and
@@ -58,10 +71,29 @@
 #define DIAL_FOLLOW 0U
 #define DIAL_OFF 1U
 #define DIAL_RECIPE 2U
+/* How long the label shows, and the frame of its first line: the width
+   between the native icons at the sides of the live view, below the rows of
+   the native text at the top and the load cue. The other lines follow. */
+#define DIAL_LABEL_MS 2000U
+#define DIAL_LABEL_LEFT 80U
+#define DIAL_LABEL_TOP 90U
+#define DIAL_LABEL_WIDTH 560U
+#define DIAL_LABEL_HEIGHT 40U
+/* The names of the user modes, as the dial shows them, and the text of
+   GRKit Off (runtime/abi.h: the DIAL run). */
+static const u16 dial_names[GRKIT_RECIPE_DIAL_POSITIONS][3]={{'U','1',0},{'U','2',0},{'U','3',0}};
+#define DIAL_TEXT_OFF (TEXT_DIAL+2U)
 
 #ifndef DIAL_TIMER_START
 #define DIAL_TIMER_START(ms) ui_timer_start(ms)
 #define DIAL_TIMER_CANCEL(id) ui_timer_cancel(id)
+#endif
+/* Make a string view of the label on `parent` with its top at `top`, which
+   *at holds before the view joins the canvas, and remove one. A host test
+   records them. */
+#ifndef DIAL_LABEL_CREATE
+#define DIAL_LABEL_CREATE(parent,top,at) dial_label_create(parent,top,at)
+#define DIAL_LABEL_REMOVE(parent,view) ui_remove(parent,view)
 #endif
 
 static volatile u32 *dial_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_DIAL+offset); }
@@ -152,6 +184,93 @@ static void dial_restore(volatile u32 *h) {
     }
 }
 
+/* ---- The label ------------------------------------------------------------ */
+static volatile u32 *dial_label_views(volatile u32 *h) { return dial_word(h,DIAL_LABEL_VIEWS); }
+static volatile u32 *dial_label_text_at(volatile u32 *h,u32 line) { return dial_word(h,DIAL_LABEL_TEXTS+8U*line); }
+/* A string view on `parent`, centered on the width of the label, in the
+   font of the live-view text. Its text ID is that of the box text, which
+   the text hook gives for the view (dial_label_text). Each byte is set,
+   and *at holds the view, before the view joins the canvas, which lays it
+   out and measures its text then. */
+GRKIT_MAYBE_UNUSED static void dial_label_create(u32 parent,u32 top,volatile u32 *at) {
+    u32 view=ui_create(STRING_VIEW_TYPE,DIAL_LABEL_LEFT,top,DIAL_LABEL_WIDTH,DIAL_LABEL_HEIGHT);
+    *at=view;
+    if(!view) return;
+    BYTE(view,STRING_VIEW_FONT)=STRING_VIEW_LIVE_FONT;
+    BYTE(view,STRING_VIEW_ALIGN)=STRING_VIEW_CENTER;
+    BYTE(view,STRING_VIEW_VERTICAL)=STRING_VIEW_CENTER;
+    HALF(view,STRING_VIEW_TEXT)=SETTINGS_TITLE_TEXT;
+    ui_attach(parent,view);
+}
+/* End the label: remove its views and its timer. */
+static void dial_label_end(volatile u32 *h) {
+    u32 i, parent=dial_word(h,DIAL_LABEL_PARENT)[0];
+    if(dial_word(h,DIAL_LABEL)[0]==DIAL_LABEL_SHOWN) {
+        DIAL_TIMER_CANCEL(dial_word(h,DIAL_LABEL_TIMER)[0]);
+        for(i=0;i<DIAL_LABEL_LINES_MAX;++i) {
+            u32 view=dial_label_views(h)[i];
+            dial_label_views(h)[i]=0;
+            if(view) DIAL_LABEL_REMOVE(parent,view);
+        }
+    }
+    dial_word(h,DIAL_LABEL_TIMER)[0]=0;
+    dial_word(h,DIAL_LABEL_PARENT)[0]=0;
+    dial_word(h,DIAL_LABEL)[0]=DIAL_LABEL_NONE;
+}
+/* Add line `text` to the label. */
+static void dial_label_line(volatile u32 *h,const u16 *text) {
+    u32 line=dial_word(h,DIAL_LABEL_LINES)[0];
+    if(line>=DIAL_LABEL_LINES_MAX) return;
+    descriptor(dial_label_text_at(h,line),text);
+    dial_word(h,DIAL_LABEL_LINES)[0]=line+1U;
+}
+/* A new label for user mode u (1 to 3) that waits for the live view: its
+   first line, the name of the user mode and `value`, or the name of recipe
+   `entry` for a value of 0. */
+static void dial_label_start(volatile u32 *h,u32 u,const u16 *value,u32 entry) {
+    volatile u16 *name=(volatile u16 *)dial_word(h,DIAL_LABEL_NAME);
+    u32 at=recipe_append(name,recipe_append(name,0,dial_names[u-1U]),text(h,TEXT_SEPARATOR));
+    if(value) recipe_append(name,at,value);
+    else recipe_append_name(h,name,at,entry);
+    dial_label_end(h);
+    dial_word(h,DIAL_LABEL_LINES)[0]=0;
+    dial_label_line(h,(const u16 *)name);
+    dial_word(h,DIAL_LABEL)[0]=DIAL_LABEL_WAITS;
+}
+/* The label of recipe `entry` on user mode u: `result` is the reason that
+   it cannot apply (recipe_entry_reason), or RECIPE_READY with the
+   RECIPE_SKIPPED bits of the parts that it left out (recipe_set). The
+   automatic name of a recipe whose effect is missing says so already. */
+static void dial_label_recipe(volatile u32 *h,u32 u,u32 entry,u32 result) {
+    dial_label_start(h,u,0,entry);
+    if(result==RECIPE_MISSING) { if(recipe_name_length(h,entry)) dial_label_line(h,text(h,RECIPE_TEXT_MISSING)); }
+    else if(result==RECIPE_UNSUPPORTED) dial_label_line(h,text(h,RECIPE_TEXT_UNSUPPORTED));
+    if(result&RECIPE_SKIPPED_GRAIN) dial_label_line(h,text(h,RECIPE_TEXT_NO_GRAIN));
+    if(result&RECIPE_SKIPPED_MODULE) dial_label_line(h,text(h,RECIPE_TEXT_NO_GLOW));
+}
+/* A still live view shows its text (VIEWFINDER_LABEL_SHOW): the waiting
+   label shows on its canvas, one string view for each line, until its
+   timer ends. The view of a line that the firmware cannot make stays 0. */
+static void dial_label_show(volatile u32 *h) {
+    u32 parent=h[GRKIT_HOST_FRAME_CANVAS/4], i, lines=dial_word(h,DIAL_LABEL_LINES)[0];
+    if(dial_word(h,DIAL_LABEL)[0]!=DIAL_LABEL_WAITS || !parent) return;
+    if(lines>DIAL_LABEL_LINES_MAX) lines=DIAL_LABEL_LINES_MAX;
+    /* The text hook can ask for the text of a view while it joins the
+       canvas, so the state is set first. */
+    dial_word(h,DIAL_LABEL)[0]=DIAL_LABEL_SHOWN;
+    dial_word(h,DIAL_LABEL_PARENT)[0]=parent;
+    for(i=0;i<lines;++i) DIAL_LABEL_CREATE(parent,DIAL_LABEL_TOP+i*DIAL_LABEL_HEIGHT,dial_label_views(h)+i);
+    dial_word(h,DIAL_LABEL_TIMER)[0]=DIAL_TIMER_START(DIAL_LABEL_MS);
+}
+/* The text of a view of the label for the text hook, or 0. */
+static u32 dial_label_text(volatile u32 *h,u32 view,u32 id) {
+    u32 i;
+    if(id!=SETTINGS_TITLE_TEXT || dial_word(h,DIAL_LABEL)[0]!=DIAL_LABEL_SHOWN) return 0;
+    for(i=0;i<DIAL_LABEL_LINES_MAX;++i)
+        if(view && dial_label_views(h)[i]==view) return (u32)dial_label_text_at(h,i)|1U;
+    return 0;
+}
+
 /* ---- The state machine ---------------------------------------------------- */
 /* Leave the bound user modes: the base state, and the state file saves
    again. */
@@ -165,23 +284,33 @@ static void dial_leave(volatile u32 *h) {
    user mode. A user mode that follows, or whose recipe cannot apply, leaves
    the bound user modes. */
 static void dial_enter(volatile u32 *h,u32 u) {
-    u32 entry=0, kind=dial_assignment(h,u,&entry), w[GRKIT_RECIPE_WORDS], i;
+    u32 entry=0, kind=dial_assignment(h,u,&entry), w[GRKIT_RECIPE_WORDS], i, reason;
     if(kind==DIAL_FOLLOW) { dial_leave(h); return; }
     if(!dial_word(h,DIAL_ACTIVE)[0]) {
         dial_snapshot(h);
         h[GRKIT_HOST_STATE_HOLD/4]=1;
     }
     dial_word(h,DIAL_ACTIVE)[0]=u;
-    if(kind==DIAL_OFF) { manage_set_all_off(h,1); return; }
+    if(kind==DIAL_OFF) {
+        manage_set_all_off(h,1);
+        dial_label_start(h,u,text(h,DIAL_TEXT_OFF),0);
+        return;
+    }
     /* The capabilities of the modules run only while the switch is On, so
        the switch goes On before the check and the apply. */
     if(manage_all_off(h)) manage_set_all_off(h,0);
-    if(recipe_entry_reason(h,entry)!=RECIPE_READY) { dial_leave(h); return; }
+    reason=recipe_entry_reason(h,entry);
+    if(reason!=RECIPE_READY) {
+        dial_leave(h);
+        dial_label_recipe(h,u,entry,reason);
+        return;
+    }
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,entry)[i];
-    recipe_set(h,w);
+    dial_label_recipe(h,u,entry,recipe_set(h,w));
 }
 /* Act on user mode u (0 for another position) after the dial stays there. */
 static void dial_settle(volatile u32 *h,u32 u) {
+    dial_label_end(h);
     dial_word(h,DIAL_AT)[0]=u;
     if(u && dial_enabled(h)) dial_enter(h,u);
     else dial_leave(h);
@@ -201,7 +330,13 @@ static void dial_arm(volatile u32 *h,u32 ms) {
    on last changes nothing. 1 when `id` is the timer of the dial. */
 static u32 dial_fired(volatile u32 *h,u32 id) {
     u32 position, u;
-    if(!id || id!=dial_word(h,DIAL_TIMER)[0]) return 0;
+    if(!id) return 0;
+    if(id==dial_word(h,DIAL_LABEL_TIMER)[0]) {
+        dial_word(h,DIAL_LABEL_TIMER)[0]=0;
+        dial_label_end(h);
+        return 1;
+    }
+    if(id!=dial_word(h,DIAL_TIMER)[0]) return 0;
     dial_word(h,DIAL_TIMER)[0]=0;
     position=DIAL_POSITION();
     if(!DIAL_NATIVE_SETTLED(position)) {

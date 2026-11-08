@@ -170,7 +170,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     u32 subscribers = 0;
     for (u32 k = 0; k < SERVICES_WORDS; ++k) store(services + 4 * k, 0);
     /* The entry of the menu component for SYSTEM_READY (runtime/services.h). */
-    store(services + SERVICES_CORE_READY, relocated[TAIL_SYMBOL] + CORE_READY);
+    store(services + SERVICES_CORE_VIEWFINDER, relocated[TAIL_SYMBOL] + CORE_VIEWFINDER);
     services_block = services;
     if (!sync_alias(array, list_at - array)) return STATUS_SYNC;
     module_page_count = module_layer_count = module_filter_count = capabilities_used = capabilities_running = 0;

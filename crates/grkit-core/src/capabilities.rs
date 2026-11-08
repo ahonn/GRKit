@@ -201,11 +201,14 @@ pub const CAPABILITIES: [Capability; 10] = [
         // its page: undo, the recipes, and save. A recipe sets the other
         // capabilities only while a module uses them, so applying one needs
         // no point. The user modes of the mode dial apply recipes
-        // (runtime/mode_dial.h), which needs the hook of the dial.
+        // (runtime/mode_dial.h), which needs the hook of the dial, and the
+        // hooks of the shooting screen: the dial acts on a start in a user
+        // mode at the first shooting screen, and its label shows on the
+        // live view.
         key: "RECIPE",
         values: 0,
         state: State::Recipes,
-        points: &[Point::ModeDial],
+        points: &[Point::ModeDial, Point::ViewfinderOverlay],
     },
 ];
 

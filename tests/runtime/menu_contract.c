@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <string.h>
+#include <stdint.h>
 /* The build's label table, which the Rust test writes for this harness. */
 #include "menu_text.h"
 /* The family header sends the aspect request; the harness counts requests. */
@@ -181,6 +182,17 @@ static unsigned dial_timer_start(unsigned ms)
 }
 #define DIAL_TIMER_START(ms) dial_timer_start(ms)
 #define DIAL_TIMER_CANCEL(id) ((void)((id) && ++dial_timer_cancels))
+/* The string views of the label of the dial: each that the core makes, with
+   its parent and top, and each that it removes. */
+static unsigned label_made, label_removed, label_parent, label_tops[4];
+static void label_create(unsigned parent, unsigned top, volatile unsigned *at)
+{
+    label_parent = parent;
+    if (label_made < 4) label_tops[label_made] = top;
+    *at = 0x7000U + ++label_made;
+}
+#define DIAL_LABEL_CREATE(parent,top,at) label_create(parent, top, at)
+#define DIAL_LABEL_REMOVE(parent,view) ((void)(parent), (void)(view), ++label_removed)
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
@@ -3669,7 +3681,7 @@ static void the_mode_dial_belongs_to_the_recipes_module(void)
     services_word(h, SERVICES_DIAL + DIAL_AT)[0] = 0;
     dial_timer_ids = 0;
     dial_code = DIAL_U(1);
-    menu_ready();
+    menu_viewfinder(VIEWFINDER_READY);
     assert(!dial_timer_ids);
     /* The switch Off does not stop it: U1 turns GRKit on and applies its
        recipe, and P turns GRKit off again. */
@@ -3696,15 +3708,185 @@ static void the_mode_dial_applies_a_user_mode_at_a_start(void)
     /* At a start in U1 the firmware sends no dial event: the first
        shooting screen starts the timer, and its end applies U1. */
     dial_code = DIAL_U(1);
-    menu_ready();
+    menu_viewfinder(VIEWFINDER_READY);
     assert(dial_timer_ids == 1 && dial_timer_ms == DIAL_RETRY_MS);
     dial_fire();
     assert(h[GRKIT_HOST_GRAIN / 4] == 3 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
     /* A start in P changes nothing. */
     dial_reset();
-    menu_ready();
+    menu_viewfinder(VIEWFINDER_READY);
     dial_fire();
     assert(dial_base());
+}
+
+/* The label of the dial (runtime/mode_dial.h). TEST_LIVE_VIEW is the
+   canvas of the live view. */
+#define TEST_LIVE_VIEW 0x5a000000U
+static u32 label_state(void) { return services_word(test_header, SERVICES_DIAL + DIAL_LABEL)[0]; }
+static u32 label_lines(void) { return services_word(test_header, SERVICES_DIAL + DIAL_LABEL_LINES)[0]; }
+/* Line i of the label is `expected`: line 0 in its own text, a later line
+   as the menu string `id`. */
+static int label_line(u32 i, const char *expected, u32 id)
+{
+    volatile u32 *at = services_word(test_header, SERVICES_DIAL + DIAL_LABEL_TEXTS + 8U * i);
+    const u16 *name = (const u16 *)services_word(test_header, SERVICES_DIAL + DIAL_LABEL_NAME);
+    if (i) return at[1] == (u32)(uintptr_t)text(test_header, id);
+    return at[1] == (u32)(uintptr_t)name && same(name, expected);
+}
+/* The label waits; the live view shows it. */
+static void label_show(void)
+{
+    assert(label_state() == DIAL_LABEL_WAITS);
+    menu_viewfinder(VIEWFINDER_LABEL_SHOW);
+    assert(label_state() == DIAL_LABEL_SHOWN && dial_timer_ms == DIAL_LABEL_MS);
+}
+static void label_reset(void)
+{
+    dial_reset();
+    test_header[GRKIT_HOST_FRAME_CANVAS / 4] = TEST_LIVE_VIEW;
+    recipe_name_set(test_header, 0, (const volatile u8 *)"Street");
+    label_made = label_removed = label_parent = 0;
+}
+
+static void the_mode_dial_labels_what_a_user_mode_applies(void)
+{
+    volatile u32 *h = test_header;
+    u32 view, other;
+    label_reset();
+    /* No label before the dial acts. */
+    menu_viewfinder(VIEWFINDER_LABEL_SHOW);
+    assert(label_state() == DIAL_LABEL_NONE && !label_made);
+    /* U1 applies its recipe: the label waits for the live view with the
+       user mode and the recipe name. */
+    dial_to(DIAL_U(1));
+    assert(label_state() == DIAL_LABEL_NONE);
+    dial_fire();
+    assert(label_state() == DIAL_LABEL_WAITS && label_lines() == 1 && label_line(0, "U1: Street", 0) && !label_made);
+    /* The live view shows it: one string view on its canvas, and the text
+       hook gives the line in the font of the menu language for that view
+       only. */
+    label_show();
+    view = 0x7001U;
+    assert(label_made == 1 && label_parent == TEST_LIVE_VIEW && label_tops[0] == DIAL_LABEL_TOP);
+    assert(menu_text_override(view, SETTINGS_TITLE_TEXT) ==
+           ((u32)(uintptr_t)services_word(h, SERVICES_DIAL + DIAL_LABEL_TEXTS) | 1U));
+    assert(menu_text_override(view, SETTINGS_TITLE_TEXT + 1U) != menu_text_override(view, SETTINGS_TITLE_TEXT));
+    assert(!dial_label_text(h, view + 1U, SETTINGS_TITLE_TEXT));
+    /* A second show changes nothing; the timer ends the label. */
+    menu_viewfinder(VIEWFINDER_LABEL_SHOW);
+    assert(label_made == 1);
+    ui_timer_fired(0, dial_timer_ids);
+    assert(label_state() == DIAL_LABEL_NONE && label_removed == 1 && !dial_label_text(h, view, SETTINGS_TITLE_TEXT));
+    /* GRKit Off. */
+    dial_to(DIAL_U(3));
+    dial_fire();
+    assert(label_lines() == 1 && label_line(0, "U3: GRKit Off", 0));
+    /* A recipe without a name has its automatic name; one whose Grain does
+       not run says so on a second line. */
+    manage_memory[MANAGE_ENTRY(1) + MANAGE_USES / 4] &= ~(GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT);
+    h[GRKIT_HOST_CAPABILITIES / 4] &= ~(GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT);
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(label_lines() == 2 && label_line(0, "U2: Recipe", 0) && label_line(1, 0, RECIPE_TEXT_NO_GRAIN));
+    /* A module setting of a module that is not loaded: a line for it. */
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] |= (1U | 2U << 1) << (RECIPE_MODULE_BITS * 0);
+    dial_to(DIAL_U(1));
+    dial_fire();
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(label_lines() == 3 && label_line(1, 0, RECIPE_TEXT_NO_GRAIN) && label_line(2, 0, RECIPE_TEXT_NO_GLOW));
+    label_show();
+    assert(label_made == 4 && label_tops[1] == DIAL_LABEL_TOP && label_tops[2] == DIAL_LABEL_TOP + DIAL_LABEL_HEIGHT &&
+           label_tops[3] == DIAL_LABEL_TOP + 2U * DIAL_LABEL_HEIGHT);
+    other = 0x7004U;
+    assert(menu_text_override(other, SETTINGS_TITLE_TEXT) ==
+           ((u32)(uintptr_t)services_word(h, SERVICES_DIAL + DIAL_LABEL_TEXTS + 16U) | 1U));
+    /* A move to another position ends the label and shows none. */
+    dial_to(DIAL_P);
+    dial_fire();
+    assert(label_state() == DIAL_LABEL_NONE && label_removed == 4);
+    /* A recipe whose effect is missing: the user mode follows, and the
+       label says why under the name. Without a name, the automatic name
+       says it already. */
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 1003;
+    recipe_name_set(h, 2, (const volatile u8 *)"Lost");
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base() && label_lines() == 2 && label_line(0, "U1: Lost", 0) && label_line(1, 0, RECIPE_TEXT_MISSING));
+    recipe_name_set(h, 2, (const volatile u8 *)"");
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(label_lines() == 1 && label_line(0, "U1: Effect not installed", 0));
+    /* A native value that the camera does not have: the user mode follows
+       too, with a line that says so. */
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 1002;
+    recipe_at(h, 1)[RECIPE_NATIVE_WORD] |= 30U << NATIVE_TYPE_SHIFT;
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base() && label_lines() == 2 && label_line(0, "U1: Recipe", 0) &&
+           label_line(1, 0, RECIPE_TEXT_UNSUPPORTED));
+    recipe_at(h, 1)[RECIPE_NATIVE_WORD] &= ~(30U << NATIVE_TYPE_SHIFT);
+    /* A user mode that follows shows no label. */
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = GRKIT_RECIPE_DIAL_FOLLOW;
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(label_state() == DIAL_LABEL_NONE);
+}
+
+static void the_label_of_the_mode_dial_follows_the_live_view(void)
+{
+    volatile u32 *h = test_header;
+    label_reset();
+    /* Without a live view the label waits, as while MENU shows. */
+    h[GRKIT_HOST_FRAME_CANVAS / 4] = 0;
+    dial_to(DIAL_U(1));
+    dial_fire();
+    menu_viewfinder(VIEWFINDER_LABEL_SHOW);
+    assert(label_state() == DIAL_LABEL_WAITS && !label_made);
+    /* The live view hides its text: a waiting label ends without views. */
+    menu_viewfinder(VIEWFINDER_LABEL_DROP);
+    assert(label_state() == DIAL_LABEL_NONE && !label_removed);
+    /* A label that shows ends with its views. */
+    h[GRKIT_HOST_FRAME_CANVAS / 4] = TEST_LIVE_VIEW;
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    label_show();
+    menu_viewfinder(VIEWFINDER_LABEL_DROP);
+    assert(label_state() == DIAL_LABEL_NONE && label_removed == 1 && dial_timer_cancels);
+    /* At a start in a bound user mode. */
+    label_reset();
+    dial_code = DIAL_U(2);
+    menu_viewfinder(VIEWFINDER_READY);
+    dial_fire();
+    assert(label_state() == DIAL_LABEL_WAITS && label_line(0, "U2: Recipe", 0));
+    label_show();
+    /* The Mode Dial page changes the user mode that the dial is on: the new
+       label waits for the return from MENU. */
+    h[GRKIT_HOST_FRAME_CANVAS / 4] = 0;
+    dial_assign(h, 1, DIAL_VALUE_RECIPE + 0U);
+    assert(label_state() == DIAL_LABEL_WAITS && label_removed == 1 && label_line(0, "U2: Street", 0));
+    dial_assign(h, 1, DIAL_VALUE_OFF);
+    assert(label_line(0, "U2: GRKit Off", 0));
+    /* Another user mode on the page changes no label. */
+    dial_assign(h, 0, DIAL_VALUE_OFF);
+    assert(label_line(0, "U2: GRKit Off", 0));
+    dial_assign(h, 1, DIAL_VALUE_NONE);
+    assert(label_state() == DIAL_LABEL_NONE);
+    /* With the Recipes module Off, no label. */
+    label_reset();
+    DIAL_RECIPES_OFF = 1;
+    manage_off_changed(h);
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(label_state() == DIAL_LABEL_NONE);
 }
 
 /* The Mode Dial page of MENU (runtime/menu_dial.h) shows and sets what each
@@ -4194,5 +4376,7 @@ int main(void)
     the_mode_dial_belongs_to_the_recipes_module();
     the_mode_dial_applies_a_user_mode_at_a_start();
     the_mode_dial_page_sets_what_each_user_mode_does();
+    the_mode_dial_labels_what_a_user_mode_applies();
+    the_label_of_the_mode_dial_follows_the_live_view();
     return 0;
 }

@@ -309,7 +309,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         "#define RTOS_EXECUTABLE_END {:#x}U",
         crate::components::RTOS_EXECUTABLE_END
     )?;
-    writeln!(result, "#define CORE_READY {:#x}U", plan.ready)?;
+    writeln!(result, "#define CORE_VIEWFINDER {:#x}U", plan.viewfinder)?;
     writeln!(result, "#define CORE_EXPORT_COUNT {}U", plan.exports.len())?;
     words(
         &mut result,

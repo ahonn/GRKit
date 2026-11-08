@@ -143,7 +143,21 @@ static void test_module_paint(uint32_t address, const void *surface, uint32_t va
 #define MODULE_PAINT(address,surface,value) test_module_paint(address,surface,value)
 static uint32_t level_updates, level_updated;
 #define FRAMING_LEVEL_UPDATE(controller) (++level_updates, level_updated = (controller))
+/* The services block of the core, and the calls of the entry of the menu
+   component for the shooting screen: their count and the last event. */
+#define TEST_SERVICES 0x58000000U
+#define TEST_CORE_ENTRY 0x57000001U
+static uint32_t services_memory[0x2000];
+static volatile uint32_t *mapped_services(uint32_t address)
+{
+    assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && (address & 3) == 0);
+    return services_memory + (address - TEST_SERVICES) / 4;
+}
+#define SERVICES_MAP(address) mapped_services(address)
+static uint32_t core_calls, core_event;
+#define SERVICES_CORE_CALL(address,event) (assert((address) == TEST_CORE_ENTRY), ++core_calls, core_event = (event))
 #include "framing.c"
+_Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 #define GRKIT_PIXELS(address) mapped_pixels(address)
 #include "../../modules/framing/framing.c"
 #include "../../modules/guides/guides.c"
@@ -1042,11 +1056,69 @@ static void crop_badges_replace_the_camera_badge(void)
     header[GRKIT_HOST_CROP/4] = 4;
     assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT);
 }
+/* The label of the mode dial (runtime/mode_dial.h): the shooting screen
+   asks the menu component to show a waiting label while the live view shows
+   its text, and to drop the label when the live view hides its text,
+   records a movie, or ends. */
+static void the_dial_label_follows_the_live_view_text(void)
+{
+    volatile uint32_t *label = &services_memory[(SERVICES_DIAL + DIAL_LABEL) / 4];
+    reset();
+    memset(services_memory, 0, sizeof(services_memory));
+    header[GRKIT_HOST_SERVICES/4] = TEST_SERVICES;
+    services_memory[SERVICES_CORE_VIEWFINDER/4] = TEST_CORE_ENTRY;
+    core_calls = 0;
+    /* The first shooting screen, then no label: no call. */
+    framing_bind(TEST_OWNER);
+    assert(core_calls == 1 && core_event == VIEWFINDER_READY);
+    framing_bind(TEST_OWNER);
+    assert(core_calls == 1);
+    /* A waiting label shows at DISP Full and Simple. */
+    *label = DIAL_LABEL_WAITS;
+    for (uint32_t mode = DISPLAY_FULL; mode <= DISPLAY_SIMPLE; ++mode) {
+        display_mode = mode;
+        framing_bind(TEST_OWNER);
+        assert(core_event == VIEWFINDER_LABEL_SHOW);
+    }
+    assert(core_calls == 3);
+    /* It drops at No Info and Off, and in a movie. */
+    for (uint32_t mode = DISPLAY_NO_INFO; mode <= DISPLAY_OFF; ++mode) {
+        display_mode = mode;
+        framing_bind(TEST_OWNER);
+        assert(core_event == VIEWFINDER_LABEL_DROP);
+    }
+    display_mode = DISPLAY_FULL;
+    BYTE(TEST_OWNER, LIVEVIEW_MOVIE) = 1;
+    framing_bind(TEST_OWNER);
+    assert(core_calls == 6 && core_event == VIEWFINDER_LABEL_DROP);
+    BYTE(TEST_OWNER, LIVEVIEW_MOVIE) = 0;
+    /* A label that shows stays while the live view shows its text. */
+    *label = DIAL_LABEL_SHOWN;
+    display_mode = DISPLAY_SIMPLE;
+    framing_bind(TEST_OWNER);
+    assert(core_calls == 6);
+    display_mode = DISPLAY_NO_INFO;
+    framing_bind(TEST_OWNER);
+    assert(core_calls == 7 && core_event == VIEWFINDER_LABEL_DROP);
+    /* The live view ends: a label that shows drops, a waiting one waits. */
+    display_mode = DISPLAY_FULL;
+    framing_bind(TEST_OWNER);
+    framing_leave(TEST_OWNER);
+    assert(core_calls == 8 && core_event == VIEWFINDER_LABEL_DROP);
+    *label = DIAL_LABEL_WAITS;
+    framing_bind(TEST_OWNER);
+    core_calls = 0;
+    framing_leave(TEST_OWNER);
+    assert(core_calls == 0);
+    header[GRKIT_HOST_SERVICES/4] = 0;
+}
+
 int main(void)
 {
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
+    the_dial_label_follows_the_live_view_text();
     native_guides_follow_the_photo_area();
     guides_follow_composition_frames();
     status_icons_follow_enable_strength_and_disp();

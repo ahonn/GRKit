@@ -55,7 +55,7 @@ static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc, 0x0, 0x0, 
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U
 static u32 relocated[] = {TAIL};
-#define CORE_READY 0x80U
+#define CORE_VIEWFINDER 0x80U
 #define CORE_EXPORT_COUNT 1U
 #define OVERLAY_LABEL (TAIL + 0x40U)
 static const u32 core_exports[] = {0xc0e27352U, 0x40U};
@@ -998,8 +998,9 @@ static void a_stopped_recipes_module_keeps_the_dial(void)
     save_state(pairs, 2);
     assert(install() == 0 && all_off && module_status[0] == 0);
     assert(word(services_block + SERVICES_SUSPENDED) == 1);
-    assert((needed_points & core_setting_points[5]) == core_setting_points[5]);
-    assert(word(services_block + SERVICES_CORE_READY) == TAIL + CORE_READY);
+    assert((needed_points & core_setting_points[GRKIT_CORE_RECIPE - GRKIT_CORE_SETTING_BASE]) ==
+           core_setting_points[GRKIT_CORE_RECIPE - GRKIT_CORE_SETTING_BASE]);
+    assert(word(services_block + SERVICES_CORE_VIEWFINDER) == TAIL + CORE_VIEWFINDER);
 }
 /* Enable at Start decides the switch at each start. `pairs` is STATE.TXT,
    or 0 for a card without it. The switch of the start, the modules that load

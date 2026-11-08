@@ -21,10 +21,10 @@
    value page, which shows the values while MENU_ROWS_PAGE_STATE holds the
    user mode. The includer is runtime/menu.c, after runtime/mode_dial.h and
    before runtime/menu_recipes.h. */
-/* The texts of the page (runtime/abi.h: the DIAL run). */
+/* The texts of the page (runtime/abi.h: the DIAL run). GRKit Off is
+   DIAL_TEXT_OFF, which the label of the dial shows too (runtime/mode_dial.h). */
 #define DIAL_TEXT_ROW (TEXT_DIAL+0U)
 #define DIAL_TEXT_NONE (TEXT_DIAL+1U)
-#define DIAL_TEXT_OFF (TEXT_DIAL+2U)
 /* MENU_ROWS_PAGE_STATE: DIAL_PAGE_SHOWN with the user mode (0 to 2) whose
    values show, or the user mode that the list puts its cursor on + 1, or 0
    for the cursor on U1. */
@@ -54,8 +54,6 @@ static u32 dial_append_value(volatile u32 *h,volatile u16 *to,u32 at,u32 value) 
     if(value>=DIAL_VALUE_RECIPE) return recipe_append_name(h,to,at,value-DIAL_VALUE_RECIPE);
     return recipe_append(to,at,text(h,value==DIAL_VALUE_OFF ? DIAL_TEXT_OFF : DIAL_TEXT_NONE));
 }
-/* The names of the user modes, as the dial shows them. */
-static const u16 dial_names[GRKIT_RECIPE_DIAL_POSITIONS][3]={{'U','1',0},{'U','2',0},{'U','3',0}};
 /* Set what user mode u (0 to 2) does to value `value`. A recipe that has no
    ID yet, which INSTALL gives at the next start, gets one now. */
 static void dial_assign(volatile u32 *h,u32 u,u32 value) {
