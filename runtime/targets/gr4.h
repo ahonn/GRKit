@@ -415,4 +415,24 @@
 #define SHOT_PROGRAM_CODES 2,4,3,0,1,1,1,2
 #define SHOT_METERING (SHOT_SETTINGS + 0x8f)
 
+/* The mode dial (runtime/mode_dial.h). The switch model of the App
+   (DIAL_SWITCHES, build header) keeps the state of each switch in a byte at
+   DIAL_SWITCH_STATES + 8 x its ID. The mode dial is switch DIAL_SWITCH: P 3,
+   Tv 5, Av 6, M 8, Sn 9, and U1 to U3 from DIAL_CODE_U1. The AE model
+   (DIAL_AE_MODEL) applies a position: it keeps the code of the applied
+   position at DIAL_AE_APPLIED and its user mode (1 to 3, 0 for another
+   position) at DIAL_AE_USER_MODE, then sets the user mode model, whose
+   holder (DIAL_USER_MODES) points to its state with the loaded user mode in
+   the first byte. The settings of a position are loaded when the AE model
+   applied it and the user mode model holds its user mode. */
+#define DIAL_SWITCH_STATES 0x114
+#define DIAL_SWITCH 39
+#define DIAL_CODE_U1 11U
+#define DIAL_AE_APPLIED 0x13
+#define DIAL_AE_USER_MODE 0x14
+#define DIAL_POSITION() BYTE(DIAL_SWITCHES,DIAL_SWITCH_STATES+DIAL_SWITCH*8)
+#define DIAL_NATIVE_SETTLED(position) \
+    (BYTE(DIAL_AE_MODEL,DIAL_AE_APPLIED)==(position) && \
+     BYTE(WORD(DIAL_USER_MODES,0),0)==BYTE(DIAL_AE_MODEL,DIAL_AE_USER_MODE))
+
 #endif

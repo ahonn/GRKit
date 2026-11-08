@@ -50,11 +50,12 @@ typedef unsigned int u32;
 static const char *const core_setting_names[] = {
     "CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE", "CORE.ASPECT_MODE", "CORE.ADJ",
     "CORE.ADJ_MODULE", "CORE.CROP", "CORE.CROP_MODE", "CORE.RECIPE"};
-static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc, 0x0, 0x0, 0x84, 0x84, 0x0};
+static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc, 0x0, 0x0, 0x84, 0x84, 0x100};
 /* The tail of the core, and its one export, overlay_label. */
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U
 static u32 relocated[] = {TAIL};
+#define CORE_READY 0x80U
 #define CORE_EXPORT_COUNT 1U
 #define OVERLAY_LABEL (TAIL + 0x40U)
 static const u32 core_exports[] = {0xc0e27352U, 0x40U};
@@ -984,6 +985,22 @@ static void the_switch_stops_each_module(void)
     assert(!all_off && word(services_block + SERVICES_SUSPENDED) == 1);
     assert(capabilities_running == 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE));
 }
+/* The mode dial belongs to CORE.RECIPE: a module that uses it needs the
+   hook of the dial also when it loads stopped, by its own Enable or by the
+   switch, so the dial can turn GRKit on (runtime/mode_dial.h). INSTALL
+   writes the entry of the menu for SYSTEM_READY, which applies a user mode
+   of the dial at a start. */
+static void a_stopped_recipes_module_keeps_the_dial(void)
+{
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "RECIPES.GRM", &(struct spec){.id = "RECIPES", .order = 1, .uses = {"CORE.RECIPE"}});
+    const u32 pairs[] = {id_of("CORE.OFF"), 1, id_of("CORE.OFF.RECIPES"), 1};
+    save_state(pairs, 2);
+    assert(install() == 0 && all_off && module_status[0] == 0);
+    assert(word(services_block + SERVICES_SUSPENDED) == 1);
+    assert((needed_points & core_setting_points[5]) == core_setting_points[5]);
+    assert(word(services_block + SERVICES_CORE_READY) == TAIL + CORE_READY);
+}
 /* Enable at Start decides the switch at each start. `pairs` is STATE.TXT,
    or 0 for a card without it. The switch of the start, the modules that load
    stopped, the switch that installer.c restores (apply_state), and the value
@@ -1647,6 +1664,7 @@ static void *run(void *unused)
     a_color_only_module_needs_a_color_camera();
     install_group_page();
     the_switch_stops_each_module();
+    a_stopped_recipes_module_keeps_the_dial();
     enable_at_start_decides_the_switch();
     layer_conditions_resolve_shared_and_optional_settings();
     layers_follow_their_order_and_filters_their_stage();

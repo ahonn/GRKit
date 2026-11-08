@@ -267,6 +267,9 @@ const SITES: &[Site] = &[
     ("menu_parameter_get_9", 0x532c295c, "0dc0a0e1"),
     ("menu_parameter_set_9", 0x532c0700, "0dc0a0e1"),
     ("menu_parameter_row_9", 0x532ac9a4, "f9750aeb"),
+    // The entry of the apply of a dial position, which each App event of the
+    // dial reaches.
+    ("menu_dial", 0x532241a8, "0dc0a0e1"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

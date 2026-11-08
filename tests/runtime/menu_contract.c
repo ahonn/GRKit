@@ -166,6 +166,21 @@ static unsigned keyboard_set_function(unsigned model, unsigned function) { BYTE(
 #define FW_KEYBOARD_MODEL keyboard_model
 #define FW_KEYBOARD_SET_FUNCTION keyboard_set_function
 #endif
+/* The mode dial (runtime/mode_dial.h): the dial position and whether the
+   firmware has loaded its settings, which a test sets, and the timers of the
+   dial, which a test fires by their ID. */
+#undef DIAL_POSITION
+#undef DIAL_NATIVE_SETTLED
+static unsigned dial_code, dial_loaded, dial_timer_ids, dial_timer_ms, dial_timer_cancels;
+#define DIAL_POSITION() (dial_code)
+#define DIAL_NATIVE_SETTLED(position) ((void)(position), dial_loaded)
+static unsigned dial_timer_start(unsigned ms)
+{
+    dial_timer_ms = ms;
+    return ++dial_timer_ids;
+}
+#define DIAL_TIMER_START(ms) dial_timer_start(ms)
+#define DIAL_TIMER_CANCEL(id) ((void)((id) && ++dial_timer_cancels))
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
@@ -3410,6 +3425,264 @@ static void each_selection_change_counts_once(void)
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == ++n);
 }
 
+/* The mode dial (runtime/mode_dial.h). Listed module 0 is the Recipes
+   module, which uses CORE.RECIPE; listed module 1 runs the other
+   capabilities; handle 12 is the switch Enable GRKit. Two effect records,
+   "a" and "b", are in mapped memory. Recipe 0 (ID 1001) is effect b with Fn
+   adjustments and Grain Strong, recipe 1 (ID 1002) holds only Grain Extra
+   Strong, and recipe 2 (ID 1003) is an effect that is not installed. */
+#define DIAL_P 3U
+#define DIAL_U(u) (DIAL_CODE_U1 + (u) - 1U)
+#define DIAL_SWITCH_HANDLE 12U
+#define DIAL_RECIPES_OFF settings_memory[2 + 3 * 3 + 1]
+#define DIAL_SWITCH_OFF settings_memory[2 + DIAL_SWITCH_HANDLE * 3 + 1]
+#define DIAL_FN 19U
+static u32 dial_record(u32 i) { return TEST_OBJECTS + i * GRKIT_RECORD_SIZE; }
+static void dial_reset(void)
+{
+    volatile u32 *h = test_header;
+    const u32 running = GRKIT_CORE_TONE_BIT | GRKIT_CORE_ASPECT_BIT | GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT;
+    reset();
+    install_module_list();
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    settings_memory[0] = DIAL_SWITCH_HANDLE + 1;
+    settings_memory[2 + DIAL_SWITCH_HANDLE * 3 + 2] = 2;
+    manage_memory[MANAGE_SWITCH / 4] = DIAL_SWITCH_HANDLE + 1;
+    manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] = GRKIT_CORE_RECIPE_BIT;
+    manage_memory[MANAGE_ENTRY(1) + MANAGE_USES / 4] = running;
+    h[GRKIT_HOST_CAPABILITIES / 4] = running | GRKIT_CORE_RECIPE_BIT;
+    h[GRKIT_HOST_RECORDS / 4] = dial_record(0);
+    h[GRKIT_HOST_COUNT / 4] = 2;
+    BYTE(dial_record(0), GRKIT_RECORD_ID) = 'a';
+    BYTE(dial_record(1), GRKIT_RECORD_ID) = 'b';
+    const u32 b = recipe_effect_code(dial_record(1));
+    u32 missing = 1;
+    while (missing == b || missing == recipe_effect_code(dial_record(0))) ++missing;
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_EFFECT | b << RECIPE_CODE_SHIFT | RECIPE_GRAIN | 3U << RECIPE_GRAIN_LEVEL_SHIFT);
+    h[GRKIT_HOST_RECIPES / 4 + RECIPE_FN_WORD] = DIAL_FN;
+    header_recipe(1, "", RECIPE_USED | RECIPE_GRAIN | 4U << RECIPE_GRAIN_LEVEL_SHIFT);
+    header_recipe(2, "", RECIPE_USED | RECIPE_LOOK_EFFECT | missing << RECIPE_CODE_SHIFT);
+    for (u32 i = 0; i < 3; ++i) *recipe_id_at(h, i) = 1001 + i;
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 1001;
+    h[GRKIT_HOST_RECIPE_DIAL / 4 + 1] = 1002;
+    h[GRKIT_HOST_RECIPE_DIAL / 4 + 2] = GRKIT_RECIPE_DIAL_OFF;
+    /* The base state: Film Look Off, Grain Weak, and Guides Center. */
+    h[GRKIT_HOST_ACTIVE / 4] = 0;
+    h[GRKIT_HOST_GRAIN / 4] = 1;
+    GUIDE_STYLE = 2;
+    dial_code = DIAL_P;
+    dial_loaded = 1;
+    dial_timer_ids = dial_timer_ms = dial_timer_cancels = 0;
+}
+/* The firmware applies position `code`. */
+static void dial_to(u32 code)
+{
+    dial_code = code;
+    menu_dial_moved();
+}
+/* The last timer of the dial ends. */
+static void dial_fire(void)
+{
+    assert(services_word(test_header, SERVICES_DIAL + DIAL_TIMER)[0] == dial_timer_ids);
+    ui_timer_fired(0, dial_timer_ids);
+}
+static int dial_base(void)
+{
+    volatile u32 *h = test_header;
+    return !h[GRKIT_HOST_ACTIVE / 4] && h[GRKIT_HOST_GRAIN / 4] == 1 && GUIDE_STYLE == 2 && !DIAL_SWITCH_OFF &&
+           recipe_fn_read(dial_record(1)) == 0 && !h[GRKIT_HOST_STATE_HOLD / 4] &&
+           !services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0];
+}
+
+static void the_mode_dial_applies_a_user_mode_and_restores_the_base(void)
+{
+    volatile u32 *h = test_header;
+    u32 changes, sets;
+    dial_reset();
+    /* A move starts the timer of the dial; nothing applies before it ends. */
+    dial_to(DIAL_U(1));
+    assert(dial_timer_ids == 1 && dial_timer_ms == DIAL_SETTLE_MS && dial_base());
+    /* U1 applies its recipe without an undo step and holds the state file. */
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    dial_fire();
+    assert(h[GRKIT_HOST_ACTIVE / 4] == dial_record(1) && h[GRKIT_HOST_GRAIN / 4] == 3);
+    assert(recipe_fn_read(dial_record(1)) == DIAL_FN && !recipe_undo_count(h));
+    assert(h[GRKIT_HOST_STATE_HOLD / 4] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] > changes);
+    assert(!services_word(h, SERVICES_DIAL + DIAL_TIMER)[0]);
+    /* Changes in the user mode: Grain Medium, Guides Thirds, and Fn. */
+    setting_store(h, GRKIT_CORE_GRAIN, 2);
+    setting_store(h, 0, 1);
+    BYTE(dial_record(0), GRKIT_RECORD_PARAMETERS) = 3;
+    /* The firmware applies U1 again: the core acted on it, so nothing
+       changes. */
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 2 && GUIDE_STYLE == 1);
+    /* U1 to U2 applies U2 at once, on the settings of U1: the recipe holds
+       only Grain. The copy of the base state stays. */
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 4 && h[GRKIT_HOST_ACTIVE / 4] == dial_record(1) && GUIDE_STYLE == 1);
+    assert(h[GRKIT_HOST_STATE_HOLD / 4] == 1 && services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0] == 2);
+    /* P restores each setting of the base state, also the Fn adjustments of
+       each effect, and releases the state file. A setting that did not
+       change writes nothing: Framing keeps the native aspect. */
+    sets = native_sets;
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    dial_to(DIAL_P);
+    dial_fire();
+    assert(dial_base() && BYTE(dial_record(0), GRKIT_RECORD_PARAMETERS) == 0);
+    assert(native_sets == sets && !framing_requests);
+    /* The restore counts its changes, so the loader saves the base state. */
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] > changes);
+    assert(services_word(h, SERVICES_DIAL + DIAL_AT)[0] == 0);
+    /* A position that is no user mode leaves the base state as it is. */
+    dial_to(DIAL_P + 2);
+    dial_fire();
+    assert(dial_base());
+}
+
+static void the_mode_dial_acts_once_where_the_dial_stays(void)
+{
+    volatile u32 *h = test_header;
+    u32 first;
+    dial_reset();
+    /* A fast pass P, U1, U2, U3: each move starts the timer again, and only
+       the last one acts. U3 turns GRKit off. */
+    dial_to(DIAL_U(1));
+    first = dial_timer_ids;
+    dial_to(DIAL_U(2));
+    dial_to(DIAL_U(3));
+    assert(dial_timer_cancels == 2 && dial_base());
+    /* A timer that a move replaced does nothing. */
+    ui_timer_fired(0, first);
+    assert(dial_base());
+    dial_fire();
+    assert(DIAL_SWITCH_OFF == 1 && manage_all_off(h) && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    assert(h[GRKIT_HOST_GRAIN / 4] == 1 && !h[GRKIT_HOST_ACTIVE / 4]);
+    /* P turns GRKit on again. */
+    dial_to(DIAL_P);
+    dial_fire();
+    assert(dial_base() && !manage_all_off(h));
+    /* While the firmware loads the settings of the user mode, the timer
+       tries again, a bounded number of times, and then gives up. */
+    dial_loaded = 0;
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_timer_ms == DIAL_RETRY_MS && dial_base());
+    for (u32 i = 2; i < DIAL_TRIES; ++i) dial_fire();
+    assert(services_word(h, SERVICES_DIAL + DIAL_TIMER)[0] == dial_timer_ids);
+    dial_fire();
+    assert(!services_word(h, SERVICES_DIAL + DIAL_TIMER)[0] && dial_base());
+    /* The next move tries again from the start. */
+    dial_to(DIAL_U(1));
+    dial_fire();
+    dial_loaded = 1;
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 3 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+}
+
+static void the_mode_dial_follows_without_a_recipe_that_applies(void)
+{
+    volatile u32 *h = test_header;
+    dial_reset();
+    /* A user mode that follows changes nothing and holds nothing. */
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = GRKIT_RECIPE_DIAL_FOLLOW;
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base());
+    /* So does an ID that no recipe has, as of a deleted recipe, and that of
+       a recipe that is off. */
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 4242;
+    dial_to(DIAL_U(1));
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base());
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 1002;
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] |= RECIPE_OFF;
+    recipe_at(h, 2)[RECIPE_MODULE_WORD] |= RECIPE_OFF;
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base());
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] &= ~RECIPE_OFF;
+    recipe_at(h, 2)[RECIPE_MODULE_WORD] &= ~RECIPE_OFF;
+    /* A recipe whose effect is not installed follows too, also with the
+       switch Off, which the core turned On to check the recipe. */
+    DIAL_SWITCH_OFF = 1;
+    manage_off_changed(h);
+    h[GRKIT_HOST_RECIPE_DIAL / 4] = 1003;
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(DIAL_SWITCH_OFF == 1 && manage_all_off(h) && !h[GRKIT_HOST_STATE_HOLD / 4]);
+    /* From a bound user mode, it restores the base state. */
+    DIAL_SWITCH_OFF = 0;
+    manage_off_changed(h);
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 4 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base());
+}
+
+static void the_mode_dial_belongs_to_the_recipes_module(void)
+{
+    volatile u32 *h = test_header;
+    dial_reset();
+    /* With the Recipes module Off, the dial does nothing, also at a start. */
+    DIAL_RECIPES_OFF = 1;
+    manage_off_changed(h);
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base() && !manage_stopped(h, 1));
+    dial_code = DIAL_P;
+    services_word(h, SERVICES_DIAL + DIAL_AT)[0] = 0;
+    dial_timer_ids = 0;
+    dial_code = DIAL_U(1);
+    menu_ready();
+    assert(!dial_timer_ids);
+    /* The switch Off does not stop it: U1 turns GRKit on and applies its
+       recipe, and P turns GRKit off again. */
+    DIAL_RECIPES_OFF = 0;
+    DIAL_SWITCH_OFF = 1;
+    manage_off_changed(h);
+    assert(manage_stopped(h, 0) && manage_stopped(h, 1) && !h[GRKIT_HOST_CAPABILITIES / 4]);
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(!DIAL_SWITCH_OFF && !manage_stopped(h, 1));
+    assert(h[GRKIT_HOST_ACTIVE / 4] == dial_record(1) && h[GRKIT_HOST_GRAIN / 4] == 3);
+    dial_to(DIAL_P);
+    dial_fire();
+    assert(DIAL_SWITCH_OFF == 1 && manage_stopped(h, 1) && !h[GRKIT_HOST_ACTIVE / 4]);
+    assert(!h[GRKIT_HOST_STATE_HOLD / 4]);
+}
+
+static void the_mode_dial_applies_a_user_mode_at_a_start(void)
+{
+    volatile u32 *h = test_header;
+    dial_reset();
+    /* At a start in U1 the firmware sends no dial event: the first
+       shooting screen starts the timer, and its end applies U1. */
+    dial_code = DIAL_U(1);
+    menu_ready();
+    assert(dial_timer_ids == 1 && dial_timer_ms == DIAL_RETRY_MS);
+    dial_fire();
+    assert(h[GRKIT_HOST_GRAIN / 4] == 3 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
+    /* A start in P changes nothing. */
+    dial_reset();
+    menu_ready();
+    dial_fire();
+    assert(dial_base());
+}
+
 static void record_index_finds_each_record_start(void)
 {
     reset();
@@ -3799,5 +4072,10 @@ int main(void)
 #endif
     each_selection_change_counts_once();
     record_index_finds_each_record_start();
+    the_mode_dial_applies_a_user_mode_and_restores_the_base();
+    the_mode_dial_acts_once_where_the_dial_stays();
+    the_mode_dial_follows_without_a_recipe_that_applies();
+    the_mode_dial_belongs_to_the_recipes_module();
+    the_mode_dial_applies_a_user_mode_at_a_start();
     return 0;
 }

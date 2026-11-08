@@ -45,6 +45,7 @@ fn core_span_covers_payloads_and_rejects_invalid_bounds() -> Result<()> {
         relocations: vec![],
         references: vec![],
         exports: vec![],
+        ready: 0,
     };
     assert_eq!(plan.core_size(tail)?, 0xd300);
     validate_plan(&plan)?;

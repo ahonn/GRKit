@@ -265,6 +265,9 @@ const SITES: &[Site] = &[
     ("grain_gate", 0x53734c2c, "defeffeb"),
     // The grain tables: `mov r0, #0x200` after the luma amplitude load.
     ("grain_amplitude", 0x538bf418, "020ca0e3"),
+    // AeModel's apply of a dial position (0x53258dd4): the BL to
+    // UserModeModel::SetUserMode (0x533f3090).
+    ("menu_dial", 0x53258e38, "946806eb"),
 ];
 
 /// The stock instructions around the processing hooks.

@@ -940,3 +940,28 @@ crop_button:
     ldr pc, =HOOK_CROP_BUTTON_RESUME
 .ltorg
 #endif
+
+/* The mode dial (runtime/mode_dial.h): the firmware applies a dial
+   position. Each build of a family hooks the same place: on GR III the entry
+   of the apply of a dial position, which each event of the dial reaches, and
+   on GR IV the BL to the setter of the user mode in the apply of a dial
+   position. The hook notes the move (menu_dial_moved starts a timer of the
+   App task) and the firmware code runs as it would: the replaced
+   instruction, or the call of the BL target with the caller's return
+   address. */
+#if !defined(HOOK_MENU_DIAL)
+#error "The family has the menu_dial hook"
+#endif
+.global menu_dial
+.type menu_dial, %function
+menu_dial:
+    push {r0-r3, r12, lr}
+    bl menu_dial_moved
+    pop {r0-r3, r12, lr}
+#ifdef HOOK_MENU_DIAL_TARGET
+    ldr pc, =HOOK_MENU_DIAL_TARGET
+#else
+    .inst HOOK_MENU_DIAL_STOCK
+    ldr pc, =HOOK_MENU_DIAL_RESUME
+#endif
+.ltorg

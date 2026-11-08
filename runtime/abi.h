@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 3680
+#define GRKIT_HOST_HEADER_SIZE 3684
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -451,6 +451,11 @@
    saved: a start begins without them. */
 #define GRKIT_HOST_RECIPE_UNDO 3580
 #define GRKIT_HOST_RECIPE_UNDO_WORDS 25
+/* Nonzero while the mode dial is on a user mode whose settings are temporary
+   (runtime/mode_dial.h): the resident loader then does not save the main state
+   file, so the file keeps the settings of the other positions. The recipe file
+   still saves. */
+#define GRKIT_HOST_STATE_HOLD 3680
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
