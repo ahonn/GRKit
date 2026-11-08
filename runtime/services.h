@@ -192,7 +192,8 @@
 /* The mode dial (runtime/mode_dial.h): the firmware timer of the dial (0
    when none runs), the number of tries while the firmware loads the native
    settings, the user mode that the core acted on last (0 for another
-   position), and the bound user mode that applies (0 in the base state).
+   position), the bound user mode that applies (0 in the base state), and
+   what it does (DIAL_OFF, DIAL_RECIPE, or DIAL_SAVED; 0 in the base state).
    Then the label of the dial: its state (DIAL_LABEL_*), its firmware timer,
    its number of lines, the string view of each line and their parent, the
    text descriptor of each line, and the text of the first line.
@@ -205,11 +206,12 @@
 #define DIAL_TRY 4U
 #define DIAL_AT 8U
 #define DIAL_ACTIVE 12U
-#define DIAL_LABEL 16U
-#define DIAL_LABEL_TIMER 20U
-#define DIAL_LABEL_LINES 24U
+#define DIAL_KIND 16U
+#define DIAL_LABEL 20U
+#define DIAL_LABEL_TIMER 24U
+#define DIAL_LABEL_LINES 28U
 #define DIAL_LABEL_LINES_MAX 3U
-#define DIAL_LABEL_VIEWS 28U
+#define DIAL_LABEL_VIEWS 32U
 #define DIAL_LABEL_PARENT (DIAL_LABEL_VIEWS + 4U * DIAL_LABEL_LINES_MAX)
 #define DIAL_LABEL_TEXTS (DIAL_LABEL_PARENT + 4U)
 #define DIAL_LABEL_NAME (DIAL_LABEL_TEXTS + 8U * DIAL_LABEL_LINES_MAX)

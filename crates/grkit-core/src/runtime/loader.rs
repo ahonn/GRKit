@@ -3,9 +3,9 @@
 
 use super::*;
 use crate::abi::{
-    HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, HOST_STATE_HOLD, PROFILE,
-    PROFILE_KINDS, PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS,
-    PROFILE_SLOT_SIZE,
+    DIAL_SET_WORDS, HOST_DIAL_SETS, HOST_DIAL_SET_CHANGES, HOST_PROCESSING_CALLS, HOST_PROFILE,
+    HOST_RECIPE_CHANGES, HOST_STATE_HOLD, PROFILE, PROFILE_KINDS, PROFILE_MODULES,
+    PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
 };
 use crate::capabilities::{self, StateFile};
 use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
@@ -622,7 +622,7 @@ fn state_script() -> Vec<String> {
         let (changes, at, saved, _) = watch_names(file);
         lines.push(format!("{changes} = {}", word(at)));
         lines.push(match file {
-            StateFile::Main => format!("{saved} = {changes}"),
+            StateFile::Main | StateFile::DialSets => format!("{saved} = {changes}"),
             StateFile::Recipes => format!("{saved} = 0"),
         });
     }
@@ -782,6 +782,33 @@ fn state_script() -> Vec<String> {
                 "rindex = rindex + 1".into(),
                 "goto recipe_word".into(),
                 ":recipe_word_end".into(),
+            ]);
+        }
+        if file == StateFile::DialSets {
+            // The words of the set of each user mode that are not 0
+            // (runtime/mode_dial.h), at their keys (state::dial_set_key). The
+            // save of the recipe file has the same variables, which keeps
+            // the variables of the script few.
+            lines.extend([
+                "rindex = 0".into(),
+                ":set_word".into(),
+                format!("if rindex >= {DIAL_SET_STATE_WORDS} goto set_word_end"),
+                format!("rvalue = registry[{} + rindex]", HOST_DIAL_SETS / 4),
+                "if rvalue <= 0 goto set_word_next".into(),
+                format!("if rvalue > {DIAL_SET_VALUE_MAX} goto set_word_next"),
+                format!("rkey = rindex / {DIAL_SET_WORDS}"),
+                format!("rkey = rkey * {DIAL_SET_KEY_STRIDE}"),
+                format!("rkey = rkey + {DIAL_SET_KEY_BASE}"),
+                format!("rslot = rindex % {DIAL_SET_WORDS}"),
+                "rkey = rkey + rslot".into(),
+                "int2str line rkey".into(),
+                "filewriteln sfh line".into(),
+                "int2str line rvalue".into(),
+                "filewriteln sfh line".into(),
+                ":set_word_next".into(),
+                "rindex = rindex + 1".into(),
+                "goto set_word".into(),
+                ":set_word_end".into(),
             ]);
         }
         lines.extend([
@@ -963,6 +990,7 @@ fn watch_names(file: StateFile) -> (&'static str, usize, &'static str, &'static 
     match file {
         StateFile::Main => ("changes", HOST_STATE_CHANGES, "saved", "stamp"),
         StateFile::Recipes => ("rchanges", HOST_RECIPE_CHANGES, "rsaved", "rstamp"),
+        StateFile::DialSets => ("dchanges", HOST_DIAL_SET_CHANGES, "dsaved", "dstamp"),
     }
 }
 
@@ -1050,6 +1078,7 @@ mod tests {
         // its code, and the three words of its adjustments; and the recipe
         // words of the header below RECIPE_STATE_WORDS.
         let recipes = format!("{} + rindex", HOST_RECIPES / 4);
+        let sets = format!("{} + rindex", HOST_DIAL_SETS / 4);
         let allowed = [
             record("index", RECORD_CODE),
             record("pindex", RECORD_CODE),
@@ -1058,6 +1087,7 @@ mod tests {
             record("pindex", RECORD_PARAMETERS + 8),
             record("pindex", RECORD_TONING & !3),
             recipes.clone(),
+            sets.clone(),
         ];
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
@@ -1114,6 +1144,13 @@ mod tests {
             )
         };
         assert_eq!(script.matches(&recipes).count(), 1);
+        // Each index of the sets of the user modes is below
+        // DIAL_SET_STATE_WORDS, which ends in the header.
+        assert!(script.contains(&format!(
+            "if rindex >= {DIAL_SET_STATE_WORDS} goto set_word_end"
+        )));
+        const { assert!(HOST_DIAL_SETS / 4 + DIAL_SET_STATE_WORDS <= HEADER_SIZE / 4) };
+        assert_eq!(script.matches(&sets).count(), 1);
     }
 
     /// The interpreter reads a whole file when it includes it, so the start
@@ -1175,15 +1212,19 @@ mod tests {
         };
         let read = format!("changes = registry[{}]", HOST_STATE_CHANGES / 4);
         let read_recipes = format!("rchanges = registry[{}]", HOST_RECIPE_CHANGES / 4);
+        let read_sets = format!("dchanges = registry[{}]", HOST_DIAL_SET_CHANGES / 4);
         let (start, watch) = (at(":resident"), at(":watch"));
         let poll = at(&format!("mpause {STATE_POLL_MS}"));
         assert_eq!(script[poll + 1], read);
         assert_eq!(script[poll + 2], read_recipes);
-        assert_eq!(script[poll + 3], "total = changes + rchanges");
+        assert_eq!(script[poll + 3], read_sets);
+        assert_eq!(script[poll + 4], "total = changes + rchanges + dchanges");
         let moved = at("if total <> last goto watch_moved");
         let settled = at("if changes = saved goto watch_state_saved");
         let settled_recipes = at("if rchanges = rsaved goto watch_recipes_saved");
+        let settled_sets = at("if dchanges = dsaved goto watch_usermode_saved");
         assert!(watch < poll && poll < moved && moved < settled && settled < settled_recipes);
+        assert!(settled_recipes < settled_sets);
         // While the core holds the main file, its change waits: the poll
         // jumps past its save and keeps its count unsaved.
         assert_eq!(
@@ -1195,10 +1236,13 @@ mod tests {
         assert_eq!(script[settled + 4], "call save_state");
         assert_eq!(script[settled_recipes + 1], "rstamp = rchanges");
         assert_eq!(script[settled_recipes + 2], "call save_recipes");
-        // An idle poll runs eight lines: the pause, two reads, the sum, three
+        assert_eq!(script[settled_sets + 1], "dstamp = dchanges");
+        assert_eq!(script[settled_sets + 2], "call save_usermode");
+        // An idle poll runs ten lines: the pause, three reads, the sum, four
         // compares that jump past the saves, and the jump back. The hold is
         // read only for a change of the main file.
-        assert_eq!(script[at(":watch_recipes_saved") + 1], "goto watch");
+        assert_eq!(at(":watch_recipes_saved") + 1, settled_sets);
+        assert_eq!(script[at(":watch_usermode_saved") + 1], "goto watch");
         assert_eq!(at(":watch_state_saved"), settled + 5);
         // The watch loop of the profile holds too.
         assert_eq!(
@@ -1208,8 +1252,11 @@ mod tests {
         let profile = profile_script();
         assert!(profile.contains(&"if hold <> 0 goto profile_poll_state_saved".to_owned()));
         assert_eq!(at(":watch_recipes_saved"), settled_recipes + 3);
+        assert_eq!(at(":watch_usermode_saved"), settled_sets + 3);
         assert_eq!(script[at(":watch_moved") + 1], "last = total");
-        for name in ["last", "saved", "rsaved", "changes", "rchanges"] {
+        for name in [
+            "last", "saved", "rsaved", "dsaved", "changes", "rchanges", "dchanges",
+        ] {
             assert!(script[start..watch]
                 .iter()
                 .any(|l| l.starts_with(&format!("{name} ="))));
@@ -1219,6 +1266,12 @@ mod tests {
         assert_eq!(script[at(":save_state") + 2], "call snapshot");
         assert!(script.iter().any(|l| l == "saved = stamp"));
         assert!(script.iter().any(|l| l == "rsaved = rstamp"));
+        assert!(script.iter().any(|l| l == "dsaved = dstamp"));
+        // The sets of the user modes start saved: only a save on the camera
+        // writes their file.
+        assert!(script[start..watch]
+            .iter()
+            .any(|l| l == "dsaved = dchanges"));
     }
 
     fn at(script: &[String], line: &str) -> usize {

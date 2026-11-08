@@ -36,6 +36,8 @@ typedef unsigned int u32;
 #define STATE_PATH CARD "/GRKIT/STATE.TXT"
 #define RECIPES_STATE_PATH CARD "/GRKIT/RECIPES.TXT"
 #define RECIPES_STATE_TMP_PATH CARD "/GRKIT/RECIPES.TMP"
+#define DIAL_SETS_PATH CARD "/GRKIT/USERMODE.TXT"
+#define DIAL_SETS_TMP_PATH CARD "/GRKIT/USERMODE.TMP"
 #define RECIPES_INBOX_PATH CARD "/SCRIPT/GRKIT/RECIPES.BIN"
 #define MODULES_PATH CARD "/GRKIT/MODULES"
 #define LEGACY_EFFECTS_PATH CARD "/SCRIPT/PLUGINS/EFFECTS"
@@ -1721,6 +1723,64 @@ static void imported_lines_give_the_hash_of_an_unchanged_file(void)
     m = record_line(m, "13A530FC.GRF", 0x19b4c184, 0, 0, 0);
     assert(m == (u32)n && !memcmp(record, text, (size_t)n));
 }
+/* The sets of the user modes (runtime/install_recipes.h: install_dial_sets):
+   INSTALL restores each word as the file of the loader has it. A set with
+   more pairs than the header holds stays out, and a word above
+   GRKIT_DIAL_SET_VALUE_MAX has more digits than a value of the file. */
+static u32 set_word_at(u32 header, u32 u, u32 w) { return word(header + GRKIT_HOST_DIAL_SETS + 4 * (u * GRKIT_DIAL_SET_WORDS + w)); }
+static void the_sets_of_the_user_modes_restore(void)
+{
+    const u32 header = MEMORY_BASE + 0xc0000U;
+    char text[4096];
+    u32 at = 0;
+    const u32 key = GRKIT_DIAL_SET_KEY_BASE;
+    /* U1: two pairs, the effect, and Fn; U2: a count that no set has; U3:
+       one pair, and a word out of range. */
+    const u32 pairs[][2] = {
+        {key + GRKIT_DIAL_SET_COUNT, 3},
+        {key + GRKIT_DIAL_SET_CORE, GRKIT_DIAL_SET_EFFECT | 0x1234},
+        {key + GRKIT_DIAL_SET_FN, 4711},
+        {key + GRKIT_DIAL_SET_PAIR, 123456789},
+        {key + GRKIT_DIAL_SET_PAIR + 1, 2},
+        {key + GRKIT_DIAL_SET_PAIR + 2, 987654321},
+        {key + GRKIT_DIAL_SET_WORDS - 1, 5},
+        {key + GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_COUNT, GRKIT_DIAL_SET_PAIRS + 2},
+        {key + GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_CORE + 2, 4},
+        {key + 2 * GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_COUNT, 2},
+        {key + 2 * GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_PAIR, 55},
+        {key + 2 * GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_PAIR + 1, GRKIT_DIAL_SET_VALUE_MAX},
+        {key + 2 * GRKIT_DIAL_SET_KEY_STRIDE + GRKIT_DIAL_SET_CORE + 1, GRKIT_DIAL_SET_VALUE_MAX + 1},
+    };
+    for (u32 i = 0; i < sizeof pairs / sizeof pairs[0]; ++i)
+        at += (u32)snprintf(text + at, sizeof text - at, "%u\r\n%u\r\n", pairs[i][0], pairs[i][1]);
+    reset();
+    for (u32 k = 0; k < GRKIT_HOST_HEADER_SIZE; k += 4) store(header + k, 0xa5a5a5a5U);
+    add_text(DIAL_SETS_PATH, text);
+    install_dial_sets(header);
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_COUNT) == 3 && set_word_at(header, 0, GRKIT_DIAL_SET_FN) == 4711);
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_CORE) == (GRKIT_DIAL_SET_EFFECT | 0x1234));
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_PAIR) == 123456789 && set_word_at(header, 0, GRKIT_DIAL_SET_PAIR + 1) == 2);
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_PAIR + 2) == 987654321 && !set_word_at(header, 0, GRKIT_DIAL_SET_PAIR + 3));
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_WORDS - 1) == 5 && !set_word_at(header, 0, GRKIT_DIAL_SET_TONING));
+    for (u32 w = 0; w < GRKIT_DIAL_SET_WORDS; ++w) assert(!set_word_at(header, 1, w));
+    assert(set_word_at(header, 2, GRKIT_DIAL_SET_COUNT) == 2 && set_word_at(header, 2, GRKIT_DIAL_SET_PAIR) == 55);
+    assert(set_word_at(header, 2, GRKIT_DIAL_SET_PAIR + 1) == GRKIT_DIAL_SET_VALUE_MAX);
+    assert(!set_word_at(header, 2, GRKIT_DIAL_SET_CORE + 1));
+    /* The words around the sets stay; the count of changes stays 0, so the
+       loader does not save. */
+    assert(word(header + GRKIT_HOST_DIAL_SETS - 4) == 0xa5a5a5a5U);
+    assert(word(header + GRKIT_HOST_DIAL_SETS + 4 * GRKIT_HOST_DIAL_SETS_WORDS - 4) == 0);
+    /* USERMODE.TMP, which a save cut by the power leaves, when the file is
+       missing; without both, no set. */
+    reset();
+    for (u32 k = 0; k < GRKIT_HOST_HEADER_SIZE; k += 4) store(header + k, 0);
+    add_text(DIAL_SETS_TMP_PATH, text);
+    install_dial_sets(header);
+    assert(set_word_at(header, 0, GRKIT_DIAL_SET_COUNT) == 3 && set_word_at(header, 2, GRKIT_DIAL_SET_PAIR) == 55);
+    reset();
+    install_dial_sets(header);
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) assert(!set_word_at(header, u, GRKIT_DIAL_SET_COUNT));
+}
 
 static void *run(void *unused)
 {
@@ -1757,6 +1817,7 @@ static void *run(void *unused)
     the_recipes_restore_and_import_once();
     a_library_sets_the_mode_dial_once();
     recipes_keep_their_ids_and_the_dial();
+    the_sets_of_the_user_modes_restore();
     reset();
     return 0;
 }

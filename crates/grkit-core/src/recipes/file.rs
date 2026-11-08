@@ -5,8 +5,8 @@ use super::layout::{MODULE_WORD, OFF, USED};
 use super::{check_library, Family, Recipe, LIBRARY_MAX, ON_MAX, WORD_LIMIT};
 use crate::abi::{RECIPE_DIAL_POSITIONS, RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS};
 use crate::runtime::{
-    recipe_key, RECIPE_DIAL_FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF, RECIPE_ID_KEY_BASE,
-    RECIPE_ID_MAX, RECIPE_IMPORTED_KEY,
+    recipe_key, RECIPE_DIAL_FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF, RECIPE_DIAL_SAVED,
+    RECIPE_ID_KEY_BASE, RECIPE_ID_MAX, RECIPE_IMPORTED_KEY,
 };
 use anyhow::{ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -86,7 +86,9 @@ pub fn read_recipe_file(text: &str, family: Family) -> Vec<Recipe> {
 /// The user modes of the mode dial do what `dial` gives, which the site reads
 /// with `read_recipe_dial` and the person can change. A user mode whose
 /// recipe the file does not hold, or holds off, follows
-/// (`runtime::RECIPE_DIAL_FOLLOW`).
+/// (`runtime::RECIPE_DIAL_FOLLOW`). A user mode with
+/// `runtime::RECIPE_DIAL_SAVED` keeps it: the settings that the camera saved
+/// in it are in a file that the site does not write.
 ///
 /// Each recipe keeps its ID, which the site generates when the recipe joins
 /// its library. The file holds each ID once: a recipe without an ID, or with
@@ -173,7 +175,8 @@ pub fn write_recipe_file(
 }
 
 /// What each user mode of the mode dial does, U1 to U3: it follows the dial
-/// (`runtime::RECIPE_DIAL_FOLLOW`), turns GRKit off
+/// (`runtime::RECIPE_DIAL_FOLLOW`), applies the settings that the camera
+/// saved in it (`runtime::RECIPE_DIAL_SAVED`), turns GRKit off
 /// (`runtime::RECIPE_DIAL_OFF`), or applies the recipe with that ID.
 pub type Dial = [u32; RECIPE_DIAL_POSITIONS];
 
@@ -193,10 +196,11 @@ pub fn read_recipe_dial(text: &str) -> Dial {
 }
 
 /// `dial` with each user mode whose recipe `records` do not hold on as
-/// follow.
+/// follow. GRKit Off and the saved settings name no recipe, so they stay.
 fn held_dial(dial: &Dial, records: &[FileRecord]) -> Dial {
     dial.map(|value| {
         let held = value == RECIPE_DIAL_OFF
+            || value == RECIPE_DIAL_SAVED
             || (value != RECIPE_DIAL_FOLLOW
                 && records
                     .iter()

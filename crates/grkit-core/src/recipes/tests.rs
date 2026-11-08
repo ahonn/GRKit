@@ -553,6 +553,36 @@ fn a_write_gives_the_user_modes_of_the_mode_dial() {
     assert_eq!(read_recipe_dial(&text), [22, OFF, FOLLOW]);
 }
 
+/// A user mode with the settings that the camera saved in it keeps them
+/// through a read and a write of the site, which cannot give the value but
+/// can replace it. The value is no recipe ID.
+#[test]
+fn a_write_keeps_the_saved_settings_of_a_user_mode() {
+    use crate::runtime::{
+        RECIPE_DIAL_FOLLOW as FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF as OFF,
+        RECIPE_DIAL_SAVED as SAVED, RECIPE_ID_MAX, RECIPE_VALUE_MAX,
+    };
+    assert_eq!(
+        (RECIPE_ID_MAX, SAVED, OFF),
+        (RECIPE_VALUE_MAX - 2, RECIPE_VALUE_MAX - 1, RECIPE_VALUE_MAX)
+    );
+    let recipes = named(&[("A", 11)]);
+    let mut card = write_recipe_file(&recipes, Family::Gr3, "", &NO_DIAL).unwrap();
+    card.push_str(&format!("{}\r\n{SAVED}\r\n", RECIPE_DIAL_KEY_BASE + 1));
+    assert_eq!(read_recipe_dial(&card), [FOLLOW, SAVED, FOLLOW]);
+    let same = write_recipe_file(&recipes, Family::Gr3, &card, &read_recipe_dial(&card)).unwrap();
+    assert_eq!(read_recipe_dial(&same), [FOLLOW, SAVED, FOLLOW]);
+    // The person gives U2 a recipe, then the saved settings again.
+    let recipe = write_recipe_file(&recipes, Family::Gr3, &same, &[FOLLOW, 11, FOLLOW]).unwrap();
+    assert_eq!(read_recipe_dial(&recipe), [FOLLOW, 11, FOLLOW]);
+    let back = write_recipe_file(&recipes, Family::Gr3, &recipe, &[FOLLOW, SAVED, OFF]).unwrap();
+    assert_eq!(read_recipe_dial(&back), [FOLLOW, SAVED, OFF]);
+    // A recipe never has the value as its ID.
+    let mut wrong = recipes.clone();
+    wrong[0].id = SAVED;
+    assert!(wrong[0].check().is_err());
+}
+
 /// A read of the mode dial gives follow for a user mode whose recipe the
 /// file does not hold, and for a file without user modes.
 #[test]

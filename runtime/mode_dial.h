@@ -3,9 +3,25 @@
 /* The mode dial: what the user modes U1 to U3 do (GRKIT_HOST_RECIPE_DIAL,
    which the recipe file keeps). A user mode follows (GRKIT_RECIPE_DIAL_FOLLOW,
    and an ID that no recipe that is on has), turns GRKit off
-   (GRKIT_RECIPE_DIAL_OFF), or applies a recipe by its ID. The Mode Dial page
-   of MENU sets them (runtime/menu_dial.h). A user mode that
-   does not follow is bound. The dial is part of CORE.RECIPE: its hook
+   (GRKIT_RECIPE_DIAL_OFF), applies a recipe by its ID, or applies the
+   settings that the camera saved in it (GRKIT_RECIPE_DIAL_SAVED, while it
+   has a set). The Mode Dial page of MENU sets them and saves the sets
+   (runtime/menu_dial.h). A user mode that does not follow is bound.
+
+   A set (GRKIT_HOST_DIAL_SETS, one for each user mode) holds the GRKit
+   settings that a person changes for shooting: the value of each
+   capability, with the effect by its recipe code (recipe_effect_code) and
+   its Fn adjustments and Toning; and by their state file IDs, each module
+   setting that the state file saves, the Enable of each module, and the
+   switch Enable GRKit (dial_set_holds). It holds no position or options of
+   ADJ, no Enable at Start, no recipe, and not the Enable of the module of
+   the dial, which the dial needs. The IDs find the settings when the
+   modules change: a setting that no longer exists is skipped, and an
+   effect that is missing selects Film Look Off. The resident loader saves
+   the sets in their own file after GRKIT_HOST_DIAL_SET_CHANGES changes, and
+   INSTALL restores them (runtime/install_recipes.h).
+
+   The dial is part of CORE.RECIPE: its hook
    installs with the Recipes module (point mode.dial), also when the module
    loads stopped, and it acts while the Enable of that module is On. The
    switch Enable GRKit does not stop it, so a bound user mode can turn GRKit
@@ -18,13 +34,17 @@
      copy of the base state (the capability words, the values of the module
      settings, which hold the Enable of each module and the switch, and the
      Fn adjustments and the Toning of each effect), holds the main state file
-     (GRKIT_HOST_STATE_HOLD), and applies the user mode: the switch Off, or
-     the switch On and the recipe, without an undo step. A recipe that cannot
-     apply (its effect or a native value is missing) makes the user mode
-     follow: the core restores the base state and releases the file.
+     (GRKIT_HOST_STATE_HOLD), and applies the user mode: the switch Off, the
+     switch On and the recipe, without an undo step, or each value of its
+     set that differs from the current one, through the setters. A recipe
+     that cannot apply (its effect or a native value is missing) makes the
+     user mode follow: the core restores the base state and releases the
+     file.
    - The settings that change in a bound user mode are temporary.
    - The dial moves to another bound user mode: the core applies it, and
-     keeps the copy of the base state.
+     keeps the copy of the base state. From a user mode with a set, the core
+     restores the base state first: a set holds more settings than a recipe
+     or GRKit Off sets, so they do not carry over.
    - The dial leaves the bound user modes: the core restores each setting of
      the copy that differs, so a setting that did not change writes nothing
      (an unchanged Framing ratio does not set the native aspect again), and
@@ -71,6 +91,9 @@
 #define DIAL_FOLLOW 0U
 #define DIAL_OFF 1U
 #define DIAL_RECIPE 2U
+#define DIAL_SAVED 3U
+/* No set, or no setting that a set holds. */
+#define DIAL_NO_SET 0xffffffffU
 /* How long the label shows, and the frame of its first line: the width
    between the native icons at the sides of the live view, below the rows of
    the native text at the top and the load cue. The other lines follow. */
@@ -79,10 +102,11 @@
 #define DIAL_LABEL_TOP 90U
 #define DIAL_LABEL_WIDTH 560U
 #define DIAL_LABEL_HEIGHT 40U
-/* The names of the user modes, as the dial shows them, and the text of
-   GRKit Off (runtime/abi.h: the DIAL run). */
+/* The names of the user modes, as the dial shows them, and the texts of
+   GRKit Off and Saved Settings (runtime/abi.h: the DIAL run). */
 static const u16 dial_names[GRKIT_RECIPE_DIAL_POSITIONS][3]={{'U','1',0},{'U','2',0},{'U','3',0}};
 #define DIAL_TEXT_OFF (TEXT_DIAL+2U)
+#define DIAL_TEXT_SAVED (TEXT_DIAL+3U)
 
 #ifndef DIAL_TIMER_START
 #define DIAL_TIMER_START(ms) ui_timer_start(ms)
@@ -103,21 +127,37 @@ static u32 dial_user_mode(u32 position) {
     u32 u=position-DIAL_CODE_U1;
     return u<GRKIT_RECIPE_DIAL_POSITIONS ? u+1U : 0U;
 }
-/* Whether the dial acts: the Recipes module, the listed module that uses
-   CORE.RECIPE, loaded at this start with its own Enable On. */
-static u32 dial_enabled(volatile u32 *h) {
+/* The module of the dial: the Recipes module, the listed module that uses
+   CORE.RECIPE and loaded at this start, or MANAGE_MODULES. */
+static u32 dial_module(volatile u32 *h) {
     u32 i;
     for(i=0;i<manage_count(h);++i)
         if(manage_status(h,i)==MANAGE_LOADED && MANAGE_MAP(manage_entry(h,i)+MANAGE_USES)[0]&GRKIT_CORE_RECIPE_BIT)
-            return !manage_off(h,i);
-    return 0;
+            return i;
+    return MANAGE_MODULES;
 }
+/* Whether the dial acts: its module has its own Enable On. */
+static u32 dial_enabled(volatile u32 *h) {
+    u32 module=dial_module(h);
+    return module<MANAGE_MODULES && !manage_off(h,module);
+}
+/* The set of user mode u (1 to 3), and the number of its pairs, or
+   DIAL_NO_SET without a set or for a count that no set has. */
+static volatile u32 *dial_set(volatile u32 *h,u32 u) {
+    return h+GRKIT_HOST_DIAL_SETS/4+(u-1U)*GRKIT_DIAL_SET_WORDS;
+}
+static u32 dial_set_pairs(volatile u32 *h,u32 u) {
+    u32 n=dial_set(h,u)[GRKIT_DIAL_SET_COUNT];
+    return n && n<=GRKIT_DIAL_SET_PAIRS+1U ? n-1U : DIAL_NO_SET;
+}
+static u32 dial_has_set(volatile u32 *h,u32 u) { return dial_set_pairs(h,u)!=DIAL_NO_SET; }
 /* What user mode u (1 to 3) does, and for DIAL_RECIPE the entry of its
-   recipe in *entry. */
+   recipe in *entry. A user mode whose set is missing follows. */
 static u32 dial_assignment(volatile u32 *h,u32 u,u32 *entry) {
     u32 value=h[GRKIT_HOST_RECIPE_DIAL/4+u-1U], e, n=recipe_entries(h);
     if(value==GRKIT_RECIPE_DIAL_OFF) return DIAL_OFF;
     if(value==GRKIT_RECIPE_DIAL_FOLLOW) return DIAL_FOLLOW;
+    if(value==GRKIT_RECIPE_DIAL_SAVED) return dial_has_set(h,u) ? DIAL_SAVED : DIAL_FOLLOW;
     for(e=0;e<n;++e) if(*recipe_id_at(h,e)==value) { *entry=e; return DIAL_RECIPE; }
     return DIAL_FOLLOW;
 }
@@ -182,6 +222,99 @@ static void dial_restore(volatile u32 *h) {
         if(!core_setting_values[i] && GRKIT_CORE_SETTING_BASE+i!=GRKIT_CORE_TONE) continue;
         if(dial_core_value(h,i)!=value) setting_store(h,GRKIT_CORE_SETTING_BASE+i,value);
     }
+}
+
+/* ---- The sets ------------------------------------------------------------- */
+/* Whether a set holds setting k of the settings table `t`: a module setting
+   that the state file saves (it has an ID), the Enable of a listed module
+   other than the module of the dial, or the switch. Not the position or the
+   options of a module in ADJ, the choices of the effects, Enable at Start,
+   or the values that the table keeps for modules that did not load
+   (runtime/manage.h, runtime/install_plan.h). */
+static u32 dial_set_holds(volatile u32 *h,volatile u32 *t,u32 k) {
+    u32 module, n;
+    if(!t[SETTINGS_ENTRY(k)] || !h[GRKIT_HOST_MANAGE/4]) return 0;
+    if(k<manage_word(h,MANAGE_SETTINGS) || k+1U==manage_switch(h)) return 1;
+    for(module=0, n=manage_count(h);module<n;++module)
+        if(k==manage_off_handle(h,module)) return module!=dial_module(h);
+    return 0;
+}
+/* The handle of the setting with state file ID `id` that a set holds, or
+   DIAL_NO_SET. */
+static u32 dial_set_handle(volatile u32 *h,volatile u32 *t,u32 id) {
+    u32 k;
+    for(k=0;k<t[0];++k)
+        if(t[SETTINGS_ENTRY(k)]==id && dial_set_holds(h,t,k)) return k;
+    return DIAL_NO_SET;
+}
+/* Save the current settings in the set of user mode u (1 to 3), which
+   replaces the set that it had (runtime/menu_dial.h). The loader saves the
+   sets after the count of changes. */
+static void dial_save(volatile u32 *h,u32 u) {
+    volatile u32 *s=dial_set(h,u), *t=settings_table(h);
+    u32 i, n=0, record=h[GRKIT_HOST_ACTIVE/4], effect=0, fn=0, toning=0;
+    for(i=0;i<GRKIT_CORE_SETTING_COUNT;++i) s[GRKIT_DIAL_SET_CORE+i]=dial_core_value(h,i);
+    /* The effect by its code, which finds it when the effects change. */
+    if(record_index(h,record)<GRKIT_TEXT_RECORDS) {
+        effect=GRKIT_DIAL_SET_EFFECT|recipe_effect_code(record);
+        fn=recipe_fn_read(record);
+        toning=BYTE(record,GRKIT_RECORD_TONING);
+    }
+    s[GRKIT_DIAL_SET_CORE+CORE_SETTING(GRKIT_CORE_TONE)]=effect;
+    s[GRKIT_DIAL_SET_FN]=fn;
+    s[GRKIT_DIAL_SET_TONING]=toning;
+    for(i=0;t && i<t[0] && n<GRKIT_DIAL_SET_PAIRS;++i) {
+        if(!dial_set_holds(h,t,i)) continue;
+        s[GRKIT_DIAL_SET_PAIR+2U*n]=t[SETTINGS_ENTRY(i)];
+        s[GRKIT_DIAL_SET_PAIR+2U*n+1U]=t[SETTINGS_ENTRY(i)+1];
+        ++n;
+    }
+    /* The file keeps no pair of the set before. */
+    for(i=2U*n;i<2U*GRKIT_DIAL_SET_PAIRS;++i) s[GRKIT_DIAL_SET_PAIR+i]=0;
+    s[GRKIT_DIAL_SET_COUNT]=n+1U;
+    ++h[GRKIT_HOST_DIAL_SET_CHANGES/4];
+}
+/* Apply the set of user mode u (1 to 3), which has one: each value that
+   differs from the current one, through the setters, in the order of
+   dial_restore. A pair whose setting the table does not hold is skipped, as
+   is a value that the setting does not offer. 1 when the effect of the set
+   is missing: Film Look is then Off. */
+static u32 dial_set_apply(volatile u32 *h,u32 u) {
+    volatile u32 *s=dial_set(h,u), *t=settings_table(h);
+    u32 n=dial_set_pairs(h,u), i, k, value, record, changed=0, index=GRKIT_TEXT_RECORDS;
+    u32 effect=s[GRKIT_DIAL_SET_CORE+CORE_SETTING(GRKIT_CORE_TONE)];
+    if(effect) index=recipe_effect(h,effect&GRKIT_RECIPE_CODE_MASK);
+    if(index<GRKIT_TEXT_RECORDS) {
+        record=recipe_record(h,index);
+        changed=recipe_fn_write(record,s[GRKIT_DIAL_SET_FN]);
+        value=s[GRKIT_DIAL_SET_TONING]&0xffU;
+        if(BYTE(record,GRKIT_RECORD_TONING)!=value) {
+            if(toning_record(record)) toning_apply(h,record,value);
+            else BYTE(record,GRKIT_RECORD_TONING)=(u8)value;
+            changed=1;
+        }
+        if(changed) {
+            ++h[GRKIT_HOST_PARAMETER_CHANGES/4];
+            GRKIT_STATE_CHANGED(h);
+        }
+    }
+    changed=0;
+    for(i=0;t && i<n;++i) {
+        k=dial_set_handle(h,t,s[GRKIT_DIAL_SET_PAIR+2U*i]);
+        value=s[GRKIT_DIAL_SET_PAIR+2U*i+1U];
+        if(k==DIAL_NO_SET || t[SETTINGS_ENTRY(k)+1]==value) continue;
+        setting_store(h,k,value);
+        changed=1;
+    }
+    if(changed) manage_off_changed(h);
+    for(i=0;i<GRKIT_CORE_SETTING_COUNT;++i) {
+        if(GRKIT_CORE_SETTING_BASE+i==GRKIT_CORE_TONE) value=index<GRKIT_TEXT_RECORDS ? index+1U : 0;
+        /* CORE.RECIPE has no value. */
+        else if(!core_setting_values[i]) continue;
+        else value=s[GRKIT_DIAL_SET_CORE+i];
+        if(dial_core_value(h,i)!=value) setting_store(h,GRKIT_CORE_SETTING_BASE+i,value);
+    }
+    return effect && index>=GRKIT_TEXT_RECORDS;
 }
 
 /* ---- The label ------------------------------------------------------------ */
@@ -278,6 +411,7 @@ static void dial_leave(volatile u32 *h) {
     if(!dial_word(h,DIAL_ACTIVE)[0]) return;
     dial_restore(h);
     dial_word(h,DIAL_ACTIVE)[0]=0;
+    dial_word(h,DIAL_KIND)[0]=0;
     h[GRKIT_HOST_STATE_HOLD/4]=0;
 }
 /* Apply what user mode u does, from the base state or from another bound
@@ -290,10 +424,18 @@ static void dial_enter(volatile u32 *h,u32 u) {
         dial_snapshot(h);
         h[GRKIT_HOST_STATE_HOLD/4]=1;
     }
+    else if(dial_word(h,DIAL_KIND)[0]==DIAL_SAVED) dial_restore(h);
     dial_word(h,DIAL_ACTIVE)[0]=u;
+    dial_word(h,DIAL_KIND)[0]=kind;
     if(kind==DIAL_OFF) {
         manage_set_all_off(h,1);
         dial_label_start(h,u,text(h,DIAL_TEXT_OFF),0);
+        return;
+    }
+    if(kind==DIAL_SAVED) {
+        reason=dial_set_apply(h,u);
+        dial_label_start(h,u,text(h,DIAL_TEXT_SAVED),0);
+        if(reason) dial_label_line(h,text(h,RECIPE_TEXT_MISSING));
         return;
     }
     /* The capabilities of the modules run only while the switch is On, so

@@ -47,6 +47,7 @@ static u32 recipe_id_candidate(u32 attempt) {
     x ^= x >> 16;
     return x & 0x1fffffffU;
 }
-_Static_assert(GRKIT_RECIPE_ID_MAX + 1U == 0x1fffffffU, "a candidate has the bits of an ID and of GRKIT_RECIPE_DIAL_OFF");
-_Static_assert(GRKIT_RECIPE_DIAL_OFF > GRKIT_RECIPE_ID_MAX, "no ID turns GRKit off");
+_Static_assert(GRKIT_RECIPE_ID_MAX + 2U == 0x1fffffffU, "a candidate has the bits of an ID and of GRKIT_RECIPE_DIAL_OFF");
+_Static_assert(GRKIT_RECIPE_DIAL_SAVED > GRKIT_RECIPE_ID_MAX && GRKIT_RECIPE_DIAL_OFF > GRKIT_RECIPE_DIAL_SAVED,
+               "no ID applies the saved settings or turns GRKit off");
 #endif

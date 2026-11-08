@@ -79,6 +79,13 @@ static u32 module_list, effect_list, services_block;
    choices of each module, the choices of `effects` effects, then the
    switch and Enable at Start. */
 #define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 2U + (effects))
+/* A set of a user mode of the mode dial (runtime/mode_dial.h) holds the
+   module settings, the Enable of each module, and the switch. plan_modules
+   leaves room for the choices of EFFECTS_LISTED effects, so the table holds
+   the most of them with one module: the settings beside its choices, its
+   Enable, and the switch. */
+_Static_assert(GRKIT_MODULE_SETTINGS_MAX - CHOICE_ENTRIES(1U, EFFECTS_LISTED) + 1U + 1U <= GRKIT_DIAL_SET_PAIRS,
+               "A set holds each setting that the table can hold for it");
 /* The words of the module list and of the effect list. */
 #define MANAGE_WORDS(n) ((MANAGE_HEADER + (n) * MANAGE_STRIDE) / 4U)
 #define EFFECT_LIST_WORDS(n) ((EFFECTS_HEADER + (n) * EFFECTS_STRIDE) / 4U)
