@@ -223,10 +223,13 @@ pub enum StateFile {
     /// The recipes, their names, and the hash of the last imported package
     /// library (`runtime::recipe_key`). The site reads and writes it too.
     Recipes,
+    /// The settings that the camera saved in the user modes of the mode dial
+    /// (`runtime::dial_set_key`). Only the camera writes it.
+    DialSets,
 }
 
 impl StateFile {
-    pub const ALL: [StateFile; 2] = [StateFile::Main, StateFile::Recipes];
+    pub const ALL: [StateFile; 3] = [StateFile::Main, StateFile::Recipes, StateFile::DialSets];
 
     /// The file name without its extension. The file is `<stem>.TXT`, and the
     /// loader writes `<stem>.TMP` before it replaces the file.
@@ -234,6 +237,7 @@ impl StateFile {
         match self {
             Self::Main => "STATE",
             Self::Recipes => "RECIPES",
+            Self::DialSets => "USERMODE",
         }
     }
 }

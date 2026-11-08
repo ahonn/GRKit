@@ -38,9 +38,17 @@
      its first word is that of a recipe, and each word stays below 2^29. The
      core checks the values for the camera when a person applies the recipe.
    - REPORT.TXT tells the count, the import, and each recipe that cannot
-     apply in full (check_recipes). The installer deletes no file. */
+     apply in full (check_recipes). The installer deletes no file.
+   - The file of the sets of the user modes (GRKIT/USERMODE.TXT, or
+     USERMODE.TMP) holds the settings that the camera saved in each user
+     mode (runtime/mode_dial.h, grkit_core::runtime::dial_set_key). INSTALL
+     restores them into the header as the file has them (install_dial_sets);
+     a set with more pairs than the header holds is damaged and stays out. */
 #include "recipe_id.h"
 static const char recipes_state_path[] = RECIPES_STATE_PATH, recipes_state_tmp_path[] = RECIPES_STATE_TMP_PATH;
+static const char dial_sets_path[] = DIAL_SETS_PATH, dial_sets_tmp_path[] = DIAL_SETS_TMP_PATH;
+/* The text of the recipe file, then that of the file of the sets. */
+static u8 recipes_text[STATE_TEXT_MAX];
 static const char recipes_inbox_path[] = RECIPES_INBOX_PATH;
 static u8 recipes_inbox[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_MAX * GRKIT_RCP_RECORD_SIZE];
 static struct state saved_recipes;
@@ -218,14 +226,14 @@ static u32 recipes_hash(const u8 *file, u32 size) { return (recipes_crc(file, si
    another family counts in recipes_other. */
 static void install_recipes(u32 base, u32 family)
 {
-    static u8 text[STATE_TEXT_MAX];
+    u8 *text = recipes_text;
     /* The recipe that each record of the library became, or
        GRKIT_RECIPE_SLOTS for a record that INSTALL did not import. */
     static u8 record_recipe[GRKIT_RCP_MAX];
     u32 value, imported = 0, hash = 0, dial[GRKIT_RECIPE_DIAL_POSITIONS];
     recipes_import = recipes_added = recipes_full = recipes_other = recipes_same = recipes_bad = recipes_switched = 0;
-    long n = read_text(recipes_state_path, text, sizeof(text));
-    if (n < 0) n = read_text(recipes_state_tmp_path, text, sizeof(text));
+    long n = read_text(recipes_state_path, text, sizeof(recipes_text));
+    if (n < 0) n = read_text(recipes_state_tmp_path, text, sizeof(recipes_text));
     state_parse(&saved_recipes, text, n);
     for (u32 slot = 0; slot < GRKIT_RECIPE_SLOTS; ++slot) {
         for (u32 w = 0; w < GRKIT_RECIPE_WORDS; ++w)
@@ -305,6 +313,26 @@ static void install_recipes(u32 base, u32 family)
        IDs. */
     store(base + GRKIT_HOST_RECIPE_IMPORTED, imported);
     if (changed || given || recipes_import == RECIPES_IMPORT_READ) store(base + GRKIT_HOST_RECIPE_CHANGES, 1);
+}
+
+/* Restore the sets of the user modes from their file. The loader saves the
+   file only after a save on the camera (GRKIT_HOST_DIAL_SET_CHANGES), so a
+   set that stays out stays in the file until then. */
+static void install_dial_sets(u32 base)
+{
+    long n = read_text(dial_sets_path, recipes_text, sizeof(recipes_text));
+    if (n < 0) n = read_text(dial_sets_tmp_path, recipes_text, sizeof(recipes_text));
+    state_parse(&saved_recipes, recipes_text, n);
+    for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) {
+        u32 key = GRKIT_DIAL_SET_KEY_BASE + u * GRKIT_DIAL_SET_KEY_STRIDE, value, count = 0;
+        u32 set = base + GRKIT_HOST_DIAL_SETS + 4U * u * GRKIT_DIAL_SET_WORDS;
+        if (state_value(&saved_recipes, key + GRKIT_DIAL_SET_COUNT, &value)) count = value;
+        int whole = count <= GRKIT_DIAL_SET_PAIRS + 1U;
+        /* A value has at most 9 digits (runtime/state.h), as the loader
+           writes each word up to GRKIT_DIAL_SET_VALUE_MAX. */
+        for (u32 w = 0; w < GRKIT_DIAL_SET_WORDS; ++w)
+            store(set + 4U * w, whole && state_value(&saved_recipes, key + w, &value) ? value : 0);
+    }
 }
 
 /* The recipes that cannot apply in full on this camera, which REPORT.TXT

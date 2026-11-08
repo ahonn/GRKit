@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 3684
+#define GRKIT_HOST_HEADER_SIZE 6076
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -113,9 +113,30 @@
 #define GRKIT_RECIPE_IMPORTED_KEY 991009000U
 #define GRKIT_RECIPE_ID_KEY_BASE 991009001U
 #define GRKIT_RECIPE_DIAL_KEY_BASE 991009065U
-#define GRKIT_RECIPE_ID_MAX 536870910U
+#define GRKIT_RECIPE_ID_MAX 536870909U
 #define GRKIT_RECIPE_DIAL_FOLLOW 0U
+#define GRKIT_RECIPE_DIAL_SAVED 536870910U
 #define GRKIT_RECIPE_DIAL_OFF 536870911U
+/* The settings that the camera saves in a user mode of the mode dial
+   (runtime/mode_dial.h, grkit_core::abi::DIAL_SET_WORDS): GRKIT_DIAL_SET_WORDS
+   words, the number of pairs + 1 (0 without a set), a word for each
+   capability, the Fn adjustments and the Toning of the effect, then
+   GRKIT_DIAL_SET_PAIRS pairs of a state file ID and a value. The effect word
+   is 0 for Off, else GRKIT_DIAL_SET_EFFECT with the recipe code of the effect.
+   In their file, word w of user mode u (0 for U1) has the key
+   GRKIT_DIAL_SET_KEY_BASE + u * GRKIT_DIAL_SET_KEY_STRIDE + w, and a word is
+   at most GRKIT_DIAL_SET_VALUE_MAX. */
+#define GRKIT_DIAL_SET_PAIRS 93U
+#define GRKIT_DIAL_SET_COUNT 0U
+#define GRKIT_DIAL_SET_CORE 1U
+#define GRKIT_DIAL_SET_FN 11U
+#define GRKIT_DIAL_SET_TONING 12U
+#define GRKIT_DIAL_SET_PAIR 13U
+#define GRKIT_DIAL_SET_WORDS 199U
+#define GRKIT_DIAL_SET_EFFECT 32768U
+#define GRKIT_DIAL_SET_KEY_BASE 992000000U
+#define GRKIT_DIAL_SET_KEY_STRIDE 1000U
+#define GRKIT_DIAL_SET_VALUE_MAX 999999999U
 #define GRKIT_MODULE_SETTINGS_MAX 160
 /* The most modules that GRKit lists, and the words of the largest script
    array, which holds the module array. */
@@ -456,6 +477,16 @@
    file, so the file keeps the settings of the other positions. The recipe file
    still saves. */
 #define GRKIT_HOST_STATE_HOLD 3680
+/* The count of changes of the saved settings of the user modes
+   (`HOST_DIAL_SETS`): the loader saves their file after it changes. */
+#define GRKIT_HOST_DIAL_SET_CHANGES 3684
+/* The settings that the camera saved in each user mode of the mode dial, U1 to
+   U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A user mode applies
+   them while it has `runtime::RECIPE_DIAL_SAVED` (`HOST_RECIPE_DIAL`). The
+   resident loader saves each word that is not 0 in their file
+   (`capabilities::StateFile::DialSets`), and INSTALL restores them. */
+#define GRKIT_HOST_DIAL_SETS 3688
+#define GRKIT_HOST_DIAL_SETS_WORDS 597
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
@@ -888,8 +919,8 @@
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
 #define TEXT_START 61
 /* The Mode Dial row of the Recipes page of MENU, then the values of a user
-   mode besides a recipe: None and GRKit Off. */
+   mode besides a recipe: None, GRKit Off, and Saved Settings. */
 #define TEXT_DIAL 63
-#define GRKIT_TEXT_STRINGS 66
+#define GRKIT_TEXT_STRINGS 67
 
 #endif
