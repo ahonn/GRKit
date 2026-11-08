@@ -1433,11 +1433,28 @@ static void the_recipe_page_saves_applies_and_deletes(void)
     assert(!recipe_count(test_header) && !recipe_name_length(test_header, 0));
     menu_confirm(test_header);
     assert(recipe_count(test_header) == 1 && !recipe_name_length(test_header, 0));
-    /* OK on Undo restores the grain before the apply. */
+    /* OK on Undo keeps ADJ open, and on a recipe closes it. */
+    assert(current_module(test_header)->stays(test_header, 0));
+    assert(!current_module(test_header)->stays(test_header, 1) && !current_module(test_header)->stays(test_header, 2));
+    /* OK on Undo restores the grain before the apply. The last undo step
+       takes the Undo row away, and the cursor moves to the page's row. */
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
     menu_confirm(test_header);
     assert(test_header[GRKIT_HOST_GRAIN / 4] == 3 && recipe_undo_count(test_header) == 0);
     assert(count(test_header) == 2);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == current_module(test_header)->committed(test_header));
+    /* With undo steps left, the cursor stays on Undo for the next one. */
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 2);
+    test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 1 && test_header[GRKIT_HOST_MENU_CURSOR / 4] == 0);
+    menu_confirm(test_header);
+    assert(recipe_undo_count(test_header) == 0);
+    assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == current_module(test_header)->committed(test_header));
     /* CORE.RECIPE has no value, and a store does nothing. */
     assert(setting_value(test_header, GRKIT_CORE_RECIPE) == 0 && setting_limit(test_header, GRKIT_CORE_RECIPE) == 0);
     setting_store(test_header, GRKIT_CORE_RECIPE, 0);

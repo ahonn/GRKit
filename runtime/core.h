@@ -124,6 +124,9 @@ typedef struct {
     /* Optional: how the GRKit section of MENU shows the page, where it
        differs from a page of a module setting. */
     const struct MenuListing *menu;
+    /* Optional: whether OK on a row of the page keeps ADJ open, as for a
+       row that a person may choose again. */
+    u32 (*stays)(volatile u32 *,u32);
 } MenuPage;
 /* The parts of the page of a module in the GRKit section of MENU
    (runtime/menu_listed.h) that a page gives itself. Each hook is optional:

@@ -10,7 +10,10 @@
      recipe whose Grain has no effect or whose Glow module is not loaded
      (the RECIPE_SKIPPED bits) applies and shows a message, which keeps ADJ
      open.
-   - OK on Undo restores the newest undo step and closes ADJ.
+   - OK on Undo restores the newest undo step and keeps ADJ open, so that
+     a person can undo again or choose a recipe. When no undo step is left,
+     the Undo row goes, and the cursor moves to the recipe that the
+     settings now match.
    - OK on Save saves the current settings as a new recipe with the
      automatic name, then opens the keyboard of the camera with that name
      (runtime/ui_keyboard.h). OK there names the recipe; MENU, or OK on
@@ -318,7 +321,11 @@ static void recipe_no_glow(u32 arg) {
 
 static void recipe_ok(volatile u32 *h,u32 row) {
     u32 slot=recipe_row_slot(h,row), saved, result;
-    if(slot==RECIPE_ROW_UNDO) { recipe_undo(h); return; }
+    if(slot==RECIPE_ROW_UNDO) {
+        recipe_undo(h);
+        if(!recipe_undo_count(h)) h[GRKIT_HOST_MENU_CURSOR/4]=recipe_committed(h);
+        return;
+    }
     if(slot==RECIPE_ROW_SAVE) {
         saved=recipe_save(h);
         if(saved==RECIPE_FULL) { recipe_message(h,RECIPE_TEXT_FULL); return; }
@@ -362,6 +369,8 @@ static void recipe_action_done(u32 choice,u32 slot) {
     if(choice==0U) recipe_keyboard(h,slot,recipe_renamed_back);
     else if(choice==1U) recipe_delete_confirm(h,slot);
 }
+/* OK on Undo keeps ADJ open. */
+static u32 recipe_stays(volatile u32 *h,u32 row) { return recipe_row_slot(h,row)==RECIPE_ROW_UNDO; }
 /* Fn on a recipe shows its name with Rename and Delete: 1 when the page
    took the key. */
 static u32 recipe_fn(volatile u32 *h,u32 row) {
@@ -376,5 +385,5 @@ static u32 recipe_fn(volatile u32 *h,u32 row) {
 /* The page in MENU (runtime/menu_recipes.h). */
 static const MenuListing recipe_listing;
 static const MenuPage recipe_module={recipe_title,recipe_summary,recipe_rows,recipe_label,recipe_icon,
-    recipe_checked,recipe_ok,recipe_committed,0,0,0,recipe_fn,MENU_PAGE_ACTIONS,&recipe_listing};
+    recipe_checked,recipe_ok,recipe_committed,0,0,0,recipe_fn,MENU_PAGE_ACTIONS,&recipe_listing,recipe_stays};
 #endif
