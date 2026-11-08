@@ -55,6 +55,7 @@ const en = {
   changeDial: 'Writes the Mode Dial settings',
   modeDial: 'Mode Dial',
   dialNone: 'None',
+  dialKeep: 'No change',
   dialOff: 'GRKit Off',
 };
 
@@ -111,6 +112,7 @@ const zhHans: RecipeStrings = {
   changeDial: '写入模式转盘设置',
   modeDial: '模式转盘',
   dialNone: '无',
+  dialKeep: '不更改',
   dialOff: '关闭 GRKit',
 };
 
@@ -165,6 +167,7 @@ const zhHant: RecipeStrings = {
   changeDial: '寫入模式轉盤設定',
   modeDial: '模式轉盤',
   dialNone: '無',
+  dialKeep: '不變更',
   dialOff: '關閉 GRKit',
 };
 
@@ -219,6 +222,7 @@ const ja: RecipeStrings = {
   changeDial: 'モードダイヤルの設定を書き込みます',
   modeDial: 'モードダイヤル',
   dialNone: 'なし',
+  dialKeep: '変更しない',
   dialOff: 'GRKit オフ',
 };
 
@@ -273,6 +277,7 @@ const ko: RecipeStrings = {
   changeDial: '모드 다이얼 설정을 씁니다',
   modeDial: '모드 다이얼',
   dialNone: '없음',
+  dialKeep: '변경 안 함',
   dialOff: 'GRKit 끄기',
 };
 

@@ -1412,6 +1412,86 @@ static void recipes_keep_their_ids_and_the_dial(void)
     install_recipes(header, GRKIT_RCP_FAMILY_GR3);
     assert(!word(header + GRKIT_HOST_RECIPE_CHANGES) && word(header + GRKIT_HOST_RECIPE_IDS + 4) == c1);
 }
+/* The library of the Rust codec at $GRKIT_TEST_RECIPES also sets the user
+   modes of the mode dial: U1 applies its GR III record 0, U2 its GR IV record
+   1, and U3 turns GRKit off. INSTALL sets them once with the import: a
+   record becomes the ID of its recipe on the camera, a record of another
+   camera line follows, and a step that keeps leaves the camera's value. */
+static u32 dial_at(u32 header, u32 u) { return word(header + GRKIT_HOST_RECIPE_DIAL + 4 * u); }
+static void install_with(u32 header, const char *text, const u8 *library, u32 size)
+{
+    reset();
+    for (u32 k = 0; k < GRKIT_HOST_HEADER_SIZE; k += 4) store(header + k, 0);
+    add_text(RECIPES_STATE_PATH, text);
+    if (library) add_file(RECIPES_INBOX_PATH, library, size);
+    install_recipes(header, GRKIT_RCP_FAMILY_GR3);
+}
+static void with_steps(u8 *library, u32 size, u32 u1, u32 u2, u32 u3)
+{
+    put32(library + GRKIT_RCP_DIAL, u1);
+    put32(library + GRKIT_RCP_DIAL + 4, u2);
+    put32(library + GRKIT_RCP_DIAL + 8, u3);
+    put32(library + GRKIT_RCP_CRC, recipes_crc(library, size));
+}
+static void a_library_sets_the_mode_dial_once(void)
+{
+    const char *path = getenv("GRKIT_TEST_RECIPES");
+    static u8 bytes[GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_MAX * GRKIT_RCP_RECORD_SIZE], other[sizeof bytes];
+    const u32 header = MEMORY_BASE + 0xc0000U;
+    char text[512], saved[2048];
+    assert(path);
+    FILE *file = fopen(path, "rb");
+    assert(file);
+    u32 size = (u32)fread(bytes, 1, sizeof bytes, file);
+    fclose(file);
+    assert(get32(bytes + GRKIT_RCP_DIAL) == GRKIT_RCP_DIAL_RECORD &&
+           get32(bytes + GRKIT_RCP_DIAL + 4) == GRKIT_RCP_DIAL_RECORD + 1 &&
+           get32(bytes + GRKIT_RCP_DIAL + 8) == GRKIT_RCP_DIAL_OFF);
+    /* The recipe file has "Mine" with ID 9, and U1 to U3 apply it. */
+    snprintf(text, sizeof text, "%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n%u\r\n", GRKIT_RECIPE_KEY_BASE, 0x08000001U,
+             GRKIT_RECIPE_ID_KEY_BASE, 9U, GRKIT_RECIPE_DIAL_KEY_BASE, 9U, GRKIT_RECIPE_DIAL_KEY_BASE + 1, 9U,
+             GRKIT_RECIPE_DIAL_KEY_BASE + 2, 9U);
+    test_id_source = 0x4242U;
+    install_with(header, text, 0, 0);
+    assert(dial_at(header, 0) == 9 && dial_at(header, 1) == 9 && dial_at(header, 2) == 9);
+    /* The import: U1 gets the ID of the added recipe, U2 follows because
+       INSTALL skips a GR IV record, U3 turns GRKit off. */
+    install_with(header, text, bytes, size);
+    assert(recipes_import == RECIPES_IMPORT_READ && recipes_added == 1 && recipes_count == 2);
+    u32 added = word(header + GRKIT_HOST_RECIPE_IDS + 4);
+    assert(added && added != 9 && word(header + GRKIT_HOST_RECIPE_CHANGES) == 1);
+    assert(dial_at(header, 0) == added && dial_at(header, 1) == GRKIT_RECIPE_DIAL_FOLLOW &&
+           dial_at(header, 2) == GRKIT_RECIPE_DIAL_OFF);
+    /* A person sets the dial on the camera; the next start with the same
+       library keeps it: the library was imported. */
+    store(header + GRKIT_HOST_RECIPE_DIAL, 9);
+    store(header + GRKIT_HOST_RECIPE_DIAL + 8, 0);
+    recipe_file_of(header, saved, sizeof saved);
+    install_with(header, saved, bytes, size);
+    assert(recipes_import == RECIPES_IMPORT_NONE && !word(header + GRKIT_HOST_RECIPE_CHANGES));
+    assert(dial_at(header, 0) == 9 && dial_at(header, 1) == GRKIT_RECIPE_DIAL_FOLLOW && dial_at(header, 2) == 0);
+    /* Another library: U1 keeps the camera's value, U2 turns GRKit off, and
+       U3 applies record 0, which the camera already has: its ID. */
+    memcpy(other, bytes, size);
+    with_steps(other, size, GRKIT_RCP_DIAL_KEEP, GRKIT_RCP_DIAL_OFF, GRKIT_RCP_DIAL_RECORD);
+    install_with(header, saved, other, size);
+    assert(recipes_import == RECIPES_IMPORT_READ && recipes_same == 1 && recipes_added == 0);
+    assert(dial_at(header, 0) == 9 && dial_at(header, 1) == GRKIT_RECIPE_DIAL_OFF && dial_at(header, 2) == added);
+    /* Follow, and a record that the library has off: its user mode follows. */
+    memcpy(other, bytes, size);
+    u32 word4 = GRKIT_RCP_HEADER_SIZE + GRKIT_RCP_RECORD_WORDS + 4 * GRKIT_RECIPE_MODULE_WORD;
+    put32(other + word4, get32(other + word4) | GRKIT_RECIPE_OFF);
+    with_steps(other, size, GRKIT_RCP_DIAL_FOLLOW, GRKIT_RCP_DIAL_KEEP, GRKIT_RCP_DIAL_RECORD);
+    install_with(header, saved, other, size);
+    assert(recipes_import == RECIPES_IMPORT_READ && recipes_switched == 1);
+    assert(dial_at(header, 0) == GRKIT_RECIPE_DIAL_FOLLOW && dial_at(header, 1) == GRKIT_RECIPE_DIAL_FOLLOW &&
+           dial_at(header, 2) == GRKIT_RECIPE_DIAL_FOLLOW);
+    /* A step past the records is a damaged library: nothing changes. */
+    memcpy(other, bytes, size);
+    with_steps(other, size, GRKIT_RCP_DIAL_RECORD + get32(other + GRKIT_RCP_COUNT), GRKIT_RCP_DIAL_KEEP, GRKIT_RCP_DIAL_KEEP);
+    install_with(header, saved, other, size);
+    assert(recipes_import == RECIPES_IMPORT_DAMAGED && dial_at(header, 0) == 9 && recipes_count == 2);
+}
 static void the_recipes_restore_and_import_once(void)
 {
     const char *path = getenv("GRKIT_TEST_RECIPES");
@@ -1675,6 +1755,7 @@ static void *run(void *unused)
     the_fn_setting_of_a_page_gets_its_handle();
     a_setting_of_a_module_that_did_not_link_is_missing();
     the_recipes_restore_and_import_once();
+    a_library_sets_the_mode_dial_once();
     recipes_keep_their_ids_and_the_dial();
     reset();
     return 0;

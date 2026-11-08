@@ -145,6 +145,7 @@ A recipe is a named set of picture settings that OK applies in one step: the loo
   - In a bound user mode, the core applies the recipe without an undo step. Changes there are temporary: the main state file does not save, and another position restores the GRKit settings from before the user mode. The firmware restores the native settings itself.
   - At a start on a bound user mode, the core applies it when the shooting screen shows. The firmware sends no dial event at power-on.
 - **Site and packages.** The camera makes and edits recipes. The site turns them on and off, adds presets, and writes the recipe file again in full, keeping each recipe that it cannot read. A ZIP package carries a library in `SCRIPT/GRKIT/RECIPES.BIN`; INSTALL adds the recipes of the camera's line that the list does not hold, once for each library.
+- **Mode dial from the site.** The site also sets what U1, U2, and U3 do. On a connected card, it writes them in the recipe file; a user mode whose recipe is off or deleted follows. In a ZIP package, the header of the library gives each user mode a step: keep the camera's value (the default), follow, GRKit Off, or a record of the library. INSTALL applies the steps once, when it imports the library, and gives a record the ID of the recipe that the record became; a record that it does not import follows.
 
 ## Relocation
 

@@ -741,18 +741,24 @@ pub fn native_looks_js(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeLoo
 }
 
 /// The bytes of `GRKIT/RECIPES.BIN` for a library: a JSON array of recipes
-/// (`grkit_core::recipes::Recipe`). Throws for a recipe that the camera
-/// cannot hold.
+/// (`grkit_core::recipes::Recipe`), and a JSON array of what INSTALL sets
+/// U1 to U3 of the mode dial to (`grkit_core::recipes::DialStep`: "keep",
+/// "follow", "off", or {"record": k}). Throws for a recipe that the camera
+/// cannot hold, or for a step that names a record that the library does
+/// not have.
 #[wasm_bindgen(js_name = encodeRecipes)]
-pub fn encode_recipes(json: &str) -> Result<Vec<u8>, JsError> {
+pub fn encode_recipes(json: &str, dial: &str) -> Result<Vec<u8>, JsError> {
+    let dial = serde_json::from_str::<recipes::LibraryDial>(dial);
     serde_json::from_str::<Vec<recipes::Recipe>>(json)
+        .and_then(|library| Ok((library, dial?)))
         .map_err(anyhow::Error::from)
-        .and_then(|library| recipes::encode(&library))
+        .and_then(|(library, dial)| recipes::encode(&library, &dial))
         .map_err(js_error)
 }
 
-/// The recipes of a recipe library (`RECIPES.BIN`), as a JSON array of recipes.
-/// Throws for a damaged library.
+/// The library of a `RECIPES.BIN`, as the JSON of
+/// `grkit_core::recipes::Library`: its recipes and its steps of the mode
+/// dial. Throws for a damaged library.
 #[wasm_bindgen(js_name = decodeRecipes)]
 pub fn decode_recipes(bytes: &[u8]) -> Result<String, JsError> {
     recipes::decode(bytes)

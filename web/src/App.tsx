@@ -921,12 +921,21 @@ export function InstallPage({
                   grainModule={plan.modules.includes('GRAIN')}
                   glowModule={plan.modules.includes('GLOW')}
                   dial={
-                    active && recipeLibrary.packageRecipes
-                      ? {
-                          shown: recipeLibrary.shownDial(active),
-                          onChange: (u, value) => recipeLibrary.changeDial(active, u, value),
-                        }
-                      : null
+                    // A card shows and writes its own dial; a ZIP package carries the choice
+                    // of this browser.
+                    !recipeLibrary.packageRecipes
+                      ? null
+                      : mode === 'zip'
+                        ? { shown: recipeLibrary.zipDial, canKeep: true, onChange: recipeLibrary.changeZipDial }
+                        : active
+                          ? {
+                              shown: recipeLibrary.shownDial(active),
+                              canKeep: false,
+                              onChange: (u, value) => {
+                                if (value !== null) recipeLibrary.changeDial(active, u, value);
+                              },
+                            }
+                          : null
                   }
                 />
               </Suspense>

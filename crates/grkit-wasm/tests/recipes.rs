@@ -20,9 +20,39 @@ fn a_recipe_library_comes_back_from_its_bytes() {
         "number": 3,
         "id": 0,
     }]);
-    let bytes = encode_recipes(&library.to_string()).unwrap();
+    let bytes = encode_recipes(&library.to_string(), r#"["keep","keep","keep"]"#).unwrap();
     let decoded: Value = serde_json::from_str(&decode_recipes(&bytes).unwrap()).unwrap();
-    assert_eq!(decoded, library);
+    assert_eq!(
+        decoded,
+        json!({ "recipes": library, "dial": ["keep", "keep", "keep"] })
+    );
+}
+
+/// A library carries what INSTALL sets U1 to U3 to, in the JSON form of the
+/// site: a step that names a record that is off follows.
+#[test]
+fn a_recipe_library_carries_the_mode_dial() {
+    let recipe = |name: &str, enabled: bool| {
+        json!({
+            "name": name,
+            "family": "gr3",
+            "look": { "kind": "off" },
+            "grain": null,
+            "glow": null,
+            "whiteBalance": null,
+            "corrections": [null, null, null, null],
+            "exposure": { "compensation": null, "isoLimit": null, "metering": null, "nd": null },
+            "enabled": enabled,
+            "hidden": false,
+            "number": 0,
+            "id": 0,
+        })
+    };
+    let library = json!([recipe("A", true), recipe("B", false)]);
+    let bytes =
+        encode_recipes(&library.to_string(), r#"[{"record":0},{"record":1},"off"]"#).unwrap();
+    let decoded: Value = serde_json::from_str(&decode_recipes(&bytes).unwrap()).unwrap();
+    assert_eq!(decoded["dial"], json!([{ "record": 0 }, "follow", "off"]));
 }
 
 /// A recipe file keeps the ID that the site generated for each recipe, and
