@@ -11,6 +11,7 @@ import {
   cameraOrder,
   DIAL_FOLLOW,
   DIAL_OFF,
+  DIAL_SAVED,
   dialChoices,
   LIBRARY_MAX,
   libraryWarnings,
@@ -47,9 +48,15 @@ interface Props {
   /**
    * What the user modes of the mode dial do, as the camera shows them, and the change of user mode
    * `u` (0 for U1): for a ZIP package, null keeps the camera's value; on a card, each user mode has
-   * a value. Null when the page writes no recipes.
+   * a value. `saved` tells the user modes of the card that apply settings that the camera saved in
+   * them, which the site can keep but not make. Null when the page writes no recipes.
    */
-  dial?: { shown: DialChoice; canKeep: boolean; onChange: (u: number, value: number | null) => void } | null;
+  dial?: {
+    shown: DialChoice;
+    canKeep: boolean;
+    saved?: readonly boolean[];
+    onChange: (u: number, value: number | null) => void;
+  } | null;
 }
 
 /**
@@ -291,6 +298,7 @@ export function RecipesSection({
                   {dial.canKeep && <option value={KEEP_VALUE}>{r.dialKeep}</option>}
                   <option value={DIAL_FOLLOW}>{r.dialNone}</option>
                   <option value={DIAL_OFF}>{r.dialOff}</option>
+                  {dial.saved?.[u] && <option value={DIAL_SAVED}>{r.dialSaved}</option>}
                   {dialChoices(library).map((recipe) => (
                     <option key={recipe.id} value={recipe.id}>
                       {nameOf(recipe)}

@@ -57,6 +57,7 @@ const en = {
   dialNone: 'None',
   dialKeep: 'No change',
   dialOff: 'GRKit Off',
+  dialSaved: 'Saved on the camera',
 };
 
 export type RecipeStrings = typeof en;
@@ -114,6 +115,7 @@ const zhHans: RecipeStrings = {
   dialNone: '无',
   dialKeep: '不更改',
   dialOff: '关闭 GRKit',
+  dialSaved: '相机上保存的设置',
 };
 
 const zhHant: RecipeStrings = {
@@ -169,6 +171,7 @@ const zhHant: RecipeStrings = {
   dialNone: '無',
   dialKeep: '不變更',
   dialOff: '關閉 GRKit',
+  dialSaved: '相機上儲存的設定',
 };
 
 const ja: RecipeStrings = {
@@ -224,6 +227,7 @@ const ja: RecipeStrings = {
   dialNone: 'なし',
   dialKeep: '変更しない',
   dialOff: 'GRKit オフ',
+  dialSaved: 'カメラに保存した設定',
 };
 
 const ko: RecipeStrings = {
@@ -279,6 +283,7 @@ const ko: RecipeStrings = {
   dialNone: '없음',
   dialKeep: '변경 안 함',
   dialOff: 'GRKit 끄기',
+  dialSaved: '카메라에 저장한 설정',
 };
 
 export const RECIPE_STRINGS: Readonly<Record<Language, RecipeStrings>> = {
