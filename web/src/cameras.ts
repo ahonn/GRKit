@@ -77,10 +77,12 @@ export const CAMERAS: readonly Camera[] = [
   },
   // GR IV Monochrome runs the GR IV firmware with its own version: it shows 1.11 as 1.00 and 1.20
   // as 1.10. It uses the GR IV package and ModeSet file. The effects are made for color sensors,
-  // so its package has no Image Control.
+  // so its package has no Image Control. Its official 1.10 file is that of GR IV 1.20, so the same
+  // fast-boot firmware runs on it.
   {
     key: 'gr4m',
     id: 'gr4',
+    fastboot: true,
     name: 'GR IV Monochrome',
     support: {
       ...releases('gr4'),

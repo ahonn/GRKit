@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LATEST, LATEST_NAMES, newerRelease, releaseName } from './fastboot';
+import { firmwareName, LATEST, LATEST_NAMES, newerRelease, releaseName } from './fastboot';
 
 describe('releaseName', () => {
   it('names the camera and the version of a release', () => {
@@ -20,7 +20,15 @@ describe('newerRelease', () => {
     expect(newerRelease('gr3-2.20')).toBeNull();
     expect(newerRelease('gr3x-1.70')).toBeNull();
     expect(newerRelease('gr4-1.20')).toBeNull();
-    expect(LATEST_NAMES).toEqual(['GR III 2.20', 'GR IIIx 1.70', 'GR IV 1.20']);
+    expect(LATEST_NAMES).toEqual(['GR III 2.20', 'GR IIIx 1.70', 'GR IV 1.20', 'GR IV Monochrome 1.10']);
+  });
+});
+
+describe('firmwareName', () => {
+  it('names each camera whose official file the release has', () => {
+    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20 / GR IV Monochrome 1.10');
+    expect(firmwareName('gr3-2.20')).toBe('GR III 2.20');
+    expect(firmwareName('gr4-1.11')).toBe('GR IV 1.11');
   });
 });
 
@@ -38,7 +46,7 @@ describe('LATEST', () => {
       if (!current || Number(firmware) > Number(current)) newest.set(camera, firmware);
     }
     expect(newest.size).toBeGreaterThan(0);
-    expect(LATEST.map((item) => item.release).sort()).toEqual(
+    expect([...new Set(LATEST.map((item) => item.release))].sort()).toEqual(
       [...newest].map(([camera, firmware]) => `${camera}-${firmware}`).sort(),
     );
   });

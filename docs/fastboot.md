@@ -23,7 +23,7 @@ The official firmware has the two commands, but uses neither. Each release table
 | GR IIIx 1.60, 1.70 | `fwdc243b.bin` |
 | GR IV 1.11, 1.20 | `fwdc248b.bin` |
 
-The HDF model of a camera runs the same file. GR IV Monochrome and the factory build of GR IV 30th Anniversary Edition cameras have no fast-boot firmware.
+The HDF model of a camera runs the same file. GR IV Monochrome 1.10 has the official file of GR IV 1.20, so the same fast-boot firmware runs on it. The factory build of GR IV 30th Anniversary Edition cameras has no fast-boot firmware.
 
 ## Script interface
 

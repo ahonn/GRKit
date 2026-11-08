@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LATEST, LATEST_NAMES, makeFastbootFirmware, releaseName } from '../fastboot';
+import { firmwareName, LATEST, LATEST_NAMES, latestName, makeFastbootFirmware, releaseName } from '../fastboot';
 import type { Strings } from '../i18n';
 import { TermsNote } from './TermsNote';
 
@@ -63,16 +63,16 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
             <li>
               {t.makeSteps[0]}
               <ul className="ricoh-links">
-                {LATEST.map(({ release, page }) => (
-                  <li key={release}>
+                {LATEST.map((item) => (
+                  <li key={item.page}>
                     <a
                       className="button small"
-                      href={page}
+                      href={item.page}
                       target="_blank"
                       rel="noreferrer"
-                      aria-label={t.ricohPage(releaseName(release))}
+                      aria-label={t.ricohPage(latestName(item))}
                     >
-                      {releaseName(release)}
+                      {latestName(item)}
                     </a>
                   </li>
                 ))}
@@ -106,9 +106,9 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                       {t.working}
                     </p>
                   )}
-                  {state.state === 'ready' && <p className="status">{t.ready(releaseName(state.release), state.fileName)}</p>}
+                  {state.state === 'ready' && <p className="status">{t.ready(firmwareName(state.release), state.fileName)}</p>}
                   {state.state === 'outdated' && (
-                    <p className="status error">{t.outdated(releaseName(state.release), releaseName(state.latest))}</p>
+                    <p className="status error">{t.outdated(releaseName(state.release), firmwareName(state.latest))}</p>
                   )}
                   {state.state === 'unknown' && <p className="status error">{t.unknown}</p>}
                   {state.state === 'failed' && <p className="status error">{t.error}</p>}
