@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 61;
+pub const STRINGS: usize = 63;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -65,6 +65,11 @@ struct Words {
     on: &'static str,
     /// The MENU row of the switch that turns all modules off and on again.
     enable_grkit: &'static str,
+    /// The MENU row that decides the switch at each start, and its value
+    /// that keeps the switch of the last session. Its other values are the
+    /// On and Off of the switch.
+    enable_at_start: &'static str,
+    keep_last: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The settings row that lists the options of a module page.
@@ -130,6 +135,8 @@ const ENGLISH: Words = Words {
     enable: "Enable",
     on: "On",
     enable_grkit: "Enable GRKit",
+    enable_at_start: "Enable at Start",
+    keep_last: "Keep Last",
     adj_order: "ADJ Order",
     options: "Options",
     about: "About GRKit",
@@ -187,6 +194,8 @@ const SIMPLIFIED_CHINESE: Words = Words {
     enable: "启用",
     on: "开启",
     enable_grkit: "启用 GRKit",
+    enable_at_start: "开机启用",
+    keep_last: "保持上次",
     adj_order: "ADJ 菜单顺序",
     options: "可选项",
     about: "关于 GRKit",
@@ -244,6 +253,8 @@ const TRADITIONAL_CHINESE: Words = Words {
     enable: "啟用",
     on: "開啟",
     enable_grkit: "啟用 GRKit",
+    enable_at_start: "開機啟用",
+    keep_last: "保持上次",
     adj_order: "ADJ 選單順序",
     options: "可選項",
     about: "關於 GRKit",
@@ -303,6 +314,8 @@ const JAPANESE: Words = Words {
     enable: "有効",
     on: "オン",
     enable_grkit: "GRKit を有効",
+    enable_at_start: "起動時に有効",
+    keep_last: "前回のまま",
     adj_order: "ADJ メニューの順番",
     options: "オプション",
     about: "GRKit について",
@@ -360,6 +373,8 @@ const KOREAN: Words = Words {
     enable: "사용",
     on: "켜짐",
     enable_grkit: "GRKit 사용",
+    enable_at_start: "시작 시 사용",
+    keep_last: "이전 상태",
     adj_order: "ADJ 메뉴 순서",
     options: "옵션",
     about: "GRKit 정보",
@@ -513,6 +528,12 @@ pub const RUNS: &[Run] = &[
         21,
         "The names of the native Image Control types, in the order of runtime/native.h.",
     ),
+    run(
+        "START",
+        2,
+        "Enable at Start, which decides the switch at each start: its MENU row, then its \
+         Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -582,6 +603,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         .chain(words(&[w.recipe_apply]))
         .collect(),
         "NATIVE_TYPE" => words(&w.native_types),
+        "START" => words(&[w.enable_at_start, w.keep_last]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -719,6 +741,29 @@ mod tests {
             );
             assert!(list[id("SWITCH") + 2].contains("GRKit"));
         }
+    }
+
+    /// Enable at Start shows the On and Off of the switch, so only its row
+    /// and Keep Last are new texts.
+    #[test]
+    fn enable_at_start_has_its_row_and_keep_last_in_each_language() {
+        let expected = [
+            (Language::English, "Enable at Start", "Keep Last"),
+            (Language::SimplifiedChinese, "开机启用", "保持上次"),
+            (Language::TraditionalChinese, "開機啟用", "保持上次"),
+            (Language::Japanese, "起動時に有効", "前回のまま"),
+            (Language::Korean, "시작 시 사용", "이전 상태"),
+        ];
+        for (language, row, keep) in expected {
+            let list = strings(language, VERSION);
+            assert_eq!(list[id("START")], row);
+            assert_eq!(list[id("START") + 1], keep);
+            assert_eq!(language.undrawable(row), None);
+            assert_eq!(language.undrawable(keep), None);
+        }
+        assert!(strings(Language::English, VERSION)[id("START")..]
+            .iter()
+            .all(|text| text.is_ascii()));
     }
 
     #[test]

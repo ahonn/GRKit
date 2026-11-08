@@ -25,6 +25,14 @@
    table. A module that is Off at a start, by its Enable or by the switch,
    loads stopped.
 
+   Enable at Start, the row after the switch in the GRKit section (no ADJ
+   row), decides the switch at each start: On, Off, or Keep Last, which
+   keeps the value of the last session. Its setting, CORE.START, follows
+   the switch in the table. INSTALL applies it before it selects the modules
+   (runtime/install_plan.h: start_switch), so a start with Off loads each
+   module stopped. A change of the switch during a session applies at once,
+   and On or Off overrides it at the next start.
+
    INSTALL writes the module list (GRKIT_HOST_MANAGE): MANAGE_HEADER words,
    then MANAGE_STRIDE bytes for each listed module, in the order of the last
    start. The includer defines u16, u32, and the header fields. */
@@ -41,7 +49,9 @@
 #define MANAGE_OPEN 12U
 /* The handle + 1 of CORE.OFF, the GRKit switch, or 0 without it. */
 #define MANAGE_SWITCH 16U
-#define MANAGE_HEADER 20U
+/* The handle + 1 of CORE.START, Enable at Start, or 0 without it. */
+#define MANAGE_START 20U
+#define MANAGE_HEADER 24U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -71,6 +81,13 @@
 /* The setting of the GRKit switch: the CORE.OFF of each module without the
    module ID. */
 #define MANAGE_SWITCH_KEY "CORE.OFF"
+/* The setting of Enable at Start and its values, in the order of its value
+   page. */
+#define MANAGE_START_KEY "CORE.START"
+#define MANAGE_START_ON 0U
+#define MANAGE_START_OFF 1U
+#define MANAGE_START_KEEP 2U
+#define MANAGE_START_VALUES 3U
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -314,6 +331,29 @@ static u32 switch_committed(volatile u32 *h) { return !manage_all_off(h); }
    of a module. */
 static const Setting switch_settings[SETTING_ROWS]={
     {switch_menu_label,switch_rows,switch_value_text,manage_all_off,manage_set_all_off},
+};
+
+/* Enable at Start in MENU: its row opens the value page of this one setting
+   at once, titled Enable at Start: On, Off, then Keep Last. On and Off are
+   the texts of the switch. A choice applies at the next start; the switch
+   keeps its value in this session. */
+static u32 start_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_START) : 0; }
+static u32 start_value(volatile u32 *h) {
+    u32 at=start_handle(h);
+    return at ? setting_value(h,at-1) : MANAGE_START_KEEP;
+}
+static void start_set(volatile u32 *h,u32 value) {
+    u32 at=start_handle(h);
+    if(at && value<MANAGE_START_VALUES) setting_store(h,at-1,value);
+}
+static const u16 *start_label(volatile u32 *h) { return text(h,TEXT_START); }
+static u32 start_values(volatile u32 *h) { (void)h; return MANAGE_START_VALUES; }
+static const u16 *start_value_text(volatile u32 *h,u32 value) {
+    if(value==MANAGE_START_KEEP) return text(h,TEXT_START+1);
+    return switch_value_text(h,value==MANAGE_START_OFF);
+}
+static const Setting start_settings[SETTING_ROWS]={
+    {start_label,start_values,start_value_text,start_value,start_set},
 };
 #endif
 #endif

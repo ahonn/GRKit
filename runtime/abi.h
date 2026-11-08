@@ -869,6 +869,9 @@
 /* The names of the native Image Control types, in the order of
    runtime/native.h. */
 #define TEXT_NATIVE_TYPE 40
-#define GRKIT_TEXT_STRINGS 61
+/* Enable at Start, which decides the switch at each start: its MENU row, then
+   its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
+#define TEXT_START 61
+#define GRKIT_TEXT_STRINGS 63
 
 #endif

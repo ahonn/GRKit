@@ -55,6 +55,19 @@ static int state_value(const struct state *state, u32 key, u32 *value)
     return 0;
 }
 
+/* Give `key` the value `value` for the rest of a start, as if the file held
+   it: the last pair of the key takes it, else a new pair. A full state takes
+   no new pair and returns 0; the largest file of the loader leaves room. */
+static int state_set(struct state *state, u32 key, u32 value)
+{
+    for (u32 i = state->pairs; i > 0; --i)
+        if (state->ids[i - 1] == key) { state->values[i - 1] = value; return 1; }
+    if (state->pairs >= STATE_PAIRS) return 0;
+    state->ids[state->pairs] = key;
+    state->values[state->pairs++] = value;
+    return 1;
+}
+
 /* A saved setting overrides its initial value only when its value is valid.
    Zero is a saved choice, distinct from an absent key. */
 static u32 state_setting_value(const struct state *state, u32 key, u32 initial, u32 values)
