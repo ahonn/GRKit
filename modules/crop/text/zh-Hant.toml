@@ -1,0 +1,14 @@
+title = "裁切"
+rows = ["關閉", "35mm", "40mm", "50mm", "70mm", "90mm"]
+summaries = ["關閉", "35mm", "40mm", "50mm", "70mm", "90mm"]
+
+[settings."CORE.CROP"]
+label = "焦距"
+
+[settings."CORE.CROP_MODE"]
+label = "模式"
+values = ["裁切拍攝", "僅顯示取景框"]
+
+[settings.MASK]
+label = "遮罩"
+values = ["暗色", "黑色", "邊框線"]

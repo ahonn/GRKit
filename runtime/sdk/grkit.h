@@ -21,7 +21,7 @@ typedef signed int s32;
    equals that of the core and whose minor version is not larger. A minor
    version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 5U
+#define GRKIT_ABI_MINOR 6U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -33,7 +33,11 @@ typedef signed int s32;
    ratio value. `box` is {left, top, right, bottom}. Each layer receives the
    framing area: the crop, or the composition frame in guides-only mode.
    Without one, a layer bound to CORE.ASPECT receives area 0 and other layers
-   receive the native photo area. ADJ previews supply the highlighted ratio. */
+   receive the native photo area. A crop (CORE.CROP) frames the center of
+   that area: a layer bound to CORE.CROP receives the frame of the crop with
+   the crop value as `area`, or area 0 without a frame, and other layers,
+   except those bound to CORE.ASPECT, receive the frame as `box`. ADJ
+   previews supply the highlighted ratio or crop. */
 #ifndef GRKIT_CORE_SURFACE
 typedef struct {
     u32 data;
@@ -132,7 +136,12 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   without that crop. Off preserves the current native aspect.
      CORE.ASPECT_MODE  2 values: 0 Crop (default), 1 Guides Only. A module
                   without this capability retains crop behavior. Changing
-                  only this mode preserves the native aspect. */
+                  only this mode preserves the native aspect.
+     CORE.CROP    6 values: a focal-length crop, 0 Off, then 35, 40, 50, 70,
+                  and 90 mm of a 28 mm lens (the same factors of the 40 mm
+                  lens of GR IIIx). The live view shows its frame (Surface).
+     CORE.CROP_MODE  2 values: 0 crops photos where the camera can
+                  (default), 1 shows the frame only. Since ABI 2.6. */
 
 #define GRKIT_SETTING_PUBLIC 1U /* other modules can use it */
 #define GRKIT_SETTING_SAVED 2U  /* the value survives a restart */

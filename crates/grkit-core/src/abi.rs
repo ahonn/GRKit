@@ -352,6 +352,11 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// it was not readable. A half-press on the native Image Control slot
     /// with another type selects that type, as OK does (runtime/menu.c).
     HOST_ADJ_IC_TYPE: 4;
+    /// CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h).
+    HOST_CROP: 4;
+    /// CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the
+    /// frame only.
+    HOST_CROP_MODE: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

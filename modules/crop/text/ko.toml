@@ -1,0 +1,14 @@
+title = "크롭"
+rows = ["꺼짐", "35mm", "40mm", "50mm", "70mm", "90mm"]
+summaries = ["꺼짐", "35mm", "40mm", "50mm", "70mm", "90mm"]
+
+[settings."CORE.CROP"]
+label = "초점 거리"
+
+[settings."CORE.CROP_MODE"]
+label = "모드"
+values = ["자르기", "프레임만"]
+
+[settings.MASK]
+label = "마스크"
+values = ["어둡게", "검정", "프레임 선"]

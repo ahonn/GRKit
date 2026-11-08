@@ -1,4 +1,4 @@
-//! Reproduce the Glow, Grain, Date, Framing, and Guides icons and the viewfinder status icons.
+//! Reproduce the Glow, Grain, Date, Framing, Crop, and Guides icons and the viewfinder status icons.
 //! Run from the repository root with `cargo run -p grkit-core --example module-icons`.
 use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use anyhow::{ensure, Context, Result};
@@ -322,6 +322,25 @@ fn ratio_tile(ratio: f64, label: &str) -> Result<Vec<u8>> {
         36.0,
     )?;
     Ok(pixels)
+}
+
+// The full view as a 3:2 outline, 30 x 20, and the frame of a crop at
+// `scale` of its sides at its center. The crop module's texts give the
+// focal length, which differs between GR III and GR IIIx, so the tile has
+// no caption.
+fn crop_tile(scale: f64) -> Vec<u8> {
+    let mut pixels = list_tile();
+    let [left, top, right, bottom] = [5, 10, 35, 30];
+    fill_rect(&mut pixels, [left, top, right, top + 1], DIAGRAM_LINE);
+    fill_rect(&mut pixels, [left, bottom - 1, right, bottom], DIAGRAM_LINE);
+    fill_rect(&mut pixels, [left, top, left + 1, bottom], DIAGRAM_LINE);
+    fill_rect(&mut pixels, [right - 1, top, right, bottom], DIAGRAM_LINE);
+    let width = (30.0 * scale).round() as usize;
+    let height = (20.0 * scale).round() as usize;
+    let x = 20 - width / 2;
+    let y = 20 - height / 2;
+    frame(&mut pixels, [x, y, x + width, y + height]);
+    pixels
 }
 
 #[derive(Clone, Copy)]
@@ -729,6 +748,22 @@ fn main() -> Result<()> {
         save(
             &modules.join("framing/tiles").join(file),
             &ratio_tile(ratio, label)?,
+        )?;
+    }
+    save(
+        &modules.join("crop/tiles/0-module.png"),
+        &crop_tile(28.0 / 50.0),
+    )?;
+    for (file, focal) in [
+        ("1-35.png", 35.0),
+        ("2-40.png", 40.0),
+        ("3-50.png", 50.0),
+        ("4-70.png", 70.0),
+        ("5-90.png", 90.0),
+    ] {
+        save(
+            &modules.join("crop/tiles").join(file),
+            &crop_tile(28.0 / focal),
         )?;
     }
     let mut root = list_tile();

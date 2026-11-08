@@ -1,0 +1,40 @@
+# Crop: a focal-length crop of the lens. CORE.CROP selects the crop, and
+# CORE.CROP_MODE whether the camera crops the photo or the live view shows
+# the frame only. The layer draws the outside of the frame.
+id = "CROP"
+version = 1
+# The default place in ADJ and in MENU: Film Look, Framing, Crop, Guides, Date, Grain.
+order = 25
+sources = ["crop.c"]
+# Tile n shows value n. Tile 0 is the module tile, for Off at the root.
+tiles = [
+    "tiles/0-module.png",
+    "tiles/1-35.png",
+    "tiles/2-40.png",
+    "tiles/3-50.png",
+    "tiles/4-70.png",
+    "tiles/5-90.png",
+]
+uses = ["CORE.CROP", "CORE.CROP_MODE"]
+
+# The mask outside the frame: 0 dark (black at 50%), 1 black, 2 frame lines
+# only, as the mask of Framing.
+[[settings]]
+key = "MASK"
+values = 3
+saved = true
+public = true
+
+[page]
+setting = "CORE.CROP"
+off_row = true
+settings = ["CORE.CROP", "CORE.CROP_MODE", "MASK"]
+# The GRKit section of MENU turns each crop on or off for ADJ.
+options = true
+
+# Above the Framing mask (10), below the guides (20), so that the guides
+# show inside the frame.
+[[layers]]
+paint = "crop_mask"
+setting = "CORE.CROP"
+order = 15

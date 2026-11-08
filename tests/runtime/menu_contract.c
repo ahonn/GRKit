@@ -23,6 +23,10 @@ static void record_native_aspect(unsigned id);
 /* The native Image Control type plus 1 (runtime/menu.c). */
 static unsigned native_ic_value;
 #define MENU_NATIVE_IC_TYPE() (native_ic_value)
+/* GR IIIx: the lens of 40 mm that the GR III family runtime asks for. */
+#undef CROP_LENS_40MM
+static unsigned test_lens_40mm;
+#define CROP_LENS_40MM() (test_lens_40mm)
 /* The controller factory gives the TopMenu instance, which the GRKit section
    takes out of it (runtime/menu_section.h). */
 #undef FW_CONTROLLER_FACTORY
@@ -3177,8 +3181,23 @@ static void fn_steps_the_setting_of_its_row(void)
     *page_at(page) = 40;
 }
 
+/* GR IIIx names the crops by the focal lengths of its 40 mm lens. The
+   other cameras keep the module texts, and so do other settings and Off. */
+static void crops_name_the_focal_lengths_of_the_lens(void)
+{
+    static const unsigned short fifty[]={'5','0','m','m',0}, longest[]={'1','2','8','m','m',0};
+    test_lens_40mm=0;
+    assert(crop_text(GRKIT_CORE_CROP,1)==0);
+    test_lens_40mm=1;
+    assert(memcmp(crop_text(GRKIT_CORE_CROP,1),fifty,sizeof(fifty))==0);
+    assert(memcmp(crop_text(GRKIT_CORE_CROP,5),longest,sizeof(longest))==0);
+    assert(crop_text(GRKIT_CORE_CROP,0)==0 && crop_text(GRKIT_CORE_CROP,6)==0);
+    assert(crop_text(GRKIT_CORE_ASPECT,1)==0 && crop_text(0,1)==0);
+    test_lens_40mm=0;
+}
 int main(void)
 {
+    crops_name_the_focal_lengths_of_the_lens();
     fn_steps_the_setting_of_its_row();
     registered_icons_use_committed_values_and_restore_the_native_slot();
     the_root_reads_off_without_a_committed_effect();
