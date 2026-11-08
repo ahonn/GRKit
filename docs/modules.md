@@ -57,12 +57,15 @@ tiles = [
     "tiles/3-golden.png",
     "tiles/4-diagonals.png",
     "tiles/5-thirds-center.png",
+    "tiles/6-spiral.png",
+    "tiles/7-symmetry.png",
 ]
 
-# 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals, 5 thirds and center.
+# 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals, 5 thirds and center,
+# 6 golden spiral, 7 dynamic symmetry.
 [[settings]]
 key = "STYLE"
-values = 6
+values = 8
 saved = true
 public = true
 
@@ -78,7 +81,7 @@ follow_disp = true
 ```
 
 - `order`: the default place in ADJ and in MENU, after Film Look (10) and Framing (20).
-- `[[settings]]`: the setting `GUIDES.STYLE` has 6 values. The state file keeps it (`saved`), and other modules can use it (`public`).
+- `[[settings]]`: the setting `GUIDES.STYLE` has 8 values. The state file keeps it (`saved`), and other modules can use it (`public`).
 - `[page]`: a choice page of `STYLE` in ADJ and in MENU, with one row for each value.
 - `[[layers]]`: the core calls `guides_paint` for each draw of the live view while `STYLE` is not 0.
 
@@ -108,7 +111,7 @@ A page has text in the five menu languages: `text/en.toml`, `text/zh-Hans.toml`,
 
 ```toml
 title = "Guides"
-rows = ["Off", "Thirds", "Center", "Golden Ratio", "Diagonals", "Thirds + Center"]
+rows = ["Off", "Thirds", "Center", "Golden Ratio", "Diagonals", "Thirds + Center", "Golden Spiral", "Dynamic Symmetry"]
 ```
 
 The tiles are 40 x 40 PNG files. Tile n shows value n of the page setting, and tile 0 is also the module tile.

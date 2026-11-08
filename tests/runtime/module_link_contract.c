@@ -19,9 +19,10 @@ enum {
     KEY2 = 34,       /* "LOOK" */
     USES = 36,       /* one name pointer */
     USE_NAME = 37,   /* "?CORE.ASPECT" */
-    PAGE = 41,       /* {size, kind, setting, flags, title, summaries, labels, rows, setting rows, settings} */
+    PAGE = 41,       /* {size, kind, setting, flags, title, summaries, labels, rows, setting rows, settings,
+                        children, icon, fn value, fn setting} */
     /* Each text list has one pointer for each language (L). */
-    TITLE = 51,                     /* L text pointers */
+    TITLE = 55,                     /* L text pointers */
     SUMMARIES = TITLE + GRM_LANGUAGES,   /* 2 values x L */
     LABELS = SUMMARIES + 2 * GRM_LANGUAGES, /* 2 values x L */
     ROWS = LABELS + 2 * GRM_LANGUAGES,   /* {size, setting, label, values} x 2 */
@@ -467,6 +468,30 @@ int main(void)
     reset(); code_words[PAGE + 3] = GRM_PAGE_MENU_ONLY;
     assert(registrations() == 0 && pages[0].flags == GRM_PAGE_MENU_ONLY);
     reset(); code_words[PAGE + 3] = 16;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    /* ABI 2.5: Fn on the row of a value other than Off steps another setting
+       with two values or more, of the module or used. Value 0 ignores the
+       setting. A page that the module does not give rows has none. */
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 1;
+    assert(registrations() == 0 && page_count == 1);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = GRM_USED;
+    assert(registrations() == 0);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 13] = 9;
+    assert(registrations() == 0);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 0;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 2; code_words[PAGE + 13] = 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 1;
+    code_words[SETTING + 6] = 1;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 1;
+    code_words[PAGE + 1] = GRM_PAGE_SETTINGS; code_words[PAGE + 3] = 0; code_words[PAGE + 8] = 2;
+    assert(registrations() == GRM_BAD_DESCRIPTOR);
+    reset(); code_words[PAGE] = GRM_PAGE_FN; code_words[PAGE + 12] = 1; code_words[PAGE + 13] = 1;
+    code_words[PAGE + 2] = GRM_USED; code_words[PAGE + 3] = GRM_CHOICE_CORE_ROWS; code_words[PAGE + 7] = 0;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     /* Filters: a stage of the core, a setting that the module has, and
        apply code. */

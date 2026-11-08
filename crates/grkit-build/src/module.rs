@@ -317,6 +317,18 @@ pub struct PageSpec {
     /// The icon of row 0 (Off) of a choice page without `off_row`. The root
     /// row keeps tile 0 while the setting is Off.
     pub off_icon: Option<IconSpec>,
+    /// Fn on the row of one value of a choice page steps another setting
+    /// (`GrkitPage.fn_value` and `fn_setting`, ABI 2.5).
+    pub fn_cycle: Option<FnCycleSpec>,
+}
+
+/// Fn on the row of `value` in ADJ sets `setting` to its next value, and to
+/// 0 after the last one.
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FnCycleSpec {
+    pub value: u32,
+    pub setting: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -579,6 +591,11 @@ pub fn generate(directory: &Path) -> Result<(Manifest, String, String)> {
                     && !page.off_row
                     && !CORE_ROWS.contains(&page.setting.as_str())),
             "Only a choice page without off_row has an off_icon"
+        );
+        ensure!(
+            page.fn_cycle.is_none()
+                || (page.kind == PageKind::Choice && !CORE_ROWS.contains(&page.setting.as_str())),
+            "Only a choice page with its own rows has an fn_cycle"
         );
         if page.kind == PageKind::Group {
             group_page(directory, m, page, &mut c)?;
@@ -870,6 +887,7 @@ fn group_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) -
             options: false,
             children: Vec::new(),
             off_icon: None,
+            fn_cycle: None,
         };
         let rows = setting_rows(directory, m, &child_page, &setting, values)?;
         children.push((setting, values, rows));
@@ -979,6 +997,7 @@ fn choice_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) 
         !page.options || values <= OPTION_VALUES,
         "A page with options has at most {OPTION_VALUES} values"
     );
+    let fn_cycle = fn_cycle(m, page, values)?;
     let rows = setting_rows(directory, m, page, &setting, values)?;
     for (l, language) in Language::ALL.into_iter().enumerate() {
         choice_text(directory, page, values, &rows, l, language, c)?;
@@ -1003,9 +1022,36 @@ fn choice_page(directory: &Path, m: &Manifest, page: &PageSpec, c: &mut String) 
     let off_icon = off_icon(m, page, c)?;
     writeln!(
         c,
-        "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_CHOICE, .setting = {setting}, .flags = {flags}, .title = page_title, .summaries = page_summaries, .labels = page_labels, .rows = {values}{settings}{off_icon}}};"
+        "static const GrkitPage page = {{.size = sizeof(GrkitPage), .kind = GRKIT_PAGE_CHOICE, .setting = {setting}, .flags = {flags}, .title = page_title, .summaries = page_summaries, .labels = page_labels, .rows = {values}{settings}{off_icon}{fn_cycle}}};"
     )?;
     Ok(())
+}
+
+/// The Fn fields of a choice page with `values` rows: the value of the row
+/// and the setting that Fn steps on it. The installer checks the values of a
+/// used setting.
+fn fn_cycle(m: &Manifest, page: &PageSpec, values: usize) -> Result<String> {
+    let Some(spec) = &page.fn_cycle else {
+        return Ok(String::new());
+    };
+    ensure!(
+        spec.value > 0 && (spec.value as usize) < values,
+        "fn_cycle names a value of the page other than Off (1 to {})",
+        values - 1
+    );
+    ensure!(
+        spec.setting != page.setting,
+        "fn_cycle names a setting other than the page setting"
+    );
+    let (reference, count) = setting_reference(m, &spec.setting)?;
+    ensure!(
+        count.is_none_or(|count| count >= 2),
+        "fn_cycle names a setting with at least 2 values"
+    );
+    Ok(format!(
+        ", .fn_value = {}, .fn_setting = {reference}",
+        spec.value
+    ))
 }
 
 /// The rows of the native settings page. Row 0 is the page setting, also a

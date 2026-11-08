@@ -120,6 +120,19 @@ static u32 choice_off_tile(volatile u32 *h) { return choice_tile(h,0); }
 /* The optional icon after children (ABI 2.2): a child's icon, or for a
    choice page without an Off row, the icon of its Off row. */
 static u32 page_icon(u32 page) { return page && PAGE_WORD(page,0)>=48 ? PAGE_WORD(page,44) : 0; }
+/* The Fn setting of row `row` of a choice page (ABI 2.5), or PAGE_NO_FN:
+   INSTALL writes its handle, and clears the value of a setting that the
+   camera does not have. */
+#define PAGE_NO_FN 0xffffffffU
+#define PAGE_FN 56U
+#define PAGE_FN_VALUE 48U
+#define PAGE_FN_SETTING 52U
+static u32 choice_fn_setting(volatile u32 *h,u32 row) {
+    u32 page=CHOICE_ENTRY(h)[0], value;
+    if(PAGE_WORD(page,0)<PAGE_FN || choice_direct(h) || choice_group(h)) return PAGE_NO_FN;
+    value=PAGE_WORD(page,PAGE_FN_VALUE);
+    return value && choice_row_value(h,row)==value ? PAGE_WORD(page,PAGE_FN_SETTING) : PAGE_NO_FN;
+}
 static const u16 *choice_title(volatile u32 *h) { return choice_text(h,PAGE_TITLE,0); }
 static const u16 *choice_summary(volatile u32 *h) { return choice_direct(h) ? choice_title(h) : choice_text(h,PAGE_SUMMARIES,choice_value(h)); }
 static const u16 *choice_label(volatile u32 *h,u32 row) { return choice_text(h,PAGE_LABELS,choice_row_value(h,row)); }

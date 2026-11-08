@@ -1,5 +1,5 @@
 title = "Guides"
-rows = ["Off", "Thirds", "Center", "Golden Ratio", "Diagonals", "Thirds + Center"]
+rows = ["Off", "Thirds", "Center", "Golden Ratio", "Diagonals", "Thirds + Center", "Golden Spiral", "Dynamic Symmetry"]
 
 [settings.STYLE]
 label = "Style"
@@ -15,3 +15,7 @@ values = ["50%", "100%"]
 [settings.DISP]
 label = "Hide with DISP"
 values = ["On", "Off"]
+
+[settings.SPIRAL]
+label = "Spiral Center"
+values = ["Top Left", "Top Right", "Bottom Right", "Bottom Left"]

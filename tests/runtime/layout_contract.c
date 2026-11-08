@@ -45,7 +45,7 @@ AT(GrkitLayer, order, GRM_LAYER_ORDER_AT);
 AT(GrkitLayer, condition_count, GRM_LAYER_CONDITION_COUNT_AT);
 AT(GrkitLayer, conditions, GRM_LAYER_CONDITIONS_AT);
 
-SIZE(GrkitPage, GRM_PAGE_ICON);
+SIZE(GrkitPage, GRM_PAGE_FN);
 AT(GrkitPage, size, 0);
 AT(GrkitPage, kind, GRM_PAGE_KIND_AT);
 AT(GrkitPage, setting, GRM_PAGE_SETTING_AT);
@@ -58,6 +58,8 @@ AT(GrkitPage, setting_rows, GRM_PAGE_SETTING_ROWS_AT);
 AT(GrkitPage, settings, GRM_PAGE_SETTINGS_AT);
 AT(GrkitPage, children, GRM_PAGE_CHILDREN_AT);
 AT(GrkitPage, icon, GRM_PAGE_ICON_AT);
+AT(GrkitPage, fn_value, GRM_PAGE_FN_VALUE_AT);
+AT(GrkitPage, fn_setting, GRM_PAGE_FN_SETTING_AT);
 
 SIZE(GrkitIcon, GRM_ICON);
 AT(GrkitIcon, kind, GRM_ICON_KIND_AT);

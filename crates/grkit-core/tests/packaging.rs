@@ -367,14 +367,14 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [8010]})
+        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [9612]})
     );
     assert_eq!(
         runtime::layout(40).unwrap(),
         json!({
             "words": (runtime::HEADER_SIZE + 40 * 0x1100) / 4,
             "tail_words": runtime::TAIL_WORDS,
-            "icon_words": [64080, 8010]
+            "icon_words": [64080, 9612]
         })
     );
     assert!(runtime::layout(41).is_err());
@@ -405,15 +405,15 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
         assert!(tail <= grkit_core::abi::MODULE_ARRAY_WORDS);
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
-            (count + 5) * 6408,
+            (count + 6) * 6408,
             "count {count}"
         );
         assert!(std::iter::once(&words)
             .chain(&icons)
             .all(|v| (1..=65536).contains(v)));
-        // The 5 host icons come first, then the effects, 40 icons in each
+        // The 6 host icons come first, then the effects, 40 icons in each
         // chunk. Module tiles follow the effects (runtime/installer.c).
-        assert_eq!(icons.len(), (count + 5).div_ceil(40), "count {count}");
+        assert_eq!(icons.len(), (count + 6).div_ceil(40), "count {count}");
     }
     assert!(runtime::layout(usize::MAX).is_err());
 }

@@ -238,9 +238,11 @@ static u32 page_text(const char *text)
    page with its text in each language, its setting handle, and the global
    index of its tile 0. A page without rows (`names` 0) gets its rows from
    the core. */
+/* The title list of a test page, after the 56 bytes of a page of ABI 2.5. */
+#define PAGE_TITLES 0x38U
 static void install_page(u32 slot, const char *title, const char *const *names, u32 rows, u32 handle, u32 tile)
 {
-    u32 page = TEST_PAGE + slot * TEST_PAGE_SIZE, titles = page + 0x28, summaries = titles + TEXT_LIST,
+    u32 page = TEST_PAGE + slot * TEST_PAGE_SIZE, titles = page + PAGE_TITLES, summaries = titles + TEXT_LIST,
         labels = summaries + rows * TEXT_LIST;
     char summary[64];
     assert(slot < TEST_PAGE_SLOTS && labels + rows * TEXT_LIST <= page + 0x200);
@@ -290,7 +292,7 @@ static void install_setting_rows(u32 slot)
     }
     assert(texts <= page + TEST_PAGE_SIZE);
 }
-/* The settings rows of Guides, as modules/guides has them: STYLE (handle 0),
+/* The settings rows of a Guides page modeled on modules/guides: STYLE (handle 0),
    COLOR (15), OPACITY (16), and DISP (17). */
 static void install_guide_rows(u32 slot)
 {
@@ -857,7 +859,8 @@ static void module_tiles_follow_the_effect_icons(void)
        are not tiles. */
     assert(menu_icon(GRKIT_ICON_MODULES) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 2 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_MODULES_OFF) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 3 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_MODULES_OFF - 1) == 0);
+    assert(menu_icon(GRKIT_ICON_ROTATE) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 4 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_ROTATE - 1) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -1611,11 +1614,11 @@ static void install_module_list(void)
     manage_memory[1] = 3;
     entry = MANAGE_ENTRY(0);
     manage_memory[entry] = MANAGE_LOADED;
-    manage_memory[entry + 1] = TEST_PAGE + 2 * TEST_PAGE_SIZE + 0x28;
+    manage_memory[entry + 1] = TEST_PAGE + 2 * TEST_PAGE_SIZE + PAGE_TITLES;
     manage_memory[entry + 2] = 7;
     entry += 14;
     manage_memory[entry] = MANAGE_LOADED;
-    manage_memory[entry + 1] = TEST_PAGE + 3 * TEST_PAGE_SIZE + 0x28;
+    manage_memory[entry + 1] = TEST_PAGE + 3 * TEST_PAGE_SIZE + PAGE_TITLES;
     manage_memory[entry + 2] = MANAGE_NO_TILE;
     entry += 14;
     manage_memory[entry] = 52;
@@ -1919,7 +1922,7 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
         name[7] = (char)('0' + i);
         install_page(i, name, two_rows, 2, 3 + 3 * i, 0);
         manage_memory[entry] = MANAGE_LOADED;
-        manage_memory[entry + 1] = TEST_PAGE + i * TEST_PAGE_SIZE + 0x28;
+        manage_memory[entry + 1] = TEST_PAGE + i * TEST_PAGE_SIZE + PAGE_TITLES;
         manage_memory[entry + 2] = MANAGE_NO_TILE;
         ascii((unsigned short *)&manage_memory[entry + 6], name);
     }
@@ -2080,7 +2083,7 @@ static void install_menu_pages(void)
         entry = MANAGE_ENTRY(i);
         memset(&manage_memory[entry], 0, MANAGE_STRIDE);
         manage_memory[entry] = MANAGE_LOADED;
-        manage_memory[entry + 1] = TEST_PAGE + i * TEST_PAGE_SIZE + 0x28;
+        manage_memory[entry + 1] = TEST_PAGE + i * TEST_PAGE_SIZE + PAGE_TITLES;
         manage_memory[entry + 2] = MANAGE_NO_TILE;
     }
     h[GRKIT_HOST_MANAGE / 4] = TEST_MANAGE;
@@ -2888,7 +2891,7 @@ static void install_stock_tab(u32 rows, u32 sections)
     /* Module 0 has the page of Guides, so ADJ can show it. */
     for (u32 i = 0; i < 3; ++i) {
         manage_memory[MANAGE_ENTRY(i)] = i ? 52 : MANAGE_LOADED;
-        manage_memory[MANAGE_ENTRY(i) + 1] = i ? 0 : TEST_PAGE + 2 * TEST_PAGE_SIZE + 0x28;
+        manage_memory[MANAGE_ENTRY(i) + 1] = i ? 0 : TEST_PAGE + 2 * TEST_PAGE_SIZE + PAGE_TITLES;
     }
     for (u32 i = 0; i < MENU_TAB_SIZE; i += 4) WORD(TEST_TAB, i) = 0xa5000000U | i;
     BYTE(TEST_TAB, MENU_TAB_ROWS) = (u8)rows;
@@ -3075,8 +3078,49 @@ static void registered_icons_use_committed_values_and_restore_the_native_slot(vo
     assert(module_icon_value(h,icon,10)==GRKIT_ICON_MODULE_TILE(16));
 }
 
+/* Fn on the row of the value that names an Fn setting (ABI 2.5) steps
+   that setting in place, wraps after its last value, and redraws the ADJ
+   canvas. The page value stays uncommitted. Fn on another row, on the root,
+   and on a page without the field opens the settings as before. */
+static void fn_steps_the_setting_of_its_row(void)
+{
+    volatile u32 *h = test_header;
+    const u32 page = TEST_PAGE + GUIDES_MODULE * TEST_PAGE_SIZE;
+    reset();
+    adj_controllers();
+    GUIDE_STYLE = 1;
+    menu_open(h, GUIDES_MODULE);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 3;
+    assert(!fn_step(h, ADJ_A));
+    /* Golden Ratio (value 3) steps Date LOOK: handle 2, three values. */
+    *page_at(page) = PAGE_FN; *page_at(page + PAGE_FN_VALUE) = 3; *page_at(page + PAGE_FN_SETTING) = 2;
+    DATE_LOOK = 1;
+    /* The Fn hint shows the rotate icon on the same rows. */
+    assert(fn_setting(h, ADJ_A) == 2);
+    test_movie = 1;
+    assert(fn_setting(h, ADJ_A) == PAGE_NO_FN && !fn_step(h, ADJ_A) && DATE_LOOK == 1);
+    test_movie = 0;
+    preview_invalidations = 0;
+    assert(fn_step(h, ADJ_A) && DATE_LOOK == 2);
+    assert(preview_invalidations == 1 && preview_invalidated == 0x5a000000);
+    assert(fn_step(h, ADJ_A) && DATE_LOOK == 0 && preview_invalidations == 2);
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MODULE / 4] == GUIDES_MODULE);
+    assert(h[GRKIT_HOST_MENU_CURSOR / 4] == 3 && GUIDE_STYLE == 1);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 2;
+    assert(fn_setting(h, ADJ_A) == PAGE_NO_FN && !fn_step(h, ADJ_A) && DATE_LOOK == 0);
+    assert(menu_back(h) && h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT);
+    assert(!fn_step(h, ADJ_A));
+    /* INSTALL clears the value for a setting that the camera does not have. */
+    menu_open(h, GUIDES_MODULE);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 3;
+    *page_at(page + PAGE_FN_VALUE) = 0;
+    assert(!fn_step(h, ADJ_A) && DATE_LOOK == 0);
+    *page_at(page) = 40;
+}
+
 int main(void)
 {
+    fn_steps_the_setting_of_its_row();
     registered_icons_use_committed_values_and_restore_the_native_slot();
     the_root_reads_off_without_a_committed_effect();
     each_language_reads_its_own_texts_and_font();

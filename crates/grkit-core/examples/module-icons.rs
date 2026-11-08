@@ -331,6 +331,78 @@ enum Guide {
     Golden,
     Diagonals,
     ThirdsCenter,
+    Spiral,
+    Symmetry,
+}
+
+// The distance from (x, y) to the segment from a to b.
+fn segment_distance((x, y): (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let t = (((x - a.0) * dx + (y - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+    (x - a.0 - t * dx).hypot(y - a.1 - t * dy)
+}
+
+// The golden spiral of guides.c, stretched to the frame `[x, y, w, h]`
+// without a flip: it ends near the bottom-right corner. Returns the curve and
+// the division lines.
+type Point = (f64, f64);
+
+fn spiral_points([x, y, w, h]: [f64; 4]) -> (Vec<Point>, Vec<[Point; 2]>) {
+    const CUT: f64 = 0.618_034;
+    let (mut l, mut t, mut r, mut b) = (x, y, x + w, y + h);
+    let (mut points, mut divisions) = (Vec::new(), Vec::new());
+    for k in 0..6 {
+        divisions.push(match k % 4 {
+            0 => {
+                let c = l + (r - l) * CUT;
+                [(c, t), (c, b)]
+            }
+            1 => {
+                let c = t + (b - t) * CUT;
+                [(l, c), (r, c)]
+            }
+            2 => {
+                let c = r - (r - l) * CUT;
+                [(c, t), (c, b)]
+            }
+            _ => {
+                let c = b - (b - t) * CUT;
+                [(l, c), (r, c)]
+            }
+        });
+        let (cx, cy, rx, ry, start) = match k % 4 {
+            0 => {
+                let c = l + (r - l) * CUT;
+                let arc = (c, b, c - l, b - t, 0.5);
+                l = c;
+                arc
+            }
+            1 => {
+                let c = t + (b - t) * CUT;
+                let arc = (l, c, r - l, c - t, 1.0);
+                t = c;
+                arc
+            }
+            2 => {
+                let c = r - (r - l) * CUT;
+                let arc = (c, t, r - c, b - t, 1.5);
+                r = c;
+                arc
+            }
+            _ => {
+                let c = b - (b - t) * CUT;
+                let arc = (r, c, r - l, b - c, 0.0);
+                b = c;
+                arc
+            }
+        };
+        // A quarter turn from the angle `start` (in half turns), clockwise on screen.
+        for i in 0..=16 {
+            let angle = std::f64::consts::PI * (start + 0.5 + i as f64 / 32.0);
+            points.push((cx + rx * angle.cos(), cy + ry * angle.sin()));
+        }
+    }
+    (points, divisions)
 }
 
 // A guide style in the frame `[left, top, right, bottom)`: 1-pixel gray
@@ -375,6 +447,64 @@ fn guides(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], guide: Guid
         Guide::ThirdsCenter => {
             lines(pixels, &[1.0 / 3.0, 2.0 / 3.0]);
             cross(pixels, 2, 1);
+        }
+        Guide::Spiral => {
+            let frame = [
+                inner_left as f64,
+                inner_top as f64,
+                width as f64,
+                height as f64,
+            ];
+            let (points, divisions) = spiral_points(frame);
+            paint(
+                pixels,
+                [
+                    inner_left,
+                    inner_top,
+                    inner_left + width,
+                    inner_top + height,
+                ],
+                DIAGRAM_LINE,
+                |x, y| {
+                    points
+                        .windows(2)
+                        .chain(divisions.iter().map(|d| &d[..]))
+                        .any(|p| segment_distance((x, y), p[0], p[1]) <= 0.5)
+                },
+            );
+        }
+        Guide::Symmetry => {
+            // The diagonals and the reciprocals of dynamic symmetry, as guides.c.
+            let (x0, y0, w, h) = (
+                inner_left as f64,
+                inner_top as f64,
+                width as f64,
+                height as f64,
+            );
+            let across = h * h / w;
+            let segments = [
+                ((x0, y0), (x0 + w, y0 + h)),
+                ((x0 + w, y0), (x0, y0 + h)),
+                ((x0, y0), (x0 + across, y0 + h)),
+                ((x0 + w, y0), (x0 + w - across, y0 + h)),
+                ((x0, y0 + h), (x0 + across, y0)),
+                ((x0 + w, y0 + h), (x0 + w - across, y0)),
+            ];
+            paint(
+                pixels,
+                [
+                    inner_left,
+                    inner_top,
+                    inner_left + width,
+                    inner_top + height,
+                ],
+                DIAGRAM_LINE,
+                |x, y| {
+                    segments
+                        .iter()
+                        .any(|&(a, b)| segment_distance((x, y), a, b) <= 0.5)
+                },
+            );
         }
         Guide::Diagonals => {
             let (x0, y0) = (inner_left as f64, inner_top as f64);
@@ -610,6 +740,8 @@ fn main() -> Result<()> {
         ("3-golden.png", Guide::Golden, "Phi"),
         ("4-diagonals.png", Guide::Diagonals, "Diag"),
         ("5-thirds-center.png", Guide::ThirdsCenter, "3x3+"),
+        ("6-spiral.png", Guide::Spiral, "Fib"),
+        ("7-symmetry.png", Guide::Symmetry, "Dyn"),
     ] {
         save(
             &modules.join("guides/tiles").join(file),

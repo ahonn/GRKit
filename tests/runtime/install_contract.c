@@ -281,6 +281,8 @@ struct spec {
     u32 icon_kind, icon_setting, icon_first, indicator_tiles, page_icon;
     /* The flags of a 44-byte descriptor (ABI 2.4), or 0 for a 40-byte one. */
     u32 module_flags;
+    /* The Fn value and setting of a 56-byte page (ABI 2.5), or 0. */
+    u32 fn_value, fn_setting;
 };
 static u32 code_words[GRM_MAX_SEGMENT / 4], code_count, relocations[256], relocation_count;
 static u32 emit(u32 value)
@@ -380,9 +382,15 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
         page_at = emit(GRM_PAGE); emit(s->settings_page ? GRM_PAGE_SETTINGS : GRM_PAGE_CHOICE); emit(0); emit(0);
         emit_pointer(texts, 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
         emit(s->settings[0].values); emit(s->page_rows); emit_pointer(row_list, 0);
-        if (s->page_icon) {
+        if (s->page_icon || s->fn_value) {
             code_words[page_at] = GRM_PAGE_ICON;
-            emit(0); emit_pointer(icon_at, 0);
+            emit(0);
+            if (s->page_icon) emit_pointer(icon_at, 0);
+            else emit(0);
+        }
+        if (s->fn_value) {
+            code_words[page_at] = GRM_PAGE_FN;
+            emit(s->fn_value); emit(s->fn_setting);
         }
         if (s->group_page) {
             child_at[0] = page_at;
@@ -1073,6 +1081,32 @@ static void settings_rows_of_used_settings(void)
     assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR);
 }
 
+/* The Fn setting of a page row (ABI 2.5) gets its handle: an own setting or
+   a used one. Without the setting of an optional use, the page has no Fn
+   value. */
+static void the_fn_setting_of_a_page_gets_its_handle(void)
+{
+    static const u32 named[] = {1, GRM_USED | 1, GRM_USED | 0}, handles[] = {1, GRKIT_CORE_GRAIN, 0};
+    for (u32 k = 0; k < 3; ++k) {
+        reset();
+        const struct spec grain = {.id = "GRAIN", .order = 1,
+                                   .settings = {{"LEVEL", 2, GRM_SETTING_SAVED}, {"TONE", 3, GRM_SETTING_SAVED}},
+                                   .uses = {"?OTHER.SIZE", "CORE.GRAIN"},
+                                   .page_rows = 1, .rows = {0}, .fn_value = 1, .fn_setting = named[k]};
+        add_module(PACKAGE_MODULES_PATH, "GRAIN.GRM", &grain);
+        assert(install() == 0 && module_status[0] == 0 && module_page_count == 1);
+        u32 page = module_pages[0];
+        assert(word(page) == GRM_PAGE_FN && word(page + GRM_PAGE_FN_VALUE_AT) == (k < 2 ? 1U : 0U));
+        if (k < 2) assert(word(page + GRM_PAGE_FN_SETTING_AT) == handles[k]);
+    }
+    /* A value past the rows is not valid. */
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "GRAIN.GRM", &(struct spec){
+        .id = "GRAIN", .settings = {{"LEVEL", 2, 0}, {"TONE", 3, 0}}, .page_rows = 1, .rows = {0},
+        .fn_value = 2, .fn_setting = 1});
+    assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR);
+}
+
 /* A setting of a module that does not link is missing, also for a module
    that links before it: a module that requires the setting gets error 55,
    and the layer of an optional one is not registered. */
@@ -1226,6 +1260,7 @@ static void *run(void *unused)
 }
 int main(void)
 {
+    the_fn_setting_of_a_page_gets_its_handle();
     pthread_attr_t attributes;
     pthread_t thread;
     assert(!pthread_attr_init(&attributes) && !pthread_attr_setstack(&attributes, test_stack, sizeof test_stack));

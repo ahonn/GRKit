@@ -427,16 +427,19 @@ static void list_frame(u32 view,u32 rows) {
     CALL2(WORD(WORD(view,0),0x18))(view,(u32)rectangle);
 }
 /* Show the Fn hint where Fn opens the parameter page or the settings of a
-   module. The native refresh fills the hint only on a native slot that
-   offers Fn, so a hint that GRKit shows could be empty. Fill it as the
-   native Image Control slot does. */
+   module, or turns the setting of the row. The native refresh fills the
+   hint only on a native slot that offers Fn, so a hint that GRKit shows
+   could be empty. Fill it as the native Image Control slot does, with the
+   rotate icon where Fn turns a setting. */
 static u32 settings_target(volatile u32 *h,u32 controller);
+static u32 fn_setting(volatile u32 *h,u32 controller);
 static void fn_guide(u32 controller) {
     volatile u32 *h=menu_header();
-    u32 guide=WORD(controller,ADJ_FN_GUIDE), shown=parameters_row(h) ? parameters_available(controller) :
-        settings_target(h,controller)!=MODULE_TOTAL;
+    u32 guide=WORD(controller,ADJ_FN_GUIDE), turns=!parameters_row(h) && fn_setting(h,controller)!=PAGE_NO_FN;
+    u32 shown=parameters_row(h) ? parameters_available(controller) :
+        turns || settings_target(h,controller)!=MODULE_TOTAL;
     if(shown) {
-        CALL4(FW_GUIDE_SET_CONTENT)(guide,FN_GUIDE_TEXT,10,FN_GUIDE_ICON);
+        CALL4(FW_GUIDE_SET_CONTENT)(guide,FN_GUIDE_TEXT,10,turns ? GRKIT_ICON_ROTATE : FN_GUIDE_ICON);
 #ifdef FN_GUIDE_X
         CALL2(FW_VIEW_SET_X)(guide,FN_GUIDE_X);
 #endif
@@ -743,6 +746,28 @@ static u32 settings_target(volatile u32 *h,u32 controller) {
     if(page->settings==choice_settings && !choice_direct(h) && PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS)<2) return MODULE_TOTAL;
     return module;
 }
+/* The Fn setting of the highlighted row of a choice page (ABI 2.5), or
+   PAGE_NO_FN. Fn turns it only in the still context, and only when it has
+   two values or more. */
+static u32 fn_setting(volatile u32 *h,u32 controller) {
+    u32 module=h[GRKIT_HOST_MODULE/4], handle;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_MODULE || module>=module_pages(h) || ADJ_MOVIE(controller)==1) return PAGE_NO_FN;
+    menu_page(h,module);
+    handle=choice_fn_setting(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+    return handle!=PAGE_NO_FN && setting_limit(h,handle)>=2 ? handle : PAGE_NO_FN;
+}
+/* Fn on a row with an Fn setting: the setting takes its next value, and 0
+   after the last one. ADJ stays on the row, and the live view redraws with
+   the new value. */
+static u32 fn_step(volatile u32 *h,u32 controller) {
+    u32 handle=fn_setting(h,controller), values, value;
+    if(handle==PAGE_NO_FN) return 0;
+    values=setting_limit(h,handle);
+    value=setting_value(h,handle)+1;
+    setting_store(h,handle,value<values ? value : 0);
+    MENU_PREVIEW_INVALIDATE(WORD(controller,ADJ_CANVAS));
+    return 1;
+}
 static u32 open_settings(u32 controller) {
     volatile u32 *h=menu_header();
     u32 module=settings_target(h,controller), root=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT;
@@ -959,6 +984,8 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         if(!open_parameters(controller)) render(controller);
         return 0;
     }
+    /* Fn on the row of a page value with an Fn setting steps that setting. */
+    if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && fn_step(h,controller)) return 0;
     /* Fn elsewhere opens the detail settings of the module, if it has any. */
     if(kind==EV_FN && *(u8 *)WORD((u32)event,4)==FN_PRESS_ARG && open_settings(controller)) return 0;
     /* OK and Right on a settings entry open its native controls. */
@@ -1042,6 +1069,7 @@ static u32 icon_address(volatile u32 *h,u32 id) {
     /* The Modules icon follows the Version icon. */
     if(id==GRKIT_ICON_MODULES) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+2*GRKIT_ICON_STRIDE : 0;
     if(id==GRKIT_ICON_MODULES_OFF) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+3*GRKIT_ICON_STRIDE : 0;
+    if(id==GRKIT_ICON_ROTATE) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+4*GRKIT_ICON_STRIDE : 0;
     if(id==0x7fff) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : NATIVE_OFF_ICON();
     if(index>=h[GRKIT_HOST_COUNT/4]) return 0;
     return WORD(h[GRKIT_HOST_RECORDS/4]+index*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);

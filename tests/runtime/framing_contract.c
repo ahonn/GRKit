@@ -88,9 +88,9 @@ static const volatile uint8_t *mapped_labels(uint32_t address)
     return overlay_labels;
 }
 #define LABEL_MAP(address) mapped_labels(address)
-/* The module settings table of the harness: the four Guides settings. */
+/* The module settings table of the harness: the five Guides settings. */
 #define TEST_SETTINGS 0x5f000000U
-static uint32_t settings_memory[2 + 3 * 4];
+static uint32_t settings_memory[2 + 3 * 5];
 static volatile uint32_t *mapped_settings(uint32_t address)
 {
     assert(address == TEST_SETTINGS);
@@ -125,7 +125,10 @@ static uint32_t level_updates, level_updated;
 #define GRKIT_PIXELS(address) mapped_pixels(address)
 #include "../../modules/framing/framing.c"
 #include "../../modules/guides/guides.c"
-#define GUIDES_STYLE_MAX 5U
+/* Styles 1 to 5 have an exact pixel model; 6, the golden spiral, and 7,
+   dynamic symmetry, are checked to stay inside the area (the module test
+   checks their lines). */
+#define GUIDES_STYLE_MAX 7U
 /* An ABI 2.1 label layer remains supported after built-ins use indicators. */
 static void legacy_badge(const Surface *surface,u32 value) {
     (void)value;
@@ -152,7 +155,7 @@ volatile u32 *framing_header(void) { return header; }
 /* Register the module layers as INSTALL does, in painting order: with
    Framing, its mask (order 10) and its ratio label (order 30, full display,
    live view only) of CORE.ASPECT, around the Guides layer (order 20, DISP)
-   of its STYLE setting (handle 0, 6 values). Without Framing, no module uses
+   of its STYLE setting (handle 0, 8 values). Without Framing, no module uses
    CORE.ASPECT. */
 static void register_layers(u32 framing)
 {
@@ -216,8 +219,8 @@ static void reset(void)
     WORD(TEST_BITMAP, 8)=TEST_PIXELS;
     /* The Framing and Guides modules are loaded. */
     memset(settings_memory,0,sizeof(settings_memory));
-    settings_memory[0]=4;
-    for(u32 i=0;i<4;++i) { settings_memory[2+3*i]=i+1; settings_memory[4+3*i]=i==0 ? 6 : i==1 ? 3 : 2; }
+    settings_memory[0]=5;
+    for(u32 i=0;i<5;++i) { settings_memory[2+3*i]=i+1; settings_memory[4+3*i]=i==0 ? 8 : i==1 ? 3 : i==4 ? 4 : 2; }
     header[GRKIT_HOST_MODULE_SETTINGS/4]=TEST_SETTINGS;
     register_layers(1);
     header[GRKIT_HOST_ACTIVE/4]=0x59001000;
@@ -290,6 +293,8 @@ static u32 expected_guide(u32 ratio,u32 style,u32 x,u32 y)
 {
     const u32 *box=boxes[ratio];
     if(x<box[0] || x>=box[2] || y<box[1] || y>=box[3]) return 0;
+    /* Any pixel inside the area may be a curve or a reciprocal. */
+    if(style==6 || style==7) return 2;
     if(style==1 || style==3 || style==5) {
         const u32 *lines=style==3 ? golden[ratio] : thirds[ratio];
         if(on_line(x,lines[0]) || on_line(x,lines[1]) || on_line(y,lines[2]) || on_line(y,lines[3])) return 1;
@@ -337,12 +342,13 @@ static void assert_overlay(u32 capture,u32 composition,u32 style,u32 badge)
     const u32 *box=boxes[composition];
     for(u32 y=0; y<480; ++y) for(u32 x=0; x<TEST_STRIDE; ++x) {
         u32 expected=SENTINEL;
+        u32 guide=x<720 ? expected_guide(capture,style,x,y) : 0, line=0x80000000U;
         if(x<720) {
             if(composition && (x<box[0] || x>=box[2] || y<box[1] || y>=box[3])) expected=0x80000000;
-            if(expected_guide(capture,style,x,y)) expected=0x80000000U;
-            if(badge) expected=expected_badge(composition,x,y,expected);
+            if(guide==1) expected=0x80000000U;
+            if(badge) { expected=expected_badge(composition,x,y,expected); line=expected_badge(composition,x,y,line); }
         }
-        assert(pixels[1+y*TEST_STRIDE+x]==expected);
+        assert(pixels[1+y*TEST_STRIDE+x]==expected || (guide==2 && pixels[1+y*TEST_STRIDE+x]==line));
     }
 }
 static void assert_guides(u32 ratio,u32 style,u32 badge)

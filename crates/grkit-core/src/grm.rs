@@ -35,7 +35,7 @@ pub const DATA_LOCATION: u32 = 0x8000_0000;
 /// in the low half. The installer loads a module whose major equals its own
 /// and whose minor is not larger than its own (`runtime/sdk/grkit.h`).
 pub const ABI_MAJOR: u32 = 2;
-pub const ABI_MINOR: u32 = 4;
+pub const ABI_MINOR: u32 = 5;
 /// The largest code, data, or BSS size of one module that the installer
 /// accepts.
 pub const MAX_SEGMENT: usize = 0x10000;

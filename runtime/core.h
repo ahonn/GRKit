@@ -40,6 +40,9 @@ typedef short s16;
    Modules tile with a line through it (Enable GRKit Off). */
 #define GRKIT_ICON_MODULES 0x7ffcU
 #define GRKIT_ICON_MODULES_OFF 0x7ffbU
+/* The Fn hint of a row where Fn turns a setting to its next value. The
+   installer puts it after the Modules Off tile. */
+#define GRKIT_ICON_ROTATE 0x7ffaU
 
 /* One setting of a native settings page: its row label, its values (at most
    SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a

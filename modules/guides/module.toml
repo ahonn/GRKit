@@ -12,12 +12,15 @@ tiles = [
     "tiles/3-golden.png",
     "tiles/4-diagonals.png",
     "tiles/5-thirds-center.png",
+    "tiles/6-spiral.png",
+    "tiles/7-symmetry.png",
 ]
 
-# 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals, 5 thirds and center.
+# 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals, 5 thirds and center,
+# 6 golden spiral, 7 dynamic symmetry. A native settings row has at most 8 values.
 [[settings]]
 key = "STYLE"
-values = 6
+values = 8
 saved = true
 public = true
 
@@ -43,12 +46,23 @@ values = 2
 saved = true
 public = true
 
+# The corner where the golden spiral ends, clockwise: 0 top left, 1 top right,
+# 2 bottom right, 3 bottom left.
+[[settings]]
+key = "SPIRAL"
+values = 4
+default = 2
+saved = true
+public = true
+
 [page]
 setting = "STYLE"
 off_row = true
-settings = ["STYLE", "COLOR", "OPACITY", "DISP"]
+settings = ["STYLE", "COLOR", "OPACITY", "DISP", "SPIRAL"]
 # The GRKit section of MENU turns each style on or off for ADJ.
 options = true
+# Fn on the Golden Spiral row turns the spiral to the next corner, clockwise.
+fn_cycle = { value = 6, setting = "SPIRAL" }
 
 # Above the Framing mask (10), below the Framing ratio label (30). The core selects
 # one layer from DISP before deciding whether the canvas needs a full clear.

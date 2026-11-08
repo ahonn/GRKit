@@ -330,6 +330,14 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
             const u8 *p = grm_code_at(&module, module_code, code_base, pages[k].address, GRM_PAGE);
             if (grm_word(p) >= GRM_PAGE_ICON && grm_word(p + GRM_PAGE_ICON_AT))
                 module_icon_patch(i, use_handles, code_base, grm_word(p + GRM_PAGE_ICON_AT));
+            /* The Fn setting of a row gets its absolute handle. Without the
+               setting of an optional use, or with fewer than two values, Fn
+               on that row opens the settings as on the other rows. */
+            if (grm_word(p) >= GRM_PAGE_FN && grm_word(p + GRM_PAGE_FN_VALUE_AT)) {
+                u32 handle = module_handle(i, use_handles, grm_word(p + GRM_PAGE_FN_SETTING_AT));
+                if (handle == GRM_NO_SETTING || handle_values(handle) < 2) store(pages[k].address + GRM_PAGE_FN_VALUE_AT, 0);
+                else store(pages[k].address + GRM_PAGE_FN_SETTING_AT, handle);
+            }
         }
         /* The native settings rows of each page get absolute setting handles
            (runtime/modules.h): row 0 the page setting, the others settings of

@@ -21,7 +21,7 @@
 #define GRM_MAX_SEGMENT 0x10000U
 /* The ABI of the core (runtime/sdk/grkit.h). */
 #define GRM_ABI_MAJOR 2U
-#define GRM_ABI_MINOR 4U
+#define GRM_ABI_MINOR 5U
 #define GRM_POINT_OVERLAY_LAYER 1U
 #define GRM_POINT_MENU_PAGE 2U
 #define GRM_POINT_PICTURE_PLANE 3U
@@ -132,6 +132,10 @@
 #define GRM_PAGE_CHILDREN_AT 40U
 #define GRM_PAGE_ICON 48U
 #define GRM_PAGE_ICON_AT 44U
+/* A page with the Fn setting of a row (ABI 2.5). */
+#define GRM_PAGE_FN 56U
+#define GRM_PAGE_FN_VALUE_AT 48U
+#define GRM_PAGE_FN_SETTING_AT 52U
 #define GRM_PAGE_KIND_AT 4U
 #define GRM_PAGE_SETTING_AT 8U
 #define GRM_PAGE_FLAGS_AT 12U
@@ -579,8 +583,17 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
                     return GRM_BAD_DESCRIPTOR;
             }
             u32 kind = grm_word(page + GRM_PAGE_KIND_AT), direct = kind == GRM_PAGE_SETTINGS;
+            /* ABI 2.5: Fn on the row of a value steps another setting. Only a
+               choice page with rows from the module has it. */
+            u32 fn_value = 0, fn_setting = GRM_NO_SETTING;
+            if (grm_word(page) >= GRM_PAGE_FN) {
+                if (!grm_code_at(m, code, base, impl, GRM_PAGE_FN)) return GRM_BAD_DESCRIPTOR;
+                fn_value = grm_word(page + GRM_PAGE_FN_VALUE_AT);
+                fn_setting = grm_word(page + GRM_PAGE_FN_SETTING_AT);
+            }
             if (kind == GRM_PAGE_GROUP) {
                 u32 rows = grm_word(page + GRM_PAGE_ROWS_AT);
+                if (fn_value) return GRM_BAD_DESCRIPTOR;
                 if (grm_word(page) < GRM_GROUP_PAGE || !grm_code_at(m, code, base, impl, GRM_GROUP_PAGE) ||
                     grm_word(page + GRM_PAGE_SETTING_AT) != GRM_NO_SETTING || grm_word(page + GRM_PAGE_FLAGS_AT) ||
                     grm_word(page + GRM_PAGE_SETTING_ROWS_AT) || !rows || rows > GRM_PAGE_CHILDREN || rows + 1 > tile_count ||
@@ -597,6 +610,12 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             if (!grm_setting_reference(setting, setting_count, use_count) ||
                 (flags & ~(GRM_CHOICE_OFF_ROW | GRM_CHOICE_CORE_ROWS | GRM_CHOICE_OPTIONS | GRM_PAGE_MENU_ONLY))) return GRM_BAD_DESCRIPTOR;
             if (direct && ((flags & ~GRM_PAGE_MENU_ONLY) || !grm_word(page + GRM_PAGE_SETTING_ROWS_AT))) return GRM_BAD_DESCRIPTOR;
+            /* The Fn value is a row of the page and not Off. The Fn setting is
+               another setting with at least two values; the installer checks
+               a used one. */
+            if (fn_value && (direct || (flags & GRM_CHOICE_CORE_ROWS) || fn_value >= rows || fn_setting == setting ||
+                             !grm_setting_reference(fn_setting, setting_count, use_count) ||
+                             (!(fn_setting & GRM_USED) && settings[fn_setting].values < 2))) return GRM_BAD_DESCRIPTOR;
             /* The core gives the rows of a page of a used capability: the
                page has only its title. The installer checks the setting. */
             if (flags & GRM_CHOICE_CORE_ROWS) {

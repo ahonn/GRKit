@@ -539,6 +539,104 @@ pub fn modules_off_pixels() -> Vec<u8> {
     rgba
 }
 
+/// The Fn hint of a row where Fn turns a setting to its next value: a
+/// clockwise open circle arrow, white with a black edge on a transparent
+/// tile, as the native settings icon of the Fn hint has it. The arrow has a
+/// gap at the top right and its head at the top, pointing right.
+pub fn rotate_pixels() -> Vec<u8> {
+    // 4 x 4 samples in each pixel. The black edge is the white shape grown
+    // by EDGE samples.
+    const SAMPLES: usize = 4;
+    const SIDE: usize = 40 * SAMPLES;
+    const EDGE: i32 = 5;
+    const CENTER: (f32, f32) = (20.0, 21.0);
+    const RADIUS: f32 = 11.0;
+    const HALF_WIDTH: f32 = 2.0;
+    // The arc runs clockwise (y down) from START to END degrees.
+    const START: f32 = -15.0;
+    const END: f32 = 268.0;
+    const HEAD: f32 = 6.5;
+    let end = END.to_radians();
+    let tip = (CENTER.0 + RADIUS * end.cos(), CENTER.1 + RADIUS * end.sin());
+    let (along, across) = ((-end.sin(), end.cos()), (end.cos(), end.sin()));
+    let head = [
+        (tip.0 + along.0 * HEAD, tip.1 + along.1 * HEAD),
+        (
+            tip.0 + across.0 * HEAD - along.0 * 0.5,
+            tip.1 + across.1 * HEAD - along.1 * 0.5,
+        ),
+        (
+            tip.0 - across.0 * HEAD - along.0 * 0.5,
+            tip.1 - across.1 * HEAD - along.1 * 0.5,
+        ),
+    ];
+    let in_head = |x: f32, y: f32| {
+        let side = |(x1, y1): (f32, f32), (x2, y2): (f32, f32)| {
+            (x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)
+        };
+        let s = [
+            side(head[0], head[1]),
+            side(head[1], head[2]),
+            side(head[2], head[0]),
+        ];
+        s.iter().all(|v| *v >= 0.0) || s.iter().all(|v| *v <= 0.0)
+    };
+    let mut white = vec![false; SIDE * SIDE];
+    for j in 0..SIDE {
+        for i in 0..SIDE {
+            let (x, y) = (
+                (i as f32 + 0.5) / SAMPLES as f32,
+                (j as f32 + 0.5) / SAMPLES as f32,
+            );
+            let (dx, dy) = (x - CENTER.0, y - CENTER.1);
+            let mut angle = dy.atan2(dx).to_degrees();
+            while angle < START {
+                angle += 360.0;
+            }
+            let on_arc = ((dx * dx + dy * dy).sqrt() - RADIUS).abs() <= HALF_WIDTH && angle <= END;
+            white[j * SIDE + i] = on_arc || in_head(x, y);
+        }
+    }
+    let mut edge = vec![false; SIDE * SIDE];
+    for j in 0..SIDE as i32 {
+        for i in 0..SIDE as i32 {
+            if !white[j as usize * SIDE + i as usize] {
+                continue;
+            }
+            for dy in -EDGE..=EDGE {
+                for dx in -EDGE..=EDGE {
+                    let (x, y) = (i + dx, j + dy);
+                    if dx * dx + dy * dy <= EDGE * EDGE
+                        && (0..SIDE as i32).contains(&x)
+                        && (0..SIDE as i32).contains(&y)
+                    {
+                        edge[y as usize * SIDE + x as usize] = true;
+                    }
+                }
+            }
+        }
+    }
+    // Alpha is binary: a pixel that the edge covers at least half is opaque,
+    // and its shade is the white share of the covered samples.
+    let mut rgba = vec![0; 40 * 40 * 4];
+    for y in 0..40 {
+        for x in 0..40 {
+            let (mut w, mut e) = (0, 0);
+            for b in 0..SAMPLES {
+                for a in 0..SAMPLES {
+                    let at = (y * SAMPLES + b) * SIDE + x * SAMPLES + a;
+                    w += usize::from(white[at]);
+                    e += usize::from(edge[at]);
+                }
+            }
+            if 2 * e >= SAMPLES * SAMPLES {
+                dot(&mut rgba, x, y, ((255 * w + e / 2) / e) as u8);
+            }
+        }
+    }
+    rgba
+}
+
 /// Mark a list tile as Off, as the native Off icons do: dim the drawing
 /// halfway to the body shade, then draw a white line with a black edge on
 /// the diagonal x = y, from the top left to the bottom right of the frame.

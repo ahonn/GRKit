@@ -1012,3 +1012,68 @@ fn group_page_rejects_invalid_structure_and_text() -> Result<()> {
         .contains("camera cannot draw"));
     Ok(())
 }
+
+/// A copy of the Guides module folder, whose page has an `fn_cycle`.
+fn guides_folder(directory: &Path) -> Result<std::path::PathBuf> {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules/guides");
+    let folder = directory.join("guides");
+    for sub in ["text", "tiles"] {
+        fs::create_dir_all(folder.join(sub))?;
+        for entry in fs::read_dir(source.join(sub))? {
+            let entry = entry?;
+            fs::copy(entry.path(), folder.join(sub).join(entry.file_name()))?;
+        }
+    }
+    for file in ["module.toml", "guides.c", "test.c"] {
+        fs::copy(source.join(file), folder.join(file))?;
+    }
+    Ok(folder)
+}
+
+/// Fn on the row of one page value steps another setting (ABI 2.5). The
+/// value is a row other than Off, and the setting is another one with at
+/// least two values.
+#[test]
+fn fn_cycle_names_a_page_value_and_another_setting() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = guides_folder(directory.path())?;
+    let path = folder.join("module.toml");
+    let original = fs::read_to_string(&path)?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".fn_value = 6, .fn_setting = 4}"));
+    let line = "fn_cycle = { value = 6, setting = \"SPIRAL\" }";
+    for (replacement, error) in [
+        (
+            "fn_cycle = { value = 0, setting = \"SPIRAL\" }",
+            "other than Off",
+        ),
+        (
+            "fn_cycle = { value = 8, setting = \"SPIRAL\" }",
+            "other than Off",
+        ),
+        (
+            "fn_cycle = { value = 6, setting = \"STYLE\" }",
+            "other than the page setting",
+        ),
+        (
+            "fn_cycle = { value = 6, setting = \"NONE\" }",
+            "has no setting NONE",
+        ),
+    ] {
+        fs::write(&path, original.replace(line, replacement))?;
+        let message = module::generate(&folder).unwrap_err().to_string();
+        assert!(message.contains(error), "{message}");
+    }
+    fs::write(
+        &path,
+        original.replace(
+            "key = \"SPIRAL\"\nvalues = 4\ndefault = 2",
+            "key = \"SPIRAL\"\nvalues = 1",
+        ),
+    )?;
+    assert!(module::generate(&folder)
+        .unwrap_err()
+        .to_string()
+        .contains("at least 2 values"));
+    Ok(())
+}

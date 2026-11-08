@@ -21,7 +21,7 @@ typedef signed int s32;
    equals that of the core and whose minor version is not larger. A minor
    version adds functions, registration types, or trailing descriptor fields. */
 #define GRKIT_ABI_MAJOR 2U
-#define GRKIT_ABI_MINOR 4U
+#define GRKIT_ABI_MINOR 5U
 #define GRKIT_ABI (GRKIT_ABI_MAJOR << 16 | GRKIT_ABI_MINOR)
 
 /* ---- overlay.layer -------------------------------------------------------- */
@@ -304,6 +304,13 @@ typedef struct GrkitPage {
        and in its value list, also while its first setting is Off. For a
        CHOICE page without GRKIT_CHOICE_OFF_ROW, the icon of row 0. */
     const GrkitIcon *icon;
+    /* Since ABI 2.5; optional, CHOICE only. Fn on the row of value
+       `fn_value` in ADJ sets `fn_setting` (see GRKIT_USE) to its next value,
+       and to 0 after the last one, and the live view shows the change at
+       once. Fn on the other rows opens the settings as before. 0 for none:
+       value 0 is Off. */
+    u32 fn_value;
+    u32 fn_setting;
 } GrkitPage;
 
 /* ---- picture.plane -------------------------------------------------------- */
