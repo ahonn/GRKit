@@ -1,3 +1,10 @@
+## 1.5.2 (2026-11-08)
+
+### Fixes
+
+- With the fast-boot firmware, GRKit still loads when the fast start fails, instead of showing an error.
+- Guides adds a golden spiral and dynamic symmetry, and in ADJ, Fn turns the spiral to the next corner.
+
 ## 1.5.1 (2026-11-07)
 
 ### Fixes
