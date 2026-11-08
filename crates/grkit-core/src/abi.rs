@@ -400,19 +400,19 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// last (runtime/install_recipes.h), after the names: the loader saves it
     /// with the recipes, so a package imports once.
     HOST_RECIPE_IMPORTED: 4;
-    /// The ID of each recipe, by slot: a number from 1 that no other recipe of
-    /// the camera has had. A reference to a recipe holds its ID, so that it
-    /// stays valid when the recipes move. Each part that creates a recipe
-    /// (the camera, INSTALL, the site) gives it `HOST_RECIPE_NEXT_ID`. The
-    /// loader saves the IDs after the import hash.
+    /// The ID of each recipe, by slot, 1 to `runtime::RECIPE_ID_MAX`: a
+    /// generated number, so that a recipe that the site moves to another card
+    /// keeps an ID that no recipe of that card had. A reference to a recipe
+    /// holds its ID, so that it stays valid when the recipes move. Each part
+    /// that creates a recipe (the camera, INSTALL, the site) generates its ID.
+    /// The loader saves the IDs after the import hash.
     HOST_RECIPE_IDS: 4 * RECIPE_SLOTS;
     /// What each user mode of the mode dial, U1 to U3, does
     /// (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a
-    /// recipe). An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`.
+    /// recipe). An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A
+    /// generated ID is never one of these values, so a deleted recipe never
+    /// gets the references of another.
     HOST_RECIPE_DIAL: 4 * RECIPE_DIAL_POSITIONS;
-    /// The ID that the next new recipe takes. IDs only grow, so a deleted
-    /// recipe never gets the references of another.
-    HOST_RECIPE_NEXT_ID: 4;
     /// The count of changes of the recipes: the loader saves the recipe file
     /// after it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an
     /// import.
@@ -959,9 +959,9 @@ pub fn header() -> String {
          GRKIT_RECIPE_KEY_STRIDE + n. The words after the names have one key \
          each from GRKIT_RECIPE_IMPORTED_KEY: the hash of the imported package \
          library, the ID of recipe n at GRKIT_RECIPE_ID_KEY_BASE + n, the \
-         assignment of user mode u at GRKIT_RECIPE_DIAL_KEY_BASE + u, and the \
-         next ID at GRKIT_RECIPE_NEXT_ID_KEY (grkit_core::runtime::recipe_key). \
-         A recipe ID is 1 to GRKIT_RECIPE_ID_MAX. A user mode follows \
+         assignment of user mode u at GRKIT_RECIPE_DIAL_KEY_BASE + u \
+         (grkit_core::runtime::recipe_key). A recipe ID is a generated number, \
+         1 to GRKIT_RECIPE_ID_MAX (runtime/recipe_id.h). A user mode follows \
          (GRKIT_RECIPE_DIAL_FOLLOW), turns GRKit off (GRKIT_RECIPE_DIAL_OFF), \
          or applies the recipe with its ID. The undo steps are not saved.",
     );
@@ -1051,7 +1051,6 @@ pub fn header() -> String {
         ("IMPORTED_KEY", crate::runtime::RECIPE_IMPORTED_KEY),
         ("ID_KEY_BASE", crate::runtime::RECIPE_ID_KEY_BASE),
         ("DIAL_KEY_BASE", crate::runtime::RECIPE_DIAL_KEY_BASE),
-        ("NEXT_ID_KEY", crate::runtime::RECIPE_NEXT_ID_KEY),
         ("ID_MAX", crate::runtime::RECIPE_ID_MAX),
         ("DIAL_FOLLOW", crate::runtime::RECIPE_DIAL_FOLLOW),
         ("DIAL_OFF", crate::runtime::RECIPE_DIAL_OFF),

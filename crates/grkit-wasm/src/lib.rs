@@ -775,14 +775,12 @@ pub fn read_recipe_file(text: &str, family: &str) -> Result<String, JsError> {
         .map_err(js_error)
 }
 
-/// The recipe file for a JSON array of recipes of the camera line `family`,
-/// which replaces `previous`, the text of the file on the card: it keeps the
-/// import hash, the user modes of the mode dial, and the recipes of
-/// `previous` that `readRecipeFile` leaves out
-/// (`grkit_core::recipes::write_recipe_file`). The JSON result has `text`,
-/// the text of the file, and `recipes`, the recipes in their order with the
-/// ID that the file gives each. Throws for a recipe that the camera cannot
-/// hold, or for more recipes than the file holds.
+/// The text of the recipe file for a JSON array of recipes of the camera
+/// line `family`, which replaces `previous`, the text of the file on the
+/// card: it keeps the import hash, the user modes of the mode dial, and the
+/// recipes of `previous` that `readRecipeFile` leaves out
+/// (`grkit_core::recipes::write_recipe_file`). Throws for a recipe that the
+/// camera cannot hold, or for more recipes than the file holds.
 #[wasm_bindgen(js_name = writeRecipeFile)]
 pub fn write_recipe_file(json: &str, family: &str, previous: &str) -> Result<String, JsError> {
     let family =
@@ -791,12 +789,6 @@ pub fn write_recipe_file(json: &str, family: &str, previous: &str) -> Result<Str
         .and_then(|recipes| Ok((recipes, family?)))
         .map_err(anyhow::Error::from)
         .and_then(|(recipes, family)| recipes::write_recipe_file(&recipes, family, previous))
-        .and_then(|file| {
-            Ok(serde_json::to_string(&serde_json::json!({
-                "text": file.text,
-                "recipes": file.recipes,
-            }))?)
-        })
         .map_err(js_error)
 }
 

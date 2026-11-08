@@ -276,6 +276,10 @@ static void icon_header(u32 icon, u32 pixels) { store(icon, pixels); }
 static int test_monochrome;
 static int monochrome_camera(void) { return test_monochrome; }
 #include "install_modules.h"
+/* The value behind generated recipe IDs (runtime/recipe_id.h), which a test
+   sets so that it knows each candidate. */
+static u32 test_id_source;
+#define RECIPE_ID_SOURCE(high) (*(high) = 0U, test_id_source)
 #include "install_recipes.h"
 /* installer.c also reads STATE.TMP and the state of GRKit 1.2. */
 static void read_state(void)
@@ -1285,8 +1289,8 @@ static void recipe_file_of(u32 header, char *out, u32 size)
                                     GRKIT_RECIPE_NAME_KEY_BASE + w * GRKIT_RECIPE_KEY_STRIDE + slot, value);
         }
     }
-    /* The import hash, the IDs, the user modes, and the next ID. */
-    for (u32 t = 0; GRKIT_HOST_RECIPE_IMPORTED + 4 * t <= GRKIT_HOST_RECIPE_NEXT_ID; ++t) {
+    /* The import hash, the IDs, and the user modes. */
+    for (u32 t = 0; GRKIT_HOST_RECIPE_IMPORTED + 4 * t < GRKIT_HOST_RECIPE_DIAL + 4 * GRKIT_RECIPE_DIAL_POSITIONS; ++t) {
         u32 value = word(header + GRKIT_HOST_RECIPE_IMPORTED + 4 * t);
         if (value) at += (u32)snprintf(out + at, size - at, "%u\r\n%u\r\n", GRKIT_RECIPE_IMPORTED_KEY + t, value);
     }
@@ -1294,8 +1298,8 @@ static void recipe_file_of(u32 header, char *out, u32 size)
 }
 /* Each recipe keeps its ID when INSTALL moves the recipes that are on
    first. A recipe without an ID, or with the ID of an earlier recipe, gets
-   a new one above every ID, and the user modes of the mode dial stay as the
-   file has them. */
+   a generated one that no recipe has and no user mode names, and the user
+   modes of the mode dial stay as the file has them. */
 static void recipes_keep_their_ids_and_the_dial(void)
 {
     const u32 header = MEMORY_BASE + 0xc0000U;
@@ -1303,9 +1307,12 @@ static void recipes_keep_their_ids_and_the_dial(void)
     u32 at = 0;
     /* A, off, with ID 7; B with ID 3; C with ID 3 too. The words differ in
        their number. U1 applies B, U2 turns GRKit off, U3 names a recipe
-       that is gone. The next ID, 5, is below ID 7. */
+       that is gone, whose ID is the first candidate. */
+    test_id_source = 0x5678U;
+    const u32 c0 = recipe_id_candidate(0), c1 = recipe_id_candidate(1);
+    assert(c0 && c1 && c0 != c1 && c1 <= GRKIT_RECIPE_ID_MAX && c1 != 3 && c1 != 7);
     const u32 number[3] = {1, 2, 3}, id[3] = {7, 3, 3}, off[3] = {GRKIT_RECIPE_OFF, 0, 0};
-    const u32 dial[GRKIT_RECIPE_DIAL_POSITIONS] = {3, GRKIT_RECIPE_DIAL_OFF, 99};
+    const u32 dial[GRKIT_RECIPE_DIAL_POSITIONS] = {3, GRKIT_RECIPE_DIAL_OFF, c0};
     for (u32 slot = 0; slot < 3; ++slot) {
         at += (u32)snprintf(text + at, sizeof text - at, "%u\r\n%u\r\n%u\r\n%u\r\n", GRKIT_RECIPE_KEY_BASE + slot,
                             0x08000001U | number[slot] << GRKIT_RECIPE_NUMBER_SHIFT, GRKIT_RECIPE_ID_KEY_BASE + slot, id[slot]);
@@ -1315,20 +1322,19 @@ static void recipes_keep_their_ids_and_the_dial(void)
     }
     for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u)
         at += (u32)snprintf(text + at, sizeof text - at, "%u\r\n%u\r\n", GRKIT_RECIPE_DIAL_KEY_BASE + u, dial[u]);
-    snprintf(text + at, sizeof text - at, "%u\r\n%u\r\n", GRKIT_RECIPE_NEXT_ID_KEY, 5U);
     reset();
     for (u32 k = 0; k < GRKIT_HOST_HEADER_SIZE; k += 4) store(header + k, 0);
     add_text(RECIPES_STATE_PATH, text);
     install_recipes(header, GRKIT_RCP_FAMILY_GR3);
     assert(recipes_count == 3 && word(header + GRKIT_HOST_RECIPE_CHANGES) == 1);
-    /* B, C, then A, each with its ID: C gets 8, above A's 7. */
-    const u32 order[3] = {2, 3, 1}, ids[3] = {3, 8, 7};
+    /* B, C, then A, each with its ID: C gets the second candidate, because
+       U3 names the first. */
+    const u32 order[3] = {2, 3, 1}, ids[3] = {3, c1, 7};
     for (u32 slot = 0; slot < 3; ++slot) {
         assert((recipe_word_at(header, slot, 0) >> GRKIT_RECIPE_NUMBER_SHIFT & GRKIT_RECIPE_NUMBER_MAX) == order[slot]);
         assert(word(header + GRKIT_HOST_RECIPE_IDS + 4 * slot) == ids[slot]);
     }
     assert(!word(header + GRKIT_HOST_RECIPE_IDS + 4 * 3));
-    assert(word(header + GRKIT_HOST_RECIPE_NEXT_ID) == 9);
     for (u32 u = 0; u < GRKIT_RECIPE_DIAL_POSITIONS; ++u) assert(word(header + GRKIT_HOST_RECIPE_DIAL + 4 * u) == dial[u]);
     /* The next start reads the file that the loader saved: nothing changes. */
     char saved[2048];
@@ -1337,8 +1343,7 @@ static void recipes_keep_their_ids_and_the_dial(void)
     for (u32 k = 0; k < GRKIT_HOST_HEADER_SIZE; k += 4) store(header + k, 0);
     add_text(RECIPES_STATE_PATH, saved);
     install_recipes(header, GRKIT_RCP_FAMILY_GR3);
-    assert(!word(header + GRKIT_HOST_RECIPE_CHANGES) && word(header + GRKIT_HOST_RECIPE_NEXT_ID) == 9);
-    assert(word(header + GRKIT_HOST_RECIPE_IDS + 4) == 8);
+    assert(!word(header + GRKIT_HOST_RECIPE_CHANGES) && word(header + GRKIT_HOST_RECIPE_IDS + 4) == c1);
 }
 static void the_recipes_restore_and_import_once(void)
 {
@@ -1363,9 +1368,10 @@ static void the_recipes_restore_and_import_once(void)
     assert(recipes_count == 1 && recipes_import == RECIPES_IMPORT_NONE);
     assert(recipe_word_at(header, 0, 0) == 0x08000001U && recipe_word_at(header, 0, 2) == 7U);
     assert(word(header + GRKIT_HOST_RECIPE_NAMES) == ('M' | 'i' << 7 | 'n' << 14 | 'e' << 21));
-    /* A file from before the IDs: "Mine" gets ID 1, and the loader saves the
-       file with it. */
-    assert(word(header + GRKIT_HOST_RECIPE_IDS) == 1 && word(header + GRKIT_HOST_RECIPE_NEXT_ID) == 2);
+    /* A file from before the IDs: "Mine" gets a generated ID, and the loader
+       saves the file with it. */
+    test_id_source = 0;
+    assert(word(header + GRKIT_HOST_RECIPE_IDS) == recipe_id_candidate(0));
     assert(word(header + GRKIT_HOST_RECIPE_CHANGES) == 1);
     /* A package library: its GR III recipe joins after "Mine", its GR IV
        and GR IV Monochrome recipes do not, and the loader saves the file
@@ -1374,9 +1380,9 @@ static void the_recipes_restore_and_import_once(void)
     install_recipes(header, GRKIT_RCP_FAMILY_GR3);
     assert(recipes_import == RECIPES_IMPORT_READ && recipes_added == 1 && recipes_other == 2 && recipes_count == 2);
     assert(word(header + GRKIT_HOST_RECIPE_CHANGES) == 1);
-    /* The added recipe gets the next ID, and "Mine" keeps its own. */
-    assert(word(header + GRKIT_HOST_RECIPE_IDS) == 1 && word(header + GRKIT_HOST_RECIPE_IDS + 4) == 2);
-    assert(word(header + GRKIT_HOST_RECIPE_NEXT_ID) == 3);
+    /* The added recipe gets another ID than "Mine". */
+    assert(word(header + GRKIT_HOST_RECIPE_IDS) == recipe_id_candidate(0) &&
+           word(header + GRKIT_HOST_RECIPE_IDS + 4) == recipe_id_candidate(1));
     u32 hash = word(header + GRKIT_HOST_RECIPE_IMPORTED);
     assert(hash && hash <= RECIPE_VALUE_MAX);
     char name[GRKIT_RECIPE_NAME_CHARS + 1];

@@ -11,6 +11,7 @@ import {
   packageLibraries,
   sameRecipes,
   saveLibrary,
+  withIds,
   type Family,
   type Recipe,
 } from './recipes';
@@ -86,7 +87,9 @@ export function useRecipeLibrary({
   const library = libraries[family];
   const packageRecipes = inPackage ? library : null;
 
-  function changeLibrary(of: Family, next: Recipe[]) {
+  // Each change goes through here, so each recipe of a library has its own ID (`withIds`).
+  function changeLibrary(of: Family, recipes: Recipe[]) {
+    const next = withIds(recipes);
     librariesNow.current = { ...librariesNow.current, [of]: next };
     setLibraries(librariesNow.current);
     saveLibrary(storage(), of, next);

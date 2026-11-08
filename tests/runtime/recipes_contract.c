@@ -126,6 +126,10 @@ static void setting_store(volatile u32 *h, u32 handle, u32 value)
         module_table[SETTINGS_ENTRY(handle) + 1] = value;
     }
 }
+/* The value behind generated recipe IDs (runtime/recipe_id.h), which a test
+   sets so that it knows each candidate. */
+static u32 test_id_source;
+#define RECIPE_ID_SOURCE(high) (*(high) = 0U, test_id_source)
 #include "native_look.h"
 #include "recipes.h"
 
@@ -288,12 +292,18 @@ static void recipes_that_are_off_stay_for_the_site(void)
 }
 
 /* Each recipe keeps its ID and its name when Save and Delete move the
-   recipes, and a new recipe takes the next ID, which only grows. */
+   recipes. A new recipe takes the first generated candidate that no recipe
+   has and that no user mode of the mode dial names. */
 static void each_recipe_keeps_its_id(void)
 {
     reset();
+    test_id_source = 0x1234U;
+    const u32 c0 = recipe_id_candidate(0), c1 = recipe_id_candidate(1), c2 = recipe_id_candidate(2),
+              c3 = recipe_id_candidate(3);
+    assert(c0 && c1 && c2 && c3 && c0 != c1 && c1 != c2 && c2 != c3 && c0 != c2 && c0 != c3 && c1 != c3);
+    assert(c0 <= GRKIT_RECIPE_ID_MAX && c1 <= GRKIT_RECIPE_ID_MAX && c2 <= GRKIT_RECIPE_ID_MAX && c3 <= GRKIT_RECIPE_ID_MAX);
     select_effect(0);
-    assert(recipe_save(header) == 0 && *recipe_id_at(header, 0) == 1);
+    assert(recipe_save(header) == 0 && *recipe_id_at(header, 0) == c0);
     /* Two recipes that are off, from the site, with IDs 40 and 41. */
     for (u32 slot = 1; slot < 3; ++slot) {
         recipe_at(header, slot)[0] = RECIPE_USED | RECIPE_LOOK_OFF;
@@ -301,22 +311,20 @@ static void each_recipe_keeps_its_id(void)
         *recipe_id_at(header, slot) = 39 + slot;
     }
     recipe_name_set(header, 2, (const u8 *)"B");
-    /* A save goes after the recipe that is on: the others move down with
-       their IDs and names. */
+    /* The same source: recipe 0 has the first candidate and U1 names the
+       second, so the save takes the third. It goes after the recipe that is
+       on, and the others move down with their IDs and names. */
+    header[GRKIT_HOST_RECIPE_DIAL / 4] = c1;
     select_effect(1);
-    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == 2);
+    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == c2);
     assert(*recipe_id_at(header, 2) == 40 && *recipe_id_at(header, 3) == 41 && recipe_name_char(header, 3, 0) == 'B');
-    assert(header[GRKIT_HOST_RECIPE_NEXT_ID / 4] == 3);
     /* Delete moves them up again and clears the last slot. */
     recipe_delete(header, 0);
-    assert(*recipe_id_at(header, 0) == 2 && *recipe_id_at(header, 1) == 40 && *recipe_id_at(header, 2) == 41);
+    assert(*recipe_id_at(header, 0) == c2 && *recipe_id_at(header, 1) == 40 && *recipe_id_at(header, 2) == 41);
     assert(recipe_name_char(header, 2, 0) == 'B' && !*recipe_id_at(header, 3) && !recipe_name_length(header, 3));
-    /* A deleted ID does not come back. */
-    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == 3);
-    /* The largest ID stays the next one. */
-    header[GRKIT_HOST_RECIPE_NEXT_ID / 4] = GRKIT_RECIPE_ID_MAX;
-    assert(recipe_save(header) == 2 && *recipe_id_at(header, 2) == GRKIT_RECIPE_ID_MAX);
-    assert(header[GRKIT_HOST_RECIPE_NEXT_ID / 4] == GRKIT_RECIPE_ID_MAX);
+    /* U2 names the deleted recipe: its ID does not come back. */
+    header[GRKIT_HOST_RECIPE_DIAL / 4 + 1] = c0;
+    assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == c3);
 }
 
 /* Apply writes the Fn adjustments before it selects the effect, counts the

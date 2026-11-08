@@ -6,7 +6,7 @@ use super::{check_library, Family, Recipe, LIBRARY_MAX, ON_MAX, WORD_LIMIT};
 use crate::abi::{RECIPE_DIAL_POSITIONS, RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS};
 use crate::runtime::{
     recipe_key, RECIPE_DIAL_FOLLOW, RECIPE_DIAL_KEY_BASE, RECIPE_DIAL_OFF, RECIPE_ID_KEY_BASE,
-    RECIPE_ID_MAX, RECIPE_IMPORTED_KEY, RECIPE_NEXT_ID_KEY,
+    RECIPE_ID_MAX, RECIPE_IMPORTED_KEY,
 };
 use anyhow::{ensure, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
@@ -71,19 +71,9 @@ pub fn read_recipe_file(text: &str, family: Family) -> Vec<Recipe> {
         .collect()
 }
 
-/// A recipe file that `write_recipe_file` made.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RecipeFile {
-    /// The text of the file.
-    pub text: String,
-    /// The recipes that the file holds for the site, in the order that the
-    /// write had them, each with its ID.
-    pub recipes: Vec<Recipe>,
-}
-
-/// The recipe file for `recipes` of a camera of `family`, which replaces the
-/// file text `previous`. The recipes are in the order of the camera: those
-/// that are on, then those that are off, each in their order.
+/// The text of the recipe file for `recipes` of a camera of `family`, which
+/// replaces the file text `previous`. The recipes are in the order of the
+/// camera: those that are on, then those that are off, each in their order.
 ///
 /// The file keeps from `previous` what the site does not edit:
 ///
@@ -95,10 +85,11 @@ pub struct RecipeFile {
 /// - The user modes of the mode dial. A user mode whose recipe the file no
 ///   longer holds follows (`runtime::RECIPE_DIAL_FOLLOW`).
 ///
-/// A recipe keeps its ID. A recipe without one, or with the ID of an earlier
-/// recipe, gets the next ID, which stays above each ID that `previous` gave,
-/// so a deleted recipe never gets the references of another.
-pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> Result<RecipeFile> {
+/// Each recipe keeps its ID, which the site generates when the recipe joins
+/// its library. The file holds each ID once: a recipe without an ID, or with
+/// one that an earlier recipe of the file has, goes without one, and INSTALL
+/// generates it at the next start.
+pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> Result<String> {
     check_library(recipes)?;
     let values = file_values(previous);
     let value = |key: u32| values.get(&key).copied().unwrap_or(0);
@@ -112,33 +103,16 @@ pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> 
         kept.len(),
         LIBRARY_MAX - kept.len()
     );
-
-    // The IDs: the next ID is above each ID of `previous` and of the write.
-    let mut written = recipes.to_vec();
-    let mut next = value(RECIPE_NEXT_ID_KEY).clamp(1, RECIPE_ID_MAX);
-    let held = file_records(previous).into_iter().map(|record| record.id);
-    for id in written.iter().map(|recipe| recipe.id).chain(held) {
-        if (1..=RECIPE_ID_MAX).contains(&id) && id >= next {
-            next = (id + 1).min(RECIPE_ID_MAX);
-        }
-    }
     let mut taken = BTreeSet::new();
-    let mut give = |id: &mut u32| {
-        if !(1..=RECIPE_ID_MAX).contains(id) || !taken.insert(*id) {
-            *id = next;
-            taken.insert(next);
-            next = (next + 1).min(RECIPE_ID_MAX);
+    let mut once = |id: u32| {
+        if (1..=RECIPE_ID_MAX).contains(&id) && taken.insert(id) {
+            id
+        } else {
+            0
         }
     };
-    for recipe in &mut written {
-        give(&mut recipe.id);
-    }
-    for record in &mut kept {
-        give(&mut record.id);
-    }
-
-    let mut records = Vec::with_capacity(written.len() + kept.len());
-    for recipe in &written {
+    let mut records = Vec::with_capacity(recipes.len() + kept.len());
+    for recipe in recipes {
         let words = recipe
             .words()
             .with_context(|| format!("Recipe {}", recipe.name))?;
@@ -149,8 +123,11 @@ pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> 
         records.push(FileRecord {
             words,
             name,
-            id: recipe.id,
+            id: once(recipe.id),
         });
+    }
+    for record in &mut kept {
+        record.id = once(record.id);
     }
     let mut on = records.iter().filter(|record| record.on()).count();
     for record in &mut kept {
@@ -190,11 +167,7 @@ pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> 
             if held { assignment } else { RECIPE_DIAL_FOLLOW },
         );
     }
-    put(RECIPE_NEXT_ID_KEY, next);
-    Ok(RecipeFile {
-        text,
-        recipes: written,
-    })
+    Ok(text)
 }
 
 /// The key and value pairs of a state file text.
