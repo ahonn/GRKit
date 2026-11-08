@@ -90,7 +90,7 @@ export interface Recipe {
 }
 
 /** The largest recipe ID (`grkit_core::runtime::RECIPE_ID_MAX`). */
-export const RECIPE_ID_MAX = 2 ** 29 - 2;
+export const RECIPE_ID_MAX = 2 ** 29 - 3;
 
 /** A generated recipe ID, 1 to `RECIPE_ID_MAX`, that `taken` does not hold. */
 export function newRecipeId(taken: ReadonlySet<number>): number {
@@ -180,13 +180,19 @@ export async function readRecipeFile(text: string, family: Family): Promise<Reci
 
 /**
  * What each user mode of the mode dial does, U1 to U3 (`grkit_core::recipes::Dial`): it follows
- * the dial (`DIAL_FOLLOW`), turns GRKit off (`DIAL_OFF`), or applies the recipe with that ID.
+ * the dial (`DIAL_FOLLOW`), applies the settings that the camera saved in it (`DIAL_SAVED`), turns
+ * GRKit off (`DIAL_OFF`), or applies the recipe with that ID.
  */
 export type Dial = readonly number[];
 
 export const DIAL_FOLLOW = 0;
-/** `grkit_core::runtime::RECIPE_DIAL_OFF`: one past the largest recipe ID. */
-export const DIAL_OFF = RECIPE_ID_MAX + 1;
+/**
+ * `grkit_core::runtime::RECIPE_DIAL_SAVED`: one past the largest recipe ID. Only the camera saves
+ * settings in a user mode, so the site keeps this value but cannot give it.
+ */
+export const DIAL_SAVED = RECIPE_ID_MAX + 1;
+/** `grkit_core::runtime::RECIPE_DIAL_OFF`: two past the largest recipe ID. */
+export const DIAL_OFF = RECIPE_ID_MAX + 2;
 /** The mode dial of a card without a recipe file: each user mode follows. */
 export const NO_DIAL: Dial = [DIAL_FOLLOW, DIAL_FOLLOW, DIAL_FOLLOW];
 
@@ -207,10 +213,10 @@ export function dialChoices(library: readonly Recipe[]): Recipe[] {
 /**
  * What each user mode of `dial` does with the recipes of `library`, as the camera shows it: a user
  * mode whose recipe the library does not have on follows. A write of the recipe file also lets it
- * follow (`writeRecipeFile`).
+ * follow (`writeRecipeFile`). A user mode with saved settings keeps them.
  */
 export function shownDial(dial: Dial, library: readonly Recipe[]): Dial {
-  return dial.map((value) => shownValue(value, library));
+  return dial.map((value) => (value === DIAL_SAVED ? value : shownValue(value, library)));
 }
 
 function shownValue(value: number, library: readonly Recipe[]): number {
@@ -226,7 +232,10 @@ export type DialChoice = readonly (number | null)[];
 /** The choice that changes nothing on the camera. */
 export const KEEP_DIAL: DialChoice = [null, null, null];
 
-/** `choice` as the camera would show it after the import: a recipe that is not on follows. */
+/**
+ * `choice` as the camera would show it after the import: a recipe that is not on follows, and so
+ * does `DIAL_SAVED`, which a package cannot give.
+ */
 export function shownChoice(choice: DialChoice, library: readonly Recipe[]): DialChoice {
   return choice.map((value) => (value === null ? null : shownValue(value, library)));
 }

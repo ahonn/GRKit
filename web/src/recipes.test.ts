@@ -22,6 +22,7 @@ import {
   withIds,
   DIAL_FOLLOW,
   DIAL_OFF,
+  DIAL_SAVED,
   dialChoices,
   choiceOfLibrary,
   KEEP_DIAL,
@@ -254,8 +255,18 @@ describe('mode dial', () => {
     expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
   });
 
-  it('marks GRKit Off past the recipe IDs', () => {
+  it('keeps the settings that the camera saved in a user mode on a card only', () => {
+    // A card shows them and writes them back; a ZIP package cannot give them, so they follow.
+    expect(shownDial([DIAL_SAVED, 5, DIAL_FOLLOW], library)).toEqual([DIAL_SAVED, 5, DIAL_FOLLOW]);
+    expect(shownDial([DIAL_SAVED, DIAL_SAVED, DIAL_SAVED], [])).toEqual([DIAL_SAVED, DIAL_SAVED, DIAL_SAVED]);
+    expect(shownChoice([DIAL_SAVED, null, 5], library)).toEqual([DIAL_FOLLOW, null, 5]);
+    expect(libraryDial([DIAL_SAVED, null, null], library)).toEqual(['follow', 'keep', 'keep']);
+  });
+
+  it('marks GRKit Off and the saved settings past the recipe IDs', () => {
     expect(DIAL_OFF).toBe(2 ** 29 - 1);
+    expect(DIAL_SAVED).toBe(2 ** 29 - 2);
+    expect(RECIPE_ID_MAX).toBe(2 ** 29 - 3);
     expect(DIAL_OFF).toBeGreaterThan(RECIPE_ID_MAX);
     expect(sameDial([1, 2, 3], [1, 2, 3])).toBe(true);
     expect(sameDial([1, 2, 3], [1, 2, 4])).toBe(false);
