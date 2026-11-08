@@ -1,4 +1,4 @@
-//! Reproduce the Glow, Grain, Date, Framing, and Guides icons and the viewfinder status icons.
+//! Reproduce the Glow, Grain, Date, Framing, Guides, and Border icons and the viewfinder status icons.
 //! Run from the repository root with `cargo run -p grkit-core --example module-icons`.
 use ab_glyph::{point, Font, FontRef, PxScale, ScaleFont};
 use anyhow::{ensure, Context, Result};
@@ -645,6 +645,42 @@ fn date(order: &str, with_time: bool) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
+// Border: a print border painted over the edge of the photo. The diagram is a
+// photo with the band in white or black inside a light outline. The gray fill
+// keeps a black band visible against the tile background.
+const BORDER_FILL: u8 = 110;
+
+fn border_diagram(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], ink: u8, band: usize) {
+    fill_rect(pixels, [left, top, right, bottom], DIAGRAM_FRAME);
+    fill_rect(pixels, [left + 1, top + 1, right - 1, bottom - 1], ink);
+    fill_rect(
+        pixels,
+        [
+            left + 1 + band,
+            top + 1 + band,
+            right - 1 - band,
+            bottom - 1 - band,
+        ],
+        BORDER_FILL,
+    );
+}
+
+// The band is 1 pixel for 3% and 2 pixels for 6% of the 28-pixel photo, and
+// the caption gives the width.
+fn border_tile(ink: u8, band: usize, label: &str) -> Result<Vec<u8>> {
+    let mut pixels = list_tile();
+    border_diagram(&mut pixels, [5, 5, 35, 21], ink, band);
+    draw_text(
+        &mut pixels,
+        label,
+        CAPTION_SIZE,
+        CAPTION_BASELINE,
+        21.0,
+        36.0,
+    )?;
+    Ok(pixels)
+}
+
 fn main() -> Result<()> {
     let modules = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules");
     for (bloom, files) in [
@@ -748,6 +784,20 @@ fn main() -> Result<()> {
             &guides_tile(guide, label)?,
         )?;
     }
+    let mut root = list_tile();
+    border_diagram(&mut root, [7, 11, 33, 29], 255, 2);
+    save(&modules.join("border/tiles/0-module.png"), &root)?;
+    for (file, ink, band, label) in [
+        ("1-white-thin.png", 255, 1, "3%"),
+        ("2-white-wide.png", 255, 2, "6%"),
+        ("3-black-thin.png", 0, 1, "3%"),
+        ("4-black-wide.png", 0, 2, "6%"),
+    ] {
+        save(
+            &modules.join("border/tiles").join(file),
+            &border_tile(ink, band, label)?,
+        )?;
+    }
     // Viewfinder status icons (module.toml `[[indicators]]`).
     for (level, file) in [
         "vf-1-weak.png",
@@ -779,5 +829,14 @@ fn main() -> Result<()> {
             )?;
         }
     }
+    // The sign of Border: the band of a photo, as a frame.
+    let mut m = marks();
+    mark(&mut m, 255, |x, y| {
+        let (left, top, right, bottom) = (7.0, 5.0, 33.0, 22.0);
+        let inside = x >= left && x < right && y >= top && y < bottom;
+        let inner = x >= left + 3.0 && x < right - 3.0 && y >= top + 3.0 && y < bottom - 3.0;
+        inside && !inner
+    });
+    save(&modules.join("border/tiles/vf-border.png"), &outlined(&m))?;
     Ok(())
 }

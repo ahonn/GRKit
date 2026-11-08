@@ -1,0 +1,44 @@
+# Border: a white or black edge painted over each recorded picture, as a
+# print with a border. The edge covers the picture; nothing is added outside
+# it. Thin is 3% of the picture width, wide 6%. Off by default.
+id = "BORDER"
+version = 1
+# The default place in ADJ and in MENU: after Glow (45), before Grain (50).
+order = 48
+sources = ["border.c"]
+# Tile n shows style n. Tile 0 is the module tile, for Off at the root. Tile
+# 5 is the viewfinder status icon.
+tiles = [
+    "tiles/0-module.png",
+    "tiles/1-white-thin.png",
+    "tiles/2-white-wide.png",
+    "tiles/3-black-thin.png",
+    "tiles/4-black-wide.png",
+    "tiles/vf-border.png",
+]
+
+# 0 Off, 1 white 3%, 2 white 6%, 3 black 3%, 4 black 6%.
+[[settings]]
+key = "STYLE"
+values = 5
+saved = true
+public = true
+
+[page]
+setting = "STYLE"
+off_row = true
+# The Options row in MENU turns each style on or off in ADJ.
+options = true
+
+# After the color of the Film Look and before the marks, so the date prints
+# over the border as a data back prints over a print.
+[[filters]]
+apply = "border_apply"
+setting = "STYLE"
+stage = "frame"
+
+[[indicators]]
+id = "border"
+placement = "status_row"
+enabled = { setting = "STYLE", not_equals = 0 }
+icon = { tile = 5 }

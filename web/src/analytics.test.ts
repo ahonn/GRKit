@@ -20,6 +20,7 @@ describe('downloadProps', () => {
       guides: 'off',
       dateStamp: 'off',
       glow: 'off',
+      border: 'off',
       grain: 'off',
     });
   });
