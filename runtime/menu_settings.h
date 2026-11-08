@@ -84,10 +84,14 @@ static u32 menu_return(volatile u32 *h) {
 #define SETTINGS_OPEN_ROW 24U
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
+/* The page of Enable at Start in the GRKit section of MENU, which has no
+   ADJ page (runtime/manage.h: start_settings). */
+#define START_PAGE (LISTED_PAGE+1U)
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {
     if(module==LISTED_PAGE) return listed_settings;
     if(module==SWITCH_MODULE) return switch_settings;
+    if(module==START_PAGE) return start_settings;
     if(module>=MODULE_TOTAL) return 0;
     if(one) { menu_page(h,module); return choice_one; }
     return menu_page(h,module)->settings;
@@ -783,7 +787,7 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
                    manage_name(h,listed(h)));
     else
     descriptor(block+SETTINGS_LABELS/4,module==MANAGE_MODULE ? manage_title(h) :
-               module==SWITCH_MODULE ? grkit_title : menu_page(h,module)->title(h));
+               module==SWITCH_MODULE || module==START_PAGE ? grkit_title : menu_page(h,module)->title(h));
     for(i=0;i<SETTINGS_VIEW_SLOTS*3;++i) block[SETTINGS_VIEWS/4+i]=0;
     h[GRKIT_HOST_SETTINGS/4]=(module+1)|(one ? SETTINGS_ONE : 0);
 }

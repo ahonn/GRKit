@@ -744,9 +744,10 @@ static void install_writes_the_settings_and_the_contexts(void)
     save_state(pairs, sizeof pairs / sizeof pairs[0] / 2);
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, the
-       switch, then the saved values that no setting takes: CORE.GRAIN,
-       which no module uses, and unknown keys, including a value 0. */
-    assert(word(ARRAY_AT) == 14 && word(ARRAY_AT + 4) == 0);
+       switch and Enable at Start, then the saved values that no setting
+       takes: CORE.GRAIN, which no module uses, and unknown keys, including a
+       value 0. */
+    assert(word(ARRAY_AT) == 15 && word(ARRAY_AT + 4) == 0);
     expect_setting(0, id_of("GUIDES.STYLE"), 0, 6);
     expect_setting(1, id_of("GUIDES.COLOR"), 0, 3);
     expect_setting(2, 0, 0, 2);
@@ -758,12 +759,13 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(8, id_of("CORE.POS.DATE"), 0, MANAGE_MODULES + 1);
     expect_setting(9, id_of("CORE.ROWS.DATE"), 5, 1U << MANAGE_OPTION_VALUES);
     expect_setting(10, id_of("CORE.OFF"), 0, 2);
-    expect_setting(11, 12345, 7, 8);
-    expect_setting(12, 23456, 0, 1);
-    expect_setting(13, id_of("CORE.GRAIN"), 1, 2);
+    expect_setting(11, id_of("CORE.START"), MANAGE_START_KEEP, MANAGE_START_VALUES);
+    expect_setting(12, 12345, 7, 8);
+    expect_setting(13, 23456, 0, 1);
+    expect_setting(14, id_of("CORE.GRAIN"), 1, 2);
     /* The contexts: the first setting, the count, reserved, then the handle
        of each used setting. */
-    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(14);
+    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(15);
     assert(word(context) == 0 && word(context + 4) == 3 && word(context + 8) == 0);
     assert(word(context + 12) == GRKIT_CORE_ASPECT && word(context + 16) == GRM_NO_SETTING);
     u32 date_context = context + 4 * CONTEXT_WORDS(2);
@@ -778,6 +780,7 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert((needed_points & core_setting_points[1]) == core_setting_points[1]);
     assert(word(module_list + MANAGE_SETTINGS) == 4);
     assert(word(module_list + MANAGE_SWITCH) == 10 + 1);
+    assert(word(module_list + MANAGE_START) == 11 + 1);
 }
 /* Defaults initialize both saved and transient settings. Explicit saved zero
    survives a restart and a period without the module installed. */
@@ -980,6 +983,52 @@ static void the_switch_stops_each_module(void)
     assert(install() == 0);
     assert(!all_off && word(services_block + SERVICES_SUSPENDED) == 1);
     assert(capabilities_running == 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE));
+}
+/* Enable at Start decides the switch at each start. `pairs` is STATE.TXT,
+   or 0 for a card without it. The switch of the start, the modules that load
+   stopped, the switch that installer.c restores (apply_state), and the value
+   of Enable at Start. */
+static void start_with(const u32 *pairs, u32 n, u32 off, u32 start)
+{
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){.id = "FIRST", .order = 1, .uses = {"CORE.ASPECT"}});
+    add_module(PACKAGE_MODULES_PATH, "SECOND.GRM", &(struct spec){.id = "SECOND", .order = 2, .uses = {"CORE.GRAIN"}});
+    if (pairs) save_state(pairs, n);
+    assert(install() == 0);
+    assert(all_off == off && module_status[0] == 0 && module_status[1] == 0);
+    assert(word(services_block + SERVICES_SUSPENDED) == (off ? 2U : 0U));
+    assert(capabilities_running == (off ? 0U : capabilities_used));
+    u32 handle = word(module_list + MANAGE_SWITCH) - 1, value;
+    expect_setting(handle, id_of("CORE.OFF"), off, 2);
+    assert(state_setting_value(&saved_state, id_of("CORE.OFF"), 0, 2) == off);
+    assert(word(module_list + MANAGE_START) == handle + 2);
+    expect_setting(handle + 1, id_of("CORE.START"), start, MANAGE_START_VALUES);
+    assert(state_setting_value(&saved_state, id_of("CORE.START"), start, MANAGE_START_VALUES) == start);
+    /* SCAN and INSTALL read the same file, so a second start agrees. */
+    assert(state_value(&saved_state, id_of("CORE.OFF"), &value) ? value == off : !off);
+}
+static void enable_at_start_decides_the_switch(void)
+{
+    const u32 off = id_of("CORE.OFF"), start = id_of("CORE.START"), other = id_of("CORE.OFF.FIRST");
+    /* A new camera, without a state file, starts On, and Enable at Start
+       is On. */
+    start_with(0, 0, 0, MANAGE_START_ON);
+    /* A camera of an earlier GRKit has saved pairs and no Enable at Start:
+       Keep Last, so its switch stays as it was. */
+    start_with((const u32[]){off, 1, other, 0}, 2, 1, MANAGE_START_KEEP);
+    start_with((const u32[]){off, 0, other, 0}, 2, 0, MANAGE_START_KEEP);
+    start_with((const u32[]){other, 0}, 1, 0, MANAGE_START_KEEP);
+    /* On starts with the switch On, also after the switch was Off. */
+    start_with((const u32[]){off, 1, start, MANAGE_START_ON}, 2, 0, MANAGE_START_ON);
+    /* Off starts with the switch Off: each module loads stopped, also
+       without a saved switch. */
+    start_with((const u32[]){off, 0, start, MANAGE_START_OFF}, 2, 1, MANAGE_START_OFF);
+    start_with((const u32[]){start, MANAGE_START_OFF}, 1, 1, MANAGE_START_OFF);
+    /* Keep Last keeps the saved switch. */
+    start_with((const u32[]){off, 1, start, MANAGE_START_KEEP}, 2, 1, MANAGE_START_KEEP);
+    start_with((const u32[]){off, 0, start, MANAGE_START_KEEP}, 2, 0, MANAGE_START_KEEP);
+    /* A value out of range is no value: the default of a saved file. */
+    start_with((const u32[]){off, 1, start, MANAGE_START_VALUES}, 2, 1, MANAGE_START_KEEP);
 }
 /* Conditions in two descriptors can share one array. Relocation must read
    original local handles each time, not relocate an already global handle. */
@@ -1598,6 +1647,7 @@ static void *run(void *unused)
     a_color_only_module_needs_a_color_camera();
     install_group_page();
     the_switch_stops_each_module();
+    enable_at_start_decides_the_switch();
     layer_conditions_resolve_shared_and_optional_settings();
     layers_follow_their_order_and_filters_their_stage();
     the_module_list_shows_each_result();
