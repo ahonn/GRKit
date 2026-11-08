@@ -93,7 +93,9 @@ static void write_report(int status)
         u32 result = module_status[i];
         if (!result && (module_usable >> i & 1))
             say(module_off[i] ? "  loaded, stopped: Enable is Off in the GRKit section of MENU\r\n" :
-                all_off ? "  loaded, stopped: Enable GRKit is Off in the GRKit section of MENU\r\n" : "  loaded\r\n");
+                !all_off ? "  loaded\r\n" :
+                start_choice == MANAGE_START_OFF ? "  loaded, stopped: Enable at Start is Off in the GRKit section of MENU\r\n" :
+                "  loaded, stopped: Enable GRKit is Off in the GRKit section of MENU\r\n");
         else if (result == MANAGE_SAFE) say("  not loaded: safe mode\r\n");
         else if (result == GRM_COLOR_ONLY) say("  not loaded: it needs a camera with a color sensor\r\n");
         else {
