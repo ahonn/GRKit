@@ -178,7 +178,31 @@
 #define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
-#define SERVICES_SIZE (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+/* The entry of the menu component for SYSTEM_READY (runtime/menu.c:
+   menu_ready), which INSTALL writes: services_ready calls it in the App
+   task, as the components link apart. */
+#define SERVICES_CORE_READY (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
+/* The mode dial (runtime/mode_dial.h): the firmware timer of the dial (0
+   when none runs), the number of tries while the firmware loads the native
+   settings, the user mode that the core acted on last (0 for another
+   position), and the bound user mode that applies (0 in the base state).
+   Then the copy of the base state: the value of each capability; the number
+   of module settings and the value of each; and the number of effects, the
+   Fn adjustments of each (base-9 digits, as a recipe holds them), and its
+   Toning byte. */
+#define SERVICES_DIAL (SERVICES_CORE_READY + 4U)
+#define DIAL_TIMER 0U
+#define DIAL_TRY 4U
+#define DIAL_AT 8U
+#define DIAL_ACTIVE 12U
+#define DIAL_BASE_CORE 16U
+#define DIAL_BASE_COUNT (DIAL_BASE_CORE + 4U * GRKIT_CORE_SETTING_COUNT)
+#define DIAL_BASE_SETTINGS (DIAL_BASE_COUNT + 4U)
+#define DIAL_BASE_RECORDS (DIAL_BASE_SETTINGS + 4U * GRKIT_MODULE_SETTINGS_MAX)
+#define DIAL_BASE_FN (DIAL_BASE_RECORDS + 4U)
+#define DIAL_BASE_TONING (DIAL_BASE_FN + 4U * GRKIT_TEXT_RECORDS)
+#define DIAL_SIZE (DIAL_BASE_TONING + ((GRKIT_TEXT_RECORDS + 3U) & ~3U))
+#define SERVICES_SIZE (SERVICES_DIAL + DIAL_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U
@@ -256,8 +280,11 @@ static __attribute__((unused)) void services_emit(volatile u32 *h,u32 event,u32 
 /* SYSTEM_READY, once after INSTALL: the core calls it when the shooting
    screen first shows (runtime/framing.c). */
 static __attribute__((unused)) void services_ready(volatile u32 *h) {
+    u32 core;
     if(!h[GRKIT_HOST_SERVICES/4] || services_word(h,SERVICES_READY)[0]) return;
     services_word(h,SERVICES_READY)[0]=1;
+    core=services_word(h,SERVICES_CORE_READY)[0];
+    if(core) ((void (*)(void))core)();
     services_emit(h,SERVICE_EVENT_SYSTEM_READY,0,0);
 }
 #endif

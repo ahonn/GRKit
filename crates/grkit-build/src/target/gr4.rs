@@ -12,7 +12,9 @@ use super::Family;
 use crate::components::{
     b, bl, bl_shared, HookSpec,
     Part::{Framing, Menu, Processing},
-    Point::{CaptureAspect, CaptureCrop, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
+    Point::{
+        CaptureAspect, CaptureCrop, MenuPage, ModeDial, PipelineGrain, PipelineGrainSize, Tuning,
+    },
 };
 
 pub const FAMILY: Family = Family {
@@ -38,6 +40,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
     GRAIN,
+    DIAL,
 ];
 
 /// Image Control processing (`runtime/targets/gr4-processing.S`): the BL to
@@ -93,3 +96,8 @@ const GRAIN: &[HookSpec] = &[
     bl_shared("grain_gate", Framing, PipelineGrain, Tuning),
     bl("grain_amplitude", Framing, PipelineGrain),
 ];
+
+/// The mode dial (`runtime/mode_dial.h`): the BL to the setter of the user
+/// mode in the apply of a dial position (AeModel), its only caller, which
+/// runs for each position.
+const DIAL: &[HookSpec] = &[bl("menu_dial", Menu, ModeDial)];

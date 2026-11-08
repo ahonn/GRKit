@@ -3,8 +3,9 @@
 
 use super::*;
 use crate::abi::{
-    HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, PROFILE, PROFILE_KINDS,
-    PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
+    HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, HOST_STATE_HOLD, PROFILE,
+    PROFILE_KINDS, PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS,
+    PROFILE_SLOT_SIZE,
 };
 use crate::capabilities::{self, StateFile};
 use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
@@ -978,6 +979,11 @@ fn watch_total() -> String {
 /// move, then saves each file whose count it does not have. A series of
 /// changes, such as Fn adjustments, writes the card once after its last
 /// change, and a change of one file writes only that file.
+///
+/// While the core holds the main file (`HOST_STATE_HOLD`, a user mode of the
+/// mode dial whose settings are temporary), the main file waits: its count
+/// stays unsaved, so the first poll after the hold saves it. The poll reads
+/// the hold only when the main file has a change to save.
 fn watch_poll(name: &str) -> Vec<String> {
     let mut lines = Vec::new();
     for file in StateFile::ALL {
@@ -991,8 +997,14 @@ fn watch_poll(name: &str) -> Vec<String> {
     for file in StateFile::ALL {
         let (changes, _, saved, stamp) = watch_names(file);
         let next = format!("{name}_{}_saved", label(file));
+        lines.push(format!("if {changes} = {saved} goto {next}"));
+        if file == StateFile::Main {
+            lines.extend([
+                format!("hold = registry[{}]", HOST_STATE_HOLD / 4),
+                format!("if hold <> 0 goto {next}"),
+            ]);
+        }
         lines.extend([
-            format!("if {changes} = {saved} goto {next}"),
             format!("{stamp} = {changes}"),
             format!("call save_{}", label(file)),
             format!(":{next}"),
@@ -1172,14 +1184,29 @@ mod tests {
         let settled = at("if changes = saved goto watch_state_saved");
         let settled_recipes = at("if rchanges = rsaved goto watch_recipes_saved");
         assert!(watch < poll && poll < moved && moved < settled && settled < settled_recipes);
-        assert_eq!(script[settled + 1], "stamp = changes");
-        assert_eq!(script[settled + 2], "call save_state");
+        // While the core holds the main file, its change waits: the poll
+        // jumps past its save and keeps its count unsaved.
+        assert_eq!(
+            script[settled + 1],
+            format!("hold = registry[{}]", HOST_STATE_HOLD / 4)
+        );
+        assert_eq!(script[settled + 2], "if hold <> 0 goto watch_state_saved");
+        assert_eq!(script[settled + 3], "stamp = changes");
+        assert_eq!(script[settled + 4], "call save_state");
         assert_eq!(script[settled_recipes + 1], "rstamp = rchanges");
         assert_eq!(script[settled_recipes + 2], "call save_recipes");
         // An idle poll runs eight lines: the pause, two reads, the sum, three
-        // compares that jump past the saves, and the jump back.
+        // compares that jump past the saves, and the jump back. The hold is
+        // read only for a change of the main file.
         assert_eq!(script[at(":watch_recipes_saved") + 1], "goto watch");
-        assert_eq!(at(":watch_state_saved"), settled + 3);
+        assert_eq!(at(":watch_state_saved"), settled + 5);
+        // The watch loop of the profile holds too.
+        assert_eq!(
+            script.iter().filter(|l| l.starts_with("hold = ")).count(),
+            1
+        );
+        let profile = profile_script();
+        assert!(profile.contains(&"if hold <> 0 goto profile_poll_state_saved".to_owned()));
         assert_eq!(at(":watch_recipes_saved"), settled_recipes + 3);
         assert_eq!(script[at(":watch_moved") + 1], "last = total");
         for name in ["last", "saved", "rsaved", "changes", "rchanges"] {

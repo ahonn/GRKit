@@ -187,4 +187,19 @@
    applies it after them, so a native look moves it (runtime/picture.c). */
 #define NATIVE_SATURATION_BEFORE_CURVES 1
 
+/* The mode dial (runtime/mode_dial.h). The switch model of the App
+   (DIAL_SWITCHES, build header) keeps the state of each switch in a byte at
+   DIAL_SWITCH_STATES + 8 x its ID. The mode dial is switch DIAL_SWITCH: P 3,
+   Tv 5, Av 6, M 8, and U1 to U3 from DIAL_CODE_U1. The first byte of the
+   header of the settings object (DIAL_SETTINGS, build header) is the user
+   mode box that the camera loaded, 0 for P to M. The settings of a position
+   are loaded when that box is not 0 for a user mode, and 0 for another
+   position. */
+#define DIAL_SWITCH_STATES 0x114
+#define DIAL_SWITCH 38
+#define DIAL_CODE_U1 10U
+#define DIAL_POSITION() BYTE(DIAL_SWITCHES,DIAL_SWITCH_STATES+DIAL_SWITCH*8)
+#define DIAL_NATIVE_SETTLED(position) \
+    ((BYTE(WORD(DIAL_SETTINGS,0),0)!=0)==((u32)((position)-DIAL_CODE_U1)<3U))
+
 #endif

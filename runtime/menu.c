@@ -753,8 +753,16 @@ static void fit_value(u32 view) {
 }
 #include "menu_settings.h"
 #include "menu_recipes.h"
+#include "mode_dial.h"
 #include "menu_section.h"
 #include "menu_about.h"
+/* The first shooting screen after INSTALL: the framing component calls this
+   entry, whose address INSTALL writes (SERVICES_CORE_READY), in the App
+   task (runtime/services.h: services_ready). */
+A32_ENTRY void menu_ready(void) {
+    volatile u32 *h=menu_header();
+    if(h[GRKIT_HOST_SERVICES/4]) dial_ready(h);
+}
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.
    Bit 0 selects the font of the menu language. GRKit gives the texts of one
    screen, which the last controller change selects (MENU_ROWS_CURRENT): the

@@ -420,6 +420,11 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// The undo steps, the oldest first, RECIPE_WORDS words each. They are
     /// not saved: a start begins without them.
     HOST_RECIPE_UNDO: 4 * RECIPE_WORDS * RECIPE_UNDO;
+    /// Nonzero while the mode dial is on a user mode whose settings are
+    /// temporary (runtime/mode_dial.h): the resident loader then does not
+    /// save the main state file, so the file keeps the settings of the other
+    /// positions. The recipe file still saves.
+    HOST_STATE_HOLD: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

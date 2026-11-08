@@ -406,6 +406,10 @@
 #define FW_TIMER_SERVICE FIRMWARE(0x5320d3f4)
 #define FW_TIMER_START FIRMWARE(0x5322dbb8)
 #define FW_TIMER_CANCEL FIRMWARE(0x5322d93c)
+/* The mode dial (runtime/targets/gr3.h): the switch model of the App, and
+   the settings object whose slot +4 is UI_SETTINGS_SLOT. */
+#define DIAL_SWITCHES FIRMWARE(0x55064918)
+#define DIAL_SETTINGS FIRMWARE(0x55064200)
 /* The Set command of the RTOS shell command UserData (runtime/recipes.h):
    set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
    setter of a native setting by its name and the stored value by its label. */
