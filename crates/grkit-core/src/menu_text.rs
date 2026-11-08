@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 63;
+pub const STRINGS: usize = 66;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -70,6 +70,12 @@ struct Words {
     /// On and Off of the switch.
     enable_at_start: &'static str,
     keep_last: &'static str,
+    /// The Mode Dial row of the Recipes page of MENU, and the values of a
+    /// user mode besides a recipe: None, which follows the dial, and GRKit
+    /// Off. U1 to U3 have the names of the dial.
+    mode_dial: &'static str,
+    dial_none: &'static str,
+    dial_off: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The settings row that lists the options of a module page.
@@ -137,6 +143,9 @@ const ENGLISH: Words = Words {
     enable_grkit: "Enable GRKit",
     enable_at_start: "Enable at Start",
     keep_last: "Keep Last",
+    mode_dial: "Mode Dial",
+    dial_none: "None",
+    dial_off: "GRKit Off",
     adj_order: "ADJ Order",
     options: "Options",
     about: "About GRKit",
@@ -196,6 +205,9 @@ const SIMPLIFIED_CHINESE: Words = Words {
     enable_grkit: "启用 GRKit",
     enable_at_start: "开机启用",
     keep_last: "保持上次",
+    mode_dial: "模式转盘",
+    dial_none: "无",
+    dial_off: "关闭 GRKit",
     adj_order: "ADJ 菜单顺序",
     options: "可选项",
     about: "关于 GRKit",
@@ -255,6 +267,9 @@ const TRADITIONAL_CHINESE: Words = Words {
     enable_grkit: "啟用 GRKit",
     enable_at_start: "開機啟用",
     keep_last: "保持上次",
+    mode_dial: "模式轉盤",
+    dial_none: "無",
+    dial_off: "關閉 GRKit",
     adj_order: "ADJ 選單順序",
     options: "可選項",
     about: "關於 GRKit",
@@ -316,6 +331,9 @@ const JAPANESE: Words = Words {
     enable_grkit: "GRKit を有効",
     enable_at_start: "起動時に有効",
     keep_last: "前回のまま",
+    mode_dial: "モードダイヤル",
+    dial_none: "なし",
+    dial_off: "GRKit オフ",
     adj_order: "ADJ メニューの順番",
     options: "オプション",
     about: "GRKit について",
@@ -375,6 +393,9 @@ const KOREAN: Words = Words {
     enable_grkit: "GRKit 사용",
     enable_at_start: "시작 시 사용",
     keep_last: "이전 상태",
+    mode_dial: "모드 다이얼",
+    dial_none: "없음",
+    dial_off: "GRKit 끄기",
     adj_order: "ADJ 메뉴 순서",
     options: "옵션",
     about: "GRKit 정보",
@@ -534,6 +555,12 @@ pub const RUNS: &[Run] = &[
         "Enable at Start, which decides the switch at each start: its MENU row, then its \
          Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF.",
     ),
+    run(
+        "DIAL",
+        3,
+        "The Mode Dial row of the Recipes page of MENU, then the values of a user mode \
+         besides a recipe: None and GRKit Off.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -604,6 +631,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         .collect(),
         "NATIVE_TYPE" => words(&w.native_types),
         "START" => words(&[w.enable_at_start, w.keep_last]),
+        "DIAL" => words(&[w.mode_dial, w.dial_none, w.dial_off]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -762,6 +790,35 @@ mod tests {
             assert_eq!(language.undrawable(keep), None);
         }
         assert!(strings(Language::English, VERSION)[id("START")..]
+            .iter()
+            .all(|text| text.is_ascii()));
+    }
+
+    /// The Mode Dial page names U1 to U3 as the dial does and shows a recipe
+    /// by its name, so only its row, None, and GRKit Off are new texts.
+    #[test]
+    fn the_mode_dial_has_its_row_and_values_in_each_language() {
+        let expected = [
+            (Language::English, ["Mode Dial", "None", "GRKit Off"]),
+            (
+                Language::SimplifiedChinese,
+                ["模式转盘", "无", "关闭 GRKit"],
+            ),
+            (
+                Language::TraditionalChinese,
+                ["模式轉盤", "無", "關閉 GRKit"],
+            ),
+            (Language::Japanese, ["モードダイヤル", "なし", "GRKit オフ"]),
+            (Language::Korean, ["모드 다이얼", "없음", "GRKit 끄기"]),
+        ];
+        for (language, texts) in expected {
+            let list = strings(language, VERSION);
+            for (k, text) in texts.iter().enumerate() {
+                assert_eq!(list[id("DIAL") + k], *text);
+                assert_eq!(language.undrawable(text), None);
+            }
+        }
+        assert!(strings(Language::English, VERSION)[id("DIAL")..]
             .iter()
             .all(|text| text.is_ascii()));
     }

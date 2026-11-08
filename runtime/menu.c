@@ -752,8 +752,9 @@ static void fit_value(u32 view) {
     CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
 }
 #include "menu_settings.h"
-#include "menu_recipes.h"
 #include "mode_dial.h"
+#include "menu_dial.h"
+#include "menu_recipes.h"
 #include "menu_section.h"
 #include "menu_about.h"
 /* The first shooting screen after INSTALL: the framing component calls this
