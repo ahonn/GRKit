@@ -520,6 +520,7 @@ Other lines:
 | `loaded` | The module loaded. |
 | `loaded, stopped: Enable is Off in the GRKit section of MENU` | The module loaded, but Enable is Off, so the core calls none of its code. On applies at once. |
 | `loaded, stopped: Enable GRKit is Off in the GRKit section of MENU` | The module loaded, but Enable GRKit is Off, so the core calls none of its code. On applies at once. |
+| `loaded, stopped: Enable at Start is Off in the GRKit section of MENU` | The module loaded, but Enable at Start turned Enable GRKit off at this start. Enable GRKit On applies at once. |
 | `not loaded: safe mode` | GRKit is in the safe mode, so no module loads. See [Report and safe mode](architecture.md#report-and-safe-mode). |
 | `not loaded: it needs a camera with a color sensor` | The module is `color_only`, and the camera is GR IV Monochrome. The GRKit section of MENU does not list it. |
 
