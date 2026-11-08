@@ -12,7 +12,7 @@ use super::Family;
 use crate::components::{
     b, bl, bl_shared, HookSpec,
     Part::{Framing, Menu, Processing},
-    Point::{CaptureAspect, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
+    Point::{CaptureAspect, CaptureCrop, MenuPage, PipelineGrain, PipelineGrainSize, Tuning},
 };
 
 pub const FAMILY: Family = Family {
@@ -33,6 +33,7 @@ const GROUPS: &[&[HookSpec]] = &[
     LIVE_VIEW,
     common::PICTURE,
     common::CROP,
+    CROP_QUEUE,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
     GRAIN,
@@ -51,6 +52,15 @@ const PROCESSING: &[HookSpec] = &[
     bl("module_packet", Processing, Tuning),
     bl("module_gamma_flag", Processing, Tuning),
     bl("module_gamma_curves", Processing, Tuning),
+];
+
+/// The queue completion of a crop shot (`runtime/crop_queue.S`): the release
+/// start of the back end, the entry of the event poster, and the release stop
+/// after its drive-mode check.
+const CROP_QUEUE: &[HookSpec] = &[
+    b("crop_queue_start", Framing, CaptureCrop),
+    b("crop_queue_post", Framing, CaptureCrop),
+    b("crop_queue_release", Framing, CaptureCrop),
 ];
 
 /// Icon lookup entry, then the limit check and the table read of the icon

@@ -36,6 +36,17 @@
    the camera settings (FW_SETTINGS), with the factor as a float in s0. */
 #define FW_CROP_GET FIRMWARE(0x532a0c38)
 #define FW_CROP_SET FIRMWARE(0x532fdd80)
+/* The queue completion of a crop shot (runtime/crop_queue.S): the counts
+   of the recipes of a queue in states 1, 2, and 3, the recipes in states
+   2 and 3, the recipe bank and its table of a recipe ID, and the
+   completion check of the back end. */
+#define FW_QUEUE_COUNT1 FIRMWARE(0x5374d07c)
+#define FW_QUEUE_COUNT2 FIRMWARE(0x5374d10c)
+#define FW_QUEUE_COUNT3 FIRMWARE(0x5374d19c)
+#define FW_QUEUE_RECIPES FIRMWARE(0x5374d650)
+#define FW_RECIPE_BANK FIRMWARE(0x53737724)
+#define FW_RECIPE_TABLE FIRMWARE(0x5373981c)
+#define FW_QUEUE_COMPLETE FIRMWARE(0x5373ed78)
 /* The size classifier is 0x533b28b4. */
 
 /* Allocation and the vector helpers of View children. */

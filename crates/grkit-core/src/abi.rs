@@ -363,6 +363,13 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// The crop factor of the next shot, as float bits, where it is longer
     /// than the native factor of the live view (70 and 90 mm), or 0.
     HOST_CROP_SHOT: 4;
+    /// GR IV: the back end of the last shot, whose queue completion the core
+    /// can post when a crop shot finishes before the shutter release stops
+    /// (runtime/crop_queue.S).
+    HOST_CROP_QUEUE_OWNER: 4;
+    /// GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
+    /// CROP_QUEUE_RECOVERED.
+    HOST_CROP_QUEUE_FLAGS: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
