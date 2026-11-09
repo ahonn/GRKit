@@ -7,7 +7,10 @@
 //! uses its setting. The resident loader saves the value as the state key
 //! `CORE.<KEY>`, and restores it only while a loaded module uses it.
 
-use crate::abi::{HOST_ASPECT_MODE, HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE};
+use crate::abi::{
+    HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE, HOST_MODULE,
+    MODULES_MAX,
+};
 
 /// An extension point: the firmware changes that a group of features needs.
 /// The installer applies the patches of a point only when a loaded module
@@ -98,7 +101,7 @@ impl Capability {
 }
 
 /// The capabilities in handle order.
-pub const CAPABILITIES: [Capability; 5] = [
+pub const CAPABILITIES: [Capability; 7] = [
     Capability {
         // The effect of still pictures and the live view: 0 Off, then effect
         // n - 1 of the installed effects (runtime/tone.h). The core gives
@@ -143,6 +146,23 @@ pub const CAPABILITIES: [Capability; 5] = [
         values: 2,
         state: State::Word(HOST_ASPECT_MODE),
         points: &[Point::ViewfinderOverlay, Point::CaptureAspect],
+    },
+    Capability {
+        // 1 when ADJ should open on GRKit after the next power-on, 0 for a
+        // native entry. No firmware patches: INSTALL always restores it
+        // (runtime/installer.c), and menu_exit writes it (runtime/menu.c).
+        key: "ADJ",
+        values: 2,
+        state: State::Word(HOST_ADJ_OPEN),
+        points: &[],
+    },
+    Capability {
+        // The module of the GRKit root row where the next ADJ session opens
+        // (HOST_MODULE). No firmware patches: INSTALL always restores it.
+        key: "ADJ_MODULE",
+        values: MODULES_MAX as u32,
+        state: State::Word(HOST_MODULE),
+        points: &[],
     },
 ];
 

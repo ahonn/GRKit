@@ -440,7 +440,11 @@ static void apply_state(u32 base, u32 table)
     static const u16 words[] = {GRKIT_CORE_SETTING_WORDS}, values[] = {GRKIT_CORE_SETTING_VALUES};
     u32 value;
     for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) {
-        if (!(capabilities_used >> k & 1) || !state_value(&saved_state, ids[k], &value)) continue;
+        /* UI-only keys (no firmware points) always restore: ADJ open preference
+           and the last GRKit root module. Module capabilities still need a
+           loaded module that uses them. */
+        if ((core_setting_points[k] && !(capabilities_used >> k & 1)) ||
+            !state_value(&saved_state, ids[k], &value)) continue;
         if (k == GRKIT_CORE_TONE - GRKIT_CORE_SETTING_BASE) {
             /* The effect is its ImageTone code. */
             for (u32 i = 0; i < count; ++i) {
@@ -449,6 +453,9 @@ static void apply_state(u32 base, u32 table)
             }
         } else if (value < values[k]) store(base + words[k], value);
     }
+    /* ADJ exited from GRKit on the last power-on: the next ADJ opens GRKit
+       (RETURN_GRKIT in runtime/menu.c). */
+    if (word(base + GRKIT_HOST_ADJ_OPEN) == 1) store(base + GRKIT_HOST_RETURN, 3);
     if (table) {
         u32 n = word(table);
         for (u32 k = 0; k < n && k < GRKIT_MODULE_SETTINGS_MAX; ++k) {

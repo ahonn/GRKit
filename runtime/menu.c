@@ -514,8 +514,15 @@ static void render_step(u32 controller,u32 step) {
 static void leave(u32 controller) {
     volatile u32 *h=menu_header();
     if(!private_mode(controller)) return;
-    /* The next ADJ session opens at the row of this module (menu_reopen). */
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) h[GRKIT_HOST_MODULE/4]=root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+    /* The next ADJ session opens at the row of this module (menu_reopen).
+       STATE.TXT keeps the module across power-off (CORE.ADJ_MODULE). */
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) {
+        u32 module=root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+        if(h[GRKIT_HOST_MODULE/4]!=module) {
+            h[GRKIT_HOST_MODULE/4]=module;
+            GRKIT_STATE_CHANGED(h);
+        }
+    }
     h[GRKIT_HOST_MENU_LEVEL/4]=0; h[GRKIT_HOST_MENU_REBUILDING/4]=1;
     h[GRKIT_HOST_PREVIEW/4]=0;
     detail_width(controller,400);
@@ -849,9 +856,18 @@ A32_ENTRY void menu_exit(u32 controller) {
     h[GRKIT_HOST_PREVIEW/4]=0;
     h[GRKIT_HOST_FRAME_PREVIEW/4]=0;
     /* The next ADJ returns to the parameter page's GRKit page, opens on
-       GRKit, or opens as native ADJ does (exit_return). */
+       GRKit, or opens as native ADJ does (exit_return). CORE.ADJ keeps the
+       sticky preference across power-off; a transient return to the
+       parameter page does not change it. */
     h[GRKIT_HOST_RETURN/4]=exit_return(h[GRKIT_HOST_RETURN/4],in_grkit);
-    if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])!=RETURN_PARAMETERS && (h[GRKIT_HOST_PARAMETERS/4]&1U)) h[GRKIT_HOST_PARAMETERS/4]=0;
+    if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])!=RETURN_PARAMETERS) {
+        u32 open=h[GRKIT_HOST_RETURN/4]==RETURN_GRKIT ? 1U : 0U;
+        if(h[GRKIT_HOST_ADJ_OPEN/4]!=open) {
+            h[GRKIT_HOST_ADJ_OPEN/4]=open;
+            GRKIT_STATE_CHANGED(h);
+        }
+        if(h[GRKIT_HOST_PARAMETERS/4]&1U) h[GRKIT_HOST_PARAMETERS/4]=0;
+    }
     parameter_title(h)[0]=0;
     menu_exit_original(controller);
     if(menu_header()[GRKIT_HOST_TOOLBAR_OWNER/4]==controller) {

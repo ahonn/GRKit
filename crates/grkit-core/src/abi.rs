@@ -234,10 +234,15 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// 2 away. 3: ADJ exited from GRKit, so the next ADJ opens GRKit. 4: MENU
     /// or OK on GRKit passed the event that closes ADJ to the native list.
     HOST_RETURN: 4;
+    /// CORE.ADJ: 1 when the next ADJ should open on GRKit, 0 for a native
+    /// entry. Survives enter clearing HOST_RETURN, and STATE.TXT keeps it
+    /// across power-off (runtime/menu.c).
+    HOST_ADJ_OPEN: 4;
     /// Number of changes of the saved selections: the effect, CORE.ASPECT,
-    /// CORE.GRAIN, CORE.GRAIN_SIZE, the Fn adjustments, and the module settings
-    /// (GRKIT_STATE_CHANGED). The resident loader polls only this word and
-    /// saves the state file after it changes.
+    /// CORE.GRAIN, CORE.GRAIN_SIZE, CORE.ADJ, CORE.ADJ_MODULE, the Fn
+    /// adjustments, and the module settings (GRKIT_STATE_CHANGED). The
+    /// resident loader polls only this word and saves the state file after
+    /// it changes.
     HOST_STATE_CHANGES: 4;
     /// Number of module plane filters in GRKIT_HOST_MODULE_FILTERS. INSTALL
     /// writes it.

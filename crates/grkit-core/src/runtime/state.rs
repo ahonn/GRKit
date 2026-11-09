@@ -109,6 +109,15 @@ mod tests {
         assert_eq!(keys[0].name, "CORE.TONE");
         assert!(keys[0].word.is_none());
         assert!(keys[1..].iter().all(|key| key.word.is_some()));
+        // ADJ open preference and last GRKit root module persist across
+        // power-off; they have no firmware points and INSTALL always
+        // restores them.
+        assert_eq!(keys[5].name, "CORE.ADJ");
+        assert_eq!(keys[5].word, Some(crate::abi::HOST_ADJ_OPEN));
+        assert_eq!(keys[6].name, "CORE.ADJ_MODULE");
+        assert_eq!(keys[6].word, Some(crate::abi::HOST_MODULE));
+        assert_eq!(state_key_id("CORE.ADJ"), 458876999);
+        assert_eq!(state_key_id("CORE.ADJ_MODULE"), 697053196);
     }
 
     #[test]

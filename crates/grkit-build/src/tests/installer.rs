@@ -160,9 +160,9 @@ fn generated_header_gives_the_points_of_each_patch() -> Result<()> {
     // CORE.GRAIN the grain point (bit 5), and CORE.GRAIN_SIZE the grain size
     // point (bit 6). CORE.ASPECT_MODE shares the aspect points.
     assert!(header.contains(
-        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\",\"CORE.ASPECT_MODE\"};"
+        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\",\"CORE.ASPECT_MODE\",\"CORE.ADJ\",\"CORE.ADJ_MODULE\"};"
     ));
-    assert!(header.contains("static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc};"));
+    assert!(header.contains("static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0};"));
     Ok(())
 }
 

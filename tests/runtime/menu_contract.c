@@ -820,6 +820,12 @@ static void adj_exits_return_once_for_the_parameter_page(void)
     menu_settings_controller(0x4000000);
     assert(test_header[GRKIT_HOST_RETURN / 4] == RETURN_GRKIT);
     test_header[GRKIT_HOST_RETURN / 4] = 0;
+    /* CORE.ADJ mirrors the sticky preference that menu_exit writes: 1 when
+       the next ADJ opens GRKit, 0 when it opens as a native entry. A
+       transient return to the parameter page does not change it. */
+    assert(exit_return(0, 1) == RETURN_GRKIT);
+    assert(exit_return(0, 0) == 0);
+    assert(RETURN_STATE(exit_return(RETURN_OPENING, 0)) == RETURN_PARAMETERS);
 }
 
 static void the_root_lists_the_official_modules(void)
