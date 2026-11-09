@@ -16,12 +16,14 @@
 //! A fast-boot file (`F<project><version>.BIN`, `FastRelease::path`) is the
 //! installer of a runtime build, built for the RTOS side of one firmware
 //! release. Its head (`runtime/fastboot/head.S`) loads the file to the top
-//! of the RTOS code region and runs SCAN. The install file of the release
+//! of the RTOS code region and runs SCAN. SCAN keeps the whole plan in the
+//! memory of the file. The install file of the release
 //! (`I<project><version>.BIN`, `install_file`) is the same head with the
-//! install vector, so INSTALL loads the file again and uses no memory that
-//! SCAN left. So on a firmware build with the fast-boot loader, GRKit
-//! installs before Linux mounts the card, and the package is the same for
-//! each build.
+//! install vector and the sums of the code pages: it calls INSTALL in the
+//! loaded file only if no code page changed since SCAN, and INSTALL first
+//! checks that its data did not change. So on a firmware build with the
+//! fast-boot loader, GRKit installs before Linux mounts the card, and the
+//! package is the same for each build.
 
 use anyhow::{ensure, Context, Result};
 
@@ -55,25 +57,89 @@ pub const FAST_STATUS_OFFSET: usize = FAST_HEAD_SIZE - 8;
 pub const FAST_STATUS_INDEX: usize = FAST_STATUS_OFFSET / 4;
 pub const FAST_STATUS_NOT_RUN: u32 = 998;
 pub const FAST_STATUS_NOT_READ: u32 = 999;
+/// The status when the install file found a changed code page: the head
+/// did not call INSTALL.
+pub const FAST_STATUS_CODE_CHANGED: u32 = 997;
+/// The status when INSTALL found that its data changed since the last call:
+/// INSTALL did not run.
+pub const FAST_STATUS_DATA_CHANGED: u32 = 996;
+/// The detail words of a changed status, before the status word: the address
+/// of the first changed page or block, then the number of changed ones. The
+/// loader reads them as `ba[FAST_DETAIL_INDEX]` and `ba[FAST_DETAIL_INDEX + 1]`.
+pub const FAST_DETAIL_OFFSET: usize = FAST_STATUS_OFFSET - 8;
+pub const FAST_DETAIL_INDEX: usize = FAST_DETAIL_OFFSET / 4;
 /// The vectors of a fast-boot file, after its head: scan, then install.
 pub const FAST_SCAN_VECTOR: u32 = FAST_BASE + FAST_HEAD_SIZE as u32;
 pub const FAST_INSTALL_VECTOR: u32 = FAST_SCAN_VECTOR + 4;
 
+/// The code sums in the head (`runtime/fastboot/head.S`): one word for each
+/// code page, from the scan vector to the end of the code (`_code_end`).
+pub const FAST_SUMS_OFFSET: usize = 0x200;
+pub const FAST_SUMS_WORDS: usize = 116;
+/// The number of code pages: 0 in a fast-boot file, which loads the file.
+pub const FAST_PAGES_OFFSET: usize = FAST_SUMS_OFFSET + FAST_SUMS_WORDS * 4;
+/// The size of a code page as a shift: 12 is 4 KB.
+pub const FAST_SHIFT_OFFSET: usize = FAST_PAGES_OFFSET + 4;
+/// The end of the code (`_code_end` of `fast.ld`), which the linker writes.
+pub const FAST_CODE_END_OFFSET: usize = FAST_SHIFT_OFFSET + 4;
+/// SCAN writes the plan header (`abi::PLAN_FIELDS`) over the code sums of the
+/// head, which a fast-boot file does not use: the loader reads it as
+/// `ba[FAST_PLAN_INDEX..]`, so no plan file reaches the card.
+pub const FAST_PLAN_INDEX: usize = FAST_SUMS_OFFSET / 4;
+pub const FAST_PLAN_WORDS: usize = crate::abi::PLAN_HEADER_SIZE / 4;
+
+fn word_at(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().expect("a word"))
+}
+
+/// The sum of the code page `words`, as the head computes it.
+fn page_sum(words: &[u8]) -> u32 {
+    words.chunks_exact(4).fold(0, |sum, word| {
+        u32::from_le_bytes(word.try_into().expect("a word")).wrapping_add(sum.rotate_right(27))
+    })
+}
+
 /// The install file of a fast-boot file: the head of `fast_file`, with the
-/// install vector as the entry word. The head loads the whole fast-boot file
-/// again, so INSTALL does not depend on memory that SCAN left.
+/// install vector as the entry word and the sums of the code pages. The head
+/// of an install file does not load the file again: it compares each code
+/// page in memory with its sum and calls INSTALL only if none changed.
 pub fn install_file(fast_file: &[u8]) -> Result<Vec<u8>> {
     ensure!(
         fast_file.len() > FAST_HEAD_SIZE,
         "A fast-boot file is longer than its head"
     );
     let mut head = fast_file[..FAST_HEAD_SIZE].to_vec();
-    let entry = &mut head[FAST_ENTRY_OFFSET..];
     ensure!(
-        entry == FAST_SCAN_VECTOR.to_le_bytes(),
+        head[FAST_ENTRY_OFFSET..] == FAST_SCAN_VECTOR.to_le_bytes(),
         "The head of the fast-boot file does not call the scan vector"
     );
-    entry.copy_from_slice(&FAST_INSTALL_VECTOR.to_le_bytes());
+    ensure!(
+        word_at(&head, FAST_PAGES_OFFSET) == 0
+            && head[FAST_SUMS_OFFSET..FAST_PAGES_OFFSET]
+                .iter()
+                .all(|&b| b == 0),
+        "The head of the fast-boot file already has code sums"
+    );
+    let end = word_at(&head, FAST_CODE_END_OFFSET);
+    ensure!(
+        end > FAST_SCAN_VECTOR
+            && end.is_multiple_of(4)
+            && (end - FAST_BASE) as usize <= fast_file.len(),
+        "The head of the fast-boot file has no end of its code"
+    );
+    let code = &fast_file[FAST_HEAD_SIZE..(end - FAST_BASE) as usize];
+    let shift = (12..=20)
+        .find(|shift| code.len().div_ceil(1 << shift) <= FAST_SUMS_WORDS)
+        .context("The code of the fast-boot file has too many pages")?;
+    let pages: Vec<_> = code.chunks(1 << shift).collect();
+    for (index, page) in pages.iter().enumerate() {
+        let offset = FAST_SUMS_OFFSET + index * 4;
+        head[offset..offset + 4].copy_from_slice(&page_sum(page).to_le_bytes());
+    }
+    head[FAST_PAGES_OFFSET..FAST_PAGES_OFFSET + 4]
+        .copy_from_slice(&(pages.len() as u32).to_le_bytes());
+    head[FAST_SHIFT_OFFSET..FAST_SHIFT_OFFSET + 4].copy_from_slice(&(shift as u32).to_le_bytes());
+    head[FAST_ENTRY_OFFSET..].copy_from_slice(&FAST_INSTALL_VECTOR.to_le_bytes());
     Ok(head)
 }
 
@@ -265,8 +331,22 @@ mod tests {
         let file = crate::testing::fast_file(&release);
         let install = install_file(&file).unwrap();
         assert_eq!(install.len(), FAST_HEAD_SIZE);
-        assert_eq!(install[..FAST_ENTRY_OFFSET], file[..FAST_ENTRY_OFFSET]);
+        assert_eq!(install[..FAST_SUMS_OFFSET], file[..FAST_SUMS_OFFSET]);
+        assert_eq!(
+            install[FAST_CODE_END_OFFSET..FAST_ENTRY_OFFSET],
+            file[FAST_CODE_END_OFFSET..FAST_ENTRY_OFFSET]
+        );
         assert_eq!(install[FAST_ENTRY_OFFSET..], 0x54c00404_u32.to_le_bytes());
+        // The head layout of head.S and fast.ld.
+        assert_eq!(
+            (
+                FAST_PAGES_OFFSET,
+                FAST_SHIFT_OFFSET,
+                FAST_CODE_END_OFFSET,
+                FAST_DETAIL_INDEX
+            ),
+            (0x3d0, 0x3d4, 0x3d8, 252)
+        );
         assert_eq!(FAST_SCAN_VECTOR, 0x54c00400);
         // Only a head that calls the scan vector has an install file.
         assert!(install_file(&install).is_err());
@@ -283,6 +363,53 @@ mod tests {
         let mut unmarked = file.clone();
         unmarked[FAST_STATUS_OFFSET] = 0;
         assert!(check_fast_file(&release, &unmarked).is_err());
+    }
+
+    #[test]
+    fn the_install_file_has_the_sum_of_each_code_page() {
+        let release = FastRelease::new(&GR4, "1.20").unwrap();
+        let mut file = crate::testing::fast_file(&release);
+        // 9 KB of code: three 4 KB pages, the last one short.
+        let code: Vec<u8> = (0..9 * 1024).map(|i| (i * 7 + i / 251) as u8).collect();
+        file.truncate(FAST_HEAD_SIZE);
+        file.extend_from_slice(&code);
+        let end = FAST_BASE + file.len() as u32;
+        file[FAST_CODE_END_OFFSET..FAST_CODE_END_OFFSET + 4].copy_from_slice(&end.to_le_bytes());
+        // Bytes after the end of the code (.data) do not count.
+        file.extend_from_slice(&[0xa5; 64]);
+        let install = install_file(&file).unwrap();
+        assert_eq!(word_at(&install, FAST_PAGES_OFFSET), 3);
+        assert_eq!(word_at(&install, FAST_SHIFT_OFFSET), 12);
+        // The sum of the head: add each word to the sum rotated right by 27.
+        let mut sum = 0u32;
+        for word in code[8192..].chunks_exact(4) {
+            sum = u32::from_le_bytes(word.try_into().unwrap()).wrapping_add(sum.rotate_right(27));
+        }
+        assert_eq!(word_at(&install, FAST_SUMS_OFFSET + 8), sum);
+        assert_ne!(
+            word_at(&install, FAST_SUMS_OFFSET),
+            word_at(&install, FAST_SUMS_OFFSET + 4)
+        );
+        assert_eq!(word_at(&install, FAST_SUMS_OFFSET + 12), 0);
+        // More code than the sums can hold in 4 KB pages takes larger pages.
+        let mut large = file[..FAST_HEAD_SIZE].to_vec();
+        large.resize(FAST_HEAD_SIZE + 600 * 1024, 1);
+        let end = FAST_BASE + large.len() as u32;
+        large[FAST_CODE_END_OFFSET..FAST_CODE_END_OFFSET + 4].copy_from_slice(&end.to_le_bytes());
+        let install = install_file(&large).unwrap();
+        assert_eq!(word_at(&install, FAST_SHIFT_OFFSET), 13);
+        assert_eq!(word_at(&install, FAST_PAGES_OFFSET), 75);
+        // A head without the end of its code, or with sums, has no install file.
+        let mut unmarked = file.clone();
+        unmarked[FAST_CODE_END_OFFSET..FAST_CODE_END_OFFSET + 4].fill(0);
+        assert!(install_file(&unmarked).is_err());
+        let mut past = file.clone();
+        let beyond = FAST_BASE + file.len() as u32 + 4;
+        past[FAST_CODE_END_OFFSET..FAST_CODE_END_OFFSET + 4].copy_from_slice(&beyond.to_le_bytes());
+        assert!(install_file(&past).is_err());
+        let mut summed = file.clone();
+        summed[FAST_PAGES_OFFSET] = 1;
+        assert!(install_file(&summed).is_err());
     }
 
     #[test]

@@ -48,6 +48,15 @@ pub const STATUS_LOADER_NO_INSTALL: u32 = 62;
 /// The status of an INSTALL whose rollback failed (`runtime/install_status.h`):
 /// the firmware may keep some of the patches.
 const STATUS_ROLLBACK_FAILED: u32 = 24;
+/// The statuses of an INSTALL that ran before the camera was ready
+/// (`runtime/install_status.h`): language, record, icons, and settings. The
+/// loader tries again. On Linux INSTALL then writes no result file; through
+/// the fast-boot file the loader reads the status from the script array.
+pub const STATUS_NOT_READY: [u32; 4] = [12, 14, 26, 39];
+
+/// The resident part of the loader (`resident`): the loader includes it after
+/// INSTALL, so the start does not wait for the interpreter to read it.
+pub const RESIDENT_NAME: &str = "RESIDENT.TTL";
 
 /// The loader for a target with `icon_stride`-byte icon slots.
 pub fn loader_for(icon_stride: usize) -> Vec<u8> {
@@ -67,6 +76,7 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
 pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     let path = core_path;
     let (plan, done, failed) = (path("PLAN.BIN"), path("INSTALL.OK"), path("INSTALL.ERR"));
+    let resident = path(RESIDENT_NAME);
     let mut lines: Vec<String> = Vec::new();
     // The results of the last start. write_error replaces INSTALL.ERR.
     for name in ["PLAN.BIN", "PLAN.TMP", "INSTALL.OK", "INSTALL.LCK"] {
@@ -110,7 +120,13 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     lines.extend([
         "attempts = 0".into(),
         format!("failure = {STATUS_LOADER_NO_PLAN}"),
-        "call write_error".into(),
+    ]);
+    // The fast-boot steps write no file to the card: the status of a Linux
+    // step goes to INSTALL.ERR before its first request.
+    if fast.is_empty() {
+        lines.push("call write_error".into());
+    }
+    lines.extend([
         format!("filesearch '{plan}'"),
         "if result != 0 goto reject".into(),
         format!("filesearch '{done}'"),
@@ -128,14 +144,15 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
                 release.rtos_path()
             ));
         }
+        // SCAN gives the plan header in the script array.
         lines.extend([
             format!("faststatus = ba[{FAST_STATUS_INDEX}]"),
-            format!("filesearch '{plan}'"),
-            "if result != 0 goto plan_ready".into(),
+            "if faststatus = 0 goto plan_ready".into(),
             format!("fastreason = {FAST_OFF_SCAN}"),
             "call fast_log".into(),
             "fast = 0".into(),
             ":linux".into(),
+            "call write_error".into(),
         ]);
     }
     lines.extend([
@@ -153,18 +170,18 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "goto reject".into(),
         ":plan_ready".into(),
         format!("failure = {STATUS_LOADER_BAD_PLAN}"),
+    ]);
+    if !fast.is_empty() {
+        lines.push("if fast <> 0 goto plan_fast".into());
+    }
+    lines.extend([
         format!("fileopen fh '{plan}' 0"),
         "if fh < 0 goto reject".into(),
-        "call readword".into(),
         // The words of the plan header in order (`abi::PLAN_FIELDS`).
-        format!(
-            "if value != {} goto reject_close",
-            crate::abi::PLAN_MAGIC_VALUE
-        ),
+        "call readword".into(),
+        "planmagic = value".into(),
         "call readword".into(),
         "count = value".into(),
-        "if count < 0 goto reject_close".into(),
-        format!("if count > {MAX_COUNT} goto reject_close"),
         "call readword".into(),
         "words = value".into(),
         "call readword".into(),
@@ -173,13 +190,39 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "call readword".into(),
         "call readword".into(),
         "modulewords = value".into(),
-        "if modulewords < 0 goto reject_close".into(),
-        format!("if modulewords > {MODULE_ARRAY_WORDS} goto reject_close"),
         "call readword".into(),
         "moduletiles = value".into(),
-        "if moduletiles < 0 goto reject_close".into(),
-        format!("if moduletiles > {MODULE_TILES_MAX} goto reject_close"),
         "fileclose fh".into(),
+    ]);
+    if !fast.is_empty() {
+        let word = |offset: usize| format!("ba[{}]", FAST_PLAN_INDEX + offset / 4);
+        use crate::abi::{
+            PLAN_COUNT, PLAN_HEADER_WORDS, PLAN_ICON_CHUNKS, PLAN_MAGIC, PLAN_MODULE_TILES,
+            PLAN_MODULE_WORDS,
+        };
+        lines.extend([
+            "goto plan_read".into(),
+            ":plan_fast".into(),
+            format!("planmagic = {}", word(PLAN_MAGIC)),
+            format!("count = {}", word(PLAN_COUNT)),
+            format!("words = {}", word(PLAN_HEADER_WORDS)),
+            format!("chunks = {}", word(PLAN_ICON_CHUNKS)),
+            format!("modulewords = {}", word(PLAN_MODULE_WORDS)),
+            format!("moduletiles = {}", word(PLAN_MODULE_TILES)),
+            ":plan_read".into(),
+        ]);
+    }
+    lines.extend([
+        format!(
+            "if planmagic != {} goto reject",
+            crate::abi::PLAN_MAGIC_VALUE
+        ),
+        "if count < 0 goto reject".into(),
+        format!("if count > {MAX_COUNT} goto reject"),
+        "if modulewords < 0 goto reject".into(),
+        format!("if modulewords > {MODULE_ARRAY_WORDS} goto reject"),
+        "if moduletiles < 0 goto reject".into(),
+        format!("if moduletiles > {MODULE_TILES_MAX} goto reject"),
         format!(
             "expected = {} + count * {}",
             HEADER_SIZE / 4,
@@ -246,7 +289,11 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "waits = 60".into(),
         "if fast <> 0 waits = 300".into(),
         format!("failure = {STATUS_LOADER_NO_INSTALL}"),
-        "call write_error".into(),
+        if fast.is_empty() {
+            "call write_error".into()
+        } else {
+            "if fast = 0 call write_error".into()
+        },
         ":install".into(),
     ]);
     if !fast.is_empty() {
@@ -268,11 +315,23 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "if fast = 0 sendln 'lcmd sh {LINUX_DIRECTORY}/INSTALL.SH'"
     ));
     if !fast.is_empty() {
-        // An install file that did not run INSTALL fails as INSTALL does.
+        // The status of the fast-boot INSTALL is in the script array. An
+        // install file that did not run INSTALL fails as INSTALL does: the
+        // file was not read or not run, or the memory of the fast-boot file
+        // changed after SCAN.
         lines.extend([
+            "if fast = 0 goto install_linux".into(),
             format!("faststatus = ba[{FAST_STATUS_INDEX}]"),
-            "if fast = 0 faststatus = 0".into(),
-            format!("if faststatus >= {FAST_STATUS_NOT_RUN} goto install_not_run"),
+            "if faststatus = 0 goto installed".into(),
+            format!("if faststatus >= {FAST_STATUS_DATA_CHANGED} goto install_not_run"),
+        ]);
+        for status in STATUS_NOT_READY {
+            lines.push(format!("if faststatus = {status} goto install_wait"));
+        }
+        lines.extend([
+            "errorstatus = faststatus".into(),
+            "goto install_failed".into(),
+            ":install_linux".into(),
         ]);
     }
     lines.extend([
@@ -290,7 +349,12 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "goto install".into(),
         ":installed".into(),
         format!("filedelete '{failed}'"),
-        "goto resident".into(),
+        // Without the resident part, GRKit stays installed but saves no
+        // selection.
+        format!("filesearch '{resident}'"),
+        "if result = 0 end".into(),
+        format!("include '{resident}'"),
+        "end".into(),
     ]);
     if !fast.is_empty() {
         lines.extend([
@@ -299,8 +363,12 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             // leaves the firmware changed, so it stops the loader.
             ":install_not_run".into(),
             "errorstatus = faststatus".into(),
+            format!("fastaddress = ba[{FAST_DETAIL_INDEX}]"),
+            format!("fastcount = ba[{}]", FAST_DETAIL_INDEX + 1),
             ":install_failed".into(),
             "if fast = 0 goto reject".into(),
+            // The fast-boot INSTALL writes no INSTALL.ERR.
+            "failure = errorstatus".into(),
             format!("if errorstatus = {STATUS_ROLLBACK_FAILED} goto reject"),
             "faststatus = errorstatus".into(),
             format!("fastreason = {FAST_OFF_INSTALL}"),
@@ -311,12 +379,9 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             format!("filedelete '{}'", path("INSTALL.LCK")),
             "attempts = 0".into(),
             format!("failure = {STATUS_LOADER_NO_PLAN}"),
-            "call write_error".into(),
             "goto linux".into(),
         ]);
     }
-    lines.extend(state_script());
-    lines.extend(profile_script());
     lines.extend([
         ":reject_close".into(),
         "fileclose fh".into(),
@@ -382,6 +447,16 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     (lines.join("\r\n") + "\r\n").into_bytes()
 }
 
+/// The resident part of the loader (`RESIDENT_NAME`), which `loader_with`
+/// includes after INSTALL: it saves the selections after each change
+/// (`state_script`) and writes the development profile (`profile_script`).
+/// It uses only its own labels.
+pub fn resident() -> Vec<u8> {
+    let mut lines = state_script();
+    lines.extend(profile_script());
+    (lines.join("\r\n") + "\r\n").into_bytes()
+}
+
 /// Why a start with fast-boot files does not use them, or stops using them
 /// (`fastreason`, `fast_log_script`): the official firmware, another
 /// interface of the fast-boot firmware, a release without fast-boot files in
@@ -406,10 +481,14 @@ const FAST_OFF_INSTALL: u32 = 6;
 /// - `fast-boot RELEASE off: files missing`
 /// - `fast-boot RELEASE scan STATUS, Linux used`
 /// - `fast-boot RELEASE install STATUS, Linux used`
+/// - `fast-boot RELEASE install STATUS at ADDRESS count N, Linux used`
 ///
 /// STATUS is that of `runtime/install_status.h`, `FAST_STATUS_NOT_RUN` when
 /// the head did not run SCAN or INSTALL, or `FAST_STATUS_NOT_READ` when the
-/// firmware did not read the file.
+/// firmware did not read the file. `FAST_STATUS_CODE_CHANGED` and
+/// `FAST_STATUS_DATA_CHANGED` mean that other code wrote into the memory of
+/// the fast-boot file after SCAN: N code pages or data blocks changed, the
+/// first at ADDRESS (decimal).
 fn fast_log_script() -> Vec<String> {
     let log = format!("{DATA_FOLDER}\\{BOOT_LOG}");
     vec![
@@ -438,6 +517,16 @@ fn fast_log_script() -> Vec<String> {
         format!("if fastreason = {FAST_OFF_INSTALL} filewrite lfh ' install '"),
         format!("if fastreason >= {FAST_OFF_SCAN} int2str line faststatus"),
         format!("if fastreason >= {FAST_OFF_SCAN} filewrite lfh line"),
+        format!("if fastreason <> {FAST_OFF_INSTALL} goto fast_log_changed_end"),
+        format!("if faststatus < {FAST_STATUS_DATA_CHANGED} goto fast_log_changed_end"),
+        format!("if faststatus > {FAST_STATUS_CODE_CHANGED} goto fast_log_changed_end"),
+        "filewrite lfh ' at '".into(),
+        "int2str line fastaddress".into(),
+        "filewrite lfh line".into(),
+        "filewrite lfh ' count '".into(),
+        "int2str line fastcount".into(),
+        "filewrite lfh line".into(),
+        ":fast_log_changed_end".into(),
         format!("if fastreason >= {FAST_OFF_SCAN} filewrite lfh ', Linux used'"),
         "filewriteln lfh ''".into(),
         "fileclose lfh".into(),
@@ -894,6 +983,49 @@ mod tests {
     /// two polls in a row read the same count and the file does not have it.
     /// The start sets each variable that the loop reads, because an unset
     /// variable is a runtime error.
+    /// The interpreter reads a whole file when it includes it, so the start
+    /// reads only the steps up to INSTALL. The resident part comes after
+    /// INSTALL, in its own file, which jumps only to its own labels.
+    #[test]
+    fn the_loader_includes_its_resident_part_after_install() {
+        let releases = [FastRelease::new(&crate::camera::GR4, "1.20").unwrap()];
+        for loader in [loader(), loader_with(ICON_STRIDE, &releases)] {
+            let loader = String::from_utf8(loader).unwrap();
+            let lines: Vec<&str> = loader.split("\r\n").collect();
+            let installed = lines.iter().position(|l| *l == ":installed").unwrap();
+            assert_eq!(
+                lines[installed + 1..installed + 6],
+                [
+                    "filedelete 'C:\\SCRIPT\\GRKIT\\INSTALL.ERR'",
+                    "filesearch 'C:\\SCRIPT\\GRKIT\\RESIDENT.TTL'",
+                    "if result = 0 end",
+                    "include 'C:\\SCRIPT\\GRKIT\\RESIDENT.TTL'",
+                    "end",
+                ]
+            );
+            assert!(!lines.contains(&":resident"));
+            assert!(!lines.contains(&":watch"));
+        }
+        let resident = String::from_utf8(resident()).unwrap();
+        assert!(resident.starts_with(":resident\r\n"));
+        let lines: Vec<&str> = resident.split("\r\n").collect();
+        let labels: Vec<&str> = lines.iter().filter_map(|l| l.strip_prefix(':')).collect();
+        for line in &lines {
+            for keyword in ["goto ", "call "] {
+                // A jump, not text in a string.
+                if let Some(at) = line.find(keyword).filter(|at| !line[..*at].contains('\'')) {
+                    let target = line[at + keyword.len()..]
+                        .split_whitespace()
+                        .next()
+                        .unwrap();
+                    assert!(labels.contains(&target), "{line}");
+                }
+            }
+        }
+        // The two parts together are smaller than one loader before the split.
+        assert!(loader().len() < 12 * 1024, "{}", loader().len());
+    }
+
     #[test]
     fn the_resident_script_saves_after_the_selections_settle() {
         let script = state_script();
@@ -1166,22 +1298,45 @@ mod tests {
         assert_eq!(lines[scan + 1], "ba[254] = 999");
         assert_eq!(lines[scan + 2 + releases.len()], "faststatus = ba[254]");
         // A fast-boot SCAN without a plan notes its status and falls back to
-        // Linux.
+        // Linux. Only the Linux steps write INSTALL.ERR before their requests.
         let linux = at(":linux");
         assert_eq!(
             &lines[linux - 4..linux + 4],
             [
-                "if result != 0 goto plan_ready",
+                "if faststatus = 0 goto plan_ready",
                 "fastreason = 5",
                 "call fast_log",
                 "fast = 0",
                 ":linux",
+                "call write_error",
                 "mpause 2000",
                 "sendln 'lcmd_resp on'",
-                ":scan",
             ]
         );
         assert!(at("if fast = 0 goto linux") < linux);
+        assert_eq!(
+            lines.iter().filter(|l| **l == "call write_error").count(),
+            2
+        );
+        assert!(at("if fast = 0 call write_error") > linux);
+        // The fast-boot SCAN gives the plan header in the script array: the
+        // loader reads no plan file.
+        let fast_plan = at(":plan_fast");
+        assert_eq!(
+            &lines[fast_plan - 1..fast_plan + 8],
+            [
+                "goto plan_read",
+                ":plan_fast",
+                "planmagic = ba[128]",
+                "count = ba[129]",
+                "words = ba[130]",
+                "chunks = ba[131]",
+                "modulewords = ba[133]",
+                "moduletiles = ba[134]",
+                ":plan_read",
+            ]
+        );
+        assert_eq!(lines[at(":plan_ready") + 2], "if fast <> 0 goto plan_fast");
         at("if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'");
 
         // Without fast-boot files, the loader asks for no probe and runs no
@@ -1241,28 +1396,44 @@ mod tests {
                 .count(),
             1
         );
-        // An install file that did not run INSTALL, or a failure status of
+        // An install file that did not run INSTALL, also after a change of
+        // the memory of the fast-boot file (996, 997), or a failure status of
         // INSTALL, goes to the fallback. It notes the status, removes the
         // results of the fast-boot steps, and runs SCAN.SH.
+        // The fast-boot INSTALL gives its status in the script array: it
+        // writes no INSTALL.OK, and the loader tries again after a not-ready
+        // status.
         let shell = at("if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'");
         assert_eq!(
-            lines[shell + 1..shell + 4],
+            lines[shell + 1..shell + 13],
             [
+                "if fast = 0 goto install_linux",
                 "faststatus = ba[254]",
-                "if fast = 0 faststatus = 0",
-                "if faststatus >= 998 goto install_not_run",
+                "if faststatus = 0 goto installed",
+                "if faststatus >= 996 goto install_not_run",
+                "if faststatus = 12 goto install_wait",
+                "if faststatus = 14 goto install_wait",
+                "if faststatus = 26 goto install_wait",
+                "if faststatus = 39 goto install_wait",
+                "errorstatus = faststatus",
+                "goto install_failed",
+                ":install_linux",
+                "filesearch 'C:\\SCRIPT\\GRKIT\\INSTALL.OK'",
             ]
         );
         assert_eq!(lines[at(":install") + 1], "ba[254] = 999");
         at("if errorstatus != 0 goto install_failed");
         let not_run = at(":install_not_run");
         assert_eq!(
-            lines[not_run..not_run + 17],
+            lines[not_run..not_run + 19],
             [
                 ":install_not_run",
                 "errorstatus = faststatus",
+                "fastaddress = ba[252]",
+                "fastcount = ba[253]",
                 ":install_failed",
                 "if fast = 0 goto reject",
+                "failure = errorstatus",
                 "if errorstatus = 24 goto reject",
                 "faststatus = errorstatus",
                 "fastreason = 6",
@@ -1273,13 +1444,12 @@ mod tests {
                 "filedelete 'C:\\SCRIPT\\GRKIT\\INSTALL.LCK'",
                 "attempts = 0",
                 "failure = 60",
-                "call write_error",
                 "goto linux",
-                ":resident",
+                ":reject_close",
             ]
         );
         // The fallback is reachable only through its labels.
-        assert_eq!(lines[not_run - 1], "goto resident");
+        assert_eq!(lines[not_run - 1], "end");
     }
 
     /// A start that does not use its fast-boot files, or stops using them,

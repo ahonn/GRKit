@@ -940,6 +940,25 @@ fn the_package_scripts_test_the_install_statuses_of_the_core() {
         let line = format!("    {name} = {value},");
         assert!(header.lines().any(|l| l == line), "{line}");
     }
+    // The loader tries a fast-boot INSTALL again after these statuses.
+    let names = [
+        "STATUS_LANGUAGE_NOT_READY",
+        "STATUS_RECORD_NOT_READY",
+        "STATUS_ICONS_NOT_READY",
+        "STATUS_SETTINGS_NOT_READY",
+    ];
+    for (name, value) in names.into_iter().zip(grkit_core::runtime::STATUS_NOT_READY) {
+        let line = format!("    {name} = {value},");
+        assert!(header.lines().any(|l| l == line), "{line}");
+    }
+    // They are the statuses after which the installer tries again.
+    let installer = fs::read_to_string(root().join("runtime/installer.c")).unwrap();
+    let start = installer.find("static int not_ready(int status)").unwrap();
+    let body = &installer[start..start + installer[start..].find("\n}").unwrap()];
+    assert_eq!(body.matches("status == STATUS_").count(), names.len());
+    for name in names {
+        assert!(body.contains(&format!("status == {name}")), "{name}");
+    }
 }
 
 #[test]

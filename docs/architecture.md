@@ -56,13 +56,13 @@ At each power-on, a loader script in the RTOS waits until the camera mounts the 
 1. SCAN lists the modules and the effects and writes an allocation plan. A new package also copies its effects into the effects library. The loader allocates the arrays of the plan in the RTOS.
 2. INSTALL links the modules, writes the effect records and the icons, restores the saved settings, and installs the hooks last.
 
-The resident loader then saves the settings when they change.
+The resident loader then saves the settings when they change. Its resident part is a second script, `SCRIPT/GRKIT/RESIDENT.TTL`, which the loader includes after INSTALL: the interpreter reads a whole script before it runs it, so the start reads only the steps up to INSTALL.
 
 INSTALL changes nothing on a firmware that it does not expect. Each address must resolve in the running image, and each hook site must hold its stock instruction. Each hook belongs to one extension point, and INSTALL installs only the points that the loaded modules need. When a camera has several targets, its package holds the installer of each, and the installer of the running build runs.
 
 On the optional [fast-boot firmware](fastboot.md), the loader runs SCAN and INSTALL on the RTOS side right after power-on, through the fast-boot files of the package. It falls back to Linux if that SCAN writes no plan.
 
-The loader writes `INSTALL.ERR` from the RTOS before each step and removes it after the install. So a start that stops leaves its step on the card. The scripts also write a boot log, `GRKIT/BOOT.TXT`, with the time of each step.
+The loader writes `INSTALL.ERR` from the RTOS before each Linux step and removes it after the install. So a start that stops leaves its step on the card. The fast-boot steps write no file to the card: SCAN gives the plan header and INSTALL gives its status in the script array. The scripts also write a boot log, `GRKIT/BOOT.TXT`, with the time of each step.
 
 ### Card layout
 

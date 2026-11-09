@@ -67,9 +67,9 @@ A later interface has another version in word 1. A script that does not know the
 A GRKit package has two files for each release of its camera: the fast-boot file `SCRIPT/GRKIT/F<project><version>.BIN` and its install file `SCRIPT/GRKIT/I<project><version>.BIN`. The same package works on the official firmware.
 
 1. The loader script probes the firmware.
-2. On the fast-boot firmware, it reads the first 1 KB of the fast-boot file of the release and calls it. That head loads the whole file to the top of the RTOS code region and runs SCAN. SCAN writes the whole plan to the card.
-3. The loader allocates the arrays of the plan and calls the install file. The install file is the same head with another entry vector: it loads the fast-boot file again and runs INSTALL, which reads the plan from the card. So INSTALL uses no memory that SCAN left.
-4. If SCAN writes no plan, or INSTALL fails, the loader runs SCAN and INSTALL on Linux, as on the official firmware. After a failed INSTALL, the new plan must have the sizes of the arrays that the loader already allocated. A failed rollback (status 24) stops the loader instead.
+2. On the fast-boot firmware, it reads the first 1 KB of the fast-boot file of the release and calls it. That head loads the whole file to the top of the RTOS code region and runs SCAN. SCAN keeps the whole plan in the memory of the file and gives the plan header to the loader in the script array, so it writes no plan file to the card. The file reads each card file and directory of the start once and keeps it in memory until INSTALL ends.
+3. The loader allocates the arrays of the plan and calls the install file. The install file is the same head with the install vector and a sum for each 4 KB code page. It does not load the file again: it compares each code page in memory with its sum, and calls INSTALL in the loaded file only if no page changed. INSTALL first compares the data of the file with the sums that the last call left, then reads the plan from memory. INSTALL gives its status in the script array and writes no `INSTALL.OK` or `INSTALL.LCK`. After a not-ready status, the loader calls the install file again, and INSTALL starts as at the first call.
+4. If SCAN writes no plan, or INSTALL fails or does not run, the loader runs SCAN and INSTALL on Linux, as on the official firmware. After a failed INSTALL, the new plan must have the sizes of the arrays that the loader already allocated. A failed rollback (status 24) stops the loader instead.
 
 When a start does not use the fast-boot files, or stops using them, the loader adds one line to `GRKIT/BOOT.TXT`. A start that installs through them adds no line.
 
@@ -81,8 +81,9 @@ When a start does not use the fast-boot files, or stops using them, the loader a
 | `fast-boot RELEASE off: files missing` | The fast-boot file or its install file is not on the card. |
 | `fast-boot RELEASE scan STATUS, Linux used` | SCAN wrote no plan. |
 | `fast-boot RELEASE install STATUS, Linux used` | INSTALL failed. |
+| `fast-boot RELEASE install STATUS at ADDRESS count N, Linux used` | Other code wrote into the memory of the fast-boot file after SCAN, so INSTALL did not run. |
 
-STATUS is an installer status (`runtime/install_status.h`), 998 when the head did not run SCAN or INSTALL (the file is not complete), or 999 when the firmware did not read the file.
+STATUS is an installer status (`runtime/install_status.h`), 998 when the head did not run SCAN or INSTALL (the file is not complete), or 999 when the firmware did not read the file. 997 means that N code pages changed, and 996 that N data blocks of 64 KB changed. ADDRESS is the address of the first changed page or block, in decimal.
 
 The code of GRKit ends before the fast-boot file, which runs from 0x54c00000 (`runtime::FAST_BASE`).
 

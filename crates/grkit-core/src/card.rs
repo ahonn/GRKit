@@ -54,6 +54,9 @@ pub const LINUX_RAM_PLAN: &str = "/tmp/grkit-plan.bin";
 
 /// The files of the package folder on the card.
 pub const LOADER_FILE: &str = concat!(package_folder!("/"), "/LOADER.TTL");
+/// The resident part of the loader, which `LOADER_FILE` includes after INSTALL
+/// (`runtime::resident`).
+pub const RESIDENT_FILE: &str = concat!(package_folder!("/"), "/RESIDENT.TTL");
 pub const CORE_FILE: &str = concat!(package_folder!("/"), "/CORE.BIN");
 pub const SCAN_FILE: &str = concat!(package_folder!("/"), "/SCAN.SH");
 pub const INSTALL_FILE: &str = concat!(package_folder!("/"), "/INSTALL.SH");

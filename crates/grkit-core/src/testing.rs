@@ -31,6 +31,11 @@ pub fn fast_file(release: &runtime::FastRelease) -> Vec<u8> {
     bytes.extend_from_slice(
         format!("{}{}\0", packaging::TARGET_MARKER, release.target()).as_bytes(),
     );
+    bytes.resize(bytes.len().next_multiple_of(4), 0);
+    // The code ends with the file, as `_code_end` of `fast.ld` gives it.
+    let end = runtime::FAST_BASE + bytes.len() as u32;
+    bytes[runtime::FAST_CODE_END_OFFSET..runtime::FAST_CODE_END_OFFSET + 4]
+        .copy_from_slice(&end.to_le_bytes());
     bytes
 }
 

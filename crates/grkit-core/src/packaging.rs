@@ -15,9 +15,10 @@ use crate::{
     modules, runtime, Files,
 };
 
-pub const RUNTIME_PATHS: [&str; 5] = [
+pub const RUNTIME_PATHS: [&str; 6] = [
     "SCRIPT/STARTUP.TTL",
     card::LOADER_FILE,
+    card::RESIDENT_FILE,
     card::CORE_FILE,
     card::SCAN_FILE,
     card::INSTALL_FILE,

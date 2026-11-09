@@ -194,11 +194,12 @@ fn menu_assembly_symbols_are_typed_functions() {
 #[test]
 fn production_scripts_and_activation_match_fixed_contracts() {
     let files = grkit_core::runtime::runtime_files(b"ELF");
-    assert_eq!(files.len(), 5);
+    assert_eq!(files.len(), 6);
     assert_eq!(files["SCRIPT/GRKIT/CORE.BIN"], b"ELF");
     for (path, name) in [
         ("SCRIPT/STARTUP.TTL", "STARTUP.TTL"),
         ("SCRIPT/GRKIT/LOADER.TTL", "LOADER.TTL"),
+        ("SCRIPT/GRKIT/RESIDENT.TTL", "RESIDENT.TTL"),
         ("SCRIPT/GRKIT/SCAN.SH", "SCAN.SH"),
         ("SCRIPT/GRKIT/INSTALL.SH", "INSTALL.SH"),
     ] {

@@ -3,11 +3,12 @@
 //! off.
 
 use super::fastboot::{fast_files, install_file};
-use super::loader::{core_path, loader_with};
+use super::loader::{core_path, loader_with, resident};
 use super::ICON_STRIDE;
 use crate::camera::Camera;
 use crate::card::{
-    INSTALL_FILE, LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LOADER_FILE, PACKAGE_FOLDER, SCAN_FILE,
+    INSTALL_FILE, LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LOADER_FILE, PACKAGE_FOLDER,
+    RESIDENT_FILE, SCAN_FILE,
 };
 use crate::Files;
 
@@ -201,6 +202,7 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
     let mut files = Files::from([
         ("SCRIPT/STARTUP.TTL".into(), startup.into_bytes()),
         (LOADER_FILE.into(), loader_with(icon_stride, &releases)),
+        (RESIDENT_FILE.into(), resident()),
         (SCAN_FILE.into(), wrapper(scan, "scan", &start)),
         (INSTALL_FILE.into(), wrapper(install, "install", "")),
     ]);

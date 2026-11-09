@@ -68,14 +68,7 @@ static const char imported_path[] = IMPORTED_PATH;
 static const char data_path[] = DATA_PATH;
 static const char plan_path[] = PLAN_PATH;
 static const char plan_tmp[] = PLAN_TMP_PATH;
-/* The whole plan, which INSTALL reads: in RAM on Linux. On the RTOS side
-   (runtime/fastboot/) it is on the card, because the head loads the fast-boot
-   file again for INSTALL and no memory lasts from SCAN to INSTALL. */
-#ifdef RTOS_NATIVE
-static const char full_plan_path[] = CARD_PLAN_PATH;
-#else
-static const char full_plan_path[] = RAM_PLAN_PATH;
-#endif
+static const char ram_plan_path[] = RAM_PLAN_PATH;
 static const char lock_path[] = LOCK_PATH;
 static const char done_path[] = DONE_PATH;
 static const char failed_path[] = FAILED_PATH;
@@ -139,8 +132,21 @@ static u32 chunk_count(u32 chunk)
     return left < ICONS_PER_CHUNK ? left : ICONS_PER_CHUNK;
 }
 #include "install_plan.h"
+/* The plan header goes to the card on Linux, where the loader reads it. On
+   the RTOS side, the loader calls SCAN once and reads the header from the
+   script array (runtime/fastboot/backend.c), so SCAN writes no plan file. */
+static void plan_files_close(long fd)
+{
+#ifndef RTOS_NATIVE
+    syscall6(6, fd, 0, 0, 0, 0, 0);
+    syscall6(10, (u32)plan_tmp, 0, 0, 0, 0, 0);
+#else
+    (void)fd;
+#endif
+}
 static int scan(void)
 {
+#ifndef RTOS_NATIVE
     /* An earlier attempt of this power-on wrote the plan: the loader deletes
        it at power-on. A second plan would replace it in a rename, which the
        camera's Linux does not do. */
@@ -152,6 +158,9 @@ static int scan(void)
     fd = syscall6(5, (u32)plan_tmp, 0xc1, 0600, 0, 0, 0);
     if (fd == -17) return STATUS_BUSY;
     if (fd < 0) return STATUS_PLAN_WRITE;
+#else
+    long fd = -1;
+#endif
     /* The marker files of the safe mode and of the profile. */
     safe_mode = present(safe_path) || present(safe_text_path);
     profile_mode = present(profile_path) || present(profile_text_path);
@@ -161,8 +170,7 @@ static int scan(void)
     collect();
     int status = discover();
     if (status) {
-        syscall6(6, fd, 0, 0, 0, 0, 0);
-        syscall6(10, (u32)plan_tmp, 0, 0, 0, 0, 0);
+        plan_files_close(fd);
         return status;
     }
     plan_array();
@@ -187,16 +195,19 @@ static int scan(void)
         put32(entry + GRKIT_PLANNED_CHOICE, listed_choice[i]);
         put32(entry + GRKIT_PLANNED_RECORD, listed_record[i]);
     }
-    /* The whole plan goes to full_plan_path, then only its header to the
-       card. The loader starts INSTALL when the header appears on the card,
-       so INSTALL always finds the whole plan. On Linux, a card write of the
-       whole plan takes about 0.35 s on a camera, so it goes to RAM. */
+    /* The whole plan goes to RAM, then only its header to the card. The
+       loader starts INSTALL when the header appears on the card, so INSTALL
+       always finds the whole plan. A card write of the whole plan takes about
+       0.35 s on a camera. On the RTOS side, the RAM is that of the fast-boot
+       file (runtime/fastboot/backend.c). */
     u32 done = 0, total = effects_at + listed_count * GRKIT_PLANNED_EFFECT_SIZE;
-    if (!write_file(full_plan_path, plan, total)) {
-        syscall6(6, fd, 0, 0, 0, 0, 0);
-        syscall6(10, (u32)plan_tmp, 0, 0, 0, 0, 0);
+    if (!write_file(ram_plan_path, plan, total)) {
+        plan_files_close(fd);
         return STATUS_PLAN_WRITE;
     }
+#ifdef RTOS_NATIVE
+    (void)done;
+#else
     while (done < GRKIT_PLAN_HEADER_SIZE) {
         long n = syscall6(4, fd, (u32)(plan + done), GRKIT_PLAN_HEADER_SIZE - done, 0, 0, 0);
         if (n <= 0) break;
@@ -207,6 +218,7 @@ static int scan(void)
         syscall6(10, (u32)plan_tmp, 0, 0, 0, 0, 0);
         return STATUS_PLAN_WRITE;
     }
+#endif
     print("GR_MODULE_SCANNED "); number(count); print("\n");
     return 0;
 }
@@ -326,12 +338,12 @@ static int relocate(void)
 /* SCAN wrote the plan at this power-on, and the loader allocated the arrays
    for it. INSTALL takes the effects from the plan, so that both steps install
    the same effects. */
-/* The whole plan of this start (full_plan_path). Its header must be the
-   header on the card, which the loader allocated the arrays from. */
+/* The plan of this start from RAM. Its header must be the header on the card,
+   which the loader allocated the arrays from. */
 static int read_plan(void)
 {
     u32 have = 0; long got = 0; u8 extra, header[GRKIT_PLAN_HEADER_SIZE];
-    long fd = syscall6(5, (u32)full_plan_path, 0x8800, 0, 0, 0, 0);
+    long fd = syscall6(5, (u32)ram_plan_path, 0x8800, 0, 0, 0, 0);
     if (fd < 0) return STATUS_PLAN;
     while (have < sizeof(plan)) {
         got = syscall6(3, fd, (u32)(plan + have), sizeof(plan) - have, 0, 0, 0);
@@ -342,8 +354,14 @@ static int read_plan(void)
     syscall6(6, fd, 0, 0, 0, 0, 0);
     if (got < 0 || (have == sizeof(plan) && got) || have < GRKIT_PLAN_HEADER_SIZE ||
         get32(plan + GRKIT_PLAN_MAGIC) != GRKIT_PLAN_MAGIC_VALUE) return STATUS_PLAN;
+#ifdef RTOS_NATIVE
+    /* The loader allocated the arrays from the header of this plan in its
+       script array, so no card header exists. */
+    (void)header;
+#else
     if (read_text(plan_path, header, sizeof(header)) != (long)sizeof(header) || !equal(header, plan, sizeof(header)))
         return STATUS_PLAN;
+#endif
     count = get32(plan + GRKIT_PLAN_COUNT);
     safe_mode = get32(plan + GRKIT_PLAN_MODES) & GRKIT_PLAN_SAFE;
     profile_mode = (get32(plan + GRKIT_PLAN_MODES) & GRKIT_PLAN_PROFILE) != 0;
@@ -743,6 +761,12 @@ static int install(void)
     u32 module_start;
     int status = read_plan();
     if (status) return status;
+    /* The checks of the firmware read only memory, so an attempt before the
+       camera is ready ends before it reads the modules from the card. */
+    if ((status = relocate())) return status;
+    if ((status = check_firmware())) return status;
+    u32 pixels = icon_pixels();
+    if (!pixels) return STATUS_ICONS_NOT_READY;
     /* The loaded modules add the points that they need (install_modules). */
     needed_points = 0;
     /* The modules of SCAN, which the loader reserved memory for. */
@@ -752,12 +776,8 @@ static int install(void)
     if (get32(plan + GRKIT_PLAN_HEADER_WORDS) != size / 4 || get32(plan + GRKIT_PLAN_ICON_CHUNKS) != icon_chunks ||
         get32(plan + GRKIT_PLAN_MODULE_WORDS) != module_words || get32(plan + GRKIT_PLAN_MODULE_TILES) != module_tiles)
         return STATUS_PLAN;
-    if ((status = relocate())) return status;
     if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, CODE_END, &module_start))) return status;
     if ((status = check_arrays(&arrays))) return status;
-    if ((status = check_firmware())) return status;
-    u32 pixels = icon_pixels();
-    if (!pixels) return STATUS_ICONS_NOT_READY;
     write_header(&arrays);
 #ifndef GRKIT_NO_IMAGE_CONTROL
     write_records(&arrays, pixels);
@@ -912,8 +932,12 @@ __attribute__((used)) void start(u32 *stack)
         long fd = -1;
         int other = mode != INSTALL_LAST && other_build(mode);
         if (other) status = mode == INSTALL_KNOWN ? STATUS_OTHER_BUILD : STATUS_RELOCATION;
-        /* The lock admits one install attempt at a time and stays after a result. */
+#ifndef RTOS_NATIVE
+        /* The lock admits one install attempt at a time and stays after a
+           result. On the RTOS side, the loader calls INSTALL once at a time
+           and reads its status from the script array. */
         else if (argc == 2 && !create(lock_path, 0)) status = STATUS_BUSY;
+#endif
         else if ((fd = syscall6(5, (u32)"/dev/mem", 0x101002, 0, 0, 0, 0)) < 0) status = STATUS_NO_MEMORY;
         else {
             long mapped = syscall6(192, 0, MAP_SIZE, 3, 1, fd, MAP_BASE >> 12);
@@ -931,11 +955,15 @@ __attribute__((used)) void start(u32 *stack)
         /* The loader polls these files: retry after not-ready, stop after a result.
            Another build leaves the next installer to run. */
         if (argc == 2 && status != STATUS_BUSY && !other) {
+#ifdef RTOS_NATIVE
+            if (!not_ready(status)) write_report(status);
+#else
             if (not_ready(status)) syscall6(10, (u32)lock_path, 0, 0, 0, 0, 0);
             else {
                 write_report(status);
                 create(status ? failed_path : done_path, status);
             }
+#endif
         }
     }
     if (status) { print("GR_MODULE_REJECTED "); number(status); print("\n"); }

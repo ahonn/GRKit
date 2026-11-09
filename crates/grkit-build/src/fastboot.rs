@@ -82,9 +82,23 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                 "/* The path of this fast-boot file, which its head reads. */\n\
                  #define FAST_PATH {:?}\n\
                  /* The status word of the head in the script array. */\n\
-                 #define FAST_STATUS_INDEX {}\n",
+                 #define FAST_STATUS_INDEX {}\n\
+                 /* The detail words of a changed status, before the status word. */\n\
+                 #define FAST_DETAIL_INDEX {}\n\
+                 /* The status when INSTALL found that its data changed. */\n\
+                 #define FAST_STATUS_DATA_CHANGED {}\n\
+                 /* The plan header that SCAN gives the loader in the script array. */\n\
+                 #define FAST_PLAN_INDEX {}\n\
+                 #define FAST_PLAN_WORDS {}\n\
+                 /* The RAM file of the whole plan. */\n\
+                 #define FAST_PLAN_FILE {:?}\n",
                 release.rtos_path(),
-                grkit_core::runtime::FAST_STATUS_INDEX
+                grkit_core::runtime::FAST_STATUS_INDEX,
+                grkit_core::runtime::FAST_DETAIL_INDEX,
+                grkit_core::runtime::FAST_STATUS_DATA_CHANGED,
+                grkit_core::runtime::FAST_PLAN_INDEX,
+                grkit_core::runtime::FAST_PLAN_WORDS,
+                grkit_core::card::LINUX_RAM_PLAN
             ),
         )?;
         let (backend, head) = (build.join("backend.o"), build.join("head.o"));

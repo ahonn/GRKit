@@ -7,8 +7,16 @@
  *   - serves the card paths (/media/storage1/...) from the SD card through the
  *     RTOS file API (C:\...), so every file the installer writes reaches the
  *     card as on Linux;
- *   - keeps no file in memory: the head loads the whole file again for
- *     INSTALL, so nothing lasts from SCAN to INSTALL but the card;
+ *   - keeps /tmp files in RAM: the whole plan that INSTALL reads after SCAN;
+ *     SCAN gives the loader the plan header in the script array
+ *     (FAST_PLAN_INDEX), so no plan file reaches the card;
+ *   - reads each card file and directory of the start once (the cache), as
+ *     nothing but this file changes the card until INSTALL ends;
+ *   - checks at each INSTALL call that its data did not change since the
+ *     last call (data_changed), as the head of the install file checks the
+ *     code, then starts INSTALL from the .data of the file and a clear .bss
+ *     (data_reset), so a retry after a not-ready status starts as the first
+ *     try;
  *   - returns the physical map base from mmap, so at(p) == (u8*)p;
  *   - implements msync as a real cache clean + instruction-cache invalidate;
  *   - routes stdout to the RTOS printf and the exit markers to the RTOS log.
@@ -25,6 +33,7 @@ typedef unsigned int u32;
 #include "target.h"
 /* The status word of the head in the script array (FAST_STATUS_INDEX). */
 #include "fast.h"
+#include "../install_status.h"
 
 typedef int (*printf_fn)(const char *, ...);
 typedef void (*log_fn)(u32, u32, u32, u32, const char *, ...);
@@ -66,6 +75,16 @@ typedef int (*fs_stat_fn)(const char *name, void *out);
 static u32 slen(const char *s) { u32 n = 0; while (s[n]) ++n; return n; }
 static int seq(const char *a, const char *b) { while (*a && *a == *b) { ++a; ++b; } return *a == *b; }
 static int prefix(const char *s, const char *p) { while (*p) if (*s++ != *p++) return 0; return 1; }
+/* The RTOS file system ignores the case of names. */
+static int same_name(const char *a, const char *b)
+{
+    for (;; ++a, ++b) {
+        char x = *a >= 'a' && *a <= 'z' ? (char)(*a - 32) : *a, y = *b >= 'a' && *b <= 'z' ? (char)(*b - 32) : *b;
+        if (x != y) return 0;
+        if (!x) return 1;
+    }
+}
+static void copy_name(char *to, const char *from) { while ((*to++ = *from++)) {} }
 
 static void putbytes(const char *s, u32 n)
 {
@@ -92,6 +111,32 @@ static int dos_path(const char *path, char *out)
     return 1;
 }
 
+/* ---- RAM files (/tmp) ---------------------------------------------------- */
+/* The only /tmp file is the plan (FAST_PLAN_FILE). */
+#define RAM_FILES 1U
+#define RAM_CAP (512U * 1024U)
+#define PATH_SIZE 96U
+struct ram_file { char path[PATH_SIZE]; u32 size; int present; u8 bytes[RAM_CAP]; };
+static struct ram_file ram[RAM_FILES] __attribute__((section(".fast_keep")));
+static struct ram_file *ram_find(const char *path)
+{
+    for (u32 i = 0; i < RAM_FILES; ++i) if (ram[i].present && seq(ram[i].path, path)) return &ram[i];
+    return 0;
+}
+static struct ram_file *ram_make(const char *path)
+{
+    struct ram_file *f = ram_find(path);
+    if (!f) {
+        if (slen(path) >= PATH_SIZE) return 0;
+        for (u32 i = 0; i < RAM_FILES && !f; ++i) if (!ram[i].present) f = &ram[i];
+        if (!f) return 0;
+        u32 i = 0; for (; path[i]; ++i) f->path[i] = path[i]; f->path[i] = 0;
+        f->present = 1;
+    }
+    f->size = 0;
+    return f;
+}
+
 /* ---- directory listings --------------------------------------------------- */
 #define LIST_NAMES 256U
 #define NAME_SIZE 16U    /* 8.3 names */
@@ -100,6 +145,63 @@ struct listing { u32 count; char names[LIST_NAMES][NAME_SIZE]; };
 static struct listing listings[LISTINGS];
 static int listing_used[LISTINGS];
 static u8 dir_entry[2048] __attribute__((aligned(8)));
+
+/* ---- the cache of the start --------------------------------------------------
+   SCAN reads each effect three times and each module twice, and INSTALL
+   reads the modules again. On a camera each RTOS file call is a round trip to
+   the file-system task and each read is a card command, so the first open
+   reads a whole file into the cache, and later opens read the cache. The
+   cache also keeps directory listings and the paths that do not exist. A
+   write, a removal, a rename, or a new directory removes what it can change.
+   The cache lasts from SCAN to INSTALL (.fast_keep). */
+#define CACHE_BYTES (1024U * 1024U)
+#define CACHE_FILES 96U
+#define CACHE_MISSING 32U
+#define CACHE_LISTINGS 8U
+struct cached_file { char dos[DOS_SIZE]; u32 offset, size; };
+struct cached_listing { char dos[DOS_SIZE]; struct listing list; };
+struct cache {
+    u32 used, files, missing, listings;
+    struct cached_file file[CACHE_FILES];
+    char missing_path[CACHE_MISSING][DOS_SIZE];
+    struct cached_listing listing[CACHE_LISTINGS];
+    u8 bytes[CACHE_BYTES] __attribute__((aligned(8)));
+};
+static struct cache cache __attribute__((section(".fast_keep")));
+static struct cached_file *cache_file(const char *dos)
+{
+    for (u32 i = 0; i < cache.files; ++i) if (same_name(cache.file[i].dos, dos)) return &cache.file[i];
+    return 0;
+}
+static int cache_missing(const char *dos)
+{
+    for (u32 i = 0; i < cache.missing; ++i) if (same_name(cache.missing_path[i], dos)) return 1;
+    return 0;
+}
+static void cache_note_missing(const char *dos)
+{
+    if (cache.missing < CACHE_MISSING && slen(dos) < DOS_SIZE) copy_name(cache.missing_path[cache.missing++], dos);
+}
+static struct listing *cache_listing(const char *dos)
+{
+    for (u32 i = 0; i < cache.listings; ++i) if (same_name(cache.listing[i].dos, dos)) return &cache.listing[i].list;
+    return 0;
+}
+/* A change of `dos`: its content, the listings, and the missing paths can
+   be other now. The bytes of a removed file stay unused until power-off. */
+static void cache_forget(const char *dos)
+{
+    struct cached_file *f = cache_file(dos);
+    /* Field by field: a struct copy would call memcpy, which this file has not. */
+    if (f) {
+        const struct cached_file *last = &cache.file[--cache.files];
+        copy_name(f->dos, last->dos);
+        f->offset = last->offset;
+        f->size = last->size;
+    }
+    cache.missing = 0;
+    cache.listings = 0;
+}
 
 static int list_directory(const char *dos, struct listing *l)
 {
@@ -120,8 +222,11 @@ static int list_directory(const char *dos, struct listing *l)
 }
 
 /* ---- open-file table ------------------------------------------------------ */
-enum kind { FREE, CARD_FILE, CARD_DIR, MEMORY };
-struct open_file { enum kind kind; u32 fno; u32 size; u32 position; int writing; struct listing *list; };
+enum kind { FREE, CARD_FILE, CARD_DIR, RAM_FILE, CACHED_FILE, MEMORY };
+struct open_file {
+    enum kind kind; u32 fno; u32 size; u32 position; int writing;
+    struct ram_file *ram; const u8 *bytes; struct listing *list; int own_list;
+};
 #define OPEN_FILES 12U
 #define FIRST_FD 3U
 static struct open_file open_files[OPEN_FILES];
@@ -158,24 +263,78 @@ static long do_open(const char *path, u32 flags)
     char dos[DOS_SIZE];
     if (seq(path, "/dev/mem")) {
         o->kind = MEMORY;
+    } else if (prefix(path, "/tmp/")) {
+        if (flags == 0x8800) {
+            o->ram = ram_find(path);
+            if (!o->ram) return ENOENT_ERROR;
+        } else if (flags == 0xc1 || flags == 0x241) {
+            if (flags == 0xc1 && ram_find(path)) return EEXIST_ERROR;
+            o->ram = ram_make(path);
+            if (!o->ram) return EIO_ERROR;
+            o->writing = 1;
+        } else {
+            return EBADF_ERROR;
+        }
+        o->kind = RAM_FILE;
     } else if (dos_path(path, dos)) {
         int exists = 0;
         if (flags == 0xc000) {
-            u32 k = 0;
-            while (k < LISTINGS && listing_used[k]) ++k;
-            if (k == LISTINGS) return EMFILE_ERROR;
-            if (list_directory(dos, &listings[k])) return ENOENT_ERROR;
-            listing_used[k] = 1;
-            o->list = &listings[k];
+            o->list = cache_listing(dos);
+            if (!o->list && cache_missing(dos)) return ENOENT_ERROR;
+            if (!o->list && cache.listings < CACHE_LISTINGS && slen(dos) < DOS_SIZE) {
+                struct cached_listing *c = &cache.listing[cache.listings];
+                if (list_directory(dos, &c->list)) { cache_note_missing(dos); return ENOENT_ERROR; }
+                copy_name(c->dos, dos);
+                ++cache.listings;
+                o->list = &c->list;
+            }
+            if (!o->list) {
+                u32 k = 0;
+                while (k < LISTINGS && listing_used[k]) ++k;
+                if (k == LISTINGS) return EMFILE_ERROR;
+                if (list_directory(dos, &listings[k])) return ENOENT_ERROR;
+                listing_used[k] = 1;
+                o->list = &listings[k];
+                o->own_list = 1;
+            }
             o->kind = CARD_DIR;
         } else if (flags == 0x8800) {
+            struct cached_file *c = cache_file(dos);
+            if (c) {
+                o->bytes = cache.bytes + c->offset;
+                o->size = c->size;
+                o->kind = CACHED_FILE;
+                return (long)(s + FIRST_FD);
+            }
+            if (cache_missing(dos)) return ENOENT_ERROR;
             o->size = card_size(dos, &exists);
-            if (!exists) return ENOENT_ERROR;
+            if (!exists) { cache_note_missing(dos); return ENOENT_ERROR; }
             int f = FS_OPEN(dos, MODE_RDWR, 0);
             if (f < 0) return ENOENT_ERROR;
+            /* The whole file in one read, if the cache has room. After a
+               failed read, the file reads as without the cache. */
+            u32 at = cache.used, len = 0;
+            int room = cache.files < CACHE_FILES && slen(dos) < DOS_SIZE && o->size <= CACHE_BYTES - at;
+            if (room && (!o->size || !FS_READ((u32)f, cache.bytes + at, o->size, &len))) {
+                FS_CLOSE((u32)f);
+                c = &cache.file[cache.files++];
+                copy_name(c->dos, dos);
+                c->offset = at;
+                c->size = o->size;
+                cache.used = (at + o->size + 7U) & ~7U;
+                o->bytes = cache.bytes + at;
+                o->kind = CACHED_FILE;
+                return (long)(s + FIRST_FD);
+            }
+            if (room) {
+                FS_CLOSE((u32)f);
+                f = FS_OPEN(dos, MODE_RDWR, 0);
+                if (f < 0) return ENOENT_ERROR;
+            }
             o->fno = (u32)f;
             o->kind = CARD_FILE;
         } else if (flags == 0xc1 || flags == 0x241) {
+            cache_forget(dos);
             card_size(dos, &exists);
             if (flags == 0xc1 && exists) return EEXIST_ERROR;
             if (!exists) {
@@ -240,6 +399,13 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
     case 3: /* read */
         o = opened(a);
         if (!o) return EBADF_ERROR;
+        if (o->kind == RAM_FILE || o->kind == CACHED_FILE) {
+            const u8 *from = o->kind == RAM_FILE ? o->ram->bytes : o->bytes;
+            u32 size = o->kind == RAM_FILE ? o->ram->size : o->size;
+            u32 left = size - o->position, k = left < c ? left : c;
+            for (u32 i = 0; i < k; ++i) ((u8 *)b)[i] = from[o->position + i];
+            o->position += k; return (long)k;
+        }
         if (o->kind != CARD_FILE || o->writing) return EBADF_ERROR;
         { u32 left = o->size - o->position, k = left < c ? left : c, len = 0;
           /* The RTOS read reports the requested count, so read exactly what is left. */
@@ -249,6 +415,12 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
         if (a == 1 || a == 2) { putbytes((const char *)b, c); return (long)c; }
         o = opened(a);
         if (!o || !o->writing) return EBADF_ERROR;
+        if (o->kind == RAM_FILE) {
+            u32 room = RAM_CAP - o->position, k = room < c ? room : c;
+            for (u32 i = 0; i < k; ++i) o->ram->bytes[o->position + i] = ((const u8 *)b)[i];
+            o->position += k; if (o->position > o->ram->size) o->ram->size = o->position;
+            return (long)k;
+        }
         { u32 len = 0;
           if (c && FS_WRITE(o->fno, (void *)b, c, &len)) return EIO_ERROR;
           o->position += c; return (long)c; }
@@ -257,11 +429,14 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
     case 6: /* close */
         o = opened(a); if (!o) return EBADF_ERROR;
         if (o->kind == CARD_FILE) FS_CLOSE(o->fno);
-        if (o->kind == CARD_DIR) for (u32 k = 0; k < LISTINGS; ++k) if (&listings[k] == o->list) listing_used[k] = 0;
+        if (o->kind == CARD_DIR && o->own_list) for (u32 k = 0; k < LISTINGS; ++k) if (&listings[k] == o->list) listing_used[k] = 0;
         o->kind = FREE;
         return 0;
     case 10: /* unlink */
+        if (prefix((const char *)a, "/tmp/")) { struct ram_file *g = ram_find((const char *)a); if (!g) return ENOENT_ERROR; g->present = 0; return 0; }
         if (!dos_path((const char *)a, dos)) return ENOENT_ERROR;
+        if (cache_missing(dos)) return ENOENT_ERROR;
+        cache_forget(dos);
         return FS_REMOVE(dos) ? ENOENT_ERROR : 0;
     case 19: /* lseek: directories only (rewind, tell, skip) */
         o = opened(a); if (!o || o->kind != CARD_DIR || c > 1) return EBADF_ERROR;
@@ -273,11 +448,21 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
         return list_entries(o, (u8 *)b, c);
     case 38: /* rename: Linux replaces the destination, the RTOS does not */
         if (!dos_path((const char *)a, dos) || !dos_path((const char *)b, dos2)) return ENOENT_ERROR;
+        cache_forget(dos);
+        cache_forget(dos2);
         FS_REMOVE(dos2);
         return FS_RENAME(dos, dos2) ? ENOENT_ERROR : 0;
     case 39: /* mkdir */
         if (!dos_path((const char *)a, dos)) return ENOENT_ERROR;
-        return FS_MKDIR(dos) ? EIO_ERROR : 0;
+        if (cache_listing(dos)) return EEXIST_ERROR;
+        cache_forget(dos);
+        if (!FS_MKDIR(dos)) return 0;
+        /* As on Linux, an existing directory is EEXIST: the installer writes
+           the report only after a new or an existing data folder. */
+        { u32 dno = 0;
+          if (FS_OPENDIR(dos, &dno)) return EIO_ERROR;
+          FS_CLOSEDIR(dno);
+          return EEXIST_ERROR; }
     case 91: /* munmap */
         return 0;
     case 192: /* mmap: physical identity map so at(p) == (u8*)p */
@@ -318,6 +503,63 @@ __attribute__((naked, noinline)) static int on_stack(int (*fn)(u32 *), u32 *arg,
         "pop {r4, pc}\n");
 }
 
+/* ---- the data of the file between calls ----------------------------------
+   Nothing but SCAN and INSTALL changes the data of the file (.data and .bss,
+   from _code_end to _data_end in fast.ld), and the loader script calls them
+   one at a time. So after each call the data has a sum for each block, and
+   INSTALL runs only if no block changed. A change means that other code
+   wrote into this memory between the calls. */
+#define DATA_BLOCK (64U * 1024U)
+#define DATA_BLOCKS 96U
+/* The most bytes of .data (fast.ld checks it). */
+#define DATA_COPY (128U * 1024U)
+extern u32 _code_end[], _edata[], _keep_start[], _data_end[];
+static u32 data_sums[DATA_BLOCKS] __attribute__((section(".fast_sums")));
+static u32 data_blocks(void)
+{
+    u32 bytes = (u32)_data_end - (u32)_code_end, n = (bytes + DATA_BLOCK - 1) / DATA_BLOCK;
+    return n < DATA_BLOCKS ? n : DATA_BLOCKS;
+}
+/* The sum of block `i`. The last block holds the rest of the data. */
+static u32 data_sum(u32 i, u32 n)
+{
+    const u32 *p = _code_end + i * (DATA_BLOCK / 4);
+    const u32 *end = i + 1 == n ? _data_end : p + DATA_BLOCK / 4;
+    u32 sum = 0;
+    while (p < end) { sum = *p++ + ((sum >> 27) | (sum << 5)); }
+    return sum;
+}
+static void data_seal(void)
+{
+    u32 n = data_blocks();
+    for (u32 i = 0; i < n; ++i) data_sums[i] = data_sum(i, n);
+}
+/* The .data of the file, before SCAN changed it. INSTALL changes .data too:
+   relocate() moves the patch addresses in place, so a second try on the
+   same .data would move them again. */
+static u32 data_copy[DATA_COPY / 4] __attribute__((section(".fast_keep")));
+static void data_keep(void)
+{
+    for (u32 *p = _code_end, *q = data_copy; p < _edata; ) *q++ = *p++;
+}
+static void data_reset(void)
+{
+    for (u32 *p = _code_end, *q = data_copy; p < _edata; ) *p++ = *q++;
+    for (u32 *p = _edata; p < _keep_start; ) *p++ = 0;
+}
+/* Writes the first changed block and the number of changed blocks to the
+   detail words, and returns 1, if a block changed. */
+static int data_changed(u32 *array)
+{
+    u32 n = data_blocks(), changed = 0, first = 0;
+    for (u32 i = 0; i < n; ++i)
+        if (data_sum(i, n) != data_sums[i]) { if (!changed) first = (u32)(_code_end + i * (DATA_BLOCK / 4)); ++changed; }
+    if (!changed) return 0;
+    array[FAST_DETAIL_INDEX] = first;
+    array[FAST_DETAIL_INDEX + 1] = changed;
+    return 1;
+}
+
 /* The installer with one argument, as SCAN.SH and INSTALL.SH run it. The
    loader script reads the results from the card: PLAN.BIN after a scan,
    INSTALL.OK or INSTALL.ERR after an install. */
@@ -335,14 +577,17 @@ static int run(const char *mode)
 static int scan(u32 *array)
 {
     int s = run("--scan");
+    struct ram_file *plan = ram_find(FAST_PLAN_FILE);
+    if (!s && (!plan || plan->size < FAST_PLAN_WORDS * 4)) s = STATUS_PLAN_WRITE;
+    if (!s) for (u32 i = 0; i < FAST_PLAN_WORDS; ++i) array[FAST_PLAN_INDEX + i] = ((const u32 *)plan->bytes)[i];
     RLOG(0, 0, 0, 0, "GR_MODULE_SCAN_EXIT_%d", s);
     array[FAST_STATUS_INDEX] = (u32)s;
     return s;
 }
 
 /* The later calls, from the install file of the release after the script
-   allocated the planned arrays: install. The head loaded this file again
-   and cleared the BSS, so INSTALL reads its plan from the card. */
+   allocated the planned arrays: install. INSTALL reads the plan that SCAN
+   left in RAM. The loader calls it again after a not-ready status. */
 static int install(u32 *array)
 {
     int s = run("--install");
@@ -351,5 +596,24 @@ static int install(u32 *array)
     return s;
 }
 
-__attribute__((used)) int rtos_fastboot_scan(u32 *ba) { return on_stack(scan, ba, stack + STACK_SIZE); }
-__attribute__((used)) int rtos_fastboot_install(u32 *ba) { return on_stack(install, ba, stack + STACK_SIZE); }
+/* The sums are taken and checked on the stack of the script task, after the
+   call left the stack of this file. */
+__attribute__((used)) int rtos_fastboot_scan(u32 *ba)
+{
+    data_keep();
+    int s = on_stack(scan, ba, stack + STACK_SIZE);
+    data_seal();
+    return s;
+}
+__attribute__((used)) int rtos_fastboot_install(u32 *ba)
+{
+    if (data_changed(ba)) {
+        RLOG(0, 0, 0, 0, "GRKit: the fast-boot data changed after SCAN");
+        ba[FAST_STATUS_INDEX] = FAST_STATUS_DATA_CHANGED;
+        return FAST_STATUS_DATA_CHANGED;
+    }
+    data_reset();
+    int s = on_stack(install, ba, stack + STACK_SIZE);
+    data_seal();
+    return s;
+}
