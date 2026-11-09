@@ -91,14 +91,21 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                  #define FAST_PLAN_INDEX {}\n\
                  #define FAST_PLAN_WORDS {}\n\
                  /* The RAM file of the whole plan. */\n\
-                 #define FAST_PLAN_FILE {:?}\n",
+                 #define FAST_PLAN_FILE {:?}\n\
+                 /* The pack of the effects and the modules of a start, and its folders. */\n\
+                 #define FAST_PACK_FILE {:?}\n\
+                 #define FAST_PACK_FOLDERS {{{:?}, {:?}, {:?}}}\n",
                 release.rtos_path(),
                 grkit_core::runtime::FAST_STATUS_INDEX,
                 grkit_core::runtime::FAST_DETAIL_INDEX,
                 grkit_core::runtime::FAST_STATUS_DATA_CHANGED,
                 grkit_core::runtime::FAST_PLAN_INDEX,
                 grkit_core::runtime::FAST_PLAN_WORDS,
-                grkit_core::card::LINUX_RAM_PLAN
+                grkit_core::card::LINUX_RAM_PLAN,
+                format!("{}\\CACHE.PAK", grkit_core::card::DATA_FOLDER),
+                format!("{}\\EFFECTS", grkit_core::card::DATA_FOLDER),
+                format!("{}\\MODULES", grkit_core::card::RTOS_PACKAGE_FOLDER),
+                format!("{}\\MODULES", grkit_core::card::DATA_FOLDER)
             ),
         )?;
         let (backend, head) = (build.join("backend.o"), build.join("head.o"));

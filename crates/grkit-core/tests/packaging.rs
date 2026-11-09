@@ -83,7 +83,10 @@ fn package_round_trip_is_deterministic_and_preserves_metadata() {
     for index in 0..archive.len() {
         let entry = archive.by_index(index).unwrap();
         assert_eq!(entry.compression(), CompressionMethod::Stored);
-        assert_eq!(entry.last_modified().unwrap().year(), 2026);
+        // The time follows from the bytes: in 2026 or 2027, with even seconds.
+        let time = entry.last_modified().unwrap();
+        assert!((2026..=2027).contains(&time.year()));
+        assert_eq!(time.second() % 2, 0);
         let name = entry.name().unwrap();
         let expected = if name.ends_with(".BIN") || name.ends_with(".SH") {
             0o100755
