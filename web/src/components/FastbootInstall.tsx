@@ -1,4 +1,4 @@
-import { LATEST, latestName } from '../fastboot';
+import { LATEST, latestCamera } from '../fastboot';
 import { FASTBOOT_SCREENS, type FastbootScreen } from '../fastbootScreens';
 import type { Strings } from '../i18n';
 
@@ -27,7 +27,7 @@ export function FastbootInstall({ strings }: { strings: Strings }) {
   // GR IV and GR IV Monochrome share the file, so each file name is one row.
   const files = [...new Set(LATEST.map((item) => item.file))].map((file) => ({
     file,
-    cameras: LATEST.filter((item) => item.file === file).map(latestName),
+    cameras: LATEST.filter((item) => item.file === file).map(latestCamera),
   }));
 
   return (

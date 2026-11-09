@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firmwareName, LATEST, LATEST_NAMES, newerRelease, releaseName } from './fastboot';
+import { firmwareName, LATEST, latestCamera, LATEST_NAMES, newerRelease, releaseName } from './fastboot';
 
 describe('releaseName', () => {
   it('names the camera and the version of a release', () => {
@@ -21,6 +21,12 @@ describe('newerRelease', () => {
     expect(newerRelease('gr3x-1.70')).toBeNull();
     expect(newerRelease('gr4-1.20')).toBeNull();
     expect(LATEST_NAMES).toEqual(['GR III 2.20', 'GR IIIx 1.70', 'GR IV 1.20', 'GR IV Monochrome 1.10']);
+  });
+});
+
+describe('latestCamera', () => {
+  it('names the camera of each entry without its version', () => {
+    expect(LATEST.map(latestCamera)).toEqual(['GR III', 'GR IIIx', 'GR IV', 'GR IV Monochrome']);
   });
 });
 

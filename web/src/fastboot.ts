@@ -36,6 +36,11 @@ export function latestName(item: (typeof LATEST)[number]): string {
   return item.name ?? releaseName(item.release);
 }
 
+/** The camera of an entry of `LATEST` without its version, such as `GR IV Monochrome`. */
+export function latestCamera(item: (typeof LATEST)[number]): string {
+  return latestName(item).replace(/ [\d.]+$/, '');
+}
+
 /** The cameras and versions that the page makes, as `latestName` names them. */
 export const LATEST_NAMES: readonly string[] = LATEST.map(latestName);
 
