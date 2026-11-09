@@ -112,9 +112,11 @@ static int dos_path(const char *path, char *out)
 }
 
 /* ---- RAM files (/tmp) ---------------------------------------------------- */
-/* The only /tmp file is the plan (FAST_PLAN_FILE). */
+/* The only /tmp file is the plan (FAST_PLAN_FILE). Its largest size is that
+   of the plan buffer of installer.c, 354 KB with 40 effects and 64 listed. A
+   longer plan is a short write, so SCAN fails and the loader uses Linux. */
 #define RAM_FILES 1U
-#define RAM_CAP (512U * 1024U)
+#define RAM_CAP (360U * 1024U)
 #define PATH_SIZE 96U
 struct ram_file { char path[PATH_SIZE]; u32 size; int present; u8 bytes[RAM_CAP]; };
 static struct ram_file ram[RAM_FILES] __attribute__((section(".fast_keep")));
@@ -154,7 +156,9 @@ static u8 dir_entry[2048] __attribute__((aligned(8)));
    cache also keeps directory listings and the paths that do not exist. A
    write, a removal, a rename, or a new directory removes what it can change.
    The cache lasts from SCAN to INSTALL (.fast_keep). */
-#define CACHE_BYTES (1024U * 1024U)
+/* The official modules and 40 effects fit. A file that does not fit reads
+   from the card, as without the cache. */
+#define CACHE_BYTES (768U * 1024U)
 #define CACHE_FILES 96U
 #define CACHE_MISSING 32U
 #define CACHE_LISTINGS 8U
@@ -512,7 +516,7 @@ __attribute__((naked, noinline)) static int on_stack(int (*fn)(u32 *), u32 *arg,
 #define DATA_BLOCK (64U * 1024U)
 #define DATA_BLOCKS 96U
 /* The most bytes of .data (fast.ld checks it). */
-#define DATA_COPY (128U * 1024U)
+#define DATA_COPY (80U * 1024U)
 extern u32 _code_end[], _edata[], _keep_start[], _data_end[];
 static u32 data_sums[DATA_BLOCKS] __attribute__((section(".fast_sums")));
 static u32 data_blocks(void)
