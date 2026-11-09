@@ -42,6 +42,17 @@ describe('STRINGS', () => {
     expect(shape('ko')).toEqual(shape('en'));
   });
 
+  it('gives each language the same fast-boot steps and help', () => {
+    const shape = (language: keyof typeof STRINGS) => ({
+      steps: STRINGS[language].fastboot.installSteps.length,
+      help: STRINGS[language].fastboot.helpItems.length,
+      screens: Object.keys(STRINGS[language].fastboot.screens).sort(),
+    });
+    for (const language of Object.keys(STRINGS) as (keyof typeof STRINGS)[]) {
+      expect(shape(language)).toEqual(shape('en'));
+    }
+  });
+
   it('names the ModeSet file only through the camera token, as often in each language', () => {
     const tokens = (language: keyof typeof STRINGS) =>
       STRINGS[language].steps.flat().filter((part) => part === MODESET_TOKEN).length;

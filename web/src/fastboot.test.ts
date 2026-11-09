@@ -34,7 +34,7 @@ describe('firmwareName', () => {
 
 describe('LATEST', () => {
   // The release tables of grkit-firmware: the page makes the newest release of each camera.
-  const tables = import.meta.glob<{ camera: string; firmware: string }>('../../fastboot/releases/*.json', {
+  const tables = import.meta.glob<{ camera: string; firmware: string; update: { name: string } }>('../../fastboot/releases/*.json', {
     eager: true,
     import: 'default',
   });
@@ -49,5 +49,10 @@ describe('LATEST', () => {
     expect([...new Set(LATEST.map((item) => item.release))].sort()).toEqual(
       [...newest].map(([camera, firmware]) => `${camera}-${firmware}`).sort(),
     );
+  });
+
+  it('names the update file of each release table', () => {
+    const files = new Map(Object.values(tables).map((table) => [`${table.camera}-${table.firmware}`, table.update.name]));
+    for (const item of LATEST) expect(item.file).toBe(files.get(item.release));
   });
 });

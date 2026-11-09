@@ -2346,6 +2346,60 @@ button.row-body {
   line-height: 1.6;
 }
 
+/* The file name of each camera, in the step that copies the file: the name is what the user
+   compares with the file on the card. */
+.fastboot-names {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 15px;
+}
+
+.fastboot-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+}
+
+.fastboot-files li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.fastboot-files code {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* A camera screen under a step, at about half the size of the camera LCD on a desktop. */
+.fastboot-screen {
+  max-width: 360px;
+  margin: 12px 0 4px;
+}
+
+.fastboot-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #000;
+}
+
+.fastboot-screen figcaption {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.fastboot-help {
+  list-style: disc;
+}
+
 .fastboot-working {
   display: flex;
   align-items: center;

@@ -16,14 +16,16 @@ export function releaseName(release: string): string {
  * Ricoh's support page of the camera, which has it. HDF models share the page. A camera on an older
  * version installs the fast-boot firmware as an update. `grkit firmware patch` makes all releases.
  * GR IV Monochrome 1.10 has the official file of GR IV 1.20 with its own version, so it has an entry
- * of that release with its own `name` and page.
+ * of that release with its own `name` and page. `file` is the name of the update file, which the
+ * camera looks for in the card root.
  */
-export const LATEST: readonly { release: string; page: string; name?: string }[] = [
-  { release: 'gr3-2.20', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3_s.html' },
-  { release: 'gr3x-1.70', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3x_s.html' },
-  { release: 'gr4-1.20', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html' },
+export const LATEST: readonly { release: string; page: string; file: string; name?: string }[] = [
+  { release: 'gr3-2.20', file: 'fwdc239b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3_s.html' },
+  { release: 'gr3x-1.70', file: 'fwdc243b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3x_s.html' },
+  { release: 'gr4-1.20', file: 'fwdc248b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html' },
   {
     release: 'gr4-1.20',
+    file: 'fwdc248b.bin',
     name: 'GR IV Monochrome 1.10',
     page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr-4-mono_s.html',
   },

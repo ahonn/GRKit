@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { firmwareName, LATEST, LATEST_NAMES, latestName, makeFastbootFirmware, releaseName } from '../fastboot';
 import type { Strings } from '../i18n';
+import { FastbootInstall } from './FastbootInstall';
 import { TermsNote } from './TermsNote';
 
 type State =
@@ -13,7 +14,8 @@ type State =
 
 /**
  * The optional fast-boot firmware: how it compares with the official firmware, the patch of an
- * official update file in the browser (`grkit_firmware`), and how to install and remove it.
+ * official update file in the browser (`grkit_firmware`), how to install it (`FastbootInstall`), and
+ * how to remove it.
  */
 export function FastbootSection({ strings, terms }: { strings: Strings; terms: string }) {
   const t = strings.fastboot;
@@ -118,20 +120,7 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
           </ol>
         </div>
       </section>
-      <section className="section fastboot" aria-labelledby="fastboot-install">
-        <h2 id="fastboot-install">{t.install}</h2>
-        <div className="section-body">
-          <p className="fastboot-warning" role="note">
-            {t.warning}
-          </p>
-          <ol className="steps">
-            {t.installSteps.map((step) => (
-              <li key={step}>{step}</li>
-            ))}
-          </ol>
-          <p className="fastboot-text">{t.installDone}</p>
-        </div>
-      </section>
+      <FastbootInstall strings={strings} />
       <section className="section fastboot" aria-labelledby="fastboot-restore">
         <h2 id="fastboot-restore">{t.restore}</h2>
         <div className="section-body">
