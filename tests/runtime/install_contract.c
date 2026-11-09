@@ -1227,9 +1227,31 @@ static void legacy_tone_icon_is_only_for_old_module_abi(void)
     assert(word(word(module_indicators[0] + GRM_INDICATOR_ICON_AT) + GRM_ICON_SETTING_AT) == GRKIT_CORE_TONE);
 }
 
+/* IMPORTED.TXT: a line with the size and the stamp of an inbox file gives its
+   hash while both stay the same, so the RTOS side does not read the file. A
+   line without them, or another size or stamp, needs the file. */
+static void imported_lines_give_the_hash_of_an_unchanged_file(void)
+{
+    const char *text = "1315C678.GRF FDEB34F1 00002200 1234ABCD\r\n13A530FC.GRF 19B4C184\r\n";
+    long n = (long)strlen(text);
+    memcpy(recorded, text, (size_t)n);
+    u32 hash = 0;
+    assert(recorded_hash(n, "1315c678.grf", 0x2200, 0x1234abcd, &hash) && hash == 0xfdeb34f1);
+    assert(!recorded_hash(n, "1315C678.GRF", 0x2200, 0x1234abce, &hash));
+    assert(!recorded_hash(n, "1315C678.GRF", 0x2000, 0x1234abcd, &hash));
+    assert(!recorded_hash(n, "13A530FC.GRF", 0, 0, &hash));
+    assert(!recorded_hash(n, "1315C678.GR", 0x2200, 0x1234abcd, &hash));
+    assert(!recorded_hash(-1, "1315C678.GRF", 0x2200, 0x1234abcd, &hash));
+    /* The lines that record_line writes read back the same. */
+    u32 m = record_line(0, "1315C678.GRF", 0xfdeb34f1, 1, 0x2200, 0x1234abcd);
+    m = record_line(m, "13A530FC.GRF", 0x19b4c184, 0, 0, 0);
+    assert(m == (u32)n && !memcmp(record, text, (size_t)n));
+}
+
 static void *run(void *unused)
 {
     (void)unused;
+    imported_lines_give_the_hash_of_an_unchanged_file();
     indicators_resolve_settings_and_preserve_shared_descriptors();
     indicators_reject_conflicts_overflow_and_used_value_ranges();
     legacy_tone_icon_is_only_for_old_module_abi();

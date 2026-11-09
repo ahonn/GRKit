@@ -33,6 +33,7 @@ typedef unsigned int u32;
 #include "target.h"
 /* The status word of the head in the script array (FAST_STATUS_INDEX). */
 #include "fast.h"
+#include "calls.h"
 #include "../install_status.h"
 
 typedef int (*printf_fn)(const char *, ...);
@@ -71,6 +72,7 @@ typedef int (*fs_stat_fn)(const char *name, void *out);
 #define EBADF_ERROR (-9L)
 #define EEXIST_ERROR (-17L)
 #define EMFILE_ERROR (-24L)
+#define ENOSYS_ERROR (-38L)
 
 static u32 slen(const char *s) { u32 n = 0; while (s[n]) ++n; return n; }
 static int seq(const char *a, const char *b) { while (*a && *a == *b) { ++a; ++b; } return *a == *b; }
@@ -142,7 +144,14 @@ static struct ram_file *ram_make(const char *path)
 /* ---- directory listings --------------------------------------------------- */
 #define LIST_NAMES 256U
 #define NAME_SIZE 16U    /* 8.3 names */
-struct listing { u32 count; char names[LIST_NAMES][NAME_SIZE]; };
+/* With `meta`, each entry also has its size, the stamp of its times, and
+   whether it is a directory (list_directory). */
+struct listing {
+    u32 count; int meta;
+    char names[LIST_NAMES][NAME_SIZE];
+    u32 size[LIST_NAMES], stamp[LIST_NAMES];
+    u8 directory[LIST_NAMES];
+};
 #define LISTINGS 4U
 static struct listing listings[LISTINGS];
 static int listing_used[LISTINGS];
@@ -206,22 +215,80 @@ static void cache_forget(const char *dos)
     cache.missing = 0;
     cache.listings = 0;
 }
+static int list_directory(const char *dos, struct listing *l);
+/* The cached listing of the folder of `dos`, or 0. With `list`, the folder
+   is listed into the cache when it is not there. */
+static struct listing *folder_listing(const char *dos, int list, const char **name)
+{
+    u32 cut = 0;
+    for (u32 i = 0; dos[i]; ++i) if (dos[i] == '\\') cut = i;
+    if (cut < 3) return 0;
+    char folder[DOS_SIZE];
+    for (u32 i = 0; i < cut; ++i) folder[i] = dos[i];
+    folder[cut] = 0;
+    *name = dos + cut + 1;
+    struct listing *l = cache_listing(folder);
+    if (l || !list || cache.listings >= CACHE_LISTINGS || cache_missing(folder)) return l;
+    struct cached_listing *c = &cache.listing[cache.listings];
+    if (list_directory(folder, &c->list)) { cache_note_missing(folder); return 0; }
+    copy_name(c->dos, folder);
+    ++cache.listings;
+    return &c->list;
+}
+/* A file of a cached listing with sizes: 1 with its size and stamp, 0 when
+   the listing does not have it, or -1 without such a listing. */
+static int listed_file(const char *dos, int list, u32 *size, u32 *stamp)
+{
+    const char *name = 0;
+    struct listing *l = folder_listing(dos, list, &name);
+    if (!l || !l->meta) return -1;
+    for (u32 i = 0; i < l->count; ++i)
+        if (same_name(l->names[i], name)) {
+            if (l->directory[i]) return -1;
+            *size = l->size[i];
+            *stamp = l->stamp[i];
+            return 1;
+        }
+    return l->count < LIST_NAMES ? 0 : -1;
+}
 
+/* The entry that readdir fills: the name first, then the attribute byte, the
+   size, and the times (FAT date and time words). The listing uses the size
+   and the times only if each "." entry has the directory attribute, so
+   another layout falls back to a status call for each file. */
+#define ENTRY_ATTRIBUTE 779U
+#define ENTRY_SIZE 784U
+#define ENTRY_TIMES 800U
+#define ATTRIBUTE_DIRECTORY 0x10U
+static u32 entry_word(u32 offset)
+{
+    return (u32)dir_entry[offset] | (u32)dir_entry[offset + 1] << 8 | (u32)dir_entry[offset + 2] << 16 |
+           (u32)dir_entry[offset + 3] << 24;
+}
 static int list_directory(const char *dos, struct listing *l)
 {
     u32 dno = 0;
+    int dot = 0, dot_directory = 1;
     if (FS_OPENDIR(dos, &dno)) return -1;
     l->count = 0;
     for (;;) {
         for (u32 i = 0; i < sizeof dir_entry; ++i) dir_entry[i] = 0;
         if (FS_READDIR(dno, dir_entry)) break;
+        int directory = (dir_entry[ENTRY_ATTRIBUTE] & ATTRIBUTE_DIRECTORY) != 0;
+        if (dir_entry[0] == '.' && !dir_entry[1]) { dot = 1; dot_directory &= directory; }
         if (l->count >= LIST_NAMES) continue;
         u32 n = 0;
         while (n + 1 < NAME_SIZE && dir_entry[n]) { l->names[l->count][n] = (char)dir_entry[n]; ++n; }
         l->names[l->count][n] = 0;
+        l->directory[l->count] = (u8)directory;
+        l->size[l->count] = entry_word(ENTRY_SIZE);
+        /* Not the access date, which a read can change. */
+        l->stamp[l->count] = entry_word(ENTRY_TIMES) ^ (entry_word(ENTRY_TIMES + 8) * 0x9e3779b1U) ^
+                             (entry_word(ENTRY_TIMES + 12) * 0x85ebca6bU);
         ++l->count;
     }
     FS_CLOSEDIR(dno);
+    l->meta = dot && dot_directory;
     return 0;
 }
 
@@ -247,6 +314,10 @@ static long slot(void)
 }
 static u32 card_size(const char *dos, int *exists)
 {
+    /* A cached listing of the folder answers without a call. */
+    u32 size = 0, stamp = 0;
+    int listed = listed_file(dos, 0, &size, &stamp);
+    if (listed >= 0) { *exists = listed; return size; }
     /* The file status: 64 bytes, as the head and SYS_memovr give it. The
        call fills it, so it has no initializer, which would need memset. */
     u32 st[16];
@@ -474,6 +545,15 @@ long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
     case 0xf0002: /* msync alias -> real cache maintenance over [a, b) */
         cache_sync(a, b - a);
         return 0;
+    case FAST_FILE_STAMP: /* the size and the stamp of the times of a file, from its listing */
+        if (!dos_path((const char *)a, dos)) return ENOENT_ERROR;
+        { u32 size = 0, stamp = 0;
+          int listed = listed_file(dos, 1, &size, &stamp);
+          if (listed < 0) return ENOSYS_ERROR;
+          if (!listed) return ENOENT_ERROR;
+          ((u32 *)b)[0] = size;
+          ((u32 *)b)[1] = stamp;
+          return 0; }
     default:
         return -38;
     }

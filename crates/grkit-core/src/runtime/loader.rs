@@ -78,9 +78,22 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     let (plan, done, failed) = (path("PLAN.BIN"), path("INSTALL.OK"), path("INSTALL.ERR"));
     let resident = path(RESIDENT_NAME);
     let mut lines: Vec<String> = Vec::new();
-    // The results of the last start. write_error replaces INSTALL.ERR.
-    for name in ["PLAN.BIN", "PLAN.TMP", "INSTALL.OK", "INSTALL.LCK"] {
-        lines.push(format!("filedelete '{}'", path(name)));
+    // The results of the last Linux steps, which the Linux steps of this
+    // start must not find. write_error replaces INSTALL.ERR. A start through
+    // the fast-boot files writes none of them, so it removes them only when
+    // it falls back to Linux.
+    let linux_start: Vec<String> = ["PLAN.BIN", "PLAN.TMP", "INSTALL.OK", "INSTALL.LCK"]
+        .iter()
+        .map(|name| format!("filedelete '{}'", path(name)))
+        .chain([
+            format!("filesearch '{plan}'"),
+            "if result != 0 goto reject".into(),
+            format!("filesearch '{done}'"),
+            "if result != 0 goto reject".into(),
+        ])
+        .collect();
+    if fast.is_empty() {
+        lines.extend(linux_start[..4].iter().cloned());
     }
     lines.extend(["intdim ba 256".into(), "fast = 0".into()]);
     if !fast.is_empty() {
@@ -125,13 +138,8 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     // step goes to INSTALL.ERR before its first request.
     if fast.is_empty() {
         lines.push("call write_error".into());
+        lines.extend(linux_start[4..].iter().cloned());
     }
-    lines.extend([
-        format!("filesearch '{plan}'"),
-        "if result != 0 goto reject".into(),
-        format!("filesearch '{done}'"),
-        "if result != 0 goto reject".into(),
-    ]);
     if !fast.is_empty() {
         lines.extend([
             "if fast = 0 goto linux".into(),
@@ -152,8 +160,9 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             "call fast_log".into(),
             "fast = 0".into(),
             ":linux".into(),
-            "call write_error".into(),
         ]);
+        lines.extend(linux_start.iter().cloned());
+        lines.push("call write_error".into());
     }
     lines.extend([
         // Wait for the host command tables of the RTOS before lcmd_resp.
@@ -282,9 +291,10 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
     }
     lines.extend([
         // Not-ready attempts release the install lock. Retry for about 30 s,
-        // every 0.5 s through Linux and every 0.1 s through the fast-boot
-        // file, then every 10 s, so a later shooting-mode start can still
-        // install.
+        // every 0.5 s through Linux and 20 ms after each attempt through the
+        // fast-boot file, which ends without a card access when the camera is
+        // not ready, then every 10 s, so a later shooting-mode start can
+        // still install.
         "attempts = 0".into(),
         "waits = 60".into(),
         "if fast <> 0 waits = 300".into(),
@@ -342,8 +352,8 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         format!("if errorstatus = {STATUS_LOADER_NO_INSTALL} goto install_wait"),
         format!("if errorstatus != 0 goto {failed_install}"),
         ":install_wait".into(),
-        "mpause 100".into(),
-        "if fast = 0 mpause 400".into(),
+        "mpause 20".into(),
+        "if fast = 0 mpause 480".into(),
         "attempts = attempts + 1".into(),
         "if attempts > waits mpause 9500".into(),
         "goto install".into(),
@@ -374,9 +384,6 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             format!("fastreason = {FAST_OFF_INSTALL}"),
             "call fast_log".into(),
             "fast = 0".into(),
-            format!("filedelete '{plan}'"),
-            format!("filedelete '{}'", path("PLAN.TMP")),
-            format!("filedelete '{}'", path("INSTALL.LCK")),
             "attempts = 0".into(),
             format!("failure = {STATUS_LOADER_NO_PLAN}"),
             "goto linux".into(),
@@ -1308,11 +1315,27 @@ mod tests {
                 "call fast_log",
                 "fast = 0",
                 ":linux",
+                "filedelete 'C:\\SCRIPT\\GRKIT\\PLAN.BIN'",
+                "filedelete 'C:\\SCRIPT\\GRKIT\\PLAN.TMP'",
+                "filedelete 'C:\\SCRIPT\\GRKIT\\INSTALL.OK'",
+            ]
+        );
+        // The fast-boot steps find no file of the Linux steps and leave none,
+        // so only the Linux steps remove them and check that they are gone.
+        assert_eq!(
+            &lines[linux + 4..linux + 12],
+            [
+                "filedelete 'C:\\SCRIPT\\GRKIT\\INSTALL.LCK'",
+                "filesearch 'C:\\SCRIPT\\GRKIT\\PLAN.BIN'",
+                "if result != 0 goto reject",
+                "filesearch 'C:\\SCRIPT\\GRKIT\\INSTALL.OK'",
+                "if result != 0 goto reject",
                 "call write_error",
                 "mpause 2000",
                 "sendln 'lcmd_resp on'",
             ]
         );
+        assert!(lines[..linux].iter().all(|l| !l.starts_with("filedelete")));
         assert!(at("if fast = 0 goto linux") < linux);
         assert_eq!(
             lines.iter().filter(|l| **l == "call write_error").count(),
@@ -1439,13 +1462,13 @@ mod tests {
                 "fastreason = 6",
                 "call fast_log",
                 "fast = 0",
-                "filedelete 'C:\\SCRIPT\\GRKIT\\PLAN.BIN'",
-                "filedelete 'C:\\SCRIPT\\GRKIT\\PLAN.TMP'",
-                "filedelete 'C:\\SCRIPT\\GRKIT\\INSTALL.LCK'",
                 "attempts = 0",
                 "failure = 60",
                 "goto linux",
                 ":reject_close",
+                "fileclose fh",
+                ":reject",
+                "call read_error",
             ]
         );
         // The fallback is reachable only through its labels.

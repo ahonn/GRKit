@@ -96,17 +96,85 @@ static int list_effects(const char *folder)
     return status;
 }
 /* IMPORTED.TXT records the package that the library has: for each listed
-   inbox file, its name and the FNV-1a hash of its bytes. */
-#define IMPORTED_MAX (NAMES_MAX * 24U)
+   inbox file, its name and the FNV-1a hash of its bytes. On the RTOS side a
+   line also has the size of the file and the stamp of its times
+   (FAST_FILE_STAMP): while both stay the same, a start takes the hash from
+   the line and does not read the file. */
+#define IMPORTED_MAX (NAMES_MAX * 44U)
 static u8 record[IMPORTED_MAX], recorded[IMPORTED_MAX];
-static u32 record_line(u32 n, const char *name, u32 hash)
+static u32 record_hex(u32 n, u32 value)
+{
+    record[n++] = ' ';
+    for (int shift = 28; shift >= 0; shift -= 4) record[n++] = (u8)"0123456789ABCDEF"[(value >> shift) & 15];
+    return n;
+}
+static u32 record_line(u32 n, const char *name, u32 hash, int stamped, u32 size, u32 stamp)
 {
     u32 k = length(name);
-    if (n + k + 11 > IMPORTED_MAX) return n;
-    copy(record + n, (const u8 *)name, k); n += k; record[n++] = ' ';
-    for (int shift = 28; shift >= 0; shift -= 4) record[n++] = (u8)"0123456789ABCDEF"[(hash >> shift) & 15];
+    if (n + k + 29 > IMPORTED_MAX) return n;
+    copy(record + n, (const u8 *)name, k); n += k;
+    n = record_hex(n, hash);
+    if (stamped) { n = record_hex(n, size); n = record_hex(n, stamp); }
     record[n++] = '\r'; record[n++] = '\n';
     return n;
+}
+/* The words of a line of IMPORTED.TXT after the name: the hash, then the
+   size and the stamp. Returns the number of words. */
+static u32 recorded_words(const u8 *line, u32 n, u32 *words)
+{
+    u32 count = 0, i = 0;
+    while (i < n && !text_space(line[i])) ++i;
+    while (count < 3) {
+        while (i < n && (line[i] == ' ' || line[i] == '\t')) ++i;
+        u32 value = 0, digits = 0;
+        for (; i < n && digits < 8; ++i, ++digits) {
+            u8 c = line[i];
+            u32 d = c >= '0' && c <= '9' ? (u32)(c - '0') : c >= 'A' && c <= 'F' ? (u32)(c - 'A' + 10) : 16U;
+            if (d > 15) break;
+            value = value << 4 | d;
+        }
+        if (digits != 8) break;
+        words[count++] = value;
+    }
+    return count;
+}
+/* The recorded hash of `name`, if its line has the same size and stamp. */
+static int recorded_hash(long had, const char *name, u32 size, u32 stamp, u32 *hash)
+{
+    for (long i = 0; i < had;) {
+        long start = i;
+        while (i < had && recorded[i] != '\n') ++i;
+        const u8 *line = recorded + start;
+        u32 n = (u32)(i - start), k = length(name), words[3];
+        if (i < had) ++i;
+        if (n <= k || !text_space(line[k])) continue;
+        char head[CATALOG_NAME_SIZE];
+        if (k >= sizeof(head)) continue;
+        copy((u8 *)head, line, k);
+        head[k] = 0;
+        if (!same_name(head, name)) continue;
+        if (recorded_words(line, n, words) == 3 && words[1] == size && words[2] == stamp) {
+            *hash = words[0];
+            return 1;
+        }
+        return 0;
+    }
+    return 0;
+}
+/* The size and the stamp of a card file without reading it, on the RTOS
+   side only. */
+static int file_stamp(const char *path, u32 *size, u32 *stamp)
+{
+#ifdef RTOS_NATIVE
+    u32 out[2];
+    if (syscall6(FAST_FILE_STAMP, (u32)path, (u32)out, 0, 0, 0, 0)) return 0;
+    *size = out[0];
+    *stamp = out[1];
+    return 1;
+#else
+    (void)path; (void)size; (void)stamp;
+    return 0;
+#endif
 }
 static u32 fnv(const u8 *data, u32 size)
 {
@@ -144,13 +212,20 @@ static void collect(void)
     if (dir >= 0) syscall6(6, dir, 0, 0, 0, 0, 0);
     else if (!first) return;
     u32 n = 0;
+    long had = read_text(imported_path, recorded, sizeof(recorded));
     for (u32 i = 0; i < package_effect_count; ++i) {
         char from[EFFECT_PATH_SIZE];
         if (!join(from, sizeof(from), inbox_path, package_effects[i])) continue;
+        u32 listed = 0, stamp = 0, hash = 0;
+        int stamped = file_stamp(from, &listed, &stamp);
+        if (stamped && recorded_hash(had, package_effects[i], listed, stamp, &hash)) {
+            n = record_line(n, package_effects[i], hash, 1, listed, stamp);
+            continue;
+        }
         u32 size = read_effect(from, temporary);
-        if (size && valid_profile(temporary, size)) n = record_line(n, package_effects[i], fnv(temporary, size));
+        if (size && valid_profile(temporary, size))
+            n = record_line(n, package_effects[i], fnv(temporary, size), stamped && size == listed, listed, stamp);
     }
-    long had = read_text(imported_path, recorded, sizeof(recorded));
     if (!first && had == (long)n && equal(recorded, record, n)) return;
     if (first) {
         long fd = syscall6(5, (u32)inbox_path, 0xc000, 0, 0, 0, 0);

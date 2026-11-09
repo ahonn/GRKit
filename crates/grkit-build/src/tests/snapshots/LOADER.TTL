@@ -94,8 +94,8 @@ call read_error
 if errorstatus = 62 goto install_wait
 if errorstatus != 0 goto reject
 :install_wait
-mpause 100
-if fast = 0 mpause 400
+mpause 20
+if fast = 0 mpause 480
 attempts = attempts + 1
 if attempts > waits mpause 9500
 goto install

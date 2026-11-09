@@ -66,12 +66,16 @@ static const char inbox_path[] = INBOX_PATH;
 static const char package_path[] = PACKAGE_PATH;
 static const char imported_path[] = IMPORTED_PATH;
 static const char data_path[] = DATA_PATH;
+static const char ram_plan_path[] = RAM_PLAN_PATH;
+/* The result files of the Linux steps. On the RTOS side, the loader reads
+   the plan header and the status from the script array. */
+#ifndef RTOS_NATIVE
 static const char plan_path[] = PLAN_PATH;
 static const char plan_tmp[] = PLAN_TMP_PATH;
-static const char ram_plan_path[] = RAM_PLAN_PATH;
 static const char lock_path[] = LOCK_PATH;
 static const char done_path[] = DONE_PATH;
 static const char failed_path[] = FAILED_PATH;
+#endif
 /* A marker file of the safe mode or of the profile is NAME or NAME.TXT, as
    a text editor adds the extension. */
 static const char safe_path[] = SAFE_PATH, safe_text_path[] = SAFE_TEXT_PATH;
@@ -116,6 +120,10 @@ static u32 listed_record[EFFECTS_LISTED];
 /* A path in the library: the folder, '/', an 8.3 name, and NUL. */
 #define PATH_MAX_OF(a, b) (sizeof(a) > sizeof(b) ? sizeof(a) : sizeof(b))
 #define EFFECT_PATH_SIZE (PATH_MAX_OF(legacy_effects_path, PATH_MAX_OF(library_path, inbox_path)) + CATALOG_NAME_SIZE)
+#ifdef RTOS_NATIVE
+/* The calls of the RTOS backend, such as FAST_FILE_STAMP. */
+#include "fastboot/calls.h"
+#endif
 #include "install_library.h"
 #include "install_effects.h"
 /* The artwork tiles of the usable modules (plan_modules). Their icon slots
@@ -829,6 +837,7 @@ static int select_profile(const char *id)
 }
 #endif
 /* Create an empty file only when it is absent. */
+#ifndef RTOS_NATIVE
 /* Create a result file. A nonzero status is written as decimal text, so a
    card from a camera shows why INSTALL failed. It replaces the status that
    the loader wrote before the step. A file without a status is created only
@@ -863,6 +872,7 @@ static int create(const char *path, u32 status)
     syscall6(6, fd, 0, 0, 0, 0, 0);
     return 1;
 }
+#endif
 #include "install_report.h"
 /* Native state that the camera is still initializing. Other failures are final. */
 static int not_ready(int status)
