@@ -1,7 +1,3 @@
-filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
-filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
-filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
-filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
 intdim ba 256
 fast = 0
 allocated = 0
@@ -26,10 +22,6 @@ if result <> 0 fast = 636111
 if fast = 0 call fast_log
 attempts = 0
 failure = 60
-filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
-if result != 0 goto reject
-filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
-if result != 0 goto reject
 if fast = 0 goto linux
 ba[254] = 999
 if fast = 636111 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F636111.BIN 0 call'
@@ -39,6 +31,14 @@ fastreason = 5
 call fast_log
 fast = 0
 :linux
+filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto reject
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto reject
 call write_error
 mpause 2000
 sendln 'lcmd_resp on'
@@ -85,7 +85,7 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 242 + count * 1088
+expected = 243 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 45) / 40
 if chunks != expectedchunks goto reject
@@ -161,8 +161,8 @@ call read_error
 if errorstatus = 62 goto install_wait
 if errorstatus != 0 goto install_failed
 :install_wait
-mpause 100
-if fast = 0 mpause 400
+mpause 20
+if fast = 0 mpause 480
 attempts = attempts + 1
 if attempts > waits mpause 9500
 goto install
@@ -184,9 +184,6 @@ faststatus = errorstatus
 fastreason = 6
 call fast_log
 fast = 0
-filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
-filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
-filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
 attempts = 0
 failure = 60
 goto linux
