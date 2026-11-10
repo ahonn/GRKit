@@ -781,7 +781,7 @@ __attribute__((naked, noinline)) static int on_stack(int (*fn)(u32 *), u32 *arg,
 #define DATA_BLOCK (64U * 1024U)
 #define DATA_BLOCKS 96U
 /* The most bytes of .data (fast.ld checks it). */
-#define DATA_COPY (80U * 1024U)
+#define DATA_COPY (88U * 1024U)
 extern u32 _code_end[], _edata[], _keep_start[], _data_end[];
 static u32 data_sums[DATA_BLOCKS] __attribute__((section(".fast_sums")));
 static u32 data_blocks(void)
