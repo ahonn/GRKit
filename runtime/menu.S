@@ -206,7 +206,8 @@ menu_icon_descriptor:
 
 #ifdef HOOK_MENU_NATIVE_ADJ_APPLY
 /* Native pages apply each highlighted Image Control immediately. Preview it in
-   the live view (GRKIT_HOST_PREVIEW = 1) and keep the private selection until a native OK. */
+   the live view (GRKIT_HOST_PREVIEW = 1) and keep the private selection until a native OK,
+   or a half-press on the ADJ slot with another type (runtime/menu.c: native_ic_chosen). */
 .macro NATIVE_APPLY name, resume
 .global \name
 .type \name, %function

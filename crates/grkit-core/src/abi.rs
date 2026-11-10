@@ -348,6 +348,10 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DEVELOP_CHANGED: 4;
     /// Those adjustments, as GRKIT_HOST_DEVELOP_NATIVE.
     HOST_DEVELOP_CHANGES: 12;
+    /// The native Image Control type plus 1 when ADJ last opened, or 0 when
+    /// it was not readable. A half-press on the native Image Control slot
+    /// with another type selects that type, as OK does (runtime/menu.c).
+    HOST_ADJ_IC_TYPE: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

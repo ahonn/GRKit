@@ -319,6 +319,9 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
     id=menu_settings_controller(id);
     /* ADJ opens after INSTALL: it opens GRKit (RETURN_POWERON). */
     h[GRKIT_HOST_RETURN/4]=controller_return(h[GRKIT_HOST_RETURN/4],id,arg);
+    /* The type that a half-press on the native Image Control slot compares
+       with (native_ic_chosen). */
+    if(id==ADJ_CONTROLLER) h[GRKIT_HOST_ADJ_IC_TYPE/4]=MENU_NATIVE_IC_TYPE();
     if(parent_back && id==SETTINGS_SUBMENU) {
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING)=0;
         MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET)=menu_return(h);

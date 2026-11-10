@@ -84,6 +84,27 @@ static u32 exit_return(u32 value,u32 in_grkit) {
 static u32 controller_return(u32 value,u32 id,u32 arg) {
     return value==RETURN_POWERON && id==ADJ_CONTROLLER && arg!=CONTROLLER_BACK ? RETURN_GRKIT : value;
 }
+#ifndef MENU_NATIVE_IC_TYPE
+/* The native Image Control type plus 1, or 0 before the settings exist:
+   settings domain +0x518 -> control -> payload (runtime/targets). */
+static u32 native_ic_type(void) {
+    u32 domain=WORD(FW_SETTINGS_DOMAIN,0), control, payload;
+    if(!domain) return 0;
+    control=WORD(domain,0x518);
+    if(!control) return 0;
+    payload=WORD(control,0);
+    return payload ? BYTE(payload,SETTINGS_IC_TYPE)+1U : 0;
+}
+#define MENU_NATIVE_IC_TYPE() native_ic_type()
+#endif
+/* Whether a native ADJ exit selects the native Image Control type under the
+   cursor. The native slot writes the type under its cursor at each cursor
+   change, and a half-press keeps it. So an exit to the shooting screen on
+   that slot, with another type than when ADJ opened, selects the type, as OK
+   does. `opened` and `current` are types plus 1 (MENU_NATIVE_IC_TYPE). */
+static u32 native_ic_chosen(u32 opened,u32 current,u32 ic_slot,u32 shooting) {
+    return opened && current && current!=opened && ic_slot && shooting;
+}
 /* Menu C is Thumb-2 for size. Firmware hooks and thunks enter with A32 B/BL,
    which cannot change state, so their targets stay A32. */
 #ifdef __arm__
@@ -210,6 +231,13 @@ static u32 native_action_release(u32 action,u32 active) {
 static void level_reapply(volatile u32 *h) {
     if(h[GRKIT_HOST_LEVEL_SCREEN/4] && h[GRKIT_HOST_LEVEL_MODE/4])
         MENU_LEVEL_ALARM(h[GRKIT_HOST_LEVEL_SCREEN/4],h[GRKIT_HOST_LEVEL_MODE/4]);
+}
+/* A native Image Control type is selected on the native ADJ slot: the
+   GRKit effect ends. */
+static void native_ic_selected(volatile u32 *h) {
+    h[GRKIT_HOST_ACTIVE/4]=0;
+    GRKIT_STATE_CHANGED(h);
+    level_reapply(h);
 }
 #include "tone.h"
 #include "develop.h"
@@ -868,6 +896,11 @@ A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
     u32 in_grkit=private_mode(controller);
     if(in_grkit) exit_commit(h);
+    else if(h[GRKIT_HOST_ACTIVE/4] && h[GRKIT_HOST_SERVICES/4] &&
+            native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE/4],MENU_NATIVE_IC_TYPE(),
+                             CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))==ADJ_IC_SLOT_TYPE,
+                             services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SHOOTING_CONTROLLER))
+        native_ic_selected(h);
     /* A box of the UI service closes with ADJ, and a native screen that
        waits to open does not open. */
     ui_close(h);
@@ -994,11 +1027,8 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         /* OK or ADJ press on the native Image Control slot confirms a native value.
            Confirming the existing native type can omit its setter entirely. */
         if(kind==EV_CONFIRM && !after_menu_switch(h) &&
-           CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))==ADJ_IC_SLOT_TYPE) {
-            h[GRKIT_HOST_ACTIVE/4]=0;
-            GRKIT_STATE_CHANGED(h);
-            level_reapply(h);
-        }
+           CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))==ADJ_IC_SLOT_TYPE)
+            native_ic_selected(h);
         if(ADJ_MOVIE(controller)!=1 &&
            ((kind==EV_RIGHT && BYTE(controller,ADJ_SLOT)==4) ||
             (kind==EV_LEFT && BYTE(controller,ADJ_SLOT)==0))) {

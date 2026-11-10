@@ -93,7 +93,7 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 243 + count * 1088
+expected = 244 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 45) / 40
 if chunks != expectedchunks goto reject

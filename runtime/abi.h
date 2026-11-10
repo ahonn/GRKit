@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 972
+#define GRKIT_HOST_HEADER_SIZE 976
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 10
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -290,6 +290,10 @@
 /* Those adjustments, as GRKIT_HOST_DEVELOP_NATIVE. */
 #define GRKIT_HOST_DEVELOP_CHANGES 960
 #define GRKIT_HOST_DEVELOP_CHANGES_WORDS 3
+/* The native Image Control type plus 1 when ADJ last opened, or 0 when it was
+   not readable. A half-press on the native Image Control slot with another
+   type selects that type, as OK does (runtime/menu.c). */
+#define GRKIT_HOST_ADJ_IC_TYPE 972
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
