@@ -877,11 +877,14 @@ static u32 row_stays(volatile u32 *h) {
     return page->stays && page->stays(h,h[GRKIT_HOST_MENU_CURSOR/4]);
 }
 /* Confirm the current selection and return whether ADJ should close.
-   Group OK toggles a child in place; an ADJ press only closes its list. */
+   Group OK toggles a child in place; an ADJ press only closes its list. An
+   ADJ press also closes a page of actions without acting, as an ADJ exit
+   does (exit_commit): only OK acts. */
 static u32 confirm_selection(volatile u32 *h) {
-    u32 page=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE, group=group_settings_row(h);
+    u32 page=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE, group=group_settings_row(h), adj=after_adj_press(h);
     u32 close=page && h[GRKIT_HOST_MODULE/4]!=MANAGE_MODULE && !group;
-    if(after_adj_press(h)) close=1;
+    if(adj) close=1;
+    if(adj && page && current_module(h)->flags&MENU_PAGE_ACTIONS) return close;
     if((page || !close) && !(group && close)) menu_confirm(h);
     return close;
 }
@@ -1124,7 +1127,8 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
        ADJ, as OK on a native value does: the restored native list gets the
        confirm, as after MENU on the root. Group OK toggles a child and keeps
        the list open. An ADJ press closes that list without another toggle;
-       on other pages it commits the row first.
+       on other pages it commits the row first, but on a page of actions it
+       does nothing (confirm_selection).
        If the commit made a module show a UI box or ask for a native screen,
        ADJ stays open on the page instead (ui_holds_page), as it does for a
        row whose page keeps it open (row_stays). */
