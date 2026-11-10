@@ -168,7 +168,9 @@
 #define GRKIT_HOST_GRAIN_SHOT 248
 /* Return to GRKit Image Control after the native parameter page: 1 opening, 2
    away. 3: ADJ exited from GRKit, so the next ADJ opens GRKit. 4: MENU or OK
-   on GRKit passed the event that closes ADJ to the native list. */
+   on GRKit passed the event that closes ADJ to the native list. 5: INSTALL
+   restored CORE.ADJ = 1, so the next ADJ that opens after INSTALL opens GRKit
+   (runtime/menu.c). */
 #define GRKIT_HOST_RETURN 252
 /* CORE.ADJ: 1 when the next ADJ should open on GRKit, 0 for a native entry.
    Survives enter clearing HOST_RETURN, and STATE.TXT keeps it across power-off

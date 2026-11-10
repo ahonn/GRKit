@@ -233,6 +233,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Return to GRKit Image Control after the native parameter page: 1 opening,
     /// 2 away. 3: ADJ exited from GRKit, so the next ADJ opens GRKit. 4: MENU
     /// or OK on GRKit passed the event that closes ADJ to the native list.
+    /// 5: INSTALL restored CORE.ADJ = 1, so the next ADJ that opens after
+    /// INSTALL opens GRKit (runtime/menu.c).
     HOST_RETURN: 4;
     /// CORE.ADJ: 1 when the next ADJ should open on GRKit, 0 for a native
     /// entry. Survives enter clearing HOST_RETURN, and STATE.TXT keeps it

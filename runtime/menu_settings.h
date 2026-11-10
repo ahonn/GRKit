@@ -305,7 +305,9 @@ static void settings_note_return(volatile u32 *h,u32 controller) {
        target==ADJ_CONTROLLER || target==IC_PARAMETERS_CONTROLLER) return;
     services_word(h,SERVICES_MENU+MENU_ROWS_RETURN)[0]=target;
 }
-A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id) {
+/* `arg` is the third argument of ChangeController (CONTROLLER_BACK for a
+   return to the previous controller). */
+A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
     volatile u32 *h=menu_header();
     u32 parent_back;
     settings_note_return(h,controller);
@@ -315,6 +317,8 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id) {
         services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU &&
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING);
     id=menu_settings_controller(id);
+    /* ADJ opens after INSTALL: it opens GRKit (RETURN_POWERON). */
+    h[GRKIT_HOST_RETURN/4]=controller_return(h[GRKIT_HOST_RETURN/4],id,arg);
     if(parent_back && id==SETTINGS_SUBMENU) {
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING)=0;
         MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET)=menu_return(h);

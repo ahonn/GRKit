@@ -659,6 +659,10 @@ static void icons_toolbar_and_edges_map_their_ids(void)
     assert(advance_from_private(EV_LEFT, 1) == 0);
     assert(advance_from_private(EV_RIGHT, 2) == 0);
     assert(advance_from_private(EV_LEFT, 2) == 1);
+    /* ADJ that reopens GRKit after a power-on has no edge: Left and Right
+       find the neighbor slots as after a touch. A known edge stays. */
+    assert(reopen_edge(0) == 3);
+    assert(reopen_edge(1) == 1 && reopen_edge(2) == 2 && reopen_edge(3) == 3);
 }
 
 /* A half-press on the Fn adjustments page changes to the shooting screen,
@@ -826,6 +830,24 @@ static void adj_exits_return_once_for_the_parameter_page(void)
     assert(exit_return(0, 1) == RETURN_GRKIT);
     assert(exit_return(0, 0) == 0);
     assert(RETURN_STATE(exit_return(RETURN_OPENING, 0)) == RETURN_PARAMETERS);
+    /* INSTALL restored CORE.ADJ = 1 (RETURN_POWERON). An ADJ that opened
+       before INSTALL stays native, and its native exit keeps the return. An
+       exit from GRKit sets RETURN_GRKIT. */
+    assert(exit_return(RETURN_POWERON, 0) == RETURN_POWERON);
+    assert(exit_return(RETURN_POWERON, 1) == RETURN_GRKIT);
+    /* Only a change that opens ADJ turns it into RETURN_GRKIT, so that the
+       ADJ refresh opens GRKit. The return to an open ADJ after a half-press
+       (CONTROLLER_BACK) and other screens keep it. */
+    test_header[GRKIT_HOST_RETURN / 4] = RETURN_POWERON;
+    menu_settings_transition(0, SHOOTING_CONTROLLER, CONTROLLER_BACK);
+    menu_settings_transition(0, ADJ_CONTROLLER, CONTROLLER_BACK);
+    menu_settings_transition(0, 0x4000000, SHOOTING_CONTROLLER);
+    assert(test_header[GRKIT_HOST_RETURN / 4] == RETURN_POWERON);
+    menu_settings_transition(0, ADJ_CONTROLLER, SHOOTING_CONTROLLER);
+    assert(test_header[GRKIT_HOST_RETURN / 4] == RETURN_GRKIT);
+    assert(controller_return(RETURN_GRKIT, ADJ_CONTROLLER, SHOOTING_CONTROLLER) == RETURN_GRKIT);
+    assert(controller_return(RETURN_PARAMETERS, ADJ_CONTROLLER, SHOOTING_CONTROLLER) == RETURN_PARAMETERS);
+    test_header[GRKIT_HOST_RETURN / 4] = 0;
 }
 
 static void the_root_lists_the_official_modules(void)
@@ -2426,7 +2448,7 @@ static u32 native_settings_back(u32 controller)
     u32 target = MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET);
     assert(target != 0x10000000U);
     MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING) = 1;
-    target = menu_settings_transition(controller, target);
+    target = menu_settings_transition(controller, target, 0);
     if (MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING))
         MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = 0x10000000U;
     MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING) = 0;
@@ -2442,9 +2464,9 @@ static void group_back_keeps_the_shared_native_parent_return_target(void)
     menu_row(h, 0)[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
     menu_row(h, 0)[MENU_ROW_MODULE / 4] = 2;
     for (u32 child = 1; child <= 2; ++child) {
-        assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+        assert(menu_settings_transition(controller, MENU_ROW_TARGET, 0) == SETTINGS_SUBMENU);
         MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
-        assert(menu_settings_transition(controller, MENU_GROUP_TARGET + child) == SETTINGS_SUBMENU);
+        assert(menu_settings_transition(controller, MENU_GROUP_TARGET + child, 0) == SETTINGS_SUBMENU);
         assert(!MENU_OBJECT_BYTE(controller, SETTINGS_BACK_PENDING));
         /* A native forward self transition stores its own id as the child
            return target. Also cover a direct MENU return from the child. */
@@ -2458,9 +2480,9 @@ static void group_back_keeps_the_shared_native_parent_return_target(void)
     }
     /* A value page returning to a child keeps the parent marker, but must
        still release that value controller's native Back target. */
-    assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
-    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1) == SETTINGS_SUBMENU);
-    assert(menu_settings_transition(controller, settings_pages[1]) == settings_pages[1]);
+    assert(menu_settings_transition(controller, MENU_ROW_TARGET, 0) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1, 0) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, settings_pages[1], 0) == settings_pages[1]);
     MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
     assert(native_settings_back(controller) == SETTINGS_SUBMENU);
     assert(h[GRKIT_HOST_SETTINGS / 4] & SETTINGS_PARENT);
@@ -2484,11 +2506,11 @@ static void group_back_returns_to_the_menu_of_the_camera(void)
     menu[MENU_ROWS_COUNT / 4] = 1;
     menu_row(h, 0)[MENU_ROW_KIND / 4] = MENU_ROW_LISTED;
     menu_row(h, 0)[MENU_ROW_MODULE / 4] = 2;
-    assert(menu_settings_transition(controller, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, MENU_ROW_TARGET, 0) == SETTINGS_SUBMENU);
     MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = top;
     assert(menu_return(h) == MENU_RETURN_CONTROLLER);
     /* The change to the child notes the controller. */
-    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1) == SETTINGS_SUBMENU);
+    assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1, 0) == SETTINGS_SUBMENU);
     assert(menu_return(h) == top);
     MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
     assert(native_settings_back(controller) == SETTINGS_SUBMENU);

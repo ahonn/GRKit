@@ -51,12 +51,17 @@ extern u32 menu_destroy_original(u32);
    is opening (1) or open (2). ADJ exited while GRKit was open (3), so the next
    ADJ opens GRKit. MENU or OK on GRKit passes the event that closes ADJ to the
    native list (4); the exit then sets 3. Only an exit sets 3, because leaving
-   GRKit refreshes ADJ. RETURN_ROOT marks a page that opened from the root, so
-   the page returns to the root instead of the page of the module. */
+   GRKit refreshes ADJ. INSTALL sets 5 when ADJ closed on GRKit before the last
+   power-off (CORE.ADJ). An ADJ that opened before INSTALL keeps 5 and stays
+   native, also after a half-press. The change that opens ADJ turns 5 into 3,
+   so only an ADJ that opens after INSTALL opens GRKit (controller_return).
+   RETURN_ROOT marks a page that opened from the root, so the page returns to
+   the root instead of the page of the module. */
 #define RETURN_OPENING 1U
 #define RETURN_PARAMETERS 2U
 #define RETURN_GRKIT 3U
 #define RETURN_CLOSING 4U
+#define RETURN_POWERON 5U
 #define RETURN_ROOT 0x10U
 #define RETURN_STATE(value) ((value)&~RETURN_ROOT)
 /* The controller of ADJ, where a native page that GRKit opened returns. */
@@ -65,7 +70,19 @@ extern u32 menu_destroy_original(u32);
    GRKit was open. */
 static u32 exit_return(u32 value,u32 in_grkit) {
     if(RETURN_STATE(value)==RETURN_OPENING) return RETURN_PARAMETERS|(value&RETURN_ROOT);
-    return in_grkit || value==RETURN_CLOSING ? RETURN_GRKIT : 0;
+    if(in_grkit || value==RETURN_CLOSING) return RETURN_GRKIT;
+    /* A native exit of an ADJ that opened before INSTALL keeps CORE.ADJ. */
+    return value==RETURN_POWERON ? RETURN_POWERON : 0;
+}
+/* The third argument of ChangeController for a return to the previous
+   controller. The release of a half-press returns to ADJ with it; the ADJ
+   button opens ADJ with the shooting screen as the argument. */
+#define CONTROLLER_BACK 0x10000000U
+/* The return state when the screen changes to the controller `id` with the
+   argument `arg`. Only an ADJ that opens, not a return to an open ADJ after
+   a half-press, takes RETURN_POWERON. */
+static u32 controller_return(u32 value,u32 id,u32 arg) {
+    return value==RETURN_POWERON && id==ADJ_CONTROLLER && arg!=CONTROLLER_BACK ? RETURN_GRKIT : value;
 }
 /* Menu C is Thumb-2 for size. Firmware hooks and thunks enter with A32 B/BL,
    which cannot change state, so their targets stay A32. */
@@ -152,6 +169,10 @@ static u32 wrapped_edge(u32 kind,u32 old,u32 next,u32 movie) {
 static u32 advance_from_private(u32 kind,u32 edge) {
     return (kind==EV_RIGHT && edge==1) || (kind==EV_LEFT && edge==2);
 }
+/* The edge of an ADJ that reopens GRKit. After a power-on (CORE.ADJ) no edge
+   is known, and the native slot can be any slot, so Left and Right find the
+   neighbor slots as after a touch on the GRKit icon (3). */
+static u32 reopen_edge(u32 edge) { return edge ? edge : 3; }
 /* Match the native ActionModel: only the initial press starts an action. */
 static u32 menu_press(u32 phase,u32 repeats) { return phase==2 && repeats==0; }
 /* MENU emits a switch event followed by the same confirm used by OK. */
@@ -354,7 +375,7 @@ A32_ENTRY void menu_refresh(u32 controller) {
            leaving GRKit restores the value of that slot. */
         if(ADJ_MOVIE(controller)!=1) {
             menu_refresh_original(controller);
-            enter(controller,h[GRKIT_HOST_MENU_EDGE/4]);
+            enter(controller,reopen_edge(h[GRKIT_HOST_MENU_EDGE/4]));
             return;
         }
     }
@@ -860,7 +881,8 @@ A32_ENTRY void menu_exit(u32 controller) {
        sticky preference across power-off; a transient return to the
        parameter page does not change it. */
     h[GRKIT_HOST_RETURN/4]=exit_return(h[GRKIT_HOST_RETURN/4],in_grkit);
-    if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])!=RETURN_PARAMETERS) {
+    if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])!=RETURN_PARAMETERS &&
+       h[GRKIT_HOST_RETURN/4]!=RETURN_POWERON) {
         u32 open=h[GRKIT_HOST_RETURN/4]==RETURN_GRKIT ? 1U : 0U;
         if(h[GRKIT_HOST_ADJ_OPEN/4]!=open) {
             h[GRKIT_HOST_ADJ_OPEN/4]=open;
