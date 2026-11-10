@@ -228,46 +228,65 @@ static GRKIT_ICON_COMPACT u32 canvas_pixels(u32 canvas,u32 bitmap) {
     if(FRAMING_NATIVE_ASPECT()>3) return 0;
     return canvas_bitmap(canvas,bitmap);
 }
-/* Six 40-pixel icons fit left of the centered load cue. Their order comes
-   from module order, then declaration order; inactive entries leave no gap. */
-#define STATUS_LEFT 7U
+/* The status row is on the second row of the native information, from
+   STATUS_LEFT to STATUS_RIGHT. Left of STATUS_LEFT, the native view writes
+   the white balance shift under its white balance icon, and a value can show
+   under the next icon. Right of STATUS_RIGHT is the native focus distance.
+   The row ends at STATUS_RIGHT and grows to the left. The order of the
+   indicators comes from module order, then declaration order; inactive
+   entries leave no gap. An indicator that does not fit is not shown, nor
+   are those after it. The row waits while the load cue shows in the middle
+   of the same row; the end of the cue redraws the canvas. */
+#define STATUS_LEFT 245U
+#define STATUS_RIGHT 580U
 #define STATUS_TOP 45U
 #define STATUS_STEP 44U
 /* A core label takes its own width and this gap. The marks of an icon reach
    one pixel from its tile edge, so the space after a label looks close to
    the space between two icons. */
 #define STATUS_LABEL_GAP 10U
-/* The row ends before the native focus distance at the right of the second
-   row, and left of the load cue while it shows. An indicator that does not
-   fit is not shown. */
-#define STATUS_RIGHT 580U
-#define STATUS_CUE_GAP 8U
-static GRKIT_ICON_COMPACT u32 status_right(volatile u32 *h) {
-    u32 cue=360-label_width(LABEL_GRKIT)/2;
-    return cue_shown(h) && cue<STATUS_RIGHT+STATUS_CUE_GAP ? cue-STATUS_CUE_GAP : STATUS_RIGHT;
-}
 static GRKIT_ICON_COMPACT void viewfinder_status_paint(volatile u32 *h,const Surface *surface) {
-    u32 i,count=0,left=STATUS_LEFT,right=status_right(h);
-    for(i=0;i<viewfinder_indicators(h) && count<GRKIT_STATUS_ICONS_MAX;++i) {
-        u32 address=INDICATOR_ENTRY(h,i)[0],id,icon=0,x,y;
+    const volatile u8 *labels=LABEL_MAP(GRKIT_LABELS(framing_header()));
+    /* For each shown indicator: the address of its icon pixels, or its core
+       label with STATUS_LABEL_BIT (icon addresses are below 0x80000000); and
+       its width. */
+#define STATUS_LABEL_BIT 0x80000000U
+    u32 item[GRKIT_STATUS_ICONS_MAX],width[GRKIT_STATUS_ICONS_MAX];
+    u32 i,n=0,end=0,next=0,left,x,y;
+    if(cue_shown(h)) return;
+    for(i=0;i<viewfinder_indicators(h) && n<GRKIT_STATUS_ICONS_MAX;++i) {
+        u32 address=INDICATOR_ENTRY(h,i)[0],id,icon=0,w=40,gap=STATUS_STEP-40;
         if(!address || INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
         id=viewfinder_indicator_icon(h,i);
         if(id==GRKIT_ICON_OFF) continue;
-        /* A core label, centered on the 40-pixel row like the icons. */
         if(id-GRKIT_ICON_CORE_LABEL(0)<GRKIT_LABEL_COUNT) {
-            u32 label=id-GRKIT_ICON_CORE_LABEL(0),width=label_width(label);
-            u32 height=label_field(LABEL_MAP(GRKIT_LABELS(framing_header())),label*8+2,2);
-            if(!width || height>40 || left+width>right) break;
-            overlay_label(surface,label,left,STATUS_TOP+(40-height)/2);
-            left+=width+STATUS_LABEL_GAP;
-            ++count;
+            u32 label=id-GRKIT_ICON_CORE_LABEL(0);
+            w=label_width(label);
+            if(!w || label_field(labels,label*8+2,2)>40) break;
+            icon=label|STATUS_LABEL_BIT;
+            gap=STATUS_LABEL_GAP;
+        } else {
+            if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
+            else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
+                icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
+            if(!icon) continue;
+        }
+        if(next+w>STATUS_RIGHT-STATUS_LEFT) break;
+        item[n]=icon; width[n++]=w;
+        end=next+w;
+        next=end+gap;
+    }
+    left=STATUS_RIGHT-end;
+    for(i=0;i<n;++i) {
+        u32 icon=item[i];
+        if(icon&STATUS_LABEL_BIT) {
+            u32 label=icon&~STATUS_LABEL_BIT;
+            /* At LABEL_TOP, so its capitals share the baseline of the
+               native focus distance next to the row. */
+            overlay_label(surface,label,left,LABEL_TOP);
+            left+=width[i]+STATUS_LABEL_GAP;
             continue;
         }
-        if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
-        else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
-            icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
-        if(!icon) continue;
-        if(left+40>right) break;
         /* INSTALL stores the same binary-alpha RGBA pixels after each
            native-compatible descriptor, whose size differs by family. */
         icon+=GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE;
@@ -279,8 +298,8 @@ static GRKIT_ICON_COMPACT void viewfinder_status_paint(volatile u32 *h,const Sur
             }
         }
         left+=STATUS_STEP;
-        ++count;
     }
+#undef STATUS_LABEL_BIT
 }
 /* The ADJ canvas of the preview, or 0 (runtime/modules.h: frame_preview). */
 static GRKIT_ICON_COMPACT u32 preview_canvas(volatile u32 *h) {
