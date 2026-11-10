@@ -1,0 +1,5 @@
+filesearch 'C:\SCRIPT\GRKIT\LOADER.TTL'
+if result = 0 goto done
+include 'C:\SCRIPT\GRKIT\LOADER.TTL'
+:done
+end

@@ -1,0 +1,280 @@
+intdim ba 256
+fast = 0
+allocated = 0
+fastreason = 1
+ba[0] = 0
+ba[1] = 0
+sendln 'SYS_buildinfo 0'
+if ba[0] <> 1129202771 goto probed
+fastreason = 2
+fastinterface = ba[1]
+if ba[1] <> 1 goto probed
+fastreason = 3
+release = ba[2] * 1000 + ba[3]
+if release <> 636121 goto probe1
+fastreason = 4
+filesearch 'C:\SCRIPT\GRKIT\F636121.BIN'
+if result = 0 goto probe1
+filesearch 'C:\SCRIPT\GRKIT\I636121.BIN'
+if result <> 0 fast = 636121
+:probe1
+:probed
+if fast = 0 call fast_log
+attempts = 0
+failure = 60
+if fast = 0 goto linux
+ba[254] = 999
+if fast = 636121 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F636121.BIN 0 call'
+faststatus = ba[254]
+if faststatus = 0 goto plan_ready
+fastreason = 5
+call fast_log
+fast = 0
+:linux
+filedelete 'C:\SCRIPT\GRKIT\PLAN.BIN'
+filedelete 'C:\SCRIPT\GRKIT\PLAN.TMP'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.OK'
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.LCK'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto reject
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto reject
+call write_error
+mpause 2000
+sendln 'lcmd_resp on'
+:scan
+sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/SCAN.SH'
+filesearch 'C:\SCRIPT\GRKIT\PLAN.BIN'
+if result != 0 goto plan_ready
+mpause 200
+attempts = attempts + 1
+if attempts < 150 goto scan
+goto reject
+:plan_ready
+failure = 61
+if fast <> 0 goto plan_fast
+fileopen fh 'C:\SCRIPT\GRKIT\PLAN.BIN' 0
+if fh < 0 goto reject
+call readword
+planmagic = value
+call readword
+count = value
+call readword
+words = value
+call readword
+chunks = value
+call readword
+call readword
+modulewords = value
+call readword
+moduletiles = value
+fileclose fh
+goto plan_read
+:plan_fast
+planmagic = ba[128]
+count = ba[129]
+words = ba[130]
+chunks = ba[131]
+modulewords = ba[133]
+moduletiles = ba[134]
+:plan_read
+if planmagic != 827150919 goto reject
+if count < 0 goto reject
+if count > 40 goto reject
+if modulewords < 0 goto reject
+if modulewords > 65536 goto reject
+if moduletiles < 0 goto reject
+if moduletiles > 128 goto reject
+expected = 243 + count * 1088
+if words != expected goto reject
+expectedchunks = (count + moduletiles + 45) / 40
+if chunks != expectedchunks goto reject
+if allocated <> 0 goto check_arrays
+intdim registry words
+if chunks <= 0 goto icons_ready
+items = count + moduletiles + 6 - 0
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork0 iconwords
+if chunks <= 1 goto icons_ready
+items = count + moduletiles + 6 - 40
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork1 iconwords
+if chunks <= 2 goto icons_ready
+items = count + moduletiles + 6 - 80
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork2 iconwords
+if chunks <= 3 goto icons_ready
+items = count + moduletiles + 6 - 120
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork3 iconwords
+if chunks <= 4 goto icons_ready
+items = count + moduletiles + 6 - 160
+if items > 40 items = 40
+iconwords = items * 1603
+intdim artwork4 iconwords
+:icons_ready
+if modulewords <= 0 goto modules_ready
+intdim modulecode modulewords
+:modules_ready
+intdim tailarea 48815
+allocated = 1
+hadcount = count
+hadwords = words
+hadchunks = chunks
+hadmodwords = modulewords
+hadmodtiles = moduletiles
+goto arrays_ready
+:check_arrays
+if count <> hadcount goto reject
+if words <> hadwords goto reject
+if chunks <> hadchunks goto reject
+if modulewords <> hadmodwords goto reject
+if moduletiles <> hadmodtiles goto reject
+:arrays_ready
+attempts = 0
+waits = 60
+if fast <> 0 waits = 300
+failure = 62
+if fast = 0 call write_error
+:install
+ba[254] = 999
+if fast = 636121 sendln 'SYS_memovr C:\SCRIPT\GRKIT\I636121.BIN 0 call'
+if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'
+if fast = 0 goto install_linux
+faststatus = ba[254]
+if faststatus = 0 goto installed
+if faststatus >= 996 goto install_not_run
+if faststatus = 12 goto install_wait
+if faststatus = 14 goto install_wait
+if faststatus = 26 goto install_wait
+if faststatus = 39 goto install_wait
+errorstatus = faststatus
+goto install_failed
+:install_linux
+filesearch 'C:\SCRIPT\GRKIT\INSTALL.OK'
+if result != 0 goto installed
+call read_error
+if errorstatus = 62 goto install_wait
+if errorstatus != 0 goto install_failed
+:install_wait
+mpause 20
+if fast = 0 mpause 480
+attempts = attempts + 1
+if attempts > waits mpause 9500
+goto install
+:installed
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
+filesearch 'C:\SCRIPT\GRKIT\RESIDENT.TTL'
+if result = 0 end
+include 'C:\SCRIPT\GRKIT\RESIDENT.TTL'
+end
+:install_not_run
+errorstatus = faststatus
+fastaddress = ba[252]
+fastcount = ba[253]
+:install_failed
+if fast = 0 goto reject
+failure = errorstatus
+if errorstatus = 24 goto reject
+faststatus = errorstatus
+fastreason = 6
+call fast_log
+fast = 0
+attempts = 0
+failure = 60
+goto linux
+:reject_close
+fileclose fh
+:reject
+call read_error
+if errorstatus = 0 goto reject_write
+if errorstatus = 60 goto reject_write
+if errorstatus = 62 goto reject_write
+goto reject_end
+:reject_write
+call write_error
+:reject_end
+dispstr 'GR_MODULE_LOADER_REJECTED'
+end
+:readword
+value = 0
+weight = 1
+for byteindex 0 3
+fileread fh 1 octet
+if result != 0 goto reject_close
+str2code bytevalue octet
+value = value + bytevalue * weight
+if byteindex < 3 weight = weight * 256
+next
+return
+:write_error
+filedelete 'C:\SCRIPT\GRKIT\INSTALL.ERR'
+filecreate efh 'C:\SCRIPT\GRKIT\INSTALL.ERR'
+if efh < 0 goto write_error_end
+int2str line failure
+filewriteln efh line
+int2str line attempts
+filewriteln efh line
+fileclose efh
+:write_error_end
+return
+:read_error
+errorstatus = 0
+fileopen efh 'C:\SCRIPT\GRKIT\INSTALL.ERR' 0
+if efh < 0 goto read_error_end
+fileread efh 1 octet
+if result != 0 goto read_error_close
+str2code bytevalue octet
+errorstatus = (bytevalue - 48) * 10
+fileread efh 1 octet
+if result != 0 goto read_error_close
+str2code bytevalue octet
+errorstatus = errorstatus + bytevalue - 48
+:read_error_close
+fileclose efh
+:read_error_end
+return
+:fast_log
+foldersearch 'C:\GRKIT'
+if result = 0 foldercreate 'C:\GRKIT'
+filesearch 'C:\GRKIT\BOOT.TXT'
+if result != 0 goto fast_log_append
+filecreate lfh 'C:\GRKIT\BOOT.TXT'
+goto fast_log_opened
+:fast_log_append
+fileopen lfh 'C:\GRKIT\BOOT.TXT' 1
+:fast_log_opened
+if lfh < 0 goto fast_log_end
+filewrite lfh 'fast-boot'
+if fastreason = 1 filewrite lfh ' off: official firmware'
+if fastreason = 2 filewrite lfh ' off: interface '
+if fastreason = 2 int2str line fastinterface
+if fastreason = 2 filewrite lfh line
+if fastreason >= 3 filewrite lfh ' '
+if fastreason >= 3 int2str line release
+if fastreason >= 3 filewrite lfh line
+if fastreason = 3 filewrite lfh ' off: not in this package'
+if fastreason = 4 filewrite lfh ' off: files missing'
+if fastreason = 5 filewrite lfh ' scan '
+if fastreason = 6 filewrite lfh ' install '
+if fastreason >= 5 int2str line faststatus
+if fastreason >= 5 filewrite lfh line
+if fastreason <> 6 goto fast_log_changed_end
+if faststatus < 996 goto fast_log_changed_end
+if faststatus > 997 goto fast_log_changed_end
+filewrite lfh ' at '
+int2str line fastaddress
+filewrite lfh line
+filewrite lfh ' count '
+int2str line fastcount
+filewrite lfh line
+:fast_log_changed_end
+if fastreason >= 5 filewrite lfh ', Linux used'
+filewriteln lfh ''
+fileclose lfh
+:fast_log_end
+return
