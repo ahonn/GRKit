@@ -35,7 +35,7 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
   return (
     <>
       <section className="section fastboot" aria-labelledby="fastboot-label">
-        <h2 id="fastboot-label">{t.title}</h2>
+        <h1 id="fastboot-label">{t.title}</h1>
         <div className="section-body">
           <p className="fastboot-lead">{t.lead}</p>
           <table className="compare">

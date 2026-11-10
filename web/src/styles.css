@@ -228,6 +228,18 @@ label.download[aria-disabled='true'] {
   text-wrap: balance;
 }
 
+/* A button in the banner, light on the dark banner. */
+.banner-button {
+  margin-left: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--paper);
+  background: transparent;
+  color: var(--paper);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 /* The GR Snap bar on an iPhone or an iPad. The bar stays above the home indicator, and the
    space element keeps the end of the page clear of it. The bar is 74px high with three lines of
    text, and the space leaves room for the description to wrap to a second line. */
@@ -372,8 +384,11 @@ label.download[aria-disabled='true'] {
   color: var(--paper);
 }
 
-.masthead h1 {
+/* The name links to the home page of the language. */
+.masthead-name {
   margin: 0;
+  color: inherit;
+  text-decoration: none;
   font-family: 'IBM Plex Sans Condensed', sans-serif;
   font-weight: 700;
   font-size: 36px;
@@ -393,21 +408,28 @@ label.download[aria-disabled='true'] {
   white-space: nowrap;
 }
 
+/* The link of the page in view. */
+.masthead-nav a[aria-current='page'] {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
 /* The dot of the i in Ricoh red. The text keeps its glyph: a gradient fills it, red down to the
    gap between the dot and the stem. In IBM Plex Sans Condensed Bold, the gap spans 33% to 38%
    of the content box at each font size. */
-/* The name links to the language page on the fast-boot firmware page. */
-.masthead-home {
-  color: inherit;
-  text-decoration: none;
-}
-
-.masthead h1 .dot {
+.masthead-name .dot {
   --dot-end: 35.5%;
   background: linear-gradient(var(--accent) var(--dot-end), var(--ink) var(--dot-end));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* On hover the name turns red as a link does, the stem of the i included. */
+.masthead-name:hover .dot {
+  background: var(--accent);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 .landing-copy .lead {
@@ -423,16 +445,15 @@ label.download[aria-disabled='true'] {
   display: block;
 }
 
-/* The links stay on one line; a narrower window hides them, as the footer has them too. The
-   one link back from the fast-boot firmware page stays. */
+/* The links stay on one line; a narrower window hides them, as the footer has them too. */
 @media (max-width: 900px) {
-  .masthead-nav:not(.masthead-back) {
+  .masthead-nav {
     display: none;
   }
 }
 
 @media (max-width: 560px) {
-  .masthead h1 {
+  .masthead-name {
     font-size: 30px;
   }
 }
@@ -470,6 +491,11 @@ label.download[aria-disabled='true'] {
 .landing-install:hover {
   color: var(--paper);
   background: var(--ink-2);
+}
+
+/* The install link under the safety facts keeps its own width. */
+.landing-safe-install {
+  align-self: flex-start;
 }
 
 .landing-looks {
@@ -574,6 +600,11 @@ label.download[aria-disabled='true'] {
   color: var(--muted);
 }
 
+/* The guide choices under the display caption, apart from it. */
+.landing-framing-views figcaption + .landing-choices {
+  margin-top: 20px;
+}
+
 .landing-framing-views figcaption b {
   color: var(--ink);
   font-weight: 600;
@@ -596,6 +627,32 @@ label.download[aria-disabled='true'] {
   object-fit: cover;
 }
 
+/* The LUT card: Standard on the left half, the look on the right half, each with its tag. */
+.landing-lut {
+  position: relative;
+}
+
+.landing-lut .landing-lut-after {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 50%);
+}
+
+.landing-lut::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.landing-lut .landing-lut-before-tag {
+  right: auto;
+  left: 10px;
+}
+
 .landing-crop {
   position: absolute;
   top: 50%;
@@ -612,7 +669,8 @@ label.download[aria-disabled='true'] {
   height: 100%;
 }
 
-.landing-crop line {
+.landing-crop polyline {
+  fill: none;
   stroke: rgba(255, 255, 255, 0.85);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
@@ -625,8 +683,9 @@ label.download[aria-disabled='true'] {
 
 .landing-details {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 32px;
+  /* Four cards: two to a row, one on a phone. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 40px 32px;
 }
 
 .landing-detail figcaption {
@@ -658,6 +717,18 @@ label.download[aria-disabled='true'] {
 /* Narrower choices, so the four Grain strengths fit on one row of a detail. */
 .landing-detail .button.small {
   padding: 0 8px;
+}
+
+/* A link that looks like a choice button. */
+.landing-link-button {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.landing-link-button:hover {
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .landing-zoom {
@@ -703,10 +774,10 @@ label.download[aria-disabled='true'] {
   color: var(--ink-2);
 }
 
-/* The title of the installer, and the place where the install link scrolls to. */
-.landing-start {
+/* The title of the installer page, where the install links of the home page go. */
+.install-title {
   margin: 0;
-  padding: 72px 0 28px;
+  padding: 0 0 28px;
   font-family: var(--display);
   font-weight: 700;
   font-size: clamp(30px, 3vw, 40px);
@@ -733,6 +804,7 @@ label.download[aria-disabled='true'] {
 }
 
 /* The heading stays at the top of the window while its section scrolls by. */
+.section > h1,
 .section > h2 {
   position: sticky;
   top: 16px;
@@ -751,6 +823,7 @@ label.download[aria-disabled='true'] {
 /* When the body wraps under the heading, the heading spans the page and covers what scrolls
    under it. */
 @media (max-width: 900px) {
+  .section > h1,
   .section > h2 {
     top: 0;
     flex-basis: 100%;
@@ -1507,24 +1580,33 @@ code {
 
 .footer {
   border-top: 1px solid var(--ink);
-  padding-top: 20px;
+  padding-top: 28px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 28px;
   font-size: 14px;
   color: var(--muted);
 }
 
+/* The link groups side by side, two to a row on a phone. Each group lists its links down. */
 .footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 48px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 28px 32px;
 }
 
-.footer-links ul {
+.footer-heading {
+  margin: 0 0 12px;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.footer-group ul {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px 24px;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;

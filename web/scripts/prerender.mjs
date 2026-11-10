@@ -1,9 +1,11 @@
 // Writes the language pages, the sitemap, the 404 page, and the edge worker after `vite build`.
 //
 // Search engines and link previews read the HTML that the server sends. The page renders in the
-// browser, so this script renders the first screen of each language into its own page:
-// dist/index.html (English) and dist/<language>/index.html. Each page names the others with
-// hreflang links. The edge worker sends a visitor of the root page to the page of their language.
+// browser, so this script renders the first screen of each page of each language into its own
+// file: the home page (dist/index.html for English, dist/<language>/index.html), the installer
+// (install/index.html under each), and the fast-boot firmware page (fastboot/index.html under
+// each). Each page names its other languages with hreflang links. The edge worker sends a visitor
+// of the root page to the home page of their language.
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -80,13 +82,16 @@ async function edgeWorker(headers) {
 }
 
 const template = readFileSync(join(dist, 'index.html'), 'utf8');
-const { render, renderFastboot, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION, pageText } = await renderer();
+const { render, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION, pageText } = await renderer();
 const codes = LANGUAGES.map((language) => language.code);
-const pageUrl = (code) => `${SITE}${LANGUAGE_PATHS[code]}`;
-const alternates = [
-  ...codes.map((code) => `<link rel="alternate" hreflang="${code}" href="${pageUrl(code)}" />`),
-  `<link rel="alternate" hreflang="x-default" href="${pageUrl('en')}" />`,
-].join('\n    ');
+const pageUrl = (code, page = 'home') => `${SITE}${pageText(code, page).path}`;
+
+/** The pages of each language. Search engines index the home page and the installer. */
+const PAGES = [
+  { page: 'home', index: true },
+  { page: 'install', index: true },
+  { page: 'fastboot', index: false },
+];
 
 function structuredData(code) {
   const strings = STRINGS[code];
@@ -114,24 +119,27 @@ function structuredData(code) {
   return JSON.stringify(data).replaceAll('<', '\\u003c');
 }
 
-function page(code) {
-  const strings = STRINGS[code];
-  const title = escape(strings.title);
-  const description = escape(strings.description);
+/** The HTML of `page` in `code`, with its title, description, address, and other languages. */
+function htmlPage(code, { page, index }) {
+  const text = pageText(code, page);
+  const title = escape(text.title);
+  const description = escape(text.description);
   let html = template;
   html = replaceOne(html, /<html lang="[^"]*">/, `<html lang="${code}">`);
   html = replaceOne(html, /<title>[^<]*<\/title>/, `<title>${title}</title>`);
   html = replaceOne(html, /(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`);
-  html = replaceOne(html, /(<meta property="og:url" content=")[^"]*(")/, `$1${pageUrl(code)}$2`);
+  html = replaceOne(html, /(<meta property="og:url" content=")[^"]*(")/, `$1${pageUrl(code, page)}$2`);
   html = replaceOne(html, /(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`);
   html = replaceOne(html, /(<meta property="og:description" content=")[^"]*(")/, `$1${description}$2`);
   const head = [
-    `<link rel="canonical" href="${pageUrl(code)}" />`,
-    alternates,
-    `<script type="application/ld+json">${structuredData(code)}</script>`,
+    ...(index ? [] : ['<meta name="robots" content="noindex" />']),
+    `<link rel="canonical" href="${pageUrl(code, page)}" />`,
+    ...codes.map((other) => `<link rel="alternate" hreflang="${other}" href="${pageUrl(other, page)}" />`),
+    ...(index ? [`<link rel="alternate" hreflang="x-default" href="${pageUrl('en', page)}" />`] : []),
+    ...(page === 'home' ? [`<script type="application/ld+json">${structuredData(code)}</script>`] : []),
   ].join('\n    ');
   html = replaceOne(html, /<\/head>/, `  ${head}\n  </head>`);
-  return replaceOne(html, /<div id="root"><\/div>/, `<div id="root">${render(code)}</div>`);
+  return replaceOne(html, /<div id="root"><\/div>/, `<div id="root">${render(code, page)}</div>`);
 }
 
 /** The value of an HTML attribute as the browser reads it. */
@@ -161,41 +169,14 @@ function allowStyleAttributes(file, pages) {
 }
 
 const pages = [];
-for (const code of codes) {
-  const file = join(dist, `.${LANGUAGE_PATHS[code]}`, 'index.html');
-  mkdirSync(dirname(file), { recursive: true });
-  const html = page(code);
-  writeFileSync(file, html);
-  pages.push(html);
-}
-
-// The fast-boot firmware page of each language. Search engines do not index it.
-const fastbootUrl = (code) => `${SITE}${pageText(code, true).path}`;
-function fastbootPage(code) {
-  const text = pageText(code, true);
-  const title = escape(text.title);
-  const description = escape(text.description);
-  let html = template;
-  html = replaceOne(html, /<html lang="[^"]*">/, `<html lang="${code}">`);
-  html = replaceOne(html, /<title>[^<]*<\/title>/, `<title>${title}</title>`);
-  html = replaceOne(html, /(<meta\s+name="description"\s+content=")[^"]*(")/, `$1${description}$2`);
-  html = replaceOne(html, /(<meta property="og:url" content=")[^"]*(")/, `$1${fastbootUrl(code)}$2`);
-  html = replaceOne(html, /(<meta property="og:title" content=")[^"]*(")/, `$1${title}$2`);
-  html = replaceOne(html, /(<meta property="og:description" content=")[^"]*(")/, `$1${description}$2`);
-  const head = [
-    '<meta name="robots" content="noindex" />',
-    `<link rel="canonical" href="${fastbootUrl(code)}" />`,
-    ...codes.map((other) => `<link rel="alternate" hreflang="${other}" href="${fastbootUrl(other)}" />`),
-  ].join('\n    ');
-  html = replaceOne(html, /<\/head>/, `  ${head}\n  </head>`);
-  return replaceOne(html, /<div id="root"><\/div>/, `<div id="root">${renderFastboot(code)}</div>`);
-}
-for (const code of codes) {
-  const file = join(dist, `.${pageText(code, true).path}`, 'index.html');
-  mkdirSync(dirname(file), { recursive: true });
-  const html = fastbootPage(code);
-  writeFileSync(file, html);
-  pages.push(html);
+for (const kind of PAGES) {
+  for (const code of codes) {
+    const file = join(dist, `.${pageText(code, kind.page).path}`, 'index.html');
+    mkdirSync(dirname(file), { recursive: true });
+    const html = htmlPage(code, kind);
+    writeFileSync(file, html);
+    pages.push(html);
+  }
 }
 allowStyleAttributes(join(dist, '_headers'), pages);
 
@@ -215,12 +196,14 @@ notFound = replaceOne(
 );
 writeFileSync(join(dist, '404.html'), notFound);
 
-const urls = codes
-  .map(
-    (code) =>
-      `  <url>\n    <loc>${pageUrl(code)}</loc>\n${codes
-        .map((other) => `    <xhtml:link rel="alternate" hreflang="${other}" href="${pageUrl(other)}"/>`)
-        .join('\n')}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl('en')}"/>\n  </url>`,
+const urls = PAGES.filter((kind) => kind.index)
+  .flatMap(({ page }) =>
+    codes.map(
+      (code) =>
+        `  <url>\n    <loc>${pageUrl(code, page)}</loc>\n${codes
+          .map((other) => `    <xhtml:link rel="alternate" hreflang="${other}" href="${pageUrl(other, page)}"/>`)
+          .join('\n')}\n    <xhtml:link rel="alternate" hreflang="x-default" href="${pageUrl('en', page)}"/>\n  </url>`,
+    ),
   )
   .join('\n');
 writeFileSync(

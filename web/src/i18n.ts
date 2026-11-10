@@ -1,6 +1,6 @@
 import type { Grade } from './catalog';
 import type { NativeProblem } from './import/native';
-import { cookieValue, fastbootPath, isLanguage, LANGUAGE_COOKIE, LANGUAGE_PATHS, pathLanguage } from './languagePage';
+import { cookieValue, isLanguage, LANGUAGE_COOKIE, pagePath, pathLanguage, type Page } from './languagePage';
 
 export const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -31,13 +31,13 @@ const en = {
     /** The install note where the browser cannot write to a card: a phone, a tablet, Safari, Firefox. */
     installNoteZip: 'Download GRKit.zip and copy the files to your SD card.',
     /** The supported cameras under the install button, as one sentence before the install note. */
-    supports: (cameras: string) => `Works with ${cameras}.`,
+    /** The cameras under the install button, short; the FAQ lists them in full. */
+    supports: 'Works with GR III, GR IIIx, and GR IV, HDF models included. GR IV Monochrome works without film looks.',
     looks: 'Film looks',
-    lookNote: 'The preview is approximate. You can also import your own LUT.',
     framingText: 'Shoot XPan and other ratios. The display dims outside the frame.',
     display: 'Display',
     photo: 'Photo',
-    guideRows: ['Off', 'Thirds', 'Center', 'Golden Ratio', 'Diagonals'],
+    guideRows: ['Off', 'Thirds', 'Center', 'Golden Ratio', 'Diagonals', 'Golden Spiral', 'Dynamic Symmetry'],
     details: 'More effects',
     dateText: 'Prints the date in the bottom-right corner of photos.',
     dateLooks: ['Classic', 'GR1s', 'GR II'],
@@ -49,11 +49,25 @@ const en = {
     adjCaption: 'Press ADJ and choose GRK.',
     menuCaption: 'All settings are in the GRKit section of MENU.',
     safe: 'Safe to try',
+    /** The fast-boot firmware, after the safety facts: a title, a text, and a link. */
+    fastFact: ['Optional fast start', 'GRKit loads one to two seconds after power-on.', 'About fast start'] as readonly [string, string, string],
+    /** The LUT import card among the details: a title, a text, and a link. */
+    lut: ['Import a LUT', 'Use your own .cube LUT or Lightroom preset as a film look.', 'Import on the install page'] as readonly [string, string, string],
     facts: [
       ['No firmware flashing', 'GRKit loads from the SD card. The firmware stays as it is.'],
       ['Remove the card to go back to normal', 'Without the card, the camera works as it always has.'],
-      ['See the changes first', 'Nothing is written to the card until you confirm.'],
     ] as readonly (readonly [string, string])[],
+    /** The questions before an install, at the end of the home page. A part that starts with `[` links to GitHub. */
+    faqTitle: 'Before you install',
+    faq: [
+      { q: 'Is GRKit free?', a: ['Yes. GRKit is free and open source on ', '[GitHub', ', under the MIT License. It needs no account.'] },
+      { q: 'Is it safe for my camera?', a: ['GRKit loads from the SD card and does not change the firmware, unless you choose to install the optional fast-boot firmware. Take out the card, and the camera works as before. GRKit comes with no warranty.'] },
+      { q: 'Which cameras does it work with?', a: ['GR III, GR IIIx, GR IV, their HDF models, and GR IV Monochrome without film looks. The install page lists the supported firmware versions. Earlier GR models are not supported.'] },
+      { q: 'What do I need?', a: ['An SD card and a card reader. On a computer, Chrome or Edge writes GRKit straight to the card. In other browsers, download GRKit.zip and copy it to the card.'] },
+      { q: 'Does GRKit change my RAW files?', a: ['No. GRKit changes the JPEG. The RAW (DNG) file keeps the raw data from the camera.'] },
+      { q: 'Does it slow down the camera?', a: ['GRKit loads about 8 to 10 seconds after power-on. Until then, the camera uses its own settings. With the optional fast-boot firmware, it loads in one to two seconds.'] },
+      { q: 'How do I remove it?', a: ['Uninstall it on the install page, or delete the GRKIT and SCRIPT folders from the card. Your photos stay.'] },
+    ] as readonly { q: string; a: RichText }[],
   },
   camera: 'Camera',
   firmware: 'Firmware',
@@ -61,6 +75,8 @@ const en = {
   planned: 'Planned',
   effects: 'Film Looks',
   modules: 'Modules',
+  /** The modules section in the footer, which lines up with the other links of its group. */
+  modulesLink: 'Modules',
   /** Separates the module names in the package summary. */
   listSeparator: ', ',
   /** Module names as the camera menu shows them in this language. */
@@ -74,6 +90,15 @@ const en = {
   },
   package: 'Download',
   install: 'Install',
+  /** The installer page in the top navigation. */
+  installLink: 'Install',
+  /** The title and the search result text of the installer page. */
+  installTitle: 'Install GRKit on RICOH GR III, IIIx, and IV',
+  installDescription: 'Pick your camera, modules, and film looks. Write GRKit to the SD card in Chrome or Edge, or download GRKit.zip. No firmware flashing.',
+  /** The headings of the link groups in the footer. */
+  footerHelp: 'Help',
+  footerCommunity: 'Community',
+  footerLegal: 'Legal',
   photoSource: (label: string) => `Photo: ${label}`,
   previewing: 'Previewing',
   samplePhoto: 'Sample photo',
@@ -233,6 +258,8 @@ const en = {
   ] as readonly [string, string, string],
   firmwareDump: 'Firmware dump guide',
   suggestFeature: 'Suggest a feature',
+  /** The Tally form for photos taken with GRKit. */
+  sharePhotos: 'Share your photos',
   reportProblem: 'Report a problem',
   donate: 'Buy me a coffee',
   modulesNote: 'The camera menu shows only the modules that you select.',
@@ -243,7 +270,7 @@ const en = {
   modulesText: {
     filmLook: 'The film looks below, with live-view preview.',
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos. The screen stays 3:2 and dims the rest.',
-    guides: 'Thirds, center, golden ratio, or diagonals inside the Framing area.',
+    guides: 'Thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry inside the Framing area.',
     dateStamp: 'A date at the bottom right of photos, with classic, GR1s dot-matrix, or GR II digits: orange on color photos, white on black-and-white photos.',
     glow: 'Bloom and film halation with independent strengths, used alone or together. No live-view preview.',
     grain: "Film grain from the camera's grain stage, in four strengths. Photos only.",
@@ -336,7 +363,6 @@ const en = {
   /** The section of the fast-boot firmware: the text, then the patch of an official file. */
   fastboot: {
     title: 'Fast start',
-    back: 'Back to GRKit',
     /** The first line of the page, also its search result text. */
     lead: 'GRKit loads one to two seconds after power-on.',
     /** The two firmwares side by side: the column names, then a row name and a cell for each.
@@ -417,7 +443,7 @@ const en = {
     ['Insert the card. Hold MENU while you turn the camera on, then wait until it turns itself off.'],
     ['Remove ', '`{modeset}', ' and ', '`DEVELOP.MOD', ' from the card root.'],
   ] as readonly RichText[],
-  scriptsOff: (camera: string) => `Download the files that turn SD scripts off on ${camera}`,
+  scriptsOff: 'Download the files that turn SD scripts off',
   scriptsOffError: 'The files cannot be prepared. Try again.',
   /** The first section: write the card or download a GRKit.zip. */
   card: 'How to install',
@@ -444,6 +470,9 @@ const en = {
   modeZipText: 'Copy the files to the card yourself. Works in any browser.',
   cardBrowser: 'Open this page in Chrome or Edge, then insert your SD card to install and update GRKit automatically.',
   cardComputer: 'On a computer, Chrome or Edge can install GRKit right onto your SD card.',
+  /** The button next to cardComputer that copies the installer address, to open it on a computer. */
+  copyLink: 'Copy link',
+  linkCopied: 'Link copied',
   appPromo: 'Wireless transfer and remote',
   appPromoMaker: 'By the maker of GRKit',
   appPromoOpen: 'View',
@@ -563,13 +592,12 @@ const zhHans: Strings = {
     install: '开始安装',
     installNote: '可直接写入 SD 卡，或下载 GRKit.zip。',
     installNoteZip: '下载 GRKit.zip，复制到 SD 卡。',
-    supports: (cameras) => `适用于 ${cameras}。`,
+    supports: '适用于 GR III、GR IIIx、GR IV 及其 HDF 版本；GR IV Monochrome 不含胶片风格。',
     looks: '胶片风格',
-    lookNote: '预览为近似效果，也可导入自己的 LUT。',
     framingText: '拍摄 XPan 等多种比例，取景时画幅外变暗。',
     display: '显示屏',
     photo: '照片',
-    guideRows: ['关闭', '三分法', '中心', '黄金分割', '对角线'],
+    guideRows: ['关闭', '三分法', '中心', '黄金分割', '对角线', '黄金螺线', '动态对称'],
     details: '更多效果',
     dateText: '在照片右下角加印日期。',
     dateLooks: ['经典', 'GR1s', 'GR II'],
@@ -581,10 +609,21 @@ const zhHans: Strings = {
     adjCaption: '按 ADJ，选择 GRK。',
     menuCaption: '全部设置在 MENU 的 GRKit 小节。',
     safe: '放心安装',
+    fastFact: ['可选快速启动', '开机一到两秒即可加载。', '了解快速启动'],
+    lut: ['导入 LUT', '把自己的 .cube LUT 或 Lightroom 预设变成胶片风格。', '去安装页导入'],
     facts: [
       ['无需刷机', '从存储卡加载，不修改固件。'],
       ['取卡即复原', '取出存储卡，相机就恢复原样。'],
-      ['先看改动，再写入', '确认改动后才写入。'],
+    ],
+    faqTitle: '安装前须知',
+    faq: [
+      { q: '要付费吗？', a: ['不用。GRKit 免费开源，源代码在 ', '[GitHub', ' 上，采用 MIT 许可，也不需要注册账号。'] },
+      { q: '会不会弄坏相机？', a: ['GRKit 从存储卡加载，不修改固件，除非你自己选择安装可选的快速启动固件。取出存储卡，相机就恢复原样。GRKit 不提供任何担保。'] },
+      { q: '支持哪些相机？', a: ['GR III、GR IIIx、GR IV 及它们的 HDF 版本；GR IV Monochrome 也能用，但没有胶片风格。支持的固件版本见安装页。更早的 GR 机型不支持。'] },
+      { q: '需要准备什么？', a: ['一张 SD 卡和一个读卡器。在电脑上用 Chrome 或 Edge，可以直接把 GRKit 写入存储卡；其他浏览器可以下载 GRKit.zip，再复制到卡里。'] },
+      { q: '会改动 RAW 文件吗？', a: ['不会。GRKit 只改 JPEG，RAW（DNG）文件保留相机的原始数据。'] },
+      { q: '会拖慢相机吗？', a: ['开机后约 8 到 10 秒 GRKit 才加载完，在此之前相机使用自己的设置。装上可选的快速启动固件后，一到两秒就能加载。'] },
+      { q: '怎么卸载？', a: ['在安装页卸载，或者删除存储卡上的 GRKIT 和 SCRIPT 文件夹即可。照片不受影响。'] },
     ],
   },
   camera: '相机',
@@ -593,6 +632,7 @@ const zhHans: Strings = {
   planned: '计划支持',
   effects: '胶片风格',
   modules: '模块',
+  modulesLink: '功能模块',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
   moduleNames: {
@@ -605,6 +645,12 @@ const zhHans: Strings = {
   },
   package: '下载',
   install: '安装',
+  installLink: '开始安装',
+  installTitle: '安装 GRKit · 理光 GR III / IIIx / IV',
+  installDescription: '选择相机、模块和胶片风格，用 Chrome 或 Edge 直接写入 SD 卡，或下载 GRKit.zip。无需刷机。',
+  footerHelp: '帮助',
+  footerCommunity: '社区',
+  footerLegal: '法律信息',
   photoSource: (label) => `照片：${label}`,
   previewing: '正在预览',
   samplePhoto: '示例照片',
@@ -745,6 +791,7 @@ const zhHans: Strings = {
   termsNote: ['GRKit 是实验性软件，不提供任何担保。继续即表示接受', '使用条款', '。'],
   firmwareDump: '固件导出指南',
   suggestFeature: '功能建议',
+  sharePhotos: '分享照片',
   reportProblem: '问题反馈',
   donate: '请我喝杯咖啡',
   modulesNote: '相机菜单只显示选中的模块。',
@@ -755,7 +802,7 @@ const zhHans: Strings = {
   modulesText: {
     filmLook: '使用下方选择的胶片风格，可在实时显示中预览。',
     framing: '拍摄 XPan 65:24、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片。显示屏保持 3:2，画幅外的区域变暗。',
-    guides: '在画幅内显示三分法、中心、黄金分割或对角线。',
+    guides: '在画幅内显示三分法、中心、黄金分割、对角线、黄金螺线或动态对称。',
     dateStamp: '在照片右下角加印日期，字体可选经典、GR1s 点阵或 GR II：彩色照片为橙色，黑白照片为白色。',
     glow: '柔光与胶片光晕，可独立调节或叠加使用，无法实时预览。',
     grain: '相机内置的颗粒感，分弱、中、强、特强四档。仅用于照片。',
@@ -824,7 +871,6 @@ const zhHans: Strings = {
   ],
   fastboot: {
     title: '快速启动',
-    back: '返回 GRKit',
     lead: 'GRKit 开机后一到两秒加载。',
     compareHead: ['官方固件', '快速启动固件'],
     versionSeparator: '、',
@@ -887,7 +933,7 @@ const zhHans: Strings = {
     ['插入存储卡。按住 MENU 按钮开机，等待相机自动关机。'],
     ['从存储卡根目录删除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
   ],
-  scriptsOff: (camera) => `下载关闭 ${camera} SD 脚本的文件`,
+  scriptsOff: '下载关闭 SD 脚本的文件',
   scriptsOffError: '无法准备文件。请重试。',
   card: '安装方式',
   uninstallText: '从这张卡上卸载 GRKit，照片不受影响。',
@@ -912,6 +958,8 @@ const zhHans: Strings = {
   modeZipText: '自己把文件复制到存储卡，任何浏览器都可用。',
   cardBrowser: '用 Chrome 或 Edge 打开本页面，插入 SD 卡即可自动安装和更新 GRKit。',
   cardComputer: '在电脑上用 Chrome 或 Edge 打开，可直接安装到 SD 卡。',
+  copyLink: '复制链接',
+  linkCopied: '已复制链接',
   appPromo: 'RICOH GR 无线传输与遥控',
   appPromoMaker: 'GRKit 作者开发',
   appPromoOpen: '查看',
@@ -1019,13 +1067,12 @@ const zhHant: Strings = {
     install: '開始安裝',
     installNote: '可直接寫入 SD 卡，或下載 GRKit.zip。',
     installNoteZip: '下載 GRKit.zip，複製到 SD 卡。',
-    supports: (cameras) => `適用於 ${cameras}。`,
+    supports: '適用於 GR III、GR IIIx、GR IV 及其 HDF 版本；GR IV Monochrome 不含底片風格。',
     looks: '底片風格',
-    lookNote: '預覽為近似效果，也可匯入自己的 LUT。',
     framingText: '拍攝 XPan 等多種比例，取景時構圖框外變暗。',
     display: '顯示屏',
     photo: '照片',
-    guideRows: ['關閉', '三分法', '中心', '黃金分割', '對角線'],
+    guideRows: ['關閉', '三分法', '中心', '黃金分割', '對角線', '黃金螺旋', '動態對稱'],
     details: '更多效果',
     dateText: '在照片右下角加印日期。',
     dateLooks: ['經典', 'GR1s', 'GR II'],
@@ -1037,10 +1084,21 @@ const zhHant: Strings = {
     adjCaption: '按 ADJ，選擇 GRK。',
     menuCaption: '所有設定都在 MENU 的 GRKit 小節。',
     safe: '放心試用',
+    fastFact: ['可選快速啟動', '開機一到兩秒即可載入。', '了解快速啟動'],
+    lut: ['匯入 LUT', '把自己的 .cube LUT 或 Lightroom 預設變成底片風格。', '到安裝頁匯入'],
     facts: [
       ['不改韌體', '從記憶卡載入，韌體保持原樣。'],
       ['取出記憶卡即復原', '取出記憶卡，相機就恢復原樣。'],
-      ['先看變更，再寫入', '確認前不會寫入任何內容。'],
+    ],
+    faqTitle: '安裝前須知',
+    faq: [
+      { q: '要付費嗎？', a: ['不用。GRKit 免費開源，原始碼在 ', '[GitHub', ' 上，採用 MIT 授權，也不需要註冊帳號。'] },
+      { q: '會不會弄壞相機？', a: ['GRKit 從記憶卡載入，不修改韌體，除非你自己選擇安裝選用的快速啟動韌體。取出記憶卡，相機就恢復原樣。GRKit 不提供任何擔保。'] },
+      { q: '支援哪些相機？', a: ['GR III、GR IIIx、GR IV 及它們的 HDF 版本；GR IV Monochrome 也能用，但沒有底片風格。支援的韌體版本請見安裝頁。更早的 GR 機型不支援。'] },
+      { q: '需要準備什麼？', a: ['一張 SD 卡和一個讀卡機。在電腦上用 Chrome 或 Edge，可以直接把 GRKit 寫入記憶卡；其他瀏覽器可以下載 GRKit.zip，再複製到卡裡。'] },
+      { q: '會改動 RAW 檔嗎？', a: ['不會。GRKit 只改 JPEG，RAW（DNG）檔保留相機的原始資料。'] },
+      { q: '會拖慢相機嗎？', a: ['開機後約 8 到 10 秒 GRKit 才載入完成，在此之前相機使用自己的設定。裝上選用的快速啟動韌體後，一到兩秒就能載入。'] },
+      { q: '怎麼移除？', a: ['在安裝頁移除，或刪除記憶卡上的 GRKIT 和 SCRIPT 資料夾即可。照片不受影響。'] },
     ],
   },
   camera: '相機',
@@ -1049,6 +1107,7 @@ const zhHant: Strings = {
   planned: '規劃中',
   effects: '底片風格',
   modules: '模組',
+  modulesLink: '功能模組',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
   moduleNames: {
@@ -1061,6 +1120,12 @@ const zhHant: Strings = {
   },
   package: '下載',
   install: '安裝',
+  installLink: '開始安裝',
+  installTitle: '安裝 GRKit · 理光 GR III / IIIx / IV',
+  installDescription: '選擇相機、模組和底片風格，用 Chrome 或 Edge 直接寫入 SD 卡，或下載 GRKit.zip。不改韌體。',
+  footerHelp: '說明',
+  footerCommunity: '社群',
+  footerLegal: '法律資訊',
   photoSource: (label) => `照片：${label}`,
   previewing: '正在預覽',
   samplePhoto: '範例照片',
@@ -1201,6 +1266,7 @@ const zhHant: Strings = {
   termsNote: ['GRKit 是實驗性軟體，不提供任何擔保。繼續即表示接受', '使用條款', '。'],
   firmwareDump: '韌體匯出指南',
   suggestFeature: '功能建議',
+  sharePhotos: '分享照片',
   reportProblem: '問題回報',
   donate: '請我喝杯咖啡',
   modulesNote: '相機功能表只顯示選擇的模組。',
@@ -1211,7 +1277,7 @@ const zhHant: Strings = {
   modulesText: {
     filmLook: '使用下方選擇的底片風格，可在實時顯示中預覽。',
     framing: '拍攝 XPan 65:24、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片。顯示屏維持 3:2，構圖框外的區域變暗。',
-    guides: '在構圖框內顯示三分法、中心、黃金分割或對角線。',
+    guides: '在構圖框內顯示三分法、中心、黃金分割、對角線、黃金螺旋或動態對稱。',
     dateStamp: '在照片右下角加印日期，字體可選經典、GR1s 點陣或 GR II：彩色照片為橘色，黑白照片為白色。',
     glow: '柔光與底片光暈，可獨立調整或疊加使用，實時顯示中無法預覽。',
     grain: '相機內建的粒紋感，分弱、中、強、特強四段。僅用於照片。',
@@ -1280,7 +1346,6 @@ const zhHant: Strings = {
   ],
   fastboot: {
     title: '快速啟動',
-    back: '返回 GRKit',
     lead: 'GRKit 開機後一到兩秒載入。',
     compareHead: ['官方韌體', '快速啟動韌體'],
     versionSeparator: '、',
@@ -1343,7 +1408,7 @@ const zhHant: Strings = {
     ['插入記憶卡。按住 MENU 按鈕開機，等待相機自動關機。'],
     ['從記憶卡根目錄刪除 ', '`{modeset}', ' 和 ', '`DEVELOP.MOD', '。'],
   ],
-  scriptsOff: (camera) => `下載關閉 ${camera} SD 腳本的檔案`,
+  scriptsOff: '下載關閉 SD 腳本的檔案',
   scriptsOffError: '無法準備檔案。請再試一次。',
   card: '安裝方式',
   uninstallText: '從這張卡上解除安裝 GRKit，照片不受影響。',
@@ -1368,6 +1433,8 @@ const zhHant: Strings = {
   modeZipText: '自行把檔案複製到記憶卡，任何瀏覽器都可用。',
   cardBrowser: '用 Chrome 或 Edge 開啟本頁面，插入 SD 卡即可自動安裝和更新 GRKit。',
   cardComputer: '在電腦上用 Chrome 或 Edge 開啟，可直接安裝到 SD 卡。',
+  copyLink: '複製連結',
+  linkCopied: '已複製連結',
   appPromo: 'RICOH GR 無線傳輸與遙控',
   appPromoMaker: 'GRKit 作者開發',
   appPromoOpen: '查看',
@@ -1475,13 +1542,12 @@ const ja: Strings = {
     install: 'インストール',
     installNote: 'SD カードに直接書き込むか、GRKit.zip をダウンロードします。',
     installNoteZip: 'GRKit.zip をダウンロードして SD カードにコピーします。',
-    supports: (cameras) => `${cameras} に対応しています。`,
+    supports: 'GR III、GR IIIx、GR IV（HDF モデルを含む）に対応しています。GR IV Monochrome ではフィルムルックを除いて使えます。',
     looks: 'フィルムルック',
-    lookNote: 'プレビューは目安です。自分の LUT も読み込めます。',
     framingText: 'XPan などの比率で撮影できます。撮影画面ではフレームの外側が暗くなります。',
     display: '画面',
     photo: '写真',
-    guideRows: ['オフ', '9分割', '画面中央', '黄金比', '対角線'],
+    guideRows: ['オフ', '9分割', '画面中央', '黄金比', '対角線', '黄金螺旋', 'ダイナミックシンメトリー'],
     details: '仕上げ',
     dateText: '写真の右下に日付を写し込みます。',
     dateLooks: ['クラシック', 'GR1s', 'GR II'],
@@ -1493,10 +1559,21 @@ const ja: Strings = {
     adjCaption: 'ADJ を押して GRK を選びます。',
     menuCaption: 'すべての設定は MENU の GRKit にあります。',
     safe: '安心して試せます',
+    fastFact: ['任意の高速起動', '電源オンから 1〜2 秒で読み込みます。', '高速起動について'],
+    lut: ['LUT を読み込む', '手持ちの .cube LUT や Lightroom プリセットをフィルムルックとして使えます。', 'インストールページで読み込む'],
     facts: [
       ['ファームウェアの書き換え不要', 'SD カードから読み込みます。ファームウェアは変わりません。'],
       ['カードを抜けば元どおり', 'カードがなければ、カメラはこれまでどおりに動きます。'],
-      ['書き込む前に変更を確認', '確認するまで何も書き込みません。'],
+    ],
+    faqTitle: 'インストールの前に',
+    faq: [
+      { q: '無料ですか？', a: ['はい。GRKit は MIT ライセンスのオープンソースで、無料です。ソースコードは ', '[GitHub', ' で公開しています。アカウントも要りません。'] },
+      { q: 'カメラが壊れる心配はありませんか？', a: ['GRKit は SD カードから読み込み、ファームウェアを変更しません。変更するのは、任意の高速起動ファームウェアを自分で入れた場合だけです。カードを抜けば、カメラはこれまでどおりに動きます。GRKit に保証はありません。'] },
+      { q: 'どのカメラに対応していますか？', a: ['GR III、GR IIIx、GR IV とそれぞれの HDF モデルに対応しています。GR IV Monochrome ではフィルムルック以外が使えます。対応ファームウェアはインストールページで確認できます。それより前の GR には対応していません。'] },
+      { q: '何が必要ですか？', a: ['SD カードとカードリーダーです。パソコンの Chrome か Edge なら、GRKit をカードに直接書き込めます。ほかのブラウザでは GRKit.zip をダウンロードしてカードにコピーします。'] },
+      { q: 'RAW ファイルは変わりますか？', a: ['いいえ。GRKit が変えるのは JPEG だけです。RAW（DNG）ファイルにはカメラの RAW データがそのまま残ります。'] },
+      { q: 'カメラの動作は遅くなりますか？', a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。それまではカメラ本来の設定で撮影されます。任意の高速起動ファームウェアを使うと、1〜2 秒で読み込まれます。'] },
+      { q: '削除するには？', a: ['インストールページからアンインストールするか、カードの GRKIT フォルダと SCRIPT フォルダを削除してください。写真は消えません。'] },
     ],
   },
   camera: 'カメラ',
@@ -1505,6 +1582,7 @@ const ja: Strings = {
   planned: '対応予定',
   effects: 'フィルムルック',
   modules: 'モジュール',
+  modulesLink: 'モジュール',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
   moduleNames: {
@@ -1517,6 +1595,12 @@ const ja: Strings = {
   },
   package: 'ダウンロード',
   install: 'インストール',
+  installLink: 'インストール',
+  installTitle: 'GRKit をインストール · RICOH GR III / IIIx / IV',
+  installDescription: 'カメラ、モジュール、フィルムルックを選び、Chrome か Edge で SD カードに直接書き込むか、GRKit.zip をダウンロードします。ファームウェアの書き換えは不要です。',
+  footerHelp: 'ヘルプ',
+  footerCommunity: 'コミュニティ',
+  footerLegal: '法的情報',
   photoSource: (label) => `写真：${label}`,
   previewing: 'プレビュー中',
   samplePhoto: 'サンプル写真',
@@ -1660,6 +1744,7 @@ const ja: Strings = {
   termsNote: ['GRKit は試験的なソフトウェアで、保証はありません。続行すると、', '利用規約', 'に同意したものとみなされます。'],
   firmwareDump: 'ファームウェア書き出しガイド',
   suggestFeature: '機能の要望',
+  sharePhotos: '写真を共有',
   reportProblem: '不具合の報告',
   donate: 'コーヒーをおごる',
   modulesNote: 'カメラのメニューには、選択したモジュールだけが表示されます。',
@@ -1671,7 +1756,7 @@ const ja: Strings = {
   modulesText: {
     filmLook: '下で選んだフィルムルックを使います。ライブビューでプレビューできます。',
     framing: 'XPan 65:24、2.35:1、16:9、4:3、5:4、7:6、1:1 の写真を撮影します。撮影画面は 3:2 のままで、範囲外が暗くなります。',
-    guides: 'フレーミングの範囲内に、9分割、画面中央、黄金比、対角線のいずれかを表示します。',
+    guides: 'フレーミングの範囲内に、9分割、画面中央、黄金比、対角線、黄金螺旋、ダイナミックシンメトリーのいずれかを表示します。',
     dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s のドットマトリクス、GR II から選べます。カラー写真ではオレンジ色、白黒写真では白になります。',
     glow: 'ブルームとハレーションを個別に調整・併用できます。ライブビューには反映されません。',
     grain: 'カメラ内蔵の粒状感を、弱・中・強・特強の 4 段階で加えます。静止画のみ。',
@@ -1740,7 +1825,6 @@ const ja: Strings = {
   ],
   fastboot: {
     title: '高速起動',
-    back: 'GRKit のトップへ',
     lead: '電源を入れて 1〜2 秒で GRKit が読み込まれます。',
     compareHead: ['公式ファームウェア', '高速起動ファームウェア'],
     versionSeparator: '、',
@@ -1803,7 +1887,7 @@ const ja: Strings = {
     ['カードを入れます。MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。'],
     ['カードのルートから ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を削除します。'],
   ],
-  scriptsOff: (camera) => `${camera} の SD スクリプトをオフにするファイルをダウンロード`,
+  scriptsOff: 'SD スクリプトをオフにするファイルをダウンロード',
   scriptsOffError: 'ファイルを準備できません。もう一度お試しください。',
   card: 'インストール方法',
   uninstallText: 'このカードから GRKit をアンインストールします。写真はそのままです。',
@@ -1828,6 +1912,8 @@ const ja: Strings = {
   modeZipText: 'ファイルを自分でカードにコピーします。どのブラウザーでも使えます。',
   cardBrowser: 'Chrome または Edge でこのページを開いて SD カードを挿すと、GRKit を自動でインストール・アップデートできます。',
   cardComputer: 'パソコンの Chrome または Edge なら、SD カードに直接インストールできます。',
+  copyLink: 'リンクをコピー',
+  linkCopied: 'コピーしました',
   appPromo: 'ワイヤレス転送とリモート撮影',
   appPromoMaker: 'GRKit の作者が開発',
   appPromoOpen: '見る',
@@ -1935,13 +2021,12 @@ const ko: Strings = {
     install: '설치하기',
     installNote: 'SD 카드에 바로 기록하거나 GRKit.zip을 다운로드합니다.',
     installNoteZip: 'GRKit.zip을 다운로드해 SD 카드에 복사합니다.',
-    supports: (cameras) => `${cameras}에서 쓸 수 있습니다.`,
+    supports: 'GR III, GR IIIx, GR IV와 각 HDF 모델에서 쓸 수 있습니다. GR IV Monochrome에서는 필름 룩을 제외하고 쓸 수 있습니다.',
     looks: '필름 룩',
-    lookNote: '미리 보기는 참고용입니다. 가지고 있는 LUT도 가져올 수 있습니다.',
     framingText: 'XPan 등 여러 비율로 촬영합니다. 촬영 화면에서 프레임 밖은 어둡게 표시됩니다.',
     display: '화면',
     photo: '사진',
-    guideRows: ['꺼짐', '9분할', '화면 중앙', '황금비', '대각선'],
+    guideRows: ['꺼짐', '9분할', '화면 중앙', '황금비', '대각선', '황금 나선', '동적 대칭'],
     details: '더 많은 효과',
     dateText: '사진 오른쪽 아래에 날짜를 새깁니다.',
     dateLooks: ['클래식', 'GR1s', 'GR II'],
@@ -1953,10 +2038,21 @@ const ko: Strings = {
     adjCaption: 'ADJ를 누르고 GRK를 선택합니다.',
     menuCaption: '모든 설정은 MENU의 GRKit 항목에 있습니다.',
     safe: '안심하고 써 보세요',
+    fastFact: ['선택 사항: 빠른 시작', '전원을 켜고 1~2초면 로드됩니다.', '빠른 시작 알아보기'],
+    lut: ['LUT 가져오기', '가지고 있는 .cube LUT나 Lightroom 프리셋을 필름 룩으로 쓸 수 있습니다.', '설치 페이지에서 가져오기'],
     facts: [
       ['펌웨어 수정 없음', 'GRKit은 SD 카드에서 실행됩니다. 펌웨어는 그대로입니다.'],
       ['카드를 빼면 원래대로', '카드가 없으면 카메라는 예전과 똑같이 동작합니다.'],
-      ['변경 사항을 먼저 확인', '확인하기 전에는 카드에 아무것도 기록하지 않습니다.'],
+    ],
+    faqTitle: '설치 전에',
+    faq: [
+      { q: '무료인가요?', a: ['네. GRKit은 MIT 라이선스의 오픈 소스로 무료이며, 소스 코드는 ', '[GitHub', '에 공개되어 있습니다. 계정도 필요 없습니다.'] },
+      { q: '카메라가 고장 나지는 않나요?', a: ['GRKit은 SD 카드에서 실행되며 펌웨어를 바꾸지 않습니다. 선택 사항인 빠른 시작 펌웨어를 직접 설치할 때만 펌웨어가 바뀝니다. 카드를 빼면 카메라는 예전과 똑같이 동작합니다. GRKit은 어떠한 보증도 제공하지 않습니다.'] },
+      { q: '어떤 카메라를 지원하나요?', a: ['GR III, GR IIIx, GR IV와 각 HDF 모델을 지원합니다. GR IV Monochrome에서는 필름 룩을 제외한 기능을 쓸 수 있습니다. 지원 펌웨어 버전은 설치 페이지에서 확인하세요. 이전 GR 모델은 지원하지 않습니다.'] },
+      { q: '무엇이 필요한가요?', a: ['SD 카드와 카드 리더기가 필요합니다. 컴퓨터의 Chrome이나 Edge에서는 GRKit을 카드에 바로 기록할 수 있습니다. 다른 브라우저에서는 GRKit.zip을 다운로드해 카드에 복사하세요.'] },
+      { q: 'RAW 파일도 바뀌나요?', a: ['아니요. GRKit은 JPEG만 바꿉니다. RAW(DNG) 파일에는 카메라의 RAW 데이터가 그대로 남습니다.'] },
+      { q: '카메라가 느려지나요?', a: ['GRKit은 전원을 켜고 약 8~10초 뒤에 로드됩니다. 그 전에는 카메라 자체 설정으로 촬영됩니다. 선택 사항인 빠른 시작 펌웨어를 쓰면 1~2초 만에 로드됩니다.'] },
+      { q: '어떻게 삭제하나요?', a: ['설치 페이지에서 제거하거나 카드의 GRKIT 폴더와 SCRIPT 폴더를 삭제하면 됩니다. 사진은 그대로 남습니다.'] },
     ],
   },
   camera: '카메라',
@@ -1965,6 +2061,7 @@ const ko: Strings = {
   planned: '지원 예정',
   effects: '필름 룩',
   modules: '모듈',
+  modulesLink: '모듈',
   listSeparator: ', ',
   /** Module names as the camera menu shows them in this language. */
   moduleNames: {
@@ -1977,6 +2074,12 @@ const ko: Strings = {
   },
   package: '다운로드',
   install: '설치',
+  installLink: '설치',
+  installTitle: 'GRKit 설치 · RICOH GR III, IIIx, IV',
+  installDescription: '카메라와 모듈, 필름 룩을 고른 뒤 Chrome이나 Edge에서 SD 카드에 바로 기록하거나 GRKit.zip을 다운로드하세요. 펌웨어 수정은 필요 없습니다.',
+  footerHelp: '도움말',
+  footerCommunity: '커뮤니티',
+  footerLegal: '법적 고지',
   photoSource: (label) => `사진: ${label}`,
   previewing: '미리 보기 중',
   samplePhoto: '샘플 사진',
@@ -2118,6 +2221,7 @@ const ko: Strings = {
   termsNote: ['GRKit은 실험적인 소프트웨어이며, 어떠한 보증도 제공하지 않습니다. 계속 진행하면 ', '이용 약관', '에 동의한 것으로 간주됩니다.'],
   firmwareDump: '펌웨어 덤프 가이드',
   suggestFeature: '기능 제안',
+  sharePhotos: '사진 공유',
   reportProblem: '문제 신고',
   donate: '커피 한 잔 사 주기',
   modulesNote: '카메라 메뉴에는 선택한 모듈만 표시됩니다.',
@@ -2128,7 +2232,7 @@ const ko: Strings = {
   modulesText: {
     filmLook: '아래에서 고른 필름 룩을 라이브 뷰 미리 보기와 함께 씁니다.',
     framing: 'XPan 65:24, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1 사진을 찍습니다. 촬영 화면은 3:2 그대로이고, 범위 밖은 어둡게 표시됩니다.',
-    guides: '프레이밍 범위 안에 9분할, 화면 중앙, 황금비, 대각선 중 하나를 표시합니다.',
+    guides: '프레이밍 범위 안에 9분할, 화면 중앙, 황금비, 대각선, 황금 나선, 동적 대칭 중 하나를 표시합니다.',
     dateStamp: '사진 오른쪽 아래에 날짜를 넣습니다. 글꼴은 클래식, GR1s 도트 매트릭스, GR II 중에서 고릅니다. 컬러 사진에는 주황색, 흑백 사진에는 흰색으로 들어갑니다.',
     glow: '블룸과 필름 헐레이션의 강도를 따로 정하고, 하나만 쓰거나 함께 쓸 수 있습니다. 라이브 뷰에서는 미리 볼 수 없습니다.',
     grain: '카메라 자체의 입자감을 약, 중, 강, 매우 강 4단계로 더합니다. 사진에만 적용됩니다.',
@@ -2218,7 +2322,6 @@ const ko: Strings = {
   ],
   fastboot: {
     title: '빠른 시작',
-    back: 'GRKit 홈으로',
     lead: '전원을 켜고 1~2초 만에 GRKit이 불러와집니다.',
     compareHead: ['공식 펌웨어', '빠른 시작 펌웨어'],
     versionSeparator: ', ',
@@ -2281,7 +2384,7 @@ const ko: Strings = {
     ['카드를 넣습니다. MENU 버튼을 누른 채 전원을 켜고, 전원이 저절로 꺼질 때까지 기다립니다.'],
     ['카드 최상위에서 ', '`{modeset}', ' 파일과 ', '`DEVELOP.MOD', ' 파일을 삭제합니다.'],
   ],
-  scriptsOff: (camera) => `${camera}의 SD 스크립트를 끄는 파일 다운로드`,
+  scriptsOff: 'SD 스크립트를 끄는 파일 다운로드',
   scriptsOffError: '파일을 준비할 수 없습니다. 다시 시도하세요.',
   card: '설치 방법',
   uninstallText: '이 카드에서 GRKit을 제거합니다. 사진은 그대로 남습니다.',
@@ -2307,6 +2410,8 @@ const ko: Strings = {
   modeZipText: '파일을 직접 카드에 복사합니다. 어떤 브라우저에서도 됩니다.',
   cardBrowser: 'Chrome 또는 Edge에서 이 페이지를 열면 SD 카드를 넣기만 해도 GRKit을 자동으로 설치하고 업데이트할 수 있습니다.',
   cardComputer: '컴퓨터의 Chrome 또는 Edge에서는 SD 카드에 바로 설치할 수 있습니다.',
+  copyLink: '링크 복사',
+  linkCopied: '링크를 복사했습니다',
   appPromo: 'RICOH GR 무선 전송과 원격 촬영',
   appPromoMaker: 'GRKit 개발자가 만든 앱',
   appPromoOpen: '보기',
@@ -2446,17 +2551,23 @@ function saveLanguage(language: Language): void {
   document.cookie = `${LANGUAGE_COOKIE}=${language}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
 }
 
-/** Sets the language, the title, and the description of the document. */
-/** The title, the description, and the address of a page: the language page, or with `fastboot` its fast-boot firmware page. */
-export function pageText(language: Language, fastboot = false): { title: string; description: string; path: string } {
+/** The title, the description, and the address of `page` in `language`. */
+export function pageText(language: Language, page: Page): { title: string; description: string; path: string } {
   const strings = STRINGS[language];
-  return fastboot
-    ? { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path: fastbootPath(language) }
-    : { title: strings.title, description: strings.description, path: LANGUAGE_PATHS[language] };
+  const path = pagePath(language, page);
+  switch (page) {
+    case 'home':
+      return { title: strings.title, description: strings.description, path };
+    case 'install':
+      return { title: strings.installTitle, description: strings.installDescription, path };
+    case 'fastboot':
+      return { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path };
+  }
 }
 
-export function showLanguage(language: Language, fastboot = false): void {
-  const page = pageText(language, fastboot);
+/** Sets the language, the title, and the description of the document. */
+export function showLanguage(language: Language, current: Page): void {
+  const page = pageText(language, current);
   document.documentElement.lang = language;
   document.title = page.title;
   document.querySelector('meta[name="description"]')?.setAttribute('content', page.description);
@@ -2468,8 +2579,8 @@ export function showLanguage(language: Language, fastboot = false): void {
 }
 
 /** Applies a language, moves to its page address, and remembers it for the next visit. */
-export function applyLanguage(language: Language, fastboot = false): void {
-  history.replaceState(history.state, '', `${pageText(language, fastboot).path}${location.search}${location.hash}`);
-  showLanguage(language, fastboot);
+export function applyLanguage(language: Language, page: Page): void {
+  history.replaceState(history.state, '', `${pageText(language, page).path}${location.search}${location.hash}`);
+  showLanguage(language, page);
   saveLanguage(language);
 }

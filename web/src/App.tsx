@@ -40,7 +40,7 @@ import {
   PREVIEW_TARGET,
   type Camera,
 } from './cameras';
-import { loadCatalog, siteUrl, type Catalog, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
+import { loadCatalog, type Catalog, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
 import {
   CardChangesView,
   CardUninstall,
@@ -50,23 +50,23 @@ import {
   type CardTask,
   type InstallMode,
 } from './components/CardPanel';
-import { AppPromo } from './components/AppPromo';
 import { ChangeBadge, EffectsSection } from './components/EffectsSection';
+import { CopyLink } from './components/CopyLink';
 import { PackageOpen, type PackageStatus } from './components/PackageOpen';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Landing } from './components/Landing';
 import { FastbootHint } from './components/FastbootHint';
 import { RichText } from './components/RichText';
+import { DONATE, FEATURE_BOARD, Footer, Masthead, PHOTO_FORM, RELEASE_URL, SUPPORT_FORM } from './components/SiteChrome';
 import { TermsNote } from './components/TermsNote';
-import { guideUrl, REPOSITORY } from './links';
-import { fastbootPath } from './languagePage';
+import { guideUrl } from './links';
+import { fastbootPath, installPath } from './languagePage';
 import { loadFonts } from './fonts';
 import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails, type LibraryDetails } from './import/library';
 import { restoreImports } from './import/lut';
 import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
 import { isLutImportId } from './import/names';
 import { deleteImport, saveImport, updateImport } from './import/store';
-import { applyLanguage, LANGUAGES, sentences, STRINGS, type Language, type Strings } from './i18n';
+import { applyLanguage, sentences, STRINGS, type Language, type Strings } from './i18n';
 import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 import {
   buildCardFiles,
@@ -82,15 +82,6 @@ import { packageCard } from './packageCard';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
-/** The UserJot board for feature ideas and votes. A plain link, so the page loads nothing from UserJot. */
-const FEATURE_BOARD = 'https://grkit.userjot.com';
-/** The Tally form for problems and questions, with the report files. A plain link, so the page loads nothing from Tally. */
-const SUPPORT_FORM = 'https://tally.so/r/Z9jRgB';
-const DONATE = 'https://buymeacoffee.com/yuexunjiang';
-/** The release notes of the GRKit version that the site packages, on the releases page. */
-const RELEASE_URL = `${REPOSITORY}/releases#release-v${__GRKIT_VERSION__}`;
-
-
 type Build =
   | { state: 'idle' }
   | { state: 'building'; received: number; retrying: boolean }
@@ -100,7 +91,8 @@ type Build =
 /** Megabytes with one decimal, as the progress text shows them. */
 const megabytes = (bytes: number) => (bytes / 1_000_000).toFixed(1);
 
-export function App({
+/** The installer of a language: the card or the ZIP, the camera, the modules, the film looks, and the steps. */
+export function InstallPage({
   initialLanguage,
   initialImports = [],
   initialCard = null,
@@ -207,7 +199,7 @@ export function App({
 
   function chooseLanguage(next: Language) {
     loadFonts(next);
-    applyLanguage(next);
+    applyLanguage(next, 'install');
     setLanguage(next);
   }
 
@@ -654,6 +646,11 @@ export function App({
         </a>
       </li>
       <li>
+        <a className="button" href={PHOTO_FORM}>
+          {t.sharePhotos}
+        </a>
+      </li>
+      <li>
         <a className="button" href={DONATE}>
           {t.donate}
         </a>
@@ -666,54 +663,18 @@ export function App({
       {(appBrowser || cardHintKind) && (
         <div className="browser-banner" role="note">
           {appBrowser ? t.appBrowser : cardHintKind === 'computer' ? t.cardComputer : t.cardBrowser}
+          {/* A phone cannot write the card: the link takes the installer to a computer. */}
+          {!appBrowser && cardHintKind === 'computer' && (
+            <CopyLink strings={t} path={installPath(language)} />
+          )}
         </div>
       )}
     <div className="page">
-      <header className="masthead">
-        {/* One row: the name on the left, the links and the language on the right. */}
-        <div className="masthead-top">
-          <div className="masthead-title">
-            <h1>
-              GRK<span className="dot">i</span>t
-            </h1>
-            <a className="masthead-version" href={RELEASE_URL}>
-              v{__GRKIT_VERSION__}
-            </a>
-          </div>
-          <div className="languages">
-            <nav className="masthead-nav" aria-label="GRKit">
-              <a href="#effects-label">{t.effects}</a>
-              <a href="#modules-label">{t.modules}</a>
-              <a href="#faq-label">{t.faqTitle}</a>
-              <a href={fastbootPath(language)}>{t.fastbootLink}</a>
-            </nav>
-            <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
-              <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
-                <path
-                  fill="currentColor"
-                  d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"
-                />
-              </svg>
-            </a>
-            <span className="language-select">
-              <select
-                className="button"
-                aria-label={t.language}
-                value={language}
-                onChange={(event) => chooseLanguage(event.target.value as Language)}
-              >
-                {LANGUAGES.map((item) => (
-                  <option key={item.code} value={item.code} lang={item.code}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </span>
-          </div>
-        </div>
-      </header>
-
-      <Landing strings={t} language={language} canWrite={canWriteCards()} />
+      <Masthead strings={t} language={language} page="install" onLanguage={chooseLanguage} />
+      {/* The title of the installer, where the install links of the home page go. */}
+      <h1 className="install-title" id="install">
+        {t.landing.install}
+      </h1>
 
       <main>
         {canWriteCards() && (
@@ -1051,7 +1012,7 @@ export function App({
                   aria-busy={scriptsOff === 'building'}
                   onClick={downloadScriptsOff}
                 >
-                  {t.scriptsOff(camera.name)}
+                  {t.scriptsOff}
                 </button>
                 <div aria-live="polite">
                   {scriptsOff === 'failed' && <p className="status error">{t.scriptsOffError}</p>}
@@ -1076,49 +1037,8 @@ export function App({
         </section>
       </main>
 
-      <footer className="footer">
-        <div className="footer-links">
-          <ul>
-            <li>
-              <a href={guideUrl('RECOVERY', language)}>{t.recovery}</a>
-            </li>
-            <li>
-              <a href={guideUrl('DUMP', language)}>{t.firmwareDump}</a>
-            </li>
-            <li>
-              <a href={fastbootPath(language)}>{t.fastbootLink}</a>
-            </li>
-          </ul>
-          <ul>
-            <li>
-              <a href={FEATURE_BOARD}>{t.suggestFeature}</a>
-            </li>
-            <li>
-              <a href={SUPPORT_FORM}>{t.reportProblem}</a>
-            </li>
-            <li>
-              <a href={DONATE}>{t.donate}</a>
-            </li>
-          </ul>
-          <ul>
-            <li>
-              <a href={`${REPOSITORY}/blob/main/effects/NOTICE.md`}>{t.licenses}</a>
-            </li>
-            <li>
-              <a href={siteUrl('THIRD_PARTY_LICENSES.txt')}>{t.thirdParty}</a>
-            </li>
-            <li>
-              <a href={guideUrl('TERMS', language)}>{t.terms}</a>
-            </li>
-          </ul>
-        </div>
-        <div className="footer-meta">
-          <p>{t.trademarks}</p>
-          <a href={RELEASE_URL}>GRKit {__GRKIT_VERSION__}</a>
-        </div>
-      </footer>
+      <Footer strings={t} language={language} />
     </div>
-      <AppPromo strings={t} />
     </>
   );
 }

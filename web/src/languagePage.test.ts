@@ -4,8 +4,11 @@ import {
   acceptedLanguages,
   cookieValue,
   fastbootPath,
+  installPath,
   isFastbootPath,
+  isInstallAnchor,
   pathLanguage,
+  pathPage,
   visitorLanguage,
   type Visitor,
 } from './languagePage';
@@ -31,6 +34,26 @@ describe('pathLanguage', () => {
     expect(isFastbootPath('/faq/fastboot/')).toBe(false);
     expect(fastbootPath('zh-Hant')).toBe('/zh-hant/fastboot/');
     expect(fastbootPath('en')).toBe('/fastboot/');
+  });
+
+  it('reads the language of an installer page', () => {
+    expect(pathPage('/install/')).toEqual({ language: 'en', page: 'install' });
+    expect(pathPage('/zh-Hant/install')).toEqual({ language: 'zh-Hant', page: 'install' });
+    expect(pathPage('/ko/fastboot/')).toEqual({ language: 'ko', page: 'fastboot' });
+    expect(pathPage('/ja/')).toEqual({ language: 'ja', page: 'home' });
+    expect(pathPage('/faq/install/')).toEqual({ language: 'en', page: 'home' });
+    expect(installPath('en')).toBe('/install/');
+    expect(installPath('zh-Hans')).toBe('/zh-hans/install/');
+  });
+});
+
+describe('isInstallAnchor', () => {
+  it('knows the sections that moved from the home page to the installer', () => {
+    expect(isInstallAnchor('#install')).toBe(true);
+    expect(isInstallAnchor('#effects-label')).toBe(true);
+    expect(isInstallAnchor('faq-label')).toBe(true);
+    expect(isInstallAnchor('#landing-framing')).toBe(false);
+    expect(isInstallAnchor('')).toBe(false);
   });
 });
 

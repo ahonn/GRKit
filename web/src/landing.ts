@@ -27,7 +27,7 @@ export const LANDING_RATIOS = [
 export const LANDING_HERO = 'landing-hero';
 
 /** The guide styles in the order of the camera menu (`landing.guideRows`). */
-export const LANDING_GUIDES = ['off', 'thirds', 'center', 'golden', 'diagonals'] as const;
+export const LANDING_GUIDES = ['off', 'thirds', 'center', 'golden', 'diagonals', 'spiral', 'symmetry'] as const;
 export type LandingGuide = (typeof LANDING_GUIDES)[number];
 
 /** The image of the landing page with the name `name` in public/landing/. */
@@ -44,15 +44,47 @@ export const CAMERA_SCREENS: Record<Language, { adj: string; menu: string }> = {
   ko: { adj: rootKo, menu: menuKo },
 };
 
-/** The guide lines inside a frame, in percent of its width and height. */
-export function guideLines(guide: LandingGuide): readonly (readonly [number, number, number, number])[] {
-  const at = (p: number) =>
+/** A guide line through points, in percent of the frame width and height. */
+export type GuideLine = readonly (readonly [number, number])[];
+
+/** The part of the rest of the box that each step of the golden spiral cuts. */
+const SPIRAL_CUT = 0.618;
+/** The golden spiral stops before a part narrower than this, in percent of the frame. */
+const SPIRAL_END = 1.5;
+
+/**
+ * The guide lines inside a frame of `aspect` (width / height), in percent of its width and
+ * height, as the Guides module draws them (modules/guides/guides.c).
+ */
+export function guideLines(guide: LandingGuide, aspect: number): readonly GuideLine[] {
+  const at = (p: number): GuideLine[] => [
     [
-      [p, 0, p, 100],
-      [100 - p, 0, 100 - p, 100],
-      [0, p, 100, p],
-      [0, 100 - p, 100, 100 - p],
-    ] as const;
+      [p, 0],
+      [p, 100],
+    ],
+    [
+      [100 - p, 0],
+      [100 - p, 100],
+    ],
+    [
+      [0, p],
+      [100, p],
+    ],
+    [
+      [0, 100 - p],
+      [100, 100 - p],
+    ],
+  ];
+  const diagonals: GuideLine[] = [
+    [
+      [0, 0],
+      [100, 100],
+    ],
+    [
+      [100, 0],
+      [0, 100],
+    ],
+  ];
   switch (guide) {
     case 'thirds':
       return at(100 / 3);
@@ -60,17 +92,117 @@ export function guideLines(guide: LandingGuide): readonly (readonly [number, num
       return at(38.2);
     case 'center':
       return [
-        [46, 50, 54, 50],
-        [50, 44, 50, 56],
+        [
+          [46, 50],
+          [54, 50],
+        ],
+        [
+          [50, 44],
+          [50, 56],
+        ],
       ];
     case 'diagonals':
+      return diagonals;
+    case 'spiral':
+      return goldenSpiral();
+    case 'symmetry': {
+      // Each reciprocal starts at a corner, is perpendicular to the other diagonal, and ends on
+      // the opposite side. In a 1:1 frame it is the diagonal.
+      const across = Math.min(100, 100 / (aspect * aspect));
       return [
-        [0, 0, 100, 100],
-        [100, 0, 0, 100],
+        ...diagonals,
+        [
+          [0, 0],
+          [across, 100],
+        ],
+        [
+          [100, 0],
+          [100 - across, 100],
+        ],
+        [
+          [0, 100],
+          [across, 0],
+        ],
+        [
+          [100, 100],
+          [100 - across, 0],
+        ],
       ];
+    }
     default:
       return [];
   }
+}
+
+/**
+ * The golden spiral, stretched to the frame, with its division lines. Each step cuts 0.618 of the
+ * rest of the frame, in turn on the left, the top, the right, and the bottom, and draws a quarter
+ * ellipse in the part that it cuts. The spiral starts at the bottom-left corner.
+ */
+function goldenSpiral(): GuideLine[] {
+  const lines: GuideLine[] = [];
+  let [l, t, r, b] = [0, 0, 100, 100];
+  for (let k = 0; r - l >= SPIRAL_END && b - t >= SPIRAL_END; ++k) {
+    const quarter = k % 4;
+    const sineX = quarter % 2 === 1;
+    const signX = quarter === 0 || quarter === 3 ? -1 : 1;
+    const signY = quarter < 2 ? -1 : 1;
+    let cx: number, cy: number, rx: number, ry: number;
+    switch (quarter) {
+      case 0:
+        cx = l + (r - l) * SPIRAL_CUT;
+        cy = b;
+        rx = cx - l;
+        ry = b - t;
+        lines.push([
+          [cx, t],
+          [cx, b],
+        ]);
+        l = cx;
+        break;
+      case 1:
+        cx = l;
+        cy = t + (b - t) * SPIRAL_CUT;
+        rx = r - l;
+        ry = cy - t;
+        lines.push([
+          [l, cy],
+          [r, cy],
+        ]);
+        t = cy;
+        break;
+      case 2:
+        cx = r - (r - l) * SPIRAL_CUT;
+        cy = t;
+        rx = r - cx;
+        ry = b - t;
+        lines.push([
+          [cx, t],
+          [cx, b],
+        ]);
+        r = cx;
+        break;
+      default:
+        cx = r;
+        cy = b - (b - t) * SPIRAL_CUT;
+        rx = r - l;
+        ry = b - cy;
+        lines.push([
+          [l, cy],
+          [r, cy],
+        ]);
+        b = cy;
+    }
+    const arc: [number, number][] = [];
+    for (let i = 0; i <= 16; ++i) {
+      const angle = (i / 16) * (Math.PI / 2);
+      const sine = Math.sin(angle);
+      const cosine = Math.cos(angle);
+      arc.push([cx + signX * rx * (sineX ? sine : cosine), cy + signY * ry * (sineX ? cosine : sine)]);
+    }
+    lines.push(arc);
+  }
+  return lines;
 }
 
 /**

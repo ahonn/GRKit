@@ -20,27 +20,78 @@ export function isLanguage(value: unknown): value is Language {
   return CODES.some((code) => code === value);
 }
 
-/** The page of the fast-boot firmware under each language page. */
-const FASTBOOT_PAGE = 'fastboot/';
+/**
+ * The pages of each language: the home page with what GRKit does, the installer, and the
+ * fast-boot firmware page. The installer and the fast-boot page sit under the language page.
+ */
+export type Page = 'home' | 'install' | 'fastboot';
 
-/** The path of `pathname` with one trailing slash, in lower case. */
-const normalized = (pathname: string) => pathname.toLowerCase().replace(/\/?$/, '/');
+const SUBPAGES: Readonly<Record<Exclude<Page, 'home'>, string>> = {
+  install: 'install/',
+  fastboot: 'fastboot/',
+};
 
-/** Whether `pathname` is the fast-boot firmware page of a language. */
-export function isFastbootPath(pathname: string): boolean {
-  const path = normalized(pathname);
-  return CODES.some((code) => path === `${LANGUAGE_PATHS[code]}${FASTBOOT_PAGE}`);
+/** The address of `page` in `language`. */
+export function pagePath(language: Language, page: Page): string {
+  return page === 'home' ? LANGUAGE_PATHS[language] : `${LANGUAGE_PATHS[language]}${SUBPAGES[page]}`;
+}
+
+/** The address of the installer in `language`. */
+export function installPath(language: Language): string {
+  return pagePath(language, 'install');
 }
 
 /** The address of the fast-boot firmware page in `language`. */
 export function fastbootPath(language: Language): string {
-  return `${LANGUAGE_PATHS[language]}${FASTBOOT_PAGE}`;
+  return pagePath(language, 'fastboot');
 }
 
-/** The language of the page at `pathname`, a language page or its fast-boot page. Any other path is English. */
-export function pathLanguage(pathname: string): Language {
+/** The path of `pathname` with one trailing slash, in lower case. */
+const normalized = (pathname: string) => pathname.toLowerCase().replace(/\/?$/, '/');
+
+const PAGES: readonly Page[] = ['home', 'install', 'fastboot'];
+
+/** The language and the page at `pathname`. Any other path is the English home page. */
+export function pathPage(pathname: string): { language: Language; page: Page } {
   const path = normalized(pathname);
-  return CODES.find((code) => LANGUAGE_PATHS[code] === path || fastbootPath(code) === path) ?? 'en';
+  for (const language of CODES) {
+    const page = PAGES.find((item) => pagePath(language, item) === path);
+    if (page) return { language, page };
+  }
+  return { language: 'en', page: 'home' };
+}
+
+/** The language of the page at `pathname`. Any other path is English. */
+export function pathLanguage(pathname: string): Language {
+  return pathPage(pathname).language;
+}
+
+/** Whether `pathname` is the fast-boot firmware page of a language. */
+export function isFastbootPath(pathname: string): boolean {
+  return pathPage(pathname).page === 'fastboot';
+}
+
+/**
+ * The sections of the installer that links of the one-page site pointed to. The home page
+ * sends such an address to the installer, so a shared or saved link still opens its section.
+ */
+const INSTALL_ANCHORS = new Set([
+  'install',
+  'start-label',
+  'camera-label',
+  'modules-label',
+  'effects-label',
+  'package-label',
+  'install-label',
+  'update-label',
+  'remove-label',
+  'uninstall-label',
+  'faq-label',
+]);
+
+/** Whether `hash`, such as `#effects-label`, names a section of the installer. */
+export function isInstallAnchor(hash: string): boolean {
+  return INSTALL_ANCHORS.has(hash.replace(/^#/, ''));
 }
 
 /** Countries where Traditional Chinese is the usual script. */

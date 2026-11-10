@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Handle, HandleRoot, Item, Provider, Root } from 'react-compare-slider/components';
 import { useReactCompareSlider } from 'react-compare-slider/hooks';
-import { CAMERAS } from '../cameras';
 import { sentences, type Language, type Strings } from '../i18n';
+import { fastbootPath, installPath } from '../languagePage';
+import { REPOSITORY } from '../links';
 import {
   CAMERA_SCREENS,
   cropWidth,
@@ -16,6 +17,7 @@ import {
   type LandingGuide,
 } from '../landing';
 import { EffectIcon } from './EffectIcon';
+import { RichText } from './RichText';
 
 type Photo = keyof typeof LANDING_PHOTOS;
 type Look = (typeof LANDING_LOOKS)[number];
@@ -28,21 +30,21 @@ interface Props {
   canWrite: boolean;
 }
 
-/** The landing page above the installer: what GRKit does, then a way into the installer. */
+/** The home page: what GRKit does, with a way into the installer. */
 export function Landing({ strings, language, canWrite }: Props) {
   const t = strings.landing;
   return (
     <>
       <section className="landing-hero" id={LANDING_HERO} aria-label={t.looks}>
         <div className="landing-copy">
-          <p className="lead">
+          <h1 className="lead">
             {strings.lead.map((line) => (
               <span key={line} className="lead-line">
                 {line}
               </span>
             ))}
-          </p>
-          <InstallAction strings={strings} canWrite={canWrite} />
+          </h1>
+          <InstallAction strings={strings} language={language} canWrite={canWrite} />
         </div>
         <Looks strings={strings} />
       </section>
@@ -62,6 +64,7 @@ export function Landing({ strings, language, canWrite }: Props) {
             <DateDetail strings={strings} />
             <GlowDetail strings={strings} />
             <GrainDetail strings={strings} />
+            <LutDetail strings={strings} language={language} />
           </div>
         </div>
       </section>
@@ -82,6 +85,21 @@ export function Landing({ strings, language, canWrite }: Props) {
         </div>
       </section>
 
+      <section className="section" aria-labelledby="landing-faq">
+        <h2 id="landing-faq">{t.faqTitle}</h2>
+        <div className="section-body faq">
+          {t.faq.map((item) => (
+            <details key={item.q}>
+              <summary>{item.q}</summary>
+              <p>
+                <RichText parts={item.a} link={REPOSITORY} />
+              </p>
+            </details>
+          ))}
+        </div>
+      </section>
+
+      {/* The end of the page: what keeps the camera safe, then the way into the installer. */}
       <section className="section" aria-labelledby="landing-safe">
         <h2 id="landing-safe">{t.safe}</h2>
         <div className="section-body">
@@ -92,14 +110,18 @@ export function Landing({ strings, language, canWrite }: Props) {
                 <p>{text}</p>
               </li>
             ))}
+            <li>
+              <h3>{t.fastFact[0]}</h3>
+              <p>
+                {t.fastFact[1]} <a href={fastbootPath(language)}>{t.fastFact[2]}</a>
+              </p>
+            </li>
           </ul>
+          <a className="download landing-install landing-safe-install" href={installPath(language)}>
+            {t.install}
+          </a>
         </div>
       </section>
-
-      {/* The title of the installer below, where the install link goes. */}
-      <h2 className="landing-start" id="install">
-        {t.install}
-      </h2>
     </>
   );
 }
@@ -115,23 +137,18 @@ function Credit({ photo, camera = false }: { photo: Photo; camera?: boolean }) {
   );
 }
 
-/** The cameras that GRKit supports, by the names of the installer. */
-const SUPPORTED_CAMERAS = CAMERAS.filter((camera) => camera.support)
-  .map((camera) => camera.name)
-  .join(' · ');
-
 /**
- * The main action: the installer below, which writes the card or downloads GRKit.zip, the
- * cameras it supports, and what it does on this device.
+ * The main action: the installer page, which writes the card or downloads GRKit.zip, the cameras
+ * it supports, and what it does on this device.
  */
-function InstallAction({ strings, canWrite }: { strings: Strings; canWrite: boolean }) {
+function InstallAction({ strings, language, canWrite }: { strings: Strings; language: Language; canWrite: boolean }) {
   const t = strings.landing;
   return (
     <div className="landing-action">
-      <a className="download landing-install" href="#install">
+      <a className="download landing-install" href={installPath(language)}>
         {t.install}
       </a>
-      <p className="note">{sentences(t.supports(SUPPORTED_CAMERAS), canWrite ? t.installNote : t.installNoteZip)}</p>
+      <p className="note">{sentences(t.supports, canWrite ? t.installNote : t.installNoteZip)}</p>
     </div>
   );
 }
@@ -182,7 +199,6 @@ function Looks({ strings }: { strings: Strings }) {
           </button>
         ))}
       </div>
-      <p className="note">{t.lookNote}</p>
       {/* The other looks load while the visitor reads, so a pick shows at once. */}
       {LANDING_LOOKS.filter((item) => item !== look).map((item) => (
         <link key={item.image} rel="prefetch" as="image" href={landingImage(`looks/${item.image}.jpg`)} />
@@ -218,8 +234,8 @@ function Framing({ strings }: { strings: Strings }) {
             <img src={image} alt="" />
             <div className="landing-crop" style={{ width: `${cropWidth(ratio.ratio)}%`, aspectRatio: ratio.ratio }}>
               <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                {guideLines(guide).map(([x1, y1, x2, y2]) => (
-                  <line key={`${x1} ${y1} ${x2} ${y2}`} x1={x1} y1={y1} x2={x2} y2={y2} />
+                {guideLines(guide, ratio.ratio).map((points, index) => (
+                  <polyline key={index} points={points.map(([x, y]) => `${x},${y}`).join(' ')} />
                 ))}
               </svg>
             </div>
@@ -363,5 +379,43 @@ function Choices({
         </button>
       ))}
     </div>
+  );
+}
+
+/**
+ * LUT import: the sample photo in Standard on the left and with a film look on the right, as an
+ * imported LUT changes it, and a link to the import on the install page.
+ */
+function LutDetail({ strings, language }: { strings: Strings; language: Language }) {
+  const [title, text, link] = strings.landing.lut;
+  return (
+    <figure className="landing-detail">
+      <div className="landing-zoom landing-lut">
+        <img src={landingImage('looks/standard.jpg')} alt="" width="720" height="480" loading="lazy" />
+        <img
+          className="landing-lut-after"
+          src={landingImage('looks/velvia-100.jpg')}
+          alt={`${strings.samplePhoto} — ${title}`}
+          width="720"
+          height="480"
+          loading="lazy"
+        />
+        <span className="tag landing-lut-before-tag">{strings.original}</span>
+        <span className="tag">LUT</span>
+      </div>
+      <figcaption>
+        <h3>{title}</h3>
+        <p>{text}</p>
+        {/* A link in the place where the other cards have their choices, styled as one of them. */}
+        <div className="landing-choices">
+          <a className="button small landing-link-button" href={`${installPath(language)}#effects-label`}>
+            {link}
+          </a>
+        </div>
+        <p className="note">
+          <Credit photo="kitchen" />
+        </p>
+      </figcaption>
+    </figure>
   );
 }
