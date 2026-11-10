@@ -7,3 +7,7 @@ label = "強度"
 [settings."CORE.GRAIN_SIZE"]
 label = "大小"
 values = ["自動", "小", "中", "大"]
+
+[settings.ICON]
+label = "圖示顯示"
+values = ["開啟", "關閉"]

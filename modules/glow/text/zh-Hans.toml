@@ -17,3 +17,11 @@ values = ["关闭", "弱", "中", "强"]
 [settings.HALATION_COLOR]
 label = "颜色"
 values = ["红色", "橙色", "金色", "白色"]
+
+[settings.BLOOM_ICON]
+label = "图标显示"
+values = ["开启", "关闭"]
+
+[settings.HALATION_ICON]
+label = "图标显示"
+values = ["开启", "关闭"]

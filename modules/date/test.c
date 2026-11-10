@@ -60,10 +60,12 @@ int main(void)
     };
     static u8 guarded[GRKIT_PLANE_SCRATCH + 2];
     u32 left, top;
-    /* The descriptor: STYLE (6 values), LOOK (3), and POSITION (2), a page
-       with its native settings rows, one filter, and one status indicator. */
-    assert(grkit_module.setting_count == 3 && grkit_module.settings[0].values == 6 &&
-           grkit_module.settings[1].values == 3 && grkit_module.settings[2].values == 2);
+    /* The descriptor: STYLE (6 values), LOOK (3), POSITION (2), and ICON (2),
+       a page with its native settings rows, one filter, and one status
+       indicator. */
+    assert(grkit_module.setting_count == 4 && grkit_module.settings[0].values == 6 &&
+           grkit_module.settings[1].values == 3 && grkit_module.settings[2].values == 2 &&
+           grkit_module.settings[3].values == 2);
     assert(grkit_module.registration_count == 3 && grkit_module.tile_count == 6);
     assert(SETTING_STYLE == GRKIT_SETTING(0) && SETTING_LOOK == GRKIT_SETTING(1) &&
            SETTING_POSITION == GRKIT_SETTING(2));

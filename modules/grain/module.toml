@@ -24,16 +24,23 @@ tiles = [
 # CORE.GRAIN_SIZE: 0 Auto (by ISO), 1 small, 2 medium, 3 large.
 uses = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
 
+# The viewfinder icon: 0 on, 1 off.
+[[settings]]
+key = "ICON"
+values = 2
+saved = true
+public = true
+
 [page]
 setting = "CORE.GRAIN"
 off_icon = { tile = 9 }
-# The level, then the size.
-settings = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
+# The level, the size, then the icon.
+settings = ["CORE.GRAIN", "CORE.GRAIN_SIZE", "ICON"]
 
 [[indicators]]
 id = "grain"
 placement = "status_row"
-enabled = { setting = "CORE.GRAIN", not_equals = 0 }
+enabled = { all = [{ setting = "CORE.GRAIN", not_equals = 0 }, { setting = "ICON", equals = 0 }] }
 # The viewfinder strength icons are tiles 5 to 8. Value 0 maps to tile 4,
 # but the indicator is hidden while Grain is Off.
 icon = { setting = "CORE.GRAIN", first_tile = 4 }

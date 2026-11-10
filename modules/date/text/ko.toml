@@ -11,3 +11,7 @@ values = ["클래식", "GR1s", "GR II"]
 [settings.POSITION]
 label = "날짜 위치"
 values = ["필름", "정방향"]
+
+[settings.ICON]
+label = "아이콘 표시"
+values = ["켜짐", "꺼짐"]

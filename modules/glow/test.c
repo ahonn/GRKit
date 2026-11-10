@@ -1185,10 +1185,13 @@ static void test_filter_gate(PictureSet *set)
    one effect off leaves the look of the other unchanged. */
 static void test_settings(PictureSet *set)
 {
-    assert(grkit_module.setting_count == 3);
+    assert(grkit_module.setting_count == 5);
     assert_setting_default("BLOOM", 4, 0);
     assert_setting_default("HALATION", 4, 0);
     assert_setting_default("HALATION_COLOR", 4, 1);
+    /* The viewfinder icons show by default. */
+    assert_setting_default("BLOOM_ICON", 2, 0);
+    assert_setting_default("HALATION_ICON", 2, 0);
     set_pair(0, 0);
     fill(40, 128, 128); square();
     u32 off = plane_sum(&set->planes[0]);

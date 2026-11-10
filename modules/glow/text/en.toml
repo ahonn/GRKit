@@ -17,3 +17,11 @@ values = ["Off", "Weak", "Medium", "Strong"]
 [settings.HALATION_COLOR]
 label = "Color"
 values = ["Red", "Orange", "Gold", "White"]
+
+[settings.BLOOM_ICON]
+label = "Show Icon"
+values = ["On", "Off"]
+
+[settings.HALATION_ICON]
+label = "Show Icon"
+values = ["On", "Off"]

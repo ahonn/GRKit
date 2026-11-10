@@ -7,3 +7,7 @@ label = "Strength"
 [settings."CORE.GRAIN_SIZE"]
 label = "Size"
 values = ["Auto", "Small", "Medium", "Large"]
+
+[settings.ICON]
+label = "Show Icon"
+values = ["On", "Off"]

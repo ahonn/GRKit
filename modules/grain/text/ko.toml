@@ -7,3 +7,7 @@ label = "강도"
 [settings."CORE.GRAIN_SIZE"]
 label = "크기"
 values = ["자동", "소", "중", "대"]
+
+[settings.ICON]
+label = "아이콘 표시"
+values = ["켜짐", "꺼짐"]

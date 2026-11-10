@@ -38,12 +38,19 @@ values = 2
 saved = true
 public = true
 
+# The viewfinder icon: 0 on, 1 off.
+[[settings]]
+key = "ICON"
+values = 2
+saved = true
+public = true
+
 # Where the camera has a native settings page, it shows the style, the look,
-# and the position.
+# the position, and the icon.
 [page]
 setting = "STYLE"
 off_row = true
-settings = ["STYLE", "LOOK", "POSITION"]
+settings = ["STYLE", "LOOK", "POSITION", "ICON"]
 # The Options row in MENU turns each style on or off in ADJ.
 options = true
 
@@ -55,7 +62,7 @@ stage = "mark"
 [[indicators]]
 id = "date"
 placement = "status_row"
-enabled = { setting = "STYLE", not_equals = 0 }
+enabled = { all = [{ setting = "STYLE", not_equals = 0 }, { setting = "ICON", equals = 0 }] }
 # The viewfinder shows the format as live-view text: the core label after DATE
 # for each STYLE (YMD, YMD HM, MDY, DMY, DMY HM). STYLE 0 maps to DATE, but
 # the indicator is hidden while Date Imprint is Off.

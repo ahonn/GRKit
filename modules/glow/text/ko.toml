@@ -17,3 +17,11 @@ values = ["꺼짐", "약", "중", "강"]
 [settings.HALATION_COLOR]
 label = "색상"
 values = ["빨강", "주황", "금색", "흰색"]
+
+[settings.BLOOM_ICON]
+label = "아이콘 표시"
+values = ["켜짐", "꺼짐"]
+
+[settings.HALATION_ICON]
+label = "아이콘 표시"
+values = ["켜짐", "꺼짐"]

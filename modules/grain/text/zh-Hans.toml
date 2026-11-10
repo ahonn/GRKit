@@ -7,3 +7,7 @@ label = "强度"
 [settings."CORE.GRAIN_SIZE"]
 label = "大小"
 values = ["自动", "小", "中", "大"]
+
+[settings.ICON]
+label = "图标显示"
+values = ["开启", "关闭"]

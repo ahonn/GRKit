@@ -11,3 +11,7 @@ values = ["经典", "GR1s", "GR II"]
 [settings.POSITION]
 label = "日期位置"
 values = ["胶片", "摆正"]
+
+[settings.ICON]
+label = "图标显示"
+values = ["开启", "关闭"]

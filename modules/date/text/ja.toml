@@ -11,3 +11,7 @@ values = ["クラシック", "GR1s", "GR II"]
 [settings.POSITION]
 label = "日付の位置"
 values = ["フィルム", "正位置"]
+
+[settings.ICON]
+label = "アイコン表示"
+values = ["オン", "オフ"]

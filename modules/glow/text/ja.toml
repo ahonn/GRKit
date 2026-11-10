@@ -17,3 +17,11 @@ values = ["オフ", "弱", "中", "強"]
 [settings.HALATION_COLOR]
 label = "色"
 values = ["レッド", "オレンジ", "ゴールド", "ホワイト"]
+
+[settings.BLOOM_ICON]
+label = "アイコン表示"
+values = ["オン", "オフ"]
+
+[settings.HALATION_ICON]
+label = "アイコン表示"
+values = ["オン", "オフ"]

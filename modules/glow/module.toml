@@ -47,30 +47,43 @@ saved = true
 public = true
 color_only = true
 
+# The viewfinder icons of Bloom and Halation: 0 on, 1 off.
+[[settings]]
+key = "BLOOM_ICON"
+values = 2
+saved = true
+public = true
+
+[[settings]]
+key = "HALATION_ICON"
+values = 2
+saved = true
+public = true
+
 [page]
 kind = "group"
 
 [[page.children]]
 key = "BLOOM"
-settings = ["BLOOM"]
+settings = ["BLOOM", "BLOOM_ICON"]
 icon = { setting = "BLOOM", first_tile = 1 }
 
 [[page.children]]
 key = "HALATION"
-settings = ["HALATION", "HALATION_COLOR"]
+settings = ["HALATION", "HALATION_COLOR", "HALATION_ICON"]
 icon = { setting = "HALATION", first_tile = 5 }
 
 # Value n shows tile first_tile + n; value 0 does not show.
 [[indicators]]
 id = "bloom"
 placement = "status_row"
-enabled = { setting = "BLOOM", not_equals = 0 }
+enabled = { all = [{ setting = "BLOOM", not_equals = 0 }, { setting = "BLOOM_ICON", equals = 0 }] }
 icon = { setting = "BLOOM", first_tile = 8 }
 
 [[indicators]]
 id = "halation"
 placement = "status_row"
-enabled = { setting = "HALATION", not_equals = 0 }
+enabled = { all = [{ setting = "HALATION", not_equals = 0 }, { setting = "HALATION_ICON", equals = 0 }] }
 icon = { setting = "HALATION", first_tile = 11 }
 
 [[filters]]

@@ -7,3 +7,7 @@ label = "強度"
 [settings."CORE.GRAIN_SIZE"]
 label = "サイズ"
 values = ["オート", "小", "中", "大"]
+
+[settings.ICON]
+label = "アイコン表示"
+values = ["オン", "オフ"]
