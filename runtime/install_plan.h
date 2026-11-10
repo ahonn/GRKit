@@ -249,14 +249,18 @@ static void order_modules(void)
     }
 }
 /* Whether a setting of this start takes the saved value of `id`: a
-   capability that a usable module uses, a saved setting of a usable module,
-   or a choice of the GRKit section. The Fn adjustments are not kept. */
+   capability without firmware points (CORE.ADJ and CORE.ADJ_MODULE, which
+   apply_state restores without a module), a capability that a usable module
+   uses, a saved setting of a usable module, or a choice of the GRKit
+   section. The Fn adjustments are not kept. A kept value would follow the
+   current one in the state file and win at the next start. */
 static int state_taken(u32 id)
 {
     static const u32 core_ids[] = {CORE_STATE_IDS};
     if (id >= PARAMETER_KEY_BASE) return 1;
     for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT; ++k) {
         if (core_ids[k] != id) continue;
+        if (!core_setting_points[k]) return 1;
         for (u32 i = 0; i < module_count; ++i) {
             if (!(module_usable >> i & 1)) continue;
             for (u32 u = 0; u < module_use_count[i]; ++u) {
