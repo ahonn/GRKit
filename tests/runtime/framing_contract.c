@@ -23,11 +23,20 @@ static uint32_t native_aspect, capture_aspect, capture_requests;
 #define TEST_LAYERS 0x59000000U
 static uint32_t layer_memory[128/4];
 static uint32_t indicator_memory[256/4], icon_memory[40*6412/4];
+/* Native views of the canvas: TEST_VIEW_COUNT views of TEST_VIEW_SIZE bytes,
+   then their child vectors. */
+#define TEST_VIEWS 0x57000000U
+#define TEST_VIEW_SIZE 0xa0U
+#define TEST_VIEW_COUNT 9U
+#define TEST_VECTORS (TEST_VIEWS+TEST_VIEW_COUNT*TEST_VIEW_SIZE)
+static uint32_t view_memory[(TEST_VIEW_COUNT*TEST_VIEW_SIZE+0x100)/4];
 
 static void *mapped(uint32_t address, uint32_t bytes)
 {
     uint32_t *object, size = sizeof(canvas_memory);
-    if (address >= TEST_LAYERS && address < TEST_LAYERS + sizeof(layer_memory)) {
+    if (address >= TEST_VIEWS && address < TEST_VIEWS + sizeof(view_memory)) {
+        object = view_memory; address -= TEST_VIEWS; size = sizeof(view_memory);
+    } else if (address >= TEST_LAYERS && address < TEST_LAYERS + sizeof(layer_memory)) {
         object = layer_memory; address -= TEST_LAYERS; size = sizeof(layer_memory);
     } else if (address >= TEST_INDICATOR && address < TEST_INDICATOR + sizeof(indicator_memory)) {
         object = indicator_memory; address -= TEST_INDICATOR; size = sizeof(indicator_memory);
@@ -686,6 +695,102 @@ static void status_row_lays_out_core_labels(void)
     assert(!cue_shown(header));
     assert(pixels[1+STATUS_TOP*TEST_STRIDE+STATUS_ONE]==0xff000013U);
 }
+/* Native view `i` at x, y, width, height, visible, without children. */
+static u32 test_view(u32 i,int x,int y,int w,int h,u32 visible)
+{
+    u32 view=TEST_VIEWS+i*TEST_VIEW_SIZE;
+    memset((uint8_t *)view_memory+i*TEST_VIEW_SIZE,0,TEST_VIEW_SIZE);
+    WORD(view,VIEW_SCREEN)=(u32)x; WORD(view,VIEW_SCREEN+4)=(u32)y;
+    WORD(view,VIEW_SCREEN+8)=(u32)w; WORD(view,VIEW_SCREEN+12)=(u32)h;
+    BYTE(view,VIEW_VISIBLE)=(uint8_t)visible;
+    return view;
+}
+/* The children of `parent`: the views in `views`, in a vector at `vector`. */
+static void test_children(u32 parent,u32 vector,const u32 *views,u32 count)
+{
+    for(u32 i=0;i<count;++i) WORD(vector,i*4)=views[i];
+    WORD(parent,VIEW_CHILDREN)=vector;
+    WORD(parent,VIEW_CHILDREN+4)=vector+count*4;
+}
+/* The first column of the status row where `color` shows, or 720. */
+static u32 status_column(u32 color)
+{
+    for(u32 x=0;x<720;++x) if(pixels[1+STATUS_TOP*TEST_STRIDE+x]==color) return x;
+    return 720;
+}
+static void status_paint_again(void)
+{
+    for (u32 i=0; i<sizeof(pixels)/sizeof(pixels[0]); ++i) pixels[i]=SENTINEL;
+    framing_paint(TEST_CANVAS,TEST_BITMAP);
+}
+/* The row takes the rightmost free part of the second row, STATUS_GAP from
+   each visible native view: the focus distance (600) and the dial guide of
+   GR IV Snap mode (440 to 600). A hidden view, the children of a hidden
+   view, a view that crosses the row, and a view as wide as the screen leave
+   the row free. When no free
+   part holds every indicator, the widest one holds the first ones. */
+static void status_row_avoids_native_views(void)
+{
+    reset();
+    header[GRKIT_HOST_MODULE_LAYER_COUNT/4]=0;
+    header[GRKIT_HOST_FRAME_RATIO/4]=0;
+    header[GRKIT_HOST_INDICATOR_COUNT/4]=2;
+    header[GRKIT_HOST_ICON_CHUNKS/4]=TEST_ICONS;
+    settings_memory[0]=4;
+    for(u32 i=0;i<4;++i) {
+        settings_memory[SETTINGS_ENTRY(i)+1]=i%2 ? 0 : 1;
+        settings_memory[SETTINGS_ENTRY(i)+2]=i%2 ? 3 : 2;
+    }
+    for(u32 i=0;i<2;++i) {
+        u32 d=TEST_INDICATOR+i*128,c=d+32,icon=d+64;
+        WORD(d,0)=24; WORD(d,4)=2; WORD(d,8)=0;
+        WORD(d,12)=1; WORD(d,16)=c; WORD(d,20)=icon;
+        WORD(c,0)=i*2; WORD(c,4)=1; WORD(c,8)=1;
+        WORD(icon,0)=16; WORD(icon,4)=1; WORD(icon,8)=i*2+1; WORD(icon,12)=i*3;
+        header[GRKIT_HOST_INDICATORS/4+i*2]=d;
+        header[GRKIT_HOST_INDICATORS/4+i*2+1]=0;
+    }
+    memset(icon_memory,0,sizeof(icon_memory));
+    for(u32 i=0;i<6;++i) {
+        u32 icon=module_tile_address(header,GRKIT_ICON_MODULE_TILE(i));
+        WORD(icon,GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE)=0xff000010U+i;
+    }
+    /* The canvas: a full-screen parent, the focus distance, a hidden icon at
+       the right, and the Snap dial guide (a parent of two views, and one
+       more view). */
+    u32 full=test_view(0,0,0,720,480,1),distance=test_view(1,600,40,80,40,1),hidden=test_view(2,680,40,40,40,0);
+    u32 guide=test_view(3,440,40,120,40,1),dial=test_view(4,440,40,40,40,1),value=test_view(5,480,40,80,40,1);
+    u32 rear=test_view(6,560,40,40,40,1),shift=test_view(7,100,40,250,20,0);
+    /* A focus frame at the top of the photo crosses the row. */
+    u32 focus=test_view(8,328,60,64,52,1);
+    u32 top[]={full,distance,hidden,guide,rear,shift,focus},parts[]={dial,value};
+    test_children(guide,TEST_VECTORS,parts,2);
+    test_children(TEST_CANVAS,TEST_VECTORS+0x20,top,7);
+    BYTE(guide,VIEW_VISIBLE)=0; BYTE(rear,VIEW_VISIBLE)=0;
+    framing_bind(TEST_OWNER);
+    /* The focus distance alone: the row ends at STATUS_RIGHT, 20 columns
+       before it, as without native views. The full-screen view, the hidden
+       icon at the right, the children of the hidden guide, and the focus
+       frame that crosses the row do not count. */
+    status_paint_again();
+    assert(status_column(0xff000013U)==STATUS_RIGHT-40);
+    assert(status_column(0xff000010U)==STATUS_RIGHT-STATUS_STEP-40);
+    /* Snap mode: the row ends STATUS_GAP before the dial guide. */
+    BYTE(guide,VIEW_VISIBLE)=1; BYTE(rear,VIEW_VISIBLE)=1;
+    status_paint_again();
+    assert(status_column(0xff000013U)==440-STATUS_GAP-40);
+    assert(status_column(0xff000010U)==440-STATUS_GAP-STATUS_STEP-40);
+    /* A wide native view leaves 7 to 80 and 370 to 420. The widest part
+       holds only the first icon, at its right end. */
+    BYTE(shift,VIEW_VISIBLE)=1;
+    status_paint_again();
+    assert(status_column(0xff000010U)==100-STATUS_GAP-40);
+    assert(status_column(0xff000013U)==720);
+    /* No free part holds an icon: no row. */
+    WORD(shift,VIEW_SCREEN)=0; WORD(shift,VIEW_SCREEN+8)=700;
+    status_paint_again();
+    assert(status_column(0xff000010U)==720 && status_column(0xff000013U)==720);
+}
 /* The widest set of the official indicators fits between STATUS_LEFT and
    STATUS_RIGHT: a Framing ratio, a Date Imprint format, and the Bloom,
    Halation, and Grain icons. */
@@ -713,6 +818,7 @@ int main(void)
     status_icons_follow_enable_strength_and_disp();
     status_row_lays_out_core_labels();
     status_row_fits_the_official_indicators();
+    status_row_avoids_native_views();
     the_highlight_warning_follows_the_effect_white();
     the_histogram_follows_the_effect_white();
     /* Fixed rectangles are independent expected output, not a second renderer. */
