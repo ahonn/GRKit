@@ -15,23 +15,23 @@ export function releaseName(release: string): string {
  * The release of each camera that the page makes the fast-boot firmware of, the latest, and
  * Ricoh's support page of the camera, which has it. HDF models share the page. A camera on an older
  * version installs the fast-boot firmware as an update. `grkit firmware patch` makes all releases.
- * GR IV Monochrome 1.10 has the official file of GR IV 1.20 with its own version, so it has an entry
+ * GR IV Monochrome 1.11 has the official file of GR IV 1.21 with its own version, so it has an entry
  * of that release with its own `name` and page. `file` is the name of the update file, which the
  * camera looks for in the card root.
  */
 export const LATEST: readonly { release: string; page: string; file: string; name?: string }[] = [
-  { release: 'gr3-2.20', file: 'fwdc239b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3_s.html' },
-  { release: 'gr3x-1.70', file: 'fwdc243b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3x_s.html' },
-  { release: 'gr4-1.20', file: 'fwdc248b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html' },
+  { release: 'gr3-2.21', file: 'fwdc239b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3_s.html' },
+  { release: 'gr3x-1.71', file: 'fwdc243b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr3x_s.html' },
+  { release: 'gr4-1.21', file: 'fwdc248b.bin', page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html' },
   {
-    release: 'gr4-1.20',
+    release: 'gr4-1.21',
     file: 'fwdc248b.bin',
-    name: 'GR IV Monochrome 1.10',
+    name: 'GR IV Monochrome 1.11',
     page: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr-4-mono_s.html',
   },
 ];
 
-/** The camera and version of an entry of `LATEST`, such as `GR IV Monochrome 1.10`. */
+/** The camera and version of an entry of `LATEST`, such as `GR IV Monochrome 1.11`. */
 export function latestName(item: (typeof LATEST)[number]): string {
   return item.name ?? releaseName(item.release);
 }
@@ -46,7 +46,7 @@ export const LATEST_NAMES: readonly string[] = LATEST.map(latestName);
 
 /**
  * The cameras and versions whose official file is the file of `release`, such as
- * `GR IV 1.20 / GR IV Monochrome 1.10`. A release that the page does not make has its `releaseName`.
+ * `GR IV 1.21 / GR IV Monochrome 1.11`. A release that the page does not make has its `releaseName`.
  */
 export function firmwareName(release: string): string {
   const names = LATEST.filter((item) => item.release === release).map(latestName);

@@ -43,9 +43,11 @@ A target is one firmware build. It gives the hook sites and the firmware address
 | Target | Cameras |
 | --- | --- |
 | `gr3-2.10` | GR III 2.10 and 2.20, GR IIIx 1.60 and 1.70, and their HDF models |
+| `gr3-2.21` | GR III 2.21, GR IIIx 1.71, and their HDF models |
 | `gr4-1.11` | GR IV 1.11, GR IV HDF, GR IV Monochrome |
 | `gr4-1.20` | GR IV 1.20 and GR IV HDF 1.20, GR IV Monochrome 1.10 |
 | `gr4-1.20-0528` | GR IV 1.20, the factory build of GR IV 30th Anniversary Edition cameras |
+| `gr4-1.21` | GR IV 1.21 and GR IV HDF 1.21, GR IV Monochrome 1.11 |
 
 A build whose code moved only a little runs the runtime of another build through [relocation](#relocation). An HDF camera runs the firmware of its base camera. `camera.rs` lists the releases of each camera and the runtime of each release.
 

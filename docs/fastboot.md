@@ -19,11 +19,11 @@ The official firmware has the two commands, but uses neither. Each release table
 
 | Release | Official update file |
 | --- | --- |
-| GR III 2.10, 2.20 | `fwdc239b.bin` |
-| GR IIIx 1.60, 1.70 | `fwdc243b.bin` |
-| GR IV 1.11, 1.20 | `fwdc248b.bin` |
+| GR III 2.10, 2.20, 2.21 | `fwdc239b.bin` |
+| GR IIIx 1.60, 1.70, 1.71 | `fwdc243b.bin` |
+| GR IV 1.11, 1.20, 1.21 | `fwdc248b.bin` |
 
-The HDF model of a camera runs the same file. GR IV Monochrome 1.10 has the official file of GR IV 1.20, so the same fast-boot firmware runs on it. The factory build of GR IV 30th Anniversary Edition cameras has no fast-boot firmware.
+The HDF model of a camera runs the same file. GR IV Monochrome 1.10 and 1.11 have the official files of GR IV 1.20 and 1.21, so the same fast-boot firmware runs on them. The factory build of GR IV 30th Anniversary Edition cameras has no fast-boot firmware.
 
 ## Script interface
 

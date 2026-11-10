@@ -81,7 +81,7 @@ fn gr4_relocation_resolves_other_builds() -> Result<()> {
 /// with its identity word (`--known`), and each runtime resolves only its own
 /// image (`--try`), so the package installs the runtime of the build.
 #[test]
-#[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and ARM toolchain"]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, GRKIT_TEST_FIRMWARE_GR4_121, and ARM toolchain"]
 fn gr4_installers_select_their_build() -> Result<()> {
     let tools = tools()?;
     let directory = tempfile::tempdir()?;
@@ -90,6 +90,7 @@ fn gr4_installers_select_their_build() -> Result<()> {
         ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
         ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
         ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
     ] {
         let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
         let image = verify_firmware(Path::new(&path), target)?;
@@ -150,6 +151,65 @@ fn gr3_relocation_resolves_its_builds() -> Result<()> {
         let decoded = firmware::decode(&fs::read(path)?)?;
         let (result, _) = resolve_image(&built.output, firmware::rtos_section(&decoded)?)?;
         assert!(result.starts_with("failed"));
+    }
+    Ok(())
+}
+
+/// The two GR III runtimes of a GR III or GR IIIx package. Each official build
+/// names exactly one runtime with its identity word, and only that runtime
+/// resolves it: `gr3-2.10` the builds that it relocates to (2.20, and GR IIIx
+/// 1.60 and 1.70), and `gr3-2.21` GR IIIx 1.71. The other official files are
+/// optional.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, and ARM toolchain"]
+fn gr3_installers_select_their_build() -> Result<()> {
+    let tools = tools()?;
+    let directory = tempfile::tempdir()?;
+    let mut runtimes = Vec::new();
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let built = build_image(&image, &directory.path().join(target.name), &tools)?;
+        runtimes.push((target, image.body.to_vec(), built));
+    }
+    // Each official RTOS image and the runtime that must install on it.
+    let mut images: Vec<(String, Vec<u8>, &str)> = runtimes
+        .iter()
+        .map(|(target, body, _)| (target.name.to_string(), body.clone(), target.name))
+        .collect();
+    for (variable, runtime) in [
+        ("GRKIT_TEST_FIRMWARE_GR3_220", "gr3-2.10"),
+        ("GRKIT_TEST_FIRMWARE_GR3X", "gr3-2.10"),
+        ("GRKIT_TEST_FIRMWARE_GR3X_170", "gr3-2.10"),
+        ("GRKIT_TEST_FIRMWARE_GR3X_171", "gr3-2.21"),
+    ] {
+        if let Ok(path) = std::env::var(variable) {
+            let decoded = firmware::decode(&fs::read(path)?)?;
+            let body = firmware::rtos_section(&decoded)?.to_vec();
+            images.push((variable.to_string(), body, runtime));
+        }
+    }
+    let offset = (target::RTOS_IDENTITY - target::RTOS_BASE) as usize;
+    for (name, body, runtime) in &images {
+        let identity = u32::from_le_bytes(body[offset..offset + 4].try_into()?);
+        let naming: Vec<_> = runtimes
+            .iter()
+            .filter(|(target, _, _)| target.identities.contains(&identity))
+            .map(|(target, _, _)| target.name)
+            .collect();
+        assert_eq!(naming, [*runtime], "{name}: identity {identity:#010x}");
+        for (target, _, built) in &runtimes {
+            let (result, _) = resolve_image(&built.output, body)?;
+            assert_eq!(
+                result.starts_with("ok"),
+                target.name == *runtime,
+                "{} on {name}: {result}",
+                target.name
+            );
+        }
     }
     Ok(())
 }

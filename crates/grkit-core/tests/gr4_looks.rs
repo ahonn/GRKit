@@ -175,3 +175,31 @@ fn gr4_120_holds_the_looks_of_111() -> Result<()> {
     }
     Ok(())
 }
+
+/// GR IV 1.21, read from its firmware file, holds the looks of 1.20: the same
+/// tone tables, definitions, and effects.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR4_120 and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn gr4_121_holds_the_looks_of_120() -> Result<()> {
+    let old = Image::read(&firmware("GRKIT_TEST_FIRMWARE_GR4_120")?)?;
+    let new = Image::read(&firmware("GRKIT_TEST_FIRMWARE_GR4_121")?)?;
+    assert_eq!(new.source.version, "1.21");
+    assert_eq!(new.tone_tables()?, old.tone_tables()?);
+    // The attribution names the version that the user read.
+    let strip = |mut definitions: Vec<serde_json::Value>| {
+        for d in &mut definitions {
+            d["attribution"] = serde_json::Value::Null;
+        }
+        definitions
+    };
+    assert_eq!(strip(new.definitions()?), strip(old.definitions()?));
+    let ids = |image: &Image| -> Result<Vec<&'static str>> {
+        Ok(image
+            .all_effects()?
+            .iter()
+            .map(|(look, _)| look.effect_id)
+            .collect())
+    };
+    assert_eq!(ids(&new)?, ids(&old)?);
+    Ok(())
+}

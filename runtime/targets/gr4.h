@@ -108,12 +108,13 @@
    row category, which its entry hook replaces, the subtitle of the list
    (+0x160 of the controller, r4 in UpdateSubTitle), the subtitle of
    RawDevelopmentTopController (r6), the list view, and the style and the
-   height of its row views. */
+   height of its row views. The IDs of the development controllers follow
+   DEVELOP_CONTROLLERS, the first one, which each build header gives. */
 #define CONTROLLER_ID 0x124
-#define DEVELOP_TONE_LIST 0x4000022U
+#define DEVELOP_TONE_LIST (DEVELOP_CONTROLLERS + 4U)
 /* The ID of the aspect list of the development, and the first instruction
    of the row value of the model, which its entry hook replaces. */
-#define DEVELOP_ASPECT_LIST 0x400001fU
+#define DEVELOP_ASPECT_LIST (DEVELOP_CONTROLLERS + 1U)
 #define DEVELOP_ASPECT_VALUE_FIRST "mov ip, sp"
 #define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
 #define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]

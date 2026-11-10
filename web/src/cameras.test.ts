@@ -21,22 +21,22 @@ describe('cameras', () => {
 
   it('lists the versions and builds of a camera', () => {
     expect(releases('gr3')).toEqual({
-      firmware: '2.10 / 2.20',
-      targets: ['gr3-2.10'],
+      firmware: '2.10 / 2.20 / 2.21',
+      targets: ['gr3-2.10', 'gr3-2.21'],
       modeset: '00078350.588',
     });
     // Two builds of 1.20 show the version once.
     expect(releases('gr4')).toMatchObject({
-      firmware: '1.11 / 1.20',
-      targets: ['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528'],
+      firmware: '1.11 / 1.20 / 1.21',
+      targets: ['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528', 'gr4-1.21'],
     });
   });
 
   it('gives GR IV Monochrome the GR IV builds with its own versions', () => {
     const mono = CAMERAS.find((item) => item.key === 'gr4m')!;
     expect(mono.support).toMatchObject({
-      firmware: '1.00 / 1.10',
-      targets: ['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528'],
+      firmware: '1.00 / 1.10 / 1.11',
+      targets: ['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528', 'gr4-1.21'],
     });
   });
 });
@@ -75,7 +75,7 @@ describe('camerasForCard', () => {
   });
 
   it('fits each build of a package with more than one', () => {
-    expect(keys(camerasForCard(['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528'], []))).toEqual(['gr4', 'gr4m']);
+    expect(keys(camerasForCard(['gr4-1.11', 'gr4-1.20', 'gr4-1.20-0528', 'gr4-1.21'], []))).toEqual(['gr4', 'gr4m']);
   });
 
   it('tells nothing without a build and a ModeSet file', () => {
@@ -89,12 +89,13 @@ describe('firmwareForTarget', () => {
 
   it('gives the versions that run the build', () => {
     expect(firmwareForTarget(camera('gr3'), 'gr3-2.10')).toBe('2.10 / 2.20');
+    expect(firmwareForTarget(camera('gr3'), 'gr3-2.21')).toBe('2.21');
     expect(firmwareForTarget(camera('gr4'), 'gr4-1.11')).toBe('1.11');
     expect(firmwareForTarget(camera('gr4'), 'gr4-1.20-0528')).toBe('1.20');
   });
 
   it('keeps the versions of an entry that shows its own', () => {
-    expect(firmwareForTarget(camera('gr4m'), 'gr4-1.11')).toBe('1.00 / 1.10');
-    expect(firmwareForTarget(camera('gr3x'), null)).toBe('1.60 / 1.70');
+    expect(firmwareForTarget(camera('gr4m'), 'gr4-1.11')).toBe('1.00 / 1.10 / 1.11');
+    expect(firmwareForTarget(camera('gr3x'), null)).toBe('1.60 / 1.70 / 1.71');
   });
 });

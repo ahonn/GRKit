@@ -1,7 +1,7 @@
-// Private Image Control processing hooks for GR III 2.10. processing.h has
+// Private Image Control processing hooks for GR III. processing.h has
 // the parts that each family shares. The header fields are those of abi.h.
-// The firmware addresses are FIRMWARE() symbols (hooks.h and
-// runtime/firmware.h), which the installer relocates.
+// The firmware addresses are FIRMWARE() symbols of the build header (hooks.h
+// and runtime/firmware.h), which the installer relocates.
 // Records are immutable, contiguous GRKIT_RECORD_SIZE allocations retained until reboot.
 // The live-view dirty hook lives in picture.S.
 #include "firmware.h"
@@ -24,7 +24,7 @@ module_processing:
     pop {r0-r3, r12, lr}
     mov r1, #11
     mov r2, #11
-    ldr r12, =FIRMWARE(0x55018cf0)
+    ldr r12, =FW_IC_TABLE_1
     add r9, r6, #492
     ldr lr, [r4, #8]
     // A record with hue sectors (feature 8) or a native look (feature 32), 0x28,
@@ -46,18 +46,18 @@ module_processing:
     cmp r0, #0
     addne r12, r12, #4
 1:
-    ldr r0, =FIRMWARE(0x55018e4c)
-    ldr pc, =FIRMWARE(0x536dc2ac)
+    ldr r0, =FW_IC_TABLE_2
+    ldr pc, =FW_PROCESSING_RESUME
 processing_stock:
     pop {r0-r3, r12, lr}
     // The eight replaced instructions (a context of target/gr3_210.rs), with
     // literal words for the three type tables instead of MOVW and MOVT pairs.
-    ldr r0, =FIRMWARE(0x55018d94)
-    ldr r12, =FIRMWARE(0x55018cf0)
+    ldr r0, =FW_IC_TABLE_0
+    ldr r12, =FW_IC_TABLE_1
     add r9, r6, #0x1ec
     ldr lr, [r0, r1, lsl #2]
-    ldr r0, =FIRMWARE(0x55018e4c)
-    ldr pc, =FIRMWARE(0x536dc2ac)
+    ldr r0, =FW_IC_TABLE_2
+    ldr pc, =FW_PROCESSING_RESUME
 
 module_packet:
     str r3, [r4, #0x90]
@@ -84,9 +84,9 @@ module_packet:
     pop {r12, lr}
     msr cpsr_f, r12
     pop {r0-r3, r12, lr}
-    ldr r12, =FIRMWARE(0x536f00c4)
+    ldr r12, =FW_PACKET_GAMMA_RESET
     blx r12
-    ldr r12, =FIRMWARE(0x536eff34)
+    ldr r12, =FW_PACKET_SPECIAL_PATH
     blx r12
     sub sp, r11, #40
     ldm sp, {r4-r11, sp, pc}
@@ -105,7 +105,7 @@ module_gamma_flag:
     pop {r0-r2, lr}
     ldr pc, =HOOK_MODULE_GAMMA_FLAG_RESUME
 
-// Replaces the BL to the curve getter at 0x536e87c4 (r4 = packet). r1..r3
+// Replaces the BL to the curve getter (r4 = packet). r1..r3
 // receive the R, G, and B curves. The gamma object is at [fp, #-0x44].
 module_gamma_curves:
     push {r0, r5, r12, lr}

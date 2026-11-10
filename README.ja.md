@@ -36,10 +36,10 @@ GRKit の読み込みには、電源を入れてから約 8〜10 秒かかりま
 
 | カメラ | 実機で確認済み | 対応 |
 | --- | --- | --- |
-| GR III、GR III HDF | 2.10、2.20 | — |
-| GR IIIx、GR IIIx HDF | 1.60、1.70 | — |
-| GR IV、GR IV HDF | 1.11、1.20 | — |
-| GR IV Monochrome | 1.00 | 1.10 |
+| GR III、GR III HDF | 2.10、2.20 | 2.21 |
+| GR IIIx、GR IIIx HDF | 1.60、1.70 | 1.71 |
+| GR IV、GR IV HDF | 1.11、1.20 | 1.21 |
+| GR IV Monochrome | 1.00 | 1.10、1.11 |
 
 GR IV Monochrome ではフィルムルックは使えません。ほかの機種やファームウェアには対応していません。対応カメラで GRKit が読み込まれない場合は、[ファームウェア書き出しガイド](resources/DUMP.ja.md)をご覧ください。
 

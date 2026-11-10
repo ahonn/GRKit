@@ -9,7 +9,11 @@
 //! A camera lists each firmware release that it can run with the runtime build
 //! for it. GR III 2.20 and GR IIIx 1.70 change only the end screen; their code
 //! moves by less than the relocation radius, so the installer relocates the
-//! `gr3-2.10` runtime to them (docs/architecture.md, Relocation).
+//! `gr3-2.10` runtime to them (docs/architecture.md, Relocation). GR III 2.21
+//! and GR IIIx 1.71 add reset settings: their code moves beyond the radius and
+//! their later text IDs move, so they have the runtime `gr3-2.21`, which has
+//! not been tested on a camera. GR IIIx 1.71 runs the RTOS code of GR III 2.21,
+//! as 1.60 runs that of 2.10.
 //!
 //! Each camera has an HDF model that runs the same firmware and ModeSet file:
 //! Ricoh publishes one firmware for both. The RTOS selects the HDF model from a
@@ -20,9 +24,12 @@
 //! changes code beyond the relocation radius, so it has a runtime of its own,
 //! `gr4-1.20`, which has not been tested on a camera. GR IV 30th Anniversary
 //! Edition cameras have another 1.20 build from the factory, which mixes code
-//! of 1.11 and 1.20, so it has the runtime `gr4-1.20-0528`. Each has
-//! Image Control, Framing, Guides, Date Stamp, and Grain. The 1.11 runtime has
-//! been tested on a GR IV camera, but not on a GR IV HDF camera.
+//! of 1.11 and 1.20, so it has the runtime `gr4-1.20-0528`. GR IV 1.21 moves
+//! the code of 1.20 beyond the relocation radius and renumbers some
+//! controllers, so it has the runtime `gr4-1.21`, which has not been tested
+//! on a camera. Each has Image Control, Framing, Guides, Date Stamp, and
+//! Grain. The 1.11 runtime has been tested on a GR IV camera, but not on a
+//! GR IV HDF camera.
 //!
 //! A camera has one package. When the camera has several runtime builds, the
 //! package holds the installer of each, and the camera selects the installer
@@ -66,6 +73,10 @@ pub const GR3: Camera = Camera {
             firmware: "2.20",
             target: "gr3-2.10",
         },
+        Release {
+            firmware: "2.21",
+            target: "gr3-2.21",
+        },
     ],
     modeset: "00078350.588",
     effects: true,
@@ -83,6 +94,10 @@ pub const GR3X: Camera = Camera {
         Release {
             firmware: "1.70",
             target: "gr3-2.10",
+        },
+        Release {
+            firmware: "1.71",
+            target: "gr3-2.21",
         },
     ],
     modeset: "00078490.609",
@@ -106,6 +121,10 @@ pub const GR4: Camera = Camera {
         Release {
             firmware: "1.20",
             target: "gr4-1.20-0528",
+        },
+        Release {
+            firmware: "1.21",
+            target: "gr4-1.21",
         },
     ],
     modeset: "00078560.636",
@@ -217,13 +236,19 @@ mod tests {
 
     #[test]
     fn each_release_names_its_runtime_build() {
-        assert_eq!(GR3.targets(), ["gr3-2.10"]);
+        assert_eq!(GR3.targets(), ["gr3-2.10", "gr3-2.21"]);
         assert_eq!(GR3.firmware_for("gr3-2.10"), ["2.10", "2.20"]);
+        assert_eq!(GR3.firmware_for("gr3-2.21"), ["2.21"]);
         assert_eq!(GR3X.firmware_for("gr3-2.10"), ["1.60", "1.70"]);
+        assert_eq!(GR3X.firmware_for("gr3-2.21"), ["1.71"]);
         assert!(GR3X.runs("gr3-2.10") && !GR3X.runs("gr4-1.11"));
-        assert_eq!(GR4.targets(), ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528"]);
+        assert_eq!(
+            GR4.targets(),
+            ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528", "gr4-1.21"]
+        );
         assert_eq!(GR4.firmware_for("gr4-1.20"), ["1.20"]);
         assert_eq!(GR4.firmware_for("gr4-1.20-0528"), ["1.20"]);
-        assert_eq!(GR4.versions(), ["1.11", "1.20"]);
+        assert_eq!(GR4.firmware_for("gr4-1.21"), ["1.21"]);
+        assert_eq!(GR4.versions(), ["1.11", "1.20", "1.21"]);
     }
 }

@@ -36,10 +36,10 @@ GRKit은 전원을 켜고 8~10초쯤 뒤에 불러와집니다. GR IV나 설치�
 
 | 카메라 | 실제 카메라에서 확인 | 지원 |
 | --- | --- | --- |
-| GR III, GR III HDF | 2.10, 2.20 | — |
-| GR IIIx, GR IIIx HDF | 1.60, 1.70 | — |
-| GR IV, GR IV HDF | 1.11, 1.20 | — |
-| GR IV Monochrome | 1.00 | 1.10 |
+| GR III, GR III HDF | 2.10, 2.20 | 2.21 |
+| GR IIIx, GR IIIx HDF | 1.60, 1.70 | 1.71 |
+| GR IV, GR IV HDF | 1.11, 1.20 | 1.21 |
+| GR IV Monochrome | 1.00 | 1.10, 1.11 |
 
 GR IV Monochrome에서는 필름 룩을 쓸 수 없습니다. 다른 기종이나 펌웨어는 지원하지 않습니다. 지원 카메라에서 GRKit이 불러와지지 않으면 [펌웨어 덤프 가이드](resources/DUMP.ko.md)를 참고하세요.
 

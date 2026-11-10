@@ -8,7 +8,7 @@ use zip::{write::SimpleFileOptions, ZipArchive, ZipWriter};
 
 fn package() -> Vec<u8> {
     assemble(
-        &[testing::runtime("gr3-2.10")],
+        &testing::camera_runtimes(&grkit_core::camera::GR3),
         &testing::effect_set(&["test-effect"]),
         &testing::official_modules(),
         &camera::GR3,

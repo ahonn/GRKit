@@ -43,7 +43,7 @@ const APX: u32 = 0x8000;
 const AP0: u32 = 0x0400;
 
 /// The release tables, by name (`fastboot/releases/<name>.json`).
-const TABLES: [(&str, &str); 6] = [
+const TABLES: [(&str, &str); 9] = [
     (
         "gr3-2.10",
         include_str!("../../../fastboot/releases/gr3-2.10.json"),
@@ -51,6 +51,10 @@ const TABLES: [(&str, &str); 6] = [
     (
         "gr3-2.20",
         include_str!("../../../fastboot/releases/gr3-2.20.json"),
+    ),
+    (
+        "gr3-2.21",
+        include_str!("../../../fastboot/releases/gr3-2.21.json"),
     ),
     (
         "gr3x-1.60",
@@ -61,12 +65,20 @@ const TABLES: [(&str, &str); 6] = [
         include_str!("../../../fastboot/releases/gr3x-1.70.json"),
     ),
     (
+        "gr3x-1.71",
+        include_str!("../../../fastboot/releases/gr3x-1.71.json"),
+    ),
+    (
         "gr4-1.11",
         include_str!("../../../fastboot/releases/gr4-1.11.json"),
     ),
     (
         "gr4-1.20",
         include_str!("../../../fastboot/releases/gr4-1.20.json"),
+    ),
+    (
+        "gr4-1.21",
+        include_str!("../../../fastboot/releases/gr4-1.21.json"),
     ),
 ];
 

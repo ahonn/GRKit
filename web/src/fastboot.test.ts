@@ -11,16 +11,18 @@ describe('releaseName', () => {
 
 describe('newerRelease', () => {
   it('asks for the latest release of the same camera', () => {
-    expect(newerRelease('gr3-2.10')).toBe('gr3-2.20');
-    expect(newerRelease('gr3x-1.60')).toBe('gr3x-1.70');
-    expect(newerRelease('gr4-1.11')).toBe('gr4-1.20');
+    expect(newerRelease('gr3-2.10')).toBe('gr3-2.21');
+    expect(newerRelease('gr3-2.20')).toBe('gr3-2.21');
+    expect(newerRelease('gr3x-1.60')).toBe('gr3x-1.71');
+    expect(newerRelease('gr4-1.11')).toBe('gr4-1.21');
+    expect(newerRelease('gr4-1.20')).toBe('gr4-1.21');
   });
 
   it('accepts the latest release of each camera', () => {
-    expect(newerRelease('gr3-2.20')).toBeNull();
-    expect(newerRelease('gr3x-1.70')).toBeNull();
-    expect(newerRelease('gr4-1.20')).toBeNull();
-    expect(LATEST_NAMES).toEqual(['GR III 2.20', 'GR IIIx 1.70', 'GR IV 1.20', 'GR IV Monochrome 1.10']);
+    expect(newerRelease('gr3-2.21')).toBeNull();
+    expect(newerRelease('gr3x-1.71')).toBeNull();
+    expect(newerRelease('gr4-1.21')).toBeNull();
+    expect(LATEST_NAMES).toEqual(['GR III 2.21', 'GR IIIx 1.71', 'GR IV 1.21', 'GR IV Monochrome 1.11']);
   });
 });
 
@@ -32,8 +34,9 @@ describe('latestCamera', () => {
 
 describe('firmwareName', () => {
   it('names each camera whose official file the release has', () => {
-    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20 / GR IV Monochrome 1.10');
-    expect(firmwareName('gr3-2.20')).toBe('GR III 2.20');
+    expect(firmwareName('gr4-1.21')).toBe('GR IV 1.21 / GR IV Monochrome 1.11');
+    expect(firmwareName('gr3-2.21')).toBe('GR III 2.21');
+    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20');
     expect(firmwareName('gr4-1.11')).toBe('GR IV 1.11');
   });
 });

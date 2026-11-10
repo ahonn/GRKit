@@ -56,10 +56,12 @@ export const CAMERAS: readonly Camera[] = [
     id: 'gr3',
     fastboot: true,
     name: 'GR III / GR III HDF',
-    // 2.20 changes only the end screen; the installer relocates the 2.10 runtime to it.
+    // 2.20 changes only the end screen; the installer relocates the 2.10 runtime to it. 2.21 has a
+    // runtime of its own.
     support: { ...releases('gr3'), modules: CAMERA_MODULES.gr3 },
   },
-  // GR IIIx 1.60 and 1.70 run the GR III 2.10 and 2.20 code, so they use the same runtime.
+  // GR IIIx 1.60, 1.70, and 1.71 run the GR III 2.10, 2.20, and 2.21 code, so they use the same
+  // runtimes.
   {
     key: 'gr3x',
     id: 'gr3x',
@@ -67,7 +69,7 @@ export const CAMERAS: readonly Camera[] = [
     name: 'GR IIIx / GR IIIx HDF',
     support: { ...releases('gr3x'), modules: CAMERA_MODULES.gr3x },
   },
-  // GR IV 1.11 and the two builds of 1.20 have a runtime each. The package holds all three.
+  // GR IV 1.11, the two builds of 1.20, and 1.21 have a runtime each. The package holds all four.
   {
     key: 'gr4',
     id: 'gr4',
@@ -75,10 +77,10 @@ export const CAMERAS: readonly Camera[] = [
     name: 'GR IV / GR IV HDF',
     support: { ...releases('gr4'), modules: CAMERA_MODULES.gr4 },
   },
-  // GR IV Monochrome runs the GR IV firmware with its own version: it shows 1.11 as 1.00 and 1.20
-  // as 1.10. It uses the GR IV package and ModeSet file. The effects are made for color sensors,
-  // so its package has no Image Control. Its official 1.10 file is that of GR IV 1.20, so the same
-  // fast-boot firmware runs on it.
+  // GR IV Monochrome runs the GR IV firmware with its own version: it shows 1.11 as 1.00, 1.20 as
+  // 1.10, and 1.21 as 1.11. It uses the GR IV package and ModeSet file. The effects are made for
+  // color sensors, so its package has no Image Control. Its official 1.10 file is that of GR IV
+  // 1.20, so the same fast-boot firmware runs on it.
   {
     key: 'gr4m',
     id: 'gr4',
@@ -86,7 +88,7 @@ export const CAMERAS: readonly Camera[] = [
     name: 'GR IV Monochrome',
     support: {
       ...releases('gr4'),
-      firmware: '1.00 / 1.10',
+      firmware: '1.00 / 1.10 / 1.11',
       modules: CAMERA_MODULES.gr4.filter((key) => key !== 'filmLook'),
       noEffects: true,
     },

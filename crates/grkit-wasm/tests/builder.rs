@@ -3,7 +3,19 @@ use grkit_wasm::Builder;
 use serde_json::{json, Value};
 
 fn runtime_files() -> Files {
-    testing::runtime_files(&testing::installer(), "gr3-2.10")
+    testing::runtime_files(&testing::marked_installer("gr3-2.10"), "gr3-2.10")
+}
+
+/// Adds the second GR III build, `gr3-2.21`, which a GR III or GR IIIx
+/// package needs after the `gr3-2.10` build.
+fn add_gr3_221(builder: &mut Builder) {
+    let files = testing::runtime_files(&testing::marked_installer("gr3-2.21"), "gr3-2.21");
+    builder
+        .add_build(&testing::manifest("gr3-2.21", &files))
+        .unwrap();
+    for path in builder.runtime_paths(1).unwrap().to_vec() {
+        builder.add_runtime_file(1, &path, &files[&path]).unwrap();
+    }
 }
 
 fn manifest(files: &Files) -> Vec<u8> {
@@ -21,6 +33,7 @@ fn builder_without_modules(files: &Files) -> Builder {
     for path in builder.runtime_paths(0).unwrap().to_vec() {
         builder.add_runtime_file(0, &path, &files[&path]).unwrap();
     }
+    add_gr3_221(&mut builder);
     builder.set_guide(PDF);
     builder
 }
@@ -107,6 +120,7 @@ fn a_package_needs_the_guide_pdf() {
     for path in builder.runtime_paths(0).unwrap().to_vec() {
         builder.add_runtime_file(0, &path, &files[&path]).unwrap();
     }
+    add_gr3_221(&mut builder);
     assert!(error(builder.build()).contains("Set the installation guide first"));
     builder.set_guide(b"not a PDF");
     assert!(error(builder.build()).contains("not a PDF document"));
@@ -215,7 +229,7 @@ fn a_package_adds_each_build_of_the_camera() {
     for (manifest, _) in &builds[1..] {
         builder.add_build(manifest).unwrap();
     }
-    assert!(error(builder.runtime_paths(3)).contains("No runtime build 3"));
+    assert!(error(builder.runtime_paths(4)).contains("No runtime build 4"));
     for (number, (_, files)) in builds.iter().enumerate() {
         for path in builder.runtime_paths(number).unwrap().to_vec() {
             builder
@@ -226,7 +240,7 @@ fn a_package_adds_each_build_of_the_camera() {
     let package = builder.build().unwrap();
     assert_eq!(
         packaging::verify_package(&package).unwrap().targets,
-        ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528"]
+        ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528", "gr4-1.21"]
     );
 }
 
@@ -237,8 +251,15 @@ fn the_card_files_are_the_sd_root_of_the_package() {
     builder.add_effect(&effect("test-a")).unwrap();
     let card = builder.card_files().unwrap();
     // Each runtime file, the ModeSet files, the effect, each module, and the package list.
+    // The core file of the first build is CORE1.BIN, and the scripts select the build.
     for path in files.keys() {
-        assert_eq!(card[path], files[path], "{path}");
+        match path.as_str() {
+            "SCRIPT/GRKIT/CORE.BIN" => {
+                assert_eq!(card["SCRIPT/GRKIT/CORE1.BIN"], files[path])
+            }
+            "SCRIPT/GRKIT/SCAN.SH" | "SCRIPT/GRKIT/INSTALL.SH" => assert!(card.contains_key(path)),
+            _ => assert_eq!(card[path], files[path], "{path}"),
+        }
     }
     assert!(card.contains_key("SCRIPT/GRKIT/PACKAGE.TXT"));
     assert!(card

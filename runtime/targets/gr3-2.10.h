@@ -112,6 +112,16 @@
 /* The last two of them, Shading and Clarity, for assembly (runtime/processing.h). */
 #define PARAMETER_KIND_SHADING 13
 #define PARAMETER_KIND_CLARITY 14
+/* Image Control processing (runtime/processing.S): the three type tables that
+   the parameter build loads before the module_processing site, the
+   instruction after those loads, and the two gamma calls of the packet tail:
+   the reset of the shared gamma helper, then the special type-16 path. */
+#define FW_IC_TABLE_0 FIRMWARE(0x55018d94)
+#define FW_IC_TABLE_1 FIRMWARE(0x55018cf0)
+#define FW_IC_TABLE_2 FIRMWARE(0x55018e4c)
+#define FW_PROCESSING_RESUME FIRMWARE(0x536dc2ac)
+#define FW_PACKET_GAMMA_RESET FIRMWARE(0x536f00c4)
+#define FW_PACKET_SPECIAL_PATH FIRMWARE(0x536eff34)
 /* Toning (runtime/toning.h): base kind 9 of the row lists at 0x53b3488c,
    the rows of Retro, adds Toning, row kind 9, to the Standard rows. Its model
    getter and setter and row read hook as adjustment 9. The page keeps the

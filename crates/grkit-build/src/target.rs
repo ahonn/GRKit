@@ -19,22 +19,33 @@ pub use grkit_core::runtime::HEADER_REFERENCE;
 pub mod common;
 pub mod gr3;
 pub mod gr3_210;
+pub mod gr3_221;
 pub mod gr4;
 pub mod gr4_111;
 pub mod gr4_120;
 pub mod gr4_120_0528;
+pub mod gr4_121;
 
 pub use gr3_210::{IMAGE_CONTROL as GR3_IMAGE_CONTROL, TARGET as GR3_210};
+pub use gr3_221::TARGET as GR3_221;
 pub use gr4_111::{IMAGE_CONTROL as GR4_IMAGE_CONTROL, TARGET as GR4_111};
 pub use gr4_120::{IMAGE_CONTROL as GR4_120_IMAGE_CONTROL, TARGET as GR4_120};
 pub use gr4_120_0528::TARGET as GR4_120_0528;
+pub use gr4_121::TARGET as GR4_121;
 
 pub const RTOS_BASE: u32 = 0x53000000;
 /// The RTOS word that names the firmware version and its build, such as
 /// `01 14 0a 0b` (little-endian 0x0b0a1401) for GR IV 1.20.
 pub const RTOS_IDENTITY: u32 = 0x53002038;
 
-pub const TARGETS: [&Target; 4] = [&GR3_210, &GR4_111, &GR4_120, &GR4_120_0528];
+pub const TARGETS: [&Target; 6] = [
+    &GR3_210,
+    &GR3_221,
+    &GR4_111,
+    &GR4_120,
+    &GR4_120_0528,
+    &GR4_121,
+];
 
 /// The zip that holds the firmware file of a target.
 #[derive(Debug, PartialEq, Eq)]

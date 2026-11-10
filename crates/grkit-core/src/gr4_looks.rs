@@ -57,7 +57,7 @@ pub struct Source {
 
 /// The builds that Ricoh publishes for GR IV and GR IV HDF. The CLI's targets of the same
 /// builds hold the same data section and type tables (`grkit-build` checks them).
-pub const SOURCES: [Source; 2] = [
+pub const SOURCES: [Source; 3] = [
     Source {
         version: "1.11",
         firmware_sha256: "a2f664dfca034059eb0fd6e18ab08684c326b4a034d85c164dad7e1ec9b5655f",
@@ -86,6 +86,22 @@ pub const SOURCES: [Source; 2] = [
         families: 0x5503_3880,
         ease: 0x540b_1eb4,
         unit: 0x540b_59e4,
+        curve_sets: 0x5505_4158,
+        curve_set_entries: 38,
+    },
+    // 1.21 has the data section and the tables of 1.20, and other code addresses.
+    Source {
+        version: "1.21",
+        firmware_sha256: "bf4d6c35f6da1c16ed5f2943af570eab8fef326f7501a2b3ce5413fa55ec5c99",
+        data_start: 0x5500_0000,
+        data_source: 0x543b_4900,
+        data_size: 0x58500,
+        look_table: 0x5505_4800,
+        multiaxial_table: 0x5505_4554,
+        gains: 0x53b7_786c,
+        families: 0x5503_3880,
+        ease: 0x540b_36a4,
+        unit: 0x540b_71d4,
         curve_sets: 0x5505_4158,
         curve_set_entries: 38,
     },

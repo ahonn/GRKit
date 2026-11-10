@@ -9,7 +9,7 @@ The fast-boot firmware is the official Ricoh firmware of your camera with three 
 > [!WARNING]
 > To install the fast-boot firmware, you update the camera with a firmware file that Ricoh did not make. If the update stops, the camera may not start. GR III and GR IIIx keep only one copy of the firmware.
 
-- The page makes the fast-boot firmware of the latest version of each camera: GR III 2.20, GR IIIx 1.70, and GR IV 1.20, also for their HDF models. A camera on an older version installs it as an update. GR IV Monochrome and the factory firmware of GR IV 30th Anniversary Edition cameras are not supported.
+- The page makes the fast-boot firmware of the latest version of each camera: GR III 2.21, GR IIIx 1.71, and GR IV 1.21, also for their HDF models. A camera on an older version installs it as an update. GR IV Monochrome and the factory firmware of GR IV 30th Anniversary Edition cameras are not supported.
 - Ricoh may decline warranty or repair service for a camera that used modified firmware.
 - Read the [Terms of Use](TERMS.md).
 

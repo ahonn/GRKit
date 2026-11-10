@@ -55,8 +55,9 @@ fn generated_header_matches_fixed_synthetic_contract() -> Result<()> {
     assert!(header.starts_with(
         "static const char target_marker[] __attribute__((used)) = \"GRKIT_TARGET=gr3-2.10\";\n"
     ));
-    // GR III has one runtime, so it names no build for `--known`.
-    assert!(header.contains("#define RTOS_IDENTITY 0x53002038U\n#define RTOS_IDENTITY_COUNT 0U\n"));
+    // GR III has a runtime for 2.10 and one for 2.21, so each names its builds
+    // for `--known`: 2.10 and 2.20, and GR IIIx 1.60 and 1.70.
+    assert!(header.contains("#define RTOS_IDENTITY 0x53002038U\n#define RTOS_IDENTITY_COUNT 4U\n"));
     snapshot("installer-gr3-synthetic.h", &summarized(&header));
     Ok(())
 }

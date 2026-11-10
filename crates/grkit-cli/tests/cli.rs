@@ -23,7 +23,35 @@ fn official_modules() -> Vec<String> {
         .collect()
 }
 
-/// Run grkit. A `package` command without `--module` gets the official modules.
+/// The runtime build of a stand-in installer for `target`, in `root`: its
+/// `build.json` and its `sd/` files.
+fn write_build(root: &Path, target: &str) {
+    let files = testing::runtime_files(&testing::marked_installer(target), target);
+    for (name, bytes) in &files {
+        let path = root.join("sd").join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+    fs::write(root.join("build.json"), testing::manifest(target, &files)).unwrap();
+}
+
+/// The shared stand-in build of `gr3-2.21`, which GR III and GR IIIx
+/// packages need after the `gr3-2.10` build of a test.
+fn gr3_221_build() -> String {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("gr3-2.21-build");
+    // Tests run in parallel: write the build once, under another name, and
+    // rename it.
+    if !root.join("build.json").exists() {
+        let staging = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
+        write_build(staging.path(), "gr3-2.21");
+        let _ = fs::rename(staging.keep(), &root);
+    }
+    text(&root).to_owned()
+}
+
+/// Run grkit. A `package` command without `--module` gets the official
+/// modules, and one with a single `--build` of `gr3-2.10` gets the `gr3-2.21`
+/// build too.
 fn run(args: &[&str]) -> Output {
     let mut args: Vec<String> = args.iter().map(|arg| (*arg).to_owned()).collect();
     if args.first().is_some_and(|command| command == "package")
@@ -32,6 +60,18 @@ fn run(args: &[&str]) -> Output {
         for module in official_modules() {
             args.extend(["--module".to_owned(), module]);
         }
+    }
+    let builds: Vec<&String> = args
+        .windows(2)
+        .filter(|pair| pair[0] == "--build")
+        .map(|pair| &pair[1])
+        .collect();
+    if args.first().is_some_and(|command| command == "package")
+        && builds.len() == 1
+        && fs::read_to_string(Path::new(builds[0]).join("build.json"))
+            .is_ok_and(|manifest| manifest.contains("\"gr3-2.10\""))
+    {
+        args.extend(["--build".to_owned(), gr3_221_build()]);
     }
     Command::new(env!("CARGO_BIN_EXE_grkit"))
         .args(&args)
@@ -104,13 +144,7 @@ fn fixture(root: &Path) -> (PathBuf, PathBuf) {
         "--out",
         text(&effects),
     ]);
-    let (manifest, files) = testing::build("gr3-2.10");
-    for (name, bytes) in &files {
-        let path = build.join("sd").join(name);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        fs::write(path, bytes).unwrap();
-    }
-    fs::write(build.join("build.json"), manifest).unwrap();
+    write_build(&build, "gr3-2.10");
     (build, effects)
 }
 
@@ -294,9 +328,9 @@ fn package_roundtrip_and_output_ownership() {
         text(&zip),
     ];
     let packaged = success(&args);
-    // Twelve runtime, package list, and document entries, the six official
-    // modules, then one per effect.
-    assert_eq!(packaged["entries"], 18 + source_count());
+    // Thirteen runtime, package list, and document entries (a core file for
+    // each GR III build), the six official modules, then one per effect.
+    assert_eq!(packaged["entries"], 19 + source_count());
     assert_eq!(success(&["verify", text(&zip)])["effects"], source_count());
     let before = fs::read(&zip).unwrap();
     assert!(!run(&args).status.success());
@@ -341,7 +375,10 @@ fn package_targets_the_selected_camera() {
     assert_eq!(packaged["language"], "en");
     let verified = success(&["verify", text(&zip)]);
     assert_eq!(verified["camera"], "gr3x");
-    assert_eq!(verified["targets"], serde_json::json!(["gr3-2.10"]));
+    assert_eq!(
+        verified["targets"],
+        serde_json::json!(["gr3-2.10", "gr3-2.21"])
+    );
     // The language names the guide.
     let chinese = tmp.path().join("zh-Hans.zip");
     let packaged = success(&[
@@ -414,7 +451,7 @@ fn package_installs_the_given_modules() {
         "--out",
         text(&zip),
     ]);
-    assert_eq!(packaged["entries"], 14 + source_count());
+    assert_eq!(packaged["entries"], 15 + source_count());
     assert_eq!(packaged["modules"], json!(["DATE", "FILMLOOK"]));
     let verified = success(&["verify", text(&zip)]);
     assert_eq!(verified["modules"], json!(["DATE", "FILMLOOK"]));
@@ -432,7 +469,7 @@ fn package_installs_the_given_modules() {
         "--out",
         text(&stamp_only),
     ]);
-    assert_eq!(packaged["entries"], 13);
+    assert_eq!(packaged["entries"], 14);
     assert_eq!(success(&["verify", text(&stamp_only)])["effects"], 0);
     // Image Control alone without effects, effects without Image Control, a
     // module twice, and a missing module file show nothing or fail.
@@ -828,7 +865,7 @@ fn guides_writes_one_typst_source_for_each_camera_and_language() {
     let out = tmp.path().join("guides");
     assert_eq!(success(&["guides", "--out", text(&out)])["guides"], 15);
     let source = fs::read_to_string(out.join("gr3x/zh-Hans/guide.typ")).unwrap();
-    assert!(source.contains("仅适用于 RICOH GR IIIx 和 GR IIIx HDF 固件 1.60 或 1.70。"));
+    assert!(source.contains("仅适用于 RICOH GR IIIx 和 GR IIIx HDF 固件 1.60、1.70 或 1.71。"));
     assert!(source.contains("#link(<recovery>)") && source.contains("= 恢复 <recovery>"));
     assert!(out.join("gr3x/zh-Hans/images/grkit-root.jpg").is_file());
     assert!(out.join("gr3x/zh-Hans/images/modeset.png").is_file());
@@ -854,6 +891,7 @@ fn cameras_lists_the_runtime_build_of_each_release() {
         serde_json::json!([
             {"firmware": "1.60", "target": "gr3-2.10"},
             {"firmware": "1.70", "target": "gr3-2.10"},
+            {"firmware": "1.71", "target": "gr3-2.21"},
         ])
     );
 }
@@ -894,23 +932,33 @@ fn release_plan_builds_each_target_and_packages_each_camera() {
         .collect();
     assert_eq!(
         targets,
-        ["gr3-2.10", "gr4-1.11", "gr4-1.20", "gr4-1.20-0528"]
+        [
+            "gr3-2.10",
+            "gr3-2.21",
+            "gr4-1.11",
+            "gr4-1.20",
+            "gr4-1.20-0528",
+            "gr4-1.21"
+        ]
     );
-    assert_eq!(plan["runtimes"][2]["zip"], "gr4_v120.zip");
-    assert_eq!(plan["runtimes"][2]["file"], "fwdc248b.bin");
-    assert_eq!(plan["runtimes"][2]["official"], true);
+    assert_eq!(plan["runtimes"][1]["zip"], "gr3_v221.zip");
+    assert_eq!(plan["runtimes"][3]["zip"], "gr4_v120.zip");
+    assert_eq!(plan["runtimes"][3]["file"], "fwdc248b.bin");
+    assert_eq!(plan["runtimes"][3]["official"], true);
     // A build that Ricoh does not publish comes only from the private backup.
-    assert_eq!(plan["runtimes"][3]["zip"], "gr4_v120_0528.zip");
-    assert_eq!(plan["runtimes"][3]["file"], "RTOS.BIN");
-    assert_eq!(plan["runtimes"][3]["official"], false);
+    assert_eq!(plan["runtimes"][4]["zip"], "gr4_v120_0528.zip");
+    assert_eq!(plan["runtimes"][4]["file"], "RTOS.BIN");
+    assert_eq!(plan["runtimes"][4]["official"], false);
+    assert_eq!(plan["runtimes"][5]["zip"], "gr4_v121.zip");
+    assert_eq!(plan["runtimes"][5]["official"], true);
     // Each camera has one package, with each of its builds. The names are
     // those of the release assets.
     assert_eq!(
         plan["packages"],
         serde_json::json!([
-            {"camera": "gr3", "targets": ["gr3-2.10"], "name": "gr3"},
-            {"camera": "gr3x", "targets": ["gr3-2.10"], "name": "gr3x"},
-            {"camera": "gr4", "targets": ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528"], "name": "gr4"},
+            {"camera": "gr3", "targets": ["gr3-2.10", "gr3-2.21"], "name": "gr3"},
+            {"camera": "gr3x", "targets": ["gr3-2.10", "gr3-2.21"], "name": "gr3x"},
+            {"camera": "gr4", "targets": ["gr4-1.11", "gr4-1.20", "gr4-1.20-0528", "gr4-1.21"], "name": "gr4"},
         ])
     );
 }

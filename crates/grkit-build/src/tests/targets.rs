@@ -186,6 +186,10 @@ const BUILD_ONLY_DEFINITIONS: &[(&str, &[&str])] = &[
         &["NATIVE_ICON_LIMIT", "NATIVE_MONOCHROME_TYPES_HIGH"],
     ),
     ("gr4-1.20-0528", &["NATIVE_ICON_LIMIT"]),
+    (
+        "gr4-1.21",
+        &["NATIVE_ICON_LIMIT", "NATIVE_MONOCHROME_TYPES_HIGH"],
+    ),
 ];
 
 /// The hooks of a build are those of its family (`Family::hooks`). Each build
@@ -384,13 +388,15 @@ fn move_value(word: u32) -> Option<(u32, u32)> {
 /// The Fn hint IDs of a build header are those that the native ADJ refresh of
 /// its firmware gives to FW_GUIDE_SET_CONTENT: the label in r1, the icon in r3.
 #[test]
-#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
 fn fn_hint_ids_are_those_of_the_native_adj_refresh() -> Result<()> {
     for (variable, target) in [
         ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
         ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
         ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
         ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
     ] {
         let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
         let image = verify_firmware(Path::new(&path), target)?;
@@ -539,13 +545,15 @@ fn tail_call(words: &[u32], function: u32) -> Option<u32> {
 /// shading and clarity one kind too far, and the stock bytes could not show
 /// it, because those setters are equal functions.
 #[test]
-#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, and GRKIT_TEST_FIRMWARE_GR4_120_0528"]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
 fn parameter_rows_are_those_of_their_row_kinds() -> Result<()> {
     for (variable, target) in [
         ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
         ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
         ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
         ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
     ] {
         let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
         let image = verify_firmware(Path::new(&path), target)?;
@@ -620,6 +628,24 @@ fn gr4_look_sources_match_their_targets() {
             ),
             "{}",
             target.name
+        );
+    }
+}
+
+/// Each firmware address of the runtime is in the header of a build, so a new
+/// build of a family gives each one (and `grkit port` finds each one). Code
+/// that a family shares names an address only by its definition. The fast-boot
+/// targets are build headers of their own.
+#[test]
+fn shared_runtime_code_names_no_firmware_address() {
+    for (name, bytes) in crate::RUNTIME_SOURCES {
+        if name.starts_with("targets/") || name.starts_with("fastboot/targets/") {
+            continue;
+        }
+        let text = String::from_utf8_lossy(bytes);
+        assert!(
+            !text.contains("FIRMWARE(0x"),
+            "{name} names a firmware address outside the build headers"
         );
     }
 }

@@ -16,7 +16,8 @@ pub const TARGET: Target = Target {
         file: "fwdc239b.bin",
         source: Source::Ricoh,
     },
-    identities: &[],
+    // GR III 2.10 and 2.20, and GR IIIx 1.60 and 1.70.
+    identities: &[0x1b150a02, 0x1c141402, 0x110b3c01, 0x12144601],
     data_start: 0x55000000,
     data_source: 0x5407b540,
     data_size: 0x3a080,

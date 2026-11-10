@@ -10,6 +10,7 @@ export const CAMERA_RELEASES = {
     releases: [
       { firmware: '2.10', target: 'gr3-2.10' },
       { firmware: '2.20', target: 'gr3-2.10' },
+      { firmware: '2.21', target: 'gr3-2.21' },
     ],
   },
   gr3x: {
@@ -17,6 +18,7 @@ export const CAMERA_RELEASES = {
     releases: [
       { firmware: '1.60', target: 'gr3-2.10' },
       { firmware: '1.70', target: 'gr3-2.10' },
+      { firmware: '1.71', target: 'gr3-2.21' },
     ],
   },
   gr4: {
@@ -25,6 +27,7 @@ export const CAMERA_RELEASES = {
       { firmware: '1.11', target: 'gr4-1.11' },
       { firmware: '1.20', target: 'gr4-1.20' },
       { firmware: '1.20', target: 'gr4-1.20-0528' },
+      { firmware: '1.21', target: 'gr4-1.21' },
     ],
   },
 } as const;

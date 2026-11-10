@@ -146,6 +146,8 @@
    and of the text). */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x53374314)
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x533742c8)
+/* RAW development: the ID of the first development controller (gr4.h). */
+#define DEVELOP_CONTROLLERS 0x400001eU
 /* RAW development, the Fn adjustments (runtime/develop.h): the category
    and the values of the selected Image Control in RawDevelopmentModel,
    and the parameter set of Standard (runtime/targets/gr3-2.10.h). */

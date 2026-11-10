@@ -36,10 +36,10 @@ GRKit 為理光 GR III、GR IIIx 與 GR IV 加上底片濾鏡、XPan 等畫面�
 
 | 機型 | 實機測試 | 已支援 |
 | --- | --- | --- |
-| GR III、GR III HDF | 2.10、2.20 | — |
-| GR IIIx、GR IIIx HDF | 1.60、1.70 | — |
-| GR IV、GR IV HDF | 1.11、1.20 | — |
-| GR IV Monochrome | 1.00 | 1.10 |
+| GR III、GR III HDF | 2.10、2.20 | 2.21 |
+| GR IIIx、GR IIIx HDF | 1.60、1.70 | 1.71 |
+| GR IV、GR IV HDF | 1.11、1.20 | 1.21 |
+| GR IV Monochrome | 1.00 | 1.10、1.11 |
 
 GR IV Monochrome 不含底片風格。其他機型與韌體版本目前不支援。如果 GRKit 在支援的相機上無法載入，請參考[韌體匯出指南](resources/DUMP.zh-Hant.md)。
 
