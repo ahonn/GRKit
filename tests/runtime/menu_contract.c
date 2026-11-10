@@ -1423,10 +1423,18 @@ static void the_recipe_page_saves_applies_and_deletes(void)
     assert(CURRENT_ICON(0) == GRAIN_TILE(1));
     assert(same(current_module(test_header)->label(test_header, 2), "Film Look: Off 2"));
     assert(current_module(test_header)->committed(test_header) == 1);
-    /* An ADJ exit on a recipe applies nothing. */
+    /* An ADJ exit on a recipe applies nothing, and an ADJ press closes ADJ
+       without applying it: its confirm is not OK. */
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = 2;
     exit_commit(test_header);
     assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    test_header[GRKIT_HOST_MENU_EVENTS / 4] = 2;
+    test_header[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
+    assert(confirm_selection(test_header));
+    assert(test_header[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(test_header) == 1);
+    assert(recipe_count(test_header) == 2 && test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE);
+    test_header[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
+    test_header[GRKIT_HOST_MENU_EVENTS / 4] = 0;
     /* Fn on a recipe shows its name with Rename and Delete; Fn on Undo or
        Save does nothing. Delete asks to delete it. */
     assert(current_module(test_header)->fn(test_header, 2));
