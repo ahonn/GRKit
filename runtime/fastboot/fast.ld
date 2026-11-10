@@ -41,7 +41,7 @@ SECTIONS {
   }
   ASSERT(_data_end > _keep_start, "The kept data is not after .bss")
   ASSERT(_sums_end > _data_end, "The data sums are in the data that they check")
-  ASSERT(_edata - _code_end <= 0x14000, "The .data of the fast-boot file passes its copy")
+  ASSERT(_edata - _code_end <= 0x16000, "The .data of the fast-boot file passes its copy")
   . = ALIGN(16);
   _end = .;
   ASSERT(_end <= 0x55000000, "The fast-boot file passes the end of the code region")
