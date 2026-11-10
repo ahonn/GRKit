@@ -1,3 +1,13 @@
+## 1.5.5 (2026-11-10)
+
+### Fixes
+
+- ADJ keeps opening where it closed last time after each power-off, not only after the first one.
+- With the fast-boot firmware, GRKit also loads faster from cards larger than 32 GB.
+- GRKit and the fast-boot firmware support GR III 2.21, GR IIIx 1.71, GR IV 1.21, and GR IV Monochrome 1.11.
+- Date Imprint, Bloom, Halation, and Grain get a Show Icon setting, as Framing has, to hide their icon in live view.
+- In live view, the GRKit icons show at the right of the second row, so they no longer cover the white balance shift.
+
 ## 1.5.4 (2026-11-10)
 
 ### Fixes
