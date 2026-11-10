@@ -180,6 +180,13 @@ const SAMPLE_CHROMA: f64 = 90.0;
 /// them traded medium chroma for high chroma: on 39 photos, the film looks lost 11 to 18% of the
 /// chroma of their LUT. With these samples they lose 5 to 12%. A 3 x 3 matrix scales all
 /// chroma alike, so it cannot follow a LUT that adds more chroma to muted colors than to vivid ones.
+///
+/// Two bands of bright colors from 0 to +2 EV follow: skin (`BRIGHT_SKIN`) and any bright color
+/// (`BRIGHT`), each a quarter of `random`. Without them, the print film looks kept only 59 to 67%
+/// of the chroma of bright skin at +1.5 EV: the shoulders of the curves wash it out. With them,
+/// 16 of the 17 built-in color looks fit bright skin and bright colors better, at a holdout cost
+/// of at most 0.09 CIEDE2000. Bright yellows stay hard: a third band for them cost up to 0.6 on
+/// the holdout.
 fn samples(random: usize) -> (Vec<Rgb>, Vec<f64>) {
     let mut linear = Vec::new();
     let mut weights = Vec::new();
@@ -207,8 +214,48 @@ fn samples(random: usize) -> (Vec<Rgb>, Vec<f64>) {
             weights.push(1.0);
         }
     }
+    let mut rng = Random(7);
+    for band in [BRIGHT_SKIN, BRIGHT] {
+        let mut count = 0;
+        while count < random / 4 {
+            let l = band.lightness.0 + (band.lightness.1 - band.lightness.0) * rng.next();
+            let chroma = band.chroma.0 + (band.chroma.1 - band.chroma.0) * rng.next();
+            let hue = (band.hue.0 + (band.hue.1 - band.hue.0) * rng.next()).to_radians();
+            let exposure = 2f64.powf(2.0 * rng.next());
+            let rgb = cube::lab_d50_to_srgb([l, chroma * hue.cos(), chroma * hue.sin()]);
+            if rgb
+                .iter()
+                .all(|v| (0.0..=1.0).contains(v) && v * exposure <= SENSOR_HEADROOM)
+            {
+                linear.push(rgb.map(|v| v * exposure));
+                weights.push(BRIGHT_WEIGHT);
+                count += 1;
+            }
+        }
+    }
     (linear, weights)
 }
+
+/// A band of `samples`: CIE L*a*b* ranges, the hue in degrees.
+#[derive(Clone, Copy)]
+struct Band {
+    lightness: (f64, f64),
+    chroma: (f64, f64),
+    hue: (f64, f64),
+}
+
+const BRIGHT_SKIN: Band = Band {
+    lightness: (55.0, 85.0),
+    chroma: (10.0, 35.0),
+    hue: (25.0, 75.0),
+};
+const BRIGHT: Band = Band {
+    lightness: (60.0, 95.0),
+    chroma: (0.0, 60.0),
+    hue: (0.0, 360.0),
+};
+/// Weights of 3 and more fit bright skin a little better, but cost more than 0.1 on the holdout.
+const BRIGHT_WEIGHT: f64 = 2.0;
 
 /// A matrix whose rows sum to 1 from its six off-diagonal coefficients, or from the green and
 /// blue weights of one row that all three rows share.

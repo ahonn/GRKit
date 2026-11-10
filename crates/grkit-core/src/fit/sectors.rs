@@ -10,8 +10,10 @@ use super::*;
 /// agree on the colors there, so smooth hue gradients show no edge.
 const SEAM: f64 = 32.0;
 
-/// The largest sector coefficient magnitude, within the stored i8 in 1/128.
-const SECTOR_LIMIT: f64 = 0.98;
+/// The largest sector coefficient magnitude. The stored i8 in 1/128 allows 0.98, but large
+/// coefficients let neighbouring sectors drift apart: on the 17 built-in color looks, 0.7
+/// lowered the largest hue step from 10.0 to 5.2 dE2000 at a holdout cost of 0.01.
+const SECTOR_LIMIT: f64 = 0.7;
 /// The gain on the validation colors that hue sectors must bring, in CIEDE2000 and as a part.
 pub(super) const SECTOR_GAIN: f64 = 0.02;
 pub(super) const VALIDATION_COLORS: usize = 1500;
