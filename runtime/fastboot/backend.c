@@ -407,8 +407,9 @@ static int listed_file(const char *dos, int list, u32 *size, u32 *stamp)
 
 /* The entry that readdir fills: the name first, then the attribute byte, the
    size, and the times (FAT date and time words). The listing uses the size
-   and the times only if each "." entry has the directory attribute, so
-   another layout falls back to a status call for each file. */
+   and the times only if each "." entry has the directory attribute, or,
+   without "." entries (exFAT), if entries_have_layout agrees. Another
+   layout falls back to a status call for each file. */
 #define ENTRY_ATTRIBUTE 779U
 #define ENTRY_SIZE 784U
 #define ENTRY_TIMES 800U
@@ -417,6 +418,26 @@ static u32 entry_word(u32 offset)
 {
     return (u32)dir_entry[offset] | (u32)dir_entry[offset + 1] << 8 | (u32)dir_entry[offset + 2] << 16 |
            (u32)dir_entry[offset + 3] << 24;
+}
+/* Whether the entries of a listing without "." entries, as exFAT gives, have
+   the layout above: 0 not known in this start, 1 yes, 2 no. The first such
+   listing with a file compares the size of its entry with a status call,
+   and needs a stamp other than zero. */
+static int entry_layout __attribute__((section(".fast_keep")));
+static int entries_have_layout(const char *dos, const struct listing *l)
+{
+    for (u32 i = 0; !entry_layout && i < l->count; ++i) {
+        u32 n = slen(l->names[i]), d = slen(dos);
+        /* A name that filled the field can be cut. */
+        if (l->directory[i] || !l->size[i] || n + 1 >= NAME_SIZE || d + 1 + n >= DOS_SIZE) continue;
+        char path[DOS_SIZE];
+        copy_name(path, dos);
+        path[d] = '\\';
+        copy_name(path + d + 1, l->names[i]);
+        u32 st[16];
+        entry_layout = FS_SIZE(path, st) == 0 && st[2] == l->size[i] && l->stamp[i] ? 1 : 2;
+    }
+    return entry_layout == 1;
 }
 static int list_directory(const char *dos, struct listing *l)
 {
@@ -441,7 +462,7 @@ static int list_directory(const char *dos, struct listing *l)
         ++l->count;
     }
     FS_CLOSEDIR(dno);
-    l->meta = dot && dot_directory;
+    l->meta = dot ? dot_directory : entries_have_layout(dos, l);
     return 0;
 }
 
