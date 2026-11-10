@@ -780,8 +780,6 @@ __attribute__((naked, noinline)) static int on_stack(int (*fn)(u32 *), u32 *arg,
    wrote into this memory between the calls. */
 #define DATA_BLOCK (64U * 1024U)
 #define DATA_BLOCKS 96U
-/* The most bytes of .data (fast.ld checks it). */
-#define DATA_COPY (80U * 1024U)
 extern u32 _code_end[], _edata[], _keep_start[], _data_end[];
 static u32 data_sums[DATA_BLOCKS] __attribute__((section(".fast_sums")));
 static u32 data_blocks(void)
@@ -805,15 +803,16 @@ static void data_seal(void)
 }
 /* The .data of the file, before SCAN changed it. INSTALL changes .data too:
    relocate() moves the patch addresses in place, so a second try on the
-   same .data would move them again. */
-static u32 data_copy[DATA_COPY / 4] __attribute__((section(".fast_keep")));
+   same .data would move them again. fast.ld makes the copy as large as
+   .data, in the kept data. */
+extern u32 _data_copy[];
 static void data_keep(void)
 {
-    for (u32 *p = _code_end, *q = data_copy; p < _edata; ) *q++ = *p++;
+    for (u32 *p = _code_end, *q = _data_copy; p < _edata; ) *q++ = *p++;
 }
 static void data_reset(void)
 {
-    for (u32 *p = _code_end, *q = data_copy; p < _edata; ) *p++ = *q++;
+    for (u32 *p = _code_end, *q = _data_copy; p < _edata; ) *p++ = *q++;
     for (u32 *p = _edata; p < _keep_start; ) *p++ = 0;
 }
 /* Writes the first changed block and the number of changed blocks to the
