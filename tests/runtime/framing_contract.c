@@ -698,6 +698,11 @@ static void status_row_fits_the_official_indicators(void)
     for(u32 style=1;LABEL_DATE_FORMAT(style)<GRKIT_LABEL_COUNT;++style)
         if(label_width(LABEL_DATE_FORMAT(style))>date) date=label_width(LABEL_DATE_FORMAT(style));
     assert(ratio>0 && date>0);
+    /* One-line labels sit at LABEL_TOP; the two-line formats (with the time)
+       center like the icons from STATUS_TOP. */
+    assert(label_field(overlay_labels,LABEL_DATE*8+2,2)<=STATUS_LINE_HEIGHT);
+    assert(label_field(overlay_labels,LABEL_DATE_FORMAT(2)*8+2,2)>STATUS_LINE_HEIGHT);
+    assert(label_field(overlay_labels,LABEL_DATE_FORMAT(2)*8+2,2)<=40);
     assert(ratio+STATUS_LABEL_GAP+date+STATUS_LABEL_GAP+2*STATUS_STEP+40<=STATUS_RIGHT-STATUS_LEFT);
 }
 
