@@ -25,6 +25,7 @@ git bcbcfc6861f49cc706dc5d00ea048e4853060aab, MIT):
 - The red filter effect multiplies the Tri-X 400 sensitivity by the Kodak Wratten 25
   transmission from the library's own data.
 - Double-X 5222 uses the library's 12-minute development of Kodak 5222 on grade 3 paper.
+- Instax is fitted with -0.64 EV, so mid gray matches Standard.
 - Fitted as above by GRKit contributors. The monochrome fits have identical matrix rows and
   curves; GRKit marks them as monochrome.
 
