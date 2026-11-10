@@ -4047,6 +4047,9 @@ static void the_mode_dial_saves_the_settings_in_a_user_mode(void)
     u32 recipes, sets;
     dial_saved_reset();
     dial_saved_settings();
+    /* Where the next ADJ opens is not a setting of a user mode. */
+    h[GRKIT_HOST_ADJ_OPEN / 4] = 1;
+    h[GRKIT_HOST_MODULE / 4] = 2;
     /* U2 has no set: its values have no Saved Settings. */
     assert(dial->select(h, 0, 1) && dial->values(h) == 6 && dial_first_recipe(h, 1) == DIAL_VALUE_SAVED);
     /* OK on Save Settings saves the settings in U2 and gives U2 Saved
@@ -4069,6 +4072,10 @@ static void the_mode_dial_saves_the_settings_in_a_user_mode(void)
     assert(set[GRKIT_DIAL_SET_CORE] == (GRKIT_DIAL_SET_EFFECT | recipe_effect_code(dial_record(1))));
     assert(set[GRKIT_DIAL_SET_FN] == DIAL_FN && set[GRKIT_DIAL_SET_TONING] == 3);
     assert(set[GRKIT_DIAL_SET_CORE + 1] == 1 && set[GRKIT_DIAL_SET_CORE + 2] == 4 && set[GRKIT_DIAL_SET_CORE + 3] == 2);
+    assert(!set[GRKIT_DIAL_SET_CORE + CORE_SETTING(GRKIT_CORE_ADJ)]);
+    assert(!set[GRKIT_DIAL_SET_CORE + CORE_SETTING(GRKIT_CORE_ADJ_MODULE)]);
+    h[GRKIT_HOST_ADJ_OPEN / 4] = 0;
+    h[GRKIT_HOST_MODULE / 4] = 0;
     /* The dial is at P: nothing applies. U2 now lists Saved Settings, with
        the mark on it, before the recipes. */
     assert(!h[GRKIT_HOST_STATE_HOLD / 4] && !services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0]);
@@ -4123,11 +4130,17 @@ static void the_mode_dial_applies_saved_settings_and_restores_the_base(void)
     assert(dial_saved_applies() && h[GRKIT_HOST_STATE_HOLD / 4] == 1 && settings_memory[1] == table + 2);
     assert(framing_requests > requests && !recipe_undo_count(h));
     assert(label_state() == DIAL_LABEL_WAITS && label_lines() == 1 && label_line(0, "U2: Saved Settings", 0));
-    /* Changes in U2 are temporary; P restores the base state. */
+    /* Changes in U2 are temporary; P restores the base state. ADJ closed on
+       GRKit in U2 still opens GRKit next time. */
     setting_store(h, 2, 2);
+    h[GRKIT_HOST_ADJ_OPEN / 4] = 1;
+    h[GRKIT_HOST_MODULE / 4] = 2;
     dial_to(DIAL_P);
     dial_fire();
     assert(dial_base() && DATE_STYLE == 0 && DATE_LOOK == 0 && !h[GRKIT_HOST_FRAME_RATIO / 4]);
+    assert(h[GRKIT_HOST_ADJ_OPEN / 4] == 1 && h[GRKIT_HOST_MODULE / 4] == 2);
+    h[GRKIT_HOST_ADJ_OPEN / 4] = 0;
+    h[GRKIT_HOST_MODULE / 4] = 0;
     assert(BYTE(dial_record(1), GRKIT_RECORD_TONING) == 0 && !h[GRKIT_HOST_GRAIN_SIZE / 4]);
     /* A second visit applies only what differs: nothing, when the settings
        are those of the set. */
