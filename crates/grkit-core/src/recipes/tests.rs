@@ -364,7 +364,8 @@ fn the_presets_are_recipes_of_the_camera() {
         for recipe in &preset.recipes {
             // A whole look (runtime/recipes.h): each setting of the picture,
             // so the preset gives the same picture after any other recipe.
-            // The exposure settings belong to one scene and stay out.
+            // The sources of the presets give no exposure settings, so the
+            // presets hold none and apply keeps those of the camera.
             assert!(
                 matches!(recipe.look, Look::Effect { .. } | Look::Native(_)),
                 "{}",
