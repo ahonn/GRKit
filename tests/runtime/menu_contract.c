@@ -3033,7 +3033,7 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(recipes->select(h, 0, 1));
     ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
     assert(menu_keyboard_text_in(0, buffer));
-    for (u32 i = 0; i < 7; ++i) BYTE(buffer, i) = (u8)"Night"[i];
+    for (u32 i = 0; i < sizeof "Night"; ++i) BYTE(buffer, i) = (u8)"Night"[i];
     assert(menu_keyboard_text_out(0, buffer));
     recipe_menu_renamed(1);
     assert(same(recipes->title(h), "Night"));
