@@ -1,3 +1,10 @@
+## 1.5.4 (2026-11-10)
+
+### Fixes
+
+- ADJ opens on GRKit after power-off when ADJ closed there last time, and on the same module row.
+- With the fast-boot firmware, GRKit reads fewer files at each start, so it loads faster.
+
 ## 1.5.3 (2026-11-09)
 
 ### Fixes
