@@ -82,8 +82,10 @@ import { packageCard } from './packageCard';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
-/** The Tally form for problems, feature ideas, and questions. A plain link, so the page loads nothing from Tally. */
-const FEEDBACK_FORM = 'https://tally.so/r/Z9jRgB';
+/** The UserJot board for feature ideas and votes. A plain link, so the page loads nothing from UserJot. */
+const FEATURE_BOARD = 'https://grkit.userjot.com';
+/** The Tally form for problems and questions, with the report files. A plain link, so the page loads nothing from Tally. */
+const SUPPORT_FORM = 'https://tally.so/r/Z9jRgB';
 const DONATE = 'https://buymeacoffee.com/yuexunjiang';
 /** The release notes of the GRKit version that the site packages, on the releases page. */
 const RELEASE_URL = `${REPOSITORY}/releases#release-v${__GRKIT_VERSION__}`;
@@ -642,8 +644,13 @@ export function App({
   const packageLinks = (
     <ul className="package-links">
       <li>
-        <a className="button" href={FEEDBACK_FORM}>
-          {t.feedback}
+        <a className="button" href={FEATURE_BOARD}>
+          {t.suggestFeature}
+        </a>
+      </li>
+      <li>
+        <a className="button" href={SUPPORT_FORM}>
+          {t.reportProblem}
         </a>
       </li>
       <li>
@@ -1084,7 +1091,10 @@ export function App({
           </ul>
           <ul>
             <li>
-              <a href={FEEDBACK_FORM}>{t.feedback}</a>
+              <a href={FEATURE_BOARD}>{t.suggestFeature}</a>
+            </li>
+            <li>
+              <a href={SUPPORT_FORM}>{t.reportProblem}</a>
             </li>
             <li>
               <a href={DONATE}>{t.donate}</a>

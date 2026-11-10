@@ -78,7 +78,7 @@ grkit verify dist/GRKit.zip
 
 ## 기여
 
-[CONTRIBUTING.md](CONTRIBUTING.md)(영어)를 참고하세요. 잘 작동했든 안 됐든 기기 리포트는 언제나 환영합니다. 특히 아직 실제 카메라에서 확인하지 못한 펌웨어의 리포트가 큰 도움이 됩니다. 버그, 기능 제안, 질문은 [피드백 양식](https://tally.so/r/Z9jRgB)으로 보내 주세요. 프로젝트를 응원하고 싶다면 [Buy Me a Coffee](https://buymeacoffee.com/yuexunjiang)를 이용해 주세요.
+[CONTRIBUTING.md](CONTRIBUTING.md)(영어)를 참고하세요. 잘 작동했든 안 됐든 기기 리포트는 언제나 환영합니다. 특히 아직 실제 카메라에서 확인하지 못한 펌웨어의 리포트가 큰 도움이 됩니다. 버그 제보와 질문은 [지원 양식](https://tally.so/r/Z9jRgB)으로 보내 주세요. 기능 제안과 다른 제안에 대한 투표는 [피드백 보드](https://grkit.userjot.com)에서 할 수 있습니다. 프로젝트를 응원하고 싶다면 [Buy Me a Coffee](https://buymeacoffee.com/yuexunjiang)를 이용해 주세요.
 
 ## 문서(영어)
 
