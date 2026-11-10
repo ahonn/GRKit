@@ -1066,11 +1066,10 @@ static void exposure_camera(u32 ev, u32 upper, u32 lower, u32 metering, u32 nd)
     native_record_bytes[NATIVE_ND_FIELD] = (u8)nd;
 }
 
-/* A recipe can hold the exposure compensation, the Auto ISO upper limit,
-   metering, and the ND filter; a save on the camera holds none of them.
-   Apply writes them as text, rounded to the steps of the camera and not
-   below its lower ISO limit, and undo writes the ones before. They do not
-   decide the match. */
+/* A save holds the exposure compensation, the Auto ISO upper limit,
+   metering, and the ND filter of the camera. Apply writes them as text,
+   rounded to the steps of the camera and not below its lower ISO limit,
+   and undo writes the ones before. They do not decide the match. */
 static void exposure_saves_applies_and_fits_the_camera(void)
 {
     reset();
@@ -1083,11 +1082,10 @@ static void exposure_saves_applies_and_fits_the_camera(void)
     exposure_camera(F_THIRD, F_SV_6400, F_SV_125, 2, 1);
     assert(recipe_save(header) == 0);
     volatile u32 *w = recipe_at(header, 0);
-    assert(!(w[RECIPE_MODULE_WORD] & NATIVE_EXPOSURE_BITS));
-    /* The recipe holds +1/3, ISO 6400, Spot, and ND On, as a library recipe
-       can. */
-    w[RECIPE_MODULE_WORD] |= (31U + 2U) << NATIVE_EV_SHIFT | (18U + 1U) << NATIVE_ISO_SHIFT |
-                              3U << NATIVE_METERING_SHIFT | 2U << NATIVE_ND_SHIFT;
+    /* The recipe holds +1/3, ISO 6400, Spot, and ND On. */
+    assert((w[RECIPE_MODULE_WORD] & NATIVE_EXPOSURE_BITS) ==
+           ((31U + 2U) << NATIVE_EV_SHIFT | (18U + 1U) << NATIVE_ISO_SHIFT | 3U << NATIVE_METERING_SHIFT |
+            2U << NATIVE_ND_SHIFT));
     /* The camera changes: -2/3, ISO 125, Multi, ND Off. The look is the
        same, so the recipe still matches. */
     exposure_camera(F_MINUS_TWO_THIRDS, F_SV_125, F_SV_125, 0, 2);

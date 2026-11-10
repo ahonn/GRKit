@@ -31,9 +31,10 @@
    Apply sets each held setting whose capability runs, so a recipe never
    turns on a capability.
 
-   The exposure settings are not part of the look: they belong to one
-   scene. A save on the camera holds none, an undo step holds them, and a
-   library recipe can. Apply keeps each one that a recipe does not hold.
+   A save also holds the exposure settings (exposure compensation, the
+   Auto ISO upper limit, metering, and the ND filter), and apply sets them.
+   They are not part of the look: a preset can leave them out, apply keeps
+   each one that a recipe does not hold, and they do not decide a match.
 
    Without a running Grain module, CORE.GRAIN has no effect on pictures
    (grain_level in runtime/picture.S), so apply skips the Grain of a recipe
@@ -512,10 +513,9 @@ static u32 recipe_same_base(const volatile u32 *a,const u32 *b) {
 static u32 recipe_save(volatile u32 *h) {
     u32 n=recipe_count(h), e=recipe_entries(h), w[GRKIT_RECIPE_WORDS], i, number=0, other;
     if(n>=GRKIT_RECIPE_SLOTS || e>=GRKIT_RECIPE_ON_MAX) return RECIPE_FULL;
-    /* A whole look: without the exposure settings, and with Off for each
+    /* A whole look with the exposure settings, and with Off for each
        module that does not run. */
     recipe_capture(h,w);
-    w[RECIPE_MODULE_WORD]&=~NATIVE_EXPOSURE_BITS;
     recipe_hold_off(w);
     for(i=0;i<n;++i) {
         if(!recipe_same_base(recipe_at(h,i),w)) continue;
