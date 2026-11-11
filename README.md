@@ -23,6 +23,7 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 
   RAW files keep the native 3:2 default crop and the camera's digital crop setting. Embedded previews can still show the selected composition.
 
+- **Crop**: crop photos to 35, 40, 50, 70, or 90 mm (50 to 128 mm on GR IIIx), with the crop framed in the live view. Longer crops keep fewer pixels: about 2.4 MP at 90 mm. With a Framing ratio, Crop shows the frame only.
 - **Guides**: thirds, center, golden ratio, or diagonals.
 - **Date Imprint**: the date on the photo in classic, GR1s dot-matrix, or GR II style.
 - **Glow**: Bloom softly spreads light around lights and highlights. Halation adds a red-orange halo around bright lights to simulate motion-picture film. Each effect has its own Enable and Strength settings, so both can run together.
