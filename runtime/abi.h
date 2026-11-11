@@ -7,9 +7,9 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6076
+#define GRKIT_HOST_HEADER_SIZE 6148
 /* The most module pages, layers, and plane filters that the header holds. */
-#define GRKIT_MODULE_PAGES_MAX 10
+#define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
 #define GRKIT_MODULE_FILTERS_MAX 8
 #define GRKIT_INDICATORS_MAX 16
@@ -340,152 +340,152 @@
    address of its GrkitPage, its setting handle, and the global index of its
    tile 0 (GRKIT_ICON_MODULE_TILE). */
 #define GRKIT_HOST_MODULE_PAGES 360
-#define GRKIT_HOST_MODULE_PAGES_WORDS 30
+#define GRKIT_HOST_MODULE_PAGES_WORDS 48
 /* The module page that the generic page callbacks of the menu serve. */
-#define GRKIT_HOST_MODULE_CHOICE 480
+#define GRKIT_HOST_MODULE_CHOICE 552
 /* Number of module layers in GRKIT_HOST_MODULE_LAYERS. INSTALL writes it. */
-#define GRKIT_HOST_MODULE_LAYER_COUNT 484
+#define GRKIT_HOST_MODULE_LAYER_COUNT 556
 /* Four words for each module layer, in painting order: its paint function,
    setting handle (GRKIT_NO_SETTING paints with value 1), flags in the low half
    with order in the high half, and an optional GrkitLayer descriptor with
    enabled conditions (0 for no conditions). */
-#define GRKIT_HOST_MODULE_LAYERS 488
+#define GRKIT_HOST_MODULE_LAYERS 560
 #define GRKIT_HOST_MODULE_LAYERS_WORDS 64
 /* Key of the inputs of the last private curve composition in the gamma stage,
    or 0 (runtime/processing.h). */
-#define GRKIT_HOST_GAMMA_KEY 744
+#define GRKIT_HOST_GAMMA_KEY 816
 /* The effect of the RAW development in playback: 1 for native processing, else
    an owned record. The start of a development sets the effect that its DNG
    records (runtime/picture.c), and its Image Control list changes it. The
    still builds of a development apply it instead of the selected effect
    (runtime/processing.h). */
-#define GRKIT_HOST_DEVELOP 748
+#define GRKIT_HOST_DEVELOP 820
 /* GRKIT_HOST_DEVELOP when the Image Control list of the development opened.
    Cancel restores it, as the list restores its native value. */
-#define GRKIT_HOST_DEVELOP_SAVED 752
+#define GRKIT_HOST_DEVELOP_SAVED 824
 /* The native rows of that list. The effects follow them (runtime/menu.c). */
-#define GRKIT_HOST_DEVELOP_ROWS 756
+#define GRKIT_HOST_DEVELOP_ROWS 828
 /* The text ID of the native Standard label of the development, which shows the
    name of a GRKit effect (GRKIT_HOST_DEVELOP_NAME) instead. */
-#define GRKIT_HOST_DEVELOP_TEXT 760
+#define GRKIT_HOST_DEVELOP_TEXT 832
 /* The text descriptor of that name. */
-#define GRKIT_HOST_DEVELOP_NAME 764
+#define GRKIT_HOST_DEVELOP_NAME 836
 #define GRKIT_HOST_DEVELOP_NAME_WORDS 2
 /* Number of registered viewfinder indicators. INSTALL writes it. */
-#define GRKIT_HOST_INDICATOR_COUNT 772
+#define GRKIT_HOST_INDICATOR_COUNT 844
 /* Descriptor address and module tile base for each indicator, in module load
    order and declaration order (runtime/sdk/grkit.h). */
-#define GRKIT_HOST_INDICATORS 776
+#define GRKIT_HOST_INDICATORS 848
 #define GRKIT_HOST_INDICATORS_WORDS 32
 /* Code address of an ABI 2.0/2.1 module that supplies CORE.TONE, or 0. Its
    legacy native icon applies only without an explicit slot owner. */
-#define GRKIT_HOST_LEGACY_TONE_OWNER 904
+#define GRKIT_HOST_LEGACY_TONE_OWNER 976
 /* CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only. */
-#define GRKIT_HOST_ASPECT_MODE 908
+#define GRKIT_HOST_ASPECT_MODE 980
 /* Native aspect + 1 at the last live-view bind, or 0 before the first bind. */
-#define GRKIT_HOST_FRAME_NATIVE 912
+#define GRKIT_HOST_FRAME_NATIVE 984
 /* The Framing ratio of the RAW development in playback (a CORE.ASPECT value),
    or 0 for its native aspect. The start of a development clears it
    (runtime/picture.c), and the aspect list of the development sets it
    (runtime/menu.c). The development sends the capture aspect and the geometry
    of that ratio to the pipeline (runtime/framing.c). */
-#define GRKIT_HOST_DEVELOP_RATIO 916
+#define GRKIT_HOST_DEVELOP_RATIO 988
 /* GRKIT_HOST_DEVELOP_RATIO when the aspect list of the development opened.
    Cancel restores it, as the list restores its native value. */
-#define GRKIT_HOST_DEVELOP_RATIO_SAVED 920
+#define GRKIT_HOST_DEVELOP_RATIO_SAVED 992
 /* The native rows of that list. The Framing ratios follow them. */
-#define GRKIT_HOST_DEVELOP_ASPECT_ROWS 924
+#define GRKIT_HOST_DEVELOP_ASPECT_ROWS 996
 /* The text ID of the native aspect label that shows the name of the Framing
    ratio (GRKIT_HOST_DEVELOP_RATIO_NAME) instead. */
-#define GRKIT_HOST_DEVELOP_RATIO_TEXT 928
+#define GRKIT_HOST_DEVELOP_RATIO_TEXT 1000
 /* The text descriptor of that name. */
-#define GRKIT_HOST_DEVELOP_RATIO_NAME 932
+#define GRKIT_HOST_DEVELOP_RATIO_NAME 1004
 #define GRKIT_HOST_DEVELOP_RATIO_NAME_WORDS 2
 /* The effect record whose Fn adjustments the Standard parameter set of the
    development model holds, or 0 while the set holds its own values
    (runtime/develop.h). */
-#define GRKIT_HOST_DEVELOP_FILLED 940
+#define GRKIT_HOST_DEVELOP_FILLED 1012
 /* The own values of that set while GRKIT_HOST_DEVELOP_FILLED is not 0: one
    byte for each Fn adjustment, in GRKIT_RECORD_PARAMETERS order. */
-#define GRKIT_HOST_DEVELOP_NATIVE 944
+#define GRKIT_HOST_DEVELOP_NATIVE 1016
 #define GRKIT_HOST_DEVELOP_NATIVE_WORDS 3
 /* The effect record whose changed adjustments the development keeps while the
    set holds another one, or 0. The start of a development clears it. */
-#define GRKIT_HOST_DEVELOP_CHANGED 956
+#define GRKIT_HOST_DEVELOP_CHANGED 1028
 /* Those adjustments, as GRKIT_HOST_DEVELOP_NATIVE. */
-#define GRKIT_HOST_DEVELOP_CHANGES 960
+#define GRKIT_HOST_DEVELOP_CHANGES 1032
 #define GRKIT_HOST_DEVELOP_CHANGES_WORDS 3
 /* The native Image Control type plus 1 when ADJ last opened, or 0 when it was
    not readable. A half-press on the native Image Control slot with another
    type selects that type, as OK does (runtime/menu.c). */
-#define GRKIT_HOST_ADJ_IC_TYPE 972
+#define GRKIT_HOST_ADJ_IC_TYPE 1044
 /* CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h). */
-#define GRKIT_HOST_CROP 976
+#define GRKIT_HOST_CROP 1048
 /* CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the frame only. */
-#define GRKIT_HOST_CROP_MODE 980
+#define GRKIT_HOST_CROP_MODE 1052
 /* The native crop factor that the core set for CORE.CROP, as float bits, or 0
    while the camera keeps its own (runtime/crop.h). */
-#define GRKIT_HOST_CROP_NATIVE 984
+#define GRKIT_HOST_CROP_NATIVE 1056
 /* The crop factor of the next shot, as float bits, where it is longer than the
    native factor of the live view (40, 70, and 90 mm), or 0. */
-#define GRKIT_HOST_CROP_SHOT 988
+#define GRKIT_HOST_CROP_SHOT 1060
 /* GR IV: the back end of the last shot, whose queue completion the core can
    post when a crop shot finishes before the shutter release stops
    (runtime/crop_queue.S). */
-#define GRKIT_HOST_CROP_QUEUE_OWNER 992
+#define GRKIT_HOST_CROP_QUEUE_OWNER 1064
 /* GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
    CROP_QUEUE_RECOVERED. */
-#define GRKIT_HOST_CROP_QUEUE_FLAGS 996
+#define GRKIT_HOST_CROP_QUEUE_FLAGS 1068
 /* The recipes (runtime/recipes.h): RECIPE_WORDS words for each of the
    RECIPE_SLOTS recipes. A recipe whose word 0 is 0 is empty. The resident
    loader saves each word that is not 0 in the recipe file
    (`capabilities::StateFile::Recipes`). */
-#define GRKIT_HOST_RECIPES 1000
+#define GRKIT_HOST_RECIPES 1072
 #define GRKIT_HOST_RECIPES_WORDS 320
 /* The names of the recipes, RECIPE_NAME_WORDS words each (RECIPE_NAME_CHARS),
    right after HOST_RECIPES, which the loader saves after the recipe words. */
-#define GRKIT_HOST_RECIPE_NAMES 2280
+#define GRKIT_HOST_RECIPE_NAMES 2352
 #define GRKIT_HOST_RECIPE_NAMES_WORDS 256
 /* The hash of the recipe library of the package that INSTALL imported last
    (runtime/install_recipes.h), after the names: the loader saves it with the
    recipes, so a package imports once. */
-#define GRKIT_HOST_RECIPE_IMPORTED 3304
+#define GRKIT_HOST_RECIPE_IMPORTED 3376
 /* The ID of each recipe, by slot, 1 to `runtime::RECIPE_ID_MAX`: a generated
    number, so that a recipe that the site moves to another card keeps an ID
    that no recipe of that card had. A reference to a recipe holds its ID, so
    that it stays valid when the recipes move. Each part that creates a recipe
    (the camera, INSTALL, the site) generates its ID. The loader saves the IDs
    after the import hash. */
-#define GRKIT_HOST_RECIPE_IDS 3308
+#define GRKIT_HOST_RECIPE_IDS 3380
 #define GRKIT_HOST_RECIPE_IDS_WORDS 64
 /* What each user mode of the mode dial, U1 to U3, does
    (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a recipe).
    An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A generated ID is
    never one of these values, so a deleted recipe never gets the references of
    another. */
-#define GRKIT_HOST_RECIPE_DIAL 3564
+#define GRKIT_HOST_RECIPE_DIAL 3636
 #define GRKIT_HOST_RECIPE_DIAL_WORDS 3
 /* The count of changes of the recipes: the loader saves the recipe file after
    it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an import. */
-#define GRKIT_HOST_RECIPE_CHANGES 3576
+#define GRKIT_HOST_RECIPE_CHANGES 3648
 /* The undo steps, the oldest first, RECIPE_WORDS words each. They are not
    saved: a start begins without them. */
-#define GRKIT_HOST_RECIPE_UNDO 3580
+#define GRKIT_HOST_RECIPE_UNDO 3652
 #define GRKIT_HOST_RECIPE_UNDO_WORDS 25
 /* Nonzero while the mode dial is on a user mode whose settings are temporary
    (runtime/mode_dial.h): the resident loader then does not save the main state
    file, so the file keeps the settings of the other positions. The recipe file
    still saves. */
-#define GRKIT_HOST_STATE_HOLD 3680
+#define GRKIT_HOST_STATE_HOLD 3752
 /* The count of changes of the saved settings of the user modes
    (`HOST_DIAL_SETS`): the loader saves their file after it changes. */
-#define GRKIT_HOST_DIAL_SET_CHANGES 3684
+#define GRKIT_HOST_DIAL_SET_CHANGES 3756
 /* The settings that the camera saved in each user mode of the mode dial, U1 to
    U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A user mode applies
    them while it has `runtime::RECIPE_DIAL_SAVED` (`HOST_RECIPE_DIAL`). The
    resident loader saves each word that is not 0 in their file
    (`capabilities::StateFile::DialSets`), and INSTALL restores them. */
-#define GRKIT_HOST_DIAL_SETS 3688
+#define GRKIT_HOST_DIAL_SETS 3760
 #define GRKIT_HOST_DIAL_SETS_WORDS 597
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
@@ -513,7 +513,7 @@
 #define GRKIT_CORE_ADJ_VALUES 2U
 #define GRKIT_CORE_ADJ_BIT 0x20
 #define GRKIT_CORE_ADJ_MODULE 0x106U
-#define GRKIT_CORE_ADJ_MODULE_VALUES 10U
+#define GRKIT_CORE_ADJ_MODULE_VALUES 16U
 #define GRKIT_CORE_ADJ_MODULE_BIT 0x40
 #define GRKIT_CORE_CROP 0x107U
 #define GRKIT_CORE_CROP_VALUES 6U
@@ -524,8 +524,8 @@
 #define GRKIT_CORE_RECIPE 0x109U
 #define GRKIT_CORE_RECIPE_VALUES 0U
 #define GRKIT_CORE_RECIPE_BIT 0x200
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,908,256,188,976,980,0
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,10,6,2,0
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,0
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,16,6,2,0
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100

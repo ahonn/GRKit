@@ -55,6 +55,49 @@ fn module_folders() -> Vec<std::path::PathBuf> {
     folders
 }
 
+/// The official modules load together on a color camera: what they need of
+/// the core, summed over all of them, fits what the core holds. INSTALL
+/// skips a module that does not fit with error 54.
+#[test]
+fn official_modules_fit_together() -> Result<()> {
+    use grkit_core::runtime::{
+        INDICATORS_MAX, MODULES_MAX, MODULE_FILTERS_MAX, MODULE_LAYERS_MAX, MODULE_PAGES_MAX,
+        MODULE_TILES_MAX, STATUS_ICONS_MAX,
+    };
+    let folders = module_folders();
+    let (mut pages, mut layers, mut filters, mut indicators, mut status_icons, mut tiles) =
+        (0, 0, 0, 0, 0, 0);
+    for folder in &folders {
+        let m = module::generate(folder)?.0;
+        // A group page takes a page for itself and one for each child.
+        pages += m.page.as_ref().map_or(0, |page| 1 + page.children.len());
+        layers += m.layers.len();
+        filters += m.filters.len();
+        indicators += m.indicators.len();
+        status_icons += m
+            .indicators
+            .iter()
+            .filter(|i| matches!(i.placement, module::IndicatorPlacement::StatusRow))
+            .count();
+        tiles += m.tiles.len();
+    }
+    for (what, need, room) in [
+        ("modules", folders.len(), MODULES_MAX),
+        ("pages", pages, MODULE_PAGES_MAX),
+        ("layers", layers, MODULE_LAYERS_MAX),
+        ("plane filters", filters, MODULE_FILTERS_MAX),
+        ("indicators", indicators, INDICATORS_MAX),
+        ("status-row icons", status_icons, STATUS_ICONS_MAX),
+        ("tiles", tiles, MODULE_TILES_MAX),
+    ] {
+        assert!(
+            need <= room,
+            "The official modules need {need} {what}, the core holds {room}"
+        );
+    }
+    Ok(())
+}
+
 /// Each module folder passes its host test (`grkit module test`). The test
 /// needs a host C compiler: `cc`, or GRKIT_HOST_CC.
 #[test]

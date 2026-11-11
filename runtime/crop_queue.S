@@ -15,6 +15,15 @@
    state of the last shot. */
 #define CROP_QUEUE_POSTED 1
 #define CROP_QUEUE_RECOVERED 2
+/* rd = rn + a header offset. An ARM immediate holds one byte, rotated, so
+   add the two bytes of the offset apart. */
+.macro add_header rd, rn, offset
+.if (\offset) > 0xffff
+.error "A header offset of 64 KB or more"
+.endif
+    add \rd, \rn, #((\offset) & 0xff00)
+    add \rd, \rd, #((\offset) & 0xff)
+.endm
 #if defined(HOOK_CROP_QUEUE_START) != defined(HOOK_CROP_QUEUE_RELEASE) \
     || defined(HOOK_CROP_QUEUE_START) != defined(HOOK_CROP_QUEUE_POST) \
     || defined(HOOK_CROP_QUEUE_START) != defined(FW_QUEUE_COMPLETE)
@@ -54,7 +63,7 @@ crop_queue_post:
     ldr r3, [r2, #GRKIT_HOST_CROP_QUEUE_OWNER]
     cmp r0, r3
     bne 2f
-    add r2, r2, #GRKIT_HOST_CROP_QUEUE_FLAGS
+    add_header r2, r2, GRKIT_HOST_CROP_QUEUE_FLAGS
 1:  ldrex r3, [r2]
     orr r4, r3, #CROP_QUEUE_POSTED
     strex r5, r4, [r2]
@@ -165,7 +174,7 @@ crop_queue_release:
     blo 2b
     b 9f
     /* Mark the check unless a completion came first, then check. */
-5:  add r1, r5, #GRKIT_HOST_CROP_QUEUE_FLAGS
+5:  add_header r1, r5, GRKIT_HOST_CROP_QUEUE_FLAGS
 6:  ldrex r0, [r1]
     tst r0, #(CROP_QUEUE_POSTED | CROP_QUEUE_RECOVERED)
     bne 8f

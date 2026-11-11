@@ -494,7 +494,7 @@ ABI 2.6 adds the capabilities `CORE.CROP` and `CORE.CROP_MODE`. `Surface` keeps 
 | Event subscribers | 1 in each module | 53 |
 | Timers of all modules | 8 | `timer_start` returns 0 |
 | Units of one text | 64 UTF-16 units | build error, or 53 |
-| Pages of all loaded modules | 10 | 54 |
+| Pages of all loaded modules: one for each module, and one for each child of a group page | 16 | 54 |
 | Layers of all loaded modules | 16 | 54 |
 | Plane filters of all loaded modules | 8 | 54 |
 | Layer order | 0 to 65535 | build error |

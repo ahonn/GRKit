@@ -88,8 +88,12 @@ pub const HEADER_REFERENCE: u32 = 0x58012340;
 /// `GRM1`.
 pub const HOST_MAGIC_VALUE: u32 = 0x314d5247;
 pub const HOST_VERSION_VALUE: u32 = 1;
-/// The most module pages that the header holds: one for each listed module.
-pub const MODULE_PAGES_MAX: usize = MODULES_MAX;
+/// The most module pages that the header holds: one for each listed module,
+/// and one for each child of a group page (Glow has a group of two).
+pub const MODULE_PAGES_MAX: usize = 16;
+// The menu keeps the pages, the GRKit switch, Modules, and About as bits of
+// one word (runtime/modules.h).
+const _: () = assert!(MODULE_PAGES_MAX >= MODULES_MAX && MODULE_PAGES_MAX + 3 <= 32);
 /// The most module layers, and the most module plane filters, of all modules
 /// that the header holds.
 pub const MODULE_LAYERS_MAX: usize = 16;
