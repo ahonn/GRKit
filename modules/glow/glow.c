@@ -82,6 +82,7 @@
 #define VEIL_DARK 60U     /* the screennail luma of a receiver up to which the veil guard is full */
 #define VEIL_LIGHT 150U   /* the luma from which it does nothing */
 #define VEIL_CUT 230U     /* the most (of 256) of the glow that the veil guard takes away */
+#define VEIL_SOURCE 200U  /* the screennail luma from which a pixel is part of the light, not of the receiver */
 
 /* Linear light of a channel value, (c / 255)^2.2 x 255. */
 static const u8 linear[256] = {
@@ -533,11 +534,19 @@ typedef struct {
     const u8 *rim, *rim_row;
     /* Strong: the part (of 256) of the lift that the scene EV keeps (0: no
        lift and no veil guard), the lift and the large light share of each
-       cell (coarse_surround), and the mean screennail luma of each fine
-       pixel of the ring rows (veil_guard). */
+       cell (coarse_surround), and for each fine pixel of the ring rows the
+       darkness of its receiver (of 255) blurred along the row, and the
+       weight (of 64) of the receivers in that blur (veil_guard). */
     u32 lift_ev;
     const u8 *lift, *large;
-    u8 receiver[RING][MAX_FINE];
+    u8 dark[RING][MAX_FINE], dark_weight[RING][MAX_FINE];
+    /* The work rows of fine_feed and receiver_row: the luma sum and the
+       count of the receiver pixels of each fine pixel, and their darkness.
+       They are here, not on the stack: Glow runs on the stack of the
+       firmware JPEG encoder, which has little room. */
+    u16 seen[MAX_FINE];
+    u8 seen_n[MAX_FINE], seen_dark[MAX_FINE];
+    u16 recip[65]; /* reciprocal(n) for n up to 64 */
     u32 hot; /* the lowest channel level with light */
     u16 scale[256]; /* light_scale of the look */
     u16 gain[256]; /* Q8 highlight gain, continuous from clip to white */
@@ -1105,6 +1114,42 @@ INLINE u32 cell_value(const Fine *f, const u8 *t0, const u8 *t1, u32 cf, u32 x)
    with 1 6 15 20 15 6 1, over 16 (at most 16320 x 4). A row out of the
    picture is 0. Fine sampling is independent of the coarse grid, which
    can miss an isolated light between its samples. */
+/* The binomial taps of the fine blur (sum 64). */
+static const u8 taps[RING] = {1, 6, 15, 20, 15, 6, 1};
+/* 65536 / n, rounded, for the pixel counts and the tap weights of
+   receiver_row: the camera has no divide instruction. */
+static u16 reciprocal(u32 n) { return (u16)(n > 1 ? divide(65536U + (n >> 1), n) : 65535U); }
+
+/* Strong: the receivers of fine row `slot` for veil_guard. The receiver of a
+   fine pixel is the mean screennail luma of its pixels below VEIL_SOURCE:
+   the light itself is no receiver, so a fine pixel across the edge of a
+   light area is as dark as the dark side of the edge. A fine pixel with
+   only light pixels has no receiver. The darkness of the receivers is
+   blurred along the row with the fine taps, over the fine pixels that have
+   a receiver: so the cut changes smoothly from one fine pixel to the next,
+   and a light does not lessen the cut next to it. */
+static void receiver_row(Fine *f, u32 slot, const u16 *seen, const u8 *seen_n)
+{
+    u8 *dark = f->seen_dark;
+    u32 x, i;
+    for (x = 0; x < f->w; ++x) {
+        u32 n = seen_n[x], y = n ? (seen[x] * f->recip[n] + 32768U) >> 16 : 0;
+        /* (VEIL_LIGHT - y) * 255 / (VEIL_LIGHT - VEIL_DARK), with 255 / 90 as 2901 / 1024 */
+        dark[x] = (u8)(!n || y >= VEIL_LIGHT ? 0 : y <= VEIL_DARK ? 255 : ((VEIL_LIGHT - y) * 2901U + 512U) >> 10);
+    }
+    for (x = 0; x < f->w; ++x) {
+        u32 sum = 0, weight = 0;
+        for (i = 0; i < RING; ++i) {
+            u32 c = x + i;
+            if (c < 3 || c - 3 >= f->w || !seen_n[c - 3]) continue;
+            sum += taps[i] * dark[c - 3];
+            weight += taps[i];
+        }
+        f->dark[slot][x] = (u8)(weight ? (sum * f->recip[weight] + 32768U) >> 16 : 0);
+        f->dark_weight[slot][x] = (u8)weight;
+    }
+}
+
 static void fine_feed(Fine *f, u32 y)
 {
     u32 x, k, slot = y % RING;
@@ -1123,7 +1168,8 @@ static void fine_feed(Fine *f, u32 y)
         u32 shift = f->shift << 1, any = 0, width = f->w << f->shift;
         u32 hot = f->hot ? (f->hot - 1) * 0x01010101U : 0, points = 0, lit_channel[3];
         u8 *best0 = f->best[0], *best1 = f->best[1], *best2 = f->best[2], *best3 = f->best[3];
-        u16 seen[MAX_FINE]; /* Strong: the luma sum of each fine pixel (veil_guard) */
+        u16 *seen = f->seen; /* Strong: the luma sum of the receiver pixels of each fine pixel (veil_guard) */
+        u8 *seen_n = f->seen_n;
         for (k = 0; k < 3; ++k)
             for (x = 0; x < f->w; ++x) f->light[k][x] = 0;
         /* The clip density of each fine pixel, and its brightest pixel. */
@@ -1141,12 +1187,18 @@ static void fine_feed(Fine *f, u32 y)
             }
         }
         if (f->lift_ev)
-            for (x = 0; x < f->w; ++x) seen[x] = 0;
+            for (x = 0; x < f->w; ++x) { seen[x] = 0; seen_n[x] = 0; }
         for (j = 0; j < n; ++j) {
             const u8 *row, *crow;
             source_row(f, (y << f->shift) + j, width, &row, &crow);
-            if (f->lift_ev)
-                for (x = 0; x < width; ++x) seen[x >> f->shift] = (u16)(seen[x >> f->shift] + row[x]);
+            /* The receiver: every second pixel of every second row is
+               enough for the mean luma of a fine pixel. */
+            if (f->lift_ev && !(j & 1))
+                for (x = 0; x < width; x += 2)
+                    if (row[x] < VEIL_SOURCE) {
+                        seen[x >> f->shift] = (u16)(seen[x >> f->shift] + row[x]);
+                        ++seen_n[x >> f->shift];
+                    }
             if (f->rim) {
                 u32 cy = divide((y << f->shift) + j, f->surround_step);
                 f->rim_row = f->rim + 4 * f->surround_w * (cy < f->surround_h ? cy : f->surround_h - 1);
@@ -1194,8 +1246,7 @@ static void fine_feed(Fine *f, u32 y)
         }
         for (k = 0; k < 3; ++k)
             for (x = 0; x < f->w; ++x) f->light[k][x] = (u16)(f->light[k][x] >> shift);
-        if (f->lift_ev)
-            for (x = 0; x < f->w; ++x) f->receiver[slot][x] = (u8)(seen[x] >> shift);
+        if (f->lift_ev) receiver_row(f, slot, seen, seen_n);
         if (points)
             for (x = 0; x < f->w; ++x) {
                 u32 l[3];
@@ -1260,7 +1311,7 @@ typedef struct {
    of each word, and the runs of glowing blocks. */
 typedef struct {
     const Plane *p;
-    u32 x0, words, y, step_y, runs, offset;
+    u32 x0, words, y, step_y, scale_y, runs, offset;
     s16 *value[3], *step[3];
     u16 *column, *run_first, *run_count;
     u8 *fraction, *original_chroma, *protect;
@@ -1292,18 +1343,29 @@ typedef struct {
    backlit window or a white wall in shade beside a dark coat), where the
    lift would otherwise lay a veil. A small light keeps its glow, and so
    does a light receiver (the wall around a lamp). The share of a large
-   light area comes from the cells; the receiver is the mean screennail
-   luma of each fine pixel, kept from fine_feed. */
+   light area comes from the cells. The darkness of the receivers is
+   blurred down the ring rows as along the row (receiver_row), over the
+   fine pixels that have a receiver, so the cut follows the receivers
+   smoothly and does not draw the fine pixels in the glow. */
 static void veil_guard(Fine *f, u32 t)
 {
-    u32 x, k, c0, c1, cf;
-    const u8 *receiver = f->receiver[t % RING];
+    u32 x, j, k, c0, c1, cf;
     if (t >= f->h) return;
     cf = cell_rows(f, t, &c0, &c1);
     for (x = 0; x < f->w; ++x) {
-        u32 large = cell_value(f, f->large + c0 * f->surround_w, f->large + c1 * f->surround_w, cf, x), y = receiver[x];
-        u32 dark = y <= VEIL_DARK ? 256 : y >= VEIL_LIGHT ? 0 : divide((VEIL_LIGHT - y) << 8, VEIL_LIGHT - VEIL_DARK);
-        u32 keep = 256 - ((((large * dark) >> 8) * VEIL_CUT) >> 8);
+        u32 large = cell_value(f, f->large + c0 * f->surround_w, f->large + c1 * f->surround_w, cf, x);
+        u32 sum = 0, weight = 0, dark, keep;
+        if (!large) continue;
+        for (j = 0; j < RING; ++j) {
+            u32 row = t + j, w;
+            if (row < 3 || row - 3 >= f->h) continue;
+            w = taps[j] * f->dark_weight[(row - 3) % RING][x];
+            sum += w * f->dark[(row - 3) % RING][x];
+            weight += w;
+        }
+        if (!weight) continue;
+        dark = weight == 64 * 64 ? (sum + 2048) >> 12 : divide(sum + (weight >> 1), weight);
+        keep = 256 - ((((large * dark) >> 8) * VEIL_CUT) >> 8);
         if (keep < 256)
             for (k = 0; k < 3; ++k) f->light[k][x] = (u16)((f->light[k][x] * keep) >> 8);
     }
@@ -1534,7 +1596,7 @@ static u32 lane_init(Lane *lane, Rows *rw, const Plane *p, u32 first, u32 block)
 {
     u32 x0 = p->left >> 2, words = ((p->right + 3) >> 2) - x0, tw = p->right - p->left, th = p->bottom - p->top, k, ch;
     u32 step_x;
-    int base = (int)(x0 << 2) - (int)p->left + 2;
+    int base = (int)(x0 << 2) - (int)p->left;
     /* A plane wider than MAX_WORDS words does not fit the block flags of
        span_values: it gets no glow. */
     if (!tw || !th || words > MAX_WORDS || first + words + 1 > ALL_WORDS || block + words / BLOCK_WORDS + 1 > ALL_BLOCKS) return 0;
@@ -1543,7 +1605,11 @@ static u32 lane_init(Lane *lane, Rows *rw, const Plane *p, u32 first, u32 block)
     lane->words = words;
     lane->y = p->top;
     lane->runs = 0;
+    /* The grid rows (of 4096) for each plane row, and (of 1 << 20) for the
+       position of a row: Q12 would lose up to 0.6 of a grid row by the
+       middle of a 4000-row plane. */
     lane->step_y = divide(rw->grid_h << 12, th);
+    lane->scale_y = divide(rw->grid_h << 20, th);
     lane->offset = GRID_OFFSET;
     for (ch = 0; ch < 3; ++ch) {
         lane->value[ch] = rw->value[ch] + first;
@@ -1563,10 +1629,13 @@ static u32 lane_init(Lane *lane, Rows *rw, const Plane *p, u32 first, u32 block)
     }
     lane->run_first = rw->run_first + block;
     lane->run_count = rw->run_count + block;
-    step_x = divide(rw->grid_w << 12, tw);
+    /* The grid columns (of 1 << 20) for each plane column. A word takes the
+       value at the center of its first pixel, as the pixel kernels place
+       it there and step to the next word over its four pixels. */
+    step_x = divide(rw->grid_w << 20, tw);
     for (k = 0; k < words; ++k) {
         int rel = base + (int)(k << 2);
-        u32 pos = rel > 0 ? (u32)rel * step_x : 0, i;
+        u32 pos = rel >= 0 ? ((u32)(2 * rel + 1) * step_x) >> 9 : 0, i;
         pos = pos > GRID_OFFSET ? pos - GRID_OFFSET : 0;
         i = pos >> 12;
         lane->column[k] = (u16)(i < rw->grid_w ? i : rw->grid_w - 1);
@@ -1582,7 +1651,7 @@ static void lane_span(Lane *lane, u32 grid_w, u32 grid_h, const GlowRow *up, con
     const Plane *p = lane->p;
     u32 first_row = 1, r, o = lane->offset;
     for (; lane->y < p->bottom; ++lane->y) {
-        u32 y = lane->y, pos = (y - p->top) * lane->step_y + (lane->step_y >> 1), span = pos >= o ? ((pos - o) >> 12) + 1 : 0;
+        u32 y = lane->y, pos = ((2 * (y - p->top) + 1) * lane->scale_y) >> 9, span = pos >= o ? ((pos - o) >> 12) + 1 : 0;
         u32 *luma, *crow = 0;
         const u8 *source_chroma = 0;
         if (span != t) break;
@@ -1936,6 +2005,8 @@ static void stream_setup(Fine *f, const PictureSet *set, const Plane *src, const
     f->h = (src->bottom - src->top) >> FINE_SHIFT;
     f->daylight = 0;
     f->lift_ev = strength == 3 ? lift_keep(set) : 0;
+    if (f->lift_ev)
+        for (u32 n = 0; n <= 64; ++n) f->recip[n] = reciprocal(n);
     for (u32 k = 0; k < 3; ++k) f->part[k] = (look->fine[k] * look->strength[strength - 1] + 128) >> 8;
     light_setup(f, look);
     white_setup(f, set);

@@ -203,20 +203,18 @@ fn synthetic_module_folders_build() -> Result<()> {
     Ok(())
 }
 
-/// Date blur runs beneath the firmware JPEG encoder. Its line workspace must
-/// stay in picture scratch, rather than consume that task's remaining stack.
-#[test]
-#[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
-fn date_blur_stays_within_stack_budget() -> Result<()> {
+/// The stack frame of each function of a module source, as `-fstack-usage`
+/// gives it for the module build flags: (function, bytes).
+fn stack_frames(module: &str, source: &str) -> Result<Vec<(String, usize)>> {
     let tools = tools()?;
     let directory = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let folder = root.join("modules/date");
+    let folder = root.join("modules").join(module);
     fs::write(
         directory.path().join("grkit_module.h"),
         module::generate(&folder)?.2,
     )?;
-    let object = directory.path().join("stamp.o");
+    let object = directory.path().join("source.o");
     let output = std::process::Command::new(&tools.clang)
         .args(crate::toolchain::CAMERA_TARGET)
         .args([
@@ -237,7 +235,7 @@ fn date_blur_stays_within_stack_budget() -> Result<()> {
         .arg("-I")
         .arg(directory.path())
         .arg("-c")
-        .arg(folder.join("stamp.c"))
+        .arg(folder.join(source))
         .arg("-o")
         .arg(&object)
         .output()?;
@@ -247,15 +245,48 @@ fn date_blur_stays_within_stack_budget() -> Result<()> {
         String::from_utf8_lossy(&output.stderr)
     );
     let usage = fs::read_to_string(object.with_extension("su"))?;
-    assert!(!usage.trim().is_empty(), "Missing Date stack measurements");
+    let mut frames = Vec::new();
     for line in usage.lines() {
         let fields: Vec<_> = line.split('\t').collect();
-        let bytes: usize = fields[1].parse()?;
+        let function = fields[0].rsplit(':').next().unwrap_or_default().to_owned();
+        frames.push((function, fields[1].parse()?));
+    }
+    assert!(!frames.is_empty(), "Missing stack measurements of {module}");
+    Ok(frames)
+}
+
+/// Date blur runs beneath the firmware JPEG encoder. Its line workspace must
+/// stay in picture scratch, rather than consume that task's remaining stack.
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
+fn date_blur_stays_within_stack_budget() -> Result<()> {
+    for (function, bytes) in stack_frames("date", "stamp.c")? {
         // Also catch a large workspace if the compiler inlines the blur.
-        assert!(bytes <= 1024, "Date stack frame exceeds budget: {line}");
-        if fields[0].ends_with(":blur_line") {
-            assert!(bytes <= 128, "Date blur stack frame exceeds budget: {line}");
+        assert!(
+            bytes <= 1024,
+            "Date stack frame exceeds budget: {function} {bytes}"
+        );
+        if function == "blur_line" {
+            assert!(
+                bytes <= 128,
+                "Date blur stack frame exceeds budget: {bytes}"
+            );
         }
+    }
+    Ok(())
+}
+
+/// Glow also runs beneath the firmware JPEG encoder. Its row workspaces must
+/// stay in picture scratch: a 992-byte frame of light_row made the encoder
+/// task warn of a low stack.
+#[test]
+#[ignore = "Requires ARM-capable Clang and LLD; run with --ignored"]
+fn glow_stays_within_stack_budget() -> Result<()> {
+    for (function, bytes) in stack_frames("glow", "glow.c")? {
+        assert!(
+            bytes <= 640,
+            "Glow stack frame exceeds budget: {function} {bytes}"
+        );
     }
     Ok(())
 }

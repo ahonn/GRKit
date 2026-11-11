@@ -548,6 +548,36 @@ static void test_strong_veil(PictureSet *set)
     set_strength(1);
 }
 
+/* Strong: the glow on the dark side of a slanted edge of a large light
+   area (the bottom of a screen) is even along the edge. A fine pixel that
+   holds both the light and the dark side must not escape the veil guard,
+   and the cut must not change in steps of fine pixels. Before, the glow 2
+   rows below the edge went from 33 to 71 (Bloom) and from 9 to 24
+   (Halation) along it. The edge steps one row each 8 columns, so the
+   distance to it varies by a row; small values also round. */
+static void test_strong_veil_edge(PictureSet *set)
+{
+    set_strength(2);
+    for (u32 look = 1; look <= 2; ++look) {
+        u32 most = 0, least = ~0U;
+        grkit_test_shot.known = GRKIT_SHOT_EXPOSURE;
+        grkit_test_shot.scene_ev = 7 << 8;
+        fill(30, 128, 128);
+        /* Light down to row 200 + x / 8: one row lower each 8 columns. */
+        for (u32 x = 0; x < W; ++x)
+            for (u32 y = 0; y < 200 + x / 8; ++y) *grkit_test_bytes(GRKIT_TEST_PLANES + y * W + x) = 255;
+        apply_look(set, look);
+        grkit_test_shot.known = 0;
+        for (u32 x = 96; x < W - 96; ++x) {
+            u32 glow = luma(x, 200 + x / 8 + 2) - 30U;
+            if (glow > most) most = glow;
+            if (glow < least) least = glow;
+        }
+        assert(least > 0 && most < least + least / 2 + 4);
+    }
+    set_strength(1);
+}
+
 /* Bloom: a lamp clipped to a white core, with an unclipped orange
    fall-off around it, glows orange and not white. */
 static void test_bloom_rim_color(PictureSet *set)
@@ -671,6 +701,47 @@ static void camera_planes(PictureSet *set)
         at += 2 * w * h;
     }
     set->count = 3;
+}
+
+/* The glow on a wide plane is where its light is. The plane takes its glow
+   from a coarse grid of the source plane, and the scale between the two
+   lost up to 0.6 of a grid column by the middle of a 6000-pixel row, so
+   the glow moved to the right with the column: about 9 pixels at the
+   middle of a 6000 x 4000 main picture, 18 at its right side. Here a
+   narrow source makes each grid column about 47 pixels of the plane. */
+static void test_wide_plane_alignment(void)
+{
+    enum { SW = 256, SH = 128, PW = 6000, PH = 200, LX = 200, LY = 60 };
+    u32 at = GRKIT_TEST_PLANES, sizes[2][2] = {{PW, PH}, {SW, SH}};
+    PictureSet set = {{plane()}, 2, 0, 0, grkit_test_scratch, 0};
+    for (u32 k = 0; k < 2; ++k) {
+        u32 w = sizes[k][0], h = sizes[k][1];
+        Plane p = {at, at + w * h, w, h, w, 0, 0, 0, w, h};
+        set.planes[k] = p;
+        /* Dark, with a light 8 x 8 source pixels at (LX, LY) of the source. */
+        for (u32 y = 0; y < h; ++y)
+            for (u32 x = 0; x < w; ++x) {
+                u32 sx = x * SW / w, sy = y * SH / h, light = sx >= LX && sx < LX + 8 && sy >= LY && sy < LY + 8;
+                *grkit_test_bytes(p.y + y * w + x) = light ? 255 : 30;
+                *grkit_test_bytes(p.c + y * w + x) = 128;
+            }
+        at += 2 * w * h;
+    }
+    apply_look(&set, 1);
+    /* The center of the light on the plane, and the mean column of the glow
+       of a row through it, with the light itself left out. */
+    {
+        const Plane *p = &set.planes[0];
+        u32 row = (2 * LY + 8) * PH / (2 * SH), x0 = (LX * PW + SW - 1) / SW, x1 = ((LX + 8) * PW + SW - 1) / SW;
+        double center = (x0 + x1) / 2.0, sum = 0, moment = 0;
+        for (u32 x = 0; x < PW; ++x) {
+            u32 glow = *grkit_test_bytes(p->y + row * PW + x) - 30U;
+            if (x >= x0 && x < x1) continue;
+            sum += glow;
+            moment += glow * (x + 0.5);
+        }
+        assert(sum > 0 && moment / sum - center < 4 && center - moment / sum < 4);
+    }
 }
 
 static u32 plane_sum(const Plane *p)
@@ -1129,7 +1200,10 @@ static void test_combined_film_white(PictureSet *set)
         u8 bloom_jump, both_jump;
         u32 bloom = sky_change(set, strength, 0, &bloom_jump);
         u32 both = sky_change(set, strength, strength, &both_jump);
-        assert(bloom > 0 && bloom_jump <= 2);
+        /* A step of 3 between two rows is the slope of Strong over the
+           sky at a few pixels. The patches that the test guards against
+           gave 8 to 17. */
+        assert(bloom > 0 && bloom_jump <= (strength == 3 ? 3 : 2));
         assert(both_jump <= bloom_jump + 1);
         assert(both * 10 >= bloom * 9);
     }
@@ -1239,6 +1313,7 @@ int main(void)
     test_daylight_fade(&set);
     test_strong_lift(&set);
     test_strong_veil(&set);
+    test_strong_veil_edge(&set);
     test_local_daylight_gate(&set);
     test_halo_block_edges(&set);
     test_bloom_broad_source(&set);
@@ -1248,6 +1323,7 @@ int main(void)
     test_dark_scene(&set);
     test_strength_range(&set);
     test_camera_planes();
+    test_wide_plane_alignment();
     test_combined_strengths(&set);
     test_combined_scratch();
     test_empty_halation();
