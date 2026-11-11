@@ -227,6 +227,9 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
     /* The camera's crop factor follows CORE.CROP in the still live view. */
 #ifdef CROP_NATIVE_BITS
     if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h,FRAMING_NATIVE_ASPECT());
+#if CROP_LIVE_FACTOR
+    if(crop_live_due(h,BYTE(controller,LIVEVIEW_MOVIE)!=0)) crop_live_try(h,FRAMING_SECOND());
+#endif
 #endif
     viewfinder_bind(h,controller);
     level_boot(h,controller);

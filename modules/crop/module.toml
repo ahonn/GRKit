@@ -7,13 +7,18 @@ version = 1
 order = 25
 sources = ["crop.c"]
 # Tile n shows value n. Tile 0 is the module tile, for Off at the root.
+# GR IIIx shows tiles 5 to 8 for values 1 to 4: the focal lengths of its
+# 40 mm lens (runtime/modules.h: crop_tile).
 tiles = [
     "tiles/0-module.png",
     "tiles/1-35.png",
     "tiles/2-40.png",
     "tiles/3-50.png",
     "tiles/4-70.png",
-    "tiles/5-90.png",
+    "tiles/5-gr3x-50.png",
+    "tiles/6-gr3x-57.png",
+    "tiles/7-gr3x-71.png",
+    "tiles/8-gr3x-100.png",
 ]
 uses = ["CORE.CROP", "CORE.CROP_MODE"]
 

@@ -1,6 +1,6 @@
 title = "クロップ"
-rows = ["オフ", "35mm", "40mm", "50mm", "70mm", "90mm"]
-summaries = ["オフ", "35mm", "40mm", "50mm", "70mm", "90mm"]
+rows = ["オフ", "35mm", "40mm", "50mm", "70mm"]
+summaries = ["オフ", "35mm", "40mm", "50mm", "70mm"]
 
 [settings."CORE.CROP"]
 label = "焦点距離"

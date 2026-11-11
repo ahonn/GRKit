@@ -112,10 +112,17 @@ static u32 choice_value_row(volatile u32 *h,u32 value) {
 /* The text of a crop (CORE.CROP value) on GR IIIx, whose module texts name
    the focal lengths of a 28 mm lens, or 0 for the module text. */
 static const u16 crop_texts_40mm[GRKIT_CORE_CROP_VALUES-1][6]={
-    {'5','0','m','m',0},{'5','7','m','m',0},{'7','1','m','m',0},{'1','0','0','m','m',0},{'1','2','8','m','m',0}};
+    {'5','0','m','m',0},{'5','7','m','m',0},{'7','1','m','m',0},{'1','0','0','m','m',0}};
 static const u16 *crop_text(u32 handle,u32 value) {
     if(handle!=GRKIT_CORE_CROP || !value || value>=GRKIT_CORE_CROP_VALUES || !CROP_LENS_40MM()) return 0;
     return crop_texts_40mm[value-1];
+}
+/* The tile of a value of a page: on GR IIIx, a crop shows the tile of its
+   own focal length, which follows the tiles of the other cameras
+   (modules/crop/module.toml). */
+static u32 crop_tile(u32 handle,u32 value) {
+    if(handle!=GRKIT_CORE_CROP || !value || value>=GRKIT_CORE_CROP_VALUES || !CROP_LENS_40MM()) return value;
+    return value+GRKIT_CORE_CROP_VALUES-1U;
 }
 /* Text `index` of a text list of the page, in the menu language. */
 static const u16 *choice_text(volatile u32 *h,u32 field,u32 index) {
@@ -152,9 +159,9 @@ static const u16 *choice_label(volatile u32 *h,u32 row) { return choice_text(h,P
    Off icon of the page, else tile 0. */
 static u32 choice_icon(volatile u32 *h,u32 row) {
     u32 value, icon;
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,choice_direct(h) ? 0 : choice_value(h));
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,choice_direct(h) ? 0 : crop_tile(CHOICE_ENTRY(h)[1],choice_value(h)));
     value=choice_row_value(h,row);
-    if(value) return choice_tile(h,value);
+    if(value) return choice_tile(h,crop_tile(CHOICE_ENTRY(h)[1],value));
     if(PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&CHOICE_OFF_ROW) return GRKIT_ICON_OFF;
     icon=page_icon(CHOICE_ENTRY(h)[0]);
     return icon ? module_icon_value(h,icon,CHOICE_ENTRY(h)[2]) : choice_tile(h,0);

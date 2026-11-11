@@ -526,7 +526,7 @@ crop_image_crop:
 #endif
 #ifdef HOOK_CROP_SHOT
 /* After the copy of the capture settings of a shot into the shot request
-   object (r4): the factor of a 40, 70, or 90 mm crop (GRKIT_HOST_CROP_SHOT)
+   object (r4): the factor of a 40 or 70 mm crop (GRKIT_HOST_CROP_SHOT)
    replaces the factor of the live view in that copy (35 mm for a factor
    below that of 50 mm, else 50 mm), so that the window, the size, the Exif
    focal length, and the DNG crop of the shot follow it. Only while the still live view is bound, so a RAW development
@@ -557,6 +557,65 @@ crop_shot:
 1:  pop {r0-r3}
     CROP_SHOT_DISPLACED
     bx lr
+.ltorg
+#endif
+#ifdef HOOK_CROP_LIVE_0
+/* Replaces each BL to the live-view crop factor (s0) before the live view
+   scales it by 8192 for its zoom: GRKIT_HOST_CROP_LIVE, when it is not 0,
+   takes the place of the camera's factor. The sites (four on GR III, five
+   on GR IV) call the same function. */
+.fpu vfpv3
+.arm
+.global crop_live_0
+.global crop_live_1
+.global crop_live_2
+.global crop_live_3
+.global crop_live_4
+.type crop_live_0, %function
+crop_live_0:
+crop_live_1:
+crop_live_2:
+crop_live_3:
+crop_live_4:
+    push {r4, lr}
+    ldr r12, =HOOK_CROP_LIVE_0_TARGET
+    blx r12
+    ldr r3, =GRKIT_HEADER_REFERENCE
+    ldr r3, [r3, #GRKIT_HOST_CROP_LIVE]
+    cmp r3, #0
+    vmovne s0, r3
+    pop {r4, pc}
+.ltorg
+#endif
+#ifdef HOOK_CROP_WINDOW
+/* The live-view window of a zoom (r3, the factor times 8192), at the entry
+   of the function that makes it, which `mov r12, sp` starts. A caller that
+   gives the zoom of the camera's crop factor (GRKIT_HOST_CROP_CAMERA_ZOOM,
+   within 2) gets the zoom of the live factor (GRKIT_HOST_CROP_LIVE_ZOOM)
+   while the core has one. GRKIT_HOST_CROP_LIVE_SEEN keeps the zoom of the
+   last window of a crop, up to CROP_ZOOM_MOST: a larger zoom, such as that
+   of the focus magnifier, is not a crop. */
+#define CROP_ZOOM_MOST 22938
+.arm
+.global crop_window
+.type crop_window, %function
+crop_window:
+    push {r4, r5}
+    ldr r4, =GRKIT_HEADER_REFERENCE
+    ldr r5, [r4, #GRKIT_HOST_CROP_LIVE_ZOOM]
+    cmp r5, #0
+    beq 1f
+    ldr r12, [r4, #GRKIT_HOST_CROP_CAMERA_ZOOM]
+    subs r12, r3, r12
+    rsbmi r12, r12, #0
+    cmp r12, #2
+    movls r3, r5
+1:  movw r5, #CROP_ZOOM_MOST
+    cmp r3, r5
+    strls r3, [r4, #GRKIT_HOST_CROP_LIVE_SEEN]
+    pop {r4, r5}
+    mov r12, sp
+    ldr pc, =HOOK_CROP_WINDOW_RESUME
 .ltorg
 #endif
 #ifdef HOOK_CROP_BADGE

@@ -37,6 +37,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::PICTURE,
     common::CROP,
     CROP_QUEUE,
+    CROP_LIVE,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
     GRAIN,
@@ -65,6 +66,19 @@ const CROP_QUEUE: &[HookSpec] = &[
     b("crop_queue_start", Framing, CaptureCrop),
     b("crop_queue_post", Framing, CaptureCrop),
     b("crop_queue_release", Framing, CaptureCrop),
+];
+
+/// The five BLs to the live-view crop factor before the live view scales it
+/// by 8192 for its zoom (`runtime/framing.S: crop_live`), then the entry of
+/// the function that makes the window of the live view from its zoom
+/// (`runtime/framing.S: crop_window`).
+const CROP_LIVE: &[HookSpec] = &[
+    bl("crop_live_0", Framing, CaptureCrop),
+    bl("crop_live_1", Framing, CaptureCrop),
+    bl("crop_live_2", Framing, CaptureCrop),
+    bl("crop_live_3", Framing, CaptureCrop),
+    bl("crop_live_4", Framing, CaptureCrop),
+    b("crop_window", Framing, CaptureCrop),
 ];
 
 /// Icon lookup entry, then the limit check and the table read of the icon

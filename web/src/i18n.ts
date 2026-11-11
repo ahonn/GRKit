@@ -274,7 +274,7 @@ const en = {
   modulesText: {
     filmLook: 'The film looks below, with live-view preview.',
     framing: 'XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos. The view dims the rest.',
-    crop: 'Crop photos to 35, 40, 50, 70, or 90 mm. GR IIIx has 50 to 128 mm.',
+    crop: 'Crop photos to 35, 40, 50, or 70 mm. GR IIIx has 50 to 100 mm.',
     guides: 'Thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry.',
     dateStamp: 'A date at the bottom right, in classic, GR1s, or GR II digits.',
     glow: 'Bloom and film halation around lights. Not shown in live view.',
@@ -813,7 +813,7 @@ const zhHans: Strings = {
   modulesText: {
     filmLook: '使用下方的胶片风格，可实时预览。',
     framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片，画幅外变暗。',
-    crop: '把照片裁切为 35、40、50、70 或 90mm。GR IIIx 为 50 至 128mm。',
+    crop: '把照片裁切为 35、40、50 或 70mm。GR IIIx 为 50 至 100mm。',
     guides: '在画幅内显示三分法、中心、黄金分割、对角线、黄金螺线或动态对称。',
     dateStamp: '在照片右下角加印日期，可选经典、GR1s 或 GR II 字体。',
     glow: '灯光周围的柔光与胶片光晕，无法实时预览。',
@@ -1295,7 +1295,7 @@ const zhHant: Strings = {
   modulesText: {
     filmLook: '使用下方的底片風格，可實時預覽。',
     framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片，構圖框外變暗。',
-    crop: '把照片裁切為 35、40、50、70 或 90mm。GR IIIx 為 50 至 128mm。',
+    crop: '把照片裁切為 35、40、50 或 70mm。GR IIIx 為 50 至 100mm。',
     guides: '在構圖框內顯示三分法、中心、黃金分割、對角線、黃金螺旋或動態對稱。',
     dateStamp: '在照片右下角加印日期，可選經典、GR1s 或 GR II 字體。',
     glow: '燈光周圍的柔光與底片光暈，無法實時預覽。',
@@ -1781,7 +1781,7 @@ const ja: Strings = {
   modulesText: {
     filmLook: '下で選んだフィルムルック。ライブビューでプレビューできます。',
     framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6、1:1 の写真。範囲外は暗く表示します。',
-    crop: '写真を 35、40、50、70、90mm にクロップします。GR IIIx では 50〜128mm です。',
+    crop: '写真を 35、40、50、70mm にクロップします。GR IIIx では 50〜100mm です。',
     guides: '9分割、画面中央、黄金比、対角線、黄金螺旋、ダイナミックシンメトリー。',
     dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s、GR II。',
     glow: '光の周りのブルームとハレーション。ライブビューには反映されません。',
@@ -2264,7 +2264,7 @@ const ko: Strings = {
   modulesText: {
     filmLook: '아래에서 고른 필름 룩. 라이브 뷰에서 미리 봅니다.',
     framing: 'XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1 사진. 범위 밖은 어둡게 표시합니다.',
-    crop: '사진을 35, 40, 50, 70, 90mm로 크롭합니다. GR IIIx는 50~128mm입니다.',
+    crop: '사진을 35, 40, 50, 70mm로 크롭합니다. GR IIIx는 50~100mm입니다.',
     guides: '9분할, 화면 중앙, 황금비, 대각선, 황금 나선, 동적 대칭을 표시합니다.',
     dateStamp: '사진 오른쪽 아래에 날짜를 넣습니다. 클래식, GR1s, GR II 글꼴.',
     glow: '빛 주위의 블룸과 필름 헐레이션. 라이브 뷰에서는 보이지 않습니다.',

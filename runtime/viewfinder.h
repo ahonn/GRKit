@@ -172,7 +172,7 @@ static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface
     u16 crop_frame[4];
     Surface frame=*surface, focal=*surface, cropped=*surface;
     frame.area=composition; frame.box=photo_boxes[composition];
-    framed=crop && crop_box(surface->box,crop_scale(crop,CROP_NATIVE_Q16()),crop_frame);
+    framed=crop && crop_box(surface->box,crop_scale(crop,CROP_VIEW_Q16(h)),crop_frame);
     if(framed) { focal.box=crop_frame; cropped.box=crop_frame; }
     cropped.area=framed ? crop : 0;
     for(i=0;i<module_layers(h);++i) {
