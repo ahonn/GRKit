@@ -18,16 +18,13 @@ Photo: [MIKI Yoshihito](https://www.flickr.com/photos/mujitra/53311001084/), [CC
 
 Press the ADJ lever while shooting and pick the sixth item, GRK.
 
-- **Film Look**: Portra 400, Velvia 100, Tri-X 400, and more, with a live preview. You can also import your own `.cube` LUT or Lightroom preset on [grkit.app](https://grkit.app). Each look is fitted from an open-source film LUT, so it comes close to the original but isn't identical ([sources](effects/NOTICE.md)).
-- **Framing**: XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, and 1:1. Crop JPEG photos or mark composition only, with a mask or frame lines. Selecting a ratio sets the camera to 3:2 in either mode. Off keeps the camera's current aspect ratio.
-
-  RAW files keep the native 3:2 default crop and the camera's digital crop setting. Embedded previews can still show the selected composition.
-
-- **Crop**: crop photos to 35, 40, 50, 70, or 90 mm (50 to 128 mm on GR IIIx), with the crop framed in the live view. Longer crops keep fewer pixels: about 2.4 MP at 90 mm. With a Framing ratio, Crop shows the frame only.
-- **Guides**: thirds, center, golden ratio, or diagonals.
+- **Film Look**: film looks such as Portra 400 and Tri-X 400 with a live preview, plus your own LUTs and Lightroom presets ([sources](effects/NOTICE.md)).
+- **Framing**: XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos, or frame lines only.
+- **Crop**: 35, 40, 50, 70, or 90 mm crops (50 to 128 mm on GR IIIx).
+- **Guides**: thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry.
 - **Date Imprint**: the date on the photo in classic, GR1s dot-matrix, or GR II style.
-- **Glow**: Bloom softly spreads light around lights and highlights. Halation adds a red-orange halo around bright lights to simulate motion-picture film. Each effect has its own Enable and Strength settings, so both can run together.
-- **Grain**: film grain in four strengths and four sizes (Auto, Small, Medium, Large).
+- **Glow**: bloom and film halation around bright lights.
+- **Grain**: film grain in four strengths and four sizes.
 
 GRKit takes about 8 to 10 seconds to load after power-on, and longer on GR IV or on the first start after an install or update. Until then, the camera uses its own settings. All the settings are in the GRKit section at the end of the Customize tab in MENU. To write your own module, see [Writing a module](docs/modules.md).
 
