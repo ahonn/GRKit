@@ -275,7 +275,7 @@
       "name": "Aerocolor IV",
       "origin": "cube-fit",
       "preview": "preview/aerocolor-iv-v1.lut",
-      "sha256": "e363e7e33f503a83237647c86a1f3691cd2ab497e277b5128e431a96aa019ed7"
+      "sha256": "5033f4388075857a81ffa2dd41ff0fc57fce3e8595502a3a58f402b3a15a9c35"
     },
     {
       "cover": {
@@ -294,7 +294,7 @@
       "name": "Fujicolor C200",
       "origin": "cube-fit",
       "preview": "preview/c200-premier-v1.lut",
-      "sha256": "fc55f994b6d9a85bf22e7ebc2ae9516a311ecbee424e71fc8d5ded107cba9872"
+      "sha256": "81b62ce50f7023b925c663fbf8e8c0d956b8985bb7d31ae5171e133f7de163a2"
     },
     {
       "cover": {
@@ -331,7 +331,7 @@
       "name": "Ektachrome E100",
       "origin": "cube-fit",
       "preview": "preview/ektachrome-e100-v1.lut",
-      "sha256": "12788e7b92a31fafe913c36b37430a2d395e24085cc20e7066b87ea87c50176d"
+      "sha256": "e66c9ffdcbb7b55571d5354d5626b251d9bf93f59e0e3c7879300fa4d7200cbb"
     },
     {
       "cover": {
@@ -350,7 +350,7 @@
       "name": "Ektar 100",
       "origin": "cube-fit",
       "preview": "preview/ektar-100-edge-v1.lut",
-      "sha256": "f8856301ce902841751b9928fd92ca1d568a5529111d1a7f7d07cb245ab35060"
+      "sha256": "24d8f7949314270485a0cc8954de5d32d4397f4e32c22552bf55cc0eba8a9baa"
     },
     {
       "cover": {
@@ -368,7 +368,7 @@
       "name": "Eterna 500T",
       "origin": "cube-fit",
       "preview": "preview/eterna-500t-3523xd-v1.lut",
-      "sha256": "98d0fe1e8d4707879955520f01bbaea9f8a3416422fc07e8dee7a6d3ff67c2e0"
+      "sha256": "2dfb4068a828e5b205ff8784ead8aaf37164328e10ad310bff7e8ca37ae83bdc"
     },
     {
       "cover": {
@@ -387,7 +387,7 @@
       "name": "Gold 200",
       "origin": "cube-fit",
       "preview": "preview/gold-200-premier-v1.lut",
-      "sha256": "0857b705306863d01ff5be03d25af247f5a9639aed1bcca451aa22813aef25e0"
+      "sha256": "14f032ba6834e67af823281ded9665e07156270b2e92b0ce7bfb701c0355fd6d"
     },
     {
       "cover": {
@@ -424,7 +424,7 @@
       "name": "Instax",
       "origin": "cube-fit",
       "preview": "preview/instax-v1.lut",
-      "sha256": "d06a9260d3ca575d3f88156876c97eecdb868b2a37c32b6d4eb75b5b2cd897d9"
+      "sha256": "e61c9f26c26f8753e8ee026c46e6ec626dffabacbeab6cb89bd0f44b3efa2e9e"
     },
     {
       "cover": {
@@ -443,7 +443,7 @@
       "name": "Kodachrome 64",
       "origin": "cube-fit",
       "preview": "preview/kodachrome-64-v1.lut",
-      "sha256": "3114f75e97f91966aa77d09347a72a00052a0b9c3ba053dc1ab1778f73b30cd8"
+      "sha256": "9c6ad1c3222b692be0aea5a01799c58bd591def10083e7240ae42dede2f080ad"
     },
     {
       "cover": {
@@ -462,7 +462,7 @@
       "name": "Portra 400",
       "origin": "cube-fit",
       "preview": "preview/portra-400-endura-v1.lut",
-      "sha256": "16a14d40e7877d467c236b9068b296fc9985671df65741d99214ab20098f166d"
+      "sha256": "74b4b7c50569cd7af94ac8df3e688e0d93a721e0110dc501eeec4a2b180fa2b6"
     },
     {
       "cover": {
@@ -481,7 +481,7 @@
       "name": "Portra 800 +2",
       "origin": "cube-fit",
       "preview": "preview/portra-800-push2-v1.lut",
-      "sha256": "36205afe5c2492b9f10ed36b85a3ce0ff7828e4d222c8395e66c91214700fe3d"
+      "sha256": "4eb0d849c930c230ab8035ebec0be135c9b8901d8900fa45aecd81a2a61b27de"
     },
     {
       "cover": {
@@ -500,7 +500,7 @@
       "name": "Pro 400H",
       "origin": "cube-fit",
       "preview": "preview/pro-400h-crystal-v1.lut",
-      "sha256": "26388e602c20bc2d0a6f71c4ed09a91c7f16e69fbd7d66df6d38463081bb6d9d"
+      "sha256": "4a60ed95811147ff31cb9918ef4feefd714675e3795fec58cccd740f0e6f2013"
     },
     {
       "cover": {
@@ -519,7 +519,7 @@
       "name": "Provia 100F",
       "origin": "cube-fit",
       "preview": "preview/provia-100f-v1.lut",
-      "sha256": "a5e989a5a360dcc8497dde5df1fc22aa363bb830d37502d280c32e6687cc148e"
+      "sha256": "0a1bd7a728597a38ef6c126f3f44c97422ba0051623a251e9e85fd98b82b8ad0"
     },
     {
       "cover": {
@@ -576,7 +576,7 @@
       "name": "UltraMax 400",
       "origin": "cube-fit",
       "preview": "preview/ultramax-400-ultra-v1.lut",
-      "sha256": "c0c262e375c9cb97a70fbcf28af499121f23ca7f0c1dc72cd165fade7657c228"
+      "sha256": "a56a31c91068dc81a524d3c64711566796e8912743f31d8727ba50e40dc5f07c"
     },
     {
       "cover": {
@@ -595,7 +595,7 @@
       "name": "Velvia 100",
       "origin": "cube-fit",
       "preview": "preview/velvia-100-v1.lut",
-      "sha256": "b1f2fd8c57c8b3fc7977cfa6af32ae997068e5cf51fd2855cf7b769f955d246d"
+      "sha256": "1483f08f6038fb392a9757a29dd673d1a4a503c5bc94e869ab62803ab914a206"
     },
     {
       "cover": {
@@ -613,7 +613,7 @@
       "name": "Vision3 250D",
       "origin": "cube-fit",
       "preview": "preview/vision3-250d-2383-v1.lut",
-      "sha256": "9b6335c2aeae2ff969f8e7f73f238fae0f841963224bbb9e056f29b74a524892"
+      "sha256": "e78b632f3583b671433ef22e847690f6e88f4ec03c0df5ea6230f6ee55c0f23f"
     },
     {
       "cover": {
@@ -632,7 +632,7 @@
       "name": "Vision3 500T",
       "origin": "cube-fit",
       "preview": "preview/vision3-500t-supra-v1.lut",
-      "sha256": "dc8ec695932aad3f6e80df21806385e10144741e72c47e4a1cd3aa68673c9a09"
+      "sha256": "bb05be9cf9d0bf5cfeedc7022046e3f11d0b19e6507aa6d366fefecd9a5835c2"
     },
     {
       "cover": {
@@ -651,7 +651,7 @@
       "name": "Superia 400",
       "origin": "cube-fit",
       "preview": "preview/xtra-400-crystal-v1.lut",
-      "sha256": "569b78d0bef6046ffdb284787061008bb35cf6721b1b63b9e13cbfa340d79fb8"
+      "sha256": "7ac79a6fa15328fa8ad4e2e678bdd53c0fdc5ff33b83400532f8edd38d1aceb5"
     }
   ],
   "preview": {

@@ -1,25 +1,25 @@
 {
   "code_memory": {
-    "available": 12713216,
+    "available": 12712704,
     "base": 1413296128,
-    "end": 1413350144,
+    "end": 1413350656,
     "limit": 1426063360,
-    "used": 54016
+    "used": 54528
   },
   "components": {
     "framing": {
-      "address": 1413332480,
-      "end": 1413350006,
-      "limit": 12730880,
-      "sha256": "024d0b7a4c1963f741abb9d246f0eae21fca775c353fe160840b105813cd9919",
-      "size": 17526
+      "address": 1413332736,
+      "end": 1413350646,
+      "limit": 12730624,
+      "sha256": "da635ebb7398d3722e976119b4e3727514eae22dd3287152a77643d659e1d5bb",
+      "size": 17910
     },
     "menu": {
       "address": 1413297664,
-      "end": 1413332446,
+      "end": 1413332646,
       "limit": 12765696,
-      "sha256": "83084946d55f9fdb38e7628e2adca58b70bf6bb490e988184e8f5c83c3541c4a",
-      "size": 34782
+      "sha256": "6dd8242d3bd176b8b65c4e73355aef5eb7ef3562b1d497fb4fb8c29eb0d629c3",
+      "size": 34982
     },
     "processing": {
       "address": 1413296384,
@@ -33,17 +33,17 @@
   "files": [
     {
       "path": "SCRIPT/GRKIT/CORE.BIN",
-      "sha256": "894627278d06fa7b599ff2f23689c2c28f2a1c5bbaf27cae2a269ca1cfbb312a",
-      "size": 434328
+      "sha256": "e21532c78f3b7f15323a3e31bfddd9f891f900cf35e2058ad5d23abf0b937a76",
+      "size": 436376
     },
     {
       "path": "SCRIPT/GRKIT/F636111.BIN",
-      "sha256": "00c9a04e8608bddb2cff87a6c98b4250e9acc42990d4429f8ba4530bb4128975",
-      "size": 366644
+      "sha256": "a80f78cfa104ad4e61c146a844a7d2beaeb83a68ea126b146dfca3fffaf25481",
+      "size": 368320
     },
     {
       "path": "SCRIPT/GRKIT/I636111.BIN",
-      "sha256": "918aeba7bbf81865114aea4d491c7c88ad34e9e7ea618b6c322a9dec7dc22ec8",
+      "sha256": "fb3fd2593ecb34440c2ebbed087b387d08c1914379183dbc1b825bcdec5ea819",
       "size": 1024
     },
     {
@@ -53,12 +53,12 @@
     },
     {
       "path": "SCRIPT/GRKIT/LOADER.TTL",
-      "sha256": "7d50284ca47826c91d906ac234913e8e0f294c56bb208b2684038a8223162865",
+      "sha256": "fdcf533652f3c653445d477a590af6b8ae56cf9ef064619c76fb32204539aa21",
       "size": 7363
     },
     {
       "path": "SCRIPT/GRKIT/RESIDENT.TTL",
-      "sha256": "b33469a036ae2b2d1cba87e9e0eca6d871ecbed3f4a0ea490e00aeef0397d539",
+      "sha256": "29522cf601befb92fcb573bbe8e35712b91a9b799e07c84e0ddbdfa5e5239fab",
       "size": 24705
     },
     {
@@ -73,7 +73,7 @@
     }
   ],
   "firmware_sha256": "a2f664dfca034059eb0fd6e18ab08684c326b4a034d85c164dad7e1ec9b5655f",
-  "generated_header_sha256": "daee96bce1d295e163870be9d612a23e1a4de8ba250842d1e575c7bd823cf790",
+  "generated_header_sha256": "3c4bc25c5949d50064a1f4883977d853c8a2e93cf53639968e4e80235d936f15",
   "points": {
     "capture.aspect": 38,
     "menu.page": 53,
@@ -88,8 +88,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "91667fce866134fe780f4dea34b282ef6bb2cd7e369349e36ec98affe99d1961",
-    "Cargo.toml": "f2b24443cb4985741837b67d08e999d599762243c344c98a6ce45c31697ae599",
+    "Cargo.lock": "d70f50bf6f3267725b3b0faf4792b8d6444d067947b2a77dbc06fdc75341569e",
+    "Cargo.toml": "76419b66b40e5f574ab0257610c2c58e6a278d041d0de00fccae6e2c5e16dd64",
     "crates/grkit-build/Cargo.toml": "9a8c29261f78944ee9e1eed9ee46b8b39110ebce1881b09348308ae7da75b0c9",
     "crates/grkit-build/src/arm.rs": "cead1100e35ba8ca8c522ef6d0fb74cd057e549401eba94de76fe6cc45cbfe90",
     "crates/grkit-build/src/components.rs": "288d376a605021e06cf06719e74df265d81a27b5012f739b74004901b838d26b",
@@ -97,11 +97,11 @@
     "crates/grkit-build/src/fastboot.rs": "38e126dd3e8202bcaae8d9ba20c1f76cd56475da39fef7e8236fb280965e333c",
     "crates/grkit-build/src/firmware.rs": "300f9cd4b91f4f0a4f976b48655fe83d41a3eb2d7b6119a7885d3f5afebada44",
     "crates/grkit-build/src/lib.rs": "f39daf268bbe13e7ae84f1bc8b931e5050373d8b3510290a31ea32b55671caab",
-    "crates/grkit-build/src/loader.rs": "28189674b26d7a365b0eb7c8ec5fe586862c1378a7ef333a03509a4b20f31a71",
+    "crates/grkit-build/src/loader.rs": "7598cbb106c29077cee0bf88dbbbce2e0c7d009856687514d9503bce7b96b008",
     "crates/grkit-build/src/module.rs": "d2480d0dc0632acb62210513e57bf1eefe6801110092a40f8643b13f47def6e7",
     "crates/grkit-build/src/port.rs": "a3be7eab4ce990e8d21340e156435a5f0332493d84f9a128708a0af1489947c9",
     "crates/grkit-build/src/relocation.rs": "2fab71721c05484ddcfd0e2d7ecf439eaab7f6e70f10079392cd3120f70288ee",
-    "crates/grkit-build/src/target.rs": "05aa3779c297a9cca08034dc1eef5182dc18a62a331e5213b7422d8d5b4763a3",
+    "crates/grkit-build/src/target.rs": "b6399d23ddf994df1ca2ab4f638bfb8dd7b43d0c32bde730f2e3be64f17262a0",
     "crates/grkit-build/src/target/common.rs": "90389d8f32b803d1fd3c3d28526c10ede91e5c69ec6bac6144e21576390e430d",
     "crates/grkit-build/src/target/gr3.rs": "fecead57a05215873b88732d99327ef3b93217c1e389527ded65572f2d1987ee",
     "crates/grkit-build/src/target/gr3_210.rs": "1e236d4f9bc5f946c294b9a48eac2fb479e8c92edb963c8fc4450c704d84b2ec",
@@ -117,7 +117,7 @@
     "crates/grkit-core/assets/RobotoCondensed-Bold.ttf": "095a8d4d5b6ab85e38ec3ab08442771a4614e533136cb03dd10d08335ca4e2a5",
     "crates/grkit-core/assets/RobotoCondensed-LICENSE.txt": "0e4cc6ece88573545be2ed25835363662a6182ba4a4c1b5c8feda52add30e8a6",
     "crates/grkit-core/assets/RobotoCondensed-Light.ttf": "e00475060f292e7a7254bd9a882cb744d97574b533d3da0fff203faf3d1f55a2",
-    "crates/grkit-core/src/abi.rs": "c6a2909cc3cf89825db652290fb7161a71569f5cfbba695658bade0182c99c90",
+    "crates/grkit-core/src/abi.rs": "f2822182be7e1b98b448b369a528831a95a0c6c3bc52721fc1fb58961523d2a9",
     "crates/grkit-core/src/artwork.rs": "38f68c9eb70ea9e69f5c7fdef888154c966db086d0bb986d190f9513188e00b5",
     "crates/grkit-core/src/camera.rs": "ffe4b8967cc07b29f85d16e9a8309fe38dca24d4850b2a43edd52cba4babf972",
     "crates/grkit-core/src/capabilities.rs": "b1ba6ce99e9da9a407e2da449e743c6f123cc60423038a869fd1b0863d5dc225",
@@ -127,9 +127,9 @@
     "crates/grkit-core/src/effects.rs": "ada8ed519a6f2d707f41100577955747237d83cd1277529ee7f7ad90e4af3f89",
     "crates/grkit-core/src/firmware.rs": "dfb9d05ec1d48896a719e7995f7f41a2ad990990095363a0cea01f4ca78631b1",
     "crates/grkit-core/src/fit/import.rs": "65625344f9dc68c245e79ac4848616f5bfd00c5ff8dcca38267b3cd0002332e8",
-    "crates/grkit-core/src/fit/mod.rs": "91324832d3f1a2caabb011312be92bc01eeb4c8fe0841463d1e689760940a1df",
+    "crates/grkit-core/src/fit/mod.rs": "30a98184b07899e0bb7d4182ab00b1541ddc5eb2c9c230a198d55883e0d6dede",
     "crates/grkit-core/src/fit/model.rs": "f0ad7e8c59ca4a426006cab983118073f8a0a36e2c4b89c05d59c042299e963e",
-    "crates/grkit-core/src/fit/sectors.rs": "f8b83e1add4400645d7a5a1c0e7b45eae31a90dbbd479068bbbc1ceea235d376",
+    "crates/grkit-core/src/fit/sectors.rs": "9e59aec5c696cbcf8c521fd2b71ac7b6e5ab7336e5035412822dbcfcb5642a0b",
     "crates/grkit-core/src/fit/solve.rs": "6bcadffc3f143d50b70ba4cd4802523a8afc28800c7b1a247140a581d8093e55",
     "crates/grkit-core/src/gr4_looks.rs": "a1ab15f2fc8cd7119b408d3e66a33c26c2f70f23e4dd844b8481498bcea2e239",
     "crates/grkit-core/src/grm.rs": "6dfab3377f51d032b37f70aafe6ef6f1ab4524a28266626c131c7600a8e8c2df",
@@ -155,7 +155,7 @@
     "crates/grkit-core/src/site.rs": "70159dccfc1bb7480338717f72d2856e8e5915ec48ad34bac28db647b026c80b",
     "crates/grkit-core/src/testing.rs": "6baa3122ee9c260c6033fb1a9d3f889bb7b324fe7e2941575942fbe67ee26070",
     "crates/grkit-core/src/tiff.rs": "aa3e294faaaba567b6bee4092a3a28b627bdc11fc01b30af68c170c08b4afd75",
-    "runtime/abi.h": "1549cd420f6b0d9e42208f13232c4651072b02caae6fbd974538f7272e1e6f85",
+    "runtime/abi.h": "163f8fa47aeab70b35b503457480b0e7b9245ab6ee0b0d3f6eb777f6f4b2b6d8",
     "runtime/about.h": "37df00143bd042f2210949773623ecca4c83e135b1ec4cc07da448cec137051c",
     "runtime/aspect.h": "8bf02d1f5687f0f4b586455138d4d981cf439d47ebfccb6a9f46c1770818c055",
     "runtime/catalog.h": "2acd0ddb0dad82d28e8a364e39744c170f4050ea09e1236f683c8f957c5db5e3",
@@ -190,17 +190,17 @@
     "runtime/install_library.h": "29a2af49f3f2c8db5c650ddd69acf0279b1408bfedf7987b83fe70c473b51ac7",
     "runtime/install_modules.h": "19272bbd7d03da62912f70ed8f494b6d1fac415a8f89726764c636f4765b8c93",
     "runtime/install_plan.h": "ca02de632f15ae0dd5782c20291af44e57b96acc8300b95ecc9053d35205b63f",
-    "runtime/install_report.h": "dc37791773162676576f17163344ec9f0c6b5fe0d79426d7fa7b30e0f684aa49",
+    "runtime/install_report.h": "930edbddd227a04f38149d672036459f20c232cb55835ab728b113cf29c03bcd",
     "runtime/install_status.h": "0bd6dad85941ca5abc11959ddcb359f488caddc6deddf97dcd2476b2942e68e5",
-    "runtime/installer.c": "a67ce0e505fefb591ec13216472b4f390c21f97f82dd46a65d1ca860cd9469ac",
+    "runtime/installer.c": "c4f30186ac8a2e01086578638662ae0eb5412101ba6ef62c6f3ad3f2e82de5a3",
     "runtime/level.h": "c8afad1eb6560c997e9e624775255b231dcffe98d9cb948f378b7a0385938a19",
     "runtime/manage.h": "aef6929a6951502a2190c70c2cc88729c42dbc262e9f4b7b46a400b638b17564",
-    "runtime/menu.S": "06d0e112c96e18bf489d63318ed450fc65aa5b8c7a8f0d83dd2d5465ad14d2f4",
-    "runtime/menu.c": "f9b940a19c0e4d075a8a5c3951ab822dc0cde8f72fece373c8143a32ca09a452",
+    "runtime/menu.S": "478c03c2678e3debc92ec2f7a94f77c899ad395060719dfc6ba45edc7eb90cc1",
+    "runtime/menu.c": "84200df66a32b93460edd6f47f24a8a35e1931488d3c011a6794bf2b9c902f15",
     "runtime/menu_about.h": "3070248f879cbe447e27a938b6566c336503eebf19358b0c57f8e6e894d3dc85",
     "runtime/menu_listed.h": "7ba72443678d9d28df8b033119c1d5b49f2a27313aab4504ee94c906311b4323",
     "runtime/menu_section.h": "f9acc026a559a4a42a07a9aba158528806ef9ae53d2fafeb7ddf1e0cb1881416",
-    "runtime/menu_settings.h": "680f9b720eeea797ddd5cae3e7dbcbf035d261dcac6a0b596475a574c866b7a3",
+    "runtime/menu_settings.h": "c5d2108492f1b5c144d3e2ee73155bb3882b9e3687f149006e6698a15b77d14a",
     "runtime/module_icons.h": "49f4546207e270658ab43368aa725251d9f0b9d67aceee4c69ba239de5c7aa92",
     "runtime/module_link.h": "b2070c31220764fb6392781d959505237383ff2667a254cb83b8ead610e118d1",
     "runtime/modules.h": "e56e161142019eb3fcd0e797f59cb06ba7d34914d7763d8e859dc53ca7b66820",
@@ -232,7 +232,7 @@
     "runtime/tone_page.h": "2e25f0b2b6bb7a376efe7a8c3ffbf81f9acddbaee805c81aa93c7aa5a2d80050",
     "runtime/toning.h": "c511c91b14e1d205f387485fbff788becb055888f9d6588ce14ce9de6fab381f",
     "runtime/ui.h": "6c7b594300773fd645dd10a6f758a382cd95c2a3ac182e8cb3291fa84b52df5e",
-    "runtime/viewfinder.h": "2b04f9e1305aa0f6be6d8825237cf479c4153f0d69bd0f10a8abb58abfe665f9",
+    "runtime/viewfinder.h": "b07121a248cc2a17d0bb29d4bab90a6450f435246c573a9745a9dbbaec5a8bec",
     "runtime/viewfinder_indicators.h": "6b4f128cfaa984bf8fd302c46f823d0f63765ecf24ec63628945ada4883cff40",
     "runtime/xmp.h": "42d27563b83ec3cc6581d53e84bfdb0b463657801316e00ddfc8a6cc797676b0"
   },
@@ -242,5 +242,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.5.5"
+  "version": "1.5.6"
 }
