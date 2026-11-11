@@ -302,7 +302,7 @@
    while the camera keeps its own (runtime/crop.h). */
 #define GRKIT_HOST_CROP_NATIVE 984
 /* The crop factor of the next shot, as float bits, where it is longer than the
-   native factor of the live view (70 and 90 mm), or 0. */
+   native factor of the live view (40, 70, and 90 mm), or 0. */
 #define GRKIT_HOST_CROP_SHOT 988
 /* GR IV: the back end of the last shot, whose queue completion the core can
    post when a crop shot finishes before the shutter release stops

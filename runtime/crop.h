@@ -11,12 +11,14 @@
 
    A crop of 3:2 photos without a Framing ratio is a crop of the camera:
    the core sets the camera's own crop factor (FW_CROP_SET) to the factor of
-   35, 40, or 50 mm, so that the live view, the focus, and the exposure
-   follow it, and the window and the size of the photo follow the factor
-   (runtime/framing.S: crop_resolution). 70 and 90 mm keep the live view at
-   50 mm with the frame of the crop, and their shots take their own factor
-   (crop_shot). With a Framing ratio or another native aspect, the live
-   view shows the frame only.
+   35 or 50 mm, so that the live view, the focus, and the exposure follow it,
+   and the window and the size of the photo follow the factor
+   (runtime/framing.S: crop_resolution). 40 mm keeps the live view at 35 mm,
+   and 70 and 90 mm at 50 mm, with the frame of the crop; their shots take
+   their own factor (crop_shot). The camera saves its factor at power-off and
+   knows only its own factors, so the core never sets another one. With a
+   Framing ratio or another native aspect, the live view shows the frame
+   only.
 
    The includer defines u16, u32, and the header fields (runtime/abi.h). */
 #ifndef CAPABILITY_USED
@@ -37,10 +39,10 @@ static const u32 crop_scales[GRKIT_CORE_CROP_VALUES]={CROP_SCALES};
 /* A frame within this part of the view is the view itself: the live view
    already shows the crop. */
 #define CROP_SCALE_SAME (CROP_SCALE_ONE-256U)
-/* The value of the live-view factor of each crop: 35 and 40 mm their own,
-   and 70 and 90 mm that of 50 mm. */
-static const u8 crop_live_values[GRKIT_CORE_CROP_VALUES]={0,1,2,3,3,3};
-#define CROP_LONGEST_LIVE 3U
+/* The value of the live-view factor of each crop, a factor of the camera:
+   35 and 50 mm their own, 40 mm that of 35 mm, and 70 and 90 mm that of
+   50 mm. */
+static const u8 crop_live_values[GRKIT_CORE_CROP_VALUES]={0,1,1,3,3,3};
 
 /* GR IIIx shares the GR III runtime and has a 40 mm lens (runtime/targets).
    Its crops have the same factors, so only their texts differ. */
@@ -105,18 +107,27 @@ void crop_native_set(u32 bits);
 #define CROP_NATIVE_SET(bits) crop_native_set(bits)
 #endif
 #ifdef CROP_NATIVE_BITS
-/* Set the camera's crop factor to that of the crop that the camera applies,
-   and arm the factor of the next shot. When no crop applies, a factor that
-   the core set and that the camera still has returns to Off; a crop from
-   the camera menu stays. The live view follows the factor. */
+/* Whether the camera knows the crop factor `bits`: Off, 35 mm, or 50 mm. */
+static __attribute__((unused)) u32 crop_native_known(u32 bits) {
+    return bits==crop_factors[0] || bits==CROP_NATIVE_35 || bits==CROP_NATIVE_50;
+}
+/* Set the camera's crop factor to the live-view factor of the crop that the
+   camera applies, and arm the factor of the next shot. When no crop
+   applies, a factor that the core set and that the camera still has returns
+   to Off; a crop from the camera menu stays. A factor that the camera does
+   not know returns to Off first: an earlier GRKit saved it at power-off, or
+   the camera's crop button stepped from one to 0. The live view follows
+   the factor. */
 static __attribute__((unused)) void crop_sync(volatile u32 *h,u32 native_aspect) {
     u32 crop=crop_capture(h,native_aspect), want=crop ? crop_factors[crop_live_values[crop]] : 0;
-    u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now;
-    h[GRKIT_HOST_CROP_SHOT/4]=crop>CROP_LONGEST_LIVE ? crop_factors[crop] : 0;
-    if(!want && !owned) return;
-    now=CROP_NATIVE_BITS();
+    u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now=CROP_NATIVE_BITS();
+    h[GRKIT_HOST_CROP_SHOT/4]=crop && crop_live_values[crop]!=crop ? crop_factors[crop] : 0;
+    if(!crop_native_known(now)) {
+        now=crop_factors[0];
+        CROP_NATIVE_SET(now);
+    }
     if(!want) {
-        if(now==owned) CROP_NATIVE_SET(crop_factors[0]);
+        if(owned && now==owned) CROP_NATIVE_SET(crop_factors[0]);
         h[GRKIT_HOST_CROP_NATIVE/4]=0;
         return;
     }

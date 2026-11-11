@@ -526,10 +526,10 @@ crop_image_crop:
 #endif
 #ifdef HOOK_CROP_SHOT
 /* After the copy of the capture settings of a shot into the shot request
-   object (r4): the factor of a 70 or 90 mm crop (GRKIT_HOST_CROP_SHOT)
-   replaces the 50 mm factor of the live view in that copy, so that the
-   window, the size, the Exif focal length, and the DNG crop of the shot
-   follow it. Only while the still live view is bound, so a RAW development
+   object (r4): the factor of a 40, 70, or 90 mm crop (GRKIT_HOST_CROP_SHOT)
+   replaces the factor of the live view in that copy (35 mm for a factor
+   below that of 50 mm, else 50 mm), so that the window, the size, the Exif
+   focal length, and the DNG crop of the shot follow it. Only while the still live view is bound, so a RAW development
    keeps the factor of its photo. Then the displaced instruction. */
 .global crop_shot
 .type crop_shot, %function
@@ -548,7 +548,10 @@ crop_shot:
     beq 1f
     add r2, r2, #(SHOT_CROP & ~0xff)
     ldr r3, [r2, #(SHOT_CROP & 0xff)]
+    /* Positive floats compare as their bits. */
     ldr r0, =CROP_NATIVE_50
+    cmp r1, r0
+    ldrlo r0, =CROP_NATIVE_35
     cmp r3, r0
     streq r1, [r2, #(SHOT_CROP & 0xff)]
 1:  pop {r0-r3}
