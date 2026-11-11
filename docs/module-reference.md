@@ -369,8 +369,9 @@ Filters run after the color of the effect, in ascending stage. In one stage, the
 
 | Stage | Manifest | Use |
 | --- | --- | --- |
-| `GRKIT_STAGE_FRAME` (20) | `frame` | frames and borders |
+| `GRKIT_STAGE_FRAME` (20) | `frame` | frames over the picture |
 | `GRKIT_STAGE_MARK` (30) | `mark` | marks over the picture, such as the date |
+| `GRKIT_STAGE_PRINT` (40) | `print` | the print around the picture, such as a border, which scales the picture with its marks (since ABI 2.6) |
 
 ## Services
 

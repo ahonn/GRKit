@@ -1532,7 +1532,8 @@ fn filters(m: &Manifest, c: &mut String) -> Result<Vec<String>> {
         let stage = match filter.stage.as_str() {
             "frame" => "GRKIT_STAGE_FRAME",
             "mark" => "GRKIT_STAGE_MARK",
-            other => bail!("Unknown filter stage {other:?}: use frame or mark"),
+            "print" => "GRKIT_STAGE_PRINT",
+            other => bail!("Unknown filter stage {other:?}: use frame, mark, or print"),
         };
         let setting = setting_reference(m, &filter.setting)?.0;
         writeln!(c, "void {apply}(PictureSet *set, u32 value);")?;
