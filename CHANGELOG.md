@@ -1,3 +1,13 @@
+## 1.5.6 (2026-11-11)
+
+### Fixes
+
+- The print film looks keep more color in highlights, and saturated colors change more smoothly from one hue to the next.
+- Bloom and Halation glow evenly around screens and other large bright areas at Strong, and sit centered on their light at every strength.
+- Instax is no longer brighter than the meter reading, so its highlights keep more detail.
+- A half-press after you select a built-in Image Control in ADJ now replaces the GRKit Film Look, as OK does.
+- In live view, the GRKit icons move next to the camera's own information in the same row, so they no longer cover the dial guide of Snap mode on GR IV.
+
 ## 1.5.5 (2026-11-10)
 
 ### Fixes
