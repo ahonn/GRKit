@@ -227,6 +227,13 @@ const SITES: &[Site] = &[
     ("crop_button", 0x532298d4, "0dc0a0e1"),
     ("crop_badge", 0x53172ad4, "5fe804eb"),
     ("crop_image_crop", 0x536a6758, "0dc0a0e1"),
+    // The BLs to the live-view crop factor before the zoom of the live view.
+    ("crop_live_0", 0x53439bdc, "d04d04eb"),
+    ("crop_live_1", 0x53446070, "ab1c04eb"),
+    ("crop_live_2", 0x53449754, "f20e04eb"),
+    ("crop_live_3", 0x53449b80, "e70d04eb"),
+    // The entry (`mov r12, sp`) of the function that makes the live-view window.
+    ("crop_window", 0x53669904, "0dc0a0e1"),
     // The Image Control list of a RAW development: the entries of
     // GetListItemCount, the row category and value of RawDevelopmentModel, the
     // row fill, IsCurrentValue, the Image Control choice, SetupScrollListView,

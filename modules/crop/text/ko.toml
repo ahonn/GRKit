@@ -1,6 +1,6 @@
 title = "크롭"
-rows = ["꺼짐", "35mm", "40mm", "50mm", "70mm", "90mm"]
-summaries = ["꺼짐", "35mm", "40mm", "50mm", "70mm", "90mm"]
+rows = ["꺼짐", "35mm", "40mm", "50mm", "70mm"]
+summaries = ["꺼짐", "35mm", "40mm", "50mm", "70mm"]
 
 [settings."CORE.CROP"]
 label = "초점 거리"

@@ -408,8 +408,25 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// bits, or 0 while the camera keeps its own (runtime/crop.h).
     HOST_CROP_NATIVE: 4;
     /// The crop factor of the next shot, as float bits, where it is longer
-    /// than the native factor of the live view (40, 70, and 90 mm), or 0.
+    /// than the native factor of the camera (40 and 70 mm), or 0.
     HOST_CROP_SHOT: 4;
+    /// The crop factor that the live view shows in place of the camera's,
+    /// as float bits, or 0 for the camera's own (runtime/framing.S:
+    /// crop_live).
+    HOST_CROP_LIVE: 4;
+    /// The zoom of GRKIT_HOST_CROP_LIVE (the factor times 8192), or 0, and
+    /// the zoom of the camera's crop factor that the core set: the live-view
+    /// window takes the first in place of the second (runtime/framing.S:
+    /// crop_window).
+    HOST_CROP_LIVE_ZOOM: 4;
+    HOST_CROP_CAMERA_ZOOM: 4;
+    /// The zoom of the last live-view window of a crop (the factor times
+    /// 8192), or 0 before one (runtime/framing.S: crop_window).
+    HOST_CROP_LIVE_SEEN: 4;
+    /// The tries to make the live view read its factor again: the count in
+    /// the high byte, and the second of the last try plus 1 below it
+    /// (runtime/crop.h: crop_live_retry).
+    HOST_CROP_LIVE_RETRY: 4;
     /// GR IV: the back end of the last shot, whose queue completion the core
     /// can post when a crop shot finishes before the shutter release stops
     /// (runtime/crop_queue.S).

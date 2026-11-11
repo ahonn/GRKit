@@ -376,14 +376,14 @@
 #define SHOT_CROP 0x7dc
 /* CORE.CROP (runtime/crop.h): the size of 3:2 L, which the sensor crops
    by the factor of a crop; the factor of each value as float bits: Off,
-   the native 35 mm, 40 mm, the native 50 mm, 70 mm, and 90 mm, so that the
+   the native 35 mm, 40 mm, the native 50 mm, and 70 mm, so that the
    Exif focal length (18.3 mm x 1.5339 x the factor) names each crop; and
    the side of its frame in 1/65536 of the uncropped view. The shot request object holds the copy of the capture
    settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
 #define CROP_WIDTH 6192
 #define CROP_HEIGHT 4128
-#define CROP_FACTORS 0x3f800000,0x3fa04f89,0x3fb66614,0x3fe23119,0x401f9951,0x404d32d6
-#define CROP_SCALES 65536,52327,45990,37086,26280,20440
+#define CROP_FACTORS 0x3f800000,0x3fa04f89,0x3fb66614,0x3fe23119,0x401f9951
+#define CROP_SCALES 65536,52327,45990,37086,26280
 /* The JPEG codec takes sizes in multiples of 16. */
 #define CROP_ALIGN 16
 /* The icon of no crop, which hides the live-view crop badge. */
@@ -392,6 +392,9 @@
    takes (runtime/framing.S). */
 #define CROP_NATIVE_35 0x3fa04f89
 #define CROP_NATIVE_50 0x3fe23119
+/* The live view zooms to the factor of a crop (runtime/framing.S:
+   crop_live). */
+#define CROP_LIVE_FACTOR 1
 #define CROP_SHOT_COPY 0x4688
 /* The instruction that the shot hook displaces (runtime/framing.S). */
 #define CROP_SHOT_DISPLACED mov r1, r5

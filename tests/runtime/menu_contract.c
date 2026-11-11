@@ -4567,18 +4567,24 @@ static void fn_steps_the_setting_of_its_row(void)
     *page_at(page) = 40;
 }
 
-/* GR IIIx names the crops by the focal lengths of its 40 mm lens. The
-   other cameras keep the module texts, and so do other settings and Off. */
+/* GR IIIx names the crops by the focal lengths of its 40 mm lens, in the
+   texts and in the tiles after those of the other cameras. The other
+   cameras keep the module texts and tiles, and so do other settings and
+   Off. */
 static void crops_name_the_focal_lengths_of_the_lens(void)
 {
-    static const unsigned short fifty[]={'5','0','m','m',0}, longest[]={'1','2','8','m','m',0};
+    static const unsigned short fifty[]={'5','0','m','m',0}, longest[]={'1','0','0','m','m',0};
     test_lens_40mm=0;
     assert(crop_text(GRKIT_CORE_CROP,1)==0);
+    assert(crop_tile(GRKIT_CORE_CROP,1)==1 && crop_tile(GRKIT_CORE_CROP,4)==4);
     test_lens_40mm=1;
     assert(memcmp(crop_text(GRKIT_CORE_CROP,1),fifty,sizeof(fifty))==0);
-    assert(memcmp(crop_text(GRKIT_CORE_CROP,5),longest,sizeof(longest))==0);
-    assert(crop_text(GRKIT_CORE_CROP,0)==0 && crop_text(GRKIT_CORE_CROP,6)==0);
+    assert(memcmp(crop_text(GRKIT_CORE_CROP,4),longest,sizeof(longest))==0);
+    assert(crop_text(GRKIT_CORE_CROP,0)==0 && crop_text(GRKIT_CORE_CROP,5)==0);
     assert(crop_text(GRKIT_CORE_ASPECT,1)==0 && crop_text(0,1)==0);
+    assert(crop_tile(GRKIT_CORE_CROP,1)==5 && crop_tile(GRKIT_CORE_CROP,4)==8);
+    assert(crop_tile(GRKIT_CORE_CROP,0)==0 && crop_tile(GRKIT_CORE_CROP,5)==5);
+    assert(crop_tile(GRKIT_CORE_ASPECT,1)==1);
     test_lens_40mm=0;
 }
 int main(void)

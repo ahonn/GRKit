@@ -1,10 +1,12 @@
 #ifndef GRKIT_CROP_H
 #define GRKIT_CROP_H
 /* The capability CORE.CROP (grkit_core::capabilities): a focal-length crop
-   of the lens. Its value is 0 for Off, then 35, 40, 50, 70, and 90 mm of a
+   of the lens. Its value is 0 for Off, then 35, 40, 50, and 70 mm of a
    28 mm lens; GR IIIx has the same factors of its 40 mm lens. The live view
-   shows the frame of the crop inside the layer area (runtime/viewfinder.h),
-   and other layers, such as the guides, draw inside that frame.
+   shows the crop, or the frame of the crop inside the layer area
+   (runtime/viewfinder.h), and other layers, such as the guides, draw inside
+   that frame. A longer crop has no value: the live view of the camera
+   cannot show it (crop_view_value).
 
    CORE.CROP_MODE selects cropping where the camera can (0, the default) or
    the frame only (1). The resident loader saves both settings.
@@ -13,9 +15,9 @@
    the core sets the camera's own crop factor (FW_CROP_SET) to the factor of
    35 or 50 mm, so that the live view, the focus, and the exposure follow it,
    and the window and the size of the photo follow the factor
-   (runtime/framing.S: crop_resolution). 40 mm keeps the live view at 35 mm,
-   and 70 and 90 mm at 50 mm, with the frame of the crop; their shots take
-   their own factor (crop_shot). The camera saves its factor at power-off and
+   (runtime/framing.S: crop_resolution). The camera keeps 35 mm for 40 mm,
+   and 50 mm for 70 mm; their shots take their own factor (crop_shot), and
+   the live view zooms to it (crop_view_value). The camera saves its factor at power-off and
    knows only its own factors, so the core never sets another one. With a
    Framing ratio or another native aspect, the live view shows the frame
    only.
@@ -28,10 +30,10 @@
 
 /* The factor of each value as float bits, and the side of its frame as a
    part of the uncropped view in 1/65536 (runtime/targets: about 28/35,
-   28/40, 28/50, 28/70, and 28/90). */
+   28/40, 28/50, and 28/70). */
 #ifndef CROP_FACTORS
-#define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000,0x404db6db
-#define CROP_SCALES 65536,52429,45875,36700,26214,20389
+#define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000
+#define CROP_SCALES 65536,52429,45875,36700,26214
 #endif
 static const u32 crop_factors[GRKIT_CORE_CROP_VALUES]={CROP_FACTORS};
 static const u32 crop_scales[GRKIT_CORE_CROP_VALUES]={CROP_SCALES};
@@ -40,9 +42,32 @@ static const u32 crop_scales[GRKIT_CORE_CROP_VALUES]={CROP_SCALES};
    already shows the crop. */
 #define CROP_SCALE_SAME (CROP_SCALE_ONE-256U)
 /* The value of the live-view factor of each crop, a factor of the camera:
-   35 and 50 mm their own, 40 mm that of 35 mm, and 70 and 90 mm that of
-   50 mm. */
-static const u8 crop_live_values[GRKIT_CORE_CROP_VALUES]={0,1,1,3,3,3};
+   35 and 50 mm their own, 40 mm that of 35 mm, and 70 mm that of 50 mm. */
+static const u8 crop_live_values[GRKIT_CORE_CROP_VALUES]={0,1,1,3,3};
+/* Where the live view takes another factor than the camera's
+   (CROP_LIVE_FACTOR, runtime/framing.S: crop_live), it zooms to the factor
+   of the crop itself, and the camera keeps the factor of crop_live_values.
+   Elsewhere it shows that factor of the camera with the frame of the crop.
+   The live view of the camera fails above a factor of about 2.8
+   (SetupDevelopmentDestinationCh1), so no crop is longer than 70 mm. */
+#ifndef CROP_LIVE_FACTOR
+#define CROP_LIVE_FACTOR 0
+#endif
+#define crop_view_value(crop) (CROP_LIVE_FACTOR ? (crop) : crop_live_values[crop])
+/* GRKIT_HOST_CROP_LIVE_RETRY after a try of crop_sync (crop_live_try). */
+#define CROP_LIVE_TRIED 0xffffffU
+/* The factor `bits` (float bits of a factor of 1 or more) in 1/65536. */
+static __attribute__((unused)) u32 crop_bits_q16(u32 bits) {
+    u32 exponent=(bits>>23)&0xffU, mantissa=(bits&0x7fffffU)|0x800000U;
+    return exponent>=134U ? mantissa<<(exponent-134U) : mantissa>>(134U-exponent);
+}
+/* The zoom of the factor `bits`: the factor times 8192, as the live view
+   takes it (runtime/framing.S: crop_window). */
+static __attribute__((unused)) u32 crop_zoom(u32 bits) { return (crop_bits_q16(bits)+4U)>>3; }
+static __attribute__((unused)) u32 crop_zoom_near(u32 a,u32 b) { return a+2U>=b && b+2U>=a; }
+/* The factor that the live view shows in 1/65536: the factor of the crop
+   that it zooms to, else the camera's (CROP_NATIVE_Q16). */
+#define CROP_VIEW_Q16(h) ((h)[GRKIT_HOST_CROP_LIVE/4] ? crop_bits_q16((h)[GRKIT_HOST_CROP_LIVE/4]) : CROP_NATIVE_Q16())
 
 /* GR IIIx shares the GR III runtime and has a 40 mm lens (runtime/targets).
    Its crops have the same factors, so only their texts differ. */
@@ -82,21 +107,21 @@ static __attribute__((unused)) u32 crop_scale(u32 crop,u32 native) {
 }
 
 /* The crop badge of the live view: the camera shows its own for 35 and 50
-   mm (GR IIIx 50 and 71 mm). For 40, 70, and 90 mm, the core hides it
+   mm (GR IIIx 50 and 71 mm). For 40 and 70 mm, the core hides it
    (runtime/framing.S: crop_badge) and draws its label LABEL_CROP + n
-   (grkit_core::artwork::OVERLAY_LABELS) in its place: n is 0 to 2 for 40,
-   70, and 90 mm, and 3 to 5 for 57, 100, and 128 mm of GR IIIx. Returns
+   (grkit_core::artwork::OVERLAY_LABELS) in its place: n is 0 and 1 for 40
+   and 70 mm, and 2 and 3 for 57 and 100 mm of GR IIIx. Returns
    GRKIT_LABEL_COUNT without one. */
 #define LABEL_CROP GRKIT_MODULE_LABEL_COUNT
 #define CROP_BADGE_LEFT 662U
 #define CROP_BADGE_TOP 80U
 static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h,u32 native_aspect) {
-    static const u8 badges[GRKIT_CORE_CROP_VALUES]={0xff,0xff,0,0xff,1,2};
+    static const u8 badges[GRKIT_CORE_CROP_VALUES]={0xff,0xff,0,0xff,1};
     u32 badge=badges[crop_capture(h,native_aspect)];
     if(badge==0xff) return GRKIT_LABEL_COUNT;
-    return LABEL_CROP+badge+(CROP_LENS_40MM() ? 3U : 0U);
+    return LABEL_CROP+badge+(CROP_LENS_40MM() ? 2U : 0U);
 }
-_Static_assert(LABEL_CROP+6U==GRKIT_LABEL_COUNT,"The crop badges end the labels");
+_Static_assert(LABEL_CROP+4U==GRKIT_LABEL_COUNT,"The crop badges end the labels");
 
 /* The camera's own crop factor: its float bits, and its setter as the
    native menu calls it (runtime/framing.S, runtime/menu.S). */
@@ -112,27 +137,82 @@ static __attribute__((unused)) u32 crop_native_known(u32 bits) {
     return bits==crop_factors[0] || bits==CROP_NATIVE_35 || bits==CROP_NATIVE_50;
 }
 /* Set the camera's crop factor to the live-view factor of the crop that the
-   camera applies, and arm the factor of the next shot. When no crop
+   camera applies, the factor that the live view shows in its place
+   (GRKIT_HOST_CROP_LIVE), and arm the factor of the next shot. When no crop
    applies, a factor that the core set and that the camera still has returns
    to Off; a crop from the camera menu stays. A factor that the camera does
    not know returns to Off first: an earlier GRKit saved it at power-off, or
-   the camera's crop button stepped from one to 0. The live view follows
-   the factor. */
+   the camera's crop button stepped from one to 0. The live view reads its
+   factor again only when the camera's factor changes, so a new live factor
+   with the same camera factor sets another factor of the camera first. */
 static __attribute__((unused)) void crop_sync(volatile u32 *h,u32 native_aspect) {
     u32 crop=crop_capture(h,native_aspect), want=crop ? crop_factors[crop_live_values[crop]] : 0;
-    u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now=CROP_NATIVE_BITS();
+    u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now=CROP_NATIVE_BITS(), target;
+    u32 view=crop_view_value(crop), live=crop && view!=crop_live_values[crop] ? crop_factors[view] : 0;
+    u32 before=h[GRKIT_HOST_CROP_LIVE/4];
     h[GRKIT_HOST_CROP_SHOT/4]=crop && crop_live_values[crop]!=crop ? crop_factors[crop] : 0;
+    h[GRKIT_HOST_CROP_LIVE/4]=live;
+    h[GRKIT_HOST_CROP_LIVE_ZOOM/4]=live ? crop_zoom(live) : 0;
+    /* A new live factor: the change of the camera's factor below makes the
+       live view read it, so a try waits a second first. */
+    if(live!=before) h[GRKIT_HOST_CROP_LIVE_RETRY/4]=live ? CROP_LIVE_TRIED : 0;
     if(!crop_native_known(now)) {
         now=crop_factors[0];
         CROP_NATIVE_SET(now);
     }
-    if(!want) {
-        if(owned && now==owned) CROP_NATIVE_SET(crop_factors[0]);
-        h[GRKIT_HOST_CROP_NATIVE/4]=0;
+    target=want ? want : owned && now==owned ? crop_factors[0] : now;
+    h[GRKIT_HOST_CROP_NATIVE/4]=want;
+    h[GRKIT_HOST_CROP_CAMERA_ZOOM/4]=crop_zoom(target);
+    if(now!=target) CROP_NATIVE_SET(target);
+    else if(live!=before) {
+        CROP_NATIVE_SET(target==crop_factors[0] ? CROP_NATIVE_35 : crop_factors[0]);
+        CROP_NATIVE_SET(target);
+    }
+}
+#endif
+#if CROP_LIVE_FACTOR && defined(CROP_NATIVE_BITS)
+/* Make the live view read its factor again where it did not read the one
+   that crop_sync set: at power-on, the camera can still be loading its
+   settings when the core first changes its factor, and the live view then
+   keeps the old zoom. A movie live view takes the camera's factor.
+   crop_live_due says whether to try, so the caller reads the clock only
+   then; crop_live_try tries at most CROP_LIVE_TRIES times for each new
+   factor, one in a second (`second`, the second of the day). A try that
+   crop_sync made starts the wait of a second (CROP_LIVE_TRIED). */
+#define CROP_LIVE_TRIES 5U
+static __attribute__((unused)) u32 crop_live_due(volatile u32 *h,u32 movie) {
+    u32 live=h[GRKIT_HOST_CROP_LIVE/4], seen=h[GRKIT_HOST_CROP_LIVE_SEEN/4], ok;
+    /* A movie window does not pass the window function: nothing to check. */
+    if(movie) {
+        h[GRKIT_HOST_CROP_LIVE/4]=0;
+        h[GRKIT_HOST_CROP_LIVE_ZOOM/4]=0;
+        h[GRKIT_HOST_CROP_LIVE_RETRY/4]=0;
+        return 0;
+    }
+    /* The window shows the live factor. Without one, a window of the
+       camera, or none since INSTALL, needs nothing; a window of an earlier
+       live factor needs the camera's again. At power-on the camera can make
+       its windows before INSTALL and not again, so a live factor without a
+       window since INSTALL (`seen` 0) also tries. */
+    if(live) ok=crop_zoom_near(seen,crop_zoom(live));
+    else ok=!seen || crop_zoom_near(seen,crop_zoom(crop_factors[0])) || crop_zoom_near(seen,crop_zoom(CROP_NATIVE_35)) ||
+            crop_zoom_near(seen,crop_zoom(CROP_NATIVE_50));
+    if(ok) {
+        h[GRKIT_HOST_CROP_LIVE_RETRY/4]=0;
+        return 0;
+    }
+    return h[GRKIT_HOST_CROP_LIVE_RETRY/4]>>24<CROP_LIVE_TRIES;
+}
+static __attribute__((unused)) void crop_live_try(volatile u32 *h,u32 second) {
+    u32 retry=h[GRKIT_HOST_CROP_LIVE_RETRY/4], at=retry&CROP_LIVE_TRIED, now=CROP_NATIVE_BITS();
+    if(at==CROP_LIVE_TRIED) {
+        h[GRKIT_HOST_CROP_LIVE_RETRY/4]=(retry&~CROP_LIVE_TRIED)|(second+1U);
         return;
     }
-    if(now!=want) CROP_NATIVE_SET(want);
-    h[GRKIT_HOST_CROP_NATIVE/4]=want;
+    if(at==second+1U) return;
+    h[GRKIT_HOST_CROP_LIVE_RETRY/4]=((retry>>24)+1U)<<24|(second+1U);
+    CROP_NATIVE_SET(now==crop_factors[0] ? CROP_NATIVE_35 : crop_factors[0]);
+    CROP_NATIVE_SET(now);
 }
 #endif
 /* The frame of a crop in `outer` {left, top, right, bottom}: its center,

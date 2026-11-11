@@ -682,10 +682,10 @@ pub fn strike(rgba: &mut [u8]) {
 /// capture area n, then the sign of Date Imprint (LABEL_DATE in
 /// runtime/sdk/grkit.h), then its formats in Date Imprint STYLE order
 /// (label LABEL_DATE + STYLE): the order of year, month, and day, and HM
-/// when the time prints. Then the crop badges (`crop_badge`): 40, 70, and
-/// 90 mm of a 28 mm lens, then 57, 100, and 128 mm of the 40 mm lens of GR
-/// IIIx (runtime/crop.h: LABEL_CROP).
-pub const OVERLAY_LABELS: [&str; 20] = [
+/// when the time prints. Then the crop badges (`crop_badge`): 40 and 70 mm
+/// of a 28 mm lens, then 57 and 100 mm of the 40 mm lens of GR IIIx
+/// (runtime/crop.h: LABEL_CROP).
+pub const OVERLAY_LABELS: [&str; 18] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -702,15 +702,13 @@ pub const OVERLAY_LABELS: [&str; 20] = [
     "DMY HM",
     "40mm",
     "70mm",
-    "90mm",
     "57mm",
     "100mm",
-    "128mm",
 ];
 /// The labels that a module can name: the live-view text before the crop
 /// badges, which only the core draws.
 pub const MODULE_LABELS: usize = 14;
-const _: () = assert!(OVERLAY_LABELS.len() == MODULE_LABELS + 6);
+const _: () = assert!(OVERLAY_LABELS.len() == MODULE_LABELS + 4);
 /// The width of the black outline around the text. The native live-view text
 /// has one black pixel around the gray edge of each stroke, and keeps the
 /// gaps between characters transparent.
