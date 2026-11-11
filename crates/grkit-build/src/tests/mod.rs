@@ -51,9 +51,16 @@ fn summarized(header: &str) -> String {
 /// Where the synthetic image keeps its literal words, away from each site.
 const SYNTHETIC_LITERALS: u32 = target::RTOS_BASE + 0x10000;
 
+/// The words between the function starts of a synthetic image. The official
+/// images have a function start about every 180 words. Without them, each
+/// relocation window spans the largest function (`relocation::Planner`), and
+/// the relocation tables are several times those of a real image.
+const SYNTHETIC_FUNCTION_WORDS: usize = 192;
+
 /// A synthetic RTOS image of `target`, for builds without the firmware. Its
 /// words are pseudo-random, so each relocation window is unique as in a real
-/// image. Then it holds the stock bytes of the layout, the startup literals,
+/// image, with a function start (`mov r12, sp`) every
+/// SYNTHETIC_FUNCTION_WORDS words. Then it holds the stock bytes of the layout, the startup literals,
 /// the Image Control tables and Standard record, and a literal word for each
 /// address after `.data` that the target names, as firmware code that loads
 /// such an address has.
@@ -67,6 +74,9 @@ fn synthetic_firmware(target: &'static target::Target) -> firmware::FirmwareImag
         state ^= state >> 7;
         state ^= state << 17;
         body.extend_from_slice(&(state as u32).to_le_bytes());
+    }
+    for start in body.chunks_mut(SYNTHETIC_FUNCTION_WORDS * 4) {
+        start[..4].copy_from_slice(&0xe1a0_c00du32.to_le_bytes());
     }
     let mut image = firmware::FirmwareImage {
         target,
