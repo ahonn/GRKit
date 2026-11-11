@@ -21,6 +21,7 @@ pub const FAMILY: Family = Family {
     name: "gr4",
     hooks: HOOKS,
     processing_source: Some(include_str!("../../../../runtime/targets/gr4-processing.S")),
+    scale_one_column: 1,
 };
 
 const HOOKS: &[HookSpec] = &join::<{ len(GROUPS) }>(GROUPS);
@@ -36,6 +37,7 @@ const GROUPS: &[&[HookSpec]] = &[
     LIVE_VIEW,
     common::PICTURE,
     common::CROP,
+    common::SCALE,
     CROP_QUEUE,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,

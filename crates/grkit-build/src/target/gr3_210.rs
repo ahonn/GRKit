@@ -226,6 +226,13 @@ const SITES: &[Site] = &[
     ("crop_shot", 0x53510834, "0400a0e1"),
     ("crop_button", 0x532271b8, "0dc0a0e1"),
     ("crop_badge", 0x53171968, "d0e204eb"),
+    ("menu_scale_meters", 0x533931c8, "f41d00eb"),
+    ("menu_scale_five", 0x533931e0, "ee1d00eb"),
+    ("menu_scale_three", 0x533931ec, "eb1d00eb"),
+    ("menu_scale_one", 0x533931f8, "e81d00eb"),
+    ("menu_scale_tenth", 0x53393204, "e51d00eb"),
+    ("menu_scale_update_entry", 0x53393aa8, "0dc0a0e1"),
+    ("menu_string_text_entry", 0x53396f80, "ba3ed0e1"),
     ("crop_image_crop", 0x536a3180, "0dc0a0e1"),
     // The Image Control list of a RAW development: the entries of
     // GetListItemCount, the row category and value of RawDevelopmentModel, the

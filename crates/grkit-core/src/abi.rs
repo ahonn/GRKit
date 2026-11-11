@@ -68,11 +68,12 @@ pub const MODULE_SETTINGS_MAX: usize = 160;
 /// icon chunks after the effect icons.
 pub const MODULE_TILES_MAX: usize = 128;
 /// Off, GRKit, Version, Modules, Modules with a line through it (Enable
-/// GRKit Off), and the Fn hint of a row where Fn turns a setting. The menu
+/// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
+/// "16" of the manual focus scale in feet (`runtime/distance.h`). The menu
 /// addresses the icons after Off by their offset from the GRKit icon, so the
 /// host icons come first in chunk 0, and they must fit in it. The effect
 /// icons follow them.
-pub const HOST_ICON_COUNT: usize = 6;
+pub const HOST_ICON_COUNT: usize = 8;
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script

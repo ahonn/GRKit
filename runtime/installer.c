@@ -235,9 +235,9 @@ static int sync_alias(u32 address, u32 n)
     __asm__ volatile("dsb sy" ::: "memory");
     return syscall6(0xf0002, (u32)at(address), (u32)at(address + n), 0, 0, 0, 0) == 0;
 }
-/* A native icon: its descriptor, then the 40 x 40 pixels. The descriptor
-   gives the pixels as an offset in words from `pixels`, the base of the icon
-   drawer. */
+/* A native icon: its descriptor, then the pixels, 40 x 40 or less. The
+   descriptor gives the pixels as an offset in words from `pixels`, the base
+   of the icon drawer. */
 #ifdef GRKIT_ICON_DESCRIPTOR_12
 /* Width and a valid flag, height, and the pixel offset. */
 #define ICON_PIXELS 12
@@ -245,17 +245,18 @@ static int sync_alias(u32 address, u32 n)
 /* Height and width, then the pixel offset. */
 #define ICON_PIXELS 8
 #endif
-static void icon_header(u32 icon, u32 pixels)
+static void icon_sized(u32 icon, u32 pixels, u32 width, u32 height)
 {
 #ifdef GRKIT_ICON_DESCRIPTOR_12
-    store(icon, 0x00280001);
-    store(icon + 4, 40);
+    store(icon, width << 16 | 1);
+    store(icon + 4, height);
     store(icon + 8, (icon + ICON_PIXELS - pixels) / 4);
 #else
-    store(icon, 0x00280028);
+    store(icon, height << 16 | width);
     store(icon + 4, (icon + ICON_PIXELS - pixels) / 4);
 #endif
 }
+static void icon_header(u32 icon, u32 pixels) { icon_sized(icon, pixels, 40, 40); }
 static int heap(u32 p, u32 n)
 {
     return !(p & 3) && p >= HEAP_MIN && n <= HEAP_END - HEAP_MIN && p <= HEAP_END - n;
@@ -744,15 +745,18 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
     u32 base = a->base;
     /* Host artwork does not consume an effect record or a native settings ID.
        It comes first in chunk 0: Off, the GRKit tile, the Version tile, the
-       Modules tile, the Modules tile of Enable GRKit Off, then the Fn hint
-       of a row where Fn turns a setting. */
-    _Static_assert(HOST_ICON_COUNT == 6, "The host icons are Off, GRKit, Version, Modules, Modules Off, and Rotate");
+       Modules tile, the Modules tile of Enable GRKit Off, the Fn hint of a
+       row where Fn turns a setting, then the "ft" and "16" labels of the
+       manual focus scale (SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT). */
+    _Static_assert(HOST_ICON_COUNT == 8, "The host icons are Off, GRKit, Version, Modules, Modules Off, Rotate, and two scale labels");
     for (u32 i = 0; i < HOST_ICON_COUNT; ++i) {
-        u32 icon = a->icon_bases[0] + i * ICON_STRIDE;
+        u32 icon = a->icon_bases[0] + i * ICON_STRIDE, label = i >= 6;
         static const u8 *const artwork[HOST_ICON_COUNT] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
-                                                                 modules_off_pixels, rotate_pixels};
-        icon_header(icon, pixels);
-        copy(at(icon + ICON_PIXELS), artwork[i], 6400);
+                                                                 modules_off_pixels, rotate_pixels, scale_feet_pixels,
+                                                                 scale_sixteen_pixels};
+        if (label) icon_sized(icon, pixels, SCALE_LABEL_WIDTH, SCALE_LABEL_HEIGHT);
+        else icon_header(icon, pixels);
+        copy(at(icon + ICON_PIXELS), artwork[i], label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
         /* The menu derives the icons after the GRKit icon from its
            address. */
         if (i < 2) store(base + (i ? GRKIT_HOST_GRKIT_ICON : GRKIT_HOST_OFF_ICON), icon);

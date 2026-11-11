@@ -741,16 +741,18 @@ static void install_writes_the_settings_and_the_contexts(void)
     const u32 pairs[] = {
         id_of("GUIDES.STYLE"), 4, id_of("CORE.OFF.DATE"), 1, id_of("CORE.POS.GUIDES"), 2,
         id_of("CORE.ROWS.DATE"), 5, 12345, 7, 23456, 0, id_of("CORE.ASPECT"), 3, id_of("CORE.GRAIN"), 1,
+        id_of("CORE.UNIT"), 1,
     };
     static const u32 core_ids[] = {CORE_STATE_IDS};
     for (u32 k = 0; k < CORE_STATE_COUNT; ++k) assert(core_ids[k] == id_of(core_setting_names[k]));
     save_state(pairs, sizeof pairs / sizeof pairs[0] / 2);
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, the
-       switch and Enable at Start, then the saved values that no setting
-       takes: CORE.GRAIN, which no module uses, and unknown keys, including a
-       value 0. */
-    assert(word(ARRAY_AT) == 15 && word(ARRAY_AT + 4) == 0);
+       switch, Enable at Start, and Distance Unit, then the saved values that
+       no setting takes: CORE.GRAIN, which no module uses, and unknown keys,
+       including a value 0. The saved unit is a setting, not a kept value:
+       apply_state restores it. */
+    assert(word(ARRAY_AT) == 16 && word(ARRAY_AT + 4) == 0);
     expect_setting(0, id_of("GUIDES.STYLE"), 0, 6);
     expect_setting(1, id_of("GUIDES.COLOR"), 0, 3);
     expect_setting(2, 0, 0, 2);
@@ -763,12 +765,13 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(9, id_of("CORE.ROWS.DATE"), 5, 1U << MANAGE_OPTION_VALUES);
     expect_setting(10, id_of("CORE.OFF"), 0, 2);
     expect_setting(11, id_of("CORE.START"), MANAGE_START_KEEP, MANAGE_START_VALUES);
-    expect_setting(12, 12345, 7, 8);
-    expect_setting(13, 23456, 0, 1);
-    expect_setting(14, id_of("CORE.GRAIN"), 1, 2);
+    expect_setting(12, id_of("CORE.UNIT"), MANAGE_UNIT_METERS, MANAGE_UNIT_VALUES);
+    expect_setting(13, 12345, 7, 8);
+    expect_setting(14, 23456, 0, 1);
+    expect_setting(15, id_of("CORE.GRAIN"), 1, 2);
     /* The contexts: the first setting, the count, reserved, then the handle
        of each used setting. */
-    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(15);
+    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(16);
     assert(word(context) == 0 && word(context + 4) == 3 && word(context + 8) == 0);
     assert(word(context + 12) == GRKIT_CORE_ASPECT && word(context + 16) == GRM_NO_SETTING);
     u32 date_context = context + 4 * CONTEXT_WORDS(2);
@@ -784,6 +787,7 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert(word(module_list + MANAGE_SETTINGS) == 4);
     assert(word(module_list + MANAGE_SWITCH) == 10 + 1);
     assert(word(module_list + MANAGE_START) == 11 + 1);
+    assert(word(module_list + MANAGE_UNIT) == 12 + 1);
 }
 /* Defaults initialize both saved and transient settings. Explicit saved zero
    survives a restart and a period without the module installed. */

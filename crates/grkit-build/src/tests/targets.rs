@@ -383,6 +383,165 @@ fn move_value(word: u32) -> Option<(u32, u32)> {
     (word & 0x0fe0_0000 == 0x03a0_0000).then(|| (register, arm::modified_immediate(word)))
 }
 
+/// The Snap focus distance texts of a build header (`runtime/distance.h`) are
+/// those of the English table of its firmware: 0.3 m to 5 m.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn snap_distance_texts_are_those_of_each_firmware() -> Result<()> {
+    const DISTANCES: [&str; 8] = ["0.3m", "0.4m", "1m", "1.5m", "2m", "2.5m", "3.5m", "5m"];
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let first = number(&definitions["SNAP_DISTANCE_TEXT"]).context("SNAP_DISTANCE_TEXT")?;
+        let word = |address: u32| -> Result<u32> {
+            Ok(u32::from_le_bytes(image.read(address, 4)?.try_into()?))
+        };
+        let table = word(target.english_slot)?;
+        for (index, distance) in DISTANCES.iter().enumerate() {
+            let descriptor = word(table + 4 * (first + index as u32))?;
+            let (header, text) = (word(descriptor)?, word(descriptor + 4)?);
+            let units: Vec<u16> = image
+                .read(text, 2 * distance.len())?
+                .chunks_exact(2)
+                .map(|unit| u16::from_le_bytes([unit[0], unit[1]]))
+                .collect();
+            assert_eq!(
+                (header, String::from_utf16(&units)?.as_str()),
+                (0x100 + distance.len() as u32 + 1, *distance),
+                "{}: text {}",
+                target.name,
+                first + index as u32
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The scale hooks (`runtime/distance.h`) replace the BLs to
+/// FW_ICON_VIEW_SET_ICON of the normal manual focus scale, one after the
+/// other: the unit, infinity, then 5, 3, 1, and 0.3 m. The 1 m and 3 m labels
+/// set SCALE_ICON_ONE and SCALE_ICON_THREE, and the macro scale later in the
+/// same function sets SCALE_ICON_TEN.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn scale_sites_and_icons_are_those_of_each_firmware() -> Result<()> {
+    const SITES: [&str; 5] = [
+        "menu_scale_meters",
+        "menu_scale_five",
+        "menu_scale_three",
+        "menu_scale_one",
+        "menu_scale_tenth",
+    ];
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let value = |name: &str| -> u32 {
+            let value = &definitions[name];
+            firmware_definition(value)
+                .map(|(address, _)| address)
+                .or_else(|| number(value))
+                .unwrap_or_else(|| panic!("{name} = {value}"))
+        };
+        let word = |address: u32| -> u32 {
+            u32::from_le_bytes(image.read(address, 4).unwrap().try_into().unwrap())
+        };
+        let set_icon = value("FW_ICON_VIEW_SET_ICON");
+        let sets = |address: u32| arm::branch_target(address, word(address)) == Some(set_icon);
+        let icon = |address: u32| {
+            move_value(word(address - 4))
+                .filter(|&(r, _)| r == 1)
+                .map(|(_, id)| id)
+        };
+        let hooks = components::hooks(target)?;
+        let sites: Vec<u32> = SITES
+            .iter()
+            .map(|symbol| {
+                hooks
+                    .iter()
+                    .find(|hook| hook.spec.symbol == *symbol)
+                    .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                    .address
+            })
+            .collect();
+        assert_eq!(
+            sites
+                .windows(2)
+                .map(|pair| pair[1] - pair[0])
+                .collect::<Vec<_>>(),
+            [24, 12, 12, 12],
+            "{}",
+            target.name
+        );
+        assert!(sites.iter().all(|&site| sets(site)), "{}", target.name);
+        assert!(sets(sites[0] + 12), "{}: infinity", target.name);
+        assert_eq!(
+            icon(sites[3]),
+            Some(value("SCALE_ICON_ONE")),
+            "{}",
+            target.name
+        );
+        assert_eq!(
+            icon(sites[2]),
+            Some(value("SCALE_ICON_THREE")),
+            "{}",
+            target.name
+        );
+        let ten = value("SCALE_ICON_TEN");
+        assert!(
+            (sites[4]..sites[4] + 0x200)
+                .step_by(4)
+                .any(|address| sets(address) && icon(address) == Some(ten)),
+            "{}: no SetIcon of {ten:#x}",
+            target.name
+        );
+        // The icon setup is the function of the sites, and the update entry
+        // calls it after it stores the macro flag of the scale.
+        let setup = value("FW_FOCUS_SCALE_ICONS");
+        let site = |symbol: &str| {
+            hooks
+                .iter()
+                .find(|hook| hook.spec.symbol == symbol)
+                .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                .address
+        };
+        assert_eq!(word(setup), 0xe1a0_c00d, "{}", target.name);
+        assert!(sites[0] - setup < 0x80, "{}", target.name);
+        let update = site("menu_scale_update_entry");
+        assert!(
+            (update..update + 0x100).step_by(4).any(|address| {
+                arm::branch_target(address, word(address)) == Some(setup)
+                    && word(address - 8) == 0xe5c4_0124
+            }),
+            "{}: the update does not set the icons",
+            target.name
+        );
+        // The text setter entry is the string view setter of the header.
+        assert_eq!(
+            site("menu_string_text_entry"),
+            value("FW_STRING_VIEW_RESET"),
+            "{}",
+            target.name
+        );
+    }
+    Ok(())
+}
+
 /// The Fn hint IDs of a build header are those that the native ADJ refresh of
 /// its firmware gives to FW_GUIDE_SET_CONTENT: the label in r1, the icon in r3.
 #[test]

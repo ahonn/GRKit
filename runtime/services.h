@@ -226,7 +226,20 @@
 #define DIAL_BASE_FN (DIAL_BASE_RECORDS + 4U)
 #define DIAL_BASE_TONING (DIAL_BASE_FN + 4U * GRKIT_TEXT_RECORDS)
 #define DIAL_SIZE (DIAL_BASE_TONING + ((GRKIT_TEXT_RECORDS + 3U) & ~3U))
-#define SERVICES_SIZE (SERVICES_DIAL + DIAL_SIZE)
+/* Distance Unit (runtime/distance.h): the text descriptors of the Snap focus
+   distances in feet; the string views that showed a Snap focus distance and
+   the manual focus scales, each with the unit it shows in bit 0; and the
+   next slot of each list. */
+#define SERVICES_DISTANCE (SERVICES_DIAL + DIAL_SIZE)
+#define DISTANCE_TEXTS 0U
+#define DISTANCE_VIEWS 64U
+#define DISTANCE_VIEW_SLOTS 16U
+#define DISTANCE_VIEW_NEXT (DISTANCE_VIEWS + 4U * DISTANCE_VIEW_SLOTS)
+#define DISTANCE_SCALES (DISTANCE_VIEW_NEXT + 4U)
+#define DISTANCE_SCALE_SLOTS 4U
+#define DISTANCE_SCALE_NEXT (DISTANCE_SCALES + 4U * DISTANCE_SCALE_SLOTS)
+#define DISTANCE_SIZE (DISTANCE_SCALE_NEXT + 4U)
+#define SERVICES_SIZE (SERVICES_DISTANCE + DISTANCE_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

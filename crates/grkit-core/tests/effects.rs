@@ -93,6 +93,46 @@ fn host_artwork_matches_golden_pixels_and_preserves_binary_transparency() {
     }
 }
 
+/// The labels of the manual focus scale in feet are white strokes in a black
+/// edge on a transparent label, as the native labels: "16" takes the
+/// places of the digits of the native "10" of each family, and "ft" the box
+/// of the native "m".
+#[test]
+fn scale_labels_are_white_in_a_black_edge() {
+    let (width, height) = (artwork::SCALE_LABEL_WIDTH, artwork::SCALE_LABEL_HEIGHT);
+    let columns = |pixels: &[u8]| {
+        let shown: Vec<usize> = (0..width)
+            .filter(|&x| (0..height).any(|y| pixels[(y * width + x) * 4 + 3] != 0))
+            .collect();
+        (shown[0], *shown.last().unwrap())
+    };
+    for (pixels, shown) in [
+        (artwork::scale_sixteen_pixels(4), (3, 25)),
+        (artwork::scale_sixteen_pixels(1), (0, 22)),
+        (artwork::scale_feet_pixels(), (6, 23)),
+    ] {
+        assert_eq!(pixels.len(), width * height * 4);
+        assert_eq!(columns(&pixels), shown);
+        for pixel in pixels.chunks_exact(4) {
+            assert!(matches!(
+                pixel,
+                [0, 0, 0, 0] | [0, 0, 0, 255] | [255, 255, 255, 255]
+            ));
+        }
+        // Each white pixel has no transparent neighbor: the edge is closed.
+        for y in 0..height {
+            for x in 0..width {
+                if pixels[(y * width + x) * 4] != 255 {
+                    continue;
+                }
+                for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
+                    assert_eq!(pixels[(ny * width + nx) * 4 + 3], 255, "({x}, {y})");
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn user_definition_preserves_edited_name_and_creative_curve() {
     let mut definition = read_json(root().join("portra-400-endura-v1/effect.json"));

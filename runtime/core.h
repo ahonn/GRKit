@@ -43,6 +43,11 @@ typedef short s16;
 /* The Fn hint of a row where Fn turns a setting to its next value. The
    installer puts it after the Modules Off tile. */
 #define GRKIT_ICON_ROTATE 0x7ffaU
+/* The labels "ft" and "16" of the manual focus scale in feet
+   (runtime/distance.h), 30 x 20 pixels. The installer puts them after the
+   Fn hint. */
+#define GRKIT_ICON_SCALE_FEET 0x7ff9U
+#define GRKIT_ICON_SCALE_SIXTEEN 0x7ff8U
 
 /* One setting of a native settings page: its row label, its values (at most
    SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a

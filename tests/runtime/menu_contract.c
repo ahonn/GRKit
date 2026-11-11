@@ -42,6 +42,16 @@ static unsigned controller_factory(void)
     return factory_top;
 }
 #define FW_CONTROLLER_FACTORY controller_factory
+/* The icon setup of a manual focus scale (runtime/distance.h). */
+#undef FW_FOCUS_SCALE_ICONS
+static unsigned scale_icon_setups, scale_icon_last;
+static unsigned scale_icons(unsigned scale)
+{
+    ++scale_icon_setups;
+    scale_icon_last = scale;
+    return 0;
+}
+#define FW_FOCUS_SCALE_ICONS scale_icons
 /* Camera addresses of the menu text map to text_arena, relative to the text
    start of the header, so the count of records can change during the test. */
 static const unsigned short *text_at(unsigned int address);
@@ -973,7 +983,10 @@ static void module_tiles_follow_the_effect_icons(void)
     assert(menu_icon(GRKIT_ICON_MODULES) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 2 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_MODULES_OFF) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 3 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_ROTATE) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 4 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_ROTATE - 1) == 0);
+    /* The labels of the manual focus scale in feet follow the Fn hint. */
+    assert(menu_icon(GRKIT_ICON_SCALE_FEET) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 5 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 6 * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN - 1) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -2040,7 +2053,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 24, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 28, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -4385,23 +4398,26 @@ static void a_color_only_module_gets_no_row(void)
     assert(BYTE(tab_copy(), MENU_TAB_ROWS) == 14);
 }
 /* While a module loaded, the section starts with the GRKit switch, then
-   Enable at Start. OK on either opens its value page. A tab without room for
-   each row keeps the switch, Enable at Start, ADJ Order, and About GRKit. */
+   GRKit Settings. OK on the switch opens its value page, and OK on GRKit
+   Settings its page: Enable at Start, then Distance Unit. A tab without room
+   for each row keeps the switch, GRKit Settings, ADJ Order, and About GRKit. */
 static void the_section_starts_with_the_switch(void)
 {
-    static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_START, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED,
+    static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED,
                                 MENU_ROW_ADJ, MENU_ROW_GRKIT},
-                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_START, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
+                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
     volatile u32 *h = test_header, *menu;
     u32 n;
-    /* The switch is setting 12 and Enable at Start setting 13
-       (runtime/install_modules.h). */
+    /* The switch is setting 12, Enable at Start setting 13, and Distance
+       Unit setting 14 (runtime/install_modules.h). */
     install_stock_tab(10, 3);
-    settings_memory[0] = 14;
+    settings_memory[0] = 15;
     settings_memory[2 + 12 * 3 + 2] = 2;
     settings_memory[2 + 13 * 3 + 2] = MANAGE_START_VALUES;
+    settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     manage_memory[MANAGE_START / 4] = 13 + 1;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu = services_word(h, SERVICES_MENU);
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 7 && BYTE(tab_copy(), MENU_TAB_ROWS) == 17);
@@ -4417,37 +4433,118 @@ static void the_section_starts_with_the_switch(void)
     switch_settings[0].set(h, 1);
     assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
     switch_settings[0].set(h, 0);
-    /* Enable at Start opens its value page at once too: On, Off, then Keep
-       Last. A choice is a saved change for the next start, and the switch
-       keeps its value in this session. */
-    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == settings_pages[0]);
-    assert(h[GRKIT_HOST_SETTINGS / 4] == START_PAGE + 1 && settings_page(h) == start_settings);
-    assert(settings_rows(h) == 1 && same(start_settings[0].label(h), "Enable at Start"));
-    assert(start_settings[0].values(h) == 3 && same(start_settings[0].value_text(h, MANAGE_START_ON), "On") &&
-           same(start_settings[0].value_text(h, MANAGE_START_OFF), "Off") &&
-           same(start_settings[0].value_text(h, MANAGE_START_KEEP), "Keep Last"));
-    assert(start_settings[0].get(h) == MANAGE_START_ON);
+    /* GRKit Settings opens its page, titled GRKit Settings, with two rows. */
+    assert(same(core_settings_title(h), "GRKit Settings"));
+    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_settings);
+    assert(settings_rows(h) == 2 && same(core_settings[0].label(h), "Enable at Start") &&
+           same(core_settings[1].label(h), "Distance Unit"));
+    /* Enable at Start: On, Off, then Keep Last. A choice is a saved change
+       for the next start, and the switch keeps its value in this session. */
+    assert(core_settings[0].values(h) == 3 && same(core_settings[0].value_text(h, MANAGE_START_ON), "On") &&
+           same(core_settings[0].value_text(h, MANAGE_START_OFF), "Off") &&
+           same(core_settings[0].value_text(h, MANAGE_START_KEEP), "Keep Last"));
+    assert(core_settings[0].get(h) == MANAGE_START_ON);
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    start_settings[0].set(h, MANAGE_START_OFF);
-    assert(start_settings[0].get(h) == MANAGE_START_OFF && settings_memory[2 + 13 * 3 + 1] == MANAGE_START_OFF);
+    core_settings[0].set(h, MANAGE_START_OFF);
+    assert(core_settings[0].get(h) == MANAGE_START_OFF && settings_memory[2 + 13 * 3 + 1] == MANAGE_START_OFF);
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1 && !manage_all_off(h));
-    /* The row shows the value. */
     assert(same(start_value_text(h, start_value(h)), "Off"));
-    start_settings[0].set(h, MANAGE_START_KEEP);
+    core_settings[0].set(h, MANAGE_START_KEEP);
     assert(same(start_value_text(h, start_value(h)), "Keep Last"));
-    start_settings[0].set(h, MANAGE_START_ON);
+    core_settings[0].set(h, MANAGE_START_ON);
+    /* Distance Unit: Meters, then Feet, a saved change that applies at once. */
+    assert(core_settings[1].values(h) == 2 && same(core_settings[1].value_text(h, MANAGE_UNIT_METERS), "Meters") &&
+           same(core_settings[1].value_text(h, MANAGE_UNIT_FEET), "Feet"));
+    assert(core_settings[1].get(h) == MANAGE_UNIT_METERS && !unit_feet(h));
+    n = h[GRKIT_HOST_STATE_CHANGES / 4];
+    core_settings[1].set(h, MANAGE_UNIT_FEET);
+    assert(unit_feet(h) && settings_memory[2 + 14 * 3 + 1] == MANAGE_UNIT_FEET && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
+    core_settings[1].set(h, MANAGE_UNIT_METERS);
     h[GRKIT_HOST_SETTINGS / 4] = 0;
     install_stock_tab(MENU_TAB_MAX_ROWS - 5, 3);
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     manage_memory[MANAGE_START / 4] = 13 + 1;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 5 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
     for (u32 slot = 0; slot < 5; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
-    /* Without Enable at Start in the module list, the switch shows alone. */
+    /* Without the switch, as in safe mode, GRKit Settings has Distance Unit
+       only. */
+    install_stock_tab(10, 3);
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
+    menu_rows_install(h);
+    assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU && settings_page(h) == unit_settings &&
+           settings_rows(h) == 1);
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    /* Without GRKit Settings in the module list, the switch shows alone. */
     install_stock_tab(10, 3);
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED);
+}
+/* In feet, the text hooks give the feet label of each Snap focus distance,
+   on any screen, and the scale hooks the feet labels of the manual focus
+   scale; in meters, and for other texts, the native ones. */
+static void snap_distances_show_in_feet(void)
+{
+    static const char *const feet[SNAP_DISTANCE_TEXTS] = {"1'", "1'", "3'", "5'", "7'", "8'", "11'", "16'"};
+    volatile u32 *h = test_header;
+    u32 view = TEST_OBJECTS + 0x100, i, text;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 15;
+    settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
+    for (i = 0; i < SNAP_DISTANCE_TEXTS; ++i) assert(!menu_text_override(view, SNAP_DISTANCE_TEXT + i));
+    unit_set(h, MANAGE_UNIT_FEET);
+    for (i = 0; i < SNAP_DISTANCE_TEXTS; ++i) {
+        text = menu_text_override(view, SNAP_DISTANCE_TEXT + i);
+        /* The descriptor keeps the font of the screen: bit 0 is clear. */
+        assert(text && !(text & 1U));
+        assert(WORD(text, 0) == (0x100U | (u32)(strlen(feet[i]) + 1)) &&
+               WORD(text, 4) == (u32)(uintptr_t)snap_feet[i] && same(snap_feet[i], feet[i]));
+    }
+    assert(!menu_text_override(view, SNAP_DISTANCE_TEXT - 1) &&
+           !menu_text_override(view, SNAP_DISTANCE_TEXT + SNAP_DISTANCE_TEXTS));
+    /* The normal manual focus scale: ft, 16, 10, 3, and 1 in feet, at the
+       sites of the unit, 5, 3, 1, and 0.3 m. Other sites keep their icon. */
+    assert(menu_scale_icon(0, 0x295) == GRKIT_ICON_SCALE_FEET && menu_scale_icon(1, 0x88) == GRKIT_ICON_SCALE_SIXTEEN &&
+           menu_scale_icon(2, 0x86) == SCALE_ICON_TEN && menu_scale_icon(3, 0x83) == SCALE_ICON_THREE &&
+           menu_scale_icon(4, 0x292) == SCALE_ICON_ONE && menu_scale_icon(SCALE_SITES, 0x84) == 0x84);
+    unit_set(h, MANAGE_UNIT_METERS);
+    assert(!menu_text_override(view, SNAP_DISTANCE_TEXT));
+    for (i = 0; i < SCALE_SITES; ++i) assert(menu_scale_icon(i, 0x100 + i) == 0x100 + i);
+}
+/* A string view lays out a Snap distance again when it showed the distance
+   in the other unit or in a unit that the core did not note, and a manual
+   focus scale sets its icons again at its update. Other texts and scales in
+   the noted unit keep their layout. */
+static void a_unit_change_lays_out_the_distances_again(void)
+{
+    volatile u32 *h = test_header;
+    u32 a = TEST_OBJECTS + 0x100, b = TEST_OBJECTS + 0x200, i;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 15;
+    settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
+    assert(!menu_string_text(a, SNAP_DISTANCE_TEXT - 1) && !menu_string_text(a, SNAP_DISTANCE_TEXT + SNAP_DISTANCE_TEXTS));
+    assert(menu_string_text(a, SNAP_DISTANCE_TEXT) && !menu_string_text(a, SNAP_DISTANCE_TEXT + 7));
+    unit_set(h, MANAGE_UNIT_FEET);
+    assert(menu_string_text(a, SNAP_DISTANCE_TEXT + 6) && !menu_string_text(a, SNAP_DISTANCE_TEXT + 6));
+    assert(menu_string_text(b, SNAP_DISTANCE_TEXT) && !menu_string_text(b, SNAP_DISTANCE_TEXT));
+    /* A full list gives the oldest slot to the next view. */
+    for (i = 0; i < DISTANCE_VIEW_SLOTS; ++i) assert(menu_string_text(TEST_OBJECTS + 0x400 + 4 * i, SNAP_DISTANCE_TEXT));
+    assert(menu_string_text(a, SNAP_DISTANCE_TEXT));
+    scale_icon_setups = 0;
+    menu_scale_update(a);
+    assert(scale_icon_setups == 1 && scale_icon_last == a);
+    menu_scale_update(a);
+    assert(scale_icon_setups == 1);
+    unit_set(h, MANAGE_UNIT_METERS);
+    menu_scale_update(a);
+    menu_scale_update(a);
+    assert(scale_icon_setups == 2);
 }
 /* A tab with all its sections gets the rows in its last section. A tab
    without room for each row keeps ADJ Order and About GRKit, and gives rows
@@ -4653,6 +4750,8 @@ int main(void)
     a_color_only_module_gets_no_row();
     a_full_tab_gets_no_new_section();
     the_section_starts_with_the_switch();
+    snap_distances_show_in_feet();
+    a_unit_change_lays_out_the_distances_again();
 #endif
     each_selection_change_counts_once();
     record_index_finds_each_record_start();

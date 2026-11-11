@@ -77,8 +77,8 @@ static u32 capabilities_running;
 static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
    choices of each module, the choices of `effects` effects, then the
-   switch and Enable at Start. */
-#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 2U + (effects))
+   switch, Enable at Start, and Distance Unit. */
+#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 3U + (effects))
 /* A set of a user mode of the mode dial (runtime/mode_dial.h) holds the
    module settings, the Enable of each module, and the switch. plan_modules
    leaves room for the choices of EFFECTS_LISTED effects, so the table holds
@@ -310,7 +310,8 @@ static int state_taken(u32 id)
         if ((setting_flags[k] & GRM_SETTING_SAVED) && grm_state_id(setting_names[k]) == id) return 1;
     for (u32 i = 0; i < module_count; ++i)
         if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id) return 1;
-    if (grm_state_id(MANAGE_SWITCH_KEY) == id || grm_state_id(MANAGE_START_KEY) == id) return 1;
+    if (grm_state_id(MANAGE_SWITCH_KEY) == id || grm_state_id(MANAGE_START_KEY) == id ||
+        grm_state_id(MANAGE_UNIT_KEY) == id) return 1;
     for (u32 i = 0; i < listed_count; ++i)
         if (effect_choice_id(i) == id) return 1;
     return 0;

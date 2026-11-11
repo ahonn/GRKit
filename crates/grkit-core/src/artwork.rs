@@ -539,6 +539,98 @@ pub fn modules_off_pixels() -> Vec<u8> {
     rgba
 }
 
+/// The width and the height of a label of the manual focus distance scale.
+pub const SCALE_LABEL_WIDTH: usize = 30;
+pub const SCALE_LABEL_HEIGHT: usize = 20;
+
+/// The scale labels are pixel art in the style of the native ones: white
+/// strokes three pixels wide in a one-pixel black edge, on a transparent
+/// label. A digit fills rows 1 to 18. These are the white pixels.
+const SCALE_ONE: [&str; 18] = [
+    "..###", ".####", "#####", "#####", "..###", "..###", "..###", "..###", "..###", "..###",
+    "..###", "..###", "..###", "..###", "..###", "..###", "..###", "..###",
+];
+const SCALE_SIX: [&str; 18] = [
+    "...#####...",
+    "..########.",
+    ".####...###",
+    ".###.......",
+    "###........",
+    "###........",
+    "###.#####..",
+    "##########.",
+    "####...####",
+    "###.....###",
+    "###.....###",
+    "###.....###",
+    "###.....###",
+    "###.....###",
+    "####...####",
+    ".#########.",
+    "..#######..",
+    "...#####...",
+];
+/// "ft", the unit, centered as the native unit "m": its x-height from
+/// row 3, its baseline at row 16, and the ascenders from row 1.
+const SCALE_FEET: [&str; 16] = [
+    "...#####.........",
+    "..######..###....",
+    "..###.....###....",
+    "..###.....###....",
+    "########.#######.",
+    "########.#######.",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....###....",
+    "..###.....######.",
+    "..###......#####.",
+];
+
+/// A scale label of `glyphs`, each the white pixels from (column, row).
+fn scale_label(glyphs: &[(&[&str], usize, usize)]) -> Vec<u8> {
+    let (width, height) = (SCALE_LABEL_WIDTH, SCALE_LABEL_HEIGHT);
+    let mut white = vec![false; width * height];
+    for &(rows, column, top) in glyphs {
+        for (y, row) in rows.iter().enumerate() {
+            for (x, pixel) in row.bytes().enumerate() {
+                if pixel == b'#' {
+                    white[(top + y) * width + column + x] = true;
+                }
+            }
+        }
+    }
+    let mut rgba = vec![0; width * height * 4];
+    for y in 0..height {
+        for x in 0..width {
+            let near = (y.saturating_sub(1)..=(y + 1).min(height - 1)).any(|ny| {
+                (x.saturating_sub(1)..=(x + 1).min(width - 1)).any(|nx| white[ny * width + nx])
+            });
+            if near {
+                let shade = if white[y * width + x] { 255 } else { 0 };
+                rgba[(y * width + x) * 4..][..4].copy_from_slice(&[shade, shade, shade, 255]);
+            }
+        }
+    }
+    rgba
+}
+
+/// "16" of the scale in feet, where the native scale in meters has 5. Its
+/// digits take the places of those of the native "10" of the camera: the 1
+/// from column `one`, the second digit ten columns later.
+pub fn scale_sixteen_pixels(one: usize) -> Vec<u8> {
+    scale_label(&[(&SCALE_ONE, one, 1), (&SCALE_SIX, one + 10, 1)])
+}
+
+/// "ft", the unit of the scale in feet, where the native scale has "m".
+pub fn scale_feet_pixels() -> Vec<u8> {
+    scale_label(&[(&SCALE_FEET, 7, 1)])
+}
+
 /// The Fn hint of a row where Fn turns a setting to its next value: a
 /// clockwise open circle arrow, white with a black edge on a transparent
 /// tile, as the native settings icon of the Fn hint has it. The arrow has a

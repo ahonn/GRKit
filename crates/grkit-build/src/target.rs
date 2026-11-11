@@ -150,6 +150,9 @@ pub struct Family {
     pub hooks: &'static [HookSpec],
     /// The Image Control processing source, if the family has processing hooks.
     pub processing_source: Option<&'static str>,
+    /// The first column of the 1 in the native "10" of the manual focus
+    /// scale. The "16" of the scale in feet puts its digits there too.
+    pub scale_one_column: usize,
 }
 
 /// The native Image Control data that the installer checks and copies.

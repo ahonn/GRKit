@@ -173,6 +173,21 @@ pub const CROP: &[HookSpec] = &[
     bl("crop_badge", Framing, CaptureCrop),
 ];
 
+/// Distance Unit (`runtime/distance.h`): the BLs to IconView::SetIcon of the
+/// labels of the normal manual focus scale in FocusMeterView, the unit, then
+/// 5, 3, 1, and 0.3 m; the entry of the update of the scale, which sets the
+/// icons again after a change of the unit; and the entry of the string view
+/// text setter, which lays out a Snap distance again in the other unit.
+pub const SCALE: &[HookSpec] = &[
+    bl("menu_scale_meters", Menu, MenuPage),
+    bl("menu_scale_five", Menu, MenuPage),
+    bl("menu_scale_three", Menu, MenuPage),
+    bl("menu_scale_one", Menu, MenuPage),
+    bl("menu_scale_tenth", Menu, MenuPage),
+    b("menu_scale_update_entry", Menu, MenuPage),
+    b("menu_string_text_entry", Menu, MenuPage),
+];
+
 /// The recorded picture geometry, then the effect extension and picture
 /// processing.
 pub const PICTURE: &[HookSpec] = &[
