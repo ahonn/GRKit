@@ -9,7 +9,7 @@
 
 use crate::abi::{
     HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_CROP, HOST_CROP_MODE, HOST_FRAME_RATIO, HOST_GRAIN,
-    HOST_GRAIN_SIZE, HOST_MODULE, MODULES_MAX,
+    HOST_GRAIN_SIZE, HOST_MODULE, MODULE_PAGES_MAX,
 };
 
 /// An extension point: the firmware changes that a group of features needs.
@@ -175,7 +175,7 @@ pub const CAPABILITIES: [Capability; 10] = [
         // The module of the GRKit root row where the next ADJ session opens
         // (HOST_MODULE). No firmware patches: INSTALL always restores it.
         key: "ADJ_MODULE",
-        values: MODULES_MAX as u32,
+        values: MODULE_PAGES_MAX as u32,
         state: State::Word(HOST_MODULE),
         points: &[],
     },

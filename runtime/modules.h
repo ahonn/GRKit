@@ -15,6 +15,7 @@
 #define ABOUT_MODULE (MANAGE_MODULE+1U)
 #define SWITCH_MODULE (ABOUT_MODULE+1U)
 #define MODULE_TOTAL (SWITCH_MODULE+1U)
+_Static_assert(MODULE_TOTAL<=32U,"The masks of visible modules are one word");
 
 static const MenuPage about_module = ABOUT_PAGE;
 
