@@ -13,15 +13,17 @@
      the site and does not list them.
    - OK on a recipe shows the page of the recipe in place of the list, with
      the name of the recipe as its title: Apply, Rename, and Delete. MENU
-     there returns to the list, with the cursor on the recipe.
+     there returns to the list, with the cursor on the recipe. A list that
+     has the mark starts with the cursor on the mark (recipes_row_cursor).
      - Apply applies the recipe and returns to the Recipes page. MENU shows
        no message after it: a recipe that cannot apply changes nothing.
      - Rename opens the keyboard of the camera with the name, and the
        keyboard returns to the page of the recipe.
      - Delete asks with the confirm box of the core, Execute or Cancel, the
        cursor on Cancel. Execute deletes the recipe and returns to the list
-       with the cursor on the recipe after it, or on the last recipe. After
-       the last recipe, it returns to the Recipes page.
+       with the cursor on the recipe after it, or on the last recipe, unless
+       the list has the mark. After the last recipe, it returns to the
+       Recipes page.
    - Mode Dial sets what the user modes of the mode dial do
      (runtime/menu_dial.h).
    - Save Settings adds a recipe that is on, then opens the keyboard with
@@ -40,8 +42,8 @@
 #define RECIPE_TEXT_APPLY (TEXT_RECIPE+14U)
 
 /* MENU_ROWS_PAGE_STATE: RECIPE_PAGE_SHOWN with the recipe whose page shows,
-   or the recipe that the list puts its cursor on + 1, or 0 for the cursor
-   on the recipe that the settings match. */
+   or the recipe of the last action + 1, where the list puts its cursor
+   without a recipe that the settings match, or 0. */
 #define RECIPE_PAGE_SHOWN 0x10000U
 #define RECIPE_PAGE_ACTIONS 3U
 static volatile u32 *recipe_page_state(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_PAGE_STATE); }
@@ -125,12 +127,15 @@ static const u16 *recipes_row_text(volatile u32 *h,u32 value) {
 static u32 recipes_row_get(volatile u32 *h) {
     return recipe_page_shown(h)!=RECIPE_NONE ? RECIPE_NONE : recipe_matching(h,0);
 }
+/* The camera shows the mark only on the row where the cursor starts
+   (menu_check_dot), so the cursor starts on the recipe that the settings
+   match. Without a match, it starts on the recipe of the last action. */
 static u32 recipes_row_cursor(volatile u32 *h) {
     u32 state=recipe_page_state(h)[0], e;
     if(state&RECIPE_PAGE_SHOWN) return 0;
-    if(state) return state-1U;
     e=recipe_matching(h,0);
-    return e!=RECIPE_NONE ? e : 0;
+    if(e!=RECIPE_NONE) return e;
+    return state ? state-1U : 0;
 }
 /* The page of a recipe has the name of the recipe as its title, which its
    text buffer holds since OK on the recipe or the return from the

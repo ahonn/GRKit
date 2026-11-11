@@ -3022,10 +3022,14 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
     assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
-    /* MENU returns to the list with the cursor on Street, which the
-       settings do not match. */
+    /* MENU returns to the list with the cursor on Corner, which the
+       settings match: the camera shows the mark only on the row where the
+       cursor starts. Without a match, the cursor is on Street. */
     assert(recipes->select(h, 0, SETTING_BACK));
-    assert(*state == 2 && recipes->cursor(h) == 1 && listed_get(h, 2) == 2 && same(listed_text(h, 2, 1), "Street"));
+    assert(*state == 2 && listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && menu_settings_current(2, 0, 2) == 2);
+    h[GRKIT_HOST_GRAIN / 4] = 3;
+    assert(listed_get(h, 2) == RECIPE_NONE && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Street"));
+    h[GRKIT_HOST_GRAIN / 4] = 2;
     /* Rename: the return from the keyboard names the recipe after an OK,
        keeps the name after MENU, and the page shows the new name. The
        change from the keyboard calls the callback (ui_keyboard_change); a
