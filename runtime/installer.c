@@ -410,6 +410,42 @@ static int monochrome_camera(void)
     return 0;
 #endif
 }
+/* The camera and the firmware version that it shows, for REPORT.TXT. The
+   RTOS identity word holds the version of the firmware file: the major
+   version in its low byte, the minor version in the next. The build names the
+   camera of each identity that it knows (rtos_cameras). After relocation
+   (with_record), a build with a model record reads the model and the version
+   that the model shows from it. Other builds name an HDF model as its base
+   model, whose firmware it runs. It reads the firmware memory, so it runs
+   while that is mapped; the report is written after the mapping ends. */
+static const char *camera_name, *camera_model = "";
+static u32 camera_major, camera_minor, camera_read;
+static void read_camera(int with_record)
+{
+    u32 identity = word(RTOS_IDENTITY);
+    camera_major = identity & 0xff;
+    camera_minor = (identity >> 8) & 0xff;
+    camera_read = 1;
+#if RTOS_IDENTITY_COUNT
+    const char *name = rtos_cameras;
+    for (u32 i = 0; i < RTOS_IDENTITY_COUNT; ++i) {
+        if (identity == rtos_identities[i]) { camera_name = name; break; }
+        while (*name) ++name;
+        ++name;
+    }
+#endif
+#ifdef MODEL_RECORD
+    u32 record = with_record ? word(MODEL_RECORD) : 0;
+    if (camera_name && record >= RELOCATION_RTOS_BASE && record + MODEL_VERSION + 4 <= relocation.image_end) {
+        u32 version = word(record + MODEL_VERSION), number = word(record + MODEL_NUMBER);
+        camera_major = version >> 24;
+        camera_minor = (version >> 16) & 0xff;
+        camera_model = number == MODEL_MONOCHROME ? " Monochrome" : number == MODEL_HDF ? " HDF" : "";
+    }
+#else
+    (void)with_record;
+#endif
+}
 #include "install_modules.h"
 /* ---- State (runtime/state.h) ----------------------------------------------
    A missing STATE.TXT reads STATE.TMP, which a save that the power cut
@@ -780,6 +816,7 @@ static int install(void)
     /* The checks of the firmware read only memory, so an attempt before the
        camera is ready ends before it reads the modules from the card. */
     if ((status = relocate())) return status;
+    read_camera(1);
     if ((status = check_firmware())) return status;
     u32 pixels = icon_pixels();
     if (!pixels) return STATUS_ICONS_NOT_READY;
@@ -963,6 +1000,8 @@ __attribute__((used)) void start(u32 *stack)
             if ((u32)mapped < 0xfffff001U) {
                 mapping = (volatile u8 *)mapped;
                 if (argc == 2) status = install();
+                /* An install that ended before relocation reads the identity only. */
+                if (argc == 2 && !camera_read) read_camera(0);
 #ifdef MODULE_DIAGNOSTICS
                 else status = select_profile(argv[2]);
 #endif

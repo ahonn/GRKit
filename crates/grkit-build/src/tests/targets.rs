@@ -649,3 +649,27 @@ fn shared_runtime_code_names_no_firmware_address() {
         );
     }
 }
+
+/// REPORT.TXT names the camera of each identity that a build knows: one camera
+/// runs the build at the version of the identity (`loader::header`).
+#[test]
+fn each_identity_has_one_camera() {
+    for target in target::TARGETS {
+        for &identity in target.identities {
+            let version = target::identity_version(identity);
+            let cameras: Vec<_> = grkit_core::camera::CAMERAS
+                .iter()
+                .filter(|camera| camera.firmware_for(target.name).contains(&version.as_str()))
+                .map(|camera| camera.name)
+                .collect();
+            assert_eq!(
+                cameras.len(),
+                1,
+                "{} {identity:#010x} {version}: {cameras:?}",
+                target.name
+            );
+        }
+    }
+    assert_eq!(target::identity_version(0x0b0a1401), "1.20");
+    assert_eq!(target::identity_version(0x12144601), "1.70");
+}

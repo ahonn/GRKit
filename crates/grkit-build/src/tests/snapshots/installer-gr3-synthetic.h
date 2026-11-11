@@ -72,6 +72,7 @@ static const u32 guard_symbols[] = {};
 #define RTOS_IDENTITY 0x53002038U
 #define RTOS_IDENTITY_COUNT 4U
 static const u32 rtos_identities[] = {0x1b150a02,0x1c141402,0x110b3c01,0x12144601};
+static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define PLAN_PATH "/media/storage1/SCRIPT/GRKIT/PLAN.BIN"
 #define RAM_PLAN_PATH "/tmp/grkit-plan.bin"
 #define PLAN_TMP_PATH "/media/storage1/SCRIPT/GRKIT/PLAN.TMP"

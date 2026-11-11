@@ -34,10 +34,20 @@ static const char *module_reason(u32 status)
     default: return "INSTALL stopped";
     }
 }
+/* The camera line (read_camera in installer.c), such as "GR IIIx 1.70". */
+static void say_camera(void)
+{
+    if (!camera_read) return;
+    say("Camera: ");
+    if (camera_name) { say(camera_name); say(camera_model); say(" "); }
+    else say("unknown, firmware ");
+    say_number(camera_major); say(camera_minor < 10 ? ".0" : "."); say_number(camera_minor); say("\r\n");
+}
 static void write_report(int status)
 {
     report_length = 0;
     say("GRKit "); say(GRKIT_VERSION); say(" ("); say(target_marker + sizeof("GRKIT_TARGET=") - 1); say(")\r\n");
+    say_camera();
     if (status) { say("\r\nGRKit did not install: error "); say_number((u32)status); say(".\r\n"); }
     if (safe_mode) say("\r\nSafe mode: GRKIT\\SAFE exists, so no module loads. Delete it to load the modules.\r\n");
     if (profile_mode) say("\r\nProfile: GRKIT\\PROFILE exists, so GRKit writes its CPU use to GRKIT\\PROFILE.LOG. Delete it to stop.\r\n");

@@ -93,7 +93,13 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
     addresses.push((name, target.pixel_base_slot));
     if let Some((record, sensor_color)) = target.model_record {
         addresses.push(("MODEL_RECORD", record));
-        constants.push(("MODEL_SENSOR_COLOR", sensor_color));
+        constants.extend([
+            ("MODEL_SENSOR_COLOR", sensor_color),
+            ("MODEL_NUMBER", target::MODEL_NUMBER),
+            ("MODEL_VERSION", target::MODEL_VERSION),
+            ("MODEL_HDF", target::MODEL_HDF),
+            ("MODEL_MONOCHROME", target::MODEL_MONOCHROME),
+        ]);
     }
     // The code, the data, and the BSS of the firmware end at `heap_min`. A
     // constant in that range is a firmware address that would not move with
@@ -147,6 +153,25 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
             "rtos_identities",
             target.identities.iter().copied(),
         );
+        // REPORT.TXT names the camera of each identity: the camera that runs
+        // this build at the version of the identity.
+        let cameras = target
+            .identities
+            .iter()
+            .map(|&identity| {
+                let version = target::identity_version(identity);
+                grkit_core::camera::CAMERAS
+                    .iter()
+                    .find(|camera| camera.firmware_for(target.name).contains(&version.as_str()))
+                    .map(|camera| camera.name)
+                    .with_context(|| format!("No camera runs {} at version {version}", target.name))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        writeln!(
+            result,
+            "static const char rtos_cameras[] = \"{}\";",
+            cameras.join("\\0")
+        )?;
     }
     // The card layout (grkit_core::card): the package in SCRIPT/GRKIT, and
     // the data of the person in GRKIT.
