@@ -363,8 +363,11 @@ static inline u32 chroma_row(const Plane *p, u32 y) { return p->c + (p->half ? y
    with the value of `setting` (see GRKIT_USE) for each recorded picture, and
    does not call it while the value is 0. Filters run in ascending `stage`,
    after the color of the effect: */
-#define GRKIT_STAGE_FRAME 20U /* frames and borders */
+#define GRKIT_STAGE_FRAME 20U /* frames over the picture */
 #define GRKIT_STAGE_MARK 30U  /* marks over the picture, such as the date */
+/* Since ABI 2.6: the print around the picture, such as a border, which
+   scales the picture with its marks. */
+#define GRKIT_STAGE_PRINT 40U
 typedef struct {
     u32 size;
     u32 stage;
