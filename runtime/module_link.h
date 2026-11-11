@@ -57,6 +57,7 @@
 /* The stages of plane filters (runtime/sdk/grkit.h). */
 #define GRM_STAGE_FRAME 20U
 #define GRM_STAGE_MARK 30U
+#define GRM_STAGE_PRINT 40U
 /* The most registrations that one descriptor gives. */
 #define GRM_REGISTRATIONS 16U
 /* The descriptor: size, ABI, registrations and their count, settings and
@@ -665,7 +666,7 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             if (!filter || grm_word(filter) < GRM_FILTER) return GRM_BAD_DESCRIPTOR;
             u32 stage = grm_word(filter + GRM_FILTER_STAGE_AT), setting = grm_word(filter + GRM_FILTER_SETTING_AT);
             u32 apply = grm_word(filter + GRM_FILTER_APPLY_AT);
-            if ((stage != GRM_STAGE_FRAME && stage != GRM_STAGE_MARK) ||
+            if ((stage != GRM_STAGE_FRAME && stage != GRM_STAGE_MARK && stage != GRM_STAGE_PRINT) ||
                 !grm_setting_reference(setting, setting_count, use_count) ||
                 !grm_code_at(m, code, base, apply & ~1U, 2) || (!(apply & 1) && (apply & 3)))
                 return GRM_BAD_DESCRIPTOR;

@@ -5,8 +5,8 @@ describe('planModules', () => {
   it('adds every module by default', () => {
     expect(planModules(ALL_MODULES, 2)).toEqual({
       includeEffects: true,
-      modules: ['FILMLOOK', 'FRAMING', 'CROP', 'GUIDES', 'DATE', 'GLOW', 'GRAIN', 'RECIPES'],
-      visible: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'grain', 'recipes'],
+      modules: ['FILMLOOK', 'FRAMING', 'CROP', 'GUIDES', 'DATE', 'GLOW', 'BORDER', 'GRAIN', 'RECIPES'],
+      visible: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain', 'recipes'],
     });
   });
 

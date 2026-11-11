@@ -24,6 +24,7 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 - **Guides**: thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry.
 - **Date Imprint**: the date on the photo in classic, GR1s dot-matrix, or GR II style.
 - **Glow**: bloom and film halation around bright lights.
+- **Border**: a white or black border, with the whole photo scaled down to fit inside.
 - **Grain**: film grain in four strengths and four sizes.
 - **Recipes**: save a look with its camera settings as a recipe, or add one from [grkit.app](https://grkit.app), and switch to it in one step or with U1 to U3.
 

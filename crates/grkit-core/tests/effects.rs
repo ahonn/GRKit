@@ -587,8 +587,8 @@ fn built_in_status_row_fits_with_its_widest_labels() {
         }
     }
     assert_eq!(
-        indicators, 5,
-        "Framing, Date Imprint, Bloom, Halation, and Grain"
+        indicators, 6,
+        "Framing, Date Imprint, Bloom, Halation, Border, and Grain"
     );
     assert!(
         row <= define("STATUS_RIGHT"),
