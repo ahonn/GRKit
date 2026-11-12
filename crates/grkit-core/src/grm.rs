@@ -82,6 +82,23 @@ pub const DESCRIPTOR_SIZE: u32 = 40;
 /// build writes (`GRM_DESCRIPTOR_FLAGS`).
 pub const DESCRIPTOR_FLAGS_SIZE: u32 = 44;
 
+/// The parts of the descriptor that package verification reads
+/// (`runtime/grm_format.h`, under the same names with `GRM_`).
+mod layout {
+    pub const DESCRIPTOR_REGISTRATIONS_AT: usize = 8;
+    pub const DESCRIPTOR_REGISTRATION_COUNT_AT: usize = 12;
+    pub const REGISTRATIONS: usize = 16;
+    pub const REGISTRATION: usize = 8;
+    pub const REGISTRATION_IMPL_AT: usize = 4;
+    pub const POINT_VIEWFINDER_INDICATOR: u32 = 5;
+    pub const INDICATOR: usize = 24;
+    pub const INDICATOR_PLACEMENT_AT: usize = 4;
+    pub const INDICATOR_SLOT_AT: usize = 8;
+    pub const INDICATOR_NATIVE_SLOT: u32 = 1;
+    pub const INDICATOR_STATUS_ROW: u32 = 2;
+    pub const SLOT_IMAGE_CONTROL: u32 = 1;
+}
+
 /// Whether a module can import `name`.
 pub fn importable(name: &str) -> bool {
     name == CONTEXT || EXPORTS.iter().any(|&(export, _)| export == name)
@@ -265,40 +282,39 @@ impl Module {
     /// Code pointers in a GRM are offsets from zero. Bound every read before
     /// package verification uses it; do not execute or link module code.
     pub(crate) fn indicator_placements(&self) -> Result<Vec<IndicatorPlacement>> {
-        const POINT_INDICATOR: u32 = 5;
-        const REGISTRATIONS_MAX: usize = 16;
+        use layout::*;
         let descriptor = self.descriptor as usize;
-        let count = word(&self.code, descriptor + 12)? as usize;
-        ensure!(count <= REGISTRATIONS_MAX, "Too many module registrations");
+        let count = word(&self.code, descriptor + DESCRIPTOR_REGISTRATION_COUNT_AT)? as usize;
+        ensure!(count <= REGISTRATIONS, "Too many module registrations");
         if count == 0 {
             return Ok(Vec::new());
         }
-        let list = word(&self.code, descriptor + 8)?;
+        let list = word(&self.code, descriptor + DESCRIPTOR_REGISTRATIONS_AT)?;
         ensure!(
-            list % 4 == 0 && inside(list, count * 8, self.code.len()),
+            list % 4 == 0 && inside(list, count * REGISTRATION, self.code.len()),
             "Invalid module registration table"
         );
         let mut placements = Vec::new();
         for index in 0..count {
-            let entry = list as usize + index * 8;
-            if word(&self.code, entry)? != POINT_INDICATOR {
+            let entry = list as usize + index * REGISTRATION;
+            if word(&self.code, entry)? != POINT_VIEWFINDER_INDICATOR {
                 continue;
             }
-            let address = word(&self.code, entry + 4)?;
+            let address = word(&self.code, entry + REGISTRATION_IMPL_AT)?;
             ensure!(
-                address % 4 == 0 && inside(address, 24, self.code.len()),
+                address % 4 == 0 && inside(address, INDICATOR, self.code.len()),
                 "Invalid viewfinder indicator descriptor"
             );
             let address = address as usize;
             ensure!(
-                word(&self.code, address)? >= 24,
+                word(&self.code, address)? as usize >= INDICATOR,
                 "Truncated viewfinder indicator descriptor"
             );
-            let placement = word(&self.code, address + 4)?;
-            let slot = word(&self.code, address + 8)?;
+            let placement = word(&self.code, address + INDICATOR_PLACEMENT_AT)?;
+            let slot = word(&self.code, address + INDICATOR_SLOT_AT)?;
             placements.push(match (placement, slot) {
-                (1, 1) => IndicatorPlacement::NativeSlot(slot),
-                (2, 0) => IndicatorPlacement::StatusRow,
+                (INDICATOR_NATIVE_SLOT, SLOT_IMAGE_CONTROL) => IndicatorPlacement::NativeSlot(slot),
+                (INDICATOR_STATUS_ROW, 0) => IndicatorPlacement::StatusRow,
                 _ => anyhow::bail!("Invalid viewfinder placement {placement} with slot {slot}"),
             });
         }
@@ -611,6 +627,49 @@ mod tests {
         assert!(module.encode().is_err());
         module.tiles = vec![0; (MAX_TILES + 1) * TILE_BYTES];
         assert!(module.encode().is_err());
+    }
+
+    /// Package verification reads the descriptor as the installer does.
+    #[test]
+    fn the_descriptor_layout_agrees_with_the_installer() {
+        use layout::*;
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime/grm_format.h");
+        let text = std::fs::read_to_string(path).unwrap();
+        let define = |name: &str| {
+            text.lines()
+                .find_map(|line| line.strip_prefix(&format!("#define {name} ")))
+                .and_then(|value| value.split_whitespace().next())
+                .and_then(|value| value.trim_end_matches('U').parse::<u64>().ok())
+                .unwrap_or_else(|| panic!("runtime/grm_format.h has no {name}"))
+        };
+        for (name, value) in [
+            (
+                "GRM_DESCRIPTOR_REGISTRATIONS_AT",
+                DESCRIPTOR_REGISTRATIONS_AT as u64,
+            ),
+            (
+                "GRM_DESCRIPTOR_REGISTRATION_COUNT_AT",
+                DESCRIPTOR_REGISTRATION_COUNT_AT as u64,
+            ),
+            ("GRM_REGISTRATIONS", REGISTRATIONS as u64),
+            ("GRM_REGISTRATION", REGISTRATION as u64),
+            ("GRM_REGISTRATION_IMPL_AT", REGISTRATION_IMPL_AT as u64),
+            (
+                "GRM_POINT_VIEWFINDER_INDICATOR",
+                POINT_VIEWFINDER_INDICATOR.into(),
+            ),
+            ("GRM_INDICATOR", INDICATOR as u64),
+            ("GRM_INDICATOR_PLACEMENT_AT", INDICATOR_PLACEMENT_AT as u64),
+            ("GRM_INDICATOR_SLOT_AT", INDICATOR_SLOT_AT as u64),
+            ("GRM_INDICATOR_NATIVE_SLOT", INDICATOR_NATIVE_SLOT.into()),
+            ("GRM_INDICATOR_STATUS_ROW", INDICATOR_STATUS_ROW.into()),
+            ("GRM_SLOT_IMAGE_CONTROL", SLOT_IMAGE_CONTROL.into()),
+            ("GRM_TILE_BYTES", TILE_BYTES as u64),
+            ("GRM_TILES", MAX_TILES as u64),
+        ] {
+            assert_eq!(define(name), value, "{name}");
+        }
     }
 
     #[test]
