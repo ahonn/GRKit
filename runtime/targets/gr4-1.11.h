@@ -175,11 +175,8 @@
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x533742c8)
 /* RAW development: the ID of the first development controller (gr4.h). */
 #define DEVELOP_CONTROLLERS 0x400001eU
-/* RAW development, the Fn adjustments (runtime/develop.h): the category
-   and the values of the selected Image Control in RawDevelopmentModel,
-   and the parameter set of Standard (runtime/targets/gr3-2.10.h). */
-#define DEVELOP_CATEGORY 0x9c
-#define DEVELOP_VALUES 0x9d
+/* RAW development, the Fn adjustments (runtime/develop.h): the parameter
+   set of Standard in RawDevelopmentModel (gr4.h: DEVELOP_CATEGORY). */
 #define DEVELOP_PARAMETERS 0xb3
 /* RAW development, the aspect list (runtime/menu.c): the row value of the
    model (model, row), the capture aspect of a development aspect (model,
@@ -246,11 +243,10 @@
 #define FW_SLIDER_FLAG FIRMWARE(0x5357b850)
 #define FW_SLIDER_APPLY FIRMWARE(0x5357b968)
 #define UI_SLIDER_ICONS {0x23a,0x4a,0xb9,0x248}
-/* The keyboard of the camera (runtime/ui.h): its controller ID, the getter
-   of SoftwareKeyboardModel, which holds the use of the keyboard (the getter
+/* The keyboard of the camera (runtime/ui.h): the getter of
+   SoftwareKeyboardModel, which holds the use of the keyboard (the getter
    ignores its argument, the model factory), and the setter of the use,
    which asserts that no use is set. */
-#define KEYBOARD_CONTROLLER 0x20000f7U
 #define FW_KEYBOARD_MODEL FIRMWARE(0x53240134)
 #define FW_KEYBOARD_SET_FUNCTION FIRMWARE(0x533e5508)
 

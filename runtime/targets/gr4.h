@@ -100,6 +100,12 @@
    RawDevelopmentModel has its state at DEVELOP_STATE: 0 while no
    development runs. */
 #define DEVELOP_STATE 4
+/* RAW development, the Fn adjustments (runtime/develop.h): RawDevelopmentModel
+   holds the selected Image Control: the category at DEVELOP_CATEGORY and the
+   value of each category from DEVELOP_VALUES. The build header gives the
+   parameter set of Standard (DEVELOP_PARAMETERS). */
+#define DEVELOP_CATEGORY 0x9c
+#define DEVELOP_VALUES 0x9d
 #define DEVELOP_SQUARE 4
 /* The value of the Standard Image Control in the development (category 0). */
 #define DEVELOP_STANDARD 1
@@ -340,11 +346,13 @@
 /* DigitalFilterProcess plan: the grain stage flag that the stage gate sets. */
 #define GRAIN_GATE_FLAG 0x25
 
-/* The keyboard of the camera (runtime/ui.h): SoftwareKeyboardController
-   copies its use from the model at its start (OnStart) to the byte
+/* The keyboard of the camera (runtime/ui.h): its controller ID
+   (KEYBOARD_CONTROLLER). SoftwareKeyboardController copies its use from
+   the model at its start (OnStart) to the byte
    KEYBOARD_FUNCTION; the copyright use is KEYBOARD_COPYRIGHT. The model
    (FW_KEYBOARD_MODEL) holds the use in its byte KEYBOARD_MODEL_FUNCTION, 0
    for none, and the keyboard clears it when it stops. */
+#define KEYBOARD_CONTROLLER 0x20000f7U
 #define KEYBOARD_FUNCTION 0x240
 #define KEYBOARD_COPYRIGHT 3U
 #define KEYBOARD_MODEL_FUNCTION 0

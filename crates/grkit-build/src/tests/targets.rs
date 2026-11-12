@@ -242,6 +242,41 @@ fn builds_of_a_family_have_its_hooks_and_the_same_definitions() {
     }
 }
 
+/// A value that each build of a family has is a value of the family: it is
+/// in the family header, so that a change and a port touch it once. A build
+/// header keeps its addresses and the values that differ in its build.
+#[test]
+fn values_that_each_build_of_a_family_shares_are_in_the_family_header() {
+    let mut families: BTreeMap<&str, Vec<&target::Target>> = BTreeMap::new();
+    for target in target::TARGETS {
+        families.entry(target.family.name).or_default().push(target);
+    }
+    for (family, builds) in families {
+        if builds.len() < 2 {
+            continue;
+        }
+        let headers: Vec<_> = builds
+            .iter()
+            .map(|build| header_definitions(&build.header(), true))
+            .collect();
+        let shared: Vec<&String> = headers[0]
+            .iter()
+            .filter(|(name, value)| {
+                !value.contains("FIRMWARE(")
+                    && headers[1..]
+                        .iter()
+                        .all(|other| other.get(*name) == Some(*value))
+            })
+            .map(|(name, _)| name)
+            .collect();
+        assert!(
+            shared.is_empty(),
+            "Each {family} build header defines {shared:?} with the same value: move them to \
+             runtime/targets/{family}.h"
+        );
+    }
+}
+
 #[test]
 fn each_target_has_a_header_a_camera_release_and_an_icon_stride() {
     let selector = std::str::from_utf8(runtime_source("firmware.h").unwrap()).unwrap();

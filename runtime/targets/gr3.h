@@ -1,13 +1,285 @@
-/* RICOH GR III family: the values that the shared runtime takes from each
-   family, as GR III builds have them. A build header (gr3-<version>.h)
-   defines the firmware addresses (FW_*) and the other values of its build,
-   then includes this file. Comments here name no firmware address, because
-   each build has its own; the build header gives them. */
+/* RICOH GR III family: the object layouts, events, and constants that each
+   GR III firmware build shares. A build header (gr3-<version>.h) defines the
+   firmware addresses (FW_*) and the values that differ in its build, then
+   includes this file. Comments here name no firmware address, because each
+   build has its own; the build header gives them.
+   A build that changes a value of this file defines it in its build header,
+   and the value moves there for each build of the family. */
 #ifndef GRKIT_GR3_H
 #define GRKIT_GR3_H
 
 /* Icon slots hold an 8-byte descriptor, then 40 x 40 RGBA. */
 #define GRKIT_ICON_STRIDE 6408
+
+/* Settings domain (FW_SETTINGS_DOMAIN): +0x518 -> control -> payload with the
+   native Image Control type at SETTINGS_IC_TYPE. Standard is type 11. */
+#define SETTINGS_IC_TYPE 0x77c
+/* The native monochrome types, as a bit mask of the type: 13 to 16 are
+   Monotone, Soft Monotone, Hard Monotone, and Hi-Contrast B&W (ImageTone 258
+   to 261). The shot settings hold the type at the same offset as the
+   settings payload. */
+#define NATIVE_MONOCHROME_TYPES 0x0001e000U
+/* The digital filter values of the shot settings, which the grain stage of
+   recorded pictures reads: Shading and Clarity (0 to 8, 4 is neutral),
+   Particle (0 is no grain), and the HDR Tone strength (0 is off). The native
+   parameter build writes them for its Image Control type. */
+#define SETTINGS_SHADING 0x793
+#define SETTINGS_CLARITY 0x794
+#define SETTINGS_GRAIN 0x795
+#define SETTINGS_HDR 0x796
+
+/* The list's row vector (first and end pointers) and its shown row count. */
+#define LIST_ROWS 0xf4
+#define LIST_COUNT 0x108
+
+/* AdjModeController. The slot type of the native Image Control slot, and the
+   controller of its Standard parameter page (still mode). */
+#define ADJ_IC_SLOT_TYPE 12
+#define IC_PARAMETERS_CONTROLLER 0x2000014
+/* The shooting screen: a half-press on a page changes to it, and the release
+   changes back to the page. */
+#define SHOOTING_CONTROLLER 0x8000000
+/* The native screens of ui_open_native (runtime/ui.h): the targets of the
+   MENU rows White Balance (still) and LCD. */
+#define UI_NATIVE_WHITE_BALANCE 0x200004eU
+#define UI_NATIVE_LCD 0x2000018U
+/* ImageControlDetailController, the parameter page. Its start method sets the
+   type (+0x198), the set kind (+0x199: 0 the base set, 1 and 2 Custom), and
+   the base kind of its row table (+0x19a: 0 Standard). The Image Control
+   model keeps a snapshot of the adjustments from +3, one byte for each row
+   kind, and a cancel writes the snapshot back through the model setters. */
+/* The main title view of the page. UpdateViewMainTitle sets its text from the type. */
+#define DETAIL_TITLE 0x15c
+#define DETAIL_TYPE 0x198
+#define DETAIL_SET_KIND 0x199
+#define DETAIL_BASE_KIND 0x19a
+#define MODEL_SNAPSHOT 3
+/* The row kinds of the Standard adjustments, in GRKIT_RECORD_PARAMETERS order. */
+#define PARAMETER_KINDS {0,1,2,3,4,5,6,13,14}
+/* The last two of them, Shading and Clarity, for assembly (runtime/processing.h). */
+#define PARAMETER_KIND_SHADING 13
+#define PARAMETER_KIND_CLARITY 14
+/* Toning (runtime/toning.h): base kind 9 of the row lists, the rows of
+   Retro, adds Toning, row kind 9, to the Standard rows. Its model getter and
+   setter and row read hook as adjustment 9. The page keeps the Standard type:
+   the Retro type also sets its own Shading. */
+#define PARAMETER_TONING_BASE 9
+#define PARAMETER_TONING_KIND 9
+/* The page event that opens another controller (0x2000015) from the page. */
+#define DETAIL_EV_SUBPAGE 0x88
+
+/* The native settings page of a GRKit root row (runtime/menu_settings.h). It
+   borrows the MENU submenu Instant Review (controller 0x20000be, entry 10 of
+   the submenu kind table FW_SUBMENU_KINDS), its three value pages (0x20000c3
+   Display Time, 0x20000c4 Zoom Review, 0x20000c5), and two value pages of
+   the MENU Setup tab (0x200009f, 0x20000a0), one for each row. Each is a
+   plain SelectMenu page: its record has one title and no description. A
+   switch in the SelectMenu start maps the page to its record; records 83, 84,
+   85, 87, 88. A kind table entry holds the row count at +6, the row label IDs
+   (u16) at +8, the row controllers (u32) at +0x14, a kind for each row (u32,
+   0x21c for a row with a value page) at +0x28, and the row value methods (C++
+   member pointers, 8 bytes) at +0x3c. A row without its kind draws its value
+   over its label.
+   A value method gets the submenu and the row. A value page shows the label
+   ID of its SelectMenu record as title, which is the label of its row. */
+#define SUBMENU_KIND_SIZE 0x64
+#define SUBMENU_KIND_ROWS 6
+#define SUBMENU_KIND_LABELS 8
+#define SUBMENU_KIND_CONTROLLERS 0x14
+#define SUBMENU_KIND_ROW_KINDS 0x28
+#define SUBMENU_KIND_VALUES 0x3c
+#define SETTINGS_SUBMENU 0x20000beU
+#define SETTINGS_SUBMENU_KIND 10
+#define SETTINGS_PAGES {0x20000c3U,0x20000c4U,0x20000c5U,0x200009fU,0x20000a0U}
+/* The text IDs of the submenu title and of the title of each value page,
+   which are also the row labels. The sixth row, which has no value page of
+   its own, shows a label of another submenu. */
+#define SETTINGS_TITLE_TEXT 0x1e7
+#define SETTINGS_ROW_TEXTS {0x1e9,0x1eb,0x16e,0x194,0x1ed,0x1b0}
+/* Options pages show checkboxes (runtime/menu_settings.h): the checked and
+   unchecked images. A value page row sets the string view at ROW_TEXT_VIEW,
+   and a submenu row its value view at ROW_VALUE_VIEW. */
+#define CHECK_IMAGE_ON 0x10fU
+#define CHECK_IMAGE_OFF 0x10eU
+#define ROW_TEXT_VIEW 0xf8
+#define ROW_VALUE_VIEW 0xfc
+/* The label view of a submenu row, which its label setter sets. */
+#define ROW_LABEL_VIEW 0xec
+
+/* Rows of modules in the native MENU (runtime/menu_section.h). MENU builds its
+   tabs at the first MENU of a start from the tab descriptors in the RAM
+   table FW_MENU_TABS; entry MENU_TAB_GRKIT is the Customize tab. A
+   descriptor holds the row count (u8) at MENU_TAB_ROWS, then for each of
+   MENU_TAB_MAX_ROWS rows its filler (a C++ member pointer), its target
+   controller, and its predicate (a member pointer, 0 for a row that always
+   shows). A filler gets the row view and sets its label view (+0xec) and
+   value view with the row setters. */
+/* The MENU tab of the GRKit section (Customize, C), and the sections of a
+   tab descriptor: their count, title text IDs, and first rows. The Setup
+   tab has all MENU_TAB_MAX_SECTIONS sections; Customize has 3. */
+#define MENU_TAB_GRKIT 3
+#define MENU_TAB_SECTIONS 0x68
+#define MENU_TAB_TITLES 0x6a
+#define MENU_TAB_STARTS 0x80
+#define MENU_TAB_MAX_SECTIONS 11
+/* The TopMenu instance in the controller factory (FW_CONTROLLER_FACTORY). */
+#define MENU_TOP_SLOT 0x74
+#define MENU_TAB_SIZE 0x384
+#define MENU_TAB_ROWS 0x8b
+#define MENU_TAB_FILLERS 0x8c
+#define MENU_TAB_TARGETS 0x1bc
+#define MENU_TAB_PREDICATES 0x254
+#define MENU_TAB_MAX_ROWS 38
+/* The rows of the stock Customize tab. */
+#define MENU_TAB_STOCK_ROWS 22
+#define MENU_ROW_LABEL_VIEW 0xec
+#define MENU_ROW_VALUE_VIEW 0xf8
+/* A native view keeps its frame {x, y, width, height} at VIEW_FRAME, and its
+   vtable sets it at VIEW_SET_FRAME. The value of a MENU or submenu row shows
+   in a column of VALUE_COLUMN pixels from the x of the view. */
+#define VIEW_FRAME 0x20
+#define VIEW_SET_FRAME 0x18
+#define VALUE_COLUMN 140
+/* The camera information page (Setup tab, Firmware Info/Options), which
+   About GRKit opens: its controller, the text ID of its title, and its two
+   lines, ASCII string views that the page update sets (menu_info_update)
+   with FW_STRING_VIEW_SET_ASCII(view, text). */
+#define INFO_CONTROLLER 0x200011aU
+#define INFO_TITLE_TEXT 0x28d
+#define INFO_LINES {0x168,0x16c}
+
+/* AdjModeController fields. */
+#define ADJ_CANVAS 0x4
+/* The UI language byte of the UI settings object (UI_SETTINGS_SLOT): 18 is
+   Traditional Chinese and 19 Simplified Chinese. */
+#define LANGUAGE_SETTING 0x9ba
+/* The text ID of the first Snap focus distance, 0.3 m, then 0.4, 1, 1.5, 2,
+   2.5, 3.5, and 5 m (runtime/distance.h). */
+#define SNAP_DISTANCE_TEXT 62
+/* The icons 1, 3, and 10 of the manual focus scale (runtime/distance.h). */
+#define SCALE_ICON_ONE 0x83
+#define SCALE_ICON_THREE 0x86
+#define SCALE_ICON_TEN 0x84
+/* The live-view display mode that DISP cycles, in the same settings object:
+   0 full, 1 simple, 2 no information, 3 display off. */
+#define DISPLAY_MODE_SETTING 0x912
+#define ADJ_TITLE 0x160
+#define ADJ_DETAIL 0x164
+#define ADJ_DETAIL_VALUE 0x168
+#define ADJ_CELLS 0x16c
+#define ADJ_FRAME 0x180
+#define ADJ_ICONS 0x184
+#define ADJ_FN_GUIDE 0x1ac
+/* The Fn hint of the Image Control slot (FW_GUIDE_SET_CONTENT): the Fn label,
+   layout 10, and the settings icon. */
+#define FN_GUIDE_TEXT 0x1cf
+#define FN_GUIDE_ICON 0x233
+#define ADJ_LIST 0x1f0
+#define ADJ_SLOT 0x1f4
+/* 1 in movie mode. */
+#define ADJ_MOVIE_FIELD 0x270
+#define ADJ_MOVIE(controller) BYTE(controller,ADJ_MOVIE_FIELD)
+/* 1 while the held Fn action of an ADJ slot (type 13) runs. */
+#define ADJ_FN_HELD 0x279
+
+/* AdjModeController events (the first halfword of an event). */
+#define EV_SWITCH 5
+#define EV_SWITCH_END 8
+/* A half-press of the shutter on a MENU value page, before the confirm that
+   OK also sends. */
+#define EV_HALF_PRESS 2
+#define EV_FN 0x1b
+/* An ADJ press, before the confirm that OK also sends. */
+#define EV_ADJ_PRESS 0x1e
+/* The argument of an Fn press. ADJ opens the native parameters on it. */
+#define FN_PRESS_ARG 2
+#define EV_TOUCH 0x30
+#define EV_LEFT 0xce
+#define EV_RIGHT 0xcf
+#define EV_UP 0xd0
+#define EV_DOWN 0xd1
+#define EV_DIAL_UP 0xd4
+#define EV_DIAL_DOWN 0xd5
+#define EV_CONFIRM 0xd8
+
+/* The playback metadata (FW_PLAYBACK_METADATA): +0x220 holds key 0x25, the
+   Image Control tag. */
+#define METADATA_TONE 0x220
+/* The native Off icon, used until the installer provides the GRKit one. */
+#define NATIVE_OFF_ICON() WORD(FW_ICON_TABLE,0x166*4)
+/* The time of the photo in the playback metadata. */
+#define METADATA_TIME 0x3c0
+/* The EXIF Orientation of the photo in the playback metadata. */
+#define METADATA_ORIENTATION 0x2b0
+/* RAW development, the Fn adjustments (runtime/develop.h). RawDevelopmentModel
+   holds the selected Image Control: the category at DEVELOP_CATEGORY and the
+   value of each category from DEVELOP_VALUES. Each Image Control has a
+   parameter set of a byte for each parameter kind; that of Standard is at
+   DEVELOP_PARAMETERS. The parameter page of the development edits the set of
+   the selected Image Control. */
+#define DEVELOP_CATEGORY 0x82
+#define DEVELOP_VALUES 0x83
+#define DEVELOP_PARAMETERS 0x97
+/* RAW development, the Image Control list and the aspect list
+   (runtime/menu.c): the controller ID word, the ID of each list, and the
+   first instruction of the row value of the model, which its entry hook
+   replaces. */
+#define CONTROLLER_ID 0x124
+#define DEVELOP_TONE_LIST 0x4000025U
+#define DEVELOP_ASPECT_LIST 0x4000022U
+#define DEVELOP_ASPECT_VALUE_FIRST "ldrb r3, [r0, #5]"
+/* The list view of RawDevelopmentParameterSetController, and the style and
+   the height of its row views. */
+#define DEVELOP_LIST_VIEW 0x168
+#define DEVELOP_ROW_STYLE 0x1aU
+#define DEVELOP_ROW_HEIGHT 0x3aU
+/* The first instruction of the row category, which its entry hook replaces.
+   The subtitle of the list is at +0x160 of the controller (r4 in
+   UpdateSubTitle), the subtitle of RawDevelopmentTopController in r6. */
+#define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
+#define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
+#define DEVELOP_TOP_TITLE mov r3, r6
+
+/* LiveViewController: nonzero in movie mode, and the LCD canvas. */
+#define LIVEVIEW_MOVIE 0x2d2
+#define LIVEVIEW_CANVAS 0x15c
+/* LiveViewController: the byte that makes UpdateLevelAlarm set the
+   highlight warning again (FW_LIVEVIEW_LEVEL_UPDATE). */
+#define LIVEVIEW_LEVEL_PENDING 0x4df
+/* The posture word of the electronic level: 1 landscape, 2 upside down, 3
+   and 4 the two vertical postures, 5 and 6 the lens down or up
+   (runtime/picture.c: picture_turns). */
+#define LEVEL_POSTURE 0x7c
+/* Picture processing. GAMMA_BUILT: the word of the gamma object that is 1
+   after the native curves are built. */
+#define GAMMA_BUILT 0x3230
+/* GAMMA_UPLOAD: the byte of the gamma object that makes the table build use
+   the composed curves. */
+#define GAMMA_UPLOAD 0x320a
+/* DigitalFilterProcess plan: the grain stage flag that the stage gate sets. */
+#define GRAIN_GATE_FLAG 0x24
+/* Grain size. The shot settings hold the float APEX Sv of the shot at
+   GRAIN_SV, which the EXIF ISO also uses. The granulation keeps the pitch and
+   the height of its noise plane at fp - GRAIN_FILL_PITCH and
+   fp - GRAIN_FILL_HEIGHT when it calls the noise fill FW_GRAIN_NOISE. */
+#define GRAIN_SV 0xb68
+#define GRAIN_FILL_PITCH 0x650
+#define GRAIN_FILL_HEIGHT 0x644
+/* The system counter behind the generic timer of the cores runs at 40 MHz
+   (the GR III device tree and kernel log). Only Linux writes CNTFRQ, so the
+   RTOS cores read 0 there. */
+#define SYSTEM_COUNTER_MHZ 40U
+
+/* The icons that the native sliders use (runtime/ui.h: ui_slider). */
+#define UI_SLIDER_ICONS {0x230,0x40,0xc7,0x240}
+/* The keyboard of the camera (runtime/ui.h): the controller ID of its
+   copyright use, which the Copyright Information page opens.
+   SoftwareKeyboardController sets its use from the controller ID at its
+   start, in the byte KEYBOARD_FUNCTION; the copyright use is
+   KEYBOARD_COPYRIGHT. */
+#define KEYBOARD_CONTROLLER 0x2000105U
+#define KEYBOARD_FUNCTION 0x1f0
+#define KEYBOARD_COPYRIGHT 2U
 
 /* Framing: the rows of every family (runtime/firmware.h). GR III has the
    native aspects 3:2 and 1:1. Framing captures each ratio through a hidden
