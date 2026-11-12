@@ -63,9 +63,10 @@ static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
 
 /* The module settings table (runtime/setting_table.h): another module's
    setting, then Glow's Bloom, Halation, and Halation color, as INSTALL
-   writes them when the Glow module loads. */
+   writes them when the Glow module loads. They are the first settings of
+   GRKIT_RECIPE_SETTINGS. */
 #include "setting_table.h"
-static const u32 module_ids[] = {GRKIT_RECIPE_MODULE_SETTING_IDS};
+static const u32 module_ids[] = {GRKIT_RECIPE_SETTING_IDS};
 #define TEST_SETTINGS_COUNT 4U
 static u32 module_table[SETTINGS_ENTRY(TEST_SETTINGS_COUNT)];
 static u32 glow_loaded;
@@ -112,6 +113,8 @@ static u32 setting_value(volatile u32 *h, u32 handle)
     if (handle == GRKIT_CORE_TONE) return tone_value(h);
     if (handle == GRKIT_CORE_GRAIN) return h[GRKIT_HOST_GRAIN / 4];
     if (handle == GRKIT_CORE_GRAIN_SIZE) return h[GRKIT_HOST_GRAIN_SIZE / 4];
+    if (handle == GRKIT_CORE_BORDER) return h[GRKIT_HOST_BORDER / 4];
+    if (handle == GRKIT_CORE_BORDER_COLOR) return h[GRKIT_HOST_BORDER_COLOR / 4];
     assert(settings_table(h) && handle < module_table[0]);
     return module_table[SETTINGS_ENTRY(handle) + 1];
 }
@@ -121,6 +124,11 @@ static void setting_store(volatile u32 *h, u32 handle, u32 value)
     if (handle == GRKIT_CORE_TONE) h[GRKIT_HOST_ACTIVE / 4] = tone_record(h, value);
     else if (handle == GRKIT_CORE_GRAIN) h[GRKIT_HOST_GRAIN / 4] = value;
     else if (handle == GRKIT_CORE_GRAIN_SIZE) h[GRKIT_HOST_GRAIN_SIZE / 4] = value;
+    else if (handle == GRKIT_CORE_BORDER) { assert(value < GRKIT_CORE_BORDER_VALUES); h[GRKIT_HOST_BORDER / 4] = value; }
+    else if (handle == GRKIT_CORE_BORDER_COLOR) {
+        assert(value < GRKIT_CORE_BORDER_COLOR_VALUES);
+        h[GRKIT_HOST_BORDER_COLOR / 4] = value;
+    }
     else {
         assert(settings_table(h) && handle < module_table[0] && value < module_table[SETTINGS_ENTRY(handle) + 2]);
         module_table[SETTINGS_ENTRY(handle) + 1] = value;
@@ -134,6 +142,29 @@ static u32 test_id_source;
 #include "recipes.h"
 
 #define RUNNING (GRKIT_CORE_TONE_BIT | GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT | GRKIT_CORE_RECIPE_BIT)
+/* The capabilities of the Border module. */
+#define BORDER_BITS (GRKIT_CORE_BORDER_BIT | GRKIT_CORE_BORDER_COLOR_BIT)
+/* The settings of GRKIT_RECIPE_SETTINGS. */
+#define BLOOM 0U
+#define HALATION 1U
+#define HALATION_COLOR 2U
+#define BORDER 3U
+#define BORDER_COLOR 4U
+/* Whether recipe `slot` holds setting i of GRKIT_RECIPE_SETTINGS, and its
+   value. */
+static u32 slot_words[GRKIT_RECIPE_WORDS];
+static const u32 *words_of(u32 slot)
+{
+    for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) slot_words[k] = recipe_at(header, slot)[k];
+    return slot_words;
+}
+#define HELD(slot, i) recipe_setting_held(words_of(slot), i)
+#define VALUE(slot, i) recipe_setting_value(words_of(slot), i)
+static void set_border(u32 style, u32 color)
+{
+    header[GRKIT_HOST_BORDER / 4] = style;
+    header[GRKIT_HOST_BORDER_COLOR / 4] = color;
+}
 
 static u32 record_at(u32 i) { return TEST_RECORDS + i * GRKIT_RECORD_SIZE; }
 /* Portable indexes of runtime/native.h. */
@@ -591,10 +622,12 @@ static void saves_hold_modules_that_do_not_run_at_off(void)
     assert(recipe_save(header) == 0);
     volatile u32 *w = recipe_at(header, 0);
     assert((w[0] & RECIPE_GRAIN) && RECIPE_GRAIN_LEVEL(w[0]) == 0 && RECIPE_GRAIN_SIZE(w[0]) == 0);
-    u32 m = w[RECIPE_MODULE_WORD];
-    assert(RECIPE_MODULE_HELD(m, 0) && RECIPE_MODULE_VALUE(m, 0) == 0);
-    assert(RECIPE_MODULE_HELD(m, 1) && RECIPE_MODULE_VALUE(m, 1) == 0);
-    assert(!RECIPE_MODULE_HELD(m, 2));
+    assert(HELD(0, BLOOM) && VALUE(0, BLOOM) == 0);
+    assert(HELD(0, HALATION) && VALUE(0, HALATION) == 0);
+    assert(!HELD(0, HALATION_COLOR));
+    /* The border is not part of the look: without the module, a save
+       holds none, and apply keeps the border of the camera. */
+    assert(!HELD(0, BORDER) && !HELD(0, BORDER_COLOR));
     /* The modules that do not run decide no match. */
     assert(recipe_matches(header, 0));
     /* The modules run, with Grain and Glow of another recipe. */
@@ -888,10 +921,9 @@ static void glow_saves_applies_and_undoes(void)
     load_glow(1);
     select_effect(1); set_grain(0, 0); set_glow(2, 3, 0);
     assert(recipe_save(header) == 0);
-    u32 m = recipe_at(header, 0)[RECIPE_MODULE_WORD];
-    assert(RECIPE_MODULE_HELD(m, 0) && RECIPE_MODULE_VALUE(m, 0) == 2);
-    assert(RECIPE_MODULE_HELD(m, 1) && RECIPE_MODULE_VALUE(m, 1) == 3);
-    assert(RECIPE_MODULE_HELD(m, 2) && RECIPE_MODULE_VALUE(m, 2) == 0);
+    assert(HELD(0, BLOOM) && VALUE(0, BLOOM) == 2);
+    assert(HELD(0, HALATION) && VALUE(0, HALATION) == 3);
+    assert(HELD(0, HALATION_COLOR) && VALUE(0, HALATION_COLOR) == 0);
     assert(recipe_matches(header, 0));
     /* Another Glow: no match, and apply sets the recipe's Glow. */
     set_glow(0, 1, 3);
@@ -908,8 +940,7 @@ static void glow_saves_applies_and_undoes(void)
     load_glow(0);
     set_glow(1, 1, 0);
     assert(recipe_save(header) == 0);
-    m = recipe_at(header, 0)[RECIPE_MODULE_WORD];
-    assert(RECIPE_MODULE_HELD(m, 1) && !RECIPE_MODULE_HELD(m, 2));
+    assert(HELD(0, HALATION) && !HELD(0, HALATION_COLOR));
 
     /* Without the Glow module the picture has no Glow: a save holds Bloom
        and Halation at Off, and no color, which has no Off. A recipe with
@@ -918,16 +949,61 @@ static void glow_saves_applies_and_undoes(void)
     reset();
     select_effect(2); set_grain(2, 0);
     assert(recipe_save(header) == 0);
-    assert(recipe_at(header, 0)[RECIPE_MODULE_WORD] == (1U | 1U << RECIPE_MODULE_BITS));
-    recipe_at(header, 0)[RECIPE_MODULE_WORD] = 1U | 3U << RECIPE_MODULE_BITS;
+    assert(recipe_at(header, 0)[RECIPE_MODULE_WORD] == (1U | 1U << recipe_setting_shifts[HALATION]));
+    recipe_at(header, 0)[RECIPE_MODULE_WORD] = 1U | 3U << recipe_setting_shifts[HALATION];
     select_effect(0); set_grain(0, 0);
-    assert(recipe_apply(header, 0) == (RECIPE_READY | RECIPE_SKIPPED_MODULE));
+    assert(recipe_apply(header, 0) == (RECIPE_READY | RECIPE_SKIPPED_MODULE(0)));
     assert(header[GRKIT_HOST_ACTIVE / 4] == record_at(2) && header[GRKIT_HOST_GRAIN / 4] == 2);
     /* The Glow that does not run does not decide the match. */
     assert(recipe_matches(header, 0));
     /* Glow Off changes nothing without the module, so apply reports none. */
-    recipe_at(header, 0)[RECIPE_MODULE_WORD] = 1U | 1U << RECIPE_MODULE_BITS;
+    recipe_at(header, 0)[RECIPE_MODULE_WORD] = 1U | 1U << recipe_setting_shifts[HALATION];
     assert(recipe_apply(header, 0) == RECIPE_READY);
+}
+
+/* With the Border module, a save holds the border, and the color of a
+   border that is on. Apply sets them, and an undo step restores them. The
+   border is not part of the look: it does not decide a match, a recipe
+   without it keeps the border of the camera, and a save without the module
+   holds none. A recipe with a border applies the rest without the module
+   and reports it. */
+static void border_saves_applies_and_does_not_match(void)
+{
+    reset();
+    header[GRKIT_HOST_CAPABILITIES / 4] = RUNNING | BORDER_BITS;
+    select_effect(1); set_border(2, 1);
+    assert(recipe_save(header) == 0);
+    assert(HELD(0, BORDER) && VALUE(0, BORDER) == 2);
+    assert(HELD(0, BORDER_COLOR) && VALUE(0, BORDER_COLOR) == 1);
+    /* Border Off: no color. */
+    set_border(0, 1);
+    assert(recipe_save(header) == 1);
+    assert(HELD(1, BORDER) && VALUE(1, BORDER) == 0 && !HELD(1, BORDER_COLOR));
+    /* Each matches whatever the border. */
+    set_border(3, 0);
+    assert(recipe_matches(header, 0) && recipe_matches(header, 1) && recipe_current(header) == 0);
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(header[GRKIT_HOST_BORDER / 4] == 2 && header[GRKIT_HOST_BORDER_COLOR / 4] == 1);
+    recipe_undo(header);
+    assert(header[GRKIT_HOST_BORDER / 4] == 3 && header[GRKIT_HOST_BORDER_COLOR / 4] == 0);
+    /* Off keeps the color for the next border. */
+    assert(recipe_apply(header, 1) == RECIPE_READY);
+    assert(header[GRKIT_HOST_BORDER / 4] == 0 && header[GRKIT_HOST_BORDER_COLOR / 4] == 0);
+    /* A recipe without a border, as a preset, keeps the border. */
+    set_border(1, 1);
+    recipe_at(header, 0)[GRKIT_RECIPE_SETTINGS_WORD] = 0;
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(header[GRKIT_HOST_BORDER / 4] == 1 && header[GRKIT_HOST_BORDER_COLOR / 4] == 1);
+
+    /* Without the module, a save holds no border, a border that is on is
+       left out and reported, and a border that is off changes nothing. */
+    header[GRKIT_HOST_CAPABILITIES / 4] = RUNNING;
+    assert(recipe_save(header) == 2);
+    assert(!HELD(2, BORDER) && !HELD(2, BORDER_COLOR));
+    assert(recipe_apply(header, 1) == RECIPE_READY);
+    recipe_at(header, 1)[GRKIT_RECIPE_SETTINGS_WORD] |= 1U | 2U << 1;
+    assert(recipe_apply(header, 1) == (RECIPE_READY | RECIPE_SKIPPED_MODULE(1)));
+    assert(header[GRKIT_HOST_BORDER / 4] == 1 && header[GRKIT_HOST_BORDER_COLOR / 4] == 1);
 }
 
 /* Without Film Look, a save that reads a native type holds Film Look Off
@@ -960,8 +1036,7 @@ static void monochrome_holds_no_color_setting(void)
     load_glow(1);
     set_glow(1, 2, 3);
     assert(recipe_save(header) == 0);
-    u32 m = recipe_at(header, 0)[RECIPE_MODULE_WORD];
-    assert(RECIPE_MODULE_HELD(m, 0) && RECIPE_MODULE_HELD(m, 1) && !RECIPE_MODULE_HELD(m, 2));
+    assert(HELD(0, BLOOM) && HELD(0, HALATION) && !HELD(0, HALATION_COLOR));
     set_glow(0, 0, 1);
     assert(recipe_apply(header, 0) == RECIPE_READY);
     assert(glow_value(0) == 1 && glow_value(1) == 2 && glow_value(2) == 1);
@@ -978,22 +1053,24 @@ static const char *family_name(void)
 }
 /* Save the current settings and print the words of the recipe for the
    Rust codec (grkit_core::recipes::Recipe::from_words), which the site
-   reads the recipe file with: "save FAMILY W0 W1 W2 W3 W4". */
+   reads the recipe file with: "save FAMILY W0 ... W5". */
 static void print_save(void)
 {
     assert(recipe_save(header) == 0);
-    volatile u32 *w = recipe_at(header, 0);
-    printf("save %s %u %u %u %u %u\n", family_name(), w[0], w[1], w[2], w[3], w[4]);
+    printf("save %s", family_name());
+    for (u32 k = 0; k < GRKIT_RECIPE_WORDS; ++k) printf(" %u", recipe_at(header, 0)[k]);
+    printf("\n");
 }
 /* The saves of the camera for the Rust codec: an effect with Fn, Grain,
-   Glow, and the native settings; a native look with and without Film
-   Look; and GR IV Monochrome with Glow. */
+   Glow, the border, and the native settings; a native look with and
+   without Film Look; and GR IV Monochrome with Glow. */
 static void print_saves(void)
 {
     reset();
+    header[GRKIT_HOST_CAPABILITIES / 4] = RUNNING | BORDER_BITS;
     load_glow(1);
     set_native_look();
-    select_effect(1); set_fn(1, 0, 3); set_fn(1, 8, 7); set_grain(2, 3); set_glow(2, 3, 1);
+    select_effect(1); set_fn(1, 0, 3); set_fn(1, 8, 7); set_grain(2, 3); set_glow(2, 3, 1); set_border(3, 1);
     print_save();
     reset();
     set_native_look();
@@ -1021,7 +1098,7 @@ static void print_saves(void)
 }
 
 /* The recipes of the Rust codec in the file $GRKIT_TEST_RECIPE_WORDS, one
-   "FAMILY W0 W1 W2 W3 W4" line each: each recipe of a camera line of this
+   "FAMILY W0 ... W5" line each: each recipe of a camera line of this
    target is a recipe that the camera holds, and the camera has each of its
    native values. */
 static void rust_recipes_apply(void)
@@ -1032,7 +1109,8 @@ static void rust_recipes_apply(void)
     if (!path) return;
     FILE *file = fopen(path, "r");
     assert(file);
-    while (fscanf(file, "%31s %u %u %u %u %u", family, &w[0], &w[1], &w[2], &w[3], &w[4]) == 6) {
+    _Static_assert(GRKIT_RECIPE_WORDS == 6U, "a line has six words");
+    while (fscanf(file, "%31s %u %u %u %u %u %u", family, &w[0], &w[1], &w[2], &w[3], &w[4], &w[5]) == 7) {
         reset();
 #ifdef NATIVE_FAMILY_GR3
         if (strcmp(family, "gr3")) continue;
@@ -1159,6 +1237,7 @@ int main(void)
     hidden_recipes_leave_adj();
     undo_steps_are_not_saved();
     glow_saves_applies_and_undoes();
+    border_saves_applies_and_does_not_match();
     exposure_saves_applies_and_fits_the_camera();
 #ifdef FW_IMAGE_CONTROL_SET
     monochrome_types();

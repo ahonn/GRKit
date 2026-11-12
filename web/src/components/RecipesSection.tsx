@@ -43,6 +43,8 @@ interface Props {
   grainModule: boolean;
   /** The package has the Glow module. */
   glowModule: boolean;
+  /** The package has the Border module. */
+  borderModule: boolean;
   /** Adds the recipe of a preset to the library, and its effect to the package. */
   onAddPreset: (recipe: Recipe, effect: string | null) => void;
   /**
@@ -101,8 +103,8 @@ const METERING_INDEX = { multi: 0, center: 1, spot: 2, highlight: 3 } as const;
 
 /**
  * The settings that a recipe holds, as a name and a value each, in the order of the camera
- * menus: the look and the levels of a native look that are not 0, Grain, Glow, the white balance
- * with its shifts, each correction, and the exposure settings.
+ * menus: the look and the levels of a native look that are not 0, Grain, Glow, the border, the
+ * white balance with its shifts, each correction, and the exposure settings.
  */
 function details(recipe: Recipe, r: RecipeStrings, language: Language, effects: Props['effectNames']): [string, string][] {
   const rows: [string, string][] = [[r.look, lookName(recipe, r, language, effects)]];
@@ -119,6 +121,11 @@ function details(recipe: Recipe, r: RecipeStrings, language: Language, effects: 
   if (glow?.halation) {
     const color = glow.halationColor === null ? '' : ` ${r.halationColors[glow.halationColor] ?? ''}`;
     rows.push([r.halation, `${r.glowLevels[glow.halation] ?? ''}${color}`]);
+  }
+  const border = recipe.border;
+  if (border) {
+    const color = border.color === null ? '' : ` ${r.borderColors[border.color] ?? ''}`;
+    rows.push([r.border, `${r.borderStyles[border.style] ?? ''}${color}`]);
   }
   const balance = recipe.whiteBalance;
   if (balance) {
@@ -140,13 +147,14 @@ function details(recipe: Recipe, r: RecipeStrings, language: Language, effects: 
   return rows;
 }
 
-/** The settings of a recipe in one line: the look, Grain, and Glow, then the names of the others. */
+/** The settings of a recipe in one line: the look, Grain, Glow, and a border, then the names of the others. */
 function summary(recipe: Recipe, r: RecipeStrings, language: Language, effects: Props['effectNames']): string {
   const parts = [lookName(recipe, r, language, effects)];
   if (recipe.grain) parts.push(`${r.grain} ${r.grainLevels[recipe.grain.level] ?? ''}`);
   const glow = recipe.glow;
   if (glow?.bloom) parts.push(`${r.bloom} ${r.glowLevels[glow.bloom] ?? ''}`);
   if (glow?.halation) parts.push(`${r.halation} ${r.glowLevels[glow.halation] ?? ''}`);
+  if (recipe.border?.style) parts.push(`${r.border} ${r.borderStyles[recipe.border.style] ?? ''}`);
   if (recipe.whiteBalance) parts.push(r.whiteBalance);
   if (recipe.corrections.some((value) => value !== null)) parts.push(r.corrections);
   if (Object.values(recipe.exposure).some((value) => value !== null)) parts.push(r.exposure);
@@ -176,6 +184,7 @@ export function RecipesSection({
   packageEffects,
   grainModule,
   glowModule,
+  borderModule,
   onAddPreset,
   dial = null,
 }: Props) {
@@ -191,7 +200,7 @@ export function RecipesSection({
   // Only the recipes that are on apply on the camera.
   const warnings = libraryWarnings(
     library.filter((recipe) => recipe.enabled),
-    { grain: grainModule, glow: glowModule },
+    { grain: grainModule, glow: glowModule, border: borderModule },
     packageEffects,
   );
   const nameOf = (recipe: Recipe) => recipe.name || automaticName(lookName(recipe, r, language, effectNames), recipe.number);
@@ -277,6 +286,9 @@ export function RecipesSection({
       )}
       {warnings.grain.length > 0 && <p className="note warning">{r.warnGrain(warnings.grain.join(t.listSeparator))}</p>}
       {warnings.glow.length > 0 && <p className="note warning">{r.warnGlow(warnings.glow.join(t.listSeparator))}</p>}
+      {warnings.border.length > 0 && (
+        <p className="note warning">{r.warnBorder(warnings.border.join(t.listSeparator))}</p>
+      )}
       {warnings.missing.length > 0 && (
         <p className="note warning">{r.warnMissing(warnings.missing.join(t.listSeparator))}</p>
       )}

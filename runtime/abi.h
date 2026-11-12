@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6200
+#define GRKIT_HOST_HEADER_SIZE 6476
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -32,7 +32,7 @@
 #define GRKIT_RECIPE_SLOTS 64U
 #define GRKIT_RECIPE_ON_MAX 40U
 #define GRKIT_RECIPE_UNDO 5U
-#define GRKIT_RECIPE_WORDS 5U
+#define GRKIT_RECIPE_WORDS 6U
 #define GRKIT_RECIPE_NAME_CHARS 16U
 #define GRKIT_RECIPE_NAME_WORDS 4U
 #define GRKIT_RECIPE_DIAL_POSITIONS 3U
@@ -43,6 +43,7 @@
 #define GRKIT_RECIPE_NATIVE_WORD 2U
 #define GRKIT_RECIPE_EXTRA_WORD 3U
 #define GRKIT_RECIPE_MODULE_WORD 4U
+#define GRKIT_RECIPE_SETTINGS_WORD 5U
 #define GRKIT_RECIPE_VALUE_BITS 29U
 #define GRKIT_RECIPE_LOOK_MASK 3U
 #define GRKIT_RECIPE_LOOK_KEPT 0U
@@ -86,8 +87,6 @@
 #define GRKIT_RECIPE_SOLARIZATION_SHIFT 26U
 #define GRKIT_RECIPE_SOLARIZATION_MASK 7U
 #define GRKIT_RECIPE_TYPE_EXTRA_BITS 0x1fc00000U
-#define GRKIT_RECIPE_MODULE_SETTING_BITS 3U
-#define GRKIT_RECIPE_MODULE_VALUE_MASK 3U
 #define GRKIT_RECIPE_EV_SHIFT 9U
 #define GRKIT_RECIPE_EV_MASK 63U
 #define GRKIT_RECIPE_EV_ZERO 31U
@@ -99,14 +98,27 @@
 #define GRKIT_RECIPE_ND_MASK 3U
 #define GRKIT_RECIPE_EXPOSURE_BITS 0x03fffe00U
 #define GRKIT_RECIPE_OFF 0x10000000U
-/* The module settings that a recipe holds
-   (grkit_core::recipes::MODULE_SETTINGS), in the order of their bits in word
-   4: GLOW.BLOOM, GLOW.HALATION, GLOW.HALATION_COLOR. Each is its state file
-   ID, which finds it in the settings table. GRKIT_RECIPE_MODULE_COLOR_ONLY has
-   bit i for a color-only setting, which GR IV Monochrome does not hold. */
-#define GRKIT_RECIPE_MODULE_SETTINGS 3U
-#define GRKIT_RECIPE_MODULE_SETTING_IDS 73603892U, 979977653U, 208924775U
-#define GRKIT_RECIPE_MODULE_COLOR_ONLY 4U
+/* The settings of modules that a recipe holds (grkit_core::recipes::SETTINGS):
+   GLOW.BLOOM, GLOW.HALATION, GLOW.HALATION_COLOR, CORE.BORDER,
+   CORE.BORDER_COLOR. GRKIT_RECIPE_SETTING_IDS gives the handle of a capability
+   (bit i of GRKIT_RECIPE_SETTING_CORE), else the state file ID, which finds
+   the setting in the settings table. Its bits are at _SHIFTS in word _WORDS:
+   one bit holds it, then its value, at most _MASKS. Bit i of _COLOR_ONLY: GR
+   IV Monochrome does not hold it. Of _LOOK: it is part of the whole look. Of
+   _WITH_PREVIOUS: a save holds it only while setting i - 1 is not 0. _MODULES
+   gives the module of each, by its position in GRKIT_RECIPE_MODULES: GLOW,
+   BORDER. */
+#define GRKIT_RECIPE_SETTINGS 5U
+#define GRKIT_RECIPE_SETTING_IDS 73603892U, 979977653U, 208924775U, 265U, 266U
+#define GRKIT_RECIPE_SETTING_CORE 24U
+#define GRKIT_RECIPE_SETTING_WORDS 4U, 4U, 4U, 5U, 5U
+#define GRKIT_RECIPE_SETTING_SHIFTS 0U, 3U, 6U, 0U, 4U
+#define GRKIT_RECIPE_SETTING_MASKS 3U, 3U, 3U, 7U, 1U
+#define GRKIT_RECIPE_SETTING_COLOR_ONLY 4U
+#define GRKIT_RECIPE_SETTING_LOOK 7U
+#define GRKIT_RECIPE_SETTING_WITH_PREVIOUS 16U
+#define GRKIT_RECIPE_SETTING_MODULES 0U, 0U, 0U, 1U, 1U
+#define GRKIT_RECIPE_MODULES 2U
 #define GRKIT_RECIPE_KEY_BASE 991000000U
 #define GRKIT_RECIPE_KEY_STRIDE 100U
 #define GRKIT_RECIPE_NAME_KEY_BASE 991005000U
@@ -460,51 +472,51 @@
    loader saves each word that is not 0 in the recipe file
    (`capabilities::StateFile::Recipes`). */
 #define GRKIT_HOST_RECIPES 1100
-#define GRKIT_HOST_RECIPES_WORDS 320
+#define GRKIT_HOST_RECIPES_WORDS 384
 /* The names of the recipes, RECIPE_NAME_WORDS words each (RECIPE_NAME_CHARS),
    right after HOST_RECIPES, which the loader saves after the recipe words. */
-#define GRKIT_HOST_RECIPE_NAMES 2380
+#define GRKIT_HOST_RECIPE_NAMES 2636
 #define GRKIT_HOST_RECIPE_NAMES_WORDS 256
 /* The hash of the recipe library of the package that INSTALL imported last
    (runtime/install_recipes.h), after the names: the loader saves it with the
    recipes, so a package imports once. */
-#define GRKIT_HOST_RECIPE_IMPORTED 3404
+#define GRKIT_HOST_RECIPE_IMPORTED 3660
 /* The ID of each recipe, by slot, 1 to `runtime::RECIPE_ID_MAX`: a generated
    number, so that a recipe that the site moves to another card keeps an ID
    that no recipe of that card had. A reference to a recipe holds its ID, so
    that it stays valid when the recipes move. Each part that creates a recipe
    (the camera, INSTALL, the site) generates its ID. The loader saves the IDs
    after the import hash. */
-#define GRKIT_HOST_RECIPE_IDS 3408
+#define GRKIT_HOST_RECIPE_IDS 3664
 #define GRKIT_HOST_RECIPE_IDS_WORDS 64
 /* What each user mode of the mode dial, U1 to U3, does
    (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a recipe).
    An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A generated ID is
    never one of these values, so a deleted recipe never gets the references of
    another. */
-#define GRKIT_HOST_RECIPE_DIAL 3664
+#define GRKIT_HOST_RECIPE_DIAL 3920
 #define GRKIT_HOST_RECIPE_DIAL_WORDS 3
 /* The count of changes of the recipes: the loader saves the recipe file after
    it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an import. */
-#define GRKIT_HOST_RECIPE_CHANGES 3676
+#define GRKIT_HOST_RECIPE_CHANGES 3932
 /* The undo steps, the oldest first, RECIPE_WORDS words each. They are not
    saved: a start begins without them. */
-#define GRKIT_HOST_RECIPE_UNDO 3680
-#define GRKIT_HOST_RECIPE_UNDO_WORDS 25
+#define GRKIT_HOST_RECIPE_UNDO 3936
+#define GRKIT_HOST_RECIPE_UNDO_WORDS 30
 /* Nonzero while the mode dial is on a user mode whose settings are temporary
    (runtime/mode_dial.h): the resident loader then does not save the main state
    file, so the file keeps the settings of the other positions. The recipe file
    still saves. */
-#define GRKIT_HOST_STATE_HOLD 3780
+#define GRKIT_HOST_STATE_HOLD 4056
 /* The count of changes of the saved settings of the user modes
    (`HOST_DIAL_SETS`): the loader saves their file after it changes. */
-#define GRKIT_HOST_DIAL_SET_CHANGES 3784
+#define GRKIT_HOST_DIAL_SET_CHANGES 4060
 /* The settings that the camera saved in each user mode of the mode dial, U1 to
    U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A user mode applies
    them while it has `runtime::RECIPE_DIAL_SAVED` (`HOST_RECIPE_DIAL`). The
    resident loader saves each word that is not 0 in their file
    (`capabilities::StateFile::DialSets`), and INSTALL restores them. */
-#define GRKIT_HOST_DIAL_SETS 3788
+#define GRKIT_HOST_DIAL_SETS 4064
 #define GRKIT_HOST_DIAL_SETS_WORDS 603
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
@@ -690,7 +702,7 @@
 /* The RECIPE_WORDS words of the recipe (runtime/recipes.h). */
 #define GRKIT_RCP_RECORD_WORDS 32U
 /* u8 family: 1 GR III, 2 GR IV, 3 GR IV Monochrome. */
-#define GRKIT_RCP_RECORD_FAMILY 52U
+#define GRKIT_RCP_RECORD_FAMILY 56U
 #define GRKIT_FEATURE_POST 1U
 #define GRKIT_FEATURE_SELECTIVE 2U
 #define GRKIT_FEATURE_HUE 8U
@@ -937,22 +949,23 @@
    are full, the text of a missing effect, the name of a recipe without a look,
    the message of a value that the camera does not have, the message of an
    apply whose Grain has no effect, then the two buttons of Fn on a camera
-   recipe: Rename and Delete, then the message of an apply whose Glow module is
-   not loaded, and the mark after the name of a recipe whose effect is not
-   installed, then the Apply row of the Recipes page of MENU. */
+   recipe: Rename and Delete, then the mark after the name of a recipe whose
+   effect is not installed, the Apply row of the Recipes page of MENU, and the
+   message of an apply that left out the settings of a module that is not
+   loaded, for each module of the recipe settings. */
 #define TEXT_RECIPE 25
 /* The names of the native Image Control types, in the order of
    runtime/native.h. */
-#define TEXT_NATIVE_TYPE 40
+#define TEXT_NATIVE_TYPE 41
 /* Enable at Start, which decides the switch at each start: its MENU row, then
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
-#define TEXT_START 61
+#define TEXT_START 62
 /* The Mode Dial row of the Recipes page of MENU, then the values of a user
    mode besides a recipe: None, GRKit Off, and Saved Settings. */
-#define TEXT_DIAL 63
+#define TEXT_DIAL 64
 /* GRKit Settings, the MENU row and the title of the settings page of the core,
    then its Distance Unit row and the values Meters and Feet. */
-#define TEXT_UNIT 67
-#define GRKIT_TEXT_STRINGS 71
+#define TEXT_UNIT 68
+#define GRKIT_TEXT_STRINGS 72
 
 #endif

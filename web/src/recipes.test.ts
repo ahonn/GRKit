@@ -43,6 +43,7 @@ const recipe = (name: string, change: Partial<Recipe> = {}): Recipe => ({
   look: { kind: 'off' },
   grain: null,
   glow: null,
+  border: null,
   whiteBalance: null,
   corrections: [null, null, null, null],
   exposure: { compensation: null, isoLimit: null, metering: null, nd: null },
@@ -166,22 +167,26 @@ describe('recipes', () => {
     expect(cardNeedsChoice([recipe('A')], [])).toBe(true);
   });
 
-  it('warns of Grain and Glow without their modules and of a missing effect', () => {
+  it('warns of Grain, Glow, and a border without their modules and of a missing effect', () => {
     const library = [
       recipe('Grain', { grain: { level: 2, size: 0 } }),
       recipe('No grain', { grain: { level: 0, size: 0 } }),
       recipe('Glow', { glow: { bloom: 0, halation: 2, halationColor: 1 } }),
       recipe('Glow off', { glow: { bloom: 0, halation: 0, halationColor: null } }),
+      recipe('Border', { border: { style: 3, color: 1 } }),
+      recipe('Border off', { border: { style: 0, color: null } }),
       recipe('Effect', { look: { kind: 'effect', code: 7, adjustments: Array(9).fill(4) } }),
     ];
-    expect(libraryWarnings(library, { grain: false, glow: false }, new Set())).toEqual({
+    expect(libraryWarnings(library, { grain: false, glow: false, border: false }, new Set())).toEqual({
       grain: ['Grain'],
       glow: ['Glow'],
+      border: ['Border'],
       missing: ['Effect'],
     });
-    expect(libraryWarnings(library, { grain: true, glow: true }, new Set([7]))).toEqual({
+    expect(libraryWarnings(library, { grain: true, glow: true, border: true }, new Set([7]))).toEqual({
       grain: [],
       glow: [],
+      border: [],
       missing: [],
     });
   });

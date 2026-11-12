@@ -1152,12 +1152,14 @@ fn fn_cycle_names_a_page_value_and_another_setting() -> Result<()> {
     Ok(())
 }
 
-/// A recipe holds each module setting of `grkit_core::recipes::MODULE_SETTINGS`
-/// except a color-only one on GR IV Monochrome, so the color-only flags of the
-/// recipes are those of the manifests of the modules.
+/// Each setting that a recipe holds (`grkit_core::recipes::SETTINGS`) is a
+/// setting of its module, or a capability that its module uses, with the
+/// values of the setting. A setting of a module is color-only as its manifest
+/// says, so a recipe on GR IV Monochrome leaves out what its rows leave out.
 #[test]
-fn recipe_module_settings_are_color_only_as_their_modules_say() -> Result<()> {
-    use grkit_core::recipes::{MODULE_SETTINGS, MODULE_SETTINGS_COLOR_ONLY};
+fn recipe_settings_are_those_of_their_modules() -> Result<()> {
+    use grkit_core::capabilities::CAPABILITIES;
+    use grkit_core::recipes::SETTINGS;
     let modules = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../modules");
     let mut found = 0;
     for entry in fs::read_dir(&modules)? {
@@ -1166,20 +1168,27 @@ fn recipe_module_settings_are_color_only_as_their_modules_say() -> Result<()> {
             continue;
         }
         let manifest: module::Manifest = toml::from_str(&fs::read_to_string(&path)?)?;
-        for setting in &manifest.settings {
-            if let Some(index) = MODULE_SETTINGS
-                .iter()
-                .position(|&(id, key)| id == manifest.id && key == setting.key)
-            {
-                assert_eq!(
-                    MODULE_SETTINGS_COLOR_ONLY[index], setting.color_only,
-                    "{}.{}",
-                    manifest.id, setting.key
-                );
-                found += 1;
+        for setting in SETTINGS
+            .iter()
+            .filter(|setting| setting.module == manifest.id)
+        {
+            let name = setting.name();
+            if let Some(capability) = CAPABILITIES.iter().find(|c| c.name() == setting.key) {
+                assert!(manifest.uses.contains(&name), "{} uses {name}", manifest.id);
+                assert_eq!(u32::from(setting.values), capability.values, "{name}");
+                assert!(!setting.color_only, "{name}");
+            } else {
+                let own = manifest
+                    .settings
+                    .iter()
+                    .find(|own| own.key == setting.key)
+                    .unwrap_or_else(|| panic!("{} has no setting {name}", manifest.id));
+                assert_eq!(u32::from(setting.values), own.values, "{name}");
+                assert_eq!(setting.color_only, own.color_only, "{name}");
             }
+            found += 1;
         }
     }
-    assert_eq!(found, MODULE_SETTINGS.len());
+    assert_eq!(found, SETTINGS.len());
     Ok(())
 }

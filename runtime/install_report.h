@@ -10,6 +10,7 @@
 #define REPORT_MAX 8192U
 static char report_text[REPORT_MAX + 1], report_old[REPORT_MAX + 1];
 static u32 report_length;
+_Static_assert(GRKIT_RECIPE_MODULES == 2U, "the report names the modules of the recipe settings: Glow, Border");
 static void say(const char *text)
 {
     while (*text && report_length < REPORT_MAX) report_text[report_length++] = *text++;
@@ -73,7 +74,8 @@ static void say_recipes(void)
         else { say("recipe "); say_number(p->recipe); }
         say(p->problem == RECIPE_PROBLEM_EFFECT ? ": its effect is not installed, or Film Look does not run\r\n" :
             p->problem == RECIPE_PROBLEM_GRAIN ? ": its Grain needs the Grain module\r\n" :
-            ": its Glow needs the Glow module\r\n");
+            p->problem == RECIPE_PROBLEM_MODULE(0) ? ": its Glow needs the Glow module\r\n" :
+            ": its Border needs the Border module\r\n");
     }
     if (recipe_problems_more) { say("and "); say_number(recipe_problems_more); say(" more\r\n"); }
 }

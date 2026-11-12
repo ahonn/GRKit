@@ -62,6 +62,8 @@ pub fn presets() -> Vec<Preset> {
             halation: 2,
             halation_color: Some(0),
         }),
+        // A preset keeps the border of the camera.
+        border: None,
         white_balance: Some(WhiteBalance {
             shift_ba: CINESTILL_SHIFT_BA,
             ..AUTO_WHITE_BALANCE
@@ -94,6 +96,7 @@ pub fn presets() -> Vec<Preset> {
             }),
             grain: Some(GRAIN_OFF),
             glow: Some(GLOW_OFF),
+            border: None,
             white_balance: Some(WhiteBalance {
                 shift_ba: (shift_ba + 14) as u8,
                 shift_gm: (shift_gm + 14) as u8,

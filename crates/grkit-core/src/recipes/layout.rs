@@ -8,6 +8,8 @@
 //! shift). A flag is the value of its bit in the word. Each word stays below
 //! 2^`VALUE_BITS`, as the state file keeps it.
 
+use super::SETTINGS;
+
 /// Declares each constant and `C_DEFINES`, the list that the C header gets.
 macro_rules! layout {
     ($($(#[doc = $doc:literal])* $name:ident: $type:ty = $value:expr;)*) => {
@@ -26,9 +28,11 @@ layout! {
     /// The word of the color temperature, the corrections, and the native
     /// grain and Solarization of the type.
     EXTRA_WORD: usize = 3;
-    /// The word of the module settings, the exposure settings, and the off
-    /// bit.
+    /// The word of the first settings of modules, the exposure settings,
+    /// and the off bit.
     MODULE_WORD: usize = 4;
+    /// The word of the settings of modules after those of MODULE_WORD.
+    SETTINGS_WORD: usize = 5;
     /// The bits of each word: a word is below 2^VALUE_BITS.
     VALUE_BITS: u32 = 29;
 
@@ -96,11 +100,8 @@ layout! {
     /// The bits of word 3 that belong to the type.
     TYPE_EXTRA_BITS: u32 = 0x7f << NATIVE_GRAIN_SHIFT;
 
-    // Word 4: MODULE_SETTING_BITS bits for each module setting, then the
+    // Word 4: the first settings of modules (SETTING_PLACES), then the
     // exposure settings, each 0 when the recipe does not hold it.
-    /// The bits of one module setting: bit 0 holds it, then its value.
-    MODULE_SETTING_BITS: u32 = 3;
-    MODULE_VALUE_MASK: u32 = 3;
     /// The compensation in sixths of a stop + EV_ZERO.
     EV_SHIFT: u32 = 9;
     EV_MASK: u32 = 63;
@@ -120,8 +121,50 @@ layout! {
     OFF: u32 = 1 << 28;
 }
 
+/// The place of each setting of `SETTINGS`: its word and the shift of its
+/// bits there. Bit 0 holds the setting, and the bits of its value follow.
+/// The settings fill MODULE_WORD below the exposure settings, then
+/// SETTINGS_WORD, in order, so a new setting moves no other.
+pub const SETTING_PLACES: [(usize, u32); SETTINGS.len()] = {
+    let mut places = [(0, 0); SETTINGS.len()];
+    let (mut word, mut shift, mut i) = (MODULE_WORD, 0, 0);
+    while i < SETTINGS.len() {
+        let width = 1 + SETTINGS[i].bits;
+        if word == MODULE_WORD && shift + width > EV_SHIFT {
+            (word, shift) = (SETTINGS_WORD, 0);
+        }
+        assert!(
+            shift + width <= VALUE_BITS,
+            "the settings fit in SETTINGS_WORD"
+        );
+        places[i] = (word, shift);
+        shift += width;
+        i += 1;
+    }
+    places
+};
+
+/// The mask of the value of each setting, after the shift of its place and
+/// the bit that holds it.
+pub const SETTING_MASKS: [u32; SETTINGS.len()] = {
+    let mut masks = [0; SETTINGS.len()];
+    let mut i = 0;
+    while i < SETTINGS.len() {
+        masks[i] = (1 << SETTINGS[i].bits) - 1;
+        assert!(
+            SETTINGS[i].values as u32 <= masks[i] + 1,
+            "each value fits in its bits"
+        );
+        assert!(
+            !SETTINGS[i].with_previous || i > 0,
+            "a setting follows the one that it needs"
+        );
+        i += 1;
+    }
+    masks
+};
+
 const _: () = {
-    assert!(MODULE_SETTING_BITS as usize * super::MODULE_SETTINGS.len() == EV_SHIFT as usize);
     assert!(CORRECTION_SHIFT + CORRECTION_BITS * 4 == NATIVE_GRAIN_SHIFT);
     assert!(ND_MASK == 3 && OFF >> VALUE_BITS == 0 && HIDDEN >> VALUE_BITS == 0);
     assert!((NUMBER_MAX << NUMBER_SHIFT) & USED == 0);

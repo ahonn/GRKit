@@ -39,7 +39,7 @@
    runtime/ui_keyboard.h). The includer is runtime/menu.c, after
    runtime/menu_settings.h and runtime/menu_dial.h. */
 /* The texts of the page (runtime/abi.h: the RECIPE run). */
-#define RECIPE_TEXT_APPLY (TEXT_RECIPE+14U)
+#define RECIPE_TEXT_APPLY (TEXT_RECIPE+13U)
 
 /* MENU_ROWS_PAGE_STATE: RECIPE_PAGE_SHOWN with the recipe whose page shows,
    or the recipe of the last action + 1, where the list puts its cursor

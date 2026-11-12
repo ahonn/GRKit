@@ -1,7 +1,9 @@
 //! The words of a recipe as the camera holds them (`layout`).
 
 use super::layout::*;
-use super::{Exposure, Family, Glow, Grain, Look, Metering, NativeLook, Nd, Recipe, WhiteBalance};
+use super::{
+    Exposure, Family, Grain, Look, Metering, NativeLook, Nd, Recipe, WhiteBalance, SETTINGS,
+};
 use crate::abi::RECIPE_WORDS;
 use crate::native;
 use anyhow::{bail, ensure, Context, Result};
@@ -96,6 +98,7 @@ impl Recipe {
             0,
             0,
             0,
+            0,
         ];
         match &self.look {
             Look::Kept => w[0] |= LOOK_KEPT,
@@ -134,12 +137,9 @@ impl Recipe {
             }
         }
         w[MODULE_WORD] |= self.exposure.bits() | if self.enabled { 0 } else { OFF };
-        if let Some(glow) = self.glow {
-            for (index, value) in glow.values().iter().enumerate() {
-                if let Some(value) = value {
-                    w[MODULE_WORD] |=
-                        (1 | u32::from(*value) << 1) << (MODULE_SETTING_BITS * index as u32);
-                }
+        for ((word, shift), value) in SETTING_PLACES.into_iter().zip(self.setting_values()) {
+            if let Some(value) = value {
+                w[word] |= (1 | u32::from(value) << 1) << shift;
             }
         }
         debug_assert!(w.iter().all(|&word| word < WORD_LIMIT));
@@ -174,7 +174,7 @@ impl Recipe {
             other => bail!("Unknown look {other}"),
         };
         let mode = w[NATIVE_WORD] >> MODE_SHIFT & MODE_MASK;
-        let recipe = Recipe {
+        let mut recipe = Recipe {
             name,
             family,
             look,
@@ -194,7 +194,8 @@ impl Recipe {
                     & CORRECTION_MASK;
                 (value != 0).then(|| value as u8 - 1)
             }),
-            glow: glow_of_word(w[MODULE_WORD])?,
+            glow: None,
+            border: None,
             exposure: Exposure::of_bits(w[MODULE_WORD])?,
             enabled: w[MODULE_WORD] & OFF == 0,
             hidden: w[0] & HIDDEN != 0,
@@ -202,6 +203,7 @@ impl Recipe {
             // The words hold no ID: the recipe file keeps it apart.
             id: 0,
         };
+        recipe.set_setting_values(setting_values(&w))?;
         recipe.check()?;
         ensure!(
             recipe.words()? == w,
@@ -212,20 +214,12 @@ impl Recipe {
     }
 }
 
-/// The Glow of word 4. Bloom and Halation are held together, and the color
-/// only with them.
-pub(super) fn glow_of_word(word: u32) -> Result<Option<Glow>> {
-    let held: [Option<u8>; 3] = std::array::from_fn(|index| {
-        let bits = word >> (MODULE_SETTING_BITS * index as u32);
-        (bits & 1 != 0).then_some((bits >> 1 & MODULE_VALUE_MASK) as u8)
-    });
-    match held {
-        [None, None, None] => Ok(None),
-        [Some(bloom), Some(halation), halation_color] => Ok(Some(Glow {
-            bloom,
-            halation,
-            halation_color,
-        })),
-        _ => bail!("A recipe holds Bloom and Halation together"),
-    }
+/// The value of each of `SETTINGS` in the words, `None` for each that the
+/// words do not hold.
+pub(super) fn setting_values(w: &[u32; RECIPE_WORDS]) -> [Option<u8>; SETTINGS.len()] {
+    std::array::from_fn(|index| {
+        let (word, shift) = SETTING_PLACES[index];
+        let bits = w[word] >> shift;
+        (bits & 1 != 0).then_some((bits >> 1 & SETTING_MASKS[index]) as u8)
+    })
 }

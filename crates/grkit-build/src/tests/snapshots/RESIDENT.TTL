@@ -6,9 +6,9 @@ foldersearch 'C:\GRKIT'
 if result = 0 stateok = 0
 changes = registry[65]
 saved = changes
-rchanges = registry[919]
+rchanges = registry[983]
 rsaved = 0
-dchanges = registry[946]
+dchanges = registry[1015]
 dsaved = dchanges
 last = changes + rchanges + dchanges
 filesearch 'C:\GRKIT\STATE.TXT'
@@ -18,12 +18,12 @@ if profile <> 0 goto profile_watch
 :watch
 mpause 2000
 changes = registry[65]
-rchanges = registry[919]
-dchanges = registry[946]
+rchanges = registry[983]
+dchanges = registry[1015]
 total = changes + rchanges + dchanges
 if total <> last goto watch_moved
 if changes = saved goto watch_state_saved
-hold = registry[945]
+hold = registry[1014]
 if hold <> 0 goto watch_state_saved
 stamp = changes
 call save_state
@@ -107,9 +107,9 @@ if pcount > 40 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[1550 + pindex * 1088 + 459]
-pw1 = registry[1550 + pindex * 1088 + 460]
-pw2 = registry[1550 + pindex * 1088 + 461]
+pw0 = registry[1619 + pindex * 1088 + 459]
+pw1 = registry[1619 + pindex * 1088 + 460]
+pw2 = registry[1619 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -139,16 +139,16 @@ pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
 if pvalue = 0 goto save_toning
-pkey = 990000000 + (registry[1550 + pindex * 1088 + 446] and 32767)
+pkey = 990000000 + (registry[1619 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
 filewriteln sfh line
 :save_toning
-ptone = (registry[1550 + pindex * 1088 + 463] >> 16) and 255
+ptone = (registry[1619 + pindex * 1088 + 463] >> 16) and 255
 if ptone < 1 goto save_parameters_next
 if ptone > 8 goto save_parameters_next
-pkey = 990032768 + (registry[1550 + pindex * 1088 + 446] and 32767)
+pkey = 990032768 + (registry[1619 + pindex * 1088 + 446] and 32767)
 int2str line pkey
 filewriteln sfh line
 int2str line ptone
@@ -200,20 +200,20 @@ filecreate sfh 'C:\GRKIT\RECIPES.TMP'
 if sfh < 0 goto save_recipes_end
 rindex = 0
 :recipe_word
-if rindex >= 644 goto recipe_word_end
+if rindex >= 708 goto recipe_word_end
 rvalue = registry[275 + rindex]
 if rvalue <= 0 goto recipe_word_next
 if rvalue > 536870911 goto recipe_word_next
-rkey = rindex % 5
+rkey = rindex % 6
 rkey = rkey * 100
-rslot = rindex / 5
+rslot = rindex / 6
 rkey = rkey + 991000000
 rkey = rkey + rslot
-if rindex < 320 goto recipe_key
-rkey = rindex - 576
+if rindex < 384 goto recipe_key
+rkey = rindex - 640
 rkey = rkey + 991009000
-if rindex >= 576 goto recipe_key
-rslot = rindex - 320
+if rindex >= 640 goto recipe_key
+rslot = rindex - 384
 rkey = rslot % 4
 rkey = rkey * 100
 rslot = rslot / 4
@@ -249,7 +249,7 @@ if sfh < 0 goto save_usermode_end
 rindex = 0
 :set_word
 if rindex >= 603 goto set_word_end
-rvalue = registry[947 + rindex]
+rvalue = registry[1016 + rindex]
 if rvalue <= 0 goto set_word_next
 if rvalue > 999999999 goto set_word_next
 rkey = rindex / 201
@@ -288,7 +288,7 @@ rest = offset % 4352
 if rest != 0 goto snapshot_values
 index = offset / 4352
 if index >= count goto snapshot_values
-value0 = registry[1550 + index * 1088 + 446] and 65535
+value0 = registry[1619 + index * 1088 + 446] and 65535
 :snapshot_values
 value1 = registry[52]
 value2 = registry[12]
@@ -592,12 +592,12 @@ mpause 2000
 ppolls = ppolls + 1
 if ppolls >= 5 call profile_write
 changes = registry[65]
-rchanges = registry[919]
-dchanges = registry[946]
+rchanges = registry[983]
+dchanges = registry[1015]
 total = changes + rchanges + dchanges
 if total <> last goto profile_poll_moved
 if changes = saved goto profile_poll_state_saved
-hold = registry[945]
+hold = registry[1014]
 if hold <> 0 goto profile_poll_state_saved
 stamp = changes
 call save_state

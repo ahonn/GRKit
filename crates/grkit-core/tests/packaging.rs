@@ -1535,6 +1535,7 @@ fn a_package_holds_the_recipe_library_of_its_camera() {
         look: Look::Off,
         grain: None,
         glow: None,
+        border: None,
         white_balance: None,
         corrections: [None; 4],
         exposure: Exposure::default(),

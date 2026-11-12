@@ -748,14 +748,11 @@ fn native_recipes_contract_saves_applies_and_undoes_recipes() {
     for recipe in &site {
         let w = recipe.words().unwrap();
         let family = serde_json::to_value(recipe.family).unwrap();
+        let words: Vec<String> = w.iter().map(u32::to_string).collect();
         lines.push_str(&format!(
-            "{} {} {} {} {} {}\n",
+            "{} {}\n",
             family.as_str().unwrap(),
-            w[0],
-            w[1],
-            w[2],
-            w[3],
-            w[4]
+            words.join(" ")
         ));
     }
     fs::write(&words, lines).unwrap();
@@ -791,6 +788,15 @@ fn native_recipes_contract_saves_applies_and_undoes_recipes() {
                     panic!("{target}: the first save holds an effect");
                 };
                 assert_eq!(adjustments, [3, 0, 0, 0, 0, 0, 0, 0, 7], "{target}");
+                // Instant, black: the border of the camera.
+                assert_eq!(
+                    recipe.border,
+                    Some(grkit_core::recipes::Border {
+                        style: 3,
+                        color: Some(1)
+                    }),
+                    "{target}"
+                );
             }
         }
     }
@@ -1106,14 +1112,15 @@ fn native_install_contract_plans_and_links_the_modules_of_the_card() {
         .map(|recipe| {
             let w = recipe.words().unwrap();
             format!(
-                "{}|{}|{} {} {} {} {}",
+                "{}|{}|{} {} {} {} {} {}",
                 recipe.name,
                 recipe.family.code(),
                 w[0],
                 w[1],
                 w[2],
                 w[3],
-                w[4]
+                w[4],
+                w[5]
             )
         })
         .collect();
@@ -1141,6 +1148,10 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
                 bloom: 1,
                 halation: 3,
                 halation_color: Some(2),
+            }),
+            border: Some(Border {
+                style: 3,
+                color: Some(1),
             }),
             white_balance: Some(WhiteBalance {
                 mode: 4,
@@ -1175,6 +1186,7 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
             }),
             grain: None,
             glow: None,
+            border: None,
             white_balance: None,
             corrections: [None; 4],
             exposure: Exposure::default(),
@@ -1193,6 +1205,7 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
                 halation: 1,
                 halation_color: None,
             }),
+            border: None,
             white_balance: None,
             corrections: [None; 4],
             exposure: Exposure::default(),

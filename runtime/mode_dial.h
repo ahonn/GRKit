@@ -384,8 +384,7 @@ static void dial_label_recipe(volatile u32 *h,u32 u,u32 entry,u32 result) {
     dial_label_start(h,u,0,entry);
     if(result==RECIPE_MISSING) { if(recipe_name_length(h,entry)) dial_label_line(h,text(h,RECIPE_TEXT_MISSING)); }
     else if(result==RECIPE_UNSUPPORTED) dial_label_line(h,text(h,RECIPE_TEXT_UNSUPPORTED));
-    if(result&RECIPE_SKIPPED_GRAIN) dial_label_line(h,text(h,RECIPE_TEXT_NO_GRAIN));
-    if(result&RECIPE_SKIPPED_MODULE) dial_label_line(h,text(h,RECIPE_TEXT_NO_GLOW));
+    else for(result=RECIPE_SKIPPED(result);result;) dial_label_line(h,text(h,recipe_skipped_text(&result)));
 }
 /* A still live view shows its text (VIEWFINDER_LABEL_SHOW): the waiting
    label shows on its canvas, one string view for each line, until its

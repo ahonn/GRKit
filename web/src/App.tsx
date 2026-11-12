@@ -920,6 +920,7 @@ export function InstallPage({
                   others={[...imported, ...(active?.extra ?? [])]}
                   grainModule={plan.modules.includes('GRAIN')}
                   glowModule={plan.modules.includes('GLOW')}
+                  borderModule={plan.modules.includes('BORDER')}
                   dial={
                     // A card shows and writes its own dial; a ZIP package carries the choice
                     // of this browser.

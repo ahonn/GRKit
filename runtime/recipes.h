@@ -20,21 +20,24 @@
    A recipe is a whole look: it holds each setting of the picture, so it
    gives the same picture after any other recipe. Those are the look of
    CORE.TONE (Off, or an effect and its Fn adjustments), the grain of
-   CORE.GRAIN and CORE.GRAIN_SIZE, the module settings of
-   GRKIT_RECIPE_MODULE_SETTINGS (Glow), and the native settings
+   CORE.GRAIN and CORE.GRAIN_SIZE, the settings of modules that are part
+   of the look (GRKIT_RECIPE_SETTING_LOOK: Glow), and the native settings
    (runtime/native_look.h): the native type of the active set, its
    parameters, and its native grain while no effect is active, the white
    balance, and the correction and noise reduction settings. A recipe with
    a native type has the look Off also without CORE.TONE. A save holds
-   Grain and each module setting at Off when its module does not run, as
-   the picture has none; a color-only setting has no Off and stays out.
-   Apply sets each held setting whose capability runs, so a recipe never
-   turns on a capability.
+   Grain and each setting of the look at Off when its module does not run,
+   as the picture has none; a color-only setting has no Off and stays out.
+   Apply sets each held setting whose capability or module runs, so a
+   recipe never turns on a capability.
 
    A save also holds the exposure settings (exposure compensation, the
-   Auto ISO upper limit, metering, and the ND filter), and apply sets them.
-   They are not part of the look: a preset can leave them out, apply keeps
-   each one that a recipe does not hold, and they do not decide a match.
+   Auto ISO upper limit, metering, and the ND filter) and the other
+   settings of modules (the border of CORE.BORDER and CORE.BORDER_COLOR,
+   while the Border module is loaded), and apply sets them. They are not
+   part of the look: a preset can leave them out, apply keeps each one that
+   a recipe does not hold, and they do not decide a match. A save holds the
+   color of a border only while the border is on.
 
    Without a running Grain module, CORE.GRAIN has no effect on pictures
    (grain_level in runtime/picture.S), so apply skips the Grain of a recipe
@@ -89,16 +92,12 @@
 #define RECIPE_FN_WORD GRKIT_RECIPE_FN_WORD
 #define RECIPE_NATIVE_WORD GRKIT_RECIPE_NATIVE_WORD
 #define RECIPE_EXTRA_WORD GRKIT_RECIPE_EXTRA_WORD
-/* Word 4: the module settings, RECIPE_MODULE_BITS bits for setting i of
-   GRKIT_RECIPE_MODULE_SETTINGS: bit 0 holds it, then its value (0 to 3).
-   The exposure settings follow (NATIVE_EXPOSURE_BITS, runtime/native_look.h),
-   and RECIPE_OFF marks a recipe that is off. */
+/* Word 4: the first settings of modules (GRKIT_RECIPE_SETTING_*), then the
+   exposure settings (NATIVE_EXPOSURE_BITS, runtime/native_look.h), and
+   RECIPE_OFF marks a recipe that is off. Word 5: the other settings of
+   modules. */
 #define RECIPE_MODULE_WORD GRKIT_RECIPE_MODULE_WORD
 #define RECIPE_OFF GRKIT_RECIPE_OFF
-#define RECIPE_MODULE_BITS GRKIT_RECIPE_MODULE_SETTING_BITS
-#define RECIPE_MODULE_VALUES (GRKIT_RECIPE_MODULE_VALUE_MASK+1U)
-#define RECIPE_MODULE_HELD(w,i) ((w)>>(RECIPE_MODULE_BITS*(i))&1U)
-#define RECIPE_MODULE_VALUE(w,i) ((w)>>(RECIPE_MODULE_BITS*(i)+1U)&GRKIT_RECIPE_MODULE_VALUE_MASK)
 
 #define RECIPE_LOOK(w) ((w)&RECIPE_LOOK_MASK)
 #define RECIPE_GRAIN_LEVEL(w) ((w)>>RECIPE_GRAIN_LEVEL_SHIFT&GRKIT_RECIPE_GRAIN_LEVEL_MASK)
@@ -113,10 +112,12 @@
 /* A native value that this camera does not have. */
 #define RECIPE_UNSUPPORTED 2U
 /* The bits of an apply that left settings out: a Grain that is not Off,
-   because no Grain module runs, and a module setting that is not Off and
-   whose module is not loaded. */
+   because no Grain module runs, and a setting of module m that is not Off
+   while module m of GRKIT_RECIPE_MODULES is not loaded. */
 #define RECIPE_SKIPPED_GRAIN 0x100U
-#define RECIPE_SKIPPED_MODULE 0x200U
+#define RECIPE_SKIPPED_MODULE(m) (0x200U<<(m))
+/* The RECIPE_SKIPPED bits of the result of an apply. */
+#define RECIPE_SKIPPED(result) ((result)&~0xffU)
 /* No entry. */
 #define RECIPE_NONE 0xffffffffU
 /* The result of a save: the slot of the new recipe, or RECIPE_FULL. */
@@ -124,8 +125,8 @@
 
 #define RECIPE_CAPABILITY(h,key) ((h)[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_##key##_BIT)
 #define RECIPE_ALL (GRKIT_RECIPE_SLOTS+GRKIT_RECIPE_UNDO)
-_Static_assert(GRKIT_RECIPE_WORDS>=5U,"a recipe holds its look, its levels, its native settings, and its module settings");
-_Static_assert(RECIPE_MODULE_BITS*GRKIT_RECIPE_MODULE_SETTINGS<=NATIVE_EV_SHIFT,"the module settings end where the exposure settings start");
+_Static_assert(GRKIT_RECIPE_WORDS>GRKIT_RECIPE_SETTINGS_WORD,"a recipe holds its look, its levels, its native settings, and the settings of modules");
+_Static_assert(GRKIT_RECIPE_MODULES<=23U,"the skipped bits of the modules fit in a word");
 
 /* The native settings (runtime/native_look.h). */
 static void native_read(u32 *w,u32 look);
@@ -290,19 +291,46 @@ static u32 recipe_fn_write(u32 record,u32 value) {
     return changed;
 }
 
-/* The state file IDs of the module settings that a recipe holds. */
-static const u32 recipe_module_ids[GRKIT_RECIPE_MODULE_SETTINGS]={GRKIT_RECIPE_MODULE_SETTING_IDS};
+/* The settings of modules that a recipe holds (GRKIT_RECIPE_SETTING_*):
+   setting i is a capability (its handle) or a module setting (its state
+   file ID), at a place in the words, of a module of GRKIT_RECIPE_MODULES. */
+static const u32 recipe_setting_ids[GRKIT_RECIPE_SETTINGS]={GRKIT_RECIPE_SETTING_IDS};
+static const u8 recipe_setting_words[GRKIT_RECIPE_SETTINGS]={GRKIT_RECIPE_SETTING_WORDS};
+static const u8 recipe_setting_shifts[GRKIT_RECIPE_SETTINGS]={GRKIT_RECIPE_SETTING_SHIFTS};
+static const u8 recipe_setting_masks[GRKIT_RECIPE_SETTINGS]={GRKIT_RECIPE_SETTING_MASKS};
+static const u8 recipe_setting_modules[GRKIT_RECIPE_SETTINGS]={GRKIT_RECIPE_SETTING_MODULES};
+/* Bit i of GRKIT_RECIPE_SETTING_<flags>. */
+#define RECIPE_SETTING_IS(flags,i) (GRKIT_RECIPE_SETTING_##flags>>(i)&1U)
+/* Whether the words `w` hold setting i, and its value. */
+static u32 recipe_setting_held(const u32 *w,u32 i) {
+    return w[recipe_setting_words[i]]>>recipe_setting_shifts[i]&1U;
+}
+static u32 recipe_setting_value(const u32 *w,u32 i) {
+    return w[recipe_setting_words[i]]>>(recipe_setting_shifts[i]+1U)&recipe_setting_masks[i];
+}
+/* Hold setting i at `value`, or hold it no more. */
+static void recipe_setting_hold(u32 *w,u32 i,u32 value) {
+    w[recipe_setting_words[i]]|=(1U|value<<1)<<recipe_setting_shifts[i];
+}
+static void recipe_setting_drop(u32 *w,u32 i) {
+    w[recipe_setting_words[i]]&=~((2U*recipe_setting_masks[i]+1U)<<recipe_setting_shifts[i]);
+}
 #define RECIPE_NO_SETTING 0xffffffffU
-/* The handle of module setting i of a recipe, or RECIPE_NO_SETTING when no
-   loaded module has it, when it has more values than word 4 holds, or when
-   it is color-only on GR IV Monochrome, which hides its rows. */
-static u32 recipe_module_handle(volatile u32 *h,u32 i) {
-    volatile u32 *t=settings_table(h);
-    u32 k;
-    if(!t || (GRKIT_RECIPE_MODULE_COLOR_ONLY>>i&1U && NATIVE_MONOCHROME())) return RECIPE_NO_SETTING;
+/* The handle of setting i of a recipe, or RECIPE_NO_SETTING: a capability
+   that no loaded module uses, a module setting that no loaded module has or
+   that has more values than its bits hold, or a color-only setting on GR IV
+   Monochrome, which hides its rows. */
+static u32 recipe_setting_handle(volatile u32 *h,u32 i) {
+    volatile u32 *t;
+    u32 id=recipe_setting_ids[i], k;
+    if(RECIPE_SETTING_IS(COLOR_ONLY,i) && NATIVE_MONOCHROME()) return RECIPE_NO_SETTING;
+    if(RECIPE_SETTING_IS(CORE,i))
+        return h[GRKIT_HOST_CAPABILITIES/4]&1U<<CORE_SETTING(id) ? id : RECIPE_NO_SETTING;
+    t=settings_table(h);
+    if(!t) return RECIPE_NO_SETTING;
     for(k=0;k<t[0];++k)
-        if(t[SETTINGS_ENTRY(k)]==recipe_module_ids[i])
-            return setting_limit(h,k)<=RECIPE_MODULE_VALUES ? k : RECIPE_NO_SETTING;
+        if(t[SETTINGS_ENTRY(k)]==id)
+            return setting_limit(h,k)<=recipe_setting_masks[i]+1U ? k : RECIPE_NO_SETTING;
     return RECIPE_NO_SETTING;
 }
 
@@ -324,10 +352,9 @@ static void recipe_capture(volatile u32 *h,u32 *out) {
         out[0]|=RECIPE_GRAIN|setting_value(h,GRKIT_CORE_GRAIN)<<RECIPE_GRAIN_LEVEL_SHIFT;
         if(RECIPE_CAPABILITY(h,GRAIN_SIZE)) out[0]|=setting_value(h,GRKIT_CORE_GRAIN_SIZE)<<RECIPE_GRAIN_SIZE_SHIFT;
     }
-    for(i=0;i<GRKIT_RECIPE_MODULE_SETTINGS;++i) {
-        u32 k=recipe_module_handle(h,i);
-        if(k!=RECIPE_NO_SETTING)
-            out[RECIPE_MODULE_WORD]|=(1U|setting_value(h,k)<<1)<<(RECIPE_MODULE_BITS*i);
+    for(i=0;i<GRKIT_RECIPE_SETTINGS;++i) {
+        u32 k=recipe_setting_handle(h,i);
+        if(k!=RECIPE_NO_SETTING) recipe_setting_hold(out,i,setting_value(h,k));
     }
     /* The native type only without an effect: an effect replaces it. */
     native_read(out,RECIPE_LOOK(out[0])!=RECIPE_LOOK_EFFECT);
@@ -336,14 +363,19 @@ static void recipe_capture(volatile u32 *h,u32 *out) {
        and leaves Film Look as it is. */
     if(RECIPE_LOOK(out[0])==RECIPE_LOOK_KEPT && NATIVE_TYPE(out[RECIPE_NATIVE_WORD])) out[0]|=RECIPE_LOOK_OFF;
 }
-/* Hold Grain and each module setting that `w` does not hold at 0 (Off): the
-   module does not run, so the picture has none. A color-only setting has no
-   Off and stays out. */
+/* The capture `w` as a save holds it. Grain and each setting of the look
+   that `w` does not hold are held at 0 (Off): the module does not run, so
+   the picture has none. A color-only setting has no Off and stays out. A
+   setting that needs the one before it, as the color of a border, stays out
+   while that one is 0. */
 static void recipe_hold_off(u32 *w) {
     u32 i;
     w[0]|=RECIPE_GRAIN;
-    for(i=0;i<GRKIT_RECIPE_MODULE_SETTINGS;++i)
-        if(!(GRKIT_RECIPE_MODULE_COLOR_ONLY>>i&1U)) w[RECIPE_MODULE_WORD]|=1U<<(RECIPE_MODULE_BITS*i);
+    for(i=0;i<GRKIT_RECIPE_SETTINGS;++i) {
+        if(RECIPE_SETTING_IS(LOOK,i) && !RECIPE_SETTING_IS(COLOR_ONLY,i) && !recipe_setting_held(w,i))
+            recipe_setting_hold(w,i,0);
+        if(RECIPE_SETTING_IS(WITH_PREVIOUS,i) && i && !recipe_setting_value(w,i-1U)) recipe_setting_drop(w,i);
+    }
 }
 /* Whether the recipe in `w` can apply: RECIPE_READY or the reason. */
 static u32 recipe_reason(volatile u32 *h,const volatile u32 *w) {
@@ -374,12 +406,14 @@ static u32 recipe_set(volatile u32 *h,const u32 *w) {
         if(RECIPE_CAPABILITY(h,GRAIN_SIZE)) setting_store(h,GRKIT_CORE_GRAIN_SIZE,RECIPE_GRAIN_SIZE(w[0]));
     }
     else if((w[0]&RECIPE_GRAIN) && RECIPE_GRAIN_LEVEL(w[0])) skipped|=RECIPE_SKIPPED_GRAIN;
-    for(i=0;i<GRKIT_RECIPE_MODULE_SETTINGS;++i) {
-        if(!RECIPE_MODULE_HELD(w[RECIPE_MODULE_WORD],i)) continue;
-        k=recipe_module_handle(h,i);
+    for(i=0;i<GRKIT_RECIPE_SETTINGS;++i) {
+        if(!recipe_setting_held(w,i)) continue;
+        k=recipe_setting_handle(h,i);
         /* Without its module, a setting at 0 (Off) changes nothing. */
-        if(k==RECIPE_NO_SETTING) { if(RECIPE_MODULE_VALUE(w[RECIPE_MODULE_WORD],i)) skipped|=RECIPE_SKIPPED_MODULE; }
-        else setting_store(h,k,RECIPE_MODULE_VALUE(w[RECIPE_MODULE_WORD],i));
+        if(k==RECIPE_NO_SETTING) {
+            if(recipe_setting_value(w,i)) skipped|=RECIPE_SKIPPED_MODULE(recipe_setting_modules[i]);
+        }
+        else setting_store(h,k,recipe_setting_value(w,i));
     }
     /* The native settings after the effect: Film Look Off first, then the
        native type that it shows. */
@@ -387,9 +421,8 @@ static u32 recipe_set(volatile u32 *h,const u32 *w) {
     return skipped;
 }
 /* Whether the current settings `now` (recipe_capture) equal each setting
-   that entry e (below recipe_entries) holds and that runs, besides its
-   exposure settings. A recipe that holds nothing else that runs matches
-   nothing. */
+   of the look that entry e (below recipe_entries) holds and that runs. A
+   recipe that holds nothing of the look that runs matches nothing. */
 static u32 recipe_matches_now(volatile u32 *h,u32 e,const u32 *now) {
     u32 w[GRKIT_RECIPE_WORDS], look, held=0, c;
     for(c=0;c<GRKIT_RECIPE_WORDS;++c) w[c]=recipe_words(h,e)[c];
@@ -405,9 +438,9 @@ static u32 recipe_matches_now(volatile u32 *h,u32 e,const u32 *now) {
         if(RECIPE_CAPABILITY(h,GRAIN_SIZE) && RECIPE_GRAIN_SIZE(now[0])!=RECIPE_GRAIN_SIZE(w[0])) return 0;
         held=1;
     }
-    for(c=0;c<GRKIT_RECIPE_MODULE_SETTINGS;++c) {
-        if(!RECIPE_MODULE_HELD(w[RECIPE_MODULE_WORD],c) || !RECIPE_MODULE_HELD(now[RECIPE_MODULE_WORD],c)) continue;
-        if(RECIPE_MODULE_VALUE(now[RECIPE_MODULE_WORD],c)!=RECIPE_MODULE_VALUE(w[RECIPE_MODULE_WORD],c)) return 0;
+    for(c=0;c<GRKIT_RECIPE_SETTINGS;++c) {
+        if(!RECIPE_SETTING_IS(LOOK,c) || !recipe_setting_held(w,c) || !recipe_setting_held(now,c)) continue;
+        if(recipe_setting_value(now,c)!=recipe_setting_value(w,c)) return 0;
         held=1;
     }
     if(NATIVE_TYPE(w[RECIPE_NATIVE_WORD])) {
@@ -420,8 +453,9 @@ static u32 recipe_matches_now(volatile u32 *h,u32 e,const u32 *now) {
         if(NATIVE_CORRECTION(now[RECIPE_EXTRA_WORD],c)!=NATIVE_CORRECTION(w[RECIPE_EXTRA_WORD],c)) return 0;
         held=1;
     }
-    /* The exposure settings change from shot to shot, so they do not
-       decide the match. */
+    /* The exposure settings change from shot to shot, and the settings of
+       modules besides the look, as the border, are not the look, so they do
+       not decide the match. */
     if(NATIVE_MODE(w[RECIPE_NATIVE_WORD])) {
         if((now[RECIPE_NATIVE_WORD]^w[RECIPE_NATIVE_WORD])&NATIVE_MODE_BITS) return 0;
         if(NATIVE_MODE(w[RECIPE_NATIVE_WORD])==NATIVE_MODE_TEMPERATURE+1U &&

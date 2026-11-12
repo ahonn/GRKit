@@ -42,6 +42,13 @@ export interface Glow {
   halationColor: number | null;
 }
 
+/** The border: style 0 Off, 1 Thin, 2 Wide, 3 Instant, and the color 0 white, 1 black of a
+ * border that is on, or null to keep the camera's. A recipe without a border keeps the camera's. */
+export interface Border {
+  style: number;
+  color: number | null;
+}
+
 export interface WhiteBalance {
   mode: number;
   /** Stored values 0 to 28; 14 is no shift. */
@@ -69,6 +76,7 @@ export interface Recipe {
   look: Look;
   grain: Grain | null;
   glow: Glow | null;
+  border: Border | null;
   whiteBalance: WhiteBalance | null;
   /** The stored value of each correction setting, or null for Unset. */
   corrections: (number | null)[];
@@ -450,15 +458,15 @@ export function effectCode(id: string): number {
 
 /**
  * The warnings of a library for a package: the recipes whose Grain has no effect without the
- * Grain module, those whose Glow the camera skips without the Glow module, and the effect recipes
- * whose effect the package does not have. `codes` holds the recipe code of each effect of the
- * package.
+ * Grain module, those whose Glow or border the camera skips without the Glow or Border module, and
+ * the effect recipes whose effect the package does not have. `codes` holds the recipe code of
+ * each effect of the package.
  */
 export function libraryWarnings(
   library: readonly Recipe[],
-  modules: { grain: boolean; glow: boolean },
+  modules: { grain: boolean; glow: boolean; border: boolean },
   codes: ReadonlySet<number>,
-): { grain: string[]; glow: string[]; missing: string[] } {
+): { grain: string[]; glow: string[]; border: string[]; missing: string[] } {
   return {
     grain: modules.grain
       ? []
@@ -469,6 +477,10 @@ export function libraryWarnings(
       : library
           .filter((recipe) => recipe.glow && (recipe.glow.bloom > 0 || recipe.glow.halation > 0))
           .map((recipe) => recipe.name),
+    // Border Off changes nothing without the module either.
+    border: modules.border
+      ? []
+      : library.filter((recipe) => recipe.border && recipe.border.style > 0).map((recipe) => recipe.name),
     missing: library
       .filter((recipe) => recipe.look.kind === 'effect' && !codes.has(recipe.look.code))
       .map((recipe) => recipe.name),

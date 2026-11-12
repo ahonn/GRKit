@@ -109,7 +109,7 @@ pub const STATUS_ICONS_MAX: usize = 6;
 pub const RECIPE_SLOTS: usize = 64;
 pub const RECIPE_ON_MAX: usize = 40;
 pub const RECIPE_UNDO: usize = 5;
-pub const RECIPE_WORDS: usize = 5;
+pub const RECIPE_WORDS: usize = 6;
 /// The name of a camera recipe that the person typed on the camera: at most
 /// `RECIPE_NAME_CHARS` printable ASCII characters, `RECIPE_NAME_CHARS / 4`
 /// words of four 7-bit characters, the first in the low bits. A character 0
@@ -618,9 +618,9 @@ fields!(RCP_RECORD_FIELDS {
     /// The name: UTF-16LE units, zero-padded, without a NUL at 16 units.
     RCP_RECORD_NAME = 0, 32;
     /// The RECIPE_WORDS words of the recipe (runtime/recipes.h).
-    RCP_RECORD_WORDS = 32, 20;
+    RCP_RECORD_WORDS = 32, 24;
     /// u8 family: 1 GR III, 2 GR IV, 3 GR IV Monochrome.
-    RCP_RECORD_FAMILY = 52, 1;
+    RCP_RECORD_FAMILY = 56, 1;
 });
 
 /// The plan file that SCAN writes and INSTALL and the loader read
@@ -836,6 +836,114 @@ fn array(out: &mut String, doc: &str, name: &str, values: &[impl std::fmt::Displ
 
 /// The GRF file: the offset and the size of each field, the file sizes, and
 /// the longest ID and name.
+/// The settings of modules that a recipe holds (`recipes::SETTINGS`), each
+/// as one entry of each list, and their modules.
+fn recipe_settings(out: &mut String) {
+    use crate::recipes::{layout, setting_modules, SETTINGS};
+    let modules = setting_modules();
+    comment(
+        out,
+        &format!(
+            "The settings of modules that a recipe holds (grkit_core::recipes::SETTINGS): {}. \
+             GRKIT_RECIPE_SETTING_IDS gives the handle of a capability (bit i of \
+             GRKIT_RECIPE_SETTING_CORE), else the state file ID, which finds the setting \
+             in the settings table. Its bits are at _SHIFTS in word _WORDS: one bit holds \
+             it, then its value, at most _MASKS. Bit i of _COLOR_ONLY: GR IV Monochrome \
+             does not hold it. Of _LOOK: it is part of the whole look. Of _WITH_PREVIOUS: \
+             a save holds it only while setting i - 1 is not 0. _MODULES gives the module \
+             of each, by its position in GRKIT_RECIPE_MODULES: {}.",
+            SETTINGS
+                .iter()
+                .map(|s| s.name())
+                .collect::<Vec<_>>()
+                .join(", "),
+            modules.join(", ")
+        ),
+    );
+    let list = |values: Vec<u32>| {
+        values
+            .iter()
+            .map(|value| format!("{value}U"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let mask = |flag: fn(&crate::recipes::Setting) -> bool| {
+        SETTINGS
+            .iter()
+            .enumerate()
+            .fold(0u32, |mask, (i, s)| mask | u32::from(flag(s)) << i)
+    };
+    let ids = SETTINGS
+        .iter()
+        .map(|setting| {
+            match capabilities::CAPABILITIES
+                .iter()
+                .position(|capability| capability.name() == setting.key)
+            {
+                Some(index) => capabilities::HANDLE_BASE + index as u32,
+                None => crate::grm::state_id(setting.module, setting.key),
+            }
+        })
+        .collect();
+    writeln!(out, "#define GRKIT_RECIPE_SETTINGS {}U", SETTINGS.len()).unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_SETTING_IDS {}", list(ids)).unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_CORE {}U",
+        mask(|s| s.key.starts_with("CORE."))
+    )
+    .unwrap();
+    let places = layout::SETTING_PLACES;
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_WORDS {}",
+        list(places.iter().map(|&(word, _)| word as u32).collect())
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_SHIFTS {}",
+        list(places.iter().map(|&(_, shift)| shift).collect())
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_MASKS {}",
+        list(layout::SETTING_MASKS.to_vec())
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_COLOR_ONLY {}U",
+        mask(|s| s.color_only)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_LOOK {}U",
+        mask(|s| s.look)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_WITH_PREVIOUS {}U",
+        mask(|s| s.with_previous)
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_RECIPE_SETTING_MODULES {}",
+        list(
+            SETTINGS
+                .iter()
+                .map(|s| modules.iter().position(|&m| m == s.module).unwrap() as u32)
+                .collect()
+        )
+    )
+    .unwrap();
+    writeln!(out, "#define GRKIT_RECIPE_MODULES {}U", modules.len()).unwrap();
+}
+
 /// The recipe library: the offset and the size of each field.
 fn recipe_table(out: &mut String) {
     comment(
@@ -1082,46 +1190,7 @@ pub fn header() -> String {
             writeln!(out, "#define GRKIT_RECIPE_{name} {value}U").unwrap();
         }
     }
-    comment(
-        &mut out,
-        &format!(
-            "The module settings that a recipe holds (grkit_core::recipes::MODULE_SETTINGS), \
-             in the order of their bits in word 4: {}. Each is its state file ID, which \
-             finds it in the settings table. GRKIT_RECIPE_MODULE_COLOR_ONLY has bit i \
-             for a color-only setting, which GR IV Monochrome does not hold.",
-            crate::recipes::MODULE_SETTINGS
-                .iter()
-                .map(|(module, key)| format!("{module}.{key}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    );
-    writeln!(
-        out,
-        "#define GRKIT_RECIPE_MODULE_SETTINGS {}U",
-        crate::recipes::MODULE_SETTINGS.len()
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "#define GRKIT_RECIPE_MODULE_SETTING_IDS {}",
-        crate::recipes::MODULE_SETTINGS
-            .iter()
-            .map(|(module, key)| format!("{}U", crate::grm::state_id(module, key)))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "#define GRKIT_RECIPE_MODULE_COLOR_ONLY {}U",
-        crate::recipes::MODULE_SETTINGS_COLOR_ONLY
-            .iter()
-            .enumerate()
-            .fold(0u32, |mask, (index, &color_only)| mask
-                | u32::from(color_only) << index)
-    )
-    .unwrap();
+    recipe_settings(&mut out);
     writeln!(
         out,
         "#define GRKIT_RECIPE_KEY_BASE {}U",

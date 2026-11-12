@@ -194,11 +194,11 @@ static unsigned dial_timer_start(unsigned ms)
 #define DIAL_TIMER_CANCEL(id) ((void)((id) && ++dial_timer_cancels))
 /* The string views of the label of the dial: each that the core makes, with
    its parent and top, and each that it removes. */
-static unsigned label_made, label_removed, label_parent, label_tops[4];
+static unsigned label_made, label_removed, label_parent, label_tops[5];
 static void label_create(unsigned parent, unsigned top, volatile unsigned *at)
 {
     label_parent = parent;
-    if (label_made < 4) label_tops[label_made] = top;
+    if (label_made < 5) label_tops[label_made] = top;
     *at = 0x7000U + ++label_made;
 }
 #define DIAL_LABEL_CREATE(parent,top,at) label_create(parent, top, at)
@@ -3819,23 +3819,25 @@ static void the_mode_dial_labels_what_a_user_mode_applies(void)
     dial_to(DIAL_U(2));
     dial_fire();
     assert(label_lines() == 2 && label_line(0, "U2: Recipe", 0) && label_line(1, 0, RECIPE_TEXT_NO_GRAIN));
-    /* A module setting of a module that is not loaded: a line for it. */
-    recipe_at(h, 1)[RECIPE_MODULE_WORD] |= (1U | 2U << 1) << (RECIPE_MODULE_BITS * 0);
+    /* A setting of a module that is not loaded: a line for each module. */
+    recipe_at(h, 1)[RECIPE_MODULE_WORD] |= (1U | 2U << 1) << recipe_setting_shifts[0];
+    recipe_at(h, 1)[GRKIT_RECIPE_SETTINGS_WORD] |= (1U | 1U << 1) << recipe_setting_shifts[3];
     dial_to(DIAL_U(1));
     dial_fire();
     dial_to(DIAL_U(2));
     dial_fire();
-    assert(label_lines() == 3 && label_line(1, 0, RECIPE_TEXT_NO_GRAIN) && label_line(2, 0, RECIPE_TEXT_NO_GLOW));
+    assert(label_lines() == 4 && label_line(1, 0, RECIPE_TEXT_NO_GRAIN) && label_line(2, 0, RECIPE_TEXT_NO_MODULE(0)) &&
+           label_line(3, 0, RECIPE_TEXT_NO_MODULE(1)));
     label_show();
-    assert(label_made == 4 && label_tops[1] == DIAL_LABEL_TOP && label_tops[2] == DIAL_LABEL_TOP + DIAL_LABEL_HEIGHT &&
-           label_tops[3] == DIAL_LABEL_TOP + 2U * DIAL_LABEL_HEIGHT);
+    assert(label_made == 5 && label_tops[1] == DIAL_LABEL_TOP && label_tops[2] == DIAL_LABEL_TOP + DIAL_LABEL_HEIGHT &&
+           label_tops[3] == DIAL_LABEL_TOP + 2U * DIAL_LABEL_HEIGHT && label_tops[4] == DIAL_LABEL_TOP + 3U * DIAL_LABEL_HEIGHT);
     other = 0x7004U;
     assert(menu_text_override(other, SETTINGS_TITLE_TEXT) ==
            ((u32)(uintptr_t)services_word(h, SERVICES_DIAL + DIAL_LABEL_TEXTS + 16U) | 1U));
     /* A move to another position ends the label and shows none. */
     dial_to(DIAL_P);
     dial_fire();
-    assert(label_state() == DIAL_LABEL_NONE && label_removed == 4);
+    assert(label_state() == DIAL_LABEL_NONE && label_removed == 5);
     /* A recipe whose effect is missing: the user mode follows, and the
        label says why under the name. Without a name, the automatic name
        says it already. */

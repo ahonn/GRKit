@@ -119,19 +119,109 @@ pub struct Grain {
     pub size: u8,
 }
 
-/// The module settings that a recipe holds, in the order of their bits in
-/// word 4: Glow (`modules/glow`). Each has at most `MODULE_SETTING_VALUES`
-/// values. The camera finds each in the settings table by its state file ID,
-/// so a recipe holds a setting only while its module is loaded.
-pub const MODULE_SETTINGS: [(&str, &str); 3] = [
-    ("GLOW", "BLOOM"),
-    ("GLOW", "HALATION"),
-    ("GLOW", "HALATION_COLOR"),
+/// A setting of a module that a recipe holds: a setting of the module, or a
+/// capability that the module uses. The camera holds it only while the
+/// module is loaded (`runtime/recipes.h`).
+#[derive(Clone, Copy, Debug)]
+pub struct Setting {
+    /// The module, whose message says that the recipe needs it.
+    pub module: &'static str,
+    /// The key of a module setting, which the camera finds in the settings
+    /// table by its state file ID, or `CORE.<KEY>` of a capability.
+    pub key: &'static str,
+    /// The number of values of the setting.
+    pub values: u8,
+    /// The bits of the value in the words, after the bit that holds it.
+    pub bits: u32,
+    /// Color-only (`color_only` in the manifest of its module): GR IV
+    /// Monochrome does not hold it.
+    pub color_only: bool,
+    /// Part of the whole look: a save holds it at 0 (Off) while its module
+    /// is not loaded, unless it is color-only, and it decides a match.
+    /// Otherwise it is like the exposure settings: a preset can leave it
+    /// out, and it does not decide a match.
+    pub look: bool,
+    /// A save holds it only while the setting before it is not 0, as the
+    /// color of a border that is on.
+    pub with_previous: bool,
+}
+
+impl Setting {
+    /// The full setting name: `MODULE.KEY`, or the key of a capability.
+    pub fn name(&self) -> String {
+        if self.key.starts_with("CORE.") {
+            self.key.to_owned()
+        } else {
+            format!("{}.{}", self.module, self.key)
+        }
+    }
+}
+
+/// The settings of modules that a recipe holds, in the order of their bits
+/// (`layout::SETTING_PLACES`): Glow (`modules/glow`) and Border
+/// (`modules/border`). A new setting comes last, so the bits of the others
+/// stay.
+pub const SETTINGS: [Setting; 5] = [
+    Setting {
+        module: "GLOW",
+        key: "BLOOM",
+        values: 4,
+        bits: 2,
+        color_only: false,
+        look: true,
+        with_previous: false,
+    },
+    Setting {
+        module: "GLOW",
+        key: "HALATION",
+        values: 4,
+        bits: 2,
+        color_only: false,
+        look: true,
+        with_previous: false,
+    },
+    Setting {
+        module: "GLOW",
+        key: "HALATION_COLOR",
+        values: 4,
+        bits: 2,
+        color_only: true,
+        look: true,
+        with_previous: false,
+    },
+    // Three bits leave room for more styles.
+    Setting {
+        module: "BORDER",
+        key: "CORE.BORDER",
+        values: 4,
+        bits: 3,
+        color_only: false,
+        look: false,
+        with_previous: false,
+    },
+    Setting {
+        module: "BORDER",
+        key: "CORE.BORDER_COLOR",
+        values: 2,
+        bits: 1,
+        color_only: false,
+        look: false,
+        with_previous: true,
+    },
 ];
-/// Whether each of `MODULE_SETTINGS` is color-only (`color_only` in the
-/// manifest of its module): GR IV Monochrome does not hold it.
-pub const MODULE_SETTINGS_COLOR_ONLY: [bool; 3] = [false, false, true];
-pub const MODULE_SETTING_VALUES: u8 = 4;
+
+/// The modules of `SETTINGS`, in the order of their first setting. A recipe
+/// that needs a module that is not loaded names it by its position here
+/// (`runtime/recipes.h`, `runtime/install_recipes.h`).
+pub fn setting_modules() -> Vec<&'static str> {
+    let mut modules: Vec<&str> = Vec::new();
+    for setting in &SETTINGS {
+        if !modules.contains(&setting.module) {
+            modules.push(setting.module);
+        }
+    }
+    modules
+}
 
 /// The Glow of a recipe: Bloom and Halation, each 0 Off to 3 Strong, and the
 /// color of Halation, 0 Red, 1 Orange, 2 Gold, 3 White. A recipe without a
@@ -145,10 +235,52 @@ pub struct Glow {
     pub halation_color: Option<u8>,
 }
 
-impl Glow {
-    /// The values of `MODULE_SETTINGS`, `None` for each that is not held.
-    pub(super) fn values(&self) -> [Option<u8>; 3] {
-        [Some(self.bloom), Some(self.halation), self.halation_color]
+/// The border of a recipe (`CORE.BORDER`, `CORE.BORDER_COLOR`): the style,
+/// 0 Off, 1 Thin, 2 Wide, 3 Instant, and the color of a style other than
+/// Off, 0 white, 1 black. A recipe without a color keeps the color of the
+/// camera. A recipe without a border keeps the border of the camera.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Border {
+    pub style: u8,
+    #[serde(default)]
+    pub color: Option<u8>,
+}
+
+impl Recipe {
+    /// The value of each of `SETTINGS`, `None` for each that is not held.
+    pub(super) fn setting_values(&self) -> [Option<u8>; SETTINGS.len()] {
+        let glow = self.glow.map_or([None; 3], |glow| {
+            [Some(glow.bloom), Some(glow.halation), glow.halation_color]
+        });
+        let border = self
+            .border
+            .map_or([None; 2], |border| [Some(border.style), border.color]);
+        [glow[0], glow[1], glow[2], border[0], border[1]]
+    }
+
+    /// Set Glow and Border from the value of each of `SETTINGS`. Bloom and
+    /// Halation are held together, and the Halation color only with them; a
+    /// border color only with a style.
+    pub(super) fn set_setting_values(
+        &mut self,
+        values: [Option<u8>; SETTINGS.len()],
+    ) -> Result<()> {
+        self.glow = match [values[0], values[1], values[2]] {
+            [None, None, None] => None,
+            [Some(bloom), Some(halation), halation_color] => Some(Glow {
+                bloom,
+                halation,
+                halation_color,
+            }),
+            _ => bail!("A recipe holds Bloom and Halation together"),
+        };
+        self.border = match [values[3], values[4]] {
+            [None, None] => None,
+            [Some(style), color] => Some(Border { style, color }),
+            _ => bail!("A recipe holds a border color only with a border"),
+        };
+        Ok(())
     }
 }
 
@@ -208,6 +340,8 @@ pub struct Recipe {
     pub grain: Option<Grain>,
     #[serde(default)]
     pub glow: Option<Glow>,
+    #[serde(default)]
+    pub border: Option<Border>,
     pub white_balance: Option<WhiteBalance>,
     /// The stored value of each correction setting
     /// (`native::CORRECTIONS`), or `None` for Unset.
@@ -289,17 +423,20 @@ impl Recipe {
                 "Grain is out of range"
             );
         }
-        if let Some(glow) = self.glow {
+        let values = self.setting_values();
+        for (index, (setting, value)) in SETTINGS.iter().zip(values).enumerate() {
+            let Some(value) = value else { continue };
+            ensure!(value < setting.values, "{} is out of range", setting.name());
             ensure!(
-                glow.values()
-                    .iter()
-                    .flatten()
-                    .all(|&v| v < MODULE_SETTING_VALUES),
-                "Glow is out of range"
+                !setting.color_only || !self.family.monochrome(),
+                "GR IV Monochrome has no {}",
+                setting.name()
             );
             ensure!(
-                glow.halation_color.is_none() || !self.family.monochrome(),
-                "GR IV Monochrome has no Halation color"
+                !setting.with_previous || values[index - 1].is_some_and(|value| value != 0),
+                "A recipe holds {} only while {} is on",
+                setting.name(),
+                SETTINGS[index - 1].name()
             );
         }
         if let Some(balance) = self.white_balance {

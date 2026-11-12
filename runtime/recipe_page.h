@@ -56,9 +56,12 @@
 /* The buttons of Fn on a camera recipe. */
 #define RECIPE_TEXT_RENAME (TEXT_RECIPE+10U)
 #define RECIPE_TEXT_REMOVE (TEXT_RECIPE+11U)
-#define RECIPE_TEXT_NO_GLOW (TEXT_RECIPE+12U)
 /* The mark after the name of a recipe whose effect is not installed. */
-#define RECIPE_TEXT_MISSING_MARK (TEXT_RECIPE+13U)
+#define RECIPE_TEXT_MISSING_MARK (TEXT_RECIPE+12U)
+/* The message of an apply that left out the settings of module m of
+   GRKIT_RECIPE_MODULES, which is not loaded. */
+#define RECIPE_TEXT_NO_MODULE(m) (TEXT_RECIPE+14U+(m))
+_Static_assert(TEXT_RECIPE+14U+GRKIT_RECIPE_MODULES==TEXT_NATIVE_TYPE,"a message for each module of the recipe settings ends the RECIPE run");
 /* The row kinds besides a recipe slot. */
 #define RECIPE_ROW_UNDO 0xfffffffeU
 #define RECIPE_ROW_SAVE 0xfffffffdU
@@ -309,13 +312,24 @@ static u32 recipe_committed(volatile u32 *h) {
 }
 
 /* ---- Messages after an apply ------------------------------------------------ */
-/* The message of an apply that left out Glow: its module is not loaded. */
-static void recipe_no_glow(u32 arg) {
+/* The text of the first RECIPE_SKIPPED bit of `skipped`, which clears it:
+   Grain, then each module in order. */
+static u32 recipe_skipped_text(u32 *skipped) {
+    u32 m;
+    if(*skipped&RECIPE_SKIPPED_GRAIN) { *skipped&=~RECIPE_SKIPPED_GRAIN; return RECIPE_TEXT_NO_GRAIN; }
+    for(m=0;!(*skipped&RECIPE_SKIPPED_MODULE(m));++m) {}
+    *skipped&=~RECIPE_SKIPPED_MODULE(m);
+    return RECIPE_TEXT_NO_MODULE(m);
+}
+/* The messages of an apply that left settings out (the RECIPE_SKIPPED bits
+   `skipped`, at least one): one after the other, each after OK on the one
+   before it. */
+static void recipe_skipped(u32 skipped) {
     volatile u32 *h=menu_header();
-    (void)arg;
-    recipe_append(recipe_text_at(h,RECIPE_BOX_AT),0,text(h,RECIPE_TEXT_NO_GLOW));
+    u32 message=recipe_skipped_text(&skipped);
+    recipe_append(recipe_text_at(h,RECIPE_BOX_AT),0,text(h,message));
     ++services_word(h,SERVICES_APP)[0];
-    grkit_export_ui_message(recipe_box(h),0,0);
+    grkit_export_ui_message(recipe_box(h),skipped ? recipe_skipped : 0,skipped);
     --services_word(h,SERVICES_APP)[0];
 }
 
@@ -342,15 +356,9 @@ static void recipe_ok(volatile u32 *h,u32 row) {
     }
     /* Applied. The first undo step adds the Undo row, so the cursor moves
        with the recipe. A message keeps ADJ open, so it shows: the Grain that
-       has no effect, then the Glow that it left out. */
+       has no effect, then each module whose settings it left out. */
     h[GRKIT_HOST_MENU_CURSOR/4]+=recipe_first_row(h)-saved;
-    if(result&RECIPE_SKIPPED_GRAIN) {
-        recipe_append(recipe_text_at(h,RECIPE_BOX_AT),0,text(h,RECIPE_TEXT_NO_GRAIN));
-        ++services_word(h,SERVICES_APP)[0];
-        grkit_export_ui_message(recipe_box(h),result&RECIPE_SKIPPED_MODULE ? recipe_no_glow : 0,0);
-        --services_word(h,SERVICES_APP)[0];
-    }
-    else if(result&RECIPE_SKIPPED_MODULE) recipe_no_glow(0);
+    if(RECIPE_SKIPPED(result)) recipe_skipped(RECIPE_SKIPPED(result));
 }
 /* Delete recipe `slot` after a confirm, the cursor on Cancel. */
 static void recipe_delete_confirm(volatile u32 *h,u32 slot) {

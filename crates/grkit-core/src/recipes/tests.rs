@@ -1,7 +1,7 @@
 use super::file::file_records;
 use super::layout::*;
 use super::presets::NEGATIVE_FILM;
-use super::words::glow_of_word;
+use super::words::setting_values;
 use super::*;
 use crate::abi::RECIPE_WORDS;
 use crate::native;
@@ -24,6 +24,10 @@ pub(crate) fn sample() -> Vec<Recipe> {
                 bloom: 1,
                 halation: 3,
                 halation_color: Some(2),
+            }),
+            border: Some(Border {
+                style: 2,
+                color: Some(1),
             }),
             white_balance: Some(WhiteBalance {
                 mode: 4,
@@ -58,6 +62,10 @@ pub(crate) fn sample() -> Vec<Recipe> {
             }),
             grain: None,
             glow: None,
+            border: Some(Border {
+                style: 0,
+                color: None,
+            }),
             white_balance: Some(WhiteBalance {
                 mode: 14,
                 shift_ba: 14,
@@ -90,6 +98,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
                 halation: 2,
                 halation_color: None,
             }),
+            border: None,
             white_balance: None,
             corrections: [Some(0), Some(4), Some(0), Some(5)],
             exposure: Exposure::default(),
@@ -141,6 +150,12 @@ fn the_words_follow_the_camera_layout() {
     assert_eq!(words[MODULE_WORD], 0);
     // Without a color, the camera keeps its own.
     assert_eq!(sample()[2].words().unwrap()[MODULE_WORD], 0b101_001);
+    // The border follows in the next word: Wide, then black.
+    assert_eq!(SETTING_PLACES[3], (SETTINGS_WORD, 0));
+    assert_eq!(effect[SETTINGS_WORD], 0b11_0101);
+    // Border Off holds no color.
+    assert_eq!(words[SETTINGS_WORD], 0b0001);
+    assert_eq!(sample()[2].words().unwrap()[SETTINGS_WORD], 0);
 }
 
 #[test]
@@ -242,9 +257,33 @@ fn a_write_keeps_the_recipes_that_the_site_cannot_read() {
 
 #[test]
 fn glow_holds_bloom_and_halation_together() {
-    assert!(glow_of_word(0b011).is_err());
-    assert!(glow_of_word(0b111_000_000).is_err());
+    let decode = |module: u32, settings: u32| {
+        let mut w = [0; RECIPE_WORDS];
+        (w[MODULE_WORD], w[SETTINGS_WORD]) = (module, settings);
+        let mut recipe = sample()[0].clone();
+        recipe.set_setting_values(setting_values(&w))
+    };
+    assert!(decode(0b011, 0).is_err());
+    assert!(decode(0b111_000_000, 0).is_err());
+    assert!(
+        decode(0, 0b11_0000).is_err(),
+        "a border color holds a border"
+    );
+    assert!(decode(0b001_001, 0b11_0101).is_ok());
     let mut recipes = sample();
+    recipes[1].border = Some(Border {
+        style: 0,
+        color: Some(1),
+    });
+    assert!(
+        recipes[1].check().is_err(),
+        "a border that is off has no color"
+    );
+    recipes[1].border = Some(Border {
+        style: 4,
+        color: None,
+    });
+    assert!(recipes[1].check().is_err(), "four border styles");
     recipes[2].glow = Some(Glow {
         bloom: 0,
         halation: 2,

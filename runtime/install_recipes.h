@@ -338,12 +338,13 @@ static void install_dial_sets(u32 base)
 /* The recipes that cannot apply in full on this camera, which REPORT.TXT
    names. A recipe has the first of these problems: its effect is not
    installed or Film Look does not run; it holds a Grain that is not Off
-   without a running Grain module; or it holds a Glow that is not Off
-   without the Glow module (runtime/recipes.h applies the same rules). */
+   without a running Grain module; or it holds a setting of module m of
+   GRKIT_RECIPE_MODULES that is not Off without that module
+   (runtime/recipes.h applies the same rules). */
 #define RECIPE_PROBLEMS_MAX 8U
 #define RECIPE_PROBLEM_EFFECT 1U
 #define RECIPE_PROBLEM_GRAIN 2U
-#define RECIPE_PROBLEM_GLOW 3U
+#define RECIPE_PROBLEM_MODULE(m) (3U + (m))
 struct recipe_problem {
     char name[GRKIT_RECIPE_NAME_CHARS + 1];
     /* The number of the recipe, from 1. */
@@ -353,7 +354,11 @@ static struct recipe_problem recipe_problems[RECIPE_PROBLEMS_MAX];
 static u32 recipe_problem_count, recipe_problems_more;
 static u32 recipe_problem_of(const u32 *w, u32 base, u32 records, u32 table, u32 capabilities)
 {
-    static const u32 ids[GRKIT_RECIPE_MODULE_SETTINGS] = {GRKIT_RECIPE_MODULE_SETTING_IDS};
+    static const u32 ids[GRKIT_RECIPE_SETTINGS] = {GRKIT_RECIPE_SETTING_IDS};
+    static const u8 words[GRKIT_RECIPE_SETTINGS] = {GRKIT_RECIPE_SETTING_WORDS};
+    static const u8 shifts[GRKIT_RECIPE_SETTINGS] = {GRKIT_RECIPE_SETTING_SHIFTS};
+    static const u8 masks[GRKIT_RECIPE_SETTINGS] = {GRKIT_RECIPE_SETTING_MASKS};
+    static const u8 modules[GRKIT_RECIPE_SETTINGS] = {GRKIT_RECIPE_SETTING_MODULES};
     if ((w[0] & GRKIT_RECIPE_LOOK_MASK) == GRKIT_RECIPE_LOOK_EFFECT) {
         u32 code = w[0] >> GRKIT_RECIPE_CODE_SHIFT & GRKIT_RECIPE_CODE_MASK, i = 0;
         if (!(capabilities & GRKIT_CORE_TONE_BIT)) return RECIPE_PROBLEM_EFFECT;
@@ -366,12 +371,15 @@ static u32 recipe_problem_of(const u32 *w, u32 base, u32 records, u32 table, u32
     if ((w[0] & GRKIT_RECIPE_GRAIN_HELD) && (w[0] >> GRKIT_RECIPE_GRAIN_LEVEL_SHIFT & GRKIT_RECIPE_GRAIN_LEVEL_MASK) &&
         !(capabilities & GRKIT_CORE_GRAIN_BIT))
         return RECIPE_PROBLEM_GRAIN;
-    for (u32 m = 0; m < GRKIT_RECIPE_MODULE_SETTINGS; ++m) {
-        u32 bits = w[GRKIT_RECIPE_MODULE_WORD] >> (GRKIT_RECIPE_MODULE_SETTING_BITS * m), found = 0;
-        if (!(bits & 1U) || !(bits >> 1 & GRKIT_RECIPE_MODULE_VALUE_MASK)) continue;
-        for (u32 k = 0; table && k < word(table); ++k)
-            if (word(table + 4U * SETTINGS_ENTRY(k)) == ids[m]) found = 1;
-        if (!found) return RECIPE_PROBLEM_GLOW;
+    for (u32 s = 0; s < GRKIT_RECIPE_SETTINGS; ++s) {
+        u32 bits = w[words[s]] >> shifts[s], found = 0;
+        if (!(bits & 1U) || !(bits >> 1 & masks[s])) continue;
+        if (GRKIT_RECIPE_SETTING_CORE >> s & 1U)
+            found = capabilities >> (ids[s] - GRKIT_CORE_SETTING_BASE) & 1U;
+        else
+            for (u32 k = 0; table && k < word(table); ++k)
+                if (word(table + 4U * SETTINGS_ENTRY(k)) == ids[s]) found = 1;
+        if (!found) return RECIPE_PROBLEM_MODULE(modules[s]);
     }
     return 0;
 }

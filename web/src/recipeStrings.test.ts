@@ -11,6 +11,8 @@ describe('recipe strings', () => {
       expect(strings.grainLevels).toHaveLength(5);
       expect(strings.glowLevels).toHaveLength(4);
       expect(strings.halationColors).toHaveLength(4);
+      expect(strings.borderStyles).toHaveLength(4);
+      expect(strings.borderColors).toHaveLength(2);
     }
   });
 });
