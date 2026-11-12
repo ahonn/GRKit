@@ -508,7 +508,7 @@ static void apply_state(u32 base, u32 table)
     /* ADJ exited from GRKit on the last power-on: the next ADJ that opens
        opens GRKit (RETURN_POWERON in runtime/menu.c). An ADJ that is open
        now stays as it is. */
-    if (word(base + GRKIT_HOST_ADJ_OPEN) == 1) store(base + GRKIT_HOST_RETURN, 5);
+    if (word(base + GRKIT_HOST_ADJ_OPEN) >= 1) store(base + GRKIT_HOST_RETURN, 5);
     if (table) {
         u32 n = word(table);
         for (u32 k = 0; k < n && k < GRKIT_MODULE_SETTINGS_MAX; ++k) {

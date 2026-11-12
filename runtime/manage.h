@@ -85,6 +85,20 @@
 #define MANAGE_MODULES GRKIT_MODULES_MAX
 /* A position without a CORE.POS value sorts after each position. */
 #define MANAGE_DEFAULT_KEY 1000U
+/* CORE.POS of a module: 0 for its default place in the GRKit root of ADJ,
+   or its position there, 1 to MANAGE_MODULES; MANAGE_POS_HIDDEN while ADJ
+   does not show it; or MANAGE_POS_PIN + k while it has entry k of the ADJ
+   toolbar, before the GRKit entry (k < MANAGE_PINS, runtime/menu.c). The
+   module works in each place. */
+#define MANAGE_PINS (GRKIT_CORE_ADJ_VALUES-2U)
+#define MANAGE_POS_HIDDEN (MANAGE_MODULES+1U)
+#define MANAGE_POS_PIN (MANAGE_MODULES+2U)
+#define MANAGE_POS_VALUES (MANAGE_POS_PIN+MANAGE_PINS)
+/* The place of a module (manage_place): the GRKit root, hidden, or entry
+   MANAGE_PLACE_PIN + k of the toolbar. */
+#define MANAGE_PLACE_ROOT 0U
+#define MANAGE_PLACE_HIDDEN 1U
+#define MANAGE_PLACE_PIN 2U
 /* The setting of the GRKit switch: the CORE.OFF of each module without the
    module ID. */
 #define MANAGE_SWITCH_KEY "CORE.OFF"
@@ -128,10 +142,20 @@ static u32 manage_halted(volatile u32 *h,u32 module) { return manage_off(h,modul
 /* The values of the page of a module that are off in ADJ, a bit each. */
 static u32 manage_rows_handle(volatile u32 *h,u32 module) { return manage_off_handle(h,module)+2; }
 static u32 manage_hidden_values(volatile u32 *h,u32 module) { return setting_value(h,manage_rows_handle(h,module)); }
-/* The sort key of a module: its CORE.POS, or the default place after them. */
+static u32 manage_position(volatile u32 *h,u32 module) { return setting_value(h,manage_off_handle(h,module)+1); }
+static u32 manage_place(volatile u32 *h,u32 module) {
+    u32 position=manage_position(h,module);
+    if(position>=MANAGE_POS_PIN && position<MANAGE_POS_VALUES) return MANAGE_PLACE_PIN+position-MANAGE_POS_PIN;
+    return position==MANAGE_POS_HIDDEN ? MANAGE_PLACE_HIDDEN : MANAGE_PLACE_ROOT;
+}
+/* The sort key of a module: an entry of the toolbar first, then its
+   position in the root, the default place after them, and a module that
+   ADJ does not show last. */
 static u32 manage_key(volatile u32 *h,u32 module) {
-    u32 position=setting_value(h,manage_off_handle(h,module)+1);
-    return position ? position : MANAGE_DEFAULT_KEY+module;
+    u32 position=manage_position(h,module);
+    if(position>=MANAGE_POS_PIN && position<MANAGE_POS_VALUES) return position-MANAGE_POS_PIN;
+    if(position==MANAGE_POS_HIDDEN) return 2U*MANAGE_DEFAULT_KEY+module;
+    return position ? MANAGE_PINS+position : MANAGE_DEFAULT_KEY+module;
 }
 /* The module of a row: the modules in the order of their keys. Equal keys
    keep the order of this start. */
@@ -264,56 +288,125 @@ static u32 manage_committed(volatile u32 *h) {
     return module<manage_count(h) ? manage_adj_row(h,module) : 0;
 }
 
-/* The ADJ Order row of the GRKit section of MENU (runtime/menu_section.h) opens a
-   native settings page with a row for each module that ADJ can show
-   (manage_adj_modules), in their order. The values of a row are the
-   positions 1 to the row count; the row shows the position of the module. A
-   choice moves the module to that position and gives each of these modules
-   its row + 1 as CORE.POS, so the page and the root of ADJ
-   (runtime/modules.h: root_order) show the new order at once. The other
-   modules keep their CORE.POS. */
+/* The ADJ Order row of GRKit Settings in MENU (runtime/menu_settings.h:
+   CORE_PAGE) opens a native settings page with a row for each module that
+   ADJ can show (manage_adj_modules), in the order of their keys: the
+   entries of the toolbar, the GRKit root, then the modules that ADJ does
+   not show. The value page of a row lists the places in that order: Top 1
+   to Top MANAGE_PINS, the positions 1 to n of the root, and Hidden; the row
+   shows the place of its module. A choice moves the module there. A module
+   that had that entry of the toolbar takes the place that the moved module
+   left. Each module of the page then gets its place as CORE.POS, so the page,
+   the toolbar, and the root of ADJ (runtime/modules.h: root_order) show the
+   change at once. The other modules keep their CORE.POS. */
 _Static_assert(MANAGE_MODULES<=SUBMENU_ROWS,"The ADJ Order page has a row for each module");
-/* More positions than SETTING_VALUES make a long value page
+/* More places than SETTING_VALUES make a long value page
    (runtime/menu_settings.h: settings_long). */
-_Static_assert(MANAGE_MODULES<=MENU_VALUES_MAX,"A value page holds each position");
-static u32 manage_values(volatile u32 *h) { return manage_adj_count(h); }
+_Static_assert(MANAGE_PINS+MANAGE_MODULES+1U<=MENU_VALUES_MAX,"A value page holds each place");
 static const u16 manage_positions[][3]={{'1',0},{'2',0},{'3',0},{'4',0},{'5',0},{'6',0},{'7',0},{'8',0},{'9',0},
     {'1','0',0}};
 _Static_assert(sizeof(manage_positions)/sizeof(manage_positions[0])==MANAGE_MODULES,"A text for each position");
-static const u16 *manage_value_text(volatile u32 *h,u32 value) {
-    (void)h;
-    return manage_positions[value<MANAGE_MODULES ? value : MANAGE_MODULES-1];
+/* The modules of the page by place: the module of each entry of the
+   toolbar (or MANAGE_MODULES), the root in order, and the hidden ones. */
+typedef struct {
+    u32 pins[MANAGE_PINS], root[MANAGE_MODULES], hidden[MANAGE_MODULES], roots, hiddens;
+} ManagePlaces;
+static void manage_places(volatile u32 *h,ManagePlaces *p) {
+    u32 n=manage_adj_count(h), i, module, place;
+    for(i=0;i<MANAGE_PINS;++i) p->pins[i]=MANAGE_MODULES;
+    p->roots=p->hiddens=0;
+    for(i=0;i<n;++i) {
+        module=manage_adj_module(h,i);
+        place=manage_place(h,module);
+        if(place>=MANAGE_PLACE_PIN && p->pins[place-MANAGE_PLACE_PIN]==MANAGE_MODULES) p->pins[place-MANAGE_PLACE_PIN]=module;
+        else if(place==MANAGE_PLACE_HIDDEN) p->hidden[p->hiddens++]=module;
+        else p->root[p->roots++]=module;
+    }
 }
-/* Move the module at ADJ Order row `row` to row `to`, the others keep their
-   order: each module of the page gets its row + 1. */
-static void manage_move(volatile u32 *h,u32 row,u32 to) {
-    u32 n=manage_adj_count(h), order[MANAGE_MODULES], i, moved;
-    if(row>=n || to>=n) return;
-    for(i=0;i<n;++i) order[i]=manage_adj_module(h,i);
-    moved=order[row];
-    for(i=row;i<to;++i) order[i]=order[i+1];
-    for(i=row;i>to;--i) order[i]=order[i-1];
-    order[to]=moved;
-    for(i=0;i<n;++i) setting_store(h,manage_off_handle(h,order[i])+1,i+1);
+/* The places of the module of row `row`: the entries of the toolbar, the
+   positions of the root with room for the module, and Hidden. */
+static u32 manage_root_room(volatile u32 *h,u32 row) {
+    ManagePlaces p;
+    manage_places(h,&p);
+    return p.roots+(manage_place(h,manage_adj_module(h,row))!=MANAGE_PLACE_ROOT);
+}
+static u32 manage_place_values(volatile u32 *h,u32 row) { return MANAGE_PINS+manage_root_room(h,row)+1U; }
+static const u16 *manage_place_text(volatile u32 *h,u32 row,u32 value) {
+    u32 room;
+    if(value<MANAGE_PINS) return text(h,TEXT_ADJ+1U+value);
+    room=manage_root_room(h,row);
+    if(value<MANAGE_PINS+room) return manage_positions[value-MANAGE_PINS<MANAGE_MODULES ? value-MANAGE_PINS : MANAGE_MODULES-1];
+    return text(h,TEXT_ADJ+1U+MANAGE_PINS);
+}
+/* The value of the place of the module of row `row`. */
+static u32 manage_place_value(volatile u32 *h,u32 row) {
+    u32 module=manage_adj_module(h,row), place=manage_place(h,module), i;
+    ManagePlaces p;
+    if(place>=MANAGE_PLACE_PIN) return place-MANAGE_PLACE_PIN;
+    manage_places(h,&p);
+    /* Hidden follows each position of the root and the one for this module. */
+    if(place==MANAGE_PLACE_HIDDEN) return MANAGE_PINS+p.roots+1U;
+    for(i=0;i<p.roots && p.root[i]!=module;++i) {}
+    return MANAGE_PINS+i;
+}
+/* Insert `module` at index `at` of the root. */
+static void manage_root_insert(ManagePlaces *p,u32 at,u32 module) {
+    u32 i;
+    if(at>p->roots) at=p->roots;
+    for(i=p->roots;i>at;--i) p->root[i]=p->root[i-1];
+    p->root[at]=module;
+    ++p->roots;
+}
+/* Move the module of row `row` to the place of value `value`. */
+static void manage_place_set(volatile u32 *h,u32 row,u32 value) {
+    u32 module=manage_adj_module(h,row), old=manage_place(h,module), i, at=0, other=MANAGE_MODULES;
+    ManagePlaces p;
+    if(row>=manage_adj_count(h) || value>=manage_place_values(h,row)) return;
+    manage_places(h,&p);
+    /* Take the module out of its place. */
+    if(old>=MANAGE_PLACE_PIN) p.pins[old-MANAGE_PLACE_PIN]=MANAGE_MODULES;
+    else if(old==MANAGE_PLACE_HIDDEN) {
+        for(i=0;i<p.hiddens && p.hidden[i]!=module;++i) {}
+        for(;i+1<p.hiddens;++i) p.hidden[i]=p.hidden[i+1];
+        --p.hiddens;
+    }
+    else {
+        for(at=0;at<p.roots && p.root[at]!=module;++at) {}
+        for(i=at;i+1<p.roots;++i) p.root[i]=p.root[i+1];
+        --p.roots;
+    }
+    if(value<MANAGE_PINS) {
+        other=p.pins[value];
+        p.pins[value]=module;
+        /* A module that had the entry takes the place that the module left. */
+        if(other<MANAGE_MODULES) {
+            if(old>=MANAGE_PLACE_PIN) p.pins[old-MANAGE_PLACE_PIN]=other;
+            else if(old==MANAGE_PLACE_HIDDEN) p.hidden[p.hiddens++]=other;
+            else manage_root_insert(&p,at,other);
+        }
+    }
+    else if(value<MANAGE_PINS+p.roots+1U) manage_root_insert(&p,value-MANAGE_PINS,module);
+    else p.hidden[p.hiddens++]=module;
+    for(i=0;i<MANAGE_PINS;++i)
+        if(p.pins[i]<MANAGE_MODULES) setting_store(h,manage_off_handle(h,p.pins[i])+1,MANAGE_POS_PIN+i);
+    for(i=0;i<p.roots;++i) setting_store(h,manage_off_handle(h,p.root[i])+1,i+1);
+    for(i=0;i<p.hiddens;++i) setting_store(h,manage_off_handle(h,p.hidden[i])+1,MANAGE_POS_HIDDEN);
+    /* The page shows again with the cursor on the module at its new row. */
+    if(h[GRKIT_HOST_SERVICES/4]) services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0]=module+1;
 }
 #define MANAGE_ROW(n) \
     static const u16 *manage_label_##n(volatile u32 *h) { \
         return manage_name(h,manage_adj_module(h,n)); } \
-    static u32 manage_get_##n(volatile u32 *h) { (void)h; return n; } \
-    static void manage_set_##n(volatile u32 *h,u32 value) { manage_move(h,n,value); }
+    static u32 manage_values_##n(volatile u32 *h) { return manage_place_values(h,n); } \
+    static const u16 *manage_text_##n(volatile u32 *h,u32 value) { return manage_place_text(h,n,value); } \
+    static u32 manage_get_##n(volatile u32 *h) { return manage_place_value(h,n); } \
+    static void manage_set_##n(volatile u32 *h,u32 value) { manage_place_set(h,n,value); }
 MANAGE_ROW(0) MANAGE_ROW(1) MANAGE_ROW(2) MANAGE_ROW(3) MANAGE_ROW(4) MANAGE_ROW(5) MANAGE_ROW(6) MANAGE_ROW(7)
 MANAGE_ROW(8) MANAGE_ROW(9)
+#define MANAGE_SETTING(n) {manage_label_##n,manage_values_##n,manage_text_##n,manage_get_##n,manage_set_##n}
 static const Setting manage_settings[SUBMENU_ROWS]={
-    {manage_label_0,manage_values,manage_value_text,manage_get_0,manage_set_0},
-    {manage_label_1,manage_values,manage_value_text,manage_get_1,manage_set_1},
-    {manage_label_2,manage_values,manage_value_text,manage_get_2,manage_set_2},
-    {manage_label_3,manage_values,manage_value_text,manage_get_3,manage_set_3},
-    {manage_label_4,manage_values,manage_value_text,manage_get_4,manage_set_4},
-    {manage_label_5,manage_values,manage_value_text,manage_get_5,manage_set_5},
-    {manage_label_6,manage_values,manage_value_text,manage_get_6,manage_set_6},
-    {manage_label_7,manage_values,manage_value_text,manage_get_7,manage_set_7},
-    {manage_label_8,manage_values,manage_value_text,manage_get_8,manage_set_8},
-    {manage_label_9,manage_values,manage_value_text,manage_get_9,manage_set_9},
+    MANAGE_SETTING(0),MANAGE_SETTING(1),MANAGE_SETTING(2),MANAGE_SETTING(3),MANAGE_SETTING(4),
+    MANAGE_SETTING(5),MANAGE_SETTING(6),MANAGE_SETTING(7),MANAGE_SETTING(8),MANAGE_SETTING(9),
 };
 #define MANAGE_PAGE {manage_title,manage_summary,manage_rows,manage_label,manage_icon, \
     manage_checked,manage_apply,manage_committed,0,0,manage_settings}
@@ -347,10 +440,11 @@ static const Setting switch_settings[SETTING_ROWS]={
 };
 
 /* The GRKit Settings row of MENU opens a settings page of the core, titled
-   GRKit Settings: Enable at Start, while the switch shows, then Distance
-   Unit. Enable at Start: On, Off, then Keep Last. On and Off are the texts
-   of the switch. A choice applies at the next start; the switch keeps its
-   value in this session. Distance Unit: Meters, then Feet, at once. */
+   GRKit Settings (runtime/menu_settings.h: CORE_PAGE). Its first rows are
+   two settings of the core. Enable at Start: On, Off, then Keep Last. On
+   and Off are the texts of the switch. A choice applies at the next start;
+   the switch keeps its value in this session. Distance Unit: Meters, then
+   Feet, at once. */
 static u32 start_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_START) : 0; }
 static u32 start_value(volatile u32 *h) {
     u32 at=start_handle(h);
@@ -383,11 +477,6 @@ static const u16 *unit_value_text(volatile u32 *h,u32 value) { return text(h,TEX
 static const u16 *core_settings_title(volatile u32 *h) { return text(h,TEXT_UNIT); }
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
-static const Setting core_settings[SETTING_ROWS]={START_SETTING,UNIT_SETTING};
-static const Setting unit_settings[SETTING_ROWS]={UNIT_SETTING};
-/* The rows of the page: Enable at Start shows with the switch. */
-static const Setting *core_settings_rows(volatile u32 *h) {
-    return manage_switch_shown(h) && start_handle(h) ? core_settings : unit_settings;
-}
+static const Setting core_settings[2]={START_SETTING,UNIT_SETTING};
 #endif
 #endif

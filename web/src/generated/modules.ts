@@ -4,6 +4,7 @@
 
 /** The official modules in menu order. `needsEffects`: the module shows only with effects. */
 export const OFFICIAL_MODULES = [
+  { key: 'recipes', id: 'RECIPES', needsEffects: false },
   { key: 'filmLook', id: 'FILMLOOK', needsEffects: true },
   { key: 'framing', id: 'FRAMING', needsEffects: false },
   { key: 'crop', id: 'CROP', needsEffects: false },
@@ -12,14 +13,13 @@ export const OFFICIAL_MODULES = [
   { key: 'glow', id: 'GLOW', needsEffects: false },
   { key: 'border', id: 'BORDER', needsEffects: false },
   { key: 'grain', id: 'GRAIN', needsEffects: false },
-  { key: 'recipes', id: 'RECIPES', needsEffects: false },
 ] as const;
 
 export type ModuleKey = (typeof OFFICIAL_MODULES)[number]['key'];
 
 /** The official modules that each camera can install, in menu order. */
 export const CAMERA_MODULES = {
-  gr3: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain', 'recipes'],
-  gr3x: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain', 'recipes'],
-  gr4: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain', 'recipes'],
+  gr3: ['recipes', 'filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain'],
+  gr3x: ['recipes', 'filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain'],
+  gr4: ['recipes', 'filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain'],
 } as const satisfies Readonly<Record<string, readonly ModuleKey[]>>;

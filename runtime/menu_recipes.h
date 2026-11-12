@@ -24,20 +24,20 @@
        with the cursor on the recipe after it, or on the last recipe, unless
        the list has the mark. After the last recipe, it returns to the
        Recipes page.
-   - Mode Dial sets what the user modes of the mode dial do
-     (runtime/menu_dial.h).
    - Save Settings adds a recipe that is on, then opens the keyboard with
      its name. Its row shows the number of recipes that are on and the most
      of them, and while no recipe can be on, OK does nothing.
-   - Without a recipe, the page has Enable, Mode Dial, and Save Settings.
-     The undo steps show only in ADJ.
+   - Without a recipe, the page has Enable and Save Settings. The undo
+     steps show only in ADJ.
+   Mode Dial, which binds the user modes of the mode dial to recipes, is a
+   row of GRKit Settings (runtime/menu_dial.h).
 
    The list and the page of a recipe are one own value page of the Recipes
    row, which shows the page of a recipe while MENU_ROWS_PAGE_STATE holds
    it. So MENU, OK, the boxes, and a half-press work as on any own value
    page (core.h: Setting, runtime/menu_settings.h, runtime/ui.h,
    runtime/ui_keyboard.h). The includer is runtime/menu.c, after
-   runtime/menu_settings.h and runtime/menu_dial.h. */
+   runtime/menu_settings.h. */
 /* The texts of the page (runtime/abi.h: the RECIPE run). */
 #define RECIPE_TEXT_APPLY (TEXT_RECIPE+13U)
 
@@ -183,16 +183,14 @@ static u32 save_row_select(volatile u32 *h,u32 controller,u32 value) {
     if(e==RECIPE_FULL || !ui_keyboard_prepare(h,recipe_keyboard_text(h,e),recipe_named,e)) return 0;
     return KEYBOARD_CONTROLLER;
 }
-/* Recipes, Mode Dial, then Save Settings. Without a recipe, Recipes does
-   not show. */
-static const Setting recipe_menu_settings[3]={
+/* Recipes, then Save Settings. Without a recipe, Recipes does not show. */
+static const Setting recipe_menu_settings[2]={
     {recipes_row_label,recipes_row_values,recipes_row_text,recipes_row_get,no_set,recipes_row_select,
      SETTING_OWN_PAGE,recipes_row_cursor,recipes_row_title},
-    DIAL_MENU_SETTING,
     {save_row_label,one_value,save_row_text,no_value,no_set,save_row_select,SETTING_ACTION},
 };
 static const Setting *recipe_menu_base(volatile u32 *h,u32 *n) {
-    *n=recipe_entries(h) ? 3U : 2U;
+    *n=recipe_entries(h) ? 2U : 1U;
     return recipe_menu_settings+(recipe_entries(h) ? 0U : 1U);
 }
 /* The row of the module shows the recipe that the settings match. */

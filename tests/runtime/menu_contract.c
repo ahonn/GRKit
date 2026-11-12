@@ -711,7 +711,10 @@ static void icons_toolbar_and_edges_map_their_ids(void)
     assert(menu_icon(0x7ffe) == 0x59003000);
     /* The Version icon follows the GRKit icon in chunk 0. */
     assert(menu_icon(GRKIT_ICON_VERSION) == 0x59003000 + GRKIT_ICON_STRIDE);
-    assert(toolbar_x(0) == 415 && toolbar_x(5) == 665);
+    assert(toolbar_x(0, 0) == 415 && toolbar_x(0, 5) == 665);
+    /* Two entries of modules move the native cells left by two cells: the
+       entries take x 565 and 615, and GRKit stays at the right edge. */
+    assert(toolbar_x(2, 0) == 315 && toolbar_x(2, 5) == 565 && toolbar_x(2, 6) == 615 && toolbar_x(2, 7) == 665);
     assert(menu_icon(0x7fff) == 0x59001000);
     assert(menu_icon(0x166) == 0);
     assert(menu_icon(0x8005) == 0);
@@ -2059,7 +2062,7 @@ static void install_module_list(void)
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
         settings_memory[2 + (3 + 3 * i) * 3 + 2] = 2;
         settings_memory[2 + (4 + 3 * i) * 3 + 1] = 0;
-        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_MODULES + 1;
+        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_POS_VALUES;
         settings_memory[2 + (5 + 3 * i) * 3 + 1] = 0;
         settings_memory[2 + (5 + 3 * i) * 3 + 2] = 1U << MANAGE_OPTION_VALUES;
     }
@@ -2080,11 +2083,22 @@ static void install_module_list(void)
     test_header[GRKIT_HOST_MANAGE / 4] = TEST_MANAGE;
 }
 
+/* The rows of the GRKit root of ADJ. */
+static u32 count_root(volatile u32 *h)
+{
+    u32 level = h[GRKIT_HOST_MENU_LEVEL / 4], n;
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    n = count(h);
+    h[GRKIT_HOST_MENU_LEVEL / 4] = level;
+    return n;
+}
 static void the_adj_order_page_moves_modules(void)
 {
     const Setting *page;
     u32 roots;
     reset();
+    /* The value page records a moved module in the services block. */
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
     test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
     roots = count(test_header);
     assert(!(visible_modules(test_header) >> MANAGE_MODULE & 1));
@@ -2117,19 +2131,26 @@ static void the_adj_order_page_moves_modules(void)
     ((volatile u8 *)settings_block(test_header))[SUBMENU_KIND_ROWS] = 2;
     assert(!menu_settings_count(0, 0, 2) && !menu_settings_apply(0, 0, 4));
     assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "Date Imprint"));
-    assert(menu_settings_count(0, 0, 1) == 3);
-    assert(same(page[1].value_text(test_header, 0), "1") && same(page[1].value_text(test_header, 1), "2"));
-    assert(menu_settings_current(1, 0, 1) == 2 && menu_settings_current(0, 0, 1) == 1);
+    /* The places of a row: Top 1 to Top 4, the positions 1 and 2 of the
+       root, then Hidden. Date Imprint is at position 2. */
+    const u32 P = MANAGE_PINS;
+    assert(P == 4 && menu_settings_count(0, 0, 1) == P + 3 + 1);
+    assert(same(page[1].value_text(test_header, 0), "Top 1") && same(page[1].value_text(test_header, P - 1), "Top 4"));
+    assert(same(page[1].value_text(test_header, P), "1") && same(page[1].value_text(test_header, P + 1), "2"));
+    assert(same(page[1].value_text(test_header, P + 2), "Hidden"));
+    assert(menu_settings_current(P + 1, 0, 1) == 2 && menu_settings_current(P, 0, 1) == 1);
     /* Position 1 moves Date Imprint first. Each module of the page gets its
-       row + 1, and BROKEN (52) keeps its position. */
-    assert(menu_settings_apply(0, 0, 1) == 1);
+       position, and BROKEN (52) keeps its own. */
+    assert(menu_settings_apply(P, 0, 1) == 1);
     assert(settings_memory[2 + 7 * 3 + 1] == 1 && settings_memory[2 + 4 * 3 + 1] == 2 && settings_memory[2 + 10 * 3 + 1] == 0);
     assert(same(page[0].label(test_header), "Date Imprint") && same(page[1].label(test_header), "Guides"));
-    assert(menu_settings_current(0, 0, 0) == 2);
+    assert(menu_settings_current(P, 0, 0) == 2);
     /* The return from the value page labels the rows in the new order:
-       "Date Imprint", then "Guides". */
+       "Date Imprint", then "Guides", with the cursor on Date Imprint. */
     assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
     assert(test_header[GRKIT_HOST_SETTINGS / 4] == MANAGE_MODULE + 1);
+    assert(services_word(test_header, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] == 1);
+    services_word(test_header, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] = 0;
     assert(settings_block(test_header)[SETTINGS_LABELS / 4 + 2] == ((12 + 1) | 0x100));
     assert(settings_block(test_header)[SETTINGS_LABELS / 4 + 4] == ((6 + 1) | 0x100));
     /* The order applies at once: the page of Date Imprint comes first in
@@ -2137,11 +2158,38 @@ static void the_adj_order_page_moves_modules(void)
     assert(root_row(test_header, 3) + 1 == root_row(test_header, 2) && root_module(test_header, root_row(test_header, 3)) == 3);
     assert(same(MODULE(MANAGE_MODULE).summary(test_header), "Modules"));
     /* Position 2 moves it last again: the order of this start. */
-    assert(menu_settings_apply(1, 0, 0) == 1);
+    assert(menu_settings_apply(P + 1, 0, 0) == 1);
     assert(same(page[0].label(test_header), "Guides") && same(page[1].label(test_header), "Date Imprint"));
     assert(settings_memory[2 + 10 * 3 + 1] == 0);
     assert(same(MODULE(MANAGE_MODULE).summary(test_header), "Modules"));
     assert(root_row(test_header, 2) + 1 == root_row(test_header, 3));
+    {
+        u32 pages[MANAGE_PINS], roots_before = count_root(test_header);
+        /* Top 1 gives Date Imprint the first entry of the toolbar: the page
+           lists it first, the root no longer shows it, and the toolbar has
+           its page. The module keeps working. */
+        assert(menu_settings_apply(0, 0, 1) == 1);
+        assert(settings_memory[2 + 7 * 3 + 1] == MANAGE_POS_PIN && settings_memory[2 + 4 * 3 + 1] == 1);
+        assert(same(page[0].label(test_header), "Date Imprint") && menu_settings_current(0, 0, 0) == 2);
+        assert(count_root(test_header) == roots_before - 1 && root_module(test_header, 0) == 2);
+        assert(toolbar_pages(test_header, pages) == 1 && pages[0] == 3);
+        /* Hidden: Guides leaves the root, and the page lists it last. Its
+           places: Top 1, Top 2, position 1 of the empty root, Hidden. */
+        assert(same(page[1].label(test_header), "Guides") && menu_settings_count(0, 0, 1) == P + 2 + 1);
+        assert(menu_settings_apply(P + 1, 0, 1) == 1 && settings_memory[2 + 4 * 3 + 1] == MANAGE_POS_HIDDEN);
+        /* The row shows Hidden, and the value page has its mark there. */
+        assert(same(page[1].value_text(test_header, page[1].get(test_header)), "Hidden"));
+        assert(menu_settings_current(P + 1, 0, 1) == 2);
+        assert(count_root(test_header) == roots_before - 2 && toolbar_pages(test_header, pages) == 1);
+        /* Top 1 for Guides: Date Imprint takes the place that Guides left. */
+        assert(menu_settings_apply(0, 0, 1) == 1);
+        assert(settings_memory[2 + 4 * 3 + 1] == MANAGE_POS_PIN && settings_memory[2 + 7 * 3 + 1] == MANAGE_POS_HIDDEN);
+        assert(toolbar_pages(test_header, pages) == 1 && pages[0] == 2);
+        /* Back to the order of this start. */
+        settings_memory[2 + 4 * 3 + 1] = 1;
+        settings_memory[2 + 7 * 3 + 1] = 2;
+        assert(count_root(test_header) == roots_before && !toolbar_pages(test_header, pages));
+    }
     /* A page of six rows: the entry has no room for the controller of the
        last row, so OK on it opens the value page of SETTINGS_ALIAS for the
        last row: its title is the label of the last row, and its methods
@@ -2369,7 +2417,7 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
         u32 entry = MANAGE_ENTRY(i);
         char name[] = "Module 0";
         settings_memory[2 + (3 + 3 * i) * 3 + 2] = 2;
-        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_MODULES + 1;
+        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_POS_VALUES;
         settings_memory[2 + (5 + 3 * i) * 3 + 2] = 1U << MANAGE_OPTION_VALUES;
         static const char *const two_rows[] = {"Off", "On"};
         name[7] = (char)('0' + i);
@@ -2401,13 +2449,14 @@ static void the_adj_order_page_has_a_row_for_each_module(void)
     assert(menu_settings_row_controller(pages[1], 1) == pages[1]);
     assert(!(h[GRKIT_HOST_SETTINGS / 4] & SETTINGS_OPEN_ROWS));
     /* OK on the last row opens the value page of SETTINGS_ALIAS, which
-       shows each position. Position 1 moves the last module first. */
+       shows each place: the two entries of the toolbar, each position, and
+       Hidden. Position 1 moves the last module first. */
     assert(menu_settings_row_controller(native, last) == pages[SETTINGS_ALIAS]);
     assert(menu_settings_controller(pages[SETTINGS_ALIAS]) == pages[SETTINGS_ALIAS]);
     assert(settings_alias(h, SETTINGS_ALIAS) == last);
-    assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == MANAGE_MODULES + 1);
-    assert(menu_settings_current(last, 0, SETTINGS_ALIAS) == 2);
-    assert(menu_settings_apply(0, 0, SETTINGS_ALIAS) == 1);
+    assert(menu_settings_count(0, 0, SETTINGS_ALIAS) == MANAGE_PINS + MANAGE_MODULES + 1 + 1);
+    assert(menu_settings_current(MANAGE_PINS + last, 0, SETTINGS_ALIAS) == 2);
+    assert(menu_settings_apply(MANAGE_PINS, 0, SETTINGS_ALIAS) == 1);
     assert(same(manage_settings[0].label(h), "Module 9") && same(manage_settings[1].label(h), "Module 0"));
     /* The return to the page forgets the row. */
     assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
@@ -2518,7 +2567,7 @@ static void install_menu_pages(void)
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
         settings_memory[2 + (3 + 3 * i) * 3 + 2] = 2;
         settings_memory[2 + (4 + 3 * i) * 3 + 1] = 0;
-        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_MODULES + 1;
+        settings_memory[2 + (4 + 3 * i) * 3 + 2] = MANAGE_POS_VALUES;
         settings_memory[2 + (5 + 3 * i) * 3 + 1] = 0;
         settings_memory[2 + (5 + 3 * i) * 3 + 2] = 1U << MANAGE_OPTION_VALUES;
         settings_memory[2 + (12 + i) * 3 + 1] = i == 2;
@@ -2945,7 +2994,7 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     menu[MENU_ROWS_PAGE / 4] = 4;
     /* The Options row shows as the manifest declares it (options = true). */
     settings_open(h, LISTED_PAGE, 0);
-    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Recipes"));
+    assert(settings_rows(h) == 3 && same(listed_label(h, 1), "Recipes"));
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
     *page_at(TEST_PAGE + 4 * TEST_PAGE_SIZE + PAGE_FLAGS) |= CHOICE_OPTIONS;
     *state = 7;
@@ -2953,9 +3002,9 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     /* A start of the settings page clears the state of the value page. */
     assert(!*state);
     const Setting *page = settings_page(h);
-    assert(settings_rows(h) == 5 && same(listed_label(h, 1), "Options"));
-    assert(same(listed_label(h, 2), "Recipes") && same(listed_label(h, 3), "Mode Dial"));
-    assert(same(listed_label(h, 4), "Save Settings") && same(listed_text(h, 4, 0), "3/40"));
+    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Options"));
+    assert(same(listed_label(h, 2), "Recipes"));
+    assert(same(listed_label(h, 3), "Save Settings") && same(listed_text(h, 3, 0), "3/40"));
     /* Options: each recipe, on while ADJ shows it. OK turns it on or off. */
     assert(options_count(h) == 3 && option_off(h, 0) && !option_off(h, 1));
     assert(same(option_label(h, 1), "Street"));
@@ -2964,45 +3013,51 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     listed_set(h, 1, 0);
     assert(!recipe_shown(h, 0));
     menu[MENU_ROWS_STAY / 4] = 0;
-    /* Recipes and Mode Dial show on the own value page; Save acts at OK. */
-    for (u32 row = 0; row < 5; ++row) {
+    /* Recipes shows on the own value page; Save acts at OK. */
+    for (u32 row = 0; row < 4; ++row) {
         u32 flags = settings_flags(h, page, row);
-        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2 || row == 3));
-        assert(settings_long(h, page, row) == (row >= 1 && row <= 3));
-        assert(!!(flags & SETTING_ACTION) == (row == 4));
+        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2));
+        assert(settings_long(h, page, row) == (row == 1 || row == 2));
+        assert(!!(flags & SETTING_ACTION) == (row == 3));
     }
     assert(listed_setting(h, 0) == 0 && listed_setting(h, 1) == 0);
-    assert(menu_settings_row_controller(settings_pages[0], 4) == MENU_ACTION_TARGET + 4);
+    assert(menu_settings_row_controller(settings_pages[0], 3) == MENU_ACTION_TARGET + 3);
     assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 2] == settings_pages[2]);
-    assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 3] == settings_pages[3]);
-    /* Mode Dial (runtime/menu_dial.h): the row shows no value, and its list
-       has no mark. The values of U1 have U1 as the title, Save Settings,
-       None, GRKit Off, and each recipe that is on, with the mark and the
-       cursor on None. */
-    const Setting *dial = listed_setting(h, 3);
-    assert(listed_get(h, 3) == DIAL_NO_MARK && same(listed_text(h, 3, listed_get(h, 3)), ""));
-    assert(listed_values(h, 3) == 3 && same(listed_text(h, 3, 0), "U1: None") && !dial->title(h));
+    /* Mode Dial (runtime/menu_dial.h), a row of GRKit Settings while the
+       Recipes page is loaded: the row shows no value, and its list has no
+       mark. The values of U1 have U1 as the title, Save Settings, None,
+       GRKit Off, and each recipe that is on, with the mark and the cursor on
+       None. */
+    settings_open(h, CORE_PAGE, 0);
+    u32 d = 0;
+    while (d < settings_rows(h) && core_row_setting(h, d) != dial_menu_setting()) ++d;
+    assert(d < settings_rows(h) && d < SETTINGS_BORROWED);
+    const Setting *dial = core_row_setting(h, d), *row = core_page_settings + d;
+    assert(same(row->label(h), "Mode Dial") && settings_long(h, core_page_settings, d));
+    assert(row->get(h) == DIAL_NO_MARK && same(row->value_text(h, row->get(h)), ""));
+    assert(row->values(h) == 3 && same(row->value_text(h, 0), "U1: None") && !dial->title(h));
     assert(dial->select(h, 0, 0) && *state == DIAL_PAGE_SHOWN);
-    assert(listed_values(h, 3) == 6 && same(listed_text(h, 3, 0), "Save Settings"));
-    assert(same(listed_text(h, 3, 1), "None") && same(listed_text(h, 3, 2), "GRKit Off"));
-    assert(same(listed_text(h, 3, 3), "Far Away") && same(listed_text(h, 3, 5), "Corner"));
-    assert(menu_settings_current(1, 0, 3) == 2 && menu_settings_current(4, 0, 3) == 1);
-    assert(menu_settings_current(0, 0, 3) == 1);
-    menu[MENU_ROWS_CURRENT / 4] = settings_pages[3];
-    assert(settings_text(h, 0, settings_row_texts[3]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
+    assert(row->values(h) == 6 && same(row->value_text(h, 0), "Save Settings"));
+    assert(same(row->value_text(h, 1), "None") && same(row->value_text(h, 2), "GRKit Off"));
+    assert(same(row->value_text(h, 3), "Far Away") && same(row->value_text(h, 5), "Corner"));
+    assert(menu_settings_current(1, 0, d) == 2 && menu_settings_current(4, 0, d) == 1);
+    assert(menu_settings_current(0, 0, d) == 1);
+    menu[MENU_ROWS_CURRENT / 4] = settings_pages[d];
+    assert(settings_text(h, 0, settings_row_texts[d]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     assert(same(dial->title(h), "U1"));
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
     /* A half-press confirms the value under the cursor with the native set,
        which sets nothing, and on Save Settings saves nothing. OK sets it and
        returns to the list. */
-    assert(menu_settings_apply(4, 0, 3) && h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
-    assert(menu_settings_apply(DIAL_VALUE_SAVE, 0, 3) && h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
+    assert(menu_settings_apply(4, 0, d) && h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
+    assert(menu_settings_apply(DIAL_VALUE_SAVE, 0, d) && h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
     assert(!h[GRKIT_HOST_DIAL_SET_CHANGES / 4] && !dial_has_set(h, 1));
     assert(dial->select(h, 0, 4) && *state == 1 && h[GRKIT_HOST_RECIPE_DIAL / 4] == *recipe_id_at(h, 1));
-    assert(same(listed_text(h, 3, 0), "U1: Street"));
+    assert(same(row->value_text(h, 0), "U1: Street"));
     assert(dial->select(h, 0, 0) && dial->select(h, 0, DIAL_VALUE_NONE));
     assert(h[GRKIT_HOST_RECIPE_DIAL / 4] == GRKIT_RECIPE_DIAL_FOLLOW);
     *state = 0;
+    settings_open(h, LISTED_PAGE, 0);
     const Setting *recipes = listed_setting(h, 2);
     /* The list has each recipe, also one that ADJ does not show. Without a
        recipe that the settings match, the row shows no value, the page has
@@ -3090,9 +3145,8 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     recipe_menu_deleted(1, 0);
     assert(!recipe_entries(h) && !*state && recipe_count(h) == 1);
     settings_open(h, LISTED_PAGE, 0);
-    assert(settings_rows(h) == 3 && same(listed_label(h, 1), "Mode Dial"));
-    assert(settings_flags(h, listed_settings, 1) == SETTING_OWN_PAGE);
-    assert(same(listed_label(h, 2), "Save Settings") && settings_flags(h, listed_settings, 2) == SETTING_ACTION);
+    assert(settings_rows(h) == 2 && same(listed_label(h, 1), "Save Settings"));
+    assert(settings_flags(h, listed_settings, 1) == SETTING_ACTION);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
 }
 
@@ -3114,8 +3168,18 @@ static void group_back_returns_to_the_menu_of_the_camera(void)
     assert(menu_settings_transition(controller, MENU_GROUP_TARGET + 1, 0) == SETTINGS_SUBMENU);
     assert(menu_return(h) == top);
     MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
+    /* The child's OK left its own row in the saved cursor of the shared
+       submenu: the return puts the cursor back on the row of the child. */
+    MENU_OBJECT_BYTE(controller, SUBMENU_CURSOR_SLOT) = 3;
+    MENU_OBJECT_HALF(controller, SUBMENU_CURSORS + 6) = 0;
     assert(native_settings_back(controller) == SETTINGS_SUBMENU);
     assert(h[GRKIT_HOST_SETTINGS / 4] == LISTED_PAGE + 1);
+    assert(services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] == 2);
+    /* The draw calls the value method of row 0 first, which writes it. */
+    object_memory[ROW_VALUE_VIEW / 4] = 0x5a000040;
+    menu_settings_value_0(controller, TEST_OBJECTS);
+    assert(MENU_OBJECT_HALF(controller, SUBMENU_CURSORS + 6) == 1);
+    assert(!services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0]);
     assert(MENU_OBJECT_WORD(controller, SETTINGS_RETURN_TARGET) == top);
     assert(native_settings_back(controller) == top);
     assert(!h[GRKIT_HOST_SETTINGS / 4]);
@@ -3425,7 +3489,7 @@ static void a_section_row_shows_its_module_and_value(void)
     /* A scroll moves a row view to another slot: the view shows the row
        of its new slot. */
     menu[MENU_ROWS_COUNT / 4] = 2;
-    menu_row(h, 1)[MENU_ROW_KIND / 4] = MENU_ROW_ADJ;
+    menu_row(h, 1)[MENU_ROW_KIND / 4] = MENU_ROW_CORE;
     menu_row(h, 1)[MENU_ROW_MODULE / 4] = 0;
     menu_row_fill(1, TEST_OBJECTS + 0x800);
     assert(!menu_row(h, 0)[MENU_ROW_LABEL / 4] && !menu_row(h, 0)[MENU_ROW_VALUE / 4]);
@@ -3929,7 +3993,7 @@ static void the_mode_dial_page_sets_what_each_user_mode_does(void)
 {
     volatile u32 *h = test_header, *dials = h + GRKIT_HOST_RECIPE_DIAL / 4;
     volatile u32 *state = services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_STATE);
-    const Setting *dial = &recipe_menu_settings[1];
+    const Setting *dial = dial_menu_setting();
     u32 changes;
     dial_reset();
     recipe_name_set(h, 0, (const volatile u8 *)"Street");
@@ -4070,7 +4134,7 @@ static void the_mode_dial_saves_the_settings_in_a_user_mode(void)
 {
     volatile u32 *h = test_header, *dials = h + GRKIT_HOST_RECIPE_DIAL / 4, *set = dial_set_of(2);
     volatile u32 *state = services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_STATE);
-    const Setting *dial = &recipe_menu_settings[1];
+    const Setting *dial = dial_menu_setting();
     u32 recipes, sets;
     dial_saved_reset();
     dial_saved_settings();
@@ -4141,7 +4205,7 @@ static void the_mode_dial_saves_the_settings_in_a_user_mode(void)
 static void the_mode_dial_applies_saved_settings_and_restores_the_base(void)
 {
     volatile u32 *h = test_header;
-    const Setting *dial = &recipe_menu_settings[1];
+    const Setting *dial = dial_menu_setting();
     u32 table, requests;
     dial_saved_reset();
     dial_saved_settings();
@@ -4238,7 +4302,7 @@ static void the_mode_dial_applies_saved_settings_and_restores_the_base(void)
 static void saved_settings_skip_what_the_camera_does_not_have(void)
 {
     volatile u32 *h = test_header, *set = dial_set_of(2);
-    const Setting *dial = &recipe_menu_settings[1];
+    const Setting *dial = dial_menu_setting();
     u32 missing = 1;
     dial_saved_reset();
     dial_saved_settings();
@@ -4337,13 +4401,14 @@ static void install_stock_tab(u32 rows, u32 sections)
 /* The copy of the Customize tab in the services block. */
 static u32 tab_copy(void) { return (u32)services_word(test_header, SERVICES_MENU + MENU_ROWS_TAB); }
 /* The first controller change after INSTALL copies the Customize tab and adds
-   the GRKit section after its rows: a row for each listed module in default
-   order, an ADJ Order row for the group, and About GRKit. The tab table
-   points at the copy, and the factory gives up its TopMenu. */
+   the GRKit section after its rows: GRKit Settings, which has ADJ Order for
+   the modules that ADJ shows, a row for each listed module in default
+   order, and About GRKit. The tab table points at the copy, and the factory
+   gives up its TopMenu. */
 static void the_section_rows_follow_the_listed_modules(void)
 {
-    static const u32 kinds[] = {MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT},
-                     modules[] = {0, 1, 2, 0, 0};
+    static const u32 kinds[] = {MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_GRKIT},
+                     modules[] = {0, 0, 1, 2, 0};
     volatile u32 *h = test_header, *menu, title[2];
     u32 copy;
     install_stock_tab(10, 3);
@@ -4382,11 +4447,31 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_tabs[MENU_TAB_GRKIT] = TEST_TAB;
     menu_rows_install(h);
     assert(menu_tabs[MENU_TAB_GRKIT] == TEST_TAB && factory_calls == 1);
-    /* Without a module that ADJ can show, the section has no ADJ Order row. */
+    /* GRKit Settings has ADJ Order, which opens its page; MENU there
+       returns to GRKit Settings. */
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_page_settings);
+    assert(settings_rows(h) == 1 && same(core_page_settings[0].label(h), "ADJ Order"));
+    assert(settings_flags(h, core_page_settings, 0) == SETTING_ACTION);
+    assert(core_row_setting(h, 0)->select(h, 0, 0) == MENU_ADJ_TARGET);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    assert(menu_rows_controller(h, MENU_ADJ_TARGET) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == (MANAGE_MODULE + 1 | SETTINGS_IN_CORE));
+    assert(menu_rows_controller(h, SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1);
+    /* The cursor goes back to ADJ Order, row 0 here. */
+    assert(services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] == 1);
+    services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] = 0;
+    assert(menu_rows_controller(h, menu_return(h)) == menu_return(h));
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
+    /* Without a module that ADJ can show, GRKit Settings has no row, and
+       the section no GRKit Settings row. */
     install_stock_tab(10, 3);
     manage_memory[MANAGE_ENTRY(0) + 1] = 0;
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
+    assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED &&
+           menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
 }
 /* A color-only module that a monochrome camera did not load gets no row; the
    rows of the other modules keep their module. */
@@ -4397,21 +4482,22 @@ static void a_color_only_module_gets_no_row(void)
     manage_memory[MANAGE_ENTRY(1)] = MANAGE_COLOR_ONLY;
     menu = services_word(h, SERVICES_MENU);
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 4);
-    assert(menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 0)[MENU_ROW_MODULE / 4] == 0);
-    assert(menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 1)[MENU_ROW_MODULE / 4] == 2);
-    assert(menu_row(h, 2)[MENU_ROW_KIND / 4] == MENU_ROW_ADJ && menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
+    assert(menu[MENU_ROWS_COUNT / 4] == 4 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
+    assert(menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 1)[MENU_ROW_MODULE / 4] == 0);
+    assert(menu_row(h, 2)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED && menu_row(h, 2)[MENU_ROW_MODULE / 4] == 2);
+    assert(menu_row(h, 3)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
     assert(BYTE(tab_copy(), MENU_TAB_ROWS) == 14);
 }
 /* While a module loaded, the section starts with the GRKit switch, then
    GRKit Settings. OK on the switch opens its value page, and OK on GRKit
-   Settings its page: Enable at Start, then Distance Unit. A tab without room
-   for each row keeps the switch, GRKit Settings, ADJ Order, and About GRKit. */
+   Settings its page: Enable at Start, Distance Unit, then ADJ Order. A tab
+   without room for each row keeps the switch, GRKit Settings, and About
+   GRKit. */
 static void the_section_starts_with_the_switch(void)
 {
     static const u32 kinds[] = {MENU_ROW_SWITCH, MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_LISTED,
-                                MENU_ROW_ADJ, MENU_ROW_GRKIT},
-                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT};
+                                MENU_ROW_GRKIT},
+                     short_kinds[] = {MENU_ROW_SWITCH, MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_GRKIT};
     volatile u32 *h = test_header, *menu;
     u32 n;
     /* The switch is setting 12, Enable at Start setting 13, and Distance
@@ -4426,8 +4512,8 @@ static void the_section_starts_with_the_switch(void)
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu = services_word(h, SERVICES_MENU);
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 7 && BYTE(tab_copy(), MENU_TAB_ROWS) == 17);
-    for (u32 slot = 0; slot < 7; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
+    assert(menu[MENU_ROWS_COUNT / 4] == 6 && BYTE(tab_copy(), MENU_TAB_ROWS) == 16);
+    for (u32 slot = 0; slot < 6; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot]);
     /* The row, Enable GRKit, opens its value page at once: On, then Off,
        as the Enable of a module. */
     assert(menu_rows_controller(h, MENU_ROW_TARGET) == settings_pages[0]);
@@ -4439,12 +4525,13 @@ static void the_section_starts_with_the_switch(void)
     switch_settings[0].set(h, 1);
     assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
     switch_settings[0].set(h, 0);
-    /* GRKit Settings opens its page, titled GRKit Settings, with two rows. */
+    /* GRKit Settings opens its page, titled GRKit Settings, with three rows. */
     assert(same(core_settings_title(h), "GRKit Settings"));
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU);
-    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_settings);
-    assert(settings_rows(h) == 2 && same(core_settings[0].label(h), "Enable at Start") &&
-           same(core_settings[1].label(h), "Distance Unit"));
+    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_page_settings);
+    assert(settings_rows(h) == 3 && same(core_page_settings[0].label(h), "Enable at Start") &&
+           same(core_page_settings[1].label(h), "Distance Unit") && same(core_page_settings[2].label(h), "ADJ Order"));
+    assert(core_row_setting(h, 0) == core_settings && core_row_setting(h, 2) == &adj_order_setting);
     /* Enable at Start: On, Off, then Keep Last. A choice is a saved change
        for the next start, and the switch keeps its value in this session. */
     assert(core_settings[0].values(h) == 3 && same(core_settings[0].value_text(h, MANAGE_START_ON), "On") &&
@@ -4474,21 +4561,23 @@ static void the_section_starts_with_the_switch(void)
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 5 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
+    assert(menu_row(h, 3)[MENU_ROW_MODULE / 4] == 1);
     for (u32 slot = 0; slot < 5; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
     /* Without the switch, as in safe mode, GRKit Settings has Distance Unit
-       only. */
+       and ADJ Order. */
     install_stock_tab(10, 3);
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
-    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU && settings_page(h) == unit_settings &&
-           settings_rows(h) == 1);
+    assert(menu[MENU_ROWS_COUNT / 4] == 5 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings &&
+           settings_rows(h) == 2 && same(core_page_settings[0].label(h), "Distance Unit"));
     h[GRKIT_HOST_SETTINGS / 4] = 0;
-    /* Without GRKit Settings in the module list, the switch shows alone. */
+    /* Without Enable at Start and Distance Unit in the module list, GRKit
+       Settings has ADJ Order. */
     install_stock_tab(10, 3);
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     menu_rows_install(h);
-    assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_LISTED);
+    assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
 /* In feet, the text hooks give the feet label of each Snap focus distance,
    on any screen, and the scale hooks the feet labels of the manual focus
@@ -4553,8 +4642,8 @@ static void a_unit_change_lays_out_the_distances_again(void)
     assert(scale_icon_setups == 2);
 }
 /* A tab with all its sections gets the rows in its last section. A tab
-   without room for each row keeps ADJ Order and About GRKit, and gives rows
-   to the first modules only. */
+   without room for each row keeps GRKit Settings and About GRKit, and gives
+   rows to the first modules only. */
 static void a_full_tab_gets_no_new_section(void)
 {
     volatile u32 *h = test_header, *menu;
@@ -4568,20 +4657,20 @@ static void a_full_tab_gets_no_new_section(void)
     for (u32 s = 0; s < MENU_TAB_MAX_SECTIONS; ++s)
         assert(HALF(copy, MENU_TAB_TITLES + 2 * s) == HALF(TEST_TAB, MENU_TAB_TITLES + 2 * s) &&
                BYTE(copy, MENU_TAB_STARTS + s) == BYTE(TEST_TAB, MENU_TAB_STARTS + s));
-    /* Room for four rows: the first two modules, ADJ Order, and About. */
-    static const u32 kinds[] = {MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_ADJ, MENU_ROW_GRKIT},
-                     modules[] = {0, 1, 0, 0};
+    /* Room for four rows: GRKit Settings, the first two modules, and About. */
+    static const u32 kinds[] = {MENU_ROW_CORE, MENU_ROW_LISTED, MENU_ROW_LISTED, MENU_ROW_GRKIT},
+                     modules[] = {0, 0, 1, 0};
     install_stock_tab(MENU_TAB_MAX_ROWS - 4, 3);
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 4 && BYTE(copy, MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
     assert(BYTE(copy, MENU_TAB_SECTIONS) == 4 && BYTE(copy, MENU_TAB_STARTS + 3) == MENU_TAB_MAX_ROWS - 4);
     for (u32 slot = 0; slot < 4; ++slot)
         assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == kinds[slot] && menu_row(h, slot)[MENU_ROW_MODULE / 4] == modules[slot]);
-    /* Room for two rows: ADJ Order and About, no module. */
+    /* Room for two rows: GRKit Settings and About, no module. */
     install_stock_tab(MENU_TAB_MAX_ROWS - 2, 3);
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 2 && BYTE(copy, MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
-    assert(menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_ADJ && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
+    assert(menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_GRKIT);
     /* A tab without room keeps the stock tab and the TopMenu. */
     install_stock_tab(MENU_TAB_MAX_ROWS, 3);
     menu_rows_install(h);

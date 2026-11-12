@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 72;
+pub const STRINGS: usize = 77;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -86,6 +86,10 @@ struct Words {
     feet: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
+    /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
+    /// the ADJ toolbar, before GRKit, and Hidden, where ADJ does not show it.
+    adj_pins: [&'static str; 4],
+    adj_hidden: &'static str,
     /// The settings row that lists the options of a module page.
     options: &'static str,
     /// The MENU row of the GRKit switch, its version, and its project.
@@ -161,6 +165,8 @@ const ENGLISH: Words = Words {
     meters: "Meters",
     feet: "Feet",
     adj_order: "ADJ Order",
+    adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
+    adj_hidden: "Hidden",
     options: "Options",
     about: "About GRKit",
     project: "Project",
@@ -231,6 +237,8 @@ const SIMPLIFIED_CHINESE: Words = Words {
     meters: "米",
     feet: "英尺",
     adj_order: "ADJ 菜单顺序",
+    adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
+    adj_hidden: "隐藏",
     options: "可选项",
     about: "关于 GRKit",
     project: "项目地址",
@@ -298,6 +306,8 @@ const TRADITIONAL_CHINESE: Words = Words {
     meters: "公尺",
     feet: "英尺",
     adj_order: "ADJ 選單順序",
+    adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
+    adj_hidden: "隱藏",
     options: "可選項",
     about: "關於 GRKit",
     project: "專案網址",
@@ -367,6 +377,8 @@ const JAPANESE: Words = Words {
     meters: "メートル",
     feet: "フィート",
     adj_order: "ADJ メニューの順番",
+    adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
+    adj_hidden: "非表示",
     options: "オプション",
     about: "GRKit について",
     project: "プロジェクト",
@@ -437,6 +449,8 @@ const KOREAN: Words = Words {
     meters: "미터",
     feet: "피트",
     adj_order: "ADJ 메뉴 순서",
+    adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
+    adj_hidden: "숨김",
     options: "옵션",
     about: "GRKit 정보",
     project: "프로젝트",
@@ -545,7 +559,11 @@ pub const RUNS: &[Run] = &[
         1,
         "The Image Control settings row that opens the Fn adjustments.",
     ),
-    run("ADJ", 1, "The ADJ Order row of MENU."),
+    run(
+        "ADJ",
+        6,
+        "The ADJ Order row of GRKit Settings, then the places of its value pages: the entries 1 to 4 of the ADJ toolbar before GRKit, and Hidden.",
+    ),
     run(
         "OPTIONS",
         1,
@@ -645,7 +663,12 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "SAFE_MODE" => words(&[w.safe_mode]),
         "RESTART" => words(&[w.restart]),
         "ADJUSTMENTS" => words(&[w.adjustments]),
-        "ADJ" => words(&[w.adj_order]),
+        "ADJ" => [w.adj_order]
+            .iter()
+            .chain(&w.adj_pins)
+            .chain([&w.adj_hidden])
+            .map(|word| word.to_string())
+            .collect(),
         "OPTIONS" => words(&[w.options]),
         "ABOUT" => vec![
             w.about.to_string(),

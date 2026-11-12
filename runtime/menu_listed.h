@@ -17,6 +17,21 @@
 static const u16 *on_off_text(volatile u32 *h,u32 value) { return text(h,value ? TEXT_OFF : TEXT_ON); }
 static u32 listed(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_LISTED)[0]; }
 static u32 listed_slot(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_PAGE)[0]; }
+/* The page slot of listed module `module`, or GRKIT_MODULE_PAGES_MAX. */
+static u32 listed_page(volatile u32 *h,u32 module) {
+    u32 slot;
+    for(slot=0;slot<module_pages(h);++slot) if(page_listed(h,slot)==module) return slot;
+    return GRKIT_MODULE_PAGES_MAX;
+}
+/* Whether the Recipes page is loaded, which Mode Dial needs. The search
+   reads each module page, so only a controller change runs it. */
+static u32 recipes_loaded(volatile u32 *h) {
+    u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], slot, found=0;
+    for(slot=0;slot<module_pages(h) && !found;++slot) found=menu_page(h,slot)==&recipe_module;
+    /* menu_page selects a page: keep the page of the caller. */
+    h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
+    return found;
+}
 /* The Fn adjustments of the committed effect: the row shows the effect. */
 static u32 one_value(volatile u32 *h) { (void)h; return 1; }
 static u32 no_value(volatile u32 *h) { (void)h; return 0; }

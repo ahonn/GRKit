@@ -11,11 +11,11 @@
 
    The rows: the GRKit switch, which turns each module off and on at once
    (runtime/manage.h); GRKit Settings, which opens Enable at Start, which
-   decides the switch at each start, and Distance Unit (runtime/manage.h);
-   a row for each listed module, which opens its Enable
-   row, its Options row, and the settings of its module page; ADJ Order,
-   which orders the module pages in ADJ; then About GRKit, which shows the
-   GRKit version and the project address.
+   decides the switch at each start, Distance Unit, Mode Dial, and ADJ
+   Order, which orders the module pages in ADJ (runtime/menu_settings.h:
+   CORE_PAGE); a row for each listed module, which opens its Enable row, its
+   Options row, and the settings of its module page; then About GRKit, which
+   shows the GRKit version and the project address.
 
    A row targets MENU_ROW_TARGET + its slot, which no controller has: the
    controller change becomes a change to the borrowed settings submenu with
@@ -28,7 +28,6 @@
 #define MENU_ROW_TARGET 0x2000f00U
 #define MENU_ROW_GRKIT 1U
 #define MENU_ROW_LISTED 2U
-#define MENU_ROW_ADJ 3U
 #define MENU_ROW_SWITCH 4U
 #define MENU_ROW_CORE 5U
 /* The model snapshot that a cancel of the parameter page restores, as
@@ -54,12 +53,6 @@ _Static_assert(MENU_TAB_SIZE==MENU_ROWS_TAB_SIZE,"The services block holds a MEN
 static volatile u32 *menu_row(volatile u32 *h,u32 slot) {
     return services_word(h,SERVICES_MENU+MENU_ROWS_FIRST+slot*MENU_ROW_SIZE);
 }
-/* The page slot of listed module `module`, or GRKIT_MODULE_PAGES_MAX. */
-static u32 listed_page(volatile u32 *h,u32 module) {
-    u32 slot;
-    for(slot=0;slot<module_pages(h);++slot) if(page_listed(h,slot)==module) return slot;
-    return GRKIT_MODULE_PAGES_MAX;
-}
 /* The fillers of the rows (below). */
 static void (*const fillers[MENU_ROWS_SLOTS])(u32,u32);
 static u32 menu_rows_add(volatile u32 *h,u32 copy,u32 *rows,u32 slots,u32 kind,u32 module) {
@@ -76,22 +69,20 @@ static u32 menu_rows_add(volatile u32 *h,u32 copy,u32 *rows,u32 slots,u32 kind,u
 }
 /* The GRKit rows fit the Customize tab of each build: its stock rows
    (MENU_TAB_STOCK_ROWS of the build header), then the GRKit switch, GRKit
-   Settings, a row for each listed module, ADJ Order, and About GRKit. GR IV
-   1.20 fills the tab. */
-_Static_assert(MENU_ROWS_SLOTS==MANAGE_MODULES+4U,"A row slot for each GRKit row");
+   Settings, a row for each listed module, and About GRKit. */
+_Static_assert(MENU_ROWS_SLOTS==MANAGE_MODULES+3U,"A row slot for each GRKit row");
 _Static_assert(MENU_TAB_STOCK_ROWS+MENU_ROWS_SLOTS<=MENU_TAB_MAX_ROWS,"The Customize tab holds each GRKit row");
 static void menu_rows_install(volatile u32 *h) {
     volatile u32 *state=services_word(h,SERVICES_MENU);
     u32 copy=(u32)services_word(h,SERVICES_MENU+MENU_ROWS_TAB), stock, rows, sections, slots=0, i, top;
-    u32 listed=0, adj, on=manage_switch_shown(h), core, n;
+    u32 listed=0, on=manage_switch_shown(h), core, n;
     if(state[MENU_ROWS_DONE/4]) return;
     /* A color-only module on a monochrome camera gets no row. */
     for(i=0;i<manage_count(h);++i) listed+=manage_status(h,i)!=MANAGE_COLOR_ONLY;
     state[MENU_ROWS_DONE/4]=1;
-    manage_adj_refresh(h);
-    adj=manage_adj_count(h)>0;
-    /* GRKit Settings shows with the module list. */
-    core=unit_handle(h)!=0;
+    /* GRKit Settings shows with a row. */
+    core_refresh(h);
+    core=core_rows(h)>0;
     stock=WORD(FW_MENU_TABS+4*MENU_TAB_GRKIT,0);
     if(!stock) return;
     for(i=0;i<MENU_TAB_SIZE/4;++i) WORD(copy,4*i)=WORD(stock,4*i);
@@ -107,10 +98,10 @@ static void menu_rows_install(volatile u32 *h) {
     }
     descriptor(services_word(h,SERVICES_MENU+MENU_ROWS_TITLE_AT),grkit_title);
     /* A build with more stock rows than its header gives, such as a build
-       that INSTALL relocates, keeps the switch, GRKit Settings, ADJ Order,
-       and About GRKit: the last modules of the default order get no row. */
-    if(rows+on+core+listed+adj+1U>MENU_TAB_MAX_ROWS)
-        listed=MENU_TAB_MAX_ROWS>rows+on+core+adj+1U ? MENU_TAB_MAX_ROWS-rows-on-core-adj-1U : 0;
+       that INSTALL relocates, keeps the switch, GRKit Settings, and About
+       GRKit: the last modules of the default order get no row. */
+    if(rows+on+core+listed+1U>MENU_TAB_MAX_ROWS)
+        listed=MENU_TAB_MAX_ROWS>rows+on+core+1U ? MENU_TAB_MAX_ROWS-rows-on-core-1U : 0;
     if(on) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_SWITCH,0);
     if(core) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_CORE,0);
     /* The modules in their default order, which the ADJ Order row changes
@@ -120,7 +111,6 @@ static void menu_rows_install(volatile u32 *h) {
         slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_LISTED,i);
         ++n;
     }
-    if(adj) slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_ADJ,0);
     slots=menu_rows_add(h,copy,&rows,slots,MENU_ROW_GRKIT,0);
     state[MENU_ROWS_COUNT/4]=slots;
     BYTE(copy,MENU_TAB_ROWS)=(u8)rows;
@@ -138,8 +128,27 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
        to that same controller. Check the incoming target before translating
        a child link; a value page returning to the submenu is not a Back. */
     u32 self_back=id==SETTINGS_SUBMENU && services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU;
+    /* Only a return to a parent page keeps a row for the cursor. */
+    services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=0;
+    /* A child returns to its group, and ADJ Order to GRKit Settings, with
+       the cursor on the row that opened it (menu_settings_transition). */
     if((id==menu_return(h) || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) {
+        u32 child=(h[GRKIT_HOST_SETTINGS/4]&0xffffU)-1U, row;
         settings_start(h,LISTED_PAGE);
+        for(row=0;row<listed_rows(h) && listed_child(h,row)!=child;++row) {}
+        if(row<listed_rows(h)) services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=row+1U;
+        return SETTINGS_SUBMENU;
+    }
+    if((id==menu_return(h) || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_IN_CORE)) {
+        u32 row;
+        settings_start(h,CORE_PAGE);
+        for(row=0;row<core_rows(h) && core_row_setting(h,row)!=&adj_order_setting;++row) {}
+        if(row<core_rows(h)) services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=row+1U;
+        return SETTINGS_SUBMENU;
+    }
+    if(id==MENU_ADJ_TARGET && settings_page(h)==core_page_settings) {
+        settings_start(h,MANAGE_MODULE);
+        h[GRKIT_HOST_SETTINGS/4]|=SETTINGS_IN_CORE;
         return SETTINGS_SUBMENU;
     }
     if(self_back && (h[GRKIT_HOST_SETTINGS/4]&0xffffU)==LISTED_PAGE+1 &&
@@ -164,16 +173,12 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
     if(slot>=services_word(h,SERVICES_MENU)[MENU_ROWS_COUNT/4]) return id;
     kind=menu_row(h,slot)[MENU_ROW_KIND/4];
     module=menu_row(h,slot)[MENU_ROW_MODULE/4];
-    if(kind==MENU_ROW_ADJ) {
-        settings_start(h,MANAGE_MODULE);
-        return SETTINGS_SUBMENU;
-    }
     /* Enable GRKit opens its value page at once: On or Off. */
     if(kind==MENU_ROW_SWITCH) {
         settings_start(h,SWITCH_MODULE);
         return settings_pages[0];
     }
-    /* GRKit Settings opens its page: Enable at Start and Distance Unit. */
+    /* GRKit Settings opens its page (CORE_PAGE). */
     if(kind==MENU_ROW_CORE) {
         settings_start(h,CORE_PAGE);
         return SETTINGS_SUBMENU;
@@ -218,8 +223,7 @@ static void menu_row_fill(u32 slot,u32 row) {
     }
     kind=at[MENU_ROW_KIND/4];
     module=at[MENU_ROW_MODULE/4];
-    if(kind==MENU_ROW_ADJ) { label=text(h,TEXT_ADJ); value=no_text; }
-    else if(kind==MENU_ROW_SWITCH) { label=switch_menu_label(h); value=on_off_text(h,manage_all_off(h)); }
+    if(kind==MENU_ROW_SWITCH) { label=switch_menu_label(h); value=on_off_text(h,manage_all_off(h)); }
     else if(kind==MENU_ROW_CORE) { label=core_settings_title(h); value=no_text; }
     else if(kind==MENU_ROW_LISTED) {
         /* A loaded page shows the value that it gives (MenuListing), such
@@ -250,13 +254,13 @@ static void menu_row_fill(u32 slot,u32 row) {
 MENU_ROW_FILLER(0) MENU_ROW_FILLER(1) MENU_ROW_FILLER(2) MENU_ROW_FILLER(3)
 MENU_ROW_FILLER(4) MENU_ROW_FILLER(5) MENU_ROW_FILLER(6) MENU_ROW_FILLER(7)
 MENU_ROW_FILLER(8) MENU_ROW_FILLER(9) MENU_ROW_FILLER(10) MENU_ROW_FILLER(11)
-MENU_ROW_FILLER(12) MENU_ROW_FILLER(13)
-_Static_assert(MENU_ROWS_SLOTS==14,"A filler for each row");
+MENU_ROW_FILLER(12)
+_Static_assert(MENU_ROWS_SLOTS==13,"A filler for each row");
 static void (*const fillers[MENU_ROWS_SLOTS])(u32,u32)={
     menu_row_fill_0,menu_row_fill_1,menu_row_fill_2,menu_row_fill_3,
     menu_row_fill_4,menu_row_fill_5,menu_row_fill_6,menu_row_fill_7,
     menu_row_fill_8,menu_row_fill_9,menu_row_fill_10,menu_row_fill_11,
-    menu_row_fill_12,menu_row_fill_13};
+    menu_row_fill_12};
 /* The text of a view of a MENU row or of the section title, or 0. */
 static u32 menu_rows_text(volatile u32 *h,u32 view,u32 id) {
     u32 slot, n;

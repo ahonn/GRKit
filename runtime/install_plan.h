@@ -281,7 +281,7 @@ static void order_modules(void)
     all_off = state_value(&saved_state, grm_state_id(MANAGE_SWITCH_KEY), &value) && value == 1;
     for (u32 i = 0; i < module_count; ++i) {
         module_off[i] = state_value(&saved_state, manage_id(i, "OFF"), &value) && value == 1;
-        module_position[i] = state_value(&saved_state, manage_id(i, "POS"), &value) && value <= MANAGE_MODULES ? value : 0;
+        module_position[i] = state_value(&saved_state, manage_id(i, "POS"), &value) && value < MANAGE_POS_VALUES ? value : 0;
         module_rows[i] = state_value(&saved_state, manage_id(i, "ROWS"), &value) && value < 1U << MANAGE_OPTION_VALUES ? value : 0;
     }
 }

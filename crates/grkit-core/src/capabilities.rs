@@ -79,6 +79,10 @@ impl Point {
     }
 }
 
+/// The entries of modules in the ADJ toolbar before GRKit
+/// (`MANAGE_PINS`, runtime/manage.h).
+pub const ADJ_ENTRIES: u32 = 4;
+
 /// The module ID of the core settings.
 pub const MODULE: &str = "CORE";
 /// The handle of capability n is `HANDLE_BASE + n`. It is above the handles of
@@ -168,11 +172,13 @@ pub const CAPABILITIES: [Capability; 12] = [
         points: &[Point::ViewfinderOverlay, Point::CaptureAspect],
     },
     Capability {
-        // 1 when ADJ should open on GRKit after the next power-on, 0 for a
-        // native entry. No firmware patches: INSTALL always restores it
-        // (runtime/installer.c), and menu_exit writes it (runtime/menu.c).
+        // 1 when ADJ should open on GRKit after the next power-on, 2 + k on
+        // entry k of a module before GRKit (MANAGE_PINS entries,
+        // runtime/manage.h), 0 for a native entry. No firmware patches:
+        // INSTALL always restores it (runtime/installer.c), and menu_exit
+        // writes it (runtime/menu.c).
         key: "ADJ",
-        values: 2,
+        values: 2 + ADJ_ENTRIES,
         state: State::Word(HOST_ADJ_OPEN),
         points: &[],
     },

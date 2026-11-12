@@ -102,9 +102,9 @@
 #define MENU_VALUE_TEXT_AT 8U
 #define MENU_VALUE_TEXT 16U
 #define MENU_VALUE_SIZE (MENU_VALUE_TEXT + 2U * MENU_VALUE_UNITS)
-/* A row for the GRKit switch, Enable at Start, each listed module, ADJ
-   Order, and About GRKit. */
-#define MENU_ROWS_SLOTS 14U
+/* A row for the GRKit switch, GRKit Settings, each listed module, and About
+   GRKit (runtime/menu_section.h). */
+#define MENU_ROWS_SLOTS 13U
 #define MENU_ROW_MODULE 0U
 #define MENU_ROW_LABEL 4U
 #define MENU_ROW_VALUE 8U
@@ -124,7 +124,29 @@
 #define MENU_PAGE_TITLE_UNITS 48U
 #define MENU_ROWS_PAGE_TITLE (MENU_ROWS_PAGE_TEXTS + 3U * 8U)
 #define MENU_ROWS_FIRST (MENU_ROWS_PAGE_TITLE + 2U * MENU_PAGE_TITLE_UNITS)
-#define MENU_ROWS_TAB (MENU_ROWS_FIRST + MENU_ROWS_SLOTS * MENU_ROW_SIZE)
+/* The rows of GRKit Settings as its page opened (runtime/menu_settings.h:
+   core_refresh): the kind of row i in bits 4i to 4i + 3, and the number of
+   rows in bits 24 to 31. */
+#define MENU_ROWS_CORE_KINDS (MENU_ROWS_FIRST + MENU_ROWS_SLOTS * MENU_ROW_SIZE)
+/* The row + 1 of a page that a child returns to, where the cursor goes
+   (runtime/menu_settings.h: menu_settings_transition), or 0. */
+#define MENU_ROWS_BACK_ROW (MENU_ROWS_CORE_KINDS + 4U)
+/* The entries of the ADJ toolbar before GRKit (runtime/menu.c): the entry
+   that shows, k + 1 for entry k, or 0 for the GRKit entry; the module of
+   the GRKit root to open at, as an entry opened from the root; and the view
+   of each entry, or 0 before it is made. */
+#define MENU_ROWS_PIN (MENU_ROWS_BACK_ROW + 4U)
+#define MENU_ROWS_PIN_MODULE (MENU_ROWS_PIN + 4U)
+#define MENU_ROWS_PIN_WIDGETS (MENU_ROWS_PIN_MODULE + 4U)
+/* 1 while the title and the detail lines of ADJ sit lower, below the cells
+   of the entries of modules (runtime/menu.c: title_fit), else 0. */
+#define MENU_ROWS_TITLE_LOW (MENU_ROWS_PIN_WIDGETS + 4U * (GRKIT_CORE_ADJ_VALUES - 2U))
+/* CORE.ADJ has 2 values besides one for each entry (runtime/manage.h:
+   MANAGE_PINS). */
+/* The listed module + 1 that a choice of ADJ Order moved, whose row takes
+   the cursor when the page shows again (runtime/menu_settings.h), or 0. */
+#define MENU_ROWS_MOVED (MENU_ROWS_TITLE_LOW + 4U)
+#define MENU_ROWS_TAB (MENU_ROWS_MOVED + 4U)
 #define MENU_ROWS_TAB_SIZE 0x384U
 /* The MENU controller that the pages of the GRKit rows return to
    (runtime/menu_settings.h: menu_return), or 0 before the first change from

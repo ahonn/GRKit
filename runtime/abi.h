@@ -541,7 +541,7 @@
 #define GRKIT_CORE_ASPECT_MODE_VALUES 2U
 #define GRKIT_CORE_ASPECT_MODE_BIT 0x10
 #define GRKIT_CORE_ADJ 0x105U
-#define GRKIT_CORE_ADJ_VALUES 2U
+#define GRKIT_CORE_ADJ_VALUES 6U
 #define GRKIT_CORE_ADJ_BIT 0x20
 #define GRKIT_CORE_ADJ_MODULE 0x106U
 #define GRKIT_CORE_ADJ_MODULE_VALUES 16U
@@ -562,7 +562,7 @@
 #define GRKIT_CORE_RECIPE_VALUES 0U
 #define GRKIT_CORE_RECIPE_BIT 0x800
 #define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,1092,1096,0
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,16,5,2,4,2,0
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,6,16,5,2,4,2,0
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100
@@ -927,23 +927,24 @@
 #define TEXT_RESTART 9
 /* The Image Control settings row that opens the Fn adjustments. */
 #define TEXT_ADJUSTMENTS 10
-/* The ADJ Order row of MENU. */
+/* The ADJ Order row of GRKit Settings, then the places of its value pages: the
+   entries 1 to 4 of the ADJ toolbar before GRKit, and Hidden. */
 #define TEXT_ADJ 11
 /* The settings row that lists the options of a module page. */
-#define TEXT_OPTIONS 12
+#define TEXT_OPTIONS 17
 /* About GRKit: the title, the Version row and its value, the Project row and
    its value. */
-#define TEXT_ABOUT 13
+#define TEXT_ABOUT 18
 /* The Film Look settings row that selects the effect. */
-#define TEXT_FILM 18
+#define TEXT_FILM 23
 /* The guides of an options value page: OK turns an option on or off, MENU goes
    back. */
-#define TEXT_GUIDE 19
+#define TEXT_GUIDE 24
 /* The switch that stops each module at once: its ADJ summary while on, and
    while off, then its MENU row. */
-#define TEXT_SWITCH 21
+#define TEXT_SWITCH 26
 /* Between a group title and its value in the ADJ root summary. */
-#define TEXT_SEPARATOR 24
+#define TEXT_SEPARATOR 29
 /* The page of recipes: the Undo and Save rows, the text before a saved name,
    the text before and after the name to delete, the message when the recipes
    are full, the text of a missing effect, the name of a recipe without a look,
@@ -953,19 +954,19 @@
    effect is not installed, the Apply row of the Recipes page of MENU, and the
    message of an apply that left out the settings of a module that is not
    loaded, for each module of the recipe settings. */
-#define TEXT_RECIPE 25
+#define TEXT_RECIPE 30
 /* The names of the native Image Control types, in the order of
    runtime/native.h. */
-#define TEXT_NATIVE_TYPE 41
+#define TEXT_NATIVE_TYPE 46
 /* Enable at Start, which decides the switch at each start: its MENU row, then
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
-#define TEXT_START 62
+#define TEXT_START 67
 /* The Mode Dial row of the Recipes page of MENU, then the values of a user
    mode besides a recipe: None, GRKit Off, and Saved Settings. */
-#define TEXT_DIAL 64
+#define TEXT_DIAL 69
 /* GRKit Settings, the MENU row and the title of the settings page of the core,
    then its Distance Unit row and the values Meters and Feet. */
-#define TEXT_UNIT 68
-#define GRKIT_TEXT_STRINGS 72
+#define TEXT_UNIT 73
+#define GRKIT_TEXT_STRINGS 77
 
 #endif

@@ -64,6 +64,9 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
 #define SETTINGS_FN 0x20000U
 /* A child opened from a module in MENU returns to that module page. */
 #define SETTINGS_PARENT 0x40000U
+/* ADJ Order, which GRKit Settings opens, returns to GRKit Settings. */
+#define SETTINGS_IN_CORE 0x80000U
+#define SETTINGS_PARENTS (SETTINGS_PARENT|SETTINGS_IN_CORE)
 #define MENU_GROUP_TARGET 0x2000f60U
 #define MENU_RETURN_CONTROLLER 0x200004aU
 /* The MENU controller that a module page returns to, as the submenu holds
@@ -79,19 +82,78 @@ static u32 menu_return(volatile u32 *h) {
    the old instance's return target when that flag is still set. */
 #define SETTINGS_RETURN_TARGET 0x150U
 #define SETTINGS_BACK_PENDING 0x154U
+/* SubMenuController fields shared by the supported builds: OK saves the
+   cursor of the page in the halfword at SUBMENU_CURSORS + 2 * the byte at
+   SUBMENU_CURSOR_SLOT, and the draw of the page puts the cursor on that row.
+   A parent page and its child share the submenu, so the child's OK leaves
+   its own row there. */
+#define SUBMENU_CURSOR_SLOT 0x175U
+#define SUBMENU_CURSORS 0x176U
 /* The row past SETTINGS_BORROWED whose value page SETTINGS_ALIAS shows, or
    0: bits 24 to 31. */
 #define SETTINGS_OPEN_ROW 24U
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
-/* The page of GRKit Settings in the GRKit section of MENU, which has no
-   ADJ page (runtime/manage.h: core_settings_rows). */
+/* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
+   page. Its rows: Enable at Start while the switch shows, Distance Unit
+   (runtime/manage.h: core_settings), Mode Dial while the Recipes page is
+   loaded (runtime/menu_dial.h), and ADJ Order while ADJ shows a module.
+   ADJ Order opens its page (MENU_ADJ_TARGET, runtime/menu_section.h), whose
+   MENU returns here. The rows are the rows of the page as it opened
+   (MENU_ROWS_CORE_KINDS), as a text hook must not read the module pages. */
 #define CORE_PAGE (LISTED_PAGE+1U)
+#define CORE_ROW_START 0U
+#define CORE_ROW_UNIT 1U
+#define CORE_ROW_DIAL 2U
+#define CORE_ROW_ADJ 3U
+#define MENU_ADJ_TARGET 0x2000fa0U
+static const Setting *dial_menu_setting(void);
+static const u16 *adj_order_label(volatile u32 *h) { return text(h,TEXT_ADJ); }
+static const u16 *adj_order_text(volatile u32 *h,u32 value) { (void)h; (void)value; return no_value_text; }
+static u32 adj_order_select(volatile u32 *h,u32 controller,u32 value) {
+    (void)h; (void)controller; (void)value;
+    return MENU_ADJ_TARGET;
+}
+static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text,no_value,no_set,adj_order_select,
+    SETTING_ACTION};
+static volatile u32 *core_kinds(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_CORE_KINDS); }
+static void core_refresh(volatile u32 *h) {
+    u32 kinds=0, n=0;
+    manage_adj_refresh(h);
+    if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
+    if(unit_handle(h)) kinds|=CORE_ROW_UNIT<<(4U*n++);
+    if(recipes_loaded(h)) kinds|=CORE_ROW_DIAL<<(4U*n++);
+    if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
+    core_kinds(h)[0]=kinds|n<<24;
+}
+static u32 core_rows(volatile u32 *h) { return core_kinds(h)[0]>>24; }
+/* The setting of row `row` of GRKit Settings, or 0. */
+static const Setting *core_row_setting(volatile u32 *h,u32 row) {
+    u32 kind;
+    if(row>=core_rows(h)) return 0;
+    kind=core_kinds(h)[0]>>(4U*row)&15U;
+    return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_UNIT ? core_settings+1 :
+           kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
+}
+#define CORE_ROW(n) \
+    static const u16 *core_label_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
+    static u32 core_values_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->values(h) : 0; } \
+    static const u16 *core_text_##n(volatile u32 *h,u32 value) { \
+        const Setting *s=core_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
+    static u32 core_get_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->get(h) : 0; } \
+    static void core_set_##n(volatile u32 *h,u32 value) { const Setting *s=core_row_setting(h,n); if(s) s->set(h,value); }
+CORE_ROW(0) CORE_ROW(1) CORE_ROW(2) CORE_ROW(3)
+static const Setting core_page_settings[SETTING_ROWS]={
+    {core_label_0,core_values_0,core_text_0,core_get_0,core_set_0},
+    {core_label_1,core_values_1,core_text_1,core_get_1,core_set_1},
+    {core_label_2,core_values_2,core_text_2,core_get_2,core_set_2},
+    {core_label_3,core_values_3,core_text_3,core_get_3,core_set_3},
+};
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {
     if(module==LISTED_PAGE) return listed_settings;
     if(module==SWITCH_MODULE) return switch_settings;
-    if(module==CORE_PAGE) return core_settings_rows(h);
+    if(module==CORE_PAGE) return core_page_settings;
     if(module>=MODULE_TOTAL) return 0;
     if(one) { menu_page(h,module); return choice_one; }
     return menu_page(h,module)->settings;
@@ -133,7 +195,9 @@ static u32 settings_options(volatile u32 *h,const Setting *page,u32 setting) {
    listed page, which delegates its rows. */
 static const Setting *settings_row_setting(volatile u32 *h,const Setting *page,u32 setting) {
     if(!page) return 0;
-    return page==listed_settings ? listed_setting(h,setting) : page+setting;
+    if(page==listed_settings) return listed_setting(h,setting);
+    if(page==core_page_settings) return core_row_setting(h,setting);
+    return page+setting;
 }
 static u32 settings_flags(volatile u32 *h,const Setting *page,u32 setting) {
     const Setting *s=settings_row_setting(h,page,setting);
@@ -410,9 +474,17 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
            page can change them: Film Stock adds Parameters once an effect is
            committed, and an ADJ Order choice moves the modules. */
         if(settings_page(h)) {
-            u32 parent=h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT;
+            u32 parent=h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENTS;
             settings_open(h,(h[GRKIT_HOST_SETTINGS/4]&0xffffU)-1,h[GRKIT_HOST_SETTINGS/4]&SETTINGS_ONE);
             h[GRKIT_HOST_SETTINGS/4]|=parent;
+        }
+        /* A module that ADJ Order moved keeps the cursor at its new row
+           (settings_row). */
+        if(h[GRKIT_HOST_SERVICES/4]) {
+            u32 moved=services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0];
+            services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0]=0;
+            if(moved && settings_page(h)==manage_settings)
+                services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=manage_adj_row(h,moved-1U)+1U;
         }
         return id;
     }
@@ -451,7 +523,7 @@ static void settings_note_return(volatile u32 *h,u32 controller) {
     u32 module=h[GRKIT_HOST_SETTINGS/4]&0xffffU, target;
     if(!controller || !h[GRKIT_HOST_SERVICES/4] ||
        services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]!=SETTINGS_SUBMENU) return;
-    if(module!=LISTED_PAGE+1 && !(h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) return;
+    if(module!=LISTED_PAGE+1 && module!=CORE_PAGE+1 && !(h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENTS)) return;
     target=MENU_OBJECT_WORD(controller,SETTINGS_RETURN_TARGET);
     /* The targets of GRKit rows (0x2000f00 and later) are no controller. */
     if(target>>12!=SETTINGS_SUBMENU>>12 || (target&0xf00U)==0xf00U || settings_shows(target) ||
@@ -466,7 +538,7 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
     settings_note_return(h,controller);
     parent_back=controller && h[GRKIT_HOST_SERVICES/4] &&
         (id==SETTINGS_SUBMENU || id==menu_return(h)) &&
-        (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT) &&
+        (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENTS) &&
         services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU &&
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING);
     id=menu_settings_controller(id);
@@ -643,16 +715,26 @@ static u32 settings_text(volatile u32 *h,u32 view,u32 id) {
     return 0;
 }
 /* The value method of submenu row `setting`, from the private entry. */
-static void settings_row(u32 row,u32 setting) {
+static void settings_row(u32 submenu,u32 row,u32 setting) {
     volatile u32 *h=menu_header();
     const Setting *page=settings_row_page(h,setting);
     if(!page) return;
+    /* A return to a parent page puts the cursor on the row that opened the
+       child (menu_rows_controller). The draw calls the value method of each
+       row, then puts the cursor on the row that the saved cursor names, so
+       the first value method writes it: a start of the page sets it before
+       the draw. */
+    if(h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]) {
+        u32 back=services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0];
+        services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=0;
+        if(submenu) MENU_OBJECT_HALF(submenu,SUBMENU_CURSORS+2U*MENU_OBJECT_BYTE(submenu,SUBMENU_CURSOR_SLOT))=(u16)(back-1U);
+    }
     settings_view(h,setting,MENU_OBJECT_WORD(row,ROW_VALUE_VIEW),page[setting].value_text(h,page[setting].get(h)));
     MENU_VIEW2(FW_ROW_VALUE,row,SETTINGS_TITLE_TEXT);
     fit_value(MENU_OBJECT_WORD(row,ROW_VALUE_VIEW));
 }
 #define SETTINGS_VALUE(n) \
-    A32_ENTRY void menu_settings_value_##n(u32 submenu,u32 row) { (void)submenu; settings_row(row,n); }
+    A32_ENTRY void menu_settings_value_##n(u32 submenu,u32 row) { settings_row(submenu,row,n); }
 SETTINGS_VALUE(0) SETTINGS_VALUE(1) SETTINGS_VALUE(2) SETTINGS_VALUE(3) SETTINGS_VALUE(4)
 SETTINGS_VALUE(5) SETTINGS_VALUE(6) SETTINGS_VALUE(7) SETTINGS_VALUE(8) SETTINGS_VALUE(9)
 /* The methods of the value page of borrowed page `setting`, which shows the
@@ -742,6 +824,7 @@ static u32 settings_count(volatile u32 *h,const Setting *page) {
     if(page==choice_settings) n=PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_SETTING_ROWS);
     else if(page==manage_settings) n=manage_adj_count(h);
     else if(page==listed_settings) n=listed_rows(h);
+    else if(page==core_page_settings) n=core_rows(h);
     else while(n<SETTING_ROWS && page[n].label) ++n;
     return n<SUBMENU_ROWS ? n : SUBMENU_ROWS;
 }
@@ -756,8 +839,10 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
     volatile u32 *block=settings_block(h);
     const Setting *page;
     u32 stock=FW_SUBMENU_KINDS+SETTINGS_SUBMENU_KIND*SUBMENU_KIND_SIZE, i, rows;
-    /* ADJ Order lists the modules that ADJ shows now. */
+    /* ADJ Order lists the modules that ADJ shows now, and GRKit Settings
+       the rows that it has now. */
     if(module==MANAGE_MODULE) manage_adj_refresh(h);
+    if(module==CORE_PAGE) core_refresh(h);
     page=settings_of(h,module,one);
     rows=page ? settings_count(h,page) : 0;
     for(i=0;i<SUBMENU_KIND_SIZE/4;++i) block[i]=MENU_OBJECT_WORD(stock,i*4);

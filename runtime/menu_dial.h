@@ -1,7 +1,8 @@
 #ifndef GRKIT_MENU_DIAL_H
 #define GRKIT_MENU_DIAL_H
-/* The Mode Dial row of the Recipes page of MENU (runtime/menu_recipes.h): what
-   the user modes U1 to U3 of the mode dial do (runtime/mode_dial.h).
+/* The Mode Dial row of GRKit Settings in MENU (runtime/menu_settings.h:
+   CORE_PAGE): what the user modes U1 to U3 of the mode dial do
+   (runtime/mode_dial.h). The row shows while the Recipes page is loaded.
 
    - The row opens a list of the user modes. Each shows its value: None (the
      user mode follows), GRKit Off, Saved Settings, or the name of its
@@ -27,7 +28,7 @@
    As the Recipes row, the list and the values of a user mode are one own
    value page, which shows the values while MENU_ROWS_PAGE_STATE holds the
    user mode. The includer is runtime/menu.c, after runtime/mode_dial.h and
-   before runtime/menu_recipes.h. */
+   runtime/menu_settings.h. */
 /* The texts of the page (runtime/abi.h: the DIAL run). GRKit Off and Saved
    Settings are DIAL_TEXT_OFF and DIAL_TEXT_SAVED, which the label of the dial
    shows too (runtime/mode_dial.h). Save Settings is the row of the Recipes
@@ -159,7 +160,9 @@ static u32 dial_row_select(volatile u32 *h,u32 controller,u32 value) {
     settings_value_again(h,0);
     return 1;
 }
-#define DIAL_MENU_SETTING \
-    {dial_row_label,dial_row_values,dial_row_text,dial_row_get,no_set,dial_row_select,SETTING_OWN_PAGE, \
-     dial_row_cursor,dial_row_title}
+static const Setting dial_menu_settings[1]={
+    {dial_row_label,dial_row_values,dial_row_text,dial_row_get,no_set,dial_row_select,SETTING_OWN_PAGE,
+     dial_row_cursor,dial_row_title},
+};
+static const Setting *dial_menu_setting(void) { return dial_menu_settings; }
 #endif /* GRKIT_MENU_DIAL_H */

@@ -117,6 +117,7 @@ static void grkit_touch(u32 controller);
 static void render(u32 controller);
 static void render_step(u32 controller,u32 step);
 static void enter(u32 controller,u32 edge);
+static void enter_pin(u32 controller,u32 k);
 static const u16 grkit_title[] = {'G','R','K','i','t',0};
 #ifndef MENU_TEXT
 /* The menu text at a camera address. Host tests map the address. */
@@ -300,6 +301,23 @@ static u32 private_mode(u32 controller) {
     volatile u32 *h=menu_header();
     return h[GRKIT_HOST_MENU_CONTROLLER/4] == controller && h[GRKIT_HOST_MENU_LEVEL/4] != 0;
 }
+/* The entries of a module in the ADJ toolbar, before the GRKit entry
+   (runtime/modules.h: toolbar_pages): each shows the page of its module
+   without the GRKit root, as a native entry shows its values. MENU_ROWS_PIN
+   holds the entry that shows, k + 1, or 0 for the GRKit entry. */
+static volatile u32 *pin_word(volatile u32 *h,u32 at) { return services_word(h,SERVICES_MENU+at); }
+static u32 pins(volatile u32 *h,u32 *pages) { return h[GRKIT_HOST_SERVICES/4] ? toolbar_pages(h,pages) : 0; }
+/* The entry that shows in `controller`, k + 1, or 0. */
+static u32 pin_shown(u32 controller) {
+    volatile u32 *h=menu_header();
+    return private_mode(controller) && h[GRKIT_HOST_SERVICES/4] ? pin_word(h,MENU_ROWS_PIN)[0] : 0;
+}
+/* The page of the entry that shows, or MODULE_TOTAL. */
+static u32 pin_page(u32 controller) {
+    volatile u32 *h=menu_header();
+    u32 pages[MANAGE_PINS], n=pins(h,pages), pin=pin_shown(controller);
+    return pin && pin<=n ? pages[pin-1] : MODULE_TOTAL;
+}
 /* A native Image Control preview lasts while its ADJ slot has focus. */
 static void native_focus(u32 controller) {
     if(CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))!=ADJ_IC_SLOT_TYPE)
@@ -312,8 +330,14 @@ static u32 parameters_available(u32 controller) {
        native Image Control type does not matter. */
     return parameters_row(menu_header()) && ADJ_MOVIE(controller)!=1;
 }
-/* Native slot indices stay in 0..4. Only the transient toolbar has six cells. */
-static u32 toolbar_x(u32 slot) { return 415 + 50 * slot; }
+/* Native slot indices stay in 0..4. The toolbar of a GRKit session has six
+   cells: the native ones, then GRKit, and a cell before GRKit for each
+   entry of a module (`entries`), so it starts further left. */
+static u32 toolbar_x(u32 entries,u32 slot) { return 415 - 50 * entries + 50 * slot; }
+/* How far the title and the detail lines of ADJ move down below the cells
+   (title_fit), and the room that the title keeps before the first cell. */
+#define TITLE_LOWER 60
+#define TITLE_GAP 5
 static void toolbar_destroy(u32 widget) {
     /* Both sibling objects share an allocation; only LineView releases it. */
     CALL1(FW_ICON_VIEW_DESTROY)(widget+0xf0);
@@ -323,62 +347,134 @@ static void toolbar_visible(u32 widget,u32 visible) {
     CALL2(FW_VIEW_SET_VISIBLE)(widget,visible);
     CALL2(FW_VIEW_SET_VISIBLE)(widget+0xf0,visible);
 }
-static void toolbar_layout(u32 controller,u32 expanded) {
-    u32 i, origin=expanded ? 415 : 425, pitch=expanded ? 50 : 60;
+static void toolbar_layout(u32 controller,u32 expanded,u32 entries) {
+    u32 i, origin=expanded ? toolbar_x(entries,0) : 425, pitch=expanded ? 50 : 60, pin=pin_shown(controller);
     for(i=0;i<5;++i) {
         CALL2(FW_VIEW_SET_X)(WORD(controller,ADJ_CELLS+i*4),origin+pitch*i);
         CALL2(FW_VIEW_SET_X)(WORD(controller,ADJ_ICONS+i*4),origin+pitch*i+5);
     }
     CALL2(FW_VIEW_SET_X)(WORD(controller,ADJ_FRAME),expanded ?
-        toolbar_x(private_mode(controller) ? 5 : BYTE(controller,ADJ_SLOT)) :
+        toolbar_x(entries,private_mode(controller) ? (pin ? 4+pin : 5+entries) : BYTE(controller,ADJ_SLOT)) :
         425+60*BYTE(controller,ADJ_SLOT));
+}
+static void pin_touch_0(u32 controller);
+static void pin_touch_1(u32 controller);
+static void pin_touch_2(u32 controller);
+static void pin_touch_3(u32 controller);
+_Static_assert(MANAGE_PINS==4U,"A touch callback for each entry of a module");
+static void (*const pin_touches[MANAGE_PINS])(u32)={pin_touch_0,pin_touch_1,pin_touch_2,pin_touch_3};
+/* Make a cell of the toolbar: a line view and an icon view in one
+   allocation, the line drawn before the selection frame and the icon after
+   it, as the native cells. 0 when the camera has no room. */
+static u32 toolbar_cell(u32 controller,void (*touch)(u32),u32 icon_id) {
+    u32 parent=WORD(WORD(controller,ADJ_ICONS),4);
+    u32 position=WORD(parent,0xc), end=WORD(parent,0x10), widget, icon, offset;
+    u32 binding[3]={(u32)touch,0,controller};
+    u32 callback[4]={(u32)binding,0,FW_ADJ_TOUCH_ENTER,FW_ADJ_TOUCH_LEAVE};
+    /* Draw the native background before the shared selection frame. */
+    while(position!=end && WORD(position,0)!=WORD(controller,ADJ_FRAME)) position+=4;
+    if(position==end) return 0;
+    offset=position-WORD(parent,0xc);
+    widget=CALL1(FW_ALLOCATE)(0x1e8);
+    if(!widget) return 0;
+    icon=widget+0xf0;
+    CALL5(FW_LINE_VIEW_INIT)(widget,toolbar_x(0,5),5,50,50);
+    CALL2(FW_LINE_VIEW_SET_STYLE)(widget,0x10);
+    CALL5(FW_ICON_VIEW_INIT)(icon,toolbar_x(0,5)+5,10,40,40);
+    CALL2(FW_ICON_VIEW_SET_ICON)(icon,icon_id);
+    CALL2(FW_VIEW_SET_TOUCH)(icon,(u32)callback);
+    CALL2(FW_VIEW_SET_TOUCHABLE)(icon,1);
+    /* Use the same vector insertion as View::AddChild, at the marker. */
+    if(!CALL3(FW_VECTOR_INSERT)(parent+8,position,(u32)&widget)) {
+        toolbar_destroy(widget);
+        return 0;
+    }
+    /* The icon must draw after the frame, which fills the entire cell. */
+    if(!CALL3(FW_VECTOR_INSERT)(parent+8,WORD(parent,0x10),(u32)&icon)) {
+        CALL2(FW_VECTOR_ERASE)(parent+8,WORD(parent,0xc)+offset);
+        toolbar_destroy(widget);
+        return 0;
+    }
+    CALL2(FW_VIEW_SET_PARENT)(widget,parent);
+    CALL2(FW_VIEW_SET_PARENT)(icon,parent);
+    TOOLBAR_CREATED(widget,icon);
+    return widget;
+}
+/* The icon of the entry of page `page`: the tile of its module. */
+static u32 pin_icon(volatile u32 *h,u32 page) {
+    u32 listed=page_listed(h,page), tile;
+    if(listed>=MANAGE_MODULES) return GRKIT_ICON_MODULES;
+    tile=MANAGE_MAP(manage_entry(h,listed)+MANAGE_TILE)[0];
+    return tile!=MANAGE_NO_TILE ? GRKIT_ICON_MODULE_TILE(tile) : GRKIT_ICON_MODULES;
+}
+/* Show the cells of the entries of modules, at their places, and hide the
+   others. */
+static void pin_cells(volatile u32 *h,u32 controller,u32 shown) {
+    u32 pages[MANAGE_PINS], n=shown ? pins(h,pages) : 0, k, widget;
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    for(k=0;k<MANAGE_PINS;++k) {
+        widget=pin_word(h,MENU_ROWS_PIN_WIDGETS+4*k)[0];
+        if(k>=n) { if(widget) toolbar_visible(widget,0); continue; }
+        if(!widget) {
+            widget=toolbar_cell(controller,pin_touches[k],pin_icon(h,pages[k]));
+            if(!widget) continue;
+            pin_word(h,MENU_ROWS_PIN_WIDGETS+4*k)[0]=widget;
+        }
+        CALL2(FW_ICON_VIEW_SET_ICON)(widget+0xf0,pin_icon(h,pages[k]));
+        CALL2(FW_VIEW_SET_X)(widget,toolbar_x(n,5+k));
+        CALL2(FW_VIEW_SET_X)(widget+0xf0,toolbar_x(n,5+k)+5);
+        toolbar_visible(widget,1);
+    }
+}
+/* The title of ADJ and its detail lines start at the left edge, in the row
+   of the toolbar and below it. A long title, such as Outdoor View Setting,
+   can reach under the first cell of the toolbar once entries of modules
+   move the toolbar left. The title and the detail lines then move down by
+   TITLE_LOWER, below the toolbar, and move back once the title fits. */
+static void title_move(u32 view,int dy) {
+    volatile int *frame=(volatile int *)(view+VIEW_FRAME);
+    int rect[4];
+    if(!view) return;
+    rect[0]=frame[0]; rect[1]=frame[1]+dy; rect[2]=frame[2]; rect[3]=frame[3];
+    CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
+}
+static void title_fit(u32 controller,u32 entries) {
+    volatile u32 *h=menu_header();
+    u32 title=WORD(controller,ADJ_TITLE), low, lower;
+    volatile int *frame=(volatile int *)(title+VIEW_FRAME);
+    if(!h[GRKIT_HOST_SERVICES/4] || !title) return;
+    low=pin_word(h,MENU_ROWS_TITLE_LOW)[0];
+    lower=entries && frame[0]+(int)MENU_VIEW1(FW_STRING_VIEW_WIDTH,title)+TITLE_GAP>(int)toolbar_x(entries,0);
+    if(lower==low) return;
+    title_move(title,lower ? TITLE_LOWER : -TITLE_LOWER);
+    title_move(WORD(controller,ADJ_DETAIL),lower ? TITLE_LOWER : -TITLE_LOWER);
+    title_move(WORD(controller,ADJ_DETAIL_VALUE),lower ? TITLE_LOWER : -TITLE_LOWER);
+    pin_word(h,MENU_ROWS_TITLE_LOW)[0]=lower;
 }
 static void toolbar(u32 controller) {
     volatile u32 *h=menu_header();
-    u32 widget=h[GRKIT_HOST_TOOLBAR_WIDGET/4];
+    u32 widget=h[GRKIT_HOST_TOOLBAR_WIDGET/4], pages[MANAGE_PINS], entries;
     if(widget && h[GRKIT_HOST_TOOLBAR_OWNER/4]!=controller) return;
     if(ADJ_MOVIE(controller)==1) {
         if(widget) toolbar_visible(widget,0);
-        toolbar_layout(controller,0);
+        pin_cells(h,controller,0);
+        toolbar_layout(controller,0,0);
+        title_fit(controller,0);
         return;
     }
     if(!widget) {
-        u32 parent=WORD(WORD(controller,ADJ_ICONS),4);
-        u32 position=WORD(parent,0xc), end=WORD(parent,0x10), icon, offset;
-        u32 binding[3]={(u32)grkit_touch,0,controller};
-        u32 callback[4]={(u32)binding,0,FW_ADJ_TOUCH_ENTER,FW_ADJ_TOUCH_LEAVE};
-        /* Draw the native background before the shared selection frame. */
-        while(position!=end && WORD(position,0)!=WORD(controller,ADJ_FRAME)) position+=4;
-        if(position==end) return;
-        offset=position-WORD(parent,0xc);
-        widget=CALL1(FW_ALLOCATE)(0x1e8);
+        widget=toolbar_cell(controller,grkit_touch,GRKIT_ICON_GRKIT);
         if(!widget) return;
-        icon=widget+0xf0;
-        CALL5(FW_LINE_VIEW_INIT)(widget,toolbar_x(5),5,50,50);
-        CALL2(FW_LINE_VIEW_SET_STYLE)(widget,0x10);
-        CALL5(FW_ICON_VIEW_INIT)(icon,toolbar_x(5)+5,10,40,40);
-        CALL2(FW_ICON_VIEW_SET_ICON)(icon,GRKIT_ICON_GRKIT);
-        CALL2(FW_VIEW_SET_TOUCH)(icon,(u32)callback);
-        CALL2(FW_VIEW_SET_TOUCHABLE)(icon,1);
-        /* Use the same vector insertion as View::AddChild, at the marker. */
-        if(!CALL3(FW_VECTOR_INSERT)(parent+8,position,(u32)&widget)) {
-            toolbar_destroy(widget);
-            return;
-        }
-        /* The icon must draw after the frame, which fills the entire cell. */
-        if(!CALL3(FW_VECTOR_INSERT)(parent+8,WORD(parent,0x10),(u32)&icon)) {
-            CALL2(FW_VECTOR_ERASE)(parent+8,WORD(parent,0xc)+offset);
-            toolbar_destroy(widget);
-            return;
-        }
-        CALL2(FW_VIEW_SET_PARENT)(widget,parent);
-        CALL2(FW_VIEW_SET_PARENT)(icon,parent);
-        TOOLBAR_CREATED(widget,icon);
         h[GRKIT_HOST_TOOLBAR_WIDGET/4]=widget;
         h[GRKIT_HOST_TOOLBAR_OWNER/4]=controller;
     }
+    entries=pins(h,pages);
+    pin_cells(h,controller,1);
+    CALL2(FW_VIEW_SET_X)(widget,toolbar_x(entries,5+entries));
+    CALL2(FW_VIEW_SET_X)(widget+0xf0,toolbar_x(entries,5+entries)+5);
     toolbar_visible(widget,1);
-    toolbar_layout(controller,1);
+    toolbar_layout(controller,1,entries);
+    title_fit(controller,entries);
     CALL2(FW_VIEW_SET_VISIBLE)(WORD(controller,ADJ_FRAME),1);
 }
 /* The parameter page title of a GRKit session (GRKIT_TEXT_PARAMETER_TITLE). */
@@ -398,10 +494,18 @@ A32_ENTRY void menu_refresh(u32 controller) {
         /* GRKit reopens at the root row of the module (menu_reopen). A page
            that opened from a page returns to that page: Fn on a module
            page. The page is visible, because it opened the other page. */
-        enter(controller,3);
-        if(!root) {
-            menu_return_page(h,row);
-            render(controller);
+        {
+            /* A page of an entry of a module returns to that entry. */
+            u32 pin=h[GRKIT_HOST_SERVICES/4] ? pin_word(h,MENU_ROWS_PIN)[0] : 0, page=h[GRKIT_HOST_MODULE/4];
+            enter(controller,3);
+            if(!root) {
+                if(pin) {
+                    pin_word(h,MENU_ROWS_PIN)[0]=pin;
+                    h[GRKIT_HOST_MODULE/4]=page;
+                }
+                menu_return_page(h,row);
+                render(controller);
+            }
         }
         ui_native_returned(h);
         return;
@@ -412,8 +516,11 @@ A32_ENTRY void menu_refresh(u32 controller) {
            native refresh first sets the list of the native slot, so that
            leaving GRKit restores the value of that slot. */
         if(ADJ_MOVIE(controller)!=1) {
+            u32 open=h[GRKIT_HOST_ADJ_OPEN/4], pages[MANAGE_PINS];
             menu_refresh_original(controller);
-            enter(controller,reopen_edge(h[GRKIT_HOST_MENU_EDGE/4]));
+            /* CORE.ADJ 2 + k: the entry k of a module was open. */
+            if(open>=2 && open-2<pins(h,pages)) enter_pin(controller,open-2);
+            else enter(controller,reopen_edge(h[GRKIT_HOST_MENU_EDGE/4]));
             return;
         }
     }
@@ -465,8 +572,11 @@ static void label(u32 object) {
     CALL1(FW_VIEW_INVALIDATE)(object);
     CALL2(FW_VIEW_SET_VISIBLE)(object,1);
 }
+/* The detail line sits at y=50, or lower with the title (title_fit). */
 static __attribute__((noinline)) void detail_width(u32 controller,u32 width) {
-    u32 object=WORD(controller,ADJ_DETAIL), rectangle[4]={0,50,width,40};
+    volatile u32 *h=menu_header();
+    u32 object=WORD(controller,ADJ_DETAIL), low=h[GRKIT_HOST_SERVICES/4] && pin_word(h,MENU_ROWS_TITLE_LOW)[0];
+    u32 rectangle[4]={0,50U+(low ? (u32)TITLE_LOWER : 0U),width,40};
     CALL2(WORD(WORD(object,0),0x18))(object,(u32)rectangle);
 }
 /* Size the list for `rows` rows, as the native refresh does for the values of
@@ -518,6 +628,8 @@ static void render_step(u32 controller,u32 step) {
     u32 view=WORD(controller,ADJ_LIST);
     const MenuPage *module;
     menu_normalize(h);
+    /* An entry whose page no longer shows becomes the GRKit root. */
+    if(h[GRKIT_HOST_SERVICES/4] && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) pin_word(h,MENU_ROWS_PIN)[0]=0;
     cursor=h[GRKIT_HOST_MENU_CURSOR/4]; total=count(h);
     list_grow(view,total);
     start=list_start(h,view); n=total-start;
@@ -585,19 +697,53 @@ static void leave(u32 controller) {
     CALL2(FW_VIEW_SET_VISIBLE)(WORD(controller,ADJ_FRAME),1);
     CALL3(FW_LIST_RESTORE)(WORD(controller,ADJ_LIST),h[GRKIT_HOST_MENU_LIST/4],h[GRKIT_HOST_MENU_LIST/4+1]);
     h[GRKIT_HOST_MENU_CONTROLLER/4]=0; h[GRKIT_HOST_MENU_REBUILDING/4]=0;
+    {
+        /* The refresh gave the native entry its own title. */
+        u32 pages[MANAGE_PINS];
+        title_fit(controller,ADJ_MOVIE(controller)==1 ? 0 : pins(h,pages));
+    }
 }
 static void enter(u32 controller,u32 edge) {
     volatile u32 *h=menu_header();
-    u32 view=WORD(controller,ADJ_LIST);
+    u32 view=WORD(controller,ADJ_LIST), native=!private_mode(controller);
+    /* After an entry of a module, the root opens where it was before. */
+    if(h[GRKIT_HOST_SERVICES/4] && pin_word(h,MENU_ROWS_PIN)[0]) {
+        h[GRKIT_HOST_MODULE/4]=pin_word(h,MENU_ROWS_PIN_MODULE)[0];
+        pin_word(h,MENU_ROWS_PIN)[0]=0;
+    }
     h[GRKIT_HOST_MENU_CONTROLLER/4]=controller; menu_reopen(h);
     h[GRKIT_HOST_MENU_EDGE/4]=edge;
     h[GRKIT_HOST_PREVIEW/4]=0;
-    CALL3(FW_LIST_SAVE)(view,(u32)(h+GRKIT_HOST_MENU_LIST/4),(u32)(h+GRKIT_HOST_MENU_LIST/4+1));
+    /* The native list is saved once, when GRKit takes it. */
+    if(native) CALL3(FW_LIST_SAVE)(view,(u32)(h+GRKIT_HOST_MENU_LIST/4),(u32)(h+GRKIT_HOST_MENU_LIST/4+1));
+    render(controller);
+}
+/* Show entry `k` of a module: the page of its module, at its committed row.
+   The root keeps the module where it was (enter). */
+static void enter_pin(u32 controller,u32 k) {
+    volatile u32 *h=menu_header();
+    u32 pages[MANAGE_PINS], n=pins(h,pages), view=WORD(controller,ADJ_LIST), native=!private_mode(controller);
+    if(k>=n) return;
+    if(!pin_word(h,MENU_ROWS_PIN)[0])
+        pin_word(h,MENU_ROWS_PIN_MODULE)[0]=!native && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT ?
+            root_module(h,h[GRKIT_HOST_MENU_CURSOR/4]) : h[GRKIT_HOST_MODULE/4];
+    if(native) CALL3(FW_LIST_SAVE)(view,(u32)(h+GRKIT_HOST_MENU_LIST/4),(u32)(h+GRKIT_HOST_MENU_LIST/4+1));
+    h[GRKIT_HOST_MENU_CONTROLLER/4]=controller;
+    pin_word(h,MENU_ROWS_PIN)[0]=k+1;
+    menu_open(h,pages[k]);
+    h[GRKIT_HOST_PREVIEW/4]=0;
     render(controller);
 }
 static void grkit_touch(u32 controller) {
-    if(!private_mode(controller) && ADJ_MOVIE(controller)!=1) enter(controller,3);
+    if((!private_mode(controller) || pin_shown(controller)) && ADJ_MOVIE(controller)!=1) enter(controller,3);
 }
+static void pin_touch(u32 controller,u32 k) {
+    if(ADJ_MOVIE(controller)!=1 && pin_shown(controller)!=k+1) enter_pin(controller,k);
+}
+static void pin_touch_0(u32 controller) { pin_touch(controller,0); }
+static void pin_touch_1(u32 controller) { pin_touch(controller,1); }
+static void pin_touch_2(u32 controller) { pin_touch(controller,2); }
+static void pin_touch_3(u32 controller) { pin_touch(controller,3); }
 /* Fn adjustments. While GRKIT_HOST_PARAMETERS holds a record, the native
    parameter page reads and writes the adjustments of that record
    (GRKIT_RECORD_PARAMETERS) instead of the native settings, and shows the
@@ -911,9 +1057,12 @@ static u32 open_parameters(u32 controller) {
     return 1;
 }
 A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
+    u32 pages[MANAGE_PINS];
     leave(controller);
     if(BYTE(controller,ADJ_SLOT)!=slot) CALL2(FW_ADJ_SELECT_SLOT)(controller,slot);
     native_focus(controller);
+    /* The native entry shows its own title. */
+    title_fit(controller,ADJ_MOVIE(controller)==1 ? 0 : pins(menu_header(),pages));
 }
 /* GRKit leaves a page itself on OK, MENU, Fn, Left, Right, and touch. An
    ADJ exit that GRKit did not start, such as a half-press of the shutter,
@@ -932,6 +1081,8 @@ static void exit_commit(volatile u32 *h) {
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
     u32 in_grkit=private_mode(controller);
+    /* The entry that showed: MENU on its page left it before the exit. */
+    u32 pin=h[GRKIT_HOST_SERVICES/4] ? pin_word(h,MENU_ROWS_PIN)[0] : 0;
     if(in_grkit) exit_commit(h);
     else if(h[GRKIT_HOST_ACTIVE/4] && h[GRKIT_HOST_SERVICES/4] &&
             native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE/4],MENU_NATIVE_IC_TYPE(),
@@ -953,7 +1104,7 @@ A32_ENTRY void menu_exit(u32 controller) {
     h[GRKIT_HOST_RETURN/4]=exit_return(h[GRKIT_HOST_RETURN/4],in_grkit);
     if(RETURN_STATE(h[GRKIT_HOST_RETURN/4])!=RETURN_PARAMETERS &&
        h[GRKIT_HOST_RETURN/4]!=RETURN_POWERON) {
-        u32 open=h[GRKIT_HOST_RETURN/4]==RETURN_GRKIT ? 1U : 0U;
+        u32 open=h[GRKIT_HOST_RETURN/4]==RETURN_GRKIT ? (pin ? 1U+pin : 1U) : 0U;
         if(h[GRKIT_HOST_ADJ_OPEN/4]!=open) {
             h[GRKIT_HOST_ADJ_OPEN/4]=open;
             GRKIT_STATE_CHANGED(h);
@@ -964,12 +1115,14 @@ A32_ENTRY void menu_exit(u32 controller) {
     menu_exit_original(controller);
     if(menu_header()[GRKIT_HOST_TOOLBAR_OWNER/4]==controller) {
         toolbar_visible(menu_header()[GRKIT_HOST_TOOLBAR_WIDGET/4],0);
-        toolbar_layout(controller,0);
+        pin_cells(menu_header(),controller,0);
+        toolbar_layout(controller,0,0);
+        title_fit(controller,0);
     }
 }
 A32_ENTRY u32 menu_destroy(u32 controller) {
     volatile u32 *h=menu_header();
-    u32 widget=0, result;
+    u32 widget=0, result, cells[MANAGE_PINS]={0}, k;
     ui_close(h);
     ui_native_cancel(h);
     if(h[GRKIT_HOST_TOOLBAR_OWNER/4]==controller) {
@@ -979,6 +1132,14 @@ A32_ENTRY u32 menu_destroy(u32 controller) {
         /* The root clears its child vector without deleting its children. */
         CALL2(WORD(WORD(widget,0),0x2c))(widget,0);
         CALL2(FW_VIEW_SET_PARENT)(widget+0xf0,0);
+        /* The cells of the entries of modules go with it. */
+        for(k=0;h[GRKIT_HOST_SERVICES/4] && k<MANAGE_PINS;++k) {
+            cells[k]=pin_word(h,MENU_ROWS_PIN_WIDGETS+4*k)[0];
+            pin_word(h,MENU_ROWS_PIN_WIDGETS+4*k)[0]=0;
+            if(!cells[k]) continue;
+            CALL2(WORD(WORD(cells[k],0),0x2c))(cells[k],0);
+            CALL2(FW_VIEW_SET_PARENT)(cells[k]+0xf0,0);
+        }
     }
     if(h[GRKIT_HOST_MENU_CONTROLLER/4]==controller) {
         /* A destroy without an exit keeps the highlighted row too. */
@@ -990,6 +1151,7 @@ A32_ENTRY u32 menu_destroy(u32 controller) {
     h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=0;
     result=menu_destroy_original(controller);
     if(widget) toolbar_destroy(widget);
+    for(k=0;k<MANAGE_PINS;++k) if(cells[k]) toolbar_destroy(cells[k]);
     return result;
 }
 A32_ENTRY void menu_changed(u32 controller) {
@@ -1046,7 +1208,11 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         return 0;
     }
     if(back==1) {
-        if(menu_back(h)) { render(controller); return 0; }
+        /* The page of an entry of a module has no root behind it: MENU
+           there closes ADJ, as on a native entry. A child of a group still
+           returns to the group. */
+        u32 pinned=pin_page(controller);
+        if(!(pinned<MODULE_TOTAL && h[GRKIT_HOST_MODULE/4]==pinned) && menu_back(h)) { render(controller); return 0; }
         /* MENU on the root closes ADJ, as on a native entry: the restored
            native list gets this switch event and the confirm after it. */
         h[GRKIT_HOST_BACK_PENDING/4]=0;
@@ -1066,18 +1232,28 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         if(kind==EV_CONFIRM && !after_menu_switch(h) &&
            CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))==ADJ_IC_SLOT_TYPE)
             native_ic_selected(h);
+        /* Right from the last native entry shows the first entry of a
+           module, else GRKit; Left from the first one shows GRKit. */
         if(ADJ_MOVIE(controller)!=1 &&
            ((kind==EV_RIGHT && BYTE(controller,ADJ_SLOT)==4) ||
             (kind==EV_LEFT && BYTE(controller,ADJ_SLOT)==0))) {
-            enter(controller,kind==EV_RIGHT ? 1 : 2); return 0;
+            u32 pages[MANAGE_PINS];
+            if(kind==EV_RIGHT && pins(h,pages)) enter_pin(controller,0);
+            else enter(controller,kind==EV_RIGHT ? 1 : 2);
+            return 0;
         }
         {
-            u32 old=BYTE(controller,ADJ_SLOT);
+            u32 old=BYTE(controller,ADJ_SLOT), pages[MANAGE_PINS];
             u32 result=menu_event_original(controller,event);
             u32 next=BYTE(controller,ADJ_SLOT);
             u32 edge=wrapped_edge(kind,old,next,ADJ_MOVIE(controller));
-            if(edge) enter(controller,edge);
-            else if(next!=old) native_focus(controller);
+            if(edge==1 && pins(h,pages)) enter_pin(controller,0);
+            else if(edge) enter(controller,edge);
+            else if(next!=old) {
+                native_focus(controller);
+                /* The native entry shows its own title. */
+                title_fit(controller,ADJ_MOVIE(controller)==1 ? 0 : pins(h,pages));
+            }
             return result;
         }
     }
@@ -1105,7 +1281,29 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     /* Left and Right otherwise move to the next ADJ entry from the root
        and from a page. MENU returns from a page to the root. */
     if(kind==EV_LEFT || kind==EV_RIGHT) {
-        u32 edge=h[GRKIT_HOST_MENU_EDGE/4], advance=advance_from_private(kind,edge);
+        u32 edge=h[GRKIT_HOST_MENU_EDGE/4], advance=advance_from_private(kind,edge), pages[MANAGE_PINS];
+        u32 n=pins(h,pages), pin=pin_shown(controller);
+        /* The entries of modules sit between the native entries and GRKit:
+           Right from the last one shows GRKit, Left from the first one the
+           last native entry, and Left from GRKit the last entry of a module.
+           The native slot can be any slot when an entry shows (Left from
+           GRKit keeps it), so GRKit finds its neighbors as after a touch. */
+        if(pin && kind==EV_RIGHT) {
+            if(pin<n) enter_pin(controller,pin);
+            else enter(controller,3);
+            return 0;
+        }
+        if(pin && pin>1) { enter_pin(controller,pin-2); return 0; }
+        if(!pin && kind==EV_LEFT && n) { enter_pin(controller,n-1); return 0; }
+        if(pin) {
+            u32 i;
+            for(i=0;i<5;++i) {
+                if(!CALL2(FW_ADJ_SLOT_TYPE)(controller,4-i)) continue;
+                menu_native_touch(controller,4-i);
+                if(BYTE(controller,ADJ_SLOT)==4-i) break;
+            }
+            return 0;
+        }
         leave(controller);
         if(edge==3) {
             u32 i;

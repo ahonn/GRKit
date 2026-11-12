@@ -24,6 +24,12 @@ pub struct Official {
 /// of each manifest), which the site also shows.
 pub const OFFICIAL: &[Official] = &[
     Official {
+        id: "RECIPES",
+        folder: "recipes",
+        key: "recipes",
+        needs_effects: false,
+    },
+    Official {
         id: "FILMLOOK",
         folder: "film-look",
         key: "filmLook",
@@ -69,12 +75,6 @@ pub const OFFICIAL: &[Official] = &[
         id: "GRAIN",
         folder: "grain",
         key: "grain",
-        needs_effects: false,
-    },
-    Official {
-        id: "RECIPES",
-        folder: "recipes",
-        key: "recipes",
         needs_effects: false,
     },
 ];

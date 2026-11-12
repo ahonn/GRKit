@@ -131,7 +131,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 8, 2);
         store(entry + 12, manage_id(i, "POS"));
         store(entry + 16, module_position[i]);
-        store(entry + 20, MANAGE_MODULES + 1);
+        store(entry + 20, MANAGE_POS_VALUES);
         store(entry + 24, manage_id(i, "ROWS"));
         store(entry + 28, module_rows[i]);
         store(entry + 32, 1U << MANAGE_OPTION_VALUES);

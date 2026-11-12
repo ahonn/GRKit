@@ -458,6 +458,31 @@ static u32 visible_modules(volatile u32 *h) {
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
     return mask;
 }
+/* Whether the root of ADJ shows page `index` among the visible pages: a page
+   of a listed module whose place is the root (runtime/manage.h:
+   manage_place), and each other row. The toolbar shows a page that has an
+   entry of its own (toolbar_pages), and ADJ shows no hidden page. */
+static u32 root_place(volatile u32 *h,u32 index) {
+    u32 listed;
+    if(index>=module_pages(h)) return 1;
+    listed=page_listed(h,index);
+    return listed>=MANAGE_MODULES || manage_place(h,listed)==MANAGE_PLACE_ROOT;
+}
+/* The pages of the entries of the ADJ toolbar before GRKit in their order,
+   and their number: each visible page whose listed module has an entry. */
+static u32 toolbar_pages(volatile u32 *h,u32 *pages) {
+    u32 mask=visible_modules(h), at[MANAGE_PINS], slot, listed, place, k, n=0;
+    for(k=0;k<MANAGE_PINS;++k) at[k]=MODULE_TOTAL;
+    for(slot=0;slot<module_pages(h);++slot) {
+        if(!(mask>>slot&1)) continue;
+        listed=page_listed(h,slot);
+        if(listed>=MANAGE_MODULES) continue;
+        place=manage_place(h,listed);
+        if(place>=MANAGE_PLACE_PIN && at[place-MANAGE_PLACE_PIN]==MODULE_TOTAL) at[place-MANAGE_PLACE_PIN]=slot;
+    }
+    for(k=0;k<MANAGE_PINS;++k) if(at[k]<MODULE_TOTAL) pages[n++]=at[k];
+    return n;
+}
 /* The root order in `order`, and its length: the module pages in the order
    of their modules (CORE.POS, runtime/manage.h), which applies at once, then
    the GRKit switch and the core rows. */
@@ -465,7 +490,7 @@ static u32 root_order(volatile u32 *h,u32 *order) {
     u32 n=module_pages(h), keys[GRKIT_MODULE_PAGES_MAX], i, j, t;
     for(i=0;i<n;++i) {
         u32 listed=page_listed(h,i);
-        keys[i]=listed<MANAGE_MODULES ? manage_key(h,listed) : 2*MANAGE_DEFAULT_KEY+i;
+        keys[i]=listed<MANAGE_MODULES ? manage_key(h,listed) : 3*MANAGE_DEFAULT_KEY+i;
         order[i]=MODULE_PAGE(i);
         for(j=i;j && keys[j-1]>keys[j];--j) {
             t=keys[j]; keys[j]=keys[j-1]; keys[j-1]=t;
@@ -479,7 +504,7 @@ static u32 root_order(volatile u32 *h,u32 *order) {
 static u32 root_module(volatile u32 *h,u32 row) {
     u32 mask=visible_modules(h), order[GRKIT_MODULE_PAGES_MAX+3], n=root_order(h,order), i, last=0;
     for(i=0;i<n;++i) {
-        if(!(mask>>order[i]&1)) continue;
+        if(!(mask>>order[i]&1) || !root_place(h,order[i])) continue;
         if(!row--) return order[i];
         last=order[i];
     }
@@ -488,7 +513,7 @@ static u32 root_module(volatile u32 *h,u32 row) {
 /* The root row of a module, or the number of root rows for MODULE_TOTAL. */
 static u32 root_row(volatile u32 *h,u32 module) {
     u32 mask=visible_modules(h), order[GRKIT_MODULE_PAGES_MAX+3], n=root_order(h,order), row=0, i;
-    for(i=0;i<n && order[i]!=module;++i) row+=mask>>order[i]&1;
+    for(i=0;i<n && order[i]!=module;++i) row+=(mask>>order[i]&1) && root_place(h,order[i]);
     return row;
 }
 static u32 root_count(volatile u32 *h) { return root_row(h,MODULE_TOTAL); }
@@ -547,7 +572,8 @@ static void menu_reopen(volatile u32 *h) {
     u32 module=h[GRKIT_HOST_MODULE/4], row, parent=group_parent(h,module,&row);
     if(parent<MODULE_TOTAL) module=parent;
     h[GRKIT_HOST_MENU_LEVEL/4]=MENU_ROOT;
-    h[GRKIT_HOST_MENU_CURSOR/4]=module<MODULE_TOTAL && visible_modules(h)>>module&1 ? root_row(h,module) : 0;
+    h[GRKIT_HOST_MENU_CURSOR/4]=module<MODULE_TOTAL && visible_modules(h)>>module&1 && root_place(h,module) ?
+        root_row(h,module) : 0;
     menu_normalize(h);
 }
 /* Whether a page can be open: a visible module, or a child of a visible group. */

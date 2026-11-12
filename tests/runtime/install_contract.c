@@ -758,10 +758,10 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(2, 0, 0, 2);
     expect_setting(3, id_of("DATE.LOOK"), 0, 3);
     expect_setting(4, id_of("CORE.OFF.GUIDES"), 0, 2);
-    expect_setting(5, id_of("CORE.POS.GUIDES"), 2, MANAGE_MODULES + 1);
+    expect_setting(5, id_of("CORE.POS.GUIDES"), 2, MANAGE_POS_VALUES);
     expect_setting(6, id_of("CORE.ROWS.GUIDES"), 0, 1U << MANAGE_OPTION_VALUES);
     expect_setting(7, id_of("CORE.OFF.DATE"), 1, 2);
-    expect_setting(8, id_of("CORE.POS.DATE"), 0, MANAGE_MODULES + 1);
+    expect_setting(8, id_of("CORE.POS.DATE"), 0, MANAGE_POS_VALUES);
     expect_setting(9, id_of("CORE.ROWS.DATE"), 5, 1U << MANAGE_OPTION_VALUES);
     expect_setting(10, id_of("CORE.OFF"), 0, 2);
     expect_setting(11, id_of("CORE.START"), MANAGE_START_KEEP, MANAGE_START_VALUES);
