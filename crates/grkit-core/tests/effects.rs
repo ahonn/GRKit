@@ -737,7 +737,7 @@ fn overlay_labels_follow_the_aspect_values() {
         .trim()
         .parse()
         .unwrap();
-    // Then the crop badges: 40, 70, and 90 mm, and those of GR IIIx.
+    // Then the crop badges: 40 and 70 mm, and those of GR IIIx.
     let crop = grkit_core::capabilities::CAPABILITIES
         .iter()
         .find(|capability| capability.key == "CROP")

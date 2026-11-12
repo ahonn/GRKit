@@ -181,11 +181,11 @@ pub const CAPABILITIES: [Capability; 10] = [
     },
     Capability {
         // A focal-length crop of the lens (runtime/crop.h): 0 Off, then 35,
-        // 40, 50, 70, and 90 mm of a 28 mm lens, the same factors of the
-        // 40 mm lens of GR IIIx. The live view shows the frame of the crop,
-        // and the camera crops 3:2 pictures (runtime/crop.h).
+        // 40, 50, and 70 mm of a 28 mm lens, the same factors of the 40 mm
+        // lens of GR IIIx. The live view shows the crop, and the camera
+        // crops 3:2 pictures (runtime/crop.h).
         key: "CROP",
-        values: 6,
+        values: 5,
         state: State::Word(HOST_CROP),
         points: &[Point::ViewfinderOverlay, Point::CaptureCrop],
     },

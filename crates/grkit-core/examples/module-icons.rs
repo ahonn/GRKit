@@ -324,23 +324,49 @@ fn ratio_tile(ratio: f64, label: &str) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-// The full view as a 3:2 outline, 30 x 20, and the frame of a crop at
-// `scale` of its sides at its center. The crop module's texts give the
-// focal length, which differs between GR III and GR IIIx, so the tile has
-// no caption.
-fn crop_tile(scale: f64) -> Vec<u8> {
+// The module tile is the crop symbol: two right angles that cross, each 2
+// pixels wide and turned by a half turn against the other. It is not the
+// word "Crop" of the native ADJ icon, so the GRKit root reads as its own.
+// A value names its focal length: the number, then "mm" smaller below it, as
+// the native two-line icons such as "File Format". GR IIIx has its own value
+// tiles, as the focal lengths of its 40 mm lens differ.
+const CROP_NUMBER_SIZE: f32 = 19.0;
+const CROP_NUMBER_BASELINE: f32 = 21.0;
+const CROP_UNIT_BASELINE: f32 = 32.0;
+const CROP_SYMBOL: u8 = 230;
+
+fn crop_symbol_tile() -> Vec<u8> {
     let mut pixels = list_tile();
-    let [left, top, right, bottom] = [5, 10, 35, 30];
-    fill_rect(&mut pixels, [left, top, right, top + 1], DIAGRAM_LINE);
-    fill_rect(&mut pixels, [left, bottom - 1, right, bottom], DIAGRAM_LINE);
-    fill_rect(&mut pixels, [left, top, left + 1, bottom], DIAGRAM_LINE);
-    fill_rect(&mut pixels, [right - 1, top, right, bottom], DIAGRAM_LINE);
-    let width = (30.0 * scale).round() as usize;
-    let height = (20.0 * scale).round() as usize;
-    let x = 20 - width / 2;
-    let y = 20 - height / 2;
-    frame(&mut pixels, [x, y, x + width, y + height]);
+    for [left, top, right, bottom] in [[12, 6, 14, 28], [12, 26, 32, 28]] {
+        fill_rect(&mut pixels, [left, top, right, bottom], CROP_SYMBOL);
+        fill_rect(
+            &mut pixels,
+            [40 - right, 40 - bottom, 40 - left, 40 - top],
+            CROP_SYMBOL,
+        );
+    }
     pixels
+}
+
+fn crop_tile(focal: &str) -> Result<Vec<u8>> {
+    let mut pixels = list_tile();
+    draw_text(
+        &mut pixels,
+        focal,
+        CROP_NUMBER_SIZE,
+        CROP_NUMBER_BASELINE,
+        4.0,
+        22.0,
+    )?;
+    draw_text(
+        &mut pixels,
+        "mm",
+        CAPTION_SIZE,
+        CROP_UNIT_BASELINE,
+        23.0,
+        36.0,
+    )?;
+    Ok(pixels)
 }
 
 #[derive(Clone, Copy)]
@@ -788,19 +814,19 @@ fn main() -> Result<()> {
     }
     save(
         &modules.join("crop/tiles/0-module.png"),
-        &crop_tile(28.0 / 50.0),
+        &crop_symbol_tile(),
     )?;
     for (file, focal) in [
-        ("1-35.png", 35.0),
-        ("2-40.png", 40.0),
-        ("3-50.png", 50.0),
-        ("4-70.png", 70.0),
-        ("5-90.png", 90.0),
+        ("1-35.png", "35"),
+        ("2-40.png", "40"),
+        ("3-50.png", "50"),
+        ("4-70.png", "70"),
+        ("5-gr3x-50.png", "50"),
+        ("6-gr3x-57.png", "57"),
+        ("7-gr3x-71.png", "71"),
+        ("8-gr3x-100.png", "100"),
     ] {
-        save(
-            &modules.join("crop/tiles").join(file),
-            &crop_tile(28.0 / focal),
-        )?;
+        save(&modules.join("crop/tiles").join(file), &crop_tile(focal)?)?;
     }
     let mut root = list_tile();
     guides(&mut root, [5, 8, 35, 32], Guide::Thirds);

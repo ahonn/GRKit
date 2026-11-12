@@ -55,7 +55,20 @@ const PROCESSING: &[HookSpec] = &[
 /// GetImageCrop after its first instruction: GR III maps only its native
 /// crop factors to the maps of their crop step, and a crop factor of
 /// CORE.CROP takes the maps of its step (`runtime/framing.S`).
-const CROP: &[HookSpec] = &[b("crop_image_crop", Framing, CaptureCrop)];
+///
+/// The four BLs to the live-view crop factor before the live view scales it
+/// by 8192 for its zoom: a crop that the live view shows takes its own
+/// factor there (`runtime/framing.S: crop_live`), while the camera keeps its
+/// own crop factor. Then the entry of the function that makes the window
+/// of the live view from its zoom (`runtime/framing.S: crop_window`).
+const CROP: &[HookSpec] = &[
+    b("crop_image_crop", Framing, CaptureCrop),
+    bl("crop_live_0", Framing, CaptureCrop),
+    bl("crop_live_1", Framing, CaptureCrop),
+    bl("crop_live_2", Framing, CaptureCrop),
+    bl("crop_live_3", Framing, CaptureCrop),
+    b("crop_window", Framing, CaptureCrop),
+];
 
 /// The icon width, height, and limit checks, and the descriptor load.
 const ICONS: &[HookSpec] = &[

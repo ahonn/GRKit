@@ -237,6 +237,14 @@ const SITES: &[Site] = &[
     ("crop_queue_start", 0x53749e2c, "dd32c5e5"),
     ("crop_queue_post", 0x5374b8bc, "0dc0a0e1"),
     ("crop_queue_release", 0x537404b0, "0400a0e1"),
+    // The BLs to the live-view crop factor before the zoom of the live view.
+    ("crop_live_0", 0x53652e00, "e7aa04eb"),
+    ("crop_live_1", 0x53658be4, "6e9304eb"),
+    ("crop_live_2", 0x5365c930, "1b8404eb"),
+    ("crop_live_3", 0x53660260, "cf7504eb"),
+    ("crop_live_4", 0x536644e0, "2f6504eb"),
+    // The entry (`mov r12, sp`) of the function that makes the live-view window.
+    ("crop_window", 0x538aefc8, "0dc0a0e1"),
     ("menu_develop_count", 0x531a27e8, "0dc0a0e1"),
     ("menu_develop_category", 0x53379e08, "0530d0e5"),
     ("menu_develop_value", 0x53379e38, "0dc0a0e1"),

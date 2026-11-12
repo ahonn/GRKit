@@ -20,7 +20,7 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 
 - **Film Look**: film looks such as Portra 400 and Tri-X 400 with a live preview, plus your own LUTs and Lightroom presets ([sources](effects/NOTICE.md)).
 - **Framing**: XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos, or frame lines only.
-- **Crop**: 35, 40, 50, 70, or 90 mm crops (50 to 128 mm on GR IIIx).
+- **Crop**: 35, 40, 50, or 70 mm crops (50 to 100 mm on GR IIIx).
 - **Guides**: thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry.
 - **Date Imprint**: the date on the photo in classic, GR1s dot-matrix, or GR II style.
 - **Glow**: bloom and film halation around bright lights.

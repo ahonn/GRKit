@@ -3035,10 +3035,14 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
     assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
-    /* MENU returns to the list with the cursor on Street, which the
-       settings do not match. */
+    /* MENU returns to the list with the cursor on Corner, which the
+       settings match: the camera shows the mark only on the row where the
+       cursor starts. Without a match, the cursor is on Street. */
     assert(recipes->select(h, 0, SETTING_BACK));
-    assert(*state == 2 && recipes->cursor(h) == 1 && listed_get(h, 2) == 2 && same(listed_text(h, 2, 1), "Street"));
+    assert(*state == 2 && listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && menu_settings_current(2, 0, 2) == 2);
+    h[GRKIT_HOST_GRAIN / 4] = 3;
+    assert(listed_get(h, 2) == RECIPE_NONE && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Street"));
+    h[GRKIT_HOST_GRAIN / 4] = 2;
     /* Rename: the return from the keyboard names the recipe after an OK,
        keeps the name after MENU, and the page shows the new name. The
        change from the keyboard calls the callback (ui_keyboard_change); a
@@ -4660,18 +4664,24 @@ static void fn_steps_the_setting_of_its_row(void)
     *page_at(page) = 40;
 }
 
-/* GR IIIx names the crops by the focal lengths of its 40 mm lens. The
-   other cameras keep the module texts, and so do other settings and Off. */
+/* GR IIIx names the crops by the focal lengths of its 40 mm lens, in the
+   texts and in the tiles after those of the other cameras. The other
+   cameras keep the module texts and tiles, and so do other settings and
+   Off. */
 static void crops_name_the_focal_lengths_of_the_lens(void)
 {
-    static const unsigned short fifty[]={'5','0','m','m',0}, longest[]={'1','2','8','m','m',0};
+    static const unsigned short fifty[]={'5','0','m','m',0}, longest[]={'1','0','0','m','m',0};
     test_lens_40mm=0;
     assert(crop_text(GRKIT_CORE_CROP,1)==0);
+    assert(crop_tile(GRKIT_CORE_CROP,1)==1 && crop_tile(GRKIT_CORE_CROP,4)==4);
     test_lens_40mm=1;
     assert(memcmp(crop_text(GRKIT_CORE_CROP,1),fifty,sizeof(fifty))==0);
-    assert(memcmp(crop_text(GRKIT_CORE_CROP,5),longest,sizeof(longest))==0);
-    assert(crop_text(GRKIT_CORE_CROP,0)==0 && crop_text(GRKIT_CORE_CROP,6)==0);
+    assert(memcmp(crop_text(GRKIT_CORE_CROP,4),longest,sizeof(longest))==0);
+    assert(crop_text(GRKIT_CORE_CROP,0)==0 && crop_text(GRKIT_CORE_CROP,5)==0);
     assert(crop_text(GRKIT_CORE_ASPECT,1)==0 && crop_text(0,1)==0);
+    assert(crop_tile(GRKIT_CORE_CROP,1)==5 && crop_tile(GRKIT_CORE_CROP,4)==8);
+    assert(crop_tile(GRKIT_CORE_CROP,0)==0 && crop_tile(GRKIT_CORE_CROP,5)==5);
+    assert(crop_tile(GRKIT_CORE_ASPECT,1)==1);
     test_lens_40mm=0;
 }
 int main(void)
