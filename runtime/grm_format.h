@@ -54,7 +54,6 @@
 /* The stages of plane filters (runtime/sdk/grkit.h). */
 #define GRM_STAGE_FRAME 20U
 #define GRM_STAGE_MARK 30U
-#define GRM_STAGE_PRINT 40U
 /* The most registrations that one descriptor gives. */
 #define GRM_REGISTRATIONS 16U
 /* The descriptor: size, ABI, registrations and their count, settings and

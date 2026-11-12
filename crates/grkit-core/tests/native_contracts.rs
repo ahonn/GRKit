@@ -1055,6 +1055,22 @@ fn native_module_link_contract_links_and_rejects_modules() {
 }
 
 #[test]
+fn native_canvas_contract_gives_the_border_geometry() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("canvas_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/canvas_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
+#[test]
 fn native_install_contract_plans_and_links_the_modules_of_the_card() {
     let Some(compiler) = compiler() else {
         return;

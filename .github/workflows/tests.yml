@@ -78,7 +78,6 @@ jobs:
         run: |
           cargo run --locked -p grkit-cli -- module test --dir modules/glow --cc "$GRKIT_HOST_CC"
           cargo run --locked -p grkit-cli -- module test --dir modules/date --cc "$GRKIT_HOST_CC"
-          cargo run --locked -p grkit-cli -- module test --dir modules/border --cc "$GRKIT_HOST_CC"
           cargo test --locked -p grkit-core --test native_contracts
       - run: cargo build --release --locked -p grkit-cli
       - run: target/release/grkit --help

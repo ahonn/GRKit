@@ -1,2 +1,9 @@
 title = "Border"
-rows = ["Off", "White 3%", "White 6%", "Black 3%", "Black 6%"]
+rows = ["Off", "Thin", "Wide", "Instant"]
+
+[settings."CORE.BORDER"]
+label = "Style"
+
+[settings."CORE.BORDER_COLOR"]
+label = "Color"
+values = ["White", "Black"]

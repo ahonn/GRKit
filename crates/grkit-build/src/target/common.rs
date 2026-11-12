@@ -253,7 +253,7 @@ pub const PICTURE: &[HookSpec] = &[
     // RawDevelopmentModel: the BL that gives the initial Image Control of a
     // development, where the development takes the effect of its DNG and
     // develops its native aspect.
-    bl_shared("picture_develop_tone", Framing, Tuning, CaptureAspect),
+    bl_shared("picture_develop_tone", Framing, Tuning, &[CaptureAspect]),
     // ScreenDevice::OnSetLevelAlarm, which sets the live-view highlight
     // warning: the `mov r5, #0xfe00` of its threshold, and the `mov r1, r6`
     // before its tail call, where r4 is the screen and r6 the mode.
@@ -275,13 +275,13 @@ pub const PICTURE: &[HookSpec] = &[
 /// The row count, the row fill, the current-row test, and the list setup
 /// also serve the aspect list (`DEVELOP_ASPECT`).
 pub const DEVELOP_TONE: &[HookSpec] = &[
-    b_shared("menu_develop_count", Menu, Tuning, CaptureAspect),
+    b_shared("menu_develop_count", Menu, Tuning, &[CaptureAspect]),
     b("menu_develop_category", Menu, Tuning),
     b("menu_develop_value", Menu, Tuning),
-    b_shared("menu_develop_row", Menu, Tuning, CaptureAspect),
-    b_shared("menu_develop_current", Menu, Tuning, CaptureAspect),
+    b_shared("menu_develop_row", Menu, Tuning, &[CaptureAspect]),
+    b_shared("menu_develop_current", Menu, Tuning, &[CaptureAspect]),
     b("menu_develop_decide", Menu, Tuning),
-    b_shared("menu_develop_open", Menu, Tuning, CaptureAspect),
+    b_shared("menu_develop_open", Menu, Tuning, &[CaptureAspect]),
     b("menu_develop_fn", Menu, Tuning),
     bl("menu_develop_restore", Menu, Tuning),
     bl("menu_develop_list_text", Menu, Tuning),

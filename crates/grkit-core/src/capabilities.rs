@@ -8,8 +8,8 @@
 //! `CORE.<KEY>`, and restores it only while a loaded module uses it.
 
 use crate::abi::{
-    HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_CROP, HOST_CROP_MODE, HOST_FRAME_RATIO, HOST_GRAIN,
-    HOST_GRAIN_SIZE, HOST_MODULE, MODULE_PAGES_MAX,
+    HOST_ADJ_OPEN, HOST_ASPECT_MODE, HOST_BORDER, HOST_BORDER_COLOR, HOST_CROP, HOST_CROP_MODE,
+    HOST_FRAME_RATIO, HOST_GRAIN, HOST_GRAIN_SIZE, HOST_MODULE, MODULE_PAGES_MAX,
 };
 
 /// An extension point: the firmware changes that a group of features needs.
@@ -40,10 +40,13 @@ pub enum Point {
     /// the core applies what a user mode of the dial does
     /// (`runtime/mode_dial.h`).
     ModeDial,
+    /// The canvas of recorded pictures: a larger developed picture with the
+    /// border around the picture at its own size (`runtime/canvas.h`).
+    PictureCanvas,
 }
 
 impl Point {
-    pub const ALL: [Point; 9] = [
+    pub const ALL: [Point; 10] = [
         Point::MenuPage,
         Point::Tuning,
         Point::ViewfinderOverlay,
@@ -53,6 +56,7 @@ impl Point {
         Point::PipelineGrainSize,
         Point::CaptureCrop,
         Point::ModeDial,
+        Point::PictureCanvas,
     ];
 
     pub fn name(self) -> &'static str {
@@ -66,6 +70,7 @@ impl Point {
             Point::PipelineGrainSize => "pipeline.grain-size",
             Point::CaptureCrop => "capture.crop",
             Point::ModeDial => "mode.dial",
+            Point::PictureCanvas => "picture.canvas",
         }
     }
 
@@ -116,7 +121,7 @@ impl Capability {
 }
 
 /// The capabilities in handle order.
-pub const CAPABILITIES: [Capability; 10] = [
+pub const CAPABILITIES: [Capability; 12] = [
     Capability {
         // The effect of still pictures and the live view: 0 Off, then effect
         // n - 1 of the installed effects (runtime/tone.h). The core gives
@@ -195,6 +200,23 @@ pub const CAPABILITIES: [Capability; 10] = [
         values: 2,
         state: State::Word(HOST_CROP_MODE),
         points: &[Point::ViewfinderOverlay, Point::CaptureCrop],
+    },
+    Capability {
+        // A border around each recorded picture (runtime/canvas.h): 0 Off,
+        // 1 Thin, 2 Wide, 3 Instant. The picture keeps its pixels, and the
+        // JPEG grows by the border. Each shot keeps the border of its still
+        // build (the shot ring).
+        key: "BORDER",
+        values: 4,
+        state: State::Word(HOST_BORDER),
+        points: &[Point::PictureCanvas, Point::PictureEncode],
+    },
+    Capability {
+        // The color of the border: 0 white, 1 black.
+        key: "BORDER_COLOR",
+        values: 2,
+        state: State::Word(HOST_BORDER_COLOR),
+        points: &[Point::PictureCanvas, Point::PictureEncode],
     },
     Capability {
         // The camera recipes (runtime/recipes.h). The core gives the rows of

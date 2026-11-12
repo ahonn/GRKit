@@ -51,8 +51,8 @@ typedef unsigned int u32;
 #define POINT_PICTURE_ENCODE 0x10U
 static const char *const core_setting_names[] = {
     "CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE", "CORE.ASPECT_MODE", "CORE.ADJ",
-    "CORE.ADJ_MODULE", "CORE.CROP", "CORE.CROP_MODE", "CORE.RECIPE"};
-static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc, 0x0, 0x0, 0x84, 0x84, 0x100};
+    "CORE.ADJ_MODULE", "CORE.CROP", "CORE.CROP_MODE", "CORE.BORDER", "CORE.BORDER_COLOR", "CORE.RECIPE"};
+static const u32 core_setting_points[] = {0x12, 0xc, 0x20, 0x40, 0xc, 0x0, 0x0, 0x84, 0x84, 0x210, 0x210, 0x100};
 /* The tail of the core, and its one export, overlay_label. */
 #define TAIL 0x54000000U
 #define TAIL_SYMBOL 0U

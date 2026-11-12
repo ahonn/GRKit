@@ -100,7 +100,7 @@ Each feature is a module, `<ID>.GRM`, linked at power-on. The same file runs on 
 | `GUIDES` | the guides |
 | `DATE` | the date imprint |
 | `GLOW` | independent Bloom and Halation around the highlights of each recorded picture |
-| `BORDER` | a white or black border around each recorded picture, which scales down in place to fit inside it |
+| `BORDER` | a page of `CORE.BORDER` and `CORE.BORDER_COLOR`: a white or black border around each recorded picture: the picture keeps its size, and the JPEG grows by the border |
 | `GRAIN` | a page of `CORE.GRAIN` and `CORE.GRAIN_SIZE` |
 | `RECIPES` | a page of `CORE.RECIPE` ([Recipes](#recipes)) |
 

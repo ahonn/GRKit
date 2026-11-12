@@ -166,13 +166,15 @@ fn generated_header_gives_the_points_of_each_patch() -> Result<()> {
     // point (bit 6). CORE.ASPECT_MODE shares the aspect points. CORE.ADJ and
     // CORE.ADJ_MODULE need no point. CORE.CROP and CORE.CROP_MODE need the
     // overlay point (bit 2) and the capture crop point (bit 7), and
-    // CORE.RECIPE the mode dial point (bit 8) and the overlay point, for the
-    // start in a user mode and the label of the dial.
+    // CORE.BORDER and CORE.BORDER_COLOR the canvas point (bit 9) and the
+    // picture encode point, and CORE.RECIPE the mode dial point (bit 8) and
+    // the overlay point, for the start in a user mode and the label of the
+    // dial.
     assert!(header.contains(
-        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\",\"CORE.ASPECT_MODE\",\"CORE.ADJ\",\"CORE.ADJ_MODULE\",\"CORE.CROP\",\"CORE.CROP_MODE\",\"CORE.RECIPE\"};"
+        "static const char *const core_setting_names[] = {\"CORE.TONE\",\"CORE.ASPECT\",\"CORE.GRAIN\",\"CORE.GRAIN_SIZE\",\"CORE.ASPECT_MODE\",\"CORE.ADJ\",\"CORE.ADJ_MODULE\",\"CORE.CROP\",\"CORE.CROP_MODE\",\"CORE.BORDER\",\"CORE.BORDER_COLOR\",\"CORE.RECIPE\"};"
     ));
     assert!(header.contains(
-        "static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x104};"
+        "static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x210,0x210,0x104};"
     ));
     Ok(())
 }

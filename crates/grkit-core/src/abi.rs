@@ -435,6 +435,10 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
     /// CROP_QUEUE_RECOVERED.
     HOST_CROP_QUEUE_FLAGS: 4;
+    /// CORE.BORDER: 0 Off, 1 Thin, 2 Wide, 3 Instant (runtime/canvas.h).
+    HOST_BORDER: 4;
+    /// CORE.BORDER_COLOR: 0 white, 1 black.
+    HOST_BORDER_COLOR: 4;
     /// The recipes (runtime/recipes.h): RECIPE_WORDS words for each of the
     /// RECIPE_SLOTS recipes. A recipe whose word 0 is 0 is empty. The resident
     /// loader saves each word that is not 0 in the recipe file
@@ -676,15 +680,18 @@ pub const SHOT_ENTRIES: usize = 8;
 /// The shot ring: a write count, the turns of the last shot with a known
 /// posture (`SHOT_LAST_TURNS`), then entry n at `SHOT_ENTRY + SHOT_STRIDE * n`,
 /// which holds the key at `SHOT_KEY`, the record at `SHOT_RECORD`, the
-/// posture of the electronic level at `SHOT_POSTURE`, and the effective
-/// capture crop at `SHOT_FRAME_CROP`.
+/// posture of the electronic level at `SHOT_POSTURE`, the effective
+/// capture crop at `SHOT_FRAME_CROP`, and the border at `SHOT_BORDER`
+/// (CORE.BORDER, and CORE.BORDER_COLOR in bits 8 to 15). The other words of
+/// an entry are reserved.
 pub const SHOT_LAST_TURNS: usize = 4;
 pub const SHOT_ENTRY: usize = 8;
-pub const SHOT_STRIDE: usize = 16;
+pub const SHOT_STRIDE: usize = 32;
 pub const SHOT_KEY: usize = 0;
 pub const SHOT_RECORD: usize = 4;
 pub const SHOT_POSTURE: usize = 8;
 pub const SHOT_FRAME_CROP: usize = 12;
+pub const SHOT_BORDER: usize = 16;
 /// The layout of `GrkitShot` (runtime/sdk/grkit.h) that picture_shot fills:
 /// its size in bytes, then the byte offset of each field, then the bits of
 /// `known`. runtime/picture.c writes these offsets, and
@@ -716,8 +723,15 @@ pub const SHOT_INFO: [(&str, usize); 25] = [
     ("KNOWN_METERING", 0x40),
     ("KNOWN_ALL", 0x7f),
 ];
-/// The picture scratch after the records: the masks, then the shot ring.
-pub const PICTURE_SCRATCH: usize = PICTURE_MASKS + SHOT_ENTRY + SHOT_STRIDE * SHOT_ENTRIES;
+/// The canvas table after the shot ring (runtime/canvas_shot.h): an entry of
+/// `CANVAS_ENTRY_SIZE` bytes for each developed picture with a border that
+/// is not encoded yet. Continuous shooting develops into banks in turn.
+pub const CANVAS_TABLE: usize = PICTURE_MASKS + SHOT_ENTRY + SHOT_STRIDE * SHOT_ENTRIES;
+pub const CANVAS_ENTRIES: usize = 4;
+pub const CANVAS_ENTRY_SIZE: usize = 80;
+/// The picture scratch after the records: the masks, the shot ring, then the
+/// canvas table.
+pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
 /// Bytes of the live-view labels after the menu text (`artwork::overlay_labels`).
 pub const LABELS_SIZE: usize = 28672;
 /// The profile table after the labels (runtime/profile.h): for each of the
@@ -1352,8 +1366,9 @@ pub fn header() -> String {
          (GRKIT_SHOT_LAST_TURNS) holds the turns of the last shot with a known posture. \
          Entry n is at GRKIT_SHOT_ENTRY + GRKIT_SHOT_STRIDE n and holds the key at \
          GRKIT_SHOT_KEY, the record at GRKIT_SHOT_RECORD, the posture of the \
-         electronic level at GRKIT_SHOT_POSTURE, and the effective capture crop \
-         at GRKIT_SHOT_FRAME_CROP (runtime/processing.h).",
+         electronic level at GRKIT_SHOT_POSTURE, the effective capture crop \
+         at GRKIT_SHOT_FRAME_CROP, and the border at GRKIT_SHOT_BORDER \
+         (runtime/processing.h).",
         "SHOT_RING",
         PICTURE_MASKS,
     );
@@ -1365,9 +1380,17 @@ pub fn header() -> String {
         ("RECORD", SHOT_RECORD),
         ("POSTURE", SHOT_POSTURE),
         ("FRAME_CROP", SHOT_FRAME_CROP),
+        ("BORDER", SHOT_BORDER),
         ("LAST_TURNS", SHOT_LAST_TURNS),
     ] {
         writeln!(out, "#define GRKIT_SHOT_{name} {value}").unwrap();
+    }
+    for (name, value) in [
+        ("TABLE", CANVAS_TABLE),
+        ("ENTRIES", CANVAS_ENTRIES),
+        ("ENTRY_SIZE", CANVAS_ENTRY_SIZE),
+    ] {
+        writeln!(out, "#define GRKIT_CANVAS_{name} {value}").unwrap();
     }
     writeln!(out, "#define GRKIT_PICTURE_SCRATCH {PICTURE_SCRATCH}").unwrap();
     out.push('\n');

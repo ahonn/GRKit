@@ -690,40 +690,30 @@ fn date(order: &str, with_time: bool) -> Result<Vec<u8>> {
     Ok(pixels)
 }
 
-// Border: a print border painted over the edge of the photo. The diagram is a
-// photo with the band in white or black inside a light outline. The gray fill
-// keeps a black band visible against the tile background.
+// Border: a print, the photo inside its border. The diagram is the print in
+// white inside a light outline, around the photo in gray. Each band is wider
+// than the share of the style, so that the styles differ at this size.
 const BORDER_FILL: u8 = 110;
 
-fn border_diagram(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], ink: u8, band: usize) {
+fn border_diagram(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4], bands: [usize; 4]) {
     fill_rect(pixels, [left, top, right, bottom], DIAGRAM_FRAME);
-    fill_rect(pixels, [left + 1, top + 1, right - 1, bottom - 1], ink);
+    fill_rect(pixels, [left + 1, top + 1, right - 1, bottom - 1], 255);
     fill_rect(
         pixels,
         [
-            left + 1 + band,
-            top + 1 + band,
-            right - 1 - band,
-            bottom - 1 - band,
+            left + 1 + bands[0],
+            top + 1 + bands[1],
+            right - 1 - bands[2],
+            bottom - 1 - bands[3],
         ],
         BORDER_FILL,
     );
 }
 
-// The band is 1 pixel for 3% and 2 pixels for 6% of the 28-pixel photo, and
-// the caption gives the width.
-fn border_tile(ink: u8, band: usize, label: &str) -> Result<Vec<u8>> {
+fn border_tile(bands: [usize; 4]) -> Vec<u8> {
     let mut pixels = list_tile();
-    border_diagram(&mut pixels, [5, 5, 35, 21], ink, band);
-    draw_text(
-        &mut pixels,
-        label,
-        CAPTION_SIZE,
-        CAPTION_BASELINE,
-        21.0,
-        36.0,
-    )?;
-    Ok(pixels)
+    border_diagram(&mut pixels, [6, 7, 34, 33], bands);
+    pixels
 }
 
 fn main() -> Result<()> {
@@ -846,17 +836,16 @@ fn main() -> Result<()> {
         )?;
     }
     let mut root = list_tile();
-    border_diagram(&mut root, [7, 11, 33, 29], 255, 2);
+    border_diagram(&mut root, [7, 11, 33, 29], [2, 2, 2, 2]);
     save(&modules.join("border/tiles/0-module.png"), &root)?;
-    for (file, ink, band, label) in [
-        ("1-white-thin.png", 255, 1, "3%"),
-        ("2-white-wide.png", 255, 2, "6%"),
-        ("3-black-thin.png", 0, 1, "3%"),
-        ("4-black-wide.png", 0, 2, "6%"),
+    for (file, bands) in [
+        ("1-thin.png", [1, 1, 1, 1]),
+        ("2-wide.png", [4, 4, 4, 4]),
+        ("3-instant.png", [2, 2, 2, 7]),
     ] {
         save(
             &modules.join("border/tiles").join(file),
-            &border_tile(ink, band, label)?,
+            &border_tile(bands),
         )?;
     }
     // Viewfinder status icons (module.toml `[[indicators]]`).

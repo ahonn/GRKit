@@ -143,6 +143,11 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   (Surface).
      CORE.CROP_MODE  2 values: 0 crops photos where the camera can
                   (default), 1 shows the frame only. Since ABI 2.6.
+     CORE.BORDER  4 values: a border around each recorded picture, 0 Off,
+                  1 Thin, 2 Wide, 3 Instant. The picture keeps its pixels and
+                  the JPEG grows; plane filters see the picture without the
+                  border. Since ABI 2.6.
+     CORE.BORDER_COLOR  2 values: 0 white, 1 black. Since ABI 2.6.
      CORE.RECIPE  no value: the camera recipes, which hold and set the
                   other capabilities that loaded modules use. A page of
                   CORE.RECIPE gets its rows from the core. Since ABI 2.6. */
@@ -366,9 +371,6 @@ static inline u32 chroma_row(const Plane *p, u32 y) { return p->c + (p->half ? y
    after the color of the effect: */
 #define GRKIT_STAGE_FRAME 20U /* frames over the picture */
 #define GRKIT_STAGE_MARK 30U  /* marks over the picture, such as the date */
-/* Since ABI 2.6: the print around the picture, such as a border, which
-   scales the picture with its marks. */
-#define GRKIT_STAGE_PRINT 40U
 typedef struct {
     u32 size;
     u32 stage;

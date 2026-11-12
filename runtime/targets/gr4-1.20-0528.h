@@ -214,6 +214,14 @@
 
 /* Date stamp: cache maintenance and the local time. */
 #define FW_CACHE_FLUSH FIRMWARE(0x53ab6b48)
+/* The IIP rectangle fill of the canvas (runtime/targets/gr4.h). */
+#define FW_CANVAS_FILL FIRMWARE(0x536dcb54)
+/* The image buffer allocator of the canvas pool (runtime/targets/gr4.h):
+   the instance, Info, the Alloc that checks Info first, and Free. */
+#define FW_IMAGE_POOL FIRMWARE(0x538efd34)
+#define FW_IMAGE_POOL_INFO FIRMWARE(0x538efeac)
+#define FW_IMAGE_POOL_ALLOC FIRMWARE(0x538f0064)
+#define FW_IMAGE_POOL_FREE FIRMWARE(0x538efd9c)
 #define FW_CLOCK FIRMWARE(0x53913498)
 #define FW_LOCAL_TIME FIRMWARE(0x5390bca8)
 

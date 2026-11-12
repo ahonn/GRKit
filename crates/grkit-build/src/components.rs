@@ -32,14 +32,22 @@ pub struct HookSpec {
     pub symbol: &'static str,
     pub part: Part,
     pub point: Point,
-    pub also: Option<Point>,
+    /// The other extension points that need the hook.
+    pub also: &'static [Point],
     pub link: bool,
 }
 
 impl HookSpec {
-    /// Install the hook when either extension point is active.
+    /// Install the hook when any of its extension points is active.
     pub fn point_mask(&self) -> u32 {
-        self.point.bit() | self.also.map_or(0, Point::bit)
+        self.also
+            .iter()
+            .fold(self.point.bit(), |mask, point| mask | point.bit())
+    }
+
+    /// Whether `point` needs the hook.
+    pub fn serves(&self, point: Point) -> bool {
+        self.point == point || self.also.contains(&point)
     }
 }
 
@@ -49,7 +57,7 @@ pub const fn b(symbol: &'static str, part: Part, point: Point) -> HookSpec {
         symbol,
         part,
         point,
-        also: None,
+        also: &[],
         link: false,
     }
 }
@@ -62,18 +70,28 @@ pub const fn bl(symbol: &'static str, part: Part, point: Point) -> HookSpec {
     }
 }
 
-/// A B hook shared by two extension points.
-pub const fn b_shared(symbol: &'static str, part: Part, point: Point, also: Point) -> HookSpec {
+/// A B hook shared by several extension points.
+pub const fn b_shared(
+    symbol: &'static str,
+    part: Part,
+    point: Point,
+    also: &'static [Point],
+) -> HookSpec {
     HookSpec {
-        also: Some(also),
+        also,
         ..b(symbol, part, point)
     }
 }
 
-/// A BL hook shared by two extension points.
-pub const fn bl_shared(symbol: &'static str, part: Part, point: Point, also: Point) -> HookSpec {
+/// A BL hook shared by several extension points.
+pub const fn bl_shared(
+    symbol: &'static str,
+    part: Part,
+    point: Point,
+    also: &'static [Point],
+) -> HookSpec {
     HookSpec {
-        also: Some(also),
+        also,
         ..bl(symbol, part, point)
     }
 }

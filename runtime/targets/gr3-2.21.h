@@ -176,6 +176,8 @@
 #define FW_GRAIN_NOISE FIRMWARE(0x5368df04)
 #define FW_RELEASE FIRMWARE(0x536b28bc)
 #define FW_CACHE_FLUSH FIRMWARE(0x53840cc0)
+/* The IIP rectangle fill of the canvas (runtime/targets/gr3.h). */
+#define FW_CANVAS_FILL FIRMWARE(0x534cb7a4)
 #define FW_CLOCK FIRMWARE(0x536c0f2c)
 #define FW_LOCAL_TIME FIRMWARE(0x536b9ae8)
 

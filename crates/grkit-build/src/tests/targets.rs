@@ -113,7 +113,7 @@ fn each_camera_offers_what_its_runtime_has() {
 }
 
 #[test]
-fn framing_without_film_look_still_records_shot_parameters() {
+fn framing_or_border_without_film_look_still_records_shot_parameters() {
     use crate::components::{Part, Point};
     for target in target::TARGETS {
         let hook = target
@@ -126,7 +126,7 @@ fn framing_without_film_look_still_records_shot_parameters() {
         assert!(hook.link);
         assert_eq!(
             hook.point_mask(),
-            Point::Tuning.bit() | Point::CaptureAspect.bit()
+            Point::Tuning.bit() | Point::CaptureAspect.bit() | Point::PictureCanvas.bit()
         );
         // The RAW development lists the effects and the Framing ratios with
         // the same list hooks, and clears both at its start.

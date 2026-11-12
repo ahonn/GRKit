@@ -1,2 +1,9 @@
 title = "테두리"
-rows = ["꺼짐", "흰색 3%", "흰색 6%", "검정 3%", "검정 6%"]
+rows = ["꺼짐", "얇게", "넓게", "인스턴트"]
+
+[settings."CORE.BORDER"]
+label = "스타일"
+
+[settings."CORE.BORDER_COLOR"]
+label = "색상"
+values = ["흰색", "검정"]

@@ -1,2 +1,9 @@
 title = "边框"
-rows = ["关", "白色 3%", "白色 6%", "黑色 3%", "黑色 6%"]
+rows = ["关闭", "细", "宽", "拍立得"]
+
+[settings."CORE.BORDER"]
+label = "样式"
+
+[settings."CORE.BORDER_COLOR"]
+label = "颜色"
+values = ["白色", "黑色"]

@@ -503,6 +503,7 @@ void picture_develop_start(void) {
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
 }
+#include "canvas_shot.h"
 /* The record of a shot, or 0: the Fn adjustments of the shot (tag 0x247). */
 u32 picture_capture_record(u32 shot) { return shot_record(framing_header(),shot); }
 /* For picture_capture_tone: the record whose code the picture records, or 0.
@@ -569,8 +570,9 @@ static u32 native_monochrome(u32 shot) {
     return type<32 && (NATIVE_MONOCHROME_TYPES>>type&1);
 }
 /* Once per plane set. The second full-size image (descriptor 3) shares the
-   main planes. */
-static void encode_shot(volatile u32 *h,u32 message) {
+   main planes. `canvas` is the table entry of a shot with a border
+   (runtime/canvas_shot.h), or 0. */
+static void encode_shot(volatile u32 *h,u32 message,const u32 *canvas) {
     /* Configuration +0x34 holds the shot settings of the encoded pictures. */
     u32 config=WORD(message,8), record=shot_record(h,WORD(config,0x34));
     u32 done[4], selective, values[MODULE_FILTER_MAX], filters=module_filters(h), any, i, j;
@@ -615,6 +617,11 @@ static void encode_shot(volatile u32 *h,u32 message) {
         area=PICTURE_DEVELOPING() ? developed_area(h,&set.planes[main]) : shot_area(h);
         for(i=0;i<set.count;++i) visible_area(area,&set.planes[i]);
     }
+#if CANVAS_ENABLED
+    if(canvas) canvas_inner(canvas,&set);
+#else
+    (void)canvas;
+#endif
     for(i=0;i<set.count;++i) flush(&set.planes[i]);
     if(selective) selective_encode(&set);
     /* The module filters follow the color of the effect, in stage order. */
@@ -629,10 +636,26 @@ static void encode_shot(volatile u32 *h,u32 message) {
 void picture_encode(u32 process,u32 message) {
     volatile u32 *h=framing_header();
     u32 start=profile_begin(h);
+#if CANVAS_ENABLED
+    u32 canvas[CANVAS_E_WORDS];
+    u32 bordered=canvas_encode(h,WORD(message,8),canvas);
+#endif
     (void)process;
-    encode_shot(h,message);
+#if CANVAS_ENABLED
+    encode_shot(h,message,bordered ? canvas : 0);
+#else
+    encode_shot(h,message,0);
+#endif
     profile_end(h,start,GRKIT_PROFILE_PICTURE_ENCODE);
 }
+#ifdef CANVAS_POOL
+/* After the encode of one shot (runtime/picture.S): its canvas gives back
+   its pool block. */
+void picture_encode_done(u32 process,u32 message) {
+    (void)process;
+    canvas_encoded(framing_header(),WORD(message,8));
+}
+#endif
 
 #ifdef GRAIN_FILL_PITCH
 /* The noise of the GR III grain stage. The granulation blends one random

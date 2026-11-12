@@ -111,8 +111,8 @@ gamma_hash:
 // is cleared while the entry changes. FW_LEVEL is a static object whose second
 // word points to the electronic level, or holds 0 before the level exists.
 // Preserves all registers.
-.if GRKIT_SHOT_STRIDE != 1 << 4
-.error "The shot ring index shift assumes 16-byte entries"
+.if GRKIT_SHOT_STRIDE != 1 << 5
+.error "The shot ring index shift assumes 32-byte entries"
 .endif
 .Lshot_store:
     push {r0-r3, r12, lr}
@@ -128,7 +128,7 @@ gamma_hash:
     add r12, r2, #1
     str r12, [r3]
     and r2, r2, #(GRKIT_SHOT_ENTRIES - 1)
-    add r2, r3, r2, lsl #4
+    add r2, r3, r2, lsl #5
     mov r12, #0
     str r12, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_KEY)]
     dmb ish
@@ -140,6 +140,19 @@ gamma_hash:
     ldreq r12, [r1, #GRKIT_HOST_FRAME_CROP]
     movne r12, #0
     str r12, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_FRAME_CROP)]
+    // The border of a still capture: CORE.BORDER | CORE.BORDER_COLOR << 8,
+    // or 0 without a module that uses CORE.BORDER, as after a soft Off of
+    // Border (runtime/manage.h). A RAW development takes the current border
+    // (runtime/canvas_shot.h). The flags are still those of the context test.
+    mov r12, #0
+    bne .Lshot_border
+    ldr r3, [r1, #GRKIT_HOST_CAPABILITIES]
+    tst r3, #GRKIT_CORE_BORDER_BIT
+    ldrne r12, [r1, #GRKIT_HOST_BORDER_COLOR]
+    ldrne r3, [r1, #GRKIT_HOST_BORDER]
+    orrne r12, r3, r12, lsl #8
+.Lshot_border:
+    str r12, [r2, #(GRKIT_SHOT_ENTRY + GRKIT_SHOT_BORDER)]
     ldr r1, =FW_LEVEL
     ldr r1, [r1, #4]
     cmp r1, #0

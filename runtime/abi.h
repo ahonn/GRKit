@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6168
+#define GRKIT_HOST_HEADER_SIZE 6200
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -129,10 +129,10 @@
 #define GRKIT_DIAL_SET_PAIRS 93U
 #define GRKIT_DIAL_SET_COUNT 0U
 #define GRKIT_DIAL_SET_CORE 1U
-#define GRKIT_DIAL_SET_FN 11U
-#define GRKIT_DIAL_SET_TONING 12U
-#define GRKIT_DIAL_SET_PAIR 13U
-#define GRKIT_DIAL_SET_WORDS 199U
+#define GRKIT_DIAL_SET_FN 13U
+#define GRKIT_DIAL_SET_TONING 14U
+#define GRKIT_DIAL_SET_PAIR 15U
+#define GRKIT_DIAL_SET_WORDS 201U
 #define GRKIT_DIAL_SET_EFFECT 32768U
 #define GRKIT_DIAL_SET_KEY_BASE 992000000U
 #define GRKIT_DIAL_SET_KEY_STRIDE 1000U
@@ -451,64 +451,68 @@
 /* GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
    CROP_QUEUE_RECOVERED. */
 #define GRKIT_HOST_CROP_QUEUE_FLAGS 1088
+/* CORE.BORDER: 0 Off, 1 Thin, 2 Wide, 3 Instant (runtime/canvas.h). */
+#define GRKIT_HOST_BORDER 1092
+/* CORE.BORDER_COLOR: 0 white, 1 black. */
+#define GRKIT_HOST_BORDER_COLOR 1096
 /* The recipes (runtime/recipes.h): RECIPE_WORDS words for each of the
    RECIPE_SLOTS recipes. A recipe whose word 0 is 0 is empty. The resident
    loader saves each word that is not 0 in the recipe file
    (`capabilities::StateFile::Recipes`). */
-#define GRKIT_HOST_RECIPES 1092
+#define GRKIT_HOST_RECIPES 1100
 #define GRKIT_HOST_RECIPES_WORDS 320
 /* The names of the recipes, RECIPE_NAME_WORDS words each (RECIPE_NAME_CHARS),
    right after HOST_RECIPES, which the loader saves after the recipe words. */
-#define GRKIT_HOST_RECIPE_NAMES 2372
+#define GRKIT_HOST_RECIPE_NAMES 2380
 #define GRKIT_HOST_RECIPE_NAMES_WORDS 256
 /* The hash of the recipe library of the package that INSTALL imported last
    (runtime/install_recipes.h), after the names: the loader saves it with the
    recipes, so a package imports once. */
-#define GRKIT_HOST_RECIPE_IMPORTED 3396
+#define GRKIT_HOST_RECIPE_IMPORTED 3404
 /* The ID of each recipe, by slot, 1 to `runtime::RECIPE_ID_MAX`: a generated
    number, so that a recipe that the site moves to another card keeps an ID
    that no recipe of that card had. A reference to a recipe holds its ID, so
    that it stays valid when the recipes move. Each part that creates a recipe
    (the camera, INSTALL, the site) generates its ID. The loader saves the IDs
    after the import hash. */
-#define GRKIT_HOST_RECIPE_IDS 3400
+#define GRKIT_HOST_RECIPE_IDS 3408
 #define GRKIT_HOST_RECIPE_IDS_WORDS 64
 /* What each user mode of the mode dial, U1 to U3, does
    (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a recipe).
    An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A generated ID is
    never one of these values, so a deleted recipe never gets the references of
    another. */
-#define GRKIT_HOST_RECIPE_DIAL 3656
+#define GRKIT_HOST_RECIPE_DIAL 3664
 #define GRKIT_HOST_RECIPE_DIAL_WORDS 3
 /* The count of changes of the recipes: the loader saves the recipe file after
    it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an import. */
-#define GRKIT_HOST_RECIPE_CHANGES 3668
+#define GRKIT_HOST_RECIPE_CHANGES 3676
 /* The undo steps, the oldest first, RECIPE_WORDS words each. They are not
    saved: a start begins without them. */
-#define GRKIT_HOST_RECIPE_UNDO 3672
+#define GRKIT_HOST_RECIPE_UNDO 3680
 #define GRKIT_HOST_RECIPE_UNDO_WORDS 25
 /* Nonzero while the mode dial is on a user mode whose settings are temporary
    (runtime/mode_dial.h): the resident loader then does not save the main state
    file, so the file keeps the settings of the other positions. The recipe file
    still saves. */
-#define GRKIT_HOST_STATE_HOLD 3772
+#define GRKIT_HOST_STATE_HOLD 3780
 /* The count of changes of the saved settings of the user modes
    (`HOST_DIAL_SETS`): the loader saves their file after it changes. */
-#define GRKIT_HOST_DIAL_SET_CHANGES 3776
+#define GRKIT_HOST_DIAL_SET_CHANGES 3784
 /* The settings that the camera saved in each user mode of the mode dial, U1 to
    U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A user mode applies
    them while it has `runtime::RECIPE_DIAL_SAVED` (`HOST_RECIPE_DIAL`). The
    resident loader saves each word that is not 0 in their file
    (`capabilities::StateFile::DialSets`), and INSTALL restores them. */
-#define GRKIT_HOST_DIAL_SETS 3780
-#define GRKIT_HOST_DIAL_SETS_WORDS 597
+#define GRKIT_HOST_DIAL_SETS 3788
+#define GRKIT_HOST_DIAL_SETS_WORDS 603
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
    of values. CORE.TONE has neither: its value is the active record, and the
    effects give its number of values (runtime/tone.h). */
 #define GRKIT_CORE_SETTING_BASE 0x100U
-#define GRKIT_CORE_SETTING_COUNT 10U
+#define GRKIT_CORE_SETTING_COUNT 12U
 #define GRKIT_CORE_TONE 0x100U
 #define GRKIT_CORE_TONE_VALUES 0U
 #define GRKIT_CORE_TONE_BIT 0x1
@@ -536,11 +540,17 @@
 #define GRKIT_CORE_CROP_MODE 0x108U
 #define GRKIT_CORE_CROP_MODE_VALUES 2U
 #define GRKIT_CORE_CROP_MODE_BIT 0x100
-#define GRKIT_CORE_RECIPE 0x109U
+#define GRKIT_CORE_BORDER 0x109U
+#define GRKIT_CORE_BORDER_VALUES 4U
+#define GRKIT_CORE_BORDER_BIT 0x200
+#define GRKIT_CORE_BORDER_COLOR 0x10aU
+#define GRKIT_CORE_BORDER_COLOR_VALUES 2U
+#define GRKIT_CORE_BORDER_COLOR_BIT 0x400
+#define GRKIT_CORE_RECIPE 0x10bU
 #define GRKIT_CORE_RECIPE_VALUES 0U
-#define GRKIT_CORE_RECIPE_BIT 0x200
-#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,0
-#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,16,5,2,0
+#define GRKIT_CORE_RECIPE_BIT 0x800
+#define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,1092,1096,0
+#define GRKIT_CORE_SETTING_VALUES 0,8,5,4,2,2,16,5,2,4,2,0
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100
@@ -774,18 +784,22 @@
    the turns of the last shot with a known posture. Entry n is at
    GRKIT_SHOT_ENTRY + GRKIT_SHOT_STRIDE n and holds the key at GRKIT_SHOT_KEY,
    the record at GRKIT_SHOT_RECORD, the posture of the electronic level at
-   GRKIT_SHOT_POSTURE, and the effective capture crop at GRKIT_SHOT_FRAME_CROP
-   (runtime/processing.h). */
+   GRKIT_SHOT_POSTURE, the effective capture crop at GRKIT_SHOT_FRAME_CROP, and
+   the border at GRKIT_SHOT_BORDER (runtime/processing.h). */
 #define GRKIT_SHOT_RING 141376
 #define GRKIT_SHOT_ENTRIES 8
 #define GRKIT_SHOT_ENTRY 8
-#define GRKIT_SHOT_STRIDE 16
+#define GRKIT_SHOT_STRIDE 32
 #define GRKIT_SHOT_KEY 0
 #define GRKIT_SHOT_RECORD 4
 #define GRKIT_SHOT_POSTURE 8
 #define GRKIT_SHOT_FRAME_CROP 12
+#define GRKIT_SHOT_BORDER 16
 #define GRKIT_SHOT_LAST_TURNS 4
-#define GRKIT_PICTURE_SCRATCH 141512
+#define GRKIT_CANVAS_TABLE 141640
+#define GRKIT_CANVAS_ENTRIES 4
+#define GRKIT_CANVAS_ENTRY_SIZE 80
+#define GRKIT_PICTURE_SCRATCH 141960
 
 /* The layout of GrkitShot (runtime/sdk/grkit.h) that picture_shot fills:
    its size in bytes, the byte offset of each field, and the bits of
@@ -836,7 +850,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 194760
+#define GRKIT_PROFILE 195208
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -857,10 +871,10 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 199356
+#define GRKIT_TAIL_SIZE 199804
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 195260
+#define GRKIT_TONE_CURVES 195708
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192

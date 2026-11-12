@@ -8,7 +8,8 @@ use crate::components::{
     b, bl, bl_shared, HookSpec,
     Part::{Framing, Menu, Processing},
     Point::{
-        CaptureAspect, CaptureCrop, MenuPage, ModeDial, PipelineGrain, PipelineGrainSize, Tuning,
+        CaptureAspect, CaptureCrop, MenuPage, ModeDial, PictureCanvas, PipelineGrain,
+        PipelineGrainSize, Tuning,
     },
 };
 
@@ -38,14 +39,21 @@ const GROUPS: &[&[HookSpec]] = &[
     GRAIN,
     TONING,
     DIAL,
+    CANVAS,
 ];
 
 /// Image Control processing (`runtime/processing.S`): the BL to the parameter
 /// normalizer, the type-table loads, the last packet field store, the
 /// custom-curve flag, and the BL to the curve getter.
 const PROCESSING: &[HookSpec] = &[
-    // The shot ring records the capture crop even without Film Look.
-    bl_shared("module_parameters", Processing, Tuning, CaptureAspect),
+    // The shot ring records the capture crop and the border even without
+    // Film Look.
+    bl_shared(
+        "module_parameters",
+        Processing,
+        Tuning,
+        &[CaptureAspect, PictureCanvas],
+    ),
     b("module_processing", Processing, Tuning),
     b("module_packet", Processing, Tuning),
     b("module_gamma_flag", Processing, Tuning),
@@ -85,7 +93,7 @@ const ICONS: &[HookSpec] = &[
 const GRAIN: &[HookSpec] = &[
     bl("grain_particle", Framing, PipelineGrain),
     // Film Look needs the gate for the Shading and Clarity of its effects.
-    bl_shared("grain_gate", Framing, PipelineGrain, Tuning),
+    bl_shared("grain_gate", Framing, PipelineGrain, &[Tuning]),
     bl("grain_fill", Framing, PipelineGrainSize),
     b("grain_amplitude", Framing, PipelineGrain),
 ];
@@ -102,3 +110,11 @@ const TONING: &[HookSpec] = &[
 /// The mode dial (`runtime/mode_dial.h`): the entry of the apply of a dial
 /// position, which both App events of the dial reach.
 const DIAL: &[HookSpec] = &[b("menu_dial", Menu, ModeDial)];
+
+/// The canvas of CORE.BORDER (`runtime/canvas_shot.h`): the BL to the R2Y
+/// stripe send of StillMake, and the instruction after the resize of
+/// BackResize.
+const CANVAS: &[HookSpec] = &[
+    bl("canvas_r2y", Framing, PictureCanvas),
+    b("canvas_resize", Framing, PictureCanvas),
+];

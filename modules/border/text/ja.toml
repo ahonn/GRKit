@@ -1,2 +1,9 @@
 title = "ボーダー"
-rows = ["オフ", "白 3%", "白 6%", "黒 3%", "黒 6%"]
+rows = ["オフ", "細い", "太い", "インスタント"]
+
+[settings."CORE.BORDER"]
+label = "スタイル"
+
+[settings."CORE.BORDER_COLOR"]
+label = "色"
+values = ["白", "黒"]

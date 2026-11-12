@@ -93,7 +93,7 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 1542 + count * 1088
+expected = 1550 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 47) / 40
 if chunks != expectedchunks goto reject
@@ -128,7 +128,7 @@ intdim artwork4 iconwords
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
-intdim tailarea 49839
+intdim tailarea 49951
 allocated = 1
 hadcount = count
 hadwords = words

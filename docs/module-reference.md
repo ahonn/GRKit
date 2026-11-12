@@ -277,6 +277,8 @@ The capabilities are public settings of the core. A module uses one by its name 
 | `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops JPEG photos or only marks composition in the live view. The default is Crop. |
 | `CORE.CROP` | 5: 0 Off, 1 35 mm, 2 40 mm, 3 50 mm, 4 70 mm | A focal-length crop of the lens, according to `CORE.CROP_MODE`. The focal lengths are those of a 28 mm lens. GR IIIx has the same crops of its 40 mm lens: 50, 57, 71, and 100 mm. |
 | `CORE.CROP_MODE` | 2: 0 Crop, 1 Frame Only | Whether the camera crops photos to the selected focal length or the live view only shows its frame. The default is Crop. |
+| `CORE.BORDER` | 4: 0 Off, 1 Thin, 2 Wide, 3 Instant | A border around each recorded JPEG. The picture keeps its pixels, and the JPEG grows by the border: 3% of the short side on each side for Thin, 6% for Wide, and 4% with a bottom three times as wide for Instant, at the bottom of the upright picture. When the camera has too little free memory for the border, such as GR IV in a long continuous burst, the border is as wide as fits, and Wide and Instant are narrower at the full 3:2 size. Plane filters see the picture without the border. An in-camera RAW development adds the current border. DNG raw data and the live view have no border. |
+| `CORE.BORDER_COLOR` | 2: 0 white, 1 black | The color of the border. |
 | `CORE.GRAIN` | 5: 0 Off, 1 weak, 2 medium, 3 strong, 4 extra strong | The grain of recorded pictures, in the native grain stage. The live view and DNG files have no grain. |
 | `CORE.GRAIN_SIZE` | 4: 0 Auto, 1 small, 2 medium, 3 large | The grain size of recorded pictures. Auto follows the ISO of the shot. |
 | `CORE.RECIPE` | none | The recipes: saved sets of the other capabilities that OK applies in one step. |
@@ -371,7 +373,6 @@ Filters run after the color of the effect, in ascending stage. In one stage, the
 | --- | --- | --- |
 | `GRKIT_STAGE_FRAME` (20) | `frame` | frames over the picture |
 | `GRKIT_STAGE_MARK` (30) | `mark` | marks over the picture, such as the date |
-| `GRKIT_STAGE_PRINT` (40) | `print` | the print around the picture, such as a border, which scales the picture with its marks (since ABI 2.6) |
 
 ## Services
 
@@ -463,7 +464,7 @@ ABI 2.4 also appends `flags` to `GrkitModule`, increasing its descriptor from 40
 
 ABI 2.5 appends the Fn value and setting of `fn_cycle` to `GrkitPage`, increasing its descriptor to 56 bytes.
 
-ABI 2.6 adds the capabilities `CORE.CROP` and `CORE.CROP_MODE`. `Surface` keeps its layout.
+ABI 2.6 adds the capabilities `CORE.CROP`, `CORE.CROP_MODE`, `CORE.BORDER`, and `CORE.BORDER_COLOR`. `Surface` keeps its layout.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

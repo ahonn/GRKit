@@ -654,6 +654,7 @@ static void write_header(const struct arrays *a)
        tail holds noise after power-on, and after a soft reset the ring of the
        last start, whose keys a new shot could match. */
     zero(at(tail + GRKIT_SHOT_RING), GRKIT_SHOT_ENTRY + GRKIT_SHOT_ENTRIES * GRKIT_SHOT_STRIDE);
+    zero(at(tail + GRKIT_CANVAS_TABLE), GRKIT_CANVAS_ENTRIES * GRKIT_CANVAS_ENTRY_SIZE);
     for (u32 i = 0; i < icon_chunks; ++i) {
         zero(at(a->icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, a->icon_bases[i]);

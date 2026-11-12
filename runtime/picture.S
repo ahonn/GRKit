@@ -377,12 +377,26 @@ picture_capture_parameters:
     pop {r1, r2, r4, pc}
 
 // JpegEncodeMacroProcess::Execute entry: r0 = process, r1 = message. The stub
-// keeps every argument and replays the displaced `mov ip, sp`.
+// keeps every argument and replays the displaced `mov ip, sp`. With a canvas
+// pool (runtime/canvas_shot.h), it also calls Execute, which takes only r0
+// and r1, and runs picture_encode_done(process, message) after it returns
+// with its result.
 .global picture_encode_entry
 picture_encode_entry:
     push {r0-r3, r12, lr}
     bl picture_encode
     pop {r0-r3, r12, lr}
+#ifdef FW_IMAGE_POOL
+    push {r0, r1, r4, lr}
+    bl 1f
+    mov r4, r0
+    ldr r0, [sp]
+    ldr r1, [sp, #4]
+    bl picture_encode_done
+    mov r0, r4
+    pop {r2, r3, r4, pc}
+1:
+#endif
     mov r12, sp
     ldr pc, =HOOK_PICTURE_ENCODE_ENTRY_RESUME
 .ltorg
@@ -398,4 +412,31 @@ picture_develop_tone:
     bl picture_develop_start
     pop {r0-r3,r12,lr}
     ldr pc, =HOOK_PICTURE_DEVELOP_TONE_TARGET
+#endif
+
+#if defined(HOOK_CANVAS_R2Y) && defined(HOOK_CANVAS_RESIZE)
+/* The canvas of CORE.BORDER (runtime/canvas_shot.h). Replaces the BL to the
+   R2Y stripe send of StillMake: canvas_r2y_c(module, config) runs first,
+   then the send with the stock registers. */
+.global canvas_r2y
+canvas_r2y:
+    push {r0-r3,r12,lr}
+    sub r0, CANVAS_R2Y_MODULE_REG, #CANVAS_R2Y_MODULE_BIAS
+    mov r1, CANVAS_R2Y_CONFIG_REG
+    bl canvas_r2y_c
+    pop {r0-r3,r12,lr}
+    ldr pc, =HOOK_CANVAS_R2Y_TARGET
+.ltorg
+/* After the resize of BackResize: canvas_resize_c(module, config), then the
+   replaced instruction. */
+.global canvas_resize
+canvas_resize:
+    push {r0-r3,r12,lr}
+    mov r0, CANVAS_RESIZE_MODULE_REG
+    mov r1, CANVAS_RESIZE_CONFIG_REG
+    bl canvas_resize_c
+    pop {r0-r3,r12,lr}
+    CANVAS_RESIZE_STOCK
+    ldr pc, =HOOK_CANVAS_RESIZE_RESUME
+.ltorg
 #endif

@@ -457,4 +457,64 @@
     (BYTE(DIAL_AE_MODEL,DIAL_AE_APPLIED)==(position) && \
      BYTE(WORD(DIAL_USER_MODES,0),0)==BYTE(DIAL_AE_MODEL,DIAL_AE_USER_MODE))
 
+/* The canvas of CORE.BORDER (runtime/canvas_shot.h). A still develops in
+   StillMake into the bank of its recipe R, as on GR III: R2Y writes the
+   source picture in stripes, then BackResize makes the main picture and the
+   previews, which the JPEG encode takes. Each picture is a 32-byte
+   descriptor in R: +4 Y, +8 interleaved CbCr (4:2:2), +0x10 u16 width and
+   height, +0x14 u16 pitch and rows. The R2Y hook gets the StillMake module
+   and the develop config, R + CANVAS_R2Y_RECIPE; the BackResize hook gets
+   its module and its config, R + CANVAS_RESIZE_RECIPE. */
+#define CANVAS_R2Y_RECIPE 0xa80
+#define CANVAS_R2Y_MODULE_REG r0
+#define CANVAS_R2Y_MODULE_BIAS 0
+#define CANVAS_R2Y_CONFIG_REG r1
+#define CANVAS_RESIZE_RECIPE 0xa18
+#define CANVAS_RESIZE_MODULE_REG r7
+#define CANVAS_RESIZE_CONFIG_REG r4
+/* The instruction that the BackResize hook replaces. */
+#define CANVAS_RESIZE_STOCK ldr r2, [fp, #-0x28]
+/* The descriptors of R: the R2Y source, the R2Y resize output (a quick
+   view), the main picture, the screennail, and the thumbnail. */
+#define CANVAS_SOURCE 0x70
+#define CANVAS_QUICK 0x90
+#define CANVAS_MAIN 0xb0
+#define CANVAS_SCREENNAIL 0xd0
+#define CANVAS_THUMBNAIL 0xf0
+/* The developed bank of R, its size, and the shot settings of the picture
+   (the key of the shot ring). The bank has room for a canvas of about 61 MB:
+   at the full 3:2 size, margins up to about 4.6% of the short side. A larger
+   canvas takes its planes from the image pool of kind CANVAS_POOL_KIND
+   (IMAGE2, 1 GB) of the firmware allocator, while the largest free block
+   keeps CANVAS_POOL_RESERVE bytes after it. */
+#define CANVAS_BANK 0x368
+#define CANVAS_BANK_SIZE 0x3cc
+#define CANVAS_SHOT 0xab4
+#define CANVAS_POOL_KIND 1U
+#define CANVAS_POOL_RESERVE (256U<<20)
+/* The source starts this many rows after the main picture in the bank. */
+#define CANVAS_SOURCE_ROWS 144U
+/* The develop config: the main Y, the source Y and CbCr, then the Y and
+   CbCr of the R2Y resize output. The module: the stripe descriptor of R2Y,
+   with its Y and CbCr, and its u16 output pitch. The firmware sets the
+   first stripe before the hook and the others from the develop config. */
+#define CANVAS_CONFIG_MAIN 0x10
+#define CANVAS_CONFIG_SOURCE 0x18
+#define CANVAS_CONFIG_QUICK 0x20
+#define CANVAS_MODULE_SOURCE 0x93bc
+#define CANVAS_MODULE_PITCH 0x93cc
+/* A second output pitch of the module, a word, which the hook sets with the
+   first one. */
+#define CANVAS_MODULE_PITCH_WORD 0x95e4
+/* The playback and the review need each preview at the size of its box. */
+#define CANVAS_PREVIEW_BOX 1
+/* FW_CANVAS_FILL(0, descriptor, color, 1) fills the rectangle of a
+   descriptor through the IIP and returns when it is done; the last argument
+   leaves out its cache maintenance. Its descriptor adds +0 format (1 for
+   4:2:2), +0x18 u16 x and y, and +0x1c tag 2. */
+#define CANVAS_FILL_FORMAT 1U
+#define CANVAS_FILL_TAG 2U
+#define CANVAS_FILL_BLACK 1U
+#define CANVAS_FILL_WHITE 2U
+
 #endif

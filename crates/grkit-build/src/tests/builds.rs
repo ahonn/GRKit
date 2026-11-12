@@ -38,7 +38,7 @@ fn synthetic_arm_build_is_reproducible() -> Result<()> {
                 .family
                 .hooks
                 .iter()
-                .filter(|hook| hook.point == point || hook.also == Some(point))
+                .filter(|hook| hook.serves(point))
                 .count();
             let instructions = match point {
                 components::Point::Tuning => target.layout.instruction_patches.len(),

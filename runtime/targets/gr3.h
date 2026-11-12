@@ -488,4 +488,55 @@
 #define DIAL_NATIVE_SETTLED(position) \
     ((BYTE(WORD(DIAL_SETTINGS,0),0)!=0)==((u32)((position)-DIAL_CODE_U1)<3U))
 
+/* The canvas of CORE.BORDER (runtime/canvas_shot.h). A still develops in
+   StillMake into the bank of its recipe R: R2Y writes the source picture in
+   stripes, then BackResize makes the main picture and the previews, which
+   the JPEG encode takes. Each picture is a 32-byte descriptor in R: +4 Y,
+   +8 interleaved CbCr (4:2:2), +0x10 u16 width and height, +0x14 u16 pitch
+   and rows. The R2Y hook gets the config of the stripe send, which is
+   R + CANVAS_R2Y_RECIPE, and the StillMake module + CANVAS_R2Y_MODULE_BIAS;
+   the BackResize hook gets its config, R + CANVAS_RESIZE_RECIPE, and the
+   module. */
+#define CANVAS_R2Y_RECIPE 0x96c
+#define CANVAS_R2Y_MODULE_REG r4
+#define CANVAS_R2Y_MODULE_BIAS 0x9000
+#define CANVAS_R2Y_CONFIG_REG r6
+#define CANVAS_RESIZE_RECIPE 0x904
+#define CANVAS_RESIZE_MODULE_REG r7
+#define CANVAS_RESIZE_CONFIG_REG r4
+/* The instruction that the BackResize hook replaces. */
+#define CANVAS_RESIZE_STOCK ldr r2, [fp, #-0x28]
+/* The descriptors of R: the R2Y source, the R2Y resize output (a quick
+   view), the main picture, the screennail, and the thumbnail. */
+#define CANVAS_SOURCE 0x70
+#define CANVAS_QUICK 0x90
+#define CANVAS_MAIN 0xb0
+#define CANVAS_SCREENNAIL 0xd0
+#define CANVAS_THUMBNAIL 0xf0
+/* The developed bank of R, its size, and the shot settings of the picture
+   (the key of the shot ring). */
+#define CANVAS_BANK 0x304
+#define CANVAS_BANK_SIZE 0x364
+#define CANVAS_SHOT 0x44c8
+/* The source starts this many rows after the main picture in the bank. */
+#define CANVAS_SOURCE_ROWS 144U
+/* Above the top margin, the canvas keeps the guard rows of the stock layout,
+   which R2Y may write. */
+#define CANVAS_ROWS_ABOVE(top) (2U*CANVAS_SOURCE_ROWS+(top))
+/* The stripe send config: the source Y and CbCr, then the Y and CbCr of the
+   R2Y resize output. The module: the Y and CbCr of the stripe, and the u16
+   output pitch of R2Y. */
+#define CANVAS_CONFIG_SOURCE 0x18
+#define CANVAS_CONFIG_QUICK 0x20
+#define CANVAS_MODULE_SOURCE 0x9950
+#define CANVAS_MODULE_PITCH 0x9960
+/* FW_CANVAS_FILL(0, descriptor, color, 1) fills the rectangle of a
+   descriptor through the IIP and returns when it is done; the last argument
+   leaves out its cache maintenance. Its descriptor adds +0 format (1 for
+   4:2:2), +0x18 u16 x and y, and +0x1c tag 2. */
+#define CANVAS_FILL_FORMAT 1U
+#define CANVAS_FILL_TAG 2U
+#define CANVAS_FILL_BLACK 1U
+#define CANVAS_FILL_WHITE 2U
+
 #endif

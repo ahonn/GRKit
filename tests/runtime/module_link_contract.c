@@ -497,8 +497,6 @@ int main(void)
        apply code. */
     reset(); code_words[FILTER + 1] = GRM_STAGE_FRAME;
     assert(registrations() == 0 && filters[0].stage == GRM_STAGE_FRAME);
-    reset(); code_words[FILTER + 1] = GRM_STAGE_PRINT;
-    assert(registrations() == 0 && filters[0].stage == GRM_STAGE_PRINT);
     reset(); code_words[FILTER + 1] = 10;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     reset(); code_words[FILTER + 2] = 2;

@@ -284,6 +284,10 @@ const SITES: &[Site] = &[
     // The entry of the apply of a dial position, which each App event of the
     // dial reaches.
     ("menu_dial", 0x532241a8, "0dc0a0e1"),
+    // The BL to the R2Y stripe send of StillMake, and the instruction after
+    // the resize of BackResize.
+    ("canvas_r2y", 0x53501f98, "62a706eb"),
+    ("canvas_resize", 0x534ff458, "28201be5"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[
