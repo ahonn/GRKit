@@ -2,7 +2,6 @@
 # exposes it.
 id = "DATE"
 version = 1
-# The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
 order = 40
 sources = ["stamp.c"]
 # Tile n shows style n. Tile 0 is the module tile, for Off at the root.

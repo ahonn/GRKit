@@ -3,7 +3,6 @@
 # the frame only. The layer draws the outside of the frame.
 id = "CROP"
 version = 1
-# The default place in ADJ and in MENU: Film Look, Framing, Crop, Guides, Date, Grain.
 order = 25
 sources = ["crop.c"]
 # Tile n shows value n. Tile 0 is the module tile, for Off at the root.

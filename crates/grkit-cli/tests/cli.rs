@@ -329,8 +329,11 @@ fn package_roundtrip_and_output_ownership() {
     ];
     let packaged = success(&args);
     // Thirteen runtime, package list, and document entries (a core file for
-    // each GR III build), the nine official modules, then one per effect.
-    assert_eq!(packaged["entries"], 22 + source_count());
+    // each GR III build), the official modules, then one per effect.
+    assert_eq!(
+        packaged["entries"],
+        13 + grkit_core::modules::OFFICIAL.len() + source_count()
+    );
     assert_eq!(success(&["verify", text(&zip)])["effects"], source_count());
     let before = fs::read(&zip).unwrap();
     assert!(!run(&args).status.success());

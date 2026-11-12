@@ -3,7 +3,6 @@
 # in the live view, and the indicator shows its ADJ icon.
 id = "FRAMING"
 version = 1
-# The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
 order = 20
 sources = ["framing.c"]
 # Tile n shows value n. Tile 0 is the module tile, for Off at the root.

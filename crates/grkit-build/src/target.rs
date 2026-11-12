@@ -54,7 +54,7 @@ pub const MODEL_VERSION: u32 = 0x28;
 pub const MODEL_HDF: u32 = 78561;
 pub const MODEL_MONOCHROME: u32 = 78640;
 
-pub const TARGETS: [&Target; 6] = [
+pub const TARGETS: &[&Target] = &[
     &GR3_210,
     &GR3_221,
     &GR4_111,
@@ -199,12 +199,17 @@ impl Target {
     }
 }
 
+/// The names of the targets.
+pub fn names() -> impl Iterator<Item = &'static str> {
+    TARGETS.iter().map(|target| target.name)
+}
+
 pub fn find(name: &str) -> Result<&'static Target> {
     match TARGETS.iter().find(|target| target.name == name) {
         Some(target) => Ok(target),
         None => bail!(
             "Unknown target {name:?}. Expected one of: {}",
-            TARGETS.map(|target| target.name).join(", ")
+            names().collect::<Vec<_>>().join(", ")
         ),
     }
 }

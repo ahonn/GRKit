@@ -5,7 +5,6 @@
 # picture. Off by default.
 id = "BORDER"
 version = 1
-# The default place in ADJ and in MENU: after Glow (45), before Grain (50).
 order = 48
 sources = ["border.c"]
 # Tile n shows style n. Tile 0 is the module tile, for Off at the root. Tile

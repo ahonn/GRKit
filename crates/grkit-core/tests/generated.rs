@@ -1,4 +1,5 @@
-//! Files generated from `grkit_core::abi`, `modules`, `camera`, and `site`. Set
+//! Files generated from `grkit_core::abi`, `modules` (with the text of each
+//! module), `camera`, and `site`. Set
 //! GRKIT_UPDATE_GENERATED=1 to rewrite them after a change of the tables.
 
 use std::{fs, path::Path};
@@ -11,6 +12,20 @@ fn checked_in_generated_files_match_the_tables() {
         ("runtime/native.h", grkit_core::native::header()),
     ];
     files.extend(grkit_core::modules::generated());
+    files.push((
+        grkit_core::modules::SITE_TITLES,
+        grkit_core::modules::site_titles(|module, language| {
+            let path = root
+                .join("modules")
+                .join(module.folder)
+                .join(format!("text/{}.toml", language.code()));
+            let text: toml::Table = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("No {}", path.display()))
+                .parse()
+                .unwrap();
+            text["title"].as_str().unwrap().to_owned()
+        }),
+    ));
     files.extend(grkit_core::camera::generated());
     files.extend(grkit_core::site::generated());
     files.extend(grkit_core::recipes::generated());

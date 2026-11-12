@@ -5,7 +5,6 @@
 # with its Fn adjustments and the grain of Grain.
 id = "RECIPES"
 version = 1
-# The default place in ADJ and in MENU: after Grain.
 order = 60
 sources = []
 # Tile 0 is the module tile, then Undo, Save, and a recipe without an effect

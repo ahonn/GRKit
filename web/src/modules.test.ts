@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ALL_MODULES, planModules, type ModuleKey } from './modules';
+import { ALL_MODULES, MODULES, planModules, type ModuleKey } from './modules';
 
 describe('planModules', () => {
-  it('adds every module by default', () => {
+  it('adds every module by default, in menu order', () => {
     expect(planModules(ALL_MODULES, 2)).toEqual({
       includeEffects: true,
-      modules: ['FILMLOOK', 'FRAMING', 'CROP', 'GUIDES', 'DATE', 'GLOW', 'BORDER', 'GRAIN', 'RECIPES'],
-      visible: ['filmLook', 'framing', 'crop', 'guides', 'dateStamp', 'glow', 'border', 'grain', 'recipes'],
+      modules: MODULES.map((module) => module.id),
+      visible: MODULES.map((module) => module.key),
     });
   });
 

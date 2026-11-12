@@ -1,4 +1,5 @@
 import type { Grade } from './catalog';
+import { MODULE_TITLES } from './generated/moduleTitles';
 import type { NativeProblem } from './import/native';
 import { cookieValue, isLanguage, LANGUAGE_COOKIE, pagePath, pathLanguage, type Page } from './languagePage';
 
@@ -79,18 +80,8 @@ const en = {
   modulesLink: 'Modules',
   /** Separates the module names in the package summary. */
   listSeparator: ', ',
-  /** Module names as the camera menu shows them in this language. */
-  moduleNames: {
-    filmLook: 'Film Look',
-    framing: 'Framing',
-    crop: 'Crop',
-    guides: 'Guides',
-    dateStamp: 'Date Imprint',
-    glow: 'Glow',
-    border: 'Border',
-    grain: 'Grain',
-    recipes: 'Recipes',
-  },
+  /** Module names as the camera menu shows them in this language: the titles in modules/<module>/text. */
+  moduleNames: MODULE_TITLES.en,
   package: 'Download',
   install: 'Install',
   /** The installer page in the top navigation. */
@@ -642,17 +633,7 @@ const zhHans: Strings = {
   modulesLink: '功能模块',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
-  moduleNames: {
-    filmLook: '胶片风格',
-    framing: '画幅',
-    crop: '裁切',
-    guides: '辅助线',
-    dateStamp: '加印日期',
-    glow: '光晕',
-    border: '边框',
-    grain: '颗粒感',
-    recipes: '配方',
-  },
+  moduleNames: MODULE_TITLES['zh-Hans'],
   package: '下载',
   install: '安装',
   installLink: '开始安装',
@@ -1124,17 +1105,7 @@ const zhHant: Strings = {
   modulesLink: '功能模組',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
-  moduleNames: {
-    filmLook: '底片風格',
-    framing: '構圖比例',
-    crop: '裁切',
-    guides: '輔助線',
-    dateStamp: '加印日期',
-    glow: '光暈',
-    border: '邊框',
-    grain: '粒紋感',
-    recipes: '配方',
-  },
+  moduleNames: MODULE_TITLES['zh-Hant'],
   package: '下載',
   install: '安裝',
   installLink: '開始安裝',
@@ -1606,17 +1577,7 @@ const ja: Strings = {
   modulesLink: 'モジュール',
   listSeparator: '、',
   /** Module names as the camera menu shows them in this language. */
-  moduleNames: {
-    filmLook: 'フィルムルック',
-    framing: 'フレーミング',
-    crop: 'クロップ',
-    guides: '構図ガイド',
-    dateStamp: '日付入れ撮影',
-    glow: 'グロー',
-    border: 'ボーダー',
-    grain: '粒状感',
-    recipes: 'レシピ',
-  },
+  moduleNames: MODULE_TITLES.ja,
   package: 'ダウンロード',
   install: 'インストール',
   installLink: 'インストール',
@@ -2092,17 +2053,7 @@ const ko: Strings = {
   modulesLink: '모듈',
   listSeparator: ', ',
   /** Module names as the camera menu shows them in this language. */
-  moduleNames: {
-    filmLook: '필름 룩',
-    framing: '프레이밍',
-    crop: '크롭',
-    guides: '구도 가이드',
-    dateStamp: '날짜 각인',
-    glow: '글로우',
-    border: '테두리',
-    grain: '입자감',
-    recipes: '레시피',
-  },
+  moduleNames: MODULE_TITLES.ko,
   package: '다운로드',
   install: '설치',
   installLink: '설치',

@@ -33,7 +33,7 @@ enum Command {
     },
     /// Build the production runtime from official firmware.
     Build {
-        #[arg(long, value_parser = grkit_build::target::TARGETS.map(|target| target.name))]
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(grkit_build::target::names()))]
         target: String,
         #[arg(long)]
         firmware: PathBuf,
@@ -53,7 +53,7 @@ enum Command {
     /// firmware, such as a new version (docs/architecture.md, Porting).
     Port {
         /// The runtime build to port.
-        #[arg(long, value_parser = grkit_build::target::TARGETS.map(|target| target.name))]
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(grkit_build::target::names()))]
         target: String,
         /// The official firmware of the runtime build.
         #[arg(long)]
@@ -69,7 +69,7 @@ enum Command {
         #[arg(long, default_value_t = grkit_build::port::RADIUS, value_parser = parse_u32)]
         radius: u32,
         /// A runtime build of the other firmware to compare the port with.
-        #[arg(long, value_parser = grkit_build::target::TARGETS.map(|target| target.name))]
+        #[arg(long, value_parser = clap::builder::PossibleValuesParser::new(grkit_build::target::names()))]
         check: Option<String>,
         /// A new directory for report.json, the draft build header (header.h),
         /// and the draft target module (target.rs).

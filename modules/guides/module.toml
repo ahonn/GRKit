@@ -1,7 +1,6 @@
 # Guides: composition guides over the still live view.
 id = "GUIDES"
 version = 1
-# The default place in ADJ and in MENU: Film Look, Framing, Guides, Date, Grain.
 order = 30
 sources = ["guides.c"]
 # Tile n shows value n. Tile 0 is the module tile, for Off at the root.
