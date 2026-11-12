@@ -401,6 +401,14 @@ static void frame_preview(volatile u32 *h,u32 controller,u32 movie) {
     if(canvas && !movie && (frame!=h[GRKIT_HOST_FRAME_PREVIEW/4] || at!=controller ||
                   handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1]))
         MENU_PREVIEW_INVALIDATE(canvas);
+#ifdef CROP_NATIVE_BITS
+    /* The live view follows the highlighted crop at once (crop_shown); the
+       next bind of the live view would too, a little later. */
+    if(!movie && (handle-1U==GRKIT_CORE_CROP || h[GRKIT_HOST_MODULE_PREVIEW/4]-1U==GRKIT_CORE_CROP) &&
+       (handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1] ||
+        frame!=h[GRKIT_HOST_FRAME_PREVIEW/4]))
+        crop_sync(h,aspect_native());
+#endif
 }
 
 /* The listed module of page `slot` (runtime/manage.h), or MANAGE_MODULES. */

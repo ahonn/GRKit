@@ -5,8 +5,8 @@
    28 mm lens; GR IIIx has the same factors of its 40 mm lens. The live view
    shows the crop, or the frame of the crop inside the layer area
    (runtime/viewfinder.h), and other layers, such as the guides, draw inside
-   that frame. A longer crop has no value: the live view of the camera
-   cannot show it (crop_view_value).
+   that frame. A longer crop has no value: even 70 mm shows only its frame
+   (crop_view_value).
 
    CORE.CROP_MODE selects cropping where the camera can (0, the default) or
    the frame only (1). The resident loader saves both settings.
@@ -16,8 +16,9 @@
    35 or 50 mm, so that the live view, the focus, and the exposure follow it,
    and the window and the size of the photo follow the factor
    (runtime/framing.S: crop_resolution). The camera keeps 35 mm for 40 mm,
-   and 50 mm for 70 mm; their shots take their own factor (crop_shot), and
-   the live view zooms to it (crop_view_value). The camera saves its factor at power-off and
+   and 50 mm for 70 mm; their shots take their own factor (crop_shot). The
+   live view zooms to 40 mm, and shows 70 mm as a frame in the view of 50 mm
+   (crop_view_value). The camera saves its factor at power-off and
    knows only its own factors, so the core never sets another one. With a
    Framing ratio or another native aspect, the live view shows the frame
    only.
@@ -44,16 +45,19 @@ static const u32 crop_scales[GRKIT_CORE_CROP_VALUES]={CROP_SCALES};
 /* The value of the live-view factor of each crop, a factor of the camera:
    35 and 50 mm their own, 40 mm that of 35 mm, and 70 mm that of 50 mm. */
 static const u8 crop_live_values[GRKIT_CORE_CROP_VALUES]={0,1,1,3,3};
-/* Where the live view takes another factor than the camera's
-   (CROP_LIVE_FACTOR, runtime/framing.S: crop_live), it zooms to the factor
-   of the crop itself, and the camera keeps the factor of crop_live_values.
-   Elsewhere it shows that factor of the camera with the frame of the crop.
-   The live view of the camera fails above a factor of about 2.8
-   (SetupDevelopmentDestinationCh1), so no crop is longer than 70 mm. */
+/* The value of the factor that the live view shows for each crop, where it
+   takes another factor than the camera's (CROP_LIVE_FACTOR,
+   runtime/framing.S: crop_live): 40 mm its own, and the camera keeps the
+   factor of crop_live_values. The live view of the camera only reduces its
+   picture, and the factor of 50 mm already takes the full height, so a
+   larger factor gives a broken picture on a camera: 70 mm shows the view
+   of 50 mm. Elsewhere the live view shows the factor of the camera. Each
+   view of another factor than the crop's has the frame of the crop. */
 #ifndef CROP_LIVE_FACTOR
 #define CROP_LIVE_FACTOR 0
 #endif
-#define crop_view_value(crop) (CROP_LIVE_FACTOR ? (crop) : crop_live_values[crop])
+static const u8 crop_view_values[GRKIT_CORE_CROP_VALUES]={0,1,2,3,3};
+#define crop_view_value(crop) (CROP_LIVE_FACTOR ? crop_view_values[crop] : crop_live_values[crop])
 /* GRKIT_HOST_CROP_LIVE_RETRY after a try of crop_sync (crop_live_try). */
 #define CROP_LIVE_TRIED 0xffffffU
 /* The factor `bits` (float bits of a factor of 1 or more) in 1/65536. */
@@ -80,14 +84,25 @@ static __attribute__((unused)) u32 crop_selection(volatile u32 *h) {
     if(!CAPABILITY_USED(h,GRKIT_CORE_CROP)) return 0;
     return value<GRKIT_CORE_CROP_VALUES ? value : 0;
 }
+/* The crop that the live view shows: the highlighted value while ADJ
+   previews the page of CORE.CROP (runtime/modules.h: frame_preview_set),
+   else the selection. ADJ keeps the highlighted value when it closes, and
+   a move to another entry ends the preview. */
+static __attribute__((unused)) u32 crop_shown(volatile u32 *h) {
+    u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value;
+    if(!h[GRKIT_HOST_FRAME_PREVIEW/4] || !handle || handle-1U!=GRKIT_CORE_CROP || !CAPABILITY_USED(h,GRKIT_CORE_CROP))
+        return crop_selection(h);
+    value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
+    return value<GRKIT_CORE_CROP_VALUES ? value : 0;
+}
 /* A module that does not use CROP_MODE crops where the camera can. */
 static __attribute__((unused)) u32 crop_frame_only(volatile u32 *h) {
     return CAPABILITY_USED(h,GRKIT_CORE_CROP_MODE) && h[GRKIT_HOST_CROP_MODE/4]==1;
 }
-/* The crop that the camera applies to photos, or 0: a selected crop in
+/* The crop that the camera applies, or 0: the shown crop (crop_shown) in
    Crop mode, in native 3:2 (`native_aspect` 0) without a Framing ratio. */
 static __attribute__((unused)) u32 crop_capture(volatile u32 *h,u32 native_aspect) {
-    u32 crop=crop_selection(h);
+    u32 crop=crop_shown(h);
     if(!crop || crop_frame_only(h) || native_aspect || framing_selection(h)) return 0;
     return crop;
 }

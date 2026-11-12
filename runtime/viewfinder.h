@@ -155,10 +155,7 @@ static GRKIT_ICON_COMPACT u32 layer_area(u32 framing) {
    ADJ preview of its page, else the selection. A crop that the camera
    applies to the live view already has no frame (runtime/crop.h). */
 static GRKIT_ICON_COMPACT u32 crop_painted(volatile u32 *h,u32 preview) {
-    u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value;
-    if(!preview || !handle || handle-1!=GRKIT_CORE_CROP) return crop_selection(h);
-    value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
-    return value<GRKIT_CORE_CROP_VALUES ? value : 0;
+    return preview ? crop_shown(h) : crop_selection(h);
 }
 /* Paint the module layers in their order. In the ADJ preview, the layers of
    the previewed setting paint its highlighted value, DISP does not hide

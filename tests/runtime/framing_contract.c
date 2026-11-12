@@ -876,13 +876,13 @@ static void assert_frame(const u16 *box, u32 left, u32 top, u32 right, u32 botto
     assert_box(box, frame[0], frame[1], frame[2], frame[3]);
 }
 #if CROP_LIVE_FACTOR
-/* The live view zooms to 40 and 70 mm, while the camera keeps 35 or 50
-   mm. A new live factor with the same
+/* The live view zooms to 40 mm, while the camera keeps 35 mm; 70 mm
+   shows the view of 50 mm. A new live factor with the same
    camera factor sets another factor of the camera first, so that the live
    view reads its factor again. Without a frame, the view is the crop. */
 static void crop_zooms_the_live_view(void)
 {
-    static const u8 views[] = {0, 0, 2, 0, 4};
+    static const u8 views[] = {0, 0, 2, 0, 0};
     for (u32 crop = 1; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
         reset();
         header[GRKIT_HOST_FRAME_RATIO/4] = 0;
@@ -915,7 +915,8 @@ static void crop_zooms_the_live_view(void)
     header[GRKIT_HOST_CROP/4] = 0;
     framing_bind(TEST_OWNER);
     assert(native_crop_sets == 5 && native_crop_bits == 0x3f800000U);
-    /* 40 and 70 mm: the view is the crop, so no frame. */
+    /* 40 mm: the view is the crop, so no frame. 70 mm in the view of 50
+       mm has its frame. */
     reset();
     header[GRKIT_HOST_FRAME_RATIO/4] = 0;
     add_crop_layer();
@@ -927,9 +928,9 @@ static void crop_zooms_the_live_view(void)
     assert(crop_calls == 0);
     native_crop_q16 = (u32)(((unsigned long long)crop_scales[0] << 16) / crop_scales[3]);
     header[GRKIT_HOST_CROP/4] = 4;
-    header[GRKIT_HOST_CROP_LIVE/4] = crop_factors[4];
+    header[GRKIT_HOST_CROP_LIVE/4] = 0;
     framing_paint(TEST_CANVAS, TEST_BITMAP);
-    assert(crop_calls == 0);
+    assert(crop_calls != 0);
     /* Power-on: the camera factor is already 35 mm, and the live view read
        it, not 40 mm. The bind that sets 40 mm tries once and then waits a
        second; each later second tries again, at most CROP_LIVE_TRIES times.
@@ -1050,6 +1051,35 @@ static void crop_frames_the_layers(void)
     assert(crop_calls == 1 && crop_area == 4);
     assert_frame(crop_box_seen, 0, 0, 720, 480, 4, 65536);
     assert_frame(guides_box_seen, 0, 0, 720, 480, 4, 65536);
+}
+/* While ADJ previews the crop page, the bind takes the highlighted crop:
+   the camera's factor and the shot follow it, and the end of the preview
+   returns them to the selection. The preview of another page does not. */
+static void crop_follows_the_adj_preview(void)
+{
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    native_crop_bits = 0x3f800000U;
+    header[GRKIT_HOST_CROP/4] = 0;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 3;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3] && !header[GRKIT_HOST_CROP_SHOT/4]);
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 4;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3] && header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[4]);
+    assert(!header[GRKIT_HOST_CROP_LIVE/4]);
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP_MODE + 1;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_SHOT/4]);
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3]);
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 0;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_NATIVE/4]);
 }
 /* In 3:2 without a Framing ratio, the camera crops: the bind sets the
    camera's factor of 35, 40, or 50 mm, and arms the factor of a 70 mm
@@ -1244,6 +1274,7 @@ int main(void)
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
+    crop_follows_the_adj_preview();
 #if CROP_LIVE_FACTOR
     crop_zooms_the_live_view();
 #endif
