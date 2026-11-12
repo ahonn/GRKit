@@ -93,7 +93,7 @@ mod tests {
     fn native_setting_rows_have_one_value_limit() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../runtime");
         for (file, name) in [
-            ("module_link.h", "GRM_SETTING_ROW_VALUES"),
+            ("grm_format.h", "GRM_SETTING_ROW_VALUES"),
             ("sdk/grkit.h", "GRKIT_SETTING_ROW_VALUES"),
             ("core.h", "SETTING_VALUES"),
         ] {
@@ -105,7 +105,7 @@ mod tests {
             assert_eq!(value, Some(NATIVE_SETTING_VALUES), "{file}");
         }
         for (file, name, rows) in [
-            ("module_link.h", "GRM_SETTING_ROWS", NATIVE_SETTING_ROWS),
+            ("grm_format.h", "GRM_SETTING_ROWS", NATIVE_SETTING_ROWS),
             ("sdk/grkit.h", "GRKIT_SETTING_ROWS", NATIVE_SETTING_ROWS),
             ("core.h", "SETTING_ROWS", NATIVE_SETTING_ROWS + 1),
         ] {

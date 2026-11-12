@@ -813,12 +813,12 @@ fn defines(path: &str) -> std::collections::HashMap<String, u64> {
 }
 
 /// The module format of the Rust writer (`grkit_core::grm`) and of the
-/// installer (`runtime/module_link.h`), and the page layout of the core
-/// (`runtime/modules.h`), which reads module pages as the installer does.
+/// runtime (`runtime/grm_format.h`). The core (`runtime/modules.h`) reads
+/// module pages with the names of the module format, as the installer does.
 #[test]
 fn the_module_format_constants_agree() {
-    let link = defines("runtime/module_link.h");
-    let core = defines("runtime/modules.h");
+    let link = defines("runtime/grm_format.h");
+    let core = fs::read_to_string(root().join("runtime/modules.h")).unwrap();
     for (name, value) in [
         ("GRM_MAGIC", u64::from(grm::MAGIC)),
         ("GRM_FORMAT", grm::FORMAT_VERSION.into()),
@@ -837,6 +837,10 @@ fn the_module_format_constants_agree() {
     for (core_name, link_name) in [
         ("PAGE_KIND", "GRM_PAGE_KIND_AT"),
         ("PAGE_SETTINGS", "GRM_PAGE_SETTINGS"),
+        ("PAGE_GROUP", "GRM_PAGE_GROUP"),
+        ("PAGE_MENU_ONLY", "GRM_PAGE_MENU_ONLY"),
+        ("PAGE_ROWS", "GRM_PAGE_ROWS_AT"),
+        ("PAGE_CHILDREN", "GRM_PAGE_CHILDREN_AT"),
         ("PAGE_SETTING", "GRM_PAGE_SETTING_AT"),
         ("PAGE_FLAGS", "GRM_PAGE_FLAGS_AT"),
         ("PAGE_TITLE", "GRM_PAGE_TITLE_AT"),
@@ -851,7 +855,11 @@ fn the_module_format_constants_agree() {
         ("CHOICE_OFF_ROW", "GRM_CHOICE_OFF_ROW"),
         ("CHOICE_OPTIONS", "GRM_CHOICE_OPTIONS"),
     ] {
-        assert_eq!(core[core_name], link[link_name], "{core_name}");
+        assert!(link.contains_key(link_name), "{link_name}");
+        assert!(
+            core.contains(&format!("\n#define {core_name} {link_name}\n")),
+            "runtime/modules.h defines {core_name} other than as {link_name}"
+        );
     }
 }
 

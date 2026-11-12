@@ -467,17 +467,17 @@ struct RowText {
 /// (`runtime/sdk/grkit.h`: GRKIT_CHOICE_CORE_ROWS).
 const CORE_ROWS: [&str; 2] = ["CORE.TONE", "CORE.RECIPE"];
 
-/// The most UTF-16 units of one text (`runtime/module_link.h`: GRM_TEXT_UNITS).
+/// The most UTF-16 units of one text (`runtime/grm_format.h`: GRM_TEXT_UNITS).
 const TEXT_UNITS: usize = 64;
 /// The width and height of a tile in pixels; a tile is RGBA
-/// (`runtime/module_link.h`: GRM_TILE_BYTES).
+/// (`runtime/grm_format.h`: GRM_TILE_BYTES).
 const TILE_SIDE: usize = 40;
-/// The most rows of a choice page (`runtime/module_link.h`: GRM_PAGE_ROWS).
+/// The most rows of a choice page (`runtime/grm_format.h`: GRM_PAGE_ROWS).
 const PAGE_ROWS: usize = 64;
 /// The most values of a page with options: CORE.ROWS has a bit for each
 /// (`runtime/manage.h`: MANAGE_OPTION_VALUES).
 const OPTION_VALUES: usize = 16;
-/// The largest layer order (`runtime/module_link.h`: GRM_MAX_LAYER_ORDER).
+/// The largest layer order (`runtime/grm_format.h`: GRM_MAX_LAYER_ORDER).
 const MAX_LAYER_ORDER: u32 = 0xffff;
 
 fn c_name(name: &str) -> Result<&str> {
@@ -1762,17 +1762,17 @@ mod tests {
     #[test]
     fn limits_match_the_runtime() {
         let tile_bytes = (TILE_SIDE * TILE_SIDE * 4) as u64;
-        assert_eq!(define("module_link.h", "GRM_TILE_BYTES"), tile_bytes);
+        assert_eq!(define("grm_format.h", "GRM_TILE_BYTES"), tile_bytes);
         assert_eq!(define("sdk/grkit.h", "GRKIT_TILE_BYTES"), tile_bytes);
         assert_eq!(tile_bytes, grkit_core::grm::TILE_BYTES as u64);
         assert_eq!(
-            define("module_link.h", "GRM_TILES"),
+            define("grm_format.h", "GRM_TILES"),
             grkit_core::grm::MAX_TILES as u64
         );
-        assert_eq!(define("module_link.h", "GRM_PAGE_ROWS"), PAGE_ROWS as u64);
-        assert_eq!(define("module_link.h", "GRM_TEXT_UNITS"), TEXT_UNITS as u64);
+        assert_eq!(define("grm_format.h", "GRM_PAGE_ROWS"), PAGE_ROWS as u64);
+        assert_eq!(define("grm_format.h", "GRM_TEXT_UNITS"), TEXT_UNITS as u64);
         assert_eq!(
-            define("module_link.h", "GRM_MAX_LAYER_ORDER"),
+            define("grm_format.h", "GRM_MAX_LAYER_ORDER"),
             u64::from(MAX_LAYER_ORDER)
         );
         assert_eq!(

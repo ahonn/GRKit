@@ -8,6 +8,7 @@
 #include "setting_store.h"
 #include "effects.h"
 #include "tone_page.h"
+#include "grm_format.h"
 
 
 #define MODULE_PAGE(slot) (slot)
@@ -24,26 +25,28 @@ static const MenuPage about_module = ABOUT_PAGE;
    menu_page() selects the slot in GRKIT_HOST_MODULE_CHOICE before it returns
    the page, so get a page again after you get another one. */
 #define CHOICE_ENTRY(h) ((h)+GRKIT_HOST_MODULE_PAGES/4+(h)[GRKIT_HOST_MODULE_CHOICE/4]*3)
-/* GrkitPage fields, and GRKIT_CHOICE_OFF_ROW. */
-#define PAGE_KIND 4U
-#define PAGE_SETTINGS 2U
-#define PAGE_GROUP 3U
-#define PAGE_MENU_ONLY 8U
-#define PAGE_ROWS 28U
-#define PAGE_CHILDREN 40U
-#define PAGE_SETTING 8U
-#define PAGE_FLAGS 12U
-#define PAGE_TITLE 16U
-#define PAGE_SUMMARIES 20U
-#define PAGE_LABELS 24U
-#define PAGE_SETTING_ROWS 32U
-#define PAGE_SETTING_LIST 36U
-#define CHOICE_OFF_ROW 1U
+/* GrkitPage fields, its kinds and flags, and GRKIT_CHOICE_OFF_ROW, from the
+   module format, which tests/runtime/layout_contract.c checks against the
+   SDK structs. */
+#define PAGE_KIND GRM_PAGE_KIND_AT
+#define PAGE_SETTINGS GRM_PAGE_SETTINGS
+#define PAGE_GROUP GRM_PAGE_GROUP
+#define PAGE_MENU_ONLY GRM_PAGE_MENU_ONLY
+#define PAGE_ROWS GRM_PAGE_ROWS_AT
+#define PAGE_CHILDREN GRM_PAGE_CHILDREN_AT
+#define PAGE_SETTING GRM_PAGE_SETTING_AT
+#define PAGE_FLAGS GRM_PAGE_FLAGS_AT
+#define PAGE_TITLE GRM_PAGE_TITLE_AT
+#define PAGE_SUMMARIES GRM_PAGE_SUMMARIES_AT
+#define PAGE_LABELS GRM_PAGE_LABELS_AT
+#define PAGE_SETTING_ROWS GRM_PAGE_SETTING_ROWS_AT
+#define PAGE_SETTING_LIST GRM_PAGE_SETTINGS_AT
+#define CHOICE_OFF_ROW GRM_CHOICE_OFF_ROW
 /* GrkitSettingRow fields. */
-#define ROW_SETTING 4U
-#define ROW_LABEL 8U
-#define ROW_VALUES 12U
-#define ROW_SIZE 16U
+#define ROW_SETTING GRM_ROW_SETTING_AT
+#define ROW_LABEL GRM_ROW_LABEL_AT
+#define ROW_VALUES GRM_ROW_VALUES_AT
+#define ROW_SIZE GRM_ROW
 /* A word of a module page in the module code. A host test maps it. */
 #ifndef PAGE_WORD
 #define PAGE_WORD(p,o) WORD(p,o)
@@ -67,7 +70,7 @@ static u32 choice_group(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],P
 static u32 choice_menu_only(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&PAGE_MENU_ONLY; }
 static u32 choice_value(volatile u32 *h) { return setting_value(h,CHOICE_ENTRY(h)[1]); }
 /* Whether the page has options (GRKIT_CHOICE_OPTIONS). */
-#define CHOICE_OPTIONS 4U
+#define CHOICE_OPTIONS GRM_CHOICE_OPTIONS
 static u32 choice_options(volatile u32 *h) { return PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_FLAGS)&CHOICE_OPTIONS; }
 static u32 page_listed(volatile u32 *h,u32 slot);
 /* The values of the page that are off in ADJ: a bit each (CORE.ROWS of its
