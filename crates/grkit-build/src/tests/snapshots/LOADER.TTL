@@ -48,31 +48,31 @@ if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
 expected = 1542 + count * 1088
 if words != expected goto reject
-expectedchunks = (count + moduletiles + 45) / 40
+expectedchunks = (count + moduletiles + 47) / 40
 if chunks != expectedchunks goto reject
 intdim registry words
 if chunks <= 0 goto icons_ready
-items = count + moduletiles + 6 - 0
+items = count + moduletiles + 8 - 0
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork0 iconwords
 if chunks <= 1 goto icons_ready
-items = count + moduletiles + 6 - 40
+items = count + moduletiles + 8 - 40
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork1 iconwords
 if chunks <= 2 goto icons_ready
-items = count + moduletiles + 6 - 80
+items = count + moduletiles + 8 - 80
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork2 iconwords
 if chunks <= 3 goto icons_ready
-items = count + moduletiles + 6 - 120
+items = count + moduletiles + 8 - 120
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork3 iconwords
 if chunks <= 4 goto icons_ready
-items = count + moduletiles + 6 - 160
+items = count + moduletiles + 8 - 160
 if items > 40 items = 40
 iconwords = items * 1602
 intdim artwork4 iconwords

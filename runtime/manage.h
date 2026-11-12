@@ -33,6 +33,11 @@
    module stopped. A change of the switch during a session applies at once,
    and On or Off overrides it at the next start.
 
+   Distance Unit, the second setting of the GRKit Settings row, shows the
+   focus distances of the camera in meters or in feet: the Snap focus
+   distances (runtime/distance.h). Its setting, CORE.UNIT, follows Enable at
+   Start in the table, and a change applies at once.
+
    INSTALL writes the module list (GRKIT_HOST_MANAGE): MANAGE_HEADER words,
    then MANAGE_STRIDE bytes for each listed module, in the order of the last
    start. The includer defines u16, u32, and the header fields. */
@@ -51,7 +56,9 @@
 #define MANAGE_SWITCH 16U
 /* The handle + 1 of CORE.START, Enable at Start, or 0 without it. */
 #define MANAGE_START 20U
-#define MANAGE_HEADER 24U
+/* The handle + 1 of CORE.UNIT, Distance Unit, or 0 without it. */
+#define MANAGE_UNIT 24U
+#define MANAGE_HEADER 28U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -88,6 +95,12 @@
 #define MANAGE_START_OFF 1U
 #define MANAGE_START_KEEP 2U
 #define MANAGE_START_VALUES 3U
+/* The setting of Distance Unit and its values, in the order of its value
+   page. */
+#define MANAGE_UNIT_KEY "CORE.UNIT"
+#define MANAGE_UNIT_METERS 0U
+#define MANAGE_UNIT_FEET 1U
+#define MANAGE_UNIT_VALUES 2U
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -333,10 +346,11 @@ static const Setting switch_settings[SETTING_ROWS]={
     {switch_menu_label,switch_rows,switch_value_text,manage_all_off,manage_set_all_off},
 };
 
-/* Enable at Start in MENU: its row opens the value page of this one setting
-   at once, titled Enable at Start: On, Off, then Keep Last. On and Off are
-   the texts of the switch. A choice applies at the next start; the switch
-   keeps its value in this session. */
+/* The GRKit Settings row of MENU opens a settings page of the core, titled
+   GRKit Settings: Enable at Start, while the switch shows, then Distance
+   Unit. Enable at Start: On, Off, then Keep Last. On and Off are the texts
+   of the switch. A choice applies at the next start; the switch keeps its
+   value in this session. Distance Unit: Meters, then Feet, at once. */
 static u32 start_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_START) : 0; }
 static u32 start_value(volatile u32 *h) {
     u32 at=start_handle(h);
@@ -352,8 +366,28 @@ static const u16 *start_value_text(volatile u32 *h,u32 value) {
     if(value==MANAGE_START_KEEP) return text(h,TEXT_START+1);
     return switch_value_text(h,value==MANAGE_START_OFF);
 }
-static const Setting start_settings[SETTING_ROWS]={
-    {start_label,start_values,start_value_text,start_value,start_set},
-};
+static u32 unit_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_UNIT) : 0; }
+/* Whether the camera shows its focus distances in feet. */
+static u32 unit_feet(volatile u32 *h) {
+    u32 at=unit_handle(h);
+    return at && setting_value(h,at-1)==MANAGE_UNIT_FEET;
+}
+static u32 unit_value(volatile u32 *h) { return unit_feet(h) ? MANAGE_UNIT_FEET : MANAGE_UNIT_METERS; }
+static void unit_set(volatile u32 *h,u32 value) {
+    u32 at=unit_handle(h);
+    if(at && value<MANAGE_UNIT_VALUES) setting_store(h,at-1,value);
+}
+static const u16 *unit_label(volatile u32 *h) { return text(h,TEXT_UNIT+1); }
+static u32 unit_values(volatile u32 *h) { (void)h; return MANAGE_UNIT_VALUES; }
+static const u16 *unit_value_text(volatile u32 *h,u32 value) { return text(h,TEXT_UNIT+2+(value==MANAGE_UNIT_FEET)); }
+static const u16 *core_settings_title(volatile u32 *h) { return text(h,TEXT_UNIT); }
+#define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
+#define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
+static const Setting core_settings[SETTING_ROWS]={START_SETTING,UNIT_SETTING};
+static const Setting unit_settings[SETTING_ROWS]={UNIT_SETTING};
+/* The rows of the page: Enable at Start shows with the switch. */
+static const Setting *core_settings_rows(volatile u32 *h) {
+    return manage_switch_shown(h) && start_handle(h) ? core_settings : unit_settings;
+}
 #endif
 #endif

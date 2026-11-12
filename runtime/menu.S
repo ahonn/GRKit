@@ -157,24 +157,26 @@ menu_apply_original:
 .global menu_icon_width
 .type menu_icon_width, %function
 menu_icon_width:
+    /* A private icon gives the width of its descriptor (u16 at +0). */
     push {r1-r3, lr}
     mov r0, r1
     bl menu_icon
     cmp r0, #0
+    ldrhne r0, [r0]
     pop {r1-r3, lr}
-    movne r0, #40
     bxne lr
     movw r3, #670
     ldr pc, =HOOK_MENU_ICON_WIDTH_RESUME
 .global menu_icon_height
 .type menu_icon_height, %function
 menu_icon_height:
+    /* And the height (u16 at +2). */
     push {r1-r3, lr}
     mov r0, r1
     bl menu_icon
     cmp r0, #0
+    ldrhne r0, [r0, #2]
     pop {r1-r3, lr}
-    movne r0, #40
     bxne lr
     movw r3, #670
     ldr pc, =HOOK_MENU_ICON_HEIGHT_RESUME
@@ -390,6 +392,56 @@ menu_icon_entry:
     pop {r0-r2, r12, lr}
     ldreq r3, [r0, r7, lsl #2]
     ldr pc, =HOOK_MENU_ICON_ENTRY_RESUME
+.ltorg
+#endif
+
+#ifdef HOOK_MENU_SCALE_METERS
+/* The manual focus scale in feet (runtime/distance.h). Each replaces the BL
+   to IconView::SetIcon(view, id) of one label of the normal scale: the unit,
+   then 5, 3, 1, and 0.3 m. menu_scale_icon gives the icon of the label. */
+.macro SCALE_ICON name, site, target
+.global \name
+.type \name, %function
+\name:
+    push {r0, r2, r3, lr}
+    mov r0, #\site
+    bl menu_scale_icon
+    mov r1, r0
+    pop {r0, r2, r3, lr}
+    ldr pc, =\target
+.endm
+SCALE_ICON menu_scale_meters, 0, HOOK_MENU_SCALE_METERS_TARGET
+SCALE_ICON menu_scale_five, 1, HOOK_MENU_SCALE_FIVE_TARGET
+SCALE_ICON menu_scale_three, 2, HOOK_MENU_SCALE_THREE_TARGET
+SCALE_ICON menu_scale_one, 3, HOOK_MENU_SCALE_ONE_TARGET
+SCALE_ICON menu_scale_tenth, 4, HOOK_MENU_SCALE_TENTH_TARGET
+.ltorg
+/* The entry of the update of a manual focus scale (r0), which replaces its
+   first instruction, `mov r12, sp`: menu_scale_update sets the icons again
+   after a change of the unit. */
+.global menu_scale_update_entry
+.type menu_scale_update_entry, %function
+menu_scale_update_entry:
+    push {r0-r3, r12, lr}
+    bl menu_scale_update
+    pop {r0-r3, r12, lr}
+    mov r12, sp
+    ldr pc, =HOOK_MENU_SCALE_UPDATE_ENTRY_RESUME
+/* The entry of the string view text setter (view r0, text ID r1), which
+   replaces its first instruction, the load of the current text ID that the
+   setter compares with r1. A Snap distance that menu_string_text lays out
+   again loads an ID that no text has, so the setter lays it out. */
+.global menu_string_text_entry
+.type menu_string_text_entry, %function
+menu_string_text_entry:
+    push {r0-r3, r12, lr}
+    bl menu_string_text
+    str r0, [sp, #16]
+    pop {r0-r3, r12, lr}
+    ldrh r3, [r0, #STRING_VIEW_TEXT]
+    cmp r12, #0
+    movne r3, #0x10000
+    ldr pc, =HOOK_MENU_STRING_TEXT_ENTRY_RESUME
 .ltorg
 #endif
 

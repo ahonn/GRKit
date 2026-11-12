@@ -141,6 +141,16 @@
    0x5329f7b8, +0x14ef; 1.11 +0x1497), with the GR III values. Not confirmed
    on a camera. */
 #define LANGUAGE_SETTING_BYTE (FIRMWARE(0x550832a8) + 0x14ef)
+/* The text ID of the first Snap focus distance, 0.3 m, then 0.4, 1, 1.5, 2,
+   2.5, 3.5, and 5 m (runtime/distance.h). */
+#define SNAP_DISTANCE_TEXT 66
+/* The icons 1, 3, and 10 of the manual focus scale (runtime/distance.h). */
+#define SCALE_ICON_ONE 0x8e
+#define SCALE_ICON_THREE 0x92
+#define SCALE_ICON_TEN 0x8f
+/* The icon setup of a manual focus scale (scale), which its update calls
+   when the scale turns between normal and macro. */
+#define FW_FOCUS_SCALE_ICONS FIRMWARE(0x53593050)
 /* The live-view display mode that DISP cycles, in the same object (reader
    0x5329f4ac, +0x1461; 1.11 +0x1409), with the GR III values: 0 full,
    1 simple, 2 no information, 3 display off. */

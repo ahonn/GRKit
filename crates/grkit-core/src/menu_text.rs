@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 67;
+pub const STRINGS: usize = 71;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -78,6 +78,12 @@ struct Words {
     dial_none: &'static str,
     dial_off: &'static str,
     dial_saved: &'static str,
+    /// The GRKit Settings row of MENU and the title of its page.
+    grkit_settings: &'static str,
+    /// The Distance Unit row of GRKit Settings, then its two values.
+    distance_unit: &'static str,
+    meters: &'static str,
+    feet: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The settings row that lists the options of a module page.
@@ -149,6 +155,10 @@ const ENGLISH: Words = Words {
     dial_none: "None",
     dial_off: "GRKit Off",
     dial_saved: "Saved Settings",
+    grkit_settings: "GRKit Settings",
+    distance_unit: "Distance Unit",
+    meters: "Meters",
+    feet: "Feet",
     adj_order: "ADJ Order",
     options: "Options",
     about: "About GRKit",
@@ -212,6 +222,10 @@ const SIMPLIFIED_CHINESE: Words = Words {
     dial_none: "无",
     dial_off: "关闭 GRKit",
     dial_saved: "已保存设置",
+    grkit_settings: "GRKit 设置",
+    distance_unit: "距离单位",
+    meters: "米",
+    feet: "英尺",
     adj_order: "ADJ 菜单顺序",
     options: "可选项",
     about: "关于 GRKit",
@@ -275,6 +289,10 @@ const TRADITIONAL_CHINESE: Words = Words {
     dial_none: "無",
     dial_off: "關閉 GRKit",
     dial_saved: "已儲存設定",
+    grkit_settings: "GRKit 設定",
+    distance_unit: "距離單位",
+    meters: "公尺",
+    feet: "英尺",
     adj_order: "ADJ 選單順序",
     options: "可選項",
     about: "關於 GRKit",
@@ -340,6 +358,10 @@ const JAPANESE: Words = Words {
     dial_none: "なし",
     dial_off: "GRKit オフ",
     dial_saved: "保存した設定",
+    grkit_settings: "GRKit 設定",
+    distance_unit: "距離の単位",
+    meters: "メートル",
+    feet: "フィート",
     adj_order: "ADJ メニューの順番",
     options: "オプション",
     about: "GRKit について",
@@ -403,6 +425,10 @@ const KOREAN: Words = Words {
     dial_none: "없음",
     dial_off: "GRKit 끄기",
     dial_saved: "저장된 설정",
+    grkit_settings: "GRKit 설정",
+    distance_unit: "거리 단위",
+    meters: "미터",
+    feet: "피트",
     adj_order: "ADJ 메뉴 순서",
     options: "옵션",
     about: "GRKit 정보",
@@ -568,6 +594,12 @@ pub const RUNS: &[Run] = &[
         "The Mode Dial row of the Recipes page of MENU, then the values of a user mode \
          besides a recipe: None, GRKit Off, and Saved Settings.",
     ),
+    run(
+        "UNIT",
+        4,
+        "GRKit Settings, the MENU row and the title of the settings page of the core, \
+         then its Distance Unit row and the values Meters and Feet.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -639,6 +671,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "NATIVE_TYPE" => words(&w.native_types),
         "START" => words(&[w.enable_at_start, w.keep_last]),
         "DIAL" => words(&[w.mode_dial, w.dial_none, w.dial_off, w.dial_saved]),
+        "UNIT" => words(&[w.grkit_settings, w.distance_unit, w.meters, w.feet]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -799,6 +832,41 @@ mod tests {
         assert!(strings(Language::English, VERSION)[id("START")..]
             .iter()
             .all(|text| text.is_ascii()));
+    }
+
+    /// GRKit Settings holds Enable at Start and Distance Unit, whose
+    /// values are Meters and Feet.
+    #[test]
+    fn grkit_settings_has_its_rows_and_units_in_each_language() {
+        let expected = [
+            (
+                Language::English,
+                ["GRKit Settings", "Distance Unit", "Meters", "Feet"],
+            ),
+            (
+                Language::SimplifiedChinese,
+                ["GRKit 设置", "距离单位", "米", "英尺"],
+            ),
+            (
+                Language::TraditionalChinese,
+                ["GRKit 設定", "距離單位", "公尺", "英尺"],
+            ),
+            (
+                Language::Japanese,
+                ["GRKit 設定", "距離の単位", "メートル", "フィート"],
+            ),
+            (
+                Language::Korean,
+                ["GRKit 설정", "거리 단위", "미터", "피트"],
+            ),
+        ];
+        for (language, texts) in expected {
+            let list = strings(language, VERSION);
+            for (i, text) in texts.iter().enumerate() {
+                assert_eq!(list[id("UNIT") + i], *text);
+                assert_eq!(language.undrawable(text), None);
+            }
+        }
     }
 
     /// The Mode Dial page names U1 to U3 as the dial does and shows a recipe

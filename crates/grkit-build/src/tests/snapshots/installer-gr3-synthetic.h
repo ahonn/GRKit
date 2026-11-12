@@ -3,7 +3,7 @@ static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10
 #define MAX_CHUNKS 0x5U
 #define ICONS_PER_CHUNK 0x28U
 #define ICON_STRIDE 0x1908U
-#define HOST_ICON_COUNT 0x6U
+#define HOST_ICON_COUNT 0x8U
 #define MAP_BASE 0x51000000U
 #define MAP_SIZE 0xf000000U
 #define HEAP_END 0x60000000U
@@ -129,8 +129,12 @@ static const u8 version_pixels[] __attribute__((aligned(4))) = { /* 6400 values,
 static const u8 modules_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 c63d6fe4548456b6724e152bfa63bdadcf44163e6bb2b9e13a1842e9a9a4acea */ };
 static const u8 modules_off_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 b9fbdee6ffee02a4e4663ecd9b3ef74a8216ce39f2bb8495dab46a7fb7e942c2 */ };
 static const u8 rotate_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8a5f3688e3432fc4c20d670e4b092cf937baf93ebd9db2e934d4e3ce63ae2d56 */ };
-#define MENU_TEXT_BYTES 5678U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5678 values, SHA-256 528bec1de240a0a837755dae1e4761cabd8ec2bb607691ee04dc717b337df6a8 */ };
+#define SCALE_LABEL_WIDTH 30U
+#define SCALE_LABEL_HEIGHT 20U
+static const u8 scale_feet_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 3035b84a34c34a48cf875d679bf732869c4b70c8e01f9a1a6c904e721f5bc1ef */ };
+static const u8 scale_sixteen_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 39ce4c2f7f5579af5c39910e572b3987d7875b3aa451cf90726fb42d0a56148b */ };
+#define MENU_TEXT_BYTES 5970U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 5970 values, SHA-256 7760372b999d74a4c4b2683b96ef4045a07085255d0d0e87a84e2627564636c7 */ };
 #define LABELS_BYTES 25188U
 static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 25188 values, SHA-256 6d1b90ea0941c41cecbdc5cf91f19dafa7c8cb09c5b9318262708e0a7619daa2 */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };

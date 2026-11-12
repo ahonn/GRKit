@@ -249,6 +249,16 @@
    Chinese. */
 #define UI_SETTINGS_SLOT (FIRMWARE(0x55064200) + 4)
 #define LANGUAGE_SETTING 0x9ba
+/* The text ID of the first Snap focus distance, 0.3 m, then 0.4, 1, 1.5, 2,
+   2.5, 3.5, and 5 m (runtime/distance.h). */
+#define SNAP_DISTANCE_TEXT 62
+/* The icons 1, 3, and 10 of the manual focus scale (runtime/distance.h). */
+#define SCALE_ICON_ONE 0x83
+#define SCALE_ICON_THREE 0x86
+#define SCALE_ICON_TEN 0x84
+/* The icon setup of a manual focus scale (scale), which its update calls
+   when the scale turns between normal and macro. */
+#define FW_FOCUS_SCALE_ICONS FIRMWARE(0x53395bc0)
 /* The live-view display mode that DISP cycles, in the same settings object:
    0 full, 1 simple, 2 no information, 3 display off. */
 #define DISPLAY_MODE_SETTING 0x912

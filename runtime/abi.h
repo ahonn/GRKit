@@ -148,7 +148,7 @@
 /* Icon slots: the host icons, then the effect icons, then the module tiles, in
    chunks of GRKIT_ICONS_PER_CHUNK (GRKIT_HOST_ICON_CHUNKS).
    GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n. */
-#define GRKIT_HOST_ICON_COUNT 6
+#define GRKIT_HOST_ICON_COUNT 8
 #define GRKIT_ICONS_PER_CHUNK 40
 #define GRKIT_MODULE_TILES_MAX 128
 #define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))
@@ -936,6 +936,9 @@
 /* The Mode Dial row of the Recipes page of MENU, then the values of a user
    mode besides a recipe: None, GRKit Off, and Saved Settings. */
 #define TEXT_DIAL 63
-#define GRKIT_TEXT_STRINGS 67
+/* GRKit Settings, the MENU row and the title of the settings page of the core,
+   then its Distance Unit row and the values Meters and Feet. */
+#define TEXT_UNIT 67
+#define GRKIT_TEXT_STRINGS 71
 
 #endif
