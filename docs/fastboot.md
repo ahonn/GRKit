@@ -4,7 +4,7 @@ GRKit does not need this firmware. On the official firmware, GRKit loads from th
 The fast-boot firmware is the official firmware with three small changes. With it, SD scripts can run code from the card at power-on, and GRKit loads before Linux mounts the card.
 
 > [!WARNING]
-> The fast-boot firmware has been tested on a GR III camera only.
+> The fast-boot firmware has been tested on GR III, GR IIIx, GR IIIx HDF, GR IV, GR IV HDF, and GR IV Monochrome cameras.
 > To install it, you flash the camera with a firmware file that Ricoh did not make. If an update fails, the camera may not start.
 
 ## Changes

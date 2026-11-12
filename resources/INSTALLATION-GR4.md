@@ -47,7 +47,7 @@ GRKit keeps your settings and effects in the `GRKIT` folder, so the update keeps
 
 On the official firmware, GRKit waits until the camera has read the card, about 10 seconds after power-on. With the fast-boot firmware, GRKit loads one to two seconds after power-on. The same package works on both firmwares. Without the fast-boot firmware, GRKit has every feature.
 
-Make the fast-boot firmware on the [Fast start page](https://grkit.app/fastboot/) of grkit.app. Select the official firmware that you downloaded from Ricoh, and the page makes the fast-boot firmware. Install it as you install an official update. The installation updates the camera firmware. If the update stops, the camera may not start. To go back, install the official firmware of the same version. GR IV Monochrome is not supported.
+Make the fast-boot firmware on the [Fast start page](https://grkit.app/fastboot/) of grkit.app. Select the official firmware that you downloaded from Ricoh, and the page makes the fast-boot firmware. Install it as you install an official update. The installation updates the camera firmware. If the update stops, the camera may not start. To go back, install the official firmware of the same version.
 
 ## Troubleshooting
 
