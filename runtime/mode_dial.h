@@ -358,9 +358,14 @@ static u32 dial_box_of(u32 u) {
 #endif
 #ifdef DIAL_NAME_RECORDS
 /* GR III: the name and the registered flag of a box in each record, as the
-   setters of the firmware write them: the name up to its 0, then 0. */
+   setters of the firmware write them: the name up to its 0, then 0. The
+   setters of box 1 (FW_BOX_NAME1_SET, FW_BOX_REGIST1_SET) are not called:
+   the reference to them makes INSTALL find their code, offsets included
+   (runtime/relocation.h), so a build that moved these fields does not
+   install (status 47), and these writes never land in other settings. */
 static void dial_names_write(u32 slot,u32 name,u32 registered) {
     u32 r, i, record, ended;
+    __asm__ volatile("" : : "r"(FW_BOX_NAME1_SET), "r"(FW_BOX_REGIST1_SET));
     for(r=0;r<DIAL_NAME_RECORDS;++r) {
         record=DIAL_NAME_RECORD(r);
         for(i=0, ended=0;i<DIAL_NAME_CHARS;++i) {

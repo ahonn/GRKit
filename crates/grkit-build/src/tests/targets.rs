@@ -1541,6 +1541,26 @@ fn user_mode_slots_match_each_firmware() -> Result<()> {
                     "{name}: the setter of the box of user mode {u}"
                 );
             }
+            // The setters of box 1 whose code INSTALL checks (mode_dial.h:
+            // dial_names_write): the name at `add r0, r0, #0x7e0` and `add
+            // r0, r0, #6` in each record, and the flag at `strb r1, [r3,
+            // #field]`, the offsets that the runtime writes.
+            let set_name = value("FW_BOX_NAME1_SET");
+            let adds = (0..20).map(|k| at(set_name + 4 * k)).collect::<Vec<_>>();
+            let added = adds
+                .windows(2)
+                .find(|pair| pair.iter().all(|word| word & 0xffff_f000 == 0xe280_0000))
+                .map(|pair| {
+                    pair.iter()
+                        .map(|&word| arm::modified_immediate(word))
+                        .sum::<u32>()
+                });
+            assert_eq!(added, Some(field), "{name}: the name setter of box 1");
+            let set_flag = value("FW_BOX_REGIST1_SET");
+            assert!(
+                within(set_flag, 8, 0xe5c3_1000 | flag),
+                "{name}: the flag setter of box 1"
+            );
         } else {
             let (assign, set_name, names_model, settings) = (
                 value("FW_USER_MODE_ASSIGN"),

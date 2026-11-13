@@ -201,6 +201,11 @@
 #define FW_BOX_ASSIGN1 FIRMWARE(0x53242eb8)
 #define FW_BOX_ASSIGN2 FIRMWARE(0x53242f0c)
 #define FW_BOX_ASSIGN3 FIRMWARE(0x53242f60)
+/* The setters of the name and of the registered flag of box 1, which
+   write them at DIAL_BOX_NAME and DIAL_BOX_REGIST of each record (gr3.h:
+   dial_names_write). */
+#define FW_BOX_NAME1_SET FIRMWARE(0x5326c7e8)
+#define FW_BOX_REGIST1_SET FIRMWARE(0x53242fb4)
 #define FW_MESSAGE_BACKGROUND FIRMWARE(0x5339c71c)
 #define FW_MESSAGE_SET FIRMWARE(0x5339c844)
 #define FW_MESSAGE_BUTTONS FIRMWARE(0x5339ca54)
