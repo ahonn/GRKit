@@ -46,33 +46,33 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 244 + count * 1088
+expected = 1627 + count * 1088
 if words != expected goto reject
-expectedchunks = (count + moduletiles + 45) / 40
+expectedchunks = (count + moduletiles + 60) / 40
 if chunks != expectedchunks goto reject
 intdim registry words
 if chunks <= 0 goto icons_ready
-items = count + moduletiles + 6 - 0
+items = count + moduletiles + 21 - 0
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork0 iconwords
 if chunks <= 1 goto icons_ready
-items = count + moduletiles + 6 - 40
+items = count + moduletiles + 21 - 40
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork1 iconwords
 if chunks <= 2 goto icons_ready
-items = count + moduletiles + 6 - 80
+items = count + moduletiles + 21 - 80
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork2 iconwords
 if chunks <= 3 goto icons_ready
-items = count + moduletiles + 6 - 120
+items = count + moduletiles + 21 - 120
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork3 iconwords
 if chunks <= 4 goto icons_ready
-items = count + moduletiles + 6 - 160
+items = count + moduletiles + 21 - 160
 if items > 40 items = 40
 iconwords = items * 1603
 intdim artwork4 iconwords
@@ -80,7 +80,7 @@ intdim artwork4 iconwords
 if modulewords <= 0 goto modules_ready
 intdim modulecode modulewords
 :modules_ready
-intdim tailarea 48815
+intdim tailarea 61215
 attempts = 0
 waits = 60
 if fast <> 0 waits = 300
