@@ -160,6 +160,9 @@ static unsigned level_calls, level_screen, level_mode;
 #define MENU_LEVEL_ALARM(screen,mode) (++level_calls, level_screen = (screen), level_mode = (mode))
 static unsigned preview_invalidations, preview_invalidated;
 #define MENU_PREVIEW_INVALIDATE(view) (++preview_invalidations, preview_invalidated = (view))
+/* The text view of each row of a long value page widens after its draw. */
+static unsigned row_text_fitted;
+#define MENU_ROW_TEXT_FIT(view) (row_text_fitted = (view))
 /* The native settings of recipes (runtime/native_look.h): no settings
    record, and each UserData Set counted. */
 static unsigned native_sets_count;
@@ -3394,7 +3397,9 @@ static void the_options_page_toggles_its_values(void)
     /* Each option keeps the view and the text of its row. */
     for (u32 k = 0; k < 5; ++k) {
         object_memory[(0x100 + k * 0x40 + ROW_TEXT_VIEW) / 4] = view + 0x10 + k;
+        row_text_fitted = 0;
         assert(menu_settings_draw(TEST_OBJECTS + 0x100 + k * 0x40, k, 1) == 1);
+        assert(row_text_fitted == view + 0x10 + k);
         assert(menu_text_override(view + 0x10 + k, SETTINGS_TITLE_TEXT) ==
                ((u32)(value_entry(h, k) + MENU_VALUE_TEXT_AT / 4) | 1U));
     }

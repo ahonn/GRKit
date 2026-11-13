@@ -827,6 +827,7 @@ static u32 settings_draw(volatile u32 *h,u32 row,u32 value,u32 setting) {
             MENU_VIEW3(FW_STRING_VIEW_RESET,MENU_OBJECT_WORD(row,ROW_TEXT_VIEW),0,0);
         }
         MENU_VIEW2(FW_ROW_TEXT,row,SETTINGS_TITLE_TEXT);
+        MENU_ROW_TEXT_FIT(MENU_OBJECT_WORD(row,ROW_TEXT_VIEW));
         return 1;
     }
     if(value<settings_values(h,page,setting))

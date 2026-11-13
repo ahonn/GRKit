@@ -901,6 +901,22 @@ static void fit_value(u32 view) {
     rect[0]=frame[0]+room-width; rect[1]=frame[1]; rect[2]=width; rect[3]=frame[3];
     CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
 }
+/* The text view of a value page row ends well before the row does, which
+   cuts a long text, such as the name of a user mode. The text views of the
+   rows of a long value page, which have nothing at their right, end
+   ROW_TEXT_END pixels from the left edge instead. Call after the native row
+   setter. */
+#define ROW_TEXT_END 700
+static void fit_row_text(u32 view) {
+    volatile int *frame=(volatile int *)(view+VIEW_FRAME);
+    int rect[4];
+    if(!view || frame[0]+frame[2]>=ROW_TEXT_END) return;
+    rect[0]=frame[0]; rect[1]=frame[1]; rect[2]=ROW_TEXT_END-frame[0]; rect[3]=frame[3];
+    CALL2(WORD(WORD(view,0),VIEW_SET_FRAME))(view,(u32)rect);
+}
+#ifndef MENU_ROW_TEXT_FIT
+#define MENU_ROW_TEXT_FIT(view) fit_row_text(view)
+#endif
 #include "menu_settings.h"
 #include "mode_dial.h"
 #include "menu_dial.h"
