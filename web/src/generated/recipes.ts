@@ -68,6 +68,63 @@ export const PRESETS: readonly Preset[] = [
         "hidden": false,
         "number": 0,
         "id": 0
+      },
+      {
+        "name": "Bennet 800",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 6,
+          "levels": [
+            7,
+            3,
+            4,
+            6,
+            2,
+            0,
+            4,
+            4,
+            3
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 28,
+          "shiftGm": 12,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          4,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
       }
     ]
   },
@@ -80,6 +137,63 @@ export const PRESETS: readonly Preset[] = [
       {
         "name": "Reggie Negative",
         "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 6,
+          "levels": [
+            6,
+            4,
+            4,
+            7,
+            0,
+            3,
+            5,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 20,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          2,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Reggie Negative",
+        "family": "gr4",
         "look": {
           "kind": "native",
           "imageType": 6,

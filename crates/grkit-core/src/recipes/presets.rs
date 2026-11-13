@@ -78,41 +78,46 @@ pub fn presets() -> Vec<Preset> {
     };
     // A community recipe of Negative Film with its nine levels as the camera
     // shows them, -4 to +4, the Auto white balance with its shifts (stored
-    // 14 is none), and the highlight and shadow corrections. It has no
-    // GRKit Grain or Glow.
+    // 14 is none), and the highlight and shadow corrections, for each color
+    // line: GR III and GR IV have Negative Film with the same nine levels.
+    // It has no GRKit Grain or Glow.
     let negative =
-        |name: &str, levels: [i8; 9], shift_gm: i8, shift_ba: i8, corrections: [u8; 2]| Recipe {
-            name: name.into(),
-            family: Family::Gr3,
-            look: Look::Native(NativeLook {
-                image_type: NEGATIVE_FILM,
-                levels: levels.map(|level| (level + 4) as u8),
-                tone: 0,
-                intensity: 0,
-                filter: 0,
-                grain_strength: 0,
-                grain_size: 0,
-                solarization: 0,
-            }),
-            grain: Some(GRAIN_OFF),
-            glow: Some(GLOW_OFF),
-            border: None,
-            white_balance: Some(WhiteBalance {
-                shift_ba: (shift_ba + 14) as u8,
-                shift_gm: (shift_gm + 14) as u8,
-                ..AUTO_WHITE_BALANCE
-            }),
-            corrections: [
-                Some(corrections[0]),
-                Some(corrections[1]),
-                NEUTRAL_CORRECTIONS[2],
-                NEUTRAL_CORRECTIONS[3],
-            ],
-            exposure: Exposure::default(),
-            enabled: true,
-            hidden: false,
-            number: 0,
-            id: 0,
+        |name: &str, levels: [i8; 9], shift_gm: i8, shift_ba: i8, corrections: [u8; 2]| {
+            COLOR_LINES
+                .map(|family| Recipe {
+                    name: name.into(),
+                    family,
+                    look: Look::Native(NativeLook {
+                        image_type: NEGATIVE_FILM,
+                        levels: levels.map(|level| (level + 4) as u8),
+                        tone: 0,
+                        intensity: 0,
+                        filter: 0,
+                        grain_strength: 0,
+                        grain_size: 0,
+                        solarization: 0,
+                    }),
+                    grain: Some(GRAIN_OFF),
+                    glow: Some(GLOW_OFF),
+                    border: None,
+                    white_balance: Some(WhiteBalance {
+                        shift_ba: (shift_ba + 14) as u8,
+                        shift_gm: (shift_gm + 14) as u8,
+                        ..AUTO_WHITE_BALANCE
+                    }),
+                    corrections: [
+                        Some(corrections[0]),
+                        Some(corrections[1]),
+                        NEUTRAL_CORRECTIONS[2],
+                        NEUTRAL_CORRECTIONS[3],
+                    ],
+                    exposure: Exposure::default(),
+                    enabled: true,
+                    hidden: false,
+                    number: 0,
+                    id: 0,
+                })
+                .to_vec()
         };
     vec![
         // Highlight correction On, shadow correction Off; AWB G2 A14.
@@ -121,13 +126,13 @@ pub fn presets() -> Vec<Preset> {
             effect: None,
             author: Some("Bennet"),
             source: Some("https://www.reddit.com/r/ricohGR/comments/1k27hmk/"),
-            recipes: vec![negative(
+            recipes: negative(
                 "Bennet 800",
                 [3, -1, 0, 2, -2, -4, 0, 0, -1],
                 -2,
                 14,
                 [1, 4],
-            )],
+            ),
         },
         // Highlight correction Auto, shadow correction Mid; AWB A6.
         Preset {
@@ -135,23 +140,26 @@ pub fn presets() -> Vec<Preset> {
             effect: None,
             author: Some("Reggie Ballesteros"),
             source: Some("https://www.reddit.com/r/ricohGR/comments/180a8nt/"),
-            recipes: vec![negative(
+            recipes: negative(
                 "Reggie Negative",
                 [2, 0, 0, 3, -4, -1, 1, 0, 0],
                 0,
                 6,
                 [0, 2],
-            )],
+            ),
         },
         Preset {
             id: "cinestill-800t",
             effect: Some("vision3-500t-supra-v1"),
             author: None,
             source: None,
-            recipes: vec![cinestill(Family::Gr3), cinestill(Family::Gr4)],
+            recipes: COLOR_LINES.map(cinestill).to_vec(),
         },
     ]
 }
+
+/// The camera lines of the color recipes: each but GR IV Monochrome.
+const COLOR_LINES: [Family; 2] = [Family::Gr3, Family::Gr4];
 
 /// B10: stored A-B shifts run from B14 (0) through none (14) to A14 (28).
 const CINESTILL_SHIFT_BA: u8 = 4;
