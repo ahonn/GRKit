@@ -198,6 +198,11 @@
 /* The user mode boxes (gr3.h: the native slots): the save of the current
    settings in a box, save(settings object, box). */
 #define FW_BOX_SAVE FIRMWARE(0x5324dee8)
+/* The setters of the box of user modes U1, U2, and U3, set(settings object,
+   box). */
+#define FW_BOX_ASSIGN1 FIRMWARE(0x53245640)
+#define FW_BOX_ASSIGN2 FIRMWARE(0x53245694)
+#define FW_BOX_ASSIGN3 FIRMWARE(0x532456e8)
 #define FW_MESSAGE_BACKGROUND FIRMWARE(0x5339f158)
 #define FW_MESSAGE_SET FIRMWARE(0x5339f280)
 #define FW_MESSAGE_BUTTONS FIRMWARE(0x5339f490)

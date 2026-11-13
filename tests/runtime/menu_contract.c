@@ -210,7 +210,11 @@ static unsigned persist_timer_ids, persist_timer_ms, persist_barriers;
    record of the test at TEST_RECORD, whose byte 0 marks its content and
    which holds the name of slot n at TEST_NAME(n) and its registered flag at
    TEST_REGIST(n); the slot of each user mode; and the content that a save
-   gave each slot (the mark of the record), with the saves and the names. */
+   gave each slot (the mark of the record), with the saves and the names.
+   As on GR III, there are six slots, and the setter of the slot of a user
+   mode records how many saves came before it. */
+#undef DIAL_SLOTS
+#undef DIAL_SLOT_ASSIGN
 #undef DIAL_SLOT_OF
 #undef DIAL_SLOT_SAVE
 #undef DIAL_SLOT_NAME_SET
@@ -223,7 +227,7 @@ static unsigned persist_timer_ids, persist_timer_ms, persist_barriers;
 #define TEST_REGIST(n) (0x400U + (n))
 static unsigned char record_memory[0xc00];
 static unsigned slot_of[4] = {0, 1, 2, 3}, slot_mark[7];
-static unsigned slot_saves, slot_names;
+static unsigned slot_saves, slot_names, slot_assigns, slot_assign_saves;
 static void slot_name_set(unsigned slot, unsigned name, unsigned registered)
 {
     unsigned i;
@@ -237,6 +241,8 @@ static void slot_name_set(unsigned slot, unsigned name, unsigned registered)
 #define DIAL_SLOT_NAME_SET(slot,name,registered) slot_name_set((slot), (name), (registered))
 #define DIAL_SLOT_NAME_AT(slot) (TEST_RECORD + TEST_NAME(slot))
 #define DIAL_SLOT_REGIST_AT(slot) (TEST_RECORD + TEST_REGIST(slot))
+#define DIAL_SLOTS 6U
+#define DIAL_SLOT_ASSIGN(u,slot) (++slot_assigns, slot_assign_saves = slot_saves, slot_of[(u)] = (slot))
 /* A change of the controller, as to the keyboard, which the test records. */
 #undef FW_CHANGE_CONTROLLER
 static unsigned controller_changes, controller_from, controller_to;
@@ -3818,7 +3824,7 @@ static void dial_reset(void)
     memset(slot_mark, 0, sizeof slot_mark);
     for (u32 u = 1; u <= GRKIT_DIAL_USER_MODES; ++u) slot_of[u] = u;
     record_memory[0] = 0x11;
-    slot_saves = slot_names = controller_changes = 0;
+    slot_saves = slot_names = slot_assigns = slot_assign_saves = controller_changes = 0;
 }
 /* The firmware applies position `code`. */
 static void dial_to(u32 code)
@@ -4101,11 +4107,19 @@ static void the_mode_dial_saves_the_current_settings_in_a_user_mode(void)
     /* A name keeps printable ASCII, at most 32 characters. */
     dial_save_as(1, "0123456789abcdefghijklmnopqrstuvwxyz");
     assert(slot_named(1, "0123456789abcdefghijklmnopqrstuv"));
-    /* A user mode without a slot saves nothing (GR III: no box). */
+    /* A user mode without a slot (GR III: no box) takes a slot that no user
+       mode has and that is not registered, after the save. */
     slot_of[1] = 0;
     sets = slot_saves;
+    dial_save_as(1, "Free");
+    assert(slot_of[1] == 4 && slot_named(4, "Free") && dial_slot_intact(h, 1));
+    assert(slot_saves == sets + 1 && slot_assigns == 1 && slot_assign_saves == slot_saves);
+    /* Without such a slot, it saves nothing. */
+    slot_of[1] = 0;
+    record_memory[TEST_REGIST(5)] = record_memory[TEST_REGIST(6)] = 1;
+    sets = slot_saves;
     dial_save_as(1, "None");
-    assert(slot_saves == sets);
+    assert(slot_saves == sets && slot_assigns == 1);
 }
 
 /* R4 and R6: a user mode with a snapshot applies it, from the shared
@@ -4524,12 +4538,27 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     dial_loaded = 1;
     dial_fire();
     assert(!dial_has_set(h, 2) && !services_word(h, SERVICES_DIAL + DIAL_SYNC)[0]);
-    /* GR III can give two user modes one box: a save for U2 makes U1, which
-       has the box too, lose its snapshot by its name. */
+    /* GR III can give two user modes one box. A save for U2, whose box U1
+       has too, writes a box that no user mode has and that is not registered
+       (box 2 is registered), and then gives it to U2: U1 keeps its box and
+       its snapshot. The confirm names U2 only. */
     dial_save_as(1, "Street");
     slot_of[2] = 1;
+    assert(record_memory[TEST_REGIST(2)] && !record_memory[TEST_REGIST(4)]);
     dial_save_as(2, "Night");
-    assert(slot_named(1, "Night") && dial_has_set(h, 2) && !dial_has_set(h, 1));
+    assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Overwrite U2?"));
+    assert(slot_of[2] == 4 && slot_named(4, "Night") && slot_named(1, "Street"));
+    assert(dial_slot_intact(h, 1) && dial_slot_intact(h, 2) && slot_assign_saves == slot_saves);
+    /* Without such a box, the save writes the shared box, the confirm names
+       each user mode that has it, and U1 loses its snapshot by its name. A
+       registered box that no user mode has stays. */
+    slot_of[2] = 1;
+    record_memory[TEST_REGIST(5)] = record_memory[TEST_REGIST(6)] = 1;
+    memcpy(record_memory + TEST_NAME(5), "Mine", 5);
+    dial_save_as(2, "Night");
+    assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Overwrite U1/U2?"));
+    assert(slot_of[2] == 1 && slot_named(1, "Night") && slot_named(5, "Mine"));
+    assert(dial_has_set(h, 2) && !dial_has_set(h, 1));
     /* A name of an earlier build (no snapshot) and an unknown value are
        On. */
     dial_slot_record(h, 3)[GRKIT_DIAL_SLOT_VALUE] = 1234;

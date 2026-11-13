@@ -501,7 +501,9 @@
    characters with 0 after it, and whether the box is registered; the
    setters of the firmware write the eight records, as the core does. The
    save copies the current settings into box n (FW_BOX_SAVE), as the native
-   save does. DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, and
+   save does. The setter of the box of user mode u (FW_BOX_ASSIGN1 to 3)
+   writes the eight records and tells the camera of a change, as the native
+   Recall does. DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, and
    M, the positions that share their settings, in the order of the Mode
    Dial page. */
 #define DIAL_SHARED_CODES 3U,6U,5U,8U
@@ -522,6 +524,9 @@
 #define DIAL_SLOT_OF(u) dial_box_of(u)
 #define DIAL_SLOT_SAVE(slot) CALL2(FW_BOX_SAVE)(DIAL_SETTINGS,(slot))
 #define DIAL_SLOT_NAME_SET(slot,name,registered) dial_names_write((slot),(name),(registered))
+#define DIAL_SLOTS DIAL_BOXES
+#define DIAL_SLOT_ASSIGN(u,slot) \
+    CALL2((u)==1U ? FW_BOX_ASSIGN1 : (u)==2U ? FW_BOX_ASSIGN2 : FW_BOX_ASSIGN3)(DIAL_SETTINGS,(slot))
 
 /* The canvas of CORE.BORDER (runtime/canvas_shot.h). A still develops in
    StillMake into the bank of its recipe R: R2Y writes the source picture in

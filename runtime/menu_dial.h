@@ -16,7 +16,9 @@
      on the row. MENU returns to the list and changes nothing.
    - Save Current Settings overwrites the native slot of the user mode, so
      it asks first with the confirm box of the core, Execute or Cancel, the
-     cursor on Cancel. Execute opens the keyboard of the camera with the
+     cursor on Cancel. The box names each user mode that has the slot that
+     the save writes (dial_save_slot), such as "Overwrite U1/U2?". Execute
+     opens the keyboard of the camera with the
      automatic name (dial_automatic_name), and OK there saves the current
      settings as the snapshot of the user mode with the typed name
      (dial_snapshot_save), which the user mode then has. Cancel, or a way out
@@ -168,6 +170,19 @@ static const u16 *dial_row_title(volatile u32 *h) {
     u32 row=dial_page_shown(h);
     return row<DIAL_ROWS ? dial_row_name(row) : 0;
 }
+/* Append user mode u (1 to 3), and each other user mode that has the slot
+   that a save for u writes, in order, with a slash between them. */
+static u32 dial_append_users(volatile u16 *to,u32 at,u32 u) {
+    static const u16 slash[2]={'/',0};
+    u32 slot=dial_save_slot(u), v, first=1;
+    for(v=1;v<=GRKIT_DIAL_USER_MODES;++v) {
+        if(v!=u && (!slot || DIAL_SLOT_OF(v)!=slot)) continue;
+        if(!first) at=recipe_append(to,at,slash);
+        at=recipe_append(to,at,dial_names[v-1U]);
+        first=0;
+    }
+    return at;
+}
 /* The return from the keyboard of Save Current Settings on user mode u (1
    to 3): OK saves with the typed text; the values of u show again. */
 static void dial_menu_named(u32 u) {
@@ -199,8 +214,7 @@ static u32 dial_row_select(volatile u32 *h,u32 controller,u32 value) {
     if(u && value==DIAL_VALUE_SAVE) {
         dial_word(h,DIAL_PAGE)[0]=controller;
         to=recipe_text_at(h,RECIPE_BOX_AT);
-        at=recipe_append(to,0,text(h,DIAL_TEXT_OVERWRITE));
-        at=recipe_append(to,at,dial_names[u-1U]);
+        at=dial_append_users(to,recipe_append(to,0,text(h,DIAL_TEXT_OVERWRITE)),u);
         recipe_append(to,at,text(h,DIAL_TEXT_OVERWRITE_AFTER));
         ui_confirm_on(h,controller,recipe_box(h),dial_menu_confirmed,u);
         return 1;

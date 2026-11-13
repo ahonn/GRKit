@@ -1408,9 +1408,11 @@ fn select_menu_methods_match_each_firmware() -> Result<()> {
 
 /// The native slots of the user modes (`runtime/mode_dial.h`) are those of
 /// each firmware. GR III: the save of a box takes a box from 1 to 6 and
-/// copies DIAL_RECORD_SIZE bytes from the current record; and the getters of
+/// copies DIAL_RECORD_SIZE bytes from the current record; the getters of
 /// the name and the registered flag of each box and the setters of the user
-/// mode of a box read the fields of gr3.h. GR IV: the assign of a user mode
+/// mode of a box read the fields of gr3.h; and FW_BOX_ASSIGN1 to 3 are the
+/// setters of the box of U1 to U3, which write the field in each of the
+/// eight records. GR IV: the assign of a user mode
 /// is a call through the holder that takes a user mode from 1 to 3 and
 /// copies the current record; the name setter takes the settings object and
 /// a user mode from 1 to 3; the getter of the name model is a guarded
@@ -1522,6 +1524,21 @@ fn user_mode_slots_match_each_firmware() -> Result<()> {
                 assert!(
                     assigned.contains(&(assign + 2 * u)),
                     "{name}: user mode {u}"
+                );
+                // `add r2, r0, #32`, `ldr r3, [r0, #4]!` (from record 1 to
+                // record 8), then `ldrb ip, [r3, #field]`, `strb r1, [r3,
+                // #field]`.
+                let set = value(&format!("FW_BOX_ASSIGN{}", u + 1));
+                let field = assign + 2 * u;
+                assert_eq!(
+                    (at(set), at(set + 8), at(set + 0x14), at(set + 0x18)),
+                    (
+                        0xe280_2020,
+                        0xe5b0_3004,
+                        0xe5d3_c000 | field,
+                        0xe5c3_1000 | field
+                    ),
+                    "{name}: the setter of the box of user mode {u}"
                 );
             }
         } else {
