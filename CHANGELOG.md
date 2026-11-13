@@ -1,3 +1,21 @@
+## 1.6.0 (2026-11-13)
+
+### Features
+
+- ADJ Order, now in GRKit Settings, can give up to four modules their own entry in the ADJ toolbar before GRKit, or hide a module from ADJ while it keeps working.
+- The new Border module adds a thin, wide, or instant-style white or black border around each photo and keeps the full photo.
+- The new Crop module crops photos to 35, 40, 50, or 70 mm, with a live view and a crop badge to match.
+- Distance Unit in GRKit Settings of the GRKit section of MENU shows the Snap focus distances and the manual focus scale in meters or in feet.
+- Enable at Start in GRKit Settings of the GRKit section of MENU decides whether GRKit is on after each start: On, Off, or Keep Last.
+- The GRKit section of MENU shows GRKit Settings, with Mode Dial and ADJ Order, right after Enable GRKit, then Recipes and the other modules, and MENU returns to the row that you came from.
+- U1, U2, and U3 of the mode dial can save your camera and GRKit settings together, and P/Av/Tv/M can run without GRKit; set them up in MENU.
+- View on the page of a recipe in MENU shows its settings with icons, ADJ shows them at the left of the live view while the cursor is on the recipe, and the tile of each recipe in ADJ shows the abbreviation of its name.
+- Recipes save a look on the camera, or bring recipes from the site, and switch Film Look or Image Control, grain, glow, white balance, the correction and exposure settings, and the border in one step in ADJ, with Undo; MENU lists, applies, renames, and deletes them.
+
+### Fixes
+
+- Shared settings now save while a U1, U2, or U3 snapshot is active. Temporary edits in that snapshot remain separate.
+
 ## 1.5.6 (2026-11-11)
 
 ### Fixes
