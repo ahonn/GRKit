@@ -4,10 +4,15 @@ import { useReactCompareSlider } from 'react-compare-slider/hooks';
 import { sentences, type Language, type Strings } from '../i18n';
 import { fastbootPath, installPath } from '../languagePage';
 import { REPOSITORY } from '../links';
+import { PRESETS } from '../generated/recipes';
+import { RECIPE_STRINGS } from '../recipeStrings';
 import {
+  BUILT_IN_LOOKS,
   CAMERA_SCREENS,
   cropWidth,
   guideLines,
+  LANDING_BORDERS,
+  LANDING_CROPS,
   LANDING_GUIDES,
   LANDING_HERO,
   LANDING_LOOKS,
@@ -17,6 +22,7 @@ import {
   type LandingGuide,
 } from '../landing';
 import { EffectIcon } from './EffectIcon';
+import { PRESET_PICTURES } from './RecipesSection';
 import { RichText } from './RichText';
 
 type Photo = keyof typeof LANDING_PHOTOS;
@@ -46,7 +52,7 @@ export function Landing({ strings, language, canWrite }: Props) {
           </h1>
           <InstallAction strings={strings} language={language} canWrite={canWrite} />
         </div>
-        <Looks strings={strings} />
+        <Looks strings={strings} language={language} />
       </section>
 
       <section className="section" aria-labelledby="landing-framing">
@@ -61,11 +67,22 @@ export function Landing({ strings, language, canWrite }: Props) {
         <h2 id="landing-details">{t.details}</h2>
         <div className="section-body">
           <div className="landing-details">
-            <DateDetail strings={strings} />
+            {/* Two to a row, each row one kind: the frame of the photo, the film texture, then the rest. */}
+            <CropDetail strings={strings} />
+            <BorderDetail strings={strings} />
             <GlowDetail strings={strings} />
             <GrainDetail strings={strings} />
+            <DateDetail strings={strings} />
             <LutDetail strings={strings} language={language} />
           </div>
+        </div>
+      </section>
+
+      <section className="section" aria-labelledby="landing-recipes">
+        <h2 id="landing-recipes">{strings.moduleNames.recipes}</h2>
+        <div className="section-body">
+          <p className="landing-text">{t.recipesText}</p>
+          <Recipes strings={strings} language={language} />
         </div>
       </section>
 
@@ -157,7 +174,7 @@ function InstallAction({ strings, language, canWrite }: { strings: Strings; lang
  * The hero: the Standard development against the picked film look, which the handle compares,
  * and the looks to pick from. Only the look is labeled.
  */
-function Looks({ strings }: { strings: Strings }) {
+function Looks({ strings, language }: { strings: Strings; language: Language }) {
   const t = strings.landing;
   const [look, setLook] = useState<Look>(LANDING_LOOKS[0]);
   const comparison = useReactCompareSlider({ clip: 'itemTwo' });
@@ -198,6 +215,17 @@ function Looks({ strings }: { strings: Strings }) {
             <span>{item.name}</span>
           </button>
         ))}
+        {/* The strip shows a few looks; the last tile says how many more the installer offers. */}
+        <a
+          className="landing-film landing-more"
+          href={`${installPath(language)}#effects-label`}
+          aria-label={t.moreLooksCount(BUILT_IN_LOOKS - LANDING_LOOKS.length)}
+        >
+          <span className="landing-more-tile" aria-hidden="true">
+            +{BUILT_IN_LOOKS - LANDING_LOOKS.length}
+          </span>
+          <span aria-hidden="true">{t.moreLooks}</span>
+        </a>
       </div>
       {/* The other looks load while the visitor reads, so a pick shows at once. */}
       {LANDING_LOOKS.filter((item) => item !== look).map((item) => (
@@ -267,6 +295,137 @@ function Framing({ strings }: { strings: Strings }) {
             <b>{t.photo}</b> {ratio.label}
           </figcaption>
         </figure>
+      </div>
+    </div>
+  );
+}
+
+/** Crop: the photo at 28 mm, or its center at a longer focal length, as the camera records it. */
+function CropDetail({ strings }: { strings: Strings }) {
+  const t = strings.landing;
+  const [index, setIndex] = useState(3);
+  const focal = LANDING_CROPS[index]!;
+  return (
+    <figure className="landing-detail">
+      <div className="landing-crop-view">
+        <img
+          src={landingImage('looks/portra-400.jpg')}
+          alt={`${strings.moduleNames.crop} — ${focal} mm`}
+          style={{ transform: `scale(${focal / LANDING_CROPS[0]})` }}
+          width="1200"
+          height="800"
+          loading="lazy"
+        />
+        <span className="tag">{focal} mm</span>
+      </div>
+      <figcaption>
+        <h3>{strings.moduleNames.crop}</h3>
+        <p>{t.cropText}</p>
+        <Choices
+          labels={LANDING_CROPS.map((value) => `${value} mm`)}
+          value={index}
+          onChange={setIndex}
+          label={strings.moduleNames.crop}
+        />
+        <p className="note"><Credit photo="kitchen" /></p>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Border: the whole 3:2 photo inside the white border of the style. */
+function BorderDetail({ strings }: { strings: Strings }) {
+  const t = strings.landing;
+  const [style, setStyle] = useState(2);
+  const { side, bottom } = LANDING_BORDERS[style]!;
+  // The photo takes PRINT_PHOTO of the card width (cqw), so its short side is two thirds of that,
+  // and each band is its share of the short side.
+  return (
+    <figure className="landing-detail">
+      <div className="landing-border-view">
+        <div
+          className="landing-print"
+          style={{ padding: `${side * SHORT}cqw ${side * SHORT}cqw ${bottom * SHORT}cqw` }}
+        >
+          <img
+            src={landingImage('looks/portra-400.jpg')}
+            alt={`${strings.moduleNames.border} — ${t.borderStyles[style]}`}
+            style={{ width: `${PRINT_PHOTO}cqw` }}
+            width="1200"
+            height="800"
+            loading="lazy"
+          />
+        </div>
+      </div>
+      <figcaption>
+        <h3>{strings.moduleNames.border}</h3>
+        <p>{t.borderText}</p>
+        <Choices labels={t.borderStyles} value={style} onChange={setStyle} label={strings.moduleNames.border} />
+        <p className="note"><Credit photo="kitchen" /></p>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** The width of the photo in the Border card, in percent of the card width, and its short side. */
+const PRINT_PHOTO = 66;
+const SHORT = (PRINT_PHOTO * 2) / 3;
+
+/**
+ * Recipes: each preset of the site, the photo that the camera developed with the recipe against
+ * the same photo without it, and the author of a community recipe.
+ */
+function Recipes({ strings, language }: { strings: Strings; language: Language }) {
+  const t = strings.landing;
+  const r = RECIPE_STRINGS[language];
+  const presets = PRESETS.filter((preset) => PRESET_PICTURES[preset.id]);
+  const [id, setId] = useState(presets[0]?.id ?? '');
+  const comparison = useReactCompareSlider({ clip: 'itemTwo' });
+  const preset = presets.find((item) => item.id === id);
+  const picture = PRESET_PICTURES[id];
+  if (!preset || !picture) return null;
+  const name = preset.recipes[0]?.name ?? preset.id;
+  const photo = LANDING_PHOTOS[picture.photo];
+  return (
+    <div className="landing-recipes">
+      <div className="frame landing-recipe-frame">
+        <Provider {...comparison}>
+          <Root className="image-comparison">
+            <Item item="itemOne">
+              <img src={picture.original} alt={`${name} — ${strings.original}`} />
+            </Item>
+            <Item item="itemTwo" className="comparison-effect">
+              <img src={picture.recipe} alt={name} />
+            </Item>
+            <HandleRoot aria-label={strings.compare}>
+              <Handle buttonStyle={{ width: 32, height: 32, gap: '0.2rem' }} />
+            </HandleRoot>
+          </Root>
+        </Provider>
+        <span className="tag">{name}</span>
+      </div>
+      <div className="landing-recipe-meta">
+        <Choices labels={presets.map((item) => item.recipes[0]?.name ?? item.id)} value={presets.indexOf(preset)} onChange={(index) => setId(presets[index]!.id)} label={strings.moduleNames.recipes} />
+        <p>{r.presetText[preset.id]}</p>
+        <p className="note">
+          {preset.author && preset.source && (
+            <>
+              {r.by(preset.author)} ·{' '}
+              <a href={preset.source} target="_blank" rel="noreferrer">
+                {r.original}
+              </a>{' '}
+              ·{' '}
+            </>
+          )}
+          <a href={photo.source} target="_blank" rel="noreferrer">
+            {photo.author} · {photo.license}
+          </a>
+        </p>
+        <div className="landing-choices">
+          <a className="button small landing-link-button" href={`${installPath(language)}#recipes-label`}>
+            {t.recipesLink}
+          </a>
+        </div>
       </div>
     </div>
   );

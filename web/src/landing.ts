@@ -1,6 +1,6 @@
 import { siteUrl } from './catalog';
 import type { Language } from './i18n';
-export { LANDING_LOOKS, LANDING_PHOTOS } from './landing-data';
+export { BUILT_IN_LOOKS, LANDING_LOOKS, LANDING_PHOTOS } from './landing-data';
 import menuEn from '../../resources/images/grkit-menu.jpg';
 import menuJa from '../../resources/images/grkit-menu.ja.jpg';
 import menuKo from '../../resources/images/grkit-menu.ko.jpg';
@@ -11,6 +11,17 @@ import rootJa from '../../resources/images/grkit-root.ja.jpg';
 import rootKo from '../../resources/images/grkit-root.ko.jpg';
 import rootZhHans from '../../resources/images/grkit-root.zh-Hans.jpg';
 import rootZhHant from '../../resources/images/grkit-root.zh-Hant.jpg';
+
+/** The Crop choices of the home page: the GR III and GR IV focal lengths, 28 mm the whole photo. */
+export const LANDING_CROPS = [28, 35, 40, 50, 70] as const;
+
+/** The Border styles of the home page, as the camera draws them: each side and the bottom, as a
+    share of the short side of the photo (modules/border/module.toml). */
+export const LANDING_BORDERS = [
+  { side: 0.03, bottom: 0.03 },
+  { side: 0.06, bottom: 0.06 },
+  { side: 0.04, bottom: 0.12 },
+] as const;
 
 /** The Framing ratios in the order of the camera menu, with their width over height. */
 export const LANDING_RATIOS = [

@@ -9,7 +9,8 @@
 // the tram photo at ISO 100, with Film Look Tri-X 400 and each Grain strength (GRAIN_FILES).
 // The recipe presets also come from the camera: the preview tables end at diffuse white, so they
 // cannot show the lights that Glow needs. RECIPES holds pictures that GR III firmware 2.10
-// developed from GR III DNGs, without a recipe and with each preset (RECIPE_FILES).
+// developed from GR III DNGs, or a GR IIIx DNG on GR IIIx firmware 1.70, without a recipe and
+// with each preset (RECIPE_FILES).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -47,14 +48,16 @@ const GRAIN_FILES = ['grain-1-weak.jpg', 'grain-2-medium.jpg', 'grain-3-strong.j
  * The developed pictures in RECIPES, 6000 x 4000, each with the top left of its crop: a photo
  * without a recipe, then the presets that use the photo. The site credits each photo
  * (src/landing-data.ts): the takeaway is Tony Barrett's night-takeaway-queue.dng of
- * discuss.pixls.us/t/40918, and the dunes are R0000357.DNG of raw.pixls.us.
+ * discuss.pixls.us/t/40918, the dunes are R0000357.DNG of raw.pixls.us, and the corner is
+ * R0001005.DNG of raw.pixls.us, a GR IIIx photo that GR IIIx firmware 1.70 developed.
  */
 const RECIPE_FILES = [
   ['takeaway.jpg', 620, 330],
   ['cinestill-800t.jpg', 620, 330],
   ['dunes.jpg', 1200, 700],
   ['bennet-800.jpg', 1200, 700],
-  ['reggie-negative.jpg', 1200, 700],
+  ['corner.jpg', 3840, 450],
+  ['reggie-negative.jpg', 3840, 450],
 ];
 
 const [photos, effects, grain, recipes] = process.argv.slice(2);

@@ -1,5 +1,6 @@
+import { existsSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { guideLines } from './landing';
+import { BUILT_IN_LOOKS, guideLines } from './landing';
 
 describe('guideLines', () => {
   it('starts the golden spiral at the bottom-left corner and keeps it in the frame', () => {
@@ -32,5 +33,13 @@ describe('guideLines', () => {
       [0, 0],
       [100, 100],
     ]);
+  });
+});
+
+describe('BUILT_IN_LOOKS', () => {
+  it('counts the film looks of effects/', () => {
+    const effects = new URL('../../effects/', import.meta.url);
+    const looks = readdirSync(effects).filter((name) => existsSync(new URL(`${name}/effect.json`, effects)));
+    expect(BUILT_IN_LOOKS).toBe(looks.length);
   });
 });

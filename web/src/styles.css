@@ -531,7 +531,7 @@ label.download[aria-disabled='true'] {
 /* All five looks in one row: the cells shrink on a phone. */
 .landing-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 84px));
+  grid-template-columns: repeat(6, minmax(0, 84px));
   gap: 4px;
 }
 
@@ -553,6 +553,29 @@ label.download[aria-disabled='true'] {
 
 .landing-film:hover {
   border-color: var(--line);
+}
+
+/* The last tile of the strip: a gray square where a cover would be, with the count of the other
+   looks, as a link to the looks of the installer. */
+.landing-more {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.landing-more:hover {
+  color: var(--ink);
+}
+
+.landing-more-tile {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: var(--code);
+  color: var(--ink-2);
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .landing-film[aria-pressed='true'] {
@@ -608,9 +631,13 @@ label.download[aria-disabled='true'] {
   color: var(--muted);
 }
 
-/* The guide choices under the display caption, apart from it. */
+/* The guide choices under the display caption, apart from it. They may run under the photo
+   column, which ends higher, so that they fit one line: the views are the display (3fr), the gap
+   (24px), and the photo (2fr). */
 .landing-framing-views figcaption + .landing-choices {
   margin-top: 20px;
+  width: max-content;
+  max-width: calc(500% / 3 + 24px);
 }
 
 .landing-framing-views figcaption b {
@@ -633,6 +660,87 @@ label.download[aria-disabled='true'] {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* The Crop card: the 3:2 photo, enlarged from its center as a longer focal length crops it. */
+.landing-crop-view {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #000;
+}
+
+.landing-crop-view img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-crop-view img {
+    transition: none;
+  }
+}
+
+/* The Border card: the white print on a neutral ground, so the border shows. The photo width
+   and the padding of the print are shares of the card width (cqw, Landing.tsx: BorderDetail),
+   and the padding eases from one style to the next as the Crop card does. */
+.landing-border-view {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 2;
+  container-type: inline-size;
+  background: #c9c4ba;
+}
+
+.landing-print {
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  transition: padding 0.2s ease-out;
+}
+
+.landing-print img {
+  display: block;
+  height: auto;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-print {
+    transition: none;
+  }
+}
+
+/* The Recipes section: the comparison next to the presets, one above the other on a phone. */
+.landing-recipes {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 24px 32px;
+  align-items: start;
+}
+
+.landing-recipe-frame {
+  aspect-ratio: 4 / 3;
+}
+
+.landing-recipe-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.landing-recipe-meta p {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .landing-recipes {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* The LUT card: Standard on the left half, the look on the right half, each with its tag. */
@@ -691,7 +799,7 @@ label.download[aria-disabled='true'] {
 
 .landing-details {
   display: grid;
-  /* Four cards: two to a row, one on a phone. */
+  /* Six cards: two to a row, one on a phone. */
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 40px 32px;
 }
@@ -727,7 +835,8 @@ label.download[aria-disabled='true'] {
   padding: 0 8px;
 }
 
-/* A link that looks like a choice button. */
+/* A link that looks like a choice button. On hover it keeps the ink of the buttons, not the
+   accent of links. */
 .landing-link-button {
   display: inline-flex;
   align-items: center;
@@ -735,8 +844,7 @@ label.download[aria-disabled='true'] {
 }
 
 .landing-link-button:hover {
-  background: var(--ink);
-  color: var(--paper);
+  color: var(--ink);
 }
 
 .landing-zoom {
@@ -798,6 +906,12 @@ label.download[aria-disabled='true'] {
   .landing-hero,
   .landing-framing-views {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One column: the guide choices wrap inside it. */
+  .landing-framing-views figcaption + .landing-choices {
+    width: auto;
+    max-width: 100%;
   }
 }
 

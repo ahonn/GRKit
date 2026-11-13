@@ -48,10 +48,10 @@ interface Props {
  * The pictures of each preset: the camera developed a RAW photo with the recipe and without it
  * (scripts/build-landing.mjs). Presets that share a photo share its picture without a recipe.
  */
-const PRESET_PICTURES: Readonly<Record<string, { recipe: string; original: string; photo: keyof typeof LANDING_PHOTOS }>> = {
+export const PRESET_PICTURES: Readonly<Record<string, { recipe: string; original: string; photo: keyof typeof LANDING_PHOTOS }>> = {
   'cinestill-800t': { recipe: siteUrl('recipes/cinestill-800t.jpg'), original: siteUrl('recipes/takeaway.jpg'), photo: 'takeaway' },
   'bennet-800': { recipe: siteUrl('recipes/bennet-800.jpg'), original: siteUrl('recipes/dunes.jpg'), photo: 'dunes' },
-  'reggie-negative': { recipe: siteUrl('recipes/reggie-negative.jpg'), original: siteUrl('recipes/dunes.jpg'), photo: 'dunes' },
+  'reggie-negative': { recipe: siteUrl('recipes/reggie-negative.jpg'), original: siteUrl('recipes/corner.jpg'), photo: 'corner' },
 };
 
 /** The count of recipes that are on shows from this many below `ON_MAX`. */
@@ -256,9 +256,7 @@ export function RecipesSection({
               <button type="button" className="recipe-name link-button" onClick={() => show(recipe)}>
                 {recipe.name}
               </button>
-              <span className="recipe-look">
-                {r.presetTag} · {summary(recipe, r, language, effectNames)}
-              </span>
+              <span className="recipe-look">{summary(recipe, r, language, effectNames)}</span>
             </li>
           ))}
         </ol>

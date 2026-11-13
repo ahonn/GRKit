@@ -21,6 +21,10 @@ export const LANDING_LOOKS = [
   { name: 'Tri-X 400', image: 'tri-x-400', cover: { band: true, brand: 'Kodak', name: 'TRI-X', number: '400', template: 'box' } },
 ] as const satisfies readonly LandingLook[];
 
+/** The film looks that each package can hold (effects/ in the repository), so the strip can say
+    how many more there are than it shows. landing.test.ts checks it against effects/. */
+export const BUILT_IN_LOOKS = 21;
+
 /** The photos of the landing page, credited where they show, with a link to their source page. */
 export const LANDING_PHOTOS = {
   kitchen: {
@@ -51,6 +55,12 @@ export const LANDING_PHOTOS = {
     author: 'raw.pixls.us',
     license: 'CC0 1.0',
     camera: 'RICOH GR III',
+    source: 'https://raw.pixls.us/',
+  },
+  corner: {
+    author: 'raw.pixls.us',
+    license: 'CC0 1.0',
+    camera: 'RICOH GR IIIx',
     source: 'https://raw.pixls.us/',
   },
 } as const;

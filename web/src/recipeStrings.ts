@@ -13,7 +13,6 @@ const en = {
   useCard: "Use the card's recipes",
   keepSite: "Keep this site's recipes",
   look: 'Look',
-  presetTag: 'Preset',
   presetBefore: 'Without the recipe',
   presetAfter: 'With the recipe',
   presetText: {
@@ -69,7 +68,6 @@ const zhHans: RecipeStrings = {
   useCard: '使用卡上的配方',
   keepSite: '保留本网站的配方',
   look: '风格',
-  presetTag: '预设',
   presetBefore: '未使用配方',
   presetAfter: '使用配方',
   presetText: {
@@ -123,7 +121,6 @@ const zhHant: RecipeStrings = {
   useCard: '使用卡上的配方',
   keepSite: '保留本網站的配方',
   look: '風格',
-  presetTag: '預設',
   presetBefore: '未使用配方',
   presetAfter: '使用配方',
   presetText: {
@@ -177,7 +174,6 @@ const ja: RecipeStrings = {
   useCard: 'カードのレシピを使う',
   keepSite: 'このサイトのレシピを残す',
   look: 'ルック',
-  presetTag: 'プリセット',
   presetBefore: 'レシピなし',
   presetAfter: 'レシピあり',
   presetText: {
@@ -231,7 +227,6 @@ const ko: RecipeStrings = {
   useCard: '카드의 레시피 사용',
   keepSite: '이 사이트의 레시피 유지',
   look: '룩',
-  presetTag: '프리셋',
   presetBefore: '레시피 없음',
   presetAfter: '레시피 적용',
   presetText: {
