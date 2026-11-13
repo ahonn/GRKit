@@ -198,6 +198,37 @@ jobs:
             target/release/grkit effects publish --source effects --target "$target" \
               --firmware "$firmware/$target/$file" --out "site/effects/$target"
           done 3< "$RUNNER_TEMP/runtimes.tsv"
+          # The runtimes also install on other builds of their firmware versions, which
+          # they find by relocation. Each known build must relocate, so no camera gets
+          # status 47, and the tables of each runtime must match its firmware.
+          # other ZIP SHA256 TAG OFFICIAL FILE: fetch a build without a runtime of its own.
+          other() {
+            fetch "$1" "$2" "$3" "$4"
+            mkdir "$firmware/$3"
+            unzip -q "$firmware/$1" "$5" -d "$firmware/$3"
+          }
+          other gr3_v220.zip 7b19f9c03f2448c2b674fb919f6a86d22d6d83801521a9c1226a0e20cf0b5a2f gr3-2.20 true fwdc239b.bin
+          other gr3x_v160.zip 19b5895fb3f48238852cdb74799ac28a6ba6ed5fbfccf442c19811f6612866d0 gr3x-1.60 true fwdc243b.bin
+          other gr3x_v170.zip 6a028e90b4f23c9e9af968b03bca5032b71f460be85fd2c49f4078366a71dc6d gr3x-1.70 true fwdc243b.bin
+          other gr3x_v171.zip f379a37e19cc2bf5c390c857564a80bf80773c71b6da0c77de0a2d8b1f350011 gr3x-1.71 true fwdc243b.bin
+          other gr4_v104.zip 436b4d0d5a603a3fd98a14d5ff3e33f4f4fba613dbd3537794bf7a897bc99a7d gr4-1.04 true fwdc248b.bin
+          # The February GR IV 1.11 build exists only as a camera dump in the backup.
+          fetch gr4_v111_20260218_rtos.bin 60250bf7c497af13d6579fc58736cfddbffa32ffb4f8ff3a1403854b9da40d5e \
+            gr4-1.11-20260218 false
+          GRKIT_CLANG=clang-21 GRKIT_LLD=ld.lld-21 \
+            GRKIT_TEST_FIRMWARE="$firmware/gr3-2.10/fwdc239b.bin" \
+            GRKIT_TEST_FIRMWARE_GR3_220="$firmware/gr3-2.20/fwdc239b.bin" \
+            GRKIT_TEST_FIRMWARE_GR3_221="$firmware/gr3-2.21/fwdc239b.bin" \
+            GRKIT_TEST_FIRMWARE_GR3X="$firmware/gr3x-1.60/fwdc243b.bin" \
+            GRKIT_TEST_FIRMWARE_GR3X_170="$firmware/gr3x-1.70/fwdc243b.bin" \
+            GRKIT_TEST_FIRMWARE_GR3X_171="$firmware/gr3x-1.71/fwdc243b.bin" \
+            GRKIT_TEST_FIRMWARE_GR4="$firmware/gr4-1.11/fwdc248b.bin" \
+            GRKIT_TEST_FIRMWARE_GR4_104="$firmware/gr4-1.04/fwdc248b.bin" \
+            GRKIT_TEST_FIRMWARE_GR4_120="$firmware/gr4-1.20/fwdc248b.bin" \
+            GRKIT_TEST_FIRMWARE_GR4_120_0528="$firmware/gr4-1.20-0528/RTOS.BIN" \
+            GRKIT_TEST_FIRMWARE_GR4_121="$firmware/gr4-1.21/fwdc248b.bin" \
+            GRKIT_TEST_RTOS_GR4_111_20260218="$firmware/gr4_v111_20260218_rtos.bin" \
+            cargo test --locked -p grkit-build --lib -- --ignored tests::resolution:: tests::targets::
       - name: Build the official modules
         run: |
           # Each module builds once for every camera and needs no firmware.

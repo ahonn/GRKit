@@ -25,7 +25,7 @@ The site holds no firmware bytes: `grkit site` leaves out the generated header o
 4. Add the repository variable `SITE_URL` with the production URL of the site and no trailing slash, for example `https://<project>.pages.dev`. `Deploy` reads the `build.json` of a runtime under `SITE_URL/runtime/` to find the version that the site serves.
 5. Optional: add the repository variable `PLAUSIBLE_HOST` with the origin of a Plausible server, for example `https://plausible.example.com`. Release then adds Plausible analytics to the site for the domain `grkit.app`.
 6. Keep a private backup of the firmware, so that a release does not depend on the Ricoh download:
-   1. Download `gr3_v210.zip`, `gr3_v221.zip`, `gr4_v111.zip`, `gr4_v120.zip`, and `gr4_v121.zip` from Ricoh and accept the license. Do not change the zips. Ricoh does not publish `gr4_v120_0528.zip`, a dump of a camera. Ask a maintainer for it.
+   1. Download `gr3_v210.zip`, `gr3_v220.zip`, `gr3_v221.zip`, `gr3x_v160.zip`, `gr3x_v170.zip`, `gr3x_v171.zip`, `gr4_v104.zip`, `gr4_v111.zip`, `gr4_v120.zip`, and `gr4_v121.zip` from Ricoh and accept the license. Do not change the zips. Ricoh does not publish `gr4_v120_0528.zip` and `gr4_v111_20260218_rtos.bin`, dumps of cameras. Ask a maintainer for them.
    2. Create a private repository: `gh repo create <owner>/<backup-repo> --private`.
    3. Upload each zip as a release asset with the tag of its target:
       - `gh release create gr3-2.10 gr3_v210.zip --repo <owner>/<backup-repo> --notes "Private backup. Do not redistribute."`
@@ -34,6 +34,7 @@ The site holds no firmware bytes: `grkit site` leaves out the generated header o
       - `gh release create gr4-1.20 gr4_v120.zip --repo <owner>/<backup-repo> --notes "Private backup. Do not redistribute."`
       - `gh release create gr4-1.20-0528 gr4_v120_0528.zip --repo <owner>/<backup-repo> --notes "Private backup. Do not redistribute."`
       - `gh release create gr4-1.21 gr4_v121.zip --repo <owner>/<backup-repo> --notes "Private backup. Do not redistribute."`
+      - The release also checks that the runtimes relocate on the other builds of these versions. Upload `gr3_v220.zip`, `gr3x_v160.zip`, `gr3x_v170.zip`, `gr3x_v171.zip`, `gr4_v104.zip`, and `gr4_v111_20260218_rtos.bin` in the same way, with the tags `gr3-2.20`, `gr3x-1.60`, `gr3x-1.70`, `gr3x-1.71`, `gr4-1.04`, and `gr4-1.11-20260218`.
    4. Create a fine-grained token that can read only the Contents of that repository.
    5. In this repository, add the secret `FIRMWARE_BACKUP_TOKEN` with the token, and the variable `FIRMWARE_BACKUP_REPO` with `<owner>/<backup-repo>`.
    6. Start the `Release` workflow with an existing release tag and `firmware_source` set to `backup`. If the `build` job succeeds, the backup works.
