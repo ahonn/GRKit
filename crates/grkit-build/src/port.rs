@@ -923,6 +923,25 @@ impl Port {
             &format!("relocation_bases: &[{}],", bases.join(", ")),
             &notes.join("; "),
         );
+        // A site window follows its site.
+        let mut windows = Vec::new();
+        for &address in base.site_windows {
+            let ported = self
+                .addresses
+                .iter()
+                .find(|ported| {
+                    ported.address.kind == Kind::Site && ported.address.address == address
+                })
+                .with_context(|| format!("No site at the site window {address:#x}"))?;
+            let (at, _) = self.value(Kind::Site, &ported.address.name)?;
+            windows.push(format!("{at:#x}"));
+        }
+        push(
+            out,
+            4,
+            &format!("site_windows: &[{}],", windows.join(", ")),
+            "",
+        );
         push(out, 0, "};", "");
 
         if let Some(native) = base.image_control {

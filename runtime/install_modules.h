@@ -211,13 +211,17 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
             const char *name = module_uses[i][u];
             int optional = name[0] == '?';
             u32 handle = GRM_NO_SETTING;
-            for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT && handle == GRM_NO_SETTING; ++k)
+            /* A capability whose hooks this firmware build lacks
+               (dropped_points): an optional use goes without it. */
+            int unavailable = 0;
+            for (u32 k = 0; k < GRKIT_CORE_SETTING_COUNT && handle == GRM_NO_SETTING && !unavailable; ++k)
                 if (text_equal(core_setting_names[k], name + optional)) {
+                    if (core_setting_points[k] & dropped_points) { unavailable = 1; continue; }
                     handle = GRKIT_CORE_SETTING_BASE + k;
                     points |= core_setting_points[k];
                     capabilities |= 1U << k;
                 }
-            for (u32 k = 0; k < setting_total && handle == GRM_NO_SETTING; ++k) {
+            for (u32 k = 0; k < setting_total && handle == GRM_NO_SETTING && !unavailable; ++k) {
                 u32 owner = setting_module(k);
                 if (owner < GRKIT_MODULES_MAX && (broken >> owner & 1)) continue;
                 if (text_equal(setting_names[k], name + optional) &&
@@ -226,7 +230,10 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
                     if (owner != i && owner < GRKIT_MODULES_MAX) module_needs[i] |= 1U << owner;
                 }
             }
-            if (handle == GRM_NO_SETTING && !optional) { status = GRM_MISSING_SETTING; failed = u; }
+            if (handle == GRM_NO_SETTING && !optional) {
+                status = unavailable ? GRM_POINT_UNAVAILABLE : GRM_MISSING_SETTING;
+                failed = u;
+            }
             use_handles[u] = handle;
             store(context + 12 + u * 4, handle);
         }
@@ -310,6 +317,11 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
             filters[k].setting = module_handle(i, use_handles, filters[k].setting);
             if (filters[k].setting == GRM_NO_SETTING) filters[k].apply = 0;
         }
+        /* The filters and the native slots need hooks too. */
+        u32 later = native_slots ? core_setting_points[CORE_SETTING(GRKIT_CORE_TONE)] : 0;
+        for (u32 k = 0; k < filter_count; ++k)
+            if (filters[k].apply) later |= POINT_PICTURE_ENCODE;
+        if (!status && (later & dropped_points)) status = GRM_POINT_UNAVAILABLE;
         if (!status && (module_layer_count + layer_count > GRKIT_MODULE_LAYERS_MAX ||
                         module_page_count + page_count > GRKIT_MODULE_PAGES_MAX ||
                         module_filter_count + filter_count > GRKIT_MODULE_FILTERS_MAX ||

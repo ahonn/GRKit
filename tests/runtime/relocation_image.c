@@ -1,6 +1,7 @@
 /* Resolves the relocation tables of a generated installer header against an
-   RTOS image file, then prints "ok" or "failed", each failure, and each
-   symbol as "symbol <pinned> <resolved>". */
+   RTOS image file, then prints "ok" or "failed", after a failure the points
+   that it drops, each failure, and each symbol as "symbol <pinned>
+   <resolved>". */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -38,6 +39,13 @@ int main(int argc, char **argv)
     state.symbol_at = relocated;
     int ok = relocation_resolve(&relocation_tables, &state);
     printf("%s %#x\n", ok ? "ok" : "failed", state.tail);
+    /* The extension points that a failed resolve drops, or "needed" when a
+       symbol that each install needs did not resolve (installer.c). */
+    u32 dropped;
+    if (!ok) {
+        if (relocation_dropped(&relocation_tables, &state, symbol_points, &dropped)) printf("dropped %#x\n", dropped);
+        else printf("dropped needed\n");
+    }
     for (u32 i = 0; i < state.failures && i < RELOCATION_REPORT; ++i)
         printf("failure %u %u %#x %#x\n", state.failure[i].reason, state.failure[i].index,
                state.failure[i].address, state.failure[i].count);

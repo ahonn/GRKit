@@ -36,6 +36,7 @@ pub const TARGET: Target = Target {
     // As on 1.11: the settings domain follows the vtable of the capture
     // property singleton, and the icon drawer is +0x10 in the icon manager.
     relocation_bases: &[(0x5537b2a8, 0x5537b2a4), (0x55083038, 0x55083028)],
+    site_windows: &[],
 };
 
 /// The tables and types of 1.20.

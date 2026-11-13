@@ -34,6 +34,7 @@ pub const TARGET: Target = Target {
     image_control: Some(&IMAGE_CONTROL),
     // The English entry is +4 in the language table, which the text hooks load.
     relocation_bases: &[(0x55002bb8, 0x55002bb4)],
+    site_windows: &[],
 };
 
 pub const IMAGE_CONTROL: ImageControl = ImageControl {

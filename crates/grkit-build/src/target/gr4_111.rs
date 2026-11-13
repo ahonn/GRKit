@@ -38,6 +38,9 @@ pub const TARGET: Target = Target {
     // The settings domain follows the vtable of the capture property
     // singleton, and the icon drawer is +0x10 in the icon manager singleton.
     relocation_bases: &[(0x55379610, 0x5537960c), (0x55082038, 0x55082028)],
+    // Build 8 moves the byte fields 0x429 and 0x42a of a live-view object by
+    // 0x10 in the function of crop_live_3, so its window ends at the hook.
+    site_windows: &[0x5363b8d8],
 };
 
 /// GR IV tables hold 0x22 entries for each of three model variants, which are

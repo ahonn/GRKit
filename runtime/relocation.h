@@ -61,6 +61,9 @@ struct relocation_state {
     /* The window addresses that an earlier search of the same build found,
        or 0. After a resolve, `searched` tells whether the search ran. */
     const u32 *hint;
+    /* Optional: the windows that only optional symbols use (nonzero), which
+       a hint may give as not found, or 0 when each window is needed. */
+    const u32 *optional;
     u32 searched;
     u32 failures;
     struct relocation_failure failure[RELOCATION_REPORT];
@@ -154,6 +157,12 @@ static int relocation_known(const struct relocation_tables *t, struct relocation
         s->window_at[w] = 0;
         if (!window->search) continue;
         u32 address = at ? at[w] : window->start;
+        /* A search of this build did not find an optional window. Its
+           symbols do not resolve, as after that search. */
+        if (!address && at && s->optional && s->optional[w]) {
+            relocation_fail(s, RELOCATION_NOT_FOUND, w, window->start, 0);
+            continue;
+        }
         if (!address || !relocation_matches(t, s, w, address)) return 0;
         s->window_at[w] = address;
     }
@@ -165,6 +174,8 @@ static void relocation_search(const struct relocation_tables *t, struct relocati
 {
     s->searched = 0;
     if (relocation_known(t, s, 0) || (s->hint && relocation_known(t, s, s->hint))) return;
+    /* The search reports again what a check of the hint reported. */
+    s->failures = 0;
     s->searched = 1;
     for (u32 w = 0; w < t->window_count; ++w) {
         const struct relocation_window *window = &t->windows[w];
@@ -242,14 +253,15 @@ static u32 relocation_value(const struct relocation_tables *t, struct relocation
     return value;
 }
 
-/* Resolves every symbol into s->symbol_at. Returns 1 when all resolve. */
+/* Resolves every symbol into s->symbol_at. Returns 1 when all resolve. A
+   symbol that does not resolve keeps 0 or 1 (relocation_unresolved). */
 static int relocation_resolve(const struct relocation_tables *t, struct relocation_state *s)
 {
     s->failures = 0;
+    for (u32 symbol = 0; symbol < t->symbol_count; ++symbol) s->symbol_at[symbol] = 0;
     if (!relocation_startup(t, s)) return 0;
     relocation_search(t, s);
     u32 tail = RELOCATION_NONE;
-    for (u32 symbol = 0; symbol < t->symbol_count; ++symbol) s->symbol_at[symbol] = 0;
     for (u32 i = 0; i < t->source_count; ++i) {
         const struct relocation_source *source = &t->sources[i];
         if (source->kind == SOURCE_TAIL) tail = source->symbol;
@@ -281,10 +293,33 @@ static int relocation_resolve(const struct relocation_tables *t, struct relocati
         if (symbol == tail) continue;
         int code = pinned < RELOCATION_DATA_START;
         if (code ? value < RELOCATION_RTOS_BASE || value >= s->data_source
-                 : value < RELOCATION_DATA_START || value > s->bss_end)
+                 : value < RELOCATION_DATA_START || value > s->bss_end) {
             relocation_fail(s, RELOCATION_OUTSIDE, symbol, pinned, value);
+            s->symbol_at[symbol] = 1;
+        }
     }
     return s->failures == 0;
+}
+
+/* Whether `symbol` did not resolve. */
+static int relocation_unresolved(const struct relocation_state *s, u32 symbol)
+{
+    return s->symbol_at[symbol] <= 1;
+}
+
+/* After a resolve that failed: the extension points of the symbols that did
+   not resolve, from `points` (0 for a symbol that each install needs), into
+   *dropped. Returns 0 when a needed symbol did not resolve. */
+static int relocation_dropped(const struct relocation_tables *t, const struct relocation_state *s,
+                              const u32 *points, u32 *dropped)
+{
+    *dropped = 0;
+    for (u32 symbol = 0; symbol < t->symbol_count; ++symbol) {
+        if (!relocation_unresolved(s, symbol)) continue;
+        if (!points[symbol]) return 0;
+        *dropped |= points[symbol];
+    }
+    return 1;
 }
 
 /* Moves the word at `p` that refers to `symbol`. A branch also moves with the

@@ -35,6 +35,7 @@ pub const TARGET: Target = Target {
     // As on 1.11: the settings domain follows the vtable of the capture
     // property singleton, and the icon drawer is +0x10 in the icon manager.
     relocation_bases: &[(0x5537b2a0, 0x5537b29c), (0x55083038, 0x55083028)],
+    site_windows: &[],
 };
 
 /// GR IV 1.20 tables hold 0x26 entries for each model variant, and 1.20 adds

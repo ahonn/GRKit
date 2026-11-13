@@ -21,6 +21,9 @@
 /* A color-only module on a camera with a monochrome sensor. It is not an
    error: the GRKit section of MENU does not list the module. */
 #define GRM_COLOR_ONLY 56
+/* The running firmware build lacks a hook that the module needs: another
+   build of the firmware version differs there (installer.c: relocate). */
+#define GRM_POINT_UNAVAILABLE 57
 
 struct grm_module {
     char id[9];

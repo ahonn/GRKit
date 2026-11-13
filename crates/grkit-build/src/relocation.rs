@@ -353,6 +353,22 @@ impl<'a> Planner<'a> {
             "Code address {address:#x} is outside the RTOS code"
         );
         let symbol = self.symbol(address);
+        // A site window starts at the address and grows only until it is
+        // unique, so it leaves out the rest of the function.
+        if self.image.target.site_windows.contains(&address) {
+            let (start, end) = self
+                .unique(Region::Image, address, address + 4)
+                .with_context(|| format!("Code at {address:#x} has no unique site window"))?;
+            let window = self.window(Region::Image, start, end, true);
+            self.add(
+                symbol,
+                Source::Window {
+                    window,
+                    offset: address - start,
+                },
+            );
+            return Ok(symbol);
+        }
         let (start, end) = self.function(address);
         if let Some((start, end)) = self.unique(Region::Image, start, end) {
             let window = self.window(Region::Image, start, end, true);

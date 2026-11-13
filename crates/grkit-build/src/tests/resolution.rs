@@ -51,6 +51,9 @@ fn gr4_relocation_resolves_other_builds() -> Result<()> {
             (0x5323db68, 0x5323dc60),
             (0x533b7110, 0x533b72f0), // Parameter getter found through a caller.
             (0x5537960c, 0x5537962c), // Settings singleton.
+            // A crop hook in a function whose field offsets differ in this
+            // build (`Target::site_windows`).
+            (0x5363b8d8, 0x5363be60),
             (0x5500211c, 0x5500211c), // English slot does not move.
             (0x5501adbc, 0x5501adc4), // Standard record and native tables.
             (0x55053780, 0x55053788),
@@ -66,6 +69,52 @@ fn gr4_relocation_resolves_other_builds() -> Result<()> {
                 "February-build relocation of {pinned:#x}"
             );
         }
+        // INSTALL compares the stock word of each hook site where it lands:
+        // a branch or a MOVW or MOVT under the mask, another word exactly.
+        let word = |address: u32| {
+            let at = (address - 0x5300_0000) as usize;
+            u32::from_le_bytes(image[at..at + 4].try_into().unwrap())
+        };
+        let mut compared = 0;
+        for &(name, site, stock) in target::GR4_111.layout.sites {
+            let Some(&at) = resolved.get(&site) else {
+                continue;
+            };
+            let stock = u32::from_le_bytes(hex::decode(stock)?.as_slice().try_into()?);
+            let live = word(at);
+            let moves = (stock >> 25) & 7 == 5
+                || stock & 0x0ff0_0000 == 0x0300_0000
+                || stock & 0x0ff0_0000 == 0x0340_0000;
+            if moves {
+                assert_eq!(
+                    relocation::mask(live),
+                    relocation::mask(stock),
+                    "{name} at {at:#x}"
+                );
+            } else {
+                assert_eq!(live, stock, "{name} at {at:#x}");
+            }
+            compared += 1;
+        }
+        assert!(compared > 150, "{compared} hook sites compared");
+    }
+    // Without its site window, the crop hook of the February build is not
+    // found, and only the crop point drops (`relocation_dropped`).
+    if let Some(path) = std::env::var_os("GRKIT_TEST_RTOS_GR4_111_20260218") {
+        let target: &'static target::Target = Box::leak(Box::new(target::Target {
+            site_windows: &[],
+            ..target::GR4_111
+        }));
+        let body = verify_firmware(&firmware, target)?;
+        let built = build_image(&body, &directory.path().join("gr4-whole"), &tools)?;
+        let (result, _) = resolve_image(&built.output, &fs::read(path)?)?;
+        assert_eq!(
+            result,
+            format!(
+                "failed 0x543d5000 dropped {:#x}",
+                crate::components::Point::CaptureCrop.bit()
+            )
+        );
     }
     // GR III is not a build of this version: nothing resolves.
     if let Ok(path) = std::env::var("GRKIT_TEST_FIRMWARE") {

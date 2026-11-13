@@ -273,6 +273,8 @@ static u32 listed_record[EFFECTS_LISTED];
 static u32 module_tiles;
 #include "install_plan.h"
 static u32 needed_points;
+/* The points whose hooks the running build lacks (installer.c: relocate). */
+static u32 dropped_points;
 static int sync_alias(u32 address, u32 n)
 {
     if (n) (void)at(address + n - 1);
@@ -514,7 +516,7 @@ static void reset(void)
     memset(open_files, 0, sizeof open_files);
     memset(memory, 0, sizeof memory);
     safe_mode = 0;
-    listed_count = count = needed_points = 0;
+    listed_count = count = needed_points = dropped_points = 0;
 }
 /* SCAN: the modules, the effects that discover lists, then the array. */
 static void scan(void)
@@ -916,6 +918,32 @@ static void a_color_only_module_needs_a_color_camera(void)
     add_module(PACKAGE_MODULES_PATH, "NEW.GRM", &(struct spec){.id = "NEW", .module_flags = 2});
     assert(install() == 0 && module_status[0] == GRM_BAD_DESCRIPTOR);
     test_monochrome = 0;
+}
+/* A build that lacks the hooks of a point (dropped_points): a module that
+   needs a capability of the point, or a filter of a dropped picture point,
+   does not load (GRM_POINT_UNAVAILABLE). An optional use goes without the
+   capability, and the other modules load. */
+static void a_module_needs_the_points_of_the_build(void)
+{
+    const u32 crop = 0x80U;
+    reset();
+    dropped_points = crop;
+    add_module(PACKAGE_MODULES_PATH, "CROP.GRM", &(struct spec){.id = "CROP", .order = 1, .uses = {"CORE.ASPECT", "CORE.CROP"}});
+    add_module(PACKAGE_MODULES_PATH, "GUIDES.GRM", &(struct spec){.id = "GUIDES", .order = 2, .uses = {"?CORE.CROP", "CORE.ASPECT"}});
+    add_module(PACKAGE_MODULES_PATH, "OTHER.GRM", &(struct spec){.id = "OTHER", .order = 3, .uses = {"CORE.GRAIN"}});
+    assert(install() == 0 && module_count == 3);
+    assert(module_status[0] == GRM_POINT_UNAVAILABLE && module_status[1] == 0 && module_status[2] == 0);
+    expect_listed(0, GRM_POINT_UNAVAILABLE, "CROP (57)");
+    assert(!(needed_points & crop));
+    assert(!(capabilities_used & 1U << (GRKIT_CORE_CROP - GRKIT_CORE_SETTING_BASE)));
+    assert(capabilities_used & 1U << (GRKIT_CORE_ASPECT - GRKIT_CORE_SETTING_BASE));
+    reset();
+    dropped_points = POINT_PICTURE_ENCODE;
+    add_module(PACKAGE_MODULES_PATH, "FILTER.GRM", &(struct spec){
+        .id = "FILTER", .order = 1, .settings = {{"ON", 2, 0}}, .filter_count = 1, .filters = {{GRM_STAGE_MARK, 0}}});
+    add_module(PACKAGE_MODULES_PATH, "OTHER.GRM", &(struct spec){.id = "OTHER", .order = 2, .uses = {"CORE.GRAIN"}});
+    assert(install() == 0 && module_status[0] == GRM_POINT_UNAVAILABLE && module_status[1] == 0);
+    assert(!module_filter_count && !(needed_points & POINT_PICTURE_ENCODE));
 }
 /* A group and both children install atomically; children keep independent
    handles, and descriptors remain inside the owning module's code. */
@@ -1866,6 +1894,7 @@ static void *run(void *unused)
     install_settings_page();
     install_color_only_rows();
     a_color_only_module_needs_a_color_camera();
+    a_module_needs_the_points_of_the_build();
     install_group_page();
     the_switch_stops_each_module();
     the_dial_installs_with_the_core();

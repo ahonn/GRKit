@@ -505,6 +505,18 @@ fn relocation_tables(
             },
         }
     };
+    // The extension points that use each symbol, or 0 for a symbol that
+    // each installation needs (`symbol_points` of runtime/installer.c).
+    let mut usage = std::collections::BTreeMap::<usize, u32>::new();
+    let mut used = |symbol: usize, points: u32| {
+        let entry = usage.entry(symbol).or_insert(points);
+        *entry = if *entry == 0 || points == 0 {
+            0
+        } else {
+            *entry | points
+        };
+    };
+    used(tail, 0);
     let mut sites = Vec::new();
     // How the installer compares the stock word of a firmware site: 1 under
     // the mask, for a branch or a MOVW or MOVT of a firmware address, which
@@ -512,7 +524,11 @@ fn relocation_tables(
     let mut compare = Vec::new();
     for patch in &plan.patches {
         sites.push(match patch.site {
-            Some(site) => anchor(&mut planner, site)? as u32,
+            Some(site) => {
+                let symbol = anchor(&mut planner, site)?;
+                used(symbol, patch.points);
+                symbol as u32
+            }
             None => NONE,
         });
         compare.push(match patch.site {
@@ -529,6 +545,7 @@ fn relocation_tables(
     let mut references = Vec::new();
     for reference in &plan.references {
         let symbol = anchor(&mut planner, reference.anchor)?;
+        used(symbol, plan.patches[reference.patch].points);
         ensure!(
             sites[reference.patch] != NONE,
             "A reference lies in a fixed patch"
@@ -549,6 +566,7 @@ fn relocation_tables(
             .find(|(field, _)| *field == address)
             .map_or((address, 0), |&(field, base)| (base, field - base));
         let symbol = firmware_symbol(&mut planner, base)?;
+        used(symbol, 0);
         defines.push(format!(
             "#define {name} (relocated[{symbol}] + {offset:#x}U)"
         ));
@@ -660,6 +678,33 @@ fn relocation_tables(
         core_size,
     )?;
     result.push_str("static u32 relocated[RELOCATION_SYMBOL_COUNT];\n");
+    // A symbol without a use, such as a guard or a table, is needed.
+    let points: Vec<u32> = (0..relocation.symbols.len())
+        .map(|symbol| usage.get(&symbol).copied().unwrap_or(0))
+        .collect();
+    words(result, "symbol_points", points.iter().copied());
+    // A window is optional while only optional symbols use it.
+    let mut optional = vec![0u32; relocation.windows.len()];
+    for needed in [false, true] {
+        for (symbol, entry) in relocation.symbols.iter().enumerate() {
+            if (points[symbol] == 0) != needed {
+                continue;
+            }
+            for source in &entry.sources {
+                let (window, verify) = match *source {
+                    Source::Window { window, .. }
+                    | Source::Literal { window, .. }
+                    | Source::Pair { window, .. } => (Some(window), None),
+                    Source::Branch { window, verify, .. } => (Some(window), verify),
+                    Source::Startup { .. } | Source::Tail => (None, None),
+                };
+                for window in window.into_iter().chain(verify) {
+                    optional[window] = u32::from(!needed);
+                }
+            }
+        }
+    }
+    words(result, "window_optional", optional);
     words(result, "patch_symbols", sites);
     words(result, "patch_compare", compare);
     writeln!(

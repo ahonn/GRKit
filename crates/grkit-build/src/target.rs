@@ -136,6 +136,10 @@ pub struct Target {
     /// loads directly: (address, the address that code loads). The address
     /// keeps its offset from the loaded one.
     pub relocation_bases: &'static [(u32, u32)],
+    /// The code addresses whose relocation window is the smallest unique
+    /// range around the address instead of its whole function, because
+    /// another build of the version differs elsewhere in that function.
+    pub site_windows: &'static [u32],
 }
 
 /// The builds of one camera line, such as each GR IV build. They share the

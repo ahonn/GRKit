@@ -268,9 +268,20 @@ static int heap(u32 p, u32 n)
 /* The extension points of the usable modules. Only their patches change
    the firmware. */
 static u32 needed_points;
+/* The extension points whose firmware code the running build does not hold
+   as the pinned build does (relocate). Their patches do not install, and a
+   module that needs one does not load (GRM_POINT_UNAVAILABLE). */
+static u32 dropped_points;
+/* The points that GRKit itself needs whatever the modules: the GRKit
+   section of MENU, the mode dial, and the shooting screen. */
+#define CORE_POINTS (POINT_MENU_PAGE | POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY)
 /* patch_points[i]: the extension points that need patch i, or 0 for code that
    each installation publishes. */
-static int applies(u32 i) { return !patch_points[i] || (patch_points[i] & needed_points); }
+static int applies(u32 i)
+{
+    if (patch_points[i] & dropped_points) return 0;
+    return !patch_points[i] || (patch_points[i] & needed_points);
+}
 static void publish(struct patch *p, const u8 *bytes)
 {
     if (p->size == 4) store(p->address, get32(bytes));
@@ -295,6 +306,7 @@ static void prepare_relocation(void)
     relocation.window_at = window_at;
     relocation.symbol_at = relocated;
     relocation.hint = 0;
+    relocation.optional = window_optional;
     if (read_text(relocation_path, (u8 *)hint_words, sizeof(hint_words)) == (long)sizeof(hint_words) &&
         hint_words[0] == HINT_MAGIC && hint_words[1] == RELOCATION_WINDOW_COUNT && hint_words[2] == word(RTOS_IDENTITY))
         relocation.hint = hint_words + HINT_KEY;
@@ -315,10 +327,24 @@ static u32 pair_value(u32 address)
     u32 low = word(address), high = word(address + 4);
     return (((high >> 4) & 0xf000U) | (high & 0xfffU)) << 16 | ((low >> 4) & 0xf000U) | (low & 0xfffU);
 }
+/* After a resolve that failed: whether each symbol that did not resolve
+   serves extension points only (symbol_points), which then drop. Another
+   build of the version can differ in the firmware code of a hook, and the
+   rest of GRKit still installs. SCAN --try runs only on a full resolve
+   (relocation_found), so a package still picks its own build first. */
+static int relocation_partial(void)
+{
+    u32 dropped;
+    if (!relocation_dropped(&relocation_tables, &relocation, symbol_points, &dropped) || (dropped & CORE_POINTS))
+        return 0;
+    dropped_points = dropped;
+    return 1;
+}
 static int relocate(void)
 {
     prepare_relocation();
-    if (!relocation_resolve(&relocation_tables, &relocation)) return STATUS_RELOCATION;
+    dropped_points = 0;
+    if (!relocation_resolve(&relocation_tables, &relocation) && !relocation_partial()) return STATUS_RELOCATION;
     keep_relocation();
     /* Patched firmware can keep data after the image end that the startup
        literals give, where the private code goes. */
@@ -327,7 +353,7 @@ static int relocate(void)
         if (value >= relocation.image_end && value < RELOCATION_DATA_START) return STATUS_TAIL_USED;
     }
     for (u32 i = 0; i < PATCH_COUNT; ++i) {
-        if (patch_symbols[i] == RELOCATION_NONE) continue;
+        if (patch_symbols[i] == RELOCATION_NONE || (patch_points[i] & dropped_points)) continue;
         patches[i].address += symbol_delta(patch_symbols[i]);
         if (patches[i].kind) continue;
         /* A stock branch, or a MOVW or MOVT of a firmware address, can
@@ -342,6 +368,7 @@ static int relocate(void)
     for (u32 i = 0; i < RELOCATION_REFERENCE_COUNT; ++i) {
         const u32 *r = relocation_references + i * 4;
         u32 patch = r[0], site = patch_symbols[patch];
+        if (patch_points[patch] & dropped_points) continue;
         if (r[1] + 4 > patches[patch].size ||
             !relocation_move(patches[patch].after + r[1], r[3], symbol_delta(r[2]), symbol_delta(site)))
             return STATUS_RELOCATION;

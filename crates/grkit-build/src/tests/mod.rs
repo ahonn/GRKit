@@ -194,8 +194,12 @@ fn resolve_image(output: &Path, image: &[u8]) -> Result<(String, Vec<(u32, u32)>
         .output()?;
     ensure!(output.status.success(), "Run the relocation harness");
     let text = String::from_utf8(output.stdout)?;
-    let mut lines = text.lines();
-    let result = lines.next().context("No result")?.to_owned();
+    let mut lines = text.lines().peekable();
+    let mut result = lines.next().context("No result")?.to_owned();
+    // After a failure: " dropped <points>" or " dropped needed".
+    if let Some(dropped) = lines.next_if(|line| line.starts_with("dropped ")) {
+        result = format!("{result} {dropped}");
+    }
     let hex = |value: &str| u32::from_str_radix(value.trim_start_matches("0x"), 16);
     let symbols = lines
         .filter_map(|line| line.strip_prefix("symbol "))

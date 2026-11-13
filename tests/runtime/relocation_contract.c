@@ -86,11 +86,12 @@ static void pinned(void)
 
 static u32 window_at[4], symbol_at[8];
 static struct relocation_state state;
-static const u32 *hint;
+static const u32 *hint, *optional;
 static int resolve(void)
 {
     memset(&state, 0, sizeof(state));
     state.read = read_word; state.window_at = window_at; state.symbol_at = symbol_at; state.hint = hint;
+    state.optional = optional;
     return relocation_resolve(&tables, &state);
 }
 
@@ -141,6 +142,23 @@ int main(void)
     put(0x5301030cU, 0xe5900008U);
     assert(!resolve());
     assert(state.failure[0].reason == RELOCATION_NOT_FOUND && state.failure[0].index == 1);
+    /* The symbols of that window do not resolve; the others do. */
+    for (u32 i = 0; i < 7; ++i)
+        assert(relocation_unresolved(&state, i) == (i == 0 || i == 1 || i == 3 || i == 6));
+    /* A hint that gives an optional window as not found checks the others
+       at their addresses and does not search again. A needed window that
+       the hint gives as not found searches. */
+    u32 partial[4];
+    memcpy(partial, found, sizeof(partial));
+    partial[1] = 0;
+    static const u32 window_optional[4] = {0, 1, 0, 0};
+    hint = partial;
+    optional = window_optional;
+    assert(!resolve() && !state.searched && state.failures);
+    assert(relocation_unresolved(&state, 0) && !relocation_unresolved(&state, 2));
+    optional = 0;
+    assert(!resolve() && state.searched);
+    hint = 0;
     put(0x5301030cU, 0xe5900007U);
 
     /* A second copy of the function within the radius: ambiguous. */
@@ -169,7 +187,7 @@ int main(void)
     int outside = 0;
     for (u32 i = 0; i < state.failures; ++i)
         outside |= state.failure[i].reason == RELOCATION_OUTSIDE && state.failure[i].index == 6;
-    assert(outside);
+    assert(outside && relocation_unresolved(&state, 6) && !relocation_unresolved(&state, 2));
     put(0x53010308U, 0xeb000000U | (((0x53010500U - 0x53010308U - 8) >> 2) & 0xffffffU));
     assert(resolve());
 
@@ -182,6 +200,7 @@ int main(void)
     /* Invalid startup literals and a tail without room stop the resolver. */
     put(RELOCATION_STARTUP + 4, 0x55001000U);
     assert(!resolve() && state.failure[0].reason == RELOCATION_STARTUP_INVALID);
+    for (u32 i = 0; i < 7; ++i) assert(relocation_unresolved(&state, i));
     put(RELOCATION_STARTUP + 4, RELOCATION_DATA_START);
     put(0x530003f4U, 0);
     assert(!resolve() && state.failure[0].reason == RELOCATION_STARTUP_INVALID);
