@@ -7,11 +7,14 @@
    never changes the switch.
 
    - P/Av/Tv/M, and Sn on GR IV, share one set of GRKit settings, the shared
-     settings, which the main state file keeps. The P/Av/Tv/M row of the
-     Mode Dial page turns GRKit off there (GRKIT_HOST_DIAL_SHARED_OFF).
-   - A user mode, U1 to U3, does what P/Av/Tv/M do (GRKIT_DIAL_VALUE_SAME,
-     the default), turns GRKit off (GRKIT_DIAL_VALUE_OFF), or applies its
-     snapshot (GRKIT_DIAL_VALUE_SNAPSHOT).
+     settings, which the main state file keeps. Each of them has a row of the
+     Mode Dial page, On or Off, and Off turns GRKit off at that position
+     (GRKIT_HOST_DIAL_SHARED_OFF, a bit for each position: dial_shared_off).
+   - A user mode, U1 to U3, runs GRKit with the shared settings
+     (GRKIT_DIAL_VALUE_ON, the default), turns GRKit off
+     (GRKIT_DIAL_VALUE_OFF), or applies its snapshot
+     (GRKIT_DIAL_VALUE_SNAPSHOT).
+   - Another position, such as Movie, runs GRKit with the shared settings.
    GRKit off by the dial is a flag of this session (DIAL_SUSPENDED), not the
    switch: the modules stop as with the switch Off (runtime/manage.h:
    manage_halted), and nothing saves it. The Enable row of ADJ turns GRKit
@@ -35,13 +38,13 @@
    that it gave the slot (GRKIT_HOST_DIAL_SLOTS). A snapshot holds while
    its slot is registered and has that name (dial_slot_intact). After a
    native save, rename, or clear of the slot, or a lost slot, the core
-   forgets the snapshot, and a user mode that applied it does what P/Av/Tv/M
-   do (dial_check). The core checks this at each start once the shooting
+   forgets the snapshot, and a user mode that applied it becomes On
+   (dial_check). The core checks this at each start once the shooting
    screen shows, when the Mode Dial page opens, and when the dial lands on
    a user mode. It never clears or restores a slot. GR III can give two
    user modes one box: a save for one of them makes the other lose its
    snapshot by its name. The resident loader saves the sets, the values, and
-   the row of P/Av/Tv/M in their own file after GRKIT_HOST_DIAL_SET_CHANGES
+   the bits of P/Av/Tv/M in their own file after GRKIT_HOST_DIAL_SET_CHANGES
    changes, and INSTALL restores them (runtime/install_recipes.h). That file
    also keeps a copy of the switch, Enable at Start, and Distance Unit
    (runtime/manage.h: manage_copy), so their restore does not depend on
@@ -79,16 +82,17 @@
    and the hook run in the App task.
 
    The family header gives DIAL_POSITION(), the code of the dial position,
-   DIAL_CODE_U1, the code of U1 (U2 and U3 follow), and
-   DIAL_NATIVE_SETTLED(position), whether the firmware has loaded the
-   settings of that position; and the slots: DIAL_SLOT_OF(u), the slot of
-   user mode u (1 to 3), or 0 without one; DIAL_SLOT_SAVE(slot), the native
-   save of the current settings in the slot; DIAL_SLOT_NAME_SET(slot, name,
-   registered), with the address of the name as ASCII; and
-   DIAL_SLOT_NAME_AT(slot) and DIAL_SLOT_REGIST_AT(slot), the addresses of
-   the name of the slot and of whether it is registered. The state is in
-   the services block (SERVICES_DIAL). The includer is runtime/menu.c, after
-   the recipes, the module list, and Toning. */
+   DIAL_CODE_U1, the code of U1 (U2 and U3 follow), DIAL_SHARED_CODES and
+   DIAL_SHARED_NAMES, the codes (below 32) and the names of the positions
+   that share their settings, and DIAL_NATIVE_SETTLED(position), whether
+   the firmware has loaded the settings of that position; and the slots:
+   DIAL_SLOT_OF(u), the slot of user mode u (1 to 3), or 0 without one;
+   DIAL_SLOT_SAVE(slot), the native save of the current settings in the
+   slot; DIAL_SLOT_NAME_SET(slot, name, registered), with the address of the
+   name as ASCII; and DIAL_SLOT_NAME_AT(slot) and DIAL_SLOT_REGIST_AT(slot),
+   the addresses of the name of the slot and of whether it is registered.
+   The state is in the services block (SERVICES_DIAL). The includer is
+   runtime/menu.c, after the recipes, the module list, and Toning. */
 
 /* The wait after the last move of the dial, and after a try while the
    firmware was still loading the native settings, and the most tries. */
@@ -119,8 +123,20 @@ static u32 dial_user_mode(u32 position) {
 }
 /* Whether the dial acts: the switch Enable GRKit is On. */
 static u32 dial_enabled(volatile u32 *h) { return !manage_all_off(h); }
-/* Whether GRKit is off at P/Av/Tv/M. */
-static u32 dial_shared_off(volatile u32 *h) { return h[GRKIT_HOST_DIAL_SHARED_OFF/4]!=0; }
+/* The codes of the positions that share their settings, in the order of
+   the Mode Dial page, and the bit of each in GRKIT_HOST_DIAL_SHARED_OFF. */
+static const u8 dial_shared_codes[]={DIAL_SHARED_CODES};
+#define DIAL_SHARED_COUNT ((u32)sizeof dial_shared_codes)
+static u32 dial_shared_bit(u32 i) { return 1U<<dial_shared_codes[i]; }
+/* Bit 0 of GRKIT_HOST_DIAL_SHARED_OFF, which no position has: the file of
+   an older build, with 1 for GRKit off at each of these positions
+   (dial_upgrade). */
+#define DIAL_SHARED_ALL_OFF 1U
+/* Whether GRKit is off at position `position`: only a position that shares
+   its settings has a bit. */
+static u32 dial_shared_off(volatile u32 *h,u32 position) {
+    return position<32U && (h[GRKIT_HOST_DIAL_SHARED_OFF/4]>>position&1U);
+}
 /* The set of user mode u (1 to 3), and the number of its pairs, or
    DIAL_NO_SET without a set or for a count that no set has. */
 static volatile u32 *dial_set(volatile u32 *h,u32 u) {
@@ -136,11 +152,26 @@ static volatile u32 *dial_slot_record(volatile u32 *h,u32 u) {
     return h+GRKIT_HOST_DIAL_SLOTS/4+(u-1U)*GRKIT_DIAL_SLOT_WORDS;
 }
 /* The value of user mode u (1 to 3): a snapshot without a set, and a value
-   that no build gives, do what P/Av/Tv/M do. */
+   that no build gives, are On. */
 static u32 dial_value(volatile u32 *h,u32 u) {
     u32 value=dial_slot_record(h,u)[GRKIT_DIAL_SLOT_VALUE];
     if(value==GRKIT_DIAL_VALUE_OFF) return value;
-    return value==GRKIT_DIAL_VALUE_SNAPSHOT && dial_has_set(h,u) ? value : GRKIT_DIAL_VALUE_SAME;
+    return value==GRKIT_DIAL_VALUE_SNAPSHOT && dial_has_set(h,u) ? value : GRKIT_DIAL_VALUE_ON;
+}
+/* The file of an older build has one row for these positions, and its
+   user modes did what they do: with DIAL_SHARED_ALL_OFF, GRKit is off at
+   each of them, and each user mode that is On becomes Off, so each position
+   stays as it was. The file of the user modes saves. At the first shooting
+   screen and when the Mode Dial page opens. */
+static void dial_upgrade(volatile u32 *h) {
+    volatile u32 *off=h+GRKIT_HOST_DIAL_SHARED_OFF/4;
+    u32 i, u, bits=0;
+    if(!(*off&DIAL_SHARED_ALL_OFF)) return;
+    for(i=0;i<DIAL_SHARED_COUNT;++i) bits|=dial_shared_bit(i);
+    *off=bits;
+    for(u=1;u<=GRKIT_DIAL_USER_MODES;++u)
+        if(dial_value(h,u)==GRKIT_DIAL_VALUE_ON) dial_slot_record(h,u)[GRKIT_DIAL_SLOT_VALUE]=GRKIT_DIAL_VALUE_OFF;
+    ++h[GRKIT_HOST_DIAL_SET_CHANGES/4];
 }
 
 /* ---- The shared settings -------------------------------------------------- */
@@ -347,14 +378,14 @@ static u32 dial_slot_intact(volatile u32 *h,u32 u) {
            dial_name_hash(DIAL_SLOT_NAME_AT(slot))==dial_slot_record(h,u)[GRKIT_DIAL_SLOT_NAME];
 }
 /* Forget the snapshot of user mode u: its set and the name of its slot. A
-   user mode that applied it does what P/Av/Tv/M do; GRKit Off stays. The
+   user mode that applied it becomes On; GRKit Off stays. The
    slot stays as it is. */
 static void dial_forget(volatile u32 *h,u32 u) {
     volatile u32 *s=dial_set(h,u), *record=dial_slot_record(h,u);
     u32 w;
     for(w=0;w<GRKIT_DIAL_SET_WORDS;++w) s[w]=0;
     record[GRKIT_DIAL_SLOT_NAME]=0;
-    if(record[GRKIT_DIAL_SLOT_VALUE]==GRKIT_DIAL_VALUE_SNAPSHOT) record[GRKIT_DIAL_SLOT_VALUE]=GRKIT_DIAL_VALUE_SAME;
+    if(record[GRKIT_DIAL_SLOT_VALUE]==GRKIT_DIAL_VALUE_SNAPSHOT) record[GRKIT_DIAL_SLOT_VALUE]=GRKIT_DIAL_VALUE_ON;
     ++h[GRKIT_HOST_DIAL_SET_CHANGES/4];
 }
 /* Let go of the snapshot of user mode u when its slot no longer holds what
@@ -448,7 +479,7 @@ static void dial_enter(volatile u32 *h,u32 u) {
 /* Act on dial position `position`, whose native settings the firmware has
    loaded. */
 static void dial_land(volatile u32 *h,u32 position) {
-    u32 u=dial_user_mode(position), value=GRKIT_DIAL_VALUE_SAME;
+    u32 u=dial_user_mode(position), value=GRKIT_DIAL_VALUE_ON;
     dial_word(h,DIAL_AT)[0]=position+1U;
     if(!dial_enabled(h)) {
         dial_leave(h);
@@ -465,7 +496,7 @@ static void dial_land(volatile u32 *h,u32 position) {
         return;
     }
     dial_leave(h);
-    dial_suspend(h,value==GRKIT_DIAL_VALUE_OFF || dial_shared_off(h));
+    dial_suspend(h,value==GRKIT_DIAL_VALUE_OFF || dial_shared_off(h,position));
 }
 /* Act on the position again after a change of what it does: at once while
    the firmware has loaded its settings, else when the timer finds them.
@@ -540,9 +571,10 @@ A32_ENTRY void menu_dial_moved(void) {
     dial_arm(h,DIAL_SETTLE_MS);
 }
 /* The first shooting screen after INSTALL (runtime/services.h:
-   services_ready): the slots wait for a check, and the dial lands where it
-   is since power-on. */
+   services_ready): the file of an older build upgrades, the slots wait for
+   a check, and the dial lands where it is since power-on. */
 static void dial_ready(volatile u32 *h) {
+    dial_upgrade(h);
     dial_word(h,DIAL_SYNC)[0]=1U;
     dial_word(h,DIAL_TRY)[0]=0;
     dial_arm(h,DIAL_RETRY_MS);

@@ -36,7 +36,7 @@
      apply in full (check_recipes). The installer deletes no file.
    - The file of the user modes of the mode dial (GRKIT/USERMODE.TXT, or
      USERMODE.TMP) holds the snapshot of each user mode, what each user mode
-     does, and whether GRKit is off at P/Av/Tv/M (runtime/mode_dial.h,
+     does, and where GRKit is off at P/Av/Tv/M (runtime/mode_dial.h,
      grkit_core::runtime::dial_set_key). Only the camera writes it. INSTALL
      restores them into the header as the file has them
      (install_dial_sets); a set with more pairs than the header holds is
@@ -301,7 +301,7 @@ static void install_dial_sets(u32 base)
         for (u32 w = 0; w < GRKIT_DIAL_SET_WORDS; ++w)
             store(set + 4U * w, whole && state_value(&saved_recipes, key + w, &value) ? value : 0);
     }
-    /* What each user mode does, then whether GRKit is off at P/Av/Tv/M,
+    /* What each user mode does, then where GRKit is off at P/Av/Tv/M,
        which follows it in the header and in the keys. */
     _Static_assert(GRKIT_HOST_DIAL_SHARED_OFF == GRKIT_HOST_DIAL_SLOTS + 4U * GRKIT_DIAL_SLOT_WORDS * GRKIT_DIAL_USER_MODES,
                    "the row of P/Av/Tv/M follows the user modes");

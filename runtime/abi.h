@@ -144,7 +144,7 @@
 #define GRKIT_DIAL_SET_KEY_STRIDE 1000U
 #define GRKIT_DIAL_SET_VALUE_MAX 999999999U
 /* What a user mode does (GRKIT_HOST_DIAL_SLOTS, runtime/mode_dial.h):
-   GRKIT_DIAL_SLOT_WORDS words, its value, GRKIT_DIAL_VALUE_SAME,
+   GRKIT_DIAL_SLOT_WORDS words, its value, GRKIT_DIAL_VALUE_ON,
    GRKIT_DIAL_VALUE_OFF, or GRKIT_DIAL_VALUE_SNAPSHOT, and a fingerprint of the
    name that the core gave its native slot with the snapshot. In the file of
    the sets, word w of user mode u (0 for U1) has the key
@@ -163,7 +163,7 @@
 #define GRKIT_MANAGE_COPY_UNIT 2U
 #define GRKIT_MANAGE_COPY_WORDS 3U
 #define GRKIT_MANAGE_COPY_KEY 992003007U
-#define GRKIT_DIAL_VALUE_SAME 0U
+#define GRKIT_DIAL_VALUE_ON 0U
 #define GRKIT_DIAL_VALUE_OFF 1U
 #define GRKIT_DIAL_VALUE_SNAPSHOT 2U
 #define GRKIT_MODULE_SETTINGS_MAX 160
@@ -533,8 +533,10 @@
    camera writes them. */
 #define GRKIT_HOST_DIAL_SLOTS 6464
 #define GRKIT_HOST_DIAL_SLOTS_WORDS 6
-/* 1 while GRKit is off at P/Av/Tv/M (and Sn on GR IV), else 0, right after
-   HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). */
+/* The positions that share their settings, P, Av, Tv, and M (and Sn on GR IV),
+   where GRKit is off: bit c for the position with code c, right after
+   HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). Bit 0, which no
+   position has, is the older value for each of them off. */
 #define GRKIT_HOST_DIAL_SHARED_OFF 6488
 /* The copy of the switch, Enable at Start, and Distance Unit,
    `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
@@ -1014,14 +1016,12 @@
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
 #define TEXT_START 68
 /* The Mode Dial row of GRKit Settings in MENU, then Save Current Settings, the
-   action of a user mode, then the text before and after P/Av/Tv/M in the value
-   of a user mode that does the same, then the text before and after the name
-   of a user mode in the confirm before Save Current Settings overwrites its
-   native slot. */
+   action of a user mode, then the text before and after the name of a user
+   mode in the confirm before Save Current Settings overwrites its native slot. */
 #define TEXT_DIAL 70
 /* GRKit Settings, the MENU row and the title of the settings page of the core,
    then its Distance Unit row and the values Meters and Feet. */
-#define TEXT_UNIT 76
-#define GRKIT_TEXT_STRINGS 80
+#define TEXT_UNIT 74
+#define GRKIT_TEXT_STRINGS 78
 
 #endif

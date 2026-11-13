@@ -189,6 +189,10 @@ static unsigned keyboard_set_function(unsigned model, unsigned function) { BYTE(
 #undef DIAL_NATIVE_SETTLED
 static unsigned dial_code, dial_loaded, dial_timer_ids, dial_timer_ms, dial_timer_cancels;
 #define DIAL_POSITION() (dial_code)
+/* The row of user mode u on the Mode Dial page, after the positions that
+   share their settings; P is row 0. */
+#define DIAL_ROW_P 0U
+#define DIAL_ROW_U(u) (DIAL_SHARED_COUNT + (u) - 1U)
 #define DIAL_NATIVE_SETTLED(position) ((void)(position), dial_loaded)
 static unsigned dial_timer_start(unsigned ms)
 {
@@ -3117,8 +3121,8 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 2] == settings_pages[2]);
     /* Mode Dial (runtime/menu_dial.h), a row of GRKit Settings: the row
        shows no value, and its list has no mark. The values of U1 have U1 as
-       the title: Save Current Settings, Same as P/Av/Tv/M, and Off, with the
-       mark and the cursor on Same. No recipe is a value. */
+       the title: Save Current Settings, On, and Off, with the mark and the
+       cursor on On. No recipe is a value. */
     settings_open(h, CORE_PAGE, 0);
     u32 d = 0;
     while (d < settings_rows(h) && core_row_setting(h, d) != dial_menu_setting()) ++d;
@@ -3127,8 +3131,9 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(same(row->label(h), "Mode Dial") && settings_long(h, core_page_settings, d));
     assert(row->get(h) == DIAL_NO_MARK && same(row->value_text(h, row->get(h)), ""));
     assert(row->values(h) == DIAL_ROWS && !dial->title(h));
-    assert(dial->select(h, 0, 1) && *state == (DIAL_PAGE_SHOWN | 1U));
+    assert(dial->select(h, 0, DIAL_ROW_U(1)) && *state == (DIAL_PAGE_SHOWN | DIAL_ROW_U(1)));
     assert(row->values(h) == 3 && same(row->value_text(h, 0), "Save Current Settings"));
+    assert(same(row->value_text(h, 1), "On"));
     assert(same(row->value_text(h, 2), "Off") && same(row->value_text(h, 3), ""));
     assert(menu_settings_current(1, 0, d) == 2 && menu_settings_current(2, 0, d) == 1);
     assert(menu_settings_current(0, 0, d) == 1);
@@ -3139,10 +3144,11 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     /* A half-press confirms the value under the cursor with the native set,
        which sets nothing, and on Save Current Settings saves nothing. OK
        sets a value and returns to the list. */
-    assert(menu_settings_apply(DIAL_VALUE_OFF, 0, d) && dial_value(h, 1) == GRKIT_DIAL_VALUE_SAME);
+    assert(menu_settings_apply(DIAL_VALUE_OFF, 0, d) && dial_value(h, 1) == GRKIT_DIAL_VALUE_ON);
     assert(menu_settings_apply(DIAL_VALUE_SAVE, 0, d) && !slot_saves && !dial_has_set(h, 1));
     assert(!h[GRKIT_HOST_DIAL_SET_CHANGES / 4]);
-    assert(dial->select(h, 0, DIAL_VALUE_OFF) && *state == 2 && same(row->value_text(h, 1), "U1: Off"));
+    assert(dial->select(h, 0, DIAL_VALUE_OFF) && *state == DIAL_ROW_U(1) + 1U);
+    assert(same(row->value_text(h, DIAL_ROW_U(1)), "U1: Off"));
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == 1);
     /* The page checks the slots as it opens: U1, whose slot the person
        saved since with another name, loses its snapshot and keeps Off. */
@@ -3151,12 +3157,12 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     record_memory[TEST_REGIST(1)] = 1;
     dial_set(h, 1)[GRKIT_DIAL_SET_COUNT] = 1;
     dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_NAME] = dial_name_hash(TEST_RECORD + TEST_NAME(1));
-    assert(dial->select(h, 0, 1) && row->values(h) == 4 && same(row->value_text(h, 3), "Old"));
+    assert(dial->select(h, 0, DIAL_ROW_U(1)) && row->values(h) == 4 && same(row->value_text(h, 3), "Old"));
     memcpy(record_memory + TEST_NAME(1), "Mine", 5);
     assert(menu_settings_controller(settings_pages[d]) == settings_pages[d]);
     assert(!dial_has_set(h, 1) && !dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_NAME] && row->values(h) == 3);
     assert(dial_value(h, 1) == GRKIT_DIAL_VALUE_OFF && !slot_saves && !slot_names);
-    assert(dial->select(h, 0, DIAL_VALUE_SAME) && dial_value(h, 1) == GRKIT_DIAL_VALUE_SAME);
+    assert(dial->select(h, 0, DIAL_VALUE_ON) && dial_value(h, 1) == GRKIT_DIAL_VALUE_ON);
     *state = 0;
     settings_open(h, LISTED_PAGE, 0);
     const Setting *recipes = listed_setting(h, 2);
@@ -3881,14 +3887,20 @@ static int slot_named(u32 slot, const char *name)
 {
     return !strncmp((const char *)record_memory + TEST_NAME(slot), name, 33) && record_memory[TEST_REGIST(slot)] == 1;
 }
-/* The Mode Dial page with the values of row `row` (0 for P/Av/Tv/M, then
-   U1 to U3). */
-static const Setting *dial_values_of(u32 row)
+/* The Mode Dial page with the values of row `row`. */
+static const Setting *dial_page_values(u32 row)
 {
     const Setting *dial = dial_menu_setting();
     *dial_page() = 0;
     assert(dial->select(test_header, TEST_OBJECTS + 0x800U, row));
     return dial;
+}
+/* The values of user mode u (1 to 3). */
+static const Setting *dial_values_of(u32 u) { return dial_page_values(DIAL_ROW_U(u)); }
+/* Each position that shares its settings On (0) or Off (1), row by row. */
+static void dial_positions(u32 value)
+{
+    for (u32 i = 0; i < DIAL_SHARED_COUNT; ++i) assert(dial_page_values(i)->select(test_header, 0, value));
 }
 /* Save Current Settings on user mode u: OK, Execute, then the keyboard,
    which gives `typed` on OK, or nothing without OK (0). The test cannot show
@@ -3909,13 +3921,6 @@ static void dial_save_as(u32 u, const char *typed)
     } else ui_word(h, UI_KEYBOARD_RESULT)[0] = 0;
     dial_menu_named(u);
     ui_word(h, UI_KEYBOARD_RESULT)[0] = 0;
-}
-/* P/Av/Tv/M of the family as text. */
-static void dial_shared_ascii(char *to)
-{
-    u32 i;
-    for (i = 0; dial_shared_name[i]; ++i) to[i] = (char)dial_shared_name[i];
-    to[i] = 0;
 }
 
 /* A value page draws each value whole: a user mode with a name of 32
@@ -3939,54 +3944,61 @@ static void a_value_page_draws_long_values_whole(void)
     assert(same(entry_text(h, 1, label, 0), "Save Current Settings"));
     assert(same(entry_text(h, 1, label, 1), "Save Current Settings (Off)"));
 }
-/* The values of the Mode Dial page: the list of the four rows, the values
-   of a row with the mark on its value, and OK and MENU. A new value saves
-   the file of the user modes and acts where the dial is. */
+/* The values of the Mode Dial page: the list with a row for each position,
+   the values of a row with the mark on its value, and OK and MENU. A new
+   value saves the file of the user modes and acts where the dial is. */
 static void the_mode_dial_page_sets_what_each_position_does(void)
 {
     volatile u32 *h = test_header, *state;
     const Setting *dial = dial_menu_setting();
-    char shared[16], text[64];
     u32 changes;
     dial_reset();
     state = dial_page();
-    dial_shared_ascii(shared);
-    /* The list: P/Av/Tv/M and the user modes with their values, the cursor
-       on the first row, no mark, and the row label as the title. */
+    /* The list: each position that shares its settings, then the user
+       modes, with their values, the cursor on the first row, no mark, and
+       the row label as the title. */
     *state = 0;
-    assert(same(dial->label(h), "Mode Dial") && dial->values(h) == 4 && !dial->title(h));
-    snprintf(text, sizeof text, "%s: On", shared);
-    assert(same(dial->value_text(h, 0), text));
-    snprintf(text, sizeof text, "U1: Same as %s", shared);
-    assert(same(dial->value_text(h, 1), text) && same(dial->value_text(h, 4), ""));
+    assert(same(dial->label(h), "Mode Dial") && dial->values(h) == DIAL_ROWS && !dial->title(h));
+    assert(DIAL_ROWS == DIAL_SHARED_COUNT + 3U && DIAL_SHARED_COUNT >= 4U);
+    assert(same(dial->value_text(h, 0), "P: On") && same(dial->value_text(h, 1), "Av: On"));
+    assert(same(dial->value_text(h, 2), "Tv: On") && same(dial->value_text(h, DIAL_SHARED_COUNT - 1U), "M: On"));
+    assert(same(dial->value_text(h, DIAL_ROW_U(1)), "U1: On") && same(dial->value_text(h, DIAL_ROWS), ""));
     assert(dial->get(h) == DIAL_NO_MARK && dial->cursor(h) == 0);
     /* MENU on the list returns as MENU does. */
-    assert(!dial->select(h, 0, SETTING_BACK) && !dial->select(h, 0, 4));
-    /* P/Av/Tv/M: On and Off, its name as the title, the mark on On. */
-    assert(dial->select(h, 0, 0) && *state == DIAL_PAGE_SHOWN && same(dial->title(h), shared));
+    assert(!dial->select(h, 0, SETTING_BACK) && !dial->select(h, 0, DIAL_ROWS));
+    /* P: On and Off, its name as the title, the mark on On. */
+    assert(dial->select(h, 0, DIAL_ROW_P) && *state == DIAL_PAGE_SHOWN && same(dial->title(h), "P"));
     assert(dial->values(h) == 2 && same(dial->value_text(h, 0), "On") && same(dial->value_text(h, 1), "Off"));
     assert(dial->get(h) == 0 && dial->cursor(h) == 0);
     /* MENU returns to the list with the cursor on the row and sets nothing. */
     assert(dial->select(h, 0, SETTING_BACK) && *state == 1 && dial->cursor(h) == 0 && !h[GRKIT_HOST_DIAL_SET_CHANGES / 4]);
-    /* OK on Off sets it, so the file saves, and returns to the list. */
-    assert(dial->select(h, 0, 0) && dial->select(h, 0, 1) && *state == 1 && dial_shared_off(h));
+    /* OK on Off sets it for P only, so the file saves, and returns to the
+       list. */
+    assert(dial->select(h, 0, DIAL_ROW_P) && dial->select(h, 0, 1) && *state == 1);
+    assert(dial_shared_off(h, DIAL_P) && !dial_shared_off(h, DIAL_TV));
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == 1);
-    snprintf(text, sizeof text, "%s: Off", shared);
-    assert(same(dial->value_text(h, 0), text));
+    assert(same(dial->value_text(h, 0), "P: Off") && same(dial->value_text(h, 2), "Tv: On"));
     /* The same value again changes nothing. */
-    assert(dial->select(h, 0, 0) && dial->get(h) == 1 && dial->select(h, 0, 1));
+    assert(dial->select(h, 0, DIAL_ROW_P) && dial->get(h) == 1 && dial->select(h, 0, 1));
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == 1);
-    /* U2: Save Current Settings, Same as P/Av/Tv/M, Off; without a snapshot
-       no name; the mark on Same. */
-    assert(dial->select(h, 0, 2) && *state == (DIAL_PAGE_SHOWN | 2U) && same(dial->title(h), "U2"));
+    /* Tv Off, then P On: each row sets its own position. */
+    assert(dial->select(h, 0, 2) && same(dial->title(h), "Tv") && dial->select(h, 0, 1) && *state == 3);
+    assert(dial_page_values(DIAL_ROW_P)->select(h, 0, 0));
+    assert(!dial_shared_off(h, DIAL_P) && dial_shared_off(h, DIAL_TV));
+    assert(h[GRKIT_HOST_DIAL_SHARED_OFF / 4] == 1U << DIAL_TV && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == 3);
+    /* No user mode has a bit. */
+    assert(!dial_shared_off(h, DIAL_U(1)) && !dial_shared_off(h, 99U));
+    /* U2: Save Current Settings, On, Off; without a snapshot no name; the
+       mark on On. */
+    *state = 0;
+    assert(dial->select(h, 0, DIAL_ROW_U(2)) && *state == (DIAL_PAGE_SHOWN | DIAL_ROW_U(2)) && same(dial->title(h), "U2"));
     assert(dial->values(h) == 3 && same(dial->value_text(h, 0), "Save Current Settings"));
-    snprintf(text, sizeof text, "Same as %s", shared);
-    assert(same(dial->value_text(h, 1), text) && same(dial->value_text(h, 2), "Off"));
-    assert(dial->get(h) == DIAL_VALUE_SAME && dial->cursor(h) == DIAL_VALUE_SAME && same(dial->value_text(h, 3), ""));
+    assert(same(dial->value_text(h, 1), "On") && same(dial->value_text(h, 2), "Off"));
+    assert(dial->get(h) == DIAL_VALUE_ON && dial->cursor(h) == DIAL_VALUE_ON && same(dial->value_text(h, 3), ""));
     changes = h[GRKIT_HOST_DIAL_SET_CHANGES / 4];
-    assert(dial->select(h, 0, DIAL_VALUE_OFF) && *state == 3 && dial_value(h, 2) == GRKIT_DIAL_VALUE_OFF);
-    assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == changes + 1 && same(dial->value_text(h, 2), "U2: Off"));
-    assert(dial->cursor(h) == 2 && !slot_saves && !slot_names);
+    assert(dial->select(h, 0, DIAL_VALUE_OFF) && *state == DIAL_ROW_U(2) + 1U && dial_value(h, 2) == GRKIT_DIAL_VALUE_OFF);
+    assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == changes + 1 && same(dial->value_text(h, DIAL_ROW_U(2)), "U2: Off"));
+    assert(dial->cursor(h) == DIAL_ROW_U(2) && !slot_saves && !slot_names);
     /* The values are not settings of the table, and no recipe value is
        left: the recipe file has no key of the dial. */
     assert(settings_memory[1] == 0 && !h[GRKIT_HOST_RECIPE_CHANGES / 4]);
@@ -4011,7 +4023,7 @@ static void the_mode_dial_saves_the_current_settings_in_a_user_mode(void)
     /* OK on Save Current Settings asks with "Overwrite U2?" and saves
        nothing. Cancel saves nothing and opens no keyboard. */
     dial = dial_values_of(2);
-    assert(dial->select(h, TEST_OBJECTS + 0x800U, DIAL_VALUE_SAVE) && *state == (DIAL_PAGE_SHOWN | 2U));
+    assert(dial->select(h, TEST_OBJECTS + 0x800U, DIAL_VALUE_SAVE) && *state == (DIAL_PAGE_SHOWN | DIAL_ROW_U(2)));
     assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Overwrite U2?"));
     assert(services_word(h, SERVICES_DIAL + DIAL_PAGE)[0] == TEST_OBJECTS + 0x800U);
     dial_menu_confirmed(0, 2);
@@ -4026,7 +4038,7 @@ static void the_mode_dial_saves_the_current_settings_in_a_user_mode(void)
     /* A way out of the keyboard without OK saves nothing. */
     ui_word(h, UI_KEYBOARD_RESULT)[0] = 0;
     dial_menu_named(2);
-    assert(!slot_saves && !slot_names && !dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_SAME);
+    assert(!slot_saves && !slot_names && !dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_ON);
     /* While the firmware loads the settings of the dial position, OK saves
        nothing either. */
     dial_loaded = 0;
@@ -4045,7 +4057,7 @@ static void the_mode_dial_saves_the_current_settings_in_a_user_mode(void)
     assert(record[GRKIT_DIAL_SLOT_NAME] == dial_name_hash(TEST_RECORD + TEST_NAME(2)));
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] > sets && settings_memory[1] == table);
     assert(dial_saved_applies() && !h[GRKIT_HOST_STATE_HOLD / 4] && !services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0]);
-    assert(*state == (DIAL_PAGE_SHOWN | 2U));
+    assert(*state == (DIAL_PAGE_SHOWN | DIAL_ROW_U(2)));
     /* The snapshot: the effect by its code with its Fn adjustments and
        Toning, each capability, and by ID the module settings and the Enable
        of each listed module, the Recipes module too. Not the switch, a
@@ -4067,12 +4079,12 @@ static void the_mode_dial_saves_the_current_settings_in_a_user_mode(void)
        the list shows it too. */
     assert(dial->values(h) == 4 && dial->get(h) == DIAL_VALUE_SNAPSHOT && same(dial->value_text(h, 3), "Street"));
     *state = 0;
-    assert(same(dial->value_text(h, 2), "U2: Street"));
-    /* Same as P/Av/Tv/M keeps the snapshot, so its name comes back. */
+    assert(same(dial->value_text(h, DIAL_ROW_U(2)), "U2: Street"));
+    /* On keeps the snapshot, so its name comes back. */
     dial = dial_values_of(2);
-    assert(dial->select(h, 0, DIAL_VALUE_SAME) && dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_SAME);
+    assert(dial->select(h, 0, DIAL_VALUE_ON) && dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_ON);
     dial = dial_values_of(2);
-    assert(dial->values(h) == 4 && dial->get(h) == DIAL_VALUE_SAME && dial->select(h, 0, DIAL_VALUE_SNAPSHOT));
+    assert(dial->values(h) == 4 && dial->get(h) == DIAL_VALUE_ON && dial->select(h, 0, DIAL_VALUE_SNAPSHOT));
     assert(dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT);
     /* A text of spaces, or none, gives the automatic name: the Film Look
        effect; with Film Look Off, the recipe that the settings match
@@ -4228,8 +4240,8 @@ static void a_save_on_the_dial_position_applies_at_once(void)
     assert(GUIDE_STYLE == 0 && h[GRKIT_HOST_GRAIN / 4] == 4);
 }
 
-/* R3, R4, R7: the row of P/Av/Tv/M and Off of a user mode turn GRKit off
-   there as a flag of the session: the modules stop as with the switch Off,
+/* R3, R4, R7: Off of a position or of a user mode turns GRKit off there
+   only, as a flag of the session: the modules stop as with the switch Off,
    the switch keeps its value, and no file saves it. */
 static void the_mode_dial_turns_grkit_off_without_the_switch(void)
 {
@@ -4239,22 +4251,25 @@ static void the_mode_dial_turns_grkit_off_without_the_switch(void)
     dial_reset();
     dial_start(DIAL_P);
     assert(!manage_grkit_off(h) && !manage_stopped(h, 1));
-    /* P/Av/Tv/M Off on the dial at P: GRKit stops at once. */
+    /* P Off on the dial at P: GRKit stops at once. */
     changes = h[GRKIT_HOST_STATE_CHANGES / 4];
-    dial = dial_values_of(0);
+    dial = dial_page_values(DIAL_ROW_P);
     assert(dial->select(h, 0, 1));
     assert(manage_grkit_off(h) && !manage_all_off(h) && !DIAL_SWITCH_OFF);
     assert(manage_stopped(h, 0) && manage_stopped(h, 1) && !h[GRKIT_HOST_CAPABILITIES / 4]);
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes && h[GRKIT_HOST_GRAIN / 4] == 1);
-    /* Tv is off too; U1, the same as P/Av/Tv/M, too (R4). */
+    /* Tv, On, runs with the shared settings; U1, On, too (R4). */
     dial_to(DIAL_TV);
     dial_fire();
-    assert(manage_grkit_off(h));
+    assert(!manage_grkit_off(h) && h[GRKIT_HOST_GRAIN / 4] == 1);
     dial_to(DIAL_U(1));
     dial_fire();
+    assert(!manage_grkit_off(h));
+    dial_to(DIAL_P);
+    dial_fire();
     assert(manage_grkit_off(h) && !manage_all_off(h));
-    /* P/Av/Tv/M On: U1 runs at once, as P does. */
-    dial = dial_values_of(0);
+    /* P On: GRKit runs at once. */
+    dial = dial_page_values(DIAL_ROW_P);
     assert(dial->select(h, 0, 0) && !manage_grkit_off(h) && !manage_stopped(h, 1));
     assert(h[GRKIT_HOST_CAPABILITIES / 4] == (manage_memory[MANAGE_ENTRY(0) + MANAGE_USES / 4] | manage_memory[MANAGE_ENTRY(1) + MANAGE_USES / 4]));
     /* U2 Off stops GRKit there only (R7); its slot stays as it is. */
@@ -4296,8 +4311,8 @@ static void the_adj_enable_row_turns_grkit_on_until_the_dial_moves(void)
     const Setting *dial;
     dial_reset();
     dial_start(DIAL_P);
-    dial = dial_values_of(0);
-    assert(dial->select(h, 0, 1) && manage_grkit_off(h));
+    dial_positions(1);
+    assert(manage_grkit_off(h));
     /* ADJ shows Off; MENU shows the switch On. */
     assert(switch_checked(h, 0) && !switch_checked(h, 1) && !switch_committed(h));
     assert(switch_settings[0].get(h) == 0);
@@ -4327,7 +4342,7 @@ static void the_adj_enable_row_turns_grkit_on_until_the_dial_moves(void)
     switch_settings[0].set(h, 0);
     assert(!DIAL_SWITCH_OFF && manage_grkit_off(h));
     /* Where the dial does not turn GRKit off, the ADJ row is the switch. */
-    dial = dial_values_of(0);
+    dial = dial_page_values(DIAL_ROW_P);
     assert(dial->select(h, 0, 0) && !manage_grkit_off(h));
     switch_apply(h, 0);
     assert(DIAL_SWITCH_OFF == 1 && switch_checked(h, 0));
@@ -4360,9 +4375,8 @@ static void the_switch_stops_the_dial_and_the_dial_keeps_the_switch(void)
        file at once. */
     switch_settings[0].set(h, 1);
     assert(DIAL_SWITCH_OFF == 1 && !h[GRKIT_HOST_STATE_HOLD / 4] && h[GRKIT_HOST_GRAIN / 4] == 1 && GUIDE_STYLE == 2);
-    /* With the switch Off, P/Av/Tv/M Off sets no flag: the switch stops
-       GRKit. */
-    const Setting *dial = dial_values_of(0);
+    /* With the switch Off, P Off sets no flag: the switch stops GRKit. */
+    const Setting *dial = dial_page_values(DIAL_ROW_P);
     assert(dial->select(h, 0, 1) && !services_word(h, SERVICES_DIAL + DIAL_SUSPENDED)[0] && manage_grkit_off(h));
     dial_to(DIAL_P);
     dial_fire();
@@ -4373,6 +4387,9 @@ static void the_switch_stops_the_dial_and_the_dial_keeps_the_switch(void)
     dial_to(DIAL_U(2));
     dial_fire();
     dial_to(DIAL_U(1));
+    dial_fire();
+    assert(!DIAL_SWITCH_OFF && !manage_grkit_off(h));
+    dial_to(DIAL_P);
     dial_fire();
     assert(!DIAL_SWITCH_OFF && manage_grkit_off(h));
     /* Before the first shooting screen, a change of the switch acts on no
@@ -4436,7 +4453,7 @@ static void the_switch_saves_on_a_snapshot(void)
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == sets + 4 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
     /* Off of the dial at P is not the switch: no copy changes, also when
        On in ADJ turns GRKit on there. */
-    dial = dial_values_of(0);
+    dial = dial_page_values(DIAL_ROW_P);
     assert(dial->select(h, 0, 1));
     dial_to(DIAL_P);
     dial_fire();
@@ -4450,8 +4467,8 @@ static void the_switch_saves_on_a_snapshot(void)
 }
 
 /* R8: a user mode whose slot the person saved, renamed, or cleared in the
-   native menu, or that the camera lost, loses its snapshot and does what
-   P/Av/Tv/M do. The core checks at a start, when the page opens, and when
+   native menu, or that the camera lost, loses its snapshot and becomes On.
+   The core checks at a start, when the page opens, and when
    the dial lands on the user mode. It never writes or clears a slot. */
 static void the_mode_dial_lets_go_of_a_changed_slot(void)
 {
@@ -4476,7 +4493,7 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     record_memory[TEST_REGIST(2)] = 0;
     dial_start(DIAL_P);
     assert(!dial_has_set(h, 1) && !dial_has_set(h, 2) && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] > sets);
-    assert(dial_value(h, 1) == GRKIT_DIAL_VALUE_SAME && !dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_NAME]);
+    assert(dial_value(h, 1) == GRKIT_DIAL_VALUE_ON && !dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_NAME]);
     assert(!dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_VALUE] && !dial_slot_record(h, 2)[GRKIT_DIAL_SLOT_VALUE]);
     assert(slot_saves == 2 && slot_names == names && !strcmp((const char *)record_memory + TEST_NAME(1), "Mine"));
     for (u32 w = 0; w < GRKIT_DIAL_SET_WORDS; ++w) assert(!dial_set(h, 1)[w]);
@@ -4487,7 +4504,7 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     memcpy(record_memory + TEST_NAME(1), "Mine", 5);
     dial_to(DIAL_U(1));
     dial_fire();
-    assert(dial_base() && !dial_has_set(h, 1) && dial_value(h, 1) == GRKIT_DIAL_VALUE_SAME);
+    assert(dial_base() && !dial_has_set(h, 1) && dial_value(h, 1) == GRKIT_DIAL_VALUE_ON);
     /* A user mode with Off keeps Off when it loses its snapshot. */
     dial_to(DIAL_P);
     dial_fire();
@@ -4513,12 +4530,12 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     slot_of[2] = 1;
     dial_save_as(2, "Night");
     assert(slot_named(1, "Night") && dial_has_set(h, 2) && !dial_has_set(h, 1));
-    /* A name of an earlier build (no snapshot) and an unknown value do what
-       P/Av/Tv/M do. */
+    /* A name of an earlier build (no snapshot) and an unknown value are
+       On. */
     dial_slot_record(h, 3)[GRKIT_DIAL_SLOT_VALUE] = 1234;
-    assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_SAME);
+    assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_ON);
     dial_slot_record(h, 3)[GRKIT_DIAL_SLOT_VALUE] = GRKIT_DIAL_VALUE_SNAPSHOT;
-    assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_SAME);
+    assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_ON);
 }
 
 static void the_mode_dial_acts_once_where_the_dial_stays(void)
@@ -4585,18 +4602,60 @@ static void the_mode_dial_lands_at_a_start(void)
     assert(dial_timer_ms == DIAL_RETRY_MS);
     dial_fire();
     assert(dial_saved_applies() && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
-    /* A start at P with P/Av/Tv/M Off stops GRKit there. */
+    /* A start at P with P Off stops GRKit there. */
     dial_reset();
-    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1;
+    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1U << DIAL_P;
     dial_start(DIAL_P);
     assert(manage_grkit_off(h) && !manage_all_off(h));
     /* A start with the switch Off does nothing. */
     dial_reset();
-    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1;
+    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1U << DIAL_P;
     DIAL_SWITCH_OFF = 1;
     manage_off_changed(h);
     dial_start(DIAL_P);
     assert(!services_word(h, SERVICES_DIAL + DIAL_SUSPENDED)[0] && DIAL_SWITCH_OFF == 1);
+}
+
+/* The file of an older build has 1 for GRKit off at P/Av/Tv/M, where a
+   user mode that did what they do was off too. At the first shooting
+   screen, or when the Mode Dial page opens, each of these positions gets
+   its bit, each user mode that is On becomes Off, a snapshot stays, and the
+   file saves: each position does what it did. */
+static void an_older_dial_file_keeps_what_each_position_does(void)
+{
+    volatile u32 *h = test_header;
+    u32 all = 0, sets;
+    for (u32 i = 0; i < DIAL_SHARED_COUNT; ++i) all |= dial_shared_bit(i);
+    assert(!(all & DIAL_SHARED_ALL_OFF) && all & 1U << DIAL_P && all & 1U << DIAL_TV);
+    /* At a start. */
+    dial_reset();
+    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1;
+    dial_start(DIAL_TV);
+    assert(h[GRKIT_HOST_DIAL_SHARED_OFF / 4] == all && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == 1);
+    assert(manage_grkit_off(h) && !manage_all_off(h));
+    for (u32 u = 1; u <= GRKIT_DIAL_USER_MODES; ++u) assert(dial_value(h, u) == GRKIT_DIAL_VALUE_OFF);
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(manage_grkit_off(h));
+    /* When the page opens: U2 keeps its snapshot, U3 Off stays Off. */
+    dial_reset();
+    dial_start(DIAL_P);
+    dial_saved_settings();
+    dial_save_as(2, "Street");
+    dial_saved_base();
+    dial_slot_record(h, 3)[GRKIT_DIAL_SLOT_VALUE] = GRKIT_DIAL_VALUE_OFF;
+    h[GRKIT_HOST_DIAL_SHARED_OFF / 4] = 1;
+    sets = h[GRKIT_HOST_DIAL_SET_CHANGES / 4];
+    dial_page_opens(h);
+    assert(h[GRKIT_HOST_DIAL_SHARED_OFF / 4] == all && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == sets + 1);
+    assert(dial_value(h, 1) == GRKIT_DIAL_VALUE_OFF && dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT);
+    assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_OFF);
+    /* A file that is upgraded already changes nothing. */
+    dial_page_opens(h);
+    assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == sets + 1);
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(dial_saved_applies() && !manage_grkit_off(h));
 }
 
 /* The dial belongs to the core: it acts without a module that uses
@@ -4643,17 +4702,17 @@ static void the_dial_values_survive_a_restore(void)
     dial_to(DIAL_U(2));
     dial_fire();
     assert(h[GRKIT_HOST_STATE_HOLD / 4] == 1);
-    /* On U2, P/Av/Tv/M Off and U1 Off: the file of the user modes counts
-       the changes, while the main file waits. */
+    /* On U2, P Off and U1 Off: the file of the user modes counts the
+       changes, while the main file waits. */
     sets = h[GRKIT_HOST_DIAL_SET_CHANGES / 4];
-    dial_values_of(0)->select(h, 0, 1);
+    dial_page_values(DIAL_ROW_P)->select(h, 0, 1);
     dial_values_of(1)->select(h, 0, DIAL_VALUE_OFF);
     assert(h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == sets + 2 && h[GRKIT_HOST_STATE_HOLD / 4] == 1);
     /* P restores the shared settings: the values stay. */
     dial_to(DIAL_P);
     dial_fire();
     dial_restore(h);
-    assert(dial_shared_off(h) && dial_value(h, 1) == GRKIT_DIAL_VALUE_OFF && dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT);
+    assert(dial_shared_off(h, DIAL_P) && dial_value(h, 1) == GRKIT_DIAL_VALUE_OFF && dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT);
     assert(manage_grkit_off(h) && !h[GRKIT_HOST_STATE_HOLD / 4]);
     _Static_assert(GRKIT_HOST_DIAL_SHARED_OFF == GRKIT_HOST_DIAL_SLOTS + 4 * GRKIT_HOST_DIAL_SLOTS_WORDS,
                    "The row of P/Av/Tv/M follows the user modes in their file");
@@ -5431,6 +5490,7 @@ int main(void)
     the_mode_dial_lets_go_of_a_changed_slot();
     the_mode_dial_acts_once_where_the_dial_stays();
     the_mode_dial_lands_at_a_start();
+    an_older_dial_file_keeps_what_each_position_does();
     the_mode_dial_belongs_to_the_core();
     the_dial_values_survive_a_restore();
     persistence_exports_shared_values_while_a_snapshot_applies();

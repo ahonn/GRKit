@@ -148,15 +148,14 @@ pub const DIAL_SET_WORDS: usize = DIAL_SET_PAIR + 2 * DIAL_SET_PAIRS;
 pub const DIAL_SET_EFFECT: u32 = 0x8000;
 /// What each user mode of the mode dial does (`HOST_DIAL_SLOTS`,
 /// runtime/mode_dial.h), `DIAL_SLOT_WORDS` words each: its value
-/// (`DIAL_SLOT_VALUE`): the same as P/Av/Tv/M (`DIAL_VALUE_SAME`), GRKit Off
-/// (`DIAL_VALUE_OFF`), or its snapshot (`DIAL_VALUE_SNAPSHOT`); and a
-/// fingerprint of the name that the core gave its native slot with the
-/// snapshot (`DIAL_SLOT_NAME`, 0 without a snapshot). Another value is the
-/// same as P/Av/Tv/M.
+/// (`DIAL_SLOT_VALUE`): GRKit On with the shared settings (`DIAL_VALUE_ON`),
+/// GRKit Off (`DIAL_VALUE_OFF`), or its snapshot (`DIAL_VALUE_SNAPSHOT`); and
+/// a fingerprint of the name that the core gave its native slot with the
+/// snapshot (`DIAL_SLOT_NAME`, 0 without a snapshot). Another value is On.
 pub const DIAL_SLOT_VALUE: usize = 0;
 pub const DIAL_SLOT_NAME: usize = 1;
 pub const DIAL_SLOT_WORDS: usize = 2;
-pub const DIAL_VALUE_SAME: u32 = 0;
+pub const DIAL_VALUE_ON: u32 = 0;
 pub const DIAL_VALUE_OFF: u32 = 1;
 pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
@@ -534,8 +533,10 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// them in the file of the sets after the sets, and INSTALL restores
     /// them. Only the camera writes them.
     HOST_DIAL_SLOTS: 4 * DIAL_SLOT_WORDS * DIAL_USER_MODES;
-    /// 1 while GRKit is off at P/Av/Tv/M (and Sn on GR IV), else 0, right
-    /// after HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h).
+    /// The positions that share their settings, P, Av, Tv, and M (and Sn on
+    /// GR IV), where GRKit is off: bit c for the position with code c, right
+    /// after HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). Bit 0,
+    /// which no position has, is the older value for each of them off.
     HOST_DIAL_SHARED_OFF: 4;
     /// The copy of the switch, Enable at Start, and Distance Unit,
     /// `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
@@ -1283,7 +1284,7 @@ pub fn header() -> String {
     comment(
         &mut out,
         "What a user mode does (GRKIT_HOST_DIAL_SLOTS, runtime/mode_dial.h): \
-         GRKIT_DIAL_SLOT_WORDS words, its value, GRKIT_DIAL_VALUE_SAME, \
+         GRKIT_DIAL_SLOT_WORDS words, its value, GRKIT_DIAL_VALUE_ON, \
          GRKIT_DIAL_VALUE_OFF, or GRKIT_DIAL_VALUE_SNAPSHOT, and a fingerprint \
          of the name that the core gave its native slot with the snapshot. In \
          the file of the sets, word w of user mode u (0 for U1) has the key \
@@ -1315,7 +1316,7 @@ pub fn header() -> String {
         writeln!(out, "#define GRKIT_MANAGE_COPY_{name} {value}U").unwrap();
     }
     for (name, value) in [
-        ("SAME", DIAL_VALUE_SAME),
+        ("ON", DIAL_VALUE_ON),
         ("OFF", DIAL_VALUE_OFF),
         ("SNAPSHOT", DIAL_VALUE_SNAPSHOT),
     ] {

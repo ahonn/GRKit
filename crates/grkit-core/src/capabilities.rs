@@ -249,7 +249,7 @@ pub enum StateFile {
     /// library (`runtime::recipe_key`). The site reads and writes it too.
     Recipes,
     /// The settings of the mode dial: the snapshot and the value of each user
-    /// mode, and whether GRKit is off at P/Av/Tv/M (`runtime::dial_set_key`);
+    /// mode, and where GRKit is off at P/Av/Tv/M (`runtime::dial_set_key`);
     /// and a copy of the switch, Enable at Start, and Distance Unit, which
     /// INSTALL takes before the main file. Only the camera writes it.
     DialSets,

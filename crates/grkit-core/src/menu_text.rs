@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 80;
+pub const STRINGS: usize = 78;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -71,14 +71,10 @@ struct Words {
     enable_at_start: &'static str,
     keep_last: &'static str,
     /// The Mode Dial row of GRKit Settings in MENU, and the action of a user
-    /// mode that saves the current settings in it. U1 to U3 have the names
-    /// of the dial, and P/Av/Tv/M (P/Av/Tv/Sn/M on GR IV) is the same in each
-    /// language.
+    /// mode that saves the current settings in it. The positions have the
+    /// names of the dial, the same in each language.
     mode_dial: &'static str,
     dial_save: &'static str,
-    /// The value of a user mode that does what P/Av/Tv/M do (before and after
-    /// P/Av/Tv/M).
-    dial_same: (&'static str, &'static str),
     /// The confirm before Save Current Settings overwrites the native slot of
     /// a user mode (before and after the name of the user mode).
     dial_overwrite: (&'static str, &'static str),
@@ -163,7 +159,6 @@ const ENGLISH: Words = Words {
     keep_last: "Keep Last",
     mode_dial: "Mode Dial",
     dial_save: "Save Current Settings",
-    dial_same: ("Same as ", ""),
     dial_overwrite: ("Overwrite ", "?"),
     grkit_settings: "GRKit Settings",
     distance_unit: "Distance Unit",
@@ -236,7 +231,6 @@ const SIMPLIFIED_CHINESE: Words = Words {
     keep_last: "保持上次",
     mode_dial: "模式转盘",
     dial_save: "保存当前设置",
-    dial_same: ("同 ", ""),
     dial_overwrite: ("覆盖", "？"),
     grkit_settings: "GRKit 设置",
     distance_unit: "距离单位",
@@ -306,7 +300,6 @@ const TRADITIONAL_CHINESE: Words = Words {
     keep_last: "保持上次",
     mode_dial: "模式轉盤",
     dial_save: "儲存目前設定",
-    dial_same: ("同 ", ""),
     dial_overwrite: ("覆蓋", "？"),
     grkit_settings: "GRKit 設定",
     distance_unit: "距離單位",
@@ -378,7 +371,6 @@ const JAPANESE: Words = Words {
     keep_last: "前回のまま",
     mode_dial: "モードダイヤル",
     dial_save: "現在の設定を保存",
-    dial_same: ("", "と同じ"),
     dial_overwrite: ("", "に上書きしますか?"),
     grkit_settings: "GRKit 設定",
     distance_unit: "距離の単位",
@@ -451,7 +443,6 @@ const KOREAN: Words = Words {
     keep_last: "이전 상태",
     mode_dial: "모드 다이얼",
     dial_save: "현재 설정 저장",
-    dial_same: ("", "와 동일"),
     dial_overwrite: ("", " 덮어쓰기?"),
     grkit_settings: "GRKit 설정",
     distance_unit: "거리 단위",
@@ -629,12 +620,10 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "DIAL",
-        6,
+        4,
         "The Mode Dial row of GRKit Settings in MENU, then Save Current Settings, the \
-         action of a user mode, then the text before and after P/Av/Tv/M in the value \
-         of a user mode that does the same, then the text before and after the name \
-         of a user mode in the confirm before Save Current Settings overwrites its \
-         native slot.",
+         action of a user mode, then the text before and after the name of a user \
+         mode in the confirm before Save Current Settings overwrites its native slot.",
     ),
     run(
         "UNIT",
@@ -724,8 +713,6 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "DIAL" => words(&[
             w.mode_dial,
             w.dial_save,
-            w.dial_same.0,
-            w.dial_same.1,
             w.dial_overwrite.0,
             w.dial_overwrite.1,
         ]),
@@ -927,32 +914,24 @@ mod tests {
         }
     }
 
-    /// The Mode Dial page names U1 to U3 as the dial does and P/Av/Tv/M the
-    /// same in each language, and its On and Off are those of the switch, so
-    /// only its row, Save Current Settings, the value that does what
-    /// P/Av/Tv/M do, and the confirm of an overwrite of a native slot are new
-    /// texts.
+    /// The Mode Dial page names the positions as the dial does, the same in
+    /// each language, and its On and Off are those of the switch, so only its
+    /// row, Save Current Settings, and the confirm of an overwrite of a native
+    /// slot are new texts.
     #[test]
     fn the_mode_dial_has_its_row_and_values_in_each_language() {
         let expected = [
             (
                 Language::English,
-                [
-                    "Mode Dial",
-                    "Save Current Settings",
-                    "Same as ",
-                    "",
-                    "Overwrite ",
-                    "?",
-                ],
+                ["Mode Dial", "Save Current Settings", "Overwrite ", "?"],
             ),
             (
                 Language::SimplifiedChinese,
-                ["模式转盘", "保存当前设置", "同 ", "", "覆盖", "？"],
+                ["模式转盘", "保存当前设置", "覆盖", "？"],
             ),
             (
                 Language::TraditionalChinese,
-                ["模式轉盤", "儲存目前設定", "同 ", "", "覆蓋", "？"],
+                ["模式轉盤", "儲存目前設定", "覆蓋", "？"],
             ),
             (
                 Language::Japanese,
@@ -960,21 +939,12 @@ mod tests {
                     "モードダイヤル",
                     "現在の設定を保存",
                     "",
-                    "と同じ",
-                    "",
                     "に上書きしますか?",
                 ],
             ),
             (
                 Language::Korean,
-                [
-                    "모드 다이얼",
-                    "현재 설정 저장",
-                    "",
-                    "와 동일",
-                    "",
-                    " 덮어쓰기?",
-                ],
+                ["모드 다이얼", "현재 설정 저장", "", " 덮어쓰기?"],
             ),
         ];
         for (language, texts) in expected {

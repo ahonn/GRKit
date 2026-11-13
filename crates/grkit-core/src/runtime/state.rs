@@ -99,10 +99,10 @@ pub const DIAL_SET_KEY_STRIDE: u32 = 1000;
 const _: () = assert!(DIAL_SET_WORDS <= DIAL_SET_KEY_STRIDE as usize);
 /// The number of saved words: each word of the set of each user mode, then
 /// each word of what each user mode does (`abi::HOST_DIAL_SLOTS`, which
-/// follows `abi::HOST_DIAL_SETS`), then whether GRKit is off at P/Av/Tv/M
-/// (`abi::HOST_DIAL_SHARED_OFF`, which follows them), then the copy of the
-/// switch, Enable at Start, and Distance Unit (`abi::HOST_MANAGE_COPY`,
-/// which follows it). The words after the sets have the keys of a fourth set
+/// follows `abi::HOST_DIAL_SETS`), then the positions of P/Av/Tv/M where
+/// GRKit is off (`abi::HOST_DIAL_SHARED_OFF`, which follows them), then the
+/// copy of the switch, Enable at Start, and Distance Unit
+/// (`abi::HOST_MANAGE_COPY`, which follows it). The words after the sets have the keys of a fourth set
 /// (`DIAL_SLOT_KEY_BASE`).
 pub const DIAL_SET_STATE_WORDS: usize =
     DIAL_SET_WORDS * DIAL_USER_MODES + DIAL_SLOT_WORDS * DIAL_USER_MODES + 1 + MANAGE_COPY_WORDS;

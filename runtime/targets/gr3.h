@@ -501,9 +501,11 @@
    characters with 0 after it, and whether the box is registered; the
    setters of the firmware write the eight records, as the core does. The
    save copies the current settings into box n (FW_BOX_SAVE), as the native
-   save does. DIAL_SHARED_TEXT names P, Tv, Av, and M, the positions that
-   share their settings. */
-#define DIAL_SHARED_TEXT 'P','/','A','v','/','T','v','/','M',0
+   save does. DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, and
+   M, the positions that share their settings, in the order of the Mode
+   Dial page. */
+#define DIAL_SHARED_CODES 3U,6U,5U,8U
+#define DIAL_SHARED_NAMES {'P',0},{'A','v',0},{'T','v',0},{'M',0}
 #define DIAL_RECORD_SIZE 0xb26U
 #define DIAL_RECORD() WORD(DIAL_SETTINGS,4)
 #define DIAL_BOX_ASSIGN 0x7e0U

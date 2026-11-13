@@ -463,9 +463,10 @@
      (FW_USER_MODE_ASSIGN), as the native assign does.
    - The setter of a name (FW_USER_MODE_NAME) also sets the registered
      flag.
-   DIAL_SHARED_TEXT names P, Tv, Av, Sn, and M, the positions that share
-   their settings. */
-#define DIAL_SHARED_TEXT 'P','/','A','v','/','T','v','/','S','n','/','M',0
+   DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, Sn, and M, the
+   positions that share their settings, in the order of the Mode Dial page. */
+#define DIAL_SHARED_CODES 3U,6U,5U,9U,8U
+#define DIAL_SHARED_NAMES {'P',0},{'A','v',0},{'T','v',0},{'S','n',0},{'M',0}
 #define DIAL_USER_NAME 0x794U
 #define DIAL_USER_NAME_STRIDE 0x21U
 #define DIAL_USER_REGIST 0x8bdU
