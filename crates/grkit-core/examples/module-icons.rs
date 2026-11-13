@@ -879,14 +879,27 @@ fn main() -> Result<()> {
             )?;
         }
     }
-    // The sign of Border: the band of a photo, as a frame.
-    let mut m = marks();
-    mark(&mut m, 255, |x, y| {
-        let (left, top, right, bottom) = (7.0, 5.0, 33.0, 22.0);
-        let inside = x >= left && x < right && y >= top && y < bottom;
-        let inner = x >= left + 3.0 && x < right - 3.0 && y >= top + 3.0 && y < bottom - 3.0;
-        inside && !inner
-    });
-    save(&modules.join("border/tiles/vf-border.png"), &outlined(&m))?;
+    // Border: the print as a frame with the bands of the style: [left, top,
+    // right, bottom]. The bands are wider than the share of the style, as in
+    // the list tiles, so that the styles differ at this size. The frame has
+    // no strength wedge, so it is centered on the tile, on the same middle
+    // line as the symbol and wedge of the other status icons.
+    for (file, bands) in [
+        ("vf-thin.png", [2.0, 2.0, 2.0, 2.0]),
+        ("vf-wide.png", [5.0, 4.0, 5.0, 4.0]),
+        ("vf-instant.png", [2.0, 2.0, 2.0, 7.0]),
+    ] {
+        let mut m = marks();
+        mark(&mut m, 255, |x, y| {
+            let (left, top, right, bottom) = (7.0, 10.0, 33.0, 30.0);
+            let inside = x >= left && x < right && y >= top && y < bottom;
+            let inner = x >= left + bands[0]
+                && x < right - bands[2]
+                && y >= top + bands[1]
+                && y < bottom - bands[3];
+            inside && !inner
+        });
+        save(&modules.join("border/tiles").join(file), &outlined(&m))?;
+    }
     Ok(())
 }

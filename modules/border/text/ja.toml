@@ -7,3 +7,7 @@ label = "スタイル"
 [settings."CORE.BORDER_COLOR"]
 label = "色"
 values = ["白", "黒"]
+
+[settings.ICON]
+label = "アイコン表示"
+values = ["オン", "オフ"]

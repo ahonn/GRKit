@@ -7,3 +7,7 @@ label = "样式"
 [settings."CORE.BORDER_COLOR"]
 label = "颜色"
 values = ["白色", "黑色"]
+
+[settings.ICON]
+label = "图标显示"
+values = ["开启", "关闭"]

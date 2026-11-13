@@ -7,29 +7,40 @@ id = "BORDER"
 version = 1
 order = 48
 sources = []
-# Tile n shows style n. Tile 0 is the module tile, for Off at the root. Tile
-# 4 is the viewfinder status icon.
+# Tile n shows style n. Tile 0 is the module tile, for Off at the root. Tiles
+# 4 to 6 are the viewfinder status icons of the styles.
 tiles = [
     "tiles/0-module.png",
     "tiles/1-thin.png",
     "tiles/2-wide.png",
     "tiles/3-instant.png",
-    "tiles/vf-border.png",
+    "tiles/vf-thin.png",
+    "tiles/vf-wide.png",
+    "tiles/vf-instant.png",
 ]
 # CORE.BORDER: 0 Off, 1 Thin, 2 Wide, 3 Instant.
 # CORE.BORDER_COLOR: 0 white, 1 black. Only MENU sets it.
 uses = ["CORE.BORDER", "CORE.BORDER_COLOR"]
 
+# The viewfinder icon: 0 on, 1 off.
+[[settings]]
+key = "ICON"
+values = 2
+saved = true
+public = true
+
 [page]
 setting = "CORE.BORDER"
 off_row = true
-# The style, then the color.
-settings = ["CORE.BORDER", "CORE.BORDER_COLOR"]
+# The style, the color, then the icon.
+settings = ["CORE.BORDER", "CORE.BORDER_COLOR", "ICON"]
 # The Options row in MENU turns each style on or off in ADJ.
 options = true
 
 [[indicators]]
 id = "border"
 placement = "status_row"
-enabled = { setting = "CORE.BORDER", not_equals = 0 }
-icon = { tile = 4 }
+enabled = { all = [{ setting = "CORE.BORDER", not_equals = 0 }, { setting = "ICON", equals = 0 }] }
+# The viewfinder icons of the styles are tiles 4 to 6. Value 0 maps to tile 3,
+# but the indicator is hidden while Border is Off.
+icon = { setting = "CORE.BORDER", first_tile = 3 }

@@ -7,3 +7,7 @@ label = "스타일"
 [settings."CORE.BORDER_COLOR"]
 label = "색상"
 values = ["흰색", "검정"]
+
+[settings.ICON]
+label = "아이콘 표시"
+values = ["켜짐", "꺼짐"]
