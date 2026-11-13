@@ -34,7 +34,7 @@ You use GRKit at your own risk. To the maximum extent that the applicable law pe
 
 ## Trademarks
 
-GRKit is not affiliated with or endorsed by Ricoh, Kodak, Fujifilm, or Ilford. Some camera, film, and paper names are trademarks of their owners.
+GRKit is not affiliated with or endorsed by Ricoh, Kodak, Fujifilm, Ilford, or CineStill. Some camera, film, and paper names are trademarks of their owners.
 
 ## Changes
 

@@ -34,7 +34,7 @@ GRKit 사용에 따른 책임은 본인에게 있습니다. 관련 법령이 허
 
 ## 상표
 
-GRKit은 Ricoh, Kodak, Fujifilm, Ilford와 관련이 없으며 이들 회사의 승인을 받지 않았습니다. 일부 카메라, 필름, 인화지 이름은 각 소유자의 상표입니다.
+GRKit은 Ricoh, Kodak, Fujifilm, Ilford, CineStill과 관련이 없으며 이들 회사의 승인을 받지 않았습니다. 일부 카메라, 필름, 인화지 이름은 각 소유자의 상표입니다.
 
 ## 약관 변경
 

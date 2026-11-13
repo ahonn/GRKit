@@ -36,8 +36,8 @@ licensed under the MIT License.
 
 Effect names and film, paper, and filter names identify the simulated materials. Some of these
 names are trademarks of their owners. GRKit is not affiliated with or endorsed by Eastman Kodak Company,
-Kodak Alaris, Fujifilm, or HARMAN technology Limited (Ilford Photo). The simulations are models
-of published data or hand-made styles, not measured equivalents of the products.
+Kodak Alaris, Fujifilm, HARMAN technology Limited (Ilford Photo), or CineStill Film. The simulations
+are models of published data or hand-made styles, not measured equivalents of the products.
 
 The effects operate in the camera's native image-processing domain. They are not display-sRGB
 JPEG transforms. They add no grain, halation, or other spatial effect. The fits assume 18% gray

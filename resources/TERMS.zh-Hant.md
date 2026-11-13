@@ -34,7 +34,7 @@ GRKit 和 grkit.app 按「現狀」提供，不提供任何形式的擔保。作
 
 ## 商標
 
-GRKit 與 Ricoh、Kodak、Fujifilm、Ilford 無關，也未獲得它們的認可。部分相機、底片和相紙名稱是其所有者的商標。
+GRKit 與 Ricoh、Kodak、Fujifilm、Ilford、CineStill 無關，也未獲得它們的認可。部分相機、底片和相紙名稱是其所有者的商標。
 
 ## 變更
 

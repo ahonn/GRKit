@@ -40,4 +40,4 @@ This effect is licensed under the MIT License. The copyright and permission noti
 
 ### Names
 
-Effect names and film, paper, and filter names identify the simulated materials. Some of these names are trademarks of their owners. GRKit is not affiliated with or endorsed by RICOH IMAGING COMPANY, LTD., Eastman Kodak Company, Kodak Alaris, Fujifilm, or HARMAN technology Limited (Ilford Photo). The simulations are models of published data or hand-made styles, not measured equivalents of the products.
+Effect names and film, paper, and filter names identify the simulated materials. Some of these names are trademarks of their owners. GRKit is not affiliated with or endorsed by RICOH IMAGING COMPANY, LTD., Eastman Kodak Company, Kodak Alaris, Fujifilm, HARMAN technology Limited (Ilford Photo), or CineStill Film. The simulations are models of published data or hand-made styles, not measured equivalents of the products.
