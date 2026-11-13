@@ -1034,6 +1034,117 @@ fn native_type_icons_match_each_firmware() -> Result<()> {
     Ok(())
 }
 
+/// The native icons of the settings of a recipe (NATIVE_DETAIL_*_ICONS and
+/// the native type icons, runtime/recipe_details.h) are 40 x 40 icons of
+/// FW_ICON_TABLE, and each slot shows the same picture on each build of a
+/// family. GR IV 1.20-0528 has no icon file of its own: its descriptors
+/// address the same pictures as those of 1.20 from one other start.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn native_detail_icons_match_each_firmware() -> Result<()> {
+    use sha2::{Digest, Sha256};
+    const LISTS: [&str; 7] = [
+        "NATIVE_DETAIL_MODE_ICONS",
+        "NATIVE_DETAIL_PARAMETER_ICONS",
+        "NATIVE_DETAIL_CORRECTION_ICONS",
+        "NATIVE_DETAIL_METERING_ICONS",
+        "NATIVE_DETAIL_ND_ICONS",
+        "NATIVE_DETAIL_COMPENSATION_ICON",
+        "NATIVE_DETAIL_ISO_ICON",
+    ];
+    // For each build: the picture (or the pixel offset on 0528) of each slot.
+    let mut pictures: BTreeMap<&str, Vec<Option<Vec<u8>>>> = BTreeMap::new();
+    let mut offsets: BTreeMap<&str, Vec<Option<u32>>> = BTreeMap::new();
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let number = |text: &str| -> u32 {
+            let text = text.trim().trim_end_matches('U');
+            match text.strip_prefix("0x") {
+                Some(hex) => u32::from_str_radix(hex, 16).unwrap(),
+                None => text.parse().unwrap(),
+            }
+        };
+        let table = number(
+            definitions["FW_ICON_TABLE"]
+                .trim_start_matches("FIRMWARE(")
+                .trim_end_matches(')'),
+        );
+        let mut ids: Vec<u32> = Vec::new();
+        for list in LISTS {
+            ids.extend(definitions[list].split(',').map(number));
+        }
+        ids.extend(definitions["NATIVE_TYPE_ICONS"].split(',').map(number));
+        // The icon file of the firmware, where the descriptors point.
+        let raw = std::fs::read(&path)?;
+        let mut icons: Option<Vec<u8>> = None;
+        if let Ok(decoded) = crate::firmware::decode(&raw) {
+            let mut at = 0;
+            while at + 16 <= decoded.len() {
+                let size = u32::from_le_bytes(decoded[at + 12..at + 16].try_into()?) as usize;
+                if &decoded[at..at + 8] == b"ICONBIN\0" && at + 16 + size <= decoded.len() {
+                    icons = Some(decoded[at + 16..at + 16 + size].to_vec());
+                }
+                at += 16 + size;
+            }
+        }
+        let wide = target.icon_descriptor_bytes()? == 12;
+        let (mut found, mut starts) = (Vec::new(), Vec::new());
+        for &id in &ids {
+            if id == 0 {
+                found.push(None);
+                starts.push(None);
+                continue;
+            }
+            let descriptor = u32::from_le_bytes(image.read(table + 4 * id, 4)?.try_into()?);
+            let words = image.read(descriptor, 12)?;
+            let word = |i: usize| u32::from_le_bytes(words[4 * i..4 * i + 4].try_into().unwrap());
+            let (width, height, offset) = if wide {
+                (word(0) >> 16, word(1), word(2))
+            } else {
+                (word(0) & 0xffff, word(0) >> 16, word(1))
+            };
+            assert_eq!((width, height), (40, 40), "{}: icon {id:#x}", target.name);
+            starts.push(Some(offset));
+            found.push(icons.as_ref().map(|icons| {
+                let at = offset as usize * 4;
+                Sha256::digest(&icons[at..at + 40 * 40 * 4]).to_vec()
+            }));
+        }
+        pictures.insert(target.name, found);
+        offsets.insert(target.name, starts);
+    }
+    for family in [
+        &["gr3-2.10", "gr3-2.21"][..],
+        &["gr4-1.11", "gr4-1.20", "gr4-1.21"],
+    ] {
+        let first = &pictures[family[0]];
+        for other in &family[1..] {
+            for (slot, (a, b)) in first.iter().zip(&pictures[other]).enumerate() {
+                if let (Some(a), Some(b)) = (a, b) {
+                    assert_eq!(a, b, "{} and {other}: slot {slot}", family[0]);
+                }
+            }
+        }
+    }
+    let shifts: std::collections::BTreeSet<i64> = offsets["gr4-1.20"]
+        .iter()
+        .zip(&offsets["gr4-1.20-0528"])
+        .take(offsets["gr4-1.20"].len() - grkit_core::native::TYPES.len())
+        .filter_map(|(a, b)| Some(i64::from((*a)?) - i64::from((*b)?)))
+        .collect();
+    assert_eq!(shifts.len(), 1, "{shifts:?}");
+    Ok(())
+}
+
 /// Each build header includes its native header, which each build has.
 #[test]
 fn each_build_includes_its_native_header() {

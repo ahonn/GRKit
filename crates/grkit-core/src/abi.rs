@@ -69,11 +69,13 @@ pub const MODULE_SETTINGS_MAX: usize = 160;
 pub const MODULE_TILES_MAX: usize = 128;
 /// Off, GRKit, Version, Modules, Modules with a line through it (Enable
 /// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
-/// "16" of the manual focus scale in feet (`runtime/distance.h`). The menu
+/// "16" of the manual focus scale in feet (`runtime/distance.h`), the tile of
+/// a recipe without its caption, and the slots of the tiles of recipes that
+/// the core writes (`runtime/recipe_card.h`). The menu
 /// addresses the icons after Off by their offset from the GRKit icon, so the
 /// host icons come first in chunk 0, and they must fit in it. The effect
 /// icons follow them.
-pub const HOST_ICON_COUNT: usize = 8;
+pub const HOST_ICON_COUNT: usize = 21;
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script
@@ -786,7 +788,7 @@ pub const CANVAS_ENTRY_SIZE: usize = 80;
 pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
 /// Bytes of the live-view labels and glyphs after the menu text
 /// (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 53248;
+pub const LABELS_SIZE: usize = 73728;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
@@ -1699,6 +1701,45 @@ pub fn header() -> String {
         crate::artwork::OVERLAY_GLYPH_HEIGHT
     )
     .unwrap();
+    // The small glyphs of the same characters follow, then the caption
+    // glyphs of a recipe tile (runtime/recipe_card.h).
+    writeln!(
+        out,
+        "#define GRKIT_SMALL_GLYPH_FIRST {}",
+        crate::artwork::OVERLAY_LABELS.len() + crate::artwork::OVERLAY_GLYPH_COUNT
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_SMALL_GLYPH_HEIGHT {}",
+        crate::artwork::OVERLAY_SMALL_HEIGHT
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_CAPTION_FIRST {}",
+        crate::artwork::OVERLAY_LABELS.len() + 2 * crate::artwork::OVERLAY_GLYPH_COUNT
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_CAPTION_CHARACTERS \"{}\"",
+        std::str::from_utf8(crate::artwork::CAPTION_CHARACTERS).unwrap()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_CAPTION_TOP {}",
+        crate::artwork::CAPTION_BASELINE - crate::artwork::CAPTION_GLYPH_BASELINE
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_CAPTION_INK {}",
+        crate::artwork::CAPTION_INK
+    )
+    .unwrap();
+    writeln!(out, "#define GRKIT_TILE_FILL {}", crate::artwork::TILE_FILL).unwrap();
     comment(
         &mut out,
         "String IDs of the label table, in grkit_core::menu_text order. A run of \

@@ -281,25 +281,17 @@ static const u16 *recipe_label(volatile u32 *h,u32 row) {
     if(recipe_name_length(h,e)) recipe_append_missing(h,to,at,e);
     return (const u16 *)to;
 }
-/* A recipe shows the icon of its effect, else the native Image Control icon
-   of its native type, as recipe_append_name names it. A type without an
-   icon on this camera, Film Look Off, and an effect that is not installed
-   show the recipe tile. */
+#include "recipe_card.h"
+/* A recipe shows its tile: the stacked cards with the abbreviation of its
+   name (runtime/recipe_card.h), so that the recipes of one look differ. The
+   panel of ADJ shows the icon of its look. */
 static u32 recipe_icon(volatile u32 *h,u32 row) {
-    static const u16 type_icons[NATIVE_TYPES]={NATIVE_TYPE_ICONS};
-    const volatile u32 *w;
-    u32 slot, index, type;
+    u32 slot;
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return choice_tile(h,RECIPE_TILE_MODULE);
     slot=recipe_row_slot(h,row);
     if(slot==RECIPE_ROW_UNDO) return choice_tile(h,RECIPE_TILE_UNDO);
     if(slot==RECIPE_ROW_SAVE) return choice_tile(h,RECIPE_TILE_SAVE);
-    w=recipe_words(h,slot);
-    if(RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT) {
-        index=recipe_effect(h,RECIPE_CODE(w[0]));
-        return index<GRKIT_TEXT_RECORDS ? GRKIT_ICON_EFFECT(index) : choice_tile(h,RECIPE_TILE_RECIPE);
-    }
-    type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]);
-    return type && type<=NATIVE_TYPES && type_icons[type-1U] ? type_icons[type-1U] : choice_tile(h,RECIPE_TILE_RECIPE);
+    return slot<GRKIT_RECIPE_SLOTS ? GRKIT_ICON_RECIPE(slot) : choice_tile(h,RECIPE_TILE_RECIPE);
 }
 static u32 recipe_checked(volatile u32 *h,u32 row) {
     u32 e=recipe_row_slot(h,row);

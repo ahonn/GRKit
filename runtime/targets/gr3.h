@@ -207,6 +207,18 @@
 #define METADATA_TONE 0x220
 /* The native Off icon, used until the installer provides the GRKit one. */
 #define NATIVE_OFF_ICON() WORD(FW_ICON_TABLE,0x166*4)
+/* The native icons of the settings of a recipe, as the camera's own menus
+   show them (runtime/recipe_details.h), by ID in FW_ICON_TABLE, 0 for
+   none: each white balance mode and each parameter in the portable order
+   of runtime/native.h, each stored value of each correction, metering,
+   and ND filter, then exposure compensation and the Auto ISO limit. */
+#define NATIVE_DETAIL_MODE_ICONS 0xd5,0xe1,0,0,0xda,0xe2,0xd6,0xdb,0xdd,0xde,0xdc,0xe3,0xd9,0xdf,0xd7,0,0,0
+#define NATIVE_DETAIL_PARAMETER_ICONS 0x1e3,0x1e1,0x1e2,0x1da,0x1db,0x1dc,0x1e5,0x1dd,0x1e4,0x1e9,0x1e9,0x1e9,0x1e9,0x1e0,0x1d9,0x1e9,0x1e9,0x1de,0x1de,0x1de,0
+#define NATIVE_DETAIL_CORRECTION_ICONS 0xe5,0x117,0x118,0xe6,0x11c,0x11d,0x11e,0x11f,0x175,0x174,0xe9,0xeb,0xec,0xed,0xea,0xee
+#define NATIVE_DETAIL_METERING_ICONS 0x220,0x222,0x223,0x221
+#define NATIVE_DETAIL_ND_ICONS 0xef,0x183,0x184
+#define NATIVE_DETAIL_COMPENSATION_ICON 0x288U
+#define NATIVE_DETAIL_ISO_ICON 0x5eU
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */

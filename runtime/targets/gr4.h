@@ -240,6 +240,8 @@
 #define INFO_CONTROLLER 0x200010bU
 #define INFO_LABELS {0x164,0x16c,0x174}
 #define INFO_VALUES {0x168,0x170,0x178}
+/* Each label and value view, which the View of a recipe hides. */
+#define INFO_LABELS_VALUES {0x164,0x16c,0x174,0x168,0x170,0x178}
 #define MENU_TAB_SECTIONS 0x68
 #define MENU_TAB_TITLES 0x6a
 #define MENU_TAB_STARTS 0x80

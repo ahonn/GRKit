@@ -1232,9 +1232,52 @@ static void the_first_shooting_screen_calls_the_core_once(void)
     assert(core_calls == 1);
     header[GRKIT_HOST_SERVICES/4] = 0;
 }
+/* The panel of a recipe in ADJ: black at 50% in its fixed rectangle, and
+   the groups of the items, each on its own row, centered from top to
+   bottom. Items without an icon write their value. */
+static void put_detail(u32 i, u32 group, const char *value)
+{
+    volatile u32 *item = DETAIL_ITEM_AT(services_memory + SERVICES_DETAILS/4, i);
+    item[DETAIL_ITEM_ICON/4] = 0;
+    item[DETAIL_ITEM_META/4] = group;
+    volatile u16 *text = (volatile u16 *)(item + DETAIL_ITEM_VALUE/4);
+    u32 n = 0;
+    for (; value[n]; ++n) text[n] = (u8)value[n];
+    text[n] = 0;
+    ((volatile u16 *)(item + DETAIL_ITEM_SHORT/4))[0] = 0;
+}
+static void the_recipe_panel_centers_its_groups(void)
+{
+    reset();
+    memset(services_memory, 0, sizeof(services_memory));
+    header[GRKIT_HOST_SERVICES/4] = TEST_SERVICES;
+    put_detail(0, DETAIL_GROUP_LOOK, "A");
+    put_detail(1, DETAIL_GROUP_MODULES, "B");
+    put_detail(2, DETAIL_GROUP_EXPOSURE, "C");
+    services_memory[SERVICES_DETAILS/4 + DETAIL_COUNT/4] = 3;
+    /* Three rows of icons, with a group gap between each two. */
+    u32 height = 3U*PANEL_ICON + 2U*PANEL_GROUP_GAP;
+    assert(panel_layout(header, 0, 0) == height);
+    Surface surface = {TEST_PIXELS, TEST_STRIDE, 0, photo_boxes[0]};
+    panel_paint(header, &surface);
+    u32 top = PANEL_TOP + PANEL_MARGIN + (PANEL_HEIGHT - 2U*PANEL_MARGIN - height)/2U;
+    u32 left = PANEL_LEFT + PANEL_MARGIN, a = glyph_of('A'), c = glyph_of('C');
+    u32 first = top + (PANEL_ICON - GRKIT_GLYPH_HEIGHT)/2U, last = first + 2U*(PANEL_ICON + PANEL_GROUP_GAP);
+    for (u32 y = PANEL_TOP - 1U; y <= PANEL_TOP + PANEL_HEIGHT; ++y)
+        for (u32 x = PANEL_LEFT - 1U; x <= PANEL_LEFT + PANEL_WIDTH; ++x) {
+            u32 inside = y >= PANEL_TOP && y < PANEL_TOP + PANEL_HEIGHT && x >= PANEL_LEFT && x < PANEL_LEFT + PANEL_WIDTH;
+            u32 expected = inside ? 0x80000000U : SENTINEL;
+            expected = expected_label(a, left, first, x, y, expected);
+            expected = expected_label(c, left, last, x, y, expected);
+            if (y >= first + PANEL_ICON + PANEL_GROUP_GAP && y < last) continue;
+            assert(pixels[1 + y*TEST_STRIDE + x] == expected);
+        }
+    header[GRKIT_HOST_SERVICES/4] = 0;
+}
 
 int main(void)
 {
+    the_recipe_panel_centers_its_groups();
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();

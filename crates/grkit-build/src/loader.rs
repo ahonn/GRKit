@@ -7,8 +7,8 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use grkit_core::{
     artwork::{
-        grkit_pixels, modules_off_pixels, modules_pixels, off_pixels, rotate_pixels,
-        scale_feet_pixels, scale_sixteen_pixels, version_pixels, SCALE_LABEL_HEIGHT,
+        grkit_pixels, modules_off_pixels, modules_pixels, off_pixels, recipe_card_pixels,
+        rotate_pixels, scale_feet_pixels, scale_sixteen_pixels, version_pixels, SCALE_LABEL_HEIGHT,
         SCALE_LABEL_WIDTH,
     },
     card::{LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LINUX_LEGACY_DIRECTORY, LINUX_RAM_PLAN},
@@ -349,6 +349,13 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         &mut result,
         "scale_sixteen_pixels",
         &scale_sixteen_pixels(target.family.scale_one_column),
+        true,
+    );
+    // The tile of a recipe without its caption (runtime/recipe_card.h).
+    array(
+        &mut result,
+        "recipe_card_pixels",
+        &recipe_card_pixels(),
         true,
     );
     // The installer copies the menu text table after the picture scratch.

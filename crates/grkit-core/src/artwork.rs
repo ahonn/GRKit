@@ -1017,12 +1017,28 @@ const OVERLAY_GLYPH_BELOW: usize = 6;
 pub const OVERLAY_GLYPH_HEIGHT: usize =
     2 * OVERLAY_OUTLINE + OVERLAY_GLYPH_ABOVE + OVERLAY_GLYPH_CAPITAL + OVERLAY_GLYPH_BELOW;
 
+/// The small glyphs after the glyphs: printable ASCII again, with a capital
+/// height of `OVERLAY_SMALL_CAPITAL`, for the names of the settings above
+/// their values on the View page of a recipe.
+pub const OVERLAY_SMALL_CAPITAL: usize = 12;
+const OVERLAY_SMALL_ABOVE: usize = 2;
+const OVERLAY_SMALL_BELOW: usize = 4;
+/// The height of each small glyph, as `OVERLAY_GLYPH_HEIGHT` of the glyphs.
+pub const OVERLAY_SMALL_HEIGHT: usize =
+    2 * OVERLAY_OUTLINE + OVERLAY_SMALL_ABOVE + OVERLAY_SMALL_CAPITAL + OVERLAY_SMALL_BELOW;
+
 /// The width, the height, and the pixels of the glyph of `character`, as
-/// `overlay_label` gives them. The width is the advance of the character
-/// with the tracking of its size, and the outline on each side: text puts
-/// the next glyph `width - 2 * OVERLAY_OUTLINE` pixels to the right, so the
-/// outlines of two glyphs share their columns.
-fn overlay_glyph(character: char) -> (usize, usize, Vec<u8>) {
+/// `overlay_label` gives them, with the capitals `capital` pixels high and
+/// `above` and `below` rows around them. The width is the advance of the
+/// character with the tracking of its size, and the outline on each side:
+/// text puts the next glyph `width - 2 * OVERLAY_OUTLINE` pixels to the
+/// right, so the outlines of two glyphs share their columns.
+fn overlay_glyph(
+    character: char,
+    capital: usize,
+    above: usize,
+    below: usize,
+) -> (usize, usize, Vec<u8>) {
     let font = FontRef::try_from_slice(OVERLAY_FONT).expect("embedded font is valid");
     let unit = font
         .outline_glyph(font.glyph_id('H').with_scale(100.0))
@@ -1030,18 +1046,18 @@ fn overlay_glyph(character: char) -> (usize, usize, Vec<u8>) {
         .px_bounds()
         .height()
         / 100.0;
-    let size = OVERLAY_GLYPH_CAPITAL as f32 / unit;
+    let size = capital as f32 / unit;
     let scale = PxScale {
         x: size * OVERLAY_CONDENSE,
         y: size,
     };
-    let tracking = OVERLAY_TRACKING * OVERLAY_GLYPH_CAPITAL as f32 / OVERLAY_CAPITAL as f32;
+    let tracking = OVERLAY_TRACKING * capital as f32 / OVERLAY_CAPITAL as f32;
     let scaled = font.as_scaled(scale);
     let id = scaled.glyph_id(character);
     let advance = (scaled.h_advance(id) + tracking).round() as usize;
     let width = advance + 2 * OVERLAY_OUTLINE;
-    let height = OVERLAY_GLYPH_HEIGHT;
-    let baseline = (OVERLAY_OUTLINE + OVERLAY_GLYPH_ABOVE + OVERLAY_GLYPH_CAPITAL) as f32;
+    let height = 2 * OVERLAY_OUTLINE + above + capital + below;
+    let baseline = (OVERLAY_OUTLINE + above + capital) as f32;
     let mut coverage = vec![0f32; width * height];
     // Half of the tracking on each side keeps the glyph centered in its advance.
     let left = (OVERLAY_OUTLINE as f32 + tracking / 2.0).round();
@@ -1058,6 +1074,66 @@ fn overlay_glyph(character: char) -> (usize, usize, Vec<u8>) {
         });
     }
     (width, height, outlined_text(width, height, coverage))
+}
+
+/// The caption glyphs after the small glyphs: the characters of a recipe
+/// tile caption (`CAPTION_CHARACTERS`), in the bold text of the list tile
+/// captions. Each pixel is the coverage of the text, 0 to 255, with no
+/// outline: the tile blends its caption gray over its fill by it.
+pub const CAPTION_CHARACTERS: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+/// The size of the caption text, as the list tiles with a caption have it.
+const CAPTION_SIZE: f32 = 14.0;
+/// The height of each caption glyph, and the row of its baseline: a caption
+/// writes its glyphs with their top row at the baseline of the tile caption
+/// minus `CAPTION_GLYPH_BASELINE`.
+pub const CAPTION_GLYPH_HEIGHT: usize = 13;
+pub const CAPTION_GLYPH_BASELINE: usize = 11;
+/// The baseline of the caption on a list tile.
+pub const CAPTION_BASELINE: usize = 33;
+/// The caption gray and the fill of a list tile (`background`).
+pub const CAPTION_INK: u8 = 255;
+pub const TILE_FILL: u8 = 51;
+
+fn caption_glyph(character: u8) -> (usize, usize, Vec<u8>) {
+    let font = FontRef::try_from_slice(FONT).expect("embedded font is valid");
+    let scaled = font.as_scaled(PxScale::from(CAPTION_SIZE));
+    let id = scaled.glyph_id(char::from(character));
+    let width = scaled.h_advance(id).round() as usize;
+    let height = CAPTION_GLYPH_HEIGHT;
+    let mut coverage = vec![0u8; width * height];
+    if let Some(outline) = font.outline_glyph(
+        id.with_scale_and_position(scaled.scale(), point(0.0, CAPTION_GLYPH_BASELINE as f32)),
+    ) {
+        let origin = outline.px_bounds().min;
+        outline.draw(|x, y, value| {
+            let (x, y) = (origin.x as i32 + x as i32, origin.y as i32 + y as i32);
+            if (0..width as i32).contains(&x) && (0..height as i32).contains(&y) {
+                let cell = &mut coverage[y as usize * width + x as usize];
+                *cell = cell.saturating_add((value * 255.0).round() as u8);
+            }
+        });
+    }
+    (width, height, coverage)
+}
+
+/// The tile of a recipe in the lists of ADJ, before its caption: the list
+/// frame and the stacked cards of the Recipes module, small, above the place
+/// of the caption. The core writes the abbreviation of the name of the
+/// recipe below the cards (runtime/recipe_card.h).
+pub fn recipe_card_pixels() -> Vec<u8> {
+    let mut rgba = background();
+    // Three cards, each a gray frame around a dark fill, the front one low
+    // and left: the symbol with caption of the list tiles keeps rows 5 to
+    // 20 for its symbol.
+    for (left, top) in [(17usize, 5usize), (14, 7), (11, 9)] {
+        for y in top..top + 11 {
+            for x in left..left + 13 {
+                let edge = x == left || x == left + 12 || y == top || y == top + 10;
+                dot(&mut rgba, x, y, if edge { 210 } else { 17 });
+            }
+        }
+    }
+    rgba
 }
 
 /// A crop badge: the size and the grays of the camera's own crop badge,
@@ -1158,7 +1234,8 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 
 /// The label table that the installer copies after the menu text
 /// (`GRKIT_LABELS` in `runtime/abi.h`): the labels, then the glyphs of
-/// `OVERLAY_GLYPHS`. For entry n, a u16 width, a u16 height, and the u32
+/// `OVERLAY_GLYPHS`, the small glyphs of the same characters, and the
+/// caption glyphs of `CAPTION_CHARACTERS`. For entry n, a u16 width, a u16 height, and the u32
 /// offset of its rows at 8 n, then the rows of each entry (`overlay_label`,
 /// `overlay_glyph`). Each row holds only its drawn pixels: a u8 span
 /// count, then for each span a u16 first column, a u16 length, and its
@@ -1166,11 +1243,27 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 /// the transparent pixels without a test for each. The live view draws them
 /// as its own text: white with a black outline, without a background.
 pub fn overlay_labels() -> Vec<u8> {
-    let entries = OVERLAY_LABELS.len() + OVERLAY_GLYPH_COUNT;
+    let small = OVERLAY_LABELS.len() + OVERLAY_GLYPH_COUNT;
+    let captions = small + OVERLAY_GLYPH_COUNT;
+    let entries = captions + CAPTION_CHARACTERS.len();
     let mut table = vec![0; entries * 8];
     for index in 0..entries {
-        let (width, height, pixels) = if let Some(glyph) = index.checked_sub(OVERLAY_LABELS.len()) {
-            overlay_glyph(char::from(b' ' + glyph as u8))
+        let (width, height, pixels) = if let Some(caption) = index.checked_sub(captions) {
+            caption_glyph(CAPTION_CHARACTERS[caption])
+        } else if let Some(glyph) = index.checked_sub(small) {
+            overlay_glyph(
+                char::from(b' ' + glyph as u8),
+                OVERLAY_SMALL_CAPITAL,
+                OVERLAY_SMALL_ABOVE,
+                OVERLAY_SMALL_BELOW,
+            )
+        } else if let Some(glyph) = index.checked_sub(OVERLAY_LABELS.len()) {
+            overlay_glyph(
+                char::from(b' ' + glyph as u8),
+                OVERLAY_GLYPH_CAPITAL,
+                OVERLAY_GLYPH_ABOVE,
+                OVERLAY_GLYPH_BELOW,
+            )
         } else if OVERLAY_LABELS[index].ends_with("mm") {
             crop_badge(OVERLAY_LABELS[index])
         } else {

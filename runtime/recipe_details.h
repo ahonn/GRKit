@@ -1,48 +1,54 @@
 #ifndef GRKIT_RECIPE_DETAILS_H
 #define GRKIT_RECIPE_DETAILS_H
-/* The settings of a recipe as short rows of text, for the View page of MENU
-   (runtime/menu_recipes.h) and the panel that ADJ shows at the left while
-   the cursor is on a recipe (runtime/modules.h, runtime/viewfinder.h).
-
-   The rows hold only what the recipe holds (runtime/recipes.h), in this
-   order, each group from a new row:
-   - the look: the name of the effect, the English name of the native type,
-     or Film Look Off; nothing while the recipe keeps the look;
-   - the Fn adjustments of the effect, or the levels of the native type,
-     that are not 0, such as "Sat +1  Con -1";
-   - the tone, HDR, filter, grain, and solarization of the native type;
-   - Grain, Bloom, Halation, and Border (not in the panel, which shows them
-     as their status icons);
-   - the white balance, such as "WB Auto A2 G1" or "WB 5200K";
-   - the corrections, such as "HL Auto  SH Off  Periph Off  NR Low";
-   - the exposure settings, such as "EV +0.7  ISO max 3200  Meter Spot".
-   The words are English abbreviations, the same in each menu language: the
-   live view can write only the glyphs of printable ASCII. A group wraps to
-   a new row before an item that would pass DETAIL_WRAP characters.
-
-   The rows are DETAIL_ROWS_MAX rows of DETAIL_UNITS UTF-16 units, each
-   NUL-terminated (runtime/services.h: SERVICES_DETAILS). Only the name of an
-   effect can hold other characters than printable ASCII.
+/* The settings of a recipe as items, for the View page of MENU
+   (runtime/menu_recipes.h, runtime/viewfinder.h: view_paint) and the panel
+   that ADJ shows at the left while the cursor is on a recipe
+   (runtime/modules.h: recipe_details_build, runtime/viewfinder.h:
+   panel_paint). Each item is one setting that the recipe holds: its icon,
+   its English name, the short value that the panel writes after the icon
+   where the icon does not show the value, and the value that the View page
+   writes below the name (runtime/services.h: SERVICES_DETAILS). The items
+   come in groups, in this order:
+   - the look: the effect or the native type, with its name;
+   - the levels: the Fn adjustments of the effect, or the levels of the
+     native type, that are not 0, such as Saturation +1, then the tone,
+     HDR, filter, grain, and solarization of the native type that are not
+     Off;
+   - the modules: Grain, Bloom, Halation, and Border that are not Off, whose
+     icons are their status icons for these values (runtime/modules.h
+     resolves them);
+   - the white balance: the mode, with its shifts or its color temperature;
+   - the corrections: highlight, shadow, peripheral illumination, and
+     high-ISO noise reduction, whose icons show their values;
+   - the exposure settings: the compensation, the Auto ISO upper limit, the
+     metering, and the ND filter.
+   The words are English, the same in each menu language: the live view
+   writes only the glyphs of printable ASCII. The native icons are those of
+   the camera's own menus, from the firmware icon table
+   (NATIVE_DETAIL_*_ICONS of the build header), 0 where the camera has none.
 
    The includer defines u8, u16, u32, BYTE, HALF, and WORD, and includes
    runtime/services.h, runtime/native_look.h, and runtime/recipes.h. */
+#include "recipe_detail_names.h"
+/* The icon ID of effect record n, as runtime/core.h has it. */
+#ifndef GRKIT_ICON_EFFECT
+#define GRKIT_ICON_EFFECT(n) (0x8000U+(n))
+#endif
 
-#define DETAIL_WRAP 24U
-/* The rows of a mode: all settings, or those that the panel writes. */
-#define DETAIL_MENU 0U
-#define DETAIL_PANEL 1U
-_Static_assert(DETAIL_WRAP<DETAIL_UNITS,"a row holds the longest item and its NUL");
+#if !defined(NATIVE_DETAIL_MODE_ICONS) || !defined(NATIVE_DETAIL_PARAMETER_ICONS) || \
+    !defined(NATIVE_DETAIL_CORRECTION_ICONS) || !defined(NATIVE_DETAIL_METERING_ICONS) || \
+    !defined(NATIVE_DETAIL_ND_ICONS) || !defined(NATIVE_DETAIL_COMPENSATION_ICON) || !defined(NATIVE_DETAIL_ISO_ICON)
+#error "The build header gives the native icons of the settings of a recipe"
+#endif
+static const u16 detail_mode_icons[NATIVE_MODES]={NATIVE_DETAIL_MODE_ICONS};
+static const u16 detail_parameter_icons[NATIVE_PARAMETERS]={NATIVE_DETAIL_PARAMETER_ICONS};
+/* The icon of each stored value of each correction, the corrections one
+   after the other. */
+static const u16 detail_correction_icons[]={NATIVE_DETAIL_CORRECTION_ICONS};
+static const u16 detail_metering_icons[]={NATIVE_DETAIL_METERING_ICONS};
+static const u16 detail_nd_icons[]={NATIVE_DETAIL_ND_ICONS};
+static const u16 detail_type_icons[NATIVE_TYPES]={NATIVE_TYPE_ICONS};
 
-typedef struct {
-    volatile u16 *rows;
-    u32 n;
-    u32 at;
-} DetailText;
-
-/* The names of the module settings that a recipe holds, in the order of
-   GRKIT_RECIPE_SETTING_IDS: Bloom, Halation, the Halation color, Border,
-   and the Border color, with the values of their module text. */
-_Static_assert(GRKIT_RECIPE_SETTINGS==5U,"the details name each module setting of a recipe");
 static const char *const detail_strengths[4]={"Off","Weak","Medium","Strong"};
 static const char *const detail_halation_colors[4]={"Red","Orange","Gold","White"};
 static const char *const detail_borders[4]={"Off","Thin","Wide","Instant"};
@@ -50,16 +56,11 @@ static const char *const detail_border_colors[2]={"White","Black"};
 /* Grain (modules/grain/text/en.toml): its levels and its sizes. */
 static const char *const detail_grains[5]={"Off","Weak","Medium","Strong","Extra Strong"};
 static const char *const detail_grain_sizes[4]={"Auto","Small","Medium","Large"};
-/* The Fn adjustments of an effect and the levels of a native type, in the
-   order of NATIVE_PARAMETER_SATURATION to NATIVE_PARAMETER_CLARITYCONTROL. */
-static const char *const detail_levels[NATIVE_LEVELS]={"Sat","Hue","Key","Con","HL Con","SH Con","Sharp","Shade","Clarity"};
 /* The white balance modes, in the portable order of runtime/native.h. */
 static const char *const detail_modes[NATIVE_MODES]={
-    "Auto","Multi Auto","Auto Warm","Auto White","Daylight","Shade","Cloudy","Fluor D","Fluor N",
-    "Fluor W","Fluor L","Tungsten","CTE","Manual",0,"Custom 1","Custom 2","Custom 3"};
-/* The corrections: highlight, shadow, peripheral illumination, and high-ISO
-   noise reduction. */
-static const char *const detail_corrections[NATIVE_CORRECTIONS]={"HL","SH","Periph","NR"};
+    "Auto","Multi Auto","Auto Warm","Auto White","Daylight","Shade","Cloudy","Fluorescent D","Fluorescent N",
+    "Fluorescent W","Fluorescent L","Tungsten","CTE","Manual",0,"Custom 1","Custom 2","Custom 3"};
+static const char *const detail_meterings[4]={"Multi-segment","Center-weighted","Spot","Highlight-weighted"};
 static const char *const detail_native_grains[4]={0,"Low","Mid","High"};
 static const char *const detail_native_grain_sizes[3]={"Small","Medium","Large"};
 static const char *const detail_type_names[NATIVE_TYPES]={NATIVE_TYPE_NAMES};
@@ -67,283 +68,313 @@ static const u32 detail_iso_values[]={NATIVE_ISO_VALUES};
 _Static_assert(sizeof(detail_iso_values)/sizeof(detail_iso_values[0])>=NATIVE_GR3_ISO_STEPS &&
                sizeof(detail_iso_values)/sizeof(detail_iso_values[0])>=NATIVE_GR4_ISO_STEPS,
                "an ISO for each third stop of the Auto ISO limit");
+_Static_assert(GRKIT_RECIPE_SETTINGS==5U,"the details name each module setting of a recipe");
+_Static_assert(DETAIL_SHORT_UNITS<=DETAIL_VALUE_UNITS,"a short value fits the value");
 
-/* An item: its characters and their number. */
+/* An item while it is written. */
 typedef struct {
-    char text[DETAIL_UNITS];
+    u32 icon, meta;
+    u16 value[DETAIL_VALUE_UNITS];
     u32 n;
+    u16 shorter[DETAIL_SHORT_UNITS];
+    u32 m;
 } DetailItem;
+/* The items of a recipe while they are written into `base`, the details
+   block of the services. */
+typedef struct {
+    volatile u32 *base;
+    u32 n;
+} DetailList;
+
+static void detail_start(DetailItem *item,u32 group,u32 name,u32 icon) {
+    item->icon=icon; item->meta=group|name<<8; item->n=0; item->m=0;
+}
+/* Add ASCII text to the value, or with `both` to the short value too. */
 static void detail_add(DetailItem *item,const char *text) {
-    while(*text && item->n+1U<DETAIL_UNITS) item->text[item->n++]=*text++;
+    while(*text && item->n+1U<DETAIL_VALUE_UNITS) item->value[item->n++]=(u16)(u8)*text++;
 }
-/* Add n in decimal. */
-static void detail_number(DetailItem *item,u32 n) {
+static void detail_add_short(DetailItem *item,const char *text) {
+    while(*text && item->m+1U<DETAIL_SHORT_UNITS) item->shorter[item->m++]=(u16)(u8)*text++;
+}
+static void detail_both(DetailItem *item,const char *text) { detail_add(item,text); detail_add_short(item,text); }
+/* The decimal digits of n. */
+static void detail_digits(char *to,u32 n) {
     char digits[10];
-    u32 i=0, rest;
+    u32 i=0, rest, k=0;
     do { rest=native_div10(n); digits[i++]=(char)('0'+n-10U*rest); n=rest; } while(n && i<10U);
-    while(i && item->n+1U<DETAIL_UNITS) item->text[item->n++]=digits[--i];
+    while(i) to[k++]=digits[--i];
+    to[k]=0;
 }
-/* Add a signed level, such as +1 or -2. */
-static void detail_signed(DetailItem *item,int n) {
-    detail_add(item,n<0 ? "-" : "+");
-    detail_number(item,(u32)(n<0 ? -n : n));
+/* A signed level, such as +1, -2, or 0. */
+static void detail_signed(char *to,int n) {
+    if(!n) { to[0]='0'; to[1]=0; return; }
+    to[0]=n<0 ? '-' : '+';
+    detail_digits(to+1,(u32)(n<0 ? -n : n));
 }
-/* Whether a label is OFF or Off. */
-static u32 detail_off(const char *label) {
-    return (label[0]=='O' && (label[1]=='F' || label[1]=='f') && (label[2]=='F' || label[2]=='f') && !label[3]);
-}
-/* Add a native label: P2 and M2 as +2 and -2, other labels as they are.
-   0 for OFF, Off, and no label, which leave the item out. */
-static u32 detail_label(DetailItem *item,const char *label) {
-    if(!label || !label[0] || detail_off(label)) return 0;
-    if((label[0]=='P' || label[0]=='M') && label[1]>='0' && label[1]<='9') {
-        detail_add(item,label[0]=='P' ? "+" : "-");
-        detail_add(item,label+1);
-    } else detail_add(item,label);
+/* A native label: P2 and M2 as +2 and -2, OFF as Off, other labels as
+   they are. 0 for no label, and with `off` 0 for Off too. */
+static u32 detail_label(char *to,const char *label,u32 off) {
+    u32 i=0;
+    if(!label || !label[0]) return 0;
+    if(label[0]=='O' && (label[1]=='F' || label[1]=='f') && (label[2]=='F' || label[2]=='f') && !label[3]) {
+        if(!off) return 0;
+        label="Off";
+    }
+    if((label[0]=='P' || label[0]=='M') && label[1]>='0' && label[1]<='9') { to[i++]=label[0]=='P' ? '+' : '-'; ++label; }
+    while(*label && i<15U) to[i++]=*label++;
+    to[i]=0;
     return 1;
 }
-
-/* End the row that has text. */
-static void detail_break(DetailText *d) {
-    if(!d->at) return;
-    ++d->n;
-    d->at=0;
-}
-/* Put an item on the row, after two spaces, or on a new row when it would
-   pass DETAIL_WRAP. Rows after DETAIL_ROWS_MAX are left out. */
-static void detail_put(DetailText *d,const DetailItem *item) {
-    volatile u16 *row;
+/* Write the item into the list. Items after DETAIL_ITEMS_MAX are left out. */
+static void detail_put(DetailList *list,const DetailItem *item) {
+    volatile u32 *at;
+    volatile u16 *text;
     u32 i;
-    if(!item->n) return;
-    if(d->at && d->at+2U+item->n>DETAIL_WRAP) detail_break(d);
-    if(d->n>=DETAIL_ROWS_MAX) return;
-    row=d->rows+d->n*DETAIL_UNITS;
-    if(d->at) { row[d->at++]=' '; row[d->at++]=' '; }
-    for(i=0;i<item->n && d->at+1U<DETAIL_UNITS;++i) row[d->at++]=(u16)(u8)item->text[i];
-    row[d->at]=0;
-}
-/* Put a name and a value from a table of names, or nothing for a value
-   past the table. */
-static void detail_named(DetailText *d,const char *name,const char *const *values,u32 count,u32 value) {
-    DetailItem item;
-    item.n=0;
-    if(value>=count || !values[value]) return;
-    detail_add(&item,name);
-    detail_add(&item," ");
-    detail_add(&item,values[value]);
-    detail_put(d,&item);
+    if(list->n>=DETAIL_ITEMS_MAX) return;
+    at=list->base+(DETAIL_ITEMS+list->n*DETAIL_ITEM_SIZE)/4U;
+    at[DETAIL_ITEM_ICON/4]=item->icon;
+    at[DETAIL_ITEM_META/4]=item->meta;
+    text=(volatile u16 *)(at+DETAIL_ITEM_SHORT/4);
+    for(i=0;i<item->m;++i) text[i]=item->shorter[i];
+    text[i]=0;
+    text=(volatile u16 *)(at+DETAIL_ITEM_VALUE/4);
+    for(i=0;i<item->n;++i) text[i]=item->value[i];
+    text[i]=0;
+    ++list->n;
 }
 
-/* The look: the name of an effect, as its record has it, or an ASCII name. */
-static void detail_look(volatile u32 *h,DetailText *d,const u32 *w) {
+/* The look: the effect with its name as its record has it, the native type
+   with its English name, or Film Look Off; nothing while the recipe keeps
+   the look. */
+static void detail_look(volatile u32 *h,DetailList *list,const u32 *w) {
     DetailItem item;
-    item.n=0;
-    u32 type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), index, i;
-    volatile u16 *row;
+    u32 type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), index, record, i, unit;
     if(RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT) {
         index=recipe_effect(h,RECIPE_CODE(w[0]));
+        detail_start(&item,DETAIL_GROUP_LOOK,DETAIL_NAME_FILM_LOOK,0);
         if(index>=GRKIT_TEXT_RECORDS) detail_add(&item,"Effect missing");
         else {
-            u32 record=recipe_record(h,index);
-            if(d->n>=DETAIL_ROWS_MAX) return;
-            row=d->rows+d->n*DETAIL_UNITS;
-            for(i=0;i+1U<DETAIL_UNITS && HALF(record,GRKIT_RECORD_NAME+2U*i);++i) row[i]=HALF(record,GRKIT_RECORD_NAME+2U*i);
-            row[i]=0;
-            d->at=i;
-            detail_break(d);
-            return;
+            item.icon=GRKIT_ICON_EFFECT(index);
+            record=recipe_record(h,index);
+            for(i=0;i+1U<DETAIL_VALUE_UNITS && (unit=HALF(record,GRKIT_RECORD_NAME+2U*i));++i) item.value[item.n++]=(u16)unit;
         }
     }
-    else if(type && type<=NATIVE_TYPES) detail_add(&item,detail_type_names[type-1U]);
-    else if(RECIPE_LOOK(w[0])==RECIPE_LOOK_OFF) detail_add(&item,"Film Look Off");
-    detail_put(d,&item);
-    detail_break(d);
+    else if(type && type<=NATIVE_TYPES) {
+        detail_start(&item,DETAIL_GROUP_LOOK,DETAIL_NAME_IMAGE_CONTROL,detail_type_icons[type-1U]);
+        detail_add(&item,detail_type_names[type-1U]);
+    }
+    else if(RECIPE_LOOK(w[0])==RECIPE_LOOK_OFF) {
+        detail_start(&item,DETAIL_GROUP_LOOK,DETAIL_NAME_FILM_LOOK,0);
+        detail_add(&item,"Off");
+    }
+    else return;
+    detail_put(list,&item);
+}
+/* A level or a native parameter with a word value: its icon, its name, and
+   its value as the short value too, as the icon does not show it. */
+static void detail_parameter(DetailList *list,u32 p,u32 name,const char *value) {
+    DetailItem item;
+    detail_start(&item,DETAIL_GROUP_LEVELS,name,detail_parameter_icons[p]);
+    detail_both(&item,value);
+    detail_put(list,&item);
 }
 /* The Fn adjustments or the levels that are not 0: base-9 digits, the
-   first lowest, each (value - 4) mod 9 (runtime/recipes.h). A native type
-   shows only its own parameters. */
-static void detail_levels_of(DetailText *d,const u32 *w) {
-    u32 digits=w[RECIPE_FN_WORD], p, rest, digit;
-    u32 type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), effect=RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT;
-    if(!effect && !(type && type<=NATIVE_TYPES)) return;
+   first lowest, each (value - 4) mod 9 (runtime/recipes.h). An effect shows
+   each adjustment that differs from its Fn default, as the Fn page shows it:
+   the default plus the adjustment. A native type shows only its own
+   parameters. */
+static void detail_levels_of(volatile u32 *h,DetailList *list,const u32 *w) {
+    u32 digits=w[RECIPE_FN_WORD], p, rest, digit, type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), record=0, index, shown;
+    u32 effect=RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT;
+    char value[12];
+    if(effect) {
+        index=recipe_effect(h,RECIPE_CODE(w[0]));
+        if(index<GRKIT_TEXT_RECORDS) record=recipe_record(h,index);
+    }
+    else if(!(type && type<=NATIVE_TYPES)) return;
     for(p=0;p<NATIVE_LEVELS;++p) {
-        DetailItem item;
-    item.n=0;
         rest=native_div9(digits);
         digit=digits-9U*rest;
         digits=rest;
         if(!digit || (!effect && !native_field(type-1U,p))) continue;
-        detail_add(&item,detail_levels[p]);
-        detail_add(&item," ");
-        detail_signed(&item,digit<=4U ? (int)digit : (int)digit-9);
-        detail_put(d,&item);
+        shown=digit;
+        if(record) {
+            shown+=BYTE(record,GRKIT_RECORD_FN_DEFAULTS+p);
+            if(shown>=9U) shown-=9U;
+        }
+        detail_signed(value,shown<=4U ? (int)shown : (int)shown-9);
+        detail_parameter(list,p,DETAIL_NAME_LEVEL(p),value);
     }
-    detail_break(d);
 }
 /* The tone, HDR, filter, grain, and solarization of the native type. */
-static void detail_native(DetailText *d,const u32 *w) {
-    u32 type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), t, p, s;
-    DetailItem item;
+static void detail_native(DetailList *list,const u32 *w) {
+    u32 type=NATIVE_TYPE(w[RECIPE_NATIVE_WORD]), t, p, s, k;
+    char value[16];
     if(RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT || !type || type>NATIVE_TYPES) return;
     t=type-1U;
     p=native_tone(t);
-    item.n=0;
-    detail_add(&item,"Tone ");
-    if(p<NATIVE_PARAMETERS && detail_label(&item,native_label(p,NATIVE_TONE(w[RECIPE_NATIVE_WORD])))) detail_put(d,&item);
-    item.n=0;
-    detail_add(&item,"HDR ");
+    if(p<NATIVE_PARAMETERS && detail_label(value,native_label(p,NATIVE_TONE(w[RECIPE_NATIVE_WORD])),0))
+        detail_parameter(list,p,DETAIL_NAME_TONING,value);
     if(native_field(t,NATIVE_PARAMETER_HDRINTENSE) &&
-       detail_label(&item,native_label(NATIVE_PARAMETER_HDRINTENSE,NATIVE_INTENSITY(w[RECIPE_NATIVE_WORD])))) detail_put(d,&item);
-    item.n=0;
-    detail_add(&item,"Filter ");
+       detail_label(value,native_label(NATIVE_PARAMETER_HDRINTENSE,NATIVE_INTENSITY(w[RECIPE_NATIVE_WORD])),0))
+        detail_parameter(list,NATIVE_PARAMETER_HDRINTENSE,DETAIL_NAME_HDR,value);
     if(native_field(t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM) &&
-       detail_label(&item,native_label(NATIVE_PARAMETER_FILTEREFFECTCUSTOM,NATIVE_FILTER(w[RECIPE_NATIVE_WORD])))) detail_put(d,&item);
+       detail_label(value,native_label(NATIVE_PARAMETER_FILTEREFFECTCUSTOM,NATIVE_FILTER(w[RECIPE_NATIVE_WORD])),0))
+        detail_parameter(list,NATIVE_PARAMETER_FILTEREFFECTCUSTOM,DETAIL_NAME_FILTER,value);
     s=NATIVE_GRAIN(w[RECIPE_EXTRA_WORD]);
     if(s && s<4U) {
-        item.n=0;
-        detail_add(&item,"IC Grain ");
-        detail_add(&item,detail_native_grains[s]);
-        if(native_grain_sized(t) && NATIVE_GRAIN_SIZE(w[RECIPE_EXTRA_WORD])<3U) {
-            detail_add(&item," ");
-            detail_add(&item,detail_native_grain_sizes[NATIVE_GRAIN_SIZE(w[RECIPE_EXTRA_WORD])]);
-        }
-        detail_put(d,&item);
+        for(k=0;detail_native_grains[s][k];++k) value[k]=detail_native_grains[s][k];
+        value[k]=0;
+        detail_parameter(list,NATIVE_PARAMETER_PARTICLE,DETAIL_NAME_GRAIN_EFFECT,value);
     }
-    item.n=0;
-    detail_add(&item,"Solar ");
     if(native_field(t,NATIVE_PARAMETER_SOLARIZATIONTYPE) &&
-       detail_label(&item,native_label(NATIVE_PARAMETER_SOLARIZATIONTYPE,NATIVE_SOLARIZATION(w[RECIPE_EXTRA_WORD])))) detail_put(d,&item);
-    detail_break(d);
+       detail_label(value,native_label(NATIVE_PARAMETER_SOLARIZATIONTYPE,NATIVE_SOLARIZATION(w[RECIPE_EXTRA_WORD])),0))
+        detail_parameter(list,NATIVE_PARAMETER_SOLARIZATIONTYPE,DETAIL_NAME_SOLARIZATION,value);
+}
+/* A module setting that is not Off: its name and value, and in the meta
+   word what its status icon needs. */
+static void detail_module(DetailList *list,u32 name,u32 setting,u32 value,const char *text,const char *more) {
+    DetailItem item;
+    detail_start(&item,DETAIL_GROUP_MODULES,name,0);
+    item.meta|=setting<<16|value<<24;
+    detail_add(&item,text);
+    if(more) { detail_add(&item,", "); detail_add(&item,more); }
+    detail_put(list,&item);
 }
 /* Grain, Bloom, Halation, and Border, as the recipe holds them. */
-static void detail_modules(DetailText *d,const u32 *w) {
-    DetailItem item;
-    item.n=0;
-    u32 level;
+static void detail_modules(DetailList *list,const u32 *w) {
+    u32 level, v;
+    char size[16];
     if(w[0]&RECIPE_GRAIN) {
         level=RECIPE_GRAIN_LEVEL(w[0]);
-        if(level<5U) {
-            detail_add(&item,"Grain ");
-            detail_add(&item,detail_grains[level]);
-            if(level && RECIPE_GRAIN_SIZE(w[0])) {
-                detail_add(&item," ");
-                detail_add(&item,detail_grain_sizes[RECIPE_GRAIN_SIZE(w[0])]);
-            }
-            detail_put(d,&item);
+        if(level && level<5U) {
+            const char *s="size ", *n=detail_grain_sizes[RECIPE_GRAIN_SIZE(w[0])&3U];
+            u32 k=0;
+            while(*s) size[k++]=*s++;
+            while(*n) size[k++]=*n++;
+            size[k]=0;
+            detail_module(list,DETAIL_NAME_GRAIN,DETAIL_GRAIN,level,detail_grains[level],size);
         }
     }
-    if(recipe_setting_held(w,0)) detail_named(d,"Bloom",detail_strengths,4U,recipe_setting_value(w,0));
-    if(recipe_setting_held(w,1) && recipe_setting_value(w,1)<4U) {
-        item.n=0;
-        detail_add(&item,"Halation ");
-        detail_add(&item,detail_strengths[recipe_setting_value(w,1)]);
-        if(recipe_setting_value(w,1) && recipe_setting_held(w,2) && recipe_setting_value(w,2)<4U) {
-            detail_add(&item," ");
-            detail_add(&item,detail_halation_colors[recipe_setting_value(w,2)]);
-        }
-        detail_put(d,&item);
-    }
-    if(recipe_setting_held(w,3) && recipe_setting_value(w,3)<4U) {
-        item.n=0;
-        detail_add(&item,"Border ");
-        detail_add(&item,detail_borders[recipe_setting_value(w,3)]);
-        if(recipe_setting_value(w,3) && recipe_setting_held(w,4) && recipe_setting_value(w,4)<2U) {
-            detail_add(&item," ");
-            detail_add(&item,detail_border_colors[recipe_setting_value(w,4)]);
-        }
-        detail_put(d,&item);
-    }
-    detail_break(d);
+    if(recipe_setting_held(w,0) && (v=recipe_setting_value(w,0)) && v<4U)
+        detail_module(list,DETAIL_NAME_BLOOM,1U,v,detail_strengths[v],0);
+    if(recipe_setting_held(w,1) && (v=recipe_setting_value(w,1)) && v<4U)
+        detail_module(list,DETAIL_NAME_HALATION,2U,v,detail_strengths[v],
+                      recipe_setting_held(w,2) && recipe_setting_value(w,2)<4U ? detail_halation_colors[recipe_setting_value(w,2)] : 0);
+    if(recipe_setting_held(w,3) && (v=recipe_setting_value(w,3)) && v<4U)
+        detail_module(list,DETAIL_NAME_BORDER,4U,v,detail_borders[v],
+                      recipe_setting_held(w,4) && recipe_setting_value(w,4)<2U ? detail_border_colors[recipe_setting_value(w,4)] : 0);
 }
-/* The white balance: the mode with its shifts, or the color temperature. */
-static void detail_white_balance(DetailText *d,const u32 *w) {
-    u32 field=NATIVE_MODE(w[RECIPE_NATIVE_WORD]), mode, ba, gm;
+/* The white balance: the mode with its shifts, or the color temperature.
+   The icon shows the mode; the short value gives the shifts, such as A2 G1,
+   or the temperature. */
+static void detail_white_balance(DetailList *list,const u32 *w) {
+    u32 field=NATIVE_MODE(w[RECIPE_NATIVE_WORD]), mode, ba, gm, shifted=0;
+    char number[12];
     DetailItem item;
-    item.n=0;
     if(!field || field>NATIVE_MODES) return;
     mode=field-1U;
-    detail_add(&item,"WB ");
+    detail_start(&item,DETAIL_GROUP_WHITE_BALANCE,DETAIL_NAME_WHITE_BALANCE,detail_mode_icons[mode]);
     if(mode==NATIVE_MODE_TEMPERATURE) {
-        detail_number(&item,NATIVE_TEMPERATURE_MIN+NATIVE_TEMPERATURE_STEP*NATIVE_TEMPERATURE(w[RECIPE_EXTRA_WORD]));
-        detail_add(&item,"K");
+        detail_digits(number,NATIVE_TEMPERATURE_MIN+NATIVE_TEMPERATURE_STEP*NATIVE_TEMPERATURE(w[RECIPE_EXTRA_WORD]));
+        detail_both(&item,number);
+        detail_both(&item,"K");
+        shifted=1;
     }
     else if(detail_modes[mode]) detail_add(&item,detail_modes[mode]);
     else return;
     ba=NATIVE_BA(w[RECIPE_NATIVE_WORD]);
     gm=NATIVE_GM(w[RECIPE_NATIVE_WORD]);
     if(native_mode_shifts[mode] && ba<NATIVE_SHIFTS && ba!=14U) {
-        detail_add(&item,ba<14U ? " B" : " A");
-        detail_number(&item,ba<14U ? 14U-ba : ba-14U);
+        detail_add(&item,shifted ? " " : ", ");
+        if(item.m) detail_add_short(&item," ");
+        detail_both(&item,ba<14U ? "B" : "A");
+        detail_digits(number,ba<14U ? 14U-ba : ba-14U);
+        detail_both(&item,number);
+        shifted=1;
     }
     if(native_mode_shifts[mode] && gm<NATIVE_SHIFTS && gm!=14U) {
-        detail_add(&item,gm<14U ? " G" : " M");
-        detail_number(&item,gm<14U ? 14U-gm : gm-14U);
+        detail_add(&item,shifted ? " " : ", ");
+        if(item.m) detail_add_short(&item," ");
+        detail_both(&item,gm<14U ? "G" : "M");
+        detail_digits(number,gm<14U ? 14U-gm : gm-14U);
+        detail_both(&item,number);
     }
-    detail_put(d,&item);
-    detail_break(d);
+    detail_put(list,&item);
 }
-/* The corrections that the recipe holds: each stored value + 1, 0 Unset. */
-static void detail_corrections_of(DetailText *d,const u32 *w) {
-    u32 c, v;
-    for(c=0;c<NATIVE_CORRECTIONS;++c) {
+/* The corrections that the recipe holds: each stored value + 1, 0 Unset.
+   The icon of the value shows it. */
+static void detail_corrections_of(DetailList *list,const u32 *w) {
+    u32 c, v, first=0;
+    char value[16];
+    DetailItem item;
+    for(c=0;c<NATIVE_CORRECTIONS;first+=native_correction_counts[c],++c) {
         v=NATIVE_CORRECTION(w[RECIPE_EXTRA_WORD],c);
-        if(v) detail_named(d,detail_corrections[c],native_correction_labels[c],native_correction_counts[c],v-1U);
+        if(!v || v>native_correction_counts[c] || !detail_label(value,native_correction_labels[c][v-1U],1)) continue;
+        detail_start(&item,DETAIL_GROUP_CORRECTIONS,DETAIL_NAME_CORRECTION(c),detail_correction_icons[first+v-1U]);
+        detail_add(&item,value);
+        detail_put(list,&item);
     }
-    detail_break(d);
 }
 /* The exposure settings that the recipe holds: the compensation in sixths
    of a stop, written to a tenth; the Auto ISO upper limit; the metering;
    and the ND filter. */
-static void detail_exposure(DetailText *d,const u32 *w) {
+static void detail_exposure(DetailList *list,const u32 *w) {
     u32 x=w[NATIVE_EXPOSURE_WORD], ev=NATIVE_EV(x), iso=NATIVE_ISO(x), v;
+    char number[12];
     DetailItem item;
-    item.n=0;
     if(ev) {
         int sixths=(int)ev-NATIVE_EV_ZERO;
         /* The tenths, rounded: (a + 3) / 6 as a product with ceil(2^18 / 6),
            exact for these small numbers. The core links no division helper,
            and a compiler makes a loop of subtractions a division. */
         u32 a=(u32)(sixths<0 ? -sixths : sixths)*10U+3U, tenths=a*43691U>>18;
-        detail_add(&item,"EV ");
-        if(tenths) detail_add(&item,sixths<0 ? "-" : "+");
-        detail_number(&item,native_div10(tenths));
-        detail_add(&item,".");
-        detail_number(&item,tenths-10U*native_div10(tenths));
-        detail_put(d,&item);
+        detail_start(&item,DETAIL_GROUP_EXPOSURE,DETAIL_NAME_COMPENSATION,NATIVE_DETAIL_COMPENSATION_ICON);
+        if(tenths) detail_both(&item,sixths<0 ? "-" : "+");
+        detail_digits(number,native_div10(tenths));
+        detail_both(&item,number);
+        detail_both(&item,".");
+        detail_digits(number,tenths-10U*native_div10(tenths));
+        detail_both(&item,number);
+        detail_add(&item," EV");
+        detail_put(list,&item);
     }
     if(iso && iso<=NATIVE_ISO_STEPS) {
-        item.n=0;
-        detail_add(&item,"ISO max ");
-        detail_number(&item,detail_iso_values[iso-1U]);
-        detail_put(d,&item);
+        detail_start(&item,DETAIL_GROUP_EXPOSURE,DETAIL_NAME_ISO,NATIVE_DETAIL_ISO_ICON);
+        detail_add(&item,"ISO ");
+        detail_digits(number,detail_iso_values[iso-1U]);
+        detail_both(&item,number);
+        detail_put(list,&item);
     }
     v=NATIVE_METERING(x);
-    if(v) detail_named(d,"Meter",native_metering_labels,NATIVE_COUNT(native_metering_labels),v-1U);
+    if(v && v<=4U) {
+        detail_start(&item,DETAIL_GROUP_EXPOSURE,DETAIL_NAME_METERING,detail_metering_icons[v-1U]);
+        detail_add(&item,detail_meterings[v-1U]);
+        detail_put(list,&item);
+    }
     v=NATIVE_ND(x);
-    if(v) detail_named(d,"ND",native_nd_labels,NATIVE_COUNT(native_nd_labels),v-1U);
-    detail_break(d);
+    if(v && v<=NATIVE_COUNT(native_nd_labels)) {
+        detail_start(&item,DETAIL_GROUP_EXPOSURE,DETAIL_NAME_ND,detail_nd_icons[v-1U]);
+        detail_add(&item,native_nd_labels[v-1U]);
+        detail_put(list,&item);
+    }
 }
 
-/* Write the rows of the recipe of words `w` into `rows`, all of them or
-   those of the panel (DETAIL_PANEL), and give their number. */
-static u32 recipe_details(volatile u32 *h,const u32 *w,u32 mode,volatile u16 *rows) {
-    DetailText d;
-    d.rows=rows; d.n=0; d.at=0;
-    detail_look(h,&d,w);
-    detail_levels_of(&d,w);
-    detail_native(&d,w);
-    if(mode!=DETAIL_PANEL) detail_modules(&d,w);
-    detail_white_balance(&d,w);
-    detail_corrections_of(&d,w);
-    detail_exposure(&d,w);
-    /* A recipe that keeps each setting still has a row. */
-    if(!d.n) {
-        DetailItem item;
-        item.n=0;
-        detail_add(&item,"No settings");
-        detail_put(&d,&item);
-        detail_break(&d);
-    }
-    return d.n;
+/* Write the items of the recipe of words `w` into the details block `base`
+   and give their number. The items of the modules have no icon yet. */
+static u32 recipe_details(volatile u32 *h,const u32 *w,volatile u32 *base) {
+    DetailList list;
+    list.base=base; list.n=0;
+    detail_look(h,&list,w);
+    detail_levels_of(h,&list,w);
+    detail_native(&list,w);
+    detail_modules(&list,w);
+    detail_white_balance(&list,w);
+    detail_corrections_of(&list,w);
+    detail_exposure(&list,w);
+    base[DETAIL_COUNT/4]=list.n;
+    return list.n;
 }
+/* Item i of the details block `base`. */
+static volatile u32 *detail_item(volatile u32 *base,u32 i) { return DETAIL_ITEM_AT(base,i); }
 #endif

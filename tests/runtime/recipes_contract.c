@@ -142,6 +142,7 @@ static u32 test_id_source;
 #include "recipes.h"
 #include "services.h"
 #include "recipe_details.h"
+#include "recipe_abbreviation.h"
 
 #define RUNNING (GRKIT_CORE_TONE_BIT | GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT | GRKIT_CORE_RECIPE_BIT)
 /* The capabilities of the Border module. */
@@ -1211,24 +1212,39 @@ static void exposure_saves_applies_and_fits_the_camera(void)
     assert(recipe_apply(header, 0) == RECIPE_UNSUPPORTED);
 }
 
-/* The rows of the details of words `w` in `mode`, as ASCII, and their
-   number. */
-static u16 detail_rows[DETAIL_ROWS_MAX * DETAIL_UNITS];
-static char detail_ascii[DETAIL_ROWS_MAX][DETAIL_UNITS];
-static u32 details_of(const u32 *w, u32 mode)
+/* The items of the details of words `w`: their number, and each as text:
+   "name|value|short|icon", with the name of runtime/recipe_detail_names.h,
+   the icon in hex or "-", and the group in the meta word. */
+static u32 detail_block[DETAILS_SIZE / 4];
+static char detail_lines[DETAIL_ITEMS_MAX][96];
+static u32 detail_groups[DETAIL_ITEMS_MAX];
+static void ascii_of(char *to, const volatile u16 *text, u32 units)
 {
-    memset(detail_rows, 0xff, sizeof detail_rows);
-    u32 n = recipe_details(header, w, mode, detail_rows);
-    assert(n >= 1 && n <= DETAIL_ROWS_MAX);
-    for (u32 r = 0; r < n; ++r) {
-        u32 i = 0;
-        for (; detail_rows[r * DETAIL_UNITS + i]; ++i) {
-            assert(i + 1 < DETAIL_UNITS && detail_rows[r * DETAIL_UNITS + i] < 0x80);
-            detail_ascii[r][i] = (char)detail_rows[r * DETAIL_UNITS + i];
-        }
-        /* Each row has text, at most DETAIL_WRAP characters. */
-        assert(i && i <= DETAIL_WRAP);
-        detail_ascii[r][i] = 0;
+    u32 i = 0;
+    for (; text[i]; ++i) {
+        assert(i + 1 < units && text[i] < 0x80);
+        to[i] = (char)text[i];
+    }
+    to[i] = 0;
+}
+static u32 details_of(const u32 *w)
+{
+    memset(detail_block, 0xff, sizeof detail_block);
+    u32 n = recipe_details(header, w, detail_block);
+    assert(n <= DETAIL_ITEMS_MAX && detail_block[DETAIL_COUNT / 4] == n);
+    for (u32 i = 0; i < n; ++i) {
+        volatile u32 *item = detail_item(detail_block, i);
+        char value[DETAIL_VALUE_UNITS], shorter[DETAIL_SHORT_UNITS];
+        u32 meta = item[DETAIL_ITEM_META / 4], name = DETAIL_NAME(meta), icon = item[DETAIL_ITEM_ICON / 4];
+        assert(name < DETAIL_NAMES);
+        ascii_of(value, (const volatile u16 *)(item + DETAIL_ITEM_VALUE / 4), DETAIL_VALUE_UNITS);
+        ascii_of(shorter, (const volatile u16 *)(item + DETAIL_ITEM_SHORT / 4), DETAIL_SHORT_UNITS);
+        assert(value[0]);
+        /* Groups come in order. */
+        detail_groups[i] = DETAIL_GROUP(meta);
+        assert(!i || detail_groups[i] >= detail_groups[i - 1]);
+        if (icon) snprintf(detail_lines[i], sizeof detail_lines[i], "%s|%s|%s|%x", name ? detail_names[name] : "", value, shorter, icon);
+        else snprintf(detail_lines[i], sizeof detail_lines[i], "%s|%s|%s|-", name ? detail_names[name] : "", value, shorter);
     }
     return n;
 }
@@ -1238,9 +1254,22 @@ static void set_name(u32 i, const char *name)
     for (; name[n]; ++n) HALF(record_at(i), GRKIT_RECORD_NAME + 2 * n) = (u16)name[n];
     HALF(record_at(i), GRKIT_RECORD_NAME + 2 * n) = 0;
 }
-/* The details name each setting that a recipe holds, in groups, with the
-   same English abbreviations in each menu language. The panel leaves out
-   Grain, Glow, and Border, which it shows as their status icons. */
+static char expected[96];
+static const char *line(const char *name, const char *value, const char *shorter, u32 icon)
+{
+    if (icon) snprintf(expected, sizeof expected, "%s|%s|%s|%x", name, value, shorter, icon);
+    else snprintf(expected, sizeof expected, "%s|%s|%s|-", name, value, shorter);
+    return expected;
+}
+static const u16 mode_icons[NATIVE_MODES] = {NATIVE_DETAIL_MODE_ICONS};
+static const u16 parameter_icons[NATIVE_PARAMETERS] = {NATIVE_DETAIL_PARAMETER_ICONS};
+static const u16 correction_icons[] = {NATIVE_DETAIL_CORRECTION_ICONS};
+static const u16 metering_icons[] = {NATIVE_DETAIL_METERING_ICONS};
+static const u16 nd_icons[] = {NATIVE_DETAIL_ND_ICONS};
+/* The details give each setting that a recipe holds as an item, in groups:
+   its icon, its English name, the value, and the short value where the
+   icon does not show the value. The words are the same in each menu
+   language. */
 static void details_name_what_the_recipe_holds(void)
 {
     reset();
@@ -1248,8 +1277,10 @@ static void details_name_what_the_recipe_holds(void)
     u32 w[GRKIT_RECIPE_WORDS] = {0};
     w[0] = RECIPE_USED | RECIPE_LOOK_EFFECT | code_of(1) << RECIPE_CODE_SHIFT | RECIPE_GRAIN |
            2U << RECIPE_GRAIN_LEVEL_SHIFT | 3U << RECIPE_GRAIN_SIZE_SHIFT;
-    /* Fn: saturation +1 (digit 1), contrast -1 (digit 8). */
+    /* Fn: saturation +1 (digit 1), contrast -1 (digit 8). The effect has a
+       contrast default of +1 (stored 1), so the Fn page shows 0 for it. */
     w[RECIPE_FN_WORD] = 1U + 8U * 9U * 9U * 9U;
+    BYTE(record_at(1), GRKIT_RECORD_FN_DEFAULTS + NATIVE_PARAMETER_CONTRAST) = 1;
     /* Daylight, A2 and G1. */
     w[RECIPE_NATIVE_WORD] = (MODE_DAYLIGHT + 1U) << NATIVE_MODE_SHIFT | 16U << NATIVE_BA_SHIFT | 13U << NATIVE_GM_SHIFT;
     /* Highlight Auto, shadow Off, peripheral Off, NR Low: stored + 1. */
@@ -1263,38 +1294,64 @@ static void details_name_what_the_recipe_holds(void)
     recipe_setting_hold(w, HALATION_COLOR, 0);
     recipe_setting_hold(w, BORDER, 1);
     recipe_setting_hold(w, BORDER_COLOR, 1);
-    static const char *const menu[] = {
-        "Portra 400", "Sat +1  Con -1", "Grain Medium Large", "Bloom Weak", "Halation Medium Red",
-        "Border Thin Black", "WB Daylight A2 G1", "HL Auto  SH Off", "Periph Off  NR Low",
-        "EV +0.7  ISO max 3200", "Meter Spot  ND On"};
-    u32 n = details_of(w, DETAIL_MENU);
-    assert(n == sizeof menu / sizeof menu[0]);
-    for (u32 r = 0; r < n; ++r) assert(!strcmp(detail_ascii[r], menu[r]));
-    static const char *const panel[] = {"Portra 400", "Sat +1  Con -1", "WB Daylight A2 G1", "HL Auto  SH Off",
-                                        "Periph Off  NR Low", "EV +0.7  ISO max 3200", "Meter Spot  ND On"};
-    n = details_of(w, DETAIL_PANEL);
-    assert(n == sizeof panel / sizeof panel[0]);
-    for (u32 r = 0; r < n; ++r) assert(!strcmp(detail_ascii[r], panel[r]));
+    char effect[16];
+    snprintf(effect, sizeof effect, "%x", GRKIT_ICON_EFFECT(1));
+    const char *const items[][4] = {
+        {"Film Look", "Portra 400", "", effect},
+        {"Saturation", "+1", "+1", 0},
+        {"Contrast", "0", "0", 0},
+        {"Grain", "Medium, size Large", "", 0},
+        {"Bloom", "Weak", "", 0},
+        {"Halation", "Medium, Red", "", 0},
+        {"Border", "Thin, Black", "", 0},
+        {"White Balance", "Daylight, A2 G1", "A2 G1", 0},
+        {"Highlight Correction", "Auto", "", 0},
+        {"Shadow Correction", "Off", "", 0},
+        {"Peripheral Illumination", "Off", "", 0},
+        {"High-ISO NR", "Low", "", 0},
+        {"Exposure Compensation", "+0.7 EV", "+0.7", 0},
+        {"Auto ISO Upper Limit", "ISO 3200", "3200", 0},
+        {"Metering", "Spot", "", 0},
+        {"ND Filter", "On", "", 0}};
+    const u32 icons[] = {0, parameter_icons[NATIVE_PARAMETER_SATURATION], parameter_icons[NATIVE_PARAMETER_CONTRAST],
+                         0, 0, 0, 0, mode_icons[MODE_DAYLIGHT], correction_icons[0], correction_icons[3 + 4],
+                         correction_icons[8 + 0], correction_icons[10 + 1], NATIVE_DETAIL_COMPENSATION_ICON,
+                         NATIVE_DETAIL_ISO_ICON, metering_icons[2], nd_icons[1]};
+    static const u32 groups[] = {0, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4, 4, 5, 5, 5, 5};
+    u32 n = details_of(w);
+    assert(n == sizeof items / sizeof items[0]);
+    for (u32 i = 0; i < n; ++i) {
+        assert(detail_groups[i] == groups[i]);
+        if (i == 0) assert(!strcmp(detail_lines[i], line(items[i][0], items[i][1], items[i][2], GRKIT_ICON_EFFECT(1))));
+        else assert(!strcmp(detail_lines[i], line(items[i][0], items[i][1], items[i][2], icons[i])));
+    }
+    /* A module item carries what its status icon needs: the setting and its
+       value. */
+    assert(DETAIL_SETTING(detail_item(detail_block, 3)[DETAIL_ITEM_META / 4]) == DETAIL_GRAIN &&
+           DETAIL_SETTING_VALUE(detail_item(detail_block, 3)[DETAIL_ITEM_META / 4]) == 2);
+    assert(DETAIL_SETTING(detail_item(detail_block, 5)[DETAIL_ITEM_META / 4]) == HALATION + 1 &&
+           DETAIL_SETTING_VALUE(detail_item(detail_block, 5)[DETAIL_ITEM_META / 4]) == 2);
 
     /* The name of an effect keeps its own characters. */
     HALF(record_at(1), GRKIT_RECORD_NAME + 2) = 0x4e2d;
-    assert(recipe_details(header, w, DETAIL_PANEL, detail_rows) == 7);
-    assert(detail_rows[0] == 'P' && detail_rows[1] == 0x4e2d && detail_rows[2] == 'r');
-    /* A row holds exactly DETAIL_WRAP characters, and the levels reach +4
-       and -4: digits 4 and 5. */
+    recipe_details(header, w, detail_block);
+    volatile u16 *name = (volatile u16 *)(detail_item(detail_block, 0) + DETAIL_ITEM_VALUE / 4);
+    assert(name[0] == 'P' && name[1] == 0x4e2d && name[2] == 'r');
+    /* The levels reach +4 and -4: digits 4 and 5. */
     u32 edge[GRKIT_RECIPE_WORDS] = {0};
     edge[0] = RECIPE_USED | RECIPE_LOOK_EFFECT | code_of(0) << RECIPE_CODE_SHIFT;
     set_name(0, "Edge");
-    edge[RECIPE_FN_WORD] = 1U + 1U * 9U + 1U * 531441U + 4U * 4782969U + 5U * 43046721U;
-    assert(details_of(edge, DETAIL_MENU) == 3 && !strcmp(detail_ascii[1], "Sat +1  Hue +1  Sharp +1"));
-    assert(strlen(detail_ascii[1]) == DETAIL_WRAP && !strcmp(detail_ascii[2], "Shade +4  Clarity -4"));
-    /* An effect that is not installed. */
+    edge[RECIPE_FN_WORD] = 4U * 4782969U + 5U * 43046721U;
+    assert(details_of(edge) == 3 && !strcmp(detail_lines[1], line("Shading", "+4", "+4", parameter_icons[7])));
+    assert(!strcmp(detail_lines[2], line("Clarity", "-4", "-4", parameter_icons[8])));
+    /* An effect that is not installed: no icon. */
     w[0] = (w[0] & ~(RECIPE_CODE_MASK << RECIPE_CODE_SHIFT)) | ((code_of(1) + 1U) & RECIPE_CODE_MASK) << RECIPE_CODE_SHIFT;
-    details_of(w, DETAIL_PANEL);
-    assert(!strcmp(detail_ascii[0], "Effect missing"));
+    details_of(w);
+    assert(!strcmp(detail_lines[0], line("Film Look", "Effect missing", "", 0)));
 
-    /* A native type: its English name, only its own levels, its tone; the
-       color temperature; a negative and a zero compensation. */
+    /* A native type: its icon and English name, only its own levels, its
+       tone with its word as the short value; the color temperature; a
+       negative and a zero compensation. */
     memset(w, 0, sizeof w);
     w[0] = RECIPE_USED | RECIPE_LOOK_OFF;
     u32 own = NATIVE_LEVELS, other = NATIVE_LEVELS;
@@ -1310,21 +1367,82 @@ static void details_name_what_the_recipe_holds(void)
                             (MODE_TEMPERATURE + 1U) << NATIVE_MODE_SHIFT | 14U << NATIVE_BA_SHIFT | 14U << NATIVE_GM_SHIFT;
     w[RECIPE_EXTRA_WORD] = 270U;
     w[RECIPE_MODULE_WORD] = 29U << NATIVE_EV_SHIFT;
-    n = details_of(w, DETAIL_MENU);
-    char level[DETAIL_UNITS];
-    snprintf(level, sizeof level, "%s +2", detail_levels[own]);
-    assert(n == 5 && !strcmp(detail_ascii[0], "Monotone") && !strcmp(detail_ascii[1], level));
-    assert(!strcmp(detail_ascii[2], "Tone Sepia") && !strcmp(detail_ascii[3], "WB 5200K") && !strcmp(detail_ascii[4], "EV -0.3"));
+    n = details_of(w);
+    static const u16 type_icons[NATIVE_TYPES] = {NATIVE_TYPE_ICONS};
+    assert(n == 5 && !strcmp(detail_lines[0], line("Image Control", "Monotone", "", type_icons[TYPE_MONOTONE])));
+    assert(!strcmp(detail_lines[1], line(detail_names[DETAIL_NAME_LEVEL(own)], "+2", "+2", parameter_icons[own])));
+    assert(!strcmp(detail_lines[2], line("Toning", "Sepia", "Sepia", parameter_icons[native_tone(TYPE_MONOTONE)])));
+    assert(!strcmp(detail_lines[3], line("White Balance", "5200K", "5200K", mode_icons[MODE_TEMPERATURE])));
+    assert(!strcmp(detail_lines[4], line("Exposure Compensation", "-0.3 EV", "-0.3", NATIVE_DETAIL_COMPENSATION_ICON)));
     w[RECIPE_MODULE_WORD] = 31U << NATIVE_EV_SHIFT;
-    n = details_of(w, DETAIL_MENU);
-    assert(!strcmp(detail_ascii[n - 1], "EV 0.0"));
+    n = details_of(w);
+    assert(!strcmp(detail_lines[n - 1], line("Exposure Compensation", "0.0 EV", "0.0", NATIVE_DETAIL_COMPENSATION_ICON)));
 
-    /* A recipe that keeps each setting, and Film Look Off. */
+    /* A recipe that keeps each setting has no item, and Film Look Off is
+       one. */
     memset(w, 0, sizeof w);
     w[0] = RECIPE_USED;
-    assert(details_of(w, DETAIL_MENU) == 1 && !strcmp(detail_ascii[0], "No settings"));
+    assert(details_of(w) == 0);
     w[0] |= RECIPE_LOOK_OFF;
-    assert(details_of(w, DETAIL_PANEL) == 1 && !strcmp(detail_ascii[0], "Film Look Off"));
+    assert(details_of(w) == 1 && !strcmp(detail_lines[0], line("Film Look", "Off", "", 0)));
+}
+/* The abbreviation of a recipe name, which its tile in ADJ shows. */
+static u32 abbreviation(const char *name)
+{
+    u16 units[64];
+    u32 n = 0;
+    for (; name[n]; ++n) units[n] = (u8)name[n];
+    units[n] = 0;
+    return recipe_abbreviation(units, 64);
+}
+static u32 packed(const char *text)
+{
+    u32 out = 0;
+    for (u32 i = 0; text[i]; ++i) out |= (u32)(u8)text[i] << (8 * i);
+    return out;
+}
+static void abbreviations_take_initials_and_numbers(void)
+{
+    assert(abbreviation("Street Neg") == packed("SN"));
+    assert(abbreviation("CineStill 800T") == packed("C800"));
+    assert(abbreviation("Bennet 800") == packed("B800"));
+    assert(abbreviation("Portra 400") == packed("P400"));
+    assert(abbreviation("Vision3 500T") == packed("V500"));
+    assert(abbreviation("Negative Film 2") == packed("NF2"));
+    assert(abbreviation("Kodachrome") == packed("KOD"));
+    assert(abbreviation("warm portra") == packed("WP"));
+    /* At most four characters, also within a number. */
+    assert(abbreviation("A B C D E") == packed("ABCD"));
+    assert(abbreviation("Tri-X 400 Push") == packed("TX40"));
+    assert(abbreviation("12345") == packed("1234"));
+    /* One letter: the first three letters and digits of the name. A letter
+       with a number is not one letter. */
+    assert(abbreviation("X-100") == packed("X100"));
+    assert(abbreviation("Go") == packed("GO"));
+    /* No letter or digit. */
+    assert(abbreviation("--") == ' ' && abbreviation("") == ' ');
+}
+
+/* The View shows 14 items on a page; Up and Down turn the pages and stop
+   at the first and the last. */
+static void the_view_turns_its_pages(void)
+{
+    assert(detail_pages(0) == 1 && detail_pages(1) == 1 && detail_pages(14) == 1);
+    assert(detail_pages(15) == 2 && detail_pages(16) == 2 && detail_pages(28) == 2);
+    assert(detail_pages(29) == 3 && detail_pages(DETAIL_ITEMS_MAX) == 3);
+    /* Street Neg: 16 items on two pages, 14 and 2. */
+    assert(detail_page_items(0, 16) == 14 && detail_page_items(1, 16) == 2 && detail_page_items(2, 16) == 0);
+    assert(detail_page_items(0, 3) == 3 && detail_page_items(1, 28) == 14 && detail_page_items(2, 29) == 1);
+    assert(detail_page_turn(0, 16, 1) == 1);
+    assert(detail_page_turn(1, 16, 1) == 1);
+    assert(detail_page_turn(1, 16, 0) == 0);
+    assert(detail_page_turn(0, 16, 0) == 0);
+    /* One page does not turn. */
+    assert(detail_page_turn(0, 14, 1) == 0 && detail_page_turn(0, 14, 0) == 0);
+    /* Three pages. */
+    assert(detail_page_turn(1, 30, 1) == 2 && detail_page_turn(2, 30, 1) == 2 && detail_page_turn(2, 30, 0) == 1);
+    /* A page past the last, after the recipe lost items, goes to the last. */
+    assert(detail_page_turn(5, 16, 0) == 1 && detail_page_turn(5, 16, 1) == 1);
 }
 
 int main(void)
@@ -1360,6 +1478,8 @@ int main(void)
     monochrome_holds_no_color_setting();
     rust_recipes_apply();
     details_name_what_the_recipe_holds();
+    abbreviations_take_initials_and_numbers();
+    the_view_turns_its_pages();
     print_saves();
     return 0;
 }

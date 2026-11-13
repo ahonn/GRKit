@@ -372,37 +372,31 @@ static u32 module_layers_on(volatile u32 *h) {
 #ifndef MENU_PREVIEW_INVALIDATE
 #define MENU_PREVIEW_INVALIDATE(view) CALL1(FW_VIEW_INVALIDATE)(view)
 #endif
-/* The panel of the settings of recipe e, which ADJ shows at the left while
-   the cursor is on its row (runtime/viewfinder.h: panel_paint): the rows of
-   runtime/recipe_details.h without Grain, Glow, and Border, the effect of
-   the look, and the status icons of the settings that the recipe holds, as
-   the live view shows them for these values. A value of 0 has no icon. */
-static void recipe_panel(volatile u32 *h,u32 e) {
-    volatile u32 *panel=services_word(h,SERVICES_DETAILS);
-    u32 w[GRKIT_RECIPE_WORDS], i, k, n=0, look=0;
+/* The settings of recipe e as the items of the details block
+   (runtime/recipe_details.h), for the View page of MENU and the panel of
+   ADJ (runtime/viewfinder.h). A module item gets the status icon of its
+   module for its value, as the live view shows it, or none. */
+static void recipe_details_build(volatile u32 *h,u32 e) {
+    volatile u32 *base=services_word(h,SERVICES_DETAILS), *item;
+    u32 w[GRKIT_RECIPE_WORDS], i, k, n, meta, setting, address, icon;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,e)[i];
-    panel[DETAIL_COUNT/4]=recipe_details(h,w,DETAIL_PANEL,(volatile u16 *)services_word(h,SERVICES_DETAILS+DETAIL_TEXT));
-    if(RECIPE_LOOK(w[0])==RECIPE_LOOK_EFFECT) {
-        i=recipe_effect(h,RECIPE_CODE(w[0]));
-        if(i<GRKIT_TEXT_RECORDS) look=i+1U;
+    n=recipe_details(h,w,base);
+    for(k=0;k<n;++k) {
+        item=detail_item(base,k);
+        meta=item[DETAIL_ITEM_META/4];
+        if(DETAIL_GROUP(meta)!=DETAIL_GROUP_MODULES) continue;
+        setting=DETAIL_SETTING(meta)==DETAIL_GRAIN ? GRKIT_CORE_GRAIN : recipe_setting_handle(h,DETAIL_SETTING(meta)-1U);
+        for(i=0;i<viewfinder_indicators(h);++i) {
+            address=INDICATOR_ENTRY(h,i)[0];
+            if(!address || services_suspended(h,address) || INDICATOR_WORD(address,0)<24 ||
+               INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
+            icon=INDICATOR_WORD(address,20);
+            if(!icon || MODULE_ICON_WORD(icon,0)<MODULE_ICON_SIZE || MODULE_ICON_WORD(icon,MODULE_ICON_SETTING)!=setting) continue;
+            icon=module_icon_row(h,icon,INDICATOR_ENTRY(h,i)[1],setting,DETAIL_SETTING_VALUE(meta));
+            if(icon!=GRKIT_ICON_OFF) item[DETAIL_ITEM_ICON/4]=icon;
+            break;
+        }
     }
-    panel[DETAIL_PANEL_LOOK/4]=look;
-    panel[DETAIL_PANEL_NAMED/4]=RECIPE_LOOK(w[0])!=RECIPE_LOOK_KEPT;
-    for(i=0;i<viewfinder_indicators(h) && n<PANEL_ICONS_MAX;++i) {
-        u32 address=INDICATOR_ENTRY(h,i)[0], icon, setting, value=0, held=0;
-        if(!address || services_suspended(h,address) || INDICATOR_WORD(address,0)<24 ||
-           INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
-        icon=INDICATOR_WORD(address,20);
-        if(!icon || MODULE_ICON_WORD(icon,0)<MODULE_ICON_SIZE) continue;
-        setting=MODULE_ICON_WORD(icon,MODULE_ICON_SETTING);
-        if(setting==GRKIT_CORE_GRAIN && w[0]&RECIPE_GRAIN) { held=1; value=RECIPE_GRAIN_LEVEL(w[0]); }
-        for(k=0;k<GRKIT_RECIPE_SETTINGS && !held;++k)
-            if(recipe_setting_held(w,k) && recipe_setting_handle(h,k)==setting) { held=1; value=recipe_setting_value(w,k); }
-        if(!held || !value) continue;
-        icon=module_icon_row(h,icon,INDICATOR_ENTRY(h,i)[1],setting,value);
-        if(icon!=GRKIT_ICON_OFF) panel[DETAIL_PANEL_ICONS/4+n++]=icon;
-    }
-    if(n<PANEL_ICONS_MAX) panel[DETAIL_PANEL_ICONS/4+n]=0;
 }
 static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {
     u32 module=h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE ? h[GRKIT_HOST_MODULE/4] : 0;
@@ -427,7 +421,7 @@ static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {
     if(choice && menu_page(h,module)==&recipe_module && h[GRKIT_HOST_SERVICES/4]) {
         u32 e=recipe_row_slot(h,h[GRKIT_HOST_MENU_CURSOR/4]);
         if(e<GRKIT_RECIPE_SLOTS) {
-            recipe_panel(h,e);
+            recipe_details_build(h,e);
             h[GRKIT_HOST_FRAME_PREVIEW/4]|=(e+1U)<<FRAME_PREVIEW_PANEL_SHIFT;
         }
     }

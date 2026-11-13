@@ -779,6 +779,82 @@ fn overlay_glyphs_share_a_baseline_and_outline_their_text() {
     }
 }
 
+/// The small glyphs after the glyphs, for the names of the settings on the
+/// View page of a recipe: the same characters, the same outline, smaller.
+/// The caption glyphs after them, for the tiles of recipes: coverage only,
+/// as high as `CAPTION_GLYPH_HEIGHT`, standing on its baseline, and narrow
+/// enough that four of them fit in the frame of a tile.
+#[test]
+fn small_and_caption_glyphs_follow_the_glyphs() {
+    let table = artwork::overlay_labels();
+    assert!(table.len() <= grkit_core::abi::LABELS_SIZE);
+    let small = artwork::OVERLAY_LABELS.len() + artwork::OVERLAY_GLYPH_COUNT;
+    for (n, character) in artwork::OVERLAY_GLYPHS.enumerate() {
+        let (width, height, pixels) = artwork::overlay_label_pixels(&table, small + n);
+        let (large, _, _) =
+            artwork::overlay_label_pixels(&table, small - artwork::OVERLAY_GLYPH_COUNT + n);
+        assert_eq!(height, artwork::OVERLAY_SMALL_HEIGHT, "{character:?}");
+        assert!(
+            width > 2 * artwork::OVERLAY_OUTLINE && width <= large,
+            "{character:?}"
+        );
+        assert_eq!(character == ' ', !pixels.contains(&1), "{character:?}");
+    }
+    let captions = small + artwork::OVERLAY_GLYPH_COUNT;
+    let mut widest = 0;
+    for (n, &character) in artwork::CAPTION_CHARACTERS.iter().enumerate() {
+        let (width, height, pixels) = artwork::overlay_label_pixels(&table, captions + n);
+        assert_eq!(
+            height,
+            artwork::CAPTION_GLYPH_HEIGHT,
+            "{}",
+            character as char
+        );
+        let rows: Vec<usize> = (0..height)
+            .filter(|&y| (0..width).any(|x| pixels[y * width + x] > 64))
+            .collect();
+        // The tail of Q passes the baseline.
+        if character != b'Q' {
+            assert_eq!(
+                *rows.last().unwrap() + 1,
+                artwork::CAPTION_GLYPH_BASELINE,
+                "{}",
+                character as char
+            );
+        }
+        widest = widest.max(width);
+    }
+    // The widest abbreviation that the recipes of the site give, and four
+    // digits, fit the 36 pixels inside the frame.
+    let width = |text: &str| -> usize {
+        text.bytes()
+            .map(|c| {
+                let n = artwork::CAPTION_CHARACTERS
+                    .iter()
+                    .position(|&k| k == c)
+                    .unwrap();
+                artwork::overlay_label_pixels(&table, captions + n).0
+            })
+            .sum()
+    };
+    for text in ["C800", "B800", "V500", "NF2", "KOD", "8888"] {
+        assert!(width(text) <= 36, "{text} is {} wide", width(text));
+    }
+    assert!(widest <= 12);
+    // The tile of a recipe: the list frame, the cards above the caption,
+    // and an empty caption area on the fill of the tile.
+    let tile = artwork::recipe_card_pixels();
+    assert_eq!(tile.len(), 40 * 40 * 4);
+    let gray = |x: usize, y: usize| tile[(y * 40 + x) * 4];
+    let top = artwork::CAPTION_BASELINE - artwork::CAPTION_GLYPH_BASELINE;
+    for y in top..37 {
+        for x in 2..38 {
+            assert_eq!(gray(x, y), artwork::TILE_FILL, "{x},{y}");
+        }
+    }
+    assert!((4..top).any(|y| (2..38).any(|x| gray(x, y) == 210)));
+}
+
 /// Label n names the CORE.ASPECT value n (LABEL_RATIO in runtime/sdk/grkit.h):
 /// it starts the summary of value n of the Framing module. The Date Imprint
 /// sign follows the ratios (LABEL_DATE), then one label for each format.

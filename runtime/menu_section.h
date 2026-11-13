@@ -190,7 +190,7 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
         return SETTINGS_SUBMENU;
     }
     /* About GRKit opens the camera information page (menu_info_fill). */
-    services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]=1;
+    services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]=MENU_ABOUT_GRKIT;
     return INFO_CONTROLLER;
 }
 static const u16 no_text[]={0};

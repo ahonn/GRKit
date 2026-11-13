@@ -1395,6 +1395,7 @@ static u32 icon_address(volatile u32 *h,u32 id) {
     if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) {
         return module_tile_address(h,id);
     }
+    if(id-GRKIT_ICON_RECIPE(0)<GRKIT_RECIPE_SLOTS) return recipe_card_address(h,id-GRKIT_ICON_RECIPE(0));
     if(id==GRKIT_ICON_GRKIT) return h[GRKIT_HOST_GRKIT_ICON/4];
     /* The installer puts the Version icon after the GRKit icon. */
     if(id==GRKIT_ICON_VERSION) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+GRKIT_ICON_STRIDE : 0;

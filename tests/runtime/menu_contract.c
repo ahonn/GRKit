@@ -1517,7 +1517,8 @@ static void the_recipe_page_saves_applies_and_deletes(void)
     assert(count(test_header) == 3);
     assert(same(current_module(test_header)->label(test_header, 0), "Film Look: Off"));
     assert(same(current_module(test_header)->label(test_header, 1), "Film Look: Off 2"));
-    assert(CURRENT_ICON(0) == GRAIN_TILE(3));
+    /* A recipe shows its tile (runtime/recipe_card.h). */
+    assert(CURRENT_ICON(0) == GRKIT_ICON_RECIPE(0) && CURRENT_ICON(1) == GRKIT_ICON_RECIPE(1));
     assert(!current_module(test_header)->checked(test_header, 0) && current_module(test_header)->checked(test_header, 1));
     assert(same(current_module(test_header)->summary(test_header), "Recipes: Film Look: Off 2"));
     /* OK on a recipe applies it and stores an undo step, which adds the Undo
@@ -1778,10 +1779,10 @@ static void the_recipe_page_marks_a_missing_effect(void)
     assert(same(current_module(test_header)->label(test_header, 1), "Gone (effect missing)"));
 }
 
-/* A recipe of a native type shows the native Image Control icon of the type
-   (NATIVE_TYPE_ICONS). A type without an icon on the camera, or a type
-   after the table, and Film Look Off show the recipe tile. */
-static void the_recipe_page_shows_native_type_icons(void)
+/* Each recipe shows its own tile (runtime/recipe_card.h), whatever its
+   look: a native type with an icon on the camera, a type without one, and
+   Film Look Off. The panel shows the icon of the look. */
+static void the_recipe_page_shows_recipe_tiles(void)
 {
     static const u16 icons[NATIVE_TYPES] = {NATIVE_TYPE_ICONS};
     u32 missing = NATIVE_TYPES;
@@ -1805,9 +1806,9 @@ static void the_recipe_page_shows_native_type_icons(void)
     menu_confirm(test_header);
     assert(count(test_header) == 4);
     assert(icons[0] && icons[0] < 0x7000U);
-    assert(CURRENT_ICON(0) == icons[0]);
-    assert(CURRENT_ICON(1) == GRAIN_TILE(3));
-    assert(CURRENT_ICON(2) == GRAIN_TILE(3));
+    assert(CURRENT_ICON(0) == GRKIT_ICON_RECIPE(0));
+    assert(CURRENT_ICON(1) == GRKIT_ICON_RECIPE(1));
+    assert(CURRENT_ICON(2) == GRKIT_ICON_RECIPE(2));
     assert(CURRENT_ICON(3) == GRAIN_TILE(2));
 }
 
@@ -3190,17 +3191,25 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
     assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
-    /* View shows the settings of Street with its name as the title: Film
-       Look Off, then Grain Off. OK there does nothing, and MENU returns to
-       the actions with the cursor on View. */
+    /* View opens the camera information page, as About GRKit does, and the
+       page keeps its settings while the information page shows. Its title
+       is the name of the recipe, and the live view paints the settings of
+       Street: Film Look Off (Grain Off is no item). The return to the page
+       ends the View, with the cursor on View. */
+    const u32 settings = h[GRKIT_HOST_SETTINGS / 4];
+    controller_changes = 0;
     assert(recipes->select(h, 0, 1));
-    assert(*state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_DETAILS | 1U) && same(recipes->title(h), "Street"));
-    assert(listed_values(h, 2) == 2 && same(listed_text(h, 2, 0), "Film Look Off") && same(listed_text(h, 2, 1), "Grain Off"));
-    assert(same(listed_text(h, 2, 2), "") && recipes->get(h) == RECIPE_NONE && recipes->cursor(h) == 0);
-    assert(recipes->select(h, 0, 1) && *state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_DETAILS | 1U));
-    assert(recipes->select(h, 0, SETTING_BACK));
-    assert(*state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_VIEWED | 1U) && recipes->cursor(h) == RECIPE_ACTION_VIEW);
-    assert(listed_values(h, 2) == 4 && same(recipes->title(h), "Street"));
+    assert(controller_changes == 1 && controller_to == INFO_CONTROLLER);
+    assert(*state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_VIEWED | 1U) && menu[MENU_ROWS_ABOUT / 4] == MENU_ABOUT_RECIPE);
+    assert(services_word(h, SERVICES_DETAILS + DETAIL_COUNT)[0] == 1);
+    assert(menu_settings_controller(INFO_CONTROLLER) == INFO_CONTROLLER && h[GRKIT_HOST_SETTINGS / 4] == settings);
+    assert(menu_text_override(0x5a000000, INFO_TITLE_TEXT) ==
+           ((u32)services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT_TEXTS) | 1U));
+    menu_info_fill(TEST_OBJECTS + 0xc00);
+    assert(services_word(h, SERVICES_DETAILS + DETAIL_VIEW_CONTROLLER)[0] == TEST_OBJECTS + 0xc00);
+    assert(menu_settings_controller(settings_pages[2]) == settings_pages[2]);
+    assert(!menu[MENU_ROWS_ABOUT / 4] && !services_word(h, SERVICES_DETAILS + DETAIL_VIEW_CONTROLLER)[0]);
+    assert(recipes->cursor(h) == RECIPE_ACTION_VIEW && listed_values(h, 2) == 4 && same(recipes->title(h), "Street"));
     /* MENU returns to the list with the cursor on Corner, which the
        settings match: the camera shows the mark only on the row where the
        cursor starts. Without a match, the cursor is on Street. */
@@ -5364,7 +5373,7 @@ int main(void)
     the_keyboard_keeps_an_unchanged_automatic_name();
     the_recipe_page_lists_the_shown_recipes();
     the_recipe_page_marks_a_missing_effect();
-    the_recipe_page_shows_native_type_icons();
+    the_recipe_page_shows_recipe_tiles();
     invalid_cursors_form_no_effect_pointer();
     film_look_previews_and_commits_the_highlighted_effect();
     the_root_has_no_about_row();

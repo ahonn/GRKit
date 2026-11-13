@@ -304,6 +304,7 @@ static void ui_page_box_leave(volatile u32 *h,u32 id) {
    and a box on the page closes without its action as the page ends
    (ui_page_box_leave). */
 #define EAT_HALF_PRESS 2U
+static void view_events_end(volatile u32 *h);
 A32_ENTRY u32 menu_select_event(u32 controller,const u16 *event) {
     volatile u32 *h=menu_header();
     u32 kind=*event, which=controller==check_word(h,CHECK_RADIO)[0] ? CHECK_PAGE_RADIO : CHECK_PAGE_CHECKBOX;
@@ -504,6 +505,7 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
     if(h[GRKIT_HOST_SERVICES/4]) {
         services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]=id;
         if(id!=INFO_CONTROLLER) services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]=0;
+        view_events_end(h);
     }
     if(id==SETTINGS_SUBMENU) {
         h[GRKIT_HOST_SETTINGS/4]&=~(SETTINGS_FN|SETTINGS_OPEN_ROWS);
@@ -548,6 +550,9 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
        h[GRKIT_HOST_SETTINGS/4]&SETTINGS_FN) return id;
     /* The keyboard that a page opened returns to it (ui_keyboard_prepare). */
     if(id==KEYBOARD_CONTROLLER && h[GRKIT_HOST_SERVICES/4] && ui_keyboard_borrowed(h)) return id;
+    /* So does the View of a recipe (runtime/menu_recipes.h). */
+    if(id==INFO_CONTROLLER && h[GRKIT_HOST_SERVICES/4] &&
+       services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]==MENU_ABOUT_RECIPE) return id;
     h[GRKIT_HOST_SETTINGS/4]=0;
     /* A native page that GRKit opened from ADJ returns to GRKit at the next
        ADJ (RETURN_PARAMETERS). The page, the shooting screen of a half-press,

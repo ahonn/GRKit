@@ -120,6 +120,9 @@
 /* Whether the camera information page shows About GRKit, the text
    descriptors of its title and labels, and its ASCII lines. */
 #define MENU_ROWS_ABOUT (MENU_ROWS_VALUES + MENU_VALUES_MAX * MENU_VALUE_SIZE)
+/* MENU_ROWS_ABOUT: the page shows About GRKit or the View of a recipe. */
+#define MENU_ABOUT_GRKIT 1U
+#define MENU_ABOUT_RECIPE 2U
 #define MENU_ROWS_ABOUT_TEXTS (MENU_ROWS_ABOUT + 4U)
 #define MENU_ROWS_ABOUT_LINES (MENU_ROWS_ABOUT_TEXTS + 3U * 8U)
 #define MENU_ABOUT_LINE 40U
@@ -261,25 +264,64 @@
 #define DISTANCE_SCALE_SLOTS 4U
 #define DISTANCE_SCALE_NEXT (DISTANCE_SCALES + 4U * DISTANCE_SCALE_SLOTS)
 #define DISTANCE_SIZE (DISTANCE_SCALE_NEXT + 4U)
-/* The settings of a recipe as rows of text (runtime/recipe_details.h), for
-   the View page of MENU and the panel of ADJ: the number of rows, then
-   DETAIL_ROWS_MAX rows of DETAIL_UNITS units. Then the rest of the panel,
-   which the core writes while ADJ shows it (runtime/modules.h:
-   recipe_panel) and the live view paints (runtime/viewfinder.h:
-   panel_paint): the effect record + 1 of the look, or 0; whether row 0 is
-   the name of the look; and the status icons of the settings of the
-   recipe, PANEL_ICONS_MAX icon IDs, 0 after the last. */
+/* The settings of a recipe as items (runtime/recipe_details.h), for the View
+   page of MENU and the panel of ADJ: the number of items, then
+   DETAIL_ITEMS_MAX items of DETAIL_ITEM_SIZE bytes. An item has its icon
+   (DETAIL_ITEM_ICON: 0 for none, a native icon ID below DETAIL_NATIVE_ICONS,
+   else a GRKit icon ID), its meta word (DETAIL_ITEM_META: the group, the
+   name, and for a module setting its index and value), the short value that
+   the panel writes after the icon, and the value that the View page writes
+   below the name, each NUL-terminated UTF-16. Then the camera information
+   page while it shows the View of a recipe, else 0 (runtime/menu_about.h,
+   runtime/viewfinder.h: view_paint), the page of the View that shows, and
+   for the information page the native vtable and a copy whose event method
+   turns the pages of the View: the word before the vtable, then
+   DETAIL_VIEW_VTABLE_SLOTS methods. */
 #define SERVICES_DETAILS (SERVICES_DISTANCE + DISTANCE_SIZE)
-#define DETAIL_ROWS_MAX 16U
-#define DETAIL_UNITS 32U
+#define DETAIL_ITEMS_MAX 32U
+#define DETAIL_SHORT_UNITS 12U
+#define DETAIL_VALUE_UNITS 28U
+#define DETAIL_ITEM_ICON 0U
+#define DETAIL_ITEM_META 4U
+#define DETAIL_ITEM_SHORT 8U
+#define DETAIL_ITEM_VALUE (DETAIL_ITEM_SHORT + 2U * DETAIL_SHORT_UNITS)
+#define DETAIL_ITEM_SIZE (DETAIL_ITEM_VALUE + 2U * DETAIL_VALUE_UNITS)
 #define DETAIL_COUNT 0U
-#define DETAIL_TEXT 4U
-#define DETAIL_TEXT_SIZE (2U * DETAIL_ROWS_MAX * DETAIL_UNITS)
-#define DETAIL_PANEL_LOOK (DETAIL_TEXT + DETAIL_TEXT_SIZE)
-#define DETAIL_PANEL_NAMED (DETAIL_PANEL_LOOK + 4U)
-#define DETAIL_PANEL_ICONS (DETAIL_PANEL_NAMED + 4U)
-#define PANEL_ICONS_MAX 6U
-#define DETAILS_SIZE (DETAIL_PANEL_ICONS + 4U * PANEL_ICONS_MAX)
+#define DETAIL_ITEMS 4U
+#define DETAIL_VIEW_CONTROLLER (DETAIL_ITEMS + DETAIL_ITEMS_MAX * DETAIL_ITEM_SIZE)
+#define DETAIL_VIEW_PAGE (DETAIL_VIEW_CONTROLLER + 4U)
+#define DETAIL_VIEW_VTABLE (DETAIL_VIEW_PAGE + 4U)
+#define DETAIL_VIEW_VTABLE_SLOTS 16U
+#define DETAILS_SIZE (DETAIL_VIEW_VTABLE + 4U * (2U + DETAIL_VIEW_VTABLE_SLOTS))
+/* A page of the View shows DETAIL_PAGE_ITEMS items: two columns of 7. */
+#define DETAIL_PAGE_ITEMS 14U
+/* Item i of the details block `base`, a word pointer. */
+#define DETAIL_ITEM_AT(base, i) ((base) + (DETAIL_ITEMS + (i) * DETAIL_ITEM_SIZE) / 4U)
+/* The native icon IDs are below this; GRKit icon IDs start at 0x7000. */
+#define DETAIL_NATIVE_ICONS 0x1000U
+/* The meta word: the group in bits 0 to 7, the name
+   (runtime/recipe_detail_names.h) in bits 8 to 15, and for a setting of a
+   module its index in the recipe settings + 1 (DETAIL_GRAIN for Grain) in
+   bits 16 to 23 and its value in bits 24 to 31. */
+#define DETAIL_GROUP(meta) ((meta) & 0xffU)
+#define DETAIL_NAME(meta) ((meta) >> 8 & 0xffU)
+#define DETAIL_SETTING(meta) ((meta) >> 16 & 0xffU)
+#define DETAIL_SETTING_VALUE(meta) ((meta) >> 24)
+#define DETAIL_GRAIN 0xffU
+#define DETAIL_GROUP_LOOK 0U
+#define DETAIL_GROUP_LEVELS 1U
+#define DETAIL_GROUP_MODULES 2U
+#define DETAIL_GROUP_WHITE_BALANCE 3U
+#define DETAIL_GROUP_CORRECTIONS 4U
+#define DETAIL_GROUP_EXPOSURE 5U
+/* The tiles of recipes in ADJ (runtime/recipe_card.h): the abbreviation that
+   each of the RECIPE_CARD_SLOTS composed tiles shows, four ASCII bytes, 0
+   while the slot is free, then the slot that the next new tile takes. */
+#define SERVICES_CARDS (SERVICES_DETAILS + DETAILS_SIZE)
+#define RECIPE_CARD_SLOTS 12U
+#define CARD_KEYS 0U
+#define CARD_NEXT (4U * RECIPE_CARD_SLOTS)
+#define CARDS_SIZE (CARD_NEXT + 4U)
 /* GRKIT_HOST_FRAME_PREVIEW: the highlighted ratio + 1 in the low byte
    (runtime/modules.h: frame_preview_set), and 1 + the slot of the recipe
    whose panel ADJ shows in the next byte, else 0. A change of either draws
@@ -289,7 +331,7 @@
 #define FRAME_PREVIEW_PANEL_SHIFT 8U
 /* The App-task timer and the frozen STATE.TXT export (runtime/persist.h).
    HOST_PERSIST_WORD gives the export's word index in the module array. */
-#define SERVICES_PERSIST_TIMER (SERVICES_DETAILS + DETAILS_SIZE)
+#define SERVICES_PERSIST_TIMER (SERVICES_CARDS + CARDS_SIZE)
 #define SERVICES_PERSIST (SERVICES_PERSIST_TIMER + 4U)
 #define SERVICES_SIZE (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
@@ -309,6 +351,30 @@ static __attribute__((unused)) volatile u32 *services_word(volatile u32 *h,u32 o
 }
 
 /* Whether module code that the core called in the App task runs now. */
+/* The pages of the View of n items: at least 1. A multiply and a shift
+   divide by DETAIL_PAGE_ITEMS, exactly for each count of items, as the core
+   has no division routine (__aeabi_uidiv). */
+#define DETAIL_PAGE_RECIPROCAL (65536U / DETAIL_PAGE_ITEMS + 1U)
+_Static_assert((DETAIL_ITEMS_MAX + DETAIL_PAGE_ITEMS) * (DETAIL_PAGE_RECIPROCAL * DETAIL_PAGE_ITEMS - 65536U) < 65536U,
+               "the reciprocal divides each count of items exactly");
+static __attribute__((unused)) u32 detail_pages(u32 n) {
+    return n ? (n+DETAIL_PAGE_ITEMS-1U)*DETAIL_PAGE_RECIPROCAL>>16 : 1U;
+}
+/* The items on page `page` of the View of n items, from item
+   page * DETAIL_PAGE_ITEMS. */
+static __attribute__((unused)) u32 detail_page_items(u32 page,u32 n) {
+    u32 first=page*DETAIL_PAGE_ITEMS;
+    if(first>=n) return 0;
+    return n-first<DETAIL_PAGE_ITEMS ? n-first : DETAIL_PAGE_ITEMS;
+}
+/* The page after `page` (`forward`) or before it, of the View of n items:
+   the first and the last page stay. */
+static __attribute__((unused)) u32 detail_page_turn(u32 page,u32 n,u32 forward) {
+    u32 last=detail_pages(n)-1U;
+    if(page>last) return last;
+    if(forward) return page<last ? page+1U : last;
+    return page ? page-1U : 0;
+}
 static __attribute__((unused)) u32 services_in_app(volatile u32 *h) {
     return h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_APP)[0];
 }
