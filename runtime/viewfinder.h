@@ -16,16 +16,20 @@ static GRKIT_ICON_COMPACT u32 label_field(const volatile u8 *table,u32 at,u32 by
 static GRKIT_ICON_COMPACT u32 label_width(u32 label) {
     return label<GRKIT_LABEL_COUNT ? label_field(LABEL_MAP(GRKIT_LABELS(framing_header())),label*8,2) : 0;
 }
+/* The entries of the label table: the labels, then the glyphs of printable
+   ASCII from GRKIT_GLYPH_FIRST (grkit_core::artwork::overlay_labels). */
+#define LABEL_ENTRIES (GRKIT_GLYPH_FIRST+GRKIT_GLYPH_COUNT)
+_Static_assert(GRKIT_GLYPH_FIRST==GRKIT_LABEL_COUNT,"the glyphs follow the labels");
 /* White text with a black outline and no background, as the native live-view
    text has it: each drawn pixel is opaque, and text edges blend toward the
    outline in RGB. A transparent pixel keeps the canvas, so a label does not
    cut the Framing mask. Canvas::Draw clears the bitmap before each draw
    (framing_prepare), which removes the previous label. */
-static GRKIT_ICON_COMPACT void overlay_label(const Surface *s,u32 label,u32 left,u32 top) {
+static GRKIT_ICON_COMPACT void overlay_entry(const Surface *s,u32 label,u32 left,u32 top) {
     const volatile u8 *table=LABEL_MAP(GRKIT_LABELS(framing_header())),*pixels;
     u32 width,height,x,y,value;
     volatile u32 *row;
-    if(label>=GRKIT_LABEL_COUNT) return;
+    if(label>=LABEL_ENTRIES) return;
     width=label_field(table,label*8,2);
     height=label_field(table,label*8+2,2);
     if(!width || left+width>720 || top+height>480) return;
@@ -48,6 +52,39 @@ static GRKIT_ICON_COMPACT void overlay_label(const Surface *s,u32 label,u32 left
                 at+=length;
             }
         }
+    }
+}
+static GRKIT_ICON_COMPACT void overlay_label(const Surface *s,u32 label,u32 left,u32 top) {
+    if(label<GRKIT_LABEL_COUNT) overlay_entry(s,label,left,top);
+}
+/* The glyph of character c: a character outside printable ASCII shows as a
+   question mark. */
+static GRKIT_ICON_COMPACT u32 glyph_of(u32 c) {
+    return GRKIT_GLYPH_FIRST+(c>=' ' && c<=' '+GRKIT_GLYPH_COUNT-1U ? c-' ' : '?'-' ');
+}
+/* The outline of a glyph is one pixel on each side, and the next glyph
+   starts on the outline of the last (grkit_core::artwork::overlay_glyph). */
+#define GLYPH_OUTLINES 2U
+static GRKIT_ICON_COMPACT u32 glyph_advance(u32 c) {
+    u32 width=label_field(LABEL_MAP(GRKIT_LABELS(framing_header())),glyph_of(c)*8,2);
+    return width>GLYPH_OUTLINES ? width-GLYPH_OUTLINES : 0;
+}
+/* The width of a NUL-terminated text in glyphs, with the outlines at both
+   ends. */
+static GRKIT_ICON_COMPACT u32 overlay_text_width(const volatile u16 *text,u32 units) {
+    u32 width=0,i;
+    for(i=0;i<units && text[i];++i) width+=glyph_advance(text[i]);
+    return width ? width+GLYPH_OUTLINES : 0;
+}
+/* Write a text in glyphs, its top row at `top`, until its NUL or a glyph
+   that would pass `right`. */
+static GRKIT_ICON_COMPACT void overlay_text(const Surface *s,const volatile u16 *text,u32 units,u32 left,u32 top,u32 right) {
+    u32 i,advance;
+    for(i=0;i<units && text[i];++i) {
+        advance=glyph_advance(text[i]);
+        if(left+advance+GLYPH_OUTLINES>right) return;
+        overlay_entry(s,glyph_of(text[i]),left,top);
+        left+=advance;
     }
 }
 
@@ -418,17 +455,105 @@ static GRKIT_ICON_COMPACT void viewfinder_prepare(u32 canvas) {
    menu controls (runtime/modules.h: frame_preview). The page of CORE.ASPECT
    previews the area of its highlighted ratio. After the page ends, one more
    full draw erases the drawing and releases the canvas. */
+/* ---- The panel of a recipe in ADJ ------------------------------------------
+   While the cursor of ADJ is on a recipe, the ADJ canvas shows the settings
+   of the recipe at the left of the live view (runtime/modules.h:
+   recipe_panel), below the title and the detail line of ADJ, which draw
+   above the canvas: the icon of its effect and the name of its look, the
+   status icons of its settings, then the rows of runtime/recipe_details.h
+   in the glyphs of the label table, on black at 50%. The black fits the
+   content, from PANEL_LEFT and PANEL_TOP to at most PANEL_RIGHT and
+   PANEL_BOTTOM, the part of ADJ that the native controls leave free. */
+#define PANEL_LEFT 16U
+#define PANEL_TOP 100U
+#define PANEL_RIGHT 600U
+#define PANEL_BOTTOM 400U
+#define PANEL_MARGIN 12U
+#define PANEL_GAP 8U
+#define PANEL_LINE (GRKIT_GLYPH_HEIGHT+2U)
+#define PANEL_ICON 40U
+#define PANEL_FILL 0x80000000U
+/* The address of the pixels of icon `id`, as the status row finds them, or 0. */
+static GRKIT_ICON_COMPACT u32 panel_icon(volatile u32 *h,u32 id) {
+    u32 icon=0;
+    if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
+    else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
+        icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
+    return icon ? icon+GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE : 0;
+}
+static GRKIT_ICON_COMPACT void panel_icon_paint(const Surface *s,u32 pixels,u32 left,u32 top) {
+    u32 x,y,pixel;
+    for(y=0;y<PANEL_ICON;++y) {
+        volatile u32 *row=OVERLAY_PIXELS(s->data+(top+y)*s->stride*4)+left;
+        for(x=0;x<PANEL_ICON;++x) { pixel=WORD(pixels,(y*PANEL_ICON+x)*4); if(pixel>>24) row[x]=pixel; }
+    }
+}
+static GRKIT_ICON_COMPACT void panel_paint(volatile u32 *h,const Surface *s) {
+    volatile u32 *panel=services_word(h,SERVICES_DETAILS);
+    const volatile u16 *rows=(const volatile u16 *)services_word(h,SERVICES_DETAILS+DETAIL_TEXT);
+    u32 n=panel[DETAIL_COUNT/4], look=0, named=panel[DETAIL_PANEL_NAMED/4]!=0, icons=0, first, i;
+    u32 width=0, height=0, line, right, bottom, x, y, head;
+    if(n>DETAIL_ROWS_MAX) n=DETAIL_ROWS_MAX;
+    if(panel[DETAIL_PANEL_LOOK/4]) look=panel_icon(h,0x8000U+panel[DETAIL_PANEL_LOOK/4]-1U);
+    while(icons<PANEL_ICONS_MAX && panel[DETAIL_PANEL_ICONS/4+icons]) ++icons;
+    if(named && !n) named=0;
+    /* The head: the icon of the effect and the name of the look. */
+    head=(look ? PANEL_ICON+PANEL_GAP : 0)+(named ? overlay_text_width(rows,DETAIL_UNITS) : 0);
+    if(head) { width=head; height=look ? PANEL_ICON : PANEL_LINE; }
+    if(icons) {
+        line=icons*PANEL_ICON+(icons-1U)*PANEL_GAP;
+        if(line>width) width=line;
+        height+=(height ? PANEL_GAP : 0)+PANEL_ICON;
+    }
+    first=named ? 1U : 0U;
+    for(i=first;i<n;++i) {
+        line=overlay_text_width(rows+i*DETAIL_UNITS,DETAIL_UNITS);
+        if(line>width) width=line;
+    }
+    if(n>first) height+=(height ? PANEL_GAP : 0)+(n-first)*PANEL_LINE;
+    if(!width) return;
+    right=PANEL_LEFT+2U*PANEL_MARGIN+width;
+    if(right>PANEL_RIGHT) right=PANEL_RIGHT;
+    bottom=PANEL_TOP+2U*PANEL_MARGIN+height;
+    if(bottom>PANEL_BOTTOM) bottom=PANEL_BOTTOM;
+    for(y=PANEL_TOP;y<bottom;++y) {
+        volatile u32 *row=OVERLAY_PIXELS(s->data+y*s->stride*4);
+        for(x=PANEL_LEFT;x<right;++x) row[x]=PANEL_FILL;
+    }
+    x=PANEL_LEFT+PANEL_MARGIN; y=PANEL_TOP+PANEL_MARGIN;
+    if(head) {
+        if(look) panel_icon_paint(s,look,x,y);
+        /* The name sits on the middle of the icon. */
+        if(named) overlay_text(s,rows,DETAIL_UNITS,x+(look ? PANEL_ICON+PANEL_GAP : 0),
+                               y+(look ? (PANEL_ICON-GRKIT_GLYPH_HEIGHT)/2U : 0),right-PANEL_MARGIN);
+        y+=(look ? PANEL_ICON : PANEL_LINE)+PANEL_GAP;
+    }
+    for(i=0;i<icons && y+PANEL_ICON<=bottom-PANEL_MARGIN;++i) {
+        u32 pixels=panel_icon(h,panel[DETAIL_PANEL_ICONS/4+i]);
+        if(pixels && x+(i+1U)*(PANEL_ICON+PANEL_GAP)-PANEL_GAP<=right-PANEL_MARGIN)
+            panel_icon_paint(s,pixels,x+i*(PANEL_ICON+PANEL_GAP),y);
+    }
+    if(icons) y+=PANEL_ICON+PANEL_GAP;
+    for(i=first;i<n && y+GRKIT_GLYPH_HEIGHT<=bottom-PANEL_MARGIN;++i,y+=PANEL_LINE)
+        overlay_text(s,rows+i*DETAIL_UNITS,DETAIL_UNITS,x,y,right-PANEL_MARGIN);
+}
 static GRKIT_ICON_COMPACT void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {
-    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],data,area,composition;
+    u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],ratio=FRAME_PREVIEW_RATIO(preview),data,area,composition;
     Surface surface;
     if(!preview) { h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=0; return; }
-    if(preview>sizeof(photo_boxes)/sizeof(photo_boxes[0]) || !module_layers(h)) return;
     data=canvas_pixels(canvas,bitmap);
     if(!data) return;
-    composition=composition_area(h,preview-1);
-    area=layer_area(composition);
-    surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
-    module_layers_paint(h,&surface,1,composition);
+    surface.data=data; surface.stride=HALF(bitmap,0x18);
+    if(ratio && ratio<=sizeof(photo_boxes)/sizeof(photo_boxes[0]) && module_layers(h)) {
+        composition=composition_area(h,ratio-1);
+        area=layer_area(composition);
+        surface.area=area; surface.box=photo_boxes[area];
+        module_layers_paint(h,&surface,1,composition);
+    }
+    if(FRAME_PREVIEW_PANEL(preview) && h[GRKIT_HOST_SERVICES/4]) {
+        surface.area=0; surface.box=photo_boxes[0];
+        panel_paint(h,&surface);
+    }
 }
 static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitmap) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4],full,data,cue,status,framing,area;

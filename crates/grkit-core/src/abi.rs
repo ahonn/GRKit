@@ -273,7 +273,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_CAPABILITIES: 4;
     /// Framing ratio: 0 native, then the Framing rows.
     HOST_FRAME_RATIO: 4;
-    /// ADJ Framing page preview: 0 none, else the highlighted ratio + 1.
+    /// ADJ page preview: the highlighted ratio + 1 in the low byte, 0 none,
+    /// and 1 + the slot of the recipe whose settings ADJ shows in the next
+    /// byte (runtime/services.h: FRAME_PREVIEW_PANEL).
     HOST_FRAME_PREVIEW: 4;
     /// Number of Framing paints. A diagnostic.
     HOST_FRAME_DRAWS: 4;
@@ -759,8 +761,9 @@ pub const CANVAS_ENTRY_SIZE: usize = 80;
 /// The picture scratch after the records: the masks, the shot ring, then the
 /// canvas table.
 pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
-/// Bytes of the live-view labels after the menu text (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 28672;
+/// Bytes of the live-view labels and glyphs after the menu text
+/// (`artwork::overlay_labels`).
+pub const LABELS_SIZE: usize = 53248;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
@@ -1534,9 +1537,10 @@ pub fn header() -> String {
     define(
         &mut out,
         "Live-view labels after the menu text. The installer copies the label \
-         table of the build (grkit_core::artwork::overlay_labels): for label n, a \
-         u16 width, a u16 height, and the u32 offset of its pixels from the table \
-         start at 8 n. Each pixel is one byte of text coverage, row by row.",
+         table of the build (grkit_core::artwork::overlay_labels): the labels, \
+         then the glyphs from GRKIT_GLYPH_FIRST. For entry n, a u16 width, a u16 \
+         height, and the u32 offset of its pixels from the table start at 8 n. \
+         Each pixel is one byte of text coverage, row by row.",
         "LABELS_SIZE",
         LABELS_SIZE,
     );
@@ -1641,6 +1645,25 @@ pub fn header() -> String {
         out,
         "#define GRKIT_MODULE_LABEL_COUNT {}",
         crate::artwork::MODULE_LABELS
+    )
+    .unwrap();
+    // The glyphs of printable ASCII follow the labels, from the space.
+    writeln!(
+        out,
+        "#define GRKIT_GLYPH_FIRST {}",
+        crate::artwork::OVERLAY_LABELS.len()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_GLYPH_COUNT {}",
+        crate::artwork::OVERLAY_GLYPH_COUNT
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_GLYPH_HEIGHT {}",
+        crate::artwork::OVERLAY_GLYPH_HEIGHT
     )
     .unwrap();
     comment(

@@ -711,6 +711,74 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
     assert!(7 + widest < 360 - cue / 2);
 }
 
+/// The glyphs of printable ASCII follow the labels. Each has the same height
+/// and baseline, so a row of text needs no other alignment, white text with
+/// the outline of the labels, and an advance that the live view reads as its
+/// width less the outline on both sides (GLYPH_OUTLINES in
+/// runtime/viewfinder.h).
+#[test]
+fn overlay_glyphs_share_a_baseline_and_outline_their_text() {
+    let repository = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let viewfinder = fs::read_to_string(repository.join("runtime/viewfinder.h")).unwrap();
+    assert!(viewfinder.contains(&format!(
+        "#define GLYPH_OUTLINES {}U",
+        2 * artwork::OVERLAY_OUTLINE
+    )));
+    let table = artwork::overlay_labels();
+    assert!(table.len() <= grkit_core::abi::LABELS_SIZE);
+    let first = artwork::OVERLAY_LABELS.len();
+    let baseline =
+        artwork::OVERLAY_OUTLINE + artwork::OVERLAY_GLYPH_ABOVE + artwork::OVERLAY_GLYPH_CAPITAL;
+    for (n, character) in artwork::OVERLAY_GLYPHS.enumerate() {
+        let (width, height, pixels) = artwork::overlay_label_pixels(&table, first + n);
+        assert_eq!(height, artwork::OVERLAY_GLYPH_HEIGHT, "{character:?}");
+        assert!(
+            width > 2 * artwork::OVERLAY_OUTLINE && width <= 24,
+            "{character:?} is {width} wide"
+        );
+        let ink = |x: usize, y: usize| pixels[y * width + x] > 1;
+        if character == ' ' {
+            assert!(pixels.iter().all(|&value| value == 0));
+            continue;
+        }
+        assert!(pixels.contains(&1), "{character:?} has no outline");
+        // The outline separates the text from the live view on every side.
+        for y in 0..height {
+            for x in 0..width {
+                if !ink(x, y) {
+                    continue;
+                }
+                assert!(
+                    x > 0 && y > 0 && x + 1 < width && y + 1 < height,
+                    "{character:?} at {x},{y}"
+                );
+                for (nx, ny) in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
+                    assert_ne!(pixels[ny * width + nx], 0, "{character:?} at {x},{y}");
+                }
+            }
+        }
+        // Capitals and digits stand on the baseline, as high as the
+        // capital height; round ones overshoot it by a row.
+        if character.is_ascii_uppercase() && !"JQ".contains(character) || character.is_ascii_digit()
+        {
+            let rows: Vec<usize> = (0..height)
+                .filter(|&y| (0..width).any(|x| ink(x, y)))
+                .collect();
+            let (top, bottom) = (rows[0], *rows.last().unwrap());
+            assert!(
+                (baseline - 1..=baseline).contains(&bottom),
+                "{character:?} ends on row {bottom}"
+            );
+            assert!(
+                (artwork::OVERLAY_GLYPH_CAPITAL - 1..=artwork::OVERLAY_GLYPH_CAPITAL + 2)
+                    .contains(&(bottom + 1 - top)),
+                "{character:?} is {} rows high",
+                bottom + 1 - top
+            );
+        }
+    }
+}
+
 /// Label n names the CORE.ASPECT value n (LABEL_RATIO in runtime/sdk/grkit.h):
 /// it starts the summary of value n of the Framing module. The Date Imprint
 /// sign follows the ratios (LABEL_DATE), then one label for each format.

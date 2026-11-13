@@ -3174,16 +3174,27 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(listed_get(h, 2) == 2);
     /* MENU on the list returns to the page as MENU does. */
     assert(!recipes->select(h, 0, SETTING_BACK) && !recipes->select(h, 0, 3));
-    /* OK on Street shows its page: its name, Apply, Rename, and Delete,
-       the cursor on Apply and no mark. */
+    /* OK on Street shows its page: its name, Apply, View, Rename, and
+       Delete, the cursor on Apply and no mark. */
     assert(recipes->select(h, 0, 1));
     assert(*state == (RECIPE_PAGE_SHOWN | 1U) && same(recipes->title(h), "Street"));
-    assert(listed_values(h, 2) == 3 && same(listed_text(h, 2, 0), "Apply"));
-    assert(same(listed_text(h, 2, 1), "Rename") && same(listed_text(h, 2, 2), "Delete"));
+    assert(listed_values(h, 2) == 4 && same(listed_text(h, 2, 0), "Apply") && same(listed_text(h, 2, 1), "View"));
+    assert(same(listed_text(h, 2, 2), "Rename") && same(listed_text(h, 2, 3), "Delete"));
     assert(recipes->cursor(h) == 0 && recipes->get(h) == RECIPE_NONE);
     menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
     assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
+    /* View shows the settings of Street with its name as the title: Film
+       Look Off, then Grain Off. OK there does nothing, and MENU returns to
+       the actions with the cursor on View. */
+    assert(recipes->select(h, 0, 1));
+    assert(*state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_DETAILS | 1U) && same(recipes->title(h), "Street"));
+    assert(listed_values(h, 2) == 2 && same(listed_text(h, 2, 0), "Film Look Off") && same(listed_text(h, 2, 1), "Grain Off"));
+    assert(same(listed_text(h, 2, 2), "") && recipes->get(h) == RECIPE_NONE && recipes->cursor(h) == 0);
+    assert(recipes->select(h, 0, 1) && *state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_DETAILS | 1U));
+    assert(recipes->select(h, 0, SETTING_BACK));
+    assert(*state == (RECIPE_PAGE_SHOWN | RECIPE_PAGE_VIEWED | 1U) && recipes->cursor(h) == RECIPE_ACTION_VIEW);
+    assert(listed_values(h, 2) == 4 && same(recipes->title(h), "Street"));
     /* MENU returns to the list with the cursor on Corner, which the
        settings match: the camera shows the mark only on the row where the
        cursor starts. Without a match, the cursor is on Street. */
@@ -3224,18 +3235,18 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(listed_get(h, 2) == 1 && same(listed_text(h, 2, listed_get(h, 2)), "Night"));
     /* Delete asks first: Cancel keeps the recipe, and Execute returns to
        the list with the cursor on the recipe after it. */
-    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 2));
+    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 3));
     recipe_menu_deleted(0, 1);
     assert(recipe_entries(h) == 3 && *state == (RECIPE_PAGE_SHOWN | 1U));
     recipe_menu_deleted(1, 1);
     assert(recipe_entries(h) == 2 && *state == 2 && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Corner"));
     /* The last recipe: the cursor goes to the one before it. */
-    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 2));
+    assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 3));
     recipe_menu_deleted(1, 1);
     assert(recipe_entries(h) == 1 && *state == 1 && recipes->cursor(h) == 0);
     /* After the last recipe, the page returns to the Recipes page, which
        has Enable and Save Settings. */
-    assert(recipes->select(h, 0, 0) && recipes->select(h, controller, 2));
+    assert(recipes->select(h, 0, 0) && recipes->select(h, controller, 3));
     recipe_menu_deleted(1, 0);
     assert(!recipe_entries(h) && !*state && recipe_count(h) == 1);
     settings_open(h, LISTED_PAGE, 0);

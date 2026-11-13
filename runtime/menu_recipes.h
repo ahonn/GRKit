@@ -12,11 +12,16 @@
      else on the first recipe. The camera keeps the recipes that are off for
      the site and does not list them.
    - OK on a recipe shows the page of the recipe in place of the list, with
-     the name of the recipe as its title: Apply, Rename, and Delete. MENU
-     there returns to the list, with the cursor on the recipe. A list that
-     has the mark starts with the cursor on the mark (recipes_row_cursor).
+     the name of the recipe as its title: Apply, View, Rename, and Delete.
+     MENU there returns to the list, with the cursor on the recipe. A list
+     that has the mark starts with the cursor on the mark
+     (recipes_row_cursor).
      - Apply applies the recipe and returns to the Recipes page. MENU shows
        no message after it: a recipe that cannot apply changes nothing.
+     - View shows the settings of the recipe in place of the actions, one
+       row for each group of runtime/recipe_details.h, with the same title.
+       OK there does nothing, and MENU returns to the actions with the
+       cursor on View.
      - Rename opens the keyboard of the camera with the name, and the
        keyboard returns to the page of the recipe.
      - Delete asks with the confirm box of the core, Execute or Cancel, the
@@ -39,16 +44,39 @@
 /* The texts of the page (runtime/abi.h: the RECIPE run). */
 #define RECIPE_TEXT_APPLY (TEXT_RECIPE+13U)
 
+#define RECIPE_TEXT_VIEW (TEXT_RECIPE+14U)
+
 /* MENU_ROWS_PAGE_STATE: RECIPE_PAGE_SHOWN with the recipe whose page shows,
-   or the recipe of the last action + 1, where the list puts its cursor
-   without a recipe that the settings match, or 0. */
+   with RECIPE_PAGE_DETAILS while it shows the settings of the recipe, or
+   RECIPE_PAGE_VIEWED after their MENU, which puts the cursor on View; or
+   the recipe of the last action + 1, where the list puts its cursor without
+   a recipe that the settings match, or 0. */
 #define RECIPE_PAGE_SHOWN 0x10000U
-#define RECIPE_PAGE_ACTIONS 3U
+#define RECIPE_PAGE_DETAILS 0x20000U
+#define RECIPE_PAGE_VIEWED 0x40000U
+#define RECIPE_PAGE_ACTIONS 4U
+#define RECIPE_ACTION_VIEW 1U
 static volatile u32 *recipe_page_state(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_PAGE_STATE); }
 /* The recipe whose page shows, or RECIPE_NONE while the list shows. */
 static u32 recipe_page_shown(volatile u32 *h) {
     u32 state=recipe_page_state(h)[0];
     return state&RECIPE_PAGE_SHOWN ? state&0xffffU : RECIPE_NONE;
+}
+/* Whether the page of the recipe shows its settings. */
+static u32 recipe_details_shown(volatile u32 *h) {
+    return (recipe_page_state(h)[0]&(RECIPE_PAGE_SHOWN|RECIPE_PAGE_DETAILS))==(RECIPE_PAGE_SHOWN|RECIPE_PAGE_DETAILS);
+}
+/* The settings of recipe e as the rows of the View page, which the services
+   block keeps while the page shows. */
+static void recipe_details_write(volatile u32 *h,u32 e) {
+    u32 w[GRKIT_RECIPE_WORDS], i;
+    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,e)[i];
+    services_word(h,SERVICES_DETAILS+DETAIL_COUNT)[0]=
+        recipe_details(h,w,DETAIL_MENU,(volatile u16 *)services_word(h,SERVICES_DETAILS+DETAIL_TEXT));
+}
+static const u16 *recipe_details_row(volatile u32 *h,u32 value) {
+    if(value>=services_word(h,SERVICES_DETAILS+DETAIL_COUNT)[0]) return no_value_text;
+    return (const u16 *)services_word(h,SERVICES_DETAILS+DETAIL_TEXT+2U*DETAIL_UNITS*value);
 }
 
 /* Whether the listed module has the Recipes page. menu_page selects it. */
@@ -89,7 +117,7 @@ static void recipe_menu_deleted(u32 executed,u32 e) {
     recipe_delete(h,e);
     recipe_list_again(h,e);
 }
-/* An action on recipe e: 0 Apply, 1 Rename, 2 Delete. */
+/* An action on recipe e: 0 Apply, 1 View, 2 Rename, 3 Delete. */
 static void recipe_action(volatile u32 *h,u32 controller,u32 e,u32 action) {
     volatile u16 *to;
     u32 at;
@@ -99,7 +127,12 @@ static void recipe_action(volatile u32 *h,u32 controller,u32 e,u32 action) {
         recipe_page_state(h)[0]=0;
         settings_value_again(h,1);
     }
-    else if(action==1U) ui_keyboard_on(h,controller,recipe_keyboard_text(h,e),UI_KEYBOARD_SHORT,recipe_menu_renamed,e);
+    else if(action==RECIPE_ACTION_VIEW) {
+        recipe_details_write(h,e);
+        recipe_page_state(h)[0]=RECIPE_PAGE_SHOWN|RECIPE_PAGE_DETAILS|e;
+        settings_value_again(h,0);
+    }
+    else if(action==2U) ui_keyboard_on(h,controller,recipe_keyboard_text(h,e),UI_KEYBOARD_SHORT,recipe_menu_renamed,e);
     else {
         to=recipe_text_at(h,RECIPE_BOX_AT);
         at=recipe_append(to,0,text(h,RECIPE_TEXT_DELETE));
@@ -110,14 +143,17 @@ static void recipe_action(volatile u32 *h,u32 controller,u32 e,u32 action) {
 }
 
 /* ---- The rows --------------------------------------------------------------- */
-/* Recipes: the list, or the actions on the recipe whose page shows. */
+/* Recipes: the list, the actions on the recipe whose page shows, or its
+   settings. */
 static const u16 *recipes_row_label(volatile u32 *h) { return recipe_title(h); }
 static u32 recipes_row_values(volatile u32 *h) {
+    if(recipe_details_shown(h)) return services_word(h,SERVICES_DETAILS+DETAIL_COUNT)[0];
     return recipe_page_shown(h)!=RECIPE_NONE ? RECIPE_PAGE_ACTIONS : recipe_entries(h);
 }
 static const u16 *recipes_row_text(volatile u32 *h,u32 value) {
-    static const u32 actions[RECIPE_PAGE_ACTIONS]={RECIPE_TEXT_APPLY,RECIPE_TEXT_RENAME,RECIPE_TEXT_REMOVE};
+    static const u32 actions[RECIPE_PAGE_ACTIONS]={RECIPE_TEXT_APPLY,RECIPE_TEXT_VIEW,RECIPE_TEXT_RENAME,RECIPE_TEXT_REMOVE};
     if(recipe_page_shown(h)==RECIPE_NONE) return recipe_list_text(h,value);
+    if(recipe_details_shown(h)) return recipe_details_row(h,value);
     return value<RECIPE_PAGE_ACTIONS ? text(h,actions[value]) : no_value_text;
 }
 /* The mark is on the recipe that the settings match; the actions have
@@ -130,7 +166,7 @@ static u32 recipes_row_get(volatile u32 *h) {
    match. Without a match, it starts on the recipe of the last action. */
 static u32 recipes_row_cursor(volatile u32 *h) {
     u32 state=recipe_page_state(h)[0], e;
-    if(state&RECIPE_PAGE_SHOWN) return 0;
+    if(state&RECIPE_PAGE_SHOWN) return (state&(RECIPE_PAGE_DETAILS|RECIPE_PAGE_VIEWED))==RECIPE_PAGE_VIEWED ? RECIPE_ACTION_VIEW : 0;
     e=recipe_matching(h,0);
     if(e!=RECIPE_NONE) return e;
     return state ? state-1U : 0;
@@ -143,9 +179,17 @@ static const u16 *recipes_row_title(volatile u32 *h) {
     return e<GRKIT_RECIPE_ON_MAX ? (const u16 *)recipe_text_at(h,(e+1U)*RECIPE_TEXT_SIZE) : 0;
 }
 /* OK on a recipe shows its page; OK on an action does it. MENU on the page
-   of a recipe returns to the list. */
+   of a recipe returns to the list, and MENU on its settings returns to its
+   page. */
 static u32 recipes_row_select(volatile u32 *h,u32 controller,u32 value) {
     u32 e=recipe_page_shown(h);
+    if(recipe_details_shown(h)) {
+        if(value==SETTING_BACK) {
+            recipe_page_state(h)[0]=RECIPE_PAGE_SHOWN|RECIPE_PAGE_VIEWED|e;
+            settings_value_again(h,0);
+        }
+        return 1;
+    }
     if(e==RECIPE_NONE) {
         if(value>=recipe_entries(h)) return 0;
         menu_recipe_name(h,value);

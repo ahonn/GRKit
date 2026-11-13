@@ -34,6 +34,7 @@
    runtime/ui_keyboard.h) before it. */
 #include "native_look.h"
 #include "recipes.h"
+#include "recipe_details.h"
 
 
 #define RECIPE_TILE_MODULE 0U
@@ -60,8 +61,8 @@
 #define RECIPE_TEXT_MISSING_MARK (TEXT_RECIPE+12U)
 /* The message of an apply that left out the settings of module m of
    GRKIT_RECIPE_MODULES, which is not loaded. */
-#define RECIPE_TEXT_NO_MODULE(m) (TEXT_RECIPE+14U+(m))
-_Static_assert(TEXT_RECIPE+14U+GRKIT_RECIPE_MODULES==TEXT_NATIVE_TYPE,"a message for each module of the recipe settings ends the RECIPE run");
+#define RECIPE_TEXT_NO_MODULE(m) (TEXT_RECIPE+15U+(m))
+_Static_assert(TEXT_RECIPE+15U+GRKIT_RECIPE_MODULES==TEXT_NATIVE_TYPE,"a message for each module of the recipe settings ends the RECIPE run");
 /* The row kinds besides a recipe slot. */
 #define RECIPE_ROW_UNDO 0xfffffffeU
 #define RECIPE_ROW_SAVE 0xfffffffdU

@@ -169,6 +169,29 @@ pub fn header() -> String {
         )
         .unwrap();
     }
+    // The English camera names of the types, for text that is the same in
+    // each menu language, such as the settings of a recipe in the live view.
+    writeln!(
+        out,
+        "#define NATIVE_TYPE_NAMES {}",
+        c_strings(
+            crate::menu_text::native_type_names(crate::language::Language::English)
+                .iter()
+                .map(|name| Some(*name))
+        )
+    )
+    .unwrap();
+    // The ISO of each third stop from ISO 100, as the camera names it.
+    writeln!(
+        out,
+        "#define NATIVE_ISO_VALUES {}",
+        ISO_STEPS
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+    .unwrap();
     out.push('\n');
     for family in Family::ALL {
         let key = family.key().to_ascii_uppercase();

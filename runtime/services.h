@@ -261,7 +261,33 @@
 #define DISTANCE_SCALE_SLOTS 4U
 #define DISTANCE_SCALE_NEXT (DISTANCE_SCALES + 4U * DISTANCE_SCALE_SLOTS)
 #define DISTANCE_SIZE (DISTANCE_SCALE_NEXT + 4U)
-#define SERVICES_SIZE (SERVICES_DISTANCE + DISTANCE_SIZE)
+/* The settings of a recipe as rows of text (runtime/recipe_details.h), for
+   the View page of MENU and the panel of ADJ: the number of rows, then
+   DETAIL_ROWS_MAX rows of DETAIL_UNITS units. Then the rest of the panel,
+   which the core writes while ADJ shows it (runtime/modules.h:
+   recipe_panel) and the live view paints (runtime/viewfinder.h:
+   panel_paint): the effect record + 1 of the look, or 0; whether row 0 is
+   the name of the look; and the status icons of the settings of the
+   recipe, PANEL_ICONS_MAX icon IDs, 0 after the last. */
+#define SERVICES_DETAILS (SERVICES_DISTANCE + DISTANCE_SIZE)
+#define DETAIL_ROWS_MAX 16U
+#define DETAIL_UNITS 32U
+#define DETAIL_COUNT 0U
+#define DETAIL_TEXT 4U
+#define DETAIL_TEXT_SIZE (2U * DETAIL_ROWS_MAX * DETAIL_UNITS)
+#define DETAIL_PANEL_LOOK (DETAIL_TEXT + DETAIL_TEXT_SIZE)
+#define DETAIL_PANEL_NAMED (DETAIL_PANEL_LOOK + 4U)
+#define DETAIL_PANEL_ICONS (DETAIL_PANEL_NAMED + 4U)
+#define PANEL_ICONS_MAX 6U
+#define DETAILS_SIZE (DETAIL_PANEL_ICONS + 4U * PANEL_ICONS_MAX)
+/* GRKIT_HOST_FRAME_PREVIEW: the highlighted ratio + 1 in the low byte
+   (runtime/modules.h: frame_preview_set), and 1 + the slot of the recipe
+   whose panel ADJ shows in the next byte, else 0. A change of either draws
+   the ADJ canvas again. */
+#define FRAME_PREVIEW_RATIO(word) ((word) & 0xffU)
+#define FRAME_PREVIEW_PANEL(word) ((word) >> 8 & 0xffU)
+#define FRAME_PREVIEW_PANEL_SHIFT 8U
+#define SERVICES_SIZE (SERVICES_DETAILS + DETAILS_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

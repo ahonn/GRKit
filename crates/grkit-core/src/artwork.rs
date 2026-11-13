@@ -956,6 +956,13 @@ fn overlay_coverage(index: usize) -> (usize, usize, Vec<f32>) {
 /// Text edges blend toward the outline.
 fn overlay_label(index: usize) -> (usize, usize, Vec<u8>) {
     let (width, height, coverage) = overlay_coverage(index);
+    (width, height, outlined_text(width, height, coverage))
+}
+
+/// The pixels of text coverage with the outline of the live-view text: 0
+/// where the text is transparent, 1 for the black outline, and up to 255 for
+/// white text.
+fn outlined_text(width: usize, height: usize, coverage: Vec<f32>) -> Vec<u8> {
     // The rasterizer leaves tiny coverage between overlapping contours, so
     // only coverage that rounds to a gray counts as text.
     let coverage: Vec<f32> = coverage
@@ -986,7 +993,71 @@ fn overlay_label(index: usize) -> (usize, usize, Vec<u8>) {
             };
         }
     }
-    (width, height, pixels)
+    pixels
+}
+
+/// The characters of the glyph table after the labels: printable ASCII,
+/// from the space to the tilde. The live view writes text of any of these
+/// with the glyphs, such as the settings of a recipe in ADJ.
+pub const OVERLAY_GLYPHS: std::ops::RangeInclusive<char> = ' '..='~';
+/// The number of glyphs.
+pub const OVERLAY_GLYPH_COUNT: usize = 95;
+const _: () = assert!(OVERLAY_GLYPH_COUNT == '~' as usize - ' ' as usize + 1);
+/// The capital height of a glyph: one size smaller than the labels, as the
+/// date line of a Date Imprint format with the time.
+pub const OVERLAY_GLYPH_CAPITAL: usize = OVERLAY_DATE_CAPITAL;
+/// Rows above the capitals for the marks that rise higher, such as those of
+/// $ and |, and below the baseline for the descenders, such as those of g, y,
+/// and the parentheses.
+pub const OVERLAY_GLYPH_ABOVE: usize = 3;
+const OVERLAY_GLYPH_BELOW: usize = 6;
+/// The height of each glyph: the outline, the rows above the capitals, the
+/// capitals, the descenders, and the outline. Each glyph has its baseline
+/// on the same row, so a line of glyphs needs no other alignment.
+pub const OVERLAY_GLYPH_HEIGHT: usize =
+    2 * OVERLAY_OUTLINE + OVERLAY_GLYPH_ABOVE + OVERLAY_GLYPH_CAPITAL + OVERLAY_GLYPH_BELOW;
+
+/// The width, the height, and the pixels of the glyph of `character`, as
+/// `overlay_label` gives them. The width is the advance of the character
+/// with the tracking of its size, and the outline on each side: text puts
+/// the next glyph `width - 2 * OVERLAY_OUTLINE` pixels to the right, so the
+/// outlines of two glyphs share their columns.
+fn overlay_glyph(character: char) -> (usize, usize, Vec<u8>) {
+    let font = FontRef::try_from_slice(OVERLAY_FONT).expect("embedded font is valid");
+    let unit = font
+        .outline_glyph(font.glyph_id('H').with_scale(100.0))
+        .expect("the font has H")
+        .px_bounds()
+        .height()
+        / 100.0;
+    let size = OVERLAY_GLYPH_CAPITAL as f32 / unit;
+    let scale = PxScale {
+        x: size * OVERLAY_CONDENSE,
+        y: size,
+    };
+    let tracking = OVERLAY_TRACKING * OVERLAY_GLYPH_CAPITAL as f32 / OVERLAY_CAPITAL as f32;
+    let scaled = font.as_scaled(scale);
+    let id = scaled.glyph_id(character);
+    let advance = (scaled.h_advance(id) + tracking).round() as usize;
+    let width = advance + 2 * OVERLAY_OUTLINE;
+    let height = OVERLAY_GLYPH_HEIGHT;
+    let baseline = (OVERLAY_OUTLINE + OVERLAY_GLYPH_ABOVE + OVERLAY_GLYPH_CAPITAL) as f32;
+    let mut coverage = vec![0f32; width * height];
+    // Half of the tracking on each side keeps the glyph centered in its advance.
+    let left = (OVERLAY_OUTLINE as f32 + tracking / 2.0).round();
+    if let Some(outline) =
+        font.outline_glyph(id.with_scale_and_position(scale, point(left, baseline)))
+    {
+        let origin = outline.px_bounds().min;
+        outline.draw(|x, y, value| {
+            let (x, y) = (origin.x as i32 + x as i32, origin.y as i32 + y as i32);
+            if (0..width as i32).contains(&x) && (0..height as i32).contains(&y) {
+                let cell = &mut coverage[y as usize * width + x as usize];
+                *cell = (*cell + value).min(1.0);
+            }
+        });
+    }
+    (width, height, outlined_text(width, height, coverage))
 }
 
 /// A crop badge: the size and the grays of the camera's own crop badge,
@@ -1086,17 +1157,21 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 }
 
 /// The label table that the installer copies after the menu text
-/// (`GRKIT_LABELS` in `runtime/abi.h`): for label n, a u16 width, a u16
-/// height, and the u32 offset of its rows at 8 n, then the rows of each
-/// label (`overlay_label`). Each row holds only its drawn pixels: a u8 span
+/// (`GRKIT_LABELS` in `runtime/abi.h`): the labels, then the glyphs of
+/// `OVERLAY_GLYPHS`. For entry n, a u16 width, a u16 height, and the u32
+/// offset of its rows at 8 n, then the rows of each entry (`overlay_label`,
+/// `overlay_glyph`). Each row holds only its drawn pixels: a u8 span
 /// count, then for each span a u16 first column, a u16 length, and its
 /// pixels. A full redraw of the live view paints the labels, so it skips
 /// the transparent pixels without a test for each. The live view draws them
 /// as its own text: white with a black outline, without a background.
 pub fn overlay_labels() -> Vec<u8> {
-    let mut table = vec![0; OVERLAY_LABELS.len() * 8];
-    for index in 0..OVERLAY_LABELS.len() {
-        let (width, height, pixels) = if OVERLAY_LABELS[index].ends_with("mm") {
+    let entries = OVERLAY_LABELS.len() + OVERLAY_GLYPH_COUNT;
+    let mut table = vec![0; entries * 8];
+    for index in 0..entries {
+        let (width, height, pixels) = if let Some(glyph) = index.checked_sub(OVERLAY_LABELS.len()) {
+            overlay_glyph(char::from(b' ' + glyph as u8))
+        } else if OVERLAY_LABELS[index].ends_with("mm") {
             crop_badge(OVERLAY_LABELS[index])
         } else {
             overlay_label(index)

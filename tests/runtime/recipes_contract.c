@@ -140,6 +140,8 @@ static u32 test_id_source;
 #define RECIPE_ID_SOURCE(high) (*(high) = 0U, test_id_source)
 #include "native_look.h"
 #include "recipes.h"
+#include "services.h"
+#include "recipe_details.h"
 
 #define RUNNING (GRKIT_CORE_TONE_BIT | GRKIT_CORE_GRAIN_BIT | GRKIT_CORE_GRAIN_SIZE_BIT | GRKIT_CORE_RECIPE_BIT)
 /* The capabilities of the Border module. */
@@ -1209,6 +1211,122 @@ static void exposure_saves_applies_and_fits_the_camera(void)
     assert(recipe_apply(header, 0) == RECIPE_UNSUPPORTED);
 }
 
+/* The rows of the details of words `w` in `mode`, as ASCII, and their
+   number. */
+static u16 detail_rows[DETAIL_ROWS_MAX * DETAIL_UNITS];
+static char detail_ascii[DETAIL_ROWS_MAX][DETAIL_UNITS];
+static u32 details_of(const u32 *w, u32 mode)
+{
+    memset(detail_rows, 0xff, sizeof detail_rows);
+    u32 n = recipe_details(header, w, mode, detail_rows);
+    assert(n >= 1 && n <= DETAIL_ROWS_MAX);
+    for (u32 r = 0; r < n; ++r) {
+        u32 i = 0;
+        for (; detail_rows[r * DETAIL_UNITS + i]; ++i) {
+            assert(i + 1 < DETAIL_UNITS && detail_rows[r * DETAIL_UNITS + i] < 0x80);
+            detail_ascii[r][i] = (char)detail_rows[r * DETAIL_UNITS + i];
+        }
+        /* Each row has text, at most DETAIL_WRAP characters. */
+        assert(i && i <= DETAIL_WRAP);
+        detail_ascii[r][i] = 0;
+    }
+    return n;
+}
+static void set_name(u32 i, const char *name)
+{
+    u32 n = 0;
+    for (; name[n]; ++n) HALF(record_at(i), GRKIT_RECORD_NAME + 2 * n) = (u16)name[n];
+    HALF(record_at(i), GRKIT_RECORD_NAME + 2 * n) = 0;
+}
+/* The details name each setting that a recipe holds, in groups, with the
+   same English abbreviations in each menu language. The panel leaves out
+   Grain, Glow, and Border, which it shows as their status icons. */
+static void details_name_what_the_recipe_holds(void)
+{
+    reset();
+    set_name(1, "Portra 400");
+    u32 w[GRKIT_RECIPE_WORDS] = {0};
+    w[0] = RECIPE_USED | RECIPE_LOOK_EFFECT | code_of(1) << RECIPE_CODE_SHIFT | RECIPE_GRAIN |
+           2U << RECIPE_GRAIN_LEVEL_SHIFT | 3U << RECIPE_GRAIN_SIZE_SHIFT;
+    /* Fn: saturation +1 (digit 1), contrast -1 (digit 8). */
+    w[RECIPE_FN_WORD] = 1U + 8U * 9U * 9U * 9U;
+    /* Daylight, A2 and G1. */
+    w[RECIPE_NATIVE_WORD] = (MODE_DAYLIGHT + 1U) << NATIVE_MODE_SHIFT | 16U << NATIVE_BA_SHIFT | 13U << NATIVE_GM_SHIFT;
+    /* Highlight Auto, shadow Off, peripheral Off, NR Low: stored + 1. */
+    w[RECIPE_EXTRA_WORD] = 1U << NATIVE_CORRECTION_SHIFT | 5U << (NATIVE_CORRECTION_SHIFT + 3U) |
+                           1U << (NATIVE_CORRECTION_SHIFT + 6U) | 2U << (NATIVE_CORRECTION_SHIFT + 9U);
+    /* +4/6 EV, ISO 3200 (third stop 15), Spot, ND On. */
+    w[RECIPE_MODULE_WORD] = 35U << NATIVE_EV_SHIFT | 16U << NATIVE_ISO_SHIFT | 3U << NATIVE_METERING_SHIFT |
+                            2U << NATIVE_ND_SHIFT;
+    recipe_setting_hold(w, BLOOM, 1);
+    recipe_setting_hold(w, HALATION, 2);
+    recipe_setting_hold(w, HALATION_COLOR, 0);
+    recipe_setting_hold(w, BORDER, 1);
+    recipe_setting_hold(w, BORDER_COLOR, 1);
+    static const char *const menu[] = {
+        "Portra 400", "Sat +1  Con -1", "Grain Medium Large", "Bloom Weak", "Halation Medium Red",
+        "Border Thin Black", "WB Daylight A2 G1", "HL Auto  SH Off", "Periph Off  NR Low",
+        "EV +0.7  ISO max 3200", "Meter Spot  ND On"};
+    u32 n = details_of(w, DETAIL_MENU);
+    assert(n == sizeof menu / sizeof menu[0]);
+    for (u32 r = 0; r < n; ++r) assert(!strcmp(detail_ascii[r], menu[r]));
+    static const char *const panel[] = {"Portra 400", "Sat +1  Con -1", "WB Daylight A2 G1", "HL Auto  SH Off",
+                                        "Periph Off  NR Low", "EV +0.7  ISO max 3200", "Meter Spot  ND On"};
+    n = details_of(w, DETAIL_PANEL);
+    assert(n == sizeof panel / sizeof panel[0]);
+    for (u32 r = 0; r < n; ++r) assert(!strcmp(detail_ascii[r], panel[r]));
+
+    /* The name of an effect keeps its own characters. */
+    HALF(record_at(1), GRKIT_RECORD_NAME + 2) = 0x4e2d;
+    assert(recipe_details(header, w, DETAIL_PANEL, detail_rows) == 7);
+    assert(detail_rows[0] == 'P' && detail_rows[1] == 0x4e2d && detail_rows[2] == 'r');
+    /* A row holds exactly DETAIL_WRAP characters, and the levels reach +4
+       and -4: digits 4 and 5. */
+    u32 edge[GRKIT_RECIPE_WORDS] = {0};
+    edge[0] = RECIPE_USED | RECIPE_LOOK_EFFECT | code_of(0) << RECIPE_CODE_SHIFT;
+    set_name(0, "Edge");
+    edge[RECIPE_FN_WORD] = 1U + 1U * 9U + 1U * 531441U + 4U * 4782969U + 5U * 43046721U;
+    assert(details_of(edge, DETAIL_MENU) == 3 && !strcmp(detail_ascii[1], "Sat +1  Hue +1  Sharp +1"));
+    assert(strlen(detail_ascii[1]) == DETAIL_WRAP && !strcmp(detail_ascii[2], "Shade +4  Clarity -4"));
+    /* An effect that is not installed. */
+    w[0] = (w[0] & ~(RECIPE_CODE_MASK << RECIPE_CODE_SHIFT)) | ((code_of(1) + 1U) & RECIPE_CODE_MASK) << RECIPE_CODE_SHIFT;
+    details_of(w, DETAIL_PANEL);
+    assert(!strcmp(detail_ascii[0], "Effect missing"));
+
+    /* A native type: its English name, only its own levels, its tone; the
+       color temperature; a negative and a zero compensation. */
+    memset(w, 0, sizeof w);
+    w[0] = RECIPE_USED | RECIPE_LOOK_OFF;
+    u32 own = NATIVE_LEVELS, other = NATIVE_LEVELS;
+    for (u32 p = 0; p < NATIVE_LEVELS; ++p) {
+        if (native_field(TYPE_MONOTONE, p) && own == NATIVE_LEVELS) own = p;
+        if (!native_field(TYPE_MONOTONE, p) && other == NATIVE_LEVELS) other = p;
+    }
+    assert(own < NATIVE_LEVELS && other < NATIVE_LEVELS);
+    u32 digits = 0;
+    for (u32 p = NATIVE_LEVELS; p--;) digits = digits * 9U + (p == own ? 2U : p == other ? 3U : 0U);
+    w[RECIPE_FN_WORD] = digits;
+    w[RECIPE_NATIVE_WORD] = (TYPE_MONOTONE + 1U) << NATIVE_TYPE_SHIFT | 1U << NATIVE_TONE_SHIFT |
+                            (MODE_TEMPERATURE + 1U) << NATIVE_MODE_SHIFT | 14U << NATIVE_BA_SHIFT | 14U << NATIVE_GM_SHIFT;
+    w[RECIPE_EXTRA_WORD] = 270U;
+    w[RECIPE_MODULE_WORD] = 29U << NATIVE_EV_SHIFT;
+    n = details_of(w, DETAIL_MENU);
+    char level[DETAIL_UNITS];
+    snprintf(level, sizeof level, "%s +2", detail_levels[own]);
+    assert(n == 5 && !strcmp(detail_ascii[0], "Monotone") && !strcmp(detail_ascii[1], level));
+    assert(!strcmp(detail_ascii[2], "Tone Sepia") && !strcmp(detail_ascii[3], "WB 5200K") && !strcmp(detail_ascii[4], "EV -0.3"));
+    w[RECIPE_MODULE_WORD] = 31U << NATIVE_EV_SHIFT;
+    n = details_of(w, DETAIL_MENU);
+    assert(!strcmp(detail_ascii[n - 1], "EV 0.0"));
+
+    /* A recipe that keeps each setting, and Film Look Off. */
+    memset(w, 0, sizeof w);
+    w[0] = RECIPE_USED;
+    assert(details_of(w, DETAIL_MENU) == 1 && !strcmp(detail_ascii[0], "No settings"));
+    w[0] |= RECIPE_LOOK_OFF;
+    assert(details_of(w, DETAIL_PANEL) == 1 && !strcmp(detail_ascii[0], "Film Look Off"));
+}
+
 int main(void)
 {
     save_numbers_each_look();
@@ -1241,6 +1359,7 @@ int main(void)
     native_type_without_film_look();
     monochrome_holds_no_color_setting();
     rust_recipes_apply();
+    details_name_what_the_recipe_holds();
     print_saves();
     return 0;
 }

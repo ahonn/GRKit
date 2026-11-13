@@ -65,6 +65,8 @@
 #define NATIVE_CORRECTION_1_LABELS "Auto","Low","Mid","High","Off"
 #define NATIVE_CORRECTION_2_LABELS "Off","On"
 #define NATIVE_CORRECTION_3_LABELS "Auto","Low","Mid","High","Custom","Off"
+#define NATIVE_TYPE_NAMES "Standard","Vivid","Monotone","Soft Monotone","Hard Monotone","Hi-Contrast B&W","Negative Film","Positive Film","Bleach Bypass","Retro","HDR Tone","Cross Processing","Cinema (Yellow)","Cinema (Green)","Standard","Soft","Hi-Contrast","Grainy","Solid","HDR Tone","Solarized Effect"
+#define NATIVE_ISO_VALUES 100,125,160,200,250,320,400,500,640,800,1000,1250,1600,2000,2500,3200,4000,5000,6400,8000,10000,12800,16000,20000,25600,32000,40000,51200,64000,80000,102400,128000,160000,204800
 
 /* gr3. */
 #define NATIVE_GR3_ISO_STEPS 31U
