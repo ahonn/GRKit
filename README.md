@@ -26,7 +26,7 @@ Press the ADJ lever while shooting and pick the sixth item, GRK.
 - **Glow**: bloom and film halation around bright lights.
 - **Border**: a thin, wide, or instant-style white or black border around the full photo.
 - **Grain**: film grain in four strengths and four sizes.
-- **Recipes**: save a look with its camera settings as a recipe, or add one from [grkit.app](https://grkit.app), and switch to it in one step or with U1 to U3.
+- **Recipes**: save a look with its camera settings as a recipe, or add one from [grkit.app](https://grkit.app), and switch to it in one step.
 
 GRKit takes about 8 to 10 seconds to load after power-on, and longer on GR IV or on the first start after an install or update. Until then, the camera uses its own settings. All the settings are in the GRKit section at the end of the Customize tab in MENU. To write your own module, see [Writing a module](docs/modules.md).
 
