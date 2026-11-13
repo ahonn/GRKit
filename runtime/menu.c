@@ -919,6 +919,7 @@ static void fit_row_text(u32 view) {
 #endif
 #include "menu_settings.h"
 #include "mode_dial.h"
+#include "persist.h"
 #include "menu_dial.h"
 #include "menu_recipes.h"
 #include "menu_section.h"
@@ -931,7 +932,10 @@ static void fit_row_text(u32 view) {
 A32_ENTRY void menu_viewfinder(u32 event) {
     volatile u32 *h=menu_header();
     if(!h[GRKIT_HOST_SERVICES/4]) return;
-    if(event==VIEWFINDER_READY) dial_ready(h);
+    if(event==VIEWFINDER_READY) {
+        persist_ready(h);
+        dial_ready(h);
+    }
 }
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.
    Bit 0 selects the font of the menu language. GRKit gives the texts of one

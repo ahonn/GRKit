@@ -262,8 +262,8 @@ static void manage_off_changed(volatile u32 *h) {
 /* Keep the switch, Enable at Start, and Distance Unit in their copy, each
    as its value + 1, after a change of one of them. A copy that changes
    counts as a change of the file of the user modes, which the loader saves
-   also while the core holds the main state file. Off of the mode dial is not
-   the switch and changes no copy. */
+   independently of the main state file. Off of the mode dial is not the
+   switch and changes no copy. */
 _Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
                MANAGE_UNIT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_UNIT && GRKIT_MANAGE_COPY_SWITCH==0U &&
                GRKIT_MANAGE_COPY_WORDS==3U, "The copy follows the handles of the module list");

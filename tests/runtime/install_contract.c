@@ -244,6 +244,10 @@ static volatile u8 *at(u32 physical)
 }
 static u32 word(u32 p) { return *(volatile u32 *)at(p); }
 static void store(u32 p, u32 v) { *(volatile u32 *)at(p) = v; }
+#define PERSIST_HALF(p,o) (*(volatile u16 *)at((p)+(o)))
+#define PERSIST_BYTE(p,o) (at((p)+(o))[0])
+#define PERSIST_SETTINGS(h) ((h)[GRKIT_HOST_MODULE_SETTINGS/4] ? (volatile u32 *)at((h)[GRKIT_HOST_MODULE_SETTINGS/4]) : (volatile u32 *)0)
+#include "persist_view.h"
 #include "install_io.h"
 
 /* The rest of what installer.c gives the parts, in its order. */
@@ -1061,8 +1065,8 @@ static void enable_at_start_decides_the_switch(void)
 }
 /* The copy of the switch, Enable at Start, and Distance Unit in the file
    of the user modes (runtime/install_recipes.h: read_manage_copy) decides
-   them before STATE.TXT, which the core holds on a user mode with a
-   snapshot. `pairs` is STATE.TXT, and `usermode` the file of the user modes
+   them before STATE.TXT, since the two files save independently.
+   `pairs` is STATE.TXT, and `usermode` the file of the user modes
    or 0. The switch of the start, Enable at Start, and Distance Unit, as
    apply_state restores them, and the copy that INSTALL writes into the
    header (install_manage_copy), which moves no count of changes. */
@@ -1798,6 +1802,49 @@ static void the_sets_of_the_user_modes_restore(void)
     assert(!word(header + GRKIT_HOST_DIAL_SHARED_OFF));
 }
 
+/* INSTALL publishes a baseline after restores, before any App edits. The
+   same collector as the runtime writes every field, including zero values,
+   without counting restored content as a new edit. */
+static void install_captures_the_complete_persistence_baseline(void)
+{
+    const u32 header = MEMORY_BASE + 0xc0000U, record = header + GRKIT_HOST_HEADER_SIZE;
+    volatile u32 *h, *p;
+    reset();
+    add_module(PACKAGE_MODULES_PATH, "FIRST.GRM", &(struct spec){.id = "FIRST", .order = 1, .uses = {"CORE.ASPECT"}});
+    assert(install() == 0);
+    h = (volatile u32 *)at(header);
+    p = (volatile u32 *)at(services_block + SERVICES_PERSIST);
+    h[GRKIT_HOST_MODULE_SETTINGS / 4] = ARRAY_AT;
+    h[GRKIT_HOST_RECORDS / 4] = record;
+    h[GRKIT_HOST_COUNT / 4] = 1;
+    h[GRKIT_HOST_ACTIVE / 4] = record;
+    h[GRKIT_HOST_CROP / 4] = 3;
+    h[GRKIT_HOST_BORDER / 4] = 2;
+    *(volatile u16 *)at(record + GRKIT_RECORD_CODE) = 0x8123;
+    at(record + GRKIT_RECORD_PARAMETERS)[0] = 2;
+    at(record + GRKIT_RECORD_PARAMETERS + 1)[0] = 3;
+    at(record + GRKIT_RECORD_TONING)[0] = 4;
+    for (u32 i = 0; i < GRKIT_PERSIST_WORDS; ++i) p[i] = 0xa5a5a5a5U;
+    persist_baseline(h, p);
+    assert(!p[GRKIT_PERSIST_REQUEST / 4] && !p[GRKIT_PERSIST_READY / 4] && !p[GRKIT_PERSIST_RELEASE / 4]);
+    assert(p[GRKIT_PERSIST_REVISION / 4] == 1 && !persist_capture(h, p));
+    assert(p[GRKIT_PERSIST_CORE / 4 + GRKIT_CORE_TONE - GRKIT_CORE_SETTING_BASE] == 0x8123);
+    assert(p[GRKIT_PERSIST_CORE / 4 + GRKIT_CORE_CROP - GRKIT_CORE_SETTING_BASE] == 3);
+    assert(p[GRKIT_PERSIST_CORE / 4 + GRKIT_CORE_BORDER - GRKIT_CORE_SETTING_BASE] == 2);
+    assert(p[GRKIT_PERSIST_EFFECT_COUNT / 4] == 1 && p[GRKIT_PERSIST_EFFECTS / 4] == 0x123);
+    assert(p[GRKIT_PERSIST_EFFECTS / 4 + 1] == 29 && p[GRKIT_PERSIST_EFFECTS / 4 + 2] == 4);
+    for (u32 i = GRKIT_PERSIST_EFFECT_WORDS; i < GRKIT_PERSIST_EFFECTS_WORDS; ++i)
+        assert(!p[GRKIT_PERSIST_EFFECTS / 4 + i]);
+    assert(p[GRKIT_PERSIST_MODULE_COUNT / 4] == word(ARRAY_AT));
+    for (u32 i = 0; i < word(ARRAY_AT); ++i) {
+        u32 id = word(ARRAY_AT + 4 * SETTINGS_ENTRY(i));
+        assert(p[GRKIT_PERSIST_MODULES / 4 + 2 * i] == id);
+        assert(p[GRKIT_PERSIST_MODULES / 4 + 2 * i + 1] == (id ? word(ARRAY_AT + 4 * SETTINGS_ENTRY(i) + 4) : 0));
+    }
+    for (u32 i = word(ARRAY_AT) * GRKIT_PERSIST_MODULE_WORDS; i < GRKIT_PERSIST_MODULES_WORDS; ++i)
+        assert(!p[GRKIT_PERSIST_MODULES / 4 + i]);
+}
+
 static void *run(void *unused)
 {
     (void)unused;
@@ -1834,6 +1881,7 @@ static void *run(void *unused)
     the_recipes_restore_and_import_once();
     recipes_keep_their_ids();
     the_sets_of_the_user_modes_restore();
+    install_captures_the_complete_persistence_baseline();
     reset();
     return 0;
 }

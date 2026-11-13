@@ -4,41 +4,53 @@ foldersearch 'C:\GRKIT'
 if result = 0 foldercreate 'C:\GRKIT'
 foldersearch 'C:\GRKIT'
 if result = 0 stateok = 0
-changes = registry[65]
+legacy = 0
+export = registry[1626]
+if modulewords <> 0 goto resident_export
+if export <> 0 goto resident_export
+legacy = 1
+:resident_export
+changes = 1
+if legacy <> 0 changes = registry[65]
 saved = changes
+last = changes
 rchanges = registry[980]
 rsaved = 0
+rchangeslast = rchanges
 dchanges = registry[1012]
 dsaved = 0
-last = changes + rchanges + dchanges
+dchangeslast = dchanges
 filesearch 'C:\GRKIT\STATE.TXT'
 if result = 0 saved = changes - 1
 profile = registry[67]
 if profile <> 0 goto profile_watch
 :watch
 mpause 2000
-changes = registry[65]
-rchanges = registry[980]
-dchanges = registry[1012]
-total = changes + rchanges + dchanges
-if total <> last goto watch_moved
-if changes = saved goto watch_state_saved
-hold = registry[1011]
-if hold <> 0 goto watch_state_saved
+call capture
+if captured = 0 goto watch_state_saved
+if changes <> last goto watch_state_release
+if changes = saved goto watch_state_release
 stamp = changes
 call save_state
+:watch_state_release
+last = changes
+if legacy <> 0 goto watch_state_saved
+call release_capture
 :watch_state_saved
+rchanges = registry[980]
+if rchanges <> rchangeslast goto watch_recipes_saved
 if rchanges = rsaved goto watch_recipes_saved
 rstamp = rchanges
 call save_recipes
 :watch_recipes_saved
+rchangeslast = rchanges
+dchanges = registry[1012]
+if dchanges <> dchangeslast goto watch_usermode_saved
 if dchanges = dsaved goto watch_usermode_saved
 dstamp = dchanges
 call save_usermode
 :watch_usermode_saved
-goto watch
-:watch_moved
-last = total
+dchangeslast = dchanges
 goto watch
 :save_state
 if stateok = 0 goto save_state_end
@@ -101,54 +113,29 @@ filewriteln sfh '360900158'
 int2str line value10
 filewriteln sfh line
 :save_key10
-pcount = registry[0]
-if pcount < 0 pcount = 0
-if pcount > 40 pcount = 0
 pindex = 0
 :save_parameters
 if pindex >= pcount goto save_parameters_end
-pw0 = registry[1626 + pindex * 1088 + 459]
-pw1 = registry[1626 + pindex * 1088 + 460]
-pw2 = registry[1626 + pindex * 1088 + 461]
-pvalue = 0
-pdigit = (pw2 >> 0) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw1 >> 24) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw1 >> 16) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw1 >> 8) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw1 >> 0) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw0 >> 24) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw0 >> 16) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw0 >> 8) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
-pdigit = (pw0 >> 0) and 255
-if pdigit > 8 pdigit = 0
-pvalue = pvalue * 9 + pdigit
+if legacy <> 0 goto save_legacy_parameters
+pcode = modulecode[pbase + 16 + pindex * 3]
+pvalue = modulecode[pbase + 17 + pindex * 3]
+ptone = modulecode[pbase + 18 + pindex * 3]
+goto save_parameter_values
+:save_legacy_parameters
+call legacy_parameters
+:save_parameter_values
+pkey = pcode
 if pvalue = 0 goto save_toning
-pkey = 990000000 + (registry[1626 + pindex * 1088 + 446] and 32767)
+pkey = pkey + 990000000
 int2str line pkey
 filewriteln sfh line
 int2str line pvalue
 filewriteln sfh line
 :save_toning
-ptone = (registry[1626 + pindex * 1088 + 463] >> 16) and 255
 if ptone < 1 goto save_parameters_next
 if ptone > 8 goto save_parameters_next
-pkey = 990032768 + (registry[1626 + pindex * 1088 + 446] and 32767)
+pkey = pcode
+pkey = pkey + 990032768
 int2str line pkey
 filewriteln sfh line
 int2str line ptone
@@ -157,19 +144,11 @@ filewriteln sfh line
 pindex = pindex + 1
 goto save_parameters
 :save_parameters_end
-mcount = 0
-if modulewords < 2 goto save_module_count_end
-mcount = modulecode[0]
-mmax = (modulewords - 2) / 3
-if mcount < 0 mcount = 0
-if mcount > mmax mcount = 0
-if mcount > 160 mcount = 0
-:save_module_count_end
 mindex = 0
 :save_modules
 if mindex >= mcount goto save_modules_end
-mid = modulecode[2 + mindex * 3]
-mvalue = modulecode[3 + mindex * 3]
+mid = modulecode[pbase + 137 + mindex * 2]
+mvalue = modulecode[pbase + 138 + mindex * 2]
 if mid <= 0 goto save_modules_next
 if mvalue < 0 goto save_modules_next
 int2str line mid
@@ -278,18 +257,80 @@ dsaved = dstamp
 :save_usermode_end
 return
 :snapshot
+if legacy <> 0 goto legacy_snapshot
+value0 = modulecode[pbase + 4]
+value1 = modulecode[pbase + 5]
+value2 = modulecode[pbase + 6]
+value3 = modulecode[pbase + 7]
+value4 = modulecode[pbase + 8]
+value5 = modulecode[pbase + 9]
+value6 = modulecode[pbase + 10]
+value7 = modulecode[pbase + 11]
+value8 = modulecode[pbase + 12]
+value9 = modulecode[pbase + 13]
+value10 = modulecode[pbase + 14]
+return
+:capture
+captured = 0
+if legacy <> 0 goto legacy_capture
+if modulewords < 457 return
+pbase = registry[1626]
+if pbase < 2 return
+pmax = modulewords - 457
+if pbase > pmax return
+ticket = modulecode[pbase + 0]
+released = modulecode[pbase + 2]
+if ticket <> released goto capture_wait
+if ticket = 2147483647 ticket = 0
+ticket = ticket + 1
+modulecode[pbase + 0] = ticket
+:capture_wait
+attempts = 0
+:capture_poll
+ready = modulecode[pbase + 1]
+if ready = ticket goto capture_ready
+if attempts >= 5 return
+mpause 50
+attempts = attempts + 1
+goto capture_poll
+:capture_ready
+mpause 1
+pcount = modulecode[pbase + 15]
+if pcount < 0 goto capture_invalid
+if pcount > 40 goto capture_invalid
+mcount = modulecode[pbase + 136]
+if mcount < 0 goto capture_invalid
+if mcount > 160 goto capture_invalid
+changes = modulecode[pbase + 3]
+if changes <= 0 goto capture_invalid
+captured = 1
+return
+:capture_invalid
+call release_capture
+return
+:release_capture
+mpause 1
+modulecode[pbase + 2] = ticket
+return
+:legacy_capture
+changes = registry[65]
+pcount = registry[0]
+if pcount < 0 pcount = 0
+if pcount > 40 pcount = 0
+mcount = 0
+captured = 1
+return
+:legacy_snapshot
 value0 = 0
-count = registry[0]
-if count < 1 goto snapshot_values
-if count > 40 goto snapshot_values
+if pcount < 1 goto legacy_values
 offset = registry[2] - registry[1]
-if offset < 0 goto snapshot_values
+if offset < 0 goto legacy_values
 rest = offset % 4352
-if rest != 0 goto snapshot_values
+if rest <> 0 goto legacy_values
 index = offset / 4352
-if index >= count goto snapshot_values
-value0 = registry[1626 + index * 1088 + 446] and 65535
-:snapshot_values
+if index >= pcount goto legacy_values
+value0 = registry[1627 + index * 1088 + 446] and 65535
+:legacy_values
 value1 = registry[52]
 value2 = registry[12]
 value3 = registry[60]
@@ -300,6 +341,41 @@ value7 = registry[262]
 value8 = registry[263]
 value9 = registry[273]
 value10 = registry[274]
+return
+:legacy_parameters
+pcode = registry[1627 + pindex * 1088 + 446] and 32767
+pw0 = registry[1627 + pindex * 1088 + 459]
+pw1 = registry[1627 + pindex * 1088 + 460]
+pw2 = registry[1627 + pindex * 1088 + 461]
+pvalue = 0
+pdigit = (pw2 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw1 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 24) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 16) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 8) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+pdigit = (pw0 >> 0) and 255
+if pdigit > 8 pdigit = 0
+pvalue = pvalue * 9 + pdigit
+ptone = (registry[1627 + pindex * 1088 + 463] >> 16) and 255
 return
 :profile_watch
 ppolls = 0
@@ -591,28 +667,31 @@ fileclose pfh
 mpause 2000
 ppolls = ppolls + 1
 if ppolls >= 5 call profile_write
-changes = registry[65]
-rchanges = registry[980]
-dchanges = registry[1012]
-total = changes + rchanges + dchanges
-if total <> last goto profile_poll_moved
-if changes = saved goto profile_poll_state_saved
-hold = registry[1011]
-if hold <> 0 goto profile_poll_state_saved
+call capture
+if captured = 0 goto profile_poll_state_saved
+if changes <> last goto profile_poll_state_release
+if changes = saved goto profile_poll_state_release
 stamp = changes
 call save_state
+:profile_poll_state_release
+last = changes
+if legacy <> 0 goto profile_poll_state_saved
+call release_capture
 :profile_poll_state_saved
+rchanges = registry[980]
+if rchanges <> rchangeslast goto profile_poll_recipes_saved
 if rchanges = rsaved goto profile_poll_recipes_saved
 rstamp = rchanges
 call save_recipes
 :profile_poll_recipes_saved
+rchangeslast = rchanges
+dchanges = registry[1012]
+if dchanges <> dchangeslast goto profile_poll_usermode_saved
 if dchanges = dsaved goto profile_poll_usermode_saved
 dstamp = dchanges
 call save_usermode
 :profile_poll_usermode_saved
-goto profile_poll
-:profile_poll_moved
-last = total
+dchangeslast = dchanges
 goto profile_poll
 :profile_write
 ppolls = 0

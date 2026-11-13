@@ -3,9 +3,12 @@
 
 use super::*;
 use crate::abi::{
-    DIAL_SET_WORDS, HOST_DIAL_SETS, HOST_DIAL_SET_CHANGES, HOST_PROCESSING_CALLS, HOST_PROFILE,
-    HOST_RECIPE_CHANGES, HOST_STATE_HOLD, PROFILE, PROFILE_KINDS, PROFILE_MODULES,
-    PROFILE_MODULE_SIZE, PROFILE_POINTS, PROFILE_SLOTS, PROFILE_SLOT_SIZE,
+    DIAL_SET_WORDS, HOST_DIAL_SETS, HOST_DIAL_SET_CHANGES, HOST_PERSIST_WORD,
+    HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, PERSIST_CORE, PERSIST_EFFECTS,
+    PERSIST_EFFECT_COUNT, PERSIST_EFFECT_WORDS, PERSIST_MODULES, PERSIST_MODULE_COUNT,
+    PERSIST_MODULE_WORDS, PERSIST_READY, PERSIST_RELEASE, PERSIST_REQUEST, PERSIST_REVISION,
+    PERSIST_WORDS, PROFILE, PROFILE_KINDS, PROFILE_MODULES, PROFILE_MODULE_SIZE, PROFILE_POINTS,
+    PROFILE_SLOTS, PROFILE_SLOT_SIZE,
 };
 use crate::capabilities::{self, StateFile};
 use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
@@ -552,62 +555,12 @@ fn fast_log_script() -> Vec<String> {
 /// and no expression divides by a value from the card or from the header.
 fn state_script() -> Vec<String> {
     let word = |offset: usize| format!("registry[{}]", offset / 4);
-    let code_word = |index: &str| {
-        format!(
-            "registry[{} + {index} * {} + {}]",
-            HEADER_SIZE / 4,
-            RECORD_SIZE / 4,
-            RECORD_CODE / 4
-        )
-    };
-    let record_word = |index: &str, offset: usize| {
-        format!(
-            "registry[{} + {index} * {} + {}]",
-            HEADER_SIZE / 4,
-            RECORD_SIZE / 4,
-            offset / 4
-        )
-    };
-    let parameter_word =
-        |index: &str, word: usize| record_word(index, RECORD_PARAMETERS + word * 4);
-    // The record count for the adjustments, or 0 if it is out of range.
-    let parameter_count = [
-        format!("pcount = {}", word(HOST_COUNT)),
-        "if pcount < 0 pcount = 0".to_string(),
-        format!("if pcount > {MAX_COUNT} pcount = 0"),
-    ];
-    // The module settings (runtime/settings.h) in the `modulecode` array that
-    // the loader allocates for the modules: the count, or 0 if it is out of
-    // range for the array. Entry i has its ID at 2 + 3i, its value at 3 + 3i,
-    // and its number of values at 4 + 3i.
-    let module_count = [
-        "mcount = 0".to_string(),
-        "if modulewords < 2 goto module_count_end".into(),
-        "mcount = modulecode[0]".into(),
-        "mmax = (modulewords - 2) / 3".into(),
-        "if mcount < 0 mcount = 0".into(),
-        "if mcount > mmax mcount = 0".into(),
-        format!("if mcount > {MODULE_SETTINGS_MAX} mcount = 0"),
-        ":module_count_end".into(),
-    ];
     let state_keys = capabilities::state_keys();
     let keys = state_keys.iter().enumerate();
 
-    // INSTALL has restored the saved values (runtime/installer.c), so the
-    // values at the start are those of the file. The loader writes only after
-    // the next change: a value that the camera could not restore, such as
-    // the effect of a missing file, keeps its entry until then. Without a
-    // state file in the data folder, as at the first start after an update
-    // from GRKit 1.2, INSTALL restored the old file, and the loader saves at
-    // the first poll.
-    //
-    // The core counts each change of a saved selection in one header word
-    // (GRKIT_STATE_CHANGED), so each poll reads that word only: the
-    // interpreter spends thousands of instructions on each line, more with
-    // each variable of the script. The loader saves when two polls in a row
-    // read the same count and the file does not have it yet. A series of
-    // changes, such as Fn adjustments, then writes the card once after its
-    // last change.
+    // INSTALL captures revision 1 before hooks can change settings. Do not
+    // take the current revision as saved: App may have changed it already.
+    // Missing effects retain their on-card entries until a real change.
     let mut lines: Vec<String> = vec![
         ":resident".into(),
         "stateok = 1".into(),
@@ -616,25 +569,27 @@ fn state_script() -> Vec<String> {
         format!("foldersearch '{DATA_FOLDER}'"),
         "if result = 0 stateok = 0".into(),
     ];
-    // The main file starts saved unless it is missing. The other files
-    // start at a count of 0, which INSTALL leaves: the recipe file saves
-    // when INSTALL set its count after an import, and the file of the user
-    // modes when the core changed it at the start, before this line runs,
-    // as when it forgot a snapshot whose native slot the person changed.
-    for file in StateFile::ALL {
+    lines.extend([
+        "legacy = 0".into(),
+        format!("export = {}", word(HOST_PERSIST_WORD)),
+        "if modulewords <> 0 goto resident_export".into(),
+        "if export <> 0 goto resident_export".into(),
+        "legacy = 1".into(),
+        ":resident_export".into(),
+        "changes = 1".into(),
+        format!("if legacy <> 0 changes = {}", word(HOST_STATE_CHANGES)),
+        "saved = changes".into(),
+        "last = changes".into(),
+    ]);
+    for file in [StateFile::Recipes, StateFile::DialSets] {
         let (changes, at, saved, _) = watch_names(file);
         lines.push(format!("{changes} = {}", word(at)));
-        lines.push(match file {
-            StateFile::Main => format!("{saved} = {changes}"),
-            StateFile::Recipes | StateFile::DialSets => format!("{saved} = 0"),
-        });
+        lines.push(format!("{saved} = 0"));
+        lines.push(format!("{changes}last = {changes}"));
     }
     lines.extend([
-        format!("last = {}", watch_total()),
         format!("filesearch '{}'", state_path(StateFile::Main, "TXT")),
         "if result = 0 saved = changes - 1".into(),
-        // The development profile has its own loop, so the usual poll
-        // reads no other word.
         format!("profile = {}", word(HOST_PROFILE)),
         "if profile <> 0 goto profile_watch".into(),
         ":watch".into(),
@@ -674,47 +629,41 @@ fn state_script() -> Vec<String> {
             ]);
         }
         if main {
-            // The adjustments of each effect that has a non-neutral one.
-            lines.extend(parameter_count.clone());
+            // Every value comes from the same frozen export, including Fn
+            // and module settings. No live registry read occurs during I/O.
             lines.extend([
                 "pindex = 0".into(),
                 ":save_parameters".into(),
                 "if pindex >= pcount goto save_parameters_end".into(),
-                format!("pw0 = {}", parameter_word("pindex", 0)),
-                format!("pw1 = {}", parameter_word("pindex", 1)),
-                format!("pw2 = {}", parameter_word("pindex", 2)),
-                "pvalue = 0".into(),
-            ]);
-            for digit in (0..PARAMETER_COUNT).rev() {
-                lines.extend([
-                    format!("pdigit = (pw{} >> {}) and 255", digit / 4, digit % 4 * 8),
-                    "if pdigit > 8 pdigit = 0".into(),
-                    "pvalue = pvalue * 9 + pdigit".into(),
-                ]);
-            }
-            lines.extend([
-                "if pvalue = 0 goto save_toning".into(),
+                "if legacy <> 0 goto save_legacy_parameters".into(),
                 format!(
-                    "pkey = {PARAMETER_KEY_BASE} + ({} and 32767)",
-                    code_word("pindex")
+                    "pcode = {}",
+                    persist_entry(PERSIST_EFFECTS, "pindex", PERSIST_EFFECT_WORDS, 0)
                 ),
+                format!(
+                    "pvalue = {}",
+                    persist_entry(PERSIST_EFFECTS, "pindex", PERSIST_EFFECT_WORDS, 1)
+                ),
+                format!(
+                    "ptone = {}",
+                    persist_entry(PERSIST_EFFECTS, "pindex", PERSIST_EFFECT_WORDS, 2)
+                ),
+                "goto save_parameter_values".into(),
+                ":save_legacy_parameters".into(),
+                "call legacy_parameters".into(),
+                ":save_parameter_values".into(),
+                "pkey = pcode".into(),
+                "if pvalue = 0 goto save_toning".into(),
+                format!("pkey = pkey + {PARAMETER_KEY_BASE}"),
                 "int2str line pkey".into(),
                 "filewriteln sfh line".into(),
                 "int2str line pvalue".into(),
                 "filewriteln sfh line".into(),
-                // The Toning of a native look, a stored byte of 1..8.
                 ":save_toning".into(),
-                format!(
-                    "ptone = ({} >> {}) and 255",
-                    record_word("pindex", RECORD_TONING & !3),
-                    RECORD_TONING % 4 * 8
-                ),
                 "if ptone < 1 goto save_parameters_next".into(),
                 "if ptone > 8 goto save_parameters_next".into(),
-                format!(
-                    "pkey = {TONING_KEY_BASE} + ({} and 32767)",
-                    code_word("pindex")
-                ),
+                "pkey = pcode".into(),
+                format!("pkey = pkey + {TONING_KEY_BASE}"),
                 "int2str line pkey".into(),
                 "filewriteln sfh line".into(),
                 "int2str line ptone".into(),
@@ -723,19 +672,18 @@ fn state_script() -> Vec<String> {
                 "pindex = pindex + 1".into(),
                 "goto save_parameters".into(),
                 ":save_parameters_end".into(),
-            ]);
-            // Save zero too: a missing setting uses its declared default.
-            lines.extend(
-                module_count
-                    .iter()
-                    .map(|line| line.replace("module_count_end", "save_module_count_end")),
-            );
-            lines.extend([
+                // Save zero too: a missing setting uses its declared default.
                 "mindex = 0".into(),
                 ":save_modules".into(),
                 "if mindex >= mcount goto save_modules_end".into(),
-                "mid = modulecode[2 + mindex * 3]".into(),
-                "mvalue = modulecode[3 + mindex * 3]".into(),
+                format!(
+                    "mid = {}",
+                    persist_entry(PERSIST_MODULES, "mindex", PERSIST_MODULE_WORDS, 0)
+                ),
+                format!(
+                    "mvalue = {}",
+                    persist_entry(PERSIST_MODULES, "mindex", PERSIST_MODULE_WORDS, 1)
+                ),
                 "if mid <= 0 goto save_modules_next".into(),
                 "if mvalue < 0 goto save_modules_next".into(),
                 "int2str line mid".into(),
@@ -835,29 +783,15 @@ fn state_script() -> Vec<String> {
         ]);
     }
 
-    // The current selections. The effect is the ImageTone code of the active
-    // record, or 0 for Off and for any pointer that is not a record.
-    lines.extend([
-        ":snapshot".into(),
-        "value0 = 0".into(),
-        format!("count = {}", word(HOST_COUNT)),
-        "if count < 1 goto snapshot_values".into(),
-        format!("if count > {MAX_COUNT} goto snapshot_values"),
-        format!("offset = {} - {}", word(HOST_ACTIVE), word(HOST_RECORDS)),
-        "if offset < 0 goto snapshot_values".into(),
-        format!("rest = offset % {RECORD_SIZE}"),
-        "if rest != 0 goto snapshot_values".into(),
-        format!("index = offset / {RECORD_SIZE}"),
-        "if index >= count goto snapshot_values".into(),
-        format!("value0 = {} and 65535", code_word("index")),
-        ":snapshot_values".into(),
-    ]);
-    for (i, key) in keys.clone() {
-        if let Some(offset) = key.word {
-            lines.push(format!("value{i} = {}", word(offset)));
-        }
+    // Core scalars and the subsequent effect/module loops share one lease.
+    lines.push(":snapshot".into());
+    lines.push("if legacy <> 0 goto legacy_snapshot".into());
+    for (i, _) in keys {
+        lines.push(format!("value{i} = {}", persist_word(PERSIST_CORE + i * 4)));
     }
     lines.push("return".into());
+    lines.extend(persist_capture());
+    lines.extend(legacy_capture());
 
     lines
 }
@@ -999,56 +933,168 @@ fn watch_names(file: StateFile) -> (&'static str, usize, &'static str, &'static 
     }
 }
 
-/// The sum of the counts of all files, which moves with any change.
-fn watch_total() -> String {
-    StateFile::ALL
-        .iter()
-        .map(|&file| watch_names(file).0)
-        .collect::<Vec<_>>()
-        .join(" + ")
+/// A word of the bounded, immutable export in the module array.
+fn persist_word(offset: usize) -> String {
+    format!("modulecode[pbase + {}]", offset / 4)
 }
 
-/// One poll of the watch loop `name`: it reads the counts, waits while they
-/// move, then saves each file whose count it does not have. A series of
-/// changes, such as Fn adjustments, writes the card once after its last
-/// change, and a change of one file writes only that file.
-///
-/// While the core holds the main file (`HOST_STATE_HOLD`, a user mode of the
-/// mode dial with a snapshot, whose changes are temporary), the main file waits: its count
-/// stays unsaved, so the first poll after the hold saves it. The poll reads
-/// the hold only when the main file has a change to save.
-fn watch_poll(name: &str) -> Vec<String> {
-    let mut lines = Vec::new();
-    for file in StateFile::ALL {
-        let (changes, at, _, _) = watch_names(file);
-        lines.push(format!("{changes} = registry[{}]", at / 4));
+fn persist_entry(offset: usize, index: &str, width: usize, field: usize) -> String {
+    format!(
+        "modulecode[pbase + {} + {index} * {width}]",
+        offset / 4 + field
+    )
+}
+
+/// Request a view on the App task. A timeout leaves the request outstanding
+/// for the next poll. Only the consumer releases a completed view, including
+/// invalid views, so a delayed response cannot overwrite a view during I/O.
+fn persist_capture() -> Vec<String> {
+    vec![
+        ":capture".into(),
+        "captured = 0".into(),
+        "if legacy <> 0 goto legacy_capture".into(),
+        format!("if modulewords < {PERSIST_WORDS} return"),
+        format!("pbase = registry[{}]", HOST_PERSIST_WORD / 4),
+        "if pbase < 2 return".into(),
+        format!("pmax = modulewords - {PERSIST_WORDS}"),
+        "if pbase > pmax return".into(),
+        format!("ticket = {}", persist_word(PERSIST_REQUEST)),
+        format!("released = {}", persist_word(PERSIST_RELEASE)),
+        "if ticket <> released goto capture_wait".into(),
+        "if ticket = 2147483647 ticket = 0".into(),
+        "ticket = ticket + 1".into(),
+        format!("{} = ticket", persist_word(PERSIST_REQUEST)),
+        ":capture_wait".into(),
+        "attempts = 0".into(),
+        ":capture_poll".into(),
+        format!("ready = {}", persist_word(PERSIST_READY)),
+        "if ready = ticket goto capture_ready".into(),
+        "if attempts >= 5 return".into(),
+        "mpause 50".into(),
+        "attempts = attempts + 1".into(),
+        "goto capture_poll".into(),
+        ":capture_ready".into(),
+        // A positive RTOS delay executes a system DMB. TTL has no barrier
+        // instruction: synchronize after READY before loading its payload.
+        "mpause 1".into(),
+        format!("pcount = {}", persist_word(PERSIST_EFFECT_COUNT)),
+        "if pcount < 0 goto capture_invalid".into(),
+        format!("if pcount > {MAX_COUNT} goto capture_invalid"),
+        format!("mcount = {}", persist_word(PERSIST_MODULE_COUNT)),
+        "if mcount < 0 goto capture_invalid".into(),
+        format!("if mcount > {MODULE_SETTINGS_MAX} goto capture_invalid"),
+        format!("changes = {}", persist_word(PERSIST_REVISION)),
+        "if changes <= 0 goto capture_invalid".into(),
+        "captured = 1".into(),
+        "return".into(),
+        ":capture_invalid".into(),
+        "call release_capture".into(),
+        "return".into(),
+        ":release_capture".into(),
+        // Complete payload reads before App may reuse the buffer. Zero
+        // delay returns early in the firmware and provides no barrier.
+        "mpause 1".into(),
+        format!("{} = ticket", persist_word(PERSIST_RELEASE)),
+        "return".into(),
+    ]
+}
+
+/// Without listed modules INSTALL creates no services or module array and
+/// installs no menu/dial hooks. Preserve this older core/effect-only path.
+fn legacy_capture() -> Vec<String> {
+    let word = |offset: usize| format!("registry[{}]", offset / 4);
+    let record = |index: &str, offset: usize| {
+        format!(
+            "registry[{} + {index} * {} + {}]",
+            HEADER_SIZE / 4,
+            RECORD_SIZE / 4,
+            offset / 4
+        )
+    };
+    let mut lines = vec![
+        ":legacy_capture".into(),
+        format!("changes = {}", word(HOST_STATE_CHANGES)),
+        format!("pcount = {}", word(HOST_COUNT)),
+        "if pcount < 0 pcount = 0".into(),
+        format!("if pcount > {MAX_COUNT} pcount = 0"),
+        "mcount = 0".into(),
+        "captured = 1".into(),
+        "return".into(),
+        ":legacy_snapshot".into(),
+        "value0 = 0".into(),
+        "if pcount < 1 goto legacy_values".into(),
+        format!("offset = {} - {}", word(HOST_ACTIVE), word(HOST_RECORDS)),
+        "if offset < 0 goto legacy_values".into(),
+        format!("rest = offset % {RECORD_SIZE}"),
+        "if rest <> 0 goto legacy_values".into(),
+        format!("index = offset / {RECORD_SIZE}"),
+        "if index >= pcount goto legacy_values".into(),
+        format!("value0 = {} and 65535", record("index", RECORD_CODE)),
+        ":legacy_values".into(),
+    ];
+    for (i, key) in capabilities::state_keys().iter().enumerate() {
+        if let Some(offset) = key.word {
+            lines.push(format!("value{i} = {}", word(offset)));
+        }
     }
     lines.extend([
-        format!("total = {}", watch_total()),
-        format!("if total <> last goto {name}_moved"),
+        "return".into(),
+        ":legacy_parameters".into(),
+        format!("pcode = {} and 32767", record("pindex", RECORD_CODE)),
+        format!("pw0 = {}", record("pindex", RECORD_PARAMETERS)),
+        format!("pw1 = {}", record("pindex", RECORD_PARAMETERS + 4)),
+        format!("pw2 = {}", record("pindex", RECORD_PARAMETERS + 8)),
+        "pvalue = 0".into(),
     ]);
-    for file in StateFile::ALL {
-        let (changes, _, saved, stamp) = watch_names(file);
-        let next = format!("{name}_{}_saved", label(file));
-        lines.push(format!("if {changes} = {saved} goto {next}"));
-        if file == StateFile::Main {
-            lines.extend([
-                format!("hold = registry[{}]", HOST_STATE_HOLD / 4),
-                format!("if hold <> 0 goto {next}"),
-            ]);
-        }
+    for digit in (0..PARAMETER_COUNT).rev() {
         lines.extend([
-            format!("{stamp} = {changes}"),
-            format!("call save_{}", label(file)),
-            format!(":{next}"),
+            format!("pdigit = (pw{} >> {}) and 255", digit / 4, digit % 4 * 8),
+            "if pdigit > 8 pdigit = 0".into(),
+            "pvalue = pvalue * 9 + pdigit".into(),
         ]);
     }
     lines.extend([
-        format!("goto {name}"),
-        format!(":{name}_moved"),
-        "last = total".into(),
-        format!("goto {name}"),
+        format!(
+            "ptone = ({} >> {}) and 255",
+            record("pindex", RECORD_TONING & !3),
+            RECORD_TONING % 4 * 8
+        ),
+        "return".into(),
     ]);
+    lines
+}
+
+/// Debounce each file independently. Temporary U-mode edits neither change
+/// the main export revision nor postpone its save. Release the export on
+/// every completed capture, including a skipped or failed save.
+fn watch_poll(name: &str) -> Vec<String> {
+    let mut lines = vec![
+        "call capture".into(),
+        format!("if captured = 0 goto {name}_state_saved"),
+        format!("if changes <> last goto {name}_state_release"),
+        format!("if changes = saved goto {name}_state_release"),
+        "stamp = changes".into(),
+        "call save_state".into(),
+        format!(":{name}_state_release"),
+        "last = changes".into(),
+        format!("if legacy <> 0 goto {name}_state_saved"),
+        "call release_capture".into(),
+        format!(":{name}_state_saved"),
+    ];
+    for file in [StateFile::Recipes, StateFile::DialSets] {
+        let (changes, at, saved, stamp) = watch_names(file);
+        let next = format!("{name}_{}_saved", label(file));
+        lines.extend([
+            format!("{changes} = registry[{}]", at / 4),
+            format!("if {changes} <> {changes}last goto {next}"),
+            format!("if {changes} = {saved} goto {next}"),
+            format!("{stamp} = {changes}"),
+            format!("call save_{}", label(file)),
+            format!(":{next}"),
+            format!("{changes}last = {changes}"),
+        ]);
+    }
+    lines.push(format!("goto {name}"));
     lines
 }
 
@@ -1071,6 +1117,8 @@ mod tests {
     #[test]
     fn the_resident_script_cannot_stop_on_its_own_arithmetic() {
         let script = state_script().join("\n");
+        let recipes = format!("{} + rindex", HOST_RECIPES / 4);
+        let sets = format!("{} + rindex", HOST_DIAL_SETS / 4);
         let record = |index: &str, offset: usize| {
             format!(
                 "{} + {index} * {} + {}",
@@ -1079,20 +1127,15 @@ mod tests {
                 offset / 4
             )
         };
-        // The computed indexes are words of a record below `count` or `pcount`:
-        // its code, and the three words of its adjustments; and the recipe
-        // words of the header below RECIPE_STATE_WORDS.
-        let recipes = format!("{} + rindex", HOST_RECIPES / 4);
-        let sets = format!("{} + rindex", HOST_DIAL_SETS / 4);
         let allowed = [
+            recipes.clone(),
+            sets.clone(),
             record("index", RECORD_CODE),
             record("pindex", RECORD_CODE),
             record("pindex", RECORD_PARAMETERS),
             record("pindex", RECORD_PARAMETERS + 4),
             record("pindex", RECORD_PARAMETERS + 8),
             record("pindex", RECORD_TONING & !3),
-            recipes.clone(),
-            sets.clone(),
         ];
         for (at, _) in script.match_indices("registry[") {
             let index = &script[at + 9..];
@@ -1115,11 +1158,29 @@ mod tests {
         }
         // A `filereadln` of a last line without a newline blocks the interpreter.
         assert!(!script.contains("filereadln"));
-        // Each computed record index is below `count`, which is at most MAX_COUNT.
-        assert!(script.contains(&format!("if count > {MAX_COUNT} goto snapshot_values")));
-        assert!(script.contains("if pcount < 0 pcount = 0"));
-        assert!(script.contains(&format!("if pcount > {MAX_COUNT} pcount = 0")));
+        // Bound the complete buffer before any access, then bound each
+        // variable-length table before the save loops can consume it.
+        let capture = persist_capture();
+        let first_read = capture
+            .iter()
+            .position(|line| line.contains("modulecode["))
+            .unwrap();
+        assert!(at(&capture, "if pbase > pmax return") < first_read);
+        assert!(capture.contains(&format!("pmax = modulewords - {PERSIST_WORDS}")));
+        assert!(capture.contains(&format!("if pcount > {MAX_COUNT} goto capture_invalid")));
+        assert!(capture.contains(&format!(
+            "if mcount > {MODULE_SETTINGS_MAX} goto capture_invalid"
+        )));
+        assert!(capture.contains(&"if pcount < 0 goto capture_invalid".into()));
+        assert!(capture.contains(&"if mcount < 0 goto capture_invalid".into()));
         assert_eq!(script.matches("if pindex >= pcount goto").count(), 1);
+        assert_eq!(script.matches("if mindex >= mcount goto").count(), 1);
+        const {
+            assert!(PERSIST_EFFECTS / 4 + MAX_COUNT * PERSIST_EFFECT_WORDS <= PERSIST_WORDS);
+            assert!(
+                PERSIST_MODULES / 4 + MODULE_SETTINGS_MAX * PERSIST_MODULE_WORDS <= PERSIST_WORDS
+            );
+        }
         // Each recipe index is below RECIPE_STATE_WORDS, which ends in the
         // header.
         assert!(script.contains(&format!(
@@ -1202,81 +1263,133 @@ mod tests {
         assert!(loader().len() < 12 * 1024, "{}", loader().len());
     }
 
-    /// A series of changes writes the card once: each poll reads the change
-    /// count of each state file, and the watch loop saves only when two polls
-    /// in a row read the same counts, and then only the files whose count it
-    /// does not have. The start sets each variable that the loop reads,
-    /// because an unset variable is a runtime error.
+    /// The main file follows only its immutable content revision. Other
+    /// files and temporary U-mode changes cannot starve its debounce.
     #[test]
     fn the_resident_script_saves_after_the_selections_settle() {
         let script = state_script();
-        let at = |line: &str| {
-            script
-                .iter()
-                .position(|l| l == line)
-                .unwrap_or_else(|| panic!("{line}"))
-        };
-        let read = format!("changes = registry[{}]", HOST_STATE_CHANGES / 4);
-        let read_recipes = format!("rchanges = registry[{}]", HOST_RECIPE_CHANGES / 4);
-        let read_sets = format!("dchanges = registry[{}]", HOST_DIAL_SET_CHANGES / 4);
-        let (start, watch) = (at(":resident"), at(":watch"));
-        let poll = at(&format!("mpause {STATE_POLL_MS}"));
-        assert_eq!(script[poll + 1], read);
-        assert_eq!(script[poll + 2], read_recipes);
-        assert_eq!(script[poll + 3], read_sets);
-        assert_eq!(script[poll + 4], "total = changes + rchanges + dchanges");
-        let moved = at("if total <> last goto watch_moved");
-        let settled = at("if changes = saved goto watch_state_saved");
-        let settled_recipes = at("if rchanges = rsaved goto watch_recipes_saved");
-        let settled_sets = at("if dchanges = dsaved goto watch_usermode_saved");
-        assert!(watch < poll && poll < moved && moved < settled && settled < settled_recipes);
-        assert!(settled_recipes < settled_sets);
-        // While the core holds the main file, its change waits: the poll
-        // jumps past its save and keeps its count unsaved.
-        assert_eq!(
-            script[settled + 1],
-            format!("hold = registry[{}]", HOST_STATE_HOLD / 4)
-        );
-        assert_eq!(script[settled + 2], "if hold <> 0 goto watch_state_saved");
-        assert_eq!(script[settled + 3], "stamp = changes");
-        assert_eq!(script[settled + 4], "call save_state");
-        assert_eq!(script[settled_recipes + 1], "rstamp = rchanges");
-        assert_eq!(script[settled_recipes + 2], "call save_recipes");
-        assert_eq!(script[settled_sets + 1], "dstamp = dchanges");
-        assert_eq!(script[settled_sets + 2], "call save_usermode");
-        // An idle poll runs ten lines: the pause, three reads, the sum, four
-        // compares that jump past the saves, and the jump back. The hold is
-        // read only for a change of the main file.
-        assert_eq!(at(":watch_recipes_saved") + 1, settled_sets);
-        assert_eq!(script[at(":watch_usermode_saved") + 1], "goto watch");
-        assert_eq!(at(":watch_state_saved"), settled + 5);
-        // The watch loop of the profile holds too.
-        assert_eq!(
-            script.iter().filter(|l| l.starts_with("hold = ")).count(),
-            1
-        );
-        let profile = profile_script();
-        assert!(profile.contains(&"if hold <> 0 goto profile_poll_state_saved".to_owned()));
-        assert_eq!(at(":watch_recipes_saved"), settled_recipes + 3);
-        assert_eq!(at(":watch_usermode_saved"), settled_sets + 3);
-        assert_eq!(script[at(":watch_moved") + 1], "last = total");
-        for name in [
-            "last", "saved", "rsaved", "dsaved", "changes", "rchanges", "dchanges",
+        let start = at(&script, ":watch");
+        assert_eq!(script[start + 2], "call capture");
+        assert!(!script
+            .iter()
+            .any(|line| line.contains("hold") || line.contains("total =")));
+        for (name, poll) in [
+            ("watch", watch_poll("watch")),
+            ("profile_poll", watch_poll("profile_poll")),
         ] {
-            assert!(script[start..watch]
-                .iter()
-                .any(|l| l.starts_with(&format!("{name} ="))));
+            let save = at(&poll, "call save_state");
+            assert!(
+                at(
+                    &poll,
+                    &format!("if changes <> last goto {name}_state_release")
+                ) < save
+            );
+            assert!(
+                at(
+                    &poll,
+                    &format!("if changes = saved goto {name}_state_release")
+                ) < save
+            );
+            let release = at(&poll, "call release_capture");
+            assert!(save < release);
+            for file in [StateFile::Recipes, StateFile::DialSets] {
+                let (changes, offset, saved, _) = watch_names(file);
+                let read = at(&poll, &format!("{changes} = registry[{}]", offset / 4));
+                assert!(release < read);
+                assert_eq!(
+                    poll[read + 1],
+                    format!(
+                        "if {changes} <> {changes}last goto {name}_{}_saved",
+                        label(file)
+                    )
+                );
+                assert_eq!(
+                    poll[read + 2],
+                    format!("if {changes} = {saved} goto {name}_{}_saved", label(file))
+                );
+                assert!(script[..start].contains(&format!("{saved} = 0")));
+                assert!(script[..start].contains(&format!("{changes}last = {changes}")));
+            }
         }
-        // A save of the main file reads the selections, and each save records
-        // the count that it saved.
-        assert_eq!(script[at(":save_state") + 2], "call snapshot");
-        assert!(script.iter().any(|l| l == "saved = stamp"));
-        assert!(script.iter().any(|l| l == "rsaved = rstamp"));
-        assert!(script.iter().any(|l| l == "dsaved = dstamp"));
-        // The file of the user modes starts at a count of 0, so a change
-        // that the core made before the loader starts, such as a snapshot
-        // that the start check forgot, saves at the first poll.
-        assert!(script[start..watch].iter().any(|l| l == "dsaved = 0"));
+        // INSTALL's baseline is fixed even if App edits occur before resident.
+        assert!(script[..start].contains(&"changes = 1".into()));
+        assert!(script[..start].contains(&"saved = changes".into()));
+        assert!(script[..start].contains(&"last = changes".into()));
+        for file in StateFile::ALL {
+            let (_, _, saved, stamp) = watch_names(file);
+            let ack = at(&script, &format!("{saved} = {stamp}"));
+            assert_eq!(
+                script[ack - 1],
+                format!("if result = 0 goto save_{}_end", label(file))
+            );
+            assert_eq!(
+                script[ack - 2],
+                format!("filesearch '{}'", state_path(file, "TXT"))
+            );
+        }
+    }
+
+    /// A timed-out request remains outstanding. A completed request is held
+    /// through the final write, and malformed counts release without saving.
+    #[test]
+    fn the_resident_keeps_the_export_leased_through_io() {
+        let capture = persist_capture();
+        let request = at(
+            &capture,
+            &format!("{} = ticket", persist_word(PERSIST_REQUEST)),
+        );
+        assert!(at(&capture, "if ticket <> released goto capture_wait") < request);
+        assert!(request < at(&capture, ":capture_wait"));
+        assert!(at(&capture, "if attempts >= 5 return") < at(&capture, ":capture_ready"));
+        let release = at(
+            &capture,
+            &format!("{} = ticket", persist_word(PERSIST_RELEASE)),
+        );
+        assert!(at(&capture, ":capture_invalid") < release);
+        assert_eq!(capture[at(&capture, ":capture_ready") + 1], "mpause 1");
+        assert_eq!(capture[release - 1], "mpause 1");
+        let script = state_script();
+        let save = &script[at(&script, ":save_state")..at(&script, ":save_state_end")];
+        assert!(!save.iter().any(|line| line.contains("registry[")
+            || line.contains(&format!("{} =", persist_word(PERSIST_RELEASE)))));
+        let snapshot = &script[at(&script, ":snapshot")..at(&script, ":capture")];
+        assert!(!snapshot.iter().any(|line| line.contains("registry[")));
+        assert_eq!(
+            snapshot
+                .iter()
+                .filter(|line| line.contains("modulecode["))
+                .count(),
+            capabilities::state_keys().len()
+        );
+    }
+
+    /// The services-free installation keeps its original counter baseline
+    /// and never accesses a nonexistent module array or waits for App export.
+    #[test]
+    fn module_free_installs_keep_the_legacy_state_path() {
+        let script = state_script();
+        let start = at(&script, "legacy = 0");
+        let enabled = at(&script, "legacy = 1");
+        assert!(start < enabled);
+        assert!(script[start..enabled].contains(&"if modulewords <> 0 goto resident_export".into()));
+        assert!(script[start..enabled].contains(&"if export <> 0 goto resident_export".into()));
+        let baseline = at(
+            &script,
+            &format!(
+                "if legacy <> 0 changes = registry[{}]",
+                HOST_STATE_CHANGES / 4
+            ),
+        );
+        assert!(baseline < at(&script, "saved = changes"));
+        let capture = persist_capture();
+        assert_eq!(capture[2], "if legacy <> 0 goto legacy_capture");
+        let legacy = legacy_capture();
+        assert!(!legacy.iter().any(|line| line.contains("modulecode[")));
+        assert!(legacy.contains(&"mcount = 0".into()));
+        assert!(legacy.contains(&format!("if pcount > {MAX_COUNT} pcount = 0")));
+        let poll = watch_poll("watch");
+        let release = at(&poll, "call release_capture");
+        assert_eq!(poll[release - 1], "if legacy <> 0 goto watch_state_saved");
     }
 
     fn at(script: &[String], line: &str) -> usize {

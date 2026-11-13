@@ -287,7 +287,11 @@
 #define FRAME_PREVIEW_RATIO(word) ((word) & 0xffU)
 #define FRAME_PREVIEW_PANEL(word) ((word) >> 8 & 0xffU)
 #define FRAME_PREVIEW_PANEL_SHIFT 8U
-#define SERVICES_SIZE (SERVICES_DETAILS + DETAILS_SIZE)
+/* The App-task timer and the frozen STATE.TXT export (runtime/persist.h).
+   HOST_PERSIST_WORD gives the export's word index in the module array. */
+#define SERVICES_PERSIST_TIMER (SERVICES_DETAILS + DETAILS_SIZE)
+#define SERVICES_PERSIST (SERVICES_PERSIST_TIMER + 4U)
+#define SERVICES_SIZE (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

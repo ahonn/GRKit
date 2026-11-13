@@ -92,6 +92,10 @@ static const char relocation_path[] = RELOCATION_PATH;
 static volatile u8 *at(u32 physical) { return mapping + physical - MAP_BASE; }
 static u32 word(u32 p) { return *(volatile u32 *)at(p); }
 static void store(u32 p, u32 v) { *(volatile u32 *)at(p) = v; }
+#define PERSIST_HALF(p,o) (*(volatile u16 *)at((p)+(o)))
+#define PERSIST_BYTE(p,o) (at((p)+(o))[0])
+#define PERSIST_SETTINGS(h) ((h)[GRKIT_HOST_MODULE_SETTINGS/4] ? (volatile u32 *)at((h)[GRKIT_HOST_MODULE_SETTINGS/4]) : (volatile u32 *)0)
+#include "persist_view.h"
 #include "install_io.h"
 #define GRKIT_GRF_EMBEDDED
 #include "grf.c"
@@ -775,6 +779,7 @@ static int write_modules(const struct arrays *a, u32 pixels, u32 code)
     store(base + GRKIT_HOST_EFFECTS, effect_list);
     store(base + GRKIT_HOST_SERVICES, services_block);
     store(base + GRKIT_HOST_MODULE_SETTINGS, a->module_array);
+    store(base + GRKIT_HOST_PERSIST_WORD, (services_block + SERVICES_PERSIST - a->module_array) / 4U);
     store(base + GRKIT_HOST_CAPABILITIES, capabilities_running);
     store(base + GRKIT_HOST_MODULE_PAGE_COUNT, module_page_count);
     for (u32 i = 0; i < module_page_count * 3; ++i) store(base + GRKIT_HOST_MODULE_PAGES + i * 4, module_pages[i]);
@@ -873,6 +878,11 @@ static int install(void)
     install_recipes(arrays.base, recipe_family);
     install_dial_sets(arrays.base);
     install_manage_copy(arrays.base, module_count ? arrays.module_array : 0);
+    if (module_count) {
+        u32 persist = services_block + SERVICES_PERSIST;
+        persist_baseline((volatile u32 *)at(arrays.base), (volatile u32 *)at(persist));
+        if (!sync_alias(persist, GRKIT_PERSIST_SIZE)) return STATUS_SYNC;
+    }
     check_recipes(arrays.base, count, module_count ? arrays.module_array : 0, capabilities_running);
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
         u32 patch_index = code_relocations[i * 2], offset = code_relocations[i * 2 + 1];

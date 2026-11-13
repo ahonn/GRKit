@@ -44,25 +44,25 @@
    the row of P/Av/Tv/M in their own file after GRKIT_HOST_DIAL_SET_CHANGES
    changes, and INSTALL restores them (runtime/install_recipes.h). That file
    also keeps a copy of the switch, Enable at Start, and Distance Unit
-   (runtime/manage.h: manage_copy), so a change of them saves also while
-   the core holds the main state file.
+   (runtime/manage.h: manage_copy), so their restore does not depend on
+   which of the two files was saved last.
 
    The dial lands on a position (dial_land) once the firmware has loaded its
    native settings:
    - With the switch Off, the core does nothing, and leaves a snapshot.
    - A user mode with a snapshot: from the shared settings, the core keeps a
      copy of them (the capability words, the values of the module settings,
-     and the Fn adjustments and the Toning of each effect), holds the main
-     state file (GRKIT_HOST_STATE_HOLD), and applies each value of the set
+     and the Fn adjustments and the Toning of each effect), marks the
+     temporary state (GRKIT_HOST_STATE_HOLD), and applies each value of the set
      that differs from the current one, through the setters. From another
      user mode with a snapshot, it restores the shared settings first.
-     Changes there are temporary.
+     Changes there are temporary. The main state export (runtime/persist.h)
+     reads the shared copy for these settings and live values for globals.
    - Any other position leaves a snapshot: the core restores each setting
      that a set holds and that differs from the copy, so a setting that did
      not change writes nothing (an unchanged Framing ratio does not set the
-     native aspect again), and releases the file; the changes that the hold
-     kept from the file then save at the next poll of the loader. Then GRKit
-     is off there or runs.
+     native aspect again), and clears the temporary-state mark. The export
+     remains the same shared state. Then GRKit is off there or runs.
    - A change of the switch or of the Mode Dial page acts on the position
      at once: Off leaves a snapshot, and On lands again.
    - At a start, the core lands once the shooting screen shows
@@ -425,7 +425,7 @@ static void dial_suspend(volatile u32 *h,u32 off) {
     at[0]=off;
     manage_off_changed(h);
 }
-/* Leave a snapshot: the shared settings, and the state file saves again. */
+/* Leave a snapshot: restore the shared settings that the export kept. */
 static void dial_leave(volatile u32 *h) {
     if(!dial_word(h,DIAL_ACTIVE)[0]) return;
     dial_restore(h);

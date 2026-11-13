@@ -248,6 +248,7 @@ __attribute__((used)) void grkit_export_ui_progress_close(const u16 *const *text
 static void ui_native_open(volatile u32 *h);
 /* The timer of the mode dial (runtime/mode_dial.h). */
 static u32 dial_fired(volatile u32 *h,u32 id);
+static u32 persist_fired(volatile u32 *h,u32 id);
 A32_ENTRY void ui_timer_fired(u32 handler,u32 id) {
     volatile u32 *h=menu_header();
     u32 i;
@@ -264,6 +265,7 @@ A32_ENTRY void ui_timer_fired(u32 handler,u32 id) {
         return;
     }
     if(dial_fired(h,id)) return;
+    if(persist_fired(h,id)) return;
     for(i=0;i<SERVICES_TIMER_SLOTS;++i) {
         volatile u32 *slot=services_word(h,SERVICES_TIMERS+i*SERVICES_TIMER_SIZE);
         if(slot[0]!=id) continue;

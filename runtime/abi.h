@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6504
+#define GRKIT_HOST_HEADER_SIZE 6508
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -333,9 +333,9 @@
 #define GRKIT_HOST_ADJ_OPEN 256
 /* Number of changes of the saved selections: the effect, CORE.ASPECT,
    CORE.GRAIN, CORE.GRAIN_SIZE, CORE.ADJ, CORE.ADJ_MODULE, the Fn adjustments,
-   and the module settings (GRKIT_STATE_CHANGED). The resident loader polls
-   this word and HOST_RECIPE_CHANGES, and saves the state file after it
-   changes. */
+   and the module settings (GRKIT_STATE_CHANGED). This also counts temporary
+   user-mode changes. The normal resident path uses the persistence export
+   revision instead; only module-free installs poll it. */
 #define GRKIT_HOST_STATE_CHANGES 260
 /* Number of module plane filters in GRKIT_HOST_MODULE_FILTERS. INSTALL writes
    it. */
@@ -515,10 +515,8 @@
    saved: a start begins without them. */
 #define GRKIT_HOST_RECIPE_UNDO 3924
 #define GRKIT_HOST_RECIPE_UNDO_WORDS 30
-/* Nonzero while the mode dial is on a user mode with a snapshot, whose changes
-   are temporary (runtime/mode_dial.h): the resident loader then does not save
-   the main state file, so the file keeps the shared settings of P/Av/Tv/M. The
-   recipe file still saves. */
+/* Nonzero while a user-mode snapshot holds temporary settings. The persistence
+   export reads dial-owned values from the shared copy. */
 #define GRKIT_HOST_STATE_HOLD 4044
 /* The count of changes of the settings of the user modes (`HOST_DIAL_SETS` to
    `HOST_MANAGE_COPY`): the loader saves their file after it changes. */
@@ -540,12 +538,37 @@
 #define GRKIT_HOST_DIAL_SHARED_OFF 6488
 /* The copy of the switch, Enable at Start, and Distance Unit,
    `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
-   HOST_DIAL_SHARED_OFF, in the same file. The core holds the main state file
-   on a user mode with a snapshot, but never this file, so a change of these
-   settings there saves. INSTALL takes them from the copy before the main state
-   file, and writes the values of the start here. */
+   HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
+   before the main state file, and writes the values of the start here. */
 #define GRKIT_HOST_MANAGE_COPY 6492
 #define GRKIT_HOST_MANAGE_COPY_WORDS 3
+/* Word index of the PERSIST buffer within modulecode, not a native address. */
+#define GRKIT_HOST_PERSIST_WORD 6504
+/* Consumer request ticket, 1..2147483647. Zero means no request. */
+#define GRKIT_PERSIST_REQUEST 0
+/* Producer publishes this ticket after all payload stores are visible. */
+#define GRKIT_PERSIST_READY 4
+/* Consumer releases the matching ticket after its final payload read. */
+#define GRKIT_PERSIST_RELEASE 8
+/* Content revision, initially 1. Temporary user-mode changes do not advance
+   it. */
+#define GRKIT_PERSIST_REVISION 12
+/* Core state values. TONE is its stable 16-bit ImageTone code. */
+#define GRKIT_PERSIST_CORE 16
+#define GRKIT_PERSIST_CORE_WORDS 11
+#define GRKIT_PERSIST_EFFECT_COUNT 60
+/* Each effect: low 15 bits of code, base-9 Fn adjustments, Toning. */
+#define GRKIT_PERSIST_EFFECTS 64
+#define GRKIT_PERSIST_EFFECTS_WORDS 120
+#define GRKIT_PERSIST_MODULE_COUNT 544
+/* Each module setting: state ID, value. Zero values must persist too. */
+#define GRKIT_PERSIST_MODULES 548
+#define GRKIT_PERSIST_MODULES_WORDS 320
+#define GRKIT_PERSIST_CORE_COUNT 11U
+#define GRKIT_PERSIST_EFFECT_WORDS 3U
+#define GRKIT_PERSIST_MODULE_WORDS 2U
+#define GRKIT_PERSIST_SIZE 1828U
+#define GRKIT_PERSIST_WORDS 457U
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number

@@ -168,6 +168,31 @@ pub const MANAGE_COPY_START: usize = 1;
 pub const MANAGE_COPY_UNIT: usize = 2;
 pub const MANAGE_COPY_WORDS: usize = 3;
 
+/// The immutable main-state export in the module array. Offsets are bytes.
+/// CORE follows state_keys(), which excludes the final CORE.RECIPE handle.
+pub const PERSIST_CORE_COUNT: usize = capabilities::CAPABILITIES.len() - 1;
+pub const PERSIST_EFFECT_WORDS: usize = 3;
+pub const PERSIST_MODULE_WORDS: usize = 2;
+packed_fields!(PERSIST_FIELDS, PERSIST_SIZE {
+    /// Consumer request ticket, 1..2147483647. Zero means no request.
+    PERSIST_REQUEST: 4;
+    /// Producer publishes this ticket after all payload stores are visible.
+    PERSIST_READY: 4;
+    /// Consumer releases the matching ticket after its final payload read.
+    PERSIST_RELEASE: 4;
+    /// Content revision, initially 1. Temporary user-mode changes do not advance it.
+    PERSIST_REVISION: 4;
+    /// Core state values. TONE is its stable 16-bit ImageTone code.
+    PERSIST_CORE: 4 * PERSIST_CORE_COUNT;
+    PERSIST_EFFECT_COUNT: 4;
+    /// Each effect: low 15 bits of code, base-9 Fn adjustments, Toning.
+    PERSIST_EFFECTS: 4 * PERSIST_EFFECT_WORDS * MAX_COUNT;
+    PERSIST_MODULE_COUNT: 4;
+    /// Each module setting: state ID, value. Zero values must persist too.
+    PERSIST_MODULES: 4 * PERSIST_MODULE_WORDS * MODULE_SETTINGS_MAX;
+});
+pub const PERSIST_WORDS: usize = PERSIST_SIZE / 4;
+
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
 packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
@@ -314,9 +339,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_ADJ_OPEN: 4;
     /// Number of changes of the saved selections: the effect, CORE.ASPECT,
     /// CORE.GRAIN, CORE.GRAIN_SIZE, CORE.ADJ, CORE.ADJ_MODULE, the Fn
-    /// adjustments, and the module settings (GRKIT_STATE_CHANGED). The
-    /// resident loader polls this word and HOST_RECIPE_CHANGES, and saves the
-    /// state file after it changes.
+    /// adjustments, and the module settings (GRKIT_STATE_CHANGED). This also
+    /// counts temporary user-mode changes. The normal resident path uses the
+    /// persistence export revision instead; only module-free installs poll it.
     HOST_STATE_CHANGES: 4;
     /// Number of module plane filters in GRKIT_HOST_MODULE_FILTERS. INSTALL
     /// writes it.
@@ -490,10 +515,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// The undo steps, the oldest first, RECIPE_WORDS words each. They are
     /// not saved: a start begins without them.
     HOST_RECIPE_UNDO: 4 * RECIPE_WORDS * RECIPE_UNDO;
-    /// Nonzero while the mode dial is on a user mode with a snapshot, whose
-    /// changes are temporary (runtime/mode_dial.h): the resident loader then
-    /// does not save the main state file, so the file keeps the shared
-    /// settings of P/Av/Tv/M. The recipe file still saves.
+    /// Nonzero while a user-mode snapshot holds temporary settings. The
+    /// persistence export reads dial-owned values from the shared copy.
     HOST_STATE_HOLD: 4;
     /// The count of changes of the settings of the user modes
     /// (`HOST_DIAL_SETS` to `HOST_MANAGE_COPY`): the loader saves their file
@@ -514,11 +537,11 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_DIAL_SHARED_OFF: 4;
     /// The copy of the switch, Enable at Start, and Distance Unit,
     /// `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
-    /// HOST_DIAL_SHARED_OFF, in the same file. The core holds the main state
-    /// file on a user mode with a snapshot, but never this file, so a change
-    /// of these settings there saves. INSTALL takes them from the copy
+    /// HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
     /// before the main state file, and writes the values of the start here.
     HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
+    /// Word index of the PERSIST buffer within modulecode, not a native address.
+    HOST_PERSIST_WORD: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
@@ -1345,6 +1368,16 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_HOST_MAGIC_VALUE {HOST_MAGIC_VALUE:#x}").unwrap();
     writeln!(out, "#define GRKIT_HOST_VERSION_VALUE {HOST_VERSION_VALUE}").unwrap();
     table(&mut out, HEADER_FIELDS, false);
+    table(&mut out, PERSIST_FIELDS, false);
+    for (name, value) in [
+        ("PERSIST_CORE_COUNT", PERSIST_CORE_COUNT),
+        ("PERSIST_EFFECT_WORDS", PERSIST_EFFECT_WORDS),
+        ("PERSIST_MODULE_WORDS", PERSIST_MODULE_WORDS),
+        ("PERSIST_SIZE", PERSIST_SIZE),
+        ("PERSIST_WORDS", PERSIST_WORDS),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
     out.push('\n');
 
     comment(
@@ -1715,6 +1748,8 @@ mod tests {
             .iter()
             .all(|field| field.offset % 4 == 0 && field.size % 4 == 0));
         check(HEADER_FIELDS, HOST_HEADER_SIZE, true);
+        check(PERSIST_FIELDS, PERSIST_SIZE, true);
+        assert_eq!(PERSIST_CORE_COUNT, capabilities::state_keys().len());
     }
 
     #[test]
