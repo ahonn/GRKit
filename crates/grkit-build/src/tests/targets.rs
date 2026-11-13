@@ -1237,8 +1237,8 @@ fn select_menu_methods_match_each_firmware() -> Result<()> {
         };
         let code = |address: u32| (target::RTOS_BASE..target.data_source).contains(&address);
         let name = target.name;
-        // The first BL from `start`, and the literal of the first `ldr rX,
-        // [pc, #imm]` from `start`.
+        // The first call from `start`, and the first constant that the code
+        // from `start` loads from its literal pool.
         let first_call = |start: u32| -> (u32, u32) {
             let site = (0..16)
                 .map(|k| start + 4 * k)
@@ -1274,7 +1274,8 @@ fn select_menu_methods_match_each_firmware() -> Result<()> {
                 "{name}: slot {slot}"
             );
         }
-        // `ldr rX, [rY, #4 * slot]`, `blx rX`.
+        // A call through method `slot` of an object's vtable: the load of
+        // the method, then the call of the loaded address.
         let virtual_call = |site: u32, slot: u32| {
             let load = word(site);
             load & 0xfff0_0fff == 0xe590_0000 | (4 * slot)
