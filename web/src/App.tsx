@@ -98,6 +98,30 @@ type Build =
 const megabytes = (bytes: number) => (bytes / 1_000_000).toFixed(1);
 
 /** The installer of a language: the card or the ZIP, the camera, the modules, the film looks, and the steps. */
+/**
+ * A ref for a section heading that an address can name, such as /install#recipes-label from the
+ * home page. The page renders after its data loads, so the browser looked for the anchor before
+ * the heading existed. The heading scrolls itself into view when it appears, once for each page
+ * load, and again while the sections above it grow as they load, until the person scrolls or
+ * ANCHOR_SETTLE_MS passes.
+ */
+let anchorShown = false;
+const ANCHOR_SETTLE_MS = 3000;
+function scrollToAnchor(heading: HTMLElement | null) {
+  if (!heading || anchorShown || decodeURIComponent(location.hash.slice(1)) !== heading.id) return;
+  anchorShown = true;
+  heading.scrollIntoView();
+  const resize = new ResizeObserver(() => heading.scrollIntoView());
+  const stop = () => {
+    resize.disconnect();
+    clearTimeout(timer);
+    for (const kind of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) removeEventListener(kind, stop);
+  };
+  const timer = setTimeout(stop, ANCHOR_SETTLE_MS);
+  for (const kind of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) addEventListener(kind, stop, { passive: true });
+  resize.observe(document.body);
+}
+
 export function InstallPage({
   initialLanguage,
   initialImports = [],
@@ -776,7 +800,7 @@ export function InstallPage({
 
         {!cardCamera && (
           <section className="section" aria-labelledby="camera-label">
-            <h2 id="camera-label">{t.camera}</h2>
+            <h2 id="camera-label" ref={scrollToAnchor}>{t.camera}</h2>
             <div className="section-body">
               {/* Without the mode section, the ZIP is the only mode, and this is the first section. */}
               {!canWriteCards() && packageOpen}
@@ -814,7 +838,7 @@ export function InstallPage({
         )}
 
         <section className="section" aria-labelledby="modules-label">
-          <h2 id="modules-label">{t.modules}</h2>
+          <h2 id="modules-label" ref={scrollToAnchor}>{t.modules}</h2>
           <div className="section-body">
             <p className="note">{t.modulesNote}</p>
             <div role="group" aria-labelledby="modules-label" className="modules">
@@ -852,7 +876,7 @@ export function InstallPage({
         </section>
 
         <section className="section" aria-labelledby="effects-label" ref={prefetchInView}>
-          <h2 id="effects-label">{t.effects}</h2>
+          <h2 id="effects-label" ref={scrollToAnchor}>{t.effects}</h2>
           {!available.includes('filmLook') ? (
             <p className="status section-body">{t.effectsUnavailable(camera.name)}</p>
           ) : plan.includeEffects ? (
@@ -895,7 +919,7 @@ export function InstallPage({
 
         {available.includes('recipes') && enabled.has('recipes') && (
           <section className="section" aria-labelledby="recipes-label">
-            <h2 id="recipes-label">{t.moduleNames.recipes}</h2>
+            <h2 id="recipes-label" ref={scrollToAnchor}>{t.moduleNames.recipes}</h2>
             <ErrorBoundary
               resetKey={String(catalogAttempt)}
               fallback={<p className="status error section-body">{t.loadError}</p>}
@@ -923,7 +947,7 @@ export function InstallPage({
         )}
 
         <section className="section" aria-labelledby="package-label">
-          <h2 id="package-label">{mode === 'card' ? t.install : t.package}</h2>
+          <h2 id="package-label" ref={scrollToAnchor}>{mode === 'card' ? t.install : t.package}</h2>
           {mode === 'card' && !card ? (
             <div className="section-body card">
               <div className="card-actions">
@@ -1034,7 +1058,7 @@ export function InstallPage({
 
         {mode === 'zip' && (
           <section className="section" aria-labelledby="install-label">
-            <h2 id="install-label">{t.install}</h2>
+            <h2 id="install-label" ref={scrollToAnchor}>{t.install}</h2>
             <ol className="steps">
               {t.steps.map((parts, index) => (
                 <li key={index}>
@@ -1067,7 +1091,7 @@ export function InstallPage({
 
         {mode === 'zip' && (
           <section className="section" aria-labelledby="update-label">
-            <h2 id="update-label">{t.update}</h2>
+            <h2 id="update-label" ref={scrollToAnchor}>{t.update}</h2>
             <ol className="steps">
               {t.updateSteps.map((parts, index) => (
                 <li key={index}>
@@ -1080,7 +1104,7 @@ export function InstallPage({
 
         {mode === 'zip' && (
           <section className="section" aria-labelledby="remove-label">
-            <h2 id="remove-label">{t.remove}</h2>
+            <h2 id="remove-label" ref={scrollToAnchor}>{t.remove}</h2>
             <div className="section-body">
               <ol className="steps">
                 {t.removeSteps.map((parts, index) => (
@@ -1112,7 +1136,7 @@ export function InstallPage({
         )}
 
         <section className="section" aria-labelledby="faq-label">
-          <h2 id="faq-label">{t.faqTitle}</h2>
+          <h2 id="faq-label" ref={scrollToAnchor}>{t.faqTitle}</h2>
           <div className="section-body faq">
             {t.faq.map((item) => (
               <details key={item.q}>
