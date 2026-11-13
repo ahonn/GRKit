@@ -1734,6 +1734,23 @@ static void the_recipes_restore_and_import_once(void)
     assert(recipe_problem_count == 2 && recipe_problems[0].problem == RECIPE_PROBLEM_MODULE(0));
 }
 
+/* PACKAGE.TXT: a name after '-' is an effect that the package leaves out,
+   which the library does not list. It is not an effect or a module of the
+   package, and a bad name after '-' is nothing. */
+static void the_package_list_leaves_out_effects(void)
+{
+    reset();
+    add_text(PACKAGE_PATH, "1315C678.GRF\r\nA.GRM\r\n-13a530fc.grf -B.GRM - -X.TXT\r\n-FDEB34F1.GRF\r\n");
+    read_package_list();
+    assert(package_effect_count == 1 && package_module_count == 1 && package_left_out_count == 2);
+    assert(package_effect("1315C678.GRF") && !package_effect("13A530FC.GRF"));
+    assert(package_leaves_out("13A530FC.GRF") && package_leaves_out("fdeb34f1.grf"));
+    assert(!package_leaves_out("1315C678.GRF") && !package_leaves_out("B.GRM") && !package_module("B.GRM"));
+    /* Without the list, nothing is left out. */
+    reset();
+    read_package_list();
+    assert(!package_listed && !package_left_out_count && !package_leaves_out("13A530FC.GRF"));
+}
 /* IMPORTED.TXT: a line with the size and the stamp of an inbox file gives its
    hash while both stay the same, so the RTOS side does not read the file. A
    line without them, or another size or stamp, needs the file. */
@@ -1877,6 +1894,7 @@ static void *run(void *unused)
 {
     (void)unused;
     imported_lines_give_the_hash_of_an_unchanged_file();
+    the_package_list_leaves_out_effects();
     indicators_resolve_settings_and_preserve_shared_descriptors();
     indicators_reject_conflicts_overflow_and_used_value_ranges();
     legacy_tone_icon_is_only_for_old_module_abi();

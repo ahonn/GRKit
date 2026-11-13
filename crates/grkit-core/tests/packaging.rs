@@ -312,6 +312,56 @@ fn selected_modules_are_packaged_and_verified() {
     assert!(validate_contents(&with_sums(files)).is_err());
 }
 
+/// The package list names each effect that the package leaves out after `-`, after the files
+/// of the package. A left-out effect is never one of the package.
+#[test]
+fn the_package_list_leaves_out_effects() {
+    let mut effects = testing::effect_set(&["test-effect"]);
+    let held = grkit_core::effects::filename("test-effect").unwrap();
+    effects.leave_out("13A530FC.GRF").unwrap();
+    effects.leave_out("0ABC_123.GRF").unwrap();
+    assert!(effects.leave_out(&held).is_err());
+    assert!(effects.leave_out("bad.grf").is_err());
+    assert!(effects.leave_out("-X.GRF").is_err());
+    let left_out = grkit_core::effects::filename("other-effect").unwrap();
+    effects.leave_out(&left_out).unwrap();
+    assert!(effects.insert(testing::effect("other-effect")).is_err());
+    let modules = [testing::module("FILMLOOK")];
+    let bytes = assemble(
+        &gr3_runtimes(),
+        &effects,
+        &modules,
+        &camera::GR3,
+        &english(),
+    )
+    .unwrap()
+    .bytes;
+    let files = unpack(&bytes);
+    let list = String::from_utf8(files[&format!("SD_ROOT/{PACKAGE_LIST}")].clone()).unwrap();
+    let mut expected = format!("{held}\nFILMLOOK.GRM\n");
+    let mut names = vec![
+        "0ABC_123.GRF".to_owned(),
+        "13A530FC.GRF".to_owned(),
+        left_out,
+    ];
+    names.sort();
+    for name in names {
+        expected.push_str(&format!("-{name}\n"));
+    }
+    assert_eq!(list, expected);
+    assert_eq!(verify_package(&bytes).unwrap().effect_ids, ["test-effect"]);
+    // A list that leaves out an effect of the package, or a name that is not an effect file,
+    // is not valid.
+    for bad in [format!("-{held}\n"), "-X.TXT\n".to_owned()] {
+        let mut files = files.clone();
+        let path = format!("SD_ROOT/{PACKAGE_LIST}");
+        let mut text = files[&path].clone();
+        text.extend_from_slice(bad.as_bytes());
+        files.insert(path, text);
+        assert!(validate_contents(&with_sums(files)).is_err(), "{bad}");
+    }
+}
+
 #[test]
 fn packages_that_show_nothing_are_rejected() {
     let assemble_with = |effects: &[&str], modules: &[&str]| {

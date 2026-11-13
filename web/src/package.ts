@@ -114,6 +114,8 @@ type Packager = InstanceType<Wasm['Package']>;
  * whether a file of it waits for a new attempt.
  * `recipes` is the recipe library (`RECIPES.BIN`) that the package puts in its package folder, or
  * null. INSTALL copies it to the data folder.
+ * `leftOut` names the `.GRF` files of the site effects that the person did not choose. The package
+ * lists them, and the camera does not list them, also when an earlier package put them there.
  */
 async function assemble<T>(
   targets: readonly string[],
@@ -125,6 +127,7 @@ async function assemble<T>(
   onProgress: (received: number, retrying: boolean) => void,
   finish: (builder: Packager) => T,
   recipes: Uint8Array | null = null,
+  leftOut: readonly string[] = [],
 ): Promise<T> {
   const used = new Set<string>([wasmUrl]);
   const use = (url: string) => {
@@ -194,6 +197,7 @@ async function assemble<T>(
         }
         builder.addEffect(blob);
       }
+      for (const file of leftOut) builder.leaveOutEffect(file);
       for (const bytes of await moduleBytes) {
         builder.addModule(bytes);
       }
@@ -222,6 +226,7 @@ export function buildPackage(
   imports: Uint8Array | null,
   onProgress: (received: number, retrying: boolean) => void,
   recipes: Uint8Array | null = null,
+  leftOut: readonly string[] = [],
 ): Promise<Blob> {
   return assemble(
     targets,
@@ -236,6 +241,7 @@ export function buildPackage(
       return new Blob([zip as Uint8Array<ArrayBuffer>], { type: 'application/zip' });
     },
     recipes,
+    leftOut,
   );
 }
 
@@ -252,6 +258,7 @@ export function buildCardFiles(
   imports: Uint8Array | null,
   onProgress: (received: number) => void,
   recipes: Uint8Array | null = null,
+  leftOut: readonly string[] = [],
 ): Promise<CardFile[]> {
   return assemble(
     targets,
@@ -268,6 +275,7 @@ export function buildCardFiles(
         return item;
       }),
     recipes,
+    leftOut,
   );
 }
 

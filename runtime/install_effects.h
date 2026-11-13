@@ -14,10 +14,11 @@ static void offer_path(const char *path, const char *name)
     /* The catalog keeps the smallest IDs: the one past EFFECTS_LISTED is out. */
     if(listed_count>EFFECTS_LISTED) { ++overflow_count; listed_count=EFFECTS_LISTED; }
 }
-/* A symbolic link or an unusable file does not stop the other effects. */
+/* A symbolic link or an unusable file does not stop the other effects. An
+   effect that the package leaves out is not listed (install_library.h). */
 static void offer_effect(const char *name, u32 n, void *context)
 {
-    if(!catalog_name(name,n)) return;
+    if(!catalog_name(name,n) || package_leaves_out(name)) return;
     char path[EFFECT_PATH_SIZE];
     if(join(path,sizeof(path),(const char *)context,name)) offer_path(path,name);
 }

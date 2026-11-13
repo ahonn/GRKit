@@ -9,13 +9,21 @@
    install before the other effects of the library. A package module loads
    only if the list names it, so a merge copy of a new package that leaves
    an old module behind does not load it. Without the list, each package
-   module loads. */
+   module loads.
+
+   A name after '-' is an effect that the site offered and the person did
+   not choose: the library does not list it (discover), so an effect that an
+   earlier package copied there goes away with the new package. The
+   installer deletes no file (copy_effects), so the file stays. Any other
+   effect file of the library still loads without a list. An earlier
+   runtime skips these names. */
 #define NAMES_MAX 64U
 #define PACKAGE_FILE_MAX 1024U
 /* ASCII whitespace, which separates the names of the list. */
 static int text_space(u8 c) { return c==' ' || c=='\t' || c=='\r' || c=='\n'; }
 static char package_effects[NAMES_MAX][CATALOG_NAME_SIZE], package_modules[NAMES_MAX][CATALOG_NAME_SIZE];
-static u32 package_effect_count, package_module_count;
+static char package_left_out[NAMES_MAX][CATALOG_NAME_SIZE];
+static u32 package_effect_count, package_module_count, package_left_out_count;
 static int package_listed;
 static int same_name(const char *a, const char *b)
 {
@@ -37,7 +45,7 @@ static int module_file_name(const char *name, u32 n)
 static void read_package_list(void)
 {
     static u8 text[PACKAGE_FILE_MAX];
-    package_effect_count = package_module_count = 0;
+    package_effect_count = package_module_count = package_left_out_count = 0;
     long have = read_text(package_path, text, sizeof(text));
     package_listed = have >= 0;
     for (long i = 0; i < have;) {
@@ -46,6 +54,13 @@ static void read_package_list(void)
         while (i < have && !text_space(text[i])) ++i;
         u32 n = (u32)(i - start);
         const char *name = (const char *)text + start;
+        if (n && name[0] == '-') {
+            if (catalog_name(name + 1, n - 1) && package_left_out_count < NAMES_MAX) {
+                copy((u8 *)package_left_out[package_left_out_count], text + start + 1, n - 1);
+                package_left_out[package_left_out_count++][n - 1] = 0;
+            }
+            continue;
+        }
         if (!n || n >= CATALOG_NAME_SIZE) continue;
         if (catalog_name(name, n) && package_effect_count < NAMES_MAX) {
             copy((u8 *)package_effects[package_effect_count], text + start, n);
@@ -59,6 +74,12 @@ static void read_package_list(void)
 static int package_effect(const char *name)
 {
     for (u32 i = 0; i < package_effect_count; ++i) if (same_name(package_effects[i], name)) return 1;
+    return 0;
+}
+/* Whether the package leaves out the effect `name`. */
+static int package_leaves_out(const char *name)
+{
+    for (u32 i = 0; i < package_left_out_count; ++i) if (same_name(package_left_out[i], name)) return 1;
     return 0;
 }
 static int package_module(const char *name)

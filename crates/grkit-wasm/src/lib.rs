@@ -258,6 +258,12 @@ impl Builder {
         self.effects.insert(blob.to_vec())
     }
 
+    /// Leaves out the effect with the package filename `name`: the site offered it, and the
+    /// person did not choose it (`EffectSet::leave_out`).
+    pub fn leave_out_effect(&mut self, name: &str) -> Result<()> {
+        self.effects.leave_out(name)
+    }
+
     /// Adds one module file (`grkit_core::grm`) and returns its ID. The
     /// installer installs each module of the package.
     pub fn add_module(&mut self, bytes: &[u8]) -> Result<String> {
@@ -438,6 +444,13 @@ impl Package {
     #[wasm_bindgen(js_name = addEffect)]
     pub fn add_effect(&mut self, blob: &[u8]) -> Result<String, JsError> {
         self.0.add_effect(blob).map_err(js_error)
+    }
+
+    /// Leaves out the effect with the `.GRF` filename `name`, which the camera then does not
+    /// list. Call it after `addEffect` for each effect of the site that is not chosen.
+    #[wasm_bindgen(js_name = leaveOutEffect)]
+    pub fn leave_out_effect(&mut self, name: &str) -> Result<(), JsError> {
+        self.0.leave_out_effect(name).map_err(js_error)
     }
 
     /// Adds one module file (`.GRM`) and returns its module ID.

@@ -343,6 +343,18 @@ export function InstallPage({
   /** The effects of the package: the checked ones, or none while Film Look is off. */
   const packageEffects = () => (plan.includeEffects ? checkedEffects() : Promise.resolve([]));
 
+  /**
+   * The `.GRF` files of the site effects that `effects` leaves out, while Film Look is on: the
+   * camera then does not list them, also when an earlier package put them on the card.
+   */
+  async function leftOutEffects(effects: readonly PackageEffect[]): Promise<string[]> {
+    if (!plan.includeEffects) return [];
+    const chosen = new Set(effects.map((effect) => effect.id));
+    return (await loadCatalog(targets![0]!)).effects
+      .filter((effect) => !chosen.has(effect.id))
+      .map((effect) => effect.file);
+  }
+
   /** Opens the card picker, then reads the card that the user picks. */
   async function connectCard() {
     let root;
@@ -617,9 +629,19 @@ export function InstallPage({
       const checked = await checkedEffects();
       const effects = plan.includeEffects ? cardPackageEffects(checked) : [];
       const imports = await encodeLibrary(allImported);
-      const files = await buildCardFiles(targets, camera.id, effects, plan.modules, language, imports, (received) => {
-        if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
-      });
+      const files = await buildCardFiles(
+        targets,
+        camera.id,
+        effects,
+        plan.modules,
+        language,
+        imports,
+        (received) => {
+          if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
+        },
+        null,
+        await leftOutEffects(effects),
+      );
       const changes = cardChanges(
         session,
         checked.map((effect) => effect.id),
@@ -697,6 +719,7 @@ export function InstallPage({
           if (run === buildRun.current) setBuild({ state: 'building', received, retrying });
         },
         recipes,
+        await leftOutEffects(effects),
       );
       if (run === buildRun.current) {
         save(blob, packageFilename(__GRKIT_VERSION__, camera.name, new Date()));

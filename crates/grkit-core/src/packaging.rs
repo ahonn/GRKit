@@ -430,10 +430,15 @@ pub use crate::card::EFFECTS_FOLDER;
 
 pub use crate::card::PACKAGE_LIST;
 
-/// The compiled effects of a package, each under its package filename (`effects::filename`).
+/// The compiled effects of a package, each under its package filename (`effects::filename`),
+/// and the effects that the package leaves out.
 #[derive(Clone, Debug, Default)]
 pub struct EffectSet {
     files: Files,
+    /// The filenames of the effects that the site offered and the person did not choose.
+    /// `PACKAGE_LIST` names each after `-`, and the camera does not list it, so an effect that
+    /// an earlier package copied into the library goes away (`runtime/install_library.h`).
+    left_out: BTreeSet<String>,
 }
 
 impl EffectSet {
@@ -448,6 +453,10 @@ impl EffectSet {
             "Duplicate effect ID or filename hash collision: {id}"
         );
         ensure!(
+            !self.left_out.contains(&name),
+            "The package leaves out the effect {id}"
+        );
+        ensure!(
             self.files.len() < runtime::MAX_COUNT,
             "This target supports at most {} effects",
             runtime::MAX_COUNT
@@ -455,31 +464,48 @@ impl EffectSet {
         self.files.insert(name, blob);
         Ok(id)
     }
+
+    /// Leaves out the effect with the package filename `name`, which the package does not hold.
+    pub fn leave_out(&mut self, name: &str) -> Result<()> {
+        ensure!(effect_file_name(name), "Not an effect filename: {name}");
+        ensure!(
+            !self.files.contains_key(name),
+            "The package holds the effect {name}"
+        );
+        self.left_out.insert(name.to_owned());
+        Ok(())
+    }
 }
 
 /// The contents of `PACKAGE_LIST`: the file names in name order, one on
-/// each line.
-fn package_list<'a>(names: impl IntoIterator<Item = &'a String>) -> Vec<u8> {
+/// each line, then each left-out effect after `-`.
+fn package_list<'a>(
+    names: impl IntoIterator<Item = &'a String>,
+    left_out: &BTreeSet<String>,
+) -> Vec<u8> {
     let mut names: Vec<&String> = names.into_iter().collect();
     names.sort();
     names
         .into_iter()
         .map(|name| format!("{name}\n"))
+        .chain(left_out.iter().map(|name| format!("-{name}\n")))
         .collect::<String>()
         .into_bytes()
 }
 
+/// A package filename of an effect: 1 to 8 uppercase letters, digits, or `_`, then `.GRF`.
+fn effect_file_name(name: &str) -> bool {
+    name.strip_suffix(".GRF").is_some_and(|stem| {
+        (1..=8).contains(&stem.len())
+            && stem
+                .bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    })
+}
+
 fn is_effect_path(name: &str) -> bool {
-    let Some(stem) = name
-        .strip_prefix("SD_ROOT/SCRIPT/GRKIT/EFFECTS/")
-        .and_then(|s| s.strip_suffix(".GRF"))
-    else {
-        return false;
-    };
-    (1..=8).contains(&stem.len())
-        && stem
-            .bytes()
-            .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    name.strip_prefix("SD_ROOT/SCRIPT/GRKIT/EFFECTS/")
+        .is_some_and(effect_file_name)
 }
 
 /// What a valid package holds besides the runtime.
@@ -667,8 +693,22 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
             bail!("Package contains unexpected files: {name}");
         }
     }
+    // The effects that the list leaves out are effects that the package does not hold.
+    let list = &contents[&format!("SD_ROOT/{PACKAGE_LIST}")];
+    let left_out: BTreeSet<String> = std::str::from_utf8(list)
+        .context("Read the package list")?
+        .lines()
+        .filter_map(|line| line.strip_prefix('-'))
+        .map(str::to_owned)
+        .collect();
     ensure!(
-        contents[&format!("SD_ROOT/{PACKAGE_LIST}")] == package_list(listed.iter()),
+        left_out
+            .iter()
+            .all(|name| effect_file_name(name) && !listed.contains(name)),
+        "{PACKAGE_LIST} leaves out an effect that is not valid or that the package holds"
+    );
+    ensure!(
+        *list == package_list(listed.iter(), &left_out),
         "{PACKAGE_LIST} must list the effect and module files of the package"
     );
     ensure!(
@@ -817,7 +857,7 @@ pub fn assemble_with(
     listed.sort();
     contents.insert(
         format!("SD_ROOT/{PACKAGE_LIST}"),
-        package_list(listed.iter()),
+        package_list(listed.iter(), &effects.left_out),
     );
     if let Some(bytes) = extras.recipes {
         contents.insert(format!("SD_ROOT/{RECIPES_PACKAGE_PATH}"), bytes.to_vec());
