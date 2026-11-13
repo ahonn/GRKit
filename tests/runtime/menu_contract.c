@@ -236,6 +236,16 @@ static unsigned change_controller(unsigned from, unsigned to, unsigned arg)
     return 0;
 }
 #define FW_CHANGE_CONTROLLER change_controller
+/* A vtable that the test puts in object memory has the method addresses
+   TEST_METHODS + 4 * slot: a call of one runs test_select_method. */
+#define TEST_METHODS 0x5a800000U
+static uintptr_t test_select_method(uintptr_t address);
+#define CALL0(a) ((unsigned (*)(void))test_select_method((uintptr_t)(a)))
+#define CALL1(a) ((unsigned (*)(unsigned))test_select_method((uintptr_t)(a)))
+#define CALL2(a) ((unsigned (*)(unsigned,unsigned))test_select_method((uintptr_t)(a)))
+#define CALL3(a) ((unsigned (*)(unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
+#define CALL4(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
+#define CALL5(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
@@ -244,6 +254,44 @@ _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the serv
    TEST_CHECK_KINDS. */
 #define TEST_CHECK_PAGE (TEST_OBJECTS + 0x3000U)
 #define TEST_CHECK_KINDS (TEST_OBJECTS + 0x3800U)
+/* The native SelectMenuController methods of the test vtable. Start
+   registers the canvases of the own page and fails when they are
+   registered, as the firmware asserts in RegistCanvas; Stop unregisters
+   them. */
+#define TEST_SELECT_VTABLE (TEST_OBJECTS + 0x3e04U)
+static unsigned own_registered, own_starts, own_stops, own_events;
+static unsigned test_select_start(unsigned controller, unsigned id, unsigned arg, unsigned more)
+{
+    (void)id; (void)arg; (void)more;
+    assert(controller == TEST_CHECK_PAGE && !own_registered);
+    own_registered = 1;
+    ++own_starts;
+    return 0;
+}
+static unsigned test_select_stop(unsigned controller)
+{
+    assert(controller == TEST_CHECK_PAGE);
+    own_registered = 0;
+    ++own_stops;
+    return 0;
+}
+static unsigned test_select_event(unsigned controller, unsigned event)
+{
+    (void)controller; (void)event;
+    ++own_events;
+    return 0;
+}
+static uintptr_t test_select_method(uintptr_t address)
+{
+    if (address - TEST_METHODS >= 4U * CHECK_VTABLE_SLOTS) return address;
+    switch ((address - TEST_METHODS) / 4) {
+    case SELECT_START_SLOT: return (uintptr_t)test_select_start;
+    case SELECT_STOP_SLOT: return (uintptr_t)test_select_stop;
+    case SELECT_EVENT_SLOT: return (uintptr_t)test_select_event;
+    }
+    assert(!"A native method that the test has not");
+    return 0;
+}
 static unsigned view_call(unsigned fn, unsigned a, unsigned b, unsigned c, unsigned d)
 {
     (void)b; (void)c; (void)d;
@@ -3453,6 +3501,87 @@ static void the_options_page_shows_checkboxes(void)
     assert(menu_settings_controller(pages[2]) == pages[2] && !check[CHECK_ID / 4]);
     assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
 }
+
+/* The firmware side of a controller change. The post calls
+   menu_settings_controller; the change runs later: it stops the controller
+   that the factory gives for the ID that leaves, then starts the one for
+   the ID that comes. The firmware also gives each event to the controller
+   of the current ID. The factory gives the own page (menu_check_controller)
+   or a native controller, which the test only counts. */
+static unsigned native_starts, native_stops, native_page_events;
+static void change_runs(u32 from, u32 to)
+{
+    u32 controller = menu_check_controller(0, from);
+    if (controller) menu_select_stop(controller);
+    else ++native_stops;
+    controller = menu_check_controller(0, to);
+    if (controller) menu_select_start(controller, to, 0, 0);
+    else ++native_starts;
+}
+static u32 event_on(u32 id)
+{
+    static const u16 event[4] = {0x7777};
+    u32 controller = menu_check_controller(0, id);
+    if (controller) return menu_select_event(controller, event);
+    ++native_page_events;
+    return 0;
+}
+
+/* An own value page stops when the camera leaves it, as for the keyboard.
+   The post of the change ends CHECK_ID, but the change that runs after it
+   stops the controller of the ID of the page, so that controller stays the
+   own page until it stops. Until then, the page takes each event. A start
+   after the stop registers the canvases of the page again, which a page
+   that did not stop cannot. */
+static void an_own_page_stops_when_the_camera_leaves_it(void)
+{
+    static const u32 pages[] = SETTINGS_PAGES;
+    static const u16 name[] = {'N', 'e', 'g', 'a', 0};
+    volatile u32 *h = test_header, *check = services_word(h, SERVICES_CHECK);
+    volatile u32 *copy = check_word(h, CHECK_VTABLES + CHECK_PAGE_CHECKBOX * CHECK_VTABLE_SIZE);
+    /* The options page of Guides shows on the own checkbox page, whose
+       vtable copy has the Start, Stop, and event methods of GRKit. */
+    for (u32 slot = 0; slot < SELECT_VTABLE_SLOTS; ++slot)
+        MENU_OBJECT_WORD(TEST_SELECT_VTABLE, 4 * slot) = TEST_METHODS + 4 * slot;
+    MENU_OBJECT_WORD(TEST_CHECK_PAGE, 0) = TEST_SELECT_VTABLE;
+    check_override(h, CHECK_PAGE_CHECKBOX, TEST_CHECK_PAGE);
+    assert(copy[0] == TEST_SELECT_VTABLE && copy[2] == TEST_METHODS);
+    assert(copy[2 + SELECT_START_SLOT] == (u32)(uintptr_t)menu_select_start);
+    assert(copy[2 + SELECT_STOP_SLOT] == (u32)(uintptr_t)menu_select_stop);
+    assert(copy[2 + SELECT_EVENT_SLOT] == (u32)(uintptr_t)menu_select_event);
+    assert(menu_settings_controller(pages[1]) == pages[1] && check[CHECK_ID / 4] == pages[1]);
+    change_runs(SETTINGS_SUBMENU, pages[1]);
+    assert(own_starts == 1 && own_registered && native_stops == 1);
+    assert(check[CHECK_SHOWN / 4] == TEST_CHECK_PAGE && check[CHECK_SHOWN_ID / 4] == pages[1]);
+    /* The page gives an event to its native method. */
+    assert(!event_on(pages[1]) && own_events == 1);
+    /* Rename opens the keyboard: its post ends CHECK_ID. Until the change
+       runs, the page takes each event. */
+    assert(ui_keyboard_on(h, TEST_CHECK_PAGE, name, UI_KEYBOARD_SHORT, 0, 0));
+    assert(controller_to == KEYBOARD_CONTROLLER);
+    assert(menu_settings_controller(KEYBOARD_CONTROLLER) == KEYBOARD_CONTROLLER && !check[CHECK_ID / 4]);
+    assert(event_on(pages[1]) == 1 && own_events == 1 && !native_page_events);
+    /* The change stops the own page, not a native one. After that, the ID
+       of the page gives the native controller. */
+    change_runs(pages[1], KEYBOARD_CONTROLLER);
+    assert(own_stops == 1 && !own_registered && native_stops == 1 && native_starts == 1);
+    assert(!check[CHECK_SHOWN / 4] && !menu_check_controller(0, pages[1]));
+    /* The keyboard returns to the page, which starts clean. */
+    assert(menu_settings_controller(pages[1]) == pages[1]);
+    change_runs(KEYBOARD_CONTROLLER, pages[1]);
+    assert(own_starts == 2 && own_registered && native_stops == 2);
+    assert(!event_on(pages[1]) && own_events == 2);
+    /* A start of the same page again (settings_value_again) stops the page
+       and then starts it. */
+    assert(menu_settings_controller(pages[1]) == pages[1]);
+    change_runs(pages[1], pages[1]);
+    assert(own_stops == 2 && own_starts == 3 && own_registered);
+    /* The return to the settings page stops it. */
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    change_runs(pages[1], SETTINGS_SUBMENU);
+    assert(own_stops == 3 && !own_registered && !check[CHECK_SHOWN / 4]);
+    MENU_OBJECT_WORD(TEST_CHECK_PAGE, 0) = 0;
+}
 #endif
 
 static void reused_row_views_show_the_page_that_reuses_them(void)
@@ -4996,6 +5125,7 @@ int main(void)
     the_options_page_toggles_its_values();
 #if defined(FW_CHECK_ITEM) && defined(FW_MENU_TABS)
     the_options_page_shows_checkboxes();
+    an_own_page_stops_when_the_camera_leaves_it();
 #endif
     reused_row_views_show_the_page_that_reuses_them();
     the_film_look_menu_page_lists_film_stocks();

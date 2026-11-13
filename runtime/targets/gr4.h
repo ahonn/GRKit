@@ -199,6 +199,10 @@
 #define STRING_VIEW_TEXT 0xea
 /* The methods of the SelectMenuController vtable. */
 #define SELECT_VTABLE_SLOTS 16U
+/* The Start and Stop methods of a controller, which a controller change
+   calls. */
+#define SELECT_START_SLOT 5U
+#define SELECT_STOP_SLOT 15U
 /* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
    and MENU (DONE): DONE returns the page. */
 #define SELECT_EV_CANCEL 0xe2U

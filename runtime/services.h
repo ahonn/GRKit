@@ -197,7 +197,11 @@
    each recipe, the summary of the root row, and the text of a box with a
    pointer to it for each language (GrkitText). Each text has RECIPE_UNITS
    units. */
-#define SERVICES_RECIPES (SERVICES_CHECK + CHECK_EAT + 4U)
+/* The own page that started and has not stopped, or 0, and the controller
+   ID that it started for (runtime/menu_settings.h: menu_select_start). */
+#define CHECK_SHOWN (CHECK_EAT + 4U)
+#define CHECK_SHOWN_ID (CHECK_EAT + 8U)
+#define SERVICES_RECIPES (SERVICES_CHECK + CHECK_SHOWN_ID + 4U)
 #define RECIPE_UNITS 96U
 #define RECIPE_TEXT_SIZE (2U * RECIPE_UNITS)
 #define RECIPE_ROWS_MAX (GRKIT_RECIPE_ON_MAX + 2U)

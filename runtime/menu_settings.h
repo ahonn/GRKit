@@ -253,8 +253,9 @@ static void check_rows(volatile u32 *h,u32 which,u32 need) {
 }
 /* The event method of an own page is menu_select_event: the vtable of the
    page is a copy with slot SELECT_EVENT_SLOT replaced, so a box can show on
-   the page and the page can take OK. The vtable layout of the controllers
-   is the same on each supported build. */
+   the page and the page can take OK. The copy also replaces Start and Stop
+   (menu_select_start). The vtable layout of the controllers is the same on
+   each build of a family. */
 #define SELECT_EVENT_SLOT 10U
 /* The rows of an action target MENU_ACTION_TARGET + the row, which no
    controller has. */
@@ -281,9 +282,10 @@ static void ui_page_box_leave(volatile u32 *h,u32 id) {
     u32 i, page;
     if(!h[GRKIT_HOST_SERVICES/4]) return;
     /* A change to another controller, as to the keyboard, ends the wait for
-       the events that follow a taken OK; they reached the page before it.
-       A start of the same page again (settings_value_again) keeps it: they
-       reach the page after. */
+       the events that follow a taken OK: until the change runs and stops
+       the page, the page takes each event (menu_select_event). A start of
+       the same page again (settings_value_again) keeps the wait: the events
+       reach the page after it starts again. */
     if(id!=check_word(h,CHECK_ID)[0]) check_word(h,CHECK_EAT)[0]=0;
     for(i=0;i<2;++i) {
         page=check_word(h,i==CHECK_PAGE_RADIO ? CHECK_RADIO : CHECK_PAGE)[0];
@@ -309,6 +311,11 @@ A32_ENTRY u32 menu_select_event(u32 controller,const u16 *event) {
     volatile u32 *eat=check_word(h,CHECK_EAT);
     const Setting *setting;
     if(h[GRKIT_HOST_SERVICES/4]) {
+        /* The post of a change to another controller changed CHECK_ID, and
+           the change has not run: the page takes each event until it
+           stops. */
+        if(controller==check_word(h,CHECK_SHOWN)[0] && check_word(h,CHECK_ID)[0]!=check_word(h,CHECK_SHOWN_ID)[0])
+            return 1;
         if(kind==EV_HALF_PRESS) {
             eat[0]=EAT_HALF_PRESS;
             return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
@@ -345,6 +352,33 @@ A32_ENTRY u32 menu_select_event(u32 controller,const u16 *event) {
     return CALL2(WORD(native,4U*SELECT_EVENT_SLOT))(controller,(u32)event);
 }
 _Static_assert(SELECT_VTABLE_SLOTS<=CHECK_VTABLE_SLOTS,"The services block holds the vtable copy");
+_Static_assert(SELECT_STOP_SLOT<SELECT_VTABLE_SLOTS,"The copy holds Stop");
+/* The native method `slot` of the own page `controller`. */
+static u32 check_native(volatile u32 *h,u32 controller,u32 slot) {
+    u32 which=controller==check_word(h,CHECK_RADIO)[0] ? CHECK_PAGE_RADIO : CHECK_PAGE_CHECKBOX;
+    return WORD(check_word(h,CHECK_VTABLES+which*CHECK_VTABLE_SIZE)[0],4U*slot);
+}
+/* The firmware gives each event to the controller that the factory gives
+   for the current ID. A controller change runs after its post: it stops the
+   controller that the factory gives for the ID that leaves, then starts the
+   controller of the new ID. CHECK_ID changes at the post
+   (menu_settings_controller), so the own page that shows stays the
+   controller of its ID until it stops (menu_check_controller). Its Stop
+   then unregisters its canvases, so that its next Start can register them
+   again. */
+A32_ENTRY u32 menu_select_start(u32 controller,u32 id,u32 arg,u32 more) {
+    volatile u32 *h=menu_header();
+    u32 r=CALL4(check_native(h,controller,SELECT_START_SLOT))(controller,id,arg,more);
+    check_word(h,CHECK_SHOWN)[0]=controller;
+    check_word(h,CHECK_SHOWN_ID)[0]=id;
+    return r;
+}
+A32_ENTRY u32 menu_select_stop(u32 controller) {
+    volatile u32 *h=menu_header();
+    u32 r=CALL1(check_native(h,controller,SELECT_STOP_SLOT))(controller);
+    if(check_word(h,CHECK_SHOWN)[0]==controller) check_word(h,CHECK_SHOWN)[0]=0;
+    return r;
+}
 static void check_override(volatile u32 *h,u32 which,u32 controller) {
     volatile u32 *at=check_word(h,CHECK_VTABLES+which*CHECK_VTABLE_SIZE);
     u32 vtable=MENU_OBJECT_WORD(controller,0), i;
@@ -352,17 +386,22 @@ static void check_override(volatile u32 *h,u32 which,u32 controller) {
     at[0]=vtable;
     for(i=0;i<1U+SELECT_VTABLE_SLOTS;++i) at[1+i]=WORD(vtable-4U,4U*i);
     at[2+SELECT_EVENT_SLOT]=(u32)menu_select_event;
+    at[2+SELECT_START_SLOT]=(u32)menu_select_start;
+    at[2+SELECT_STOP_SLOT]=(u32)menu_select_stop;
     MENU_OBJECT_WORD(controller,0)=(u32)(at+2);
 }
-/* The controller of `id` (menu.S: menu_check_factory): the own page of the
-   open long value page, else 0 for the native one. */
+/* The controller of `id` (menu.S: menu_check_factory): the own page that
+   shows for `id` until it stops, else the own page of the open long value
+   page, else 0 for the native one. */
 A32_ENTRY u32 menu_check_controller(u32 factory,u32 id) {
     volatile u32 *h=menu_header();
     const Setting *page;
     u32 which,setting,controller,title;
     volatile u32 *slot;
     (void)factory;
-    if(!h[GRKIT_HOST_SERVICES/4] || !id || id!=check_word(h,CHECK_ID)[0]) return 0;
+    if(!h[GRKIT_HOST_SERVICES/4] || !id) return 0;
+    if(check_word(h,CHECK_SHOWN)[0] && id==check_word(h,CHECK_SHOWN_ID)[0]) return check_word(h,CHECK_SHOWN)[0];
+    if(id!=check_word(h,CHECK_ID)[0]) return 0;
     page=settings_page(h);
     setting=check_word(h,CHECK_SETTING)[0];
     if(!page || setting>=settings_rows(h)) return 0;

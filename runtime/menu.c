@@ -12,12 +12,16 @@ extern void menu_changed_original(u32);
 extern void menu_apply_original(u32);
 extern void menu_refresh_original(u32);
 extern u32 menu_destroy_original(u32);
+/* A call of a firmware function. A host test defines them to call its own
+   function for a method that it put in a vtable. */
+#ifndef CALL0
 #define CALL0(a) ((u32 (*)(void))(a))
 #define CALL1(a) ((u32 (*)(u32))(a))
 #define CALL2(a) ((u32 (*)(u32,u32))(a))
 #define CALL4(a) ((u32 (*)(u32,u32,u32,u32))(a))
 #define CALL5(a) ((u32 (*)(u32,u32,u32,u32,u32))(a))
 #define CALL3(a) ((u32 (*)(u32,u32,u32))(a))
+#endif
 /* A firmware call on a view or a controller of a MENU page: a settings page,
    an options page, the GRKit section, or About GRKit. A host test defines
    them to record the calls. */

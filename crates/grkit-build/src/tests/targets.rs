@@ -1197,6 +1197,103 @@ fn keyboard_definitions_match_each_firmware() -> Result<()> {
     Ok(())
 }
 
+/// The methods of the SelectMenuController vtable that an own value page
+/// replaces (`runtime/menu_settings.h`: check_override) are those of each
+/// firmware. The constructor stores the vtable after the call of the
+/// Controller constructor, which stores the Controller vtable. The vtable
+/// has SELECT_VTABLE_SLOTS methods. SelectMenuController has its own event
+/// method and the Start and Stop of Controller. The controller change, next
+/// to its post, calls Stop on the controller that leaves and then Start on
+/// the controller that comes.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn select_menu_methods_match_each_firmware() -> Result<()> {
+    let event_slot = header_definitions("menu_settings.h", true)
+        .get("SELECT_EVENT_SLOT")
+        .and_then(|value| number(value))
+        .expect("SELECT_EVENT_SLOT");
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let value = |name: &str| -> u32 {
+            let value = definitions
+                .get(name)
+                .unwrap_or_else(|| panic!("{} defines no {name}", target.header()));
+            firmware_definition(value)
+                .map(|(address, _)| address)
+                .or_else(|| number(value))
+                .unwrap_or_else(|| panic!("{name} = {value}"))
+        };
+        let word = |address: u32| -> u32 {
+            u32::from_le_bytes(image.read(address, 4).unwrap().try_into().unwrap())
+        };
+        let code = |address: u32| (target::RTOS_BASE..target.data_source).contains(&address);
+        let name = target.name;
+        // The first BL from `start`, and the literal of the first `ldr rX,
+        // [pc, #imm]` from `start`.
+        let first_call = |start: u32| -> (u32, u32) {
+            let site = (0..16)
+                .map(|k| start + 4 * k)
+                .find(|&site| word(site) >> 24 == 0xeb)
+                .unwrap_or_else(|| panic!("{name}: no call at {start:#x}"));
+            (site, arm::branch_target(site, word(site)).unwrap())
+        };
+        let literal = |start: u32| -> u32 {
+            let site = (0..16)
+                .map(|k| start + 4 * k)
+                .find(|&site| word(site) & 0xffff_0000 == 0xe59f_0000)
+                .unwrap_or_else(|| panic!("{name}: no literal at {start:#x}"));
+            word(site + 8 + (word(site) & 0xfff))
+        };
+        let (site, base) = first_call(value("FW_SELECT_MENU_NEW"));
+        let (select, controller) = (literal(site + 4), literal(base));
+        let slots = value("SELECT_VTABLE_SLOTS");
+        let (start, stop) = (value("SELECT_START_SLOT"), value("SELECT_STOP_SLOT"));
+        let method = |vtable: u32, slot: u32| word(vtable + 4 * slot);
+        assert!(
+            (0..slots).all(|slot| code(method(select, slot))) && !code(method(select, slots)),
+            "{name}: the vtable at {select:#x} has no {slots} methods"
+        );
+        assert_ne!(
+            method(select, event_slot),
+            method(controller, event_slot),
+            "{name}: the event method"
+        );
+        for slot in [start, stop] {
+            assert_eq!(
+                method(select, slot),
+                method(controller, slot),
+                "{name}: slot {slot}"
+            );
+        }
+        // `ldr rX, [rY, #4 * slot]`, `blx rX`.
+        let virtual_call = |site: u32, slot: u32| {
+            let load = word(site);
+            load & 0xfff0_0fff == 0xe590_0000 | (4 * slot)
+                && word(site + 4) == 0xe12f_ff30 | ((load >> 12) & 0xf)
+        };
+        let change = value("FW_CHANGE_CONTROLLER");
+        let stops: Vec<u32> = (0..256)
+            .map(|k| change + 4 * k)
+            .filter(|&site| virtual_call(site, stop))
+            .collect();
+        assert_eq!(stops.len(), 1, "{name}: the change calls no Stop");
+        assert!(
+            (1..48).any(|k| virtual_call(stops[0] + 4 * k, start)),
+            "{name}: the change calls no Start after Stop"
+        );
+    }
+    Ok(())
+}
+
 /// The native slots of the user modes (`runtime/mode_dial.h`) are those of
 /// each firmware. GR III: the save of a box takes a box from 1 to 6 and
 /// copies DIAL_RECORD_SIZE bytes from the current record; and the getters of
