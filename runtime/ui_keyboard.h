@@ -7,7 +7,9 @@
    writes the setting on OK. GRKit borrows its copyright use while
    UI_KEYBOARD is set. Three hooks (runtime/menu.S) then give the keyboard
    the GRKit text instead of the copyright holder, take the text on OK
-   instead of the copyright setter, and limit the text to UI_KEYBOARD_CHARS.
+   instead of the copyright setter, and limit the text to the most
+   characters of the use: UI_KEYBOARD_SHORT, such as for a recipe name, or
+   up to UI_KEYBOARD_CHARS, as for the name of a user mode of the mode dial.
    So the copyright setting never sees a GRKit text, and the keyboard never
    shows the copyright holder for GRKit.
 
@@ -25,27 +27,33 @@
 #define UI_KEYBOARD_ARMED 1U
 #define UI_KEYBOARD_SHOWN 2U
 /* The text that the keyboard starts with for `text`, in `to`: its
-   printable ASCII without the spaces at both ends, at most
-   UI_KEYBOARD_CHARS characters, then a NUL. */
-static void ui_keyboard_start(volatile u8 *to,const volatile u16 *text) {
+   printable ASCII without the spaces at both ends, at most `limit`
+   characters, then a NUL. */
+static void ui_keyboard_start(volatile u8 *to,const volatile u16 *text,u32 limit) {
     u32 n=0, i;
-    for(i=0;text[i] && n<UI_KEYBOARD_CHARS;++i)
+    for(i=0;text[i] && n<limit;++i)
         if(text[i]>=0x20U && text[i]<=0x7eU && (n || text[i]!=' ')) to[n++]=(u8)text[i];
     while(n && to[n-1]==' ') --n;
     to[n]=0;
 }
-/* Start the keyboard with `text`. A page of MENU gives it, then changes to
-   the keyboard itself (ui_keyboard_on). */
-static void ui_keyboard_text(volatile u32 *h,const volatile u16 *text) {
-    ui_keyboard_start((volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT),text);
+/* The most characters of the keyboard now. */
+static u32 ui_keyboard_limit(volatile u32 *h) {
+    u32 limit=ui_word(h,UI_KEYBOARD_LIMIT)[0];
+    return limit && limit<=UI_KEYBOARD_CHARS ? limit : UI_KEYBOARD_SHORT;
+}
+/* Start the keyboard with `text`, of at most `limit` characters. A page of
+   MENU gives it, then changes to the keyboard itself (ui_keyboard_on). */
+static void ui_keyboard_text(volatile u32 *h,const volatile u16 *text,u32 limit) {
+    ui_word(h,UI_KEYBOARD_LIMIT)[0]=limit;
+    ui_keyboard_start((volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT),text,ui_keyboard_limit(h));
     ui_word(h,UI_KEYBOARD_RESULT)[0]=0;
 }
-/* Prepare the keyboard for a page of MENU, which changes to it next: 1, or
-   0 when another use holds the keyboard. The change from the keyboard calls
-   done(arg) (ui_keyboard_change), where ui_keyboard_result gives the text of
-   an OK. */
-static u32 ui_keyboard_prepare(volatile u32 *h,const volatile u16 *text,void (*done)(u32),u32 arg) {
-    ui_keyboard_text(h,text);
+/* Prepare the keyboard for a page of MENU, which changes to it next, with
+   `text` of at most `limit` characters: 1, or 0 when another use holds the
+   keyboard. The change from the keyboard calls done(arg)
+   (ui_keyboard_change), where ui_keyboard_result gives the text of an OK. */
+static u32 ui_keyboard_prepare(volatile u32 *h,const volatile u16 *text,u32 limit,void (*done)(u32),u32 arg) {
+    ui_keyboard_text(h,text,limit);
     if(!ui_keyboard_arm(h)) return 0;
     ui_word(h,UI_KEYBOARD_DONE)[0]=(u32)done;
     ui_word(h,UI_KEYBOARD_ARG)[0]=arg;
@@ -57,7 +65,7 @@ static u32 ui_keyboard_prepare(volatile u32 *h,const volatile u16 *text,void (*d
    back runs at once on the page. */
 static u32 ui_keyboard_open(volatile u32 *h,const volatile u16 *text,void (*back)(u32),u32 arg) {
     if(!ui_native_request(h,KEYBOARD_CONTROLLER,back,arg)) return 0;
-    ui_keyboard_text(h,text);
+    ui_keyboard_text(h,text,UI_KEYBOARD_SHORT);
     return 1;
 }
 /* Whether GRKit holds the keyboard. */
@@ -75,7 +83,7 @@ static u32 ui_keyboard_kept(volatile u32 *h,const volatile u16 *text) {
     const volatile u8 *typed=ui_keyboard_result(h);
     u32 i;
     if(!typed) return 0;
-    ui_keyboard_start(start,text);
+    ui_keyboard_start(start,text,ui_keyboard_limit(h));
     for(i=0;i<=UI_KEYBOARD_CHARS && start[i]==typed[i];++i) if(!start[i]) return 1;
     return 0;
 }
@@ -123,7 +131,7 @@ A32_ENTRY u32 menu_keyboard_text_in(u32 settings,u32 text) {
     (void)settings;
     if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD)[0]) return 0;
     from=(const volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
-    for(i=0;i<UI_KEYBOARD_CHARS && from[i];++i) BYTE(text,i)=from[i];
+    for(i=0;i<ui_keyboard_limit(h) && from[i];++i) BYTE(text,i)=from[i];
     BYTE(text,i)=0;
     ui_word(h,UI_KEYBOARD)[0]=UI_KEYBOARD_SHOWN;
     return 1;
@@ -137,18 +145,18 @@ A32_ENTRY u32 menu_keyboard_text_out(u32 settings,u32 text) {
     (void)settings;
     if(!h[GRKIT_HOST_SERVICES/4] || ui_word(h,UI_KEYBOARD)[0]!=UI_KEYBOARD_SHOWN) return 0;
     to=(volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
-    for(i=0;i<UI_KEYBOARD_CHARS && BYTE(text,i);++i) to[i]=BYTE(text,i);
+    for(i=0;i<ui_keyboard_limit(h) && BYTE(text,i);++i) to[i]=BYTE(text,i);
     to[i]=0;
     ui_word(h,UI_KEYBOARD_RESULT)[0]=1;
     ui_word(h,UI_KEYBOARD)[0]=0;
     return 1;
 }
-/* The text length of the keyboard (r0): UI_KEYBOARD_CHARS for the GRKit
-   text, else 0 for the native length. */
+/* The text length of the keyboard (r0): the most characters of the use for
+   the GRKit text, else 0 for the native length. */
 A32_ENTRY u32 menu_keyboard_limit(u32 keyboard) {
     volatile u32 *h=menu_header();
     if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD)[0] ||
        BYTE(keyboard,KEYBOARD_FUNCTION)!=KEYBOARD_COPYRIGHT) return 0;
-    return UI_KEYBOARD_CHARS;
+    return ui_keyboard_limit(h);
 }
 #endif

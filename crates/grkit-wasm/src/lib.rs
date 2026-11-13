@@ -741,24 +741,18 @@ pub fn native_looks_js(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeLoo
 }
 
 /// The bytes of `GRKIT/RECIPES.BIN` for a library: a JSON array of recipes
-/// (`grkit_core::recipes::Recipe`), and a JSON array of what INSTALL sets
-/// U1 to U3 of the mode dial to (`grkit_core::recipes::DialStep`: "keep",
-/// "follow", "off", or {"record": k}). Throws for a recipe that the camera
-/// cannot hold, or for a step that names a record that the library does
-/// not have.
+/// (`grkit_core::recipes::Recipe`). Throws for a recipe that the camera
+/// cannot hold.
 #[wasm_bindgen(js_name = encodeRecipes)]
-pub fn encode_recipes(json: &str, dial: &str) -> Result<Vec<u8>, JsError> {
-    let dial = serde_json::from_str::<recipes::LibraryDial>(dial);
+pub fn encode_recipes(json: &str) -> Result<Vec<u8>, JsError> {
     serde_json::from_str::<Vec<recipes::Recipe>>(json)
-        .and_then(|library| Ok((library, dial?)))
         .map_err(anyhow::Error::from)
-        .and_then(|(library, dial)| recipes::encode(&library, &dial))
+        .and_then(|library| recipes::encode(&library))
         .map_err(js_error)
 }
 
-/// The library of a `RECIPES.BIN`, as the JSON of
-/// `grkit_core::recipes::Library`: its recipes and its steps of the mode
-/// dial. Throws for a damaged library.
+/// The recipes of a recipe library (`RECIPES.BIN`), as a JSON array of recipes.
+/// Throws for a damaged library.
 #[wasm_bindgen(js_name = decodeRecipes)]
 pub fn decode_recipes(bytes: &[u8]) -> Result<String, JsError> {
     recipes::decode(bytes)
@@ -781,39 +775,20 @@ pub fn read_recipe_file(text: &str, family: &str) -> Result<String, JsError> {
         .map_err(js_error)
 }
 
-/// What each user mode of the mode dial does, U1 to U3, in the text of the
-/// recipe file (`grkit_core::recipes::read_recipe_dial`): 0 to follow the
-/// dial, `RECIPE_DIAL_OFF` to turn GRKit off, or a recipe ID.
-#[wasm_bindgen(js_name = readRecipeDial)]
-pub fn read_recipe_dial(text: &str) -> Vec<u32> {
-    recipes::read_recipe_dial(text).to_vec()
-}
-
 /// The text of the recipe file for a JSON array of recipes of the camera
 /// line `family`, which replaces `previous`, the text of the file on the
 /// card: it keeps the import hash and the recipes of `previous` that
-/// `readRecipeFile` leaves out, and gives the user modes of the mode dial
-/// what `dial` holds, U1 to U3 as `readRecipeDial` gives them
+/// `readRecipeFile` leaves out
 /// (`grkit_core::recipes::write_recipe_file`). Throws for a recipe that the
-/// camera cannot hold, for more recipes than the file holds, or for a dial
-/// without one value for each user mode.
+/// camera cannot hold, or for more recipes than the file holds.
 #[wasm_bindgen(js_name = writeRecipeFile)]
-pub fn write_recipe_file(
-    json: &str,
-    family: &str,
-    previous: &str,
-    dial: &[u32],
-) -> Result<String, JsError> {
+pub fn write_recipe_file(json: &str, family: &str, previous: &str) -> Result<String, JsError> {
     let family =
         serde_json::from_value::<recipes::Family>(serde_json::Value::String(family.into()));
-    let dial = recipes::Dial::try_from(dial)
-        .map_err(|_| anyhow::anyhow!("The mode dial needs 3 user modes, not {}", dial.len()));
     serde_json::from_str::<Vec<recipes::Recipe>>(json)
         .map_err(anyhow::Error::from)
-        .and_then(|recipes| Ok((recipes, family?, dial?)))
-        .and_then(|(recipes, family, dial)| {
-            recipes::write_recipe_file(&recipes, family, previous, &dial)
-        })
+        .and_then(|recipes| Ok((recipes, family?)))
+        .and_then(|(recipes, family)| recipes::write_recipe_file(&recipes, family, previous))
         .map_err(js_error)
 }
 

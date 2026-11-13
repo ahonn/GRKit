@@ -224,6 +224,17 @@
 #define DIAL_SWITCHES FIRMWARE(0x550874d0)
 #define DIAL_AE_MODEL FIRMWARE(0x55082084)
 #define DIAL_USER_MODES FIRMWARE(0x55082104)
+/* The user modes (gr4.h: the native slots): the assign of the current
+   settings record, of DIAL_RECORD_SIZE bytes, to a user mode, set(holder,
+   user mode), through the holder of the user mode model; and the getter of
+   the model of their names and the setter of a name, set(model, user mode,
+   name, registered). DIAL_RECORD_COPY is the offset of the copy of the
+   current settings record in the settings object (gr4.h). */
+#define FW_USER_MODE_ASSIGN FIRMWARE(0x533e54b4)
+#define FW_USER_MODE_NAMES FIRMWARE(0x532400d4)
+#define FW_USER_MODE_NAME FIRMWARE(0x533e6018)
+#define DIAL_RECORD_SIZE 0xae9U
+#define DIAL_RECORD_COPY 0xaf0U
 /* The Set command of the RTOS shell command UserData (runtime/recipes.h):
    set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
    setter of a native setting by its name and the stored value by its label. */

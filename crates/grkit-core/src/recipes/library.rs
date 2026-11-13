@@ -2,11 +2,9 @@
 
 use super::{Family, Recipe, LIBRARY_MAX, NAME_UNITS, ON_MAX};
 use crate::abi::{
-    RCP_BYTES, RCP_COUNT, RCP_CRC, RCP_DIAL, RCP_MAGIC, RCP_RECORD_FAMILY, RCP_RECORD_NAME,
-    RCP_RECORD_WORDS, RECIPE_DIAL_POSITIONS,
+    RCP_BYTES, RCP_COUNT, RCP_CRC, RCP_MAGIC, RCP_RECORD_FAMILY, RCP_RECORD_NAME, RCP_RECORD_WORDS,
 };
-use anyhow::{bail, ensure, Context, Result};
-use serde::{Deserialize, Serialize};
+use anyhow::{ensure, Context, Result};
 
 /// The magic of the file.
 pub const MAGIC: &[u8; 8] = b"GRKR0001";
@@ -14,60 +12,6 @@ pub const MAGIC: &[u8; 8] = b"GRKR0001";
 pub const HEADER_SIZE: usize = 32;
 /// The bytes of each record.
 pub const RECORD_SIZE: usize = 64;
-
-/// What INSTALL sets a user mode of the mode dial to when it imports a
-/// library. The records of a library have no IDs, so a step names a record,
-/// and INSTALL gives the user mode the ID of the recipe that the record
-/// became on the camera. A record that INSTALL does not import, as one of
-/// another camera line, makes the user mode follow.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum DialStep {
-    /// Keep what the camera has, so a package that does not set the dial
-    /// changes nothing.
-    #[default]
-    Keep,
-    /// The user mode follows the dial.
-    Follow,
-    /// The user mode turns GRKit off.
-    Off,
-    /// The user mode applies the recipe of record k.
-    Record(usize),
-}
-
-impl DialStep {
-    /// The value of the step in the header (`GRKIT_RCP_DIAL_*`).
-    pub fn code(self) -> u32 {
-        match self {
-            Self::Keep => 0,
-            Self::Follow => 1,
-            Self::Off => 2,
-            Self::Record(k) => 3 + k as u32,
-        }
-    }
-
-    fn from_code(code: u32, count: usize) -> Result<Self> {
-        Ok(match code {
-            0 => Self::Keep,
-            1 => Self::Follow,
-            2 => Self::Off,
-            _ if ((code - 3) as usize) < count => Self::Record((code - 3) as usize),
-            _ => bail!("The recipe library has a wrong user mode"),
-        })
-    }
-}
-
-/// What a library sets each user mode of the mode dial to, U1 to U3.
-pub type LibraryDial = [DialStep; RECIPE_DIAL_POSITIONS];
-
-/// A recipe library: the recipes, and what INSTALL sets the user modes of
-/// the mode dial to.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-pub struct Library {
-    pub recipes: Vec<Recipe>,
-    #[serde(default)]
-    pub dial: LibraryDial,
-}
 
 /// Checks the size of a library: at most `LIBRARY_MAX` recipes, and at most
 /// `ON_MAX` of them on.
@@ -81,37 +25,14 @@ pub fn check_library(recipes: &[Recipe]) -> Result<()> {
     Ok(())
 }
 
-/// The bytes of `RECIPES.BIN` for a library of `recipes` that sets the user
-/// modes of the mode dial as `dial` gives. A user mode whose record is off
-/// follows, as on the camera; a record that the library does not have is an
-/// error.
-pub fn encode(recipes: &[Recipe], dial: &LibraryDial) -> Result<Vec<u8>> {
+/// The bytes of `RECIPES.BIN` for a library.
+pub fn encode(recipes: &[Recipe]) -> Result<Vec<u8>> {
     check_library(recipes)?;
     let mut bytes = vec![0; HEADER_SIZE + RECORD_SIZE * recipes.len()];
     bytes[RCP_MAGIC..RCP_MAGIC + 8].copy_from_slice(MAGIC);
     let size = bytes.len() as u32;
     put(&mut bytes, RCP_BYTES, size);
     put(&mut bytes, RCP_COUNT, recipes.len() as u32);
-    for (u, step) in dial.iter().enumerate() {
-        let step = match *step {
-            DialStep::Record(k) => {
-                let recipe = recipes.get(k).with_context(|| {
-                    format!(
-                        "U{} names recipe {}, which the library does not have",
-                        u + 1,
-                        k + 1
-                    )
-                })?;
-                if recipe.enabled {
-                    DialStep::Record(k)
-                } else {
-                    DialStep::Follow
-                }
-            }
-            step => step,
-        };
-        put(&mut bytes, RCP_DIAL + 4 * u, step.code());
-    }
     for (index, recipe) in recipes.iter().enumerate() {
         // An empty name is the automatic name of the camera, as in the recipe
         // file, so that INSTALL finds the recipe that the camera holds.
@@ -132,8 +53,8 @@ pub fn encode(recipes: &[Recipe], dial: &LibraryDial) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-/// The library of `RECIPES.BIN`. A damaged file is an error.
-pub fn decode(bytes: &[u8]) -> Result<Library> {
+/// The recipes of `RECIPES.BIN`. A damaged file is an error.
+pub fn decode(bytes: &[u8]) -> Result<Vec<Recipe>> {
     ensure!(
         bytes.len() >= HEADER_SIZE && &bytes[RCP_MAGIC..RCP_MAGIC + 8] == MAGIC,
         "Not a recipe library"
@@ -149,11 +70,7 @@ pub fn decode(bytes: &[u8]) -> Result<Library> {
         get(bytes, RCP_CRC) == checksum(bytes),
         "The recipe library is damaged"
     );
-    let mut dial = LibraryDial::default();
-    for (u, step) in dial.iter_mut().enumerate() {
-        *step = DialStep::from_code(get(bytes, RCP_DIAL + 4 * u), count)?;
-    }
-    let recipes = (0..count)
+    (0..count)
         .map(|index| {
             let record = &bytes[HEADER_SIZE + RECORD_SIZE * index..][..RECORD_SIZE];
             let units: Vec<u16> = record[RCP_RECORD_NAME..RCP_RECORD_NAME + 2 * NAME_UNITS]
@@ -166,8 +83,7 @@ pub fn decode(bytes: &[u8]) -> Result<Library> {
             let family = Family::from_code(record[RCP_RECORD_FAMILY])?;
             Recipe::from_words(name, family, words).with_context(|| format!("Recipe {}", index + 1))
         })
-        .collect::<Result<_>>()?;
-    Ok(Library { recipes, dial })
+        .collect()
 }
 
 /// The CRC-32 of the file, which reads the CRC field as zero.

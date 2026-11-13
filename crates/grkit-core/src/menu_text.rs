@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 77;
+pub const STRINGS: usize = 79;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -70,14 +70,18 @@ struct Words {
     /// On and Off of the switch.
     enable_at_start: &'static str,
     keep_last: &'static str,
-    /// The Mode Dial row of the Recipes page of MENU, and the values of a
-    /// user mode besides a recipe: None, which follows the dial, GRKit Off,
-    /// and Saved Settings, the settings that Save Settings saved in the user
-    /// mode. U1 to U3 have the names of the dial.
+    /// The Mode Dial row of GRKit Settings in MENU, and the action of a user
+    /// mode that saves the current settings in it. U1 to U3 have the names
+    /// of the dial, and P/Av/Tv/M (P/Av/Tv/Sn/M on GR IV) is the same in each
+    /// language.
     mode_dial: &'static str,
-    dial_none: &'static str,
-    dial_off: &'static str,
-    dial_saved: &'static str,
+    dial_save: &'static str,
+    /// The value of a user mode that does what P/Av/Tv/M do (before and after
+    /// P/Av/Tv/M).
+    dial_same: (&'static str, &'static str),
+    /// The confirm before Save Current Settings overwrites the native slot of
+    /// a user mode (before and after the name of the user mode).
+    dial_overwrite: (&'static str, &'static str),
     /// The GRKit Settings row of MENU and the title of its page.
     grkit_settings: &'static str,
     /// The Distance Unit row of GRKit Settings, then its two values.
@@ -157,9 +161,9 @@ const ENGLISH: Words = Words {
     enable_at_start: "Enable at Start",
     keep_last: "Keep Last",
     mode_dial: "Mode Dial",
-    dial_none: "None",
-    dial_off: "GRKit Off",
-    dial_saved: "Saved Settings",
+    dial_save: "Save Current Settings",
+    dial_same: ("Same as ", ""),
+    dial_overwrite: ("Overwrite ", "?"),
     grkit_settings: "GRKit Settings",
     distance_unit: "Distance Unit",
     meters: "Meters",
@@ -229,9 +233,9 @@ const SIMPLIFIED_CHINESE: Words = Words {
     enable_at_start: "开机启用",
     keep_last: "保持上次",
     mode_dial: "模式转盘",
-    dial_none: "无",
-    dial_off: "关闭 GRKit",
-    dial_saved: "已保存设置",
+    dial_save: "保存当前设置",
+    dial_same: ("同 ", ""),
+    dial_overwrite: ("覆盖", "？"),
     grkit_settings: "GRKit 设置",
     distance_unit: "距离单位",
     meters: "米",
@@ -298,9 +302,9 @@ const TRADITIONAL_CHINESE: Words = Words {
     enable_at_start: "開機啟用",
     keep_last: "保持上次",
     mode_dial: "模式轉盤",
-    dial_none: "無",
-    dial_off: "關閉 GRKit",
-    dial_saved: "已儲存設定",
+    dial_save: "儲存目前設定",
+    dial_same: ("同 ", ""),
+    dial_overwrite: ("覆蓋", "？"),
     grkit_settings: "GRKit 設定",
     distance_unit: "距離單位",
     meters: "公尺",
@@ -369,9 +373,9 @@ const JAPANESE: Words = Words {
     enable_at_start: "起動時に有効",
     keep_last: "前回のまま",
     mode_dial: "モードダイヤル",
-    dial_none: "なし",
-    dial_off: "GRKit オフ",
-    dial_saved: "保存した設定",
+    dial_save: "現在の設定を保存",
+    dial_same: ("", "と同じ"),
+    dial_overwrite: ("", "に上書きしますか?"),
     grkit_settings: "GRKit 設定",
     distance_unit: "距離の単位",
     meters: "メートル",
@@ -441,9 +445,9 @@ const KOREAN: Words = Words {
     enable_at_start: "시작 시 사용",
     keep_last: "이전 상태",
     mode_dial: "모드 다이얼",
-    dial_none: "없음",
-    dial_off: "GRKit 끄기",
-    dial_saved: "저장된 설정",
+    dial_save: "현재 설정 저장",
+    dial_same: ("", "와 동일"),
+    dial_overwrite: ("", " 덮어쓰기?"),
     grkit_settings: "GRKit 설정",
     distance_unit: "거리 단위",
     meters: "미터",
@@ -619,9 +623,12 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "DIAL",
-        4,
-        "The Mode Dial row of the Recipes page of MENU, then the values of a user mode \
-         besides a recipe: None, GRKit Off, and Saved Settings.",
+        6,
+        "The Mode Dial row of GRKit Settings in MENU, then Save Current Settings, the \
+         action of a user mode, then the text before and after P/Av/Tv/M in the value \
+         of a user mode that does the same, then the text before and after the name \
+         of a user mode in the confirm before Save Current Settings overwrites its \
+         native slot.",
     ),
     run(
         "UNIT",
@@ -704,7 +711,14 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         .collect(),
         "NATIVE_TYPE" => words(&w.native_types),
         "START" => words(&[w.enable_at_start, w.keep_last]),
-        "DIAL" => words(&[w.mode_dial, w.dial_none, w.dial_off, w.dial_saved]),
+        "DIAL" => words(&[
+            w.mode_dial,
+            w.dial_save,
+            w.dial_same.0,
+            w.dial_same.1,
+            w.dial_overwrite.0,
+            w.dial_overwrite.1,
+        ]),
         "UNIT" => words(&[w.grkit_settings, w.distance_unit, w.meters, w.feet]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
@@ -903,31 +917,54 @@ mod tests {
         }
     }
 
-    /// The Mode Dial page names U1 to U3 as the dial does and shows a recipe
-    /// by its name, and its Save Settings row is that of the Recipes page,
-    /// so only its row, None, GRKit Off, and Saved Settings are new texts.
+    /// The Mode Dial page names U1 to U3 as the dial does and P/Av/Tv/M the
+    /// same in each language, and its On and Off are those of the switch, so
+    /// only its row, Save Current Settings, the value that does what
+    /// P/Av/Tv/M do, and the confirm of an overwrite of a native slot are new
+    /// texts.
     #[test]
     fn the_mode_dial_has_its_row_and_values_in_each_language() {
         let expected = [
             (
                 Language::English,
-                ["Mode Dial", "None", "GRKit Off", "Saved Settings"],
+                [
+                    "Mode Dial",
+                    "Save Current Settings",
+                    "Same as ",
+                    "",
+                    "Overwrite ",
+                    "?",
+                ],
             ),
             (
                 Language::SimplifiedChinese,
-                ["模式转盘", "无", "关闭 GRKit", "已保存设置"],
+                ["模式转盘", "保存当前设置", "同 ", "", "覆盖", "？"],
             ),
             (
                 Language::TraditionalChinese,
-                ["模式轉盤", "無", "關閉 GRKit", "已儲存設定"],
+                ["模式轉盤", "儲存目前設定", "同 ", "", "覆蓋", "？"],
             ),
             (
                 Language::Japanese,
-                ["モードダイヤル", "なし", "GRKit オフ", "保存した設定"],
+                [
+                    "モードダイヤル",
+                    "現在の設定を保存",
+                    "",
+                    "と同じ",
+                    "",
+                    "に上書きしますか?",
+                ],
             ),
             (
                 Language::Korean,
-                ["모드 다이얼", "없음", "GRKit 끄기", "저장된 설정"],
+                [
+                    "모드 다이얼",
+                    "현재 설정 저장",
+                    "",
+                    "와 동일",
+                    "",
+                    " 덮어쓰기?",
+                ],
             ),
         ];
         for (language, texts) in expected {

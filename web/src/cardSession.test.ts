@@ -12,11 +12,10 @@ import type { CardEffect, ImportedEffect, NativeImport } from './catalog';
 import type { Family } from './recipes';
 
 // The wasm build reads the recipe file. Here each read gives one recipe that names the text and
-// the camera line, and a mode dial whose U1 applies recipe 7.
+// the camera line.
 vi.mock('./recipes', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./recipes')>()),
   readRecipeFile: async (text: string, family: Family) => [{ name: `${text} ${family}`, family }],
-  readRecipeDial: async () => [7, 0, 0],
 }));
 
 const imported: ImportedEffect<NativeImport> = {
@@ -119,17 +118,11 @@ function memoryCard(files: Record<string, string>, prefix = ''): CardDirectory {
 describe('openSession', () => {
   it('reads the recipes of the card for a camera line', async () => {
     const session = await openSession(memoryCard({ [RECIPE_FILE]: 'file' }), [], 'gr4');
-    expect(session).toMatchObject({
-      family: 'gr4',
-      recipes: [{ name: 'file gr4', family: 'gr4' }],
-      dial: [7, 0, 0],
-    });
-    // One card fits GR IV and GR IV Monochrome: a change of camera reads the file again. The mode
-    // dial names recipes by ID, so it stays.
+    expect(session).toMatchObject({ family: 'gr4', recipes: [{ name: 'file gr4', family: 'gr4' }] });
+    // One card fits GR IV and GR IV Monochrome: a change of camera reads the file again.
     expect(await withFamily(session, 'gr4Monochrome')).toMatchObject({
       family: 'gr4Monochrome',
       recipes: [{ name: 'file gr4Monochrome' }],
-      dial: [7, 0, 0],
     });
     expect(await withFamily(session, 'gr4')).toBe(session);
   });
@@ -137,7 +130,6 @@ describe('openSession', () => {
   it('has no recipes without a recipe file', async () => {
     const session = await openSession(memoryCard({ 'DCIM/100RICOH/R0000001.JPG': 'jpeg' }), [], 'gr3');
     expect(session.recipes).toBeNull();
-    expect(session.dial).toEqual([0, 0, 0]);
     expect((await withFamily(session, 'gr4')).recipes).toBeNull();
   });
 });

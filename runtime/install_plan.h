@@ -104,6 +104,9 @@ static u32 profile_mode;
 /* The capabilities that the loaded modules use (GRKIT_HOST_CAPABILITIES). */
 static u32 capabilities_used;
 static void read_state(void);
+/* The copy of the switch, Enable at Start, and Distance Unit, after
+   read_state (runtime/install_recipes.h). */
+static void read_manage_copy(void);
 /* The words of the settings table and of the contexts (GrkitContext). */
 #define SETTINGS_WORDS(n) (2U + 3U * (n))
 #define CONTEXT_WORDS(uses) (3U + (uses))
@@ -260,7 +263,10 @@ static u32 manage_id(u32 i, const char *key)
    a card without the data folder has none. A switch that is Off is always a
    saved pair, so the two defaults give the same switch to a camera without
    pairs, also when its file was lost: they differ only in the value that
-   Enable at Start shows and that the loader then saves. */
+   Enable at Start shows and that the loader then saves.
+
+   The pairs hold the copy of the switch and of Enable at Start that the
+   file of the user modes keeps, when it has one (read_manage_copy). */
 static void start_switch(void)
 {
     u32 value;
@@ -346,6 +352,7 @@ static void plan_modules(void)
         module_tile[i] = MANAGE_NO_TILE;
     }
     read_state();
+    read_manage_copy();
     read_package_list();
     /* The package modules, then the modules of the person. */
     for (u32 source = 0; source < 2; ++source) {

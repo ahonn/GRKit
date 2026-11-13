@@ -865,12 +865,14 @@ static int install(void)
     /* The saved values, before the hooks start (plan_modules read them). */
     apply_state(arrays.base, module_count ? arrays.module_array : 0);
     /* The recipes and those of a new package library of this camera line,
-       the sets of the user modes, then the recipes that REPORT.TXT names. */
+       the sets of the user modes and the copy of the switch, Enable at
+       Start, and Distance Unit, then the recipes that REPORT.TXT names. */
     u32 recipe_family = target_marker[sizeof("GRKIT_TARGET=gr") - 1] == '3' ? GRKIT_RCP_FAMILY_GR3
                         : monochrome_camera() ? GRKIT_RCP_FAMILY_GR4_MONOCHROME
                                               : GRKIT_RCP_FAMILY_GR4;
     install_recipes(arrays.base, recipe_family);
     install_dial_sets(arrays.base);
+    install_manage_copy(arrays.base, module_count ? arrays.module_array : 0);
     check_recipes(arrays.base, count, module_count ? arrays.module_array : 0, capabilities_running);
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
         u32 patch_index = code_relocations[i * 2], offset = code_relocations[i * 2 + 1];

@@ -56,14 +56,17 @@
 #define UI_CHOICE_TEXTS 76U
 /* The keyboard of the camera (ui_keyboard_open): its state, whether OK gave
    a text, the callback for the change from a keyboard that a page of MENU
-   opened (ui_keyboard_prepare) and its argument, and the text,
+   opened (ui_keyboard_prepare) and its argument, the most characters of
+   this use (UI_KEYBOARD_SHORT, or up to UI_KEYBOARD_CHARS), and the text,
    NUL-terminated ASCII of at most UI_KEYBOARD_CHARS. */
 #define UI_KEYBOARD 92U
 #define UI_KEYBOARD_RESULT 96U
 #define UI_KEYBOARD_DONE 100U
 #define UI_KEYBOARD_ARG 104U
-#define UI_KEYBOARD_TEXT 108U
-#define UI_KEYBOARD_CHARS 16U
+#define UI_KEYBOARD_LIMIT 108U
+#define UI_KEYBOARD_TEXT 112U
+#define UI_KEYBOARD_CHARS 32U
+#define UI_KEYBOARD_SHORT 16U
 #define UI_SIZE (UI_KEYBOARD_TEXT + ((UI_KEYBOARD_CHARS + 4U) & ~3U))
 /* The GRKit section of the native MENU (runtime/menu_section.h): whether the Customize
    tab has been patched, the number of rows, the controller of the last
@@ -96,7 +99,9 @@
 #define MENU_ROWS_STAY_ROW 40U
 #define MENU_ROWS_VALUES 44U
 #define MENU_VALUES_MAX 64U
-#define MENU_VALUE_UNITS 32U
+/* Room for "U1: " and a name of a user mode of the mode dial, which the
+   camera keyboard gives up to 32 characters (runtime/menu_dial.h). */
+#define MENU_VALUE_UNITS 40U
 #define MENU_VALUE_ROW 0U
 #define MENU_VALUE_VIEW 4U
 #define MENU_VALUE_TEXT_AT 8U
@@ -202,46 +207,37 @@
 #define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
 /* The entry of the menu component for the shooting screen (runtime/menu.c:
    menu_viewfinder), which INSTALL writes: the framing component calls it
-   in the App task with an event, as the components link apart. The first
-   shooting screen after INSTALL (services_ready), and the label of the mode
-   dial (runtime/viewfinder.h: viewfinder_dial_label): a still live view that
-   shows its text while the label waits, and a live view that hides its text
-   or ends while the label waits or shows. */
+   in the App task with an event, as the components link apart: the first
+   shooting screen after INSTALL (services_ready). */
 #define SERVICES_CORE_VIEWFINDER (SERVICES_RECIPES + RECIPE_SERVICES_SIZE)
 #define VIEWFINDER_READY 0U
-#define VIEWFINDER_LABEL_SHOW 1U
-#define VIEWFINDER_LABEL_DROP 2U
 /* The mode dial (runtime/mode_dial.h): the firmware timer of the dial (0
    when none runs), the number of tries while the firmware loads the native
-   settings, the user mode that the core acted on last (0 for another
-   position), the bound user mode that applies (0 in the base state), and
-   what it does (DIAL_OFF, DIAL_RECIPE, or DIAL_SAVED; 0 in the base state).
-   Then the label of the dial: its state (DIAL_LABEL_*), its firmware timer,
-   its number of lines, the string view of each line and their parent, the
-   text descriptor of each line, and the text of the first line.
-   Then the copy of the base state: the value of each capability; the number
-   of module settings and the value of each; and the number of effects, the
-   Fn adjustments of each (base-9 digits, as a recipe holds them), and its
-   Toning byte. */
+   settings, the position that the core acted on last + 1 (0 before the
+   first), and the user mode with a snapshot that applies (0 at the shared
+   settings). Then whether the check of the native slots waits for the dial
+   (dial_slots_check), whether GRKit is off at this position by the dial
+   (a flag of this session, which runtime/manage.h reads), and the value
+   page of the Mode Dial page that opened the confirm of a save
+   (runtime/menu_dial.h). Then the name of a slot (DIAL_NAME_BYTES of ASCII), and the text of the automatic name of
+   a snapshot (DIAL_TEXT_UNITS units).
+   Then the copy of the shared settings while a snapshot applies: the value
+   of each capability; the number of module settings and the value of each;
+   and the number of effects, the Fn adjustments of each (base-9 digits, as
+   a recipe holds them), and its Toning byte. */
 #define SERVICES_DIAL (SERVICES_CORE_VIEWFINDER + 4U)
 #define DIAL_TIMER 0U
 #define DIAL_TRY 4U
 #define DIAL_AT 8U
 #define DIAL_ACTIVE 12U
-#define DIAL_KIND 16U
-#define DIAL_LABEL 20U
-#define DIAL_LABEL_TIMER 24U
-#define DIAL_LABEL_LINES 28U
-#define DIAL_LABEL_LINES_MAX 4U
-#define DIAL_LABEL_VIEWS 32U
-#define DIAL_LABEL_PARENT (DIAL_LABEL_VIEWS + 4U * DIAL_LABEL_LINES_MAX)
-#define DIAL_LABEL_TEXTS (DIAL_LABEL_PARENT + 4U)
-#define DIAL_LABEL_NAME (DIAL_LABEL_TEXTS + 8U * DIAL_LABEL_LINES_MAX)
-#define DIAL_LABEL_UNITS GRKIT_SUMMARY_UNITS
-#define DIAL_LABEL_NONE 0U
-#define DIAL_LABEL_WAITS 1U
-#define DIAL_LABEL_SHOWN 2U
-#define DIAL_BASE_CORE (DIAL_LABEL_NAME + 2U * DIAL_LABEL_UNITS)
+#define DIAL_SYNC 16U
+#define DIAL_SUSPENDED 20U
+#define DIAL_PAGE 24U
+#define DIAL_NAME 28U
+#define DIAL_NAME_BYTES 36U
+#define DIAL_TEXT (DIAL_NAME + DIAL_NAME_BYTES)
+#define DIAL_TEXT_UNITS 96U
+#define DIAL_BASE_CORE (DIAL_TEXT + 2U * DIAL_TEXT_UNITS)
 #define DIAL_BASE_COUNT (DIAL_BASE_CORE + 4U * GRKIT_CORE_SETTING_COUNT)
 #define DIAL_BASE_SETTINGS (DIAL_BASE_COUNT + 4U)
 #define DIAL_BASE_RECORDS (DIAL_BASE_SETTINGS + 4U * GRKIT_MODULE_SETTINGS_MAX)

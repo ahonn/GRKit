@@ -29,8 +29,6 @@
      of them, and while no recipe can be on, OK does nothing.
    - Without a recipe, the page has Enable and Save Settings. The undo
      steps show only in ADJ.
-   Mode Dial, which binds the user modes of the mode dial to recipes, is a
-   row of GRKit Settings (runtime/menu_dial.h).
 
    The list and the page of a recipe are one own value page of the Recipes
    row, which shows the page of a recipe while MENU_ROWS_PAGE_STATE holds
@@ -101,7 +99,7 @@ static void recipe_action(volatile u32 *h,u32 controller,u32 e,u32 action) {
         recipe_page_state(h)[0]=0;
         settings_value_again(h,1);
     }
-    else if(action==1U) ui_keyboard_on(h,controller,recipe_keyboard_text(h,e),recipe_menu_renamed,e);
+    else if(action==1U) ui_keyboard_on(h,controller,recipe_keyboard_text(h,e),UI_KEYBOARD_SHORT,recipe_menu_renamed,e);
     else {
         to=recipe_text_at(h,RECIPE_BOX_AT);
         at=recipe_append(to,0,text(h,RECIPE_TEXT_DELETE));
@@ -180,7 +178,7 @@ static u32 save_row_select(volatile u32 *h,u32 controller,u32 value) {
     (void)controller; (void)value;
     if(!recipe_listed(h)) return 0;
     e=recipe_save(h);
-    if(e==RECIPE_FULL || !ui_keyboard_prepare(h,recipe_keyboard_text(h,e),recipe_named,e)) return 0;
+    if(e==RECIPE_FULL || !ui_keyboard_prepare(h,recipe_keyboard_text(h,e),UI_KEYBOARD_SHORT,recipe_named,e)) return 0;
     return KEYBOARD_CONTROLLER;
 }
 /* Recipes, then Save Settings. Without a recipe, Recipes does not show. */

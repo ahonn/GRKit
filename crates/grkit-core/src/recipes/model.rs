@@ -361,11 +361,11 @@ pub struct Recipe {
     #[serde(default)]
     pub number: u8,
     /// The ID of the recipe, 1 to `runtime::RECIPE_ID_MAX`, or 0 for none: a
-    /// generated number that stays with the recipe, so a reference to it,
-    /// such as a user mode of the mode dial, stays valid when the recipes
-    /// move and when the site moves the recipe to another card. The site
-    /// generates it when the recipe joins its library, and the camera and
-    /// INSTALL when they create a recipe. A package library holds no IDs.
+    /// generated number that stays with the recipe, so a reference to it
+    /// stays valid when the recipes move and when the site moves the recipe
+    /// to another card. The site generates it when the recipe joins its
+    /// library, and the camera and INSTALL when they create a recipe. A
+    /// package library holds no IDs.
     #[serde(default)]
     pub id: u32,
 }

@@ -2,8 +2,8 @@
 //! and the largest file.
 
 use super::{
-    DIAL_SET_WORDS, MAX_COUNT, MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_DIAL_POSITIONS,
-    RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS,
+    DIAL_SET_WORDS, DIAL_SLOT_WORDS, DIAL_USER_MODES, MANAGE_COPY_WORDS, MAX_COUNT,
+    MODULE_SETTINGS_MAX, MODULE_SETTING_VALUES, RECIPE_NAME_WORDS, RECIPE_SLOTS, RECIPE_WORDS,
 };
 use crate::capabilities::{self, StateFile};
 
@@ -43,25 +43,22 @@ pub const PARAMETER_KEY_BASE: u32 = 990_000_000;
 /// `RECIPE_KEY_STRIDE` + n. A later word of a recipe or a name gets the next
 /// range, so the keys of a saved file stay valid. The words after the names
 /// have one key each from `RECIPE_IMPORTED_KEY`, in the order of the header:
-/// the hash of the imported package library, the ID of each recipe, and the
-/// assignment of each user mode of the mode dial. The header holds the words
-/// recipe by recipe (`HOST_RECIPES`, `HOST_RECIPE_NAMES`, then
-/// `HOST_RECIPE_IMPORTED` to `HOST_RECIPE_DIAL`). A word that is 0 has no
-/// entry. The undo steps are not saved.
+/// the hash of the imported package library, then the ID of each recipe. The
+/// header holds the words recipe by recipe (`HOST_RECIPES`,
+/// `HOST_RECIPE_NAMES`, then `HOST_RECIPE_IMPORTED` and `HOST_RECIPE_IDS`). A
+/// word that is 0 has no entry. The undo steps are not saved.
 pub const RECIPE_KEY_BASE: u32 = 991_000_000;
 pub const RECIPE_KEY_STRIDE: u32 = 100;
 pub const RECIPE_NAME_KEY_BASE: u32 = RECIPE_KEY_BASE + 50 * RECIPE_KEY_STRIDE;
 pub const RECIPE_IMPORTED_KEY: u32 = RECIPE_KEY_BASE + 90 * RECIPE_KEY_STRIDE;
 pub const RECIPE_ID_KEY_BASE: u32 = RECIPE_IMPORTED_KEY + 1;
-pub const RECIPE_DIAL_KEY_BASE: u32 = RECIPE_ID_KEY_BASE + RECIPE_SLOTS as u32;
-const _: () = assert!(
-    RECIPE_DIAL_KEY_BASE + RECIPE_DIAL_POSITIONS as u32 <= RECIPE_IMPORTED_KEY + RECIPE_KEY_STRIDE
-);
+const _: () =
+    assert!(RECIPE_ID_KEY_BASE + RECIPE_SLOTS as u32 <= RECIPE_IMPORTED_KEY + RECIPE_KEY_STRIDE);
 const _: () = assert!(RECIPE_SLOTS <= RECIPE_KEY_STRIDE as usize);
 const _: () = assert!(RECIPE_WORDS <= 50 && RECIPE_NAME_WORDS <= 40);
 
 /// The state key of header word `index` of the recipe run (`HOST_RECIPES`,
-/// the names, then the words from the import hash to the user modes).
+/// the names, then the import hash and the IDs).
 pub fn recipe_key(index: usize) -> u32 {
     let words = RECIPE_WORDS * RECIPE_SLOTS;
     if index < words {
@@ -82,37 +79,41 @@ pub fn recipe_key_max() -> u32 {
     (0..RECIPE_STATE_WORDS).map(recipe_key).max().unwrap()
 }
 /// The number of saved recipe words: the recipes, their names, the import
-/// hash, the IDs, and the user modes of the mode dial.
-pub const RECIPE_STATE_WORDS: usize = RECIPE_WORDS * RECIPE_SLOTS
-    + RECIPE_NAME_WORDS * RECIPE_SLOTS
-    + 1
-    + RECIPE_SLOTS
-    + RECIPE_DIAL_POSITIONS;
+/// hash, and the IDs.
+pub const RECIPE_STATE_WORDS: usize =
+    RECIPE_WORDS * RECIPE_SLOTS + RECIPE_NAME_WORDS * RECIPE_SLOTS + 1 + RECIPE_SLOTS;
 /// The largest value of a recipe word. Each word holds at most 29 bits, and
 /// a name word 28 bits.
 pub const RECIPE_VALUE_MAX: u32 = (1 << 29) - 1;
 /// The IDs of recipes: generated numbers, 1 to `RECIPE_ID_MAX`
 /// (`abi::HOST_RECIPE_IDS`).
 pub const RECIPE_ID_MAX: u32 = RECIPE_VALUE_MAX - 2;
-/// What a user mode of the mode dial does (`abi::HOST_RECIPE_DIAL`): the
-/// camera stays as it is (0), the settings that the camera saved in the user
-/// mode apply (`abi::HOST_DIAL_SETS`), GRKit is off, or the ID of a recipe
-/// applies. The values above `RECIPE_ID_MAX` are no ID.
-pub const RECIPE_DIAL_FOLLOW: u32 = 0;
-pub const RECIPE_DIAL_SAVED: u32 = RECIPE_VALUE_MAX - 1;
-pub const RECIPE_DIAL_OFF: u32 = RECIPE_VALUE_MAX;
-const _: () = assert!(RECIPE_DIAL_SAVED > RECIPE_ID_MAX && RECIPE_DIAL_OFF > RECIPE_DIAL_SAVED);
 
-/// The saved settings of the user modes of the mode dial (`abi::HOST_DIAL_SETS`,
-/// runtime/mode_dial.h) have their own file (`StateFile::DialSets`): word w
-/// of the set of user mode u (0 for U1) has the key ID this base + u *
-/// `DIAL_SET_KEY_STRIDE` + w. A later word of a set gets the next key, so the
-/// keys of a saved file stay valid. A word that is 0 has no entry.
+/// The settings of the user modes of the mode dial have their own file
+/// (`StateFile::DialSets`, runtime/mode_dial.h): word w of the snapshot of
+/// user mode u (0 for U1, `abi::HOST_DIAL_SETS`) has the key ID this base +
+/// u * `DIAL_SET_KEY_STRIDE` + w. A later word of a set gets the next key, so
+/// the keys of a saved file stay valid. A word that is 0 has no entry.
 pub const DIAL_SET_KEY_BASE: u32 = 992_000_000;
 pub const DIAL_SET_KEY_STRIDE: u32 = 1000;
 const _: () = assert!(DIAL_SET_WORDS <= DIAL_SET_KEY_STRIDE as usize);
-/// The number of saved words: each word of the set of each user mode.
-pub const DIAL_SET_STATE_WORDS: usize = DIAL_SET_WORDS * RECIPE_DIAL_POSITIONS;
+/// The number of saved words: each word of the set of each user mode, then
+/// each word of what each user mode does (`abi::HOST_DIAL_SLOTS`, which
+/// follows `abi::HOST_DIAL_SETS`), then whether GRKit is off at P/Av/Tv/M
+/// (`abi::HOST_DIAL_SHARED_OFF`, which follows them), then the copy of the
+/// switch, Enable at Start, and Distance Unit (`abi::HOST_MANAGE_COPY`,
+/// which follows it). The words after the sets have the keys of a fourth set
+/// (`DIAL_SLOT_KEY_BASE`).
+pub const DIAL_SET_STATE_WORDS: usize =
+    DIAL_SET_WORDS * DIAL_USER_MODES + DIAL_SLOT_WORDS * DIAL_USER_MODES + 1 + MANAGE_COPY_WORDS;
+/// The key of word 0 of the slot of U1.
+pub const DIAL_SLOT_KEY_BASE: u32 =
+    DIAL_SET_KEY_BASE + DIAL_USER_MODES as u32 * DIAL_SET_KEY_STRIDE;
+/// The key of word 0 of the copy of the switch, Enable at Start, and
+/// Distance Unit: the key after that of the word of P/Av/Tv/M.
+pub const MANAGE_COPY_KEY: u32 =
+    DIAL_SLOT_KEY_BASE + (DIAL_SLOT_WORDS * DIAL_USER_MODES) as u32 + 1;
+const _: () = assert!(DIAL_SLOT_WORDS * DIAL_USER_MODES + 1 + MANAGE_COPY_WORDS < DIAL_SET_WORDS);
 /// The largest value of a word of a set: a state file ID of a setting
 /// (below `PARAMETER_KEY_BASE`), or a value of at most `STATE_DIGITS` digits.
 pub const DIAL_SET_VALUE_MAX: u32 = 999_999_999;
@@ -323,6 +324,37 @@ mod tests {
         // Word 4 of U1 and word 0 of U3.
         assert_eq!(dial_set_key(4), 992_000_004);
         assert_eq!(dial_set_key(2 * DIAL_SET_WORDS), 992_002_000);
+        // The slots follow the sets: word 1 of the slot of U2. The word of
+        // P/Av/Tv/M follows the slots.
+        assert_eq!(
+            dial_set_key(3 * DIAL_SET_WORDS + DIAL_SLOT_WORDS + 1),
+            DIAL_SLOT_KEY_BASE + DIAL_SLOT_WORDS as u32 + 1
+        );
+        let shared = 3 * DIAL_SET_WORDS + DIAL_SLOT_WORDS * DIAL_USER_MODES;
+        assert_eq!(
+            dial_set_key(shared),
+            DIAL_SLOT_KEY_BASE + (DIAL_SLOT_WORDS * DIAL_USER_MODES) as u32
+        );
+        // The copy of the switch, Enable at Start, and Distance Unit follows
+        // the word of P/Av/Tv/M, and ends the words.
+        assert_eq!(dial_set_key(shared + 1), MANAGE_COPY_KEY);
+        assert_eq!(
+            dial_set_key(DIAL_SET_STATE_WORDS - 1),
+            MANAGE_COPY_KEY + MANAGE_COPY_WORDS as u32 - 1
+        );
+        const {
+            use crate::abi::{
+                HOST_DIAL_SETS, HOST_DIAL_SHARED_OFF, HOST_DIAL_SLOTS, HOST_MANAGE_COPY,
+            };
+            assert!(
+                HOST_DIAL_SLOTS == HOST_DIAL_SETS + 4 * DIAL_SET_WORDS * DIAL_USER_MODES
+                    && HOST_DIAL_SHARED_OFF
+                        == HOST_DIAL_SLOTS + 4 * DIAL_SLOT_WORDS * DIAL_USER_MODES
+                    && HOST_MANAGE_COPY == HOST_DIAL_SHARED_OFF + 4
+                    && HOST_MANAGE_COPY + 4 * MANAGE_COPY_WORDS
+                        == HOST_DIAL_SETS + 4 * DIAL_SET_STATE_WORDS
+            )
+        };
     }
 
     /// The recipe entries keep apart from the Fn adjustment entries and the
@@ -353,12 +385,8 @@ mod tests {
         assert_eq!(recipe_key(tail), RECIPE_IMPORTED_KEY);
         assert_eq!(recipe_key(tail + 1 + 5), RECIPE_ID_KEY_BASE + 5);
         assert_eq!(
-            recipe_key(tail + 1 + RECIPE_SLOTS + 2),
-            RECIPE_DIAL_KEY_BASE + 2
-        );
-        assert_eq!(
             recipe_key(RECIPE_STATE_WORDS - 1),
-            RECIPE_DIAL_KEY_BASE + RECIPE_DIAL_POSITIONS as u32 - 1
+            RECIPE_ID_KEY_BASE + RECIPE_SLOTS as u32 - 1
         );
     }
 }

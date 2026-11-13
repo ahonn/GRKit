@@ -116,8 +116,9 @@ static const char rtos_cameras[] = "GR III\0GR III\0GR IIIx\0GR IIIx";
 #define POINT_VIEWFINDER_OVERLAY 0x4U
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
+#define POINT_MODE_DIAL 0x100U
 static const char *const core_setting_names[] = { /* 12 values, SHA-256 9114df8232f7f59c933a17fad0ab2ed6ccf5789eb21336a3c799382ed51963a4 */ };
-static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x210,0x210,0x104};
+static const u32 core_setting_points[] = {0x12,0xc,0x20,0x40,0xc,0x0,0x0,0x84,0x84,0x210,0x210,0x0};
 #define RTOS_EXECUTABLE_END 0x55000000U
 #define CORE_VIEWFINDER 0x0U
 #define CORE_EXPORT_COUNT 0U
@@ -133,8 +134,8 @@ static const u8 rotate_pixels[] __attribute__((aligned(4))) = { /* 6400 values, 
 #define SCALE_LABEL_HEIGHT 20U
 static const u8 scale_feet_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 3035b84a34c34a48cf875d679bf732869c4b70c8e01f9a1a6c904e721f5bc1ef */ };
 static const u8 scale_sixteen_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 39ce4c2f7f5579af5c39910e572b3987d7875b3aa451cf90726fb42d0a56148b */ };
-#define MENU_TEXT_BYTES 6450U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 6450 values, SHA-256 6840d5dafb583996d785c6815286d4f5f5265b7d614d6b936b894ca8e4eb8c37 */ };
+#define MENU_TEXT_BYTES 6516U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 6516 values, SHA-256 9eb5a41ac231ba1859ffe7f5c23b0c3738d1b35f84ceca0a9cce44e7f561dc25 */ };
 #define LABELS_BYTES 25188U
 static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 25188 values, SHA-256 6d1b90ea0941c41cecbdc5cf91f19dafa7c8cb09c5b9318262708e0a7619daa2 */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };

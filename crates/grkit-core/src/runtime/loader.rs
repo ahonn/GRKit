@@ -616,14 +616,17 @@ fn state_script() -> Vec<String> {
         format!("foldersearch '{DATA_FOLDER}'"),
         "if result = 0 stateok = 0".into(),
     ];
-    // Each file starts saved, the main file unless it is missing. The
-    // recipe file saves when INSTALL set its count after an import.
+    // The main file starts saved unless it is missing. The other files
+    // start at a count of 0, which INSTALL leaves: the recipe file saves
+    // when INSTALL set its count after an import, and the file of the user
+    // modes when the core changed it at the start, before this line runs,
+    // as when it forgot a snapshot whose native slot the person changed.
     for file in StateFile::ALL {
         let (changes, at, saved, _) = watch_names(file);
         lines.push(format!("{changes} = {}", word(at)));
         lines.push(match file {
-            StateFile::Main | StateFile::DialSets => format!("{saved} = {changes}"),
-            StateFile::Recipes => format!("{saved} = 0"),
+            StateFile::Main => format!("{saved} = {changes}"),
+            StateFile::Recipes | StateFile::DialSets => format!("{saved} = 0"),
         });
     }
     lines.extend([
@@ -746,9 +749,9 @@ fn state_script() -> Vec<String> {
             ]);
         }
         if file == StateFile::Recipes {
-            // The recipes, their names, and the words from the import hash
-            // to the user modes: each word that is not 0 (runtime/recipes.h),
-            // at its key (state::recipe_key).
+            // The recipes, their names, the import hash, and the IDs: each
+            // word that is not 0 (runtime/recipes.h), at its key
+            // (state::recipe_key).
             let words = RECIPE_WORDS * RECIPE_SLOTS;
             let names = words + RECIPE_NAME_WORDS * RECIPE_SLOTS;
             lines.extend([
@@ -785,10 +788,12 @@ fn state_script() -> Vec<String> {
             ]);
         }
         if file == StateFile::DialSets {
-            // The words of the set of each user mode that are not 0
-            // (runtime/mode_dial.h), at their keys (state::dial_set_key). The
-            // save of the recipe file has the same variables, which keeps
-            // the variables of the script few.
+            // The words of the snapshot of each user mode that are not 0,
+            // then those of what each user mode does, the word of P/Av/Tv/M
+            // (runtime/mode_dial.h), and the copy of the switch, Enable at
+            // Start, and Distance Unit (runtime/manage.h), at their keys
+            // (state::dial_set_key). The save of the recipe file has the same
+            // variables, which keeps the variables of the script few.
             lines.extend([
                 "rindex = 0".into(),
                 ":set_word".into(),
@@ -1009,7 +1014,7 @@ fn watch_total() -> String {
 /// change, and a change of one file writes only that file.
 ///
 /// While the core holds the main file (`HOST_STATE_HOLD`, a user mode of the
-/// mode dial whose settings are temporary), the main file waits: its count
+/// mode dial with a snapshot, whose changes are temporary), the main file waits: its count
 /// stays unsaved, so the first poll after the hold saves it. The poll reads
 /// the hold only when the main file has a change to save.
 fn watch_poll(name: &str) -> Vec<String> {
@@ -1121,8 +1126,8 @@ mod tests {
             "if rindex >= {RECIPE_STATE_WORDS} goto recipe_word_end"
         )));
         const { assert!(HOST_RECIPES / 4 + RECIPE_STATE_WORDS <= HEADER_SIZE / 4) };
-        // The names and the words from the import hash to the user modes
-        // follow the recipe words, so one run of words holds them.
+        // The names, the import hash, and the IDs follow the recipe words, so
+        // one run of words holds them.
         const {
             assert!(crate::abi::HOST_RECIPE_NAMES == HOST_RECIPES + 4 * RECIPE_WORDS * RECIPE_SLOTS)
         };
@@ -1133,23 +1138,24 @@ mod tests {
             )
         };
         const {
-            use crate::abi::{
-                HOST_RECIPE_DIAL, HOST_RECIPE_IDS, HOST_RECIPE_IMPORTED, RECIPE_DIAL_POSITIONS,
-            };
+            use crate::abi::{HOST_RECIPE_IDS, HOST_RECIPE_IMPORTED};
             assert!(HOST_RECIPE_IDS == HOST_RECIPE_IMPORTED + 4);
-            assert!(HOST_RECIPE_DIAL == HOST_RECIPE_IDS + 4 * RECIPE_SLOTS);
-            assert!(
-                HOST_RECIPE_DIAL / 4 + RECIPE_DIAL_POSITIONS
-                    == HOST_RECIPES / 4 + RECIPE_STATE_WORDS
-            )
+            assert!(HOST_RECIPE_IDS / 4 + RECIPE_SLOTS == HOST_RECIPES / 4 + RECIPE_STATE_WORDS)
         };
         assert_eq!(script.matches(&recipes).count(), 1);
-        // Each index of the sets of the user modes is below
-        // DIAL_SET_STATE_WORDS, which ends in the header.
+        // Each index of the settings of the user modes is below
+        // DIAL_SET_STATE_WORDS, which ends in the header with the copy of
+        // the switch, Enable at Start, and Distance Unit.
         assert!(script.contains(&format!(
             "if rindex >= {DIAL_SET_STATE_WORDS} goto set_word_end"
         )));
-        const { assert!(HOST_DIAL_SETS / 4 + DIAL_SET_STATE_WORDS <= HEADER_SIZE / 4) };
+        const {
+            assert!(
+                HOST_DIAL_SETS / 4 + DIAL_SET_STATE_WORDS
+                    == crate::abi::HOST_MANAGE_COPY / 4 + crate::abi::MANAGE_COPY_WORDS
+                    && HOST_DIAL_SETS / 4 + DIAL_SET_STATE_WORDS <= HEADER_SIZE / 4
+            )
+        };
         assert_eq!(script.matches(&sets).count(), 1);
     }
 
@@ -1267,11 +1273,10 @@ mod tests {
         assert!(script.iter().any(|l| l == "saved = stamp"));
         assert!(script.iter().any(|l| l == "rsaved = rstamp"));
         assert!(script.iter().any(|l| l == "dsaved = dstamp"));
-        // The sets of the user modes start saved: only a save on the camera
-        // writes their file.
-        assert!(script[start..watch]
-            .iter()
-            .any(|l| l == "dsaved = dchanges"));
+        // The file of the user modes starts at a count of 0, so a change
+        // that the core made before the loader starts, such as a snapshot
+        // that the start check forgot, saves at the first poll.
+        assert!(script[start..watch].iter().any(|l| l == "dsaved = 0"));
     }
 
     fn at(script: &[String], line: &str) -> usize {

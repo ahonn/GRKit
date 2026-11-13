@@ -517,15 +517,14 @@ static void recipe_close_gap(volatile u32 *h,u32 first,u32 n) {
 }
 
 /* A generated ID for a new recipe (runtime/recipe_id.h): none of the IDs of
-   the recipes and none of the user modes of the mode dial. 0 when each
-   candidate is taken, and INSTALL generates one at the next start. */
+   the recipes. 0 when each candidate is taken, and INSTALL generates one at
+   the next start. */
 static u32 recipe_new_id(volatile u32 *h) {
     u32 attempt, id, i, taken;
     for(attempt=0;attempt<RECIPE_ID_ATTEMPTS;++attempt) {
         id=recipe_id_candidate(attempt);
         taken=!id || id>GRKIT_RECIPE_ID_MAX;
         for(i=0;i<GRKIT_RECIPE_SLOTS && !taken;++i) taken=*recipe_id_at(h,i)==id;
-        for(i=0;i<GRKIT_RECIPE_DIAL_POSITIONS && !taken;++i) taken=h[GRKIT_HOST_RECIPE_DIAL/4+i]==id;
         if(!taken) return id;
     }
     return 0;

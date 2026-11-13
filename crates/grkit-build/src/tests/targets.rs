@@ -1196,3 +1196,195 @@ fn keyboard_definitions_match_each_firmware() -> Result<()> {
     }
     Ok(())
 }
+
+/// The native slots of the user modes (`runtime/mode_dial.h`) are those of
+/// each firmware. GR III: the save of a box takes a box from 1 to 6 and
+/// copies DIAL_RECORD_SIZE bytes from the current record; and the getters of
+/// the name and the registered flag of each box and the setters of the user
+/// mode of a box read the fields of gr3.h. GR IV: the assign of a user mode
+/// is a call through the holder that takes a user mode from 1 to 3 and
+/// copies the current record; the name setter takes the settings object and
+/// a user mode from 1 to 3; the getter of the name model is a guarded
+/// static; and the getters of the name and the registered flag of each user
+/// mode read the fields at DIAL_RECORD_COPY.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn user_mode_slots_match_each_firmware() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let definitions = header_definitions(&target.header(), false);
+        let value = |name: &str| -> u32 {
+            let value = definitions
+                .get(name)
+                .unwrap_or_else(|| panic!("{} defines no {name}", target.header()));
+            firmware_definition(value)
+                .map(|(address, _)| address)
+                .or_else(|| number(value))
+                .unwrap_or_else(|| panic!("{name} = {value}"))
+        };
+        let code = &image.body[..(target.data_source - target::RTOS_BASE) as usize];
+        let words: Vec<u32> = code
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        let at = |address: u32| words[((address - target::RTOS_BASE) / 4) as usize];
+        // Whether the word at `site` is a BL (`link`) or a B to `callee`.
+        let branch = |site: u32, callee: u32, link: bool| {
+            let word = at(site);
+            (word >> 24) & 0xf == if link { 0xb } else { 0xa }
+                && arm::branch_target(site, word) == Some(callee)
+        };
+        let within =
+            |start: u32, count: u32, word: u32| (0..count).any(|k| at(start + 4 * k) == word);
+        // MOVW r2, #size.
+        let size = value("DIAL_RECORD_SIZE");
+        let movw_r2 = 0xe300_2000 | (size & 0xf000) << 4 | (size & 0xfff);
+        let name = target.name;
+        if target.family.name == "gr3" {
+            let save = value("FW_BOX_SAVE");
+            // `cmp r1, #7`, `cmpne r1, #0`: a box from 1 to 6.
+            assert_eq!(
+                (at(save), at(save + 4)),
+                (0xe351_0007, 0x1351_0000),
+                "{name}"
+            );
+            assert!(
+                within(save, 12, movw_r2) && within(save, 12, 0xe590_1004),
+                "{name}: the save"
+            );
+            // The getters of the name of each box: `ldr r3, [r0, #4]`, `mov
+            // r0, r1` and `mov r2, #0x20` in either order, then one or two
+            // ADDs of the field.
+            let names: BTreeSet<u32> = (0..words.len() - 5)
+                .filter(|&i| {
+                    words[i] == 0xe590_3004
+                        && [words[i + 1], words[i + 2]].contains(&0xe1a0_0001)
+                        && [words[i + 1], words[i + 2]].contains(&0xe3a0_2020)
+                        && words[i + 3] & 0xffff_f000 == 0xe283_1000
+                })
+                .map(|i| {
+                    let second = words[i + 4];
+                    arm::modified_immediate(words[i + 3])
+                        + if second & 0xffff_f000 == 0xe281_1000 {
+                            arm::modified_immediate(second)
+                        } else {
+                            0
+                        }
+                })
+                .collect();
+            // The getters of the registered flag: `ldr r3, [r0, #4]`, `ldrb
+            // r0, [r3, #field]`, `bx lr`.
+            let flags: BTreeSet<u32> = (0..words.len() - 2)
+                .filter(|&i| {
+                    words[i] == 0xe590_3004
+                        && words[i + 1] & 0xffff_f000 == 0xe5d3_0000
+                        && words[i + 2] == 0xe12f_ff1e
+                })
+                .map(|i| words[i + 1] & 0xfff)
+                .collect();
+            // The setters of the box of a user mode: `ldrb ip, [r3, #field]`,
+            // `strb r1, [r3, #field]`.
+            let assigned: BTreeSet<u32> = (0..words.len() - 1)
+                .filter(|&i| {
+                    words[i] & 0xffff_f000 == 0xe5d3_c000
+                        && words[i + 1] == 0xe5c3_1000 | (words[i] & 0xfff)
+                })
+                .map(|i| words[i] & 0xfff)
+                .collect();
+            let (field, stride, flag, assign) = (
+                value("DIAL_BOX_NAME"),
+                value("DIAL_BOX_NAME_STRIDE"),
+                value("DIAL_BOX_REGIST"),
+                value("DIAL_BOX_ASSIGN"),
+            );
+            for n in 0..value("DIAL_BOXES") {
+                assert!(names.contains(&(field + n * stride)), "{name}: name {n}");
+                assert!(flags.contains(&(flag + 2 * n)), "{name}: flag {n}");
+            }
+            for u in 0..3 {
+                assert!(
+                    assigned.contains(&(assign + 2 * u)),
+                    "{name}: user mode {u}"
+                );
+            }
+        } else {
+            let (assign, set_name, names_model, settings) = (
+                value("FW_USER_MODE_ASSIGN"),
+                value("FW_USER_MODE_NAME"),
+                value("FW_USER_MODE_NAMES"),
+                value("FW_SETTINGS"),
+            );
+            // The thunk: `ldr r0, [r0]` and a B to the assign, which takes a
+            // user mode from 1 to 3: `sub r3, r1, #1`.
+            assert_eq!(at(assign), 0xe590_0000, "{name}: {assign:#x}");
+            let assign = arm::branch_target(assign + 4, at(assign + 4)).unwrap();
+            assert_eq!(at(assign), 0xe241_3001, "{name}");
+            // The assign copies the current record: a call of a function
+            // with `add r3, r0, #4` and `movw r2, #size`.
+            let copies = (0..48).any(|k| {
+                let site = assign + 4 * k;
+                arm::branch_target(site, at(site)).is_some_and(|callee| {
+                    (at(site) >> 24) & 0xf == 0xb
+                        && within(callee, 8, 0xe280_3004)
+                        && within(callee, 8, movw_r2)
+                })
+            });
+            assert!(copies, "{name}: the assign copies no record");
+            // The name setter gets the settings object and takes the user
+            // modes 1 to 3: `cmp r4, #2`, `cmp r4, #3`, `cmp r4, #1`.
+            assert!(
+                (0..10).any(|k| branch(set_name + 4 * k, settings, true)),
+                "{name}: the name setter"
+            );
+            for u in 1..=3 {
+                assert!(
+                    within(set_name, 20, 0xe354_0000 | u),
+                    "{name}: user mode {u}"
+                );
+            }
+            // The name model: `ldr r3, [r4]`, `tst r3, #1`, then the object.
+            assert_eq!(at(names_model), 0xe1a0_c00d, "{name}");
+            assert!(
+                within(names_model, 8, 0xe594_3000) && within(names_model, 8, 0xe313_0001),
+                "{name}: the name model"
+            );
+            // The getters of the name of each user mode: `add r3, r0, #a`,
+            // `mov r2, #0x20`, `add r3, r3, #b`; and of its flag: `add r0, r0,
+            // #a`, `ldrb r0, [r0, #b]`.
+            let names: BTreeSet<u32> = (0..words.len() - 2)
+                .filter(|&i| {
+                    words[i] & 0xffff_f000 == 0xe280_3000
+                        && words[i + 1] == 0xe3a0_2020
+                        && words[i + 2] & 0xffff_f000 == 0xe283_3000
+                })
+                .map(|i| arm::modified_immediate(words[i]) + arm::modified_immediate(words[i + 2]))
+                .collect();
+            let flags: BTreeSet<u32> = (0..words.len() - 1)
+                .filter(|&i| {
+                    words[i] & 0xffff_f000 == 0xe280_0000
+                        && words[i + 1] & 0xffff_f000 == 0xe5d0_0000
+                })
+                .map(|i| arm::modified_immediate(words[i]) + (words[i + 1] & 0xfff))
+                .collect();
+            let fields = value("DIAL_RECORD_COPY");
+            let (field, stride, flag) = (
+                fields + value("DIAL_USER_NAME"),
+                value("DIAL_USER_NAME_STRIDE"),
+                fields + value("DIAL_USER_REGIST"),
+            );
+            for u in 0..3 {
+                assert!(names.contains(&(field + u * stride)), "{name}: name {u}");
+                assert!(flags.contains(&(flag + u)), "{name}: flag {u}");
+            }
+        }
+    }
+    Ok(())
+}

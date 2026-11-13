@@ -1089,15 +1089,10 @@ fn native_install_contract_plans_and_links_the_modules_of_the_card() {
         &executable,
         &[],
     );
-    // A package library of the Rust codec, which INSTALL imports. U1 applies
-    // the GR III recipe, U2 the GR IV recipe, and U3 turns GRKit off.
+    // A package library of the Rust codec, which INSTALL imports.
     let library = library_recipes();
     let file = temporary.path().join("RECIPES.BIN");
-    let dial = {
-        use grkit_core::recipes::DialStep;
-        [DialStep::Record(0), DialStep::Record(1), DialStep::Off]
-    };
-    fs::write(&file, grkit_core::recipes::encode(&library, &dial).unwrap()).unwrap();
+    fs::write(&file, grkit_core::recipes::encode(&library).unwrap()).unwrap();
     let output = checked(Command::new(&executable).env("GRKIT_TEST_RECIPES", &file));
     let entries: Vec<String> = String::from_utf8(output.stdout)
         .unwrap()

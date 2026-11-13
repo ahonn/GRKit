@@ -20,20 +20,6 @@ import {
   newRecipeId,
   RECIPE_ID_MAX,
   withIds,
-  DIAL_FOLLOW,
-  DIAL_OFF,
-  DIAL_SAVED,
-  dialChoices,
-  choiceOfLibrary,
-  KEEP_DIAL,
-  libraryDial,
-  loadDialChoice,
-  saveDialChoice,
-  shownChoice,
-  NO_DIAL,
-  sameDial,
-  shownDial,
-  type Dial,
   type Recipe,
 } from './recipes';
 
@@ -192,89 +178,16 @@ describe('recipes', () => {
   });
 
   it('plans the change of the recipe file on the card', () => {
-    const session = (recipes: Recipe[] | null, dial: Dial = NO_DIAL) =>
-      ({ state: { recipeText: recipes ? 'text' : null }, recipes, dial }) as unknown as CardSession;
-    expect(recipeChange(session(null), null, NO_DIAL)).toBe('same');
-    expect(recipeChange(session([recipe('A')]), null, NO_DIAL)).toBe('same');
-    expect(recipeChange(session(null), [], NO_DIAL)).toBe('same');
-    expect(recipeChange(session([recipe('A')]), [], NO_DIAL)).toBe('write');
-    expect(recipeChange(session([recipe('A')]), [recipe('A', { hidden: true })], NO_DIAL)).toBe('write');
-    expect(recipeChange(session([recipe('A')]), [recipe('A')], NO_DIAL)).toBe('same');
-    expect(recipeChange(session([recipe('A')]), [recipe('B')], NO_DIAL)).toBe('write');
-    expect(recipeChange(session(null), [recipe('B')], NO_DIAL)).toBe('write');
-  });
-
-  it('writes a change of the mode dial alone', () => {
-    const a = recipe('A', { id: 5 });
-    const card = { state: {}, recipes: [a], dial: [5, DIAL_FOLLOW, DIAL_OFF] } as unknown as CardSession;
-    expect(recipeChange(card, [a], [5, DIAL_FOLLOW, DIAL_OFF])).toBe('same');
-    expect(recipeChange(card, [a], [DIAL_FOLLOW, DIAL_FOLLOW, DIAL_OFF])).toBe('write');
-    expect(recipeChange(card, [a], [5, DIAL_OFF, DIAL_OFF])).toBe('write');
-    // Without the Recipes module, the page leaves the recipe file as it is.
-    expect(recipeChange(card, null, [DIAL_FOLLOW, DIAL_FOLLOW, DIAL_FOLLOW])).toBe('same');
-    // A card without a recipe file gets one for the dial alone.
-    const empty = { state: { recipeText: null }, recipes: null, dial: NO_DIAL } as unknown as CardSession;
-    expect(recipeChange(empty, [], NO_DIAL)).toBe('same');
-    expect(recipeChange(empty, [], [DIAL_OFF, DIAL_FOLLOW, DIAL_FOLLOW])).toBe('write');
-  });
-});
-
-describe('mode dial', () => {
-  const library = [recipe('A', { id: 5 }), recipe('B', { id: 6, enabled: false }), recipe('C', { id: 7, hidden: true })];
-
-  it('offers the recipes that are on', () => {
-    expect(dialChoices(library).map((item) => item.name)).toEqual(['A', 'C']);
-  });
-
-  it('shows None for a recipe that the library does not have on', () => {
-    // 6 is off and 9 is deleted: the camera lets those user modes follow.
-    expect(shownDial([6, 9, 7], library)).toEqual([DIAL_FOLLOW, DIAL_FOLLOW, 7]);
-    expect(shownDial([DIAL_OFF, 5, DIAL_FOLLOW], library)).toEqual([DIAL_OFF, 5, DIAL_FOLLOW]);
-    // A deleted recipe shows None.
-    expect(shownDial([5, DIAL_FOLLOW, DIAL_FOLLOW], library.slice(1))).toEqual(NO_DIAL);
-  });
-
-  it('carries the choice of a ZIP package by record', () => {
-    // C (7) is on and the third record; B (6) is off; 9 left the library.
-    expect(libraryDial([null, DIAL_OFF, DIAL_FOLLOW], library)).toEqual(['keep', 'off', 'follow']);
-    expect(libraryDial([7, 6, 9], library)).toEqual([{ record: 2 }, 'follow', 'follow']);
-    expect(libraryDial(KEEP_DIAL, [])).toEqual(['keep', 'keep', 'keep']);
-    expect(shownChoice([null, 6, 7], library)).toEqual([null, DIAL_FOLLOW, 7]);
-  });
-
-  it('reads the choice of a package library for a camera line', () => {
-    const recipes = [...library, recipe('D', { id: 8, family: 'gr4' })];
-    expect(choiceOfLibrary(['keep', { record: 0 }, { record: 3 }], recipes, 'gr3')).toEqual([null, 5, DIAL_FOLLOW]);
-    expect(choiceOfLibrary(['off', 'follow', { record: 3 }], recipes, 'gr4')).toEqual([DIAL_OFF, DIAL_FOLLOW, 8]);
-  });
-
-  it('keeps a choice for each camera line', () => {
-    const storage = memoryStorage();
-    expect(loadDialChoice(storage, 'gr3')).toEqual(KEEP_DIAL);
-    saveDialChoice(storage, 'gr3', [5, null, DIAL_OFF]);
-    expect(loadDialChoice(storage, 'gr3')).toEqual([5, null, DIAL_OFF]);
-    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
-    storage.setItem('grkit.recipeDial.gr4', JSON.stringify([1, 2]));
-    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
-    storage.setItem('grkit.recipeDial.gr4', JSON.stringify([-1, null, null]));
-    expect(loadDialChoice(storage, 'gr4')).toEqual(KEEP_DIAL);
-  });
-
-  it('keeps the settings that the camera saved in a user mode on a card only', () => {
-    // A card shows them and writes them back; a ZIP package cannot give them, so they follow.
-    expect(shownDial([DIAL_SAVED, 5, DIAL_FOLLOW], library)).toEqual([DIAL_SAVED, 5, DIAL_FOLLOW]);
-    expect(shownDial([DIAL_SAVED, DIAL_SAVED, DIAL_SAVED], [])).toEqual([DIAL_SAVED, DIAL_SAVED, DIAL_SAVED]);
-    expect(shownChoice([DIAL_SAVED, null, 5], library)).toEqual([DIAL_FOLLOW, null, 5]);
-    expect(libraryDial([DIAL_SAVED, null, null], library)).toEqual(['follow', 'keep', 'keep']);
-  });
-
-  it('marks GRKit Off and the saved settings past the recipe IDs', () => {
-    expect(DIAL_OFF).toBe(2 ** 29 - 1);
-    expect(DIAL_SAVED).toBe(2 ** 29 - 2);
-    expect(RECIPE_ID_MAX).toBe(2 ** 29 - 3);
-    expect(DIAL_OFF).toBeGreaterThan(RECIPE_ID_MAX);
-    expect(sameDial([1, 2, 3], [1, 2, 3])).toBe(true);
-    expect(sameDial([1, 2, 3], [1, 2, 4])).toBe(false);
+    const session = (recipes: Recipe[] | null) =>
+      ({ state: { recipeText: recipes ? 'text' : null }, recipes }) as unknown as CardSession;
+    expect(recipeChange(session(null), null)).toBe('same');
+    expect(recipeChange(session([recipe('A')]), null)).toBe('same');
+    expect(recipeChange(session(null), [])).toBe('same');
+    expect(recipeChange(session([recipe('A')]), [])).toBe('write');
+    expect(recipeChange(session([recipe('A')]), [recipe('A', { hidden: true })])).toBe('write');
+    expect(recipeChange(session([recipe('A')]), [recipe('A')])).toBe('same');
+    expect(recipeChange(session([recipe('A')]), [recipe('B')])).toBe('write');
+    expect(recipeChange(session(null), [recipe('B')])).toBe('write');
   });
 });
 

@@ -197,17 +197,6 @@
 /* The text ID of a string view (a halfword), which FW_STRING_VIEW_RESET sets:
    the view measures its text when the ID changes. */
 #define STRING_VIEW_TEXT 0xea
-/* A string view of its own: its type for FW_VIEW_FACTORY, and the bytes of
-   its font and of its horizontal and vertical alignment, which a new view
-   measures at its first layout. STRING_VIEW_LIVE_FONT is the font of the
-   live-view text, such as the focus distance, and STRING_VIEW_CENTER
-   centers the text in the view. */
-#define STRING_VIEW_TYPE 0x11U
-#define STRING_VIEW_FONT 0xf0
-#define STRING_VIEW_ALIGN 0xf1
-#define STRING_VIEW_VERTICAL 0xf2
-#define STRING_VIEW_LIVE_FONT 1U
-#define STRING_VIEW_CENTER 1U
 /* The methods of the SelectMenuController vtable. */
 #define SELECT_VTABLE_SLOTS 16U
 /* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
@@ -456,6 +445,30 @@
 #define DIAL_NATIVE_SETTLED(position) \
     (BYTE(DIAL_AE_MODEL,DIAL_AE_APPLIED)==(position) && \
      BYTE(WORD(DIAL_USER_MODES,0),0)==BYTE(DIAL_AE_MODEL,DIAL_AE_USER_MODE))
+/* The native slots of the user modes (runtime/mode_dial.h): user mode u
+   has slot u. The settings object holds the current settings record at +4,
+   and at DIAL_RECORD_COPY (build header) the copy of that record that the
+   firmware keeps, which holds the same values: the firmware copies the
+   record there each time it loads a whole record. The core reads the names
+   in the copy: the name of user mode u is at DIAL_USER_NAME + 0x21 x (u -
+   1), ASCII of at most 32 characters with 0 after it, and whether it is
+   registered at DIAL_USER_REGIST + u - 1.
+   - The assign copies the current settings into slot u
+     (FW_USER_MODE_ASSIGN), as the native assign does.
+   - The setter of a name (FW_USER_MODE_NAME) also sets the registered
+     flag.
+   DIAL_SHARED_TEXT names P, Tv, Av, Sn, and M, the positions that share
+   their settings. */
+#define DIAL_SHARED_TEXT 'P','/','A','v','/','T','v','/','S','n','/','M',0
+#define DIAL_USER_NAME 0x794U
+#define DIAL_USER_NAME_STRIDE 0x21U
+#define DIAL_USER_REGIST 0x8bdU
+#define DIAL_SLOT_NAME_AT(slot) (CALL0(FW_SETTINGS)()+DIAL_RECORD_COPY+DIAL_USER_NAME+DIAL_USER_NAME_STRIDE*((slot)-1U))
+#define DIAL_SLOT_REGIST_AT(slot) (CALL0(FW_SETTINGS)()+DIAL_RECORD_COPY+DIAL_USER_REGIST+(slot)-1U)
+#define DIAL_SLOT_OF(u) (u)
+#define DIAL_SLOT_SAVE(slot) CALL2(FW_USER_MODE_ASSIGN)(DIAL_USER_MODES,(slot))
+#define DIAL_SLOT_NAME_SET(slot,name,registered) \
+    CALL4(FW_USER_MODE_NAME)(CALL0(FW_USER_MODE_NAMES)(),(slot),(u32)(name),(registered))
 
 /* The canvas of CORE.BORDER (runtime/canvas_shot.h). A still develops in
    StillMake into the bank of its recipe R, as on GR III: R2Y writes the

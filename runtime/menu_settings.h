@@ -96,8 +96,8 @@ static u32 menu_return(volatile u32 *h) {
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
    page. Its rows: Enable at Start while the switch shows, Distance Unit
-   (runtime/manage.h: core_settings), Mode Dial while the Recipes page is
-   loaded (runtime/menu_dial.h), and ADJ Order while ADJ shows a module.
+   (runtime/manage.h: core_settings), Mode Dial (runtime/menu_dial.h), and
+   ADJ Order while ADJ shows a module.
    ADJ Order opens its page (MENU_ADJ_TARGET, runtime/menu_section.h), whose
    MENU returns here. The rows are the rows of the page as it opened
    (MENU_ROWS_CORE_KINDS), as a text hook must not read the module pages. */
@@ -108,6 +108,7 @@ static u32 menu_return(volatile u32 *h) {
 #define CORE_ROW_ADJ 3U
 #define MENU_ADJ_TARGET 0x2000fa0U
 static const Setting *dial_menu_setting(void);
+static void dial_page_opens(volatile u32 *h);
 static const u16 *adj_order_label(volatile u32 *h) { return text(h,TEXT_ADJ); }
 static const u16 *adj_order_text(volatile u32 *h,u32 value) { (void)h; (void)value; return no_value_text; }
 static u32 adj_order_select(volatile u32 *h,u32 controller,u32 value) {
@@ -122,7 +123,7 @@ static void core_refresh(volatile u32 *h) {
     manage_adj_refresh(h);
     if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
     if(unit_handle(h)) kinds|=CORE_ROW_UNIT<<(4U*n++);
-    if(recipes_loaded(h)) kinds|=CORE_ROW_DIAL<<(4U*n++);
+    kinds|=CORE_ROW_DIAL<<(4U*n++);
     if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
     core_kinds(h)[0]=kinds|n<<24;
 }
@@ -267,9 +268,10 @@ static void settings_value_again(volatile u32 *h,u32 back) {
     CALL3(FW_CHANGE_CONTROLLER)(page,back ? SETTINGS_SUBMENU : check_word(h,CHECK_ID)[0],0x10000000);
 }
 /* Open the keyboard from the own value page `controller` of MENU, which
-   the keyboard returns to: 1, or 0 as ui_keyboard_prepare refuses. */
-static u32 ui_keyboard_on(volatile u32 *h,u32 controller,const volatile u16 *text,void (*done)(u32),u32 arg) {
-    if(!ui_keyboard_prepare(h,text,done,arg)) return 0;
+   the keyboard returns to, with `text` of at most `limit` characters: 1, or
+   0 as ui_keyboard_prepare refuses. */
+static u32 ui_keyboard_on(volatile u32 *h,u32 controller,const volatile u16 *text,u32 limit,void (*done)(u32),u32 arg) {
+    if(!ui_keyboard_prepare(h,text,limit,done,arg)) return 0;
     CALL3(FW_CHANGE_CONTROLLER)(controller,KEYBOARD_CONTROLLER,check_word(h,CHECK_ID)[0]);
     return 1;
 }
@@ -490,6 +492,11 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
     }
     for(i=0;i<SETTINGS_BORROWED;++i) if(id==settings_pages[i]) {
         if(settings_page(h)) settings_forget_all(h);
+        /* The Mode Dial page checks the native slots of the user modes
+           before it shows (runtime/menu_dial.h). */
+        if(h[GRKIT_HOST_SERVICES/4] && settings_page(h)==core_page_settings && settings_alias(h,i)<settings_rows(h) &&
+           core_row_setting(h,settings_alias(h,i))==dial_menu_setting())
+            dial_page_opens(h);
         /* An options page starts with its cursor on the first option. */
         if(h[GRKIT_HOST_SERVICES/4] && settings_page(h) && settings_alias(h,i)<settings_rows(h) &&
            settings_long(h,settings_page(h),settings_alias(h,i)))

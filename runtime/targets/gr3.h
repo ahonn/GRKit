@@ -383,17 +383,6 @@
 /* The text ID of a string view (a halfword), which FW_STRING_VIEW_RESET sets:
    the view measures its text when the ID changes. */
 #define STRING_VIEW_TEXT 0xea
-/* A string view of its own: its type for FW_VIEW_FACTORY, and the bytes of
-   its font and of its horizontal and vertical alignment, which a new view
-   measures at its first layout. STRING_VIEW_LIVE_FONT is the font of the
-   live-view text, such as the focus distance, and STRING_VIEW_CENTER
-   centers the text in the view. */
-#define STRING_VIEW_TYPE 0x11U
-#define STRING_VIEW_FONT 0xf0
-#define STRING_VIEW_ALIGN 0xf1
-#define STRING_VIEW_VERTICAL 0xf2
-#define STRING_VIEW_LIVE_FONT 1U
-#define STRING_VIEW_CENTER 1U
 /* The methods of the SelectMenuController vtable. */
 #define SELECT_VTABLE_SLOTS 15U
 /* The events that a SelectMenu page gets after MENU (CANCEL), and after OK
@@ -487,6 +476,34 @@
 #define DIAL_POSITION() BYTE(DIAL_SWITCHES,DIAL_SWITCH_STATES+DIAL_SWITCH*8)
 #define DIAL_NATIVE_SETTLED(position) \
     ((BYTE(WORD(DIAL_SETTINGS,0),0)!=0)==((u32)((position)-DIAL_CODE_U1)<3U))
+/* The native slots of the user modes (runtime/mode_dial.h) are the six
+   boxes of the settings object. Its word 1 points to the current settings
+   record, and word 2 + n to that of box n (1 to 6); a record has
+   DIAL_RECORD_SIZE bytes. A user mode loads the box that the byte at
+   DIAL_BOX_ASSIGN + 2 x (u - 1) of the current record gives, 1 to 6. Each
+   of the eight records holds the name of each box, ASCII of at most 32
+   characters with 0 after it, and whether the box is registered; the
+   setters of the firmware write the eight records, as the core does. The
+   save copies the current settings into box n (FW_BOX_SAVE), as the native
+   save does. DIAL_SHARED_TEXT names P, Tv, Av, and M, the positions that
+   share their settings. */
+#define DIAL_SHARED_TEXT 'P','/','A','v','/','T','v','/','M',0
+#define DIAL_RECORD_SIZE 0xb26U
+#define DIAL_RECORD() WORD(DIAL_SETTINGS,4)
+#define DIAL_BOX_ASSIGN 0x7e0U
+#define DIAL_BOXES 6U
+#define DIAL_NAME_RECORDS 8U
+#define DIAL_NAME_RECORD(i) WORD(DIAL_SETTINGS,4U+4U*(i))
+#define DIAL_BOX_NAME 0x7e6U
+#define DIAL_BOX_NAME_STRIDE 0x22U
+#define DIAL_BOX_REGIST 0x8b2U
+#define DIAL_BOX_NAME_FIELD(slot) (DIAL_BOX_NAME+DIAL_BOX_NAME_STRIDE*((slot)-1U))
+#define DIAL_BOX_REGIST_FIELD(slot) (DIAL_BOX_REGIST+2U*((slot)-1U))
+#define DIAL_SLOT_NAME_AT(slot) (DIAL_RECORD()+DIAL_BOX_NAME_FIELD(slot))
+#define DIAL_SLOT_REGIST_AT(slot) (DIAL_RECORD()+DIAL_BOX_REGIST_FIELD(slot))
+#define DIAL_SLOT_OF(u) dial_box_of(u)
+#define DIAL_SLOT_SAVE(slot) CALL2(FW_BOX_SAVE)(DIAL_SETTINGS,(slot))
+#define DIAL_SLOT_NAME_SET(slot,name,registered) dial_names_write((slot),(name),(registered))
 
 /* The canvas of CORE.BORDER (runtime/canvas_shot.h). A still develops in
    StillMake into the bank of its recipe R: R2Y writes the source picture in

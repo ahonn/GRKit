@@ -116,20 +116,20 @@ pub const RECIPE_WORDS: usize = 6;
 /// ends the name, and a recipe whose name word 0 is 0 has the automatic name.
 pub const RECIPE_NAME_CHARS: usize = 16;
 pub const RECIPE_NAME_WORDS: usize = RECIPE_NAME_CHARS / 4;
-/// The user modes of the mode dial, U1 to U3, that the recipe file assigns
-/// (`HOST_RECIPE_DIAL`).
-pub const RECIPE_DIAL_POSITIONS: usize = 3;
-/// The settings that the camera saves in a user mode of the mode dial
-/// (`HOST_DIAL_SETS`, runtime/mode_dial.h): a set of `DIAL_SET_WORDS` words.
-/// Word `DIAL_SET_COUNT` holds the number of its pairs + 1, or 0 without a
-/// set. A word for each capability follows at `DIAL_SET_CORE`, in the order
-/// of `capabilities::CAPABILITIES`: the effect as `DIAL_SET_EFFECT` with the
-/// recipe code of its ID (`recipes::effect_code`), or 0 for Off, and the
-/// value of each other capability. Then the Fn adjustments of the effect
-/// (`DIAL_SET_FN`, base-9 digits as a recipe holds them) and its Toning byte
-/// (`DIAL_SET_TONING`), and from `DIAL_SET_PAIR` the pairs of a state file ID
-/// of a setting and its value: the saved module settings, the Enable of each
-/// listed module, and the switch Enable GRKit.
+/// The user modes of the mode dial, U1 to U3 (runtime/mode_dial.h).
+pub const DIAL_USER_MODES: usize = 3;
+/// The GRKit settings that Save Current Settings keeps in a user mode of the
+/// mode dial, its snapshot (`HOST_DIAL_SETS`, runtime/mode_dial.h): a set of
+/// `DIAL_SET_WORDS` words. Word `DIAL_SET_COUNT` holds the number of its
+/// pairs + 1, or 0 without a set. A word for each capability follows at
+/// `DIAL_SET_CORE`, in the order of `capabilities::CAPABILITIES`: the effect
+/// as `DIAL_SET_EFFECT` with the recipe code of its ID
+/// (`recipes::effect_code`), or 0 for Off, and the value of each other
+/// capability. Then the Fn adjustments of the effect (`DIAL_SET_FN`, base-9
+/// digits as a recipe holds them) and its Toning byte (`DIAL_SET_TONING`),
+/// and from `DIAL_SET_PAIR` the pairs of a state file ID of a setting and
+/// its value: the saved module settings and the Enable of each listed
+/// module.
 ///
 /// The settings table holds at most `DIAL_SET_PAIRS` such settings: it keeps
 /// a choice for each listed effect, at most 64 (runtime/effects.h), and the
@@ -144,7 +144,29 @@ pub const DIAL_SET_TONING: usize = DIAL_SET_FN + 1;
 pub const DIAL_SET_PAIR: usize = DIAL_SET_TONING + 1;
 pub const DIAL_SET_WORDS: usize = DIAL_SET_PAIR + 2 * DIAL_SET_PAIRS;
 pub const DIAL_SET_EFFECT: u32 = 0x8000;
+/// What each user mode of the mode dial does (`HOST_DIAL_SLOTS`,
+/// runtime/mode_dial.h), `DIAL_SLOT_WORDS` words each: its value
+/// (`DIAL_SLOT_VALUE`): the same as P/Av/Tv/M (`DIAL_VALUE_SAME`), GRKit Off
+/// (`DIAL_VALUE_OFF`), or its snapshot (`DIAL_VALUE_SNAPSHOT`); and a
+/// fingerprint of the name that the core gave its native slot with the
+/// snapshot (`DIAL_SLOT_NAME`, 0 without a snapshot). Another value is the
+/// same as P/Av/Tv/M.
+pub const DIAL_SLOT_VALUE: usize = 0;
+pub const DIAL_SLOT_NAME: usize = 1;
+pub const DIAL_SLOT_WORDS: usize = 2;
+pub const DIAL_VALUE_SAME: u32 = 0;
+pub const DIAL_VALUE_OFF: u32 = 1;
+pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
+/// A copy of three settings of the core that no snapshot holds, in the file
+/// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
+/// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
+/// (`MANAGE_COPY_START`), and Distance Unit (`MANAGE_COPY_UNIT`), each as
+/// its value + 1, or 0 without a copy.
+pub const MANAGE_COPY_SWITCH: usize = 0;
+pub const MANAGE_COPY_START: usize = 1;
+pub const MANAGE_COPY_UNIT: usize = 2;
+pub const MANAGE_COPY_WORDS: usize = 3;
 
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
@@ -459,12 +481,6 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// that creates a recipe (the camera, INSTALL, the site) generates its ID.
     /// The loader saves the IDs after the import hash.
     HOST_RECIPE_IDS: 4 * RECIPE_SLOTS;
-    /// What each user mode of the mode dial, U1 to U3, does
-    /// (`runtime::RECIPE_DIAL_FOLLOW`, `RECIPE_DIAL_OFF`, or the ID of a
-    /// recipe). An ID that no recipe has follows, as `RECIPE_DIAL_FOLLOW`. A
-    /// generated ID is never one of these values, so a deleted recipe never
-    /// gets the references of another.
-    HOST_RECIPE_DIAL: 4 * RECIPE_DIAL_POSITIONS;
     /// The count of changes of the recipes: the loader saves the recipe file
     /// after it changes (GRKIT_RECIPES_CHANGED). INSTALL sets 1 after an
     /// import.
@@ -472,21 +488,35 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// The undo steps, the oldest first, RECIPE_WORDS words each. They are
     /// not saved: a start begins without them.
     HOST_RECIPE_UNDO: 4 * RECIPE_WORDS * RECIPE_UNDO;
-    /// Nonzero while the mode dial is on a user mode whose settings are
-    /// temporary (runtime/mode_dial.h): the resident loader then does not
-    /// save the main state file, so the file keeps the settings of the other
-    /// positions. The recipe file still saves.
+    /// Nonzero while the mode dial is on a user mode with a snapshot, whose
+    /// changes are temporary (runtime/mode_dial.h): the resident loader then
+    /// does not save the main state file, so the file keeps the shared
+    /// settings of P/Av/Tv/M. The recipe file still saves.
     HOST_STATE_HOLD: 4;
-    /// The count of changes of the saved settings of the user modes
-    /// (`HOST_DIAL_SETS`): the loader saves their file after it changes.
+    /// The count of changes of the settings of the user modes
+    /// (`HOST_DIAL_SETS` to `HOST_MANAGE_COPY`): the loader saves their file
+    /// after it changes.
     HOST_DIAL_SET_CHANGES: 4;
-    /// The settings that the camera saved in each user mode of the mode
-    /// dial, U1 to U3, `DIAL_SET_WORDS` words each (runtime/mode_dial.h). A
-    /// user mode applies them while it has `runtime::RECIPE_DIAL_SAVED`
-    /// (`HOST_RECIPE_DIAL`). The resident loader saves each word that is not
-    /// 0 in their file (`capabilities::StateFile::DialSets`), and INSTALL
-    /// restores them.
-    HOST_DIAL_SETS: 4 * DIAL_SET_WORDS * RECIPE_DIAL_POSITIONS;
+    /// The snapshot of each user mode of the mode dial, U1 to U3,
+    /// `DIAL_SET_WORDS` words each (runtime/mode_dial.h). The resident loader
+    /// saves each word that is not 0 in their file
+    /// (`capabilities::StateFile::DialSets`), and INSTALL restores them.
+    HOST_DIAL_SETS: 4 * DIAL_SET_WORDS * DIAL_USER_MODES;
+    /// What each user mode, U1 to U3, does, `DIAL_SLOT_WORDS` words each
+    /// (runtime/mode_dial.h), right after HOST_DIAL_SETS: the loader saves
+    /// them in the file of the sets after the sets, and INSTALL restores
+    /// them. Only the camera writes them.
+    HOST_DIAL_SLOTS: 4 * DIAL_SLOT_WORDS * DIAL_USER_MODES;
+    /// 1 while GRKit is off at P/Av/Tv/M (and Sn on GR IV), else 0, right
+    /// after HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h).
+    HOST_DIAL_SHARED_OFF: 4;
+    /// The copy of the switch, Enable at Start, and Distance Unit,
+    /// `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
+    /// HOST_DIAL_SHARED_OFF, in the same file. The core holds the main state
+    /// file on a user mode with a snapshot, but never this file, so a change
+    /// of these settings there saves. INSTALL takes them from the copy
+    /// before the main state file, and writes the values of the start here.
+    HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
@@ -609,9 +639,6 @@ fields!(RCP_FIELDS {
     RCP_CRC = 12, 4;
     /// u32 number of recipes.
     RCP_COUNT = 16, 4;
-    /// u32 for each user mode of the mode dial, U1 to U3: what INSTALL sets
-    /// it to when it imports the library (`recipes::DialStep`).
-    RCP_DIAL = 20, 12;
 });
 
 fields!(RCP_RECORD_FIELDS {
@@ -967,19 +994,6 @@ fn recipe_table(out: &mut String) {
     writeln!(out, "#define GRKIT_RCP_NAME_UNITS {}U", recipes::NAME_UNITS).unwrap();
     comment(
         out,
-        "A user mode of the mode dial in the header (GRKIT_RCP_DIAL): keep the value of the \
-         camera, follow the dial, turn GRKit off, or apply record k at GRKIT_RCP_DIAL_RECORD + k.",
-    );
-    for (name, value) in [
-        ("KEEP", recipes::DialStep::Keep),
-        ("FOLLOW", recipes::DialStep::Follow),
-        ("OFF", recipes::DialStep::Off),
-        ("RECORD", recipes::DialStep::Record(0)),
-    ] {
-        writeln!(out, "#define GRKIT_RCP_DIAL_{name} {}U", value.code()).unwrap();
-    }
-    comment(
-        out,
         "The family byte of a record: the camera line whose INSTALL imports it.",
     );
     for (name, family) in [
@@ -1159,12 +1173,10 @@ pub fn header() -> String {
          recipe n has the key GRKIT_RECIPE_NAME_KEY_BASE + w * \
          GRKIT_RECIPE_KEY_STRIDE + n. The words after the names have one key \
          each from GRKIT_RECIPE_IMPORTED_KEY: the hash of the imported package \
-         library, the ID of recipe n at GRKIT_RECIPE_ID_KEY_BASE + n, the \
-         assignment of user mode u at GRKIT_RECIPE_DIAL_KEY_BASE + u \
+         library, and the ID of recipe n at GRKIT_RECIPE_ID_KEY_BASE + n \
          (grkit_core::runtime::recipe_key). A recipe ID is a generated number, \
-         1 to GRKIT_RECIPE_ID_MAX (runtime/recipe_id.h). A user mode follows \
-         (GRKIT_RECIPE_DIAL_FOLLOW), turns GRKit off (GRKIT_RECIPE_DIAL_OFF), \
-         or applies the recipe with its ID. The undo steps are not saved.",
+         1 to GRKIT_RECIPE_ID_MAX (runtime/recipe_id.h). The undo steps are not \
+         saved.",
     );
     writeln!(out, "#define GRKIT_RECIPE_SLOTS {RECIPE_SLOTS}U").unwrap();
     writeln!(out, "#define GRKIT_RECIPE_ON_MAX {RECIPE_ON_MAX}U").unwrap();
@@ -1172,11 +1184,7 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_RECIPE_WORDS {RECIPE_WORDS}U").unwrap();
     writeln!(out, "#define GRKIT_RECIPE_NAME_CHARS {RECIPE_NAME_CHARS}U").unwrap();
     writeln!(out, "#define GRKIT_RECIPE_NAME_WORDS {RECIPE_NAME_WORDS}U").unwrap();
-    writeln!(
-        out,
-        "#define GRKIT_RECIPE_DIAL_POSITIONS {RECIPE_DIAL_POSITIONS}U"
-    )
-    .unwrap();
+    writeln!(out, "#define GRKIT_DIAL_USER_MODES {DIAL_USER_MODES}U").unwrap();
     comment(
         &mut out,
         "The bit layout of the recipe words (grkit_core::recipes::layout): the \
@@ -1212,18 +1220,15 @@ pub fn header() -> String {
     for (name, value) in [
         ("IMPORTED_KEY", crate::runtime::RECIPE_IMPORTED_KEY),
         ("ID_KEY_BASE", crate::runtime::RECIPE_ID_KEY_BASE),
-        ("DIAL_KEY_BASE", crate::runtime::RECIPE_DIAL_KEY_BASE),
         ("ID_MAX", crate::runtime::RECIPE_ID_MAX),
-        ("DIAL_FOLLOW", crate::runtime::RECIPE_DIAL_FOLLOW),
-        ("DIAL_SAVED", crate::runtime::RECIPE_DIAL_SAVED),
-        ("DIAL_OFF", crate::runtime::RECIPE_DIAL_OFF),
     ] {
         writeln!(out, "#define GRKIT_RECIPE_{name} {value}U").unwrap();
     }
     comment(
         &mut out,
-        "The settings that the camera saves in a user mode of the mode dial \
-         (runtime/mode_dial.h, grkit_core::abi::DIAL_SET_WORDS): GRKIT_DIAL_SET_WORDS \
+        "The snapshot of a user mode of the mode dial: the GRKit settings that \
+         Save Current Settings keeps in it (runtime/mode_dial.h, \
+         grkit_core::abi::DIAL_SET_WORDS): GRKIT_DIAL_SET_WORDS \
          words, the number of pairs + 1 (0 without a set), a word for each \
          capability, the Fn adjustments and the Toning of the effect, then \
          GRKIT_DIAL_SET_PAIRS pairs of a state file ID and a value. The effect \
@@ -1246,6 +1251,47 @@ pub fn header() -> String {
         ("VALUE_MAX", crate::runtime::DIAL_SET_VALUE_MAX),
     ] {
         writeln!(out, "#define GRKIT_DIAL_SET_{name} {value}U").unwrap();
+    }
+    comment(
+        &mut out,
+        "What a user mode does (GRKIT_HOST_DIAL_SLOTS, runtime/mode_dial.h): \
+         GRKIT_DIAL_SLOT_WORDS words, its value, GRKIT_DIAL_VALUE_SAME, \
+         GRKIT_DIAL_VALUE_OFF, or GRKIT_DIAL_VALUE_SNAPSHOT, and a fingerprint \
+         of the name that the core gave its native slot with the snapshot. In \
+         the file of the sets, word w of user mode u (0 for U1) has the key \
+         GRKIT_DIAL_SLOT_KEY_BASE + u * GRKIT_DIAL_SLOT_WORDS + w, and \
+         GRKIT_HOST_DIAL_SHARED_OFF the key after the last of them.",
+    );
+    for (name, value) in [
+        ("VALUE", DIAL_SLOT_VALUE as u32),
+        ("NAME", DIAL_SLOT_NAME as u32),
+        ("WORDS", DIAL_SLOT_WORDS as u32),
+        ("KEY_BASE", crate::runtime::DIAL_SLOT_KEY_BASE),
+    ] {
+        writeln!(out, "#define GRKIT_DIAL_SLOT_{name} {value}U").unwrap();
+    }
+    comment(
+        &mut out,
+        "The copy of the switch, Enable at Start, and Distance Unit \
+         (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value + 1, or \
+         0 without a copy. In the file of the sets, word w has the key \
+         GRKIT_MANAGE_COPY_KEY + w.",
+    );
+    for (name, value) in [
+        ("SWITCH", MANAGE_COPY_SWITCH as u32),
+        ("START", MANAGE_COPY_START as u32),
+        ("UNIT", MANAGE_COPY_UNIT as u32),
+        ("WORDS", MANAGE_COPY_WORDS as u32),
+        ("KEY", crate::runtime::MANAGE_COPY_KEY),
+    ] {
+        writeln!(out, "#define GRKIT_MANAGE_COPY_{name} {value}U").unwrap();
+    }
+    for (name, value) in [
+        ("SAME", DIAL_VALUE_SAME),
+        ("OFF", DIAL_VALUE_OFF),
+        ("SNAPSHOT", DIAL_VALUE_SNAPSHOT),
+    ] {
+        writeln!(out, "#define GRKIT_DIAL_VALUE_{name} {value}U").unwrap();
     }
     writeln!(
         out,

@@ -25,6 +25,11 @@
    table. A module that is Off at a start, by its Enable or by the switch,
    loads stopped.
 
+   The mode dial can turn GRKit off at a position (runtime/mode_dial.h): a
+   flag of the session, not the switch, which stops the modules as the
+   switch Off does (manage_grkit_off). The Enable row of ADJ shows whether
+   GRKit runs; the MENU row shows the switch.
+
    Enable at Start, the row after the switch in the GRKit section (no ADJ
    row), decides the switch at each start: On, Off, or Keep Last, which
    keeps the value of the last session. Its setting, CORE.START, follows
@@ -37,6 +42,13 @@
    focus distances of the camera in meters or in feet: the Snap focus
    distances (runtime/distance.h). Its setting, CORE.UNIT, follows Enable at
    Start in the table, and a change applies at once.
+
+   The header keeps a copy of these three settings (GRKIT_HOST_MANAGE_COPY,
+   manage_copy), which the resident loader saves in the file of the user
+   modes of the mode dial. On a user mode with a snapshot, the core holds
+   the main state file (runtime/mode_dial.h), but not that file, so a change
+   of these settings there saves. INSTALL takes them from the copy before the
+   main state file (runtime/install_recipes.h: read_manage_copy).
 
    INSTALL writes the module list (GRKIT_HOST_MANAGE): MANAGE_HEADER words,
    then MANAGE_STRIDE bytes for each listed module, in the order of the last
@@ -137,8 +149,13 @@ static u32 manage_off(volatile u32 *h,u32 module) { return setting_value(h,manag
    and whether it is Off. */
 static u32 manage_switch(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_SWITCH) : 0; }
 static u32 manage_all_off(volatile u32 *h) { u32 at=manage_switch(h); return at && setting_value(h,at-1); }
-/* Whether a module is Off by its Enable or by the switch. */
-static u32 manage_halted(volatile u32 *h,u32 module) { return manage_off(h,module) || manage_all_off(h); }
+/* Whether GRKit is off: by the switch, or at this position of the mode dial
+   (runtime/mode_dial.h). */
+static u32 manage_grkit_off(volatile u32 *h) {
+    return manage_all_off(h) || (h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_DIAL+DIAL_SUSPENDED)[0]);
+}
+/* Whether a module is Off by its Enable, by the switch, or by the dial. */
+static u32 manage_halted(volatile u32 *h,u32 module) { return manage_off(h,module) || manage_grkit_off(h); }
 /* The values of the page of a module that are off in ADJ, a bit each. */
 static u32 manage_rows_handle(volatile u32 *h,u32 module) { return manage_off_handle(h,module)+2; }
 static u32 manage_hidden_values(volatile u32 *h,u32 module) { return setting_value(h,manage_rows_handle(h,module)); }
@@ -242,11 +259,37 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&(GRKIT_CORE_ASPECT_BIT|GRKIT_CORE_ASPECT_MODE_BIT)) aspect_refresh(h);
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
+/* Keep the switch, Enable at Start, and Distance Unit in their copy, each
+   as its value + 1, after a change of one of them. A copy that changes
+   counts as a change of the file of the user modes, which the loader saves
+   also while the core holds the main state file. Off of the mode dial is not
+   the switch and changes no copy. */
+_Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
+               MANAGE_UNIT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_UNIT && GRKIT_MANAGE_COPY_SWITCH==0U &&
+               GRKIT_MANAGE_COPY_WORDS==3U, "The copy follows the handles of the module list");
+static void manage_copy(volatile u32 *h) {
+    u32 i, at, value, changed=0;
+    if(!h[GRKIT_HOST_MANAGE/4]) return;
+    for(i=0;i<GRKIT_MANAGE_COPY_WORDS;++i) {
+        at=manage_word(h,MANAGE_SWITCH+4U*i);
+        if(!at) continue;
+        value=setting_value(h,at-1)+1U;
+        if(h[GRKIT_HOST_MANAGE_COPY/4+i]==value) continue;
+        h[GRKIT_HOST_MANAGE_COPY/4+i]=value;
+        changed=1;
+    }
+    if(changed) ++h[GRKIT_HOST_DIAL_SET_CHANGES/4];
+}
+/* The mode dial follows a change of the switch (runtime/mode_dial.h). */
+static void dial_master_changed(volatile u32 *h);
 static void manage_set_all_off(volatile u32 *h,u32 off) {
-    u32 at=manage_switch(h);
+    u32 at=manage_switch(h), was;
     if(!at) return;
+    was=manage_all_off(h);
     setting_store(h,at-1,off);
+    manage_copy(h);
     manage_off_changed(h);
+    if(was!=manage_all_off(h)) dial_master_changed(h);
 }
 /* The name of a module: the title of its page in the menu language, else
    its file name. */
@@ -415,21 +458,28 @@ static const Setting manage_settings[SUBMENU_ROWS]={
    title, so its page is Enable and its summary Enable: On or Enable: Off.
    The page has two rows, Off first as on each module page, then On: row r
    gives CORE.OFF !r. The root row shows the Modules tile, with a line
-   through it while the switch is Off. */
+   through it while GRKit is off. The page shows whether GRKit runs, also
+   where the mode dial turned it off; On there turns it on until the dial
+   goes to another position, and the switch keeps its value
+   (runtime/mode_dial.h: dial_suspend). */
+static void dial_suspend(volatile u32 *h,u32 off);
 static const u16 *switch_title(volatile u32 *h) { return text(h,TEXT_ENABLE); }
-static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_all_off(h)); }
+static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_grkit_off(h)); }
 /* The MENU row: Enable GRKit. */
 static const u16 *switch_menu_label(volatile u32 *h) { return text(h,TEXT_SWITCH+2); }
 static u32 switch_rows(volatile u32 *h) { (void)h; return 2; }
 static const u16 *switch_value_text(volatile u32 *h,u32 off) { return text(h,off ? TEXT_OFF : TEXT_ON); }
 static const u16 *switch_label(volatile u32 *h,u32 row) { return switch_value_text(h,!row); }
 static u32 switch_icon(volatile u32 *h,u32 row) {
-    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return manage_all_off(h) ? GRKIT_ICON_MODULES_OFF : GRKIT_ICON_MODULES;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return manage_grkit_off(h) ? GRKIT_ICON_MODULES_OFF : GRKIT_ICON_MODULES;
     return row ? GRKIT_ICON_MODULES : GRKIT_ICON_OFF;
 }
-static u32 switch_checked(volatile u32 *h,u32 row) { return !row==manage_all_off(h); }
-static void switch_apply(volatile u32 *h,u32 row) { manage_set_all_off(h,!row); }
-static u32 switch_committed(volatile u32 *h) { return !manage_all_off(h); }
+static u32 switch_checked(volatile u32 *h,u32 row) { return (!row)==manage_grkit_off(h); }
+static void switch_apply(volatile u32 *h,u32 row) {
+    manage_set_all_off(h,!row);
+    if(row && h[GRKIT_HOST_SERVICES/4]) dial_suspend(h,0);
+}
+static u32 switch_committed(volatile u32 *h) { return !manage_grkit_off(h); }
 #define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_label,switch_icon, \
     switch_checked,switch_apply,switch_committed,0,0,0}
 /* The MENU row opens the value page of this one setting at once
@@ -452,7 +502,10 @@ static u32 start_value(volatile u32 *h) {
 }
 static void start_set(volatile u32 *h,u32 value) {
     u32 at=start_handle(h);
-    if(at && value<MANAGE_START_VALUES) setting_store(h,at-1,value);
+    if(at && value<MANAGE_START_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
 }
 static const u16 *start_label(volatile u32 *h) { return text(h,TEXT_START); }
 static u32 start_values(volatile u32 *h) { (void)h; return MANAGE_START_VALUES; }
@@ -469,7 +522,10 @@ static u32 unit_feet(volatile u32 *h) {
 static u32 unit_value(volatile u32 *h) { return unit_feet(h) ? MANAGE_UNIT_FEET : MANAGE_UNIT_METERS; }
 static void unit_set(volatile u32 *h,u32 value) {
     u32 at=unit_handle(h);
-    if(at && value<MANAGE_UNIT_VALUES) setting_store(h,at-1,value);
+    if(at && value<MANAGE_UNIT_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
 }
 static const u16 *unit_label(volatile u32 *h) { return text(h,TEXT_UNIT+1); }
 static u32 unit_values(volatile u32 *h) { (void)h; return MANAGE_UNIT_VALUES; }

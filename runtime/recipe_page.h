@@ -184,7 +184,7 @@ static void recipe_saved_toast(volatile u32 *h,u32 slot) {
     recipe_append_name(h,to,recipe_append(to,0,text(h,RECIPE_TEXT_SAVED)),slot);
     recipe_toast(h);
 }
-_Static_assert(UI_KEYBOARD_CHARS>=GRKIT_RECIPE_NAME_CHARS,"The keyboard takes each recipe name");
+_Static_assert(UI_KEYBOARD_SHORT==GRKIT_RECIPE_NAME_CHARS,"The keyboard takes each recipe name");
 /* The text of the keyboard for recipe `slot`: its name. The keyboard takes
    printable ASCII, so an automatic name with other characters starts from
    its English name. */

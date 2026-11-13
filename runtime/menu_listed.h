@@ -23,15 +23,6 @@ static u32 listed_page(volatile u32 *h,u32 module) {
     for(slot=0;slot<module_pages(h);++slot) if(page_listed(h,slot)==module) return slot;
     return GRKIT_MODULE_PAGES_MAX;
 }
-/* Whether the Recipes page is loaded, which Mode Dial needs. The search
-   reads each module page, so only a controller change runs it. */
-static u32 recipes_loaded(volatile u32 *h) {
-    u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], slot, found=0;
-    for(slot=0;slot<module_pages(h) && !found;++slot) found=menu_page(h,slot)==&recipe_module;
-    /* menu_page selects a page: keep the page of the caller. */
-    h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
-    return found;
-}
 /* The Fn adjustments of the committed effect: the row shows the effect. */
 static u32 one_value(volatile u32 *h) { (void)h; return 1; }
 static u32 no_value(volatile u32 *h) { (void)h; return 0; }
@@ -154,12 +145,13 @@ static volatile u32 *value_entry(volatile u32 *h,u32 k) {
     return services_word(h,SERVICES_MENU+MENU_ROWS_VALUES+k*MENU_VALUE_SIZE);
 }
 /* The text of option `k` in its entry: its label, then Off for an option
-   that is off, in parentheses: "16:9 (Off)", "16:9 (끔)", "16:9（关闭）". */
+   that is off, in parentheses: "16:9 (Off)", "16:9 (끔)", "16:9（关闭）".
+   Only a label with Off leaves room for it. */
 static const u16 *entry_text(volatile u32 *h,u32 k,const u16 *label,u32 off_text) {
     volatile u16 *to=(volatile u16 *)(value_entry(h,k)+MENU_VALUE_TEXT/4);
     const u16 *off=text(h,TEXT_OFF);
-    u32 n=0, wide=!menu_spaced();
-    while(n<MENU_VALUE_UNITS-12 && label[n]) { to[n]=label[n]; ++n; }
+    u32 n=0, wide=!menu_spaced(), most=off_text ? MENU_VALUE_UNITS-12 : MENU_VALUE_UNITS-1;
+    while(n<most && label[n]) { to[n]=label[n]; ++n; }
     if(off_text) {
         if(!wide) to[n++]=' ';
         to[n++]=wide ? 0xff08 : '(';

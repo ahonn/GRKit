@@ -2653,19 +2653,6 @@ button.row-body {
   }
 }
 
-/* What U1 to U3 of the mode dial do, for the connected card. */
-.recipe-dial {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.recipe-dial-modes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-}
-
 .recipe-tools {
   display: flex;
   flex-wrap: wrap;

@@ -193,6 +193,9 @@
    set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
    setter of a native setting by its name and the stored value by its label. */
 #define FW_USERDATA_SET FIRMWARE(0x5334688c)
+/* The user mode boxes (gr3.h: the native slots): the save of the current
+   settings in a box, save(settings object, box). */
+#define FW_BOX_SAVE FIRMWARE(0x5324b760)
 #define FW_MESSAGE_BACKGROUND FIRMWARE(0x5339c71c)
 #define FW_MESSAGE_SET FIRMWARE(0x5339c844)
 #define FW_MESSAGE_BUTTONS FIRMWARE(0x5339ca54)

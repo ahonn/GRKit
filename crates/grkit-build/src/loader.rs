@@ -289,6 +289,11 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         "#define POINT_PICTURE_ENCODE {:#x}U",
         crate::components::Point::PictureEncode.bit()
     )?;
+    writeln!(
+        result,
+        "#define POINT_MODE_DIAL {:#x}U",
+        crate::components::Point::ModeDial.bit()
+    )?;
     // The capabilities of the core in handle order: the setting name,
     // and the points whose patches apply it.
     let capabilities = &grkit_core::capabilities::CAPABILITIES;

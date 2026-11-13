@@ -508,10 +508,13 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
    missing, also for a module that linked before it. So if a loaded module
    uses a setting of a module that failed, the pass runs again with the
    failed modules kept out. Each new pass has more failed modules, so the
-   passes end. The addresses of each module stay the same in each pass. */
+   passes end. The addresses of each module stay the same in each pass.
+   The mode dial belongs to the core: its hook and the shooting screen,
+   where the dial acts at a start (runtime/mode_dial.h), install with the
+   modules, whatever they use and whatever their Enable is. */
 static int install_modules(u32 code, u32 array, u32 pixels, const u32 *icon_bases)
 {
-    u32 points = needed_points, broken = 0;
+    u32 points = needed_points | POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY, broken = 0;
     for (;;) {
         needed_points = points;
         int status = install_pass(code, array, pixels, icon_bases, broken);

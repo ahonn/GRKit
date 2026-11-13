@@ -9,16 +9,7 @@ import {
 } from './card';
 import type { CardEffect, CatalogEffect, ImportedEffect, PackageEffect } from './catalog';
 import { effectFile, effectLabel } from './package';
-import {
-  NO_DIAL,
-  readRecipeDial,
-  readRecipeFile,
-  sameDial,
-  sameRecipes,
-  type Dial,
-  type Family,
-  type Recipe,
-} from './recipes';
+import { readRecipeFile, sameRecipes, type Family, type Recipe } from './recipes';
 
 /** The connected card, as the page compares it with the selection. */
 export interface CardSession {
@@ -34,8 +25,6 @@ export interface CardSession {
   family: Family;
   /** The recipes of the camera on the card (`RECIPE_FILE`) for `family`, or null without the file. */
   recipes: readonly Recipe[] | null;
-  /** What each user mode of the mode dial does in the recipe file, or `NO_DIAL` without the file. */
-  dial: Dial;
   /**
    * The page wrote the GRKit of this site to the card. The report shows the new version only
    * after the next power-on.
@@ -101,7 +90,6 @@ export async function openSession(
     contents,
     family,
     recipes: await readRecipes(state, family),
-    dial: state.recipeText === null ? NO_DIAL : await readRecipeDial(state.recipeText),
   };
 }
 
@@ -150,16 +138,11 @@ export function extraCardEffects(
 
 /**
  * The change of the recipes of the camera: `site` is the library of the site for a package with the
- * Recipes module, or null to leave the card as it is, and `dial` what the user modes of the mode
- * dial do on the site. A write replaces the recipe file.
+ * Recipes module, or null to leave the card as it is. A write replaces the recipe file.
  */
-export function recipeChange(
-  session: CardSession,
-  site: readonly Recipe[] | null,
-  dial: Dial,
-): 'same' | 'write' {
+export function recipeChange(session: CardSession, site: readonly Recipe[] | null): 'same' | 'write' {
   if (!site) return 'same';
-  return sameRecipes(session.recipes ?? [], site) && sameDial(session.dial, dial) ? 'same' : 'write';
+  return sameRecipes(session.recipes ?? [], site) ? 'same' : 'write';
 }
 
 /**
