@@ -180,6 +180,7 @@ const SITES: &[Site] = &[
     ("framing_destroy", 0x531885f0, "0dc0a0e1"),
     ("framing_canvas", 0x5358cee0, "0dc0a0e1"),
     ("framing_children", 0x5358cfac, "6c0800eb"),
+    ("framing_grid", 0x5318fcdc, "b66310ea"),
     ("framing_capture_request_hook", 0x5376f420, "0010d4e5"),
     // The live-view mode function (0x538ad808) and the mode check (0x5365f164).
     ("framing_live_mode", 0x538ad820, "742bfbeb"),

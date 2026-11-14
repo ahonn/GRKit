@@ -170,6 +170,7 @@ const SITES: &[Site] = &[
     ("framing_destroy", 0x53170b50, "0dc0a0e1"),
     ("framing_canvas", 0x53391b14, "0dc0a0e1"),
     ("framing_children", 0x53391be0, "500800eb"),
+    ("framing_grid", 0x53177544, "9dd708ea"),
     ("framing_capture_request_hook", 0x535423f4, "0010d4e5"),
     ("picture_dng_origin", 0x535fb36c, "d9faffeb"),
     ("picture_dng_size", 0x535fb424, "dffaffeb"),

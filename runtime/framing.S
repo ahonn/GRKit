@@ -69,6 +69,23 @@ framing_children:
     bl framing_paint_after
     pop {r0-r3,r12,lr}
     bx lr
+/* Replaces the tail call of the live-view grid update to SetVisible of the
+   camera's grid view (r0), shown when r1 is not 0. While the live view
+   shows module layers, such as a frame or the guides (framing_grid_hidden),
+   the grid hides; the camera's setting stays. The camera updates the grid at each refresh of the live-view
+   information. */
+.global framing_grid
+.type framing_grid, %function
+framing_grid:
+    cmp r1, #0
+    beq 1f
+    push {r0-r3,r12,lr}
+    bl framing_grid_hidden
+    cmp r0, #0
+    pop {r0-r3,r12,lr}
+    movne r1, #0
+1:  ldr pc, =HOOK_FRAMING_GRID_TARGET
+.ltorg
 #ifdef HOOK_FRAMING_CLASSIFY
 /* The Framing geometries of the hidden capture aspect ids (runtime/
    framing_ratios.h, from grkit_core::framing): id 2 (16:9) with the heights

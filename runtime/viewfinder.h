@@ -217,36 +217,62 @@ static GRKIT_ICON_COMPACT u32 layer_area(u32 framing) {
 static GRKIT_ICON_COMPACT u32 crop_painted(volatile u32 *h,u32 preview) {
     return preview ? crop_shown(h) : crop_selection(h);
 }
-/* Paint the module layers in their order. In the ADJ preview, the layers of
-   the previewed setting paint its highlighted value, DISP does not hide
-   layers, and a live-only layer does not paint. A layer bound to CORE.ASPECT
-   receives the framing area, or 0 without one. A crop (CORE.CROP) frames a
-   part of the layer area: a layer bound to CORE.CROP receives that frame
-   with the crop as its area, or area 0 without one, and the other layers
-   receive the frame instead of the layer area. */
+/* The frame of that crop in the layer area `box`: the crop, or 0 without a
+   frame. */
+static GRKIT_ICON_COMPACT u32 crop_frame_of(volatile u32 *h,u32 preview,const u16 *box,u16 *frame) {
+    u32 crop=crop_painted(h,preview);
+    return crop && crop_box(box,crop_scale(crop,CROP_VIEW_Q16(h)),frame) ? crop : 0;
+}
+/* The value that module layer i paints, or 0. In the ADJ preview, the
+   layers of the previewed setting paint its highlighted value, DISP does
+   not hide layers, and a live-only layer does not paint. */
+static GRKIT_ICON_COMPACT u32 layer_paint_value(volatile u32 *h,u32 i,u32 preview) {
+    volatile u32 *l=MODULE_LAYER(h,i);
+    u32 value;
+    if(!preview) return module_layer_value(h,i);
+    if((l[2]&MODULE_LAYER_LIVE_ONLY) || services_suspended(h,l[0]) || !viewfinder_layer_enabled(h,l[3],1)) return 0;
+    if(h[GRKIT_HOST_MODULE_PREVIEW/4] && h[GRKIT_HOST_MODULE_PREVIEW/4]-1==l[1]) {
+        value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
+        return value<setting_limit(h,l[1]) ? value : 0;
+    }
+    return l[1]==NO_SETTING ? 1 : setting_value(h,l[1]);
+}
+/* Paint the module layers in their order (layer_paint_value). A layer bound
+   to CORE.ASPECT receives the framing area, or 0 without one. A crop
+   (CORE.CROP) frames a part of the layer area: a layer bound to CORE.CROP
+   receives that frame with the crop as its area, or area 0 without one,
+   and the other layers receive the frame instead of the layer area. */
 static GRKIT_ICON_COMPACT void module_layers_paint(volatile u32 *h,const Surface *surface,u32 preview,u32 composition) {
-    u32 i, value, crop=crop_painted(h,preview), framed;
+    u32 i, value, framed;
     u16 crop_frame[4];
     Surface frame=*surface, focal=*surface, cropped=*surface;
     frame.area=composition; frame.box=photo_boxes[composition];
-    framed=crop && crop_box(surface->box,crop_scale(crop,CROP_VIEW_Q16(h)),crop_frame);
+    framed=crop_frame_of(h,preview,surface->box,crop_frame);
     if(framed) { focal.box=crop_frame; cropped.box=crop_frame; }
-    cropped.area=framed ? crop : 0;
+    cropped.area=framed;
     for(i=0;i<module_layers(h);++i) {
         u32 aspect=MODULE_LAYER(h,i)[1]==GRKIT_CORE_ASPECT, crop_layer=MODULE_LAYER(h,i)[1]==GRKIT_CORE_CROP;
-        if(!preview) value=module_layer_value(h,i);
-        else if(MODULE_LAYER(h,i)[2]&MODULE_LAYER_LIVE_ONLY) value=0;
-        else if(h[GRKIT_HOST_MODULE_PREVIEW/4] && h[GRKIT_HOST_MODULE_PREVIEW/4]-1==MODULE_LAYER(h,i)[1]) {
-            value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
-            if(value>=setting_limit(h,MODULE_LAYER(h,i)[1])) value=0;
-        }
-        else value=MODULE_LAYER(h,i)[1]==NO_SETTING ? 1 : setting_value(h,MODULE_LAYER(h,i)[1]);
+        value=layer_paint_value(h,i,preview);
         if(aspect && !composition) value=0;
         if(crop_layer && !framed) value=0;
-        if(preview && !viewfinder_layer_enabled(h,MODULE_LAYER(h,i)[3],1)) value=0;
-        if(value && !services_suspended(h,MODULE_LAYER(h,i)[0]))
-            module_paint(h,i,aspect ? &frame : crop_layer ? &cropped : framed ? &focal : surface,value);
+        if(value) module_paint(h,i,aspect ? &frame : crop_layer ? &cropped : framed ? &focal : surface,value);
     }
+}
+/* Whether module_layers_paint paints a layer: as there, a layer bound to
+   CORE.ASPECT paints only with the area of a Framing ratio, `composition`,
+   and a layer bound to CORE.CROP only with the frame of a crop. */
+static GRKIT_ICON_COMPACT u32 layers_painted(volatile u32 *h,u32 preview,u32 composition) {
+    u32 i, handle, framed=2;
+    u16 crop_frame[4];
+    for(i=0;i<module_layers(h);++i) {
+        handle=MODULE_LAYER(h,i)[1];
+        if(handle==GRKIT_CORE_ASPECT && !composition) continue;
+        if(!layer_paint_value(h,i,preview)) continue;
+        if(handle!=GRKIT_CORE_CROP) return 1;
+        if(framed==2) framed=crop_frame_of(h,preview,photo_boxes[layer_area(composition)],crop_frame)!=0;
+        if(framed) return 1;
+    }
+    return 0;
 }
 /* Status is screen information, independent of the capture area's geometry. */
 static GRKIT_ICON_COMPACT u32 status_shown(volatile u32 *h) {
@@ -259,6 +285,18 @@ static GRKIT_ICON_COMPACT u32 crop_badge_shown(volatile u32 *h) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
     if(!owner || BYTE(owner,LIVEVIEW_MOVIE) || native_display()!=DISPLAY_FULL) return GRKIT_LABEL_COUNT;
     return crop_badge_label(h);
+}
+/* Whether the camera's grid guide hides (runtime/framing.S: framing_grid):
+   while the still live view shows module layers, such as the mask of a
+   frame or the guides, so that only one set of lines shows. The camera's
+   grid covers the whole view, not a frame, and moves by a pixel while the
+   camera crops the live view. The ADJ preview shows the layers of its
+   highlighted value (preview_paint). The camera's setting stays. */
+static GRKIT_ICON_COMPACT u32 native_grid_hidden(volatile u32 *h) {
+    u32 owner=h[GRKIT_HOST_FRAME_OWNER/4], preview=h[GRKIT_HOST_FRAME_PREVIEW/4], ratio=FRAME_PREVIEW_RATIO(preview);
+    if(!owner || BYTE(owner,LIVEVIEW_MOVIE)) return 0;
+    if(!preview) return layers_painted(h,0,aspect_value(h));
+    return ratio && ratio<=sizeof(photo_boxes)/sizeof(photo_boxes[0]) && layers_painted(h,1,composition_area(h,ratio-1));
 }
 /* Whether the live view has something to draw: layers, status, the crop
    badge, or the cue. */

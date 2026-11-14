@@ -417,3 +417,8 @@ void framing_paint_after(u32 canvas,u32 bitmap) { paint_after(framing_header(),c
 u32 crop_badge_native(void) {
     return crop_badge_label(framing_header())>=GRKIT_LABEL_COUNT;
 }
+/* The camera's grid guide in the live view (runtime/framing.S:
+   framing_grid): not 0 hides it (runtime/viewfinder.h). */
+u32 framing_grid_hidden(void) {
+    return native_grid_hidden(framing_header());
+}

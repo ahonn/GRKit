@@ -1145,6 +1145,72 @@ static void crop_follows_the_adj_preview(void)
     framing_bind(TEST_OWNER);
     assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_NATIVE/4]);
 }
+/* The camera's grid guide hides while the still live view shows a frame:
+   the area of a Framing ratio, also of a composition frame, or the frame of
+   a crop. A crop that the camera shows in the whole view, a soft Off, a
+   movie, and a screen other than the live view keep the grid. The ADJ
+   preview hides it for the frame of its highlighted value. */
+static void the_camera_grid_hides_behind_layers(void)
+{
+    reset();
+    assert(framing_grid_hidden());
+    guides_only(1);
+    assert(framing_grid_hidden());
+    guides_only(0);
+    BYTE(TEST_OWNER, LIVEVIEW_MOVIE) = 1;
+    assert(!framing_grid_hidden());
+    BYTE(TEST_OWNER, LIVEVIEW_MOVIE) = 0;
+    native_aspect = 1;
+    assert(!framing_grid_hidden());
+    native_aspect = 0;
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    assert(!framing_grid_hidden());
+    /* 50 mm frames the full view; in a view that the camera crops to 50 mm,
+       it has no frame. */
+    add_crop_layer();
+    header[GRKIT_HOST_CROP/4] = 3;
+    assert(framing_grid_hidden());
+    native_crop_q16 = (u32)(((unsigned long long)crop_scales[0] << 16) / crop_scales[3]);
+    assert(!framing_grid_hidden());
+    /* The guides hide it too, also in a view that the camera crops, where
+       its lines move by a pixel; not while DISP hides the guides. */
+    GUIDE_STYLE = 1;
+    assert(framing_grid_hidden());
+    display_mode = DISPLAY_OFF;
+    assert(!framing_grid_hidden());
+    display_mode = 0;
+    GUIDE_STYLE = 0;
+    native_crop_q16 = 65536U;
+    /* A soft Off stops Framing and Crop: their layers paint no frame. */
+    memset(services_memory, 0, sizeof(services_memory));
+    header[GRKIT_HOST_SERVICES/4] = TEST_SERVICES;
+    services_memory[SERVICES_SUSPENDED/4] = 1;
+    services_memory[SERVICES_SUSPENDED/4 + 1] = TEST_MASK_PAINT & ~0xffU;
+    services_memory[SERVICES_SUSPENDED/4 + 2] = TEST_CROP_PAINT + 1;
+    assert(!framing_grid_hidden());
+    header[GRKIT_HOST_SERVICES/4] = 0;
+    /* ADJ previews Off on the crop page, then 70 mm; and XPan on the page
+       of the ratio. */
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 0;
+    assert(!framing_grid_hidden());
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 4;
+    assert(framing_grid_hidden());
+    header[GRKIT_HOST_CROP/4] = 0;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 2;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_ASPECT + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 1;
+    assert(framing_grid_hidden());
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 0;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = 0;
+    assert(!framing_grid_hidden());
+    /* Another screen: the live view has ended. */
+    header[GRKIT_HOST_FRAME_RATIO/4] = 1;
+    assert(framing_grid_hidden());
+    framing_leave(TEST_OWNER);
+    assert(!framing_grid_hidden());
+}
 /* The camera crops: the bind sets the camera's factor of 35, 40, or 50 mm,
    and arms the factor of a 70 mm shot, in each native aspect and with each
    Framing ratio. Frame Only or Off return a factor that the core set to
@@ -1489,6 +1555,7 @@ int main(void)
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
     crop_follows_the_adj_preview();
+    the_camera_grid_hides_behind_layers();
 #if CROP_LIVE_FACTOR
     crop_zooms_the_live_view();
 #endif

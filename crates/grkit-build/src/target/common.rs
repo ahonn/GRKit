@@ -148,7 +148,9 @@ pub const KEYBOARD: &[HookSpec] = &[
 ];
 
 /// Framing and Guides: LiveViewController update, exit, and destroy, then
-/// Canvas::Draw entry and its child-draw BL. Then the still aspect property
+/// Canvas::Draw entry and its child-draw BL. Then the tail call of the
+/// live-view grid update to SetVisible of the grid view, which hides the
+/// camera's grid while module layers show. Then the still aspect property
 /// handler, which replaces `ldrb r1, [r4]`, the requested capture aspect, so
 /// a native 3:2 request records the Framing ratio.
 pub const VIEWFINDER: &[HookSpec] = &[
@@ -157,6 +159,7 @@ pub const VIEWFINDER: &[HookSpec] = &[
     b("framing_destroy", Framing, ViewfinderOverlay),
     b("framing_canvas", Framing, ViewfinderOverlay),
     bl("framing_children", Framing, ViewfinderOverlay),
+    b("framing_grid", Framing, ViewfinderOverlay),
     bl("framing_capture_request_hook", Framing, CaptureAspect),
 ];
 
