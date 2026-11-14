@@ -13,6 +13,9 @@
      (FW_USERDATA_SET) with the setting name and the label of the value, as
      the native menu sets them. The dispatcher refuses a label that it does
      not know, and each value comes from the label tables.
+   - The exposure compensation goes to the setter of the EV buttons
+     (FW_EXPOSURE_SET, runtime/menu.S) instead: it keeps the value within
+     the limits of the camera, and the setting of UserData does not.
 
    A read takes the type and its parameters from the active set: the main
    set or a Custom set. A write selects the main set first, so a recipe
@@ -24,8 +27,8 @@
    value, as the native menu does.
 
    The includer defines u8, u16, u32, BYTE, HALF, and WORD. A host test
-   defines NATIVE_SETTINGS, NATIVE_SET, NATIVE_SET_TYPE, and
-   NATIVE_MONOCHROME. */
+   defines NATIVE_SETTINGS, NATIVE_SET, NATIVE_SET_TYPE, NATIVE_SET_EV,
+   NATIVE_SET_EV_BITS, and NATIVE_MONOCHROME. */
 #include "native.h"
 
 #ifndef NATIVE_SETTINGS
@@ -33,6 +36,14 @@
 #endif
 #ifndef NATIVE_SET
 #define NATIVE_SET(argv) CALL2(FW_USERDATA_SET)(4,(u32)(argv))
+#endif
+/* Set the exposure compensation to n sixths of a stop, or to the float of
+   the bits b (runtime/menu.S). */
+#ifndef NATIVE_SET_EV
+void native_exposure_sixths(int n);
+void native_exposure_bits(u32 b);
+#define NATIVE_SET_EV(n) native_exposure_sixths(n)
+#define NATIVE_SET_EV_BITS(b) native_exposure_bits(b)
 #endif
 #if !defined(NATIVE_SET_TYPE) && defined(FW_IMAGE_CONTROL_SET)
 #define NATIVE_SET_TYPE(code) CALL2(FW_IMAGE_CONTROL_SET)(NATIVE_SETTINGS(),(code))
@@ -176,10 +187,13 @@ static int native_snap(int n,u32 grid) {
     return n<0 ? -(int)(q*grid) : (int)(q*grid);
 }
 /* The text of n / q (q at most 9) with ten decimals, which parses to the
-   float nearest to it, in `to` of at least 16 bytes. */
+   float nearest to it, in `to` of at least 16 bytes. The empty asm hides q
+   from the compiler: with a known q, it makes the subtractions a division,
+   which needs a helper that the core does not link. */
 static void native_decimal(char *to,int n,u32 q) {
     u32 a=n<0 ? (u32)-n : (u32)n, whole=0, at=0, i, d;
     char digits[4];
+    __asm__("" : "+r"(q));
     if(n<0) to[at++]='-';
     while(a>=q) { a-=q; ++whole; }
     i=0;
@@ -192,6 +206,39 @@ static void native_decimal(char *to,int n,u32 q) {
         to[at++]=(char)('0'+d);
     }
     to[at]=0;
+}
+/* The exact text of the float of the bits f, which parses to f again, in
+   `to` of at least NATIVE_FLOAT_TEXT bytes: 1, or 0 without a text for an
+   |f| below 1, other than 0, or not below 2^20. A fraction of at most 23
+   bits has a finite decimal one, a digit for each bit, and each digit
+   comes from the fraction times 10, below 2^27. */
+#define NATIVE_FLOAT_TEXT 40U
+static u32 native_float_text(char *to,u32 f) {
+    static const u32 powers[7]={1000000U,100000U,10000U,1000U,100U,10U,1U};
+    u32 e=f>>23&0xffU, m=(f&0x7fffffU)|0x800000U, shift, whole, mask, fraction, at=0, i, d, started=0;
+    if(!(f<<1)) { to[0]='0'; to[1]=0; return 1; }
+    if(e>=147U || e<127U) return 0;
+    shift=150U-e;
+    whole=m>>shift;
+    mask=(1U<<shift)-1U;
+    fraction=m&mask;
+    if(f>>31) to[at++]='-';
+    /* The digits of the whole part, below 2^20, by subtraction: the core
+       links no division helper. */
+    for(i=0;i<7U;++i) {
+        for(d=0;whole>=powers[i];++d) whole-=powers[i];
+        if(d || started || i==6U) { to[at++]=(char)('0'+d); started=1; }
+    }
+    if(fraction) {
+        to[at++]='.';
+        while(fraction) {
+            fraction*=10U;
+            to[at++]=(char)('0'+(fraction>>shift));
+            fraction&=mask;
+        }
+    }
+    to[at]=0;
+    return 1;
 }
 /* The exposure compensation in sixths of a stop, and the third stop of an
    Auto ISO limit from ISO 100, of the fields of the record. */
@@ -451,29 +498,61 @@ static void native_set_parameter(u32 t,u32 p,u32 v) {
    of a mode, the color temperature, each correction setting, and each
    exposure setting. native_sync gives each field the value that the words
    `to` set, or for a field that `to` does not hold, its value in `base`, a
-   settings record or a copy of one (runtime/recipe_preview.h):
-   - With `force`, as an apply, it writes each field that `to` holds, also
-     when the field has that value already.
-   - Else it writes only a field whose value differs, and only while the
-     field shows its value in `base` or the value that the words `from` set:
-     a field that the camera changed meanwhile, as when the mode dial loads
-     the settings of another position, stays.
+   settings record or a copy of one (runtime/recipe_preview.h,
+   runtime/recipe_undo.h). The mode decides which fields it writes:
+   - NATIVE_APPLY writes each field that `to` holds, also when the field
+     has that value already.
+   - NATIVE_RESTORE, an undo, with no `to`: each field that `from` holds,
+     which an apply of `from` wrote, and whose value differs from `base`.
+   - NATIVE_FOLLOW writes only a field whose value differs, and only while
+     the field shows its value in `base` or the value that the words `from`
+     set: a field that the camera changed meanwhile, as when the mode dial
+     loads the settings of another position, stays.
    `live` is the settings record, or 0 when it is not readable: then each
    field that `to` holds is written. The order is that of the native menu:
    the active set, the type, its parameters, the white balance mode, its
-   shifts, the color temperature, the corrections, then the exposure. */
+   shifts, the color temperature, the corrections, then the exposure. A
+   Custom set that becomes active again comes last, after the fields of the
+   main set, which is active while they change.
+   A value of `base` goes back exactly; the exposure floats too.
+   With `keep`, each field that `to` holds keeps its value in `before`, the
+   settings before the write, for an undo (native_keep). */
 #define NATIVE_UNHELD 0xffffffffU
+#define NATIVE_FOLLOW 0U
+#define NATIVE_APPLY 1U
+#define NATIVE_RESTORE 2U
+/* The bytes of the fields that one write of the words holds at most: the
+   active set, the type, the parameters of the type, the white balance
+   mode, its shifts, the color temperature, each correction, the
+   compensation and the ISO limit (floats), metering, and the ND filter. */
+#define NATIVE_KEEP_MAX (2U+NATIVE_PARAMETERS+1U+2U+2U+NATIVE_CORRECTIONS+8U+2U)
 typedef struct {
-    u32 live, base, force;
+    u32 live, base, mode;
     const volatile u32 *from, *to;
+    volatile u32 *keep;
+    u32 before;
 } NativeSync;
 /* Whether to write a field that shows `now` and holds `base` in the base,
    which `to` sets to `want` (`held`) and `from` to `was` (`had`). `known`
    is 0 for a field that cannot be read. */
 static u32 native_due(const NativeSync *s,u32 known,u32 now,u32 base,u32 held,u32 want,u32 had,u32 was) {
+    if(s->mode==NATIVE_RESTORE) return known && had && now!=base;
     if(!known) return held;
-    if(s->force && held) return 1;
+    if(s->mode==NATIVE_APPLY && held) return 1;
     return now!=(held ? want : base) && (now==base || (had && now==was));
+}
+/* Keep the `size` bytes at `at` of `before`: keep[0] is the count of the
+   kept bytes + 1, 0 when they are not whole (no `before`, or more than
+   NATIVE_KEEP_MAX), and each kept byte follows, its offset in the low half
+   and its value above. */
+static void native_keep(const NativeSync *s,u32 at,u32 size) {
+    volatile u32 *k=s->keep;
+    u32 n, i;
+    if(!k || !k[0]) return;
+    n=k[0]-1U;
+    if(!s->before || n+size>NATIVE_KEEP_MAX) { k[0]=0; return; }
+    for(i=0;i<size;++i) k[1U+n+i]=(at+i)|(u32)BYTE(s->before,at+i)<<16;
+    k[0]=n+size+1U;
 }
 /* The same for a field of `size` bytes (1 or 2) at `at` of the records, or
    at 0 for a field that the build does not give. `want` and `was` are the
@@ -481,6 +560,7 @@ static u32 native_due(const NativeSync *s,u32 known,u32 now,u32 base,u32 held,u3
    hold. The value to write goes to *value. */
 static u32 native_due_field(const NativeSync *s,u32 at,u32 size,u32 want,u32 was,u32 *value) {
     u32 known=s->live && at, now=0, base=0;
+    if(want!=NATIVE_UNHELD && at) native_keep(s,at,size);
     if(known) {
         now=size==1U ? BYTE(s->live,at) : HALF(s->live,at);
         base=size==1U ? BYTE(s->base,at) : HALF(s->base,at);
@@ -608,64 +688,79 @@ static void native_sync_shifts(const NativeSync *s,u32 m) {
 }
 /* Write the exposure compensation (`iso` 0) or the Auto ISO upper limit in
    their steps: sixths of a stop, and third stops from ISO 100. x and y are
-   the exposure bits of `to` and `from` (native_exposure_held). */
+   the exposure bits of `to` and `from` (native_exposure_held). The value of
+   `base` goes back as its float. */
 static void native_sync_steps(const NativeSync *s,u32 iso,u32 x,u32 y) {
-    char name[NATIVE_NAME_BYTES];
+    char name[NATIVE_FLOAT_TEXT];
     u32 held=iso ? NATIVE_ISO(x) : NATIVE_EV(x), had=iso ? NATIVE_ISO(y) : NATIVE_EV(y);
+    u32 field=iso ? NATIVE_ISO_UPPER_FIELD : NATIVE_EXPOSURE_FIELD;
     int now=0, base=0, want, was;
+    _Static_assert(NATIVE_FLOAT_TEXT>=17U,"the text of a step fits");
+    if(held) native_keep(s,field,4);
     if(s->live) {
-        now=iso ? native_iso_read(s->live,NATIVE_ISO_UPPER_FIELD) : native_ev_read(s->live);
-        base=iso ? native_iso_read(s->base,NATIVE_ISO_UPPER_FIELD) : native_ev_read(s->base);
+        now=iso ? native_iso_read(s->live,field) : native_ev_read(s->live);
+        base=iso ? native_iso_read(s->base,field) : native_ev_read(s->base);
     }
     want=iso ? (int)held-1 : (int)held-NATIVE_EV_ZERO;
     was=iso ? (int)had-1 : (int)had-NATIVE_EV_ZERO;
-    if(!native_due(s,s->live!=0,(u32)now,(u32)base,held!=0,(u32)want,had!=0,(u32)was)) return;
-    if(!held) want=base;
-    if(want==NATIVE_NO_STEP) return;
-    if(iso) {
+    /* A restore compares the floats, not their steps. */
+    if(s->mode==NATIVE_RESTORE ? !had || !s->live || WORD(s->live,field)==WORD(s->base,field) :
+                                 !native_due(s,s->live!=0,(u32)now,(u32)base,held!=0,(u32)want,had!=0,(u32)was))
+        return;
+    if(!held) {
+        if(base==NATIVE_NO_STEP) return;
+        if(!iso) NATIVE_SET_EV_BITS(WORD(s->base,field));
+        else if(native_float_text(name,WORD(s->base,field))) native_set(NATIVE_ISO_UPPER_SETTING,name);
+    }
+    else if(iso) {
         native_decimal(name,3*(int)NATIVE_ISO_SV_BASE+want,3U);
         native_set(NATIVE_ISO_UPPER_SETTING,name);
     }
-    else {
-        native_decimal(name,want,6U);
-        native_set(NATIVE_EXPOSURE_SETTING,name);
-    }
+    else NATIVE_SET_EV(want);
 }
-static void native_sync(u32 live,u32 base,const volatile u32 *from,const volatile u32 *to,u32 force) {
-    NativeSync s, once;
+static void native_run(const NativeSync *s) {
+    NativeSync once;
+    const volatile u32 *from=s->from, *to=s->to;
     u32 tt=to ? NATIVE_TYPE(to[NATIVE_LOOK_WORD]) : 0, ft=from ? NATIVE_TYPE(from[NATIVE_LOOK_WORD]) : 0;
     u32 tm=to ? NATIVE_MODE(to[NATIVE_LOOK_WORD]) : 0, fm=from ? NATIVE_MODE(from[NATIVE_LOOK_WORD]) : 0;
-    u32 v, c, x, y;
-    s.live=live; s.base=live ? base : 0; s.force=force; s.from=from; s.to=to;
-    /* A type is one of the main set, so it makes the main set active. Only
-       a change of the set writes it. */
-    once=s;
-    once.force=0;
-    if(live && native_due_field(&once,NATIVE_ACTIVE_SET_FIELD,1,tt ? 0U : NATIVE_UNHELD,ft ? 0U : NATIVE_UNHELD,&v))
-        native_set_active(v);
-    if(native_due_field(&s,NATIVE_TYPE_FIELD,1,native_type_held(to),native_type_held(from),&v)) native_set_type(v);
-    native_sync_type(&s,tt);
-    if(ft!=tt) native_sync_type(&s,ft);
-    if(native_due_field(&s,NATIVE_MODE_FIELD,1,native_mode_held(to),native_mode_held(from),&v)) native_set_mode(v);
-    native_sync_shifts(&s,tm);
-    if(fm!=tm) native_sync_shifts(&s,fm);
-    if(native_due_field(&s,NATIVE_TEMPERATURE_FIELD,2,native_temperature_held(to),native_temperature_held(from),&v))
+    u32 v, c, x, y, active=NATIVE_UNHELD;
+    /* A type is one of the main set, so it makes the main set active, before
+       its fields. Only a change of the set writes it. Field by field: the
+       core links no memcpy for a copy of the whole. */
+    once.live=s->live; once.base=s->base; once.from=from; once.to=to; once.keep=s->keep; once.before=s->before;
+    once.mode=s->mode==NATIVE_APPLY ? NATIVE_FOLLOW : s->mode;
+    if(s->live && native_due_field(&once,NATIVE_ACTIVE_SET_FIELD,1,tt ? 0U : NATIVE_UNHELD,ft ? 0U : NATIVE_UNHELD,&v))
+        active=v;
+    if(!active) native_set_active(0);
+    if(native_due_field(s,NATIVE_TYPE_FIELD,1,native_type_held(to),native_type_held(from),&v)) native_set_type(v);
+    native_sync_type(s,tt);
+    if(ft!=tt) native_sync_type(s,ft);
+    if(native_due_field(s,NATIVE_MODE_FIELD,1,native_mode_held(to),native_mode_held(from),&v)) native_set_mode(v);
+    native_sync_shifts(s,tm);
+    if(fm!=tm) native_sync_shifts(s,fm);
+    if(native_due_field(s,NATIVE_TEMPERATURE_FIELD,2,native_temperature_held(to),native_temperature_held(from),&v))
         native_set_temperature(v);
     for(c=0;c<NATIVE_CORRECTIONS;++c)
-        if(native_due_field(&s,native_correction_fields[c],1,native_correction_held(to,c),native_correction_held(from,c),&v))
+        if(native_due_field(s,native_correction_fields[c],1,native_correction_held(to,c),native_correction_held(from,c),&v))
             native_set_correction(c,v);
-    x=native_exposure_held(&s,to);
-    y=native_exposure_held(&s,from);
-    native_sync_steps(&s,0,x,y);
-    native_sync_steps(&s,1,x,y);
-    if(native_due_field(&s,NATIVE_METERING_FIELD,1,NATIVE_METERING(x) ? NATIVE_METERING(x)-1U : NATIVE_UNHELD,
+    x=native_exposure_held(s,to);
+    y=native_exposure_held(s,from);
+    native_sync_steps(s,0,x,y);
+    native_sync_steps(s,1,x,y);
+    if(native_due_field(s,NATIVE_METERING_FIELD,1,NATIVE_METERING(x) ? NATIVE_METERING(x)-1U : NATIVE_UNHELD,
                         NATIVE_METERING(y) ? NATIVE_METERING(y)-1U : NATIVE_UNHELD,&v) &&
        v<NATIVE_COUNT(native_metering_labels))
         native_set(NATIVE_METERING_SETTING,native_metering_labels[v]);
-    if(native_due_field(&s,NATIVE_ND_FIELD,1,NATIVE_ND(x) ? NATIVE_ND(x)-1U : NATIVE_UNHELD,
+    if(native_due_field(s,NATIVE_ND_FIELD,1,NATIVE_ND(x) ? NATIVE_ND(x)-1U : NATIVE_UNHELD,
                         NATIVE_ND(y) ? NATIVE_ND(y)-1U : NATIVE_UNHELD,&v) &&
        v<NATIVE_COUNT(native_nd_labels))
         native_set(NATIVE_ND_SETTING,native_nd_labels[v]);
+    /* A Custom set comes back after the fields of the main set. */
+    if(active!=NATIVE_UNHELD && active) native_set_active(active);
+}
+static void native_sync(u32 live,u32 base,const volatile u32 *from,const volatile u32 *to,u32 mode) {
+    NativeSync s={live,live ? base : 0,mode,from,to,0,0};
+    native_run(&s);
 }
 
 /* Write the native settings of the words that the camera supports
@@ -674,9 +769,13 @@ static void native_sync(u32 live,u32 base,const volatile u32 *from,const volatil
    temperature of ColorTemp1, then each correction setting that is not
    Unset, then each exposure setting that the recipe holds, as the camera
    takes it (native_exposure_fit). Each one is written, also when it has
-   that value already. */
-static void native_write(const volatile u32 *w) {
+   that value already. With `keep`, each field that it writes keeps its
+   value in `before`, the settings record before the recipe or a copy of it
+   (native_keep); without a settings record, keep[0] is 0. */
+static void native_write(const volatile u32 *w,volatile u32 *keep,u32 before) {
     u32 record=native_record();
-    native_sync(record,record,0,w,1);
+    NativeSync s={record,record,NATIVE_APPLY,0,w,keep,before};
+    if(keep) keep[0]=record && before ? 1U : 0U;
+    native_run(&s);
 }
 #endif

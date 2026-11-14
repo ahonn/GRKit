@@ -921,6 +921,59 @@ fn userdata_settings_of_recipes_match_each_firmware() -> Result<()> {
                 address("FW_IMAGE_CONTROL_SET").is_none() && address("FW_MODEL_RECORD").is_none()
             );
         }
+        // FW_EXPOSURE_SET, the setter of the EV buttons, ends in a branch to
+        // the setter of CommonXv after the getters of its object, and keeps
+        // the value between two limits first: two float compares, in the
+        // function or in one that it calls (GR IV).
+        let exposure = address("FW_EXPOSURE_SET").expect("FW_EXPOSURE_SET");
+        let xv = &table.settings[grkit_core::native::EXPOSURE_SETTING];
+        let ops = |start: u32| -> Result<Vec<(u32, crate::arm::decode::Op)>> {
+            (0..32)
+                .map(|k| {
+                    let at = start + 4 * k;
+                    let word = u32::from_le_bytes(image.read(at, 4)?.try_into()?);
+                    Ok((at, crate::arm::decode::decode(at, word).op))
+                })
+                .collect()
+        };
+        use crate::arm::decode::Op;
+        let body = ops(exposure)?;
+        let tail = body
+            .iter()
+            .position(|&(_, op)| op == Op::Branch(crate::arm::decode::ALWAYS, xv.setter))
+            .unwrap_or_else(|| panic!("{}: FW_EXPOSURE_SET ends in the setter", target.name));
+        let calls: Vec<u32> = body[..tail]
+            .iter()
+            .filter_map(|&(_, op)| match op {
+                Op::Call(to) => Some(to),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            calls.ends_with(&xv.getters),
+            "{}: the getters of FW_EXPOSURE_SET",
+            target.name
+        );
+        let mut compares = body[..tail]
+            .iter()
+            .filter(|&&(_, op)| op == Op::VCompare)
+            .count();
+        for &callee in &calls[..calls.len() - xv.getters.len()] {
+            let callee = ops(callee)?;
+            let end = callee
+                .iter()
+                .position(|&(_, op)| matches!(op, Op::Return | Op::LoadMultiple(..)))
+                .unwrap_or(callee.len());
+            compares += callee[..end]
+                .iter()
+                .filter(|&&(_, op)| op == Op::VCompare)
+                .count();
+        }
+        assert_eq!(
+            compares, 2,
+            "{}: the limits of FW_EXPOSURE_SET",
+            target.name
+        );
         for name in [
             "StillActiveImageControlSet",
             "StillImageControlNo0",

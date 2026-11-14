@@ -40,6 +40,7 @@
 #include "recipes.h"
 #include "recipe_details.h"
 #include "recipe_preview.h"
+#include "recipe_undo.h"
 
 
 #define RECIPE_TILE_MODULE 0U
@@ -331,10 +332,18 @@ static void recipe_skipped(u32 skipped) {
     --services_word(h,SERVICES_APP)[0];
 }
 
+/* An apply and an undo write the native type themselves. That is not a
+   choice on the native Image Control slot: the type that an exit of ADJ
+   compares with (runtime/menu.c: native_ic_chosen) becomes the type that
+   the camera shows now. Else an exit through the native list after an undo
+   that gives a GRKit effect back would end that effect. A preview needs
+   none of this: it ends before such an exit and writes the type back. */
+static void recipe_type_written(volatile u32 *h) { h[GRKIT_HOST_ADJ_IC_TYPE/4]=MENU_NATIVE_IC_TYPE(); }
 static void recipe_ok(volatile u32 *h,u32 row) {
     u32 slot=recipe_row_slot(h,row), saved, result;
     if(slot==RECIPE_ROW_UNDO) {
         recipe_undo(h);
+        recipe_type_written(h);
         if(!recipe_undo_count(h)) h[GRKIT_HOST_MENU_CURSOR/4]=recipe_committed(h);
         return;
     }
@@ -352,6 +361,7 @@ static void recipe_ok(volatile u32 *h,u32 row) {
     if(!recipe_preview_shows(h,slot)) recipe_preview_show(h,RECIPE_NONE);
     result=recipe_apply(h,slot);
     recipe_preview_drop(h);
+    recipe_type_written(h);
     switch(result) {
     case RECIPE_MISSING: recipe_message(h,RECIPE_TEXT_MISSING); return;
     case RECIPE_UNSUPPORTED: recipe_message(h,RECIPE_TEXT_UNSUPPORTED); return;

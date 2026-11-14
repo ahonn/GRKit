@@ -106,7 +106,8 @@ static u32 native_ic_type(void) {
    cursor. The native slot writes the type under its cursor at each cursor
    change, and a half-press keeps it. So an exit to the shooting screen on
    that slot, with another type than when ADJ opened, selects the type, as OK
-   does. `opened` and `current` are types plus 1 (MENU_NATIVE_IC_TYPE). */
+   does. `opened` and `current` are types plus 1 (MENU_NATIVE_IC_TYPE);
+   `opened` follows a type that a recipe of ADJ wrote (runtime/recipe_page.h). */
 static u32 native_ic_chosen(u32 opened,u32 current,u32 ic_slot,u32 shooting) {
     return opened && current && current!=opened && ic_slot && shooting;
 }

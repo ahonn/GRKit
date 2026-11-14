@@ -193,6 +193,11 @@
    set(argc, argv) with argv = {"UserData", "Set", name, value}. It finds the
    setter of a native setting by its name and the stored value by its label. */
 #define FW_USERDATA_SET FIRMWARE(0x5334688c)
+/* The setter of the exposure compensation of the EV buttons, which takes
+   the stops in s0, keeps them within the limits of the camera, and sets
+   them with the setter of the UserData setting CommonXv
+   (runtime/menu.S: native_exposure_sixths). */
+#define FW_EXPOSURE_SET FIRMWARE(0x53223e0c)
 /* The user mode boxes (gr3.h: the native slots): the save of the current
    settings in a box, save(settings object, box). */
 #define FW_BOX_SAVE FIRMWARE(0x5324b760)

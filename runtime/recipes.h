@@ -13,7 +13,8 @@
    this order (runtime/install_recipes.h). The resident loader saves the
    recipes in the recipe file after GRKIT_RECIPES_CHANGED, and INSTALL
    restores them (grkit_core::runtime::recipe_key). The undo steps are not
-   saved: a start begins without them. The site reads and writes the recipe
+   saved: a start begins without them. An undo gives back the native
+   settings from before the apply exactly (runtime/recipe_undo.h). The site reads and writes the recipe
    file, and INSTALL adds the recipes of a package
    (runtime/install_recipes.h).
 
@@ -132,7 +133,15 @@ _Static_assert(GRKIT_RECIPE_MODULES<=23U,"the skipped bits of the modules fit in
 static void native_read_at(u32 *w,u32 look,u32 record);
 static u32 native_record(void);
 static u32 native_supported(const volatile u32 *w);
-static void native_write(const volatile u32 *w);
+static void native_write(const volatile u32 *w,volatile u32 *keep,u32 before);
+/* The native settings of undo step `slot` (runtime/recipe_undo.h): an
+   apply of the words w that keeps the settings before it, their exact
+   restore (0 when the step kept none), and a move and a clear of what the
+   step kept. */
+static void recipe_native_apply(volatile u32 *h,const u32 *w,u32 slot);
+static u32 recipe_native_undo(volatile u32 *h,u32 slot);
+static void recipe_native_move(volatile u32 *h,u32 to,u32 from);
+static void recipe_native_clear(volatile u32 *h,u32 slot);
 
 
 /* The words of slot `slot`: recipe n, or undo step GRKIT_RECIPE_SLOTS + n. */
@@ -388,9 +397,11 @@ static u32 recipe_reason(volatile u32 *h,const volatile u32 *w) {
     if(!native_supported(w)) return RECIPE_UNSUPPORTED;
     return RECIPE_READY;
 }
-/* Set the settings of a recipe that can apply. The Fn adjustments go to the
-   record before the effect commits, so the live view builds once with them.
-   The RECIPE_SKIPPED bits of the settings that it left out. */
+/* Set the GRKit settings of a recipe that can apply. The Fn adjustments go
+   to the record before the effect commits, so the live view builds once
+   with them. The RECIPE_SKIPPED bits of the settings that it left out. The
+   native settings come after them: Film Look Off first, then the native
+   type that it shows. */
 static u32 recipe_set(volatile u32 *h,const u32 *w) {
     u32 look=RECIPE_LOOK(w[0]), index, record, skipped=0, i, k;
     if(look==RECIPE_LOOK_EFFECT && RECIPE_CAPABILITY(h,TONE)) {
@@ -419,9 +430,6 @@ static u32 recipe_set(volatile u32 *h,const u32 *w) {
         }
         else setting_store(h,k,recipe_setting_value(w,i));
     }
-    /* The native settings after the effect: Film Look Off first, then the
-       native type that it shows. */
-    native_write(w);
     return skipped;
 }
 /* Whether the current settings `now` (recipe_capture) equal each setting
@@ -496,20 +504,21 @@ static void recipe_clear(volatile u32 *w) {
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=0;
 }
 /* Move slot `from` to slot `to`, both recipes or both undo steps. A recipe
-   takes its name and its ID with it: each part of a recipe that the header
-   keeps by slot moves here. */
+   takes its name and its ID with it, and an undo step its native settings:
+   each part of a slot that the core keeps by slot moves here. */
 static void recipe_slot_move(volatile u32 *h,u32 to,u32 from) {
     u32 w;
     recipe_copy(recipe_at(h,to),recipe_at(h,from));
-    if(to>=GRKIT_RECIPE_SLOTS) return;
+    if(to>=GRKIT_RECIPE_SLOTS) { recipe_native_move(h,to,from); return; }
     for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,to)[w]=recipe_name_at(h,from)[w];
     *recipe_id_at(h,to)=*recipe_id_at(h,from);
 }
-/* Empty slot `slot`: its words, and for a recipe its name and ID. */
+/* Empty slot `slot`: its words, for a recipe its name and ID, and for an
+   undo step its native settings. */
 static void recipe_slot_clear(volatile u32 *h,u32 slot) {
     u32 w;
     recipe_clear(recipe_at(h,slot));
-    if(slot>=GRKIT_RECIPE_SLOTS) return;
+    if(slot>=GRKIT_RECIPE_SLOTS) { recipe_native_clear(h,slot); return; }
     for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w) recipe_name_at(h,slot)[w]=0;
     *recipe_id_at(h,slot)=0;
 }
@@ -577,9 +586,9 @@ static void recipe_delete(volatile u32 *h,u32 slot) {
     recipe_close_gap(h,slot,n);
     GRKIT_RECIPES_CHANGED(h);
 }
-/* Store the current settings as the newest undo step. With all steps
-   taken, the oldest goes. */
-static void recipe_undo_push(volatile u32 *h) {
+/* Store the current settings as the newest undo step: its slot. With all
+   steps taken, the oldest goes. */
+static u32 recipe_undo_push(volatile u32 *h) {
     u32 n=recipe_undo_count(h), w[GRKIT_RECIPE_WORDS], i;
     if(n==GRKIT_RECIPE_UNDO) {
         recipe_close_gap(h,GRKIT_RECIPE_SLOTS,GRKIT_RECIPE_SLOTS+n);
@@ -587,6 +596,7 @@ static void recipe_undo_push(volatile u32 *h) {
     }
     recipe_capture(h,w);
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,GRKIT_RECIPE_SLOTS+n)[i]=w[i];
+    return GRKIT_RECIPE_SLOTS+n;
 }
 /* Whether entry e can apply: RECIPE_READY or the reason. */
 static u32 recipe_entry_reason(volatile u32 *h,u32 e) {
@@ -595,29 +605,31 @@ static u32 recipe_entry_reason(volatile u32 *h,u32 e) {
 }
 /* Apply entry e: RECIPE_READY with the RECIPE_SKIPPED bits of the settings
    that it left out, or the reason, and then nothing changes. The settings
-   before it become an undo step. */
+   before it become an undo step, which also keeps the native settings that
+   the apply writes. */
 static u32 recipe_apply(volatile u32 *h,u32 e) {
-    u32 w[GRKIT_RECIPE_WORDS], reason, i;
+    u32 w[GRKIT_RECIPE_WORDS], reason, i, slot, skipped;
     reason=recipe_entry_reason(h,e);
     if(reason!=RECIPE_READY) return reason;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,e)[i];
-    recipe_undo_push(h);
-    return RECIPE_READY|recipe_set(h,w);
+    slot=recipe_undo_push(h);
+    skipped=recipe_set(h,w);
+    recipe_native_apply(h,w,slot);
+    return RECIPE_READY|skipped;
 }
-/* Restore the newest undo step and remove it. A step whose effect is no
-   longer installed restores the settings that it can. */
+/* Restore the newest undo step and remove it: its GRKit settings, and the
+   native settings that the apply changed, as they were. A step that kept no
+   native settings writes those of its words that the camera supports. A
+   step whose effect is no longer installed restores the settings that it
+   can. */
 static void recipe_undo(volatile u32 *h) {
-    u32 n=recipe_undo_count(h), w[GRKIT_RECIPE_WORDS], i;
-    volatile u32 *step;
+    u32 n=recipe_undo_count(h), w[GRKIT_RECIPE_WORDS], i, slot;
     if(!n) return;
-    step=recipe_at(h,GRKIT_RECIPE_SLOTS+n-1);
-    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=step[i];
-    recipe_clear(step);
+    slot=GRKIT_RECIPE_SLOTS+n-1U;
+    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,slot)[i];
     if(recipe_reason(h,w)==RECIPE_MISSING) w[0]&=~RECIPE_LOOK_MASK;
-    if(!native_supported(w)) {
-        w[RECIPE_NATIVE_WORD]=w[RECIPE_EXTRA_WORD]=0;
-        w[RECIPE_MODULE_WORD]&=~NATIVE_EXPOSURE_BITS;
-    }
     recipe_set(h,w);
+    if(!recipe_native_undo(h,slot) && native_supported(w)) native_write(w,0,0);
+    recipe_slot_clear(h,slot);
 }
 #endif

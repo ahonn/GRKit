@@ -343,7 +343,17 @@
 #define PREVIEW_IMAGE (4U * GRKIT_RECIPE_WORDS)
 #define PREVIEW_IMAGE_BYTES 0xb40U
 #define PREVIEW_SIZE (PREVIEW_IMAGE + PREVIEW_IMAGE_BYTES)
-#define SERVICES_SIZE (SERVICES_PREVIEW + PREVIEW_SIZE)
+/* The native settings of each undo step of the recipes, in the order of the
+   steps (runtime/recipe_undo.h): the words of the recipe that the apply
+   wrote, then what it kept of the settings record before it
+   (runtime/native_look.h: native_keep), a count word and UNDO_KEPT_MAX
+   bytes at most. They are not saved, as the undo steps. */
+#define SERVICES_UNDO (SERVICES_PREVIEW + PREVIEW_SIZE)
+#define UNDO_WORDS 0U
+#define UNDO_KEPT (4U * GRKIT_RECIPE_WORDS)
+#define UNDO_KEPT_MAX 44U
+#define UNDO_STEP_SIZE (UNDO_KEPT + 4U + 4U * UNDO_KEPT_MAX)
+#define SERVICES_SIZE (SERVICES_UNDO + GRKIT_RECIPE_UNDO * UNDO_STEP_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

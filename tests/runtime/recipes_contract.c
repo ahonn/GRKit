@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,6 +58,9 @@ static void native_record_call(const char *const *argv)
 {
     assert(native_call_count < 64);
     assert(!strcmp(argv[0], "UserData") && !strcmp(argv[1], "Set"));
+    /* The exposure compensation goes to the setter of the EV buttons, which
+       keeps it within the limits of the camera (NATIVE_SET_EV). */
+    assert(strcmp(argv[2], "CommonXv"));
     snprintf(native_calls[native_call_count++], 96, "%s=%s", argv[2], argv[3]);
     if (dispatch_live) native_dispatch(argv[2], argv[3]);
 }
@@ -76,6 +80,39 @@ static void native_record_type(u32 code)
 }
 #define NATIVE_MONOCHROME() (camera_monochrome)
 #define NATIVE_SET_TYPE(code) native_record_type(code)
+/* The setter of the EV buttons (FW_EXPOSURE_SET), kept as "CommonXv=text":
+   the text of sixths of a stop for the float nearest to them, else the
+   float with 9 digits. With `dispatch_live`, it stores the float within the
+   limits of the camera, ev_min to ev_max sixths. */
+static int ev_min = -30, ev_max = 30;
+static void native_decimal(char *to, int n, u32 q);
+static void native_record_ev(u32 bits)
+{
+    float f, nearest;
+    u32 nearest_bits;
+    char text[80];
+    memcpy(&f, &bits, 4);
+    int n = (int)lroundf(f * 6.0f);
+    nearest = (float)n / 6.0f;
+    memcpy(&nearest_bits, &nearest, 4);
+    if (nearest_bits == bits) native_decimal(text, n, 6);
+    else snprintf(text, sizeof text, "%.9g", f);
+    assert(native_call_count < 64);
+    snprintf(native_calls[native_call_count++], 96, "CommonXv=%s", text);
+    if (!dispatch_live) return;
+    if (f < (float)ev_min / 6.0f) f = (float)ev_min / 6.0f;
+    if (f > (float)ev_max / 6.0f) f = (float)ev_max / 6.0f;
+    memcpy(native_record_bytes + NATIVE_EXPOSURE_FIELD, &f, 4);
+}
+static void native_record_sixths(int n)
+{
+    float f = (float)n / 6.0f;
+    u32 bits;
+    memcpy(&bits, &f, 4);
+    native_record_ev(bits);
+}
+#define NATIVE_SET_EV(n) native_record_sixths(n)
+#define NATIVE_SET_EV_BITS(b) native_record_ev(b)
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
 #include "tone.h"
@@ -161,6 +198,7 @@ static u32 test_id_source;
 #include "recipes.h"
 #include "services.h"
 #include "recipe_preview.h"
+#include "recipe_undo.h"
 #include "recipe_details.h"
 #include "recipe_abbreviation.h"
 
@@ -1752,15 +1790,157 @@ static void preview_commits_with_the_undo_step_before_it(void)
             assert(recipe_at(header, GRKIT_RECIPE_SLOTS)[k] == recipe_at(header, 3)[k]);
         assert(!((recipe_at(header, GRKIT_RECIPE_SLOTS)[RECIPE_MODULE_WORD] ^ recipe_at(header, 3)[RECIPE_MODULE_WORD]) &
                  NATIVE_EXPOSURE_BITS));
-        /* Undo writes the look, the white balance, the corrections, and the
-           exposure from before; the levels of Negative Film and the shifts
-           of Daylight, which no setting before used, stay. */
+        /* Undo writes back each field that the apply wrote, as it was
+           before the preview: also the levels of Negative Film and the
+           shifts of Daylight, which no setting before used. */
         recipe_undo(header);
         assert(recipe_current(header) == 3);
-        native_record_bytes[native_field(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION)] = 4;
-        native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT]] = 14;
-        native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT + 1]] = 14;
         assert(same_as_base());
+    }
+}
+
+/* The camera of the undo tests: that of the preview tests, with Custom set
+   1 active, which holds Positive Film with contrast -1, and ColorTemp1 at
+   6500 K without shifts saved as recipe 4. */
+static void undo_camera(void)
+{
+    preview_camera();
+    preview_recipes();
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[MODE_TEMPERATURE];
+    native_record_bytes[NATIVE_TEMPERATURE_FIELD] = 6500 & 0xff;
+    native_record_bytes[NATIVE_TEMPERATURE_FIELD + 1] = 6500 >> 8;
+    assert(recipe_save(header) == 4);
+    assert(NATIVE_MODE(recipe_at(header, 4)[RECIPE_NATIVE_WORD]) == MODE_TEMPERATURE + 1);
+    memcpy(native_record_bytes, preview_base, sizeof preview_base);
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 1;
+    native_record_bytes[NATIVE_TYPE_FIELD + NATIVE_TYPE_SET_STRIDE] = native_type_codes[TYPE_POSITIVE];
+    set_parameter(1, TYPE_POSITIVE, NATIVE_PARAMETER_CONTRAST, 3);
+    memcpy(preview_base, native_record_bytes, sizeof preview_base);
+    native_call_count = 0;
+}
+
+/* With a Custom set active, apply selects the main set and writes the
+   recipe there. Undo gives each byte of the settings record back: the main
+   set, the levels of the recipe type, the shifts of the recipe mode, the
+   color temperature, and the Custom set, which becomes active last. */
+static void undo_restores_the_settings_record(void)
+{
+    u8 after_first[sizeof native_record_bytes];
+    undo_camera();
+    assert(recipe_current(header) == RECIPE_NONE);
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(native_record_bytes[NATIVE_ACTIVE_SET_FIELD] == 0);
+    assert(native_record_bytes[NATIVE_TYPE_FIELD] == native_type_codes[TYPE_NEGATIVE]);
+    memcpy(after_first, native_record_bytes, sizeof after_first);
+    assert(recipe_apply(header, 4) == RECIPE_READY);
+    assert(HALF(TEST_NATIVE, NATIVE_TEMPERATURE_FIELD) == 6500);
+    assert(recipe_undo_count(header) == 2);
+    /* The second undo step: the temperature and the shifts of ColorTemp1. */
+    recipe_undo(header);
+    assert(!memcmp(native_record_bytes, after_first, sizeof after_first));
+    native_call_count = 0;
+    recipe_undo(header);
+    assert(same_as_base() && !recipe_undo_count(header));
+    assert(!strcmp(native_calls[native_call_count - 1], "StillActiveImageControlSet=No1"));
+    assert(called("StillImageControlNo0=Standard"));
+    assert(called_parameter(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION, "OFF"));
+    assert(called("StillWhiteBalanceDaylightAdjustBA=NORMAL") && called("StillWhiteBalanceDaylightAdjustGM=NORMAL"));
+    assert(called("CommonXv=0.3333333333"));
+    /* What the apply did not write stays as it is: the Custom set. */
+    assert(!called_parameter(TYPE_POSITIVE, NATIVE_PARAMETER_CONTRAST, "M1"));
+
+    /* The oldest steps go, with what they kept: undo after more applies
+       than steps gives back the settings before the newest steps. */
+    undo_camera();
+    for (u32 i = 0; i < GRKIT_RECIPE_UNDO + 2U; ++i) {
+        if (i == 2) memcpy(after_first, native_record_bytes, sizeof after_first);
+        native_call_count = 0;
+        assert(recipe_apply(header, i & 1U ? 4 : 0) == RECIPE_READY);
+    }
+    while (recipe_undo_count(header)) {
+        native_call_count = 0;
+        recipe_undo(header);
+    }
+    assert(!memcmp(native_record_bytes, after_first, sizeof after_first));
+
+    /* A field that changed after the apply goes back too. */
+    undo_camera();
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT]] = 20;
+    recipe_undo(header);
+    assert(same_as_base());
+
+    /* The Auto ISO limit goes back as its float, in its exact text. */
+    undo_camera();
+    set_float(NATIVE_ISO_UPPER_FIELD, F_SV_125);
+    memcpy(preview_base, native_record_bytes, sizeof preview_base);
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    assert(called("StillSvAutoUpper=11.0000000000"));
+    native_call_count = 0;
+    recipe_undo(header);
+    assert(called("StillSvAutoUpper=5.333333492279052734375") && same_as_base());
+
+    /* Without the services block, a step keeps nothing, and undo writes the
+       look of the step: the type of the Custom set goes to the main set. */
+    undo_camera();
+    header[GRKIT_HOST_SERVICES / 4] = 0;
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    recipe_undo(header);
+    assert(native_record_bytes[NATIVE_ACTIVE_SET_FIELD] == 0);
+    assert(native_record_bytes[NATIVE_TYPE_FIELD] == native_type_codes[TYPE_POSITIVE]);
+}
+
+/* The exposure compensation goes through the setter of the EV buttons,
+   which keeps it within the limits of the camera; undo gives back the
+   float as it was. */
+static void exposure_keeps_the_limits_of_the_camera(void)
+{
+    const float five = 5.0f, odd = 0.3f;
+    u32 bits;
+    undo_camera();
+    memcpy(&bits, &five, 4);
+    set_float(NATIVE_EXPOSURE_FIELD, bits);
+    assert(recipe_save(header) == 5);
+    assert(NATIVE_EV(recipe_at(header, 5)[RECIPE_MODULE_WORD]) == (u32)NATIVE_EV_ZERO + 30U);
+    memcpy(&bits, &odd, 4);
+    set_float(NATIVE_EXPOSURE_FIELD, bits);
+    ev_min = -12;
+    ev_max = 12;
+    native_call_count = 0;
+    assert(recipe_apply(header, 5) == RECIPE_READY);
+    assert(called("CommonXv=5.0000000000"));
+    float now;
+    memcpy(&now, native_record_bytes + NATIVE_EXPOSURE_FIELD, 4);
+    assert(now == 2.0f);
+    native_call_count = 0;
+    recipe_undo(header);
+    assert(called("CommonXv=0.300000012"));
+    memcpy(&now, native_record_bytes + NATIVE_EXPOSURE_FIELD, 4);
+    assert(now == odd);
+    ev_min = -30;
+    ev_max = 30;
+}
+
+/* The text of a float gives the float again. */
+static void float_texts_parse_to_their_float(void)
+{
+    char text[NATIVE_FLOAT_TEXT];
+    /* The Auto ISO limits: Sv 5 (ISO 100) to Sv 16 (ISO 102400) and above,
+       in third stops. */
+    const float values[] = {0.0f, -0.0f, 1.0f, 5.0f, 16.0f / 3.0f, 11.0f, 34.0f / 3.0f, 16.0f, 52.0f / 3.0f,
+                            -2.75f, 1048575.9f};
+    for (u32 i = 0; i < sizeof values / sizeof values[0]; ++i) {
+        u32 bits;
+        memcpy(&bits, &values[i], 4);
+        assert(native_float_text(text, bits));
+        assert(strlen(text) < NATIVE_FLOAT_TEXT && strtof(text, 0) == values[i]);
+    }
+    assert(native_float_text(text, 0x40aaaaabU) && !strcmp(text, "5.333333492279052734375"));
+    const float out[] = {1048576.0f, 0.5f, -1e-10f};
+    for (u32 i = 0; i < 3; ++i) {
+        u32 bits;
+        memcpy(&bits, &out[i], 4);
+        assert(!native_float_text(text, bits));
     }
 }
 
@@ -1830,6 +2010,9 @@ int main(void)
     preview_keeps_what_the_camera_changed();
     preview_commits_with_the_undo_step_before_it();
     preview_needs_a_recipe_that_applies();
+    undo_restores_the_settings_record();
+    exposure_keeps_the_limits_of_the_camera();
+    float_texts_parse_to_their_float();
 #ifdef FW_IMAGE_CONTROL_SET
     monochrome_types();
 #endif

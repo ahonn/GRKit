@@ -975,6 +975,29 @@ menu_develop_aspect_top_text:
 #endif
 #endif
 #include "crop.S"
+/* The exposure compensation of recipes (runtime/native_look.h) goes to the
+   setter of the EV buttons, FW_EXPOSURE_SET, which keeps a value within the
+   limits of the camera, then sets it as the UserData setting does. C uses
+   soft-float; the setter takes the stops in s0. native_exposure_sixths
+   takes r0 sixths of a stop, the float nearest to it, and
+   native_exposure_bits the float bits r0. */
+.fpu vfpv3
+.arm
+.global native_exposure_sixths
+.type native_exposure_sixths, %function
+native_exposure_sixths:
+    vmov s0, r0
+    vcvt.f32.s32 s0, s0
+    vmov.f32 s1, #6.0
+    vdiv.f32 s0, s0, s1
+    b 1f
+.global native_exposure_bits
+.type native_exposure_bits, %function
+native_exposure_bits:
+    vmov s0, r0
+1:  ldr r12, =FW_EXPOSURE_SET
+    bx r12
+.ltorg
 #ifdef HOOK_CROP_BUTTON
 .arm
 /* The entry of the camera's crop button (ChangeCrop): with CORE.CROP in

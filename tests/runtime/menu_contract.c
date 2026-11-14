@@ -165,12 +165,16 @@ static unsigned preview_invalidations, preview_invalidated;
 static unsigned row_text_fitted;
 #define MENU_ROW_TEXT_FIT(view) (row_text_fitted = (view))
 /* The native settings of recipes (runtime/native_look.h): no settings
-   record, and each UserData Set counted. */
-static unsigned native_sets_count;
+   record, and each UserData Set counted. A set of the native type makes
+   native_type_shown the type that the camera shows (MENU_NATIVE_IC_TYPE). */
+static unsigned native_sets_count, native_type_shown;
+static void native_set_record(const char *const *argv);
 #define NATIVE_SETTINGS() 0U
-#define NATIVE_SET(argv) ((void)(argv), ++native_sets_count)
+#define NATIVE_SET(argv) native_set_record(argv)
 #define NATIVE_MONOCHROME() 0U
 #define NATIVE_SET_TYPE(code) ((void)(code), ++native_sets_count)
+#define NATIVE_SET_EV(n) ((void)(n), ++native_sets_count)
+#define NATIVE_SET_EV_BITS(b) ((void)(b), ++native_sets_count)
 /* On GR IV, a model holds the use of the keyboard: an object of the test
    holds it. */
 #ifdef FW_KEYBOARD_MODEL
@@ -269,6 +273,11 @@ static uintptr_t test_select_method(uintptr_t address);
 #define CALL5(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
+static void native_set_record(const char *const *argv)
+{
+    ++native_sets_count;
+    if (!strcmp(argv[2], NATIVE_TYPE_SETTING)) native_ic_value = native_type_shown;
+}
 /* The firmware side of the checkbox page (runtime/menu_settings.h): the
    allocation gives TEST_CHECK_PAGE, and the SelectMenuController constructor
    initializes its list of three rows, whose row kinds are at
@@ -1725,6 +1734,54 @@ static void the_recipe_page_previews_the_highlighted_recipe(void)
        again. */
     frame_preview(h, ADJ_C, 0);
     assert(!recipe_preview_on(h) && current_module(h)->checked(h, h[GRKIT_HOST_MENU_CURSOR / 4]));
+}
+
+/* OK on the Recipes page writes the native type itself: an apply the type
+   of its recipe, an undo the type from before the apply. Neither is a
+   choice on the native Image Control slot, so an exit on that slot keeps
+   the effect that an undo gave back (native_ic_chosen). */
+static void recipe_type_writes_are_no_native_choice(void)
+{
+    volatile u32 *h = test_header;
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT | GRKIT_CORE_TONE_BIT;
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    h[GRKIT_HOST_RECORDS / 4] = TEST_OBJECTS;
+    h[GRKIT_HOST_COUNT / 4] = 1;
+    const u32 a = TEST_OBJECTS;
+    BYTE(a, GRKIT_RECORD_ID) = 'a';
+    h[GRKIT_HOST_ACTIVE / 4] = a;
+    /* Recipe 0: Film Look Off and the first native type. */
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_OFF);
+    h[GRKIT_HOST_RECIPES / 4 + RECIPE_NATIVE_WORD] = 1U << NATIVE_TYPE_SHIFT;
+    /* ADJ opens on type 12 (plus 1), with effect a. OK on the recipe
+       applies it, and the camera shows type 3. */
+    native_ic_value = 12;
+    menu_settings_transition(0, ADJ_CONTROLLER, SHOOTING_CONTROLLER);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = ADJ_C;
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(h);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    native_type_shown = 3;
+    menu_confirm(h);
+    assert(!h[GRKIT_HOST_ACTIVE / 4] && recipe_undo_count(h) == 1 && native_ic_value == 3);
+    assert(!native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE / 4], MENU_NATIVE_IC_TYPE(), 1, 1));
+    /* ADJ opens again on type 3. Undo gives effect a back and the type of
+       the settings before the apply, which the step holds here: the test
+       has no settings record (runtime/recipe_undo.h). */
+    menu_settings_transition(0, ADJ_CONTROLLER, SHOOTING_CONTROLLER);
+    recipe_at(h, GRKIT_RECIPE_SLOTS)[RECIPE_NATIVE_WORD] = 2U << NATIVE_TYPE_SHIFT;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    native_type_shown = 12;
+    menu_confirm(h);
+    assert(h[GRKIT_HOST_ACTIVE / 4] == a && !recipe_undo_count(h) && native_ic_value == 12);
+    assert(!native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE / 4], MENU_NATIVE_IC_TYPE(), 1, 1));
+    /* A type that the user then selects on the native slot still counts. */
+    native_ic_value = 5;
+    assert(native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE / 4], MENU_NATIVE_IC_TYPE(), 1, 1));
+    native_ic_value = native_type_shown = 0;
 }
 
 /* The keyboard of the camera (runtime/ui_keyboard.h): its hooks serve the GRKit text
@@ -5666,6 +5723,7 @@ int main(void)
     the_grain_page_changes_only_the_grain_word();
     the_recipe_page_saves_applies_and_deletes();
     the_recipe_page_previews_the_highlighted_recipe();
+    recipe_type_writes_are_no_native_choice();
     the_keyboard_serves_the_grkit_text_only_while_borrowed();
     the_keyboard_keeps_an_unchanged_automatic_name();
     the_recipe_page_lists_the_shown_recipes();
