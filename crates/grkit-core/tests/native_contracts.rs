@@ -1228,6 +1228,43 @@ fn native_relocation_contract_finds_moved_windows_and_rejects_changes() {
     checked(&mut Command::new(&executable));
 }
 
+/// The fixture of tests/runtime/framing_contract.c: for each family, the
+/// size {width, height} of each ratio with each crop in each size class
+/// (`crop_sizes[ratio][crop][class]`), and the file | size class + 1 << 8
+/// that playback finds for it (`crop_files`).
+fn crop_sizes() -> String {
+    use grkit_core::aspect::geometry::{crop_size, file_of_size, CLASSES, CROPS, FAMILIES};
+    use grkit_core::aspect::RATIOS;
+    let mut out = String::new();
+    for (index, family) in FAMILIES.iter().enumerate() {
+        let (mut sizes, mut files) = (Vec::new(), Vec::new());
+        for value in 0..RATIOS.len() {
+            for crop in 0..CROPS {
+                for class in 0..CLASSES {
+                    let (w, h) = crop_size(family, value, crop, class);
+                    let (file, class) = file_of_size(family, w, h);
+                    sizes.push(format!("{w},{h}"));
+                    files.push(
+                        (file + class.map_or(0, |class| (class as u32 + 1) << 8)).to_string(),
+                    );
+                }
+            }
+        }
+        out += &format!(
+            "#{} defined(FRAMING_FAMILY_{})\n\
+             static const unsigned short crop_sizes[{}][{CROPS}][{CLASSES}][2]={{{}}};\n\
+             static const unsigned short crop_files[{}][{CROPS}][{CLASSES}]={{{}}};\n",
+            if index == 0 { "if" } else { "elif" },
+            family.name.to_uppercase(),
+            RATIOS.len(),
+            sizes.join(","),
+            RATIOS.len(),
+            files.join(","),
+        );
+    }
+    out + "#endif\n"
+}
+
 #[test]
 fn native_framing_contract_preserves_canvas_bounds_and_settings() {
     let Some(compiler) = compiler() else {
@@ -1244,6 +1281,7 @@ fn native_framing_contract_preserves_canvas_bounds_and_settings() {
         format!("static const unsigned char overlay_labels[] = {{{labels}}};\n"),
     )
     .unwrap();
+    std::fs::write(temporary.path().join("crop_sizes.h"), crop_sizes()).unwrap();
     // The module headers of Framing and Guides, which the harness compiles
     // in one file: the index of each setting in its module.toml, and each
     // setting at its default 0.

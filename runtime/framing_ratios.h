@@ -27,12 +27,21 @@
 /* The capture aspect id and the visible-area id of each file. */
 #define FRAMING_FILE_CAPTURES 0,0,2,2,1,1,1,1,1
 #define FRAMING_FILE_AREAS 0,0,4,5,6,7,8,6,7
+/* The ratio {p, q} of each file that a crop of a ratio has (runtime/crop.h),
+   or {0, 0}: a crop has the ratio within FRAMING_CROP_SLACK (p + q), and a
+   short side of at least FRAMING_CROP_SHORTEST. */
+#define FRAMING_FILE_RATIOS {0,0},{0,0},{65,24},{47,20},{5,4},{7,6},{3,4},{0,0},{0,0}
+#define FRAMING_CROP_SLACK 9
+#define FRAMING_CROP_SHORTEST 480
 /* The geometries of capture aspect id 2 (runtime/framing.S): 0 16:9, 1 XPan
    65:24, 2 2.35:1. The mode of each file, padded to FRAMING_MODE_INDEXES, and
    of each value of GRKIT_HOST_FRAME_CROP. */
 #define FRAMING_WIDE_MODES 3
 #define FRAMING_WIDE_BY_FILE 0,0,1,2,0,0,0,0,0
 #define FRAMING_WIDE_BY_CROP 0,1,0,0,2,0,0,0,0
+/* Whether each mode has sizes that no native aspect has (runtime/crop.h:
+   crop_resolution_size). */
+#define FRAMING_WIDE_FRAMED 0,1,1
 /* The top inset of the screennail and of the thumbnail by mode. */
 #define FRAMING_WIDE_SCREENNAIL 38,107,87
 #define FRAMING_WIDE_THUMBNAIL 16,30,26
@@ -43,6 +52,9 @@
 #define FRAMING_NARROW_MODES 7
 #define FRAMING_NARROW_BY_FILE 0,0,0,0,2,3,4,5,6
 #define FRAMING_NARROW_BY_CROP 0,0,0,0,0,1,2,3,4
+/* Whether each mode has sizes that no native aspect has (runtime/crop.h:
+   crop_resolution_size). */
+#define FRAMING_NARROW_FRAMED 0,0,1,1,1,1,1
 /* The left inset of the screennail and of the thumbnail by mode. */
 #define FRAMING_NARROW_SCREENNAIL 40,120,60,80,180,60,80
 #define FRAMING_NARROW_THUMBNAIL 0,20,6,10,36,6,10
@@ -70,6 +82,13 @@
 /* The stock width of id 2 and height of id 1 of each size class. */
 #define FRAMING_STOCK_WIDTHS 6000,4800,3360,1920
 #define FRAMING_STOCK_HEIGHTS 4000,3200,2240,1440
+/* The 3:2 height of each size class. */
+#define FRAMING_NATIVE_HEIGHTS 4000,3200,2240,1280
+/* CORE.CROP (runtime/crop.h): the crop factor of each value as float bits,
+   and the camera's own factors of 35 and 50 mm. */
+#define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000
+#define CROP_NATIVE_35 0x3fa00000
+#define CROP_NATIVE_50 0x3fe49249
 /* The sizes {long side, short side} of each file from 2, L to XS, which
    the playback classifier compares. */
 #define FRAMING_SIZES 6000,2216,4800,1776,3360,1240,1920,712,6000,2552,4800,2040,3360,1432,1920,816,4992,4000,4000,3200,2800,2240,1792,1440,4656,4000,3728,3200,2608,2240,1680,1440,4000,2992,3200,2400,2240,1680,1440,1072,5000,4000,4000,3200,2800,2240,1800,1440,4664,4000,3736,3200,2616,2240,1680,1440
@@ -90,6 +109,13 @@
 /* The stock width of id 2 and height of id 1 of each size class. */
 #define FRAMING_STOCK_WIDTHS 6192,4944,3504,1920
 #define FRAMING_STOCK_HEIGHTS 4128,3296,2336,1440
+/* The 3:2 height of each size class. */
+#define FRAMING_NATIVE_HEIGHTS 4128,3296,2336,1280
+/* CORE.CROP (runtime/crop.h): the crop factor of each value as float bits,
+   and the camera's own factors of 35 and 50 mm. */
+#define CROP_FACTORS 0x3f800000,0x3fa04f89,0x3fb66614,0x3fe23119,0x401f9951
+#define CROP_NATIVE_35 0x3fa04f89
+#define CROP_NATIVE_50 0x3fe23119
 /* The sizes {long side, short side} of each file from 2, L to XS, which
    the playback classifier compares. */
 #define FRAMING_SIZES 6192,2288,4944,1824,3504,1296,1920,712,6192,2632,4944,2104,3504,1488,1920,816,5152,4128,4112,3296,2912,2336,1792,1440,4816,4128,3840,3296,2720,2336,1680,1440,4128,3088,3296,2464,2336,1744,1440,1072,5160,4128,4120,3296,2920,2336,1800,1440,4816,4128,3848,3296,2728,2336,1680,1440

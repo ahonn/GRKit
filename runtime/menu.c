@@ -1731,7 +1731,7 @@ u32 crop_button_press(void) {
         if(!value || !(hidden>>value&1U)) break;
     }
     setting_store(h,GRKIT_CORE_CROP,value);
-    crop_sync(h,aspect_native());
+    crop_sync(h);
     return 1;
 }
 #endif

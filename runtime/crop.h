@@ -8,20 +8,19 @@
    that frame. A longer crop has no value: even 70 mm shows only its frame
    (crop_view_value).
 
-   CORE.CROP_MODE selects cropping where the camera can (0, the default) or
-   the frame only (1). The resident loader saves both settings.
+   CORE.CROP_MODE selects cropping (0, the default) or the frame only (1).
+   The resident loader saves both settings.
 
-   A crop of 3:2 photos without a Framing ratio is a crop of the camera:
-   the core sets the camera's own crop factor (FW_CROP_SET) to the factor of
-   35 or 50 mm, so that the live view, the focus, and the exposure follow it,
-   and the window and the size of the photo follow the factor
-   (runtime/framing.S: crop_resolution). The camera keeps 35 mm for 40 mm,
-   and 50 mm for 70 mm; their shots take their own factor (crop_shot). The
-   live view zooms to 40 mm, and shows 70 mm as a frame in the view of 50 mm
-   (crop_view_value). The camera saves its factor at power-off and
-   knows only its own factors, so the core never sets another one. With a
-   Framing ratio or another native aspect, the live view shows the frame
-   only.
+   A crop is a crop of the camera in each native aspect and with each
+   Framing ratio: the core sets the camera's own crop factor (FW_CROP_SET)
+   to the factor of 35 or 50 mm, so that the live view, the focus, and the
+   exposure follow it, and the window and the size of the photo follow the
+   factor (runtime/framing.c: crop_resolution_size). The camera keeps 35 mm
+   for 40 mm, and 50 mm for 70 mm; their shots take their own factor
+   (crop_shot). The live view zooms to 40 mm, and shows 70 mm as a frame in
+   the view of 50 mm (crop_view_value). The camera saves its factor at
+   power-off and knows only its own factors, so the core never sets another
+   one.
 
    The includer defines u16, u32, and the header fields (runtime/abi.h). */
 #ifndef CAPABILITY_USED
@@ -29,13 +28,9 @@
 #define CAPABILITY_USED(h,handle) ((h)[GRKIT_HOST_CAPABILITIES/4]>>((handle)-GRKIT_CORE_SETTING_BASE)&1U)
 #endif
 
-/* The factor of each value as float bits, and the side of its frame as a
-   part of the uncropped view in 1/65536 (runtime/targets: about 28/35,
-   28/40, 28/50, and 28/70). */
-#ifndef CROP_FACTORS
-#define CROP_FACTORS 0x3f800000,0x3fa00000,0x3fb6db6e,0x3fe49249,0x40200000
-#define CROP_SCALES 65536,52429,45875,36700,26214
-#endif
+/* The factor of each value as float bits (runtime/framing_ratios.h), and
+   the side of its frame as a part of the uncropped view in 1/65536
+   (runtime/targets: about 28/35, 28/40, 28/50, and 28/70). */
 static const u32 crop_factors[GRKIT_CORE_CROP_VALUES]={CROP_FACTORS};
 static const u32 crop_scales[GRKIT_CORE_CROP_VALUES]={CROP_SCALES};
 #define CROP_SCALE_ONE 65536U
@@ -64,6 +59,23 @@ static const u8 crop_view_values[GRKIT_CORE_CROP_VALUES]={0,1,2,3,3};
 static __attribute__((unused)) u32 crop_bits_q16(u32 bits) {
     u32 exponent=(bits>>23)&0xffU, mantissa=(bits&0x7fffffU)|0x800000U;
     return exponent>=134U ? mantissa<<(exponent-134U) : mantissa>>(134U-exponent);
+}
+/* The crop step of the factor `bits`, not 1: the size class of the native
+   crop whose window a crop takes, 1 below the factor of 50 mm, else 2.
+   Positive floats compare as their bits. */
+static __attribute__((unused)) u32 crop_step(u32 bits) { return bits>=CROP_NATIVE_50 ? 2U : 1U; }
+/* A side of an L size at the crop factor `bits`: the side divided by the
+   factor, truncated, then to the nearest multiple of 16, which the JPEG
+   codec takes (grkit_core::aspect::geometry::crop_side). For each side and
+   factor that a size takes, the factor in 1/65536 gives the result of the
+   camera's single-precision division (tests); not for every side. A
+   shift-subtract division: the freestanding link has no division helper.
+   `bits` is a finite factor of 1 or more (crop_resolution_size). */
+static __attribute__((unused)) u32 crop_side(u32 side,u32 bits) {
+    u32 n=side<<16, d=crop_bits_q16(bits), q=0, bit=1;
+    while(d<n && !(d&0x80000000U)) { d<<=1; bit<<=1; }
+    while(bit) { if(n>=d) { n-=d; q|=bit; } d>>=1; bit>>=1; }
+    return (q+8U)&~15U;
 }
 /* The zoom of the factor `bits`: the factor times 8192, as the live view
    takes it (runtime/framing.S: crop_window). */
@@ -95,15 +107,15 @@ static __attribute__((unused)) u32 crop_shown(volatile u32 *h) {
     value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
     return value<GRKIT_CORE_CROP_VALUES ? value : 0;
 }
-/* A module that does not use CROP_MODE crops where the camera can. */
+/* A module that does not use CROP_MODE crops. */
 static __attribute__((unused)) u32 crop_frame_only(volatile u32 *h) {
     return CAPABILITY_USED(h,GRKIT_CORE_CROP_MODE) && h[GRKIT_HOST_CROP_MODE/4]==1;
 }
 /* The crop that the camera applies, or 0: the shown crop (crop_shown) in
-   Crop mode, in native 3:2 (`native_aspect` 0) without a Framing ratio. */
-static __attribute__((unused)) u32 crop_capture(volatile u32 *h,u32 native_aspect) {
+   Crop mode, in each native aspect and with each Framing ratio. */
+static __attribute__((unused)) u32 crop_capture(volatile u32 *h) {
     u32 crop=crop_shown(h);
-    if(!crop || crop_frame_only(h) || native_aspect || framing_selection(h)) return 0;
+    if(!crop || crop_frame_only(h)) return 0;
     return crop;
 }
 /* The camera's crop factor in 1/65536 (runtime/framing.S), for the frame
@@ -130,9 +142,9 @@ static __attribute__((unused)) u32 crop_scale(u32 crop,u32 native) {
 #define LABEL_CROP GRKIT_MODULE_LABEL_COUNT
 #define CROP_BADGE_LEFT 662U
 #define CROP_BADGE_TOP 80U
-static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h,u32 native_aspect) {
+static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h) {
     static const u8 badges[GRKIT_CORE_CROP_VALUES]={0xff,0xff,0,0xff,1};
-    u32 badge=badges[crop_capture(h,native_aspect)];
+    u32 badge=badges[crop_capture(h)];
     if(badge==0xff) return GRKIT_LABEL_COUNT;
     return LABEL_CROP+badge+(CROP_LENS_40MM() ? 2U : 0U);
 }
@@ -160,8 +172,8 @@ static __attribute__((unused)) u32 crop_native_known(u32 bits) {
    the camera's crop button stepped from one to 0. The live view reads its
    factor again only when the camera's factor changes, so a new live factor
    with the same camera factor sets another factor of the camera first. */
-static __attribute__((unused)) void crop_sync(volatile u32 *h,u32 native_aspect) {
-    u32 crop=crop_capture(h,native_aspect), want=crop ? crop_factors[crop_live_values[crop]] : 0;
+static __attribute__((unused)) void crop_sync(volatile u32 *h) {
+    u32 crop=crop_capture(h), want=crop ? crop_factors[crop_live_values[crop]] : 0;
     u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now=CROP_NATIVE_BITS(), target;
     u32 view=crop_view_value(crop), live=crop && view!=crop_live_values[crop] ? crop_factors[view] : 0;
     u32 before=h[GRKIT_HOST_CROP_LIVE/4];

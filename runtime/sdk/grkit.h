@@ -146,8 +146,8 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   70 mm of a 28 mm lens (the same factors of the 40 mm lens
                   of GR IIIx). The live view shows the crop, or its frame
                   (Surface).
-     CORE.CROP_MODE  2 values: 0 crops photos where the camera can
-                  (default), 1 shows the frame only. Since ABI 2.6.
+     CORE.CROP_MODE  2 values: 0 crops photos, in every aspect and Framing
+                  ratio (default), 1 shows the frame only. Since ABI 2.6.
      CORE.BORDER  4 values: a border around each recorded picture, 0 Off,
                   1 Thin, 2 Wide, 3 Instant. The picture keeps its pixels and
                   the JPEG grows; plane filters see the picture without the

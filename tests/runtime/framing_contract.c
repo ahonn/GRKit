@@ -89,6 +89,10 @@ static uint32_t local_second;
    it at TEST_LABELS. */
 #include "abi.h"
 #include "overlay_labels.h"
+/* The size of each ratio with each crop in each size class, and the file
+   that playback finds for it, written by the test runner from
+   grkit_core::aspect::geometry (crop_sizes, crop_files). */
+#include "crop_sizes.h"
 #define TEST_RECORDS 0x70000000U
 #define TEST_LABELS (TEST_RECORDS+GRKIT_PICTURE_SCRATCH+GRKIT_TEXT_SIZE)
 static const volatile uint8_t *mapped_labels(uint32_t address)
@@ -1051,14 +1055,27 @@ static void crop_frames_the_layers(void)
 #ifdef GRKIT_TARGET_GR3_210
     assert_box(crop_box_seen, 158, 105, 561, 374);
 #endif
-    /* Inside the XPan crop of Framing, the frame is 28/50 of that area. */
+    /* Inside the XPan crop of Framing, the camera crops too: 50 mm in the
+       live view of its factor has no frame, and 70 mm there has a frame of
+       50/70 of the XPan area. */
     reset();
     add_crop_layer();
     header[GRKIT_HOST_CROP/4] = 3;
     GUIDE_STYLE = 1;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3]);
+    native_crop_q16 = (u32)(((unsigned long long)crop_scales[0] << 16) / crop_scales[3]);
+    crop_calls = 0;
     framing_paint(TEST_CANVAS, TEST_BITMAP);
-    assert_frame(crop_box_seen, 0, 107, 720, 373, 3, 65536);
-    assert_frame(guides_box_seen, 0, 107, 720, 373, 3, 65536);
+    assert(crop_calls == 0);
+    assert_box(guides_box_seen, 0, 107, 720, 373);
+    header[GRKIT_HOST_CROP/4] = 4;
+    framing_paint(TEST_CANVAS, TEST_BITMAP);
+    assert(crop_calls == 1);
+    assert_frame(crop_box_seen, 0, 107, 720, 373, 4, native_crop_q16);
+    assert_frame(guides_box_seen, 0, 107, 720, 373, 4, native_crop_q16);
+    native_crop_q16 = 65536U;
+    native_crop_bits = 0x3f800000U;
     /* Off, or a crop without a module that uses it, frames nothing: the
        crop layer does not paint, and Guides divide the whole area. */
     reset();
@@ -1114,10 +1131,10 @@ static void crop_follows_the_adj_preview(void)
     framing_bind(TEST_OWNER);
     assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_NATIVE/4]);
 }
-/* In 3:2 without a Framing ratio, the camera crops: the bind sets the
-   camera's factor of 35, 40, or 50 mm, and arms the factor of a 70 mm
-   shot. Frame Only, a Framing ratio, or Off return a factor that the core
-   set to Off, and a crop of the camera menu stays. */
+/* The camera crops: the bind sets the camera's factor of 35, 40, or 50 mm,
+   and arms the factor of a 70 mm shot, in each native aspect and with each
+   Framing ratio. Frame Only or Off return a factor that the core set to
+   Off, and a crop of the camera menu stays. */
 static void crop_sets_the_camera_factor(void)
 {
     static const u8 lives[] = {0, 1, 1, 3, 3};
@@ -1166,13 +1183,26 @@ static void crop_sets_the_camera_factor(void)
             assert(header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[2]);
         }
     }
-    /* A Framing ratio: the frame only, and the camera keeps its own crop. */
-    reset();
-    add_crop_layer();
-    header[GRKIT_HOST_CROP/4] = 2;
-    native_crop_bits = crop_factors[1]; native_crop_sets = 0;
-    framing_bind(TEST_OWNER);
-    assert(native_crop_sets == 0 && native_crop_bits == crop_factors[1]);
+    /* Each Framing ratio, in both of its modes, and each native aspect crop
+       as 3:2 does. */
+    for (u32 ratio = 0; ratio < RATIO_VALUES; ++ratio)
+        for (u32 native = 0; native < 4; ++native)
+            for (u32 guides = 0; guides < 2; ++guides) {
+                if (!cropped(ratio)) continue;
+                reset();
+                header[GRKIT_HOST_FRAME_RATIO/4] = ratio;
+                header[GRKIT_HOST_ASPECT_MODE/4] = guides;
+                header[GRKIT_HOST_CAPABILITIES/4] |= GRKIT_CORE_ASPECT_MODE_BIT;
+                native_aspect = native;
+                add_crop_layer();
+                header[GRKIT_HOST_CROP/4] = 4;
+                native_crop_bits = 0x3f800000U; native_crop_sets = 0;
+                framing_bind(TEST_OWNER);
+                assert(native_crop_bits == crop_factors[3] && native_crop_sets == 1);
+                assert(header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[4]);
+                assert(crop_badge_native() == 0);
+            }
+    native_aspect = 0;
     /* 70 mm in the live view of the 50 mm factor: the frame is 50/70 of
        it. 50 mm there has no frame. */
     reset();
@@ -1204,7 +1234,7 @@ static void crop_sets_the_camera_factor(void)
 /* 40 and 70 mm show the core's crop badge in the place of the camera's
    own, which crop_badge hides; 35 and 50 mm keep the camera's. GR IIIx
    shows its focal lengths. The badge shows only with the native
-   information, and a Framing ratio or Frame Only shows none. */
+   information, and Frame Only shows none. */
 static void crop_badges_replace_the_camera_badge(void)
 {
     static const u32 labels[] = {GRKIT_LABEL_COUNT, GRKIT_LABEL_COUNT, LABEL_CROP, GRKIT_LABEL_COUNT, LABEL_CROP + 1};
@@ -1240,10 +1270,11 @@ static void crop_badges_replace_the_camera_badge(void)
     header[GRKIT_HOST_CROP_MODE/4] = 1;
     header[GRKIT_HOST_CAPABILITIES/4] |= GRKIT_CORE_CROP_MODE_BIT;
     assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT && crop_badge_native());
+    /* A Framing ratio crops too, so it shows the badge. */
     reset();
     add_crop_layer();
     header[GRKIT_HOST_CROP/4] = 4;
-    assert(crop_badge_shown(header) == GRKIT_LABEL_COUNT);
+    assert(crop_badge_shown(header) == LABEL_CROP + 1 && !crop_badge_native());
 }
 /* The shooting screen calls the menu component once, at the first shooting
    screen after INSTALL, where the mode dial starts (runtime/mode_dial.h). */
@@ -1308,8 +1339,63 @@ static void the_recipe_panel_centers_its_groups(void)
     header[GRKIT_HOST_SERVICES/4] = 0;
 }
 
+/* GetResolution of each ratio, and of native 1:1, with each crop in each
+   size class while shooting: the size of crop_resolution_size, else the
+   size of the camera at the factor of the crop step (runtime/framing.S:
+   crop_resolution), which the stock and Framing sizes give. Playback finds
+   the file and the size class of each size. */
+static u32 camera_size(u32 aspect,u32 row)
+{
+    static const u16 widths[]={FRAMING_STOCK_WIDTHS}, heights[]={FRAMING_STOCK_HEIGHTS}, native[]={FRAMING_NATIVE_HEIGHTS};
+    static const u16 wide[4][FRAMING_WIDE_MODES]={{FRAMING_WIDE_HEIGHT_0},{FRAMING_WIDE_HEIGHT_1},{FRAMING_WIDE_HEIGHT_2},{FRAMING_WIDE_HEIGHT_3}};
+    static const u16 narrow[4][FRAMING_NARROW_MODES]={{FRAMING_NARROW_WIDTH_0},{FRAMING_NARROW_WIDTH_1},{FRAMING_NARROW_WIDTH_2},{FRAMING_NARROW_WIDTH_3}};
+    static const u16 narrow_xs[]={FRAMING_NARROW_HEIGHT_3};
+    static const u8 by_crop[]={FRAMING_NARROW_BY_CROP};
+    u32 mode;
+    if (aspect == 0) return widths[row] | (u32)native[row] << 16;
+    if (aspect == 2) return widths[row] | (u32)wide[row][framing_mode(header,1)] << 16;
+    /* Native 1:1 has the sizes of the mode of Framing 1:1. */
+    mode = aspect == 3 ? by_crop[5] : framing_mode(header,0);
+    return narrow[row][mode] | (u32)(row == 3 ? narrow_xs[mode] : heights[row]) << 16;
+}
+static void crop_sizes_follow_the_geometry(void)
+{
+    static const u8 captures[]={FRAMING_RATIO_CAPTURES};
+    for (u32 value = 0; value <= RATIO_VALUES; ++value) {
+        /* RATIO_VALUES: native 1:1, with Framing Off. */
+        u32 ratio = value < RATIO_VALUES ? value : 5, aspect = value < RATIO_VALUES ? captures[value] : 3;
+        if (!cropped(ratio)) continue;
+        memset((void *)header, 0, sizeof(header));
+        header[GRKIT_HOST_FRAME_CROP/4] = value < RATIO_VALUES ? value : 0;
+        for (u32 crop = 0; crop < GRKIT_CORE_CROP_VALUES; ++crop)
+            for (u32 class = 0; class < 4; ++class) {
+                u32 size = crop ? crop_resolution_size(class, aspect, crop_factors[crop]) : 0;
+                if (!size) size = camera_size(aspect, crop && class < crop_step(crop_factors[crop]) ? crop_step(crop_factors[crop]) : class);
+                assert(size == (crop_sizes[ratio][crop][class][0] | (u32)crop_sizes[ratio][crop][class][1] << 16));
+                assert(framing_size_file(size & 0xffffU, size >> 16) == crop_files[ratio][crop][class]);
+            }
+    }
+    /* GR III and GR IV: 35, 40, 50, and 70 mm (GR IIIx 50, 57, 71, and 100
+       mm) of 3:2 and of XPan at L. */
+#ifdef FRAMING_FAMILY_GR3
+    static const u16 xpan[4][2]={{4800,1776},{4208,1552},{3360,1248},{2400,880}}, full[4][2]={{4800,3200},{4208,2800},{3360,2240},{2400,1600}};
+#else
+    static const u16 xpan[4][2]={{4944,1824},{4352,1600},{3504,1296},{2480,912}}, full[4][2]={{4944,3296},{4352,2896},{3504,2336},{2480,1648}};
+#endif
+    for (u32 crop = 1; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
+        assert(crop_sizes[1][crop][0][0] == xpan[crop-1][0] && crop_sizes[1][crop][0][1] == xpan[crop-1][1]);
+        assert(crop_sizes[0][crop][0][0] == full[crop-1][0] && crop_sizes[0][crop][0][1] == full[crop-1][1]);
+    }
+    /* A factor below 1 (0.0 that an early build saved, a subnormal) or not
+       finite is no crop, and the division does not run. */
+    static const u32 invalid[] = {0x00000000U, 0x00000001U, 0x3f7fffffU, 0x7f800000U, 0x7fc00000U, 0xbf800000U};
+    for (u32 i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i)
+        for (u32 aspect = 0; aspect < 4; ++aspect)
+            assert(crop_resolution_size(0, aspect, invalid[i]) == 0);
+}
 int main(void)
 {
+    crop_sizes_follow_the_geometry();
     the_recipe_panel_centers_its_groups();
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();
@@ -1616,16 +1702,20 @@ int main(void)
             u32 l = framing_size_file(fixture_l[i][0],fixture_l[i][1]), m = framing_size_file(fixture_m[i][1],fixture_m[i][0]);
 #ifdef FRAMING_FAMILY_GR4
             /* GR IV 7:6 L of 1.6.0 equals the current one. */
-            if (i == 6) assert(l == 5);
+            if (i == 6) assert(l == (5 | 1U << 8));
             else
 #endif
-            assert(l == l_files[i]);
-            assert(m == (m_files[i] | 1U << 8));
+            assert(l == (l_files[i] | 1U << 8));
+            assert(m == (m_files[i] | 2U << 8));
             assert(framing_size_capture(fixture_l[i][0],fixture_l[i][1]) == (i < 2 ? 2U : 1U));
         }
-        assert(!framing_size_file(fixture_l[0][0],fixture_l[0][0]*2/3) && !framing_size_file(FIXTURE_STOCK_M,fixture_m[2][1]));
-        assert(!framing_size_file(FIXTURE_SQUARE_M,FIXTURE_SQUARE_M) && !framing_size_file(fixture_l[0][0],FIXTURE_WIDE_STOCK_L));
+        assert(framing_size_file(fixture_l[0][0],fixture_l[0][0]*2/3) == 1 && framing_size_file(FIXTURE_STOCK_M,fixture_m[2][1]) == 1);
+        assert(framing_size_file(FIXTURE_SQUARE_M,FIXTURE_SQUARE_M) == 1 && framing_size_file(fixture_l[0][0],FIXTURE_WIDE_STOCK_L) == 1);
         assert(!framing_size_capture(640,480) && FRAMING_FILES == 9);
+        /* A crop of a ratio has the file of the ratio, without a size class;
+           only 3:4 is taller than wide. */
+        assert(framing_size_file(4208,1552) == 2 && framing_size_file(2400,880) == 2 && framing_size_file(1552,4208) == 1);
+        assert(framing_size_file(2096,2800) == 6 && framing_size_file(2800,2096) == 1 && framing_size_capture(2096,2800) == 1);
     }
 #ifdef DEVELOP_SQUARE
     /* RAW development of the DNG in playback: the initial aspect and
@@ -1734,6 +1824,41 @@ int main(void)
         assert(WORD(size,0)==stock_l[0] && WORD(size,4)==fixture_l[4][1]);
         framing_resize_stock(size);
         assert(WORD(size,0)==stock_l[0] && WORD(size,4)==fixture_l[4][1]);
+    }
+    /* A crop of a ratio takes the stock size of the smallest size class
+       that holds it: XPan at 40 mm that of M, 3:4 at 70 mm that of S. A
+       resize target of a smaller class takes the geometry of the ratio. */
+    {
+        static const u16 widths[]={FRAMING_STOCK_WIDTHS}, heights[]={FRAMING_STOCK_HEIGHTS};
+        static const u16 wide_m[]={FRAMING_WIDE_HEIGHT_1}, wide_s[]={FRAMING_WIDE_HEIGHT_2}, narrow_s[]={FRAMING_NARROW_WIDTH_2};
+        const u32 size=TEST_METADATA+0x10;
+        WORD(size,0)=crop_sizes[1][2][0][0]; WORD(size,4)=crop_sizes[1][2][0][1];
+        assert(framing_resize_play_aspect(0,size)==RESIZE_JOB_WIDE);
+        framing_resize_stock(size);
+        assert(WORD(size,0)==widths[1] && WORD(size,4)==wide_m[0]);
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=2;
+        framing_resize_target(size,widths[2],wide_s[0]);
+        assert(WORD(size,0)==widths[2] && WORD(size,4)==wide_s[1]);
+        WORD(size,0)=crop_sizes[8][4][0][0]; WORD(size,4)=crop_sizes[8][4][0][1];
+        assert(framing_resize_play_aspect(0,size)==RESIZE_JOB_NARROW);
+        framing_resize_stock(size);
+        assert(WORD(size,0)==narrow_s[0] && WORD(size,4)==heights[2]);
+        /* The getter gives the longer side first: a 3:4 crop that playback
+           classified as 3:4 arrives as {height, width}. A 4:3 crop, which
+           has the ratio of 3:4 turned, keeps its size. */
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=6;
+        WORD(size,0)=crop_sizes[8][4][0][1]; WORD(size,4)=crop_sizes[8][4][0][0];
+        framing_resize_stock(size);
+        assert(WORD(size,0)==narrow_s[0] && WORD(size,4)==heights[2]);
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=1;
+        WORD(size,0)=crop_sizes[3][2][0][0]; WORD(size,4)=crop_sizes[3][2][0][1];
+        framing_resize_stock(size);
+        assert(WORD(size,0)==crop_sizes[3][2][0][0] && WORD(size,4)==crop_sizes[3][2][0][1]);
+        /* A crop of 3:2 keeps its size. */
+        WORD(size,0)=crop_sizes[0][2][0][0]; WORD(size,4)=crop_sizes[0][2][0][1];
+        framing_resize_stock(size);
+        assert(WORD(size,0)==crop_sizes[0][2][0][0] && WORD(size,4)==crop_sizes[0][2][0][1]);
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=0;
     }
 #endif
     /* Live-view updates resend the 3:2 request only when capture differs. */

@@ -1,12 +1,19 @@
 //! The sizes of the ratios: the stock sizes of each camera family, the size
-//! of a ratio in each size class, the geometries that the runtime switches
-//! GetResolution to, the classification of a photo size, and the preview
-//! insets and live-view boxes.
+//! of a ratio in each size class and with each crop of CORE.CROP, the
+//! geometries that the runtime switches GetResolution to, the classification
+//! of a photo size, and the preview insets and live-view boxes.
 
 use super::ratios::{Geometry, RATIOS};
 
 /// The size classes of GetResolution: L, M, S, and XS.
 pub const CLASSES: usize = 4;
+
+/// The values of CORE.CROP (`runtime/crop.h`): Off, then 35, 40, 50, and 70
+/// mm (GR IIIx: 50, 57, 71, and 100 mm, with the same factors).
+pub const CROPS: usize = 5;
+
+/// The crops that the camera has itself: 35 and 50 mm.
+pub const NATIVE_CROPS: [usize; 2] = [1, 3];
 
 /// The stock sizes of a camera family: the immediates of GetResolution of
 /// its firmware (grkit-build `framing_family_sizes_are_those_of_each_firmware`).
@@ -25,6 +32,10 @@ pub struct Family {
     /// The side of native 1:1. Only the XS side differs from the 4:3 height:
     /// the runtime switches only the XS height (FRAMING_NARROW_HEIGHT_3).
     pub sides_1x1: [u32; CLASSES],
+    /// The crop factor of each value of CORE.CROP, as float bits: 1, the
+    /// camera's own factors of 35 and 50 mm (NATIVE_CROPS), and the factors
+    /// of 40 and 70 mm, so that the Exif focal length names each crop.
+    pub crops: [u32; CROPS],
 }
 
 pub const FAMILIES: [Family; 2] = [
@@ -36,6 +47,13 @@ pub const FAMILIES: [Family; 2] = [
         widths_4x3: [5328, 4272, 2992, 1920],
         heights_4x3: [4000, 3200, 2240, 1440],
         sides_1x1: [4000, 3200, 2240, 1280],
+        crops: [
+            0x3f80_0000,
+            0x3fa0_0000,
+            0x3fb6_db6e,
+            0x3fe4_9249,
+            0x4020_0000,
+        ],
     },
     Family {
         name: "gr4",
@@ -45,6 +63,13 @@ pub const FAMILIES: [Family; 2] = [
         widths_4x3: [5504, 4400, 3120, 1920],
         heights_4x3: [4128, 3296, 2336, 1440],
         sides_1x1: [4128, 3296, 2336, 1280],
+        crops: [
+            0x3f80_0000,
+            0x3fa0_4f89,
+            0x3fb6_6614,
+            0x3fe2_3119,
+            0x401f_9951,
+        ],
     },
 ];
 
@@ -196,6 +221,106 @@ pub fn classify(family: &Family, width: u32, height: u32) -> Option<Classified> 
         shape: shapes()[index / CLASSES],
         class: index % CLASSES,
     })
+}
+
+/// The crop step of crop `crop`: the size class of the native crop whose
+/// window it takes, 1 below the factor of 50 mm, else 2.
+pub fn crop_step(family: &Family, crop: usize) -> usize {
+    // Positive floats compare as their bits.
+    if family.crops[crop] >= family.crops[NATIVE_CROPS[1]] {
+        2
+    } else {
+        1
+    }
+}
+
+/// The factor `bits` (the float bits of a factor of 1 or more) in 1/65536,
+/// truncated (runtime/crop.h: crop_bits_q16).
+fn factor_q16(bits: u32) -> u32 {
+    let exponent = (bits >> 23) & 0xff;
+    let mantissa = (bits & 0x7f_ffff) | 0x80_0000;
+    if exponent >= 134 {
+        mantissa << (exponent - 134)
+    } else {
+        mantissa >> (134 - exponent)
+    }
+}
+
+/// A side of an L size at the crop factor `bits`: the side divided by the
+/// factor, truncated, then to the nearest multiple of 16, which the JPEG
+/// codec takes (runtime/crop.h: crop_side). For each side and factor that a
+/// size takes, the division by the factor in 1/65536 gives the result of a
+/// single-precision division (tests); not for every side.
+pub fn crop_side(side: u32, bits: u32) -> u32 {
+    let quotient = (u64::from(side) << 16) / u64::from(factor_q16(bits));
+    (quotient as u32 + 8) & !15
+}
+
+/// The photo size of ratio `value` in size class `class` with crop `crop`
+/// (runtime/framing.c: crop_resolution_size). Up to the crop step, a crop
+/// is the L size of the ratio divided by the factor (`crop_side`): the
+/// window and the photo, one pixel each. A smaller size class has the size
+/// of its class. The camera's own crops of a geometry that the camera has
+/// keep the camera's sizes: those of the class of the step.
+pub fn crop_size(family: &Family, value: usize, crop: usize, class: usize) -> (u32, u32) {
+    let geometry = RATIOS[value].geometry;
+    if crop == 0 {
+        return size(family, value, geometry, class);
+    }
+    let step = crop_step(family, crop);
+    if class > step || (NATIVE_CROPS.contains(&crop) && !geometry.framed()) {
+        return size(family, value, geometry, class.max(step));
+    }
+    let (w, h) = size(family, value, geometry, 0);
+    let bits = family.crops[crop];
+    (crop_side(w, bits), crop_side(h, bits))
+}
+
+/// Each side of a crop of a ratio p : q is within the rounding to 16
+/// pixels of the ratio: |w q - h p| is at most CROP_SLACK (p + q) (tests).
+pub const CROP_SLACK: u32 = 9;
+/// The shortest side of a crop that playback classifies.
+pub const CROP_SHORTEST: u32 = 480;
+
+/// The ratio {p, q} of each file that a crop has: that of a current shape,
+/// else {0, 0}.
+pub fn file_ratios() -> Vec<(u32, u32)> {
+    files()
+        .iter()
+        .map(|file| match file {
+            Some(shape) if !shape.legacy => RATIOS[shape.value].aspect,
+            _ => (0, 0),
+        })
+        .collect()
+}
+
+/// The file of a crop of a ratio with its own shape: a photo size with the
+/// ratio of that shape, within the rounding of each side (CROP_SLACK). Only
+/// 3:4 is taller than wide. Playback takes it for a size that is not a
+/// Framing size (`classify`).
+pub fn crop_file(width: u32, height: u32) -> Option<u32> {
+    if width.min(height) < CROP_SHORTEST {
+        return None;
+    }
+    file_ratios()
+        .iter()
+        .position(|&(p, q)| {
+            p != 0
+                && (width < height) == (p < q)
+                && (width * q).abs_diff(height * p) <= CROP_SLACK * (p + q)
+        })
+        .map(|file| file as u32)
+}
+
+/// The file (GRKIT_HOST_FRAME_FILE) and the size class of a photo size of
+/// `family` in playback (runtime/framing.c: framing_size_file): a Framing
+/// size has its file and class, a crop of a ratio with its own shape the
+/// file of the shape and no class, and another size file 1 and no class.
+pub fn file_of_size(family: &Family, width: u32, height: u32) -> (u32, Option<usize>) {
+    if let Some(found) = classify(family, width, height) {
+        return (found.file, Some(found.class));
+    }
+    (crop_file(width, height).unwrap_or(1), None)
 }
 
 /// The previews of a JPEG, with the insets of the native areas.
@@ -428,6 +553,144 @@ mod tests {
                 classify(family, family.widths[0], family.heights_3x2[0]),
                 None
             );
+        }
+    }
+
+    /// The crop of a side divides by the factor in 1/65536, and gives the
+    /// size of the single-precision division of the releases before 1.6.1,
+    /// for each side of each geometry, that of an earlier release included.
+    #[test]
+    fn crop_sides_are_those_of_a_float_division() {
+        for family in &FAMILIES {
+            let geometries = RATIOS
+                .iter()
+                .enumerate()
+                .map(|(value, ratio)| (value, ratio.geometry))
+                .chain(
+                    shapes()
+                        .into_iter()
+                        .map(|shape| (shape.value, shape.geometry)),
+                );
+            for (value, geometry) in geometries {
+                let (w, h) = size(family, value, geometry, 0);
+                for &bits in &family.crops[1..] {
+                    for side in [w, h] {
+                        let float = (side as f32 / f32::from_bits(bits)) as u32;
+                        assert_eq!(crop_side(side, bits), (float + 8) & !15, "{side} {bits:#x}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Each crop of each ratio, at L: 3:2 as the releases before 1.6.1, the
+    /// camera's own crops of its own geometries, such as GR III 4:3 at 35
+    /// mm, and the others the L size divided by the factor.
+    #[test]
+    fn crop_sizes_divide_the_l_size() {
+        let at = |name: &str, value: usize| -> Vec<(u32, u32)> {
+            (1..CROPS)
+                .map(|crop| crop_size(family(name), value, crop, 0))
+                .collect()
+        };
+        for (name, value, sizes) in [
+            (
+                "gr3",
+                0,
+                [(4800, 3200), (4208, 2800), (3360, 2240), (2400, 1600)],
+            ),
+            (
+                "gr4",
+                0,
+                [(4944, 3296), (4352, 2896), (3504, 2336), (2480, 1648)],
+            ),
+            (
+                "gr3",
+                1,
+                [(4800, 1776), (4208, 1552), (3360, 1248), (2400, 880)],
+            ),
+            (
+                "gr4",
+                1,
+                [(4944, 1824), (4352, 1600), (3504, 1296), (2480, 912)],
+            ),
+            (
+                "gr3",
+                3,
+                [(4272, 3200), (3728, 2800), (2992, 2240), (2128, 1600)],
+            ),
+            (
+                "gr3",
+                6,
+                [(4000, 3200), (3488, 2800), (2800, 2240), (2000, 1600)],
+            ),
+            (
+                "gr3",
+                7,
+                [(3728, 3200), (3264, 2800), (2608, 2240), (1856, 1600)],
+            ),
+            (
+                "gr3",
+                8,
+                [(2400, 3200), (2096, 2800), (1680, 2240), (1200, 1600)],
+            ),
+            (
+                "gr4",
+                8,
+                [(2464, 3296), (2160, 2896), (1744, 2336), (1232, 1648)],
+            ),
+        ] {
+            assert_eq!(at(name, value), sizes, "{name} {value}");
+        }
+        for family in &FAMILIES {
+            for (value, ratio) in RATIOS.iter().enumerate() {
+                for crop in 1..CROPS {
+                    let step = crop_step(family, crop);
+                    let window = crop_size(family, 0, crop, 0);
+                    for class in 0..CLASSES {
+                        let (w, h) = crop_size(family, value, crop, class);
+                        // A class below the step keeps its size.
+                        if class > step {
+                            assert_eq!((w, h), size(family, value, ratio.geometry, class));
+                            continue;
+                        }
+                        // The photo is inside the window of the crop, and
+                        // the JPEG codec takes its sides.
+                        assert!(w <= window.0 && h <= window.1, "{value} {crop} {w}x{h}");
+                        assert!(w % 16 == 0 && h % 16 == 0, "{value} {crop} {w}x{h}");
+                    }
+                }
+            }
+        }
+    }
+
+    /// Playback finds the ratio of each crop: a crop of a ratio with its own
+    /// shape has the file of the shape, within CROP_SLACK. A crop of another
+    /// ratio has file 1 and no size class.
+    #[test]
+    fn playback_finds_the_ratio_of_each_crop() {
+        for family in &FAMILIES {
+            for (value, ratio) in RATIOS.iter().enumerate() {
+                let file = file_of(value);
+                for crop in 0..CROPS {
+                    for class in 0..CLASSES {
+                        let (w, h) = crop_size(family, value, crop, class);
+                        let (found, class) = file_of_size(family, w, h);
+                        assert_eq!(found, file, "{} {value} {crop} {w}x{h}", family.name);
+                        if ratio.geometry.framed() {
+                            let (p, q) = ratio.aspect;
+                            assert!((w * q).abs_diff(h * p) <= CROP_SLACK * (p + q));
+                        } else {
+                            assert_eq!(class, None);
+                        }
+                    }
+                }
+            }
+            // Other sizes of the camera: VGA, and 3:2 sizes of the size
+            // classifier of the camera.
+            for (w, h) in [(640, 480), (5760, 3840), (4224, 2816), (3840, 2560)] {
+                assert_eq!(file_of_size(family, w, h), (1, None));
+            }
         }
     }
 

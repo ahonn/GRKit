@@ -464,7 +464,7 @@ static void frame_preview(volatile u32 *h,u32 controller,u32 movie) {
     if(!movie && (handle-1U==GRKIT_CORE_CROP || h[GRKIT_HOST_MODULE_PREVIEW/4]-1U==GRKIT_CORE_CROP) &&
        (handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1] ||
         frame!=h[GRKIT_HOST_FRAME_PREVIEW/4]))
-        crop_sync(h,aspect_native());
+        crop_sync(h);
 #endif
 }
 

@@ -452,7 +452,7 @@
 #define GRKIT_HOST_ADJ_IC_TYPE 1044
 /* CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h). */
 #define GRKIT_HOST_CROP 1048
-/* CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the frame only. */
+/* CORE.CROP_MODE: 0 crops photos, 1 draws the frame only. */
 #define GRKIT_HOST_CROP_MODE 1052
 /* The native crop factor that the core set for CORE.CROP, as float bits, or 0
    while the camera keeps its own (runtime/crop.h). */

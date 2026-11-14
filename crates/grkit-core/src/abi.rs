@@ -452,8 +452,7 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_ADJ_IC_TYPE: 4;
     /// CORE.CROP: 0 Off, then a focal-length crop step (runtime/crop.h).
     HOST_CROP: 4;
-    /// CORE.CROP_MODE: 0 crops photos where the camera can, 1 draws the
-    /// frame only.
+    /// CORE.CROP_MODE: 0 crops photos, 1 draws the frame only.
     HOST_CROP_MODE: 4;
     /// The native crop factor that the core set for CORE.CROP, as float
     /// bits, or 0 while the camera keeps its own (runtime/crop.h).

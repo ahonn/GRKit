@@ -258,7 +258,7 @@ static GRKIT_ICON_COMPACT u32 status_shown(volatile u32 *h) {
 static GRKIT_ICON_COMPACT u32 crop_badge_shown(volatile u32 *h) {
     u32 owner=h[GRKIT_HOST_FRAME_OWNER/4];
     if(!owner || BYTE(owner,LIVEVIEW_MOVIE) || native_display()!=DISPLAY_FULL) return GRKIT_LABEL_COUNT;
-    return crop_badge_label(h,FRAMING_NATIVE_ASPECT());
+    return crop_badge_label(h);
 }
 /* Whether the live view has something to draw: layers, status, the crop
    badge, or the cue. */

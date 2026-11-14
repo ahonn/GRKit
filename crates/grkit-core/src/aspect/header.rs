@@ -4,8 +4,8 @@
 use std::fmt::Write;
 
 use super::geometry::{
-    area_inset, area_of_value, areas, classified, file_of, files, mode_of, modes, photo_box, size,
-    Preview, Shape, CLASSES, FAMILIES,
+    area_inset, area_of_value, areas, classified, file_of, file_ratios, files, mode_of, modes,
+    photo_box, size, Preview, Shape, CLASSES, CROP_SHORTEST, CROP_SLACK, FAMILIES, NATIVE_CROPS,
 };
 use super::ratios::{label_index, rows, Geometry, RATIOS};
 use crate::abi::comment;
@@ -90,6 +90,25 @@ pub fn header() -> String {
             list(family.heights_4x3)
         )
         .unwrap();
+        out.push_str("/* The 3:2 height of each size class. */\n");
+        writeln!(
+            out,
+            "#define FRAMING_NATIVE_HEIGHTS {}",
+            list(family.heights_3x2)
+        )
+        .unwrap();
+        out.push_str(
+            "/* CORE.CROP (runtime/crop.h): the crop factor of each value as float bits,\n   \
+             and the camera's own factors of 35 and 50 mm. */\n",
+        );
+        let factors = family.crops.iter().map(|bits| format!("{bits:#010x}"));
+        writeln!(out, "#define CROP_FACTORS {}", list(factors)).unwrap();
+        for (name, crop) in ["CROP_NATIVE_35", "CROP_NATIVE_50"]
+            .iter()
+            .zip(NATIVE_CROPS)
+        {
+            writeln!(out, "#define {name} {:#010x}", family.crops[crop]).unwrap();
+        }
         out.push_str(
             "/* The sizes {long side, short side} of each file from 2, L to XS, which\n   \
              the playback classifier compares. */\n",
@@ -183,6 +202,19 @@ fn file_tables(out: &mut String) {
     writeln!(out, "#define FRAMING_FILE_CAPTURES {captures}").unwrap();
     let file_areas = file_list(&|shape| area_of_value(shape.value) as u32);
     writeln!(out, "#define FRAMING_FILE_AREAS {file_areas}").unwrap();
+    comment(
+        out,
+        "The ratio {p, q} of each file that a crop of a ratio has (runtime/crop.h), \
+         or {0, 0}: a crop has the ratio within FRAMING_CROP_SLACK (p + q), and \
+         a short side of at least FRAMING_CROP_SHORTEST.",
+    );
+    let ratios: Vec<String> = file_ratios()
+        .iter()
+        .map(|(p, q)| format!("{{{p},{q}}}"))
+        .collect();
+    writeln!(out, "#define FRAMING_FILE_RATIOS {}", ratios.join(",")).unwrap();
+    writeln!(out, "#define FRAMING_CROP_SLACK {CROP_SLACK}").unwrap();
+    writeln!(out, "#define FRAMING_CROP_SHORTEST {CROP_SHORTEST}").unwrap();
 
     let indexes = files.len().max(RATIOS.len());
     for (wide, kind) in [(true, "WIDE"), (false, "NARROW")] {
@@ -224,6 +256,14 @@ fn file_tables(out: &mut String) {
             _ => 0,
         });
         writeln!(out, "#define FRAMING_{kind}_BY_CROP {}", list(by_crop)).unwrap();
+        out.push_str(
+            "/* Whether each mode has sizes that no native aspect has (runtime/crop.h:\n   \
+             crop_resolution_size). */\n",
+        );
+        let framed = modes
+            .iter()
+            .map(|&(_, geometry)| u32::from(geometry.framed()));
+        writeln!(out, "#define FRAMING_{kind}_FRAMED {}", list(framed)).unwrap();
         let insets = |preview: Preview| {
             list(modes.iter().map(|&(value, geometry)| {
                 let area = match geometry {

@@ -208,11 +208,11 @@ framing_narrow_thumbnail_modes:
 TABLE_END framing_narrow_thumbnail_modes, FRAMING_NARROW_MODES, 2
 #endif
 /* Replaces the aspect BL in the size classifier (GR III 0x532b3988: frame
-   {r4-r7,fp,ip,lr,pc}, r7 = width, r4 = height, r6 = class pointer). A
-   Framing size (framing_size_file, runtime/framing.c) records its geometry
-   in GRKIT_HOST_FRAME_FILE, then returns its size class and success from
-   the classifier. Other sizes record 1 and continue with the native aspect
-   function. */
+   {r4-r7,fp,ip,lr,pc}, r7 = width, r4 = height, r6 = class pointer). Each
+   size records its geometry (framing_size_file, runtime/framing.c) in
+   GRKIT_HOST_FRAME_FILE. A Framing size then returns its size class and
+   success from the classifier. A crop of a ratio, which has no size class,
+   and another size continue with the native aspect function. */
 .global framing_classify
 framing_classify:
     push {r0-r4,lr}
@@ -220,22 +220,20 @@ framing_classify:
     mov r12, r0
     pop {r0-r4,lr}
     ldr r2, =GRKIT_HEADER_REFERENCE
-    cmp r12, #0
-    beq 5f
     strb r12, [r2, #GRKIT_HOST_FRAME_FILE]
-    lsr r12, r12, #8
+    lsrs r12, r12, #8
+    beq 5f
+    sub r12, r12, #1
     cmp CLASSIFY_CLASS, #0
     strbne r12, [CLASSIFY_CLASS]
     mov r0, #1
     CLASSIFY_RETURN
-5:  mov r3, #1
-    strb r3, [r2, #GRKIT_HOST_FRAME_FILE]
-    mov r0, CLASSIFY_WIDTH
+5:  mov r0, CLASSIFY_WIDTH
     mov r1, r4
     ldr pc, =HOOK_FRAMING_CLASSIFY_TARGET
 /* Replaces the tail branch of the image aspect getter (GR III 0x532b3ca0,
-   r0 = width, r1 = height): a Framing size reports the capture aspect id of
-   its geometry (framing_size_capture). */
+   r0 = width, r1 = height): a Framing size and a crop of a ratio report
+   the capture aspect id of their geometry (framing_size_capture). */
 .global framing_image_aspect
 framing_image_aspect:
     push {r0-r3,r12,lr}
@@ -359,63 +357,39 @@ framing_histogram:
 /* GetResolution(translator r0, size r1, aspect r2, u16 *width r3,
    u16 *height at [sp]) with the crop factor in s0. Replaces `mov r12, sp`
    after its first instruction. The camera knows only its native factors.
-   For another factor of CORE.CROP (runtime/crop.h), the sizes up to its
-   crop step in 3:2 are the sensor size of 3:2 L divided by the factor,
-   rounded to a multiple of CROP_ALIGN: the window and the photo of the crop, one
-   pixel each, as a native crop gives its own size for L. A smaller size or
-   another aspect gets the native size of the factor of its step. */
+   A crop of CORE.CROP (runtime/crop.h) takes the size of
+   crop_resolution_size (runtime/framing.c), in each aspect and Framing
+   geometry, else the size of the camera at the factor of its crop step.
+   The C code uses no VFP register, so s0 stays. */
 .global crop_resolution
 .type crop_resolution, %function
 crop_resolution:
-    push {r4-r6}
-    vmov r4, s0
-    ldr r5, =0x3f800000
-    cmp r4, r5
-    ldrne r5, =CROP_NATIVE_35
-    cmpne r4, r5
-    ldrne r5, =CROP_NATIVE_50
-    cmpne r4, r5
+    vmov r12, s0
+    cmp r12, #0x3f800000
     beq 2f
-    cmp r2, #0
-    bne 1f
-    /* The crop step: 2 from the factor of 50 mm, else 1. */
-    ldr r5, =CROP_NATIVE_50
-    vmov s1, r5
-    vcmp.f32 s0, s1
-    vmrs APSR_nzcv, fpscr
-    movge r5, #2
-    movlt r5, #1
-    cmp r1, r5
-    bhi 1f
-    ldr r5, =CROP_WIDTH
-    vmov s1, r5
-    vcvt.f32.u32 s1, s1
-    vdiv.f32 s1, s1, s0
-    vcvt.u32.f32 s1, s1
-    vmov r5, s1
-    add r5, r5, #(CROP_ALIGN / 2)
-    bic r5, r5, #(CROP_ALIGN - 1)
-    strh r5, [r3]
-    ldr r5, =CROP_HEIGHT
-    vmov s1, r5
-    vcvt.f32.u32 s1, s1
-    vdiv.f32 s1, s1, s0
-    vcvt.u32.f32 s1, s1
-    vmov r5, s1
-    add r5, r5, #(CROP_ALIGN / 2)
-    bic r5, r5, #(CROP_ALIGN - 1)
-    ldr r6, [sp, #12]
-    strh r5, [r6]
-    pop {r4-r6}
+    push {r0-r4,lr}
+    mov r0, r1
+    mov r1, r2
+    mov r2, r12
+    bl crop_resolution_size
+    cmp r0, #0
+    beq 1f
+    ldr r1, [sp, #12]
+    strh r0, [r1]
+    lsr r0, r0, #16
+    ldr r1, [sp, #24]
+    strh r0, [r1]
+    pop {r0-r4,lr}
     bx lr
-1:  ldr r5, =CROP_NATIVE_50
-    vmov s1, r5
-    vcmp.f32 s0, s1
-    vmrs APSR_nzcv, fpscr
-    ldrlt r5, =CROP_NATIVE_35
-    vmov s0, r5
-2:  pop {r4-r6}
-    mov r12, sp
+    /* The factor of the crop step: that of 50 mm from it, else that of 35
+       mm. Positive floats compare as their bits. */
+1:  vmov r12, s0
+    ldr r4, =CROP_NATIVE_50
+    cmp r12, r4
+    ldrlo r4, =CROP_NATIVE_35
+    vmov s0, r4
+    pop {r0-r4,lr}
+2:  mov r12, sp
     ldr pc, =HOOK_CROP_RESOLUTION_RESUME
 .ltorg
 #endif

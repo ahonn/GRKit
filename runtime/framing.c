@@ -70,22 +70,78 @@ static __attribute__((unused)) u32 framing_capture_id(volatile u32 *h) {
     static const u8 ids[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_CAPTURES};
     return ids[framing_crop(h)];
 }
-/* The Framing geometry of a photo size, in either orientation: its
-   GRKIT_HOST_FRAME_FILE | its size class << 8, or 0 for another size. The
-   playback classifier (runtime/framing.S), the RAW development, and the
-   resize take the geometry of a photo from it. */
+/* The geometry of a photo size: its GRKIT_HOST_FRAME_FILE | its size class
+   + 1 << 8 (grkit_core::aspect::geometry::file_of_size). A Framing size, in
+   either orientation, has its file and size class. A crop of a ratio with
+   its own geometry (runtime/crop.h) has the file of the ratio and no size
+   class: a size with the ratio p : q of the file within the rounding of each
+   side (FRAMING_CROP_SLACK), and only 3:4 taller than wide. Another size
+   has file 1. The playback classifier (runtime/framing.S), the RAW
+   development, and the resize take the geometry of a photo from it. */
 u32 framing_size_file(u32 width,u32 height) {
     static const u16 sizes[]={FRAMING_SIZES};
-    u32 longer=width<height ? height : width, shorter=width<height ? width : height, i;
+    static const u8 ratios[FRAMING_FILES][2]={FRAMING_FILE_RATIOS};
+    u32 longer=width<height ? height : width, shorter=width<height ? width : height, i, p, q, a, b;
     _Static_assert(sizeof(sizes)==(FRAMING_FILES-2)*4*2*sizeof(sizes[0]),"four size classes for each file");
     for(i=0;i<sizeof(sizes)/sizeof(sizes[0])/2;++i)
-        if(sizes[2*i]==longer && sizes[2*i+1]==shorter) return (i/4+2)|(i&3U)<<8;
-    return 0;
+        if(sizes[2*i]==longer && sizes[2*i+1]==shorter) return (i/4+2)|((i&3U)+1U)<<8;
+    if(shorter<FRAMING_CROP_SHORTEST) return 1;
+    for(i=2;i<FRAMING_FILES;++i) {
+        p=ratios[i][0]; q=ratios[i][1];
+        if(!p || (width<height)!=(p<q)) continue;
+        a=width*q; b=height*p;
+        if((a>b ? a-b : b-a)<=FRAMING_CROP_SLACK*(p+q)) return i;
+    }
+    return 1;
 }
-/* The capture aspect id of a Framing photo size, or 0 for another size. */
+/* The capture aspect id of a Framing photo size or of a crop of a ratio, or
+   0 for another size. */
 u32 framing_size_capture(u32 width,u32 height) {
     static const u8 captures[FRAMING_FILES]={FRAMING_FILE_CAPTURES};
     return captures[framing_size_file(width,height)&0xffU];
+}
+/* The geometry mode of GetResolution of capture aspect id 2 (`wide`) or 1,
+   as runtime/framing.S: wide_mode and narrow_mode. */
+static u32 framing_mode(volatile u32 *h,u32 wide) {
+    static const u8 modes[2][2][FRAMING_MODE_INDEXES]={{{FRAMING_NARROW_BY_CROP},{FRAMING_NARROW_BY_FILE}},
+                                                       {{FRAMING_WIDE_BY_CROP},{FRAMING_WIDE_BY_FILE}}};
+    u32 file=((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE], index=file ? file : h[GRKIT_HOST_FRAME_CROP/4];
+    return index<FRAMING_MODE_INDEXES ? modes[wide][file!=0][index] : 0;
+}
+/* GetResolution of a crop (runtime/framing.S: crop_resolution): the size
+   {width | height << 16} of size class `size` of capture aspect id `aspect`
+   (3 is 1:1) at the crop factor `bits`, which is not 1, or 0 for the size
+   of the camera at the factor of the crop step. Up to its crop step, a crop
+   is the L size of the aspect and its geometry divided by the factor, each
+   side to a multiple of 16 (crop_side): the window and the photo, one pixel
+   each, as a crop of the camera gives its own size for L. A smaller size
+   class takes the size of the camera. A crop of the camera's own factor in
+   a geometry that the camera has keeps the camera's sizes. The sizes of
+   each ratio are those of grkit_core::aspect::geometry::crop_size. */
+u32 crop_resolution_size(u32 size,u32 aspect,u32 bits) {
+    static const u16 widths[]={FRAMING_STOCK_WIDTHS}, heights[]={FRAMING_STOCK_HEIGHTS}, native[]={FRAMING_NATIVE_HEIGHTS};
+    static const u16 wide_heights[]={FRAMING_WIDE_HEIGHT_0}, narrow_widths[]={FRAMING_NARROW_WIDTH_0};
+    static const u8 wide_framed[]={FRAMING_WIDE_FRAMED}, narrow_framed[]={FRAMING_NARROW_FRAMED};
+    volatile u32 *h=framing_header();
+    u32 width=widths[0], height=native[0], framed=0, mode;
+    /* A factor below 1, such as 0.0 that an early build saved, or not a
+       number, is no crop: the division below would not end. */
+    if(bits<0x3f800000U || bits>=0x7f800000U || size>crop_step(bits) || aspect>3) return 0;
+    if(aspect==2) {
+        mode=framing_mode(h,1);
+        height=wide_heights[mode];
+        framed=wide_framed[mode];
+    } else if(aspect==1) {
+        mode=framing_mode(h,0);
+        width=narrow_widths[mode];
+        height=heights[0];
+        framed=narrow_framed[mode];
+    } else if(aspect==3) {
+        /* The native 1:1 side of L is the 4:3 height. */
+        width=height=heights[0];
+    }
+    if(!framed && (bits==CROP_NATIVE_35 || bits==CROP_NATIVE_50)) return 0;
+    return crop_side(width,bits)|crop_side(height,bits)<<16;
 }
 #ifdef FRAMING_CAPTURE_ASPECT
 /* The still aspect property handler calls this for each requested value. The
@@ -135,11 +191,9 @@ static u32 develop_size(void) {
     u32 data=FRAMING_PLAYBACK_METADATA();
     return HALF(data,METADATA_SIZE)|HALF(data,METADATA_SIZE+4)<<16;
 }
-/* GRKIT_HOST_FRAME_FILE for a photo size: its Framing geometry, else 1. */
-static u32 develop_file(u32 size) {
-    u32 file=framing_size_file(size&0xffffU,size>>16)&0xffU;
-    return file ? file : 1;
-}
+/* GRKIT_HOST_FRAME_FILE for a photo size: its Framing geometry, also that
+   of a crop of a ratio, else 1. */
+static u32 develop_file(u32 size) { return framing_size_file(size&0xffffU,size>>16)&0xffU; }
 /* The initial development aspect for the recorded capture aspect, or -1 for
    the native choice. A Framing size develops the recorded aspect (0) with
    the geometry of the size. A Framing 1:1 records the 4:3 id with a native
@@ -184,7 +238,10 @@ u32 framing_develop_capture(u32 capture) {
    1:1 sizes are stock sizes: no file has the 1:1 mode. The getter gives the
    longer side first, so a 3:4 photo arrives as {height, width} and takes
    the 4:3 size with that height. Its resize target stays 3:4, because the
-   resize takes the target from the GetResolution hooks. */
+   resize takes the target from the GetResolution hooks. A crop of a ratio
+   (runtime/crop.h), 3:4 also as {height, width}, takes the stock size of
+   the smallest size class of its geometry that holds it, so the camera
+   offers only smaller sizes. */
 static const u16 resize_wide[4][FRAMING_WIDE_MODES]={{FRAMING_WIDE_HEIGHT_0},{FRAMING_WIDE_HEIGHT_1},
                                                      {FRAMING_WIDE_HEIGHT_2},{FRAMING_WIDE_HEIGHT_3}};
 static const u16 resize_narrow[4][FRAMING_NARROW_MODES]={{FRAMING_NARROW_WIDTH_0},{FRAMING_NARROW_WIDTH_1},
@@ -193,12 +250,27 @@ static const u16 resize_widths[4]={FRAMING_STOCK_WIDTHS}, resize_heights[4]={FRA
 static const u8 resize_wide_modes[FRAMING_MODE_INDEXES]={FRAMING_WIDE_BY_FILE};
 static const u8 resize_narrow_modes[FRAMING_MODE_INDEXES]={FRAMING_NARROW_BY_FILE};
 void framing_resize_stock(u32 size) {
-    u32 width=WORD(size,0), height=WORD(size,4), i, file, wide, narrow;
+    u32 width=WORD(size,0), height=WORD(size,4), i, file, wide, narrow, side=height, turned;
     for(i=0;i<4;++i) for(file=2;file<FRAMING_FILES;++file) {
         wide=resize_wide_modes[file]; narrow=resize_narrow_modes[file];
         if(wide && width==resize_widths[i] && height==resize_wide[i][wide]) { WORD(size,4)=resize_wide[i][0]; return; }
         if(narrow && height==resize_heights[i] && width==resize_narrow[i][narrow]) { WORD(size,0)=resize_narrow[i][0]; return; }
         if(narrow && width==resize_heights[i] && height==resize_narrow[i][narrow]) { WORD(size,0)=resize_narrow[i][0]; WORD(size,4)=resize_heights[i]; return; }
+    }
+    file=framing_size_file(width,height);
+    /* A 3:4 crop as {height, width}, which the playback classifier saw as
+       3:4 (GRKIT_HOST_FRAME_FILE): a 4:3 size also has the ratio of 3:4
+       turned. */
+    turned=framing_size_file(height,width);
+    if(file==1 && width>height && turned>1 && turned==((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE]) {
+        file=turned;
+        side=width;
+    }
+    if(file>>8) return;
+    file&=0xffU; wide=resize_wide_modes[file]; narrow=resize_narrow_modes[file];
+    for(i=4;i--;) {
+        if(wide && resize_widths[i]>=width) { WORD(size,0)=resize_widths[i]; WORD(size,4)=resize_wide[i][0]; return; }
+        if(narrow && resize_heights[i]>=side) { WORD(size,0)=resize_narrow[i][0]; WORD(size,4)=resize_heights[i]; return; }
     }
 }
 /* The store of a resize target size {width, height}. */
@@ -241,7 +313,7 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
     capture_sync(controller);
     /* The camera's crop factor follows CORE.CROP in the still live view. */
 #ifdef CROP_NATIVE_BITS
-    if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h,FRAMING_NATIVE_ASPECT());
+    if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h);
 #if CROP_LIVE_FACTOR
     if(crop_live_due(h,BYTE(controller,LIVEVIEW_MOVIE)!=0)) crop_live_try(h,FRAMING_SECOND());
 #endif
@@ -276,5 +348,5 @@ void framing_paint_after(u32 canvas,u32 bitmap) { paint_after(framing_header(),c
 /* The live-view crop badge of the camera (runtime/framing.S: crop_badge):
    0 hides it where the core draws its own (runtime/crop.h). */
 u32 crop_badge_native(void) {
-    return crop_badge_label(framing_header(),FRAMING_NATIVE_ASPECT())>=GRKIT_LABEL_COUNT;
+    return crop_badge_label(framing_header())>=GRKIT_LABEL_COUNT;
 }
