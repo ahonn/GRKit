@@ -81,22 +81,45 @@ static u32 choice_hidden(volatile u32 *h) {
     listed=page_listed(h,h[GRKIT_HOST_MODULE_CHOICE/4]);
     return listed<MANAGE_MODULES ? manage_hidden_values(h,listed)&~1U : 0;
 }
-/* The rows of a choice page are the values that the camera offers, in the
-   order of the setting (runtime/settings.h: setting_rows), without the
-   values that are off in ADJ. */
-static u32 choice_rows(volatile u32 *h) {
-    u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), row, rows=0, value;
-    for(row=0;row<n;++row) {
-        value=setting_row_value(h,handle,row);
-        rows+=value>=32 || !(hidden>>value&1);
+/* The values that the open page names. A page of CORE.ASPECT of a module
+   before ABI 2.7 has rows only for the ratios of its time, and a later
+   ratio, such as 3:4, has no text and shows no row
+   (runtime/install_modules.h). Every other page names each value. */
+static u32 choice_named(volatile u32 *h) {
+    return CHOICE_ENTRY(h)[1]==GRKIT_CORE_ASPECT ? PAGE_WORD(CHOICE_ENTRY(h)[0],PAGE_ROWS) : 0xffffffffU;
+}
+/* Whether a value of the setting of the open page shows a row. */
+static u32 choice_shows(volatile u32 *h,u32 value,u32 hidden) {
+    return value<choice_named(h) && (value>=32 || !(hidden>>value&1));
+}
+/* The values of the setting that the open page names, in the order of the
+   setting (runtime/settings.h: setting_rows), and the value of each. */
+static u32 choice_setting_rows(volatile u32 *h) {
+    u32 handle=CHOICE_ENTRY(h)[1], n=setting_rows(h,handle), row, rows=0;
+    for(row=0;row<n;++row) rows+=setting_row_value(h,handle,row)<choice_named(h);
+    return rows;
+}
+static u32 choice_setting_row_value(volatile u32 *h,u32 row) {
+    u32 handle=CHOICE_ENTRY(h)[1], n=setting_rows(h,handle), base, value;
+    for(base=0;base<n;++base) {
+        value=setting_row_value(h,handle,base);
+        if(value<choice_named(h) && !row--) return value;
     }
+    return 0;
+}
+/* The rows of a choice page are the values that the camera offers and the
+   page names, in the order of the setting, without the values that are off
+   in ADJ. */
+static u32 choice_rows(volatile u32 *h) {
+    u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), row, rows=0;
+    for(row=0;row<n;++row) rows+=choice_shows(h,setting_row_value(h,handle,row),hidden);
     return rows;
 }
 static u32 choice_row_value(volatile u32 *h,u32 row) {
     u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), base, value;
     for(base=0;base<n;++base) {
         value=setting_row_value(h,handle,base);
-        if(value<32 && hidden>>value&1) continue;
+        if(!choice_shows(h,value,hidden)) continue;
         if(!row--) return value;
     }
     return 0;
@@ -104,11 +127,11 @@ static u32 choice_row_value(volatile u32 *h,u32 row) {
 /* The row of a value, or row 0 for a value that does not show. */
 static u32 choice_value_row(volatile u32 *h,u32 value) {
     u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), base, row=0, v;
-    if(value<32 && hidden>>value&1) return 0;
+    if(!choice_shows(h,value,hidden)) return 0;
     for(base=0;base<n;++base) {
         v=setting_row_value(h,handle,base);
         if(v==value) return row;
-        row+=v>=32 || !(hidden>>v&1);
+        row+=choice_shows(h,v,hidden);
     }
     return 0;
 }

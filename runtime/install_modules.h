@@ -56,7 +56,10 @@ static int module_icon_valid(u32 i, const u32 *uses, u32 base, u32 address, u32 
     if (kind == GRM_ICON_TONE) return handle == GRKIT_CORE_TONE;
     if (named == GRM_NO_SETTING || handle == GRM_NO_SETTING) return 1;
     u32 values = handle == GRKIT_CORE_TONE ? count + 1 : handle_values(handle);
-    /* A label needs one core label for each value of its setting. */
+    /* A label needs one core label for each value of its setting. The core
+       gives the label of each value of CORE.ASPECT from label 0
+       (framing_label). */
+    if (kind == GRM_ICON_LABEL && handle == GRKIT_CORE_ASPECT && !first) return values != 0;
     if (kind == GRM_ICON_LABEL) return values && first < GRKIT_MODULE_LABEL_COUNT && values <= GRKIT_MODULE_LABEL_COUNT - first;
     return values && first < tile_count && values <= tile_count - first;
 }
@@ -271,15 +274,19 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         }
         /* The handles of the pages and the layers. A page or a layer of an
            optional used setting that no module has is not registered. A
-           page needs a row for each value of a used setting. */
+           page needs a row for each value of a used setting. A page of
+           CORE.ASPECT of a module before ABI 2.7 has fewer: the later ratios
+           have no row (runtime/modules.h: choice_named). */
         for (u32 k = 0; !status && k < page_count; ++k) {
             pages[k].setting = module_handle(i, use_handles, pages[k].setting);
             /* The core gives the rows of a page of CORE.TONE or CORE.RECIPE. */
             u32 core_rows = pages[k].flags & GRM_CHOICE_CORE_ROWS;
             u32 core_page = pages[k].setting == GRKIT_CORE_TONE || pages[k].setting == GRKIT_CORE_RECIPE;
             /* The rows do not fit the setting: the page is not valid. */
+            u32 setting_values = pages[k].setting == GRM_NO_SETTING ? 0 : handle_values(pages[k].setting);
+            u32 fewer = pages[k].setting == GRKIT_CORE_ASPECT && pages[k].rows && pages[k].rows < setting_values;
             if (pages[k].setting != GRM_NO_SETTING &&
-                (core_rows ? !core_page : handle_values(pages[k].setting) != pages[k].rows))
+                (core_rows ? !core_page : setting_values != pages[k].rows && !fewer))
                 status = GRM_BAD_DESCRIPTOR;
             /* A settings row of a used setting needs a value text for each
                value of that setting. */

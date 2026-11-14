@@ -157,7 +157,8 @@ fn framing_or_border_without_film_look_still_records_shot_parameters() {
 }
 
 /// The definitions of a target header and of the headers that it includes from
-/// `runtime/targets/`, by name. `own` keeps only those of the target header.
+/// `runtime/targets/` or `runtime/` (the generated framing_ratios.h), by
+/// name. `own` keeps only those of the target header.
 fn header_definitions(path: &str, own: bool) -> BTreeMap<String, String> {
     let source = runtime_source(path).unwrap_or_else(|| panic!("No runtime/{path}"));
     let text = std::str::from_utf8(source).unwrap().replace("\\\n", " ");
@@ -166,7 +167,11 @@ fn header_definitions(path: &str, own: bool) -> BTreeMap<String, String> {
         if let Some(include) = line.strip_prefix("#include \"") {
             if !own {
                 let include = include.trim_end_matches('"');
-                definitions.extend(header_definitions(&format!("targets/{include}"), false));
+                let path = match include.strip_prefix("../") {
+                    Some(include) => include.to_owned(),
+                    None => format!("targets/{include}"),
+                };
+                definitions.extend(header_definitions(&path, false));
             }
         } else if let Some(definition) = line.strip_prefix("#define ") {
             let (name, value) = definition.split_once(' ').unwrap_or((definition, ""));
@@ -1639,6 +1644,163 @@ fn user_mode_slots_match_each_firmware() -> Result<()> {
                 assert!(flags.contains(&(flag + u)), "{name}: flag {u}");
             }
         }
+    }
+    Ok(())
+}
+
+/// The stock sizes of each camera family (grkit_core::aspect::geometry::
+/// FAMILIES, which the generated runtime/framing_ratios.h holds) are those
+/// of GetResolution in the firmware of each build: the immediates that the
+/// Framing hooks replace, and the {width, height} pairs of the function.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn framing_family_sizes_are_those_of_each_firmware() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let word = |address: u32| -> u32 {
+            u32::from_le_bytes(image.read(address, 4).unwrap().try_into().unwrap())
+        };
+        // The register and the value of `mov rd, #imm` or `movw rd, #imm`.
+        let mov = |address: u32| -> Option<(u32, u32)> {
+            let w = word(address);
+            if w >> 28 != 0xe {
+                return None;
+            }
+            if w & 0x0fef_0000 == 0x03a0_0000 {
+                Some(((w >> 12) & 0xf, arm::modified_immediate(w)))
+            } else if w & 0x0ff0_0000 == 0x0300_0000 {
+                Some(((w >> 12) & 0xf, arm::move_immediate(w)))
+            } else {
+                None
+            }
+        };
+        let site = |symbol: &str| {
+            target
+                .layout
+                .sites
+                .iter()
+                .find(|site| site.0 == symbol)
+                .unwrap_or_else(|| panic!("{} has no {symbol}", target.name))
+                .1
+        };
+        let family = grkit_core::aspect::geometry::family(target.family.name);
+        let name = target.name;
+        let at = |address: u32, rd: u32, value: u32, what: &str| {
+            assert_eq!(
+                mov(address),
+                Some((rd, value)),
+                "{name}: {what} at {address:#x}"
+            );
+        };
+        // The immediates that the Framing hooks replace, and the other side
+        // of each size next to them: id 2 sets the width, then the height;
+        // id 1 the width, then the height.
+        for class in 0..grkit_core::aspect::geometry::CLASSES {
+            let height = site(&format!("framing_height_{class}"));
+            at(height, 3, family.heights_16x9[class], "16:9 height");
+            at(height - 4, 2, family.widths[class], "16:9 width");
+            let width = site(&format!("framing_width_{class}"));
+            at(width, 2, family.widths_4x3[class], "4:3 width");
+            let height = if class + 1 == grkit_core::aspect::geometry::CLASSES {
+                site("framing_narrow_height_3")
+            } else {
+                width + 4
+            };
+            at(height, 3, family.heights_4x3[class], "4:3 height");
+        }
+        use grkit_core::aspect::geometry::Preview;
+        let (screennail, thumbnail) = (Preview::Screennail.native(), Preview::Thumbnail.native());
+        at(
+            site("framing_screennail_inset"),
+            1,
+            screennail[2].1,
+            "16:9 screennail inset",
+        );
+        at(
+            site("framing_thumbnail_inset"),
+            1,
+            thumbnail[2].1,
+            "16:9 thumbnail inset",
+        );
+        at(
+            site("framing_narrow_screennail"),
+            0,
+            screennail[1].0,
+            "4:3 screennail inset",
+        );
+        // GetResolution also sets the 3:2 and the native 1:1 sizes: each
+        // pair {width, height} of 3:2, and each side of 1:1.
+        let sites = [
+            "framing_width_0",
+            "framing_height_3",
+            "framing_width_3",
+            "framing_height_0",
+        ];
+        let first = sites.iter().map(|symbol| site(symbol)).min().unwrap() - 0x600;
+        let last = sites.iter().map(|symbol| site(symbol)).max().unwrap() + 0x100;
+        let moves: Vec<(u32, (u32, u32))> = (first..last)
+            .step_by(4)
+            .filter_map(|address| mov(address).map(|found| (address, found)))
+            .collect();
+        for class in 0..grkit_core::aspect::geometry::CLASSES {
+            let pair = moves.windows(2).any(|pair| {
+                pair[1].0 == pair[0].0 + 4
+                    && pair[0].1 == (2, family.widths[class])
+                    && pair[1].1 == (3, family.heights_3x2[class])
+            });
+            assert!(pair, "{name}: no 3:2 size of class {class}");
+            assert!(
+                moves
+                    .iter()
+                    .any(|&(_, found)| found == (3, family.sides_1x1[class])),
+                "{name}: no 1:1 side of class {class}"
+            );
+        }
+        // The family header selects its family in the generated sizes, and
+        // they agree.
+        let family_name = format!("FRAMING_FAMILY_{}", target.family.name.to_uppercase());
+        assert!(header_definitions(&target.header(), false).contains_key(&family_name));
+        let generated = std::str::from_utf8(runtime_source("framing_ratios.h").unwrap()).unwrap();
+        let section: Vec<&str> = generated
+            .lines()
+            .skip_while(|line| !line.ends_with(&format!("defined({family_name})")))
+            .skip(1)
+            .take_while(|line| !line.starts_with("#elif") && !line.starts_with("#else"))
+            .collect();
+        let numbers = |name: &str| -> Vec<u32> {
+            section
+                .iter()
+                .find_map(|line| line.strip_prefix(&format!("#define {name} ")))
+                .unwrap_or_else(|| panic!("{family_name} has no {name}"))
+                .split(',')
+                .map(|value| value.trim().parse().unwrap())
+                .collect()
+        };
+        assert_eq!(numbers("FRAMING_STOCK_WIDTHS"), family.widths, "{name}");
+        assert_eq!(
+            numbers("FRAMING_STOCK_HEIGHTS"),
+            family.heights_4x3,
+            "{name}"
+        );
+        for class in 0..grkit_core::aspect::geometry::CLASSES {
+            assert_eq!(
+                numbers(&format!("FRAMING_WIDE_HEIGHT_{class}"))[0],
+                family.heights_16x9[class]
+            );
+            assert_eq!(
+                numbers(&format!("FRAMING_NARROW_WIDTH_{class}"))[0],
+                family.widths_4x3[class]
+            );
+        }
+        assert_eq!(numbers("FRAMING_NARROW_HEIGHT_3")[0], family.heights_4x3[3]);
     }
     Ok(())
 }

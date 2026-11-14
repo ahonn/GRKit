@@ -136,7 +136,7 @@ static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h,u32 native_a
     if(badge==0xff) return GRKIT_LABEL_COUNT;
     return LABEL_CROP+badge+(CROP_LENS_40MM() ? 2U : 0U);
 }
-_Static_assert(LABEL_CROP+4U==GRKIT_LABEL_COUNT,"The crop badges end the labels");
+_Static_assert(LABEL_CROP+4U<=GRKIT_LABEL_COUNT,"The crop badges follow the labels that a module names");
 
 /* The camera's own crop factor: its float bits, and its setter as the
    native menu calls it (runtime/framing.S, runtime/menu.S). */

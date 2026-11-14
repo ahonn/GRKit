@@ -35,10 +35,11 @@
 
 /* Values that each family header gives the shared code. FRAMING_RATIO_ROWS:
    Off, then the Framing ratio value (GRKIT_HOST_FRAME_RATIO) of each row, in
-   menu order. The values are 1 XPan, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4,
-   and 7 7:6. A value keeps its meaning across releases, because the camera saves
-   it, so a new ratio takes the next value. Every family lists each ratio,
-   and Framing crops each one from the native 3:2 (runtime/aspect.h). */
+   menu order, from the widest ratio to the narrowest (runtime/
+   framing_ratios.h, from grkit_core::framing::RATIOS). A value keeps its
+   meaning across releases, because the camera saves it, so a new ratio
+   takes the next value. Framing crops each ratio from the native 3:2
+   (runtime/aspect.h). */
 #if !defined(GRKIT_ICON_STRIDE) || !defined(FRAMING_RATIO_ROWS)
 #error "The family header defines GRKIT_ICON_STRIDE and FRAMING_RATIO_ROWS"
 #endif

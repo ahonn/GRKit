@@ -57,12 +57,32 @@ static void guide_golden(u32 data, u32 stride, u32 color, const u16 *box)
         guide_row(data, stride, color, guide_at(box[1], box[3], f), box[0], box[2]);
     }
 }
-/* Corner-to-corner Bresenham lines, 2 pixels high in each column. Every photo
-   area is wider than tall, so each column has one pair of each diagonal. The
+/* Corner-to-corner Bresenham lines, 2 pixels high in each column of an area
+   at least as wide as tall: each column has one pair of each diagonal. The
    upper pixel goes from the top row to the row above the bottom one, rounded
-   half up. */
+   half up. An area taller than wide, such as 3:4, has the pair in each row
+   instead, 2 pixels wide: the left pixel goes from the left column to the
+   column before the right one. */
+static void guide_diagonals_tall(u32 data, u32 stride, u32 color, const u16 *box)
+{
+    int run = box[3] - box[1] - 1, rise = box[2] - box[0] - 2, error = 0;
+    u32 x = 0, at = data + box[1] * stride * 4;
+    for (u32 y = 0; y <= (u32)run; ++y, at += stride * 4) {
+        volatile u32 *row = GRKIT_PIXELS(at);
+        row[box[0] + x] = color;
+        row[box[0] + x + 1] = color;
+        row[box[2] - 2 - x] = color;
+        row[box[2] - 1 - x] = color;
+        error += rise;
+        if (2 * error >= run) { ++x; error -= run; }
+    }
+}
 static void guide_diagonals(u32 data, u32 stride, u32 color, const u16 *box)
 {
+    if (box[2] - box[0] < box[3] - box[1]) {
+        guide_diagonals_tall(data, stride, color, box);
+        return;
+    }
     int run = box[2] - box[0] - 1, rise = box[3] - box[1] - 2, error = 0;
     u32 y = box[1], mapped = y;
     volatile u32 *top = GRKIT_PIXELS(data + y * stride * 4), *below = GRKIT_PIXELS(data + (y + 1) * stride * 4);
@@ -92,14 +112,16 @@ static void guide_cross(u32 data, u32 stride, u32 color, const u16 *box)
    reciprocal starts at a corner, is perpendicular to the diagonal that does
    not pass through that corner, and ends on the opposite side: it steps
    height/width pixels across for each row. Each row has a 2-pixel pair of each
-   reciprocal. */
+   reciprocal. In an area taller than wide, such as 3:4, a reciprocal steps
+   more than one pixel for each row and ends on the side opposite its corner,
+   at width x width / height rows. */
 static void guide_symmetry(u32 data, u32 stride, u32 color, const u16 *box)
 {
     u32 width = box[2] - box[0], height = box[3] - box[1], x = 0;
     /* Signed: the error is below 0 after a step. */
     int error = 0;
     guide_diagonals(data, stride, color, box);
-    for (u32 r = 0; r < height; ++r) {
+    for (u32 r = 0; r < height && x < width; ++r) {
         volatile u32 *top = GRKIT_PIXELS(data + (box[1] + r) * stride * 4),
                      *bottom = GRKIT_PIXELS(data + (box[3] - 1 - r) * stride * 4);
         /* In a 1:1 area the reciprocals are the diagonals and reach the
@@ -108,7 +130,7 @@ static void guide_symmetry(u32 data, u32 stride, u32 color, const u16 *box)
         top[left] = top[left + 1] = top[right] = top[right - 1] = color;
         bottom[left] = bottom[left + 1] = bottom[right] = bottom[right - 1] = color;
         error += (int)height;
-        if (2 * error >= (int)width) { ++x; error -= (int)width; }
+        while (2 * error >= (int)width) { ++x; error -= (int)width; }
     }
 }
 /* sin(i x 90 / 32 degrees) x 65536 for i = 0 to 32, rounded; 65535 at 90

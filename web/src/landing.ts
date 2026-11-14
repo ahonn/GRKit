@@ -1,4 +1,5 @@
 import { siteUrl } from './catalog';
+import { FRAMING_RATIOS } from './generated/framing';
 import type { Language } from './i18n';
 export { BUILT_IN_LOOKS, LANDING_LOOKS, LANDING_PHOTOS } from './landing-data';
 import menuEn from '../../resources/images/grkit-menu.jpg';
@@ -24,15 +25,7 @@ export const LANDING_BORDERS = [
 ] as const;
 
 /** The Framing ratios in the order of the camera menu, with their width over height. */
-export const LANDING_RATIOS = [
-  { label: 'XPan 65:24', ratio: 65 / 24 },
-  { label: '16:9', ratio: 16 / 9 },
-  { label: '4:3', ratio: 4 / 3 },
-  { label: '2.35:1', ratio: 2.35 },
-  { label: '1:1', ratio: 1 },
-  { label: '5:4', ratio: 5 / 4 },
-  { label: '7:6', ratio: 7 / 6 },
-] as const;
+export const LANDING_RATIOS = FRAMING_RATIOS;
 
 /** The id of the landing hero. The App Store bar waits until the hero scrolls away (AppPromo). */
 export const LANDING_HERO = 'landing-hero';
@@ -118,25 +111,27 @@ export function guideLines(guide: LandingGuide, aspect: number): readonly GuideL
       return goldenSpiral();
     case 'symmetry': {
       // Each reciprocal starts at a corner, is perpendicular to the other diagonal, and ends on
-      // the opposite side. In a 1:1 frame it is the diagonal.
+      // the opposite side: the bottom or the top in a wide frame, the other edge in a tall one,
+      // such as 3:4. In a 1:1 frame it is the diagonal.
       const across = Math.min(100, 100 / (aspect * aspect));
+      const down = Math.min(100, 100 * aspect * aspect);
       return [
         ...diagonals,
         [
           [0, 0],
-          [across, 100],
+          [across, down],
         ],
         [
           [100, 0],
-          [100 - across, 100],
+          [100 - across, down],
         ],
         [
           [0, 100],
-          [across, 0],
+          [across, 100 - down],
         ],
         [
           [100, 100],
-          [100 - across, 0],
+          [100 - across, 100 - down],
         ],
       ];
     }
@@ -222,4 +217,14 @@ function goldenSpiral(): GuideLine[] {
  */
 export function cropWidth(ratio: number): number {
   return ratio >= 1.5 ? 100 : (ratio / 1.5) * 100;
+}
+
+/**
+ * The width of the photo of `ratio` in its column, in percent of the column width: the full width,
+ * or for a ratio taller than wide, such as 3:4, the width at which the photo is as high as the
+ * column is wide. The photo then ends no lower than the display, and the guide choices under the
+ * display stay clear of it.
+ */
+export function shotWidth(ratio: number): number {
+  return ratio >= 1 ? 100 : ratio * 100;
 }

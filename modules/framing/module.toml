@@ -15,6 +15,7 @@ tiles = [
     "tiles/5-1-1.png",
     "tiles/6-5-4.png",
     "tiles/7-7-6.png",
+    "tiles/8-3-4.png",
 ]
 uses = ["CORE.ASPECT", "CORE.ASPECT_MODE"]
 

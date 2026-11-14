@@ -61,13 +61,31 @@ __attribute__((used)) void grkit_export_overlay_label(const Surface *s,u32 label
 }
 __attribute__((used)) u32 grkit_export_setting_get(u32 handle) { return setting_value(framing_header(),handle); }
 
-/* The capture aspect id of the crop: 0 = 3:2, 1 = 4:3, 2 = 16:9. XPan and
-   2.35:1 use id 2 with their own heights, and 5:4, 1:1, and 7:6 use id 1
-   with their own widths (runtime/framing.S). GR III hides ids 1 and 2 from its menu, but
+/* The capture aspect id of the crop: 0 = 3:2, 1 = 4:3, 2 = 16:9
+   (FRAMING_RATIO_CAPTURES). The wide ratios, such as XPan, use id 2 with
+   their own heights, and the narrow ones and 1:1 use id 1 with their own
+   widths (runtime/framing.S). GR III hides ids 1 and 2 from its menu, but
    its capture and playback code support them. */
 static __attribute__((unused)) u32 framing_capture_id(volatile u32 *h) {
-    static const u8 ids[]={0,2,2,1,2,1,1,1};
+    static const u8 ids[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_CAPTURES};
     return ids[framing_crop(h)];
+}
+/* The Framing geometry of a photo size, in either orientation: its
+   GRKIT_HOST_FRAME_FILE | its size class << 8, or 0 for another size. The
+   playback classifier (runtime/framing.S), the RAW development, and the
+   resize take the geometry of a photo from it. */
+u32 framing_size_file(u32 width,u32 height) {
+    static const u16 sizes[]={FRAMING_SIZES};
+    u32 longer=width<height ? height : width, shorter=width<height ? width : height, i;
+    _Static_assert(sizeof(sizes)==(FRAMING_FILES-2)*4*2*sizeof(sizes[0]),"four size classes for each file");
+    for(i=0;i<sizeof(sizes)/sizeof(sizes[0])/2;++i)
+        if(sizes[2*i]==longer && sizes[2*i+1]==shorter) return (i/4+2)|(i&3U)<<8;
+    return 0;
+}
+/* The capture aspect id of a Framing photo size, or 0 for another size. */
+u32 framing_size_capture(u32 width,u32 height) {
+    static const u8 captures[FRAMING_FILES]={FRAMING_FILE_CAPTURES};
+    return captures[framing_size_file(width,height)&0xffU];
 }
 #ifdef FRAMING_CAPTURE_ASPECT
 /* The still aspect property handler calls this for each requested value. The
@@ -104,32 +122,23 @@ u32 framing_live_aspect(u32 property) {
 #ifdef DEVELOP_SQUARE
 /* RAW development of the DNG in playback. A DNG keeps the full sensor image.
    It records the capture aspect id, and its photo has the size of the crop:
-   a Framing ratio records the id that it crops (16:9 for XPan and 2.35:1,
-   4:3 for 5:4, 7:6, and 1:1). The development takes the size of its photo
-   from the GetResolution hooks (runtime/framing.S), which read
-   GRKIT_HOST_FRAME_FILE in playback, so it sets that byte from the size of
-   the DNG, as the playback classifier does for a JPEG. */
-static const unsigned short develop_sizes[]={XPAN_SIZES,SCOPE_SIZES,
-#ifdef NARROW_SIZES
-    NARROW_SIZES,
-#endif
-};
+   a Framing ratio records the id that it crops (FRAMING_RATIO_CAPTURES). The
+   development takes the size of its photo from the GetResolution hooks
+   (runtime/framing.S), which read GRKIT_HOST_FRAME_FILE in playback, so it
+   sets that byte from the size of the DNG, as the playback classifier does
+   for a JPEG. */
 #ifndef FRAMING_PLAYBACK_METADATA
 #define FRAMING_PLAYBACK_METADATA() (((u32 (*)(void))FW_PLAYBACK_METADATA)())
 #endif
-/* The size of the photo in playback, landscape: width in the low half. */
+/* The size of the photo in playback: width in the low half. */
 static u32 develop_size(void) {
     u32 data=FRAMING_PLAYBACK_METADATA();
-    u32 width=HALF(data,METADATA_SIZE), height=HALF(data,METADATA_SIZE+4);
-    return width<height ? height|width<<16 : width|height<<16;
+    return HALF(data,METADATA_SIZE)|HALF(data,METADATA_SIZE+4)<<16;
 }
-/* GRKIT_HOST_FRAME_FILE for a photo size: 2 XPan, 3 2.35:1, 4 5:4, 5 7:6,
-   else 1. */
+/* GRKIT_HOST_FRAME_FILE for a photo size: its Framing geometry, else 1. */
 static u32 develop_file(u32 size) {
-    u32 i;
-    for(i=0;i+1<sizeof(develop_sizes)/sizeof(develop_sizes[0]);i+=2)
-        if(develop_sizes[i]==(size&0xffff) && develop_sizes[i+1]==size>>16) return i/8+2;
-    return 1;
+    u32 file=framing_size_file(size&0xffffU,size>>16)&0xffU;
+    return file ? file : 1;
 }
 /* The initial development aspect for the recorded capture aspect, or -1 for
    the native choice. A Framing size develops the recorded aspect (0) with
@@ -170,21 +179,27 @@ u32 framing_develop_capture(u32 capture) {
    Framing size takes the stock size of its size class, the 16:9 size with
    its width or the 4:3 size with its height, so the camera resizes it. A
    resize target of that class then takes the Framing geometry of the photo
-   (GRKIT_HOST_FRAME_FILE, which the playback classifier sets) again. 1:1
-   sizes are stock sizes. */
-static const unsigned short resize_wide[4][3]={{XPAN_HEIGHT_0},{XPAN_HEIGHT_1},{XPAN_HEIGHT_2},{XPAN_HEIGHT_3}};
-static const unsigned short resize_narrow[4][4]={{NARROW_WIDTH_0},{NARROW_WIDTH_1},{NARROW_WIDTH_2},{NARROW_WIDTH_3}};
-static const unsigned short resize_xpan[]={XPAN_SIZES}, resize_five[]={NARROW_SIZES};
-/* The width of a 16:9 size class, and the height of a 4:3 size class. */
-#define RESIZE_WIDTH(i) resize_xpan[(i)*2]
-#define RESIZE_HEIGHT(i) resize_five[(i)*2+1]
+   (GRKIT_HOST_FRAME_FILE, which the playback classifier sets) again. The
+   sizes are those of each mode of runtime/framing.S, mode 0 the stock one.
+   1:1 sizes are stock sizes: no file has the 1:1 mode. The getter gives the
+   longer side first, so a 3:4 photo arrives as {height, width} and takes
+   the 4:3 size with that height. Its resize target stays 3:4, because the
+   resize takes the target from the GetResolution hooks. */
+static const u16 resize_wide[4][FRAMING_WIDE_MODES]={{FRAMING_WIDE_HEIGHT_0},{FRAMING_WIDE_HEIGHT_1},
+                                                     {FRAMING_WIDE_HEIGHT_2},{FRAMING_WIDE_HEIGHT_3}};
+static const u16 resize_narrow[4][FRAMING_NARROW_MODES]={{FRAMING_NARROW_WIDTH_0},{FRAMING_NARROW_WIDTH_1},
+                                                         {FRAMING_NARROW_WIDTH_2},{FRAMING_NARROW_WIDTH_3}};
+static const u16 resize_widths[4]={FRAMING_STOCK_WIDTHS}, resize_heights[4]={FRAMING_STOCK_HEIGHTS};
+static const u8 resize_wide_modes[FRAMING_MODE_INDEXES]={FRAMING_WIDE_BY_FILE};
+static const u8 resize_narrow_modes[FRAMING_MODE_INDEXES]={FRAMING_NARROW_BY_FILE};
 void framing_resize_stock(u32 size) {
-    u32 width=WORD(size,0), height=WORD(size,4), i;
-    for(i=0;i<4;++i) {
-        if(width==RESIZE_WIDTH(i) && (height==resize_wide[i][1] || height==resize_wide[i][2])) height=resize_wide[i][0];
-        if(height==RESIZE_HEIGHT(i) && (width==resize_narrow[i][1] || width==resize_narrow[i][3])) width=resize_narrow[i][0];
+    u32 width=WORD(size,0), height=WORD(size,4), i, file, wide, narrow;
+    for(i=0;i<4;++i) for(file=2;file<FRAMING_FILES;++file) {
+        wide=resize_wide_modes[file]; narrow=resize_narrow_modes[file];
+        if(wide && width==resize_widths[i] && height==resize_wide[i][wide]) { WORD(size,4)=resize_wide[i][0]; return; }
+        if(narrow && height==resize_heights[i] && width==resize_narrow[i][narrow]) { WORD(size,0)=resize_narrow[i][0]; return; }
+        if(narrow && width==resize_heights[i] && height==resize_narrow[i][narrow]) { WORD(size,0)=resize_narrow[i][0]; WORD(size,4)=resize_heights[i]; return; }
     }
-    WORD(size,0)=width; WORD(size,4)=height;
 }
 /* The store of a resize target size {width, height}. */
 /* This function is a direct ARM BL patch target, without an assembly wrapper. */
@@ -192,10 +207,11 @@ void framing_resize_stock(u32 size) {
 #pragma clang attribute pop
 #endif
 void framing_resize_target(u32 size,u32 width,u32 height) {
-    u32 file=((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE], i;
+    u32 file=((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE], i, wide=0, narrow=0;
+    if(file<FRAMING_FILES) { wide=resize_wide_modes[file]; narrow=resize_narrow_modes[file]; }
     for(i=0;i<4;++i) {
-        if((file==2 || file==3) && width==RESIZE_WIDTH(i) && height==resize_wide[i][0]) height=resize_wide[i][file-1];
-        if((file==4 || file==5) && height==RESIZE_HEIGHT(i) && width==resize_narrow[i][0]) width=resize_narrow[i][file==4 ? 1 : 3];
+        if(wide && width==resize_widths[i] && height==resize_wide[i][0]) height=resize_wide[i][wide];
+        if(narrow && height==resize_heights[i] && width==resize_narrow[i][0]) width=resize_narrow[i][narrow];
     }
     WORD(size,0)=width; WORD(size,4)=height;
 }
@@ -207,10 +223,9 @@ void framing_resize_target(u32 size,u32 width,u32 height) {
    size from the GetResolution hooks, and an edit the insets of its
    previews. */
 u32 framing_resize_play_aspect(u32 aspect,u32 size) {
-    u32 width=WORD(size,0), height=WORD(size,4), file;
-    file=develop_file(width<height ? height|width<<16 : width|height<<16);
-    if(file==2 || file==3) return RESIZE_JOB_WIDE;
-    if(file==4 || file==5) return RESIZE_JOB_NARROW;
+    u32 capture=framing_size_capture(WORD(size,0),WORD(size,4));
+    if(capture==2) return RESIZE_JOB_WIDE;
+    if(capture==1) return RESIZE_JOB_NARROW;
     return aspect;
 }
 #endif

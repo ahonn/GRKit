@@ -184,10 +184,22 @@ typedef struct {
 #define DISPLAY_NO_INFO 2U
 #define DISPLAY_OFF 3U
 GRKIT_MAYBE_UNUSED static u32 native_display(void);
-/* Live-view labels (GRKIT_LABELS): the load cue, then capture area n, then
-   the Date Imprint sign (LABEL_DATE in runtime/sdk/grkit.h), then the Date
-   Imprint formats. */
+/* Live-view labels (GRKIT_LABELS, grkit_core::artwork::OVERLAY_LABELS): the
+   load cue, then the Framing ratios of 1.6.0 by value, then the Date Imprint
+   sign (LABEL_DATE in runtime/sdk/grkit.h), then the Date Imprint formats,
+   the crop badges, and the later labels. The list only grows, so a label
+   keeps its index. The label of Framing ratio n is framing_label(n); a
+   module names it as LABEL_RATIO_AREA | n (LABEL_RATIO in the SDK). */
 #define LABEL_GRKIT 0U
+#define LABEL_RATIO_AREA 0x100U
+#ifdef FRAMING_RATIO_LABELS
+/* The label of a Framing ratio value (FRAMING_RATIO_LABELS), or
+   GRKIT_LABEL_COUNT for a value out of range. */
+GRKIT_MAYBE_UNUSED static u32 framing_label(u32 value) {
+    static const u8 labels[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_LABELS};
+    return value<GRKIT_CORE_ASPECT_VALUES ? labels[value] : GRKIT_LABEL_COUNT;
+}
+#endif
 /* The top of a label in the second row of the native live-view text. Its
    capitals then share the baseline of the focus distance, such as "2.5m". */
 #define LABEL_TOP 45U

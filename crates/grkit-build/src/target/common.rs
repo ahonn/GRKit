@@ -205,7 +205,8 @@ pub const PICTURE: &[HookSpec] = &[
     bl("framing_thumbnail_inset", Framing, CaptureAspect),
     // GetResolution id 1 widths (L, M, S, XS) and the XS height, then the
     // id 1 left inset of the screennail and the second store of the thumbnail
-    // insets: 5:4 and 1:1 narrow the 4:3 capture aspect.
+    // insets: the narrow Framing ratios and 1:1 narrow the 4:3 capture aspect
+    // (grkit_core::framing).
     bl("framing_width_0", Framing, CaptureAspect),
     bl("framing_width_1", Framing, CaptureAspect),
     bl("framing_width_2", Framing, CaptureAspect),

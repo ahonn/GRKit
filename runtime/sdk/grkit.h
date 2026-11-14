@@ -87,9 +87,13 @@ typedef struct {
 
 /* Live-view labels of the core (overlay_label): the GRKit cue, the name of
    each capture area (Surface.area), such as "XPan", and the sign that Date
-   Imprint is on. */
+   Imprint is on. A label keeps its number in each release. Capture areas 1
+   to 7 have the labels of the same number. A later area, such as 3:4 (8),
+   names its label through the core as LABEL_RATIO_AREA | area (since ABI
+   2.7; a core before it has no such area). */
 #define LABEL_GRKIT 0U
-#define LABEL_RATIO(area) (area)
+#define LABEL_RATIO_AREA 0x100U
+#define LABEL_RATIO(area) ((area) < 8U ? (area) : LABEL_RATIO_AREA | (area))
 #define LABEL_DATE 8U
 /* The Date Imprint formats, YMD to DMY HM, follow DATE (since ABI 2.3). */
 #define LABEL_DATE_FORMAT(style) (LABEL_DATE+(style))
@@ -128,12 +132,13 @@ void overlay_label(const Surface *s, u32 label, u32 left, u32 top);
                   2 medium, 3 strong, 4 extra strong.
      CORE.GRAIN_SIZE  4 values: the grain size, 0 Auto (by the ISO of the
                   shot), 1 small, 2 medium, 3 large.
-     CORE.ASPECT  8 values: the composition ratio, 0 Off, 1
-                  XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6. Each
-                  camera offers some of them, and a choice page shows only
-                  those. Selecting a nonzero ratio sets native 3:2 in both
-                  modes. Crop mode crops it; guides-only displays the frame
-                  without that crop. Off preserves the current native aspect.
+     CORE.ASPECT  9 values: the composition ratio, 0 Off, 1
+                  XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6,
+                  8 3:4. Value 8 since ABI 2.7. Each camera offers some of
+                  them, and a choice page shows only those. Selecting a
+                  nonzero ratio sets native 3:2 in both modes. Crop mode crops
+                  it; guides-only displays the frame without that crop. Off
+                  preserves the current native aspect.
      CORE.ASPECT_MODE  2 values: 0 Crop (default), 1 Guides Only. A module
                   without this capability retains crop behavior. Changing
                   only this mode preserves the native aspect.

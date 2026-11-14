@@ -236,14 +236,31 @@ static void register_conditional_guides(void)
     header[GRKIT_HOST_MODULE_LAYER_COUNT/4]=2;
     header[GRKIT_HOST_CAPABILITIES/4]=0;
 }
-/* 7:6: a crop on every camera, and the highest ratio value. */
-#define LAST_RATIO 7U
+/* Independent size fixtures of each family: the L and the M size {width,
+   height} of XPan, 2.35:1, 5:4, 7:6, 3:4, then 5:4 and 7:6 as GRKit 1.6.0
+   recorded them; the M width of stock 4:3, the L height of stock 16:9, and
+   the M side of native 1:1. */
+#ifdef FRAMING_FAMILY_GR3
+static const u16 fixture_l[][2]={{6000,2216},{6000,2552},{4992,4000},{4656,4000},{2992,4000},{5000,4000},{4664,4000}};
+static const u16 fixture_m[][2]={{4800,1776},{4800,2040},{4000,3200},{3728,3200},{2400,3200},{4000,3200},{3736,3200}};
+#define FIXTURE_STOCK_M 4272
+#define FIXTURE_WIDE_STOCK_L 3376
+#define FIXTURE_SQUARE_M 3200
+#else
+static const u16 fixture_l[][2]={{6192,2288},{6192,2632},{5152,4128},{4816,4128},{3088,4128},{5160,4128},{4816,4128}};
+static const u16 fixture_m[][2]={{4944,1824},{4944,2104},{4112,3296},{3840,3296},{2464,3296},{4120,3296},{3848,3296}};
+#define FIXTURE_STOCK_M 4400
+#define FIXTURE_WIDE_STOCK_L 3480
+#define FIXTURE_SQUARE_M 3296
+#endif
+/* 3:4: a crop on every camera, and the highest ratio value. */
+#define LAST_RATIO 8U
 /* Off, and each ratio value that the target offers. The core crops each
    ratio, also one that the camera has natively. */
 static u32 cropped(u32 value) { return value == 0 || framing_row(value); }
 /* The capture aspect id of each crop value: 3:2, then 16:9 for XPan and
-   16:9, 4:3, 16:9 for 2.35:1, and 4:3 for 1:1, 5:4, and 7:6. */
-static const u32 capture_ids[] = {0, 2, 2, 1, 2, 1, 1, 1};
+   16:9, 4:3, 16:9 for 2.35:1, and 4:3 for 1:1, 5:4, 7:6, and 3:4. */
+static const u32 capture_ids[] = {0, 2, 2, 1, 2, 1, 1, 1, 1};
 
 static void reset(void)
 {
@@ -319,22 +336,30 @@ static u32 expected_label(u32 label,u32 left,u32 top,u32 x,u32 y,u32 background)
     }
     return value ? 0xff000000U|value*0x010101U : background;
 }
+/* The label of each ratio value: the value up to 7:6, then 3:4 after the
+   crop badges (grkit_core::artwork::OVERLAY_LABELS). */
+static const u32 ratio_labels[]={0,1,2,3,4,5,6,7,18};
 static u32 expected_badge(u32 ratio,u32 x,u32 y,u32 background)
 {
-    return ratio ? expected_label(ratio,LABEL_LEFT,LABEL_TOP,x,y,background) : background;
+    return ratio ? expected_label(ratio_labels[ratio],LABEL_LEFT,LABEL_TOP,x,y,background) : background;
 }
 /* Independent guide fixtures. Each value is a division, and its 2-pixel line
    covers the pixel before it and the pixel at it, as the native grid does.
    Thirds are at multiples of floor(span / 3). The golden section is rounded. */
-/* By ratio value: 3:2 (Off), XPan, 16:9, 4:3, 2.35:1, 1:1, 5:4, 7:6. */
+/* By ratio value: 3:2 (Off), XPan, 16:9, 4:3, 2.35:1, 1:1, 5:4, 7:6, 3:4. */
 static const u32 boxes[][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480},
-                             {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480}};
+                             {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480},
+                             {180,0,540,480}};
 static const u32 thirds[][4]={{240,480,160,320},{240,480,195,283},{240,480,172,307},{253,466,160,320},
-                              {240,480,189,291},{280,440,160,320},{260,460,160,320},{266,452,160,320}};
+                              {240,480,189,291},{280,440,160,320},{260,460,160,320},{266,452,160,320},
+                              {300,420,160,320}};
 static const u32 golden[][4]={{275,445,183,297},{275,445,209,271},{275,445,192,287},{284,436,183,297},
-                              {275,445,204,276},{303,417,183,297},{289,431,183,297},{294,426,183,297}};
-/* The number of ratio values. It is also a value that no target offers. */
-#define RATIO_VALUES 8U
+                              {275,445,204,276},{303,417,183,297},{289,431,183,297},{294,426,183,297},
+                              {318,402,183,297}};
+/* The number of ratio values. It is also a value that no target offers. A
+   new ratio needs its fixtures here. */
+#define RATIO_VALUES 9U
+_Static_assert(RATIO_VALUES==GRKIT_CORE_ASPECT_VALUES,"a fixture for each ratio value");
 static u32 on_line(u32 value,u32 line) { return value==line-1 || value==line; }
 static u32 expected_guide(u32 ratio,u32 style,u32 x,u32 y)
 {
@@ -352,8 +377,16 @@ static u32 expected_guide(u32 ratio,u32 style,u32 x,u32 y)
         return (on_line(y,240) && x>=339 && x<=380) || (on_line(x,360) && y>=219 && y<=260);
     if(style==4) {
         /* The upper pixel of each pair goes from the top row to the row above
-           the bottom one, rounded half up. */
+           the bottom one, rounded half up. In an area taller than wide (3:4),
+           the left pixel of each pair goes from the left column to the
+           column before the right one. */
         u32 width=box[2]-box[0], height=box[3]-box[1], column=x-box[0];
+        if(width<height) {
+            u32 row=y-box[1], at=(2*row*(width-2)+height-1)/(2*(height-1));
+            u32 lefts[2]={box[0]+at, box[2]-2-at};
+            for(u32 i=0; i<2; ++i) if(x==lefts[i] || x==lefts[i]+1) return 1;
+            return 0;
+        }
         u32 rows[2]={column, width-1-column};
         for(u32 i=0; i<2; ++i) {
             u32 upper=box[1]+(2*rows[i]*(height-2)+width-1)/(2*(width-1));
@@ -1296,7 +1329,8 @@ int main(void)
     the_histogram_follows_the_effect_white();
     /* Fixed rectangles are independent expected output, not a second renderer. */
     const u32 rectangles[][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480},
-                               {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480}};
+                               {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480},
+                               {180,0,540,480}};
     for (u32 ratio=0; ratio<RATIO_VALUES; ++ratio) {
         if(!cropped(ratio)) continue;
         reset();
@@ -1551,20 +1585,62 @@ int main(void)
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=2;
     framing_bind(TEST_OWNER);
     assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==0);
+    /* The lookups of runtime/framing.S: the L size of GetResolution in the
+       mode of each GRKIT_HOST_FRAME_CROP while shooting, and in the mode of
+       each GRKIT_HOST_FRAME_FILE in playback. */
+    {
+        static const u8 wide_crop[]={FRAMING_WIDE_BY_CROP}, narrow_crop[]={FRAMING_NARROW_BY_CROP};
+        static const u8 wide_file[]={FRAMING_WIDE_BY_FILE}, narrow_file[]={FRAMING_NARROW_BY_FILE};
+        static const u16 heights[]={FRAMING_WIDE_HEIGHT_0}, widths[]={FRAMING_NARROW_WIDTH_0};
+        _Static_assert(sizeof(wide_crop)==FRAMING_MODE_INDEXES && sizeof(narrow_file)==FRAMING_MODE_INDEXES,"tables");
+        assert(heights[wide_crop[1]]==fixture_l[0][1] && heights[wide_crop[4]]==fixture_l[1][1]);
+        assert(widths[narrow_crop[6]]==fixture_l[2][0] && widths[narrow_crop[7]]==fixture_l[3][0]);
+        assert(widths[narrow_crop[8]]==fixture_l[4][0] && widths[narrow_crop[5]]==fixture_l[4][1]);
+        assert(!wide_crop[0] && !narrow_crop[0] && !wide_crop[2] && !narrow_crop[3]);
+        for (u32 file = 2; file < FRAMING_FILES; ++file) {
+            if (file < 4) assert(heights[wide_file[file]]==fixture_l[file-2][1] && !narrow_file[file]);
+            else assert(widths[narrow_file[file]]==fixture_l[file-2][0] && !wide_file[file]);
+        }
+    }
+    /* The playback classifier: each Framing size, in either orientation, has
+       its geometry and size class; a size of 1.6.0 that a release now
+       records otherwise has its own geometry. Native sizes have none. */
+    {
+        /* GR III 5:4 M of 1.6.0 equals the current one. */
+#ifdef FRAMING_FAMILY_GR3
+        static const u8 l_files[]={2,3,4,5,6,7,8}, m_files[]={2,3,4,5,6,4,8};
+#else
+        static const u8 l_files[]={2,3,4,5,6,7,8}, m_files[]={2,3,4,5,6,7,8};
+#endif
+        for (u32 i = 0; i < sizeof(l_files); ++i) {
+            u32 l = framing_size_file(fixture_l[i][0],fixture_l[i][1]), m = framing_size_file(fixture_m[i][1],fixture_m[i][0]);
+#ifdef FRAMING_FAMILY_GR4
+            /* GR IV 7:6 L of 1.6.0 equals the current one. */
+            if (i == 6) assert(l == 5);
+            else
+#endif
+            assert(l == l_files[i]);
+            assert(m == (m_files[i] | 1U << 8));
+            assert(framing_size_capture(fixture_l[i][0],fixture_l[i][1]) == (i < 2 ? 2U : 1U));
+        }
+        assert(!framing_size_file(fixture_l[0][0],fixture_l[0][0]*2/3) && !framing_size_file(FIXTURE_STOCK_M,fixture_m[2][1]));
+        assert(!framing_size_file(FIXTURE_SQUARE_M,FIXTURE_SQUARE_M) && !framing_size_file(fixture_l[0][0],FIXTURE_WIDE_STOCK_L));
+        assert(!framing_size_capture(640,480) && FRAMING_FILES == 9);
+    }
 #ifdef DEVELOP_SQUARE
     /* RAW development of the DNG in playback: the initial aspect and
        GRKIT_HOST_FRAME_FILE follow the size of its photo. A Framing size
        develops as recorded (0), a Framing 1:1 as the native 1:1, a native
        aspect natively (-1). */
     {
-        static const u16 xpan[]={XPAN_SIZES}, scope[]={SCOPE_SIZES}, narrow[]={NARROW_SIZES};
-        static const u16 wide_stock[]={XPAN_HEIGHT_0};
         const struct { u32 width, height, aspect, value, file; } cases[]={
-            {xpan[0],xpan[1],2,0,2}, {xpan[1],xpan[0],2,0,2}, {scope[2],scope[3],2,0,3},
-            {narrow[0],narrow[1],1,0,4}, {narrow[8],narrow[9],1,0,5},
-            {narrow[2],narrow[2],1,DEVELOP_SQUARE,1},
-            {xpan[0],xpan[0]*2/3,0,0xffffffffU,1},
-            {xpan[0],wide_stock[0],2,DEVELOP_NATIVE_ASPECTS>>2&1 ? 0xffffffffU : 0,1},
+            {fixture_l[0][0],fixture_l[0][1],2,0,2}, {fixture_l[0][1],fixture_l[0][0],2,0,2},
+            {fixture_m[1][0],fixture_m[1][1],2,0,3}, {fixture_l[2][0],fixture_l[2][1],1,0,4},
+            {fixture_l[3][0],fixture_l[3][1],1,0,5}, {fixture_l[4][0],fixture_l[4][1],1,0,6},
+            {fixture_l[5][0],fixture_l[5][1],1,0,7}, {fixture_m[6][0],fixture_m[6][1],1,0,8},
+            {FIXTURE_SQUARE_M,FIXTURE_SQUARE_M,1,DEVELOP_SQUARE,1},
+            {fixture_l[0][0],fixture_l[0][0]*2/3,0,0xffffffffU,1},
+            {fixture_l[0][0],FIXTURE_WIDE_STOCK_L,2,DEVELOP_NATIVE_ASPECTS>>2&1 ? 0xffffffffU : 0,1},
         };
         for (u32 i = 0; i < sizeof(cases)/sizeof(cases[0]); ++i) {
             HALF(TEST_METADATA,METADATA_SIZE)=(u16)cases[i].width;
@@ -1575,8 +1651,8 @@ int main(void)
         }
         /* An aspect that the user selects takes the stock sizes, the recorded
            aspect (0) the geometry of the DNG again. */
-        HALF(TEST_METADATA,METADATA_SIZE)=xpan[0];
-        HALF(TEST_METADATA,METADATA_SIZE+4)=xpan[1];
+        HALF(TEST_METADATA,METADATA_SIZE)=fixture_l[0][0];
+        HALF(TEST_METADATA,METADATA_SIZE+4)=fixture_l[0][1];
         framing_develop_geometry(TEST_OWNER,1);
         assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==1);
         framing_develop_geometry(TEST_OWNER,0);
@@ -1585,7 +1661,7 @@ int main(void)
            the geometry of the ratio, whatever native value the model keeps. */
         {
             const struct { u32 ratio, capture, file; } ratios[]={
-                {1,2,2}, {4,2,3}, {2,2,1}, {3,1,1}, {6,1,4}, {7,1,5},
+                {1,2,2}, {4,2,3}, {2,2,1}, {3,1,1}, {6,1,4}, {7,1,5}, {8,1,6},
             };
             for (u32 i = 0; i < sizeof(ratios)/sizeof(ratios[0]); ++i) {
                 header[GRKIT_HOST_DEVELOP_RATIO/4]=ratios[i].ratio;
@@ -1605,22 +1681,59 @@ int main(void)
        rows: every crop with 3:2, only the crops of the capture aspect without
        it, never a ratio with a native row of its stock geometry. */
     {
-        const struct { u32 captures; u8 rows[8]; } lists[]={
-            {1U<<0|1U<<3, {1,4,2,3,6,7,0}},
-            {1U<<0|1U<<1|1U<<2|1U<<3, {1,4,6,7,0}},
+        const struct { u32 captures; u8 rows[9]; } lists[]={
+            {1U<<0|1U<<3, {1,4,2,3,6,7,8,0}},
+            {1U<<0|1U<<1|1U<<2|1U<<3, {1,4,6,7,8,0}},
             {1U<<2, {1,4,0}},
-            {1U<<1|1U<<3, {6,7,0}},
+            {1U<<1|1U<<3, {6,7,8,0}},
             {1U<<3, {0}},
         };
         for (u32 i = 0; i < sizeof(lists)/sizeof(lists[0]); ++i) {
             u32 n = 0;
             while (lists[i].rows[n]) {
-                assert(develop_ratio_row(lists[i].captures,n)==lists[i].rows[n]);
+                assert(develop_ratio_row(lists[i].captures,GRKIT_CORE_ASPECT_VALUES,n)==lists[i].rows[n]);
                 ++n;
             }
-            assert(develop_ratio_row(lists[i].captures,n)==0);
-            assert(develop_ratio_rows(lists[i].captures)==n);
+            assert(develop_ratio_row(lists[i].captures,GRKIT_CORE_ASPECT_VALUES,n)==0);
+            assert(develop_ratio_rows(lists[i].captures,GRKIT_CORE_ASPECT_VALUES)==n);
+            /* The page of a module before ABI 2.7 names the first 8 ratios:
+               3:4, the last row, has none. */
+            assert(develop_ratio_rows(lists[i].captures,8)==n-(n && lists[i].rows[n-1]==8));
         }
+    }
+#endif
+#ifdef RESIZE_SIZE
+    /* Resize in playback: a 5:4 or a 3:4 photo takes the stock 4:3 size of
+       its size class, and a resize target of that class takes the geometry
+       of the photo again. */
+    {
+        static const u16 stock[]={FIXTURE_STOCK_M};
+        const u32 size=TEST_METADATA+0x10;
+        /* The M sizes, as the camera records them: width, then height. 7:6
+           of 1.6.0 keeps its own width. */
+        const struct { u32 width, height, file; } photos[]={{fixture_m[2][0],fixture_m[2][1],4},
+            {fixture_m[4][0],fixture_m[4][1],6},{fixture_m[6][0],fixture_m[6][1],8}};
+        for (u32 i = 0; i < sizeof(photos)/sizeof(photos[0]); ++i) {
+            WORD(size,0)=photos[i].width; WORD(size,4)=photos[i].height;
+            assert(framing_resize_play_aspect(0,size)==RESIZE_JOB_NARROW);
+            /* The size getter gives the longer side first: a 3:4 photo
+               arrives as {height, width}. */
+            if (photos[i].width < photos[i].height) { WORD(size,0)=photos[i].height; WORD(size,4)=photos[i].width; }
+            framing_resize_stock(size);
+            assert(WORD(size,0)==stock[0] && WORD(size,4)==photos[i].height);
+            ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=(u8)photos[i].file;
+            framing_resize_target(size,stock[0],photos[i].height);
+            assert(WORD(size,0)==photos[i].width && WORD(size,4)==photos[i].height);
+        }
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=0;
+        /* The L size of 3:4 as the getter gives it takes the 4:3 L size, and
+           the 4:3 L size stays. */
+        static const u16 stock_l[]={FRAMING_NARROW_WIDTH_0};
+        WORD(size,0)=fixture_l[4][1]; WORD(size,4)=fixture_l[4][0];
+        framing_resize_stock(size);
+        assert(WORD(size,0)==stock_l[0] && WORD(size,4)==fixture_l[4][1]);
+        framing_resize_stock(size);
+        assert(WORD(size,0)==stock_l[0] && WORD(size,4)==fixture_l[4][1]);
     }
 #endif
     /* Live-view updates resend the 3:2 request only when capture differs. */

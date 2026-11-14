@@ -1,4 +1,5 @@
 import type { Grade } from './catalog';
+import { FRAMING_RATIOS } from './generated/framing';
 import { MODULE_TITLES } from './generated/moduleTitles';
 import type { NativeProblem } from './import/native';
 import { cookieValue, isLanguage, LANGUAGE_COOKIE, pagePath, pathLanguage, type Page } from './languagePage';
@@ -15,6 +16,13 @@ export type Language = (typeof LANGUAGES)[number]['code'];
 
 /** Text with inline code: a part that starts with a backtick is code. */
 export type RichText = readonly string[];
+
+/** The Framing ratios in the order of the camera menu, as a language writes a list: `separator`
+ * between two, `last` before the last one. */
+function framingRatios(separator: string, last: string): string {
+  const names = FRAMING_RATIOS.map((ratio) => ratio.name);
+  return names.slice(0, -1).join(separator) + last + names[names.length - 1];
+}
 
 const en = {
   language: 'Language',
@@ -271,7 +279,7 @@ const en = {
   noModules: 'Select at least one module.',
   modulesText: {
     filmLook: 'The film looks below, with live-view preview.',
-    framing: 'XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, or 1:1 photos. The view dims the rest.',
+    framing: `${framingRatios(', ', ', or ')} photos. The view dims the rest.`,
     crop: 'Crop photos to 35, 40, 50, or 70 mm. GR IIIx has 50 to 100 mm.',
     guides: 'Thirds, center, golden ratio, diagonals, golden spiral, or dynamic symmetry.',
     dateStamp: 'A date at the bottom right, in classic, GR1s, or GR II digits.',
@@ -807,7 +815,7 @@ const zhHans: Strings = {
   noModules: '请至少选择一个模块。',
   modulesText: {
     filmLook: '使用下方的胶片风格，可实时预览。',
-    framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片，画幅外变暗。',
+    framing: `${framingRatios('、', ' 或 ')} 照片，画幅外变暗。`,
     crop: '把照片裁切为 35、40、50 或 70mm。GR IIIx 为 50 至 100mm。',
     guides: '在画幅内显示三分法、中心、黄金分割、对角线、黄金螺线或动态对称。',
     dateStamp: '在照片右下角加印日期，可选经典、GR1s 或 GR II 字体。',
@@ -1286,7 +1294,7 @@ const zhHant: Strings = {
   noModules: '請至少選擇一個模組。',
   modulesText: {
     filmLook: '使用下方的底片風格，可實時預覽。',
-    framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6 或 1:1 照片，構圖框外變暗。',
+    framing: `${framingRatios('、', ' 或 ')} 照片，構圖框外變暗。`,
     crop: '把照片裁切為 35、40、50 或 70mm。GR IIIx 為 50 至 100mm。',
     guides: '在構圖框內顯示三分法、中心、黃金分割、對角線、黃金螺旋或動態對稱。',
     dateStamp: '在照片右下角加印日期，可選經典、GR1s 或 GR II 字體。',
@@ -1769,7 +1777,7 @@ const ja: Strings = {
   noModules: 'モジュールを 1 つ以上選択してください。',
   modulesText: {
     filmLook: '下で選んだフィルムルック。ライブビューでプレビューできます。',
-    framing: 'XPan、2.35:1、16:9、4:3、5:4、7:6、1:1 の写真。範囲外は暗く表示します。',
+    framing: `${framingRatios('、', '、')} の写真。範囲外は暗く表示します。`,
     crop: '写真を 35、40、50、70mm にクロップします。GR IIIx では 50〜100mm です。',
     guides: '9分割、画面中央、黄金比、対角線、黄金螺旋、ダイナミックシンメトリー。',
     dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s、GR II。',
@@ -2249,7 +2257,7 @@ const ko: Strings = {
   noModules: '모듈을 하나 이상 선택하세요.',
   modulesText: {
     filmLook: '아래에서 고른 필름 룩. 라이브 뷰에서 미리 봅니다.',
-    framing: 'XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1 사진. 범위 밖은 어둡게 표시합니다.',
+    framing: `${framingRatios(', ', ', ')} 사진. 범위 밖은 어둡게 표시합니다.`,
     crop: '사진을 35, 40, 50, 70mm로 크롭합니다. GR IIIx는 50~100mm입니다.',
     guides: '9분할, 화면 중앙, 황금비, 대각선, 황금 나선, 동적 대칭을 표시합니다.',
     dateStamp: '사진 오른쪽 아래에 날짜를 넣습니다. 클래식, GR1s, GR II 글꼴.',

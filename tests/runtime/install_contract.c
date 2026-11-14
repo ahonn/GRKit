@@ -315,6 +315,9 @@ struct spec {
     /* A choice page of own setting 0 with these native settings rows: row 0
        is setting 0, the others an own setting n or GRM_USED | used n. */
     u32 page_rows, rows[SPEC_ITEMS], settings_page, group_page, bad_group;
+    /* A page of a used setting (GRM_USED | n) with `page_values` rows, in
+       place of own setting 0. */
+    u32 page_setting, page_values;
     u32 indicator_count, indicator_slot, condition_setting, condition_value;
     u32 icon_kind, icon_setting, icon_first, indicator_tiles, page_icon;
     /* The flags of a 44-byte descriptor (ABI 2.4), or 0 for a 40-byte one. */
@@ -404,7 +407,8 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
     /* The page: one text for each language and value, 32 at most, and a
        blank tile for each value of setting 0. */
     u32 page_at = 0, child_at[2] = {0, 0}, tiles_at = 0;
-    u32 tile_count = s->group_page ? 3 : s->page_rows ? (s->settings_page ? 1 : s->settings[0].values) : 0;
+    u32 page_values = s->page_setting ? s->page_values : s->settings[0].values;
+    u32 tile_count = s->group_page ? 3 : s->page_rows ? (s->settings_page ? 1 : page_values) : 0;
     if (s->indicator_tiles) tile_count = s->indicator_tiles;
     if (s->page_rows) {
         static const u16 hi[] = {'H', 'i', 0};
@@ -412,14 +416,14 @@ static u32 add_module(const char *folder, const char *file, const struct spec *s
         emit(0);
         memcpy(&code_words[text], hi, sizeof hi);
         texts = code_count;
-        for (u32 k = 0; k < 32; ++k) emit_pointer(text, 0);
+        for (u32 k = 0; k < 64; ++k) emit_pointer(text, 0);
         row_list = code_count;
         for (u32 r = 0; r < s->page_rows; ++r) {
-            emit(GRM_ROW); emit(r ? s->rows[r] : 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
+            emit(GRM_ROW); emit(r ? s->rows[r] : s->page_setting); emit_pointer(texts, 0); emit_pointer(texts, 0);
         }
-        page_at = emit(GRM_PAGE); emit(s->settings_page ? GRM_PAGE_SETTINGS : GRM_PAGE_CHOICE); emit(0); emit(0);
+        page_at = emit(GRM_PAGE); emit(s->settings_page ? GRM_PAGE_SETTINGS : GRM_PAGE_CHOICE); emit(s->page_setting); emit(0);
         emit_pointer(texts, 0); emit_pointer(texts, 0); emit_pointer(texts, 0);
-        emit(s->settings[0].values); emit(s->page_rows); emit_pointer(row_list, 0);
+        emit(page_values); emit(s->page_rows); emit_pointer(row_list, 0);
         if (s->page_icon || s->fn_value) {
             code_words[page_at] = GRM_PAGE_ICON;
             emit(0);
@@ -1410,15 +1414,26 @@ static void indicators_reject_conflicts_overflow_and_used_value_ranges(void)
             .indicator_tiles = bad == 1 ? 4 : 5});
         assert(install() == 0 && !module_indicator_count && module_status[0] == GRM_BAD_DESCRIPTOR);
     }
-    /* A label of CORE.ASPECT needs a core label for each of its 8 values:
-       labels 0 to 7 exist, and the last 7 labels and one more do not. */
-    for (u32 first = 0; first <= GRM_LABELS - 7; first += GRM_LABELS - 7) {
+    /* From label 0, a label of CORE.ASPECT shows the label of each ratio
+       (framing_label). From a later label it needs a core label for each of
+       its 9 values: the last 8 labels and one more do not exist. */
+    for (u32 first = 0; first <= GRM_LABELS - 8; first += GRM_LABELS - 8) {
         reset();
         add_module(PACKAGE_MODULES_PATH, "LABEL.GRM", &(struct spec){.id = "LABEL",
             .uses = {"CORE.ASPECT"}, .indicator_count = 1, .condition_setting = GRM_USED,
             .icon_kind = GRM_ICON_LABEL, .icon_setting = GRM_USED, .icon_first = first});
         assert(install() == 0 && module_status[0] == (first ? GRM_BAD_DESCRIPTOR : 0));
         assert(module_indicator_count == (first ? 0U : 1U));
+    }
+    /* A page of CORE.ASPECT of a module before ABI 2.7 has the 8 rows of its
+       time: it loads, and the later ratios have no row. A page with more
+       rows than values, or none, does not. */
+    for (u32 rows = 7; rows <= GRKIT_CORE_ASPECT_VALUES + 1; ++rows) {
+        reset();
+        add_module(PACKAGE_MODULES_PATH, "OLD.GRM", &(struct spec){.id = "OLD", .uses = {"CORE.ASPECT"},
+            .page_rows = 1, .page_setting = GRM_USED, .page_values = rows});
+        assert(install() == 0);
+        assert(module_status[0] == (rows <= GRKIT_CORE_ASPECT_VALUES ? 0 : GRM_BAD_DESCRIPTOR));
     }
 }
 static void legacy_tone_icon_is_only_for_old_module_abi(void)

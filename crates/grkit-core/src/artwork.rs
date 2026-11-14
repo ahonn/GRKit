@@ -769,15 +769,18 @@ pub fn strike(rgba: &mut [u8]) {
     }
 }
 
-/// The live-view labels in label order: the load cue, then the Framing ratios
-/// in capture area order (runtime/framing.c: photo_boxes), so label n names
-/// capture area n, then the sign of Date Imprint (LABEL_DATE in
-/// runtime/sdk/grkit.h), then its formats in Date Imprint STYLE order
-/// (label LABEL_DATE + STYLE): the order of year, month, and day, and HM
-/// when the time prints. Then the crop badges (`crop_badge`): 40 and 70 mm
-/// of a 28 mm lens, then 57 and 100 mm of the 40 mm lens of GR IIIx
-/// (runtime/crop.h: LABEL_CROP).
-pub const OVERLAY_LABELS: [&str; 18] = [
+/// The live-view labels in label order. The list only grows: a module names
+/// a label by its index, so a released label keeps it
+/// (`tests/effects.rs: released_labels_keep_their_index`). The load cue, then
+/// the Framing ratios of 1.6.0 in value order (capture area n has label n),
+/// then the sign of Date Imprint (LABEL_DATE in runtime/sdk/grkit.h), then
+/// its formats in Date Imprint STYLE order (label LABEL_DATE + STYLE): the
+/// order of year, month, and day, and HM when the time prints. Then the crop
+/// badges (`crop_badge`): 40 and 70 mm of a 28 mm lens, then 57 and 100 mm of
+/// the 40 mm lens of GR IIIx (runtime/crop.h: LABEL_CROP). Then the labels
+/// that came later, such as a later Framing ratio. The label of each ratio is
+/// `aspect::label_index` (FRAMING_RATIO_LABELS).
+pub const OVERLAY_LABELS: [&str; 19] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -796,11 +799,15 @@ pub const OVERLAY_LABELS: [&str; 18] = [
     "70mm",
     "57mm",
     "100mm",
+    "3:4",
 ];
-/// The labels that a module can name: the live-view text before the crop
-/// badges, which only the core draws.
+/// The labels that a module can name by index: the live-view text before
+/// the crop badges, which only the core draws. A module names a later
+/// Framing ratio through its value (`label = "ratio"`).
 pub const MODULE_LABELS: usize = 14;
-const _: () = assert!(OVERLAY_LABELS.len() == MODULE_LABELS + 4);
+/// The crop badges follow the labels that a module can name.
+pub const CROP_BADGES: usize = 4;
+const _: () = assert!(OVERLAY_LABELS.len() >= MODULE_LABELS + CROP_BADGES);
 /// The width of the black outline around the text. The native live-view text
 /// has one black pixel around the gray edge of each stroke, and keeps the
 /// gaps between characters transparent.

@@ -176,7 +176,7 @@ Indicators, group children, and the `off_icon` of a choice page accept the same 
 | `{ setting = "STYLE", label = "DATE" }` | The core label n after `DATE` for setting value n. Status-row indicators only. |
 | `{ setting = "CORE.ASPECT", label = "ratio" }` | The core label of the committed Framing ratio. Status-row indicators only. |
 
-A core label is the native live-view text, as in the focus distance `2.5m`. The labels are, in order, `XPan`, `16:9`, `4:3`, `2.35`, `1:1`, `5:4`, `7:6`, `DATE`, `YMD`, `YMD HM`, `MDY`, `DMY`, and `DMY HM`. `YMD`, `MDY`, and `DMY` are as high as a ratio. `YMD HM` and `DMY HM` show `HM` on a second line and are as high as a status-row icon. With a setting, every value needs a label at or after the named one. A label takes its own width in the status row; an icon takes 44 pixels. The row ends before x = 580. When the camera shows its own information in the same row, such as the white balance shift or the dial guide of Snap mode, the row moves to the free space next to it. The row waits while the load cue shows. An indicator that does not fit is not shown, nor are the indicators after it.
+A core label is the native live-view text, as in the focus distance `2.5m`. The labels that a module names are, in order, `XPan`, `16:9`, `4:3`, `2.35`, `1:1`, `5:4`, `7:6`, `DATE`, `YMD`, `YMD HM`, `MDY`, `DMY`, and `DMY HM`. A label keeps its place in each release. `ratio` shows the label of each Framing ratio, also of a later one such as `3:4`. `YMD`, `MDY`, and `DMY` are as high as a ratio. `YMD HM` and `DMY HM` show `HM` on a second line and are as high as a status-row icon. With a setting, every value needs a label at or after the named one. A label takes its own width in the status row; an icon takes 44 pixels. The row ends before x = 580. When the camera shows its own information in the same row, such as the white balance shift or the dial guide of Snap mode, the row moves to the free space next to it. The row waits while the load cue shows. An indicator that does not fit is not shown, nor are the indicators after it.
 
 Do not combine `tile` with `setting` or `first_tile`. A tile mapping must cover every value of its setting. `CORE.TONE` uses the core's effect icons and has no tile offset.
 
@@ -273,7 +273,7 @@ The capabilities are public settings of the core. A module uses one by its name 
 | Name | Values | Meaning |
 | --- | --- | --- |
 | `CORE.TONE` | 0 Off, then n + 1 for installed effect n | The effect of still pictures and the live view. The core installs the effects only when a loaded module uses `CORE.TONE`. |
-| `CORE.ASPECT` | 8: 0 Off, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6 | The selected crop or composition ratio, according to `CORE.ASPECT_MODE`. |
+| `CORE.ASPECT` | 9: 0 Off, 1 XPan 65:24, 2 16:9, 3 4:3, 4 2.35:1, 5 1:1, 6 5:4, 7 7:6, 8 3:4 | The selected crop or composition ratio, according to `CORE.ASPECT_MODE`. |
 | `CORE.ASPECT_MODE` | 2: 0 Crop, 1 Guides Only | Whether the selected ratio crops JPEG photos or only marks composition in the live view. The default is Crop. |
 | `CORE.CROP` | 5: 0 Off, 1 35 mm, 2 40 mm, 3 50 mm, 4 70 mm | A focal-length crop of the lens, according to `CORE.CROP_MODE`. The focal lengths are those of a 28 mm lens. GR IIIx has the same crops of its 40 mm lens: 50, 57, 71, and 100 mm. |
 | `CORE.CROP_MODE` | 2: 0 Crop, 1 Frame Only | Whether the camera crops photos to the selected focal length or the live view only shows its frame. The default is Crop. |
@@ -466,7 +466,7 @@ ABI 2.5 appends the Fn value and setting of `fn_cycle` to `GrkitPage`, increasin
 
 ABI 2.6 adds the capabilities `CORE.CROP`, `CORE.CROP_MODE`, `CORE.BORDER`, and `CORE.BORDER_COLOR`. `Surface` keeps its layout.
 
-ABI 2.7 lets a settings row have up to 64 values (`GRKIT_SETTING_ROW_VALUES`); a row with more than 8 lists them on a long value page. The installer of an earlier core rejects an ABI 2.7 module.
+ABI 2.7 gives `CORE.ASPECT` the value 8, 3:4, and lets a settings row have up to 64 values (`GRKIT_SETTING_ROW_VALUES`); a row with more than 8 lists them on a long value page. A page of `CORE.ASPECT` can have fewer rows than its values: the rows are the values from 0, and a later value has no row. `LABEL_RATIO` names the label of a later capture area, such as 3:4, through the core (`LABEL_RATIO_AREA`). The labels keep their numbers. The installer of an earlier core rejects an ABI 2.7 module.
 
 **File format.** A module file is GRM version 1 (`grkit_core::grm`): a header, the code, the data, the relocations, the imports, and the tiles. The build compiles each source as Thumb code for ARMv7-A with `-Os`. The installer only moves absolute 32-bit words and fills the imports by name hash. The build rejects other relocation types and each undefined symbol that is not a service or `grkit_self`.
 

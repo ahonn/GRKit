@@ -1477,6 +1477,9 @@ static volatile u32 *aspect_page(volatile u32 *h) {
     }
     return 0;
 }
+/* The ratios that the Framing page names: each, or fewer for a page of a
+   module before ABI 2.7 (runtime/modules.h: choice_named). */
+static u32 aspect_named(volatile u32 *h) { return PAGE_WORD(aspect_page(h)[0],PAGE_ROWS); }
 /* Bit n for each native row that develops capture aspect n. The row of the
    recorded aspect (value 0) does not count. */
 static u32 aspect_captures(volatile u32 *h) {
@@ -1489,7 +1492,7 @@ static u32 aspect_captures(volatile u32 *h) {
 static u32 aspect_ratio(volatile u32 *h,u32 row) {
     u32 rows=h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4];
     if(!rows || row<rows || !aspect_page(h)) return 0;
-    return develop_ratio_row(aspect_captures(h),row-rows);
+    return develop_ratio_row(aspect_captures(h),aspect_named(h),row-rows);
 }
 /* The native value of a ratio row. */
 static u32 aspect_native_value(volatile u32 *h,u32 ratio) {
@@ -1548,7 +1551,7 @@ A32_ENTRY u32 menu_develop_count_after(u32 count,u32 controller) {
     u32 ratios;
     if(aspect_list(controller)) {
         h[GRKIT_HOST_DEVELOP_ASPECT_ROWS/4]=count;
-        ratios=aspect_page(h) ? develop_ratio_rows(aspect_captures(h)) : 0;
+        ratios=aspect_page(h) ? develop_ratio_rows(aspect_captures(h),aspect_named(h)) : 0;
         develop_grow(WORD(controller,DEVELOP_LIST_VIEW),count+ratios);
         return count+ratios;
     }

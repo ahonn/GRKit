@@ -153,11 +153,10 @@ void picture_post(u32 object,u32 context,u32 settings) {
 /* The family header maps a native aspect to its visible-area id. */
 #error "The family header defines PICTURE_NATIVE_ID"
 #endif
-/* Visible-area id of the capture: 0 3:2, 1 4:3, 2 16:9, 3 1:1, 4 XPan,
-   5 2.35:1, 6 5:4, 7 7:6. By crop value: Off, XPan, 16:9, 4:3, 2.35:1, 1:1,
-   5:4, 7:6. */
-static const u8 picture_area_ids[8]={0,4,2,1,5,3,6,7};
-#define PICTURE_CROP_AREA(ratio) ((ratio)<8 ? picture_area_ids[ratio] : 0)
+/* Visible-area id of the capture: 0 3:2, 1 4:3, 2 16:9, 3 1:1, then each
+   Framing geometry (runtime/framing_ratios.h), by crop value. */
+static const u8 picture_area_ids[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_AREAS};
+#define PICTURE_CROP_AREA(ratio) ((ratio)<GRKIT_CORE_ASPECT_VALUES ? picture_area_ids[ratio] : 0)
 #ifdef FRAMING_XPAN_NATIVE
 /* Framing ratio values (runtime/firmware.h) apply to native 3:2 captures.
    XPan and 2.35:1 also apply to native FRAMING_XPAN_NATIVE photos. Other
@@ -368,14 +367,14 @@ static u32 shot_area(volatile u32 *h) {
     return PICTURE_AREA_ID(PICTURE_NATIVE_ASPECT(),ratio);
 }
 /* The visible-area id of a RAW development, from the size of its main
-   picture: a Framing size (GRKIT_HOST_FRAME_FILE 2 to 5, runtime/framing.c),
+   picture: a Framing size (GRKIT_HOST_FRAME_FILE 2 and up, runtime/framing.c),
    else the nearest native aspect. The settings for shots do not apply. */
 static u32 developed_area(volatile u32 *h,const Plane *main) {
-    static const u8 file_area[4]={4,5,6,7};
+    static const u8 file_area[FRAMING_FILES]={FRAMING_FILE_AREAS};
     /* Width x 100 / height of 3:2, 4:3, 16:9, and 1:1, in area id order. */
     static const u8 ratios[4]={150,133,178,100};
     u32 file=((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE], w=main->width, hh=main->height, ratio, best=0, i;
-    if(file>=2 && file<=5) return file_area[file-2];
+    if(file>=2 && file<FRAMING_FILES) return file_area[file];
     if(w<hh) { u32 t=w; w=hh; hh=t; }
     ratio=core_divide(w*100,hh);
     for(i=1;i<4;++i) {
@@ -387,10 +386,10 @@ static u32 developed_area(volatile u32 *h,const Plane *main) {
 }
 /* Visible area of a preview picture: black bars depend on the area id. */
 static void visible_area(u32 id,Plane *p) {
-    /* Screennail and thumbnail insets for ids 0 (3:2), 1 (4:3), 2 (16:9), 3 (1:1), then XPan,
-       2.35:1, 5:4, and 7:6 (runtime/framing.S). */
-    static const u8 screennail[8][2]={{0,0},{40,0},{0,38},{120,0},{0,107},{0,87},{60,0},{80,0}};
-    static const u8 thumbnail[8][2]={{0,8},{0,0},{0,16},{20,0},{0,30},{0,26},{6,0},{10,0}};
+    /* Screennail and thumbnail insets for ids 0 (3:2), 1 (4:3), 2 (16:9), 3 (1:1), then each
+       Framing geometry (runtime/framing.S). */
+    static const u8 screennail[FRAMING_AREAS][2]={FRAMING_AREA_SCREENNAILS};
+    static const u8 thumbnail[FRAMING_AREAS][2]={FRAMING_AREA_THUMBNAILS};
     const u8 *inset=0;
     if(p->width==720 && p->height==480) inset=screennail[id];
     if(p->width==160 && p->height==120) inset=thumbnail[id];
@@ -452,7 +451,7 @@ __attribute__((target("thumb"),minsize))
 void picture_dng_crop(u32 setter,u32 entry,u32 size) {
     u32 shot=WORD(setter,DNG_SETTER_SHOT), crop, info, i;
     u16 rect[4];
-    if(HALF(entry,6)!=4 || WORD(entry,8)!=2 || !shot_word(framing_header(),shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=8) return;
+    if(HALF(entry,6)!=4 || WORD(entry,8)!=2 || !shot_word(framing_header(),shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=GRKIT_CORE_ASPECT_VALUES) return;
     PICTURE_DNG_RECT(shot,rect);
     info=WORD(setter,DNG_SETTER_INFO);
     for(i=0;i<2;++i) {

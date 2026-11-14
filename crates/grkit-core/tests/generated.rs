@@ -1,5 +1,5 @@
 //! Files generated from `grkit_core::abi`, `modules` (with the text of each
-//! module), `camera`, and `site`. Set
+//! module), `camera`, `site`, and `aspect`. Set
 //! GRKIT_UPDATE_GENERATED=1 to rewrite them after a change of the tables.
 
 use std::{fs, path::Path};
@@ -29,6 +29,7 @@ fn checked_in_generated_files_match_the_tables() {
     files.extend(grkit_core::camera::generated());
     files.extend(grkit_core::site::generated());
     files.extend(grkit_core::recipes::generated());
+    files.extend(grkit_core::aspect::generated());
     let update = std::env::var_os("GRKIT_UPDATE_GENERATED").is_some();
     let mut stale = Vec::new();
     for (name, expected) in files {

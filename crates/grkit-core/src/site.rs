@@ -55,7 +55,33 @@ pub fn generated() -> Vec<(&'static str, String)> {
         effects::NAME_MAX,
         effects::ID_MAX,
     );
-    vec![("web/src/generated/site.ts", module)]
+    vec![
+        ("web/src/generated/site.ts", module),
+        ("web/src/generated/framing.ts", framing_module()),
+    ]
+}
+
+/// The Framing ratios of the camera menu (`aspect::RATIOS`), as a TypeScript
+/// module: the landing page and the module texts list them.
+fn framing_module() -> String {
+    use crate::aspect::{rows, RATIOS};
+    let mut out = String::from(
+        "// Generated from crates/grkit-core/src/aspect/ratios.rs. Do not edit: change the\n\
+         // table there, then run\n\
+         // GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated.\n\n\
+         /** The Framing ratios in the order of the camera menu: the row, the\n \
+         * summary, and the width over the height. */\n\
+         export const FRAMING_RATIOS = [\n",
+    );
+    for &value in &rows("gr3")[1..] {
+        let ratio = &RATIOS[value];
+        out.push_str(&format!(
+            "  {{ label: '{}', name: '{}', ratio: {} / {} }},\n",
+            ratio.row, ratio.summary, ratio.aspect.0, ratio.aspect.1
+        ));
+    }
+    out.push_str("] as const;\n");
+    out
 }
 
 /// The model parameters of a decoded effect.

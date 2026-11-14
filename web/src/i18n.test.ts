@@ -30,6 +30,13 @@ describe('matchLanguage', () => {
 });
 
 describe('STRINGS', () => {
+  it('lists the Framing ratios in menu order, as each language writes a list', () => {
+    expect(STRINGS.en.modulesText.framing).toBe('XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1, or 3:4 photos. The view dims the rest.');
+    expect(STRINGS['zh-Hans'].modulesText.framing).toBe('XPan、2.35:1、16:9、4:3、5:4、7:6、1:1 或 3:4 照片，画幅外变暗。');
+    expect(STRINGS.ja.modulesText.framing).toBe('XPan、2.35:1、16:9、4:3、5:4、7:6、1:1、3:4 の写真。範囲外は暗く表示します。');
+    expect(STRINGS.ko.modulesText.framing).toBe('XPan, 2.35:1, 16:9, 4:3, 5:4, 7:6, 1:1, 3:4 사진. 범위 밖은 어둡게 표시합니다.');
+  });
+
   it('gives each language the same install steps and effect looks', () => {
     const shape = (language: keyof typeof STRINGS) => ({
       steps: STRINGS[language].steps.map((parts) => parts.filter((p) => p.startsWith('`'))),

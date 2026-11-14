@@ -610,7 +610,13 @@ fn built_in_status_row_fits_with_its_widest_labels() {
             indicators += 1;
             let icon = indicator["icon"].as_table().unwrap();
             row += match icon.get("label").and_then(|v| v.as_str()) {
-                Some("ratio") => widest(1..=7) + define("STATUS_LABEL_GAP"),
+                Some("ratio") => {
+                    (1..grkit_core::aspect::RATIOS.len())
+                        .map(|value| width(grkit_core::aspect::label_index(value)))
+                        .max()
+                        .unwrap()
+                        + define("STATUS_LABEL_GAP")
+                }
                 Some("DATE") if icon.contains_key("setting") => {
                     widest(date + 1..=artwork::OVERLAY_LABELS.len() - 1)
                         + define("STATUS_LABEL_GAP")
@@ -855,46 +861,75 @@ fn small_and_caption_glyphs_follow_the_glyphs() {
     assert!((4..top).any(|y| (2..38).any(|x| gray(x, y) == 210)));
 }
 
-/// Label n names the CORE.ASPECT value n (LABEL_RATIO in runtime/sdk/grkit.h):
-/// it starts the summary of value n of the Framing module. The Date Imprint
-/// sign follows the ratios (LABEL_DATE), then one label for each format.
+/// The labels of GRKit 1.6.0 in their order. A module names a label by its
+/// index, so a released label never moves: a new label goes at the end.
+const RELEASED_LABELS: [&str; 18] = [
+    "GRKit Loaded",
+    "XPan",
+    "16:9",
+    "4:3",
+    "2.35",
+    "1:1",
+    "5:4",
+    "7:6",
+    "DATE",
+    "YMD",
+    "YMD HM",
+    "MDY",
+    "DMY",
+    "DMY HM",
+    "40mm",
+    "70mm",
+    "57mm",
+    "100mm",
+];
+
 #[test]
-fn overlay_labels_follow_the_aspect_values() {
-    let aspect = grkit_core::capabilities::CAPABILITIES
+fn released_labels_keep_their_index() {
+    assert_eq!(
+        artwork::OVERLAY_LABELS[..RELEASED_LABELS.len()],
+        RELEASED_LABELS
+    );
+    // The labels that a module names by index only grow, and the crop
+    // badges follow them.
+    const { assert!(artwork::MODULE_LABELS >= 14) };
+    assert!(artwork::OVERLAY_LABELS
+        [artwork::MODULE_LABELS..artwork::MODULE_LABELS + artwork::CROP_BADGES]
         .iter()
-        .find(|capability| capability.key == "ASPECT")
-        .unwrap();
-    assert_eq!(artwork::OVERLAY_LABELS[aspect.values as usize], "DATE");
-    let date = fs::read_to_string(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../modules/date/module.toml"),
+        .all(|label| label.ends_with("mm")));
+    // The SDK names the Date Imprint sign at its released index.
+    let sdk = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../runtime/sdk/grkit.h"),
     )
     .unwrap();
-    let styles: usize = date
-        .split("[[settings]]")
-        .find(|setting| setting.contains("key = \"STYLE\""))
-        .and_then(|setting| {
-            setting
-                .lines()
-                .find_map(|line| line.strip_prefix("values = "))
-        })
+    let date: usize = sdk
+        .lines()
+        .find_map(|line| line.strip_prefix("#define LABEL_DATE "))
         .unwrap()
-        .trim()
+        .trim_end_matches('U')
         .parse()
         .unwrap();
-    // Then the crop badges: 40 and 70 mm, and those of GR IIIx.
-    let crop = grkit_core::capabilities::CAPABILITIES
-        .iter()
-        .find(|capability| capability.key == "CROP")
+    assert_eq!(artwork::OVERLAY_LABELS[date], "DATE");
+    for header in ["runtime/sdk/grkit.h", "runtime/core.h"] {
+        let text = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../..")
+                .join(header),
+        )
         .unwrap();
-    let badges = artwork::OVERLAY_LABELS
-        .iter()
-        .filter(|label| label.ends_with("mm"))
-        .count();
-    assert_eq!(badges, 2 * (crop.values as usize - 3));
-    assert_eq!(
-        artwork::OVERLAY_LABELS.len(),
-        aspect.values as usize + styles + badges
-    );
+        assert!(
+            text.contains("#define LABEL_RATIO_AREA 0x100U"),
+            "{header} names a later ratio label the same way"
+        );
+    }
+}
+
+/// Each Framing ratio has a label (FRAMING_RATIO_LABELS), which starts the
+/// summary of its value of the Framing module. The ratios of 1.6.0 keep the
+/// label of their value (LABEL_RATIO in runtime/sdk/grkit.h).
+#[test]
+fn each_ratio_has_its_label() {
+    use grkit_core::aspect::{label_index, RATIOS};
     let text = fs::read_to_string(
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../modules/framing/text/en.toml"),
     )
@@ -905,13 +940,27 @@ fn overlay_labels_follow_the_aspect_values() {
         .find_map(|line| line.strip_prefix("summaries = "))
         .unwrap();
     let summaries: Vec<String> = serde_json::from_str(line).unwrap();
-    assert_eq!(summaries.len(), aspect.values as usize);
+    assert_eq!(summaries.len(), RATIOS.len());
+    let mut labels = Vec::new();
     for (value, summary) in summaries.iter().enumerate().skip(1) {
+        let label = label_index(value);
         assert!(
-            summary.starts_with(artwork::OVERLAY_LABELS[value]),
-            "label {value}"
+            summary.starts_with(artwork::OVERLAY_LABELS[label]),
+            "label of value {value}"
         );
+        if value < 8 {
+            assert_eq!(label, value, "a ratio of 1.6.0 keeps its label");
+        } else {
+            assert!(
+                label >= RELEASED_LABELS.len(),
+                "a later ratio appends its label"
+            );
+        }
+        labels.push(label);
     }
+    labels.sort();
+    labels.dedup();
+    assert_eq!(labels.len(), RATIOS.len() - 1, "one label for each ratio");
 }
 
 /// A native look whose level-0 rows hold `a` and `b` off the diagonal.

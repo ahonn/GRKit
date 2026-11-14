@@ -380,11 +380,13 @@ static int same(const u16 *actual, const char *expected)
 }
 /* Framing labels and summaries by ratio value, and the ratio value of each
    row of the target. */
-static const char *const ratio_names[] = {"Off", "XPan 65:24", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"};
+static const char *const ratio_names[] = {"Off", "XPan 65:24", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6", "3:4"};
 static const char *const ratio_summaries[] = {"Framing: Off", "Framing: XPan", "Framing: 16:9", "Framing: 4:3",
-                                              "Framing: 2.35:1", "Framing: 1:1", "Framing: 5:4", "Framing: 7:6"};
+                                              "Framing: 2.35:1", "Framing: 1:1", "Framing: 5:4", "Framing: 7:6",
+                                              "Framing: 3:4"};
 /* A value that no target offers. */
-#define UNKNOWN_RATIO 8
+#define UNKNOWN_RATIO 9
+_Static_assert(UNKNOWN_RATIO==GRKIT_CORE_ASPECT_VALUES,"a name for each ratio value");
 static const u32 ratio_rows[] = {FRAMING_RATIO_ROWS};
 #define ROW_COUNT ((u32)(sizeof(ratio_rows) / sizeof(ratio_rows[0])))
 /* XPan: row 1, and a crop on every camera. */
@@ -435,7 +437,7 @@ static void install_page(u32 slot, const char *title, const char *const *names, 
 }
 static const char *const grain_names[] = {"Off", "Weak", "Medium", "Strong", "Extra Strong"};
 /* The summaries of Framing, which name the ratios shorter. */
-static const char *const ratio_values[] = {"Off", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"};
+static const char *const ratio_values[] = {"Off", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6", "3:4"};
 static const char *const stamp_names[] = {"Off", "'YY M D", "'YY M D H:MM", "M D 'YY", "D M 'YY", "D M 'YY H:MM"};
 static const char *const look_names[] = {"Classic", "GR1s", "GR II"};
 /* The rows of the native settings page of Date Imprint: STYLE, then LOOK. */
@@ -496,13 +498,13 @@ static void install_guide_rows(u32 slot)
 static void install_modules(void)
 {
     install_page(0, "Film Look", 0, 0, GRKIT_CORE_TONE, 0);
-    install_page(1, "Framing", ratio_values, 8, GRKIT_CORE_ASPECT, 0);
+    install_page(1, "Framing", ratio_values, 9, GRKIT_CORE_ASPECT, 0);
     install_page(2, "Guides", guide_names, 6, 0, 7);
     install_page(3, "Date Imprint", stamp_names, 6, 1, 13);
     install_setting_rows(3);
     install_page(4, "Grain", grain_names, 5, GRKIT_CORE_GRAIN, 19);
     /* The labels of Framing name the ratios in full. */
-    for (u32 value = 0; value < 8; ++value)
+    for (u32 value = 0; value < 9; ++value)
         for (u32 language = 0; language < GRKIT_TEXT_LANGUAGES; ++language)
             *page_at(PAGE_WORD(TEST_PAGE + TEST_PAGE_SIZE, PAGE_LABELS) + (value * GRKIT_TEXT_LANGUAGES + language) * 4) =
                 page_text(ratio_names[value]);
@@ -1141,7 +1143,7 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
     menu_confirm(test_header);
     assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && test_header[GRKIT_HOST_MODULE / 4] == FRAMING_MODULE);
     assert(test_header[GRKIT_HOST_MENU_CURSOR / 4] == CROP_ROW);
-    assert(count(test_header) == ROW_COUNT && ROW_COUNT == 8);
+    assert(count(test_header) == ROW_COUNT && ROW_COUNT == 9);
     assert(same(current_module(test_header)->title(test_header), "Framing"));
     for (u32 row = 0; row < ROW_COUNT; ++row) {
         u32 value = ratio_rows[row];
@@ -1163,8 +1165,8 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
         assert(same(current_module(test_header)->summary(test_header), ratio_summaries[value]));
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
-    /* 1:1 is the last row, and a crop. */
-    assert(ratio_rows[ROW_COUNT - 1] == 5 && test_header[GRKIT_HOST_FRAME_RATIO / 4] == 5);
+    /* 3:4, the narrowest ratio, is the last row, and a crop. */
+    assert(ratio_rows[ROW_COUNT - 1] == 8 && test_header[GRKIT_HOST_FRAME_RATIO / 4] == 8);
     /* A native aspect from the camera menu is not a Framing ratio, so the
        page shows Off. A crop applies only in native 3:2, except XPan and
        2.35:1 in GR IV native 16:9. */
@@ -3319,6 +3321,48 @@ static void group_back_returns_to_the_menu_of_the_camera(void)
     assert(!h[GRKIT_HOST_SETTINGS / 4]);
 }
 
+/* The MENU page of Framing: Enable, then Aspect Ratio, the page setting,
+   with a value for each row of the target. Nine values are more than a
+   native value page holds, so the row lists them on a long value page. Its
+   value n is the ratio of row n, and the stored ratio is the value of its
+   row. A page of a module before ABI 2.7 names only the first 8 ratios: the
+   later ones have no row. */
+static void the_framing_menu_page_lists_each_ratio_on_a_long_value_page(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header, *menu = services_word(test_header, SERVICES_MENU);
+    const u32 framing = TEST_PAGE + TEST_PAGE_SIZE;
+    menu[MENU_ROWS_LISTED / 4] = 1;
+    menu[MENU_ROWS_PAGE / 4] = 1;
+    settings_open(h, LISTED_PAGE, 0);
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    const Setting *page = settings_page(h);
+    assert(page == listed_settings && settings_rows(h) == 2);
+    assert(same(page[0].label(h), "Enable") && same(page[1].label(h), "Framing"));
+    assert(page[1].values(h) == ROW_COUNT && ROW_COUNT > SETTING_VALUES);
+    assert(settings_long(h, page, 1) && settings_values(h, page, 1) == ROW_COUNT);
+    for (u32 row = 0; row < ROW_COUNT; ++row) {
+        assert(same(page[1].value_text(h, row), ratio_names[ratio_rows[row]]));
+        page[1].set(h, row);
+        assert(h[GRKIT_HOST_FRAME_RATIO / 4] == ratio_rows[row] && page[1].get(h) == row);
+    }
+    for (u32 value = 1; value < GRKIT_CORE_ASPECT_VALUES; ++value) {
+        h[GRKIT_HOST_FRAME_RATIO / 4] = value;
+        assert(ratio_rows[page[1].get(h)] == value);
+    }
+    /* A page with the 8 rows of a module before ABI 2.7: 3:4 has no row, and
+       a stored 3:4 shows no row as its own. */
+    *page_at(framing + PAGE_ROWS) = 8;
+    assert(page[1].values(h) == ROW_COUNT - 1);
+    for (u32 row = 0; row < ROW_COUNT - 1; ++row) {
+        page[1].set(h, row);
+        u32 value = h[GRKIT_HOST_FRAME_RATIO / 4];
+        assert(value < 8 && same(page[1].value_text(h, row), ratio_names[value]));
+    }
+    h[GRKIT_HOST_FRAME_RATIO / 4] = 8;
+    assert(page[1].get(h) == 0);
+    *page_at(framing + PAGE_ROWS) = GRKIT_CORE_ASPECT_VALUES;
+}
 static void the_guides_menu_page_lists_enable_options_and_settings(void)
 {
     install_menu_pages();
@@ -5552,6 +5596,7 @@ int main(void)
     group_pages_open_children_and_return_without_committing();
     group_back_keeps_the_shared_native_parent_return_target();
     group_back_returns_to_the_menu_of_the_camera();
+    the_framing_menu_page_lists_each_ratio_on_a_long_value_page();
     the_guides_menu_page_lists_enable_options_and_settings();
     the_options_page_toggles_its_values();
 #if defined(FW_CHECK_ITEM) && defined(FW_MENU_TABS)

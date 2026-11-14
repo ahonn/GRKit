@@ -62,6 +62,7 @@ static GRKIT_ICON_COMPACT void overlay_entry(const Surface *s,u32 label,u32 left
     overlay_entry_shaded(s,label,left,top,256U);
 }
 static GRKIT_ICON_COMPACT void overlay_label(const Surface *s,u32 label,u32 left,u32 top) {
+    if(label>>8==LABEL_RATIO_AREA>>8) label=framing_label(label&0xffU);
     if(label<GRKIT_LABEL_COUNT) overlay_entry(s,label,left,top);
 }
 /* The glyph of character c: a character outside printable ASCII shows as a
@@ -185,11 +186,11 @@ static GRKIT_ICON_COMPACT void module_paint(volatile u32 *h,u32 i,const Surface 
     MODULE_PAINT(MODULE_LAYER(h,i)[0],surface,value);
     profile_end_module(h,start,MODULE_LAYER(h,i)[0],GRKIT_PROFILE_PAINT);
 }
-/* Photo area {left,top,right,bottom} on the 720x480 canvas: native 3:2,
-   XPan, 16:9, 4:3, 2.35:1, 1:1, 5:4, and 7:6. Both capture and composition
-   layers use this geometry, but they can select different areas. */
-static const u16 photo_boxes[8][4]={{0,0,720,480},{0,107,720,373},{0,37,720,442},{40,0,680,480},
-                                    {0,87,720,393},{120,0,600,480},{60,0,660,480},{80,0,640,480}};
+/* Photo area {left,top,right,bottom} on the 720x480 canvas: native 3:2, then
+   each Framing ratio by value (FRAMING_PHOTO_BOXES). Both capture and
+   composition layers use this geometry, but they can select different
+   areas. */
+static const u16 photo_boxes[GRKIT_CORE_ASPECT_VALUES][4]={FRAMING_PHOTO_BOXES};
 /* The native aspect IDs are 3:2, 4:3, 16:9, and 1:1. The caller rejects
    unknown native aspects before drawing layers. */
 static GRKIT_ICON_COMPACT u32 native_area(void) {

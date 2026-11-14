@@ -1,7 +1,7 @@
 title = "画幅"
-rows = ["关闭", "XPan 65:24", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"]
+rows = ["关闭", "XPan 65:24", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6", "3:4"]
 # The value in the root row, which has less room than a row.
-summaries = ["关闭", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6"]
+summaries = ["关闭", "XPan", "16:9", "4:3", "2.35:1", "1:1", "5:4", "7:6", "3:4"]
 
 [settings."CORE.ASPECT"]
 label = "画幅比例"

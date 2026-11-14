@@ -33,6 +33,10 @@ describe('guideLines', () => {
       [0, 0],
       [100, 100],
     ]);
+    // In 3:4 a reciprocal from the top-left corner meets the right side at (3/4)^2 of the height.
+    const [, , tall] = guideLines('symmetry', 3 / 4);
+    expect(tall![1]![0]).toBeCloseTo(100);
+    expect(tall![1]![1]).toBeCloseTo((100 * 9) / 16);
   });
 });
 

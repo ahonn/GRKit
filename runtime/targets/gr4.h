@@ -31,15 +31,16 @@
    0x8100 and up, in the order Standard, Solid, Soft, Hi-Contrast, Grainy,
    HDR Tone, and Solarized Effect (types 25, 29, 26, 27, 28, 30, and 32). */
 #define NATIVE_TONE_MONOCHROME 0x8100U
-/* Framing: the rows of every family (runtime/firmware.h). GR IV has the
-   native aspects 3:2, 4:3, 16:9, and 1:1, but Framing crops each ratio from
-   native 3:2, as on GR III, so each ratio has the same live view. 16:9,
-   XPan, and 2.35:1 use capture aspect id 2, XPan and 2.35:1 with their own
-   heights. 4:3, 5:4, and 1:1 use id 1, 5:4 and 1:1 with their own widths.
+/* Framing: the rows and the sizes of the family (runtime/firmware.h), from
+   grkit_core::framing. GR IV has the native aspects 3:2, 4:3, 16:9, and 1:1,
+   but Framing crops each ratio from native 3:2, as on GR III, so each ratio
+   has the same live view. The wide ratios use capture aspect id 2 with their
+   own heights, the narrow ones id 1 with their own widths.
    The capture request hook maps the 3:2 request to that id, and the
    live-view hooks keep the live view in 3:2. In a native 16:9 that the user
    sets in the camera menu, XPan and 2.35:1 also crop the native 16:9 photos. */
-#define FRAMING_RATIO_ROWS 0,1,4,2,3,6,7,5
+#define FRAMING_FAMILY_GR4
+#include "../framing_ratios.h"
 #define FRAMING_XPAN_NATIVE 2
 /* FW_CAPTURE_ASPECT_GET reads the capture aspect (property 0xdf,
    CommonProperty +0x7da); the live-view mode function and the mode check call
@@ -59,28 +60,6 @@
    function and mode check read the capture aspect (framing_live_mode,
    framing_live_check). */
 #define MENU_STOP_LIVE_VIEW() ((void)0)
-/* ImageResolutionTranslatorKb636 GetResolution id 2: the stock 16:9 height,
-   the 65:24 height (width x 24 / 65), and the 2.35:1 height (width / 2.35) of
-   each size, rounded to a multiple of 8. */
-#define XPAN_HEIGHT_0 3480, 2288, 2632
-#define XPAN_HEIGHT_1 2784, 1824, 2104
-#define XPAN_HEIGHT_2 1968, 1296, 1488
-#define XPAN_HEIGHT_3 1080, 712, 816
-#define XPAN_SIZES 6192, 2288, 4944, 1824, 3504, 1296, 1920, 712
-#define SCOPE_SIZES 6192, 2632, 4944, 2104, 3504, 1488, 1920, 816
-/* GetResolution id 1: the stock 4:3 width, the 5:4 width (height x 5 / 4),
-   the 1:1 width, and the 7:6 width (height x 7 / 6, rounded to a multiple
-   of 8) of each size. The pipeline crops the width from the center. The
-   1:1 sizes are the native 1:1 sizes, so the XS 1:1 also takes its own
-   height (NARROW_HEIGHT_3: the stock 4:3 and the 1:1 XS height). */
-#define NARROW_WIDTH_0 5504, 5160, 4128, 4816
-#define NARROW_WIDTH_1 4400, 4120, 3296, 3848
-#define NARROW_WIDTH_2 3120, 2920, 2336, 2728
-#define NARROW_WIDTH_3 1920, 1800, 1280, 1680
-#define NARROW_HEIGHT_3 1440, 1280
-/* The 5:4 sizes, then the 7:6 sizes (width, height), largest first. */
-#define NARROW_SIZES 5160, 4128, 4120, 3296, 2920, 2336, 1800, 1440, \
-    4816, 4128, 3848, 3296, 2728, 2336, 1680, 1440
 /* The size classifier at its aspect BL: the frame is {r3-r6,fp,ip,lr,pc},
    r6 = width, r4 = height, r5 = class pointer. */
 #define CLASSIFY_WIDTH r6

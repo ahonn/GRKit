@@ -686,7 +686,7 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     store_shot(SHOT, 0);
     picture_dng_crop(setter, entry, 1);
     assert(!ifd_writes && !dng_rect_calls);
-    for (u32 crop = 1; crop < 8; ++crop) {
+    for (u32 crop = 1; crop < GRKIT_CORE_ASPECT_VALUES; ++crop) {
         header[GRKIT_HOST_FRAME_CROP / 4] = crop;
         store_shot(SHOT, 0);
         /* The current selection has changed before this older shot is written. */
@@ -1263,6 +1263,20 @@ int main(void)
             assert(seven.lit && seven.right <= 720 - 80 && seven.left > 360 && seven.top > 240);
             assert(seven.right < crop.right && seven.right > square.right);
         }
+        /* 3:4: inside the widest bars, 180 pixels and 36 in the thumbnail. */
+        {
+            struct box three, th;
+            encode_setup();
+            fill_planes(40, 128, 128);
+            STAMP_STYLE = 3;
+            header[GRKIT_HOST_FRAME_RATIO / 4] = 8;
+            picture_encode(0, MESSAGE);
+            three = changes(1, 0);
+            th = changes(2, 0);
+            assert(th.lit && th.right <= 160 - 36 && th.right > 160 - 60 && th.left >= 36);
+            assert(three.lit && three.right <= 720 - 180 && three.left > 360 && three.top > 240);
+            assert(three.right < square.right);
+        }
     }
     /* A RAW development: the time of the DNG in playback, and the clock
        without one or without a development. */
@@ -1305,6 +1319,14 @@ int main(void)
         assert(b.lit && b.bottom <= 480 - 107 && b.top > 240);
         b = changes(2, 0);
         assert(b.lit && b.bottom <= 120 - 30);
+        /* A 3:4 DNG (GRKIT_HOST_FRAME_FILE 6): left of the 3:4 bar. */
+        encode_setup();
+        fill_planes(40, 128, 128);
+        STAMP_STYLE = 3;
+        ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 6;
+        picture_encode(0, MESSAGE);
+        b = changes(1, 0);
+        assert(b.lit && b.right <= 720 - 180 && b.left > 360);
         /* A 4:3 DNG: left of the 4:3 bar. */
         encode_setup();
         picture(0, 800, 600, 800, PLANES);

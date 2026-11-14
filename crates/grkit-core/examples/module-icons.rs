@@ -303,7 +303,7 @@ fn frame(pixels: &mut [u8], [left, top, right, bottom]: [usize; 4]) {
 
 // A photo of `ratio` (width / height), centered in the 30 x 16 area above the
 // caption. The diagram and the caption together are centered on the tile.
-fn ratio_tile(ratio: f64, label: &str) -> Result<Vec<u8>> {
+pub fn ratio_tile(ratio: f64, label: &str) -> Result<Vec<u8>> {
     let mut pixels = list_tile();
     let (width, height) = if ratio >= 30.0 / 16.0 {
         (30, (30.0 / ratio).round() as usize)
@@ -788,18 +788,13 @@ fn main() -> Result<()> {
     let mut root = list_tile();
     frame(&mut root, [7, 11, 33, 29]);
     save(&modules.join("framing/tiles/0-module.png"), &root)?;
-    for (file, ratio, label) in [
-        ("1-xpan.png", 65.0 / 24.0, "XPan"),
-        ("2-16-9.png", 16.0 / 9.0, "16:9"),
-        ("3-4-3.png", 4.0 / 3.0, "4:3"),
-        ("4-2-35.png", 2.35, "2.35"),
-        ("5-1-1.png", 1.0, "1:1"),
-        ("6-5-4.png", 5.0 / 4.0, "5:4"),
-        ("7-7-6.png", 7.0 / 6.0, "7:6"),
-    ] {
+    // Tile n shows Framing ratio n (grkit_core::aspect::RATIOS) with its
+    // live-view label.
+    for ratio in &grkit_core::aspect::RATIOS[1..] {
+        let (width, height) = ratio.aspect;
         save(
-            &modules.join("framing/tiles").join(file),
-            &ratio_tile(ratio, label)?,
+            &modules.join("framing/tiles").join(ratio.tile),
+            &ratio_tile(f64::from(width) / f64::from(height), ratio.label)?,
         )?;
     }
     save(

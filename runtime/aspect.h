@@ -1,9 +1,10 @@
 #ifndef GRKIT_ASPECT_H
 #define GRKIT_ASPECT_H
 /* The capability CORE.ASPECT (grkit_core::capabilities): the selected
-   composition ratio. Its value is 0 for Off, then XPan
-   65:24, 16:9, 4:3, 2.35:1, 1:1, 5:4, and 7:6 (GRKIT_CORE_ASPECT_VALUES). Each
-   target offers the ratios of FRAMING_RATIO_ROWS.
+   composition ratio. Its value is 0 for Off, then a Framing ratio
+   (grkit_core::framing::RATIOS, GRKIT_CORE_ASPECT_VALUES values). The tables
+   of the ratios are in runtime/framing_ratios.h. Each target offers the
+   ratios of FRAMING_RATIO_ROWS.
 
    CORE.ASPECT_MODE selects cropping (0, the default) or guides only (1).
    GRKIT_HOST_FRAME_RATIO keeps the selection in both modes. Capture paths
@@ -72,11 +73,12 @@ static __attribute__((unused)) u32 capture_aspect_value(volatile u32 *h) {
 
 /* RAW development of a DNG to a Framing ratio (GRKIT_HOST_DEVELOP_RATIO).
    The development of a ratio sends a capture aspect id to the pipeline
-   (0 3:2, 1 4:3, 2 16:9, 3 1:1) and sets GRKIT_HOST_FRAME_FILE to the
-   geometry of the ratio: 1 for the stock sizes of that id, 2 XPan, 3 2.35:1,
-   4 5:4, 5 7:6 (runtime/framing.S). 1:1 is the native 1:1 of the camera. */
-static const u8 develop_ratio_capture[GRKIT_CORE_ASPECT_VALUES]={0,2,2,1,2,3,1,1};
-static const u8 develop_ratio_file[GRKIT_CORE_ASPECT_VALUES]={1,2,1,1,3,1,4,5};
+   (0 3:2, 1 4:3, 2 16:9, 3 1:1, FRAMING_RATIO_DEVELOP) and sets
+   GRKIT_HOST_FRAME_FILE to the geometry of the ratio: 1 for the stock sizes
+   of that id (FRAMING_RATIO_FILES, runtime/framing.S). 1:1 is the native
+   1:1 of the camera. */
+static const u8 develop_ratio_capture[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_DEVELOP};
+static const u8 develop_ratio_file[GRKIT_CORE_ASPECT_VALUES]={FRAMING_RATIO_FILES};
 static __attribute__((unused)) u32 develop_capture(u32 ratio) {
     return ratio<GRKIT_CORE_ASPECT_VALUES ? develop_ratio_capture[ratio] : 0;
 }
@@ -89,11 +91,13 @@ static __attribute__((unused)) u32 develop_file_of(u32 ratio) {
    native rows when no native row has its stock geometry, and when the
    development can crop it: the camera offers 3:2, which keeps the whole
    sensor, or the capture aspect of the ratio. The rows keep the order of
-   the Framing menu. */
-static __attribute__((unused)) u32 develop_ratio_row(u32 captures,u32 row) {
+   the Framing menu. Only the ratios below `named` have a row: the Framing
+   page of a module before ABI 2.7 names fewer ratios. */
+static __attribute__((unused)) u32 develop_ratio_row(u32 captures,u32 named,u32 row) {
     u32 i, ratio, capture;
     for(i=1;i<sizeof(framing_rows);++i) {
         ratio=framing_rows[i];
+        if(ratio>=named) continue;
         capture=develop_capture(ratio);
         if(develop_file_of(ratio)==1 && captures>>capture&1U) continue;
         if(!(captures&1U) && !(captures>>capture&1U)) continue;
@@ -101,9 +105,9 @@ static __attribute__((unused)) u32 develop_ratio_row(u32 captures,u32 row) {
     }
     return 0;
 }
-static __attribute__((unused)) u32 develop_ratio_rows(u32 captures) {
+static __attribute__((unused)) u32 develop_ratio_rows(u32 captures,u32 named) {
     u32 rows=0;
-    while(develop_ratio_row(captures,rows)) ++rows;
+    while(develop_ratio_row(captures,named,rows)) ++rows;
     return rows;
 }
 

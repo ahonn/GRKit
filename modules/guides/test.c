@@ -118,6 +118,22 @@ int main(void)
             assert(grkit_test_pixel(wide[i].end + 4, bottom) == GRKIT_TEST_CLEAR);
         }
     }
+    /* In a 3:4 area, taller than wide, the diagonals have a pair in each
+       row, and a reciprocal ends on the side opposite its corner at row
+       360 x 360 / 480 = 270, with no line down that side. */
+    {
+        static const u16 tall[4] = {180, 0, 540, 480};
+        Surface inner = grkit_test_surface(tall);
+        grkit_test_clear();
+        guides_paint(&inner, 4);
+        assert(grkit_test_pixel(180, 0) == 0x80000000U && grkit_test_pixel(181, 0) == 0x80000000U);
+        assert(grkit_test_pixel(538, 479) == 0x80000000U && grkit_test_pixel(539, 479) == 0x80000000U);
+        assert(grkit_test_pixel(359, 240) == 0x80000000U && grkit_test_pixel(358, 240) == GRKIT_TEST_CLEAR);
+        grkit_test_clear();
+        guides_paint(&inner, 7);
+        assert(grkit_test_pixel(539, 269) == 0x80000000U && grkit_test_pixel(180, 269) == 0x80000000U);
+        assert(grkit_test_pixel(539, 240) == GRKIT_TEST_CLEAR && grkit_test_pixel(180, 240) == GRKIT_TEST_CLEAR);
+    }
     /* White at 100%, and yellow at 50%. */
     grkit_test_settings[SETTING_COLOR] = 1;
     grkit_test_settings[SETTING_OPACITY] = 1;

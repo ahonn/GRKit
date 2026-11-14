@@ -293,11 +293,13 @@
 #define KEYBOARD_FUNCTION 0x1f0
 #define KEYBOARD_COPYRIGHT 2U
 
-/* Framing: the rows of every family (runtime/firmware.h). GR III has the
-   native aspects 3:2 and 1:1. Framing captures each ratio through a hidden
-   aspect id from native 3:2, so the live view stays in 3:2. 5:4 and 1:1 use
-   the 4:3 id with narrower widths. */
-#define FRAMING_RATIO_ROWS 0,1,4,2,3,6,7,5
+/* Framing: the rows and the sizes of the family (runtime/firmware.h), from
+   grkit_core::framing. GR III has the native aspects 3:2 and 1:1. Framing
+   captures each ratio through a hidden aspect id from native 3:2, so the
+   live view stays in 3:2: the wide ratios use the 16:9 id with their own
+   heights, the narrow ones the 4:3 id with their own widths. */
+#define FRAMING_FAMILY_GR3
+#include "../framing_ratios.h"
 /* Requested capture StillAspectRatio (CommonProperty +0x7b6). The property
    setter writes the next copy at [property+4]; readers see the current copy
    at [property] only after a later commit. Comparing the next copy sends
@@ -329,29 +331,6 @@
     CALL2(FW_LIVE_VIEW_END)(model,(u32)done); \
     CALL2(FW_LIVE_VIEW_STOP)(model,(u32)done); \
 } while(0)
-/* GetResolution id 2: the stock 16:9 height, the 65:24 height, and the 2.35:1
-   height of each size. The heights are width x 24 / 65 and width / 2.35,
-   rounded to a multiple of 8. */
-#define XPAN_HEIGHT_0 3376, 2216, 2552
-#define XPAN_HEIGHT_1 2704, 1776, 2040
-#define XPAN_HEIGHT_2 1888, 1240, 1432
-#define XPAN_HEIGHT_3 1080, 712, 816
-/* The 65:24 sizes, then the 2.35:1 sizes (width, height), largest first. */
-#define XPAN_SIZES 6000, 2216, 4800, 1776, 3360, 1240, 1920, 712
-#define SCOPE_SIZES 6000, 2552, 4800, 2040, 3360, 1432, 1920, 816
-/* GetResolution id 1: the stock 4:3 width, the 5:4 width (height x 5 / 4),
-   the 1:1 width, and the 7:6 width (height x 7 / 6, rounded to a multiple
-   of 8) of each size. The pipeline crops the width from the center. The
-   1:1 sizes are the native 1:1 sizes, so the XS 1:1 also takes its own
-   height (NARROW_HEIGHT_3: the stock 4:3 and the 1:1 XS height). */
-#define NARROW_WIDTH_0 5328, 5000, 4000, 4664
-#define NARROW_WIDTH_1 4272, 4000, 3200, 3736
-#define NARROW_WIDTH_2 2992, 2800, 2240, 2616
-#define NARROW_WIDTH_3 1920, 1800, 1280, 1680
-#define NARROW_HEIGHT_3 1440, 1280
-/* The 5:4 sizes, then the 7:6 sizes (width, height), largest first. */
-#define NARROW_SIZES 5000, 4000, 4000, 3200, 2800, 2240, 1800, 1440, \
-    4664, 4000, 3736, 3200, 2616, 2240, 1680, 1440
 /* The size classifier at its aspect BL: the frame is {r4-r7,fp,ip,lr,pc},
    r7 = width, r4 = height, r6 = class pointer. */
 #define CLASSIFY_WIDTH r7

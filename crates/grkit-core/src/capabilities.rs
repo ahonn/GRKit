@@ -138,12 +138,11 @@ pub const CAPABILITIES: [Capability; 12] = [
         points: &[Point::Tuning, Point::PictureEncode],
     },
     Capability {
-        // The composition ratio (runtime/aspect.h): 0 Off, then
-        // XPan 65:24, 16:9, 4:3, 2.35:1, 1:1, 5:4, 7:6. Each target offers some of
-        // them. The word keeps the selection; ASPECT_MODE determines whether
+        // The composition ratio (runtime/aspect.h): 0 Off, then the ratios of
+        // `aspect::RATIOS`. Each family offers some of them. The word keeps the selection; ASPECT_MODE determines whether
         // it changes the capture area or only the composition frame.
         key: "ASPECT",
-        values: 8,
+        values: crate::aspect::RATIOS.len() as u32,
         state: State::Word(HOST_FRAME_RATIO),
         points: &[Point::ViewfinderOverlay, Point::CaptureAspect],
     },

@@ -19,6 +19,7 @@ import {
   LANDING_PHOTOS,
   LANDING_RATIOS,
   landingImage,
+  shotWidth,
   type LandingGuide,
 } from '../landing';
 import { EffectIcon } from './EffectIcon';
@@ -288,7 +289,7 @@ function Framing({ strings }: { strings: Strings }) {
           </div>
         </figure>
         <figure>
-          <div className="landing-shot" style={{ aspectRatio: ratio.ratio }}>
+          <div className="landing-shot" style={{ width: `${shotWidth(ratio.ratio)}%`, aspectRatio: ratio.ratio }}>
             <img src={image} alt={`${strings.samplePhoto} — ${ratio.label}`} />
           </div>
           <figcaption>

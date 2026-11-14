@@ -103,11 +103,11 @@ static u32 options_of(volatile u32 *h,u32 slot) {
     page=menu_page(h,slot);
     if(!choice_options(h)) return 0;
     if(page->menu && page->menu->options) return page->menu->options(h);
-    return setting_rows(h,CHOICE_ENTRY(h)[1])-1;
+    return choice_setting_rows(h)-1;
 }
 static u32 options_count(volatile u32 *h) { return options_of(h,listed_slot(h)); }
 /* The value of option `k` of a module setting. */
-static u32 option_item(volatile u32 *h,u32 k) { return setting_row_value(h,CHOICE_ENTRY(h)[1],k+1); }
+static u32 option_item(volatile u32 *h,u32 k) { return choice_setting_row_value(h,k+1); }
 static const u16 *option_label(volatile u32 *h,u32 k) {
     const MenuListing *menu=listed_menu(h);
     if(menu && menu->options) return menu->option_label(h,k);
