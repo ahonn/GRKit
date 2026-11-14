@@ -29,7 +29,9 @@ enum {
     /* Row 0: L labels, 2 values x L; row 1: L labels, 3 values x L. */
     ROW_TEXTS = ROWS + 8,
     ROW1_TEXTS = ROW_TEXTS + 3 * GRM_LANGUAGES,
-    FILTER = ROW1_TEXTS + 4 * GRM_LANGUAGES, /* {size, stage, setting, apply} */
+    /* Room for the label and 9 values of LOOK: more than a native value
+       page holds. */
+    FILTER = ROW1_TEXTS + 10 * GRM_LANGUAGES, /* {size, stage, setting, apply} */
     TEXT = FILTER + 4,              /* u"Hi" */
     TILES = TEXT + 1,               /* 2 tiles */
     CODE_WORDS = TILES + 2 * GRM_TILE_BYTES / 4
@@ -451,6 +453,10 @@ int main(void)
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     reset(); code_words[PAGE + 8] = 2; code_words[SETTING + 6] = GRM_SETTING_ROW_VALUES + 1;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
+    /* A row after the page setting can have more values than a native value
+       page holds: the menu lists them on a long value page. */
+    reset(); code_words[PAGE + 8] = 2; code_words[SETTING + 6] = 9;
+    assert(registrations() == 0 && page_count == 1);
     reset(); code_words[PAGE + 8] = 2; code_words[ROWS + 7] = TEXT * 4 + 1;
     assert(registrations() == GRM_BAD_DESCRIPTOR);
     reset(); code_words[PAGE + 8] = 2; code_words[PAGE + 2] = GRM_USED; code_words[PAGE + 7] = 1;

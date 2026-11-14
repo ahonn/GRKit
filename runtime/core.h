@@ -49,10 +49,13 @@ typedef short s16;
 #define GRKIT_ICON_SCALE_FEET 0x7ff9U
 #define GRKIT_ICON_SCALE_SIXTEEN 0x7ff8U
 
-/* One setting of a native settings page: its row label, its values (at most
-   SETTING_VALUES, grkit_core::runtime::NATIVE_SETTING_VALUES), the text of a
-   value, and the stored value. A setting of MENU can also give `select`,
-   `flags`, `cursor`, and `title` (runtime/menu_settings.h):
+/* One setting of a native settings page: its row label, its values, the
+   text of a value, and the stored value. A native value page has
+   SETTING_VALUES value slots; a setting with more values shows on a long
+   value page (runtime/menu_settings.h: settings_long), up to
+   MENU_VALUES_MAX (grkit_core::runtime::NATIVE_SETTING_VALUES). A setting of
+   MENU can also give `select`, `flags`, `cursor`, and `title`
+   (runtime/menu_settings.h):
    - SETTING_OWN_PAGE: the value page shows on an own page, where the boxes
      of the core show (runtime/ui.h). OK on value v calls select(h, the
      page, v): 1 when the setting took it and the page stays, or 0 for the

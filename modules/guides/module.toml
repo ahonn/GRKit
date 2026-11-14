@@ -16,7 +16,7 @@ tiles = [
 ]
 
 # 0 Off, 1 thirds, 2 center, 3 golden ratio, 4 diagonals, 5 thirds and center,
-# 6 golden spiral, 7 dynamic symmetry. A native settings row has at most 8 values.
+# 6 golden spiral, 7 dynamic symmetry.
 [[settings]]
 key = "STYLE"
 values = 8

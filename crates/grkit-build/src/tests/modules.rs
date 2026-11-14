@@ -593,6 +593,44 @@ values = ["Off", "Weak", "Medium", "Strong"]
     Ok(())
 }
 
+/// A settings row after the first can have more values than a native value
+/// page holds (runtime/menu_settings.h: settings_long), up to
+/// NATIVE_SETTING_VALUES.
+#[test]
+fn a_later_settings_row_can_have_a_long_value_list() -> Result<()> {
+    let directory = tempfile::tempdir()?;
+    let folder = template_folder(directory.path(), "LONG")?;
+    let write = |values: usize| -> Result<()> {
+        fs::write(
+            folder.join("module.toml"),
+            format!(
+                "id = \"LONG\"\nversion = 1\ntiles = [\"tiles/0-module.png\"]\n\
+                 [[settings]]\nkey = \"FIRST\"\nvalues = 2\n\
+                 [[settings]]\nkey = \"SECOND\"\nvalues = {values}\n\
+                 [page]\nkind = \"settings\"\nsettings = [\"FIRST\", \"SECOND\"]\n"
+            ),
+        )?;
+        let names: Vec<String> = (0..values).map(|value| format!("\"{value}\"")).collect();
+        for language in grkit_core::language::Language::ALL {
+            fs::write(
+                folder.join(format!("text/{}.toml", language.code())),
+                format!(
+                    "title = \"Long\"\n[settings.FIRST]\nlabel = \"First\"\nvalues = [\"Off\", \"On\"]\n\
+                     [settings.SECOND]\nlabel = \"Second\"\nvalues = [{}]\n",
+                    names.join(", ")
+                ),
+            )?;
+        }
+        Ok(())
+    };
+    write(12)?;
+    let (_, code, _) = module::generate(&folder)?;
+    assert!(code.contains(".setting_rows = 2"));
+    write(grkit_core::runtime::NATIVE_SETTING_VALUES + 1)?;
+    assert!(module::generate(&folder).is_err());
+    Ok(())
+}
+
 const GROUP_MANIFEST: &str = r#"id = "GROUP"
 version = 1
 tiles = ["tiles/0-module.png", "tiles/0-module.png", "tiles/0-module.png"]

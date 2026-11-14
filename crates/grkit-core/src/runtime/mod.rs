@@ -51,9 +51,11 @@ pub fn icon_stride(target: &str) -> Result<usize> {
 }
 /// The most values of a module setting.
 pub const MODULE_SETTING_VALUES: usize = 65536;
-/// The most values of a row of a native settings page (`SETTING_VALUES` in
-/// runtime/core.h): one for each module that the Modules page lists.
-pub const NATIVE_SETTING_VALUES: usize = 8;
+/// The most values of a row of a native settings page. A native value page
+/// has `SETTING_VALUES` (runtime/core.h) value slots; a row with more values
+/// lists them on a long value page (runtime/menu_settings.h: settings_long),
+/// which holds MENU_VALUES_MAX (runtime/services.h).
+pub const NATIVE_SETTING_VALUES: usize = 64;
 /// The most settings rows of a module page (`GRM_SETTING_ROWS`). A page has 0,
 /// or 2 to this many rows. The native settings page shows one row more
 /// (`SETTING_ROWS` in `runtime/core.h`): in MENU, the Enable row of the
@@ -96,7 +98,7 @@ mod tests {
         for (file, name) in [
             ("grm_format.h", "GRM_SETTING_ROW_VALUES"),
             ("sdk/grkit.h", "GRKIT_SETTING_ROW_VALUES"),
-            ("core.h", "SETTING_VALUES"),
+            ("services.h", "MENU_VALUES_MAX"),
         ] {
             let text = std::fs::read_to_string(root.join(file)).unwrap();
             let value = text

@@ -474,12 +474,16 @@ static int grm_registrations(const struct grm_module *m, const u8 *code, u32 bas
             u32 setting_rows = grm_word(page + GRM_PAGE_SETTING_ROWS_AT);
             if (setting_rows) {
                 const u8 *list = grm_code_at(m, code, base, grm_word(page + GRM_PAGE_SETTINGS_AT), setting_rows * GRM_ROW);
-                if (setting_rows > GRM_SETTING_ROWS || !list || rows > GRM_SETTING_ROW_VALUES)
+                if (setting_rows > GRM_SETTING_ROWS || !list)
                     return GRM_BAD_DESCRIPTOR;
                 /* Row 0 is the page setting, also a used one, with a text for
                    each row of the page. The others are settings of the
-                   module or used settings. The installer checks the value
-                   texts of a used row, whose values it knows. */
+                   module or used settings. Each has at most
+                   GRM_SETTING_ROW_VALUES values; a row with more values than
+                   a native value page holds lists them on a long value page
+                   (runtime/menu_settings.h: settings_long). The installer
+                   checks the value texts of a used row, whose values it
+                   knows. */
                 for (u32 r = 0; r < setting_rows; ++r) {
                     const u8 *row = list + r * GRM_ROW;
                     u32 named = grm_word(row + GRM_ROW_SETTING_AT), used = r && (named & GRM_USED);

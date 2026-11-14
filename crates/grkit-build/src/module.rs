@@ -1062,9 +1062,11 @@ fn fn_cycle(m: &Manifest, page: &PageSpec, values: usize) -> Result<String> {
 
 /// The rows of the native settings page. Row 0 is the page setting, also a
 /// used one such as CORE.ASPECT: its values are the rows of the page. The
-/// other rows are settings of the module or used settings. INSTALL writes
-/// the handle of each row, and leaves out the row of an optional used
-/// setting that the camera does not have.
+/// other rows are settings of the module or used settings. Each row has at
+/// most NATIVE_SETTING_VALUES values; a row with more values than a native
+/// value page holds lists them as a long list (runtime/menu_settings.h:
+/// settings_long). INSTALL writes the handle of each row, and leaves out the
+/// row of an optional used setting that the camera does not have.
 fn setting_rows(
     directory: &Path,
     m: &Manifest,
