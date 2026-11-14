@@ -38,15 +38,20 @@ fn write_build(root: &Path, target: &str) {
 /// The shared stand-in build of `gr3-2.21`, which GR III and GR IIIx
 /// packages need after the `gr3-2.10` build of a test.
 fn gr3_221_build() -> String {
-    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("gr3-2.21-build");
-    // Tests run in parallel: write the build once, under another name, and
-    // rename it.
-    if !root.join("build.json").exists() {
+    static BUILD: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    // Each test run writes the build again, once for all its parallel tests:
+    // a build from an earlier run can hold runtime scripts that the
+    // templates no longer produce. It is written under another name and
+    // then takes the place of the earlier one.
+    let root = BUILD.get_or_init(|| {
+        let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("gr3-2.21-build");
         let staging = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         write_build(staging.path(), "gr3-2.21");
-        let _ = fs::rename(staging.keep(), &root);
-    }
-    text(&root).to_owned()
+        let _ = fs::remove_dir_all(&root);
+        fs::rename(staging.keep(), &root).unwrap();
+        root
+    });
+    text(root).to_owned()
 }
 
 /// Run grkit. A `package` command without `--module` gets the official
