@@ -9,8 +9,9 @@
 // the tram photo at ISO 100, with Film Look Tri-X 400 and each Grain strength (GRAIN_FILES).
 // The recipe presets also come from the camera: the preview tables end at diffuse white, so they
 // cannot show the lights that Glow needs. RECIPES holds pictures that GR III firmware 2.10
-// developed from GR III DNGs, or a GR IIIx DNG on GR IIIx firmware 1.70, without a recipe and
-// with each preset (RECIPE_FILES).
+// developed from GR III DNGs, or a GR IIIx DNG on GR IIIx firmware 1.70, or recorded from a RAW
+// photo of another camera as the scene of the emulator, without a recipe and with each preset
+// (RECIPE_FILES).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -45,11 +46,14 @@ const SOURCES = {
 /** The recorded Grain pictures in GRAIN, Weak to Extra Strong, 6000 x 4000. */
 const GRAIN_FILES = ['grain-1-weak.jpg', 'grain-2-medium.jpg', 'grain-3-strong.jpg', 'grain-4-extra.jpg'];
 /**
- * The developed pictures in RECIPES, 6000 x 4000, each with the top left of its crop: a photo
- * without a recipe, then the presets that use the photo. The site credits each photo
+ * The developed pictures in RECIPES, 6000 x 4000 or GR IV 6192 x 4128, each with the top left
+ * of its crop: a photo without a recipe, then the presets that use the photo. The site credits each photo
  * (src/landing-data.ts): the takeaway is Tony Barrett's night-takeaway-queue.dng of
  * discuss.pixls.us/t/40918, the dunes are R0000357.DNG of raw.pixls.us, and the corner is
- * R0001005.DNG of raw.pixls.us, a GR IIIx photo that GR IIIx firmware 1.70 developed.
+ * R0001005.DNG of raw.pixls.us, a GR IIIx photo that GR IIIx firmware 1.70 developed. The
+ * platform, alley, cat, azaleas, and Havana photos are RAW files of other cameras from
+ * discuss.pixls.us PlayRaw: GR III firmware 2.10 recorded each one as the scene of the emulator.
+ * The coast is such a photo that GR IV firmware 1.20 recorded, 6192 x 4128.
  */
 const RECIPE_FILES = [
   ['takeaway.jpg', 620, 330],
@@ -58,6 +62,18 @@ const RECIPE_FILES = [
   ['bennet-800.jpg', 1200, 700],
   ['corner.jpg', 3840, 450],
   ['reggie-negative.jpg', 3840, 450],
+  ['platform.jpg', 2000, 1900],
+  ['bennet-bw800.jpg', 2000, 1900],
+  ['alley.jpg', 3800, 1900],
+  ['dante-sisofo-street-bw.jpg', 3800, 1900],
+  ['cat.jpg', 1370, 1300],
+  ['portra-160.jpg', 1370, 1300],
+  ['azaleas.jpg', 3500, 1500],
+  ['cotton-color-400.jpg', 3500, 1500],
+  ['havana.jpg', 2100, 1800],
+  ['candy-color-400.jpg', 2100, 1800],
+  ['coast.jpg', 1500, 800],
+  ['lanzarote.jpg', 1500, 800],
 ];
 
 const [photos, effects, grain, recipes] = process.argv.slice(2);
@@ -176,7 +192,7 @@ try {
     mkdirSync(RECIPES, { recursive: true });
     RECIPE_FILES.forEach(([file, left, top]) => {
       const picture = jpeg.decode(readFileSync(join(recipes, file)), { useTArray: true, formatAsRGBA: false, maxMemoryUsageInMB: 1024 });
-      if (picture.width !== 6000 || picture.height !== 4000) throw new Error(`${file} is not a 6000 x 4000 picture`);
+      if (left + 2160 > picture.width || top + 1620 > picture.height) throw new Error(`${file} is too small for its crop`);
       const { width, height, rgba } = crop(picture, left, top, 2160, 1620, 3);
       writeFileSync(join(RECIPES, file), encode(width, height, rgba));
     });

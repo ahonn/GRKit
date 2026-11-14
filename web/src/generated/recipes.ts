@@ -359,6 +359,681 @@ export const PRESETS: readonly Preset[] = [
         "id": 0
       }
     ]
+  },
+  {
+    "id": "bennet-bw800",
+    "effect": null,
+    "author": "Bennet",
+    "source": "https://www.reddit.com/r/ricohGR/comments/1t2rmuv/",
+    "recipes": [
+      {
+        "name": "Bennet BW800",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 2,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            2,
+            0,
+            3,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 2,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 4,
+          "shiftBa": 28,
+          "shiftGm": 12,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Bennet BW800",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 2,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            2,
+            0,
+            3,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 2,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 4,
+          "shiftBa": 28,
+          "shiftGm": 12,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "portra-160",
+    "effect": null,
+    "author": "Chrizz Ocampo",
+    "source": "https://www.facebook.com/groups/363978064347683/posts/1465331294212349/",
+    "recipes": [
+      {
+        "name": "Portra 160",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 6,
+          "levels": [
+            7,
+            3,
+            7,
+            3,
+            6,
+            1,
+            4,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 5,
+          "shiftBa": 17,
+          "shiftGm": 11,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Portra 160",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 6,
+          "levels": [
+            7,
+            3,
+            7,
+            3,
+            6,
+            1,
+            4,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 5,
+          "shiftBa": 17,
+          "shiftGm": 11,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "cotton-color-400",
+    "effect": null,
+    "author": "Luke Taylor",
+    "source": "https://www.lukeptaylor.com/blog/cotton-color-400-ricoh-gr-iii-film-recipe",
+    "recipes": [
+      {
+        "name": "Cotton Color 400",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 7,
+          "levels": [
+            4,
+            4,
+            6,
+            5,
+            3,
+            0,
+            2,
+            6,
+            2
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 12,
+          "shiftGm": 11,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          0,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Cotton Color 400",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 7,
+          "levels": [
+            4,
+            4,
+            6,
+            5,
+            3,
+            0,
+            2,
+            6,
+            2
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 12,
+          "shiftGm": 11,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          0,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "candy-color-400",
+    "effect": null,
+    "author": "Luke Taylor",
+    "source": "https://www.lukeptaylor.com/blog/candy-color-400-ricoh-gr-iii-film-recipe",
+    "recipes": [
+      {
+        "name": "Candy Color 400",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 7,
+          "levels": [
+            8,
+            2,
+            4,
+            8,
+            8,
+            8,
+            8,
+            5,
+            8
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 14,
+          "shiftBa": 14,
+          "shiftGm": 16,
+          "kelvin": 5700
+        },
+        "corrections": [
+          1,
+          3,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Candy Color 400",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 7,
+          "levels": [
+            8,
+            2,
+            4,
+            8,
+            8,
+            8,
+            8,
+            5,
+            8
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 0,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 14,
+          "shiftBa": 14,
+          "shiftGm": 16,
+          "kelvin": 5700
+        },
+        "corrections": [
+          1,
+          3,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "dante-sisofo-street-bw",
+    "effect": null,
+    "author": "Dante Sisofo",
+    "source": "https://dantesisofo.com/ricoh-griii-settings/",
+    "recipes": [
+      {
+        "name": "Dante Street B&W",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 5,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            0,
+            4,
+            8,
+            8,
+            8
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 3,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 14,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Dante Street B&W",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 5,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            0,
+            4,
+            8,
+            8,
+            8
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 3,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 14,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "lanzarote",
+    "effect": null,
+    "author": "I Am a Camera",
+    "source": "https://www.youtube.com/watch?v=omAGSJblE-U",
+    "recipes": [
+      {
+        "name": "Lanzarote",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 12,
+          "levels": [
+            4,
+            3,
+            5,
+            4,
+            2,
+            3,
+            4,
+            4,
+            4
+          ],
+          "tone": 1,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 1,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 14,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
   }
 ];
 
@@ -370,6 +1045,10 @@ export const WHITE_BALANCE_MODES: readonly (readonly (string | null)[])[] = [["A
 
 /** The labels of the stored values of each correction setting, in portable order. */
 export const CORRECTION_VALUES: readonly (readonly string[])[] = [["Auto","On","Off"],["Auto","Low","Mid","High","Off"],["Off","On"],["Auto","Low","Mid","High","Custom","Off"]];
+
+/** The labels of the tone parameter of each type in portable order, by stored value from
+ * `first`: GR III, then GR IV, or null where the type has no tone. */
+export const TONE_LABELS: readonly (readonly ({ first: number; labels: readonly string[] } | null)[])[] = [[null,null],[null,null],[{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]},{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]},{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]},{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]},{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,null],[null,null],[{"first":1,"labels":["Normal","Cool","Warm"]},{"first":1,"labels":["Normal","Cool","Warm"]}],[{"first":0,"labels":["M4","M3","M2","M1","OFF","P1","P2","P3","P4"]},{"first":0,"labels":["M4","M3","M2","M1","OFF","P1","P2","P3","P4"]}],[{"first":0,"labels":["OFF","BW","Sepia"]},{"first":0,"labels":["OFF","BW","Sepia"]}],[{"first":0,"labels":["Basic","Magenta","Yellow"]},{"first":0,"labels":["Basic","Magenta","Yellow"]}],[null,{"first":0,"labels":["Low","Mid","High"]}],[null,{"first":0,"labels":["Low","Mid","High"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}],[null,{"first":0,"labels":["OFF","","Sepia"]}],[null,{"first":0,"labels":["OFF","Sepia","Red","Green","Blue","Purple"]}]];
 
 /** The camera names of the types in each site language, by portable index. */
 export const TYPE_NAMES: Readonly<Record<string, readonly string[]>> = {

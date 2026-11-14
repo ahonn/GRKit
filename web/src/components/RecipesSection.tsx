@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Handle, HandleRoot, Item, Provider, Root } from 'react-compare-slider/components';
 import { useReactCompareSlider } from 'react-compare-slider/hooks';
 import { siteUrl } from '../catalog';
-import { CORRECTION_VALUES, LEVEL_KEYS, PRESETS, TYPE_NAMES, WHITE_BALANCE_MODES } from '../generated/recipes';
+import { CORRECTION_VALUES, LEVEL_KEYS, PRESETS, TONE_LABELS, TYPE_NAMES, WHITE_BALANCE_MODES } from '../generated/recipes';
 import type { Language, Strings } from '../i18n';
 import { LANDING_PHOTOS } from '../landing-data';
 import { RECIPE_STRINGS, type RecipeStrings } from '../recipeStrings';
@@ -52,6 +52,16 @@ export const PRESET_PICTURES: Readonly<Record<string, { recipe: string; original
   'cinestill-800t': { recipe: siteUrl('recipes/cinestill-800t.jpg'), original: siteUrl('recipes/takeaway.jpg'), photo: 'takeaway' },
   'bennet-800': { recipe: siteUrl('recipes/bennet-800.jpg'), original: siteUrl('recipes/dunes.jpg'), photo: 'dunes' },
   'reggie-negative': { recipe: siteUrl('recipes/reggie-negative.jpg'), original: siteUrl('recipes/corner.jpg'), photo: 'corner' },
+  'bennet-bw800': { recipe: siteUrl('recipes/bennet-bw800.jpg'), original: siteUrl('recipes/platform.jpg'), photo: 'platform' },
+  'portra-160': { recipe: siteUrl('recipes/portra-160.jpg'), original: siteUrl('recipes/cat.jpg'), photo: 'cat' },
+  'cotton-color-400': { recipe: siteUrl('recipes/cotton-color-400.jpg'), original: siteUrl('recipes/azaleas.jpg'), photo: 'azaleas' },
+  'candy-color-400': { recipe: siteUrl('recipes/candy-color-400.jpg'), original: siteUrl('recipes/havana.jpg'), photo: 'havana' },
+  lanzarote: { recipe: siteUrl('recipes/lanzarote.jpg'), original: siteUrl('recipes/coast.jpg'), photo: 'coast' },
+  'dante-sisofo-street-bw': {
+    recipe: siteUrl('recipes/dante-sisofo-street-bw.jpg'),
+    original: siteUrl('recipes/alley.jpg'),
+    photo: 'alley',
+  },
 };
 
 /** The count of recipes that are on shows from this many below `ON_MAX`. */
@@ -97,6 +107,19 @@ function details(recipe: Recipe, r: RecipeStrings, language: Language, effects: 
       const key = LEVEL_KEYS[index];
       if (key && stored !== 4) rows.push([r.levels[key] ?? key, level(stored)]);
     });
+    // The tone of the type, unless it is Off: a named value, or a level (Retro).
+    const tones = TONE_LABELS[look.imageType]?.[recipe.family === 'gr3' ? 0 : 1];
+    const tone = tones?.labels[look.tone - tones.first];
+    if (tone && tone !== 'OFF') {
+      const value = tones.labels[0] === 'M4' ? level(look.tone) : (r.values[tone] ?? r.tones[tone] ?? tone);
+      rows.push([r.toning, value]);
+    }
+    // The native grain: strength 1 to 3 is Low to High; GR IV also has a size.
+    if (look.grainStrength > 0) {
+      const strength = r.values[['Low', 'Mid', 'High'][look.grainStrength - 1] ?? ''] ?? '';
+      const size = recipe.family === 'gr3' ? '' : ` · ${r.grainSizes[look.grainSize] ?? ''}`;
+      rows.push([r.grainEffect, `${strength}${size}`]);
+    }
   }
   if (recipe.grain) rows.push([r.grain, r.grainLevels[recipe.grain.level] ?? '']);
   const glow = recipe.glow;

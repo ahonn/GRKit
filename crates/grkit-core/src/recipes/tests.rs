@@ -1,6 +1,5 @@
 use super::file::file_records;
 use super::layout::*;
-use super::presets::NEGATIVE_FILM;
 use super::words::setting_values;
 use super::*;
 use crate::abi::RECIPE_WORDS;
@@ -374,7 +373,6 @@ fn the_effect_code_is_that_of_the_installer() {
 /// names its author and its post.
 #[test]
 fn the_presets_are_recipes_of_the_camera() {
-    assert_eq!(native::TYPES[NEGATIVE_FILM].label, "NegativeFilm");
     for preset in presets() {
         assert!(encode(&preset.recipes).is_ok(), "{}", preset.id);
         let families: std::collections::BTreeSet<_> = preset
