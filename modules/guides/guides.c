@@ -95,7 +95,9 @@ static void guide_cross(u32 data, u32 stride, u32 color, const u16 *box)
    reciprocal. */
 static void guide_symmetry(u32 data, u32 stride, u32 color, const u16 *box)
 {
-    u32 width = box[2] - box[0], height = box[3] - box[1], x = 0, error = 0;
+    u32 width = box[2] - box[0], height = box[3] - box[1], x = 0;
+    /* Signed: the error is below 0 after a step. */
+    int error = 0;
     guide_diagonals(data, stride, color, box);
     for (u32 r = 0; r < height; ++r) {
         volatile u32 *top = GRKIT_PIXELS(data + (box[1] + r) * stride * 4),
@@ -105,8 +107,8 @@ static void guide_symmetry(u32 data, u32 stride, u32 color, const u16 *box)
         u32 across = x < width - 1 ? x : width - 2, left = box[0] + across, right = box[2] - 1 - across;
         top[left] = top[left + 1] = top[right] = top[right - 1] = color;
         bottom[left] = bottom[left + 1] = bottom[right] = bottom[right - 1] = color;
-        error += height;
-        if (2 * error >= width) { ++x; error -= width; }
+        error += (int)height;
+        if (2 * error >= (int)width) { ++x; error -= (int)width; }
     }
 }
 /* sin(i x 90 / 32 degrees) x 65536 for i = 0 to 32, rounded; 65535 at 90
