@@ -16,6 +16,10 @@
    3. Before the encode, canvas_encode gives each image of the main picture
       the whole canvas, and canvas_inner gives the plane filters the picture
       inside the border.
+   4. On a family with CANVAS_REVIEW, the review after the shot resizes the
+      R2Y source, which the firmware gives the playback in a copy of its
+      descriptor. canvas_review_c gives that copy the whole canvas, from the
+      place of the canvas until its recipe lays out the next picture.
 
    A table entry (GRKIT_CANVAS_TABLE) follows a recipe from its layout to
    its encode.
@@ -34,7 +38,7 @@
 
 /* The words of a table entry. */
 enum {
-    CANVAS_E_STATE,   /* 0 free, 1 laid out, 2 placed, 3 encoding */
+    CANVAS_E_STATE,   /* 0 free, 1 laid out, 2 placed, 3 encoding, 4 encoded */
     CANVAS_E_RECIPE,
     CANVAS_E_SHOT,
     CANVAS_E_BORDER,
@@ -56,6 +60,10 @@ enum {
 #define CANVAS_PLACED 2U
 /* The JPEG encode reads a canvas from the pool: it is given back after it. */
 #define CANVAS_ENCODING 3U
+/* The canvas of an encoded picture stays in the bank of its recipe, for the
+   review (CANVAS_REVIEW), until the recipe lays out its next picture. The
+   entry is free for another shot. */
+#define CANVAS_ENCODED 4U
 _Static_assert(CANVAS_E_WORDS*4<=GRKIT_CANVAS_ENTRY_SIZE,"canvas entry");
 
 #define CANVAS_DESC(recipe,offset,word) WORD((recipe),(offset)+(word)*4)
@@ -102,17 +110,17 @@ static void canvas_end(volatile u32 *e) {
     e[CANVAS_E_STATE]=0;
 #endif
 }
-/* The laid out or placed entry of a recipe, or 0. With `create`, a free
-   entry for it, or else the first entry that is not encoding: the table
-   holds the shots that are not encoded yet, and the oldest of four ends.
-   0 when all four are encoding. */
+/* The laid out or placed entry of a recipe, or 0. With `create`, a free or
+   encoded entry for it, or else the first entry that is not encoding: the
+   table holds the shots that are not encoded yet, and the oldest of four
+   ends. 0 when all four are encoding. */
 static volatile u32 *canvas_entry(volatile u32 *h,u32 recipe,u32 create) {
     u32 i, free=GRKIT_CANVAS_ENTRIES, other=GRKIT_CANVAS_ENTRIES;
     for(i=0;i<GRKIT_CANVAS_ENTRIES;++i) {
         volatile u32 *e=canvas_at(h,i);
         u32 state=e[CANVAS_E_STATE];
         if((state==CANVAS_LAID_OUT || state==CANVAS_PLACED) && e[CANVAS_E_RECIPE]==recipe) return e;
-        if(!state && !e[CANVAS_E_POOL] && free==GRKIT_CANVAS_ENTRIES) free=i;
+        if((!state || state==CANVAS_ENCODED) && !e[CANVAS_E_POOL] && free==GRKIT_CANVAS_ENTRIES) free=i;
         if(state!=CANVAS_ENCODING && other==GRKIT_CANVAS_ENTRIES) other=i;
     }
     if(!create) return 0;
@@ -147,6 +155,11 @@ static void canvas_layout(volatile u32 *h,volatile u32 *e,u32 module,u32 config,
     u32 bank=WORD(recipe,CANVAS_BANK), end=bank+WORD(recipe,CANVAS_BANK_SIZE);
     u32 low=0xffffffffU, high=0, stride, rows, plane, base, source, moved, i, block=0;
     canvas_end(e);
+    /* R2Y writes over the encoded canvas of the bank. */
+    for(i=0;i<GRKIT_CANVAS_ENTRIES;++i) {
+        volatile u32 *other=canvas_at(h,i);
+        if(other[CANVAS_E_STATE]==CANVAS_ENCODED && other[CANVAS_E_RECIPE]==recipe) canvas_end(other);
+    }
     if(PICTURE_DEVELOPING()) border=canvas_current(h);
     else if(!shot_word(h,shot,GRKIT_SHOT_BORDER,&border)) return;
     if(!(style=canvas_style(border))) return;
@@ -367,15 +380,24 @@ void canvas_resize_c(u32 module,u32 config) {
     }
 }
 
+/* A descriptor `d` takes the whole canvas of an entry. */
+static void canvas_describe(volatile u32 *e,u32 d) {
+    u32 y=e[CANVAS_E_CANVAS], size=e[CANVAS_E_SIZE];
+    WORD(d,4)=y; WORD(d,8)=y+e[CANVAS_E_PLANE];
+    WORD(d,0x10)=size;
+    WORD(d,0x14)=e[CANVAS_E_PITCH]|(size&0xffff0000U);
+    WORD(d,0x18)=0;
+}
+
 /* Before the encode of the pictures of `config`: each image of the main
    picture of a placed canvas takes the whole canvas. Gives the entry in
-   `out`, or returns 0 without a canvas. The entry then is free, or encoding
-   while the encode reads its pool block. */
+   `out`, or returns 0 without a canvas. The entry then is encoding while the
+   encode reads its pool block, or else encoded with CANVAS_REVIEW, or free. */
 static u32 canvas_encode(volatile u32 *h,u32 config,u32 out[CANVAS_E_WORDS]) {
     u32 i, j, n=0;
     for(i=0;i<GRKIT_CANVAS_ENTRIES && !n;++i) {
         volatile u32 *e=canvas_at(h,i);
-        u32 base=e[CANVAS_E_BASE], plane=e[CANVAS_E_PLANE], y=e[CANVAS_E_CANVAS], size=e[CANVAS_E_SIZE];
+        u32 base=e[CANVAS_E_BASE], plane=e[CANVAS_E_PLANE];
         /* The shot settings of a RAW development are those of the playback,
            so only the place of its pictures tells its canvas. */
         if(e[CANVAS_E_STATE]!=CANVAS_PLACED || (WORD(config,0x34)!=e[CANVAS_E_SHOT] && !PICTURE_DEVELOPING())) continue;
@@ -383,15 +405,16 @@ static u32 canvas_encode(volatile u32 *h,u32 config,u32 out[CANVAS_E_WORDS]) {
         for(j=0;j<4;++j) {
             u32 d=WORD(config,0x3c+j*4);
             if(d<0x40000000U || d>0xbfffff00U || WORD(d,4)<base || WORD(d,4)>=base+plane) continue;
-            WORD(d,4)=y; WORD(d,8)=y+plane;
-            WORD(d,0x10)=size;
-            WORD(d,0x14)=e[CANVAS_E_PITCH]|(size&0xffff0000U);
-            WORD(d,0x18)=0;
+            canvas_describe(e,d);
             ++n;
         }
         if(n) {
             for(j=0;j<CANVAS_E_WORDS;++j) out[j]=e[j];
+#ifdef CANVAS_REVIEW
+            e[CANVAS_E_STATE]=e[CANVAS_E_POOL] ? CANVAS_ENCODING : CANVAS_ENCODED;
+#else
             e[CANVAS_E_STATE]=e[CANVAS_E_POOL] ? CANVAS_ENCODING : 0U;
+#endif
         }
     }
     return n!=0;
@@ -411,6 +434,24 @@ static void canvas_encoded(volatile u32 *h,u32 config) {
             if(d<0x40000000U || d>0xbfffff00U || WORD(d,4)<base || WORD(d,4)>=end) continue;
             canvas_end(e);
             break;
+        }
+    }
+}
+#endif
+
+#ifdef CANVAS_REVIEW
+/* The copy `d` of a descriptor (as in R) that the review resizes: when its
+   picture is the R2Y source of a placed or encoded canvas, it takes the
+   whole canvas. A pool canvas that the encode gave back stays out. */
+void canvas_review_c(u32 d) {
+    volatile u32 *h=framing_header();
+    u32 i, y=WORD(d,4);
+    for(i=0;i<GRKIT_CANVAS_ENTRIES;++i) {
+        volatile u32 *e=canvas_at(h,i);
+        u32 state=e[CANVAS_E_STATE];
+        if((state==CANVAS_PLACED || state==CANVAS_ENCODING || state==CANVAS_ENCODED) && e[CANVAS_E_SOURCE]==y) {
+            canvas_describe(e,d);
+            return;
         }
     }
 }

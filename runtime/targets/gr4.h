@@ -499,6 +499,12 @@
 #define CANVAS_MODULE_PITCH_WORD 0x95e4
 /* The playback and the review need each preview at the size of its box. */
 #define CANVAS_PREVIEW_BOX 1
+/* The review after a shot shows the screennail for a moment, then a picture
+   that the playback resizes from a copy of the R2Y source descriptor, which
+   it can take before or after the encode starts. The hook canvas_review
+   gives that copy the whole canvas. (On GR III the review resizes the main
+   picture, which the encode descriptors give.) */
+#define CANVAS_REVIEW 1
 /* FW_CANVAS_FILL(0, descriptor, color, 1) fills the rectangle of a
    descriptor through the IIP and returns when it is done; the last argument
    leaves out its cache maintenance. Its descriptor adds +0 format (1 for

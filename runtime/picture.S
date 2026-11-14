@@ -414,6 +414,24 @@ picture_develop_tone:
     ldr pc, =HOOK_PICTURE_DEVELOP_TONE_TARGET
 #endif
 
+#ifdef HOOK_CANVAS_REVIEW
+/* The review after a shot (CANVAS_REVIEW). Replaces the BL that copies the
+   descriptor of its picture (r1) into the playback (r0). The copy runs
+   first, then canvas_review_c(copy), and the result of the copy returns. */
+.global canvas_review
+canvas_review:
+    push {r4, r5, r6, lr}
+    mov r4, r0
+    ldr r12, =HOOK_CANVAS_REVIEW_TARGET
+    blx r12
+    mov r5, r0
+    mov r0, r4
+    bl canvas_review_c
+    mov r0, r5
+    pop {r4, r5, r6, pc}
+.ltorg
+#endif
+
 #if defined(HOOK_CANVAS_R2Y) && defined(HOOK_CANVAS_RESIZE)
 /* The canvas of CORE.BORDER (runtime/canvas_shot.h). Replaces the BL to the
    R2Y stripe send of StillMake: canvas_r2y_c(module, config) runs first,

@@ -287,6 +287,9 @@ const SITES: &[Site] = &[
     // after the resize of BackResize.
     ("canvas_r2y", 0x53725db4, "23feffeb"),
     ("canvas_resize", 0x537201ac, "28201be5"),
+    // The BL that copies the picture of the review after a shot into the
+    // playback.
+    ("canvas_review", 0x536c03d0, "2fea08eb"),
 ];
 
 /// The stock instructions around the processing hooks.

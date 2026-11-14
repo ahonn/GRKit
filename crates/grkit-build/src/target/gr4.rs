@@ -132,9 +132,11 @@ const DIAL: &[HookSpec] = &[
 ];
 
 /// The canvas of CORE.BORDER (`runtime/canvas_shot.h`): the BL to the R2Y
-/// stripe dispatch of StillMake, and the instruction after the resize of
-/// BackResize.
+/// stripe dispatch of StillMake, the instruction after the resize of
+/// BackResize, and the BL that copies the picture of the review after a shot
+/// into the playback.
 const CANVAS: &[HookSpec] = &[
     bl("canvas_r2y", Framing, PictureCanvas),
     b("canvas_resize", Framing, PictureCanvas),
+    bl("canvas_review", Framing, PictureCanvas),
 ];
