@@ -306,11 +306,12 @@ static u32 native_grain_fits(u32 t,u32 s,u32 size) {
    set, its parameters, and its native grain in words 1 to 3 when `look` is
    set, the
    white balance in words 2 and 3, each correction setting in word 3, and
-   the exposure settings in word 4.
+   the exposure settings in word 4, from the settings record `record`, or
+   from a copy of it (runtime/recipe_preview.h).
    A value out of the tables is not held, and GR IV Monochrome holds no
    white balance. */
-static void native_read(u32 *w,u32 look) {
-    u32 record=native_record(), t, p, v, digits=0, code, mode, kelvin, grain, c, monochrome, set;
+static void native_read_at(u32 *w,u32 look,u32 record) {
+    u32 t, p, v, digits=0, code, mode, kelvin, grain, c, monochrome, set;
     if(!record) return;
     monochrome=NATIVE_MONOCHROME();
     set=BYTE(record,NATIVE_ACTIVE_SET_FIELD);
@@ -443,81 +444,239 @@ static void native_set_parameter(u32 t,u32 p,u32 v) {
     native_set(name,native_label(p,v));
 }
 
+/* ---- Writes ----------------------------------------------------------------
+   A write goes field by field. Each native value of the words has a field
+   in the settings record: the active set, the type of the main set, each
+   parameter of a type in the main set, the white balance mode, the shifts
+   of a mode, the color temperature, each correction setting, and each
+   exposure setting. native_sync gives each field the value that the words
+   `to` set, or for a field that `to` does not hold, its value in `base`, a
+   settings record or a copy of one (runtime/recipe_preview.h):
+   - With `force`, as an apply, it writes each field that `to` holds, also
+     when the field has that value already.
+   - Else it writes only a field whose value differs, and only while the
+     field shows its value in `base` or the value that the words `from` set:
+     a field that the camera changed meanwhile, as when the mode dial loads
+     the settings of another position, stays.
+   `live` is the settings record, or 0 when it is not readable: then each
+   field that `to` holds is written. The order is that of the native menu:
+   the active set, the type, its parameters, the white balance mode, its
+   shifts, the color temperature, the corrections, then the exposure. */
+#define NATIVE_UNHELD 0xffffffffU
+typedef struct {
+    u32 live, base, force;
+    const volatile u32 *from, *to;
+} NativeSync;
+/* Whether to write a field that shows `now` and holds `base` in the base,
+   which `to` sets to `want` (`held`) and `from` to `was` (`had`). `known`
+   is 0 for a field that cannot be read. */
+static u32 native_due(const NativeSync *s,u32 known,u32 now,u32 base,u32 held,u32 want,u32 had,u32 was) {
+    if(!known) return held;
+    if(s->force && held) return 1;
+    return now!=(held ? want : base) && (now==base || (had && now==was));
+}
+/* The same for a field of `size` bytes (1 or 2) at `at` of the records, or
+   at 0 for a field that the build does not give. `want` and `was` are the
+   values of `to` and `from`, NATIVE_UNHELD for a field that they do not
+   hold. The value to write goes to *value. */
+static u32 native_due_field(const NativeSync *s,u32 at,u32 size,u32 want,u32 was,u32 *value) {
+    u32 known=s->live && at, now=0, base=0;
+    if(known) {
+        now=size==1U ? BYTE(s->live,at) : HALF(s->live,at);
+        base=size==1U ? BYTE(s->base,at) : HALF(s->base,at);
+    }
+    *value=want!=NATIVE_UNHELD ? want : base;
+    return native_due(s,known,now,base,want!=NATIVE_UNHELD,want,was!=NATIVE_UNHELD,was);
+}
+/* The stored value of parameter p of type t that the words w set, or
+   NATIVE_UNHELD: the levels, the tone of the type, the HDR intensity, the
+   B&W filter, the native grain, and the Solarization type of the type of
+   w. A sized native grain (GR IV) sets its size and strength only while it
+   is on. */
+static u32 native_parameter_held(const volatile u32 *w,u32 t,u32 p) {
+    u32 x, s, digits, i;
+    if(!w || NATIVE_TYPE(w[NATIVE_LOOK_WORD])!=t+1U || !native_field(t,p)) return NATIVE_UNHELD;
+    x=w[NATIVE_EXTRA_WORD];
+    s=NATIVE_GRAIN(x);
+    if(p<NATIVE_LEVELS) {
+        digits=w[NATIVE_LEVELS_WORD];
+        for(i=0;i<p;++i) digits=native_div9(digits);
+        return native_level(digits-9U*native_div9(digits));
+    }
+    if(p==native_tone(t)) return NATIVE_TONE(w[NATIVE_LOOK_WORD]);
+    switch(p) {
+    case NATIVE_PARAMETER_HDRINTENSE: return NATIVE_INTENSITY(w[NATIVE_LOOK_WORD]);
+    case NATIVE_PARAMETER_FILTEREFFECTCUSTOM: return NATIVE_FILTER(w[NATIVE_LOOK_WORD]);
+    case NATIVE_PARAMETER_PARTICLE: return native_grain_sized(t) ? s!=0U : native_grain_particle(s);
+    case NATIVE_PARAMETER_PARTICLESIZE: return native_grain_sized(t) && s ? NATIVE_GRAIN_SIZE(x) : NATIVE_UNHELD;
+    case NATIVE_PARAMETER_PARTICLESTRENGTH: return native_grain_sized(t) && s ? s-1U : NATIVE_UNHELD;
+    case NATIVE_PARAMETER_SOLARIZATIONTYPE: return NATIVE_SOLARIZATION(x);
+    default: return NATIVE_UNHELD;
+    }
+}
+/* The stored code of the type that the words w set, or NATIVE_UNHELD; the
+   same for the white balance mode. */
+static u32 native_type_held(const volatile u32 *w) {
+    u32 t=w ? NATIVE_TYPE(w[NATIVE_LOOK_WORD]) : 0;
+    return t ? native_type_codes[t-1U] : NATIVE_UNHELD;
+}
+static u32 native_mode_held(const volatile u32 *w) {
+    u32 m=w ? NATIVE_MODE(w[NATIVE_LOOK_WORD]) : 0;
+    return m ? native_mode_codes[m-1U] : NATIVE_UNHELD;
+}
+/* The shift (`gm` 0 for A-B, 1 for G-M) of mode m that the words w set,
+   or NATIVE_UNHELD. */
+static u32 native_shift_held(const volatile u32 *w,u32 m,u32 gm) {
+    if(!w || NATIVE_MODE(w[NATIVE_LOOK_WORD])!=m+1U || !native_mode_shifts[m]) return NATIVE_UNHELD;
+    return gm ? NATIVE_GM(w[NATIVE_LOOK_WORD]) : NATIVE_BA(w[NATIVE_LOOK_WORD]);
+}
+/* The color temperature in kelvin that the words w set, or NATIVE_UNHELD. */
+static u32 native_temperature_held(const volatile u32 *w) {
+    if(!w || NATIVE_MODE(w[NATIVE_LOOK_WORD])!=NATIVE_MODE_TEMPERATURE+1U) return NATIVE_UNHELD;
+    return NATIVE_TEMPERATURE_MIN+NATIVE_TEMPERATURE(w[NATIVE_EXTRA_WORD])*NATIVE_TEMPERATURE_STEP;
+}
+/* The stored value of correction c that the words w set, or NATIVE_UNHELD. */
+static u32 native_correction_held(const volatile u32 *w,u32 c) {
+    u32 v=w ? NATIVE_CORRECTION(w[NATIVE_EXTRA_WORD],c) : 0;
+    return v ? v-1U : NATIVE_UNHELD;
+}
+/* The exposure bits of the words w as the camera takes them, or 0. */
+static u32 native_exposure_held(const NativeSync *s,const volatile u32 *w) {
+    return w ? native_exposure_fit(s->live,w[NATIVE_EXPOSURE_WORD]) : 0;
+}
+
+/* Set the active set to set v, whose label is No and its number. */
+static void native_set_active(u32 v) {
+    char label[4]={'N','o',(char)('0'+v),0};
+    if(v<NATIVE_SETS) native_set(NATIVE_ACTIVE_SET_SETTING,label);
+}
+/* Set the type of the main set to stored code `code`. GR IV Monochrome
+   sets its types with the type setter. */
+static void native_set_type(u32 code) {
+    u32 t;
+    for(t=0;t<NATIVE_TYPES && (native_type_codes[t]!=code || code==0xffU);++t) {}
+    if(t>=NATIVE_TYPES) return;
+#ifdef NATIVE_SET_TYPE
+    if(t>=NATIVE_FIRST_MONOCHROME) { NATIVE_SET_TYPE(code); return; }
+#endif
+    native_set(NATIVE_TYPE_SETTING,native_type_labels[t]);
+}
+/* Set the white balance mode to stored code `code`. */
+static void native_set_mode(u32 code) {
+    u32 m;
+    for(m=0;m<NATIVE_MODES && native_mode_codes[m]!=code;++m) {}
+    if(m<NATIVE_MODES) native_set(NATIVE_WHITE_BALANCE_SETTING,native_mode_labels[m]);
+}
+/* Set the A-B (`gm` 0) or the G-M shift of mode m to stored value v. */
+static void native_set_shift(u32 m,u32 gm,u32 v) {
+    char name[NATIVE_NAME_BYTES];
+    u32 at;
+    if(!native_mode_labels[m] || v>=NATIVE_SHIFTS) return;
+    at=native_cat(name,0,NATIVE_WHITE_BALANCE_SETTING);
+    at=native_cat(name,at,native_mode_labels[m]);
+    native_cat(name,at,gm ? "AdjustGM" : "AdjustBA");
+    native_set(name,gm ? native_gm_labels[v] : native_ba_labels[v]);
+}
+static void native_set_temperature(u32 kelvin) {
+    char number[6];
+    u32 i=5;
+    if(kelvin<NATIVE_TEMPERATURE_MIN || kelvin>NATIVE_TEMPERATURE_MAX) return;
+    number[5]=0;
+    while(i--) { u32 rest=native_div10(kelvin); number[i]=(char)('0'+kelvin-10U*rest); kelvin=rest; }
+    native_set(NATIVE_COLOR_TEMPERATURE_SETTING,number[0]=='0' ? number+1 : number);
+}
+static void native_set_correction(u32 c,u32 v) {
+    if(v<native_correction_counts[c]) native_set(native_correction_names[c],native_correction_labels[c][v]);
+}
+
+/* Write the parameters of type t - 1 (none for 0). */
+static void native_sync_type(const NativeSync *s,u32 t) {
+    u32 p, v;
+    if(!t--) return;
+    for(p=0;p<NATIVE_PARAMETERS;++p)
+        if(native_field(t,p) &&
+           native_due_field(s,native_field(t,p),1,native_parameter_held(s->to,t,p),native_parameter_held(s->from,t,p),&v))
+            native_set_parameter(t,p,v);
+}
+/* Write the shifts of mode m - 1 (none for 0). */
+static void native_sync_shifts(const NativeSync *s,u32 m) {
+    u32 gm, v;
+    if(!m-- || !native_mode_shifts[m]) return;
+    for(gm=0;gm<2U;++gm)
+        if(native_due_field(s,native_shift_fields[2U*m+gm],1,native_shift_held(s->to,m,gm),native_shift_held(s->from,m,gm),&v))
+            native_set_shift(m,gm,v);
+}
+/* Write the exposure compensation (`iso` 0) or the Auto ISO upper limit in
+   their steps: sixths of a stop, and third stops from ISO 100. x and y are
+   the exposure bits of `to` and `from` (native_exposure_held). */
+static void native_sync_steps(const NativeSync *s,u32 iso,u32 x,u32 y) {
+    char name[NATIVE_NAME_BYTES];
+    u32 held=iso ? NATIVE_ISO(x) : NATIVE_EV(x), had=iso ? NATIVE_ISO(y) : NATIVE_EV(y);
+    int now=0, base=0, want, was;
+    if(s->live) {
+        now=iso ? native_iso_read(s->live,NATIVE_ISO_UPPER_FIELD) : native_ev_read(s->live);
+        base=iso ? native_iso_read(s->base,NATIVE_ISO_UPPER_FIELD) : native_ev_read(s->base);
+    }
+    want=iso ? (int)held-1 : (int)held-NATIVE_EV_ZERO;
+    was=iso ? (int)had-1 : (int)had-NATIVE_EV_ZERO;
+    if(!native_due(s,s->live!=0,(u32)now,(u32)base,held!=0,(u32)want,had!=0,(u32)was)) return;
+    if(!held) want=base;
+    if(want==NATIVE_NO_STEP) return;
+    if(iso) {
+        native_decimal(name,3*(int)NATIVE_ISO_SV_BASE+want,3U);
+        native_set(NATIVE_ISO_UPPER_SETTING,name);
+    }
+    else {
+        native_decimal(name,want,6U);
+        native_set(NATIVE_EXPOSURE_SETTING,name);
+    }
+}
+static void native_sync(u32 live,u32 base,const volatile u32 *from,const volatile u32 *to,u32 force) {
+    NativeSync s, once;
+    u32 tt=to ? NATIVE_TYPE(to[NATIVE_LOOK_WORD]) : 0, ft=from ? NATIVE_TYPE(from[NATIVE_LOOK_WORD]) : 0;
+    u32 tm=to ? NATIVE_MODE(to[NATIVE_LOOK_WORD]) : 0, fm=from ? NATIVE_MODE(from[NATIVE_LOOK_WORD]) : 0;
+    u32 v, c, x, y;
+    s.live=live; s.base=live ? base : 0; s.force=force; s.from=from; s.to=to;
+    /* A type is one of the main set, so it makes the main set active. Only
+       a change of the set writes it. */
+    once=s;
+    once.force=0;
+    if(live && native_due_field(&once,NATIVE_ACTIVE_SET_FIELD,1,tt ? 0U : NATIVE_UNHELD,ft ? 0U : NATIVE_UNHELD,&v))
+        native_set_active(v);
+    if(native_due_field(&s,NATIVE_TYPE_FIELD,1,native_type_held(to),native_type_held(from),&v)) native_set_type(v);
+    native_sync_type(&s,tt);
+    if(ft!=tt) native_sync_type(&s,ft);
+    if(native_due_field(&s,NATIVE_MODE_FIELD,1,native_mode_held(to),native_mode_held(from),&v)) native_set_mode(v);
+    native_sync_shifts(&s,tm);
+    if(fm!=tm) native_sync_shifts(&s,fm);
+    if(native_due_field(&s,NATIVE_TEMPERATURE_FIELD,2,native_temperature_held(to),native_temperature_held(from),&v))
+        native_set_temperature(v);
+    for(c=0;c<NATIVE_CORRECTIONS;++c)
+        if(native_due_field(&s,native_correction_fields[c],1,native_correction_held(to,c),native_correction_held(from,c),&v))
+            native_set_correction(c,v);
+    x=native_exposure_held(&s,to);
+    y=native_exposure_held(&s,from);
+    native_sync_steps(&s,0,x,y);
+    native_sync_steps(&s,1,x,y);
+    if(native_due_field(&s,NATIVE_METERING_FIELD,1,NATIVE_METERING(x) ? NATIVE_METERING(x)-1U : NATIVE_UNHELD,
+                        NATIVE_METERING(y) ? NATIVE_METERING(y)-1U : NATIVE_UNHELD,&v) &&
+       v<NATIVE_COUNT(native_metering_labels))
+        native_set(NATIVE_METERING_SETTING,native_metering_labels[v]);
+    if(native_due_field(&s,NATIVE_ND_FIELD,1,NATIVE_ND(x) ? NATIVE_ND(x)-1U : NATIVE_UNHELD,
+                        NATIVE_ND(y) ? NATIVE_ND(y)-1U : NATIVE_UNHELD,&v) &&
+       v<NATIVE_COUNT(native_nd_labels))
+        native_set(NATIVE_ND_SETTING,native_nd_labels[v]);
+}
+
 /* Write the native settings of the words that the camera supports
    (native_supported): the type, its parameters, its native grain, and its
    Solarization type, then the white balance mode, its shifts, and the color
    temperature of ColorTemp1, then each correction setting that is not
    Unset, then each exposure setting that the recipe holds, as the camera
-   takes it (native_exposure_fit). */
+   takes it (native_exposure_fit). Each one is written, also when it has
+   that value already. */
 static void native_write(const volatile u32 *w) {
-    u32 t=NATIVE_TYPE(w[NATIVE_LOOK_WORD]), mode=NATIVE_MODE(w[NATIVE_LOOK_WORD]), p, digits=w[NATIVE_LEVELS_WORD];
     u32 record=native_record();
-    char name[NATIVE_NAME_BYTES], number[6];
-    if(t) {
-        --t;
-        if(record && BYTE(record,NATIVE_ACTIVE_SET_FIELD)) native_set(NATIVE_ACTIVE_SET_SETTING,NATIVE_MAIN_SET);
-#ifdef NATIVE_SET_TYPE
-        if(t>=NATIVE_FIRST_MONOCHROME) NATIVE_SET_TYPE(native_type_codes[t]);
-        else
-#endif
-        native_set(NATIVE_TYPE_SETTING,native_type_labels[t]);
-        for(p=0;p<NATIVE_LEVELS;++p) {
-            u32 rest=native_div9(digits);
-            if(native_field(t,p)) native_set_parameter(t,p,native_level(digits-9U*rest));
-            digits=rest;
-        }
-        if(native_tone(t)<NATIVE_PARAMETERS) native_set_parameter(t,native_tone(t),NATIVE_TONE(w[NATIVE_LOOK_WORD]));
-        if(native_field(t,NATIVE_PARAMETER_HDRINTENSE))
-            native_set_parameter(t,NATIVE_PARAMETER_HDRINTENSE,NATIVE_INTENSITY(w[NATIVE_LOOK_WORD]));
-        if(native_field(t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM))
-            native_set_parameter(t,NATIVE_PARAMETER_FILTEREFFECTCUSTOM,NATIVE_FILTER(w[NATIVE_LOOK_WORD]));
-        if(native_field(t,NATIVE_PARAMETER_PARTICLE)) {
-            u32 s=NATIVE_GRAIN(w[NATIVE_EXTRA_WORD]);
-            if(!native_grain_sized(t)) native_set_parameter(t,NATIVE_PARAMETER_PARTICLE,native_grain_particle(s));
-            else {
-                native_set_parameter(t,NATIVE_PARAMETER_PARTICLE,s!=0);
-                if(s) {
-                    native_set_parameter(t,NATIVE_PARAMETER_PARTICLESIZE,NATIVE_GRAIN_SIZE(w[NATIVE_EXTRA_WORD]));
-                    native_set_parameter(t,NATIVE_PARAMETER_PARTICLESTRENGTH,s-1U);
-                }
-            }
-        }
-        if(native_field(t,NATIVE_PARAMETER_SOLARIZATIONTYPE))
-            native_set_parameter(t,NATIVE_PARAMETER_SOLARIZATIONTYPE,NATIVE_SOLARIZATION(w[NATIVE_EXTRA_WORD]));
-    }
-    if(mode) {
-        --mode;
-        native_set(NATIVE_WHITE_BALANCE_SETTING,native_mode_labels[mode]);
-        if(native_mode_shifts[mode]) {
-            u32 at=native_cat(name,0,NATIVE_WHITE_BALANCE_SETTING);
-            at=native_cat(name,at,native_mode_labels[mode]);
-            native_cat(name,at,"AdjustBA");
-            native_set(name,native_ba_labels[NATIVE_BA(w[NATIVE_LOOK_WORD])]);
-            name[at+6]='G'; name[at+7]='M';
-            native_set(name,native_gm_labels[NATIVE_GM(w[NATIVE_LOOK_WORD])]);
-        }
-        if(mode==NATIVE_MODE_TEMPERATURE) {
-            u32 kelvin=NATIVE_TEMPERATURE_MIN+NATIVE_TEMPERATURE(w[NATIVE_EXTRA_WORD])*NATIVE_TEMPERATURE_STEP, i=5;
-            number[5]=0;
-            while(i--) { u32 rest=native_div10(kelvin); number[i]=(char)('0'+kelvin-10U*rest); kelvin=rest; }
-            native_set(NATIVE_COLOR_TEMPERATURE_SETTING,number[0]=='0' ? number+1 : number);
-        }
-    }
-    for(p=0;p<NATIVE_CORRECTIONS;++p)
-        if(NATIVE_CORRECTION(w[NATIVE_EXTRA_WORD],p))
-            native_set(native_correction_names[p],native_correction_labels[p][NATIVE_CORRECTION(w[NATIVE_EXTRA_WORD],p)-1U]);
-    {
-        u32 x=native_exposure_fit(record,w[NATIVE_EXPOSURE_WORD]);
-        if(NATIVE_EV(x)) {
-            native_decimal(name,(int)NATIVE_EV(x)-NATIVE_EV_ZERO,6U);
-            native_set(NATIVE_EXPOSURE_SETTING,name);
-        }
-        if(NATIVE_ISO(x)) {
-            native_decimal(name,3*(int)NATIVE_ISO_SV_BASE+(int)NATIVE_ISO(x)-1,3U);
-            native_set(NATIVE_ISO_UPPER_SETTING,name);
-        }
-        if(NATIVE_METERING(x)) native_set(NATIVE_METERING_SETTING,native_metering_labels[NATIVE_METERING(x)-1U]);
-        if(NATIVE_ND(x)) native_set(NATIVE_ND_SETTING,native_nd_labels[NATIVE_ND(x)-1U]);
-    }
+    native_sync(record,record,0,w,1);
 }
 #endif

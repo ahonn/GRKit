@@ -694,6 +694,8 @@ static void leave(u32 controller) {
         }
     }
     h[GRKIT_HOST_MENU_LEVEL/4]=0; h[GRKIT_HOST_MENU_REBUILDING/4]=1;
+    /* The preview of a recipe ends: GRKit leaves without OK. */
+    recipe_preview_show(h,RECIPE_NONE);
     h[GRKIT_HOST_PREVIEW/4]=0;
     detail_width(controller,400);
     /* Rebuild the original list before its exit callback saves a cursor. */
@@ -1166,6 +1168,7 @@ A32_ENTRY u32 menu_destroy(u32 controller) {
         exit_commit(h);
         h[GRKIT_HOST_MENU_CONTROLLER/4]=0; h[GRKIT_HOST_MENU_LEVEL/4]=0;
     }
+    recipe_preview_show(h,RECIPE_NONE);
     h[GRKIT_HOST_PREVIEW/4]=0;
     h[GRKIT_HOST_FRAME_PREVIEW/4]=0;
     h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=0;

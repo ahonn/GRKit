@@ -544,6 +544,19 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
     /// Word index of the PERSIST buffer within modulecode, not a native address.
     HOST_PERSIST_WORD: 4;
+    /// The record of the ADJ preview of a recipe whose Fn adjustments the
+    /// live view takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the
+    /// record, while GRKIT_HOST_PREVIEW is that record; else 0
+    /// (runtime/recipe_preview.h, runtime/processing.h).
+    HOST_PREVIEW_FN: 4;
+    /// Those adjustments: one stored byte each, in the order of
+    /// RECORD_PARAMETERS. It follows GRKIT_HOST_PREVIEW_FN.
+    HOST_PREVIEW_FN_BYTES: 12;
+    /// The copy of the native settings record from the start of the ADJ
+    /// preview of a recipe, in the services block, or 0 while no preview
+    /// writes native settings. A capture of the current settings reads the
+    /// native settings from it (runtime/recipes.h).
+    HOST_RECIPE_PREVIEW: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;

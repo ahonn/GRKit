@@ -224,6 +224,28 @@ parameters_committed:
     ldrb r2, [PROCESSING_OBJECT, #PROCESSING_KEPT_BYTE]
     push {r2}
 #endif
+    // r8 is at the stored bytes: those of the record, or in the live view of
+    // the ADJ preview of a recipe of this record, those of the recipe
+    // (GRKIT_HOST_PREVIEW_FN, runtime/recipe_preview.h). The defaults stay
+    // those of the record.
+.if GRKIT_HOST_PREVIEW_FN_BYTES != GRKIT_HOST_PREVIEW_FN + 4
+.error "The Fn bytes of the preview follow its record"
+.endif
+    push {r8}
+    mov r8, r3
+    ldrb r2, [PROCESSING_CONTEXT, #0x2ac]
+    cmp r2, #1
+    bne parameters_own
+    ldr r2, =GRKIT_HEADER_REFERENCE
+    ldr r12, [r2, #GRKIT_HOST_PREVIEW]
+    cmp r12, r0
+    bne parameters_own
+    add r2, r2, #(GRKIT_HOST_PREVIEW_FN & ~0xff)
+    add r2, r2, #(GRKIT_HOST_PREVIEW_FN & 0xff)
+    ldr r12, [r2], #4
+    cmp r12, r0
+    moveq r8, r2
+parameters_own:
     add r1, PROCESSING_OBJECT, #0x1e0
     add r0, PROCESSING_OBJECT, #0x200
     adr r12, parameters_sources
@@ -236,7 +258,7 @@ parameters_fill:
     // (native - 4) mod 9 (zero without a native look). The native value is
     // (stored + default + 4) mod 9. A stored byte above 8 counts as 0.
     add lr, r3, r2
-    ldrb r2, [r3, r2]
+    ldrb r2, [r8, r2]
     cmp r2, #8
     movhi r2, #0
     ldrb lr, [lr, #(GRKIT_RECORD_FN_DEFAULTS - GRKIT_RECORD_PARAMETERS)]
@@ -250,6 +272,7 @@ parameters_store:
     strh r2, [r1], #2
     cmp r1, r0
     bne parameters_fill
+    pop {r8}
 #ifdef DEVELOP_PARAMETERS
     // A RAW development takes the Fn adjustments of the record from the
     // Standard parameter set of the development model while the set holds

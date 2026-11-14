@@ -5,6 +5,10 @@
    and shows in ADJ, then Save Settings. The rows are actions, so an ADJ exit
    applies none of them (MENU_PAGE_ACTIONS).
 
+   - A move of the cursor to a recipe shows it in the live view, as the
+     native ADJ previews a highlighted value, and leaving it without OK
+     writes back the settings from before (runtime/recipe_preview.h). The
+     page opens without a preview.
    - OK on a recipe applies it and closes ADJ, as OK on a native value does.
      A recipe that cannot apply shows a message with the reason instead. A
      recipe whose Grain has no effect or whose Glow module is not loaded
@@ -35,6 +39,7 @@
 #include "native_look.h"
 #include "recipes.h"
 #include "recipe_details.h"
+#include "recipe_preview.h"
 
 
 #define RECIPE_TILE_MODULE 0U
@@ -341,7 +346,12 @@ static void recipe_ok(volatile u32 *h,u32 row) {
         return;
     }
     saved=recipe_first_row(h);
+    /* The preview of this recipe stays until the apply, so that the undo
+       step holds the settings from before the preview, and the native
+       settings that it wrote stay. A preview of another recipe ends first. */
+    if(!recipe_preview_shows(h,slot)) recipe_preview_show(h,RECIPE_NONE);
     result=recipe_apply(h,slot);
+    recipe_preview_drop(h);
     switch(result) {
     case RECIPE_MISSING: recipe_message(h,RECIPE_TEXT_MISSING); return;
     case RECIPE_UNSUPPORTED: recipe_message(h,RECIPE_TEXT_UNSUPPORTED); return;
@@ -370,6 +380,9 @@ static void recipe_action_done(u32 choice,u32 slot) {
     if(choice==0U) recipe_keyboard(h,slot,recipe_renamed_back);
     else if(choice==1U) recipe_delete_confirm(h,slot);
 }
+/* A move of the cursor previews the recipe under it, and ends the preview
+   on Undo and Save (runtime/recipe_preview.h). */
+static void recipe_highlight(volatile u32 *h) { recipe_preview_show(h,recipe_row_slot(h,h[GRKIT_HOST_MENU_CURSOR/4])); }
 /* OK on Undo keeps ADJ open. */
 static u32 recipe_stays(volatile u32 *h,u32 row) { return recipe_row_slot(h,row)==RECIPE_ROW_UNDO; }
 /* Fn on a recipe shows its name with Rename and Delete: 1 when the page
@@ -386,5 +399,5 @@ static u32 recipe_fn(volatile u32 *h,u32 row) {
 /* The page in MENU (runtime/menu_recipes.h). */
 static const MenuListing recipe_listing;
 static const MenuPage recipe_module={recipe_title,recipe_summary,recipe_rows,recipe_label,recipe_icon,
-    recipe_checked,recipe_ok,recipe_committed,0,0,0,recipe_fn,MENU_PAGE_ACTIONS,&recipe_listing,recipe_stays};
+    recipe_checked,recipe_ok,recipe_committed,recipe_highlight,0,0,recipe_fn,MENU_PAGE_ACTIONS,&recipe_listing,recipe_stays};
 #endif

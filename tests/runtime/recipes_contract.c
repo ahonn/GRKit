@@ -18,12 +18,24 @@ typedef unsigned int u32;
 static u8 records[TEST_COUNT * GRKIT_RECORD_SIZE];
 static u32 settings_object[2];
 static u8 native_record_bytes[4096];
+/* The services block of the core (runtime/services.h), where the ADJ
+   preview of a recipe keeps its copy of the settings record. */
+#define TEST_SERVICES 0x5c000000U
+static u32 services_memory[0x4000];
+static volatile u32 *mapped_services(u32 address)
+{
+    assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && !(address & 3));
+    return &services_memory[(address - TEST_SERVICES) / 4];
+}
+#define SERVICES_MAP(address) mapped_services(address)
 static u8 *mapped(u32 address)
 {
     if (address >= TEST_SETTINGS && address < TEST_SETTINGS + sizeof(settings_object))
         return (u8 *)settings_object + (address - TEST_SETTINGS);
     if (address >= TEST_NATIVE && address < TEST_NATIVE + sizeof(native_record_bytes))
         return native_record_bytes + (address - TEST_NATIVE);
+    if (address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory))
+        return (u8 *)services_memory + (address - TEST_SERVICES);
     assert(address >= TEST_RECORDS && address < TEST_RECORDS + sizeof(records));
     return records + (address - TEST_RECORDS);
 }
@@ -36,11 +48,17 @@ static u8 *mapped(u32 address)
 static u32 settings_present;
 static char native_calls[64][96];
 static u32 native_call_count;
+/* With `dispatch_live`, each UserData Set also stores its value in the
+   settings record, as the dispatcher of the camera does (native_dispatch,
+   after the native tables). */
+static u32 dispatch_live;
+static void native_dispatch(const char *name, const char *label);
 static void native_record_call(const char *const *argv)
 {
     assert(native_call_count < 64);
     assert(!strcmp(argv[0], "UserData") && !strcmp(argv[1], "Set"));
     snprintf(native_calls[native_call_count++], 96, "%s=%s", argv[2], argv[3]);
+    if (dispatch_live) native_dispatch(argv[2], argv[3]);
 }
 #ifdef NATIVE_RECORD
 #define NATIVE_SETTINGS() (settings_present ? TEST_SETTINGS : 0U)
@@ -54,6 +72,7 @@ static void native_record_type(u32 code)
 {
     assert(native_call_count < 64);
     snprintf(native_calls[native_call_count++], 96, "TYPE=%u", code);
+    if (dispatch_live) native_record_bytes[NATIVE_TYPE_FIELD] = (u8)code;
 }
 #define NATIVE_MONOCHROME() (camera_monochrome)
 #define NATIVE_SET_TYPE(code) native_record_type(code)
@@ -141,6 +160,7 @@ static u32 test_id_source;
 #include "native_look.h"
 #include "recipes.h"
 #include "services.h"
+#include "recipe_preview.h"
 #include "recipe_details.h"
 #include "recipe_abbreviation.h"
 
@@ -199,6 +219,8 @@ static void reset(void)
     memset((void *)header, 0, sizeof header);
     memset(records, 0, sizeof records);
     memset(native_record_bytes, 0, sizeof native_record_bytes);
+    memset(services_memory, 0, sizeof services_memory);
+    dispatch_live = 0;
     native_call_count = 0;
     settings_present = 0;
     camera_monochrome = 0;
@@ -1445,6 +1467,338 @@ static void the_view_turns_its_pages(void)
     assert(detail_page_turn(5, 16, 0) == 1 && detail_page_turn(5, 16, 1) == 1);
 }
 
+/* The dispatcher of UserData Set for `dispatch_live`: the field of each
+   setting of the native tables takes the stored value of its label. */
+static u32 label_value(const char *const *labels, u32 count, const char *label)
+{
+    for (u32 v = 0; v < count; ++v)
+        if (labels[v] && !strcmp(labels[v], label)) return v;
+    assert(!"a label of the setting");
+    return 0;
+}
+static void native_dispatch(const char *name, const char *label)
+{
+    char built[NATIVE_NAME_BYTES];
+    if (!strcmp(name, NATIVE_ACTIVE_SET_SETTING)) {
+        assert(label[0] == 'N' && label[1] == 'o' && label[2] >= '0' && label[2] < '0' + (int)NATIVE_SETS && !label[3]);
+        native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = (u8)(label[2] - '0');
+        return;
+    }
+    if (!strcmp(name, NATIVE_TYPE_SETTING)) {
+        native_record_bytes[NATIVE_TYPE_FIELD] = native_type_codes[label_value(native_type_labels, NATIVE_TYPES, label)];
+        return;
+    }
+    for (u32 t = 0; t < NATIVE_TYPES; ++t)
+        for (u32 p = 0; p < NATIVE_PARAMETERS; ++p) {
+            if (!native_field(t, p) || !native_type_labels[t]) continue;
+            snprintf(built, sizeof built, "%s%s%s", native_prefixes[native_type_prefixes[t]], native_type_labels[t], native_keys[p]);
+            if (strcmp(built, name)) continue;
+            native_record_bytes[native_field(t, p)] =
+                (u8)label_value(native_labels + native_label_starts[p], native_label_counts[p], label);
+            return;
+        }
+    if (!strcmp(name, NATIVE_WHITE_BALANCE_SETTING)) {
+        native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[label_value(native_mode_labels, NATIVE_MODES, label)];
+        return;
+    }
+    for (u32 m = 0; m < NATIVE_MODES; ++m)
+        for (u32 gm = 0; gm < 2 && native_mode_shifts[m]; ++gm) {
+            snprintf(built, sizeof built, "%s%sAdjust%s", NATIVE_WHITE_BALANCE_SETTING, native_mode_labels[m], gm ? "GM" : "BA");
+            if (strcmp(built, name)) continue;
+            native_record_bytes[native_shift_fields[2 * m + gm]] =
+                (u8)label_value(gm ? native_gm_labels : native_ba_labels, NATIVE_SHIFTS, label);
+            return;
+        }
+    if (!strcmp(name, NATIVE_COLOR_TEMPERATURE_SETTING)) {
+        u32 kelvin = (u32)atoi(label);
+        native_record_bytes[NATIVE_TEMPERATURE_FIELD] = (u8)kelvin;
+        native_record_bytes[NATIVE_TEMPERATURE_FIELD + 1] = (u8)(kelvin >> 8);
+        return;
+    }
+    for (u32 c = 0; c < NATIVE_CORRECTIONS; ++c)
+        if (!strcmp(name, native_correction_names[c])) {
+            native_record_bytes[native_correction_fields[c]] =
+                (u8)label_value(native_correction_labels[c], native_correction_counts[c], label);
+            return;
+        }
+    if (!strcmp(name, NATIVE_EXPOSURE_SETTING) || !strcmp(name, NATIVE_ISO_UPPER_SETTING)) {
+        float f = strtof(label, 0);
+        u32 bits;
+        memcpy(&bits, &f, 4);
+        set_float(!strcmp(name, NATIVE_EXPOSURE_SETTING) ? NATIVE_EXPOSURE_FIELD : NATIVE_ISO_UPPER_FIELD, bits);
+        return;
+    }
+    if (!strcmp(name, NATIVE_METERING_SETTING)) {
+        native_record_bytes[NATIVE_METERING_FIELD] =
+            (u8)label_value(native_metering_labels, NATIVE_COUNT(native_metering_labels), label);
+        return;
+    }
+    assert(!strcmp(name, NATIVE_ND_SETTING));
+    native_record_bytes[NATIVE_ND_FIELD] = (u8)label_value(native_nd_labels, NATIVE_COUNT(native_nd_labels), label);
+}
+
+/* The camera of the preview tests: Film Look Off, the main set Standard,
+   AWB without shifts, +1/3 at ISO 6400, Multi, ND Off; the dispatcher
+   stores each set. The settings record as it was then is `preview_base`. */
+#define TYPE_NEGATIVE 6U
+#define MODE_SHADE 5U
+static u8 preview_base[sizeof native_record_bytes];
+static void preview_camera(void)
+{
+    reset();
+    settings_present = 1;
+    dispatch_live = 1;
+    header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    select_effect(TEST_COUNT);
+    native_record_bytes[NATIVE_TYPE_FIELD] = native_type_codes[TYPE_STANDARD];
+    for (u32 t = 0; t < NATIVE_TYPES; ++t)
+        for (u32 p = 0; p < NATIVE_LEVELS; ++p)
+            if (native_field(t, p)) native_record_bytes[native_field(t, p)] = 4;
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[0];
+    for (u32 m = 0; m < NATIVE_MODES; ++m)
+        if (native_mode_shifts[m]) {
+            native_record_bytes[native_shift_fields[2 * m]] = 14;
+            native_record_bytes[native_shift_fields[2 * m + 1]] = 14;
+        }
+    native_record_bytes[NATIVE_TEMPERATURE_FIELD] = 5500 & 0xff;
+    native_record_bytes[NATIVE_TEMPERATURE_FIELD + 1] = 5500 >> 8;
+    set_float(NATIVE_EXPOSURE_STEP_FIELD, F_THIRD);
+    set_float(NATIVE_ISO_STEP_FIELD, F_THIRD);
+    exposure_camera(F_THIRD, F_SV_6400, F_SV_125, 0, 2);
+    memcpy(preview_base, native_record_bytes, sizeof preview_base);
+}
+/* The recipes of the preview tests, saved on that camera:
+   0 Negative Film +2 saturation, Daylight A3 M2, Highlight Correction Off,
+     -2/3, Spot;
+   1 effect 1 with saturation +3 and Shade;
+   2 effect 1 with saturation -3 and clarity +2 (stored 6 and 2);
+   3 Film Look Off with Standard, the camera as it is. */
+static void preview_recipes(void)
+{
+    native_record_bytes[NATIVE_TYPE_FIELD] = native_type_codes[TYPE_NEGATIVE];
+    native_record_bytes[native_field(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION)] = 6;
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[MODE_DAYLIGHT];
+    native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT]] = 17;
+    native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT + 1]] = 16;
+    native_record_bytes[native_correction_fields[0]] = (u8)(native_correction_counts[0] - 1U);
+    exposure_camera(F_MINUS_TWO_THIRDS, F_SV_6400, F_SV_125, 2, 2);
+    assert(recipe_save(header) == 0);
+    memcpy(native_record_bytes, preview_base, sizeof preview_base);
+    select_effect(1); set_fn(1, 0, 3);
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[MODE_SHADE];
+    assert(recipe_save(header) == 1);
+    memcpy(native_record_bytes, preview_base, sizeof preview_base);
+    set_fn(1, 0, 6); set_fn(1, 8, 2);
+    assert(recipe_save(header) == 2);
+    set_fn(1, 0, 0); set_fn(1, 8, 0);
+    select_effect(TEST_COUNT);
+    assert(recipe_save(header) == 3);
+    native_call_count = 0;
+}
+/* Whether a UserData Set wrote parameter p of type t with `label`. */
+static int called_parameter(u32 t, u32 p, const char *label)
+{
+    char call[96];
+    snprintf(call, sizeof call, "%s%s%s=%s", native_prefixes[native_type_prefixes[t]], native_type_labels[t], native_keys[p], label);
+    return called(call);
+}
+static int same_as_base(void) { return !memcmp(native_record_bytes, preview_base, sizeof preview_base); }
+static u32 preview_fn_byte(u32 i) { return header[GRKIT_HOST_PREVIEW_FN_BYTES / 4 + i / 4] >> (8 * (i % 4)) & 0xffU; }
+
+/* The copy of the preview holds each native field of the build, in each
+   set; a sized native grain has a size field. */
+static void preview_copy_holds_each_field(void)
+{
+    for (u32 t = 0; t < NATIVE_TYPES; ++t)
+        for (u32 p = 0; p < NATIVE_PARAMETERS; ++p)
+            if (native_field(t, p))
+                assert(native_field(t, p) + (NATIVE_SETS - 1) * native_parameter_strides[t * NATIVE_PARAMETERS + p] < PREVIEW_IMAGE_BYTES);
+    for (u32 t = 0; t < NATIVE_TYPES; ++t)
+        if (native_field(t, NATIVE_PARAMETER_PARTICLE) && native_grain_sized(t))
+            assert(native_field(t, NATIVE_PARAMETER_PARTICLESIZE));
+    assert(NATIVE_TYPE_FIELD + (NATIVE_SETS - 1) * NATIVE_TYPE_SET_STRIDE < PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_ACTIVE_SET_FIELD < PREVIEW_IMAGE_BYTES && NATIVE_MODE_FIELD < PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_TEMPERATURE_FIELD + 2 <= PREVIEW_IMAGE_BYTES);
+    for (u32 i = 0; i < 2 * NATIVE_MODES; ++i) assert(native_shift_fields[i] < PREVIEW_IMAGE_BYTES);
+    for (u32 c = 0; c < NATIVE_CORRECTIONS; ++c) assert(native_correction_fields[c] < PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_EXPOSURE_FIELD + 4 <= PREVIEW_IMAGE_BYTES && NATIVE_EXPOSURE_STEP_FIELD + 4 <= PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_ISO_UPPER_FIELD + 4 <= PREVIEW_IMAGE_BYTES && NATIVE_ISO_LOWER_FIELD + 4 <= PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_ISO_STEP_FIELD + 4 <= PREVIEW_IMAGE_BYTES);
+    assert(NATIVE_METERING_FIELD < PREVIEW_IMAGE_BYTES && NATIVE_ND_FIELD < PREVIEW_IMAGE_BYTES);
+}
+
+/* The preview writes the native settings of the recipe under the cursor,
+   only those that differ, shows its look in the live view only, and writes
+   back each field that it changed when it ends. Meanwhile a capture reads
+   the settings from before it. */
+static void preview_shows_and_restores(void)
+{
+    preview_camera();
+    preview_recipes();
+    /* Recipe 3 is the camera as it is. */
+    assert(recipe_current(header) == 3);
+    const u32 built0 = header[GRKIT_HOST_PARAMETER_CHANGES / 4], state = changes();
+    recipe_preview_show(header, 0);
+    assert(recipe_preview_on(header) && recipe_preview_shows(header, 0));
+    assert(header[GRKIT_HOST_RECIPE_PREVIEW / 4] == TEST_SERVICES + SERVICES_PREVIEW + PREVIEW_IMAGE);
+    assert(called("StillImageControlNo0=NegativeFilm"));
+    assert(called_parameter(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION, "P2"));
+    assert(called("StillWhiteBalance=Daylight") && called("StillWhiteBalanceDaylightAdjustBA=A3"));
+    assert(called("StillWhiteBalanceDaylightAdjustGM=M2"));
+    assert(called("CommonXv=-0.6666666666") && called("StillAeMode=Spot"));
+    /* Only what differs: the other levels, the ISO limit, and ND stay. */
+    assert(!called_parameter(TYPE_NEGATIVE, NATIVE_PARAMETER_CONTRAST, "OFF"));
+    assert(!called("StillSvAutoUpper=11.0000000000") && !called("StillNdFilter=Off"));
+    assert(!called("StillActiveImageControlSet=No0"));
+    /* Film Look Off in the live view. */
+    assert(header[GRKIT_HOST_PREVIEW / 4] == 1 && !header[GRKIT_HOST_PREVIEW_FN / 4]);
+    /* The current settings are those from before: recipe 3 still matches,
+       recipe 0 does not, and no saved setting changed. */
+    assert(recipe_current(header) == 3 && !recipe_matches(header, 0));
+    assert(changes() == state && header[GRKIT_HOST_ACTIVE / 4] == 0);
+    /* The same recipe again writes nothing. */
+    u32 calls = native_call_count;
+    recipe_preview_show(header, 0);
+    assert(native_call_count == calls);
+
+    /* Recipe 1 holds no type: Standard and the levels of Negative Film
+       come back, then Shade and the exposure of the camera. The effect
+       shows with the Fn adjustments of the recipe, not of its record. */
+    native_call_count = 0;
+    recipe_preview_show(header, 1);
+    assert(called("StillImageControlNo0=Standard"));
+    assert(called_parameter(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION, "OFF"));
+    assert(called("StillWhiteBalance=Shade"));
+    assert(called("StillWhiteBalanceDaylightAdjustBA=NORMAL") && called("StillWhiteBalanceDaylightAdjustGM=NORMAL"));
+    assert(called("CommonXv=0.3333333333") && called("StillAeMode=Multi"));
+    assert(!called("StillWhiteBalanceShadeAdjustBA=NORMAL"));
+    native_record_bytes[NATIVE_MODE_FIELD] = preview_base[NATIVE_MODE_FIELD];
+    assert(same_as_base());
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[MODE_SHADE];
+    assert(header[GRKIT_HOST_PREVIEW / 4] == record_at(1) && header[GRKIT_HOST_PREVIEW_FN / 4] == record_at(1));
+    assert(preview_fn_byte(0) == 3 && preview_fn_byte(8) == 0 && fn_of(1, 0) == 0);
+    assert(header[GRKIT_HOST_PARAMETER_CHANGES / 4] != built0);
+
+    /* Recipe 2 has the same effect with other adjustments: the live view
+       builds again with them. */
+    u32 built = header[GRKIT_HOST_PARAMETER_CHANGES / 4];
+    native_call_count = 0;
+    recipe_preview_show(header, 2);
+    assert(header[GRKIT_HOST_PREVIEW / 4] == record_at(1) && header[GRKIT_HOST_PREVIEW_FN / 4] == record_at(1));
+    assert(preview_fn_byte(0) == 6 && preview_fn_byte(8) == 2 && fn_of(1, 0) == 0 && fn_of(1, 8) == 0);
+    assert(header[GRKIT_HOST_PARAMETER_CHANGES / 4] != built);
+    assert(native_call_count == 1 && !strncmp(native_calls[0], "StillWhiteBalance=", 18));
+    assert(same_as_base());
+
+    /* The end writes back what the preview changed, and the live view takes
+       the committed look again. */
+    recipe_preview_show(header, 0);
+    built = header[GRKIT_HOST_PARAMETER_CHANGES / 4];
+    recipe_preview_show(header, RECIPE_NONE);
+    assert(same_as_base() && !recipe_preview_on(header));
+    assert(!header[GRKIT_HOST_PREVIEW / 4] && !header[GRKIT_HOST_PREVIEW_FN / 4] && !header[GRKIT_HOST_RECIPE_PREVIEW / 4]);
+    assert(changes() == state && recipe_current(header) == 3);
+    /* An end without a preview writes nothing. */
+    native_call_count = 0;
+    recipe_preview_show(header, RECIPE_NONE);
+    assert(!native_call_count && header[GRKIT_HOST_PARAMETER_CHANGES / 4] == built);
+}
+
+/* A field that the camera changed during the preview, as the settings of
+   another position of the mode dial, stays at the end. A Custom set that
+   was active is active again. */
+static void preview_keeps_what_the_camera_changed(void)
+{
+    preview_camera();
+    preview_recipes();
+    native_record_bytes[NATIVE_ACTIVE_SET_FIELD] = 1;
+    preview_base[NATIVE_ACTIVE_SET_FIELD] = 1;
+    recipe_preview_show(header, 0);
+    assert(called("StillActiveImageControlSet=No0"));
+    native_record_bytes[NATIVE_MODE_FIELD] = (u8)native_mode_codes[MODE_SHADE];
+    native_call_count = 0;
+    recipe_preview_show(header, RECIPE_NONE);
+    assert(called("StillActiveImageControlSet=No1"));
+    assert(!called("StillWhiteBalance=Auto") && !called("StillWhiteBalance=AutoStandard"));
+    assert(native_record_bytes[NATIVE_MODE_FIELD] == native_mode_codes[MODE_SHADE]);
+    native_record_bytes[NATIVE_MODE_FIELD] = preview_base[NATIVE_MODE_FIELD];
+    assert(same_as_base());
+}
+
+/* OK on the recipe of the preview applies it from the settings before the
+   preview: the native settings stay as the preview wrote them, the undo
+   step holds those before, and undo writes them back. After a preview of
+   another recipe, that preview ends first. */
+static void preview_commits_with_the_undo_step_before_it(void)
+{
+    u8 applied[sizeof native_record_bytes];
+    preview_camera();
+    preview_recipes();
+    assert(recipe_apply(header, 0) == RECIPE_READY);
+    memcpy(applied, native_record_bytes, sizeof applied);
+    for (u32 from = 0; from < 2; ++from) {
+        preview_camera();
+        preview_recipes();
+        recipe_preview_show(header, from);
+        /* runtime/recipe_page.h: recipe_ok. */
+        if (!recipe_preview_shows(header, 0)) recipe_preview_show(header, RECIPE_NONE);
+        assert(recipe_apply(header, 0) == RECIPE_READY);
+        recipe_preview_drop(header);
+        assert(!memcmp(native_record_bytes, applied, sizeof applied));
+        assert(!recipe_preview_on(header) && !header[GRKIT_HOST_RECIPE_PREVIEW / 4] && !header[GRKIT_HOST_PREVIEW / 4]);
+        assert(recipe_undo_count(header) == 1 && recipe_current(header) == 0);
+        /* The undo step is the camera as it was: recipe 3. */
+        for (u32 k = RECIPE_FN_WORD; k <= RECIPE_EXTRA_WORD; ++k)
+            assert(recipe_at(header, GRKIT_RECIPE_SLOTS)[k] == recipe_at(header, 3)[k]);
+        assert(!((recipe_at(header, GRKIT_RECIPE_SLOTS)[RECIPE_MODULE_WORD] ^ recipe_at(header, 3)[RECIPE_MODULE_WORD]) &
+                 NATIVE_EXPOSURE_BITS));
+        /* Undo writes the look, the white balance, the corrections, and the
+           exposure from before; the levels of Negative Film and the shifts
+           of Daylight, which no setting before used, stay. */
+        recipe_undo(header);
+        assert(recipe_current(header) == 3);
+        native_record_bytes[native_field(TYPE_NEGATIVE, NATIVE_PARAMETER_SATURATION)] = 4;
+        native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT]] = 14;
+        native_record_bytes[native_shift_fields[2 * MODE_DAYLIGHT + 1]] = 14;
+        assert(same_as_base());
+    }
+}
+
+/* A recipe that cannot apply has no preview. Without a settings record,
+   the preview shows only the look. */
+static void preview_needs_a_recipe_that_applies(void)
+{
+    preview_camera();
+    preview_recipes();
+    set_id(1, "effect-x");
+    recipe_preview_show(header, 1);
+    assert(!recipe_preview_on(header) && !native_call_count && !header[GRKIT_HOST_PREVIEW / 4]);
+    set_id(1, "effect-1");
+    recipe_preview_show(header, 0);
+    camera_monochrome = 1;
+    native_call_count = 0;
+    recipe_preview_show(header, 0);
+    assert(!recipe_preview_on(header) && same_as_base());
+    camera_monochrome = 0;
+    settings_present = 0;
+    native_call_count = 0;
+    recipe_preview_show(header, 1);
+    assert(recipe_preview_on(header) && !native_call_count && !header[GRKIT_HOST_RECIPE_PREVIEW / 4]);
+    assert(header[GRKIT_HOST_PREVIEW / 4] == record_at(1));
+    recipe_preview_show(header, RECIPE_NONE);
+    assert(!recipe_preview_on(header) && !native_call_count && !header[GRKIT_HOST_PREVIEW / 4]);
+    /* Without Film Look, the live view keeps its look. */
+    settings_present = 1;
+    header[GRKIT_HOST_CAPABILITIES / 4] &= ~GRKIT_CORE_TONE_BIT;
+    recipe_preview_show(header, 3);
+    assert(recipe_preview_on(header) && !header[GRKIT_HOST_PREVIEW / 4]);
+    recipe_preview_show(header, RECIPE_NONE);
+    /* Without the services block, nothing shows. */
+    header[GRKIT_HOST_SERVICES / 4] = 0;
+    recipe_preview_show(header, 0);
+    assert(!native_call_count && !header[GRKIT_HOST_RECIPE_PREVIEW / 4]);
+}
+
 int main(void)
 {
     save_numbers_each_look();
@@ -1471,6 +1825,11 @@ int main(void)
     glow_saves_applies_and_undoes();
     border_saves_applies_and_does_not_match();
     exposure_saves_applies_and_fits_the_camera();
+    preview_copy_holds_each_field();
+    preview_shows_and_restores();
+    preview_keeps_what_the_camera_changed();
+    preview_commits_with_the_undo_step_before_it();
+    preview_needs_a_recipe_that_applies();
 #ifdef FW_IMAGE_CONTROL_SET
     monochrome_types();
 #endif

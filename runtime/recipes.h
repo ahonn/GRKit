@@ -129,7 +129,8 @@ _Static_assert(GRKIT_RECIPE_WORDS>GRKIT_RECIPE_SETTINGS_WORD,"a recipe holds its
 _Static_assert(GRKIT_RECIPE_MODULES<=23U,"the skipped bits of the modules fit in a word");
 
 /* The native settings (runtime/native_look.h). */
-static void native_read(u32 *w,u32 look);
+static void native_read_at(u32 *w,u32 look,u32 record);
+static u32 native_record(void);
 static u32 native_supported(const volatile u32 *w);
 static void native_write(const volatile u32 *w);
 
@@ -334,9 +335,12 @@ static u32 recipe_setting_handle(volatile u32 *h,u32 i) {
     return RECIPE_NO_SETTING;
 }
 
-/* The current settings as a recipe without a number. */
+/* The current settings as a recipe without a number. While ADJ previews a
+   recipe, the native settings are those from before the preview: the copy
+   of the settings record that GRKIT_HOST_RECIPE_PREVIEW gives
+   (runtime/recipe_preview.h). The preview changes no GRKit setting. */
 static void recipe_capture(volatile u32 *h,u32 *out) {
-    u32 i, record, index;
+    u32 i, record, index, native=h[GRKIT_HOST_RECIPE_PREVIEW/4];
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) out[i]=0;
     out[0]=RECIPE_USED;
     if(RECIPE_CAPABILITY(h,TONE)) {
@@ -357,7 +361,7 @@ static void recipe_capture(volatile u32 *h,u32 *out) {
         if(k!=RECIPE_NO_SETTING) recipe_setting_hold(out,i,setting_value(h,k));
     }
     /* The native type only without an effect: an effect replaces it. */
-    native_read(out,RECIPE_LOOK(out[0])!=RECIPE_LOOK_EFFECT);
+    native_read_at(out,RECIPE_LOOK(out[0])!=RECIPE_LOOK_EFFECT,native ? native : native_record());
     /* A native type shows only with Film Look Off, so a recipe with one has
        that look also while Film Look does not run. Apply then sets the type
        and leaves Film Look as it is. */

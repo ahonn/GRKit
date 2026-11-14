@@ -333,7 +333,17 @@
    HOST_PERSIST_WORD gives the export's word index in the module array. */
 #define SERVICES_PERSIST_TIMER (SERVICES_CARDS + CARDS_SIZE)
 #define SERVICES_PERSIST (SERVICES_PERSIST_TIMER + 4U)
-#define SERVICES_SIZE (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
+/* The ADJ preview of a recipe (runtime/recipe_preview.h): the words of the
+   recipe that the live view shows, word 0 being 0 while none shows; then
+   the copy of the native settings record from the start of the preview
+   (GRKIT_HOST_RECIPE_PREVIEW), PREVIEW_IMAGE_BYTES bytes, which hold each
+   native field of runtime/native_look.h of each build. */
+#define SERVICES_PREVIEW (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
+#define PREVIEW_WORDS 0U
+#define PREVIEW_IMAGE (4U * GRKIT_RECIPE_WORDS)
+#define PREVIEW_IMAGE_BYTES 0xb40U
+#define PREVIEW_SIZE (PREVIEW_IMAGE + PREVIEW_IMAGE_BYTES)
+#define SERVICES_SIZE (SERVICES_PREVIEW + PREVIEW_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

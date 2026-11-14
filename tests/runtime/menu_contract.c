@@ -1629,6 +1629,104 @@ static void header_recipe(u32 i, const char *name, u32 first)
     for (u32 c = 0; name[c] && c < GRKIT_RECIPE_NAME_CHARS; ++c) n[c / 4] |= (u32)name[c] << (7U * (c % 4));
 }
 
+/* A move of the cursor of the Recipes page shows the recipe under it in
+   the live view, as on the Film Look page: an effect with the Fn
+   adjustments of the recipe, Film Look Off as native processing. The page
+   opens without a preview, a recipe that cannot apply ends it, and so do
+   another level and the movie ADJ. The rows keep the marks of the settings before the preview, and OK
+   applies the recipe and ends the preview. (The native settings of the
+   preview are in tests/runtime/recipes_contract.c.) */
+static void the_recipe_page_previews_the_highlighted_recipe(void)
+{
+    volatile u32 *h = test_header;
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT | GRKIT_CORE_TONE_BIT;
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    h[GRKIT_HOST_RECORDS / 4] = TEST_OBJECTS;
+    h[GRKIT_HOST_COUNT / 4] = 2;
+    h[GRKIT_HOST_ACTIVE / 4] = 0;
+    const u32 a = TEST_OBJECTS, b = TEST_OBJECTS + GRKIT_RECORD_SIZE;
+    BYTE(a, GRKIT_RECORD_ID) = 'a';
+    BYTE(b, GRKIT_RECORD_ID) = 'b';
+    BYTE(b, GRKIT_RECORD_ID + 1) = 0;
+    const u32 code_b = recipe_effect_code(b);
+    /* 0 and 1: effect b with saturation +3 and -3 (stored 3 and 6); 2: Film
+       Look Off; 3: an effect that is not installed. */
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_EFFECT | code_b << RECIPE_CODE_SHIFT);
+    h[GRKIT_HOST_RECIPES / 4 + RECIPE_FN_WORD] = 3;
+    header_recipe(1, "", RECIPE_USED | RECIPE_LOOK_EFFECT | code_b << RECIPE_CODE_SHIFT | 2U << RECIPE_NUMBER_SHIFT);
+    h[GRKIT_HOST_RECIPES / 4 + GRKIT_RECIPE_WORDS + RECIPE_FN_WORD] = 6;
+    header_recipe(2, "", RECIPE_USED | RECIPE_LOOK_OFF);
+    header_recipe(3, "", RECIPE_USED | RECIPE_LOOK_EFFECT | ((code_b + 1U) & RECIPE_CODE_MASK) << RECIPE_CODE_SHIFT);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = ADJ_C;
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
+    menu_confirm(h);
+    /* The page opens on recipe 2, which the settings match, and its draw
+       starts no preview: the live view keeps the committed look. */
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_MODULE && h[GRKIT_HOST_MENU_CURSOR / 4] == 2);
+    frame_preview(h, ADJ_C, 0);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4]);
+    const u32 built = h[GRKIT_HOST_PARAMETER_CHANGES / 4], state = h[GRKIT_HOST_STATE_CHANGES / 4];
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    highlight(h);
+    assert(h[GRKIT_HOST_PREVIEW / 4] == b && h[GRKIT_HOST_PREVIEW_FN / 4] == b);
+    assert((h[GRKIT_HOST_PREVIEW_FN_BYTES / 4] & 0xff) == 3 && BYTE(b, GRKIT_RECORD_PARAMETERS) == 0);
+    assert(h[GRKIT_HOST_PARAMETER_CHANGES / 4] != built && h[GRKIT_HOST_STATE_CHANGES / 4] == state);
+    assert(h[GRKIT_HOST_ACTIVE / 4] == 0);
+    assert(current_module(h)->checked(h, 2) && !current_module(h)->checked(h, 0));
+    /* The other recipe of effect b builds the live view again. */
+    u32 before = h[GRKIT_HOST_PARAMETER_CHANGES / 4];
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    highlight(h);
+    assert(h[GRKIT_HOST_PREVIEW / 4] == b && (h[GRKIT_HOST_PREVIEW_FN_BYTES / 4] & 0xff) == 6);
+    assert(h[GRKIT_HOST_PARAMETER_CHANGES / 4] != before);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 2;
+    highlight(h);
+    assert(h[GRKIT_HOST_PREVIEW / 4] == 1 && !h[GRKIT_HOST_PREVIEW_FN / 4]);
+    /* A recipe that cannot apply, and Save, end the preview. */
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 3;
+    highlight(h);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4]);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    highlight(h);
+    assert(recipe_preview_on(h));
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 4;
+    highlight(h);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4]);
+    /* A draw keeps the preview, and follows a recipe that moved under the
+       cursor, as after a delete. */
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    highlight(h);
+    frame_preview(h, ADJ_C, 0);
+    assert(recipe_preview_shows(h, 0));
+    recipe_delete(h, 0);
+    frame_preview(h, ADJ_C, 0);
+    assert(recipe_preview_shows(h, 0) && (h[GRKIT_HOST_PREVIEW_FN_BYTES / 4] & 0xff) == 6);
+    /* The movie ADJ and MENU end it. */
+    frame_preview(h, ADJ_C, 1);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4]);
+    highlight(h);
+    assert(recipe_preview_on(h));
+    assert(menu_back(h));
+    frame_preview(h, ADJ_C, 0);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4] && !h[GRKIT_HOST_PREVIEW_FN / 4]);
+    /* OK applies the recipe of the preview, which ends. */
+    menu_confirm(h);
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    highlight(h);
+    assert(recipe_preview_shows(h, 0));
+    menu_confirm(h);
+    assert(h[GRKIT_HOST_ACTIVE / 4] == b && BYTE(b, GRKIT_RECORD_PARAMETERS) == 6);
+    assert(!recipe_preview_on(h) && !h[GRKIT_HOST_PREVIEW / 4] && !h[GRKIT_HOST_PREVIEW_FN / 4]);
+    assert(recipe_undo_count(h) == 1 && RECIPE_LOOK(recipe_at(h, GRKIT_RECIPE_SLOTS)[0]) == RECIPE_LOOK_OFF);
+    /* A message after the apply keeps the page: its draw starts no preview
+       again. */
+    frame_preview(h, ADJ_C, 0);
+    assert(!recipe_preview_on(h) && current_module(h)->checked(h, h[GRKIT_HOST_MENU_CURSOR / 4]));
+}
+
 /* The keyboard of the camera (runtime/ui_keyboard.h): its hooks serve the GRKit text
    only while GRKit borrows the keyboard, so the copyright text never meets
    a GRKit text. OK gives the typed text to the call after the return, which
@@ -5567,6 +5665,7 @@ int main(void)
     the_date_imprint_page_lists_its_styles();
     the_grain_page_changes_only_the_grain_word();
     the_recipe_page_saves_applies_and_deletes();
+    the_recipe_page_previews_the_highlighted_recipe();
     the_keyboard_serves_the_grkit_text_only_while_borrowed();
     the_keyboard_keeps_an_unchanged_automatic_name();
     the_recipe_page_lists_the_shown_recipes();

@@ -450,10 +450,23 @@ static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {
     }
     h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4]=controller;
 }
+/* A preview of a recipe (runtime/recipe_preview.h) follows the cursor of
+   the Recipes page at each draw, as after a delete, and ends on another
+   page or level. Only a move of the cursor starts it (recipe_highlight), as
+   on the page of CORE.TONE: the page opens without one. */
+static void recipe_preview_follow(volatile u32 *h,u32 movie) {
+    u32 module=h[GRKIT_HOST_MODULE/4], e=RECIPE_NONE;
+    if(!recipe_preview_on(h)) return;
+    if(!movie && h[GRKIT_HOST_MENU_CONTROLLER/4] && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
+       module<module_pages(h) && menu_page(h,module)==&recipe_module)
+        e=recipe_row_slot(h,h[GRKIT_HOST_MENU_CURSOR/4]);
+    recipe_preview_show(h,e);
+}
 static void frame_preview(volatile u32 *h,u32 controller,u32 movie) {
     u32 frame=h[GRKIT_HOST_FRAME_PREVIEW/4], at=h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4];
     u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
     u32 canvas=controller ? WORD(controller,ADJ_CANVAS) : 0;
+    recipe_preview_follow(h,movie);
     frame_preview_set(h,controller,movie);
     if(canvas && !movie && (frame!=h[GRKIT_HOST_FRAME_PREVIEW/4] || at!=controller ||
                   handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1]))
