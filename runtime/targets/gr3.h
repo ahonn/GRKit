@@ -500,8 +500,9 @@
    of the eight records holds the name of each box, ASCII of at most 32
    characters with 0 after it, and whether the box is registered; the
    setters of the firmware write the eight records, as the core does. The
-   save copies the current settings into box n (FW_BOX_SAVE), as the native
-   save does. The setter of the box of user mode u (FW_BOX_ASSIGN1 to 3)
+   save copies the current settings into box n (FW_BOX_SAVE); the native
+   Save Settings calls it too, and the hook of the save is at its entry. The
+   setter of the box of user mode u (FW_BOX_ASSIGN1 to 3)
    writes the eight records and tells the camera of a change, as the native
    Recall does. DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, and
    M, the positions that share their settings, in the order of the Mode

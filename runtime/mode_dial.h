@@ -1,6 +1,6 @@
 #ifndef GRKIT_MODE_DIAL_H
 #define GRKIT_MODE_DIAL_H
-/* The mode dial. It belongs to the core: its hook (point mode.dial) and the
+/* The mode dial. It belongs to the core: its hooks (point mode.dial) and the
    shooting screen install with the core whenever INSTALL lists a module
    (runtime/installer.c), whatever the modules use and whatever their Enable
    is. It acts while the switch Enable GRKit is On (dial_enabled), and it
@@ -35,13 +35,24 @@
    native settings of the slot at the dial; the core applies the set.
 
    The core keeps what each user mode does with a fingerprint of the name
-   that it gave the slot (GRKIT_HOST_DIAL_SLOTS). A snapshot holds while
-   its slot is registered and has that name (dial_slot_intact). After a
-   native save, rename, or clear of the slot, or a lost slot, the core
-   forgets the snapshot, and a user mode that applied it becomes On
-   (dial_check). The core checks this at each start once the shooting
-   screen shows, when the Mode Dial page opens, and when the dial lands on
-   a user mode. It never clears or restores a slot.
+   that it gave the slot (GRKIT_HOST_DIAL_SLOTS). A snapshot holds until the
+   next save of its slot, and while the slot is registered and has that name
+   (dial_slot_intact). A forgotten snapshot is gone: a user mode that
+   applied it becomes On.
+   - A save of the slot: a hook at the save of the firmware (DIAL_SLOT_SAVE)
+     sees each save, native or of the core, and the core forgets each
+     snapshot that the slot held at once (menu_dial_saved). The name cannot
+     show a native save: the native save offers the name that the slot has,
+     and the person can keep it or enter none. Neither can the content of
+     the slot: the firmware also writes the settings that all positions
+     share, such as those of the Setup menu, into each slot, at offsets
+     throughout it. Save Current Settings keeps its new snapshot after its
+     own save.
+   - A rename or clear of the slot, or a lost slot: the core forgets the
+     snapshot at its check (dial_check), at each start once the shooting
+     screen shows, when the Mode Dial page opens, and when the dial lands on
+     a user mode.
+   The core never clears or restores a slot.
 
    GR III can give two user modes one box (DIAL_SLOT_ASSIGN). A save for a
    user mode whose box another user mode has, or that has no box, takes a
@@ -49,9 +60,11 @@
    to the user mode (dial_save_slot), so the other user mode keeps its box
    and its snapshot, and no box that the person saved is lost. Without such
    a box, the save writes the shared box, the confirm names each user mode
-   that has it, and the others lose their snapshots by its name. The resident loader saves the sets, the values, and
-   the bits of P/Av/Tv/M in their own file after GRKIT_HOST_DIAL_SET_CHANGES
-   changes, and INSTALL restores them (runtime/install_recipes.h). That file
+   that has it, and the others lose their snapshots by the save.
+
+   The resident loader saves the sets, the values, and the bits of P/Av/Tv/M
+   in their own file after GRKIT_HOST_DIAL_SET_CHANGES changes, and INSTALL
+   restores them (runtime/install_recipes.h). That file
    also keeps a copy of the switch, Enable at Start, and Distance Unit
    (runtime/manage.h: manage_copy), so their restore does not depend on
    which of the two files was saved last.
@@ -84,8 +97,10 @@
    timer acts on the position where the dial stays. The firmware loads the
    native settings of a user mode in steps, so the timer waits until they
    are loaded (DIAL_NATIVE_SETTLED) and tries again a bounded number of
-   times. A position that the core acted on last changes nothing. The timer
-   and the hook run in the App task.
+   times. A position that the core acted on last changes nothing. The hook
+   of the save (menu_dial_saved) runs before the firmware copies the
+   settings, so it sets no setting: a snapshot that applied leaves when the
+   timer lands again. The timer and the hooks run in the App task.
 
    The family header gives DIAL_POSITION(), the code of the dial position,
    DIAL_CODE_U1, the code of U1 (U2 and U3 follow), DIAL_SHARED_CODES and
@@ -94,8 +109,10 @@
    the firmware has loaded the settings of that position; and the slots:
    DIAL_SLOT_OF(u), the slot of user mode u (1 to 3), or 0 without one;
    DIAL_SLOT_SAVE(slot), the native save of the current settings in the
-   slot; DIAL_SLOT_NAME_SET(slot, name, registered), with the address of the
-   name as ASCII; and DIAL_SLOT_NAME_AT(slot) and DIAL_SLOT_REGIST_AT(slot),
+   slot, a call of the function whose entry has the hook of the save
+   (runtime/menu.S: menu_dial_save), with the slot in r1;
+   DIAL_SLOT_NAME_SET(slot, name, registered), with the address of the name
+   as ASCII; and DIAL_SLOT_NAME_AT(slot) and DIAL_SLOT_REGIST_AT(slot),
    the addresses of the name of the slot and of whether it is registered.
    GR III also gives DIAL_SLOTS, the number of slots, and
    DIAL_SLOT_ASSIGN(u, slot), the native setter of the slot of user mode u.
@@ -422,14 +439,17 @@ static void dial_forget(volatile u32 *h,u32 u) {
     if(record[GRKIT_DIAL_SLOT_VALUE]==GRKIT_DIAL_VALUE_SNAPSHOT) record[GRKIT_DIAL_SLOT_VALUE]=GRKIT_DIAL_VALUE_ON;
     ++h[GRKIT_HOST_DIAL_SET_CHANGES/4];
 }
+/* Whether user mode u has anything of a snapshot to forget: a set, the
+   value, or the name of its slot. */
+static u32 dial_holds_snapshot(volatile u32 *h,u32 u) {
+    volatile u32 *record=dial_slot_record(h,u);
+    return dial_has_set(h,u) || record[GRKIT_DIAL_SLOT_VALUE]==GRKIT_DIAL_VALUE_SNAPSHOT || record[GRKIT_DIAL_SLOT_NAME];
+}
 /* Let go of the snapshot of user mode u when its slot no longer holds what
    the core saved. The firmware has loaded the settings of the dial
    position. */
 static void dial_check(volatile u32 *h,u32 u) {
-    volatile u32 *record=dial_slot_record(h,u);
-    if((dial_has_set(h,u) || record[GRKIT_DIAL_SLOT_VALUE]==GRKIT_DIAL_VALUE_SNAPSHOT || record[GRKIT_DIAL_SLOT_NAME]) &&
-       !dial_slot_intact(h,u))
-        dial_forget(h,u);
+    if(dial_holds_snapshot(h,u) && !dial_slot_intact(h,u)) dial_forget(h,u);
 }
 /* Check each user mode, while the firmware has loaded the settings of the
    dial position; else the timer of the dial does it then (dial_fired). */
@@ -532,6 +552,14 @@ static void dial_land(volatile u32 *h,u32 position) {
     dial_leave(h);
     dial_suspend(h,value==GRKIT_DIAL_VALUE_OFF || dial_shared_off(h,position));
 }
+/* Act on the position again when the timer finds its settings loaded.
+   Nothing before the first shooting screen (dial_ready). */
+static void dial_land_later(volatile u32 *h) {
+    if(!dial_word(h,DIAL_AT)[0]) return;
+    dial_word(h,DIAL_AT)[0]=DIAL_AT_AGAIN;
+    dial_word(h,DIAL_TRY)[0]=0;
+    dial_arm(h,DIAL_RETRY_MS);
+}
 /* Act on the position again after a change of what it does: at once while
    the firmware has loaded its settings, else when the timer finds them.
    Nothing before the first shooting screen (dial_ready). */
@@ -543,9 +571,7 @@ static void dial_land_again(volatile u32 *h) {
         dial_land(h,position);
         return;
     }
-    dial_word(h,DIAL_AT)[0]=DIAL_AT_AGAIN;
-    dial_word(h,DIAL_TRY)[0]=0;
-    dial_arm(h,DIAL_RETRY_MS);
+    dial_land_later(h);
 }
 /* The switch Enable GRKit changed (runtime/manage.h: manage_set_all_off):
    Off leaves a snapshot at once, and On lands again. */
@@ -558,14 +584,33 @@ static void dial_master_changed(volatile u32 *h) {
     dial_leave(h);
     dial_suspend(h,0);
 }
+/* The firmware saves the current settings in slot `slot` of the settings
+   object `object` (the hook of point mode.dial at the save,
+   runtime/menu.S: menu_dial_save), for the native menu or for
+   DIAL_SLOT_SAVE: each user mode with that slot forgets its snapshot, with
+   any switch and on any position. The firmware has not copied the settings
+   yet, so nothing here sets a setting: a snapshot that applies leaves when
+   the timer lands again. */
+A32_ENTRY void menu_dial_saved(u32 object,u32 slot) {
+    volatile u32 *h=menu_header();
+    u32 u;
+    (void)object;
+    if(!h[GRKIT_HOST_SERVICES/4] || !slot) return;
+    for(u=1;u<=GRKIT_DIAL_USER_MODES;++u) {
+        if(DIAL_SLOT_OF(u)!=slot || !dial_holds_snapshot(h,u)) continue;
+        dial_forget(h,u);
+        if(dial_word(h,DIAL_ACTIVE)[0]==u) dial_land_later(h);
+    }
+}
 /* Save Current Settings in user mode u (1 to 3) with the name `typed`
    (runtime/menu_dial.h): the native save of the current settings in its
    slot, the name, which registers the slot, and the snapshot of the GRKit
    settings, which the user mode then applies, in the slot of
-   dial_save_slot. No current setting changes; on that user mode, the
-   snapshot applies at once with nothing to set. 0, and nothing changes,
-   while the firmware loads the settings of the dial position, or without a
-   slot to write. */
+   dial_save_slot. The save of the slot forgets the snapshot before
+   (menu_dial_saved), and on GR III that of each user mode that shares the
+   slot. No current setting changes; on that user mode, the snapshot applies
+   at once with nothing to set. 0, and nothing changes, while the firmware
+   loads the settings of the dial position, or without a slot to write. */
 static u32 dial_snapshot_save(volatile u32 *h,u32 u,const volatile u8 *typed) {
     volatile u32 *record=dial_slot_record(h,u);
     u32 slot=dial_save_slot(u), name;
@@ -581,8 +626,6 @@ static u32 dial_snapshot_save(volatile u32 *h,u32 u,const volatile u8 *typed) {
     dial_save(h,u);
     record[GRKIT_DIAL_SLOT_NAME]=dial_name_hash(name);
     record[GRKIT_DIAL_SLOT_VALUE]=GRKIT_DIAL_VALUE_SNAPSHOT;
-    /* GR III: a user mode that shares the slot lets go of its snapshot. */
-    dial_slots_check(h);
     dial_land_again(h);
     return 1;
 }

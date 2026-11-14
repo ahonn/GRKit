@@ -460,7 +460,9 @@
    1), ASCII of at most 32 characters with 0 after it, and whether it is
    registered at DIAL_USER_REGIST + u - 1.
    - The assign copies the current settings into slot u
-     (FW_USER_MODE_ASSIGN), as the native assign does.
+     (FW_USER_MODE_ASSIGN); the native Assign User Mode Dial calls it too,
+     also when the person enters no name, and the hook of the save is at its
+     entry.
    - The setter of a name (FW_USER_MODE_NAME) also sets the registered
      flag.
    DIAL_SHARED_CODES and DIAL_SHARED_NAMES give P, Av, Tv, Sn, and M, the

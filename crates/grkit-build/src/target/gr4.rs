@@ -123,8 +123,13 @@ const GRAIN: &[HookSpec] = &[
 
 /// The mode dial (`runtime/mode_dial.h`): the BL to the setter of the user
 /// mode in the apply of a dial position (AeModel), its only caller, which
-/// runs for each position.
-const DIAL: &[HookSpec] = &[bl("menu_dial", Menu, ModeDial)];
+/// runs for each position; and the entry of the assign of a user mode
+/// (FW_USER_MODE_ASSIGN), which the native Assign User Mode Dial and the core
+/// call, so the core sees each save of a user mode.
+const DIAL: &[HookSpec] = &[
+    bl("menu_dial", Menu, ModeDial),
+    b("menu_dial_save", Menu, ModeDial),
+];
 
 /// The canvas of CORE.BORDER (`runtime/canvas_shot.h`): the BL to the R2Y
 /// stripe dispatch of StillMake, and the instruction after the resize of

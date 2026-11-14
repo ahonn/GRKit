@@ -1017,3 +1017,22 @@ menu_dial:
     ldr pc, =HOOK_MENU_DIAL_RESUME
 #endif
 .ltorg
+
+/* The save of a native slot of a user mode (runtime/mode_dial.h): the entry
+   of the function of DIAL_SLOT_SAVE, which the native menu and the core call
+   with the slot in r1. The hook notes the save (menu_dial_saved forgets each
+   snapshot that the slot held) before the firmware copies the settings, then
+   the firmware code runs as it would: the replaced instruction, which is no
+   branch. */
+#if !defined(HOOK_MENU_DIAL_SAVE) || defined(HOOK_MENU_DIAL_SAVE_TARGET)
+#error "The family has the menu_dial_save hook on an instruction that is no branch"
+#endif
+.global menu_dial_save
+.type menu_dial_save, %function
+menu_dial_save:
+    push {r0-r3, r12, lr}
+    bl menu_dial_saved
+    pop {r0-r3, r12, lr}
+    .inst HOOK_MENU_DIAL_SAVE_STOCK
+    ldr pc, =HOOK_MENU_DIAL_SAVE_RESUME
+.ltorg

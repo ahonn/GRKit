@@ -108,8 +108,13 @@ const TONING: &[HookSpec] = &[
 ];
 
 /// The mode dial (`runtime/mode_dial.h`): the entry of the apply of a dial
-/// position, which both App events of the dial reach.
-const DIAL: &[HookSpec] = &[b("menu_dial", Menu, ModeDial)];
+/// position, which both App events of the dial reach; and the entry of the
+/// save of a box (FW_BOX_SAVE), which the native Save Settings and the core
+/// call, so the core sees each save of a box.
+const DIAL: &[HookSpec] = &[
+    b("menu_dial", Menu, ModeDial),
+    b("menu_dial_save", Menu, ModeDial),
+];
 
 /// The canvas of CORE.BORDER (`runtime/canvas_shot.h`): the BL to the R2Y
 /// stripe send of StillMake, and the instruction after the resize of

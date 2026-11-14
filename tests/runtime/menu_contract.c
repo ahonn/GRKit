@@ -211,8 +211,10 @@ static unsigned persist_timer_ids, persist_timer_ms, persist_barriers;
    which holds the name of slot n at TEST_NAME(n) and its registered flag at
    TEST_REGIST(n); the slot of each user mode; and the content that a save
    gave each slot (the mark of the record), with the saves and the names.
-   As on GR III, there are six slots, and the setter of the slot of a user
-   mode records how many saves came before it. */
+   The save runs the hook of the save first (menu_dial_saved), as the
+   firmware does for the core and for the native menu (native_save). As on
+   GR III, there are six slots, and the setter of the slot of a user mode
+   records how many saves came before it. */
 #undef DIAL_SLOTS
 #undef DIAL_SLOT_ASSIGN
 #undef DIAL_SLOT_OF
@@ -237,7 +239,7 @@ static void slot_name_set(unsigned slot, unsigned name, unsigned registered)
     ++slot_names;
 }
 #define DIAL_SLOT_OF(u) (slot_of[(u)])
-#define DIAL_SLOT_SAVE(slot) (++slot_saves, slot_mark[(slot)] = record_memory[0])
+#define DIAL_SLOT_SAVE(slot) (menu_dial_saved(0, (slot)), ++slot_saves, slot_mark[(slot)] = record_memory[0])
 #define DIAL_SLOT_NAME_SET(slot,name,registered) slot_name_set((slot), (name), (registered))
 #define DIAL_SLOT_NAME_AT(slot) (TEST_RECORD + TEST_NAME(slot))
 #define DIAL_SLOT_REGIST_AT(slot) (TEST_RECORD + TEST_REGIST(slot))
@@ -4550,7 +4552,7 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     assert(slot_of[2] == 4 && slot_named(4, "Night") && slot_named(1, "Street"));
     assert(dial_slot_intact(h, 1) && dial_slot_intact(h, 2) && slot_assign_saves == slot_saves);
     /* Without such a box, the save writes the shared box, the confirm names
-       each user mode that has it, and U1 loses its snapshot by its name. A
+       each user mode that has it, and U1 loses its snapshot by the save. A
        registered box that no user mode has stays. */
     slot_of[2] = 1;
     record_memory[TEST_REGIST(5)] = record_memory[TEST_REGIST(6)] = 1;
@@ -4565,6 +4567,70 @@ static void the_mode_dial_lets_go_of_a_changed_slot(void)
     assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_ON);
     dial_slot_record(h, 3)[GRKIT_DIAL_SLOT_VALUE] = GRKIT_DIAL_VALUE_SNAPSHOT;
     assert(dial_value(h, 3) == GRKIT_DIAL_VALUE_ON);
+}
+
+/* The native save of the current settings in a slot, which runs the hook of
+   the save first, as DIAL_SLOT_SAVE does. */
+static void native_save(u32 slot) { DIAL_SLOT_SAVE(slot); }
+/* A native save of the slot of a user mode ends its snapshot at once, also
+   when it keeps the name and the registered flag of the slot: the hook of the
+   save sees it, where the check of the name cannot. A save of another slot
+   changes nothing, and Off stays. */
+static void a_native_save_ends_the_snapshot_of_its_slot(void)
+{
+    volatile u32 *h = test_header;
+    u32 sets;
+    dial_reset();
+    dial_start(DIAL_P);
+    dial_saved_settings();
+    dial_save_as(1, "Street");
+    dial_save_as(2, "Night");
+    dial_saved_base();
+    /* A save of slot 3, which holds no snapshot, changes nothing. */
+    sets = h[GRKIT_HOST_DIAL_SET_CHANGES / 4];
+    native_save(3);
+    assert(dial_has_set(h, 1) && dial_has_set(h, 2) && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] == sets);
+    /* A save of the slot of U1 with its name and flag kept: the slot is
+       intact by its name, yet U1 forgets its snapshot at once and the file
+       saves. The slot keeps the new settings, and U2 its snapshot. */
+    record_memory[0] = 0x22;
+    native_save(1);
+    assert(slot_mark[1] == 0x22 && slot_named(1, "Street"));
+    assert(!dial_has_set(h, 1) && dial_value(h, 1) == GRKIT_DIAL_VALUE_ON);
+    assert(!dial_slot_record(h, 1)[GRKIT_DIAL_SLOT_NAME] && h[GRKIT_HOST_DIAL_SET_CHANGES / 4] > sets);
+    assert(dial_has_set(h, 2) && dial_slot_intact(h, 2));
+    /* At the dial, U1 does what P does, and U2 applies its snapshot. */
+    dial_to(DIAL_U(1));
+    dial_fire();
+    assert(dial_base());
+    dial_to(DIAL_U(2));
+    dial_fire();
+    assert(dial_saved_applies());
+    /* On U2, a save of its slot sets no setting before the firmware copies
+       the settings: the snapshot leaves when the timer lands again. */
+    native_save(2);
+    assert(!dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_ON);
+    assert(dial_saved_applies() && dial_timer_ms == DIAL_RETRY_MS);
+    dial_fire();
+    assert(dial_base());
+    /* Save Current Settings keeps its new snapshot after its own save, on
+       the dial position too, also while its snapshot applies: the land of
+       the timer then changes nothing. */
+    dial_saved_settings();
+    dial_save_as(2, "Night");
+    assert(dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT && dial_slot_intact(h, 2));
+    assert(dial_saved_applies() && services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0] == 2);
+    dial_save_as(2, "Night");
+    dial_fire();
+    assert(dial_has_set(h, 2) && dial_value(h, 2) == GRKIT_DIAL_VALUE_SNAPSHOT && dial_slot_intact(h, 2));
+    assert(dial_saved_applies() && services_word(h, SERVICES_DIAL + DIAL_ACTIVE)[0] == 2);
+    /* A user mode with Off keeps Off. */
+    dial_to(DIAL_P);
+    dial_fire();
+    dial_save_as(1, "Street");
+    assert(dial_values_of(1)->select(h, 0, DIAL_VALUE_OFF));
+    native_save(1);
+    assert(!dial_has_set(h, 1) && dial_value(h, 1) == GRKIT_DIAL_VALUE_OFF);
 }
 
 static void the_mode_dial_acts_once_where_the_dial_stays(void)
@@ -5517,6 +5583,7 @@ int main(void)
     the_switch_stops_the_dial_and_the_dial_keeps_the_switch();
     the_switch_saves_on_a_snapshot();
     the_mode_dial_lets_go_of_a_changed_slot();
+    a_native_save_ends_the_snapshot_of_its_slot();
     the_mode_dial_acts_once_where_the_dial_stays();
     the_mode_dial_lands_at_a_start();
     an_older_dial_file_keeps_what_each_position_does();

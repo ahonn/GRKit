@@ -285,6 +285,9 @@ const SITES: &[Site] = &[
     // The entry of the apply of a dial position, which each App event of the
     // dial reaches.
     ("menu_dial", 0x532241a8, "0dc0a0e1"),
+    // The entry of the save of a box (FW_BOX_SAVE), which the native Save
+    // Settings and the core call.
+    ("menu_dial_save", 0x5324b760, "070051e3"),
     // The BL to the R2Y stripe send of StillMake, and the instruction after
     // the resize of BackResize.
     ("canvas_r2y", 0x53501f98, "62a706eb"),

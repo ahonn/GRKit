@@ -280,6 +280,9 @@ const SITES: &[Site] = &[
     // AeModel's apply of a dial position (0x532599dc): the BL to
     // UserModeModel::SetUserMode (0x533f7140).
     ("menu_dial", 0x53259a40, "be7506eb"),
+    // The entry of the assign of a user mode (FW_USER_MODE_ASSIGN), which
+    // the native Assign User Mode Dial and the core call.
+    ("menu_dial_save", 0x533f715c, "000090e5"),
     // The BL to the R2Y stripe dispatch of StillMake, and the instruction
     // after the resize of BackResize.
     ("canvas_r2y", 0x53725db4, "23feffeb"),

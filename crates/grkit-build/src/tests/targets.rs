@@ -389,9 +389,17 @@ fn build_headers_agree_with_the_target_tables() {
             "{}",
             target.name
         );
+        // The hook of the save of a native slot is at the entry of the save
+        // that DIAL_SLOT_SAVE calls (runtime/mode_dial.h: menu_dial_saved).
+        let slot_save = if target.family.name == "gr3" {
+            "FW_BOX_SAVE"
+        } else {
+            "FW_USER_MODE_ASSIGN"
+        };
         for (name, symbol) in [
             ("FW_ADJ_REFRESH", "menu_refresh"),
             ("FW_CHANGE_CONTROLLER", "menu_settings_change"),
+            (slot_save, "menu_dial_save"),
         ] {
             let site = components::hooks(target)
                 .unwrap()
