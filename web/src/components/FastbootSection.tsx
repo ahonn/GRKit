@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { firmwareName, LATEST, LATEST_NAMES, latestName, makeFastbootFirmware, releaseName } from '../fastboot';
+import { firmwareName, LATEST, latestName, makeFastbootFirmware, OLDER, SUPPORTED_NAMES } from '../fastboot';
 import type { Strings } from '../i18n';
 import { FastbootInstall } from './FastbootInstall';
 import { TermsNote } from './TermsNote';
@@ -7,8 +7,7 @@ import { TermsNote } from './TermsNote';
 type State =
   | { state: 'idle' }
   | { state: 'working' }
-  | { state: 'ready'; release: string; fileName: string }
-  | { state: 'outdated'; release: string; latest: string }
+  | { state: 'ready'; release: string; fileName: string; latest: string | null }
   | { state: 'unknown' }
   | { state: 'failed' };
 
@@ -51,7 +50,7 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                 <tr key={name}>
                   <th scope="row">{name}</th>
                   <td data-label={t.compareHead[0]}>{official}</td>
-                  <td data-label={t.compareHead[1]}>{fast ?? LATEST_NAMES.join(t.versionSeparator)}</td>
+                  <td data-label={t.compareHead[1]}>{fast ?? SUPPORTED_NAMES.join(t.versionSeparator)}</td>
                 </tr>
               ))}
             </tbody>
@@ -79,6 +78,19 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                   </li>
                 ))}
               </ul>
+              <details className="older-firmware">
+                <summary>{t.older}</summary>
+                <p className="note">{t.olderNote}</p>
+                <ul className="ricoh-links">
+                  {OLDER.map((item) => (
+                    <li key={item.zip}>
+                      <a className="button small" href={item.zip} rel="noreferrer" aria-label={t.olderZip(item.name)}>
+                        {item.name}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             </li>
             <li>
               {t.makeSteps[1]}
@@ -109,9 +121,7 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                     </p>
                   )}
                   {state.state === 'ready' && <p className="status">{t.ready(firmwareName(state.release), state.fileName)}</p>}
-                  {state.state === 'outdated' && (
-                    <p className="status error">{t.outdated(releaseName(state.release), firmwareName(state.latest))}</p>
-                  )}
+                  {state.state === 'ready' && state.latest && <p className="status">{t.newer(firmwareName(state.latest))}</p>}
                   {state.state === 'unknown' && <p className="status error">{t.unknown}</p>}
                   {state.state === 'failed' && <p className="status error">{t.error}</p>}
                 </div>

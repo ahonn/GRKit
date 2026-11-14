@@ -2525,6 +2525,19 @@ button.row-body {
   text-decoration: none;
 }
 
+.older-firmware {
+  margin-top: 10px;
+}
+
+.older-firmware summary {
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.older-firmware .note {
+  margin: 8px 0 0;
+}
+
 /* The file button is part of the second step, so it lines up with the Ricoh links of the first. */
 .fastboot .steps .package-action {
   margin-top: 12px;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { firmwareName, LATEST, latestCamera, LATEST_NAMES, newerRelease, releaseName } from './fastboot';
+import { firmwareName, LATEST, latestCamera, newerRelease, OLDER, RELEASES, releaseName, SUPPORTED_NAMES } from './fastboot';
 
 describe('releaseName', () => {
   it('names the camera and the version of a release', () => {
@@ -10,7 +10,7 @@ describe('releaseName', () => {
 });
 
 describe('newerRelease', () => {
-  it('asks for the latest release of the same camera', () => {
+  it('names the latest release of the same camera', () => {
     expect(newerRelease('gr3-2.10')).toBe('gr3-2.21');
     expect(newerRelease('gr3-2.20')).toBe('gr3-2.21');
     expect(newerRelease('gr3x-1.60')).toBe('gr3x-1.71');
@@ -18,11 +18,21 @@ describe('newerRelease', () => {
     expect(newerRelease('gr4-1.20')).toBe('gr4-1.21');
   });
 
-  it('accepts the latest release of each camera', () => {
+  it('has none for the latest release of each camera', () => {
     expect(newerRelease('gr3-2.21')).toBeNull();
     expect(newerRelease('gr3x-1.71')).toBeNull();
     expect(newerRelease('gr4-1.21')).toBeNull();
-    expect(LATEST_NAMES).toEqual(['GR III 2.21', 'GR IIIx 1.71', 'GR IV 1.21', 'GR IV Monochrome 1.11']);
+  });
+});
+
+describe('SUPPORTED_NAMES', () => {
+  it('lists each camera once with every version that the page makes', () => {
+    expect(SUPPORTED_NAMES).toEqual([
+      'GR III 2.10 / 2.20 / 2.21',
+      'GR IIIx 1.60 / 1.70 / 1.71',
+      'GR IV 1.11 / 1.20 / 1.21',
+      'GR IV Monochrome 1.10 / 1.11',
+    ]);
   });
 });
 
@@ -36,7 +46,7 @@ describe('firmwareName', () => {
   it('names each camera whose official file the release has', () => {
     expect(firmwareName('gr4-1.21')).toBe('GR IV 1.21 / GR IV Monochrome 1.11');
     expect(firmwareName('gr3-2.21')).toBe('GR III 2.21');
-    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20');
+    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20 / GR IV Monochrome 1.10');
     expect(firmwareName('gr4-1.11')).toBe('GR IV 1.11');
   });
 });
@@ -60,8 +70,38 @@ describe('LATEST', () => {
     );
   });
 
+  it('makes every release table, and the latest of each camera is one of them', () => {
+    expect(RELEASES.map((item) => item.release).sort()).toEqual(
+      Object.values(tables)
+        .map(({ camera, firmware }) => `${camera}-${firmware}`)
+        .sort(),
+    );
+    for (const item of RELEASES) expect(item.names[0]).toBe(releaseName(item.release));
+    for (const item of LATEST) expect(RELEASES.some((release) => release.release === item.release)).toBe(true);
+  });
+
   it('names the update file of each release table', () => {
     const files = new Map(Object.values(tables).map((table) => [`${table.camera}-${table.firmware}`, table.update.name]));
     for (const item of LATEST) expect(item.file).toBe(files.get(item.release));
+  });
+});
+
+describe('OLDER', () => {
+  it('links the official ZIP of each version that is not the latest of its camera', () => {
+    const latest = new Set(LATEST.map((item) => item.name ?? releaseName(item.release)));
+    const older = RELEASES.flatMap((item) => item.names.map((name) => ({ name, release: item.release }))).filter(
+      (item) => !latest.has(item.name),
+    );
+    expect(OLDER.map(({ name, release }) => ({ name, release }))).toEqual(older);
+    for (const item of OLDER) expect(item.zip).toMatch(/^https:\/\/www\.ricoh-imaging\.co\.jp\/.+\.zip$/);
+  });
+
+  // Ricoh can remove these files. Run with CHECK_RICOH_LINKS=1 before a release.
+  it.runIf(process.env.CHECK_RICOH_LINKS)('finds each ZIP on Ricoh\'s server', async () => {
+    for (const item of OLDER) {
+      const response = await fetch(item.zip, { headers: { Range: 'bytes=0-3' } });
+      const head = new Uint8Array(await response.arrayBuffer());
+      expect([item.name, head[0], head[1]]).toEqual([item.name, 0x50, 0x4b]);
+    }
   });
 });

@@ -91,7 +91,7 @@ The code of GRKit ends before the fast-boot file, which runs from 0x54c00000 (`r
 
 ## Make the fast-boot firmware
 
-A person who does not build GRKit uses the Fast start page of grkit.app (`/fastboot/`), which runs the same code in the browser, and the [fast start guide](../resources/FASTBOOT.md). The page takes the official ZIP from Ricoh and makes the latest release of each camera only (`LATEST` in `web/src/fastboot.ts`). The `grkit` command takes the official ZIP or its update file of any release in the table of releases.
+A person who does not build GRKit uses the Fast start page of grkit.app (`/fastboot/`), which runs the same code in the browser, and the [fast start guide](../resources/FASTBOOT.md). The page and the `grkit` command take the official ZIP or its update file of any release in the table of releases (`RELEASES` in `web/src/fastboot.ts`). The page recommends the latest release of each camera (`LATEST`) and names it after it makes an older one.
 
 1. Download the official firmware of your camera and version from Ricoh.
 2. Run `grkit firmware patch` with the official ZIP or the update file in it:

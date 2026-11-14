@@ -394,19 +394,24 @@ const en = {
     /** The section with the steps and the file button. */
     make: 'Make the firmware',
     makeSteps: [
-      'Download the latest firmware of your camera from Ricoh.',
+      'Download the latest firmware of your camera from Ricoh. A camera that still has an older version can use its official ZIP under Older versions.',
       'Select the downloaded ZIP file, or the firmware file in it. The fast-boot firmware downloads.',
     ] as readonly string[],
     /** The name of the link to the Ricoh page of a camera with its latest version, for screen readers. */
     ricohPage: (camera: string) => `Ricoh download page of ${camera}`,
+    /** The folded list of the official ZIP files of older versions, under the Ricoh pages. */
+    older: 'Older versions',
+    olderNote: 'Only for a camera that still has that version. A camera cannot go back to an older firmware version.',
+    /** The name of the link to the official ZIP of an older version, for screen readers. */
+    olderZip: (camera: string) => `Official firmware ZIP of ${camera} from Ricoh`,
     choose: 'Select the firmware file',
     note: 'The file is not uploaded.',
     working: 'Making the fast-boot firmware…',
     /** The camera and version, then the file name, which the camera looks for. */
     ready: (camera: string, file: string) =>
       `The fast-boot firmware for ${camera} is downloaded as ${file}. On the card, the file name must be ${file}. If the browser renamed it, rename it back.`,
-    /** An official file of an older version, then the latest version of the camera. */
-    outdated: (release: string, latest: string) => `${release} is not the latest version. Download ${latest} from Ricoh.`,
+    /** After the firmware of an older version downloaded: the latest version of the camera. */
+    newer: (latest: string) => `A newer version, ${latest}, is on Ricoh's website.`,
     unknown: 'This is not the official firmware of a supported camera and version. Download it from Ricoh again.',
     error: 'The fast-boot firmware could not be made. Try again.',
     /** The section with the steps that install the firmware on the camera, after the warning. */
@@ -901,16 +906,19 @@ const zhHans: Strings = {
     ],
     make: '制作固件',
     makeSteps: [
-      '从 Ricoh 官网下载相机的最新固件。',
+      '从 Ricoh 官网下载相机的最新固件。相机还是旧版本时，可以在「旧版本」中下载对应的官方 ZIP。',
       '选择下载的 ZIP 文件（或解压出的固件文件），下载快速启动固件。',
     ],
     ricohPage: (camera: string) => `${camera} 的 Ricoh 下载页面`,
+    older: '旧版本',
+    olderNote: '只适用于还是这个版本的相机。相机固件不能降级到旧版本。',
+    olderZip: (camera: string) => `Ricoh 官方的 ${camera} 固件 ZIP`,
     choose: '选择官方固件文件',
     note: '文件不会上传。',
     working: '正在制作快速启动固件…',
     ready: (camera: string, file: string) =>
       `已下载 ${camera} 的快速启动固件 ${file}。复制到存储卡时，文件名必须是 ${file}。浏览器改了名的，请改回来。`,
-    outdated: (release: string, latest: string) => `${release} 不是最新版本。请从 Ricoh 下载 ${latest}。`,
+    newer: (latest: string) => `Ricoh 官网有更新的版本：${latest}。`,
     unknown: '这不是受支持的相机和版本的官方固件。请从 Ricoh 重新下载。',
     error: '无法制作快速启动固件，请重试。',
     install: '安装固件',
@@ -1380,16 +1388,19 @@ const zhHant: Strings = {
     ],
     make: '製作韌體',
     makeSteps: [
-      '從 Ricoh 官網下載相機的最新韌體。',
+      '從 Ricoh 官網下載相機的最新韌體。相機還是舊版本時，可以在「舊版本」中下載對應的官方 ZIP。',
       '選擇下載的 ZIP 檔案（或解壓縮出的韌體檔案），下載快速啟動韌體。',
     ],
     ricohPage: (camera: string) => `${camera} 的 Ricoh 下載頁面`,
+    older: '舊版本',
+    olderNote: '只適用於還是這個版本的相機。相機韌體不能降級到舊版本。',
+    olderZip: (camera: string) => `Ricoh 官方的 ${camera} 韌體 ZIP`,
     choose: '選擇官方韌體檔案',
     note: '檔案不會上傳。',
     working: '正在製作快速啟動韌體…',
     ready: (camera: string, file: string) =>
       `已下載 ${camera} 的快速啟動韌體 ${file}。複製到記憶卡時，檔名必須是 ${file}。瀏覽器改了檔名的，請改回來。`,
-    outdated: (release: string, latest: string) => `${release} 不是最新版本。請從 Ricoh 下載 ${latest}。`,
+    newer: (latest: string) => `Ricoh 官網有更新的版本：${latest}。`,
     unknown: '這不是受支援的相機與版本的官方韌體。請從 Ricoh 重新下載。',
     error: '無法製作快速啟動韌體，請再試一次。',
     install: '安裝韌體',
@@ -1863,16 +1874,19 @@ const ja: Strings = {
     ],
     make: 'ファームウェアを作る',
     makeSteps: [
-      'カメラの最新ファームウェアを Ricoh からダウンロードします。',
+      'カメラの最新ファームウェアを Ricoh からダウンロードします。古いバージョンのままのカメラは、「古いバージョン」から公式 ZIP をダウンロードできます。',
       'ダウンロードした ZIP ファイル（または展開したファームウェアのファイル）を選択すると、高速起動ファームウェアがダウンロードされます。',
     ],
     ricohPage: (camera: string) => `${camera} の Ricoh ダウンロードページ`,
+    older: '古いバージョン',
+    olderNote: 'そのバージョンのままのカメラ専用です。カメラのファームウェアは古いバージョンに戻せません。',
+    olderZip: (camera: string) => `Ricoh 公式の ${camera} ファームウェア ZIP`,
     choose: '公式ファームウェアのファイルを選択',
     note: 'ファイルはアップロードされません。',
     working: '高速起動ファームウェアを作成しています…',
     ready: (camera: string, file: string) =>
       `${camera} の高速起動ファームウェア ${file} をダウンロードしました。カードにコピーするときのファイル名は ${file} のままにしてください。ブラウザーが名前を変えた場合は元に戻します。`,
-    outdated: (release: string, latest: string) => `${release} は最新バージョンではありません。Ricoh から ${latest} をダウンロードしてください。`,
+    newer: (latest: string) => `Ricoh のサイトに新しいバージョン（${latest}）があります。`,
     unknown: '対応するカメラとバージョンの公式ファームウェアではありません。Ricoh からダウンロードし直してください。',
     error: '高速起動ファームウェアを作成できませんでした。もう一度お試しください。',
     install: 'ファームウェアをインストール',
@@ -2364,16 +2378,19 @@ const ko: Strings = {
     ],
     make: '펌웨어 만들기',
     makeSteps: [
-      '카메라의 최신 펌웨어를 Ricoh에서 내려받습니다.',
+      '카메라의 최신 펌웨어를 Ricoh에서 내려받습니다. 아직 이전 버전인 카메라는 “이전 버전”에서 공식 ZIP을 내려받을 수 있습니다.',
       '내려받은 ZIP 파일(또는 압축을 푼 펌웨어 파일)을 선택하면 빠른 시작 펌웨어가 내려받아집니다.',
     ],
     ricohPage: (camera: string) => `${camera} Ricoh 다운로드 페이지`,
+    older: '이전 버전',
+    olderNote: '아직 그 버전인 카메라에만 해당합니다. 카메라 펌웨어는 이전 버전으로 되돌릴 수 없습니다.',
+    olderZip: (camera: string) => `Ricoh 공식 ${camera} 펌웨어 ZIP`,
     choose: '공식 펌웨어 파일 선택',
     note: '파일은 업로드되지 않습니다.',
     working: '빠른 시작 펌웨어를 만드는 중…',
     ready: (camera: string, file: string) =>
       `${camera}용 빠른 시작 펌웨어 ${file}을(를) 내려받았습니다. 카드에 복사할 때 파일 이름은 ${file}이어야 합니다. 브라우저가 이름을 바꿨다면 원래대로 바꾸세요.`,
-    outdated: (release: string, latest: string) => `${release}은(는) 최신 버전이 아닙니다. Ricoh에서 ${latest}을(를) 내려받으세요.`,
+    newer: (latest: string) => `Ricoh 웹사이트에 새 버전(${latest})이 있습니다.`,
     unknown: '지원하는 카메라와 버전의 공식 펌웨어가 아닙니다. Ricoh에서 다시 내려받으세요.',
     error: '빠른 시작 펌웨어를 만들지 못했습니다. 다시 시도하세요.',
     install: '펌웨어 설치',
