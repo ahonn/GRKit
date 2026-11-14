@@ -243,11 +243,21 @@ void canvas_r2y_c(u32 module,u32 config) {
 
 /* The margins of the IIP: four rectangles of the canvas around the picture. */
 static void canvas_rect(u32 y,u32 plane,u32 pitch,u32 w,u32 hh,u32 color) {
-    u32 d[8];
+    u32 d[8], rows=hh, n;
     if(!w || !hh) return;
-    d[0]=CANVAS_FILL_FORMAT; d[1]=y; d[2]=y+plane; d[3]=0;
-    d[4]=w|hh<<16; d[5]=pitch|hh<<16; d[6]=0; d[7]=CANVAS_FILL_TAG;
-    CANVAS_FILL(d,color);
+#ifdef CANVAS_FILL_PIXELS
+    /* The fill of a family with this limit takes a larger rectangle in
+       parts and then checks it as if its pitch were its width: the margins
+       go in parts below the limit. */
+    rows=core_divide(CANVAS_FILL_PIXELS-1U,w);
+    if(!rows) rows=1;
+#endif
+    for(;hh;hh-=n,y+=n*pitch) {
+        n=hh<rows ? hh : rows;
+        d[0]=CANVAS_FILL_FORMAT; d[1]=y; d[2]=y+plane; d[3]=0;
+        d[4]=w|n<<16; d[5]=pitch|n<<16; d[6]=0; d[7]=CANVAS_FILL_TAG;
+        CANVAS_FILL(d,color);
+    }
 }
 static void canvas_fill(volatile u32 *e) {
     u32 y=e[CANVAS_E_CANVAS], plane=e[CANVAS_E_PLANE], pitch=e[CANVAS_E_PITCH];

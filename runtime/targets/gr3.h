@@ -570,12 +570,17 @@
 #define CANVAS_CONFIG_QUICK 0x20
 #define CANVAS_MODULE_SOURCE 0x9950
 #define CANVAS_MODULE_PITCH 0x9960
+/* The playback and the review need each preview at the size of its box. */
+#define CANVAS_PREVIEW_BOX 1
 /* FW_CANVAS_FILL(0, descriptor, color, 1) fills the rectangle of a
    descriptor through the IIP and returns when it is done; the last argument
    leaves out its cache maintenance. Its descriptor adds +0 format (1 for
    4:2:2), +0x18 u16 x and y, and +0x1c tag 2. */
 #define CANVAS_FILL_FORMAT 1U
 #define CANVAS_FILL_TAG 2U
+/* FW_CANVAS_FILL splits a rectangle of this many pixels or more into parts
+   and then asserts that its pitch is its width. */
+#define CANVAS_FILL_PIXELS 0x100000U
 #define CANVAS_FILL_BLACK 1U
 #define CANVAS_FILL_WHITE 2U
 

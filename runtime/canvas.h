@@ -64,13 +64,19 @@ GRKIT_MAYBE_UNUSED static u32 canvas_margins(u32 style,u32 w,u32 h,u32 turns,u32
     return m;
 }
 
-/* The largest even size of the aspect of cw x ch that fits into bw x bh:
-   w | h << 16. A preview of the canvas keeps its whole area. */
+/* The size of the aspect of cw x ch that fits into bw x bh, the other side
+   rounded to the nearest pixel, then down to an even size: w | h << 16. A
+   preview of the canvas keeps its whole area. The firmware renders the main
+   picture in playback at this size too (GR III 694.3 -> 694 and 705.6 ->
+   706, GR IV 695.0 -> 694), so the preview and the main picture that
+   replaces it keep their edges. */
 GRKIT_MAYBE_UNUSED static u32 canvas_fit(u32 cw,u32 ch,u32 bw,u32 bh) {
     u32 w=bw, h=bh;
     if(!cw || !ch) return 0;
-    if(cw*bh>ch*bw) h=core_divide(bw*ch,cw)&~1U;
-    else w=core_divide(bh*cw,ch)&~1U;
+    if(cw*bh>ch*bw) h=core_divide(2U*bw*ch+cw,2U*cw)&~1U;
+    else w=core_divide(2U*bh*cw+ch,2U*ch)&~1U;
+    if(w>bw) w=bw&~1U;
+    if(h>bh) h=bh&~1U;
     return w|h<<16;
 }
 

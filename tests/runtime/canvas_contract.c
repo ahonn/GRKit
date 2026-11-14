@@ -78,21 +78,28 @@ int main(void)
     /* A preview keeps the whole canvas in its box, with even sides. */
     assert(canvas_fit(6240, 4240, 720, 480) == (706U | 480U << 16));
     assert(canvas_fit(6480, 4480, 160, 120) == (160U | 110U << 16));
-    assert(canvas_fit(6272, 2488, 720, 480) == (720U | 284U << 16));
+    assert(canvas_fit(6272, 2488, 720, 480) == (720U | 286U << 16));
     assert(canvas_fit(4480, 4480, 720, 480) == (480U | 480U << 16));
     assert(canvas_fit(0, 4480, 720, 480) == 0);
+    /* The size of the main picture in playback: rounded, then even. Thin
+       on GR III is 705.56 wide: 706 (not 704); Wide on GR IV is 695.0
+       wide: 694 (not 696). */
+    assert(canvas_fit(6256, 4256, 720, 480) == (706U | 480U << 16));
+    assert(canvas_fit(6480, 4480, 720, 480) == (694U | 480U << 16));
+    assert(canvas_fit(6672, 4608, 720, 480) == (694U | 480U << 16));
+    assert(canvas_fit(6256, 4256, 160, 120) == (160U | 108U << 16));
     /* The picture inside the border, in each plane. The main picture is
        the whole canvas: GR IV Wide 6576 x 4512 with 192 on each side. */
     {
         const u32 m[4] = {192, 192, 192, 192};
         inner(6576, 4512, m, 6576, 4512, 192, 192, 6384, 4320);
-        /* A GR IV screennail keeps its 720 x 480 box: the canvas is 698 x
+        /* A GR IV screennail keeps its 720 x 480 box: the canvas is 700 x
            480 between bars of 10. The margins round away from the picture,
            so that no preview sample of the border is inside. */
-        assert(canvas_fit(6576, 4512, 720, 480) == (698U | 480U << 16));
-        inner(6576, 4512, m, 720, 480, 32, 21, 686, 459);
-        /* The thumbnail box holds 160 x 108, with bars of 6 above and below. */
-        inner(6576, 4512, m, 160, 120, 6, 11, 154, 109);
+        assert(canvas_fit(6576, 4512, 720, 480) == (700U | 480U << 16));
+        inner(6576, 4512, m, 720, 480, 32, 21, 688, 459);
+        /* The thumbnail box holds 160 x 110, with bars of 5 above and below. */
+        inner(6576, 4512, m, 160, 120, 6, 10, 154, 110);
         samples_inside(6576, 4512, m, 720, 480);
         samples_inside(6576, 4512, m, 160, 120);
     }
