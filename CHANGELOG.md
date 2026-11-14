@@ -1,3 +1,17 @@
+## 1.6.1 (2026-11-14)
+
+### Fixes
+
+- Bordered photos now show at once and without a shift in playback, and GR IV shows the border in the review after a shot.
+- Crop now works with every aspect and Framing ratio, and in-camera RAW development keeps the 40 and 70 mm crops (57 and 100 mm on GR IIIx).
+- Film looks that you uncheck on the site no longer load on the camera after you copy the new package.
+- Framing adds a 3:4 ratio for vertical half-frame photos.
+- GRKit installs again on GR IV 1.11 cameras that stopped with error 47.
+- The camera's own grid lines hide while GRKit draws in the live view, and Guides place the dynamic symmetry lines of XPan and 2.35:1 correctly.
+- Mode Dial turns GRKit on or off at P, Av, Tv, M, and Sn (GR IV) separately.
+- Saving a user mode no longer clears another one on GR III, and saving it again in the camera menu now drops its GRKit look.
+- ADJ previews the recipe under the cursor in the live view, and Undo restores every camera setting that a recipe changed.
+
 ## 1.6.0 (2026-11-13)
 
 ### Features
