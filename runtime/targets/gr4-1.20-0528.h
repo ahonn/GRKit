@@ -179,6 +179,8 @@
 #define METADATA_TIME 0x3e0
 /* The EXIF Orientation of the photo in the playback metadata. */
 #define METADATA_ORIENTATION 0x2c4
+/* The Exif 35 mm focal length of the photo in the playback metadata. */
+#define METADATA_FOCAL_35MM 0x294
 /* RAW development, the Image Control list (runtime/menu.c): the label and
    the icon of an Image Control (model, category, value), the children of a
    list row view (their maker and layout, a child, and the setups of the icon

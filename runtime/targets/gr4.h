@@ -77,8 +77,12 @@
 /* The playback metadata also holds the time of that photo at METADATA_TIME
    (build header), in the layout of GrkitDateTime (runtime/sdk/grkit.h).
    RawDevelopmentModel has its state at DEVELOP_STATE: 0 while no
-   development runs. */
+   development runs. It holds at DEVELOP_SETTINGS the settings that it
+   reads from the DNG, with the crop factor at SHOT_CROP, as a shot does.
+   The playback metadata holds the Exif 35 mm focal length of the photo in
+   mm, below 256 for each lens, at METADATA_FOCAL_35MM (build header). */
 #define DEVELOP_STATE 4
+#define DEVELOP_SETTINGS 0x24
 /* RAW development, the Fn adjustments (runtime/develop.h): RawDevelopmentModel
    holds the selected Image Control: the category at DEVELOP_CATEGORY and the
    value of each category from DEVELOP_VALUES. The build header gives the
@@ -362,6 +366,9 @@
    factor) names it. The shot request object holds the copy of the capture
    settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
 #define CROP_SCALES 65536,52327,45990,37086,26280
+/* The Exif 35 mm focal length of a photo of each crop that the camera does
+   not have, 40 and 70 mm, 0 for the others (runtime/crop.h: crop_of_photo). */
+#define CROP_FOCALS 0,0,40,0,70
 /* The icon of no crop, which hides the live-view crop badge. */
 #define CROP_BADGE_OFF 0
 /* The live view zooms to the factor of a crop (runtime/framing.S:

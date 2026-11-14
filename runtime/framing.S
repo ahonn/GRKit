@@ -425,35 +425,23 @@ crop_image_crop:
 #endif
 #ifdef HOOK_CROP_SHOT
 /* After the copy of the capture settings of a shot into the shot request
-   object (r4): the factor of a 40 or 70 mm crop (GRKIT_HOST_CROP_SHOT)
-   replaces the factor of the live view in that copy (35 mm for a factor
-   below that of 50 mm, else 50 mm), so that the window, the size, the Exif
-   focal length, and the DNG crop of the shot follow it. Only while the still live view is bound, so a RAW development
-   keeps the factor of its photo. Then the displaced instruction. */
+   object (r4): the factor of a 40 or 70 mm crop replaces the factor of its
+   crop step in that copy (crop_shot_copy, runtime/framing.c), so that the
+   window, the size, the Exif focal length, and the DNG crop of the shot
+   follow it. A RAW development makes its photo through the same copy, with
+   the factor of the crop of its DNG. Then the displaced instruction. */
 .global crop_shot
 .type crop_shot, %function
 crop_shot:
-    push {r0-r3}
-    ldr r0, =GRKIT_HEADER_REFERENCE
-    ldr r1, [r0, #GRKIT_HOST_CROP_SHOT]
-    cmp r1, #0
+    push {r0-r3,r12,lr}
+    add r0, r4, #(CROP_SHOT_COPY & ~0xff)
+    ldr r0, [r0, #(CROP_SHOT_COPY & 0xff)]
+    cmp r0, #0
     beq 1f
-    ldr r2, [r0, #GRKIT_HOST_FRAME_OWNER]
-    cmp r2, #0
-    beq 1f
-    add r2, r4, #(CROP_SHOT_COPY & ~0xff)
-    ldr r2, [r2, #(CROP_SHOT_COPY & 0xff)]
-    cmp r2, #0
-    beq 1f
-    add r2, r2, #(SHOT_CROP & ~0xff)
-    ldr r3, [r2, #(SHOT_CROP & 0xff)]
-    /* Positive floats compare as their bits. */
-    ldr r0, =CROP_NATIVE_50
-    cmp r1, r0
-    ldrlo r0, =CROP_NATIVE_35
-    cmp r3, r0
-    streq r1, [r2, #(SHOT_CROP & 0xff)]
-1:  pop {r0-r3}
+    add r0, r0, #(SHOT_CROP & ~0xff)
+    add r0, r0, #(SHOT_CROP & 0xff)
+    bl crop_shot_copy
+1:  pop {r0-r3,r12,lr}
     CROP_SHOT_DISPLACED
     bx lr
 .ltorg

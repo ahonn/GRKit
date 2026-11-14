@@ -108,6 +108,72 @@ static u32 framing_mode(volatile u32 *h,u32 wide) {
     u32 file=((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE], index=file ? file : h[GRKIT_HOST_FRAME_CROP/4];
     return index<FRAMING_MODE_INDEXES ? modes[wide][file!=0][index] : 0;
 }
+#if defined(FW_DEVELOP_MODEL) && defined(DEVELOP_SETTINGS) && defined(CROP_FOCALS)
+#define FRAMING_DEVELOP_CROP 1
+/* Whether a RAW development runs (runtime/picture.c: PICTURE_DEVELOPING),
+   the settings that it reads from its DNG, and the playback metadata of
+   that DNG (runtime/targets). */
+#ifndef FRAMING_DEVELOPING
+#define FRAMING_DEVELOPING() ((BYTE(FW_DEVELOP_GUARD,0)&1U) && BYTE(FW_DEVELOP_MODEL,DEVELOP_STATE))
+#endif
+#ifndef FRAMING_DEVELOP_SETTINGS
+#define FRAMING_DEVELOP_SETTINGS() WORD(FW_DEVELOP_MODEL,DEVELOP_SETTINGS)
+#endif
+#ifndef FRAMING_PLAYBACK_METADATA
+#define FRAMING_PLAYBACK_METADATA() (((u32 (*)(void))FW_PLAYBACK_METADATA)())
+#endif
+/* The crop factor of the DNG of the RAW development where the camera does
+   not have its crop (runtime/crop.h: crop_of_photo), or 0. The camera knows
+   only its own factors, so it reads a DNG of 40 or 70 mm (GR IIIx 57 or 100
+   mm) as one without a crop, or with the factor of its crop step. Its Exif
+   35 mm focal length names the crop. */
+static u32 develop_crop_factor(void) {
+    u32 settings=FRAMING_DEVELOP_SETTINGS(), crop;
+    if(!settings) return 0;
+    crop=crop_of_photo(BYTE(FRAMING_PLAYBACK_METADATA(),METADATA_FOCAL_35MM),WORD(settings,SHOT_CROP));
+    return crop ? crop_factors[crop] : 0;
+}
+/* The start of a RAW development (runtime/picture.c: picture_develop_start):
+   a DNG of such a crop develops at the factor of its crop step, as the
+   camera kept it for its shot, so that the development knows the factor.
+   crop_shot_copy gives the photo the factor of the crop. */
+void framing_develop_crop(void) {
+    u32 own=develop_crop_factor();
+    if(own) WORD(FRAMING_DEVELOP_SETTINGS(),SHOT_CROP)=crop_step_factor(own);
+}
+#else
+#define FRAMING_DEVELOPING() 0
+#define develop_crop_factor() 0U
+#endif
+/* The crop factor of a shot or of a RAW development, as float bits at
+   `address`, in its copy of the capture settings (runtime/framing.S:
+   crop_shot). The factor of a crop that the camera does not have takes the
+   place of the factor of its crop step: that of the next shot
+   (GRKIT_HOST_CROP_SHOT, crop_sync) while the still live view is bound, and
+   that of the DNG while a development runs, where it also takes the place
+   of the factor 1, as which the development can read it. */
+void crop_shot_copy(u32 address) {
+    volatile u32 *h=framing_header();
+    u32 now=WORD(address,0), own;
+    if(FRAMING_DEVELOPING()) {
+        own=develop_crop_factor();
+        if(own && (now==crop_factors[0] || now==crop_step_factor(own))) WORD(address,0)=own;
+        return;
+    }
+    own=h[GRKIT_HOST_CROP_SHOT/4];
+    if(own && h[GRKIT_HOST_FRAME_OWNER/4] && now==crop_step_factor(own)) WORD(address,0)=own;
+}
+/* The crop factor `bits` of GetResolution: in a RAW development of such a
+   crop, the factor of its crop step, which the development reads
+   (framing_develop_crop), is the factor of the crop, so that each size of
+   the development, such as its JPEG Recorded Pixels, is that of the
+   photo. */
+static u32 develop_crop_bits(u32 bits) {
+    u32 own;
+    if(!FRAMING_DEVELOPING()) return bits;
+    own=develop_crop_factor();
+    return own && bits==crop_step_factor(own) ? own : bits;
+}
 /* GetResolution of a crop (runtime/framing.S: crop_resolution): the size
    {width | height << 16} of size class `size` of capture aspect id `aspect`
    (3 is 1:1) at the crop factor `bits`, which is not 1, or 0 for the size
@@ -124,6 +190,7 @@ u32 crop_resolution_size(u32 size,u32 aspect,u32 bits) {
     static const u8 wide_framed[]={FRAMING_WIDE_FRAMED}, narrow_framed[]={FRAMING_NARROW_FRAMED};
     volatile u32 *h=framing_header();
     u32 width=widths[0], height=native[0], framed=0, mode;
+    bits=develop_crop_bits(bits);
     /* A factor below 1, such as 0.0 that an early build saved, or not a
        number, is no crop: the division below would not end. */
     if(bits<0x3f800000U || bits>=0x7f800000U || size>crop_step(bits) || aspect>3) return 0;

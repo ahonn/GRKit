@@ -13,9 +13,15 @@ static uint32_t owner_memory[512], canvas_memory[256], bitmap_memory[256];
 /* One effect record for the highlight warning (GRKIT_RECORD_SIZE bytes). */
 #define TEST_RECORD 0x5d000000U
 static uint32_t record_memory[0x1100 / 4];
-/* The playback metadata: the size of the photo in playback at METADATA_SIZE. */
+/* The playback metadata: the size of the photo in playback at METADATA_SIZE,
+   and its Exif 35 mm focal length at METADATA_FOCAL_35MM. */
 #define TEST_METADATA 0x5c000000U
-static uint32_t metadata_memory[0x40 / 4];
+static uint32_t metadata_memory[0x300 / 4];
+/* The settings that a RAW development reads from its DNG, with the crop
+   factor at SHOT_CROP, and the copy of the capture settings of a shot. */
+#define TEST_DEVELOP_SETTINGS 0x55000000U
+#define TEST_SHOT_COPY 0x54000000U
+static uint32_t develop_settings_memory[0x800 / 4], shot_copy_memory[0x800 / 4];
 static uint32_t pixels[1024 * 480 + 2];
 static uint32_t native_aspect, capture_aspect, capture_requests;
 #define TEST_INDICATOR 0x5b000000U
@@ -50,6 +56,10 @@ static void *mapped(uint32_t address, uint32_t bytes)
         object = record_memory; address -= TEST_RECORD; size = sizeof(record_memory);
     } else if (address >= TEST_METADATA && address < TEST_METADATA + sizeof(metadata_memory)) {
         object = metadata_memory; address -= TEST_METADATA; size = sizeof(metadata_memory);
+    } else if (address >= TEST_DEVELOP_SETTINGS && address < TEST_DEVELOP_SETTINGS + sizeof(develop_settings_memory)) {
+        object = develop_settings_memory; address -= TEST_DEVELOP_SETTINGS; size = sizeof(develop_settings_memory);
+    } else if (address >= TEST_SHOT_COPY && address < TEST_SHOT_COPY + sizeof(shot_copy_memory)) {
+        object = shot_copy_memory; address -= TEST_SHOT_COPY; size = sizeof(shot_copy_memory);
     } else {
         assert(address >= TEST_BITMAP && address < TEST_BITMAP + sizeof(bitmap_memory));
         object = bitmap_memory; address -= TEST_BITMAP;
@@ -81,6 +91,10 @@ static volatile uint32_t *mapped_pixels(uint32_t address)
 static uint32_t display_mode;
 #define FRAMING_DISPLAY_MODE() display_mode
 #define FRAMING_PLAYBACK_METADATA() TEST_METADATA
+/* Whether a RAW development runs, and its settings. */
+static uint32_t developing, develop_settings = TEST_DEVELOP_SETTINGS;
+#define FRAMING_DEVELOPING() (developing)
+#define FRAMING_DEVELOP_SETTINGS() (develop_settings)
 static uint32_t invalidations, invalidated;
 #define FRAMING_INVALIDATE(view) (++invalidations, invalidated = (view))
 static uint32_t local_second;
@@ -1393,9 +1407,83 @@ static void crop_sizes_follow_the_geometry(void)
         for (u32 aspect = 0; aspect < 4; ++aspect)
             assert(crop_resolution_size(0, aspect, invalid[i]) == 0);
 }
+/* A RAW development of a DNG of a crop that the camera does not have (40
+   and 70 mm, GR IIIx 57 and 100 mm): the camera reads its factor as no
+   crop, or as that of the crop step, and its Exif 35 mm focal length names
+   the crop. The development then reads the factor of the crop step, its
+   sizes are those of the crop, and its photo takes the factor of the crop
+   in its copy of the capture settings. A shot takes the factor of
+   GRKIT_HOST_CROP_SHOT only in place of that of the crop step, and only
+   while the still live view is bound. */
+static void a_development_takes_the_crop_of_its_dng(void)
+{
+#ifdef FRAMING_DEVELOP_CROP
+    static const u8 focals[2][GRKIT_CORE_CROP_VALUES] = {{CROP_FOCALS}, {CROP_FOCALS_LENS_40MM}};
+    memset((void *)header, 0, sizeof(header));
+    for (u32 lens = 0; lens < 2; ++lens) {
+        lens_40mm = lens;
+        for (u32 crop = 0; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
+            u32 step = crop_factors[crop_live_values[crop]];
+            const u32 reads[] = {crop_factors[0], step, crop_factors[crop], crop_factors[3]};
+            /* The focal length of the crop, or one that names no crop. */
+            u32 focal = focals[lens][crop] ? focals[lens][crop] : 20U + crop;
+            for (u32 r = 0; r < sizeof(reads) / sizeof(reads[0]); ++r) {
+                u32 own = focals[lens][crop] && (reads[r] == crop_factors[0] || reads[r] == step) ? crop_factors[crop] : 0;
+                u32 l = crop_sizes[0][crop][0][0] | (u32)crop_sizes[0][crop][0][1] << 16;
+                BYTE(TEST_METADATA, METADATA_FOCAL_35MM) = (u8)focal;
+                WORD(TEST_DEVELOP_SETTINGS, SHOT_CROP) = reads[r];
+                /* The crop of the next shot does not apply. */
+                header[GRKIT_HOST_CROP_SHOT/4] = crop_factors[4];
+                header[GRKIT_HOST_FRAME_OWNER/4] = 0;
+                developing = 1;
+                framing_develop_crop();
+                assert(WORD(TEST_DEVELOP_SETTINGS, SHOT_CROP) == (own ? step : reads[r]));
+                if (own) assert(crop_resolution_size(0, 0, step) == l);
+                for (u32 c = 0; c < 4; ++c) {
+                    const u32 copies[] = {crop_factors[0], step, crop_factors[3], crop_factors[1]};
+                    if (copies[c] == step && c > 1) continue;
+                    WORD(TEST_SHOT_COPY, SHOT_CROP) = copies[c];
+                    crop_shot_copy(TEST_SHOT_COPY + SHOT_CROP);
+                    assert(WORD(TEST_SHOT_COPY, SHOT_CROP) == (own && c < 2 ? own : copies[c]));
+                }
+                /* Without a development, the sizes of the camera. */
+                developing = 0;
+                if (own && crop_live_values[crop] == 1) assert(crop_resolution_size(0, 0, step) == 0);
+            }
+        }
+    }
+    lens_40mm = 0;
+    /* Without settings, the development has no crop of its own. */
+    developing = 1;
+    develop_settings = 0;
+    BYTE(TEST_METADATA, METADATA_FOCAL_35MM) = focals[0][2];
+    WORD(TEST_SHOT_COPY, SHOT_CROP) = crop_factors[0];
+    crop_shot_copy(TEST_SHOT_COPY + SHOT_CROP);
+    assert(WORD(TEST_SHOT_COPY, SHOT_CROP) == crop_factors[0]);
+    develop_settings = TEST_DEVELOP_SETTINGS;
+    developing = 0;
+    /* A shot: in place of the factor of the crop step only, while the live
+       view is bound. */
+    for (u32 crop = 1; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
+        if (crop_live_values[crop] == crop) continue;
+        header[GRKIT_HOST_CROP_SHOT/4] = crop_factors[crop];
+        for (u32 owner = 0; owner < 2; ++owner) {
+            header[GRKIT_HOST_FRAME_OWNER/4] = owner ? TEST_OWNER : 0;
+            WORD(TEST_SHOT_COPY, SHOT_CROP) = crop_factors[crop_live_values[crop]];
+            crop_shot_copy(TEST_SHOT_COPY + SHOT_CROP);
+            assert(WORD(TEST_SHOT_COPY, SHOT_CROP) == (owner ? crop_factors[crop] : crop_factors[crop_live_values[crop]]));
+            WORD(TEST_SHOT_COPY, SHOT_CROP) = crop_factors[0];
+            crop_shot_copy(TEST_SHOT_COPY + SHOT_CROP);
+            assert(WORD(TEST_SHOT_COPY, SHOT_CROP) == crop_factors[0]);
+        }
+    }
+    memset((void *)header, 0, sizeof(header));
+#endif
+}
 int main(void)
 {
     crop_sizes_follow_the_geometry();
+    a_development_takes_the_crop_of_its_dng();
     the_recipe_panel_centers_its_groups();
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();

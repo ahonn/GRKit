@@ -16,8 +16,9 @@
    to the factor of 35 or 50 mm, so that the live view, the focus, and the
    exposure follow it, and the window and the size of the photo follow the
    factor (runtime/framing.c: crop_resolution_size). The camera keeps 35 mm
-   for 40 mm, and 50 mm for 70 mm; their shots take their own factor
-   (crop_shot). The live view zooms to 40 mm, and shows 70 mm as a frame in
+   for 40 mm, and 50 mm for 70 mm; their shots, and the RAW developments of
+   their DNGs, take their own factor (runtime/framing.c: crop_shot_copy).
+   The live view zooms to 40 mm, and shows 70 mm as a frame in
    the view of 50 mm (crop_view_value). The camera saves its factor at
    power-off and knows only its own factors, so the core never sets another
    one.
@@ -64,6 +65,8 @@ static __attribute__((unused)) u32 crop_bits_q16(u32 bits) {
    crop whose window a crop takes, 1 below the factor of 50 mm, else 2.
    Positive floats compare as their bits. */
 static __attribute__((unused)) u32 crop_step(u32 bits) { return bits>=CROP_NATIVE_50 ? 2U : 1U; }
+/* The camera's factor of that crop step: that of 35 or 50 mm. */
+static __attribute__((unused)) u32 crop_step_factor(u32 bits) { return crop_step(bits)==2U ? CROP_NATIVE_50 : CROP_NATIVE_35; }
 /* A side of an L size at the crop factor `bits`: the side divided by the
    factor, truncated, then to the nearest multiple of 16, which the JPEG
    codec takes (grkit_core::aspect::geometry::crop_side). For each side and
@@ -89,6 +92,24 @@ static __attribute__((unused)) u32 crop_zoom_near(u32 a,u32 b) { return a+2U>=b 
    Its crops have the same factors, so only their texts differ. */
 #ifndef CROP_LENS_40MM
 #define CROP_LENS_40MM() 0
+#endif
+#ifdef CROP_FOCALS
+#ifndef CROP_FOCALS_LENS_40MM
+#define CROP_FOCALS_LENS_40MM CROP_FOCALS
+#endif
+/* The crop of a photo that the camera does not have, 40 or 70 mm, or 0: the
+   crop whose Exif 35 mm focal length the photo records (`focal`), where the
+   camera reads the crop factor `bits` of no crop or of the crop step from
+   the photo. The camera knows only its own factors, so it reads such a DNG
+   as one without a crop. */
+static __attribute__((unused)) u32 crop_of_photo(u32 focal,u32 bits) {
+    static const u8 focals[2][GRKIT_CORE_CROP_VALUES]={{CROP_FOCALS},{CROP_FOCALS_LENS_40MM}};
+    u32 lens=CROP_LENS_40MM() ? 1U : 0U, crop;
+    for(crop=1;crop<GRKIT_CORE_CROP_VALUES;++crop)
+        if(focals[lens][crop] && focals[lens][crop]==focal &&
+           (bits==crop_factors[0] || bits==crop_factors[crop_live_values[crop]])) return crop;
+    return 0;
+}
 #endif
 /* The selected crop, or 0 without a module that uses it. */
 static __attribute__((unused)) u32 crop_selection(volatile u32 *h) {

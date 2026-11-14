@@ -1804,3 +1804,68 @@ fn framing_family_sizes_are_those_of_each_firmware() -> Result<()> {
     }
     Ok(())
 }
+
+/// A RAW development reads the crop factor of its DNG from its settings
+/// (`DEVELOP_SETTINGS` of RawDevelopmentModel, the factor at `SHOT_CROP`),
+/// and the size of the developed photo takes it (runtime/framing.c:
+/// framing_develop_crop): before the BL that `framing_develop_size`
+/// replaces, `ldr r3, [r0, #DEVELOP_SETTINGS]`, then `add r3, r3, #a` and
+/// `vldr s16, [r3, #b]` with a + b = SHOT_CROP. The playback metadata keeps
+/// the Exif 35 mm focal length of the photo 0x30 bytes before its Exif
+/// Orientation.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE, GRKIT_TEST_FIRMWARE_GR3_221, GRKIT_TEST_FIRMWARE_GR4, GRKIT_TEST_FIRMWARE_GR4_120, GRKIT_TEST_FIRMWARE_GR4_120_0528, and GRKIT_TEST_FIRMWARE_GR4_121"]
+fn development_reads_the_crop_factor_of_its_settings() -> Result<()> {
+    for (variable, target) in [
+        ("GRKIT_TEST_FIRMWARE", &target::GR3_210),
+        ("GRKIT_TEST_FIRMWARE_GR3_221", &target::GR3_221),
+        ("GRKIT_TEST_FIRMWARE_GR4", &target::GR4_111),
+        ("GRKIT_TEST_FIRMWARE_GR4_120", &target::GR4_120),
+        ("GRKIT_TEST_FIRMWARE_GR4_120_0528", &target::GR4_120_0528),
+        ("GRKIT_TEST_FIRMWARE_GR4_121", &target::GR4_121),
+    ] {
+        let path = std::env::var(variable).with_context(|| format!("Set {variable}"))?;
+        let image = verify_firmware(Path::new(&path), target)?;
+        let word = |address: u32| -> u32 {
+            u32::from_le_bytes(image.read(address, 4).unwrap().try_into().unwrap())
+        };
+        let definitions = header_definitions(&target.header(), false);
+        let value = |name: &str| {
+            definitions
+                .get(name)
+                .and_then(|value| number(value))
+                .unwrap_or_else(|| panic!("{} defines no {name}", target.name))
+        };
+        let (settings, crop) = (value("DEVELOP_SETTINGS"), value("SHOT_CROP"));
+        let site = target
+            .layout
+            .sites
+            .iter()
+            .find(|site| site.0 == "framing_develop_size")
+            .unwrap()
+            .1;
+        let words: Vec<u32> = (site - 0x40..site).step_by(4).map(word).collect();
+        let load = words
+            .iter()
+            .position(|&w| w == 0xe590_3000 | settings)
+            .unwrap_or_else(|| panic!("{}: no load of the settings", target.name));
+        let add = words[load..]
+            .iter()
+            .find(|&&w| w & 0xffff_f000 == 0xe283_3000)
+            .map(|&w| arm::modified_immediate(w))
+            .unwrap_or_else(|| panic!("{}: no offset in the settings", target.name));
+        let offset = words[load..]
+            .iter()
+            .find(|&&w| w & 0xffff_ff00 == 0xed93_8a00)
+            .map(|&w| (w & 0xff) * 4)
+            .unwrap_or_else(|| panic!("{}: no load of the crop factor", target.name));
+        assert_eq!(add + offset, crop, "{}", target.name);
+        assert_eq!(
+            value("METADATA_FOCAL_35MM") + 0x30,
+            value("METADATA_ORIENTATION"),
+            "{}",
+            target.name
+        );
+    }
+    Ok(())
+}

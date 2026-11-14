@@ -21,6 +21,8 @@ static void *mapped(uint32_t address, uint32_t bytes)
 #define PICTURE_BARRIER() ((void)0)
 /* Selective color never calls the firmware's DNG rectangle helper. */
 #define PICTURE_DNG_RECT(shot,rect) assert(!"DNG metadata is outside this test")
+/* Nor does it start a RAW development. */
+#define PICTURE_DEVELOP_CROP() assert(!"RAW development is outside this test")
 #include "picture.c"
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];

@@ -350,6 +350,12 @@
    RawDevelopmentModel has its state at DEVELOP_STATE: 0 while no
    development runs. */
 #define DEVELOP_STATE 4
+/* RawDevelopmentModel holds at DEVELOP_SETTINGS the settings that it reads
+   from the DNG, with the crop factor at SHOT_CROP, as a shot does. The
+   playback metadata holds the Exif 35 mm focal length of the photo in mm,
+   below 256 for each lens, at METADATA_FOCAL_35MM. */
+#define DEVELOP_SETTINGS 0x24
+#define METADATA_FOCAL_35MM 0x280
 #define DEVELOP_SQUARE 2
 /* The value of the Standard Image Control in the development (category 0). */
 #define DEVELOP_STANDARD 1
@@ -425,6 +431,11 @@
    factor) names it. The shot request object holds the copy of the capture
    settings of a shot at CROP_SHOT_COPY, with its factor at SHOT_CROP. */
 #define CROP_SCALES 65536,52429,45875,36700,26214
+/* The Exif 35 mm focal length of a photo of each crop that the camera does
+   not have, 40 and 70 mm, 0 for the others (runtime/crop.h: crop_of_photo);
+   GR IIIx: 57 and 100 mm. */
+#define CROP_FOCALS 0,0,40,0,70
+#define CROP_FOCALS_LENS_40MM 0,0,57,0,100
 /* The icon of no crop, which hides the live-view crop badge. */
 #define CROP_BADGE_OFF 0
 /* The live view zooms to the factor of a crop (runtime/framing.S:

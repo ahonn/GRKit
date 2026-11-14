@@ -480,14 +480,24 @@ static u32 picture_turns(volatile u32 *h,u32 shot) {
    0x10000 | (tag - 0x100). */
 #define PICTURE_PLAYBACK_TONE() WORD(((u32 (*)(void))FW_PLAYBACK_METADATA)(),METADATA_TONE)
 #endif
+/* The crop of the DNG (runtime/framing.c: framing_develop_crop). */
+#ifndef PICTURE_DEVELOP_CROP
+#if defined(DEVELOP_SETTINGS) && defined(CROP_FOCALS)
+void framing_develop_crop(void);
+#define PICTURE_DEVELOP_CROP() framing_develop_crop()
+#else
+#define PICTURE_DEVELOP_CROP() ((void)0)
+#endif
+#endif
 /* The start of a RAW development: its effect is the effect that the DNG
    records (the ImageTone code of the record, picture_capture_tone), or
    native processing for a native photo or an effect that the camera no
    longer has. It develops the native aspect of the DNG until its aspect list
-   selects a Framing ratio (runtime/menu.c). */
+   selects a Framing ratio (runtime/menu.c), and the crop of the DNG. */
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
     u32 value=PICTURE_PLAYBACK_TONE(), record;
+    PICTURE_DEVELOP_CROP();
     h[GRKIT_HOST_DEVELOP_RATIO/4]=0;
     h[GRKIT_HOST_DEVELOP/4]=1;
     /* The model gives each parameter set its values after this, so the

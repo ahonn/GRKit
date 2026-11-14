@@ -42,6 +42,10 @@ static unsigned flushes, native_aspect;
    time, 2 other bytes at the place of the time. */
 static unsigned developing, photo_unset;
 #define PICTURE_DEVELOPING() developing
+/* The start of a development finds the crop of its DNG
+   (runtime/framing.c: framing_develop_crop). */
+static unsigned develop_crops;
+#define PICTURE_DEVELOP_CROP() (++develop_crops)
 /* The EXIF Orientation of that DNG. */
 static unsigned photo_orientation = 1;
 #define PICTURE_PHOTO_ORIENTATION() photo_orientation
@@ -1694,10 +1698,13 @@ int main(void)
         develop_hold(header, record(2));
         assert(develop_set[kinds[2]] == 7 && develop_set[kinds[0]] == 6);
         develop_hold(header, 0);
-        /* A new development starts without an effect in the set. */
+        /* A new development starts without an effect in the set, and with
+           the crop of its DNG. */
         develop_hold(header, record(2));
+        develop_crops = 0;
         picture_develop_start();
         assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
+        assert(develop_crops == 1);
         developing = 0;
         BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 0;
         BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;
