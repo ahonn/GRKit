@@ -44,6 +44,31 @@ fn site_module() -> String {
         serde_json::to_string(&corrections).unwrap(),
     )
     .unwrap();
+    // The labels of the tone parameter of each type in GR III and GR IV, by
+    // stored value from `first`: the one ColorTone parameter of the type.
+    let tones: Vec<Vec<Option<serde_json::Value>>> = (0..native::TYPES.len())
+        .map(|image_type| {
+            native::Family::ALL
+                .iter()
+                .map(|&family| {
+                    let parameter = (0..native::PARAMETERS.len()).find(|&p| {
+                        native::PARAMETERS[p].key.starts_with("ColorTone")
+                            && native::parameter_name(family, image_type, p).is_some()
+                    })?;
+                    let labels = native::type_parameter_labels(family, image_type, parameter)?;
+                    Some(serde_json::json!({ "first": labels.first, "labels": labels.labels }))
+                })
+                .collect()
+        })
+        .collect();
+    writeln!(
+        out,
+        "\n/** The labels of the tone parameter of each type in portable order, by stored value from\n \
+         * `first`: GR III, then GR IV, or null where the type has no tone. */\n\
+         export const TONE_LABELS: readonly (readonly ({{ first: number; labels: readonly string[] }} | null)[])[] = {};",
+        serde_json::to_string(&tones).unwrap(),
+    )
+    .unwrap();
     out.push_str(
         "\n/** The camera names of the types in each site language, by portable index. */\n",
     );

@@ -63,4 +63,40 @@ export const LANDING_PHOTOS = {
     camera: 'RICOH GR IIIx',
     source: 'https://raw.pixls.us/',
   },
+  platform: {
+    author: 'Tim Wood',
+    license: 'CC BY-SA 4.0',
+    camera: 'FUJIFILM X100F',
+    source: 'https://discuss.pixls.us/t/50453',
+  },
+  alley: {
+    author: 'sbij',
+    license: 'CC BY-SA 4.0',
+    camera: 'Sony RX100 III',
+    source: 'https://discuss.pixls.us/t/34269',
+  },
+  cat: {
+    author: 'Yannic Meyer',
+    license: 'CC BY-SA 4.0',
+    camera: 'Sony A7 III',
+    source: 'https://discuss.pixls.us/t/57758',
+  },
+  azaleas: {
+    author: 'Bao',
+    license: 'CC BY-SA 4.0',
+    camera: 'Sony A6000',
+    source: 'https://discuss.pixls.us/t/12686',
+  },
+  coast: {
+    author: 'Nacho Rodríguez',
+    license: 'CC BY-SA 4.0',
+    camera: 'Sony A6000',
+    source: 'https://discuss.pixls.us/t/27097',
+  },
+  havana: {
+    author: 'Franklin Aguilar Matos',
+    license: 'CC BY-SA 4.0',
+    camera: 'FUJIFILM X-H1',
+    source: 'https://discuss.pixls.us/t/39870',
+  },
 } as const;
