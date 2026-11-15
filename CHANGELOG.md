@@ -1,3 +1,11 @@
+## 1.6.2 (2026-11-15)
+
+### Fixes
+
+- With a border, the review after a cropped shot shows the border at once, and the picture stays in place when playback opens.
+- The crop badge in the live view looks the same for each focal length.
+- Order in the MENU page of Film Look, Recipes, Framing, Guides, and Date Imprint sets the order of their choices in ADJ.
+
 ## 1.6.1 (2026-11-14)
 
 ### Fixes
