@@ -186,10 +186,19 @@ pub fn presets() -> Vec<Preset> {
         number: 0,
         id: 0,
     };
-    // The community recipes give their settings for GR III or GR IIIx. GR IV
-    // has the same types with the same levels, so each one that uses no
-    // GR IV setting is on both color lines.
+    // The site lists the presets in this order: the recipe of GRKit, then
+    // the community recipes by look: color negative, positive, cinema, and
+    // black and white. The community recipes give their settings for GR III
+    // or GR IIIx. GR IV has the same types with the same levels, so each one
+    // that uses no GR IV setting is on both color lines.
     vec![
+        Preset {
+            id: "cinestill-800t",
+            effect: Some("vision3-500t-supra-v1"),
+            author: None,
+            source: None,
+            recipes: COLOR_LINES.iter().map(cinestill).collect(),
+        },
         Preset {
             id: "bennet-800",
             effect: None,
@@ -219,31 +228,6 @@ pub fn presets() -> Vec<Preset> {
                 grain: (0, 0),
                 white_balance: ("Auto", 6, 0, 5500),
                 corrections: ["Auto", "Mid", "Off", "Auto"],
-            }
-            .recipes(COLOR_LINES),
-        },
-        Preset {
-            id: "cinestill-800t",
-            effect: Some("vision3-500t-supra-v1"),
-            author: None,
-            source: None,
-            recipes: COLOR_LINES.iter().map(cinestill).collect(),
-        },
-        // The comment of the author on the post gives the settings. The
-        // grain of GR III Grain Effect 2 is Mid.
-        Preset {
-            id: "bennet-bw800",
-            effect: None,
-            author: Some("Bennet"),
-            source: Some("https://www.reddit.com/r/ricohGR/comments/1t2rmuv/"),
-            recipes: Native {
-                name: "Bennet BW800",
-                image_type: "MonotoneGR",
-                levels: [0, 0, -2, 4, -2, -4, -1, 0, 0],
-                tone: Some("OFF"),
-                grain: (2, 0),
-                white_balance: ("Daylight", 14, -2, 5500),
-                corrections: ["On", "Mid", "On", "Off"],
             }
             .recipes(COLOR_LINES),
         },
@@ -301,24 +285,6 @@ pub fn presets() -> Vec<Preset> {
             }
             .recipes(COLOR_LINES),
         },
-        // GR III Grain Effect 3 is High. The source gives no white balance:
-        // the recipe is black and white.
-        Preset {
-            id: "dante-sisofo-street-bw",
-            effect: None,
-            author: Some("Dante Sisofo"),
-            source: Some("https://dantesisofo.com/ricoh-griii-settings/"),
-            recipes: Native {
-                name: "Dante Street B&W",
-                image_type: "HighContrastBW",
-                levels: [0, 0, -2, 4, -4, 0, 4, 4, 4],
-                tone: Some("OFF"),
-                grain: (3, 0),
-                white_balance: ("Auto", 0, 0, 5500),
-                corrections: NEUTRAL_CORRECTIONS,
-            }
-            .recipes(COLOR_LINES),
-        },
         // A GR IV recipe: Cinema Yellow. The video gives Toning 2 (Mid) and
         // grain size 1 and strength 1 (Small, Low), and no white balance.
         Preset {
@@ -336,6 +302,42 @@ pub fn presets() -> Vec<Preset> {
                 corrections: NEUTRAL_CORRECTIONS,
             }
             .recipes(&[Family::Gr4]),
+        },
+        // The comment of the author on the post gives the settings. The
+        // grain of GR III Grain Effect 2 is Mid.
+        Preset {
+            id: "bennet-bw800",
+            effect: None,
+            author: Some("Bennet"),
+            source: Some("https://www.reddit.com/r/ricohGR/comments/1t2rmuv/"),
+            recipes: Native {
+                name: "Bennet BW800",
+                image_type: "MonotoneGR",
+                levels: [0, 0, -2, 4, -2, -4, -1, 0, 0],
+                tone: Some("OFF"),
+                grain: (2, 0),
+                white_balance: ("Daylight", 14, -2, 5500),
+                corrections: ["On", "Mid", "On", "Off"],
+            }
+            .recipes(COLOR_LINES),
+        },
+        // GR III Grain Effect 3 is High. The source gives no white balance:
+        // the recipe is black and white.
+        Preset {
+            id: "dante-sisofo-street-bw",
+            effect: None,
+            author: Some("Dante Sisofo"),
+            source: Some("https://dantesisofo.com/ricoh-griii-settings/"),
+            recipes: Native {
+                name: "Dante Street B&W",
+                image_type: "HighContrastBW",
+                levels: [0, 0, -2, 4, -4, 0, 4, 4, 4],
+                tone: Some("OFF"),
+                grain: (3, 0),
+                white_balance: ("Auto", 0, 0, 5500),
+                corrections: NEUTRAL_CORRECTIONS,
+            }
+            .recipes(COLOR_LINES),
         },
     ]
 }

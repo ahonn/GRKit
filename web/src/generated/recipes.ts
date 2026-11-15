@@ -7,6 +7,116 @@ import type { Preset } from '../recipes';
 /** The recipes that the site offers. */
 export const PRESETS: readonly Preset[] = [
   {
+    "id": "cinestill-800t",
+    "effect": "vision3-500t-supra-v1",
+    "author": null,
+    "source": null,
+    "recipes": [
+      {
+        "name": "CineStill 800T",
+        "family": "gr3",
+        "look": {
+          "kind": "effect",
+          "code": 18750,
+          "adjustments": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "grain": {
+          "level": 2,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 2,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 4,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          4,
+          0,
+          1
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "CineStill 800T",
+        "family": "gr4",
+        "look": {
+          "kind": "effect",
+          "code": 18750,
+          "adjustments": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ]
+        },
+        "grain": {
+          "level": 2,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 2,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 4,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          4,
+          0,
+          1
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
     "id": "bennet-800",
     "effect": null,
     "author": "Bennet",
@@ -236,238 +346,6 @@ export const PRESETS: readonly Preset[] = [
           2,
           0,
           0
-        ],
-        "exposure": {
-          "compensation": null,
-          "isoLimit": null,
-          "metering": null,
-          "nd": null
-        },
-        "enabled": true,
-        "hidden": false,
-        "number": 0,
-        "id": 0
-      }
-    ]
-  },
-  {
-    "id": "cinestill-800t",
-    "effect": "vision3-500t-supra-v1",
-    "author": null,
-    "source": null,
-    "recipes": [
-      {
-        "name": "CineStill 800T",
-        "family": "gr3",
-        "look": {
-          "kind": "effect",
-          "code": 18750,
-          "adjustments": [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0
-          ]
-        },
-        "grain": {
-          "level": 2,
-          "size": 0
-        },
-        "glow": {
-          "bloom": 0,
-          "halation": 2,
-          "halationColor": 0
-        },
-        "border": null,
-        "whiteBalance": {
-          "mode": 0,
-          "shiftBa": 4,
-          "shiftGm": 14,
-          "kelvin": 5500
-        },
-        "corrections": [
-          0,
-          4,
-          0,
-          1
-        ],
-        "exposure": {
-          "compensation": null,
-          "isoLimit": null,
-          "metering": null,
-          "nd": null
-        },
-        "enabled": true,
-        "hidden": false,
-        "number": 0,
-        "id": 0
-      },
-      {
-        "name": "CineStill 800T",
-        "family": "gr4",
-        "look": {
-          "kind": "effect",
-          "code": 18750,
-          "adjustments": [
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0
-          ]
-        },
-        "grain": {
-          "level": 2,
-          "size": 0
-        },
-        "glow": {
-          "bloom": 0,
-          "halation": 2,
-          "halationColor": 0
-        },
-        "border": null,
-        "whiteBalance": {
-          "mode": 0,
-          "shiftBa": 4,
-          "shiftGm": 14,
-          "kelvin": 5500
-        },
-        "corrections": [
-          0,
-          4,
-          0,
-          1
-        ],
-        "exposure": {
-          "compensation": null,
-          "isoLimit": null,
-          "metering": null,
-          "nd": null
-        },
-        "enabled": true,
-        "hidden": false,
-        "number": 0,
-        "id": 0
-      }
-    ]
-  },
-  {
-    "id": "bennet-bw800",
-    "effect": null,
-    "author": "Bennet",
-    "source": "https://www.reddit.com/r/ricohGR/comments/1t2rmuv/",
-    "recipes": [
-      {
-        "name": "Bennet BW800",
-        "family": "gr3",
-        "look": {
-          "kind": "native",
-          "imageType": 2,
-          "levels": [
-            4,
-            4,
-            2,
-            8,
-            2,
-            0,
-            3,
-            4,
-            4
-          ],
-          "tone": 0,
-          "intensity": 0,
-          "filter": 0,
-          "grainStrength": 2,
-          "grainSize": 0,
-          "solarization": 0
-        },
-        "grain": {
-          "level": 0,
-          "size": 0
-        },
-        "glow": {
-          "bloom": 0,
-          "halation": 0,
-          "halationColor": 0
-        },
-        "border": null,
-        "whiteBalance": {
-          "mode": 4,
-          "shiftBa": 28,
-          "shiftGm": 12,
-          "kelvin": 5500
-        },
-        "corrections": [
-          1,
-          2,
-          1,
-          5
-        ],
-        "exposure": {
-          "compensation": null,
-          "isoLimit": null,
-          "metering": null,
-          "nd": null
-        },
-        "enabled": true,
-        "hidden": false,
-        "number": 0,
-        "id": 0
-      },
-      {
-        "name": "Bennet BW800",
-        "family": "gr4",
-        "look": {
-          "kind": "native",
-          "imageType": 2,
-          "levels": [
-            4,
-            4,
-            2,
-            8,
-            2,
-            0,
-            3,
-            4,
-            4
-          ],
-          "tone": 0,
-          "intensity": 0,
-          "filter": 0,
-          "grainStrength": 2,
-          "grainSize": 0,
-          "solarization": 0
-        },
-        "grain": {
-          "level": 0,
-          "size": 0
-        },
-        "glow": {
-          "bloom": 0,
-          "halation": 0,
-          "halationColor": 0
-        },
-        "border": null,
-        "whiteBalance": {
-          "mode": 4,
-          "shiftBa": 28,
-          "shiftGm": 12,
-          "kelvin": 5500
-        },
-        "corrections": [
-          1,
-          2,
-          1,
-          5
         ],
         "exposure": {
           "compensation": null,
@@ -849,6 +727,193 @@ export const PRESETS: readonly Preset[] = [
     ]
   },
   {
+    "id": "lanzarote",
+    "effect": null,
+    "author": "I Am a Camera",
+    "source": "https://www.youtube.com/watch?v=omAGSJblE-U",
+    "recipes": [
+      {
+        "name": "Lanzarote",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 12,
+          "levels": [
+            4,
+            3,
+            5,
+            4,
+            2,
+            3,
+            4,
+            4,
+            4
+          ],
+          "tone": 1,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 1,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 0,
+          "shiftBa": 14,
+          "shiftGm": 14,
+          "kelvin": 5500
+        },
+        "corrections": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
+    "id": "bennet-bw800",
+    "effect": null,
+    "author": "Bennet",
+    "source": "https://www.reddit.com/r/ricohGR/comments/1t2rmuv/",
+    "recipes": [
+      {
+        "name": "Bennet BW800",
+        "family": "gr3",
+        "look": {
+          "kind": "native",
+          "imageType": 2,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            2,
+            0,
+            3,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 2,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 4,
+          "shiftBa": 28,
+          "shiftGm": 12,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      },
+      {
+        "name": "Bennet BW800",
+        "family": "gr4",
+        "look": {
+          "kind": "native",
+          "imageType": 2,
+          "levels": [
+            4,
+            4,
+            2,
+            8,
+            2,
+            0,
+            3,
+            4,
+            4
+          ],
+          "tone": 0,
+          "intensity": 0,
+          "filter": 0,
+          "grainStrength": 2,
+          "grainSize": 0,
+          "solarization": 0
+        },
+        "grain": {
+          "level": 0,
+          "size": 0
+        },
+        "glow": {
+          "bloom": 0,
+          "halation": 0,
+          "halationColor": 0
+        },
+        "border": null,
+        "whiteBalance": {
+          "mode": 4,
+          "shiftBa": 28,
+          "shiftGm": 12,
+          "kelvin": 5500
+        },
+        "corrections": [
+          1,
+          2,
+          1,
+          5
+        ],
+        "exposure": {
+          "compensation": null,
+          "isoLimit": null,
+          "metering": null,
+          "nd": null
+        },
+        "enabled": true,
+        "hidden": false,
+        "number": 0,
+        "id": 0
+      }
+    ]
+  },
+  {
     "id": "dante-sisofo-street-bw",
     "effect": null,
     "author": "Dante Sisofo",
@@ -932,71 +997,6 @@ export const PRESETS: readonly Preset[] = [
           "intensity": 0,
           "filter": 0,
           "grainStrength": 3,
-          "grainSize": 0,
-          "solarization": 0
-        },
-        "grain": {
-          "level": 0,
-          "size": 0
-        },
-        "glow": {
-          "bloom": 0,
-          "halation": 0,
-          "halationColor": 0
-        },
-        "border": null,
-        "whiteBalance": {
-          "mode": 0,
-          "shiftBa": 14,
-          "shiftGm": 14,
-          "kelvin": 5500
-        },
-        "corrections": [
-          0,
-          0,
-          0,
-          0
-        ],
-        "exposure": {
-          "compensation": null,
-          "isoLimit": null,
-          "metering": null,
-          "nd": null
-        },
-        "enabled": true,
-        "hidden": false,
-        "number": 0,
-        "id": 0
-      }
-    ]
-  },
-  {
-    "id": "lanzarote",
-    "effect": null,
-    "author": "I Am a Camera",
-    "source": "https://www.youtube.com/watch?v=omAGSJblE-U",
-    "recipes": [
-      {
-        "name": "Lanzarote",
-        "family": "gr4",
-        "look": {
-          "kind": "native",
-          "imageType": 12,
-          "levels": [
-            4,
-            3,
-            5,
-            4,
-            2,
-            3,
-            4,
-            4,
-            4
-          ],
-          "tone": 1,
-          "intensity": 0,
-          "filter": 0,
-          "grainStrength": 1,
           "grainSize": 0,
           "solarization": 0
         },
