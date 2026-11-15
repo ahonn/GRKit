@@ -152,8 +152,12 @@
 /* CORE.ADJ has 2 values besides one for each entry (runtime/manage.h:
    MANAGE_PINS). */
 /* The listed module + 1 that a choice of ADJ Order moved, whose row takes
-   the cursor when the page shows again (runtime/menu_settings.h), or 0. */
+   the cursor when the page shows again (runtime/menu_settings.h), or 0. Or
+   MENU_MOVED_SETTING + n for setting n of the page of a listed module, whose
+   row takes the cursor after an action that changed the rows of the page,
+   as Save Settings of the Recipes page adds the Order row. */
 #define MENU_ROWS_MOVED (MENU_ROWS_TITLE_LOW + 4U)
+#define MENU_MOVED_SETTING 0x100U
 #define MENU_ROWS_TAB (MENU_ROWS_MOVED + 4U)
 #define MENU_ROWS_TAB_SIZE 0x384U
 /* The MENU controller that the pages of the GRKit rows return to

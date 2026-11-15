@@ -198,6 +198,9 @@ static u32 save_row_select(volatile u32 *h,u32 controller,u32 value) {
     if(!recipe_listed(h)) return 0;
     e=recipe_save(h);
     if(e==RECIPE_FULL || !ui_keyboard_prepare(h,recipe_keyboard_text(h,e),UI_KEYBOARD_SHORT,recipe_named,e)) return 0;
+    /* A second recipe adds the Order row: the cursor stays on Save Settings,
+       the second setting of the page, when the page shows again. */
+    services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0]=MENU_MOVED_SETTING+1U;
     return KEYBOARD_CONTROLLER;
 }
 /* Recipes, then Save Settings. Without a recipe, Recipes does not show. */

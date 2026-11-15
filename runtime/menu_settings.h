@@ -526,8 +526,17 @@ A32_ENTRY u32 menu_settings_controller(u32 id) {
         if(h[GRKIT_HOST_SERVICES/4]) {
             u32 moved=services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0];
             services_word(h,SERVICES_MENU+MENU_ROWS_MOVED)[0]=0;
-            if(moved && settings_page(h)==manage_settings)
+            if(moved && moved<MENU_MOVED_SETTING && settings_page(h)==manage_settings)
                 services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=manage_adj_row(h,moved-1U)+1U;
+            /* The row of a setting keeps the cursor when the rows before it
+               changed. */
+            if(moved>=MENU_MOVED_SETTING && settings_page(h)==listed_settings) {
+                const Setting *b;
+                u32 row;
+                for(row=0;row<listed_rows(h);++row)
+                    if(listed_kind(h,row,&b)==moved-MENU_MOVED_SETTING)
+                        services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=row+1U;
+            }
         }
         return id;
     }

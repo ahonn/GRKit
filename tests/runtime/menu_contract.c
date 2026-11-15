@@ -3285,6 +3285,19 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(order_select(h, 0, 0) && order_select(h, 0, 1) && same(listed_text(h, 2, 1), "2. Street"));
     assert(recipe_entries(h) == 3 && recipe_count(h) == 4 && !recipe_shown(h, 0));
     *state = 0;
+    /* Save Settings keeps the cursor on its row when the page shows again
+       after the keyboard: a save can add the Order row before it. */
+    ui_word(h, UI_KEYBOARD)[0] = 0;
+    assert(save_row_select(h, 0, 0) == KEYBOARD_CONTROLLER && recipe_entries(h) == 4);
+    assert(menu[MENU_ROWS_MOVED / 4] == MENU_MOVED_SETTING + 1);
+    /* A host pointer does not fit the services word: no callback here. */
+    ui_word(h, UI_KEYBOARD_DONE)[0] = 0;
+    ui_word(h, UI_KEYBOARD)[0] = 0;
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    assert(menu[MENU_ROWS_BACK_ROW / 4] == 4 + 1 && !menu[MENU_ROWS_MOVED / 4]);
+    menu[MENU_ROWS_BACK_ROW / 4] = 0;
+    recipe_delete(h, 3);
+    assert(recipe_entries(h) == 3 && recipe_count(h) == 4);
     /* Order and Recipes show on own value pages; Save acts at OK. */
     for (u32 row = 0; row < 5; ++row) {
         u32 flags = settings_flags(h, page, row);
