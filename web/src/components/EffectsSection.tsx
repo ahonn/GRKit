@@ -4,6 +4,7 @@ import {
   useCallback,
   useRef,
   useState,
+  useSyncExternalStore,
   useTransition,
   type ChangeEvent,
 } from 'react';
@@ -39,6 +40,18 @@ const DEFAULT_PREVIEW = 'portra-400-endura-v1';
 function stockText(stock: (typeof STOCKS)[string] & {}, t: Strings): string {
   return stock.print ? `${stock.film} · ${t.printFilm(stock.print)}` : stock.film;
 }
+
+function subscribeFullscreen(change: () => void): () => void {
+  document.addEventListener('fullscreenchange', change);
+  return () => document.removeEventListener('fullscreenchange', change);
+}
+
+/** The browser can show an element in full screen. iPhone Safari cannot. */
+function fullscreenEnabled(): boolean {
+  return document.fullscreenEnabled === true;
+}
+
+const neverChanges = () => () => undefined;
 
 interface Props {
   strings: Strings;
@@ -130,6 +143,16 @@ export function EffectsSection({
   const [previewAttempt, setPreviewAttempt] = useState(0);
   const [isPending, startTransition] = useTransition();
   const photoCount = useRef(0);
+  // The viewer, not the frame, goes to full screen: an error replaces the frame, and the removal of
+  // the full-screen element would end full screen.
+  const [viewer, setViewer] = useState<HTMLDivElement | null>(null);
+  const canFullscreen = useSyncExternalStore(neverChanges, fullscreenEnabled, () => false);
+  const fullscreenElement = useSyncExternalStore(
+    subscribeFullscreen,
+    () => document.fullscreenElement,
+    () => null,
+  );
+  const fullscreen = viewer !== null && fullscreenElement === viewer;
 
   const shown = effects.find((effect) => effect.id === previewId) ?? effects[0];
   const requested = effects.find((effect) => effect.id === requestedId) ?? shown;
@@ -250,10 +273,16 @@ export function EffectsSection({
     setPreviewAttempt((attempt) => attempt + 1);
   }
 
+  function toggleFullscreen() {
+    // A refusal, such as without a user gesture, leaves the page as it is.
+    if (fullscreen) document.exitFullscreen().catch(() => undefined);
+    else viewer?.requestFullscreen().catch(() => undefined);
+  }
+
   return (
     <div className="section-body effects-body" ref={ownPhoto}>
       <div className="preview-row">
-        <div className="viewer">
+        <div className="viewer" ref={setViewer}>
           {shown && previewed && (
             <ErrorBoundary
               resetKey={`${source.key}\n${shown.id}\n${previewAttempt}`}
@@ -281,6 +310,33 @@ export function EffectsSection({
                 />
               </Suspense>
             </ErrorBoundary>
+          )}
+          {canFullscreen && shown && (
+            <button
+              type="button"
+              className="frame-fullscreen"
+              aria-label={fullscreen ? t.exitFullScreen : t.fullScreen}
+              title={fullscreen ? t.exitFullScreen : t.fullScreen}
+              onClick={toggleFullscreen}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                {fullscreen ? (
+                  <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+                ) : (
+                  <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+                )}
+              </svg>
+            </button>
           )}
         </div>
 
