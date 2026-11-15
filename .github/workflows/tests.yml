@@ -49,7 +49,7 @@ jobs:
       # qemu-arm runs the NEON parity test of Glow (synthetic_glow_neon_parity).
       - if: runner.os == 'Linux'
         run: sudo apt-get install --yes qemu-user
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
@@ -102,7 +102,7 @@ jobs:
           ref: ${{ inputs.ref }}
       - run: rustup toolchain install 1.92.0 --profile minimal --target wasm32-unknown-unknown
       - run: rustup default 1.92.0
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: web/package.json
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
