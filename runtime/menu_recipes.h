@@ -5,7 +5,8 @@
    do with it.
 
    - Enable, then Options, which chooses the recipes that ADJ shows, as the
-     Options of other modules choose their values (runtime/menu_listed.h).
+     Options of other modules choose their values (runtime/menu_listed.h),
+     then Order, which orders the recipes (recipe_move).
    - Recipes shows the recipe that the current settings match. Its value
      page lists each recipe that is on (runtime/recipes.h), also those that
      ADJ does not show, with the mark on that recipe and the cursor on it,
@@ -216,5 +217,5 @@ static const u16 *recipe_menu_value(volatile u32 *h) { return recipe_list_text(h
 static u32 recipe_option_off(volatile u32 *h,u32 e) { return !recipe_shown(h,e); }
 static void recipe_option_set(volatile u32 *h,u32 e,u32 off) { recipe_show_in_adj(h,e,!off); }
 static const MenuListing recipe_listing={recipe_menu_base,recipe_menu_value,recipe_entries,menu_recipe_name,
-    recipe_option_off,recipe_option_set};
+    recipe_option_off,recipe_option_set,recipe_move};
 #endif /* GRKIT_MENU_RECIPES_H */

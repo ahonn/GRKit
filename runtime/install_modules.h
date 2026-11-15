@@ -146,8 +146,10 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 8, EFFECT_CHOICE_VALUES);
     }
     /* The GRKit switch, Enable at Start, and Distance Unit follow the
-       choices of the effects. apply_state restores the saved unit. */
-    u32 switch_handle = setting_total + choices - 3, start_handle = switch_handle + 1, unit_handle = start_handle + 1;
+       choices of the effects. apply_state restores the saved unit. The order
+       of the values of each module follows them. */
+    u32 switch_handle = setting_total + MANAGE_PER_MODULE * module_count + listed_count;
+    u32 start_handle = switch_handle + 1, unit_handle = start_handle + 1, order_handle = unit_handle + 1;
     {
         u32 entry = array + 4 * SETTINGS_ENTRY(switch_handle);
         store(entry, grm_state_id(MANAGE_SWITCH_KEY));
@@ -162,6 +164,13 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 4, MANAGE_UNIT_METERS);
         store(entry + 8, MANAGE_UNIT_VALUES);
     }
+    for (u32 i = 0; i < module_count; ++i)
+        for (u32 k = 0; k < MANAGE_ORDER_WORDS; ++k) {
+            u32 entry = array + 4 * SETTINGS_ENTRY(order_handle + MANAGE_ORDER_WORDS * i + k);
+            store(entry, manage_id(i, manage_order_keys[k]));
+            store(entry + 4, module_value_order[i][k]);
+            store(entry + 8, MANAGE_ORDER_LIMIT);
+        }
     for (u32 k = 0; k < kept_count; ++k) {
         u32 entry = array + 4 * SETTINGS_ENTRY(setting_total + choices + k);
         store(entry, kept_ids[k]);
@@ -468,6 +477,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     store(list_at + MANAGE_SWITCH, switch_handle + 1);
     store(list_at + MANAGE_START, start_handle + 1);
     store(list_at + MANAGE_UNIT, unit_handle + 1);
+    store(list_at + MANAGE_ORDERS, order_handle + 1);
     for (u32 i = 0; i < module_count; ++i) {
         u32 entry = list_at + MANAGE_HEADER + i * MANAGE_STRIDE, n = 0;
         volatile u16 *name = (volatile u16 *)at(entry + MANAGE_NAME);

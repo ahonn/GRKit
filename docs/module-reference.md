@@ -69,7 +69,7 @@ A setting reference is a key of `settings`, or a name of `uses` without its `?`.
 | `setting` | string | required for `choice` | The setting of a choice page. Omit it for `settings` and `group`. |
 | `off_row` | boolean | `false` | Row 0 shows the core Off icon instead of the Off icon of the page. |
 | `settings` | array of strings | `[]` | Up to 5 native settings rows (`GRKIT_SETTING_ROWS`). A choice page starts with its page setting. A settings page needs at least one row. |
-| `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. |
+| `options` | boolean | `false` | The settings page of the module in the GRKit section of MENU has an Options row, which turns each value of the page on or off in ADJ, or each effect for a page of `CORE.TONE` (`GRKIT_CHOICE_OPTIONS`). A page of a setting with options needs `off_row` and at most 16 values. Without room on the settings page, its first rows leave it. With two options or more, the settings page also has an Order row, which orders them in ADJ: the values of the page, the effects, or the recipes. A page of `CORE.CROP` or `CORE.BORDER` has no Order row, because its values are steps of one scale. |
 | `children` | array of tables | `[]` | A group page has 1 to 4 children, in display order. Other page kinds have none. |
 | `off_icon` | table | none | Optional [icon source](#icon-sources) of row 0 (Off) of a choice page without `off_row`. Without it, row 0 shows tile 0. The root row shows tile 0 while the setting is 0. Other page kinds have none. |
 | `fn_cycle` | table | none | `{ value = n, setting = "KEY" }`: in ADJ, Fn on the row of value `n` sets the setting to its next value, and to 0 after the last one. ADJ stays on the row, and the live view shows the change at once. Fn on the other rows opens the settings as before. `n` is a value of the page other than Off. The setting is a setting reference other than the page setting, with at least 2 values. Only a choice page whose rows come from the module has it. Needs ABI 2.5. |
@@ -487,7 +487,7 @@ ABI 2.7 gives `CORE.ASPECT` the value 8, 3:4, and lets a settings row have up to
 | Used settings of one module | 8 | 53 |
 | Setting key | 1 to 15 characters `A`-`Z`, `0`-`9`, `_` | build error, or 53 |
 | Values of one setting | 1 to 65536 | build error, or 53 |
-| Entries of the settings table: the settings of all modules, 2 for each listed module, and the entries that the core keeps for the effects | 160 | 54 |
+| Entries of the settings table: the settings of all modules, 5 for each listed module, and the entries that the core keeps for the effects | 160 | 54 |
 | Tiles of one module | 64 | build error, or 53 |
 | Tiles of all loaded modules | 128 | 54 |
 | Rows of a choice page | 1 to 64 | build error, or 53 |

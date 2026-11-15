@@ -2317,7 +2317,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 28, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 32, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -3263,9 +3263,9 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     /* A start of the settings page clears the state of the value page. */
     assert(!*state);
     const Setting *page = settings_page(h);
-    assert(settings_rows(h) == 4 && same(listed_label(h, 1), "Options"));
-    assert(same(listed_label(h, 2), "Recipes"));
-    assert(same(listed_label(h, 3), "Save Settings") && same(listed_text(h, 3, 0), "3/40"));
+    assert(settings_rows(h) == 5 && same(listed_label(h, 1), "Options") && same(listed_label(h, 2), "Order"));
+    assert(same(listed_label(h, 3), "Recipes"));
+    assert(same(listed_label(h, 4), "Save Settings") && same(listed_text(h, 4, 0), "3/40"));
     /* Options: each recipe, on while ADJ shows it. OK turns it on or off. */
     assert(options_count(h) == 3 && option_off(h, 0) && !option_off(h, 1));
     assert(same(option_label(h, 1), "Street"));
@@ -3274,16 +3274,27 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     listed_set(h, 1, 0);
     assert(!recipe_shown(h, 0));
     menu[MENU_ROWS_STAY / 4] = 0;
-    /* Recipes shows on the own value page; Save acts at OK. */
-    for (u32 row = 0; row < 4; ++row) {
+    /* Order lists each recipe after its place. Street goes to the first
+       place with its name, and back: the recipe that is off keeps its
+       slot. */
+    assert(listed_values(h, 2) == 3 && same(listed_text(h, 2, 0), "1. Far Away") && !listed_text(h, 2, listed_get(h, 2))[0]);
+    assert(order_select(h, 0, 1) && same(order_title(h), "Street") && same(listed_text(h, 2, 2), "3"));
+    assert(order_select(h, 0, 0) && *state == 0 + 1 && same(listed_text(h, 2, 0), "1. Street"));
+    assert(same(listed_text(h, 2, 1), "2. Far Away") && !recipe_shown(h, 1) && recipe_shown(h, 0));
+    assert(same(order_title(h), "Recipes Order"));
+    assert(order_select(h, 0, 0) && order_select(h, 0, 1) && same(listed_text(h, 2, 1), "2. Street"));
+    assert(recipe_entries(h) == 3 && recipe_count(h) == 4 && !recipe_shown(h, 0));
+    *state = 0;
+    /* Order and Recipes show on own value pages; Save acts at OK. */
+    for (u32 row = 0; row < 5; ++row) {
         u32 flags = settings_flags(h, page, row);
-        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2));
-        assert(settings_long(h, page, row) == (row == 1 || row == 2));
-        assert(!!(flags & SETTING_ACTION) == (row == 3));
+        assert(!!(flags & SETTING_OWN_PAGE) == (row == 2 || row == 3));
+        assert(settings_long(h, page, row) == (row == 1 || row == 2 || row == 3));
+        assert(!!(flags & SETTING_ACTION) == (row == 4));
     }
-    assert(listed_setting(h, 0) == 0 && listed_setting(h, 1) == 0);
-    assert(menu_settings_row_controller(settings_pages[0], 3) == MENU_ACTION_TARGET + 3);
-    assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 2] == settings_pages[2]);
+    assert(listed_setting(h, 0) == 0 && listed_setting(h, 1) == 0 && listed_setting(h, 2) == &order_setting);
+    assert(menu_settings_row_controller(settings_pages[0], 4) == MENU_ACTION_TARGET + 4);
+    assert(block[SUBMENU_KIND_CONTROLLERS / 4 + 3] == settings_pages[3]);
     /* Mode Dial (runtime/menu_dial.h), a row of GRKit Settings: the row
        shows no value, and its list has no mark. The values of U1 have U1 as
        the title: Save Current Settings, On, and Off, with the mark and the
@@ -3330,37 +3341,37 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     assert(dial->select(h, 0, DIAL_VALUE_ON) && dial_value(h, 1) == GRKIT_DIAL_VALUE_ON);
     *state = 0;
     settings_open(h, LISTED_PAGE, 0);
-    const Setting *recipes = listed_setting(h, 2);
+    const Setting *recipes = listed_setting(h, 3);
     /* The list has each recipe, also one that ADJ does not show. Without a
        recipe that the settings match, the row shows no value, the page has
        no mark, and the cursor is on the first recipe. */
-    assert(listed_values(h, 2) == 3 && same(listed_text(h, 2, 0), "Far Away") && same(listed_text(h, 2, 2), "Corner"));
-    assert(listed_get(h, 2) == RECIPE_NONE && same(listed_text(h, 2, listed_get(h, 2)), ""));
+    assert(listed_values(h, 3) == 3 && same(listed_text(h, 3, 0), "Far Away") && same(listed_text(h, 3, 2), "Corner"));
+    assert(listed_get(h, 3) == RECIPE_NONE && same(listed_text(h, 3, listed_get(h, 3)), ""));
     assert(recipes->cursor(h) == 0 && !recipes->title(h));
     /* Grain 2 matches Corner: the row shows it, and the list has the mark
        and the cursor on it. */
     h[GRKIT_HOST_GRAIN / 4] = 2;
-    assert(listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && same(listed_text(h, 2, 2), "Corner"));
-    assert(menu_settings_current(2, 0, 2) == 2 && menu_settings_current(1, 0, 2) == 1);
+    assert(listed_get(h, 3) == 2 && recipes->cursor(h) == 2 && same(listed_text(h, 3, 2), "Corner"));
+    assert(menu_settings_current(2, 0, 3) == 2 && menu_settings_current(1, 0, 3) == 1);
     /* MENU lists the recipes that ADJ does not show, so its mark can be on
        one of them, while ADJ names the first recipe that it shows. */
     volatile u32 *far = h + GRKIT_HOST_RECIPES / 4;
     far[0] = (far[0] & ~(7U << RECIPE_GRAIN_LEVEL_SHIFT)) | 2U << RECIPE_GRAIN_LEVEL_SHIFT;
-    assert(listed_get(h, 2) == 0 && recipes->cursor(h) == 0 && same(recipe_menu_value(h), "Far Away"));
+    assert(listed_get(h, 3) == 0 && recipes->cursor(h) == 0 && same(recipe_menu_value(h), "Far Away"));
     assert(recipe_current(h) == 2);
     far[0] = (far[0] & ~(7U << RECIPE_GRAIN_LEVEL_SHIFT)) | 4U << RECIPE_GRAIN_LEVEL_SHIFT;
-    assert(listed_get(h, 2) == 2);
+    assert(listed_get(h, 3) == 2);
     /* MENU on the list returns to the page as MENU does. */
     assert(!recipes->select(h, 0, SETTING_BACK) && !recipes->select(h, 0, 3));
     /* OK on Street shows its page: its name, Apply, View, Rename, and
        Delete, the cursor on Apply and no mark. */
     assert(recipes->select(h, 0, 1));
     assert(*state == (RECIPE_PAGE_SHOWN | 1U) && same(recipes->title(h), "Street"));
-    assert(listed_values(h, 2) == 4 && same(listed_text(h, 2, 0), "Apply") && same(listed_text(h, 2, 1), "View"));
-    assert(same(listed_text(h, 2, 2), "Rename") && same(listed_text(h, 2, 3), "Delete"));
+    assert(listed_values(h, 3) == 4 && same(listed_text(h, 3, 0), "Apply") && same(listed_text(h, 3, 1), "View"));
+    assert(same(listed_text(h, 3, 2), "Rename") && same(listed_text(h, 3, 3), "Delete"));
     assert(recipes->cursor(h) == 0 && recipes->get(h) == RECIPE_NONE);
-    menu[MENU_ROWS_CURRENT / 4] = settings_pages[2];
-    assert(settings_text(h, 0, settings_row_texts[2]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
+    menu[MENU_ROWS_CURRENT / 4] = settings_pages[3];
+    assert(settings_text(h, 0, settings_row_texts[3]) == (u32)services_word(h, SERVICES_MENU + MENU_ROWS_PAGE_TEXTS) + 1U);
     menu[MENU_ROWS_CURRENT / 4] = SETTINGS_SUBMENU;
     /* View opens the camera information page, as About GRKit does, and the
        page keeps its settings while the information page shows. Its title
@@ -3378,16 +3389,16 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
            ((u32)services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT_TEXTS) | 1U));
     menu_info_fill(TEST_OBJECTS + 0xc00);
     assert(services_word(h, SERVICES_DETAILS + DETAIL_VIEW_CONTROLLER)[0] == TEST_OBJECTS + 0xc00);
-    assert(menu_settings_controller(settings_pages[2]) == settings_pages[2]);
+    assert(menu_settings_controller(settings_pages[3]) == settings_pages[3]);
     assert(!menu[MENU_ROWS_ABOUT / 4] && !services_word(h, SERVICES_DETAILS + DETAIL_VIEW_CONTROLLER)[0]);
-    assert(recipes->cursor(h) == RECIPE_ACTION_VIEW && listed_values(h, 2) == 4 && same(recipes->title(h), "Street"));
+    assert(recipes->cursor(h) == RECIPE_ACTION_VIEW && listed_values(h, 3) == 4 && same(recipes->title(h), "Street"));
     /* MENU returns to the list with the cursor on Corner, which the
        settings match: the camera shows the mark only on the row where the
        cursor starts. Without a match, the cursor is on Street. */
     assert(recipes->select(h, 0, SETTING_BACK));
-    assert(*state == 2 && listed_get(h, 2) == 2 && recipes->cursor(h) == 2 && menu_settings_current(2, 0, 2) == 2);
+    assert(*state == 2 && listed_get(h, 3) == 2 && recipes->cursor(h) == 2 && menu_settings_current(2, 0, 3) == 2);
     h[GRKIT_HOST_GRAIN / 4] = 3;
-    assert(listed_get(h, 2) == RECIPE_NONE && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Street"));
+    assert(listed_get(h, 3) == RECIPE_NONE && recipes->cursor(h) == 1 && same(listed_text(h, 3, 1), "Street"));
     h[GRKIT_HOST_GRAIN / 4] = 2;
     /* Rename: the return from the keyboard names the recipe after an OK,
        keeps the name after MENU, and the page shows the new name. The
@@ -3406,7 +3417,7 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
     ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
     ui_keyboard_change(h, KEYBOARD_CONTROLLER);
     assert(ui_keyboard_borrowed(h));
-    ui_keyboard_change(h, settings_pages[2]);
+    ui_keyboard_change(h, settings_pages[3]);
     assert(!ui_keyboard_borrowed(h));
     /* The page keeps the settings while the keyboard that it opened shows. */
     ui_word(h, UI_KEYBOARD)[0] = UI_KEYBOARD_ARMED;
@@ -3418,14 +3429,14 @@ static void the_recipes_menu_page_chooses_a_recipe_then_an_action(void)
        shows it. */
     assert(recipes->select(h, 0, 0));
     assert(h[GRKIT_HOST_GRAIN / 4] == 0 && recipe_undo_count(h) == 1 && !*state);
-    assert(listed_get(h, 2) == 1 && same(listed_text(h, 2, listed_get(h, 2)), "Night"));
+    assert(listed_get(h, 3) == 1 && same(listed_text(h, 3, listed_get(h, 3)), "Night"));
     /* Delete asks first: Cancel keeps the recipe, and Execute returns to
        the list with the cursor on the recipe after it. */
     assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 3));
     recipe_menu_deleted(0, 1);
     assert(recipe_entries(h) == 3 && *state == (RECIPE_PAGE_SHOWN | 1U));
     recipe_menu_deleted(1, 1);
-    assert(recipe_entries(h) == 2 && *state == 2 && recipes->cursor(h) == 1 && same(listed_text(h, 2, 1), "Corner"));
+    assert(recipe_entries(h) == 2 && *state == 2 && recipes->cursor(h) == 1 && same(listed_text(h, 3, 1), "Corner"));
     /* The last recipe: the cursor goes to the one before it. */
     assert(recipes->select(h, 0, 1) && recipes->select(h, controller, 3));
     recipe_menu_deleted(1, 1);
@@ -3852,7 +3863,7 @@ static void the_film_look_menu_page_lists_film_stocks(void)
     volatile u32 *h = test_header, *block = settings_block(test_header), *menu = services_word(test_header, SERVICES_MENU);
     const u32 film = TEST_PAGE;
     const Setting *page;
-    /* The page of Film Look: Enable, Options, and Film Stock, whose
+    /* The page of Film Look: Enable, Options, Order, and Film Stock, whose
        values are Off and the effects that are On. A committed effect adds
        Parameters, which opens the Fn adjustments and shows no value. */
     *page_at(film + PAGE_FLAGS) |= CHOICE_OPTIONS;
@@ -3861,17 +3872,126 @@ static void the_film_look_menu_page_lists_film_stocks(void)
     menu[MENU_ROWS_PAGE / 4] = 0;
     settings_open(h, LISTED_PAGE, 0);
     page = settings_page(h);
-    assert(settings_rows(h) == 3 && same(page[2].label(h), "Film Stock"));
-    assert(page[1].values(h) == 3 && page[2].values(h) == 3 && same(page[2].value_text(h, 0), "Off"));
-    assert(!settings_long(h, page, 2) && settings_options(h, page, 1));
-    page[2].set(h, 1);
-    assert(tone_value(h) && page[2].get(h) == 1);
+    assert(settings_rows(h) == 4 && same(page[2].label(h), "Order") && same(page[3].label(h), "Film Stock"));
+    assert(page[1].values(h) == 3 && page[3].values(h) == 3 && same(page[3].value_text(h, 0), "Off"));
+    assert(!settings_long(h, page, 3) && settings_options(h, page, 1));
+    page[3].set(h, 1);
+    assert(tone_value(h) && page[3].get(h) == 1);
     assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
-    assert(settings_rows(h) == 4 && same(page[3].label(h), "Parameters") && !page[3].value_text(h, 0)[0]);
-    assert(settings_fn_row(h, page, 3) && block[SUBMENU_KIND_CONTROLLERS / 4 + 3] == MENU_FN_TARGET);
-    page[2].set(h, 0);
+    assert(settings_rows(h) == 5 && same(page[4].label(h), "Parameters") && !page[4].value_text(h, 0)[0]);
+    assert(settings_fn_row(h, page, 4) && block[SUBMENU_KIND_CONTROLLERS / 4 + 4] == MENU_FN_TARGET);
+    page[3].set(h, 0);
     assert(!h[GRKIT_HOST_ACTIVE / 4]);
+    /* Order is an own value page that lists each effect after its place,
+       also one that is Off. The row shows no value. */
+    assert(page[2].values(h) == 3 && settings_long(h, page, 2) && !settings_options(h, page, 2));
+    assert(settings_row_setting(h, page, 2) == &order_setting && !page[2].value_text(h, page[2].get(h))[0]);
+    assert(same(page[2].value_text(h, 0), "1. Portra 400") && same(page[2].value_text(h, 2), "3. Gold 200"));
+    /* OK on Portra 400 shows the places, with the mark on its place. */
+    assert(order_select(h, 0, 0) == 1 && menu[MENU_ROWS_PAGE_STATE / 4] == ORDER_PICKED);
+    assert(same(order_title(h), "Portra 400") && same(page[2].value_text(h, 2), "3"));
+    assert(page[2].get(h) == 0 && order_cursor(h) == 0);
+    /* OK on place 3 moves it there: each effect gets its position, and
+       keeps whether it is Off. The list shows again with the cursor on it. */
+    assert(order_select(h, 0, 2) == 1 && menu[MENU_ROWS_PAGE_STATE / 4] == 2 + 1 && order_cursor(h) == 2);
+    assert(settings_memory[2 + 12 * 3 + 1] == 3U << 1 && settings_memory[2 + 13 * 3 + 1] == 1U << 1);
+    assert(settings_memory[2 + 14 * 3 + 1] == (2U << 1 | 1U));
+    assert(same(page[2].value_text(h, 0), "1. Velvia 100") && same(page[2].value_text(h, 2), "3. Portra 400"));
+    assert(same(order_title(h), "Film Look Order"));
+    /* The page of CORE.TONE and Options follow at once. */
+    assert(page[3].values(h) == 3 && tone_row_index(h, 1) == 1 && tone_row_index(h, 2) == 0);
+    assert(same(option_label(h, 1), "Gold 200") && option_off(h, 1));
+    /* MENU on the places shows the list again without a move; MENU on the
+       list returns to the settings page. */
+    assert(order_select(h, 0, 1) == 1 && order_select(h, 0, SETTING_BACK) == 1);
+    assert(menu[MENU_ROWS_PAGE_STATE / 4] == 1 + 1 && settings_memory[2 + 14 * 3 + 1] == (2U << 1 | 1U));
+    assert(order_select(h, 0, SETTING_BACK) == 0);
+    for (u32 i = 0; i < 3; ++i) settings_memory[2 + (12 + i) * 3 + 1] = i == 2;
+    menu[MENU_ROWS_PAGE_STATE / 4] = 0;
     *page_at(film + PAGE_FLAGS) &= ~CHOICE_OPTIONS;
+}
+
+/* The values of a module setting get their order from CORE.ORDER of the
+   module, which the settings table holds after the other settings. */
+static void the_order_page_orders_the_values_of_a_setting(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header, *menu = services_word(test_header, SERVICES_MENU);
+    const u32 guides = TEST_PAGE + 2 * TEST_PAGE_SIZE, order = 2 + 22 * 3 + 1;
+    const Setting *page;
+    const u16 *second, *third;
+    menu[MENU_ROWS_LISTED / 4] = 2;
+    menu[MENU_ROWS_PAGE / 4] = 2;
+    /* Without the settings of the order, the page has no Order row. */
+    settings_open(h, LISTED_PAGE, 0);
+    page = settings_page(h);
+    assert(settings_rows(h) == SETTING_ROWS && same(page[2].label(h), "Style"));
+    settings_memory[0] = 24;
+    for (u32 k = 18; k < 24; ++k) {
+        settings_memory[2 + k * 3 + 1] = 0;
+        settings_memory[2 + k * 3 + 2] = MANAGE_ORDER_LIMIT;
+    }
+    manage_memory[MANAGE_ORDERS / 4] = 18 + 1;
+    /* Order takes a row of its own: the four settings stay. */
+    settings_open(h, LISTED_PAGE, 0);
+    assert(settings_rows(h) == SETTING_ROWS + 1 && same(page[1].label(h), "Options"));
+    assert(same(page[2].label(h), "Order") && same(page[3].label(h), "Style") && same(page[6].label(h), "Hide with DISP"));
+    assert(page[2].values(h) == 5 && same(page[2].value_text(h, 1), "2. Center"));
+    second = option_label(h, 1);
+    third = option_label(h, 2);
+    /* Center, the second style, goes to place 4: the nibbles of CORE.ORDER
+       hold the values after Off in their order. */
+    assert(order_select(h, 0, 1) == 1 && same(order_title(h), "Center"));
+    assert(order_select(h, 0, 3) == 1 && settings_memory[order] == 0x52431 && !settings_memory[order + 3]);
+    assert(option_label(h, 3) == second && option_label(h, 1) == third && order_cursor(h) == 3);
+    assert(same(order_title(h), "Guides Order"));
+    /* The page of ADJ and the Style row of MENU show Off, then that order. */
+    menu_page(h, 2);
+    assert(choice_rows(h) == 6 && choice_row_value(h, 0) == 0 && choice_row_value(h, 1) == 1);
+    assert(choice_row_value(h, 2) == 3 && choice_row_value(h, 3) == 4 && choice_row_value(h, 4) == 2);
+    assert(choice_row_value(h, 5) == 5 && choice_value_row(h, 2) == 4 && choice_value_row(h, 3) == 2);
+    /* A value that is off in ADJ leaves its row, and the others keep their
+       order. */
+    settings_memory[2 + 11 * 3 + 1] = 1U << 3;
+    assert(choice_rows(h) == 5 && choice_row_value(h, 2) == 4 && choice_row_value(h, 3) == 2);
+    assert(choice_value_row(h, 2) == 3 && !choice_value_row(h, 3));
+    settings_memory[2 + 11 * 3 + 1] = 0;
+    /* A nibble that names no value of the setting, or a value again, does
+       nothing, and a value without a nibble follows in the order of the
+       setting. */
+    settings_memory[order] = 0x7445;
+    assert(choice_row_value(h, 1) == 5 && choice_row_value(h, 2) == 4 && choice_row_value(h, 3) == 1);
+    assert(choice_row_value(h, 4) == 2 && choice_row_value(h, 5) == 3);
+    /* CORE.ORDER holds seven values, and CORE.ORDER2 the next ones: each
+       has nine digits at most, as the state file takes. */
+    settings_memory[order] = 0x50000000;
+    assert(choice_row_value(h, 1) == 1);
+    settings_memory[order] = 0x4;
+    settings_memory[order + 3] = 0x35;
+    assert(choice_row_value(h, 1) == 4 && choice_row_value(h, 2) == 5 && choice_row_value(h, 3) == 3);
+    assert(choice_row_value(h, 4) == 1 && choice_row_value(h, 5) == 2);
+    settings_memory[order + 3] = 0;
+    _Static_assert(MANAGE_ORDER_LIMIT <= 1000000000U, "The state file holds each order setting");
+    /* A page whose values are steps of one scale has no order. */
+    settings_memory[order] = 0x52431;
+    {
+        u32 handle = h[GRKIT_HOST_MODULE_PAGES / 4 + 2 * 3 + 1];
+        h[GRKIT_HOST_MODULE_PAGES / 4 + 2 * 3 + 1] = GRKIT_CORE_CROP;
+        assert(!choice_orders(h));
+        h[GRKIT_HOST_MODULE_PAGES / 4 + 2 * 3 + 1] = handle;
+        assert(choice_orders(h) && choice_row_value(h, 2) == 3);
+    }
+    /* Without options, the page has no Order row, and ADJ the order of
+       the setting. */
+    *page_at(guides + PAGE_FLAGS) &= ~CHOICE_OPTIONS;
+    assert(listed_rows(h) == 5 && choice_row_value(h, 2) == 2);
+    *page_at(guides + PAGE_FLAGS) |= CHOICE_OPTIONS;
+    settings_memory[order] = 0;
+    assert(choice_row_value(h, 2) == 2);
+    manage_memory[MANAGE_ORDERS / 4] = 0;
+    settings_memory[0] = 18;
+    menu[MENU_ROWS_PAGE_STATE / 4] = 0;
+    assert(menu_settings_controller(SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
 }
 
 static void a_section_row_shows_its_module_and_value(void)
@@ -5762,6 +5882,7 @@ int main(void)
 #endif
     reused_row_views_show_the_page_that_reuses_them();
     the_film_look_menu_page_lists_film_stocks();
+    the_order_page_orders_the_values_of_a_setting();
     the_recipes_menu_page_chooses_a_recipe_then_an_action();
     a_section_row_shows_its_module_and_value();
     about_grkit_shows_the_version_and_address();

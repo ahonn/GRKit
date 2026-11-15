@@ -713,11 +713,12 @@ static u32 options_page_text(volatile u32 *h,u32 n,const u16 *name) {
     return (u32)at|1U;
 }
 /* The title of an options page: the page title, then Options, as
-   "Framing Options", "프레이밍 옵션", or "画幅选项". */
-static const u16 *options_title(volatile u32 *h) {
+   "Framing Options", "프레이밍 옵션", or "画幅选项"; and of the list of an
+   Order page, with Order. */
+static const u16 *page_title_with(volatile u32 *h,u32 word) {
     volatile u16 *to=(volatile u16 *)services_word(h,SERVICES_MENU+MENU_ROWS_PAGE_TITLE);
     const u16 *title=listed_slot(h)<module_pages(h) ? menu_page(h,listed_slot(h))->title(h) : manage_name(h,listed(h));
-    const u16 *options=text(h,TEXT_OPTIONS);
+    const u16 *options=text(h,word);
     u32 n=0;
     while(n<MENU_PAGE_TITLE_UNITS-20 && *title) to[n++]=*title++;
     if(menu_spaced()) to[n++]=' ';
@@ -725,6 +726,7 @@ static const u16 *options_title(volatile u32 *h) {
     to[n]=0;
     return (const u16 *)to;
 }
+static const u16 *options_title(volatile u32 *h) { return page_title_with(h,TEXT_OPTIONS); }
 /* The text descriptor of a settings page text, with bit 0 set (the text hooks
    then select the font of the menu language), or 0. */
 static u32 settings_text(volatile u32 *h,u32 view,u32 id) {

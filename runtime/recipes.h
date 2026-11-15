@@ -579,6 +579,23 @@ static u32 recipe_save(volatile u32 *h) {
     GRKIT_RECIPES_CHANGED(h);
     return e;
 }
+/* Move entry `from` to entry `to`, as the Order row of the module in the
+   GRKit section of MENU does: the recipes between them move by one entry.
+   The lists of ADJ and MENU show the entries in this order, and the recipe
+   file keeps it. */
+static void recipe_move(volatile u32 *h,u32 from,u32 to) {
+    u32 n=recipe_entries(h), w[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS], id, i;
+    if(from>=n || to>=n || from==to) return;
+    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,from)[i];
+    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) name[i]=recipe_name_at(h,from)[i];
+    id=*recipe_id_at(h,from);
+    for(i=from;i<to;++i) recipe_slot_move(h,i,i+1U);
+    for(i=from;i>to;--i) recipe_slot_move(h,i,i-1U);
+    for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,to)[i]=w[i];
+    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,to)[i]=name[i];
+    *recipe_id_at(h,to)=id;
+    GRKIT_RECIPES_CHANGED(h);
+}
 /* Delete entry `slot`. The recipes after it move up. */
 static void recipe_delete(volatile u32 *h,u32 slot) {
     u32 n=recipe_count(h);

@@ -151,6 +151,9 @@ typedef struct MenuListing {
     const u16 *(*option_label)(volatile u32 *,u32);
     u32 (*option_off)(volatile u32 *,u32);
     void (*option_set)(volatile u32 *,u32,u32);
+    /* Optional, for a page that gives its options: move option `from` to
+       the place of option `to`. The Order row then orders the options. */
+    void (*option_move)(volatile u32 *,u32,u32);
 } MenuListing;
 /* The rows are actions, not values: an ADJ exit, such as a half-press of
    the shutter, applies no row, and the page shows with one row. */

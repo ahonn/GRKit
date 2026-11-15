@@ -14,7 +14,8 @@
    module (runtime/settings.h): CORE.OFF.<ID>, 1 for Off; CORE.POS.<ID>, its
    position + 1, or 0 for the default place; and CORE.ROWS.<ID>, a bit for
    each value of its page that is off in ADJ (the options of the page,
-   runtime/modules.h).
+   runtime/modules.h). Two more keep the order of the values of its page in
+   ADJ, CORE.ORDER.<ID> and CORE.ORDER2.<ID> (manage_order).
    The resident loader saves them as other settings, and SCAN reads them to
    select and order the modules (runtime/install_plan.h).
 
@@ -70,7 +71,23 @@
 #define MANAGE_START 20U
 /* The handle + 1 of CORE.UNIT, Distance Unit, or 0 without it. */
 #define MANAGE_UNIT 24U
-#define MANAGE_HEADER 28U
+/* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
+   CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
+   The two settings hold the values of the page of the module after its
+   first row in the order of ADJ, a nibble each from bit 0 of CORE.ORDER,
+   MANAGE_ORDER_NIBBLES in each setting: the state file takes a value of
+   nine digits at most (runtime/state.h), so a setting keeps to 28 bits. A
+   nibble of 0 is no value, so 0 in both is the order of the setting. A
+   value without a nibble follows the others in the order of the setting
+   (runtime/modules.h: choice_sequence), so the nibbles order each page with
+   options: its MANAGE_OPTION_VALUES - 1 values after the first row but the
+   last one, which follows. */
+#define MANAGE_ORDERS 28U
+#define MANAGE_ORDER_WORDS 2U
+#define MANAGE_ORDER_NIBBLES 7U
+#define MANAGE_ORDER_VALUES (MANAGE_ORDER_NIBBLES * MANAGE_ORDER_WORDS)
+#define MANAGE_ORDER_LIMIT (1U << 4U * MANAGE_ORDER_NIBBLES)
+#define MANAGE_HEADER 32U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -160,6 +177,18 @@ static u32 manage_halted(volatile u32 *h,u32 module) { return manage_off(h,modul
 static u32 manage_rows_handle(volatile u32 *h,u32 module) { return manage_off_handle(h,module)+2; }
 static u32 manage_hidden_values(volatile u32 *h,u32 module) { return setting_value(h,manage_rows_handle(h,module)); }
 static u32 manage_position(volatile u32 *h,u32 module) { return setting_value(h,manage_off_handle(h,module)+1); }
+/* The handle + 1 of word `i` of the order of the values of the page of a
+   module, or 0 without it, and the nibble of place `k` of that order. */
+static u32 manage_order_handle(volatile u32 *h,u32 module,u32 i) {
+    u32 base=manage_word(h,MANAGE_ORDERS);
+    return base ? base+MANAGE_ORDER_WORDS*module+i : 0;
+}
+static u32 manage_order_value(volatile u32 *h,u32 module,u32 k) {
+    u32 word=k>=MANAGE_ORDER_NIBBLES, at=manage_order_handle(h,module,word);
+    return at ? setting_value(h,at-1)>>(4U*(k-MANAGE_ORDER_NIBBLES*word))&15U : 0;
+}
+_Static_assert(MANAGE_ORDER_WORDS==2U && MANAGE_ORDER_VALUES+2U>=MANAGE_OPTION_VALUES,
+               "The nibbles order each page with options");
 static u32 manage_place(volatile u32 *h,u32 module) {
     u32 position=manage_position(h,module);
     if(position>=MANAGE_POS_PIN && position<MANAGE_POS_VALUES) return MANAGE_PLACE_PIN+position-MANAGE_POS_PIN;

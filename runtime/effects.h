@@ -10,7 +10,8 @@
 
    One setting of the settings table keeps the choice of each listed effect
    (runtime/settings.h): CORE.EFFECT.<effect ID>, with Off in bit 0, and its
-   position + 1, or 0 for the default place, above. The resident loader saves
+   position + 1, or 0 for the default place, above. The Order row of the page
+   in the GRKit section of MENU sets the positions (effects_move). The resident loader saves
    it as other settings, and SCAN reads it to select and order the effects
    (runtime/install_effects.h). GRKit installs at most MAX_COUNT effects: those
    that are On, in that order, then those that are Off while there is room.
@@ -100,6 +101,21 @@ static void effects_turn(volatile u32 *h,u32 effect,u32 off) {
     setting_store(h,effects_handle(h,effect),(effects_choice(h,effect)&~1U)|(off&1U));
     if(off && record!=EFFECTS_NO_RECORD && h[GRKIT_HOST_ACTIVE/4]==tone_record(h,record+1))
         setting_store(h,GRKIT_CORE_TONE,0);
+}
+/* Move the effect of row `from` to row `to` of the order of the effects
+   (effects_at): the effects between them move by one row. Each effect then
+   gets its row as its position, so the page of CORE.TONE shows the order at
+   once, and the next start installs the effects in it. */
+static void effects_move(volatile u32 *h,u32 from,u32 to) {
+    u8 order[EFFECTS_LISTED];
+    u32 n=effects_count(h), i, effect;
+    if(from>=n || to>=n || from==to) return;
+    effects_order(h,order,n);
+    effect=order[from];
+    for(i=from;i<to;++i) order[i]=order[i+1];
+    for(i=from;i>to;--i) order[i]=order[i-1];
+    order[to]=(u8)effect;
+    for(i=0;i<n;++i) setting_store(h,effects_handle(h,order[i]),(i+1U)<<1|effects_off(h,order[i]));
 }
 static const u16 *effects_name(volatile u32 *h,u32 effect) {
     return (const u16 *)MANAGE_MAP(effects_entry(h,effect)+EFFECTS_NAME);

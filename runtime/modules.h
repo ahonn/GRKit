@@ -92,46 +92,81 @@ static u32 choice_named(volatile u32 *h) {
 static u32 choice_shows(volatile u32 *h,u32 value,u32 hidden) {
     return value<choice_named(h) && (value>=32 || !(hidden>>value&1));
 }
-/* The values of the setting that the open page names, in the order of the
-   setting (runtime/settings.h: setting_rows), and the value of each. */
+/* Whether the values of the page have an order of their own in ADJ: a page
+   with options whose values are not the steps of one scale, as the focal
+   lengths of CORE.CROP and the widths of CORE.BORDER are. The pages of
+   CORE.TONE and CORE.RECIPE order their own rows (runtime/menu_listed.h). */
+static u32 choice_orders(volatile u32 *h) {
+    u32 handle=CHOICE_ENTRY(h)[1];
+    return choice_options(h) && handle!=GRKIT_CORE_CROP && handle!=GRKIT_CORE_BORDER;
+}
+/* The values of the setting of the open page that the camera offers, in
+   the order of ADJ, and their number: the order of the setting
+   (runtime/settings.h: setting_rows), or on a page with an order, its first
+   row, then the values of CORE.ORDER of its module, then the other values
+   in the order of the setting (runtime/manage.h). */
+#define CHOICE_SEQUENCE GRM_PAGE_ROWS
+static u32 choice_sequence(volatile u32 *h,u8 *values) {
+    u32 handle=CHOICE_ENTRY(h)[1], n=setting_rows(h,handle), listed=MANAGE_MODULES, seen=0, k=0, i, v;
+    if(n>CHOICE_SEQUENCE) n=CHOICE_SEQUENCE;
+    if(n && choice_orders(h)) listed=page_listed(h,h[GRKIT_HOST_MODULE_CHOICE/4]);
+    if(listed<MANAGE_MODULES) {
+        v=setting_row_value(h,handle,0);
+        values[k++]=(u8)v;
+        if(v<32) seen|=1U<<v;
+        for(i=0;i<MANAGE_ORDER_VALUES && k<n;++i) {
+            v=manage_order_value(h,listed,i);
+            if(!v || seen>>v&1 || !setting_offered(h,handle,v)) continue;
+            values[k++]=(u8)v;
+            seen|=1U<<v;
+        }
+    }
+    for(i=0;i<n && k<n;++i) {
+        v=setting_row_value(h,handle,i);
+        if(v<32 && seen>>v&1) continue;
+        values[k++]=(u8)v;
+    }
+    return k;
+}
+/* The values of the setting that the open page names, in the order of ADJ,
+   and the value of each. */
 static u32 choice_setting_rows(volatile u32 *h) {
     u32 handle=CHOICE_ENTRY(h)[1], n=setting_rows(h,handle), row, rows=0;
     for(row=0;row<n;++row) rows+=setting_row_value(h,handle,row)<choice_named(h);
     return rows;
 }
 static u32 choice_setting_row_value(volatile u32 *h,u32 row) {
-    u32 handle=CHOICE_ENTRY(h)[1], n=setting_rows(h,handle), base, value;
-    for(base=0;base<n;++base) {
-        value=setting_row_value(h,handle,base);
-        if(value<choice_named(h) && !row--) return value;
-    }
+    u8 values[CHOICE_SEQUENCE];
+    u32 n=choice_sequence(h,values), base;
+    for(base=0;base<n;++base)
+        if(values[base]<choice_named(h) && !row--) return values[base];
     return 0;
 }
 /* The rows of a choice page are the values that the camera offers and the
-   page names, in the order of the setting, without the values that are off
-   in ADJ. */
+   page names, in the order of ADJ, without the values that are off in
+   ADJ. */
 static u32 choice_rows(volatile u32 *h) {
     u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), row, rows=0;
     for(row=0;row<n;++row) rows+=choice_shows(h,setting_row_value(h,handle,row),hidden);
     return rows;
 }
 static u32 choice_row_value(volatile u32 *h,u32 row) {
-    u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), base, value;
+    u8 values[CHOICE_SEQUENCE];
+    u32 hidden=choice_hidden(h), n=choice_sequence(h,values), base;
     for(base=0;base<n;++base) {
-        value=setting_row_value(h,handle,base);
-        if(!choice_shows(h,value,hidden)) continue;
-        if(!row--) return value;
+        if(!choice_shows(h,values[base],hidden)) continue;
+        if(!row--) return values[base];
     }
     return 0;
 }
 /* The row of a value, or row 0 for a value that does not show. */
 static u32 choice_value_row(volatile u32 *h,u32 value) {
-    u32 handle=CHOICE_ENTRY(h)[1], hidden=choice_hidden(h), n=setting_rows(h,handle), base, row=0, v;
+    u8 values[CHOICE_SEQUENCE];
+    u32 hidden=choice_hidden(h), n=choice_sequence(h,values), base, row=0;
     if(!choice_shows(h,value,hidden)) return 0;
     for(base=0;base<n;++base) {
-        v=setting_row_value(h,handle,base);
-        if(v==value) return row;
-        row+=choice_shows(h,v,hidden);
+        if(values[base]==value) return row;
+        row+=choice_shows(h,values[base],hidden);
     }
     return 0;
 }

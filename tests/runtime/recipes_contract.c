@@ -417,6 +417,38 @@ static void each_recipe_keeps_its_id(void)
     assert(recipe_save(header) == 1 && *recipe_id_at(header, 1) == c0);
 }
 
+/* A move takes an entry to another entry with its ID and its name, and the
+   recipes between them move by one entry. The recipes that are off keep
+   their slots. */
+static void a_move_orders_the_entries(void)
+{
+    reset();
+    for (u32 slot = 0; slot < 4; ++slot) {
+        static const char *const names[] = {"A", "B", "C", "Off"};
+        recipe_at(header, slot)[0] = RECIPE_USED | RECIPE_LOOK_OFF;
+        recipe_at(header, slot)[RECIPE_MODULE_WORD] = slot == 3 ? RECIPE_OFF : 0;
+        *recipe_id_at(header, slot) = 10 + slot;
+        recipe_name_set(header, slot, (const u8 *)names[slot]);
+    }
+    recipe_show_in_adj(header, 0, 0);
+    assert(recipe_entries(header) == 3);
+    /* A goes to the last entry: B, C, A. It stays hidden in ADJ. */
+    recipe_move(header, 0, 2);
+    assert(*recipe_id_at(header, 0) == 11 && *recipe_id_at(header, 1) == 12 && *recipe_id_at(header, 2) == 10);
+    assert(recipe_name_char(header, 0, 0) == 'B' && recipe_name_char(header, 2, 0) == 'A');
+    assert(recipe_shown(header, 0) && recipe_shown(header, 1) && !recipe_shown(header, 2));
+    /* A goes back to the first entry: A, B, C. */
+    recipe_move(header, 2, 0);
+    assert(*recipe_id_at(header, 0) == 10 && *recipe_id_at(header, 1) == 11 && *recipe_id_at(header, 2) == 12);
+    assert(recipe_name_char(header, 1, 0) == 'B' && !recipe_shown(header, 0));
+    /* A move takes only entries, so the recipe that is off stays. */
+    recipe_move(header, 0, 3);
+    recipe_move(header, 3, 0);
+    recipe_move(header, 1, 1);
+    assert(*recipe_id_at(header, 0) == 10 && *recipe_id_at(header, 3) == 13 && recipe_name_char(header, 3, 0) == 'O');
+    assert(recipe_count(header) == 4 && recipe_entries(header) == 3);
+}
+
 /* Apply writes the Fn adjustments before it selects the effect, counts the
    change for the live view, and stores the settings before it as an undo
    step. */
@@ -1986,6 +2018,7 @@ int main(void)
     save_stops_when_full();
     recipes_that_are_off_stay_for_the_site();
     each_recipe_keeps_its_id();
+    a_move_orders_the_entries();
     apply_sets_the_look_and_stores_an_undo_step();
     undo_keeps_the_newest_steps();
     missing_effect_changes_nothing();

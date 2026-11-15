@@ -1036,6 +1036,8 @@
 /* GRKit Settings, the MENU row and the title of the settings page of the core,
    then its Distance Unit row and the values Meters and Feet. */
 #define TEXT_UNIT 74
-#define GRKIT_TEXT_STRINGS 78
+/* The settings row that orders the options of a module page. */
+#define TEXT_ORDER 78
+#define GRKIT_TEXT_STRINGS 79
 
 #endif

@@ -54,9 +54,14 @@ _Static_assert(GRKIT_MODULES_MAX == MANAGE_MODULES, "The Modules page lists each
 static u32 module_status[GRKIT_MODULES_MAX];
 static char module_detail[GRKIT_MODULES_MAX][GRM_NAME + 1];
 /* The choices of the GRKit section of MENU (runtime/manage.h): Off, the
-   position + 1 or 0, and the values that are off in ADJ of each module.
-   INSTALL also notes the title texts and tile 0 of each module. */
+   position + 1 or 0, the values that are off in ADJ, and the order of the
+   values in ADJ of each module. INSTALL also notes the title texts and tile
+   0 of each module. */
 static u32 module_off[GRKIT_MODULES_MAX], module_position[GRKIT_MODULES_MAX], module_rows[GRKIT_MODULES_MAX];
+static u32 module_value_order[GRKIT_MODULES_MAX][MANAGE_ORDER_WORDS];
+/* The keys of the order settings of a module: CORE.ORDER.<ID>, then
+   CORE.ORDER2.<ID>. */
+static const char *const manage_order_keys[MANAGE_ORDER_WORDS] = {"ORDER", "ORDER2"};
 static u32 module_title[GRKIT_MODULES_MAX], module_tile[GRKIT_MODULES_MAX];
 /* The GRKit switch: 1 while it is Off, which stops each module as its own
    Off does, and keeps the Enable of each. */
@@ -76,9 +81,10 @@ static u32 capabilities_running;
    the core services, or 0 (install_modules). */
 static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
-   choices of each module, the choices of `effects` effects, then the
-   switch, Enable at Start, and Distance Unit. */
-#define CHOICE_ENTRIES(modules, effects) (MANAGE_PER_MODULE * (modules) + 3U + (effects))
+   choices of each module, the choices of `effects` effects, the switch,
+   Enable at Start, and Distance Unit, then the order of the values of each
+   module. */
+#define CHOICE_ENTRIES(modules, effects) ((MANAGE_PER_MODULE + MANAGE_ORDER_WORDS) * (modules) + 3U + (effects))
 /* A set of a user mode of the mode dial (runtime/mode_dial.h) holds the
    module settings, the Enable of each module, and the switch. plan_modules
    leaves room for the choices of EFFECTS_LISTED effects, so the table holds
@@ -289,6 +295,8 @@ static void order_modules(void)
         module_off[i] = state_value(&saved_state, manage_id(i, "OFF"), &value) && value == 1;
         module_position[i] = state_value(&saved_state, manage_id(i, "POS"), &value) && value < MANAGE_POS_VALUES ? value : 0;
         module_rows[i] = state_value(&saved_state, manage_id(i, "ROWS"), &value) && value < 1U << MANAGE_OPTION_VALUES ? value : 0;
+        for (u32 k = 0; k < MANAGE_ORDER_WORDS; ++k)
+            module_value_order[i][k] = state_value(&saved_state, manage_id(i, manage_order_keys[k]), &value) && value < MANAGE_ORDER_LIMIT ? value : 0;
     }
 }
 /* Whether a setting of this start takes the saved value of `id`: a
@@ -315,7 +323,8 @@ static int state_taken(u32 id)
     for (u32 k = 0; k < setting_total; ++k)
         if ((setting_flags[k] & GRM_SETTING_SAVED) && grm_state_id(setting_names[k]) == id) return 1;
     for (u32 i = 0; i < module_count; ++i)
-        if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id) return 1;
+        if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id ||
+            manage_id(i, manage_order_keys[0]) == id || manage_id(i, manage_order_keys[1]) == id) return 1;
     if (grm_state_id(MANAGE_SWITCH_KEY) == id || grm_state_id(MANAGE_START_KEY) == id ||
         grm_state_id(MANAGE_UNIT_KEY) == id) return 1;
     for (u32 i = 0; i < listed_count; ++i)
@@ -347,6 +356,7 @@ static void plan_modules(void)
     module_contexts = module_data_words = 0;
     for (u32 i = 0; i < GRKIT_MODULES_MAX; ++i) {
         module_status[i] = module_off[i] = module_position[i] = module_rows[i] = module_title[i] = 0;
+        module_value_order[i][0] = module_value_order[i][1] = 0;
         module_code_from[i] = module_code_to[i] = module_capabilities[i] = 0;
         module_detail[i][0] = 0;
         module_tile[i] = MANAGE_NO_TILE;
