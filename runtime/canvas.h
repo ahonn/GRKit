@@ -80,10 +80,22 @@ GRKIT_MAYBE_UNUSED static u32 canvas_fit(u32 cw,u32 ch,u32 bw,u32 bh) {
     return w|h<<16;
 }
 
+/* The first of the two canvas samples that preview sample i reads along one
+   side of `size` canvas samples, with `step` canvas samples in 1/65536 for
+   each preview sample: the pair around the middle of the preview sample. The
+   firmware takes the middle too when playback resizes the main picture, so
+   the picture has the same place in the preview and in the main picture
+   that replaces it. */
+GRKIT_MAYBE_UNUSED static u32 canvas_sample(u32 i,u32 step,u32 size) {
+    u32 s=((2U*i+1U)*step)>>17;
+    if(s) --s;
+    return s+1U>=size ? size-2U : s;
+}
+
 /* The margin m of a canvas side c in a plane side s, rounded outward from
    the picture, so that no sample of the margin is inside. A smaller plane
    (`scaled`) takes one more canvas pixel at the far side: a preview sample
-   is the mean of a canvas pixel and the next (canvas_preview). Even for the
+   is the mean of a canvas pixel and the next (canvas_sample). Even for the
    chroma pairs when `even`. */
 GRKIT_MAYBE_UNUSED static u32 canvas_inner_margin(u32 m,u32 s,u32 c,u32 far,u32 even) {
     u32 v=core_divide((m+far)*s+c-1U,c);

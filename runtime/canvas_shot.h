@@ -12,7 +12,10 @@
       main picture, fills the margins, and draws the previews from the whole
       canvas. A pass that crops (XPan, 1:1) or makes a smaller size (M, S)
       moves the main picture, so each pass places the canvas again, and a
-      place outside the planes waits for the next pass.
+      place outside the planes waits for the next pass. The first pass of a
+      crop is such a place, and the review after the shot shows its
+      previews: they take the border from the picture alone
+      (canvas_crop), and the planes wait for the next pass.
    3. Before the encode, canvas_encode gives each image of the main picture
       the whole canvas, and canvas_inner gives the plane filters the picture
       inside the border.
@@ -302,15 +305,24 @@ static u32 canvas_place(volatile u32 *e,u32 y,u32 w,u32 hh) {
 }
 
 /* A preview of the whole canvas in a descriptor of R, fit into its box:
-   each sample is the mean of 2 x 2 luma at its place, with the CbCr pair
-   there. The R2Y and IIP write the canvas without the CPU cache, so its
+   each sample is the mean of 2 x 2 luma around its middle (canvas_sample),
+   with the CbCr pair there. The R2Y and IIP write the canvas without the CPU cache, so its
    rows are flushed before they are read, and the preview after it is
-   written, for the encode. */
-static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box) {
+   written, for the encode. With `drawn` 0, the margins are not filled yet:
+   a sample in a margin takes the color of the border, and the planes are
+   read only inside the picture. */
+static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box,u32 drawn) {
     u32 y=e[CANVAS_E_CANVAS], plane=e[CANVAS_E_PLANE], pitch=e[CANVAS_E_PITCH];
     u32 cw=e[CANVAS_E_SIZE]&0xffffU, ch=e[CANVAS_E_SIZE]>>16, fit=canvas_fit(cw,ch,box&0xffffU,box>>16);
     u32 w=fit&0xffffU, hh=fit>>16, py=CANVAS_DESC(recipe,offset,CANVAS_DESC_Y), pc=CANVAS_DESC(recipe,offset,CANVAS_DESC_C);
     u32 ps=CANVAS_DESC(recipe,offset,CANVAS_DESC_PITCH)&0xffffU, sx_step, sy_step, x, r;
+    /* The picture inside the margins, in canvas samples: [left, right) x
+       [top, bottom). Each sample of `drawn` is inside. */
+    u32 left=0, top=0, right=cw, bottom=ch, luma=canvas_luma(e[CANVAS_E_BORDER]);
+    if(!drawn) {
+        left=e[CANVAS_E_NEAR]&0xffffU; top=e[CANVAS_E_NEAR]>>16;
+        right=cw-(e[CANVAS_E_FAR]&0xffffU); bottom=ch-(e[CANVAS_E_FAR]>>16);
+    }
     if(w<2 || hh<2 || ps<(box&0xffffU) || cw<2 || ch<2) return;
     sx_step=core_divide(cw<<16,w); sy_step=core_divide(ch<<16,hh);
 #ifdef CANVAS_PREVIEW_BOX
@@ -328,17 +340,20 @@ static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box) {
     }
 #endif
     for(r=0;r<hh;++r) {
-        u32 sy=(r*sy_step)>>16;
+        u32 sy=canvas_sample(r,sy_step,ch);
         const u8 *ys, *cs;
         u8 *yd=PICTURE_MAP(py+r*ps), *cd=PICTURE_MAP(pc+r*ps);
-        if(sy>=ch-1U) sy=ch-2U;
+        if(sy<top || sy>=bottom) {
+            for(x=0;x<w;++x) { yd[x]=(u8)luma; cd[x]=128; }
+            continue;
+        }
         PICTURE_CACHE_FLUSH(y+sy*pitch,cw);
         PICTURE_CACHE_FLUSH(y+(sy+1U)*pitch,cw);
         PICTURE_CACHE_FLUSH(y+plane+sy*pitch,cw);
         ys=PICTURE_MAP(y+sy*pitch); cs=PICTURE_MAP(y+plane+sy*pitch);
         for(x=0;x<w;++x) {
-            u32 sx=(x*sx_step)>>16;
-            if(sx>=cw-1U) sx=cw-2U;
+            u32 sx=canvas_sample(x,sx_step,cw);
+            if(sx<left || sx>=right) { yd[x]=(u8)luma; cd[x]=128; continue; }
             yd[x]=(u8)((ys[sx]+ys[sx+1]+ys[sx+pitch]+ys[sx+pitch+1]+2U)>>2);
             cd[x]=cs[(sx&~1U)+(x&1U)];
         }
@@ -346,6 +361,31 @@ static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box) {
     PICTURE_CACHE_FLUSH(CANVAS_DESC(recipe,offset,CANVAS_DESC_Y),ps*(fit>>16));
     PICTURE_CACHE_FLUSH(CANVAS_DESC(recipe,offset,CANVAS_DESC_C),ps*(fit>>16));
     CANVAS_DESC(recipe,offset,CANVAS_DESC_SIZE)=fit;
+}
+
+/* The screennail and the thumbnail of R from the placed canvas of `e`
+   (canvas_preview), each fit into the box of its stock preview. */
+static void canvas_previews(volatile u32 *e,u32 recipe,u32 drawn) {
+    static const u16 previews[2]={CANVAS_SCREENNAIL,CANVAS_THUMBNAIL};
+    u32 i;
+    for(i=0;i<2;++i) {
+        if(!e[CANVAS_E_BOX+i]) e[CANVAS_E_BOX+i]=CANVAS_DESC(recipe,previews[i],CANVAS_DESC_SIZE);
+        canvas_preview(e,recipe,previews[i],e[CANVAS_E_BOX+i],drawn);
+    }
+}
+
+/* A pass of a crop (a Framing ratio, XPan, CORE.CROP) moves the main
+   picture to the top left of the crop in the R2Y source, but keeps the size
+   of the source. The next pass gives it the size of the crop. The crop lies
+   in the middle of the source, so the move gives its size: w | h << 16, or
+   0 when the main picture of size `size` at y is not such a move. The size
+   can differ from the size of the next pass by the alignment of the crop. */
+static u32 canvas_crop(volatile u32 *e,u32 y,u32 size,u32 source_size) {
+    u32 source=e[CANVAS_E_SOURCE], pitch=e[CANVAS_E_PITCH], w=size&0xffffU, hh=size>>16, row, column;
+    if(size!=source_size || y<=source || !pitch) return 0;
+    row=core_divide(y-source,pitch); column=y-source-row*pitch;
+    if(2U*column>=w || 2U*row>=hh) return 0;
+    return (w-2U*column)|(hh-2U*row)<<16;
 }
 
 /* After each BackResize pass of a still. */
@@ -367,17 +407,20 @@ void canvas_resize_c(u32 module,u32 config) {
            again. */
         e[CANVAS_E_STATE]=CANVAS_LAID_OUT;
         if(!canvas_place(e,y,size&0xffffU,size>>16)) {
+            u32 crop=canvas_crop(e,y,size,CANVAS_DESC(recipe,CANVAS_SOURCE,CANVAS_DESC_SIZE));
             for(i=0;i<2;++i) if(e[CANVAS_E_BOX+i]) CANVAS_DESC(recipe,previews[i],CANVAS_DESC_SIZE)=e[CANVAS_E_BOX+i];
+            /* The review after the shot shows the previews of this pass:
+               they take the border around the crop, from the picture
+               without the margins. The planes stay as they are until the
+               next pass places the canvas. */
+            if(crop && canvas_place(e,y,crop&0xffffU,crop>>16)) canvas_previews(e,recipe,0);
             return;
         }
         canvas_fill(e);
         e[CANVAS_E_STATE]=CANVAS_PLACED;
     }
     /* Each pass draws the previews again from the main picture. */
-    for(i=0;i<2;++i) {
-        if(!e[CANVAS_E_BOX+i]) e[CANVAS_E_BOX+i]=CANVAS_DESC(recipe,previews[i],CANVAS_DESC_SIZE);
-        canvas_preview(e,recipe,previews[i],e[CANVAS_E_BOX+i]);
-    }
+    canvas_previews(e,recipe,1);
 }
 
 /* A descriptor `d` takes the whole canvas of an entry. */

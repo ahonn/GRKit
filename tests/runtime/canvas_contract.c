@@ -27,8 +27,8 @@ static void inner(u32 cw, u32 ch, const u32 m[4], u32 pw, u32 ph, u32 l, u32 t, 
 }
 
 /* Each sample of a preview inside the picture area reads only the picture:
-   canvas_preview takes canvas pixel (x * cw / w) and the next one, and the
-   same for rows. */
+   canvas_preview takes the canvas pixel of canvas_sample and the next one,
+   and the same for rows. */
 static void samples_inside(u32 cw, u32 ch, const u32 m[4], u32 pw, u32 ph)
 {
     u32 a[4], fit = canvas_fit(cw, ch, pw, ph), w = fit & 0xffffU, h = fit >> 16, ox, oy, sx, sy;
@@ -37,18 +37,30 @@ static void samples_inside(u32 cw, u32 ch, const u32 m[4], u32 pw, u32 ph)
     ox = ((pw - w) >> 1) & ~1U; oy = (ph - h) >> 1;
     sx = (cw << 16) / w; sy = (ch << 16) / h;
     for (u32 x = a[CANVAS_LEFT]; x < a[CANVAS_RIGHT]; ++x) {
-        u32 c = ((x - ox) * sx) >> 16;
+        u32 c = canvas_sample(x - ox, sx, cw);
         assert(c >= m[CANVAS_LEFT] && c + 1U < cw - m[CANVAS_RIGHT]);
     }
     for (u32 y = a[CANVAS_TOP]; y < a[CANVAS_BOTTOM]; ++y) {
-        u32 r = ((y - oy) * sy) >> 16;
+        u32 r = canvas_sample(y - oy, sy, ch);
         assert(r >= m[CANVAS_TOP] && r + 1U < ch - m[CANVAS_BOTTOM]);
     }
     assert(!(a[CANVAS_LEFT] & 1U) && !(a[CANVAS_RIGHT] & 1U));
 }
 
+/* A preview sample reads the two canvas samples around its middle: with 10
+   canvas samples for each, sample 0 reads 4 and 5, and sample 3 reads 34
+   and 35. The pair stays inside the side. */
+static void samples_take_the_middle(void)
+{
+    assert(canvas_sample(0, 10U << 16, 6000) == 4 && canvas_sample(3, 10U << 16, 6000) == 34);
+    assert(canvas_sample(599, 10U << 16, 6000) == 5994);
+    assert(canvas_sample(0, 1U << 16, 720) == 0 && canvas_sample(719, 1U << 16, 720) == 718);
+    assert(canvas_sample(159, 41U << 16, 6500) == 6498);
+}
+
 int main(void)
 {
+    samples_take_the_middle();
     /* GR III 3:2: Thin 3% and Wide 6% of the short side, on each side, to
        the nearest multiple of 16. */
     margins(CANVAS_THIN, 6000, 4000, 0, 128, 128, 128, 128);
