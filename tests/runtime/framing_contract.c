@@ -1311,13 +1311,16 @@ static void crop_sets_the_camera_factor(void)
     assert(crop_box_seen[2] - crop_box_seen[0] > 620 && crop_box_seen[2] - crop_box_seen[0] < 640);
     native_crop_q16 = 65536U;
 }
-/* 40 and 70 mm show the core's crop badge in the place of the camera's
-   own, which crop_badge hides; 35 and 50 mm keep the camera's. GR IIIx
-   shows its focal lengths. The badge shows only with the native
-   information, and Frame Only shows none. */
+/* Each crop shows the core's crop badge in the place of the camera's own,
+   which crop_badge hides, so that the badges have one look. GR IIIx shows
+   its focal lengths. The badge shows only with the native information, and
+   Frame Only shows none. */
 static void crop_badges_replace_the_camera_badge(void)
 {
-    static const u32 labels[] = {GRKIT_LABEL_COUNT, GRKIT_LABEL_COUNT, LABEL_CROP, GRKIT_LABEL_COUNT, LABEL_CROP + 1};
+    static const u32 labels[2][GRKIT_CORE_CROP_VALUES] = {
+        {GRKIT_LABEL_COUNT, LABEL_CROP_CAMERA, LABEL_CROP, LABEL_CROP_CAMERA + 1, LABEL_CROP + 1},
+        {GRKIT_LABEL_COUNT, LABEL_CROP_CAMERA + 1, LABEL_CROP + 2, LABEL_CROP_CAMERA + 2, LABEL_CROP + 3},
+    };
     for (u32 lens = 0; lens < 2; ++lens)
         for (u32 crop = 0; crop < GRKIT_CORE_CROP_VALUES; ++crop) {
             reset();
@@ -1325,7 +1328,7 @@ static void crop_badges_replace_the_camera_badge(void)
             add_crop_layer();
             lens_40mm = lens;
             header[GRKIT_HOST_CROP/4] = crop;
-            u32 expected = labels[crop] < GRKIT_LABEL_COUNT ? labels[crop] + 2 * lens : GRKIT_LABEL_COUNT;
+            u32 expected = labels[lens][crop];
             assert(crop_badge_shown(header) == expected);
             assert(crop_badge_native() == (expected >= GRKIT_LABEL_COUNT));
             if (expected >= GRKIT_LABEL_COUNT) continue;

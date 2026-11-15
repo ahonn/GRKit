@@ -778,9 +778,10 @@ pub fn strike(rgba: &mut [u8]) {
 /// order of year, month, and day, and HM when the time prints. Then the crop
 /// badges (`crop_badge`): 40 and 70 mm of a 28 mm lens, then 57 and 100 mm of
 /// the 40 mm lens of GR IIIx (runtime/crop.h: LABEL_CROP). Then the labels
-/// that came later, such as a later Framing ratio. The label of each ratio is
-/// `aspect::label_index` (FRAMING_RATIO_LABELS).
-pub const OVERLAY_LABELS: [&str; 19] = [
+/// that came later, such as a later Framing ratio, and the crop badges of
+/// the crops that the camera has too (`CAMERA_CROP_BADGES`). The label of
+/// each ratio is `aspect::label_index` (FRAMING_RATIO_LABELS).
+pub const OVERLAY_LABELS: [&str; 22] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -800,7 +801,21 @@ pub const OVERLAY_LABELS: [&str; 19] = [
     "57mm",
     "100mm",
     "3:4",
+    "35mm",
+    "50mm",
+    "71mm",
 ];
+/// The badges of the crops that the camera has too, so that each crop shows
+/// the same badge: 35 and 50 mm of a 28 mm lens, and 50 and 71 mm of GR IIIx
+/// (runtime/crop.h: LABEL_CROP_CAMERA).
+pub const CAMERA_CROP_BADGES: [&str; 3] = ["35mm", "50mm", "71mm"];
+/// The index of the first of them.
+pub fn camera_crop_badges() -> usize {
+    OVERLAY_LABELS
+        .windows(CAMERA_CROP_BADGES.len())
+        .position(|labels| labels == CAMERA_CROP_BADGES)
+        .expect("the labels hold the crop badges of the camera's crops")
+}
 /// The labels that a module can name by index: the live-view text before
 /// the crop badges, which only the core draws. A module names a later
 /// Framing ratio through its value (`label = "ratio"`).
@@ -1144,7 +1159,8 @@ pub fn recipe_card_pixels() -> Vec<u8> {
 }
 
 /// A crop badge: the size and the grays of the camera's own crop badge,
-/// which the live view shows at its right for a crop of the camera. A
+/// which the live view shows at its right for a crop of the camera. The
+/// core draws the badge of each crop, so that they have one look. A
 /// 1-pixel border, a dark fill, the focal length in bold digits as high as
 /// `BADGE_CAPITAL`, and "mm" with letters as high as `BADGE_X_HEIGHT` on the
 /// same baseline, centered.

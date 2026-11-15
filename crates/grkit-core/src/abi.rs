@@ -801,7 +801,7 @@ pub const CANVAS_ENTRY_SIZE: usize = 80;
 pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
 /// Bytes of the live-view labels and glyphs after the menu text
 /// (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 73728;
+pub const LABELS_SIZE: usize = 77824;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
@@ -1686,6 +1686,12 @@ pub fn header() -> String {
         out,
         "#define GRKIT_LABEL_COUNT {}",
         crate::artwork::OVERLAY_LABELS.len()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_LABEL_CROP_CAMERA {}",
+        crate::artwork::camera_crop_badges()
     )
     .unwrap();
     // The labels that a module can name; the crop badges follow them.

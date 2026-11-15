@@ -526,8 +526,9 @@ crop_window:
 .fpu vfpv3
 .arm
 /* Replaces the BL to the crop badge icon of a crop factor (s0) in the
-   live-view crop badge update. Where the core draws its own badge
-   (runtime/crop.h), the icon is that of no crop, CROP_BADGE_OFF. */
+   live-view crop badge update. Where the core draws its own badge, which
+   is for each crop of CORE.CROP (runtime/crop.h), the icon is that of no
+   crop, CROP_BADGE_OFF. */
 .global crop_badge
 .type crop_badge, %function
 crop_badge:

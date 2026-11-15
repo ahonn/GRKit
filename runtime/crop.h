@@ -154,22 +154,28 @@ static __attribute__((unused)) u32 crop_scale(u32 crop,u32 native) {
     return (u32)(((unsigned long long)crop_scales[crop]*native)>>16);
 }
 
-/* The crop badge of the live view: the camera shows its own for 35 and 50
-   mm (GR IIIx 50 and 71 mm). For 40 and 70 mm, the core hides it
-   (runtime/framing.S: crop_badge) and draws its label LABEL_CROP + n
-   (grkit_core::artwork::OVERLAY_LABELS) in its place: n is 0 and 1 for 40
-   and 70 mm, and 2 and 3 for 57 and 100 mm of GR IIIx. Returns
-   GRKIT_LABEL_COUNT without one. */
+/* The crop badge of the live view: the camera has its own for 35 and 50 mm
+   (GR IIIx 50 and 71 mm) and none for the other crops, and its text differs
+   from the text that the core can draw. So for each crop, the core hides the
+   camera's badge (runtime/framing.S: crop_badge) and draws a label in its
+   place, so that the badges have one look
+   (grkit_core::artwork::OVERLAY_LABELS): LABEL_CROP + n for 40 and 70 mm (n
+   is 0 and 1) and for 57 and 100 mm of GR IIIx (2 and 3), and
+   LABEL_CROP_CAMERA + n for 35, 50, and 71 mm (0 to 2). Returns
+   GRKIT_LABEL_COUNT without a crop. */
 #define LABEL_CROP GRKIT_MODULE_LABEL_COUNT
+#define LABEL_CROP_CAMERA GRKIT_LABEL_CROP_CAMERA
 #define CROP_BADGE_LEFT 662U
 #define CROP_BADGE_TOP 80U
 static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h) {
-    static const u8 badges[GRKIT_CORE_CROP_VALUES]={0xff,0xff,0,0xff,1};
-    u32 badge=badges[crop_capture(h)];
-    if(badge==0xff) return GRKIT_LABEL_COUNT;
-    return LABEL_CROP+badge+(CROP_LENS_40MM() ? 2U : 0U);
+    static const u8 badges[2][GRKIT_CORE_CROP_VALUES]={
+        {GRKIT_LABEL_COUNT,LABEL_CROP_CAMERA,LABEL_CROP,LABEL_CROP_CAMERA+1U,LABEL_CROP+1U},
+        {GRKIT_LABEL_COUNT,LABEL_CROP_CAMERA+1U,LABEL_CROP+2U,LABEL_CROP_CAMERA+2U,LABEL_CROP+3U},
+    };
+    return badges[CROP_LENS_40MM() ? 1 : 0][crop_capture(h)];
 }
-_Static_assert(LABEL_CROP+4U<=GRKIT_LABEL_COUNT,"The crop badges follow the labels that a module names");
+_Static_assert(LABEL_CROP+4U<=GRKIT_LABEL_COUNT && LABEL_CROP_CAMERA+3U<=GRKIT_LABEL_COUNT,
+               "The labels hold each crop badge");
 
 /* The camera's own crop factor: its float bits, and its setter as the
    native menu calls it (runtime/framing.S, runtime/menu.S). */
