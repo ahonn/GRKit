@@ -116,7 +116,7 @@ export function importProps(
 ): Props {
   const extension = file.includes('.') ? file.slice(file.lastIndexOf('.') + 1).toLowerCase() : '';
   const format =
-    extension === 'cube' || extension === 'png'
+    extension === 'cube' || extension === 'png' || extension === 'xmp'
       ? extension
       : extension === 'tif' || extension === 'tiff'
         ? 'tiff'

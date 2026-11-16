@@ -96,6 +96,8 @@ export interface LutImport extends ImportData {
   warnings: readonly string[];
   /** The LUT file name. */
   source: string;
+  /** JSON text of XMP preset hints, or empty when the source was a LUT or the hints are empty. */
+  hints: string;
 }
 
 /**

@@ -138,6 +138,7 @@ export async function importLut(
       input,
       warnings: result.warnings,
       source: file.name,
+      hints: result.hints,
     },
   };
 }

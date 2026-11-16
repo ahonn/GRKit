@@ -8,6 +8,7 @@ import {
   effectFilename,
   effectId,
   isLutImportId,
+  isPreset,
   lutAccept,
   nameFromFile,
   validCover,
@@ -17,8 +18,15 @@ import {
 
 describe('LUT file input', () => {
   it('filters by extension only on a device without touch', () => {
-    expect(lutAccept(false)).toBe('.cube,.png,.tif,.tiff');
+    expect(lutAccept(false)).toBe('.cube,.png,.tif,.tiff,.xmp');
     expect(lutAccept(true)).toBeUndefined();
+  });
+
+  it('recognizes a Lightroom preset by its .xmp extension', () => {
+    expect(isPreset('look.xmp')).toBe(true);
+    expect(isPreset('Look.XMP')).toBe(true);
+    expect(isPreset('look.cube')).toBe(false);
+    expect(isPreset('look.xmp.png')).toBe(false);
   });
 });
 

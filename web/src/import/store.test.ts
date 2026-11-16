@@ -18,6 +18,7 @@ const legacy = () => ({
     input: 'standard',
     warnings: [],
     source: 'My Look.cube',
+    hints: '',
   },
   savedAt: 1,
 });

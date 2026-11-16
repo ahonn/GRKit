@@ -106,7 +106,15 @@ describe('importFit', () => {
     expect(importFit({ ...data, kind: 'restored', source: 'GRKit.zip' })).toBe('exact');
     expect(importFit({ ...data, kind: 'native', version: '1.20', source: 'gr4.zip' })).toBe('exact');
     expect(
-      importFit({ ...data, kind: 'lut', grade: 'C', input: 'standard', warnings: [], source: 'a.cube' }),
+      importFit({
+        ...data,
+        kind: 'lut',
+        grade: 'C',
+        input: 'standard',
+        warnings: [],
+        source: 'a.cube',
+        hints: '',
+      }),
     ).toBe('C');
   });
 });

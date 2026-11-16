@@ -22,6 +22,8 @@ export interface ImportResult {
   monochrome: boolean;
   grade: Grade;
   warnings: string[];
+  /** JSON text of XMP preset hints, or empty. */
+  hints: string;
 }
 
 /** Guesses the input that a LUT expects from its data (`fit::guess_input`). */
@@ -162,6 +164,7 @@ self.onmessage = async ({ data }: MessageEvent<ImportRequest | GuessRequest | Re
         monochrome: effect.monochrome,
         grade: oneOf(GRADES, effect.grade),
         warnings: effect.warnings,
+        hints: effect.hints,
       };
     } finally {
       effect.free();

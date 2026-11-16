@@ -27,6 +27,7 @@ import { PhotoLoader } from '../preview/raw';
 import { editable } from '../import/edit';
 import { missingNativeLooks } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
+import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -73,6 +74,12 @@ interface Props {
   onCard: ReadonlySet<string> | null;
   /** The IDs of the imports whose file on the card differs, such as after a new name. */
   changedOnCard?: ReadonlySet<string>;
+  /** The camera line of the page, for a recipe from a preset import. */
+  family: Family;
+  /** The recipe library of that camera line. */
+  recipes: readonly Recipe[];
+  /** Adds a recipe from a preset import. */
+  onAddRecipe: (recipe: Recipe) => void;
 }
 
 /** The change badge of an effect or a module: what a write to the card does with it. */
@@ -107,6 +114,9 @@ export function EffectsSection({
   cardEffects,
   onCard,
   changedOnCard,
+  family,
+  recipes,
+  onAddRecipe,
 }: Props) {
   const catalog = use(loadCatalog(PREVIEW_TARGET));
   const effects: readonly Effect[] = [...catalog.effects, ...imported];
@@ -583,6 +593,9 @@ export function EffectsSection({
             baseGamma={catalog.baseGamma}
             taken={taken}
             onImport={(effect) => importEffects([effect])}
+            family={family}
+            recipes={recipes}
+            onAddRecipe={onAddRecipe}
           />
         )}
         <EditDialog ref={editor} strings={t} onSave={onEdit} />

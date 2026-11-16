@@ -54,6 +54,7 @@ describe('import library details', () => {
       input: 'standard',
       warnings: [],
       source: 'Vision.cube',
+      hints: '',
     });
     const partial = withDetails(restored(), { cover });
     expect(partial.cover).toEqual(cover);

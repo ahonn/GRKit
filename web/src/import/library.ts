@@ -205,6 +205,7 @@ export function withDetails(
         input,
         warnings,
         source,
+        hints: '',
       },
     };
   }

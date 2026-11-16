@@ -84,7 +84,15 @@ import {
 } from './package';
 import { packageCard } from './packageCard';
 import { useRecipeLibrary } from './recipeLibrary';
-import { writeRecipeFile, familyOf, effectCode, withPreset, type Family, type Recipe } from './recipes';
+import {
+  writeRecipeFile,
+  familyOf,
+  effectCode,
+  withPreset,
+  cameraOrder,
+  type Family,
+  type Recipe,
+} from './recipes';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
@@ -932,6 +940,11 @@ export function InstallPage({
                   cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
                   changedOnCard={active ? changedImports(active, imported) : undefined}
+                  family={family}
+                  recipes={recipeLibrary.library}
+                  onAddRecipe={(recipe) =>
+                    recipeLibrary.change(cameraOrder([...recipeLibrary.library, recipe]))
+                  }
                 />
               </Suspense>
             </ErrorBoundary>
