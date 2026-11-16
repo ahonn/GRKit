@@ -131,6 +131,55 @@ fn guesses_the_input_from_the_lut_data() {
     assert!(guess_input(b"not a LUT", &base).is_err());
 }
 
+/// A minimal Lightroom `.xmp` preset with one skipped setting, for the site import path.
+fn clarity_preset() -> String {
+    r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+   crs:Version="15.0" crs:ProcessVersion="11.0" crs:Clarity2012="+20">
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#
+        .to_owned()
+}
+
+#[test]
+fn a_lightroom_preset_guesses_standard_and_returns_its_warnings() {
+    let base = synthetic_base();
+    let preset = clarity_preset();
+    assert_eq!(guess_input(preset.as_bytes(), &base).unwrap(), "standard");
+    let mut request = request("preset-v1", "Preset");
+    request.source = "look.xmp";
+    let imported = import_lut(preset.as_bytes(), &base, &request).unwrap();
+    assert!(
+        imported.warnings.iter().any(|w| w.contains("Clarity")),
+        "{:?}",
+        imported.warnings
+    );
+    assert!(imported.hints.is_empty(), "{}", imported.hints);
+}
+
+#[test]
+fn a_preset_import_carries_non_empty_hints() {
+    let base = synthetic_base();
+    let preset = r#"<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+   crs:Version="15.0" crs:ProcessVersion="11.0" crs:Exposure2012="+0.50">
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>
+<?xpacket end="w"?>"#;
+    let mut request = request("preset-exp-v1", "Preset");
+    request.source = "look.xmp";
+    let imported = import_lut(preset.as_bytes(), &base, &request).unwrap();
+    let hints: serde_json::Value = serde_json::from_str(&imported.hints).unwrap();
+    assert_eq!(hints["exposure"], 0.5);
+}
+
 #[test]
 fn the_preview_of_an_effect_file_is_the_preview_of_its_import() {
     let base = synthetic_base();

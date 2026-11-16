@@ -1,4 +1,4 @@
-use grkit_wasm::{decode_recipes, encode_recipes};
+use grkit_wasm::{decode_recipes, encode_recipes, recipe_from_preset};
 use serde_json::{json, Value};
 
 /// A recipe library that the site encodes for a package comes back from its
@@ -87,4 +87,43 @@ fn a_recipe_file_drops_the_keys_of_the_mode_dial() {
         .collect();
     assert!(keys.contains(&(RECIPE_ID_KEY_BASE)));
     assert!(keys.iter().all(|&key| !(dial..dial + 3).contains(&key)));
+}
+
+/// A recipe from preset hints uses the film look and carries exposure; empty hints give none.
+#[test]
+fn a_recipe_comes_from_preset_hints() {
+    let hints = json!({
+        "exposure": 0.5,
+        "grainAmount": null,
+        "grainSize": null,
+        "grainFrequency": null,
+        "incrementalTemperature": null,
+        "incrementalTint": null,
+        "whiteBalance": { "kind": "asShot" },
+    })
+    .to_string();
+    let text = recipe_from_preset(&hints, "gr3", "Look", "look-v1")
+        .unwrap()
+        .expect("recipe");
+    let recipe: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(recipe["name"], "Look");
+    assert_eq!(recipe["family"], "gr3");
+    assert_eq!(recipe["look"]["kind"], "effect");
+    assert_eq!(recipe["exposure"]["compensation"], 2);
+    assert!(recipe["glow"].is_null());
+    assert!(recipe["border"].is_null());
+
+    let empty = json!({
+        "exposure": null,
+        "grainAmount": null,
+        "grainSize": null,
+        "grainFrequency": null,
+        "incrementalTemperature": null,
+        "incrementalTint": null,
+        "whiteBalance": { "kind": "asShot" },
+    })
+    .to_string();
+    assert!(recipe_from_preset(&empty, "gr3", "Look", "look-v1")
+        .unwrap()
+        .is_none());
 }

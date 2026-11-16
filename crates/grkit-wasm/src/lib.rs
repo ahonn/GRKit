@@ -4,7 +4,8 @@
 //! It also serves each official module file. The page fetches those files, the selected
 //! modules, and the selected effects, then builds the ZIP locally.
 //! `Builder` holds the logic so that native tests cover it. `Package` only adapts it for JS.
-//! `import_lut` fits a LUT as `grkit effects import` does, over the base gamma of the catalog.
+//! `import_lut` fits a LUT or a Lightroom `.xmp` preset as `grkit effects import` does, over
+//! the base gamma of the catalog.
 
 use anyhow::{ensure, Context, Result};
 use grkit_core::recipes;
@@ -15,7 +16,7 @@ use grkit_core::{
     language::Language,
     lut_image,
     packaging::{self, EffectSet},
-    site, Files,
+    site, xmp, Files,
 };
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
@@ -41,6 +42,9 @@ pub struct Imported {
     /// Conditions that the user should check before using the effect. The page describes the
     /// grade itself.
     pub warnings: Vec<String>,
+    /// The exposure, grain, and white-balance hints of an XMP preset as JSON, or empty when the
+    /// source was a LUT or the hints are empty.
+    pub hints: String,
 }
 
 /// What the user gives for an import. The fields are the `grkit effects import` options.
@@ -66,12 +70,14 @@ fn lut_inputs(bytes: &[u8], base_gamma: &[u16]) -> Result<[u16; 256]> {
     site::base_gamma(base_gamma)
 }
 
-/// Fits a `.cube` file or a LUT image over `base_gamma`, the table of the site catalog.
+/// Fits a `.cube` file, a LUT image, or a Lightroom `.xmp` preset over `base_gamma`, the table
+/// of the site catalog.
 pub fn import_lut(bytes: &[u8], base_gamma: &[u16], request: &ImportRequest) -> Result<Imported> {
     import_lut_with_progress(bytes, base_gamma, request, &|_| {})
 }
 
-/// `import_lut`, which reports the progress of the fit to `progress`.
+/// `import_lut`, which reports the progress of the fit to `progress`. Accepts the same LUT and
+/// Lightroom `.xmp` preset inputs.
 pub fn import_lut_with_progress(
     bytes: &[u8],
     base_gamma: &[u16],
@@ -100,6 +106,10 @@ pub fn import_lut_with_progress(
     )?;
     let blob = effects::compile_definition(&effects::parse_json(imported.text.as_bytes())?)?;
     let (effect, icon) = effects::decode(&blob)?;
+    let hints = match imported.hints.as_ref().filter(|hints| !hints.is_empty()) {
+        Some(hints) => serde_json::to_string(hints)?,
+        None => String::new(),
+    };
     Ok(Imported {
         preview: site::linear_preview_lut(&base_gamma, &effect)?,
         icon,
@@ -107,6 +117,7 @@ pub fn import_lut_with_progress(
         monochrome: imported.fit.monochrome,
         grade: fit::Grade::of(&imported.fit).letter(),
         warnings: imported.warnings,
+        hints,
         definition: imported.text,
     })
 }
@@ -161,8 +172,12 @@ pub fn native_looks(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeEffect
 }
 
 /// The input that a LUT most likely expects, from its data alone: see `fit::guess_input`.
+/// A Lightroom `.xmp` preset returns `standard` without reading a LUT.
 pub fn guess_input(bytes: &[u8], base_gamma: &[u16]) -> Result<&'static str> {
     let base_gamma = lut_inputs(bytes, base_gamma)?;
+    if xmp::looks_like(bytes) {
+        return Ok("standard");
+    }
     Ok(fit::guess_input(&base_gamma, &Cube::read(bytes)?).name())
 }
 
@@ -811,6 +826,31 @@ pub fn effect_code(id: &str) -> u16 {
     recipes::effect_code(id)
 }
 
+/// A recipe JSON from the hints of an XMP preset for the film look `effectId`, or nothing when
+/// the hints give no exposure, grain, or white balance. `family` is a JSON `Family` name.
+/// Throws when the hints or the family are not valid.
+#[wasm_bindgen(js_name = recipeFromPreset)]
+pub fn recipe_from_preset(
+    hints: &str,
+    family: &str,
+    name: &str,
+    effect_id: &str,
+) -> Result<Option<String>, JsError> {
+    let family =
+        serde_json::from_value::<recipes::Family>(serde_json::Value::String(family.into()))
+            .map_err(anyhow::Error::from);
+    serde_json::from_str::<grkit_core::xmp::Hints>(hints)
+        .map_err(anyhow::Error::from)
+        .and_then(|hints| Ok((hints, family?)))
+        .map(|(hints, family)| {
+            recipes::from_preset(&hints, family, name, effect_id)
+                .map(|recipe| serde_json::to_string(&recipe))
+                .transpose()
+        })
+        .and_then(|result| result.map_err(anyhow::Error::from))
+        .map_err(js_error)
+}
+
 /// An effect fitted from a LUT. See `importLut`.
 #[wasm_bindgen(js_name = ImportedEffect)]
 pub struct ImportedEffect(Imported);
@@ -857,6 +897,12 @@ impl ImportedEffect {
     pub fn warnings(&self) -> Vec<String> {
         self.0.warnings.clone()
     }
+
+    /// The exposure, grain, and white-balance hints of an XMP preset as JSON, or empty.
+    #[wasm_bindgen(getter)]
+    pub fn hints(&self) -> String {
+        self.0.hints.clone()
+    }
 }
 
 #[wasm_bindgen]
@@ -869,10 +915,10 @@ extern "C" {
     fn report(this: &ImportProgress, context: &JsValue, fraction: f64);
 }
 
-/// Fits a `.cube` file or a LUT image (PNG or TIFF) into an effect, as `grkit effects import`
-/// does. `baseGamma` is the `base_gamma` array of the site catalog. The fit takes seconds,
-/// so call it from a Worker. `progress` receives the progress of the fit, a fraction from 0
-/// to 1 that does not decrease.
+/// Fits a `.cube` file, a LUT image (PNG or TIFF), or a Lightroom `.xmp` preset into an
+/// effect, as `grkit effects import` does. `baseGamma` is the `base_gamma` array of the site
+/// catalog. The fit takes seconds, so call it from a Worker. `progress` receives the progress
+/// of the fit, a fraction from 0 to 1 that does not decrease.
 /// `icon` is the JSON text of the effect.json `icon`, such as
 /// `{"template":"box","brand":"Kodak","name":"PORTRA","number":"400","band":true}`.
 #[wasm_bindgen(js_name = importLut)]
@@ -905,8 +951,9 @@ pub fn import_lut_js(
 }
 
 /// The input that a `.cube` file or LUT image most likely expects (`standard`, `vlog`,
-/// `flog`, `flog2`, or `flog2c`), from its data alone. `baseGamma` is the `base_gamma` array
-/// of the site catalog. It reads the whole file, so call it from a Worker.
+/// `flog`, `flog2`, or `flog2c`), from its data alone. A Lightroom `.xmp` preset returns
+/// `standard` without reading a LUT. `baseGamma` is the `base_gamma` array of the site
+/// catalog. It reads the whole file, so call it from a Worker.
 #[wasm_bindgen(js_name = guessInput)]
 pub fn guess_input_js(bytes: &[u8], base_gamma: &[u16]) -> Result<String, JsError> {
     guess_input(bytes, base_gamma)
