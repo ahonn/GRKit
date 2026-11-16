@@ -280,9 +280,10 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Fit a .cube LUT or a LUT image (PNG or TIFF) into a new effect definition at
-    /// OUT/ID/effect.json.
+    /// Fit a .cube LUT, a LUT image (PNG or TIFF), or a Lightroom / Camera Raw .xmp preset
+    /// into a new effect definition at OUT/ID/effect.json.
     Import {
+        /// A .cube LUT, a LUT image (PNG or TIFF), or a Lightroom / Camera Raw .xmp preset.
         #[arg(long, visible_alias = "cube")]
         lut: PathBuf,
         /// Official GR III 2.10 firmware, the source of the Standard base gamma.
@@ -299,6 +300,10 @@ enum EffectsCommand {
         /// Fit no post-curve matrix.
         #[arg(long)]
         no_post: bool,
+        /// For an XMP preset: skip the Standard→reference tone bridge (keep the preset on
+        /// the camera Standard rendering as-is).
+        #[arg(long)]
+        no_base_bridge: bool,
         #[arg(long)]
         id: String,
         #[arg(long)]
@@ -533,6 +538,7 @@ fn run(command: Command) -> Result<Value> {
                     input,
                     exposure,
                     no_post,
+                    no_base_bridge,
                     id,
                     name,
                     label,
@@ -566,6 +572,7 @@ fn run(command: Command) -> Result<Value> {
                 exposure,
                 options: fit::Options {
                     post: !no_post,
+                    base_bridge: !no_base_bridge,
                     ..fit::Options::default()
                 },
             };
@@ -578,10 +585,19 @@ fn run(command: Command) -> Result<Value> {
                 &output,
                 &Files::from([("effect.json".to_owned(), imported.text.into_bytes())]),
             )?;
-            Ok(json!({"output": output, "effect_id": id, "fit": errors,
+            let mut result = json!({
+                "output": output,
+                "effect_id": id,
+                "fit": errors,
                 "post_matrix": imported.fit.post_matrix.is_some(),
-                "monochrome": imported.fit.monochrome, "toned": imported.fit.toned,
-                "warnings": warnings}))
+                "monochrome": imported.fit.monochrome,
+                "toned": imported.fit.toned,
+                "warnings": warnings,
+            });
+            if let Some(hints) = imported.hints.as_ref().filter(|hints| !hints.is_empty()) {
+                result["hints"] = serde_json::to_value(hints)?;
+            }
+            Ok(result)
         }
         Command::Package {
             build,

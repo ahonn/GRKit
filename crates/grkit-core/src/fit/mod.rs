@@ -75,6 +75,9 @@ pub struct Options {
     /// Passes of the final joint refinement of the matrix, the post matrix, and the sectors,
     /// for color effects with a post matrix.
     pub joint_passes: usize,
+    /// For an XMP preset: compose the Standard→reference tone bridge before the preset.
+    /// Ignored for `.cube` and LUT image imports.
+    pub base_bridge: bool,
 }
 
 impl Default for Options {
@@ -89,6 +92,7 @@ impl Default for Options {
             sector_rounds: 5,
             sector_samples: 3000,
             joint_passes: 2,
+            base_bridge: true,
         }
     }
 }

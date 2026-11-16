@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::cube::{delta_e2000, Cube, Encoding, LabConverter, Layout, Rgb};
+use crate::xmp::{self, Hints as PresetHints};
 use crate::{effects, packaging};
 
 use super::*;
@@ -62,6 +63,14 @@ struct Attribution<'a> {
     fit: Errors,
 }
 
+fn attribution_origin(preset: bool) -> &'static str {
+    if preset {
+        "xmp-preset"
+    } else {
+        "cube-fit"
+    }
+}
+
 /// Field order follows the existing effect.json files.
 #[derive(Serialize)]
 struct Definition<'a> {
@@ -80,7 +89,13 @@ struct Definition<'a> {
 }
 
 /// Pretty effect.json text that `effects::compile_definition` accepts.
-fn definition_text(fit: &Fit, request: &Import, input: Encoding, sha256: String) -> Result<String> {
+fn definition_text(
+    fit: &Fit,
+    request: &Import,
+    input: Encoding,
+    sha256: String,
+    preset: bool,
+) -> Result<String> {
     let round = |v: f64| (v * 1000.0).round() / 1000.0;
     let definition = Definition {
         schema: effects::SCHEMA,
@@ -94,7 +109,7 @@ fn definition_text(fit: &Fit, request: &Import, input: Encoding, sha256: String)
         matrix: fit.matrix,
         icon: request.icon,
         attribution: Attribution {
-            origin: "cube-fit",
+            origin: attribution_origin(preset),
             source: request.source,
             source_sha256: sha256,
             input: input.name(),
@@ -310,6 +325,9 @@ pub struct Imported {
     /// Conditions that the user should check before using the effect. The grade is in `fit`
     /// (`Grade::of`, `grade_warning`).
     pub warnings: Vec<String>,
+    /// When the source was an XMP preset: exposure, grain, and white-balance hints that the
+    /// color LUT does not bake in.
+    pub hints: Option<PresetHints>,
 }
 
 /// The inputs that `guess_input` chooses from. Linear is left out: a look LUT does not take
@@ -404,7 +422,8 @@ pub fn guess_input(base_gamma: &[u16; 256], cube: &Cube) -> Encoding {
 /// color LUT: before the fit, it reads the LUT and guesses its input; after it, it checks flaws.
 const IMPORT_FIT: (f64, f64) = (0.01, 0.99);
 
-/// Fits a `.cube` file or HALD PNG over `base_gamma` and returns the fit and its effect.json.
+/// Fits a `.cube` file, HALD PNG, or Lightroom / Camera Raw `.xmp` preset over `base_gamma`
+/// and returns the fit and its effect.json.
 pub fn import(bytes: &[u8], base_gamma: &[u16; 256], request: &Import) -> Result<Imported> {
     import_with_progress(bytes, base_gamma, request, &|_| {})
 }
@@ -423,12 +442,23 @@ pub fn import_with_progress(
     // Reject an invalid ID, name, or icon before the fit, which takes seconds.
     effects::check_identity(request.effect_id, request.name)?;
     effects::icon_pixels(request.icon)?;
-    let cube = Cube::read(bytes)?;
+    let (cube, preset_warnings, hints) = if xmp::looks_like(bytes) {
+        let prepared = xmp::prepare_with(bytes, request.options.base_bridge)?;
+        (prepared.cube, prepared.warnings, Some(prepared.hints))
+    } else {
+        (Cube::read(bytes)?, Vec::new(), None)
+    };
+    let from_preset = hints.is_some();
     let model = Model::new(base_gamma);
-    // The data, not the file name, tells the input.
+    // The data, not the file name, tells the input. An XMP preset is a look on top of the
+    // camera's Standard rendering unless the caller names another encoding.
     let distances = guess_distances(&model, &cube);
     let guess = choose(&distances);
-    let input = request.input.unwrap_or(guess);
+    let input = request.input.unwrap_or(if from_preset {
+        Encoding::Standard
+    } else {
+        guess
+    });
     let target = cube_target(&model, &cube, input, request.exposure);
     progress(IMPORT_FIT.0);
     let fit = fit_with_progress(
@@ -437,8 +467,8 @@ pub fn import_with_progress(
         &request.options,
         &span(progress, IMPORT_FIT.0, IMPORT_FIT.1),
     )?;
-    let text = definition_text(&fit, request, input, packaging::sha256(bytes))?;
-    let mut warnings = Vec::new();
+    let text = definition_text(&fit, request, input, packaging::sha256(bytes), from_preset)?;
+    let mut warnings = preset_warnings;
     let limit = (MATRIX_LIMIT * 8192.0) as i32 - 64;
     if fit.matrix.iter().any(|v| (*v as i32).abs() >= limit) {
         warnings.push(format!(
@@ -472,7 +502,8 @@ pub fn import_with_progress(
     // known input, this warns for 92% of wrong inputs and 8% of right ones; requiring the guess
     // to be `LOG_MARGIN` times closer missed a quarter of the wrong inputs. The data does not
     // tell Standard from sRGB, or F-Log2 from F-Log2 C, so these do not warn about each other.
-    if !similar(guess, input) && distance(input) > distance(guess) {
+    // Preset imports always use Standard unless the caller overrides, so they skip this guess.
+    if !from_preset && !similar(guess, input) && distance(input) > distance(guess) {
         warnings.push(format!(
             "The LUT data suggests {} input, but the import used {}",
             guess.name(),
@@ -481,7 +512,7 @@ pub fn import_with_progress(
     }
     // A guessed log input. The data cannot tell a supported log from another camera's log,
     // which the import then reads as the nearest supported one.
-    if request.input.is_none() && !guess.is_display() {
+    if !from_preset && request.input.is_none() && !guess.is_display() {
         let near: Vec<&str> = distances
             .iter()
             .filter(|(other, d)| {
@@ -535,5 +566,6 @@ pub fn import_with_progress(
         text,
         input,
         warnings,
+        hints,
     })
 }

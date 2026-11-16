@@ -32,6 +32,7 @@ pub mod site;
 #[doc(hidden)]
 pub mod testing;
 mod tiff;
+pub mod xmp;
 
 pub type Files = std::collections::BTreeMap<String, Vec<u8>>;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
