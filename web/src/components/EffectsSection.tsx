@@ -20,15 +20,16 @@ import {
   type Effect,
   type ImportedEffect,
 } from '../catalog';
-import { sentences, type Language, type Strings } from '../i18n';
+import { type Language, type Strings } from '../i18n';
 import { forget, prefetchTable, preview, type PreviewEffect, type Source } from '../preview/render';
 import { DEFAULT_SAMPLE } from '../preview/samples';
 import { PhotoLoader } from '../preview/raw';
 import { editable } from '../import/edit';
-import { missingNativeLooks } from '../import/native';
+import { missingNativeLooks, NATIVE_LOOKS } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
 import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
+import { type EffectFilter } from '../effectGroups';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
 import { EditDialog, type EditDialogHandle } from './EditDialog';
@@ -37,9 +38,96 @@ import { NativeLookDialog, type NativeLookDialogHandle } from './NativeLookDialo
 
 const DEFAULT_PREVIEW = 'portra-400-endura-v1';
 
+type ListedEffect = Effect | CardEffect;
+
+type NativeLook = (typeof NATIVE_LOOKS)[number];
+
+type ListEntry =
+  | { kind: 'header'; key: string; label: string }
+  | { kind: 'effect'; effect: ListedEffect }
+  | { kind: 'native'; look: NativeLook }
+  | { kind: 'import'; key: 'import-color' | 'import-mono' };
+
+type ShelfGroup = 'color' | 'mono' | 'imported' | 'card';
+
 /** The film number, then the print film of a cine look: "5219 · 2393 print". */
 function stockText(stock: (typeof STOCKS)[string] & {}, t: Strings): string {
   return stock.print ? `${stock.film} · ${t.printFilm(stock.print)}` : stock.film;
+}
+
+function groupLabel(group: ShelfGroup, t: Strings): string {
+  switch (group) {
+    case 'color':
+      return t.filterColor;
+    case 'mono':
+      return t.groupMono;
+    case 'imported':
+      return t.groupImported;
+    case 'card':
+      return t.groupCard;
+  }
+}
+
+function matchesFilter(effect: ListedEffect, filter: EffectFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'yours') return Boolean(effect.imported || effect.card);
+  if (filter === 'mono') return effect.monochrome;
+  return !effect.monochrome && !effect.card;
+}
+
+function buildList(
+  catalogEffects: readonly Effect[],
+  imported: readonly ImportedEffect[],
+  cardEffects: readonly CardEffect[],
+  filter: EffectFilter,
+  t: Strings,
+  locked: readonly NativeLook[],
+  canImport: boolean,
+): ListEntry[] {
+  const catalog = catalogEffects.filter((effect) => matchesFilter(effect, filter));
+  const imports = imported.filter((effect) => matchesFilter(effect, filter));
+  const cards = cardEffects.filter((effect) => matchesFilter(effect, filter));
+  const entries: ListEntry[] = [];
+
+  const pushGroup = (key: ShelfGroup, items: readonly ListedEffect[], headed: boolean) => {
+    if (items.length === 0) return;
+    if (headed) entries.push({ kind: 'header', key: `h-${key}`, label: groupLabel(key, t) });
+    for (const effect of items) entries.push({ kind: 'effect', effect });
+  };
+
+  if (filter === 'yours') {
+    pushGroup('imported', imports, true);
+    pushGroup('card', cards, true);
+    return entries;
+  }
+
+  // All: Color then B&W. Color / B&W filters: one flat shelf, no subtype headers.
+  // GR IV unlock tiles sit at the end of Color; Import LUT tiles close Color and B&W.
+  const showHeaders = filter === 'all';
+  const pool = [...catalog, ...imports];
+  const color = pool.filter((effect) => !effect.monochrome);
+  const mono = pool.filter((effect) => effect.monochrome);
+  const showNative = locked.length > 0 && filter !== 'mono';
+  const importColor = canImport && filter !== 'mono';
+  const importMono = canImport && filter !== 'color';
+
+  if (color.length > 0 || showNative || importColor) {
+    if (showHeaders) entries.push({ kind: 'header', key: 'h-color', label: groupLabel('color', t) });
+    for (const effect of color) entries.push({ kind: 'effect', effect });
+    if (showNative) {
+      for (const look of locked) entries.push({ kind: 'native', look });
+    }
+    if (importColor) entries.push({ kind: 'import', key: 'import-color' });
+  }
+
+  if (mono.length > 0 || importMono) {
+    if (showHeaders) entries.push({ kind: 'header', key: 'h-mono', label: groupLabel('mono', t) });
+    for (const effect of mono) entries.push({ kind: 'effect', effect });
+    if (importMono) entries.push({ kind: 'import', key: 'import-mono' });
+  }
+
+  pushGroup('card', cards, true);
+  return entries;
 }
 
 function subscribeFullscreen(change: () => void): () => void {
@@ -53,6 +141,58 @@ function fullscreenEnabled(): boolean {
 }
 
 const neverChanges = () => () => undefined;
+
+/** Wide layout that may show the floating preview when the main one scrolls away. */
+const DESKTOP_PREVIEW = '(min-width: 1024px)';
+
+function subscribeDesktop(change: () => void): () => void {
+  const media = matchMedia(DESKTOP_PREVIEW);
+  media.addEventListener('change', change);
+  return () => media.removeEventListener('change', change);
+}
+
+function desktopPreview(): boolean {
+  return matchMedia(DESKTOP_PREVIEW).matches;
+}
+
+/**
+ * Calls `change` when `element`'s visibility against the viewport may have changed.
+ * `thresholds` defaults to any intersection; pass e.g. `[0, 0.5, 1]` for half-visible checks.
+ */
+function subscribeInView(
+  element: HTMLElement | null,
+  change: () => void,
+  thresholds: number | number[] = 0,
+): () => void {
+  if (!element) return () => undefined;
+  const observer = new IntersectionObserver(() => change(), { threshold: thresholds });
+  observer.observe(element);
+  return () => observer.disconnect();
+}
+
+/** True while any part of `element` intersects the viewport. */
+function elementInView(element: HTMLElement | null, whenMissing: boolean): boolean {
+  if (!element) return whenMissing;
+  const rect = element.getBoundingClientRect();
+  return rect.bottom > 0 && rect.top < innerHeight && rect.right > 0 && rect.left < innerWidth;
+}
+
+/**
+ * Visible area of `element` inside the viewport, as a fraction of its size (0–1).
+ * Height is what matters for the preview float: sideways clipping is rare.
+ */
+function elementVisibleRatio(element: HTMLElement | null): number {
+  if (!element) return 1;
+  const rect = element.getBoundingClientRect();
+  const visible = Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0);
+  if (rect.height <= 0 || visible <= 0) return 0;
+  return Math.min(1, visible / rect.height);
+}
+
+/** The Film Looks `<section>` that wraps this body (labelled by `#effects-label`). */
+function effectsSection(): HTMLElement | null {
+  return document.getElementById('effects-label')?.closest('section') ?? null;
+}
 
 interface Props {
   strings: Strings;
@@ -163,6 +303,27 @@ export function EffectsSection({
     () => null,
   );
   const fullscreen = viewer !== null && fullscreenElement === viewer;
+  const desktop = useSyncExternalStore(subscribeDesktop, desktopPreview, () => false);
+  const subscribeViewer = useCallback(
+    (change: () => void) => subscribeInView(viewer, change, [0, 0.5, 1]),
+    [viewer],
+  );
+  // Show the float once half or more of the preview is off-screen. Missing viewer: keep it hidden.
+  const viewerMostlyVisible = useSyncExternalStore(
+    subscribeViewer,
+    () => elementVisibleRatio(viewer) > 0.5,
+    () => true,
+  );
+  // Hide the float once the whole Film Looks section has scrolled away.
+  const subscribeSection = useCallback(
+    (change: () => void) => subscribeInView(effectsSection(), change),
+    [],
+  );
+  const sectionInView = useSyncExternalStore(
+    subscribeSection,
+    () => elementInView(effectsSection(), false),
+    () => false,
+  );
 
   const shown = effects.find((effect) => effect.id === previewId) ?? effects[0];
   const requested = effects.find((effect) => effect.id === requestedId) ?? shown;
@@ -185,12 +346,23 @@ export function EffectsSection({
         : requested.imported
           ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
           : (t.looks[requested.id] ?? requested.look);
-  // The native looks wait behind one locked row until they are on the page. The row opens
-  // to list them.
+  // Locked GR IV looks wait as Color tiles until the user unlocks them from firmware.
   const locked = nativeLooks && catalog.baseGamma ? missingNativeLooks(imported) : [];
-  const [showLocked, setShowLocked] = useState(false);
+  const [filter, setFilter] = useState<EffectFilter>('all');
   // What the frame waits for: a new photo, or the preview of the selected effect.
   const waiting = decoding ? t.decodingPhoto : isPending ? t.previewRendering(name) : null;
+  const listEntries = buildList(
+    catalog.effects,
+    imported,
+    cardEffects,
+    filter,
+    t,
+    locked,
+    Boolean(catalog.baseGamma),
+  );
+  const visibleEffects = listEntries.flatMap((entry) =>
+    entry.kind === 'effect' ? [entry.effect] : [],
+  );
 
   function toggle(effect: Effect | CardEffect) {
     const next = new Set(checked);
@@ -289,38 +461,51 @@ export function EffectsSection({
     else viewer?.requestFullscreen().catch(() => undefined);
   }
 
+  function renderPreview() {
+    if (!shown || !previewed) return null;
+    return (
+      <ErrorBoundary
+        resetKey={`${source.key}\n${shown.id}\n${previewAttempt}`}
+        fallback={
+          <div className="frame">
+            <div className="frame-placeholder">
+              <p>{t.previewError}</p>
+              <button type="button" className="button small" onClick={retryPreview}>
+                {t.retryPreview}
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <Suspense fallback={<Placeholder text={sourceLabel} busy />}>
+          <PreviewFrame
+            source={source}
+            effect={previewed}
+            compareLabel={t.compare}
+            busy={isPending || decoding}
+            status={waiting}
+            originalLabel={t.original}
+            originalAlt={sourceLabel}
+            effectName={shown.name}
+          />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // Desktop only: a corner copy once half the main viewer is off-screen, while the section remains.
+  const showFloat =
+    desktop &&
+    !viewerMostlyVisible &&
+    sectionInView &&
+    !fullscreen &&
+    Boolean(shown && previewed);
+
   return (
     <div className="section-body effects-body" ref={ownPhoto}>
       <div className="preview-row">
         <div className="viewer" ref={setViewer}>
-          {shown && previewed && (
-            <ErrorBoundary
-              resetKey={`${source.key}\n${shown.id}\n${previewAttempt}`}
-              fallback={
-                <div className="frame">
-                  <div className="frame-placeholder">
-                    <p>{t.previewError}</p>
-                    <button type="button" className="button small" onClick={retryPreview}>
-                      {t.retryPreview}
-                    </button>
-                  </div>
-                </div>
-              }
-            >
-              <Suspense fallback={<Placeholder text={sourceLabel} busy />}>
-                <PreviewFrame
-                  source={source}
-                  effect={previewed}
-                  compareLabel={t.compare}
-                  busy={isPending || decoding}
-                  status={waiting}
-                  originalLabel={t.original}
-                  originalAlt={sourceLabel}
-                  effectName={shown.name}
-                />
-              </Suspense>
-            </ErrorBoundary>
-          )}
+          {renderPreview()}
           {canFullscreen && shown && (
             <button
               type="button"
@@ -351,88 +536,162 @@ export function EffectsSection({
         </div>
 
         <div className="preview-side">
-          <div className="field">
-            <span className="field-label">{t.previewing}</span>
-            <span className="previewing">{name}</span>
-            {requested && STOCKS[requested.id] && (
-              <span className="effect-stock">{stockText(STOCKS[requested.id]!, t)}</span>
-            )}
-            {look && <span className="previewing-look">{look}</span>}
-          </div>
-
-          <div className="field photo-field">
-            <span className="field-label">{t.photoSource(sourceLabel)}</span>
-            <label htmlFor="photo-input" className="upload">
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 16V4" />
-                <path d="M7 9l5-5 5 5" />
-                <path d="M4 20h16" />
-              </svg>
-              <span>{t.upload}</span>
-            </label>
-            <input
-              id="photo-input"
-              className="visually-hidden"
-              type="file"
-              accept=".dng,image/x-adobe-dng"
-              onChange={openPhoto}
-            />
-            {decoding && (
-              <p role="status" className="status">
-                {t.decodingPhoto}
+          <div className="preview-meta">
+            <div className="preview-copy">
+              <span className="field-label">{t.previewing}</span>
+              <span className="previewing">
+                {name}
+                {requested && STOCKS[requested.id] && (
+                  <span className="effect-stock">{stockText(STOCKS[requested.id]!, t)}</span>
+                )}
+              </span>
+              {look && <span className="previewing-look">{look}</span>}
+              {requested && !requested.imported && t.lookHints[requested.id] && (
+                <span className="previewing-hint">{t.lookHints[requested.id]}</span>
+              )}
+              {requested && onCard && (
+                <ChangeBadge
+                  on={onCard.has(requested.id)}
+                  checked={checked.has(requested.id)}
+                  changed={changedOnCard?.has(requested.id)}
+                  strings={t}
+                />
+              )}
+              {requested?.imported && (
+                <div className="preview-actions">
+                  {editable(requested) && (
+                    <button
+                      type="button"
+                      className="link-button"
+                      onClick={() => editor.current?.open(requested)}
+                    >
+                      {t.editEffect}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => onRemove(requested)}
+                  >
+                    {t.removeEffect}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="preview-controls">
+              <p className="note preview-note">
+                {/* The landing hero credits the sample photo where it first shows. */}
+                {t.previewNote}
               </p>
-            )}
-            {photoError && (
-              <p role="alert" className="status error">
-                {t.photoError}
-              </p>
-            )}
-            {source !== DEFAULT_SAMPLE && (
-              <button type="button" className="button small" onClick={showSample}>
-                {t.useSample}
-              </button>
-            )}
-            <p className="note">
-              {/* The landing hero credits the sample photo where it first shows. */}
-              {sentences(t.uploadNote, t.previewNote)}
-            </p>
+              <div className="preview-control-row">
+                {requested && (
+                  <button
+                    type="button"
+                    className="button small package-toggle"
+                    aria-pressed={checked.has(requested.id)}
+                    disabled={!checked.has(requested.id) && checked.size >= MAX_EFFECTS}
+                    onClick={() => toggle(requested)}
+                  >
+                    {checked.has(requested.id) ? t.removeFromPackage : t.includeInPackage}
+                  </button>
+                )}
+                <label htmlFor="photo-input" className="button small upload">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 16V4" />
+                    <path d="M7 9l5-5 5 5" />
+                    <path d="M4 20h16" />
+                  </svg>
+                  <span>{t.upload}</span>
+                </label>
+                <input
+                  id="photo-input"
+                  className="visually-hidden"
+                  type="file"
+                  accept=".dng,image/x-adobe-dng"
+                  onChange={openPhoto}
+                />
+                {source !== DEFAULT_SAMPLE && (
+                  <button type="button" className="button small" onClick={showSample}>
+                    {t.useSample}
+                  </button>
+                )}
+              </div>
+              {decoding && (
+                <p role="status" className="status">
+                  {t.decodingPhoto}
+                </p>
+              )}
+              {photoError && (
+                <p role="alert" className="status error">
+                  {t.photoError}
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="effects-pick">
-        <div className="toolbar">
-          <p>
+        <div className="toolbar effects-toolbar">
+          <p className="effects-count">
             {t.count(selectable)[0]}
             <span className="count">{checked.size}</span>
             {t.count(selectable)[1]}
             {listed > MAX_EFFECTS && t.countTotal(listed)}
           </p>
-          <div>
+          <div className="effects-filters" role="group" aria-label={t.effects}>
+            {(
+              [
+                ['all', t.filterAll],
+                ['color', t.filterColor],
+                ['mono', t.filterMono],
+                ['yours', t.filterYours],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className="filter-seg"
+                aria-pressed={filter === id}
+                onClick={() => setFilter(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="effects-bulk">
             <button
               type="button"
-              className="button"
-              onClick={() =>
-                onSelectionChange(
-                  new Set(
-                    [...effects, ...cardEffects].map((effect) => effect.id).slice(0, MAX_EFFECTS),
-                  ),
-                )
-              }
+              className="button small"
+              onClick={() => {
+                const next = new Set(checked);
+                for (const effect of visibleEffects) {
+                  if (next.size >= MAX_EFFECTS) break;
+                  next.add(effect.id);
+                }
+                onSelectionChange(next);
+              }}
             >
               {t.selectAll}
             </button>
-            <button type="button" className="button" onClick={() => onSelectionChange(new Set())}>
+            <button
+              type="button"
+              className="button small"
+              onClick={() => {
+                const drop = new Set(visibleEffects.map((effect) => effect.id));
+                onSelectionChange(new Set([...checked].filter((id) => !drop.has(id))));
+              }}
+            >
               {t.clear}
             </button>
           </div>
@@ -450,32 +709,62 @@ export function EffectsSection({
           {onCard && <p className="note">{t.effectsCardNote}</p>}
         </div>
 
-        <ul className="effects-list" aria-label={t.effects}>
-          {[...effects, ...cardEffects].map((effect) => {
+        <div className="effects-shelf" aria-label={t.effects}>
+          {listEntries.map((entry) => {
+            if (entry.kind === 'header') {
+              return (
+                <div key={entry.key} className="shelf-label" role="presentation">
+                  {entry.label}
+                </div>
+              );
+            }
+            if (entry.kind === 'import') {
+              return (
+                <button
+                  key={entry.key}
+                  type="button"
+                  className="shelf-tile action-tile import-tile"
+                  onClick={openImport}
+                >
+                  <span className="tile-body">
+                    <span className="import-mark" aria-hidden="true">
+                      +
+                    </span>
+                    <span className="tile-name">{t.importOpen}</span>
+                  </span>
+                </button>
+              );
+            }
+            if (entry.kind === 'native') {
+              const { look } = entry;
+              return (
+                <button
+                  key={look.id}
+                  type="button"
+                  className="shelf-tile action-tile native-tile"
+                  aria-label={t.nativeUnlockOf(look.name)}
+                  onClick={openUnlock}
+                >
+                  <span className="tile-body">
+                    <CoverIcon cover={look.cover} />
+                    <span className="tile-name">{look.name}</span>
+                  </span>
+                  <span className="tile-meta">{t.nativeNeeds}</span>
+                </button>
+              );
+            }
+            const effect = entry.effect;
             const isChecked = checked.has(effect.id);
             const previewed = effect.id === requested?.id;
-            const stock = STOCKS[effect.id];
-            const body = (
-              <>
-                <EffectIcon effect={effect} />
-                <span className="row-text">
-                  <span className="row-name">{effect.name}</span>
-                  <span className="row-meta">
-                    {effect.card ? t.cardOnlyEffect : effect.monochrome ? t.mono : t.color}
-                    {stock && ` · ${stockText(stock, t)}`}
-                  </span>
-                </span>
-              </>
-            );
             return (
-              <li
+              <div
                 key={effect.id}
-                className="effect-row"
+                className="shelf-tile"
                 data-checked={isChecked || undefined}
                 data-previewed={previewed || undefined}
               >
                 <input
-                  className="row-check"
+                  className="tile-check"
                   type="checkbox"
                   checked={isChecked}
                   disabled={!isChecked && checked.size >= MAX_EFFECTS}
@@ -483,11 +772,15 @@ export function EffectsSection({
                   onChange={() => toggle(effect)}
                 />
                 {effect.card ? (
-                  <div className="row-body">{body}</div>
+                  <div className="tile-body">
+                    <EffectIcon effect={effect} />
+                    <span className="tile-name">{effect.name}</span>
+                    <span className="tile-meta">{t.cardOnlyEffect}</span>
+                  </div>
                 ) : (
                   <button
                     type="button"
-                    className="row-body"
+                    className="tile-body"
                     aria-pressed={previewed}
                     aria-label={t.previewOf(effect.name)}
                     onPointerEnter={() => prefetch(effect)}
@@ -495,97 +788,36 @@ export function EffectsSection({
                     onPointerDown={() => startPreview(effect)}
                     onClick={() => showEffect(effect)}
                   >
-                    {body}
-                  </button>
-                )}
-                {onCard && (
-                  <ChangeBadge
-                    on={onCard.has(effect.id)}
-                    checked={isChecked}
-                    changed={changedOnCard?.has(effect.id)}
-                    strings={t}
-                  />
-                )}
-                {effect.imported && editable(effect) && (
-                  <button
-                    type="button"
-                    className="row-remove"
-                    aria-label={t.editOf(effect.name)}
-                    onClick={() => editor.current?.open(effect)}
-                  >
-                    {t.editEffect}
+                    <EffectIcon effect={effect} />
+                    <span className="tile-name">{effect.name}</span>
                   </button>
                 )}
                 {effect.imported && (
-                  <button
-                    type="button"
-                    className="row-remove"
-                    aria-label={t.removeOf(effect.name)}
-                    onClick={() => onRemove(effect)}
-                  >
-                    {t.removeEffect}
-                  </button>
+                  <div className="tile-actions">
+                    {editable(effect) && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        aria-label={t.editOf(effect.name)}
+                        onClick={() => editor.current?.open(effect)}
+                      >
+                        {t.editEffect}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="link-button"
+                      aria-label={t.removeOf(effect.name)}
+                      onClick={() => onRemove(effect)}
+                    >
+                      {t.removeEffect}
+                    </button>
+                  </div>
                 )}
-              </li>
+              </div>
             );
           })}
-          {locked.length > 0 && (
-            <li className="effect-row native-row native-group">
-              <svg className="native-lock" viewBox="0 0 20 20" aria-hidden="true">
-                <rect x="4" y="9" width="12" height="9" rx="1.5" />
-                <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
-              </svg>
-              <button
-                type="button"
-                className="row-body"
-                aria-expanded={showLocked}
-                onClick={() => setShowLocked(!showLocked)}
-              >
-                <span className="native-stack" aria-hidden="true">
-                  {locked.slice(0, 3).map((look) => (
-                    <span key={look.id} className="native-stack-cover">
-                      <CoverIcon cover={look.cover} />
-                    </span>
-                  ))}
-                </span>
-                <span className="row-text">
-                  <span className="row-name">
-                    {t.nativeGroup} · {t.nativeCount(locked.length)}
-                  </span>
-                  <span className="row-meta">{t.nativeNeeds}</span>
-                </span>
-                <span className="native-chevron" aria-hidden="true" />
-              </button>
-              <button type="button" className="row-remove native-action" onClick={openUnlock}>
-                {t.nativeUnlock}
-              </button>
-            </li>
-          )}
-          {showLocked &&
-            locked.map((look) => (
-              <li key={look.id} className="effect-row native-row native-item">
-                <button
-                  type="button"
-                  className="row-body"
-                  aria-label={t.nativeUnlockOf(look.name)}
-                  onClick={openUnlock}
-                >
-                  <CoverIcon cover={look.cover} />
-                  <span className="row-name">{look.name}</span>
-                </button>
-              </li>
-            ))}
-          {catalog.baseGamma && (
-            <li className="effect-row import-row">
-              <button type="button" className="row-body" onClick={openImport}>
-                <span className="import-mark" aria-hidden="true">
-                  +
-                </span>
-                <span className="row-name">{t.importOpen}</span>
-              </button>
-            </li>
-          )}
-        </ul>
+        </div>
         {catalog.baseGamma && (
           <ImportDialog
             ref={importer}
@@ -608,6 +840,11 @@ export function EffectsSection({
           />
         )}
       </div>
+      {showFloat && (
+        <aside className="preview-float" aria-hidden="true">
+          {renderPreview()}
+        </aside>
+      )}
     </div>
   );
 }

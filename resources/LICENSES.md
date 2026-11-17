@@ -38,6 +38,38 @@ HP5 Plus 400 derives from a HaldCLUT of [t3mujinpack](https://github.com/t3mujin
 
 This effect is licensed under the MIT License. The copyright and permission notice is in "t3mujinpack license" below.
 
+### Film LUTs Collection (G'MIC)
+
+Neopan Acros, T-Max 400, Delta 100, XP2 Super, Astia 100F, Precisa 100, Portra 160 VC, Fuji 160C, and Vista 200 derive from cubes of the [Film LUTs Collection](https://github.com/YahiaAngelo/Film-Luts) by Yahia Angelo (G'MIC film emulations).
+
+These effects are licensed under the MIT License. The copyright and permission notice is in "Film LUTs Collection license" below. Film, camera, and brand names in the collection remain trademarks of their owners.
+
 ### Names
 
 Effect names and film, paper, and filter names identify the simulated materials. Some of these names are trademarks of their owners. GRKit is not affiliated with or endorsed by RICOH IMAGING COMPANY, LTD., Eastman Kodak Company, Kodak Alaris, Fujifilm, HARMAN technology Limited (Ilford Photo), or CineStill Film. The simulations are models of published data or hand-made styles, not measured equivalents of the products.
+
+## Film LUTs Collection license
+
+```
+MIT License
+
+Copyright (c) 2024 Yahia
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

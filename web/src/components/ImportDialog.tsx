@@ -334,7 +334,7 @@ export function ImportDialog({
         <form className="dialog-body" onSubmit={submit}>
           <p className="note">{t.importNote}</p>
 
-          <label htmlFor={`${ids}-file`} className="upload" aria-disabled={importing}>
+          <label htmlFor={`${ids}-file`} className="button upload" aria-disabled={importing}>
             <span className="import-file-name">{file?.name ?? t.importFile}</span>
           </label>
           <input

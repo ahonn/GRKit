@@ -42,11 +42,13 @@ describe('STRINGS', () => {
       steps: STRINGS[language].steps.map((parts) => parts.filter((p) => p.startsWith('`'))),
       updateSteps: STRINGS[language].updateSteps.map((parts) => parts.filter((p) => p.startsWith('`'))),
       looks: Object.keys(STRINGS[language].looks).sort(),
+      lookHints: Object.keys(STRINGS[language].lookHints).sort(),
     });
     expect(shape('zh-Hans')).toEqual(shape('en'));
     expect(shape('zh-Hant')).toEqual(shape('en'));
     expect(shape('ja')).toEqual(shape('en'));
     expect(shape('ko')).toEqual(shape('en'));
+    expect(Object.keys(STRINGS.en.lookHints).sort()).toEqual(Object.keys(STRINGS.en.looks).sort());
   });
 
   it('gives each language the same fast-boot steps and help', () => {

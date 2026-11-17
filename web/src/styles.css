@@ -1084,14 +1084,14 @@ label.download[aria-disabled='true'] {
 
 .preview-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
 }
 
 .viewer {
   position: relative;
-  flex: 1 1 520px;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1196,11 +1196,46 @@ label.download[aria-disabled='true'] {
 
 
 .preview-side {
-  flex: 0 1 300px;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+}
+
+.preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+}
+
+.preview-copy {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.preview-controls {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  max-width: 28rem;
+  text-align: right;
+}
+
+.preview-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 
 .field {
@@ -1215,9 +1250,19 @@ label.download[aria-disabled='true'] {
 }
 
 .previewing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 0.5em;
   font-family: var(--display);
   font-weight: 700;
   font-size: 26px;
+  line-height: 1.15;
+}
+
+.preview-note {
+  margin: 0;
+  max-width: 42rem;
 }
 
 .upload {
@@ -1225,10 +1270,6 @@ label.download[aria-disabled='true'] {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 48px;
-  border: 1px solid var(--ink);
-  font-size: 15px;
-  font-weight: 500;
   cursor: pointer;
 }
 
@@ -1309,8 +1350,8 @@ td input[type='checkbox'] {
 }
 
 .effect-stock {
-  display: block;
   font-family: var(--mono);
+  font-weight: 400;
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
@@ -2029,8 +2070,243 @@ code {
   width: min(460px, calc(100vw - 32px));
 }
 
-/* Effects: one row for each effect. A click on a row previews it. The checkbox selects it for
-   the package, and the change badge and Remove sit at the row end. */
+.effects-toolbar {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper);
+  padding-block: 8px;
+  margin-block: -8px 0;
+}
+
+.effects-count {
+  margin: 0;
+}
+
+.effects-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--ink);
+}
+
+.filter-seg {
+  padding: 6px 12px;
+  border: 0;
+  border-right: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.filter-seg:last-child {
+  border-right: 0;
+}
+
+.filter-seg[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+.effects-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.package-toggle[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+/* Film shelf: cover tiles. Click the cover to preview; the corner checkbox adds to the package.
+   At full page width, ten tiles fit a row; on narrower screens auto-fill wraps. */
+.effects-shelf {
+  --shelf-gap-x: 8px;
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(max(76px, calc((100% - 9 * var(--shelf-gap-x)) / 10)), 1fr)
+  );
+  gap: 10px var(--shelf-gap-x);
+  align-items: stretch;
+  margin: 0;
+  padding: 0;
+}
+
+.shelf-label {
+  grid-column: 1 / -1;
+  padding: 12px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.shelf-label:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.shelf-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 140px;
+  min-width: 0;
+  padding: 12px 4px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.shelf-tile[data-checked] {
+  background: var(--selected);
+}
+
+.shelf-tile[data-previewed] {
+  border-color: var(--ink);
+}
+
+button.shelf-tile.action-tile {
+  border-style: dashed;
+  border-color: var(--ink-2);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.shelf-tile.native-tile .effect-icon {
+  opacity: 0.55;
+}
+
+.tile-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.tile-body {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+button.tile-body {
+  cursor: pointer;
+}
+
+.tile-body:focus-visible {
+  outline-offset: 2px;
+}
+
+.tile-body .effect-icon,
+.tile-body .import-mark {
+  flex: none;
+  width: 64px;
+  height: 64px;
+}
+
+.tile-body .import-mark {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ink-2);
+  font-size: 28px;
+  line-height: 1;
+  color: var(--ink-2);
+}
+
+.tile-name {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 2.5em;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.tile-meta {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--muted);
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.native-unlock-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.native-unlock-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.native-unlock-list .effect-icon {
+  width: 40px;
+  height: 40px;
+}
+
+/* Legacy row styles kept for native/import dialogs that still use them. */
 .effects-list {
   list-style: none;
   margin: 0;
@@ -2050,7 +2326,6 @@ code {
   background: var(--selected);
 }
 
-/* The row of the look in the preview: a full ring, so it shows on checked rows too. */
 .effect-row[data-previewed] {
   box-shadow: inset 0 0 0 2px var(--ink);
 }
@@ -2314,69 +2589,77 @@ button.row-body {
   font-size: 18px;
 }
 
-/* The selection controls and the list, under the preview on narrow screens. */
+/* The selection controls and the shelf, under the preview. */
 .effects-pick {
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-width: 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--ink);
 }
 
-/* On narrow screens the list sits under the preview. The picture stays in view, under the
-   section heading, while the user scrolls the list, so a tap on a look shows it. It takes at
-   most two fifths of the window height. */
+/* On narrow screens the preview sits above the shelf and scrolls away with the page. */
 @media (max-width: 1023.98px) {
-  .effects-body .preview-row {
-    display: contents;
-  }
-
   .effects-body .viewer {
-    position: sticky;
-    top: 16px;
-    /* Under the section heading, which is 5. */
-    z-index: 4;
     flex: none;
     align-self: center;
     width: min(100%, 60svh);
-    padding-bottom: 8px;
-    background: var(--paper);
   }
 }
 
-@media (max-width: 900px) {
-  .effects-body .viewer {
-    /* Under the heading, which spans the page here: its line and its padding. */
-    top: calc(var(--stuck-heading-line) + 24px);
-  }
-}
-
-/* On wide screens the list sits beside the preview, and the preview stays in view while the
-   user scrolls the list. The DOM order stays preview first, so the keyboard order does not
-   change. */
+/* Wide screens: large preview on top, meta under it, film shelf full width below. */
 @media (min-width: 1024px) {
   .effects-body {
-    display: grid;
-    /* The preview takes three fifths. The list keeps room for an effect name and its
-       note on one line each, and for the unlock row of the Cinema looks. */
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    align-items: start;
-  }
-
-  .effects-body .preview-row {
-    position: sticky;
-    top: 16px;
+    display: flex;
     flex-direction: column;
-    flex-wrap: nowrap;
+    gap: 28px;
   }
 
-  .effects-body .viewer,
-  .effects-body .preview-side {
-    flex: none;
+  .effects-body .viewer {
     width: 100%;
+    max-width: none;
   }
 
   .effects-body .toolbar > div {
     flex-wrap: wrap;
+  }
+}
+
+/* When the main preview has scrolled away on a wide screen, a small copy stays bottom-right. */
+.preview-float {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .preview-float {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    display: block;
+    /* Scale with the viewport: ~1/3 of the width, clamped for small and large desktops. */
+    width: clamp(280px, 32vw, 560px);
+    border: 1px solid var(--ink);
+    border-right: 0;
+    border-bottom: 0;
+    background: var(--paper);
+  }
+
+  .preview-float .frame-fullscreen {
+    display: none;
+  }
+}
+
+@media (min-width: 1440px) {
+  .preview-float {
+    width: clamp(360px, 28vw, 640px);
+  }
+}
+
+@media (min-width: 1920px) {
+  .preview-float {
+    width: clamp(420px, 24vw, 720px);
   }
 }
 
@@ -2398,10 +2681,11 @@ button.row-body {
   color: var(--ink-2);
 }
 
-/* The photo of the preview: its source, the DNG button, and the notes. */
-.photo-field {
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
+.previewing-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 36em;
 }
 
 /* A new preview on its way: the old picture dims under a status line. */

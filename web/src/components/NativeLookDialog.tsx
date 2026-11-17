@@ -209,7 +209,7 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
           </li>
           <li>
             <p className="status">{t.nativeStepChoose}</p>
-            <button type="button" className="upload" disabled={reading} onClick={() => void pick()}>
+            <button type="button" className="button upload" disabled={reading} onClick={() => void pick()}>
               {t.nativeChoose}
             </button>
             <input

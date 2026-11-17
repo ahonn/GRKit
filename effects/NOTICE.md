@@ -32,6 +32,15 @@ HP5 Plus 400 derives from a HaldCLUT of the darktable styles of
 License. `sources/T3MUJINPACK_LICENSE.txt` contains its notice. This effect definition is also
 licensed under the MIT License.
 
+## Film LUTs Collection (G'MIC)
+
+Neopan Acros, T-Max 400, Delta 100, XP2 Super, Astia 100F, Precisa 100, Portra 160 VC, Fuji 160C,
+and Vista 200 derive from cubes of the
+[Film LUTs Collection](https://github.com/YahiaAngelo/Film-Luts) by Yahia Angelo (G'MIC film
+emulations), licensed under the MIT License. `sources/FILM_LUTS_LICENSE.txt` contains its notice.
+These effect definitions are also licensed under the MIT License. Film, camera, and brand names
+in the collection remain trademarks of their owners; the collection does not claim endorsement.
+
 ## Names and limits
 
 Effect names and film, paper, and filter names identify the simulated materials. Some of these
