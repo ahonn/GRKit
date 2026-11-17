@@ -33,17 +33,17 @@
   "files": [
     {
       "path": "SCRIPT/GRKIT/CORE.BIN",
-      "sha256": "3e20006ec8874ccb72d0985132b412648e1c1bbd577c3c132ece0fade0a67926",
+      "sha256": "8646b9ce8258d1fb38a9ae8e1602f6d7b33a157447578312aa538456b17a269b",
       "size": 622908
     },
     {
       "path": "SCRIPT/GRKIT/F636120.BIN",
-      "sha256": "38e97873713865f286d3832824a1cffdcba6baa2a3b3a476fa941bdc319720c6",
+      "sha256": "4ebeb751e1e10c2a0723a828be0fd5718a3616a928111d7340b5a392c7545322",
       "size": 551376
     },
     {
       "path": "SCRIPT/GRKIT/I636120.BIN",
-      "sha256": "4604fdc731015e1d6d32f8ee0a36a40feeb05c9c5d7299860c49cf214858f3be",
+      "sha256": "b8581cf3dbd6f5142367948e32b80e4f9eb0a0150d067d6986248785473d1ee4",
       "size": 1024
     },
     {
@@ -73,7 +73,7 @@
     }
   ],
   "firmware_sha256": "7563d7e462f0c53b6ab2fbab7cdfbbb57151a41192ee82f4f3a2108f9d77650d",
-  "generated_header_sha256": "74aa604e85865e7a8a28d4705921a767c2a8b01f10fcd7066c8f5ceb9627a79d",
+  "generated_header_sha256": "2253bbd4d647e0fffb7f2fe2f9fba791254b92955908311fb73ea4dd240519c7",
   "points": {
     "capture.aspect": 38,
     "capture.crop": 13,
@@ -91,8 +91,8 @@
   "source_dirty": null,
   "source_revision": null,
   "source_sha256": {
-    "Cargo.lock": "e293c160786323643072ea9ebc42afe54dd243ba76ad4d08c23f957102662e06",
-    "Cargo.toml": "e27aaf597f29f6ed2cb31b03c3f13162b65d803a66e935f0585d4ca53e466209",
+    "Cargo.lock": "14ec6f8248662d7030caa8b637184e16633724beb189f03dcc771913fd00f3c0",
+    "Cargo.toml": "851dc1e7df071cf969f8e1912ad85de8a3afa6d9b418b028f5a6d227c5f65466",
     "crates/grkit-build/Cargo.toml": "9a8c29261f78944ee9e1eed9ee46b8b39110ebce1881b09348308ae7da75b0c9",
     "crates/grkit-build/src/arm.rs": "24f56cbef63723482b65d7a57466965c36a87dad2c6da417ad1fcd7d48832228",
     "crates/grkit-build/src/arm/decode.rs": "02fb202954eeda15b9f84dbfc8056717ac39684881180167d989051d970177e9",
@@ -125,7 +125,7 @@
     "crates/grkit-core/assets/RobotoCondensed-LICENSE.txt": "0e4cc6ece88573545be2ed25835363662a6182ba4a4c1b5c8feda52add30e8a6",
     "crates/grkit-core/assets/RobotoCondensed-Light.ttf": "e00475060f292e7a7254bd9a882cb744d97574b533d3da0fff203faf3d1f55a2",
     "crates/grkit-core/src/abi.rs": "bfc6b6245a2f5194ca2cddae1f070b25e5debb5a2e6e6ea76a9816afec12aee2",
-    "crates/grkit-core/src/artwork.rs": "a53a86a0a4c30c4568cc323e1176e286adafb40e54c69916842d83b3eb16dd5a",
+    "crates/grkit-core/src/artwork.rs": "8afc0719afa2df48551f2593fd9c966f69ce2afc59438f0fc72126b291b882f6",
     "crates/grkit-core/src/aspect/geometry.rs": "9b3162fd0a29870205207708fd160bfb970347056e7c07ba548af9770e6bb1df",
     "crates/grkit-core/src/aspect/header.rs": "d3dca82cc9099478be62b4101b9f903a0424ed98beccd23d0236c6fcd1a531d0",
     "crates/grkit-core/src/aspect/mod.rs": "02d22e350f97874d7ddc69423e9b19fc29968f569964dbf6f970da05b0af4c83",
@@ -135,10 +135,10 @@
     "crates/grkit-core/src/card.rs": "38328c72c9af5a4989e1b4259ede77f64b7c0d55e9ad78149240ce3044c3915c",
     "crates/grkit-core/src/color.rs": "1c81635b14bbd5086ba91a79d85b6fdbf8b14950f871fac95b434e8883a2fcb8",
     "crates/grkit-core/src/cube.rs": "9b5b523700d12a0311335d707fecd0a96a35478dca3c5a66b7f473a3c3149f20",
-    "crates/grkit-core/src/effects.rs": "ada8ed519a6f2d707f41100577955747237d83cd1277529ee7f7ad90e4af3f89",
+    "crates/grkit-core/src/effects.rs": "699bdef012134c53a55009b4d17b1814f4a50fe56c420d3d6f6c7259ca2e23ff",
     "crates/grkit-core/src/firmware.rs": "dfb9d05ec1d48896a719e7995f7f41a2ad990990095363a0cea01f4ca78631b1",
-    "crates/grkit-core/src/fit/import.rs": "65625344f9dc68c245e79ac4848616f5bfd00c5ff8dcca38267b3cd0002332e8",
-    "crates/grkit-core/src/fit/mod.rs": "30a98184b07899e0bb7d4182ab00b1541ddc5eb2c9c230a198d55883e0d6dede",
+    "crates/grkit-core/src/fit/import.rs": "a093b92658e09022c4f144c1764d307fa43a06e7860ac72adeef2d2f8a026aae",
+    "crates/grkit-core/src/fit/mod.rs": "f40e2e649af8906d56f501c6fe2411978c72c8e368694e1d143d198bea76f7c0",
     "crates/grkit-core/src/fit/model.rs": "f0ad7e8c59ca4a426006cab983118073f8a0a36e2c4b89c05d59c042299e963e",
     "crates/grkit-core/src/fit/sectors.rs": "9e59aec5c696cbcf8c521fd2b71ac7b6e5ab7336e5035412822dbcfcb5642a0b",
     "crates/grkit-core/src/fit/solve.rs": "6bcadffc3f143d50b70ba4cd4802523a8afc28800c7b1a247140a581d8093e55",
@@ -149,7 +149,7 @@
     "crates/grkit-core/src/imports.rs": "681ccff0db9b32b93172e658d1f7f85361471f78ef6332a6d5ea3703b953fdcc",
     "crates/grkit-core/src/korean_font.txt": "3c63ca3341d581cbf9018e4a8b08671d43b3fd82d58623b174712be9556f1908",
     "crates/grkit-core/src/language.rs": "a4c0019a3735f383afef555a707bc00cc85630edcad58932ee59c9fa9fdde713",
-    "crates/grkit-core/src/lib.rs": "bede5721a4aaf595272b56900b3ec86d4e7e8c0d5eb269a2528ff52db44d3ee9",
+    "crates/grkit-core/src/lib.rs": "b7fcbcb2d8280cb01ea90ef4b8a86485d3d31bc92a27758d0988e85c34b778c4",
     "crates/grkit-core/src/lut_image.rs": "4a66bdbd1a085534bbfbe3c814f06721871e5bb24d67690aee89f27fccc3d6b8",
     "crates/grkit-core/src/menu_text.rs": "119c9d54caf887b10cf01295a0a273234b696f7a6f5dccac7f0f8dda2ded9e30",
     "crates/grkit-core/src/modules.rs": "11f98875e47d4987b4efe2a3f6a9f1c2fd97926f386be93be853fbef1b264a69",
@@ -161,8 +161,9 @@
     "crates/grkit-core/src/native_tone.rs": "719858c8ad497378bfbdcac6ea978c35332db197e23b3fdf602848a9983239f0",
     "crates/grkit-core/src/packaging.rs": "9f183c128717349423d17b8ae94396cb6813a4acbca95188d614b77ba9d7974f",
     "crates/grkit-core/src/png.rs": "4472f768b82a53ab180e46498819a5daeb9d9ef39727e7595a0a511afeca552e",
-    "crates/grkit-core/src/recipes.rs": "5431a5dba06954408ea98ea3d932b7f3d0095517c9465d3039aa7e41ce3fab2b",
+    "crates/grkit-core/src/recipes.rs": "a229932271c973ec4635b91342fb5799ba8a70149d86e750f41d796769f0095c",
     "crates/grkit-core/src/recipes/file.rs": "7680e6d4a12e9f6ec1818a98cedb338cb5cb1c85e98a4e9078028f8793c781dd",
+    "crates/grkit-core/src/recipes/from_preset.rs": "1ab4722465a4bcc12ad8e4724f2774eeed242b8fe50c8a0ada018abf8bea885a",
     "crates/grkit-core/src/recipes/layout.rs": "341a056eedbaec03e458aae08a477f28498d086bb2033bf88417d978a7a1d00e",
     "crates/grkit-core/src/recipes/library.rs": "0ebb28853c27d3ab5d6ae317f4d150eab145628fd3117bae03abf50d4db5dd7e",
     "crates/grkit-core/src/recipes/model.rs": "0435d646a207f6d3d1319488267f040a7fbe000142d876fcfbbadbf511ae9033",
@@ -179,6 +180,13 @@
     "crates/grkit-core/src/site.rs": "e08651124c57dd4740acbce5b60e955901795d544bf6f5f3b1f9c14f136d3735",
     "crates/grkit-core/src/testing.rs": "6baa3122ee9c260c6033fb1a9d3f889bb7b324fe7e2941575942fbe67ee26070",
     "crates/grkit-core/src/tiff.rs": "aa3e294faaaba567b6bee4092a3a28b627bdc11fc01b30af68c170c08b4afd75",
+    "crates/grkit-core/src/xmp/bridge.rs": "818c997720e1f6a4d3910287414c36972cbd91688cf243bc38b676c899247a5b",
+    "crates/grkit-core/src/xmp/mod.rs": "a5063296752148c797a174618cb03089aae6192da874cbfacca02553be7ff0d0",
+    "crates/grkit-core/src/xmp/parse.rs": "fd7915ca1686ae0a788135f356cb000149ffc29dba2fbab83fa5eb507edc453d",
+    "crates/grkit-core/src/xmp/table.rs": "e4355d9a41ad604b4274644b18a68a71f7964b3272c1124e61255a64a06e04fc",
+    "crates/grkit-core/src/xmp/tone_data.rs": "27c7e01860d587400c558441c9451e44aefdd4a31a42692a04c62d2d3f98fa58",
+    "crates/grkit-core/src/xmp/transform.rs": "686156ab0eb213e03bcc620c3d4ea78e8406574f154a401f9363f3c908d58280",
+    "crates/grkit-core/src/xmp/xml.rs": "c7882822b9fab062a6bd0d4c141f6b47fc2d67788ba68f0b2682f957e1f682a4",
     "runtime/abi.h": "735b55d5433e8a8c1cc2c07598ef1bef4901f72256f96b50f01c045a5fd8ad8b",
     "runtime/about.h": "37df00143bd042f2210949773623ecca4c83e135b1ec4cc07da448cec137051c",
     "runtime/aspect.h": "08c9ae432a43f48a781cd2a71fc85276664e7c5fbece5784f127fd998e0e505a",
@@ -298,5 +306,5 @@
     "clang": "Ubuntu clang version 21.1.8 (++20251221032922+2078da43e25a-1~exp1~20251221153059.70)",
     "lld": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
   },
-  "version": "1.6.2"
+  "version": "1.6.3"
 }
