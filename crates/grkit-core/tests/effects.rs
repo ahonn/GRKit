@@ -1122,4 +1122,3 @@ fn a_long_cover_number_takes_a_smaller_size() {
         artwork::render_cine("RICOH", "CINEMA", "123456789", artwork::NEUTRAL_PALETTE).is_err()
     );
 }
-
