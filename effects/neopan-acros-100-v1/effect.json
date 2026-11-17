@@ -17,13 +17,12 @@
   "icon": {
     "template": "box",
     "brand": "FUJIFILM",
-    "name": "ACROS",
-    "number": "100",
+    "name": "NEOPAN ACROS",
     "band": true
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "fuji_neopan_acros_100.cube",
+    "source": "neopan-acros-100-v1.cube",
     "source_sha256": "a2bad0a9abd1334695a5d63c4da5ba8ca0bc6ad2fe9f60719441095b1fd2509b",
     "input": "standard",
     "exposure": 0.0,

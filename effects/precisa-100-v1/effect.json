@@ -23,7 +23,7 @@
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "agfa_precisa_100.cube",
+    "source": "precisa-100-v1.cube",
     "source_sha256": "712dd96ca82535164751ee432548ea4f619218d3025ffcbd2411eb1fbd10c2bb",
     "input": "standard",
     "exposure": 0.0,

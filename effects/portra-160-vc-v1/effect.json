@@ -17,13 +17,13 @@
   "icon": {
     "template": "box",
     "brand": "Kodak",
-    "name": "PORTRA",
+    "name": "PORTRA VC",
     "number": "160",
     "band": true
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "kodak_portra_160_vc.cube",
+    "source": "portra-160-vc-v1.cube",
     "source_sha256": "9dfc81b0d45773924c88ddd21a00ad27c51ccbcfa455899aa41b1de36a82cc2e",
     "input": "standard",
     "exposure": 0.0,

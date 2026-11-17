@@ -22,9 +22,16 @@
     "t3mujinpack": {
       "repository": "https://github.com/t3mujin/t3mujinpack",
       "revision": "0b421f3e25209ed78253d1724a29cc6255c5e7fe",
-      "author": "João Almeida",
+      "author": "Jo\u00e3o Almeida",
       "license": "MIT",
       "license_notice": "T3MUJINPACK_LICENSE.txt"
+    },
+    "film_luts": {
+      "repository": "https://github.com/YahiaAngelo/Film-Luts",
+      "revision": "af957b631a304e6be94778b96cb3395de3438e9f",
+      "author": "Yahia Angelo",
+      "license": "MIT",
+      "license_notice": "FILM_LUTS_LICENSE.txt"
     }
   },
   "upstream_changes": "CHANGELOG.txt",
@@ -55,6 +62,11 @@
     "bake_spectral_film_lut.py": {
       "sha256": "979a529bfdcf4d8681385a0ff2d698374d8003c9580a6d4d4a9b4123d104f69c",
       "license": "project"
+    },
+    "FILM_LUTS_LICENSE.txt": {
+      "sha256": "df194a15bf69c2dc16be81eddce0b1a6ee68d9fc418f33abc29952a4d6c9e878",
+      "license": "upstream-notice",
+      "upstream": "https://github.com/YahiaAngelo/Film-Luts/blob/af957b631a304e6be94778b96cb3395de3438e9f/LICENSE"
     }
   },
   "luts": {
@@ -62,9 +74,19 @@
       "generator": "spectral_film_lut",
       "sha256": "7079fd3703de7046543b5fb75d74f241092b2d5596cbb74e70e84cc56d442978"
     },
+    "astia-100f-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "16c5e6fd1fad9cc0e0b0c55e0f5fc57aba220f2d73fb4bfdf70977a9205087bf",
+      "upstream": "luts/colorslide/fuji_astia_100f.cube"
+    },
     "c200-premier-v1.cube": {
       "generator": "spektrafilm",
       "sha256": "9609c724902417f40da6ffee6155254b2ea6e9c391cf048ba238188adb4f860b"
+    },
+    "delta-100-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "8c4a87e645ab18ec2d26c6731c4c9b0fde6d391e3be5a8058e29fd8470146994",
+      "upstream": "luts/bw/ilford_delta_100.cube"
     },
     "double-x-5222-mono-v1.cube": {
       "generator": "spectral_film_lut",
@@ -81,6 +103,11 @@
     "eterna-500t-3523xd-v1.cube": {
       "generator": "spectral_film_lut",
       "sha256": "43fdc9c2b9815fa9717c80e8f0292e789e2d4be88a4a3cc567d1290d0f158a7b"
+    },
+    "fuji-160c-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "8302f6f8899d6de499cd6023d5ed8b915382092ff85461dd96055a0ef2b3aab0",
+      "upstream": "luts/negative_new/fuji_160c.cube"
     },
     "gold-200-premier-v1.cube": {
       "generator": "spektrafilm",
@@ -99,6 +126,16 @@
       "generator": "spektrafilm",
       "sha256": "8e16cab3018eee39cd66cded8df0fef7aeff6f4aff92379d490527e299e8bae2"
     },
+    "neopan-acros-100-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "a2bad0a9abd1334695a5d63c4da5ba8ca0bc6ad2fe9f60719441095b1fd2509b",
+      "upstream": "luts/bw/fuji_neopan_acros_100.cube"
+    },
+    "portra-160-vc-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "9dfc81b0d45773924c88ddd21a00ad27c51ccbcfa455899aa41b1de36a82cc2e",
+      "upstream": "luts/negative_color/kodak_portra_160_vc.cube"
+    },
     "portra-400-endura-v1.cube": {
       "generator": "spektrafilm",
       "sha256": "e2d43bebfdcc0744e54d95f88bdf32a4a0505b358db04353af72d2ef1c605682"
@@ -106,6 +143,11 @@
     "portra-800-push2-v1.cube": {
       "generator": "spektrafilm",
       "sha256": "b00d80ceb876c28912d619f2a6f6ad9dc1cf7d58cb0e729738039793174ba800"
+    },
+    "precisa-100-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "712dd96ca82535164751ee432548ea4f619218d3025ffcbd2411eb1fbd10c2bb",
+      "upstream": "luts/colorslide/agfa_precisa_100.cube"
     },
     "pro-400h-crystal-v1.cube": {
       "generator": "spektrafilm",
@@ -118,6 +160,11 @@
     "red-filter-mono-v1.cube": {
       "generator": "spectral_film_lut",
       "sha256": "fb92f310bd4695e53f4c615bf37da594b6f47fdea54db7bee638b945981733af"
+    },
+    "t-max-400-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "3d5932c8bb4f277043cc25439de7e0c3a694df7a2b67ddaa411a3bc025af7c15",
+      "upstream": "luts/bw/kodak_t-max_400.cube"
     },
     "trix-400-mono-v1.cube": {
       "generator": "spectral_film_lut",
@@ -138,6 +185,16 @@
     "vision3-500t-supra-v1.cube": {
       "generator": "spektrafilm",
       "sha256": "f7a319e548e8e3cd5d932f7c16e5b4073fbf624ab2efc0b2261053ead83cc665"
+    },
+    "vista-200-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "b65848b3e217bbb57ca998f0460fe0d6c631228872ad49574d85e07ffeb3548e",
+      "upstream": "luts/negative_color/agfa_vista_200.cube"
+    },
+    "xp2-super-v1.cube": {
+      "generator": "film_luts",
+      "sha256": "5cd90f3792cc6da8f76e8b96813e0372758fd30d2073e143d0f64416a0eaea50",
+      "upstream": "luts/bw/ilford_xp_2.cube"
     },
     "xtra-400-crystal-v1.cube": {
       "generator": "spektrafilm",

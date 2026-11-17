@@ -23,7 +23,7 @@
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "fuji_astia_100f.cube",
+    "source": "astia-100f-v1.cube",
     "source_sha256": "16c5e6fd1fad9cc0e0b0c55e0f5fc57aba220f2d73fb4bfdf70977a9205087bf",
     "input": "standard",
     "exposure": 0.0,

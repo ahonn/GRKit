@@ -23,7 +23,7 @@
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "ilford_delta_100.cube",
+    "source": "delta-100-v1.cube",
     "source_sha256": "8c4a87e645ab18ec2d26c6731c4c9b0fde6d391e3be5a8058e29fd8470146994",
     "input": "standard",
     "exposure": 0.0,

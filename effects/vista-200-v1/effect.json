@@ -23,7 +23,7 @@
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "agfa_vista_200.cube",
+    "source": "vista-200-v1.cube",
     "source_sha256": "b65848b3e217bbb57ca998f0460fe0d6c631228872ad49574d85e07ffeb3548e",
     "input": "standard",
     "exposure": 0.0,

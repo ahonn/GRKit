@@ -17,13 +17,13 @@
   "icon": {
     "template": "box",
     "brand": "FUJIFILM",
-    "name": "160C",
-    "number": "160",
+    "name": "FUJI",
+    "number": "160C",
     "band": true
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "fuji_160c.cube",
+    "source": "fuji-160c-v1.cube",
     "source_sha256": "8302f6f8899d6de499cd6023d5ed8b915382092ff85461dd96055a0ef2b3aab0",
     "input": "standard",
     "exposure": 0.0,

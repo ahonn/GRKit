@@ -17,13 +17,12 @@
   "icon": {
     "template": "box",
     "brand": "ILFORD",
-    "name": "XP2",
-    "number": "400",
+    "name": "XP2 SUPER",
     "band": true
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "ilford_xp_2.cube",
+    "source": "xp2-super-v1.cube",
     "source_sha256": "5cd90f3792cc6da8f76e8b96813e0372758fd30d2073e143d0f64416a0eaea50",
     "input": "standard",
     "exposure": 0.0,

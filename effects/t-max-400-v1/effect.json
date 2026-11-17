@@ -23,7 +23,7 @@
   },
   "attribution": {
     "origin": "cube-fit",
-    "source": "kodak_t-max_400.cube",
+    "source": "t-max-400-v1.cube",
     "source_sha256": "3d5932c8bb4f277043cc25439de7e0c3a694df7a2b67ddaa411a3bc025af7c15",
     "input": "standard",
     "exposure": 0.0,
