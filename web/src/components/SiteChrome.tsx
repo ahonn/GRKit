@@ -93,12 +93,12 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
         { href: `${install}#effects-label`, label: t.effects },
         { href: `${install}#modules-label`, label: t.modulesLink },
         { href: fastbootPath(language), label: t.fastbootLink },
+        { href: REPOSITORY, label: 'GitHub' },
       ],
     },
     {
       title: t.footerHelp,
       links: [
-        { href: SUPPORT_FORM, label: t.reportProblem },
         { href: `${install}#faq-label`, label: t.faqTitle },
         { href: resourcesPath(language), label: t.resourcesLink },
         { href: guideUrl('RECOVERY', language), label: t.recovery },
@@ -108,9 +108,9 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
     {
       title: t.footerCommunity,
       links: [
+        { href: SUPPORT_FORM, label: t.reportProblem },
         { href: FEATURE_BOARD, label: t.suggestFeature },
         { href: PHOTO_FORM, label: t.sharePhotos },
-        { href: REPOSITORY, label: 'GitHub' },
         { href: DONATE, label: t.donate },
       ],
     },

@@ -3,7 +3,12 @@ import { loadWasm, save } from './package';
 /** The largest file that the page reads: an official ZIP has about 35 MB, its update file about 40 MB. */
 export const MAX_FIRMWARE_SIZE = 64 * 1024 * 1024;
 
-const CAMERA_NAMES: Readonly<Record<string, string>> = { gr3: 'GR III', gr3x: 'GR IIIx', gr4: 'GR IV' };
+/** The base camera of each release, with its HDF model: they share the firmware and the Ricoh page. */
+const CAMERA_NAMES: Readonly<Record<string, string>> = {
+  gr3: 'GR III / GR III HDF',
+  gr3x: 'GR IIIx / GR IIIx HDF',
+  gr4: 'GR IV / GR IV HDF',
+};
 
 /** The camera and version of a release of `grkit_firmware`, such as `gr3-2.10`: `GR III 2.10`. */
 export function releaseName(release: string): string {
@@ -36,15 +41,15 @@ export const LATEST: readonly { release: string; page: string; file: string; nam
  * GR IV with its own versions: 1.10 has the file of GR IV 1.20, and 1.11 that of GR IV 1.21.
  */
 export const RELEASES: readonly { release: string; names: readonly string[] }[] = [
-  { release: 'gr3-2.10', names: ['GR III 2.10'] },
-  { release: 'gr3-2.20', names: ['GR III 2.20'] },
-  { release: 'gr3-2.21', names: ['GR III 2.21'] },
-  { release: 'gr3x-1.60', names: ['GR IIIx 1.60'] },
-  { release: 'gr3x-1.70', names: ['GR IIIx 1.70'] },
-  { release: 'gr3x-1.71', names: ['GR IIIx 1.71'] },
-  { release: 'gr4-1.11', names: ['GR IV 1.11'] },
-  { release: 'gr4-1.20', names: ['GR IV 1.20', 'GR IV Monochrome 1.10'] },
-  { release: 'gr4-1.21', names: ['GR IV 1.21', 'GR IV Monochrome 1.11'] },
+  { release: 'gr3-2.10', names: ['GR III / GR III HDF 2.10'] },
+  { release: 'gr3-2.20', names: ['GR III / GR III HDF 2.20'] },
+  { release: 'gr3-2.21', names: ['GR III / GR III HDF 2.21'] },
+  { release: 'gr3x-1.60', names: ['GR IIIx / GR IIIx HDF 1.60'] },
+  { release: 'gr3x-1.70', names: ['GR IIIx / GR IIIx HDF 1.70'] },
+  { release: 'gr3x-1.71', names: ['GR IIIx / GR IIIx HDF 1.71'] },
+  { release: 'gr4-1.11', names: ['GR IV / GR IV HDF 1.11'] },
+  { release: 'gr4-1.20', names: ['GR IV / GR IV HDF 1.20', 'GR IV Monochrome 1.10'] },
+  { release: 'gr4-1.21', names: ['GR IV / GR IV HDF 1.21', 'GR IV Monochrome 1.11'] },
 ];
 
 /** Ricoh's folder of the official firmware ZIP files. */
@@ -57,12 +62,12 @@ const RICOH_FIRMWARE = 'https://www.ricoh-imaging.co.jp/resources/japan/support/
  * that still has that version.
  */
 export const OLDER: readonly { name: string; release: string; zip: string }[] = [
-  { name: 'GR III 2.10', release: 'gr3-2.10', zip: `${RICOH_FIRMWARE}/gr3_v210.zip` },
-  { name: 'GR III 2.20', release: 'gr3-2.20', zip: `${RICOH_FIRMWARE}/gr3_v220.zip` },
-  { name: 'GR IIIx 1.60', release: 'gr3x-1.60', zip: `${RICOH_FIRMWARE}/gr3x_v160.zip` },
-  { name: 'GR IIIx 1.70', release: 'gr3x-1.70', zip: `${RICOH_FIRMWARE}/gr3x_v170.zip` },
-  { name: 'GR IV 1.11', release: 'gr4-1.11', zip: `${RICOH_FIRMWARE}/gr4_v111.zip` },
-  { name: 'GR IV 1.20', release: 'gr4-1.20', zip: `${RICOH_FIRMWARE}/gr4_v120.zip` },
+  { name: 'GR III / GR III HDF 2.10', release: 'gr3-2.10', zip: `${RICOH_FIRMWARE}/gr3_v210.zip` },
+  { name: 'GR III / GR III HDF 2.20', release: 'gr3-2.20', zip: `${RICOH_FIRMWARE}/gr3_v220.zip` },
+  { name: 'GR IIIx / GR IIIx HDF 1.60', release: 'gr3x-1.60', zip: `${RICOH_FIRMWARE}/gr3x_v160.zip` },
+  { name: 'GR IIIx / GR IIIx HDF 1.70', release: 'gr3x-1.70', zip: `${RICOH_FIRMWARE}/gr3x_v170.zip` },
+  { name: 'GR IV / GR IV HDF 1.11', release: 'gr4-1.11', zip: `${RICOH_FIRMWARE}/gr4_v111.zip` },
+  { name: 'GR IV / GR IV HDF 1.20', release: 'gr4-1.20', zip: `${RICOH_FIRMWARE}/gr4_v120.zip` },
   { name: 'GR IV Monochrome 1.10', release: 'gr4-1.20', zip: `${RICOH_FIRMWARE}/gr4_mono_v110.zip` },
 ];
 

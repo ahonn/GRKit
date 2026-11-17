@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { firmwareName, LATEST, latestCamera, newerRelease, OLDER, RELEASES, releaseName, SUPPORTED_NAMES } from './fastboot';
 
 describe('releaseName', () => {
-  it('names the camera and the version of a release', () => {
-    expect(releaseName('gr3-2.10')).toBe('GR III 2.10');
-    expect(releaseName('gr3x-1.70')).toBe('GR IIIx 1.70');
-    expect(releaseName('gr4-1.20')).toBe('GR IV 1.20');
+  it('names the camera, its HDF model, and the version of a release', () => {
+    expect(releaseName('gr3-2.10')).toBe('GR III / GR III HDF 2.10');
+    expect(releaseName('gr3x-1.70')).toBe('GR IIIx / GR IIIx HDF 1.70');
+    expect(releaseName('gr4-1.20')).toBe('GR IV / GR IV HDF 1.20');
   });
 });
 
@@ -28,9 +28,9 @@ describe('newerRelease', () => {
 describe('SUPPORTED_NAMES', () => {
   it('lists each camera once with every version that the page makes', () => {
     expect(SUPPORTED_NAMES).toEqual([
-      'GR III 2.10 / 2.20 / 2.21',
-      'GR IIIx 1.60 / 1.70 / 1.71',
-      'GR IV 1.11 / 1.20 / 1.21',
+      'GR III / GR III HDF 2.10 / 2.20 / 2.21',
+      'GR IIIx / GR IIIx HDF 1.60 / 1.70 / 1.71',
+      'GR IV / GR IV HDF 1.11 / 1.20 / 1.21',
       'GR IV Monochrome 1.10 / 1.11',
     ]);
   });
@@ -38,16 +38,21 @@ describe('SUPPORTED_NAMES', () => {
 
 describe('latestCamera', () => {
   it('names the camera of each entry without its version', () => {
-    expect(LATEST.map(latestCamera)).toEqual(['GR III', 'GR IIIx', 'GR IV', 'GR IV Monochrome']);
+    expect(LATEST.map(latestCamera)).toEqual([
+      'GR III / GR III HDF',
+      'GR IIIx / GR IIIx HDF',
+      'GR IV / GR IV HDF',
+      'GR IV Monochrome',
+    ]);
   });
 });
 
 describe('firmwareName', () => {
   it('names each camera whose official file the release has', () => {
-    expect(firmwareName('gr4-1.21')).toBe('GR IV 1.21 / GR IV Monochrome 1.11');
-    expect(firmwareName('gr3-2.21')).toBe('GR III 2.21');
-    expect(firmwareName('gr4-1.20')).toBe('GR IV 1.20 / GR IV Monochrome 1.10');
-    expect(firmwareName('gr4-1.11')).toBe('GR IV 1.11');
+    expect(firmwareName('gr4-1.21')).toBe('GR IV / GR IV HDF 1.21 / GR IV Monochrome 1.11');
+    expect(firmwareName('gr3-2.21')).toBe('GR III / GR III HDF 2.21');
+    expect(firmwareName('gr4-1.20')).toBe('GR IV / GR IV HDF 1.20 / GR IV Monochrome 1.10');
+    expect(firmwareName('gr4-1.11')).toBe('GR IV / GR IV HDF 1.11');
   });
 });
 

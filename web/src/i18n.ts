@@ -492,19 +492,14 @@ const en = {
     restore: 'Go back to the official firmware',
     restoreText: 'Open the official ZIP of the same version, and update the camera with the firmware file in it, in the same way. A later official update also replaces the fast-boot firmware.',
     /** After the lead: the text before the video link, the link, and the text after it. */
-    videoHint: ['Video walkthrough of install and Fast start: ', 'watch on YouTube', '.'] as readonly [
-      string,
-      string,
-      string,
-    ],
-    /** The link after the video hint, to the resources page. */
-    moreResources: 'More resources',
+    /** Before the video link, the link text, and the text before the author name. */
+    videoHint: ['', 'Install and Fast start walkthrough', ' by '] as readonly [string, string, string],
   },
   fastbootLink: 'Fast start',
   /** The line after the step that turns the camera on: the text before the link to the fast-boot page, the link, and the text after it. */
   fastbootHint: ['To load GRKit sooner, try ', 'Fast start', '.'] as readonly [string, string, string],
   /** The resources page in the footer. */
-  resourcesLink: 'Resources',
+  resourcesLink: 'More resources',
   /** The page of videos and articles about GRKit. */
   resources: {
     title: 'Resources',
@@ -1104,12 +1099,11 @@ const zhHans: Strings = {
     ],
     restore: '恢复官方固件',
     restoreText: '解压同版本的官方固件 ZIP，用里面的固件文件按同样的方法更新即可。以后的官方固件更新也会替换快速启动固件。',
-    videoHint: ['安装与快速启动的完整视频：', '在 YouTube 观看', '。'] as readonly [string, string, string],
-    moreResources: '更多资源',
+    videoHint: ['', '安装与快速启动完整视频', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速启动',
   fastbootHint: ['想更快加载 GRKit？试试', '快速启动', '。'],
-  resourcesLink: '资源',
+  resourcesLink: '更多资源',
   resources: {
     title: '资源',
     lead: '关于 GRKit 的视频和文章。GRKit 与作者无关。',
@@ -1688,12 +1682,11 @@ const zhHant: Strings = {
     ],
     restore: '恢復官方韌體',
     restoreText: '解壓縮同版本的官方韌體 ZIP，用裡面的韌體檔案依同樣的方法更新即可。之後的官方韌體更新也會取代快速啟動韌體。',
-    videoHint: ['安裝與快速啟動的完整影片：', '在 YouTube 觀看', '。'] as readonly [string, string, string],
-    moreResources: '更多資源',
+    videoHint: ['', '安裝與快速啟動完整影片', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速啟動',
   fastbootHint: ['想更快載入 GRKit？試試', '快速啟動', '。'],
-  resourcesLink: '資源',
+  resourcesLink: '更多資源',
   resources: {
     title: '資源',
     lead: '關於 GRKit 的影片和文章。GRKit 與作者無關。',
@@ -2276,12 +2269,11 @@ const ja: Strings = {
     ],
     restore: '公式ファームウェアに戻す',
     restoreText: '同じバージョンの公式 ZIP を展開し、中のファームウェアのファイルで同じ手順で更新します。今後の公式アップデートでも、高速起動ファームウェアは置き換わります。',
-    videoHint: ['インストールと高速起動の動画：', 'YouTube で見る', '。'] as readonly [string, string, string],
-    moreResources: 'その他の資料',
+    videoHint: ['', 'インストールと高速起動の動画', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '高速起動',
   fastbootHint: ['GRKit をもっと早く読み込むには、', '高速起動', 'をお試しください。'],
-  resourcesLink: '資料',
+  resourcesLink: 'その他の資料',
   resources: {
     title: '資料',
     lead: 'GRKit についての動画と記事です。著者とは関係ありません。',
@@ -2882,12 +2874,11 @@ const ko: Strings = {
     ],
     restore: '공식 펌웨어로 되돌리기',
     restoreText: '같은 버전의 공식 ZIP을 풀고, 안의 펌웨어 파일로 같은 방법으로 업데이트합니다. 이후의 공식 업데이트도 빠른 시작 펌웨어를 대체합니다.',
-    videoHint: ['설치와 빠른 시작 전체 영상: ', 'YouTube에서 보기', '.'] as readonly [string, string, string],
-    moreResources: '더 많은 자료',
+    videoHint: ['', '설치와 빠른 시작 영상', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '빠른 시작',
   fastbootHint: ['GRKit을 더 빨리 불러오려면 ', '빠른 시작', '을 써 보세요.'],
-  resourcesLink: '자료',
+  resourcesLink: '더 많은 자료',
   resources: {
     title: '자료',
     lead: 'GRKit에 관한 영상과 글입니다. GRKit은 작성자와 무관합니다.',
