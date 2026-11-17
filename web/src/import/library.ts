@@ -1,4 +1,5 @@
 import { GRADES, type Cover, type Grade, type ImportedEffect, type RestoredImport } from '../catalog';
+import { isCoverColors } from '../coverPalette';
 import { loadWasm } from '../package';
 import { INPUTS, isTone, type Input } from './names';
 
@@ -110,11 +111,12 @@ function readCover(value: unknown): Cover | undefined {
   if (
     typeof cover !== 'object' ||
     cover === null ||
-    (cover.template !== 'box' && cover.template !== 'cine') ||
+    (cover.template !== 'box' && cover.template !== 'cine' && cover.template !== 'stack') ||
     !isText(cover.brand, 12) ||
     !isText(cover.name, 12) ||
     (cover.number !== undefined && !isText(cover.number, 12)) ||
-    (cover.band !== undefined && typeof cover.band !== 'boolean')
+    (cover.band !== undefined && typeof cover.band !== 'boolean') ||
+    (cover.colors !== undefined && !isCoverColors(cover.colors))
   ) {
     return undefined;
   }
@@ -124,6 +126,7 @@ function readCover(value: unknown): Cover | undefined {
     name: cover.name,
     ...(cover.number !== undefined && { number: cover.number }),
     ...(cover.band !== undefined && { band: cover.band }),
+    ...(cover.colors !== undefined && { colors: cover.colors }),
   };
 }
 

@@ -26,7 +26,9 @@ import {
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
 import {
+  changedCatalogCovers,
   changedImports,
+  coverLibraryAdds,
   extraCardEffects,
   libraryChanges,
   openSession,
@@ -34,6 +36,7 @@ import {
   withFamily,
   type CardSession,
 } from './cardSession';
+import { readColorfulCovers } from './coverPalette';
 import {
   cameraForCard,
   CAMERAS,
@@ -168,6 +171,11 @@ export function InstallPage({
   const [taskArea, setTaskArea] = useState<'apply' | 'remove'>('apply');
   // A newer connection makes the result of an older card task stale.
   const cardRun = useRef(0);
+  // Color covers: shelf SVG and which packaging colors a write bakes into catalog GRFs.
+  const [colorfulCovers, setColorfulCovers] = useState(() => readColorfulCovers());
+  // Catalog looks on the card whose icons differ from the colorful switch (gray vs packaging).
+  const [coverUpdates, setCoverUpdates] = useState<ReadonlySet<string>>(() => new Set());
+  const coverUpdateRun = useRef(0);
 
   const t = STRINGS[language];
   const packageOpen = <PackageOpen strings={t} status={packageStatus} onOpen={openPackage} />;
@@ -281,6 +289,29 @@ export function InstallPage({
   function changeSelection(next: ReadonlySet<string>) {
     keepSelection(next);
     resetBuild();
+  }
+
+  /** Recomputes which film covers on the card would change under the colorful switch. */
+  async function refreshCoverUpdates(session: CardSession | null, colorful: boolean) {
+    const run = ++coverUpdateRun.current;
+    if (!session || !targets) {
+      if (run === coverUpdateRun.current) setCoverUpdates(new Set());
+      return;
+    }
+    try {
+      const catalog = (await loadCatalog(targets[0]!)).effects;
+      const changed = await changedCatalogCovers(session, catalog, colorful, imported);
+      if (run === coverUpdateRun.current) setCoverUpdates(changed);
+    } catch (error) {
+      console.warn(error);
+      if (run === coverUpdateRun.current) setCoverUpdates(new Set());
+    }
+  }
+
+  function changeColorfulCovers(on: boolean) {
+    setColorfulCovers(on);
+    resetBuild();
+    void refreshCoverUpdates(card, on);
   }
 
   // The effects section checks an import (`selectImport`). An import with the ID of an earlier
@@ -529,6 +560,7 @@ export function InstallPage({
       if (fit.support) prefetchPackage(fit.support.targets, fit.id, language);
       // The imports of an earlier browser come back with the card. The card works without them.
       await adoptImports(root, session, root.name, catalog).catch((error) => console.warn(error));
+      if (run === cardRun.current) await refreshCoverUpdates(session, colorfulCovers);
     } catch (error) {
       console.error(error);
       if (run === cardRun.current) setConnectMessage({ tone: 'error', lines: [failure] });
@@ -602,7 +634,9 @@ export function InstallPage({
 
   function disconnectCard() {
     cardRun.current += 1;
+    coverUpdateRun.current += 1;
     setCard(null);
+    setCoverUpdates(new Set());
     setLastCard(null);
     void forgetLastCard();
     setConnectMessage(null);
@@ -612,12 +646,13 @@ export function InstallPage({
 
   /** The changes from the card to the selection: `checked` gives the checked effect IDs. */
   function cardChanges(session: CardSession, checked: readonly string[]): CardChanges {
+    const changed = new Set([...changedImports(session, imported), ...coverUpdates]);
     const changes = planChanges(
       session.state,
       __GRKIT_VERSION__,
       plan.modules,
       plan.includeEffects
-        ? { before: [...session.effects.keys()], after: checked, changed: [...changedImports(session, imported)] }
+        ? { before: [...session.effects.keys()], after: checked, changed: [...changed] }
         : null,
       recipeLibrary.cardChange(session),
     );
@@ -637,6 +672,12 @@ export function InstallPage({
       const checked = await checkedEffects();
       const effects = plan.includeEffects ? cardPackageEffects(checked) : [];
       const imports = await encodeLibrary(allImported);
+      const catalog = await loadCatalog(PREVIEW_TARGET);
+      // Fresh cover diffs so a write right after toggling colorful still rewrites the library.
+      const coverChanged = plan.includeEffects
+        ? await changedCatalogCovers(session, catalog.effects, colorfulCovers, imported)
+        : new Set<string>();
+      if (run === cardRun.current) setCoverUpdates(coverChanged);
       const files = await buildCardFiles(
         targets,
         camera.id,
@@ -649,21 +690,44 @@ export function InstallPage({
         },
         null,
         await leftOutEffects(effects),
+        colorfulCovers,
       );
-      const changes = cardChanges(
-        session,
-        checked.map((effect) => effect.id),
+      const checkedIds = checked.map((effect) => effect.id);
+      const changes = planChanges(
+        session.state,
+        __GRKIT_VERSION__,
+        plan.modules,
+        plan.includeEffects
+          ? {
+              before: [...session.effects.keys()],
+              after: checkedIds,
+              changed: [...changedImports(session, imported), ...coverChanged],
+            }
+          : null,
+        recipeLibrary.cardChange(session),
       );
+      const planned =
+        session.written && changes.grkit === 'update' ? { ...changes, grkit: 'same' as const } : changes;
       const library = await libraryChanges(
         session,
         files,
         checked,
-        [...changes.addEffects, ...changes.updateEffects],
-        changes.removeEffects,
+        [...planned.addEffects, ...planned.updateEffects],
+        planned.removeEffects,
+      );
+      library.add.push(
+        ...(await coverLibraryAdds(
+          session,
+          coverChanged,
+          catalog.effects,
+          imported,
+          colorfulCovers,
+          library.add,
+        )),
       );
       // The recipes of the site replace the recipe file of the camera, which keeps its import
       // record; the library of a ZIP package has no more use.
-      if (changes.recipes === 'write' && recipeLibrary.packageRecipes) {
+      if (planned.recipes === 'write' && recipeLibrary.packageRecipes) {
         const text = await writeRecipeFile(recipeLibrary.packageRecipes, family, session.state.recipeText ?? '');
         files.push({ path: RECIPE_FILE, bytes: new TextEncoder().encode(text) });
         library.remove.push(RECIPES_PACKAGE);
@@ -672,10 +736,11 @@ export function InstallPage({
         if (run !== cardRun.current) return;
         setCardTask(written < total ? { kind: 'writing', written, total } : { kind: 'finishing' });
       });
-      const catalog = await loadCatalog(PREVIEW_TARGET);
       const next = await openSession(session.root, [...catalog.effects, ...imported], family);
       if (run !== cardRun.current) return;
-      setCard({ ...next, written: true });
+      const written = { ...next, written: true };
+      setCard(written);
+      await refreshCoverUpdates(written, colorfulCovers);
       setApplyMessage({
         tone: 'ok',
         // The camera steps after the write: the MENU step for a first install and for SD scripts
@@ -683,7 +748,7 @@ export function InstallPage({
         lines: [
           t.cardDone,
           t.cardStepInsert,
-          ...(changes.grkit === 'install' ? [t.cardDoneFirst] : changes.scriptsOn ? [t.cardEnable] : []),
+          ...(planned.grkit === 'install' ? [t.cardDoneFirst] : planned.scriptsOn ? [t.cardEnable] : []),
           t.steps[3]!.join(''),
         ],
       });
@@ -692,7 +757,7 @@ export function InstallPage({
         plan,
         plan.includeEffects ? checked.length : 0,
         language,
-        changes.grkit === 'same' ? 'change' : changes.grkit,
+        planned.grkit === 'same' ? 'change' : planned.grkit,
       );
     } catch (error) {
       console.error(error);
@@ -728,6 +793,7 @@ export function InstallPage({
         },
         recipes,
         await leftOutEffects(effects),
+        colorfulCovers,
       );
       if (run === buildRun.current) {
         save(blob, packageFilename(__GRKIT_VERSION__, camera.name, new Date()));
@@ -939,7 +1005,13 @@ export function InstallPage({
                   nativeLooks={takesNativeLooks(camera.key)}
                   cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
-                  changedOnCard={active ? changedImports(active, imported) : undefined}
+                  changedOnCard={
+                    active
+                      ? new Set([...changedImports(active, imported), ...coverUpdates])
+                      : undefined
+                  }
+                  colorfulCovers={colorfulCovers}
+                  onColorfulCovers={changeColorfulCovers}
                   family={family}
                   recipes={recipeLibrary.library}
                   onAddRecipe={(recipe) =>

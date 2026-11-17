@@ -4,6 +4,7 @@ import { renderToString } from 'react-dom/server';
 import { InstallPage } from './App';
 import { FastbootPage } from './components/FastbootPage';
 import { HomePage } from './components/HomePage';
+import { ResourcesPage } from './components/ResourcesPage';
 import type { Language } from './i18n';
 import type { Page } from './languagePage';
 
@@ -21,5 +22,7 @@ export function render(language: Language, page: Page): string {
       return renderToString(<InstallPage initialLanguage={language} />);
     case 'fastboot':
       return renderToString(<FastbootPage initialLanguage={language} />);
+    case 'resources':
+      return renderToString(<ResourcesPage initialLanguage={language} />);
   }
 }

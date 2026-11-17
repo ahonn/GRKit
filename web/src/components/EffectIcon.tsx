@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { Cover, Effect } from '../catalog';
+import { displayColors, rgbCss } from '../coverPalette';
 
 const SIZE = 40;
 
@@ -67,37 +68,114 @@ function fitLarge(text: SVGTextElement | null) {
   void document.fonts?.ready.then(measure);
 }
 
-// The shades of the camera icon (`artwork.rs`).
-const LIGHT = 'rgb(214 214 214)';
-const DARK = 'rgb(40 40 40)';
-const BODY = 'rgb(51 51 51)';
-
 /**
- * A film cover in the layout of the camera icon: the brand on a light band, then the film name
- * and a large number on a dark body. A professional film box has a light band at the bottom, and
- * a motion picture film label has three light stripes.
+ * A film cover in the layout of the camera icon. Colors come from `cover.colors`, or packaging
+ * hues from the film stock when omitted. Pass `colorful={false}` so covers without stored
+ * `colors` stay classic gray (the shelf switch); stored `colors` still draw as saved.
+ *
+ * Templates: `box` top brand band; `cine` top band + bottom stripes; `stack` bottom brand band.
  */
-export function CoverIcon({ cover }: { cover: Cover }) {
+export function CoverIcon({ cover, colorful = true }: { cover: Cover; colorful?: boolean }) {
+  const colors = displayColors(cover, colorful);
   const stripes = cover.template === 'cine';
+  const stack = cover.template === 'stack';
   const band = cover.template === 'box' && cover.band;
-  // The number sits higher above the stripes, so that it keeps a gap to the first one.
+  if (stack) {
+    const footer = 28;
+    const center = (3 + footer) / 2;
+    return (
+      <svg className="effect-icon" viewBox="0 0 40 40" aria-hidden="true">
+        <rect x="0" y="3" width="40" height="34" fill={rgbCss(colors.body)} />
+        <rect x="0" y={footer} width="40" height={37 - footer} fill={rgbCss(colors.band)} />
+        <text
+          key={cover.brand}
+          ref={fit}
+          data-width="34"
+          x="20"
+          y="34.8"
+          className="cover-brand"
+          fill={rgbCss(colors.brand)}
+        >
+          {cover.brand}
+        </text>
+        {cover.number ? (
+          <>
+            <text
+              key={cover.name}
+              ref={fit}
+              data-width="38"
+              x="20"
+              y="13"
+              className="cover-name"
+              fill={rgbCss(colors.text)}
+            >
+              {cover.name}
+            </text>
+            <text
+              key={cover.number}
+              ref={fit}
+              data-width="36"
+              x="20"
+              y="24.5"
+              className="cover-number"
+              fill={rgbCss(colors.text)}
+            >
+              {cover.number}
+            </text>
+          </>
+        ) : (
+          <text
+            key={`large ${cover.name} ${center}`}
+            ref={fitLarge}
+            data-width="38"
+            data-center={center}
+            x="20"
+            y={center + 4}
+            className="cover-name-large"
+            fill={rgbCss(colors.text)}
+          >
+            {cover.name}
+          </text>
+        )}
+      </svg>
+    );
+  }
+  const headerEnd = 12;
+  const brandY = 10.4;
   const baseline = stripes ? 30.2 : band ? 32 : 33;
-  // The body runs from row 12 to the bottom band, the stripes, or row 37.
-  const center = (12 + (stripes ? 32 : band ? 34 : 37)) / 2;
+  const center = (headerEnd + (stripes ? 32 : band ? 34 : 37)) / 2;
+  const nameY = 19;
   return (
     <svg className="effect-icon" viewBox="0 0 40 40" aria-hidden="true">
-      <rect x="0" y="3" width="40" height="34" fill={BODY} />
-      <rect x="0" y="3" width="40" height="9" fill={LIGHT} />
-      {band && <rect x="0" y="34" width="40" height="3" fill={LIGHT} />}
+      <rect x="0" y="3" width="40" height="34" fill={rgbCss(colors.body)} />
+      <rect x="0" y="3" width="40" height={headerEnd - 3} fill={rgbCss(colors.band)} />
+      {band && <rect x="0" y="34" width="40" height="3" fill={rgbCss(colors.accent)} />}
       {stripes &&
-        [32, 34, 36].map((y) => <rect key={y} x="0" y={y} width="40" height="1" fill={LIGHT} />)}
-      {/* A key per text measures it again when it changes, as in the import dialog. */}
-      <text key={cover.brand} ref={fit} data-width="34" x="20" y="10.4" className="cover-brand" fill={DARK}>
+        [32, 34, 36].map((y) => (
+          <rect key={y} x="0" y={y} width="40" height="1" fill={rgbCss(colors.accent)} />
+        ))}
+      <text
+        key={cover.brand}
+        ref={fit}
+        data-width="34"
+        x="20"
+        y={brandY}
+        className="cover-brand"
+        fill={rgbCss(colors.brand)}
+      >
         {cover.brand}
       </text>
       {cover.number ? (
         <>
-          <text key={cover.name} ref={fit} data-width="38" x="20" y="19" className="cover-name" fill="#fff">
+          <text
+            key={cover.name}
+            ref={fit}
+            data-width="38"
+            x="20"
+            y={nameY}
+            className="cover-name"
+            fill={rgbCss(colors.text)}
+          >
             {cover.name}
           </text>
           <text
@@ -107,13 +185,12 @@ export function CoverIcon({ cover }: { cover: Cover }) {
             x="20"
             y={baseline}
             className="cover-number"
-            fill="#fff"
+            fill={rgbCss(colors.text)}
           >
             {cover.number}
           </text>
         </>
       ) : (
-        // Without a number, the name is large and centered on the body, as `artwork.rs` draws it.
         <text
           key={`large ${cover.name} ${center}`}
           ref={fitLarge}
@@ -122,7 +199,7 @@ export function CoverIcon({ cover }: { cover: Cover }) {
           x="20"
           y={center + 4}
           className="cover-name-large"
-          fill="#fff"
+          fill={rgbCss(colors.text)}
         >
           {cover.name}
         </text>
@@ -131,12 +208,21 @@ export function CoverIcon({ cover }: { cover: Cover }) {
   );
 }
 
-/** The ADJ icon of an effect. A film cover draws with web fonts, other icons with camera pixels. */
-export function EffectIcon({ effect }: { effect: Pick<Effect, 'icon' | 'cover'> }) {
+/**
+ * The ADJ icon of an effect. A film cover draws as SVG; `colorful` only affects covers without
+ * stored `colors`. Effects with no cover metadata use the baked 40×40 camera pixels.
+ */
+export function EffectIcon({
+  effect,
+  colorful = true,
+}: {
+  effect: Pick<Effect, 'icon' | 'cover'>;
+  colorful?: boolean;
+}) {
   const { icon, cover } = effect;
   const draw = useCallback((canvas: HTMLCanvasElement | null) => paint(canvas, icon), [icon]);
   if (cover) {
-    return <CoverIcon cover={cover} />;
+    return <CoverIcon cover={cover} colorful={colorful} />;
   }
   return <canvas ref={draw} className="effect-icon pixels" width={SIZE} height={SIZE} aria-hidden="true" />;
 }

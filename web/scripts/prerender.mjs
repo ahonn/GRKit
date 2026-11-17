@@ -3,9 +3,10 @@
 // Search engines and link previews read the HTML that the server sends. The page renders in the
 // browser, so this script renders the first screen of each page of each language into its own
 // file: the home page (dist/index.html for English, dist/<language>/index.html), the installer
-// (install/index.html under each), and the fast-boot firmware page (fastboot/index.html under
-// each). Each page names its other languages with hreflang links. The edge worker sends a visitor
-// of the root page to the home page of their language.
+// (install/index.html under each), the fast-boot firmware page (fastboot/index.html under each),
+// and the resources page (resources/index.html under each). Each page names its other languages
+// with hreflang links. The edge worker sends a visitor of the root page to the home page of their
+// language.
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -91,6 +92,7 @@ const PAGES = [
   { page: 'home', index: true },
   { page: 'install', index: true },
   { page: 'fastboot', index: false },
+  { page: 'resources', index: false },
 ];
 
 function structuredData(code) {

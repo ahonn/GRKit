@@ -76,9 +76,16 @@ fn host_artwork_matches_golden_pixels_and_preserves_binary_transparency() {
         artwork::render_tile("OFF", "film").unwrap(),
         artwork::render_tile("OFF", "filter").unwrap(),
         artwork::render_tile("OFF", "plain").unwrap(),
-        artwork::render_box("Kodak", "PORTRA", "400", true).unwrap(),
-        artwork::render_box("FUJIFILM", "SUPERIA", "400", false).unwrap(),
-        artwork::render_cine("Kodak", "VISION3", "250D").unwrap(),
+        artwork::render_box("Kodak", "PORTRA", "400", true, artwork::NEUTRAL_PALETTE).unwrap(),
+        artwork::render_box(
+            "FUJIFILM",
+            "SUPERIA",
+            "400",
+            false,
+            artwork::NEUTRAL_PALETTE,
+        )
+        .unwrap(),
+        artwork::render_cine("Kodak", "VISION3", "250D", artwork::NEUTRAL_PALETTE).unwrap(),
     ]
     .into_iter()
     .chain(modules)
@@ -342,8 +349,8 @@ fn compiler_rejects_ambiguous_definitions_and_invalid_artwork() {
 #[test]
 fn cover_icons_span_the_tile_width_inside_the_row_margin() {
     for pixels in [
-        artwork::render_box("Kodak", "KODACHROME", "64", true).unwrap(),
-        artwork::render_cine("Kodak", "EXR", "200T").unwrap(),
+        artwork::render_box("Kodak", "KODACHROME", "64", true, artwork::NEUTRAL_PALETTE).unwrap(),
+        artwork::render_cine("Kodak", "EXR", "200T", artwork::NEUTRAL_PALETTE).unwrap(),
     ] {
         for y in 0..40 {
             for x in 0..40 {
@@ -354,8 +361,17 @@ fn cover_icons_span_the_tile_width_inside_the_row_margin() {
         }
     }
     // Only the pixel font has no lowercase, so a wide brand must be capitals.
-    assert!(artwork::render_box("Fujicolorpro", "PRO", "400H", true).is_err());
-    assert!(artwork::render_box("FUJICOLOR", "PRO", "400H", true).is_ok());
+    assert!(artwork::render_box(
+        "Fujicolorpro",
+        "PRO",
+        "400H",
+        true,
+        artwork::NEUTRAL_PALETTE
+    )
+    .is_err());
+    assert!(
+        artwork::render_box("FUJICOLOR", "PRO", "400H", true, artwork::NEUTRAL_PALETTE).is_ok()
+    );
 }
 
 #[test]
@@ -366,8 +382,10 @@ fn covers_without_a_number_show_a_large_name() {
             .filter(|y| (0..40).any(|x| pixels[(y * 40 + x) * 4] > 128))
             .collect()
     };
-    let large = artwork::render_box("Kodak", "PORTRA", "", false).unwrap();
-    let small = artwork::render_box("Kodak", "PORTRA", "400", false).unwrap();
+    let large =
+        artwork::render_box("Kodak", "PORTRA", "", false, artwork::NEUTRAL_PALETTE).unwrap();
+    let small =
+        artwork::render_box("Kodak", "PORTRA", "400", false, artwork::NEUTRAL_PALETTE).unwrap();
     assert_ne!(large, small);
     let large_rows = rows(&large);
     // Taller than the 5-pixel font, inside the body, and centered within one row.
@@ -385,7 +403,8 @@ fn covers_without_a_number_show_a_large_name() {
         "MMMMMMMMMMMM",
         "classic chrome"[..12].trim(),
     ] {
-        let pixels = artwork::render_box("Kodak", name, "", false).unwrap();
+        let pixels =
+            artwork::render_box("Kodak", name, "", false, artwork::NEUTRAL_PALETTE).unwrap();
         let used = rows(&pixels);
         assert!(
             !used.is_empty() && used.iter().all(|y| (12..37).contains(y)),
@@ -397,14 +416,21 @@ fn covers_without_a_number_show_a_large_name() {
     // The condensed font fits every name of 12 characters.
     for name in ["TEAL ORANGE", "VISION 2383", "Portra", "WWWWWWWWWWWW"] {
         assert!(
-            artwork::render_box("Kodak", name, "400", true).is_ok(),
+            artwork::render_box("Kodak", name, "400", true, artwork::NEUTRAL_PALETTE).is_ok(),
             "{name}"
         );
     }
-    let error = artwork::render_box("Kodak", "PORTRA", "WWWWWWWWWWWW", true).unwrap_err();
+    let error = artwork::render_box(
+        "Kodak",
+        "PORTRA",
+        "WWWWWWWWWWWW",
+        true,
+        artwork::NEUTRAL_PALETTE,
+    )
+    .unwrap_err();
     assert!(format!("{error:#}").contains("does not fit"), "{error:#}");
     // Lowercase works only in Roboto Condensed Black.
-    assert!(artwork::render_box("Kodak", "Portra", "", true).is_ok());
+    assert!(artwork::render_box("Kodak", "Portra", "", true, artwork::NEUTRAL_PALETTE).is_ok());
 }
 
 #[test]
@@ -431,7 +457,7 @@ fn compiler_rejects_cover_icons_that_do_not_fit() {
     changed["icon"] = json!({"template": "cine", "brand": "Kodak", "name": "VISION3"});
     assert_eq!(
         effects::icon_pixels(&changed["icon"]).unwrap(),
-        artwork::render_cine("Kodak", "VISION3", "").unwrap()
+        artwork::render_cine("Kodak", "VISION3", "", artwork::NEUTRAL_PALETTE).unwrap()
     );
     changed["icon"] =
         json!({"template": "box", "brand": "Kodak", "name": "PORTRA", "number": "", "band": true});
@@ -440,7 +466,7 @@ fn compiler_rejects_cover_icons_that_do_not_fit() {
     assert!(effects::compile_definition(&changed).is_err());
     assert_eq!(
         effects::icon_pixels(&box_icon).unwrap(),
-        artwork::render_box("Kodak", "PORTRA", "400", true).unwrap()
+        artwork::render_box("Kodak", "PORTRA", "400", true, artwork::NEUTRAL_PALETTE).unwrap()
     );
 }
 
@@ -1079,8 +1105,9 @@ fn fn_defaults_go_with_any_effect() {
 #[test]
 fn a_long_cover_number_takes_a_smaller_size() {
     // YELLOW is too wide at the full size; GREEN keeps it.
-    let yellow = artwork::render_cine("RICOH", "CINEMA", "YELLOW").unwrap();
-    let green = artwork::render_cine("RICOH", "CINEMA", "GREEN").unwrap();
+    let yellow =
+        artwork::render_cine("RICOH", "CINEMA", "YELLOW", artwork::NEUTRAL_PALETTE).unwrap();
+    let green = artwork::render_cine("RICOH", "CINEMA", "GREEN", artwork::NEUTRAL_PALETTE).unwrap();
     // The first and last rows with number ink (white) in the body below the name.
     let rows = |rgba: &[u8]| {
         let ink: Vec<usize> = (21..32)
@@ -1091,5 +1118,8 @@ fn a_long_cover_number_takes_a_smaller_size() {
     let (top_y, bottom_y) = rows(&yellow);
     let (top_g, bottom_g) = rows(&green);
     assert!(bottom_y - top_y < bottom_g - top_g);
-    assert!(artwork::render_cine("RICOH", "CINEMA", "123456789").is_err());
+    assert!(
+        artwork::render_cine("RICOH", "CINEMA", "123456789", artwork::NEUTRAL_PALETTE).is_err()
+    );
 }
+

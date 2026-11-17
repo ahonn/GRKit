@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { ImportedEffect } from '../catalog';
-import { coverFields, editable } from './edit';
+import { colorsFromLook } from '../coverPalette';
+import {
+  coverFields,
+  coverStub,
+  editable,
+  editableCoverFields,
+  sameCoverFields,
+  shelfCover,
+} from './edit';
 
-const effect = (kind: 'lut' | 'native' | 'restored') => ({ imported: { kind } }) as unknown as ImportedEffect;
+const effect = (kind: 'lut' | 'native' | 'restored', name = 'Warm') =>
+  ({ name, imported: { kind } }) as unknown as ImportedEffect;
 
 describe('import edits', () => {
   it('change LUT imports, also those read back from a package, and not the native looks', () => {
@@ -11,20 +20,105 @@ describe('import edits', () => {
     expect(editable(effect('native'))).toBe(false);
   });
 
-  it('edit the fields of a film box cover only', () => {
+  it('edit the fields of film covers without inventing packaging looks for colorless covers', () => {
     expect(coverFields({ template: 'box', brand: 'Kodak', name: 'GOLD', number: '200', band: true })).toEqual({
+      template: 'box',
+      look: 'gray',
+      brand: 'Kodak',
+      name: 'GOLD',
+      number: '200',
+      band: true,
+    });
+    expect(
+      coverFields({
+        template: 'box',
+        brand: 'Kodak',
+        name: 'GOLD',
+        number: '200',
+        band: true,
+        colors: colorsFromLook('gold'),
+      }),
+    ).toEqual({
+      template: 'box',
+      look: 'gold',
       brand: 'Kodak',
       name: 'GOLD',
       number: '200',
       band: true,
     });
     expect(coverFields({ template: 'box', brand: 'LUT', name: 'WARM' })).toEqual({
+      template: 'box',
+      look: 'gray',
       brand: 'LUT',
       name: 'WARM',
       number: '',
       band: false,
     });
-    expect(coverFields({ template: 'cine', brand: 'RICOH', name: 'CINEMA', number: 'YELLOW' })).toBeNull();
+    expect(
+      coverFields({
+        template: 'cine',
+        brand: 'RICOH',
+        name: 'CINEMA',
+        number: 'YELLOW',
+        colors: colorsFromLook('cinemaYellow'),
+      }),
+    ).toEqual({
+      template: 'cine',
+      look: 'cinemaYellow',
+      brand: 'RICOH',
+      name: 'CINEMA',
+      number: 'YELLOW',
+      band: false,
+    });
     expect(coverFields(undefined)).toBeNull();
+  });
+
+  it('treats unchanged cover fields as a rename-only save', () => {
+    const opened = {
+      template: 'box' as const,
+      look: 'gray' as const,
+      brand: 'Kodak',
+      name: 'GOLD',
+      number: '200',
+      band: false,
+    };
+    expect(sameCoverFields(opened, { ...opened })).toBe(true);
+    expect(sameCoverFields(opened, { ...opened, look: 'gold' })).toBe(false);
+  });
+
+  it('invents cover fields for a restored import without cover metadata', () => {
+    const restored = effect('restored', 'Kodak Portra 400');
+    expect(editableCoverFields(restored)).toEqual({
+      template: 'box',
+      look: 'portra',
+      brand: 'Kodak',
+      name: 'PORTRA',
+      number: '400',
+      band: false,
+    });
+    expect(coverStub('Kodak Portra 400')).toEqual({
+      template: 'box',
+      brand: 'Kodak',
+      name: 'PORTRA',
+      number: '400',
+      band: false,
+    });
+    expect(editableCoverFields(effect('native'))).toBeNull();
+  });
+
+  it('draws a shelf stub for restored imports and card-only GRFs without cover metadata', () => {
+    const stub = coverStub('Leica M9 STD');
+    expect(shelfCover({ name: 'Leica M9 STD', imported: { kind: 'restored' } })).toEqual(stub);
+    expect(shelfCover({ name: 'Leica M9 STD', card: { path: 'GRKIT/EFFECTS/A.GRF', bytes: new Uint8Array() } })).toEqual(
+      stub,
+    );
+    expect(shelfCover({ name: 'Warm', imported: { kind: 'native' } })).toBeUndefined();
+    expect(
+      shelfCover({
+        name: 'Portra 400',
+        cover: { template: 'box', brand: 'Kodak', name: 'PORTRA', number: '400' },
+        card: {},
+      }),
+    ).toEqual({ template: 'box', brand: 'Kodak', name: 'PORTRA', number: '400' });
   });
 });

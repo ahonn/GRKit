@@ -1,6 +1,7 @@
 import type { Cover, ImportedEffect } from '../catalog';
+import { lookFromColors } from '../coverPalette';
 import { loadWasm } from '../package';
-import { base64, coverIcon, type CoverFields } from './names';
+import { base64, coverFromFile, coverIcon, type CoverFields } from './names';
 
 // A LUT import keeps its ID when the user changes its name or its icon, so the camera keeps its Fn
 // adjustments and the card keeps it under the same file name. Only the effect file changes.
@@ -10,10 +11,77 @@ import { base64, coverIcon, type CoverFields } from './names';
 export const editable = (effect: ImportedEffect): boolean =>
   effect.imported.kind === 'lut' || effect.imported.kind === 'restored';
 
-/** The cover fields of a film box cover, or null for a cover that the page cannot edit. */
+/** True when the edit dialog cover fields are unchanged (rename-only should keep the GRF icon). */
+export function sameCoverFields(a: CoverFields, b: CoverFields): boolean {
+  return (
+    a.template === b.template &&
+    a.look === b.look &&
+    a.brand === b.brand &&
+    a.name === b.name &&
+    a.number === b.number &&
+    a.band === b.band
+  );
+}
+
+/**
+ * The cover fields of an editable cover, or null when the page cannot edit it. Covers without
+ * stored `colors` open as classic gray — not packaging hues — so saving a rename does not bake
+ * stock colors into an old GRF.
+ */
 export function coverFields(cover: Cover | undefined): CoverFields | null {
-  if (cover?.template !== 'box') return null;
-  return { brand: cover.brand, name: cover.name, number: cover.number ?? '', band: cover.band ?? false };
+  if (!cover || (cover.template !== 'box' && cover.template !== 'cine' && cover.template !== 'stack')) {
+    return null;
+  }
+  return {
+    template: cover.template,
+    look: (cover.colors && lookFromColors(cover.colors)) || 'gray',
+    brand: cover.brand,
+    name: cover.name,
+    number: cover.number ?? '',
+    band: cover.band ?? false,
+  };
+}
+
+/**
+ * Cover fields for the edit dialog. Restored LUT imports without library cover metadata get a
+ * cover deduced from the effect name, so the user can set brand, layout, and colors.
+ */
+export function editableCoverFields(effect: ImportedEffect): CoverFields | null {
+  if (!editable(effect)) return null;
+  return coverFields(effect.cover) ?? coverFromFile(effect.name);
+}
+
+/**
+ * Cover metadata for the shelf when an editable import has none: brand/name from the effect name,
+ * without `colors`, so the site draws a crisp gray SVG instead of upscaled GRF pixels.
+ */
+export function coverStub(effectName: string): Cover {
+  const { template, brand, name, number, band } = coverFromFile(effectName);
+  return {
+    template,
+    brand,
+    name,
+    ...(number !== '' ? { number } : {}),
+    ...(template === 'box' ? { band } : {}),
+  };
+}
+
+/**
+ * Cover to draw on the film shelf. Uses stored `cover` when present; otherwise invents a stub for
+ * restored LUT imports and card-only GRFs so the tile is SVG instead of soft 40×40 camera pixels.
+ * Catalog effects and native looks keep their own cover (or pixels) elsewhere.
+ */
+export function shelfCover(effect: {
+  name: string;
+  cover?: Cover;
+  imported?: { kind: string };
+  card?: unknown;
+}): Cover | undefined {
+  if (effect.cover) return effect.cover;
+  if (effect.imported?.kind === 'lut' || effect.imported?.kind === 'restored' || effect.card) {
+    return coverStub(effect.name);
+  }
+  return undefined;
 }
 
 /**

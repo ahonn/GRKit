@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MODESET_TOKEN } from './cameras';
 import { matchLanguage, STRINGS } from './i18n';
+import { RESOURCE_LINKS } from './resources';
 
 describe('matchLanguage', () => {
   it('maps Chinese tags by script and region', () => {
@@ -59,6 +60,13 @@ describe('STRINGS', () => {
     });
     for (const language of Object.keys(STRINGS) as (keyof typeof STRINGS)[]) {
       expect(shape(language)).toEqual(shape('en'));
+    }
+  });
+
+  it('gives each resource link a note in every language', () => {
+    const ids = RESOURCE_LINKS.map((item) => item.id).sort();
+    for (const language of Object.keys(STRINGS) as (keyof typeof STRINGS)[]) {
+      expect(Object.keys(STRINGS[language].resources.notes).sort()).toEqual(ids);
     }
   });
 

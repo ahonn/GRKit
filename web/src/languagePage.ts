@@ -21,14 +21,15 @@ export function isLanguage(value: unknown): value is Language {
 }
 
 /**
- * The pages of each language: the home page with what GRKit does, the installer, and the
- * fast-boot firmware page. The installer and the fast-boot page sit under the language page.
+ * The pages of each language: the home page with what GRKit does, the installer, the
+ * fast-boot firmware page, and the resources page. The other pages sit under the language page.
  */
-export type Page = 'home' | 'install' | 'fastboot';
+export type Page = 'home' | 'install' | 'fastboot' | 'resources';
 
 const SUBPAGES: Readonly<Record<Exclude<Page, 'home'>, string>> = {
   install: 'install/',
   fastboot: 'fastboot/',
+  resources: 'resources/',
 };
 
 /** The address of `page` in `language`. */
@@ -46,10 +47,15 @@ export function fastbootPath(language: Language): string {
   return pagePath(language, 'fastboot');
 }
 
+/** The address of the resources page in `language`. */
+export function resourcesPath(language: Language): string {
+  return pagePath(language, 'resources');
+}
+
 /** The path of `pathname` with one trailing slash, in lower case. */
 const normalized = (pathname: string) => pathname.toLowerCase().replace(/\/?$/, '/');
 
-const PAGES: readonly Page[] = ['home', 'install', 'fastboot'];
+const PAGES: readonly Page[] = ['home', 'install', 'fastboot', 'resources'];
 
 /** The language and the page at `pathname`. Any other path is the English home page. */
 export function pathPage(pathname: string): { language: Language; page: Page } {

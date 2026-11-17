@@ -24,6 +24,7 @@ import {
   type CoverFields,
   type Input,
 } from '../import/names';
+import { importCoverLook } from '../coverPalette';
 import { presetRecipePlan } from '../import/presetRecipe';
 import { TaskSlot } from '../import/task';
 import { loadWasm } from '../package';
@@ -69,7 +70,14 @@ type Status =
 /** `auto` uses the input that the LUT data suggests (`guessInput`). */
 type InputChoice = 'auto' | Input;
 
-const EMPTY_COVER: CoverFields = { brand: 'LUT', name: 'LUT', number: '', band: false };
+const EMPTY_COVER: CoverFields = {
+  template: 'box',
+  look: 'gray',
+  brand: 'CUSTOM',
+  name: 'LOOK',
+  number: '',
+  band: false,
+};
 
 /** Any touch pointer, not only the primary one, so an iPad with a trackpad still counts. */
 const hasTouch = () =>
@@ -171,7 +179,7 @@ export function ImportDialog({
       return;
     }
     setName(nameFromFile(chosen.name));
-    void fillCover(coverFromFile(chosen.name));
+    void fillCover({ ...coverFromFile(chosen.name), look: importCoverLook() });
     // A preset has no input encoding; skip the guess and import as Standard.
     if (isPreset(chosen.name)) {
       guess.cancel();

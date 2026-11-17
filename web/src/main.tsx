@@ -9,6 +9,7 @@ import { showLanguage, takeLegacyLanguage } from './i18n';
 import { installPath, isInstallAnchor, pagePath, pathPage } from './languagePage';
 import { FastbootPage } from './components/FastbootPage';
 import { HomePage } from './components/HomePage';
+import { ResourcesPage } from './components/ResourcesPage';
 // The site serves its fonts itself, so a page view sends no request to a font host.
 // loadFonts adds the Chinese, Japanese, or Korean fonts when a page in that language needs them.
 import '@fontsource/ibm-plex-sans/400.css';
@@ -50,6 +51,12 @@ if (target !== null) {
     root.render(
       <StrictMode>
         <FastbootPage initialLanguage={language} />
+      </StrictMode>,
+    );
+  } else if (page === 'resources') {
+    root.render(
+      <StrictMode>
+        <ResourcesPage initialLanguage={language} />
       </StrictMode>,
     );
   } else if (page === 'home') {

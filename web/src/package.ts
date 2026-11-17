@@ -1,8 +1,23 @@
 import type { CardFile } from './card';
-import { effectUrl, siteUrl, type Effect, type PackageEffect } from './catalog';
+import {
+  effectUrl,
+  siteUrl,
+  type CatalogEffect,
+  type Cover,
+  type Effect,
+  type PackageEffect,
+} from './catalog';
 import { effectFilename } from './import/names';
+import { NATIVE_LOOKS } from './import/native';
+import { isCatalogEffect, isFilmCover, needsCoverRelabel, packageCover } from './packageCovers';
 import { fetchFile, type Progress } from './transfer';
 import wasmUrl from './wasm/grkit_wasm_bg.wasm?url';
+
+/** Cover used when packaging: the effect's own, else a known Cinema cover. */
+function packagingCoverOf(effect: PackageEffect): Cover | undefined {
+  if (isFilmCover(effect.cover)) return effect.cover;
+  return NATIVE_LOOKS.find((look) => look.id === effect.id)?.cover;
+}
 
 /** One file that the package needs. A download keeps its bytes for later packages. */
 interface Transfer extends Progress {
@@ -100,6 +115,42 @@ async function sha256(bytes: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Relabels `bytes` with the cover the colorful switch would bake, or returns them unchanged.
+ */
+export async function withPackagedCover(
+  bytes: Uint8Array,
+  name: string,
+  cover: Cover | undefined,
+  colorful: boolean,
+): Promise<{ bytes: Uint8Array; relabeled: boolean }> {
+  if (!needsCoverRelabel(cover, colorful) || !isFilmCover(cover)) {
+    return { bytes, relabeled: false };
+  }
+  const packed = packageCover(cover, colorful);
+  const { iconPixels, relabelEffect } = await loadWasm();
+  const icon = iconPixels(JSON.stringify(packed));
+  return { bytes: relabelEffect(bytes, name, icon), relabeled: true };
+}
+
+/**
+ * Site GRF bytes for a catalog effect, with packaging colors baked in when colorful is on.
+ * Returns whether the bytes were relabeled (sha256 of the site file no longer applies).
+ */
+export async function catalogEffectBytes(
+  effect: CatalogEffect,
+  siteBytes: Uint8Array,
+  colorful: boolean,
+): Promise<{ bytes: Uint8Array; relabeled: boolean }> {
+  return withPackagedCover(siteBytes, effect.name, effect.cover, colorful);
+}
+
+/** Expected ADJ icon pixels for a film cover under the colorful switch. */
+export async function expectedCoverIcon(cover: Cover, colorful: boolean): Promise<Uint8Array> {
+  const { iconPixels } = await loadWasm();
+  return iconPixels(JSON.stringify(packageCover(cover, colorful)));
+}
+
 type Packager = InstanceType<Wasm['Package']>;
 
 /**
@@ -116,6 +167,7 @@ type Packager = InstanceType<Wasm['Package']>;
  * null. INSTALL copies it to the data folder.
  * `leftOut` names the `.GRF` files of the site effects that the person did not choose. The package
  * lists them, and the camera does not list them, also when an earlier package put them there.
+ * `colorful` bakes packaging colors into catalog film-cover icons that have no stored colors.
  */
 async function assemble<T>(
   targets: readonly string[],
@@ -128,6 +180,7 @@ async function assemble<T>(
   finish: (builder: Packager) => T,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
+  colorful = false,
 ): Promise<T> {
   const used = new Set<string>([wasmUrl]);
   const use = (url: string) => {
@@ -158,13 +211,23 @@ async function assemble<T>(
     const moduleBytes = Promise.all(modules.map((id) => use(moduleUrl(id))));
     moduleBytes.catch(ignore);
     const effectBytes = Promise.all(
-      effects.map((effect) =>
-        effect.card
-          ? Promise.resolve(effect.card.bytes)
-          : effect.imported
-            ? Promise.resolve(effect.imported.blob)
-            : use(effectUrl(targets[0]!, effect.file)),
-      ),
+      effects.map(async (effect) => {
+        if (effect.card) {
+          return withPackagedCover(effect.card.bytes, effect.name, packagingCoverOf(effect), colorful);
+        }
+        if (effect.imported) {
+          return withPackagedCover(
+            effect.imported.blob,
+            effect.name,
+            packagingCoverOf(effect),
+            colorful,
+          );
+        }
+        const site = await use(effectUrl(targets[0]!, effect.file));
+        return isCatalogEffect(effect)
+          ? catalogEffectBytes(effect, site, colorful)
+          : { bytes: site, relabeled: false };
+      }),
     );
     // The build awaits the effects later. Until then, a failure is not an unhandled rejection.
     effectBytes.catch(ignore);
@@ -189,10 +252,16 @@ async function assemble<T>(
           builder.addRuntimeFile(number, paths[index]!, bytes);
         }
       }
-      for (const [index, blob] of (await effectBytes).entries()) {
+      for (const [index, item] of (await effectBytes).entries()) {
         const effect = effects[index]!;
-        // An imported effect or an effect from the card has no site file to check.
-        if (!effect.imported && !effect.card && (await sha256(blob)) !== effect.sha256) {
+        const { bytes: blob, relabeled } = item!;
+        // An imported effect, a card effect, or a recolored catalog cover has no site checksum.
+        if (
+          !effect.imported &&
+          !effect.card &&
+          !relabeled &&
+          (await sha256(blob)) !== effect.sha256
+        ) {
           throw new Error(`Effect checksum mismatch: ${effect.id}`);
         }
         builder.addEffect(blob);
@@ -227,6 +296,7 @@ export function buildPackage(
   onProgress: (received: number, retrying: boolean) => void,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
+  colorful = false,
 ): Promise<Blob> {
   return assemble(
     targets,
@@ -242,6 +312,7 @@ export function buildPackage(
     },
     recipes,
     leftOut,
+    colorful,
   );
 }
 
@@ -259,6 +330,7 @@ export function buildCardFiles(
   onProgress: (received: number) => void,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
+  colorful = false,
 ): Promise<CardFile[]> {
   return assemble(
     targets,
@@ -276,6 +348,7 @@ export function buildCardFiles(
       }),
     recipes,
     leftOut,
+    colorful,
   );
 }
 

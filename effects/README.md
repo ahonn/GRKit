@@ -30,9 +30,11 @@ A monochrome effect cannot have `post_matrix`, `selective_color`, `hue_sectors`,
 | Form | Fields |
 |---|---|
 | Label tile | `label` (1 to 4 capitals or digits) and `shape` (`film`, `filter`, or `plain`) |
-| Film box | `template: "box"`, `brand`, `name`, an optional `number`, and `band` |
+| Film box | `template: "box"`, `brand`, `name`, an optional `number`, and `band` (website: Film box / Film box 2) |
 | Motion picture film label | `template: "cine"`, `brand`, `name`, and an optional `number` |
+| Bottom brand band | `template: "stack"`, `brand`, `name`, and an optional `number` |
 
+- Optional `colors`: `{ "band", "brand", "body", "text", "accent" }`, each an `[r, g, b]` triple (0–255). The compiler accepts any RGB. On the website, covers pick RGB from a curated ink list (`COVER_INKS`) via named looks; stock packaging and the import editor share that list. Without `colors`, the cover stays the classic gray.
 - The icon shows the words of the effect name and the brand, in capitals. A cover without `number` shows the name large.
 - A motion picture film label shows the film number in place of the series name: Vision3 500T shows `5219` above `500T`. The target description must give that number.
 - Stock codes, papers, and process details go in the target description.

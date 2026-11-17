@@ -1,17 +1,24 @@
 import { CATALOG_SCHEMA } from './generated/site';
+import type { CoverColors, CoverTemplate } from './coverPalette';
 import type { Input } from './import/names';
 
 export { MAX_EFFECTS } from './generated/site';
 
 /** The fields of a film cover icon, as `effect.json` gives them (`effects/README.md`, Icons). */
 export interface Cover {
-  template: 'box' | 'cine';
+  template: CoverTemplate;
   brand: string;
   name: string;
   /** Missing when the cover shows a large name instead of a number. */
   number?: string;
-  /** A light band at the bottom of a film box. */
+  /** A light band at the bottom of a film box (`box` only). */
   band?: boolean;
+  /**
+   * RGB fills for the cover. Older catalogs omit it; with color covers on, the page then uses
+   * packaging colors from the film stock. Rust takes this object as-is — no named presets on the
+   * compiler side.
+   */
+  colors?: CoverColors;
 }
 
 /** The fields that the page shows for each effect. */

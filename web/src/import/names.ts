@@ -1,4 +1,10 @@
 import type { Cover } from '../catalog';
+import {
+  colorsFromLook,
+  packagingLook,
+  type CoverLookId,
+  type CoverTemplate,
+} from '../coverPalette';
 import { EFFECT_ID_MAX, EFFECT_NAME_MAX } from '../generated/site';
 
 /** The input encodings of `grkit effects import --input`, in the order the page offers them. */
@@ -129,13 +135,16 @@ export function effectId(name: string, taken: ReadonlySet<string>): string {
   return id;
 }
 
-/** The fields of an imported effect's icon: a film box, as on the catalog covers. */
+/** The fields of an imported effect's icon: a film cover, as on the catalog covers. */
 export interface CoverFields {
+  template: CoverTemplate;
+  /** Cover look from `COVER_LOOKS` — expands to RGB from `COVER_INKS`. */
+  look: CoverLookId;
   brand: string;
   name: string;
   /** Empty for no number. The cover then shows the name large. */
   number: string;
-  /** A light band at the bottom of the box. */
+  /** A light band at the bottom of the box (`box` only). */
   band: boolean;
 }
 
@@ -151,9 +160,18 @@ export function validCover({ brand, name, number }: CoverFields): boolean {
   return validCoverText(brand) && validCoverText(name) && (number === '' || validCoverText(number));
 }
 
-/** The effect.json `icon` of the cover fields: a film box, with no `number` key when empty. */
-export function coverIcon({ brand, name, number, band }: CoverFields): Cover {
-  return number ? { template: 'box', brand, name, number, band } : { template: 'box', brand, name, band };
+/** The effect.json `icon` of the cover fields: look RGB from `COVER_INKS`. */
+export function coverIcon({ template, look, brand, name, number, band }: CoverFields): Cover {
+  const base = {
+    template,
+    brand,
+    name,
+    colors: colorsFromLook(look),
+  } as const;
+  if (template === 'box') {
+    return number ? { ...base, number, band } : { ...base, band };
+  }
+  return number ? { ...base, number } : { ...base };
 }
 
 const cut = (text: string) => text.slice(0, MAX_COVER_TEXT).trim();
@@ -210,21 +228,27 @@ export function coverFromFile(file: string): CoverFields {
   const [first = '', ...others] = rest;
   const [head = '', ...tail] = first.split('-').filter(Boolean);
   const prefix = tail.length > 0 && head === head.toLowerCase();
+  // No known film brand: use CUSTOM (short enough for the 40px icon) and the file words as
+  // the film name. A single leftover word is the name, not a second "LUT".
   const [brand, ...name] = known
     ? [BRANDS[known.toLowerCase()]!, ...rest]
     : prefix
       ? [head.toUpperCase(), tail.join('-'), ...others]
       : rest.length >= 2 && tail.length === 0
         ? [head.toUpperCase(), ...others]
-        : ['LUT', ...rest];
+        : ['CUSTOM', ...rest];
   // The leading whole words that fit, so a cut never splits a word; a long hyphenated word
   // keeps its parts that fit, with spaces.
-  const nameText = cut(fitWords(name, MAX_COVER_TEXT, ' ').toUpperCase()) || 'LUT';
+  const nameText = cut(fitWords(name, MAX_COVER_TEXT, ' ').toUpperCase()) || 'LOOK';
+  const brandText = cut(brand!) || 'CUSTOM';
+  const numberText = cut((number ?? '').toUpperCase());
   return {
-    brand: cut(brand!) || 'LUT',
+    template: 'box',
+    look: packagingLook(brandText, nameText, 'box', numberText),
+    brand: brandText,
     name: nameText,
     // Without a film speed, the cover shows the name large.
-    number: cut((number ?? '').toUpperCase()),
+    number: numberText,
     band: false,
   };
 }

@@ -2,6 +2,7 @@
 import { createReadStream, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import react from '@vitejs/plugin-react';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite';
 import { addPlausible, allowPlausible, plausibleOrigin } from './plausible.ts';
 
@@ -122,6 +123,8 @@ function plausible(host: string | undefined): Plugin {
 export default defineConfig({
   plugins: [
     react(),
+    // Local HTTPS so Chrome File System Access works (SD card write). Use with Tailscale Funnel too.
+    basicSsl(),
     woff2Only(),
     preloadFonts(),
     siteData(process.env.GRKIT_SITE_DATA ?? '../dist/site-data'),
@@ -129,7 +132,11 @@ export default defineConfig({
   ],
   define: { __GRKIT_VERSION__: JSON.stringify(workspaceVersion()) },
   // The landing page shows the camera screens of the README from resources/images.
-  server: { fs: { allow: ['.', '../resources/images'] } },
+  // `.ts.net` allows Tailscale Serve/Funnel hosts through to Vite.
+  server: {
+    fs: { allow: ['.', '../resources/images'] },
+    allowedHosts: ['.ts.net', '.localhost'],
+  },
   build: {
     target: 'es2023',
     // The CSP allows fonts only from the site, so fonts stay files and never become data URLs.

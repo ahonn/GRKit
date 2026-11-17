@@ -23,7 +23,7 @@ export function FastbootPage({ initialLanguage }: { initialLanguage: Language })
     <div className="page">
       <Masthead strings={t} language={language} page="fastboot" onLanguage={chooseLanguage} />
       <main>
-        <FastbootSection strings={t} terms={guideUrl('TERMS', language)} />
+        <FastbootSection strings={t} language={language} terms={guideUrl('TERMS', language)} />
       </main>
       <Footer strings={t} language={language} />
     </div>

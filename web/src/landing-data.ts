@@ -1,6 +1,7 @@
 // The landing data that the page (landing.ts) and scripts/build-landing.mjs share. It has no
 // asset imports, so Node can load it.
 import type { Cover } from './catalog';
+import { packagingColors } from './coverPalette';
 
 /**
  * The film looks of the landing hero: the catalog name, the image that scripts/build-landing.mjs
@@ -13,12 +14,50 @@ export interface LandingLook {
   cover: Cover;
 }
 
+const look = (name: string, image: string, cover: Omit<Cover, 'colors'>): LandingLook => ({
+  name,
+  image,
+  cover: {
+    ...cover,
+    colors: packagingColors(cover.brand, cover.name, cover.template, cover.number ?? ''),
+  },
+});
+
 export const LANDING_LOOKS = [
-  { name: 'Portra 400', image: 'portra-400', cover: { band: true, brand: 'Kodak', name: 'PORTRA', number: '400', template: 'box' } },
-  { name: 'Kodachrome 64', image: 'kodachrome-64', cover: { band: true, brand: 'Kodak', name: 'KODACHROME', number: '64', template: 'box' } },
-  { name: 'Velvia 100', image: 'velvia-100', cover: { band: true, brand: 'FUJIFILM', name: 'VELVIA', number: '100', template: 'box' } },
-  { name: 'Eterna 500T', image: 'eterna-500t', cover: { brand: 'FUJIFILM', name: '8573', number: '500T', template: 'cine' } },
-  { name: 'Tri-X 400', image: 'tri-x-400', cover: { band: true, brand: 'Kodak', name: 'TRI-X', number: '400', template: 'box' } },
+  look('Portra 400', 'portra-400', {
+    band: true,
+    brand: 'Kodak',
+    name: 'PORTRA',
+    number: '400',
+    template: 'box',
+  }),
+  look('Kodachrome 64', 'kodachrome-64', {
+    band: true,
+    brand: 'Kodak',
+    name: 'KODACHROME',
+    number: '64',
+    template: 'box',
+  }),
+  look('Velvia 100', 'velvia-100', {
+    band: true,
+    brand: 'FUJIFILM',
+    name: 'VELVIA',
+    number: '100',
+    template: 'box',
+  }),
+  look('Eterna 500T', 'eterna-500t', {
+    brand: 'FUJIFILM',
+    name: '8573',
+    number: '500T',
+    template: 'cine',
+  }),
+  look('Tri-X 400', 'tri-x-400', {
+    band: true,
+    brand: 'Kodak',
+    name: 'TRI-X',
+    number: '400',
+    template: 'box',
+  }),
 ] as const satisfies readonly LandingLook[];
 
 /** The film looks that each package can hold (effects/ in the repository), so the strip can say

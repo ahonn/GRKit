@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { firmwareName, LATEST, latestName, makeFastbootFirmware, OLDER, SUPPORTED_NAMES } from '../fastboot';
-import type { Strings } from '../i18n';
+import { firmwareName, LATEST, latestName, makeFastbootFirmware, OLDER } from '../fastboot';
+import type { Language, Strings } from '../i18n';
+import { resourcesPath } from '../languagePage';
+import { PRIMARY_VIDEO } from '../resources';
 import { FastbootInstall } from './FastbootInstall';
 import { TermsNote } from './TermsNote';
 
@@ -16,7 +18,15 @@ type State =
  * official update file in the browser (`grkit_firmware`), how to install it (`FastbootInstall`), and
  * how to remove it.
  */
-export function FastbootSection({ strings, terms }: { strings: Strings; terms: string }) {
+export function FastbootSection({
+  strings,
+  language,
+  terms,
+}: {
+  strings: Strings;
+  language: Language;
+  terms: string;
+}) {
   const t = strings.fastboot;
   const [state, setState] = useState<State>({ state: 'idle' });
 
@@ -50,11 +60,21 @@ export function FastbootSection({ strings, terms }: { strings: Strings; terms: s
                 <tr key={name}>
                   <th scope="row">{name}</th>
                   <td data-label={t.compareHead[0]}>{official}</td>
-                  <td data-label={t.compareHead[1]}>{fast ?? SUPPORTED_NAMES.join(t.versionSeparator)}</td>
+                  <td data-label={t.compareHead[1]}>{fast}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="note">
+            {t.videoHint[0]}
+            <a href={PRIMARY_VIDEO.href} target="_blank" rel="noreferrer">
+              {t.videoHint[1]}
+            </a>
+            {t.videoHint[2]}{' '}
+            <span className="resource-source">{PRIMARY_VIDEO.source}</span>
+            <span aria-hidden="true"> · </span>
+            <a href={resourcesPath(language)}>{t.moreResources}</a>
+          </p>
         </div>
       </section>
       <section className="section fastboot" id="fastboot" aria-labelledby="fastboot-make">

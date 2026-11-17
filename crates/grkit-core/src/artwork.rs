@@ -51,8 +51,11 @@ fn toolbar_background() -> Vec<u8> {
     frame(1, 1, 38, 38)
 }
 
+/// An opaque RGB color.
+type Rgb = [u8; 3];
+
 /// Blend `ink` over an opaque tile pixel by glyph coverage.
-fn blend(rgba: &mut [u8], x: i32, y: i32, ink: u8, coverage: f32) {
+fn blend(rgba: &mut [u8], x: i32, y: i32, ink: Rgb, coverage: f32) {
     if !(0..40).contains(&x) || !(0..40).contains(&y) {
         return;
     }
@@ -61,15 +64,20 @@ fn blend(rgba: &mut [u8], x: i32, y: i32, ink: u8, coverage: f32) {
         return;
     }
     let coverage = coverage.clamp(0.0, 1.0);
-    for channel in &mut rgba[offset..offset + 3] {
+    for (channel, target) in rgba[offset..offset + 3].iter_mut().zip(ink) {
         let old = f32::from(*channel);
-        *channel = (old + (f32::from(ink) - old) * coverage).round() as u8;
+        *channel = (old + (f32::from(target) - old) * coverage).round() as u8;
     }
+}
+
+fn gray(shade: u8) -> Rgb {
+    [shade, shade, shade]
 }
 
 /// Draw `label` centered horizontally, with its capitals centered on `middle`.
 /// The size shrinks from `size` until the label fits within `width` pixels.
 fn text(rgba: &mut [u8], label: &str, size: f32, width: f32, middle: f32, ink: u8) {
+    let ink = gray(ink);
     let font = FontRef::try_from_slice(FONT).expect("embedded font is valid");
     let mut scale = size;
     loop {
@@ -142,7 +150,7 @@ pub fn render_tile(label: &str, shape: &str) -> Result<Vec<u8>> {
                             sx * sx + sy * sy <= 13.5 * 13.5
                         })
                         .count();
-                    blend(&mut rgba, x, y, 255, inside as f32 / 16.0);
+                    blend(&mut rgba, x, y, gray(255), inside as f32 / 16.0);
                 }
             }
             30
@@ -175,10 +183,59 @@ pub fn render_tile(label: &str, shape: &str) -> Result<Vec<u8>> {
 /// Roboto Condensed Black, the weight 900 instance of the same release, with
 /// the same characters and license as `FONT`. Only the cover icons use it.
 const COVER_FONT: &[u8] = include_bytes!("../assets/RobotoCondensed-Black.ttf");
-/// Cover shades: the light bands, the dark text on them, and the body.
-const LIGHT: u8 = 214;
-const DARK: u8 = 40;
-const BODY: u8 = 51;
+/// Cover fill colors. The website (or any author) chooses RGB; this crate does not name palettes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Palette {
+    pub band: Rgb,
+    pub brand: Rgb,
+    pub body: Rgb,
+    pub text: Rgb,
+    pub accent: Rgb,
+}
+
+/// The classic gray cover, used when `colors` is omitted from an icon definition.
+pub const NEUTRAL_PALETTE: Palette = Palette {
+    band: [214, 214, 214],
+    brand: [40, 40, 40],
+    body: [51, 51, 51],
+    text: [255, 255, 255],
+    accent: [214, 214, 214],
+};
+
+/// Reads one `[r, g, b]` triple (0–255) from a JSON object.
+pub fn read_rgb(value: &serde_json::Value, key: &str) -> Result<Rgb> {
+    let channels = value
+        .get(key)
+        .and_then(|v| v.as_array())
+        .with_context(|| format!("Expected cover colors.{key} as [r, g, b]"))?;
+    ensure!(
+        channels.len() == 3,
+        "Expected cover colors.{key} as [r, g, b] with three channels"
+    );
+    let mut rgb = [0u8; 3];
+    for (i, channel) in channels.iter().enumerate() {
+        let n = channel
+            .as_u64()
+            .with_context(|| format!("Expected cover colors.{key}[{i}] as an integer 0–255"))?;
+        ensure!(
+            n <= 255,
+            "Expected cover colors.{key}[{i}] as an integer 0–255, not {n}"
+        );
+        rgb[i] = n as u8;
+    }
+    Ok(rgb)
+}
+
+/// Reads `band`, `brand`, `body`, `text`, and `accent` RGB triples from a `colors` object.
+pub fn parse_colors(value: &serde_json::Value) -> Result<Palette> {
+    Ok(Palette {
+        band: read_rgb(value, "band")?,
+        brand: read_rgb(value, "brand")?,
+        body: read_rgb(value, "body")?,
+        text: read_rgb(value, "text")?,
+        accent: read_rgb(value, "accent")?,
+    })
+}
 /// The cover rows, with a 3-pixel transparent margin above and below. The cover spans the full tile width, so that a name
 /// such as KODACHROME fits on one line.
 const COVER: i32 = 3;
@@ -187,10 +244,11 @@ const COVER_WIDTH: i32 = 40;
 /// A cover text may compress to this horizontal scale before it is rejected.
 const MIN_COMPRESSION: f32 = 0.75;
 
-fn fill(rgba: &mut [u8], top: i32, bottom: i32, shade: u8) {
+fn fill(rgba: &mut [u8], top: i32, bottom: i32, color: Rgb) {
     for y in top..bottom {
         for x in 0..COVER_WIDTH {
-            dot(rgba, x as usize, y as usize, shade);
+            let offset = (y as usize * 40 + x as usize) * 4;
+            rgba[offset..offset + 4].copy_from_slice(&[color[0], color[1], color[2], 255]);
         }
     }
 }
@@ -208,7 +266,7 @@ fn cover_text(
     tracking: f32,
     width: f32,
     min_compression: f32,
-    ink: u8,
+    ink: Rgb,
 ) -> Option<()> {
     let font = FontRef::try_from_slice(COVER_FONT).expect("embedded font is valid");
     let unit = PxScale::from(100.0);
@@ -336,7 +394,7 @@ fn pixel_width(glyphs: &[[&str; 5]]) -> i32 {
         - 1
 }
 
-fn pixel_text(rgba: &mut [u8], label: &str, top: i32, ink: u8) -> Result<()> {
+fn pixel_text(rgba: &mut [u8], label: &str, top: i32, ink: Rgb) -> Result<()> {
     let glyphs_of = |glyph: fn(char) -> Option<[&'static str; 5]>| {
         label
             .chars()
@@ -399,7 +457,7 @@ const NAME_WIDTH: f32 = 38.0;
 
 /// Draws `name` in Roboto Condensed Black at the largest capital height in `capitals` that fits,
 /// centered vertically on `center`. Returns false, and draws nothing, if no size fits.
-fn fitted_name(rgba: &mut [u8], name: &str, capitals: &[f32], center: f32) -> bool {
+fn fitted_name(rgba: &mut [u8], name: &str, capitals: &[f32], center: f32, ink: Rgb) -> bool {
     capitals.iter().any(|&capital| {
         let baseline = (center + capital / 2.0).round() as i32;
         cover_text(
@@ -410,65 +468,89 @@ fn fitted_name(rgba: &mut [u8], name: &str, capitals: &[f32], center: f32) -> bo
             -0.02,
             NAME_WIDTH,
             NAME_COMPRESSION,
-            255,
+            ink,
         )
         .is_some()
     })
 }
 
-/// A gray cover: a light band with the brand, then a dark body with the film
-/// name and a large number. The brand uses Roboto Condensed Black when it fits without
-/// compression, and the pixel font otherwise. The name uses the pixel font. A
-/// name that the pixel font cannot draw in 40 pixels uses a smaller Roboto Condensed Black.
+/// A film cover: brand band, then body with the film name and optional number.
 /// An empty `number` means no number: the name then uses Roboto Condensed Black, as large
-/// as fits, centered on the body. A name that fits no large size uses the pixel
-/// font, and then the smaller Roboto Condensed Black.
-fn cover(brand: &str, name: &str, number: &str, bottom: Bottom) -> Result<Vec<u8>> {
+/// as fits, centered on the body. `header_end` is the first body row (12 for box/cine, 16 for stack).
+fn cover(
+    brand: &str,
+    name: &str,
+    number: &str,
+    bottom: Bottom,
+    palette: Palette,
+    header_end: i32,
+) -> Result<Vec<u8>> {
     check_cover_label(brand, "brand")?;
     check_cover_label(name, "name")?;
     if !number.is_empty() {
         check_cover_label(number, "number")?;
     }
     let mut rgba = vec![0; 40 * 40 * 4];
-    fill(&mut rgba, COVER, COVER_END, BODY);
-    fill(&mut rgba, COVER, 12, LIGHT);
-    if cover_text(&mut rgba, brand, 6.0, 10, -0.04, 28.0, 1.0, DARK).is_none() {
-        pixel_text(&mut rgba, brand, 5, DARK)?;
+    fill(&mut rgba, COVER, COVER_END, palette.body);
+    fill(&mut rgba, COVER, header_end, palette.band);
+    let brand_baseline = if header_end > 12 { 13 } else { 10 };
+    let brand_pixel_top = if header_end > 12 { 8 } else { 5 };
+    if cover_text(
+        &mut rgba,
+        brand,
+        6.0,
+        brand_baseline,
+        -0.04,
+        28.0,
+        1.0,
+        palette.brand,
+    )
+    .is_none()
+    {
+        pixel_text(&mut rgba, brand, brand_pixel_top, palette.brand)?;
     }
     // The number sits one row lower without a bottom band, and one row
     // higher above the stripes. `body_end` is the first row below the body.
     let (name_top, baseline, body_end) = match bottom {
-        Bottom::None => (15, 33, COVER_END),
+        Bottom::None => (if header_end > 12 { 18 } else { 15 }, 33, COVER_END),
         Bottom::Band => {
-            fill(&mut rgba, 34, COVER_END, LIGHT);
+            fill(&mut rgba, 34, COVER_END, palette.accent);
             (14, 32, 34)
         }
         Bottom::Stripes => {
             for row in [32, 34, 36] {
-                fill(&mut rgba, row, row + 1, LIGHT);
+                fill(&mut rgba, row, row + 1, palette.accent);
             }
             (14, 31, 32)
         }
     };
     if number.is_empty() {
-        // The body starts below the brand band, on row 12.
-        let center = (12 + body_end) as f32 / 2.0;
-        if !fitted_name(&mut rgba, name, &LARGE_NAME, center) {
-            // The 5-pixel font, centered on the body.
-            let pixel = pixel_text(&mut rgba, name, 12 + (body_end - 12 - 5) / 2, 255);
-            if pixel.is_err() && !fitted_name(&mut rgba, name, &SMALL_NAME, center) {
+        let center = (header_end + body_end) as f32 / 2.0;
+        if !fitted_name(&mut rgba, name, &LARGE_NAME, center, palette.text) {
+            let pixel = pixel_text(
+                &mut rgba,
+                name,
+                header_end + (body_end - header_end - 5) / 2,
+                palette.text,
+            );
+            if pixel.is_err() && !fitted_name(&mut rgba, name, &SMALL_NAME, center, palette.text) {
                 pixel.with_context(|| format!("Cover name {name:?} does not fit"))?;
             }
         }
         return Ok(rgba);
     }
-    // `pixel_text` draws nothing when it fails, so a smaller Roboto Condensed Black can take its place.
-    let pixel = pixel_text(&mut rgba, name, name_top, 255);
-    if pixel.is_err() && !fitted_name(&mut rgba, name, &SMALL_NAME, name_top as f32 + 2.5) {
+    let pixel = pixel_text(&mut rgba, name, name_top, palette.text);
+    if pixel.is_err()
+        && !fitted_name(
+            &mut rgba,
+            name,
+            &SMALL_NAME,
+            name_top as f32 + 2.5,
+            palette.text,
+        )
+    {
         pixel.with_context(|| format!("Cover name {name:?} does not fit"))?;
     }
-    // A number that does not fit at full size takes a smaller size with the same
-    // vertical center.
     NUMBER_CAPITALS
         .iter()
         .find_map(|&capital| {
@@ -481,7 +563,7 @@ fn cover(brand: &str, name: &str, number: &str, bottom: Bottom) -> Result<Vec<u8
                 -0.04,
                 34.0,
                 MIN_COMPRESSION,
-                255,
+                palette.text,
             )
         })
         .with_context(|| format!("Cover number {number:?} does not fit"))?;
@@ -490,19 +572,90 @@ fn cover(brand: &str, name: &str, number: &str, bottom: Bottom) -> Result<Vec<u8
 
 /// A still film box. Professional films have a light band at the bottom.
 /// An empty `number` gives a large name and no number.
-pub fn render_box(brand: &str, name: &str, number: &str, band: bool) -> Result<Vec<u8>> {
+pub fn render_box(
+    brand: &str,
+    name: &str,
+    number: &str,
+    band: bool,
+    colors: Palette,
+) -> Result<Vec<u8>> {
     cover(
         brand,
         name,
         number,
         if band { Bottom::Band } else { Bottom::None },
+        colors,
+        12,
     )
 }
 
 /// A motion picture film label, with three light stripes at the bottom.
 /// An empty `number` gives a large name and no number.
-pub fn render_cine(brand: &str, name: &str, number: &str) -> Result<Vec<u8>> {
-    cover(brand, name, number, Bottom::Stripes)
+pub fn render_cine(brand: &str, name: &str, number: &str, colors: Palette) -> Result<Vec<u8>> {
+    cover(brand, name, number, Bottom::Stripes, colors, 12)
+}
+
+/// A film cover with the brand band at the bottom (inverted box).
+/// An empty `number` gives a large name in the upper body.
+pub fn render_stack(brand: &str, name: &str, number: &str, colors: Palette) -> Result<Vec<u8>> {
+    check_cover_label(brand, "brand")?;
+    check_cover_label(name, "name")?;
+    if !number.is_empty() {
+        check_cover_label(number, "number")?;
+    }
+    // First row of the bottom brand band.
+    const FOOTER: i32 = 28;
+    let mut rgba = vec![0; 40 * 40 * 4];
+    fill(&mut rgba, COVER, COVER_END, colors.body);
+    fill(&mut rgba, FOOTER, COVER_END, colors.band);
+    if cover_text(&mut rgba, brand, 6.0, 35, -0.04, 28.0, 1.0, colors.brand).is_none() {
+        pixel_text(&mut rgba, brand, 31, colors.brand)?;
+    }
+    if number.is_empty() {
+        let center = (COVER + FOOTER) as f32 / 2.0;
+        if !fitted_name(&mut rgba, name, &LARGE_NAME, center, colors.text) {
+            let pixel = pixel_text(
+                &mut rgba,
+                name,
+                COVER + (FOOTER - COVER - 5) / 2,
+                colors.text,
+            );
+            if pixel.is_err() && !fitted_name(&mut rgba, name, &SMALL_NAME, center, colors.text) {
+                pixel.with_context(|| format!("Cover name {name:?} does not fit"))?;
+            }
+        }
+        return Ok(rgba);
+    }
+    let name_top = 8;
+    let pixel = pixel_text(&mut rgba, name, name_top, colors.text);
+    if pixel.is_err()
+        && !fitted_name(
+            &mut rgba,
+            name,
+            &SMALL_NAME,
+            name_top as f32 + 2.5,
+            colors.text,
+        )
+    {
+        pixel.with_context(|| format!("Cover name {name:?} does not fit"))?;
+    }
+    NUMBER_CAPITALS
+        .iter()
+        .find_map(|&capital| {
+            let baseline = 26 - ((NUMBER_CAPITALS[0] - capital) / 2.0).round() as i32;
+            cover_text(
+                &mut rgba,
+                number,
+                capital,
+                baseline,
+                -0.04,
+                34.0,
+                MIN_COMPRESSION,
+                colors.text,
+            )
+        })
+        .with_context(|| format!("Cover number {number:?} does not fit"))?;
+    Ok(rgba)
 }
 
 pub fn off_pixels() -> Vec<u8> {
@@ -740,6 +893,8 @@ pub fn strike(rgba: &mut [u8]) {
     // Half widths across the line, and the ends along it, as (x + y) / 2.
     const WHITE: (f32, f32, f32) = (1.55, 5.25, 34.75);
     const BLACK: (f32, f32, f32) = (2.83, 4.2, 35.8);
+    /// Body fill of the gray list tile (`background`).
+    const TILE_BODY: u8 = 51;
     let inside = |(half, start, end): (f32, f32, f32), x: f32, y: f32| {
         (x - y).abs() / std::f32::consts::SQRT_2 <= half && (start..=end).contains(&((x + y) / 2.0))
     };
@@ -747,8 +902,8 @@ pub fn strike(rgba: &mut [u8]) {
         for x in 2..38 {
             let at = (y * 40 + x) * 4;
             for channel in &mut rgba[at..at + 3] {
-                if *channel > BODY {
-                    *channel = BODY + (*channel - BODY) / 2;
+                if *channel > TILE_BODY {
+                    *channel = TILE_BODY + (*channel - TILE_BODY) / 2;
                 }
             }
             let (mut white, mut black) = (0u32, 0u32);

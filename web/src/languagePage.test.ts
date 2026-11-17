@@ -9,6 +9,7 @@ import {
   isInstallAnchor,
   pathLanguage,
   pathPage,
+  resourcesPath,
   visitorLanguage,
   type Visitor,
 } from './languagePage';
@@ -44,6 +45,14 @@ describe('pathLanguage', () => {
     expect(pathPage('/faq/install/')).toEqual({ language: 'en', page: 'home' });
     expect(installPath('en')).toBe('/install/');
     expect(installPath('zh-Hans')).toBe('/zh-hans/install/');
+  });
+
+  it('reads the language of a resources page', () => {
+    expect(pathPage('/resources/')).toEqual({ language: 'en', page: 'resources' });
+    expect(pathPage('/zh-hans/resources')).toEqual({ language: 'zh-Hans', page: 'resources' });
+    expect(pathPage('/ja/resources/')).toEqual({ language: 'ja', page: 'resources' });
+    expect(resourcesPath('en')).toBe('/resources/');
+    expect(resourcesPath('ko')).toBe('/ko/resources/');
   });
 });
 

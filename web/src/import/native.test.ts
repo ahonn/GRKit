@@ -32,6 +32,10 @@ describe('importsForCamera', () => {
     expect(hasNativeLooks(imported.slice(0, 2))).toBe(false);
     expect(hasNativeLooks(imported)).toBe(true);
     expect(missingNativeLooks(imported.slice(2)).map((look) => look.id)).toEqual(['gr4-cinema-yellow']);
+    // A Cinema look already on the card is not offered again as an unlock tile.
+    expect(
+      missingNativeLooks([{ id: 'lut-a' }, { id: 'gr4-cinema-yellow' }]).map((look) => look.id),
+    ).toEqual(['gr4-cinema-green']);
   });
 });
 

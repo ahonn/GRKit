@@ -1,10 +1,9 @@
 import { useId, useImperativeHandle, useRef, useState, type FormEvent, type Ref } from 'react';
 import type { ImportedEffect } from '../catalog';
 import type { Strings } from '../i18n';
-import { coverFields, relabelImport } from '../import/edit';
+import { editableCoverFields, relabelImport, sameCoverFields } from '../import/edit';
 import { validCover, validName, type CoverFields } from '../import/names';
 import { CoverFieldset, useCoverEditor } from './CoverEditor';
-import { EffectIcon } from './EffectIcon';
 
 interface Props {
   strings: Strings;
@@ -18,40 +17,48 @@ export interface EditDialogHandle {
   open: (effect: ImportedEffect) => void;
 }
 
-const NO_COVER: CoverFields = { brand: '', name: '', number: '', band: false };
+const NO_COVER: CoverFields = {
+  template: 'box',
+  look: 'gray',
+  brand: '',
+  name: '',
+  number: '',
+  band: false,
+};
 
 /**
- * Changes the name of a LUT import, and the text of its film cover icon when it has one. The
- * effect keeps its ID, so the camera keeps its Fn adjustments.
+ * Changes the name of a LUT import, and the text of its film cover icon. Restored imports without
+ * cover metadata get a cover deduced from the name so the user can set layout and colors. A rename
+ * that leaves the cover fields as opened keeps the GRF icon pixels.
  */
 export function EditDialog({ strings: t, onSave, ref }: Props) {
   const ids = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const [effect, setEffect] = useState<ImportedEffect | null>(null);
   const [name, setName] = useState('');
-  // The cover fields of an import with a film box cover, else null: its icon stays.
-  const [fields, setFields] = useState<CoverFields | null>(null);
+  const [openedCover, setOpenedCover] = useState<CoverFields>(NO_COVER);
   const coverEditor = useCoverEditor(NO_COVER);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useImperativeHandle(ref, () => ({
     open(next) {
-      const cover = coverFields(next.cover);
+      const cover = editableCoverFields(next) ?? NO_COVER;
       setEffect(next);
       setName(next.name);
-      setFields(cover);
+      setOpenedCover(cover);
       coverEditor.cancel();
-      if (cover) void coverEditor.show(cover);
+      void coverEditor.show(cover);
       setSaving(false);
       setFailed(false);
       dialog.current?.showModal();
     },
   }));
 
-  const cover = fields && coverEditor.cover;
+  const cover = coverEditor.cover;
   const badName = !validName(name);
-  const ready = effect !== null && !badName && (!cover || (validCover(cover) && coverEditor.error === null)) && !saving;
+  const ready =
+    effect !== null && !badName && validCover(cover) && coverEditor.error === null && !saving;
 
   function close() {
     coverEditor.cancel();
@@ -64,7 +71,9 @@ export function EditDialog({ strings: t, onSave, ref }: Props) {
     setSaving(true);
     setFailed(false);
     try {
-      onSave(await relabelImport(effect, name, cover));
+      // Unchanged cover fields → rename only; do not rewrite camera icon pixels.
+      const nextCover = sameCoverFields(cover, openedCover) ? null : cover;
+      onSave(await relabelImport(effect, name, nextCover));
       close();
     } catch (error) {
       console.error(error);
@@ -114,16 +123,7 @@ export function EditDialog({ strings: t, onSave, ref }: Props) {
               )}
             </label>
           </div>
-          {cover ? (
-            <CoverFieldset strings={t} editor={coverEditor} disabled={saving} />
-          ) : (
-            <div className="import-icon">
-              <span className="field-label">{t.iconHeading}</span>
-              <div className="import-icon-preview">
-                <EffectIcon effect={effect} />
-              </div>
-            </div>
-          )}
+          <CoverFieldset strings={t} editor={coverEditor} disabled={saving} />
           <div aria-live="polite">{failed && <p className="status error">{t.editError}</p>}</div>
           <div className="dialog-actions">
             <button type="submit" className="button primary" disabled={!ready} aria-busy={saving}>

@@ -1,14 +1,17 @@
 import {
   cardEffects,
   INBOX,
+  LIBRARY,
   readCard,
   readFile,
   type CardDirectory,
   type CardFile,
   type CardState,
 } from './card';
-import type { CardEffect, CatalogEffect, ImportedEffect, PackageEffect } from './catalog';
-import { effectFile, effectLabel } from './package';
+import type { CardEffect, CatalogEffect, Cover, ImportedEffect, PackageEffect } from './catalog';
+import { NATIVE_LOOKS } from './import/native';
+import { isFilmCover } from './packageCovers';
+import { effectFile, effectLabel, expectedCoverIcon, withPackagedCover } from './package';
 import { readRecipeFile, sameRecipes, type Family, type Recipe } from './recipes';
 
 /** The connected card, as the page compares it with the selection. */
@@ -53,7 +56,6 @@ export async function openSession(
   const byFile = new Map<string, string>();
   for (const effect of known) byFile.set((await effectFile(effect)).toUpperCase(), effect.id);
   const ids = new Set(known.map((effect) => effect.id));
-  const imports = new Set(known.flatMap((effect) => ('imported' in effect && effect.imported ? [effect.id] : [])));
   const effects = new Map<string, string[]>();
   const contents = new Map<string, Uint8Array>();
   const extra: CardEffect[] = [];
@@ -75,8 +77,9 @@ export async function openSession(
           card: { path, bytes },
         });
       }
-    }
-    if (imports.has(id) && !contents.has(id)) {
+      if (!contents.has(id)) contents.set(id, bytes);
+    } else if (!contents.has(id)) {
+      // Keep card bytes for imports and catalog covers so a later write can replace changed icons.
       const bytes = await readFile(root, path);
       if (bytes) contents.set(id, bytes);
     }
@@ -121,6 +124,84 @@ export function changedImports(session: CardSession, imported: readonly Imported
     if (bytes && !sameBytes(bytes, effect.imported.blob)) changed.add(effect.id);
   }
   return changed;
+}
+
+/** Cover to bake for an effect id: catalog/import cover, else a known Cinema cover. */
+function coverForPackaging(
+  id: string,
+  catalog: readonly CatalogEffect[],
+  imported: readonly ImportedEffect[],
+): Cover | undefined {
+  const fromCatalog = catalog.find((effect) => effect.id === id)?.cover;
+  if (isFilmCover(fromCatalog)) return fromCatalog;
+  const fromImport = imported.find((effect) => effect.id === id)?.cover;
+  if (isFilmCover(fromImport)) return fromImport;
+  return NATIVE_LOOKS.find((look) => look.id === id)?.cover;
+}
+
+/**
+ * Film looks on the card whose ADJ icon differs from what a write would put there under the
+ * colorful-covers switch. Includes catalog covers and Cinema Yellow/Green (unlock GRFs are gray
+ * while the page cover stores cinema colors).
+ */
+export async function changedCatalogCovers(
+  session: CardSession,
+  catalog: readonly CatalogEffect[],
+  colorful: boolean,
+  imported: readonly ImportedEffect[] = [],
+): Promise<Set<string>> {
+  const changed = new Set<string>();
+  if (!session.contents) return changed;
+  const ids = new Set<string>([
+    ...catalog.map((effect) => effect.id),
+    ...imported.map((effect) => effect.id),
+    ...NATIVE_LOOKS.map((look) => look.id),
+  ]);
+  for (const id of ids) {
+    if (!session.effects.has(id)) continue;
+    const cover = coverForPackaging(id, catalog, imported);
+    if (!isFilmCover(cover)) continue;
+    const bytes = session.contents.get(id);
+    if (!bytes) continue;
+    const label = await effectLabel(bytes);
+    if (!label) continue;
+    const expected = await expectedCoverIcon(cover, colorful);
+    if (!sameBytes(label.icon, expected)) changed.add(id);
+  }
+  return changed;
+}
+
+/**
+ * Library effect files to rewrite for colorful covers that are not already in `library.add`
+ * (card-only Cinema looks never enter the package inbox).
+ */
+export async function coverLibraryAdds(
+  session: CardSession,
+  coverChanged: ReadonlySet<string>,
+  catalog: readonly CatalogEffect[],
+  imported: readonly ImportedEffect[],
+  colorful: boolean,
+  already: readonly CardFile[],
+): Promise<CardFile[]> {
+  const added = new Set(already.map((file) => file.path.toUpperCase()));
+  const out: CardFile[] = [];
+  for (const id of coverChanged) {
+    const paths = session.effects.get(id) ?? [];
+    const libraryPath = paths.find((path) => path.toUpperCase().startsWith(`${LIBRARY}/`));
+    if (!libraryPath) continue;
+    const fileName = libraryPath.split('/').at(-1)!;
+    if (added.has(fileName.toUpperCase())) continue;
+    const bytes = session.contents?.get(id);
+    const cover = coverForPackaging(id, catalog, imported);
+    if (!bytes || !isFilmCover(cover)) continue;
+    const label = await effectLabel(bytes);
+    const name = label?.name ?? imported.find((effect) => effect.id === id)?.name ?? id;
+    const next = await withPackagedCover(bytes, name, cover, colorful);
+    if (!next.relabeled) continue;
+    out.push({ path: fileName, bytes: next.bytes });
+    added.add(fileName.toUpperCase());
+  }
+  return out;
 }
 
 /**

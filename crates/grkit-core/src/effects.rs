@@ -185,10 +185,12 @@ pub fn icon_pixels(icon: &Value) -> Result<Vec<u8>> {
             }
         }
     };
-    let keys = |required: &[&str]| {
-        let mut with_number = required.to_vec();
-        with_number.push("number");
-        has_keys(icon, required) || has_keys(icon, &with_number)
+    // Optional: number, colors (any RGB). Named palettes live on the website only.
+    let colors = || -> Result<crate::artwork::Palette> {
+        match icon.get("colors") {
+            None => Ok(crate::artwork::NEUTRAL_PALETTE),
+            Some(value) => crate::artwork::parse_colors(value),
+        }
     };
     match icon.get("template").map(|t| t.as_str().unwrap_or_default()) {
         None => {
@@ -200,20 +202,31 @@ pub fn icon_pixels(icon: &Value) -> Result<Vec<u8>> {
         }
         Some("box") => {
             ensure!(
-                keys(&["template", "brand", "name", "band"]),
-                "Expected box icon brand, name, band, and an optional number"
+                has_keys_with(
+                    icon,
+                    &["template", "brand", "name", "band"],
+                    &["number", "colors"]
+                ),
+                "Expected box icon brand, name, band, optional number and colors"
             );
             let band = icon["band"].as_bool().context("Expected icon band")?;
-            crate::artwork::render_box(text("brand")?, text("name")?, number()?, band)
+            crate::artwork::render_box(text("brand")?, text("name")?, number()?, band, colors()?)
         }
         Some("cine") => {
             ensure!(
-                keys(&["template", "brand", "name"]),
-                "Expected cine icon brand, name, and an optional number"
+                has_keys_with(icon, &["template", "brand", "name"], &["number", "colors"]),
+                "Expected cine icon brand, name, optional number and colors"
             );
-            crate::artwork::render_cine(text("brand")?, text("name")?, number()?)
+            crate::artwork::render_cine(text("brand")?, text("name")?, number()?, colors()?)
         }
-        Some(_) => bail!("Expected icon template box or cine"),
+        Some("stack") => {
+            ensure!(
+                has_keys_with(icon, &["template", "brand", "name"], &["number", "colors"]),
+                "Expected stack icon brand, name, optional number and colors"
+            );
+            crate::artwork::render_stack(text("brand")?, text("name")?, number()?, colors()?)
+        }
+        Some(_) => bail!("Expected icon template box, cine, or stack"),
     }
 }
 

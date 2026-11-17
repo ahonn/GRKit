@@ -1,6 +1,6 @@
 import { siteUrl } from '../catalog';
 import { LANGUAGES, type Language, type Strings } from '../i18n';
-import { fastbootPath, installPath, LANGUAGE_PATHS, type Page } from '../languagePage';
+import { fastbootPath, installPath, LANGUAGE_PATHS, resourcesPath, type Page } from '../languagePage';
 import { guideUrl, REPOSITORY } from '../links';
 
 /** The UserJot board for feature ideas and votes. A plain link, so the page loads nothing from UserJot. */
@@ -100,6 +100,7 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
       links: [
         { href: SUPPORT_FORM, label: t.reportProblem },
         { href: `${install}#faq-label`, label: t.faqTitle },
+        { href: resourcesPath(language), label: t.resourcesLink },
         { href: guideUrl('RECOVERY', language), label: t.recovery },
         { href: guideUrl('DUMP', language), label: t.firmwareDump },
       ],

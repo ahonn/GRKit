@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readBaseGamma } from '../catalog';
+import { COVER_LOOK_IDS, colorsFromLook, importCoverLook } from '../coverPalette';
 import { EFFECT_FILENAME_SAMPLE } from '../generated/site';
 import {
   base64,
@@ -83,20 +84,20 @@ describe('imported effect names', () => {
     expect(fields('Fuji_Velvia_50.cube')).toEqual(['FUJIFILM', 'VELVIA', '50']);
     expect(fields('kodak_5247__kodak_vision_2383.cube')).toEqual(['Kodak', 'VISION', '5247']);
     expect(fields('XE5_FLog_FGamut_to_ETERNA_BT.709_33grid_V.1.00.cube')).toEqual([
-      'LUT',
+      'CUSTOM',
       'ETERNA',
       'XE5',
     ]);
     expect(fields('Polaroid PX-100UV+ Cold 3.png')).toEqual(['Polaroid', 'PX-100UV+', '3']);
-    expect(fields('warm.cube')).toEqual(['LUT', 'WARM', '']);
+    expect(fields('warm.cube')).toEqual(['CUSTOM', 'WARM', '']);
     expect(fields('wunjo-TEAL_ORANGE.cube')).toEqual(['WUNJO', 'TEAL ORANGE', '']);
     expect(fields('obs-grayscale.cube')).toEqual(['OBS', 'GRAYSCALE', '']);
     expect(fields('threejs-Chemical 168.CUBE')).toEqual(['THREEJS', 'CHEMICAL', '168']);
     // A brand inside a hyphenated word, and no brand from a word in capitals.
     expect(fields('colorreps-kodak-gold.cube')).toEqual(['Kodak', 'GOLD', '']);
     expect(fields('colorreps-portra.cube')).toEqual(['COLORREPS', 'PORTRA', '']);
-    expect(fields('FLog2C_to_ETERNA-BB_VLog.cube')).toEqual(['LUT', 'ETERNA-BB', '']);
-    expect(fields('L-Log_to_Classic_VLog.cube')).toEqual(['LUT', 'CLASSIC', '']);
+    expect(fields('FLog2C_to_ETERNA-BB_VLog.cube')).toEqual(['CUSTOM', 'ETERNA-BB', '']);
+    expect(fields('L-Log_to_Classic_VLog.cube')).toEqual(['CUSTOM', 'CLASSIC', '']);
     expect(fields('Cineon_to_Kodak_2383_D65_VLog.cube')).toEqual(['Kodak', 'CINEON', '2383']);
     for (const file of ['Kodak Portra 400 2.png', 'A very long brand name here 12345678901234.cube', '-.cube']) {
       expect(validCover(coverFromFile(file))).toBe(true);
@@ -105,17 +106,34 @@ describe('imported effect names', () => {
 
   it('writes a film box icon with an optional number', () => {
     const cover = coverFromFile('Kodak Portra 400.png');
-    expect(coverIcon(cover)).toEqual({ template: 'box', brand: 'Kodak', name: 'PORTRA', number: '400', band: false });
+    expect(coverIcon(cover)).toEqual({
+      template: 'box',
+      brand: 'Kodak',
+      name: 'PORTRA',
+      number: '400',
+      band: false,
+      colors: colorsFromLook(cover.look),
+    });
     expect(coverIcon({ ...cover, number: '' })).toEqual({
       template: 'box',
       brand: 'Kodak',
       name: 'PORTRA',
       band: false,
+      colors: colorsFromLook(cover.look),
     });
     expect(validCover({ ...cover, number: '' })).toBe(true);
     expect(validCover({ ...cover, name: '' })).toBe(false);
     expect(validCoverText('')).toBe(false);
     expect(validCoverText('Thirteen char')).toBe(false);
+  });
+
+  it('picks a random editor look, or gray when color covers are off', () => {
+    expect(importCoverLook(false)).toBe('gray');
+    const picks = new Set(Array.from({ length: 40 }, () => importCoverLook(true)));
+    expect(picks.size).toBeGreaterThan(1);
+    for (const look of picks) {
+      expect(COVER_LOOK_IDS).toContain(look);
+    }
   });
 
   it('encodes icons as the catalog does', () => {

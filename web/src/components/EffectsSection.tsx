@@ -24,12 +24,13 @@ import { type Language, type Strings } from '../i18n';
 import { forget, prefetchTable, preview, type PreviewEffect, type Source } from '../preview/render';
 import { DEFAULT_SAMPLE } from '../preview/samples';
 import { PhotoLoader } from '../preview/raw';
-import { editable } from '../import/edit';
+import { editable, shelfCover } from '../import/edit';
 import { missingNativeLooks, NATIVE_LOOKS } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
 import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
 import { type EffectFilter } from '../effectGroups';
+import { writeColorfulCovers } from '../coverPalette';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
 import { EditDialog, type EditDialogHandle } from './EditDialog';
@@ -37,6 +38,22 @@ import { ImportDialog, type ImportDialogHandle } from './ImportDialog';
 import { NativeLookDialog, type NativeLookDialogHandle } from './NativeLookDialog';
 
 const DEFAULT_PREVIEW = 'portra-400-endura-v1';
+
+/**
+ * Shelf icon: prefer stored cover, then a known Cinema cover, then a stub for restored imports /
+ * card-only GRFs. Avoids upscaling the camera's 40×40 pixels on the larger web tile.
+ */
+function shelfIcon(effect: {
+  id?: string;
+  icon: string;
+  name: string;
+  cover?: Effect['cover'];
+  imported?: ImportedEffect['imported'];
+  card?: CardEffect['card'];
+}): Pick<Effect, 'icon' | 'cover'> {
+  const native = !effect.cover && effect.id ? NATIVE_LOOKS.find((look) => look.id === effect.id) : undefined;
+  return { icon: effect.icon, cover: native?.cover ?? shelfCover(effect) };
+}
 
 type ListedEffect = Effect | CardEffect;
 
@@ -102,9 +119,10 @@ function buildList(
   }
 
   // All: Color then B&W. Color / B&W filters: one flat shelf, no subtype headers.
+  // Card-only effects join the shelf so a Cinema look on the SD card is not also an unlock tile.
   // GR IV unlock tiles sit at the end of Color; Import LUT tiles close Color and B&W.
   const showHeaders = filter === 'all';
-  const pool = [...catalog, ...imports];
+  const pool = [...catalog, ...imports, ...cards];
   const color = pool.filter((effect) => !effect.monochrome);
   const mono = pool.filter((effect) => effect.monochrome);
   const showNative = locked.length > 0 && filter !== 'mono';
@@ -126,7 +144,6 @@ function buildList(
     if (importMono) entries.push({ kind: 'import', key: 'import-mono' });
   }
 
-  pushGroup('card', cards, true);
   return entries;
 }
 
@@ -214,6 +231,10 @@ interface Props {
   onCard: ReadonlySet<string> | null;
   /** The IDs of the imports whose file on the card differs, such as after a new name. */
   changedOnCard?: ReadonlySet<string>;
+  /** Whether the shelf draws packaging colors; also drives which icons a write bakes into GRFs. */
+  colorfulCovers: boolean;
+  /** Persists the colorful-covers switch and refreshes card change detection. */
+  onColorfulCovers: (on: boolean) => void;
   /** The camera line of the page, for a recipe from a preset import. */
   family: Family;
   /** The recipe library of that camera line. */
@@ -254,6 +275,8 @@ export function EffectsSection({
   cardEffects,
   onCard,
   changedOnCard,
+  colorfulCovers,
+  onColorfulCovers,
   family,
   recipes,
   onAddRecipe,
@@ -346,8 +369,10 @@ export function EffectsSection({
         : requested.imported
           ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
           : (t.looks[requested.id] ?? requested.look);
-  // Locked GR IV looks wait as Color tiles until the user unlocks them from firmware.
-  const locked = nativeLooks && catalog.baseGamma ? missingNativeLooks(imported) : [];
+  // Locked GR IV looks wait as Color tiles until the user unlocks them from firmware, or until
+  // the connected card already has that effect file.
+  const locked =
+    nativeLooks && catalog.baseGamma ? missingNativeLooks([...imported, ...cardEffects]) : [];
   const [filter, setFilter] = useState<EffectFilter>('all');
   // What the frame waits for: a new photo, or the preview of the selected effect.
   const waiting = decoding ? t.decodingPhoto : isPending ? t.previewRendering(name) : null;
@@ -670,6 +695,20 @@ export function EffectsSection({
             ))}
           </div>
           <div className="effects-bulk">
+            <label className="cover-color-switch">
+              <input
+                type="checkbox"
+                role="switch"
+                checked={colorfulCovers}
+                aria-checked={colorfulCovers}
+                onChange={(event) => {
+                  const on = event.target.checked;
+                  writeColorfulCovers(on);
+                  onColorfulCovers(on);
+                }}
+              />
+              <span>{t.colorfulCovers}</span>
+            </label>
             <button
               type="button"
               className="button small"
@@ -746,10 +785,10 @@ export function EffectsSection({
                   onClick={openUnlock}
                 >
                   <span className="tile-body">
-                    <CoverIcon cover={look.cover} />
+                    <CoverIcon cover={look.cover} colorful={colorfulCovers} />
                     <span className="tile-name">{look.name}</span>
+                    <span className="tile-meta">{t.nativeNeeds}</span>
                   </span>
-                  <span className="tile-meta">{t.nativeNeeds}</span>
                 </button>
               );
             }
@@ -773,7 +812,7 @@ export function EffectsSection({
                 />
                 {effect.card ? (
                   <div className="tile-body">
-                    <EffectIcon effect={effect} />
+                    <EffectIcon effect={shelfIcon(effect)} colorful={colorfulCovers} />
                     <span className="tile-name">{effect.name}</span>
                     <span className="tile-meta">{t.cardOnlyEffect}</span>
                   </div>
@@ -788,7 +827,7 @@ export function EffectsSection({
                     onPointerDown={() => startPreview(effect)}
                     onClick={() => showEffect(effect)}
                   >
-                    <EffectIcon effect={effect} />
+                    <EffectIcon effect={shelfIcon(effect)} colorful={colorfulCovers} />
                     <span className="tile-name">{effect.name}</span>
                   </button>
                 )}
