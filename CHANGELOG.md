@@ -1,3 +1,10 @@
+## 1.6.3 (2026-11-17)
+
+### Fixes
+
+- Color covers shows the packaging colors of each film look on the shelf and writes them onto the card.
+- Import a Lightroom .xmp preset as a film look, and optionally add a recipe with its exposure, grain, and white balance.
+
 ## 1.6.2 (2026-11-15)
 
 ### Fixes
