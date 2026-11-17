@@ -337,6 +337,12 @@ export function EffectsSection({
     () => elementVisibleRatio(viewer) > 0.5,
     () => true,
   );
+  // Only after the main preview has been on screen: otherwise a below-the-fold viewer looks
+  // "mostly hidden" while the user is still on Camera or Modules, and the float would appear early.
+  const [reachedPreview, setReachedPreview] = useState(false);
+  if (viewer && viewerMostlyVisible && !reachedPreview) {
+    setReachedPreview(true);
+  }
   // Hide the float once the whole Film Looks section has scrolled away.
   const subscribeSection = useCallback(
     (change: () => void) => subscribeInView(effectsSection(), change),
@@ -518,9 +524,11 @@ export function EffectsSection({
     );
   }
 
-  // Desktop only: a corner copy once half the main viewer is off-screen, while the section remains.
+  // Desktop only: a corner copy once the user has reached the main preview and then scrolled it
+  // mostly off-screen, while the Film Looks section remains.
   const showFloat =
     desktop &&
+    reachedPreview &&
     !viewerMostlyVisible &&
     sectionInView &&
     !fullscreen &&

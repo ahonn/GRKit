@@ -1296,7 +1296,6 @@ label.download[aria-disabled='true'] {
 
 .toolbar > div {
   display: flex;
-  gap: 8px;
 }
 
 .table-box {
