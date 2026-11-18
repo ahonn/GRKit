@@ -133,10 +133,13 @@ const DIAL: &[HookSpec] = &[
 
 /// The canvas of CORE.BORDER (`runtime/canvas_shot.h`): the BL to the R2Y
 /// stripe dispatch of StillMake, the instruction after the resize of
-/// BackResize, and the BL that copies the picture of the review after a shot
-/// into the playback.
+/// BackResize, the BL that copies the picture of the review after a shot
+/// into the playback, and the two BLs of DigitalFilterProcess to the filter
+/// step that runs the Shading and the Clarity of an Image Control.
 const CANVAS: &[HookSpec] = &[
     bl("canvas_r2y", Framing, PictureCanvas),
     b("canvas_resize", Framing, PictureCanvas),
     bl("canvas_review", Framing, PictureCanvas),
+    bl("canvas_filter_0", Framing, PictureCanvas),
+    bl("canvas_filter_1", Framing, PictureCanvas),
 ];

@@ -432,6 +432,48 @@ canvas_review:
 .ltorg
 #endif
 
+#if defined(HOOK_CANVAS_FILTER_0) && defined(HOOK_CANVAS_FILTER_1)
+/* The canvas of CORE.BORDER: the BLs of DigitalFilterProcess to its filter
+   step, which runs the Shading and the Clarity of an Image Control on the
+   pictures of a job (r1, runtime/canvas_shot.h). The filter step takes its
+   arguments in r0 to r2 only, so the stub calls it with a frame of its own:
+   the descriptor copies of canvas_filter_c(job, frame) live in that frame
+   until the step returns, then canvas_filter_end(job, frame) gives the job
+   its own descriptors again. The result of the step returns. */
+/* runtime/canvas_shot.h: two saved words and two descriptor copies of 0x40
+   bytes; with the six saved registers, sp stays a multiple of 8. */
+#define CANVAS_FILTER_FRAME 0x88
+.macro CANVAS_FILTER name, target
+.global \name
+\name:
+    push {r4-r8, lr}
+    sub sp, sp, #CANVAS_FILTER_FRAME
+    mov r4, r0
+    mov r5, r1
+    mov r6, r2
+    mov r7, r3
+    mov r0, r1
+    mov r1, sp
+    bl canvas_filter_c
+    mov r0, r4
+    mov r1, r5
+    mov r2, r6
+    mov r3, r7
+    ldr r12, =\target
+    blx r12
+    mov r4, r0
+    mov r0, r5
+    mov r1, sp
+    bl canvas_filter_end
+    mov r0, r4
+    add sp, sp, #CANVAS_FILTER_FRAME
+    pop {r4-r8, pc}
+.ltorg
+.endm
+CANVAS_FILTER canvas_filter_0, HOOK_CANVAS_FILTER_0_TARGET
+CANVAS_FILTER canvas_filter_1, HOOK_CANVAS_FILTER_1_TARGET
+#endif
+
 #if defined(HOOK_CANVAS_R2Y) && defined(HOOK_CANVAS_RESIZE)
 /* The canvas of CORE.BORDER (runtime/canvas_shot.h). Replaces the BL to the
    R2Y stripe send of StillMake: canvas_r2y_c(module, config) runs first,

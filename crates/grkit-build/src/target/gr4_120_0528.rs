@@ -295,6 +295,10 @@ const SITES: &[Site] = &[
     // The BL that copies the picture of the review after a shot into the
     // playback.
     ("canvas_review", 0x536bb128, "a5e408eb"),
+    // The BLs of DigitalFilterProcess to the filter step of Shading and
+    // Clarity (0x538c7c5c).
+    ("canvas_filter_0", 0x53721700, "559906eb"),
+    ("canvas_filter_1", 0x53721d8c, "b29706eb"),
 ];
 
 /// The stock instructions around the processing hooks.

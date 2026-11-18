@@ -293,6 +293,10 @@ const SITES: &[Site] = &[
     // the resize of BackResize.
     ("canvas_r2y", 0x535049d8, "48aa06eb"),
     ("canvas_resize", 0x53501e98, "28201be5"),
+    // The BLs of DigitalFilterProcess to the filter step of Shading and
+    // Clarity (0x53684394).
+    ("canvas_filter_0", 0x53505e28, "59f905eb"),
+    ("canvas_filter_1", 0x535064f4, "a6f705eb"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

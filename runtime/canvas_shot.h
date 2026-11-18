@@ -304,60 +304,86 @@ static u32 canvas_place(volatile u32 *e,u32 y,u32 w,u32 hh) {
     return 1;
 }
 
-/* A preview of the whole canvas in a descriptor of R, fit into its box:
-   each sample is the mean of 2 x 2 luma around its middle (canvas_sample),
-   with the CbCr pair there. The R2Y and IIP write the canvas without the CPU cache, so its
-   rows are flushed before they are read, and the preview after it is
-   written, for the encode. With `drawn` 0, the margins are not filled yet:
-   a sample in a margin takes the color of the border, and the planes are
-   read only inside the picture. */
-static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box,u32 drawn) {
-    u32 y=e[CANVAS_E_CANVAS], plane=e[CANVAS_E_PLANE], pitch=e[CANVAS_E_PITCH];
+/* The place of the canvas of `e` in a preview box: the fitted size, its
+   offset in the box, and the canvas samples per preview sample in 1/65536
+   (canvas_sample). Returns 0 for a canvas or a box that is too small. */
+enum { CANVAS_GRID_W, CANVAS_GRID_H, CANVAS_GRID_X, CANVAS_GRID_Y, CANVAS_GRID_STEP_X, CANVAS_GRID_STEP_Y, CANVAS_GRID_WORDS };
+static u32 canvas_preview_grid(volatile u32 *e,u32 box,u32 g[CANVAS_GRID_WORDS]) {
     u32 cw=e[CANVAS_E_SIZE]&0xffffU, ch=e[CANVAS_E_SIZE]>>16, fit=canvas_fit(cw,ch,box&0xffffU,box>>16);
-    u32 w=fit&0xffffU, hh=fit>>16, py=CANVAS_DESC(recipe,offset,CANVAS_DESC_Y), pc=CANVAS_DESC(recipe,offset,CANVAS_DESC_C);
-    u32 ps=CANVAS_DESC(recipe,offset,CANVAS_DESC_PITCH)&0xffffU, sx_step, sy_step, x, r;
-    /* The picture inside the margins, in canvas samples: [left, right) x
-       [top, bottom). Each sample of `drawn` is inside. */
-    u32 left=0, top=0, right=cw, bottom=ch, luma=canvas_luma(e[CANVAS_E_BORDER]);
-    if(!drawn) {
-        left=e[CANVAS_E_NEAR]&0xffffU; top=e[CANVAS_E_NEAR]>>16;
-        right=cw-(e[CANVAS_E_FAR]&0xffffU); bottom=ch-(e[CANVAS_E_FAR]>>16);
-    }
-    if(w<2 || hh<2 || ps<(box&0xffffU) || cw<2 || ch<2) return;
-    sx_step=core_divide(cw<<16,w); sy_step=core_divide(ch<<16,hh);
+    g[CANVAS_GRID_W]=fit&0xffffU; g[CANVAS_GRID_H]=fit>>16;
+    if(g[CANVAS_GRID_W]<2 || g[CANVAS_GRID_H]<2 || cw<2 || ch<2) return 0;
 #ifdef CANVAS_PREVIEW_BOX
     /* The preview keeps the size of its box: black bars around the canvas,
        as on a stock XPan picture. */
+    g[CANVAS_GRID_X]=(((box&0xffffU)-g[CANVAS_GRID_W])>>1)&~1U;
+    g[CANVAS_GRID_Y]=((box>>16)-g[CANVAS_GRID_H])>>1;
+#else
+    g[CANVAS_GRID_X]=g[CANVAS_GRID_Y]=0;
+#endif
+    g[CANVAS_GRID_STEP_X]=core_divide(cw<<16,g[CANVAS_GRID_W]);
+    g[CANVAS_GRID_STEP_Y]=core_divide(ch<<16,g[CANVAS_GRID_H]);
+    return 1;
+}
+
+/* The samples [x0, x1) of row r of the fitted canvas in a preview, with
+   yd and cd at the first sample of the row: each sample is the mean of
+   2 x 2 luma around its middle (canvas_sample), with the CbCr pair there.
+   A sample outside `inside` (left, top, right, bottom in canvas samples)
+   takes the color of the border. The R2Y and the IIP write the canvas
+   without the CPU cache, so its rows are flushed before they are read. */
+static void canvas_preview_span(volatile u32 *e,const u32 g[CANVAS_GRID_WORDS],const u32 inside[4],u8 *yd,u8 *cd,u32 r,u32 x0,u32 x1) {
+    u32 y=e[CANVAS_E_CANVAS], plane=e[CANVAS_E_PLANE], pitch=e[CANVAS_E_PITCH];
+    u32 cw=e[CANVAS_E_SIZE]&0xffffU, sy=canvas_sample(r,g[CANVAS_GRID_STEP_Y],e[CANVAS_E_SIZE]>>16);
+    u32 luma=canvas_luma(e[CANVAS_E_BORDER]), x;
+    const u8 *ys, *cs;
+    if(sy<inside[CANVAS_TOP] || sy>=inside[CANVAS_BOTTOM]) {
+        for(x=x0;x<x1;++x) { yd[x]=(u8)luma; cd[x]=128; }
+        return;
+    }
+    PICTURE_CACHE_FLUSH(y+sy*pitch,cw);
+    PICTURE_CACHE_FLUSH(y+(sy+1U)*pitch,cw);
+    PICTURE_CACHE_FLUSH(y+plane+sy*pitch,cw);
+    ys=PICTURE_MAP(y+sy*pitch); cs=PICTURE_MAP(y+plane+sy*pitch);
+    for(x=x0;x<x1;++x) {
+        u32 sx=canvas_sample(x,g[CANVAS_GRID_STEP_X],cw);
+        if(sx<inside[CANVAS_LEFT] || sx>=inside[CANVAS_RIGHT]) { yd[x]=(u8)luma; cd[x]=128; continue; }
+        yd[x]=(u8)((ys[sx]+ys[sx+1]+ys[sx+pitch]+ys[sx+pitch+1]+2U)>>2);
+        cd[x]=cs[(sx&~1U)+(x&1U)];
+    }
+}
+
+/* A preview of the whole canvas in a descriptor of R, fit into its box
+   (canvas_preview_grid, canvas_preview_span). The preview is flushed after
+   it is written, for the encode. With `drawn` 0, the margins are not filled
+   yet: a sample in a margin takes the color of the border, and the planes
+   are read only inside the picture. */
+static void canvas_preview(volatile u32 *e,u32 recipe,u32 offset,u32 box,u32 drawn) {
+    u32 cw=e[CANVAS_E_SIZE]&0xffffU, ch=e[CANVAS_E_SIZE]>>16, g[CANVAS_GRID_WORDS], fit, r;
+    u32 py=CANVAS_DESC(recipe,offset,CANVAS_DESC_Y), pc=CANVAS_DESC(recipe,offset,CANVAS_DESC_C);
+    u32 ps=CANVAS_DESC(recipe,offset,CANVAS_DESC_PITCH)&0xffffU;
+    /* The picture inside the margins, in canvas samples: [left, right) x
+       [top, bottom). Each sample of `drawn` is inside. */
+    u32 inside[4]={0,0,cw,ch};
+    if(!drawn) {
+        inside[CANVAS_LEFT]=e[CANVAS_E_NEAR]&0xffffU; inside[CANVAS_TOP]=e[CANVAS_E_NEAR]>>16;
+        inside[CANVAS_RIGHT]=cw-(e[CANVAS_E_FAR]&0xffffU); inside[CANVAS_BOTTOM]=ch-(e[CANVAS_E_FAR]>>16);
+    }
+    if(ps<(box&0xffffU) || !canvas_preview_grid(e,box,g)) return;
+    fit=g[CANVAS_GRID_W]|g[CANVAS_GRID_H]<<16;
+#ifdef CANVAS_PREVIEW_BOX
     {
-        u32 bw=box&0xffffU, bh=box>>16, ox=((bw-w)>>1)&~1U, oy=(bh-hh)>>1;
+        u32 bw=box&0xffffU, bh=box>>16, x;
         for(r=0;r<bh;++r) {
             u8 *yb=PICTURE_MAP(py+r*ps), *cb=PICTURE_MAP(pc+r*ps);
-            if(r>=oy && r<oy+hh && !ox && w==bw) continue;
+            if(r>=g[CANVAS_GRID_Y] && r<g[CANVAS_GRID_Y]+g[CANVAS_GRID_H] && !g[CANVAS_GRID_X] && g[CANVAS_GRID_W]==bw) continue;
             for(x=0;x<bw;++x) { yb[x]=0; cb[x]=128; }
         }
-        py+=oy*ps+ox; pc+=oy*ps+ox;
+        py+=g[CANVAS_GRID_Y]*ps+g[CANVAS_GRID_X]; pc+=g[CANVAS_GRID_Y]*ps+g[CANVAS_GRID_X];
         fit=box;
     }
 #endif
-    for(r=0;r<hh;++r) {
-        u32 sy=canvas_sample(r,sy_step,ch);
-        const u8 *ys, *cs;
-        u8 *yd=PICTURE_MAP(py+r*ps), *cd=PICTURE_MAP(pc+r*ps);
-        if(sy<top || sy>=bottom) {
-            for(x=0;x<w;++x) { yd[x]=(u8)luma; cd[x]=128; }
-            continue;
-        }
-        PICTURE_CACHE_FLUSH(y+sy*pitch,cw);
-        PICTURE_CACHE_FLUSH(y+(sy+1U)*pitch,cw);
-        PICTURE_CACHE_FLUSH(y+plane+sy*pitch,cw);
-        ys=PICTURE_MAP(y+sy*pitch); cs=PICTURE_MAP(y+plane+sy*pitch);
-        for(x=0;x<w;++x) {
-            u32 sx=canvas_sample(x,sx_step,cw);
-            if(sx<left || sx>=right) { yd[x]=(u8)luma; cd[x]=128; continue; }
-            yd[x]=(u8)((ys[sx]+ys[sx+1]+ys[sx+pitch]+ys[sx+pitch+1]+2U)>>2);
-            cd[x]=cs[(sx&~1U)+(x&1U)];
-        }
-    }
+    for(r=0;r<g[CANVAS_GRID_H];++r)
+        canvas_preview_span(e,g,inside,PICTURE_MAP(py+r*ps),PICTURE_MAP(pc+r*ps),r,0,g[CANVAS_GRID_W]);
     PICTURE_CACHE_FLUSH(CANVAS_DESC(recipe,offset,CANVAS_DESC_Y),ps*(fit>>16));
     PICTURE_CACHE_FLUSH(CANVAS_DESC(recipe,offset,CANVAS_DESC_C),ps*(fit>>16));
     CANVAS_DESC(recipe,offset,CANVAS_DESC_SIZE)=fit;
@@ -499,6 +525,136 @@ void canvas_review_c(u32 d) {
     }
 }
 #endif
+
+/* The filter step of DigitalFilterProcess runs the Shading and the Clarity
+   of an Image Control on the source and the destination picture of a job:
+   job + CANVAS_FILTER_JOB_SOURCE and + CANVAS_FILTER_JOB_DESTINATION point
+   to their descriptors, and the step takes the whole picture of each, with
+   the center of the Shading in its middle. A shot and the Execute of a RAW
+   development run it on the main picture, which is the picture inside the
+   canvas. The preview of a RAW development runs it on the screennail, which
+   holds the whole canvas: the border would take the Shading, and the
+   vignette its middle. So a job picture that is the screennail or the
+   thumbnail of a placed canvas takes a copy of its descriptor for the
+   picture inside the border (canvas_inner_area).
+   The step moves the start of each row up and its end down to a multiple
+   of CANVAS_FILTER_ALIGN bytes. So the copy starts and ends on such a
+   multiple outside the picture, and after the step the columns of the
+   border in it are drawn again from the canvas (canvas_preview_span).
+   The copies live in the frame of the hook (runtime/picture.S): two saved
+   descriptor pointers, then two copies. */
+#define CANVAS_FILTER_JOB_SOURCE 4
+#define CANVAS_FILTER_JOB_DESTINATION 8
+#define CANVAS_FILTER_ALIGN 16U
+/* The words of a descriptor copy: the descriptor and what follows it. */
+#define CANVAS_FILTER_DESC_WORDS 16U
+
+/* The placed canvas that has the preview picture of descriptor d: its
+   entry, with the preview (0 screennail, 1 thumbnail) in *which; or 0. */
+static volatile u32 *canvas_filter_entry(u32 d,u32 *which) {
+    static const u16 previews[2]={CANVAS_SCREENNAIL,CANVAS_THUMBNAIL};
+    volatile u32 *h=framing_header();
+    u32 i, j;
+    if(d<0x40000000U || d>0xbfffff00U) return 0;
+    for(i=0;i<GRKIT_CANVAS_ENTRIES;++i) {
+        volatile u32 *e=canvas_at(h,i);
+        u32 recipe=e[CANVAS_E_RECIPE];
+        if(e[CANVAS_E_STATE]!=CANVAS_PLACED || !recipe) continue;
+        for(j=0;j<2;++j)
+            if(WORD(d,CANVAS_DESC_Y*4)==CANVAS_DESC(recipe,previews[j],CANVAS_DESC_Y)) {
+                *which=j;
+                return e;
+            }
+    }
+    return 0;
+}
+
+/* The columns of the step in the preview of descriptor d of the placed
+   canvas of e: the picture inside the border in `a` (canvas_inner_area),
+   and the aligned columns [*left, *right) around it. Returns 0 for no
+   picture inside, or a row that does not start on an aligned byte. */
+static u32 canvas_filter_area(volatile u32 *e,u32 d,u32 a[4],u32 *left,u32 *right) {
+    u32 m[4], size=WORD(d,CANVAS_DESC_SIZE*4), pitch=WORD(d,CANVAS_DESC_PITCH*4)&0xffffU;
+    u32 row=WORD(d,CANVAS_DESC_Y*4), r;
+    m[CANVAS_LEFT]=e[CANVAS_E_NEAR]&0xffffU; m[CANVAS_TOP]=e[CANVAS_E_NEAR]>>16;
+    m[CANVAS_RIGHT]=e[CANVAS_E_FAR]&0xffffU; m[CANVAS_BOTTOM]=e[CANVAS_E_FAR]>>16;
+    if(!canvas_inner_area(e[CANVAS_E_SIZE]&0xffffU,e[CANVAS_E_SIZE]>>16,m,size&0xffffU,size>>16,a)) return 0;
+    if(a[CANVAS_RIGHT]<=a[CANVAS_LEFT]+CANVAS_FILTER_ALIGN || a[CANVAS_BOTTOM]<=a[CANVAS_TOP]+2U) return 0;
+    row+=a[CANVAS_TOP]*pitch;
+    if((row|pitch)&(CANVAS_FILTER_ALIGN-1U)) return 0;
+    *left=a[CANVAS_LEFT]&~(CANVAS_FILTER_ALIGN-1U);
+    r=(a[CANVAS_RIGHT]+CANVAS_FILTER_ALIGN-1U)&~(CANVAS_FILTER_ALIGN-1U);
+    /* The last columns of a row without room after it stay out. */
+    *right=r<=pitch ? r : a[CANVAS_RIGHT]&~(CANVAS_FILTER_ALIGN-1U);
+    return 1;
+}
+
+/* Before the filter step of `job`, with the frame of the hook. */
+void canvas_filter_c(u32 job,u32 *frame) {
+    u32 k, n=0, d, which, a[4], left, right, pitch, i;
+    frame[0]=WORD(job,CANVAS_FILTER_JOB_SOURCE);
+    frame[1]=WORD(job,CANVAS_FILTER_JOB_DESTINATION);
+    for(k=0;k<2;++k) {
+        volatile u32 *e;
+        u32 *copy=frame+2+n*CANVAS_FILTER_DESC_WORDS, offset;
+        d=frame[k];
+        /* A job that takes one picture twice takes one copy. */
+        if(k==1 && d==frame[0]) {
+            WORD(job,CANVAS_FILTER_JOB_DESTINATION)=WORD(job,CANVAS_FILTER_JOB_SOURCE);
+            continue;
+        }
+        e=canvas_filter_entry(d,&which);
+        if(!e || !canvas_filter_area(e,d,a,&left,&right)) continue;
+        pitch=WORD(d,CANVAS_DESC_PITCH*4)&0xffffU;
+        offset=a[CANVAS_TOP]*pitch+left;
+        for(i=0;i<CANVAS_FILTER_DESC_WORDS;++i) copy[i]=WORD(d,i*4);
+        copy[CANVAS_DESC_Y]+=offset;
+        copy[CANVAS_DESC_C]+=offset;
+        copy[CANVAS_DESC_SIZE]=(right-left)|(a[CANVAS_BOTTOM]-a[CANVAS_TOP])<<16;
+        copy[CANVAS_DESC_PITCH]=pitch|(a[CANVAS_BOTTOM]-a[CANVAS_TOP])<<16;
+        WORD(job,k ? CANVAS_FILTER_JOB_DESTINATION : CANVAS_FILTER_JOB_SOURCE)=(u32)copy;
+        ++n;
+    }
+}
+
+/* The columns [x0, x1) of the rows of `a` in the preview of descriptor d
+   take the canvas again. */
+static void canvas_filter_redraw(volatile u32 *e,u32 d,u32 which,const u32 a[4],u32 x0,u32 x1) {
+    u32 g[CANVAS_GRID_WORDS], inside[4]={0,0,e[CANVAS_E_SIZE]&0xffffU,e[CANVAS_E_SIZE]>>16};
+    u32 y=WORD(d,CANVAS_DESC_Y*4), c=WORD(d,CANVAS_DESC_C*4), pitch=WORD(d,CANVAS_DESC_PITCH*4)&0xffffU;
+    u32 r, x, ox, oy;
+    if(x0>=x1 || !canvas_preview_grid(e,e[CANVAS_E_BOX+which],g)) return;
+    ox=g[CANVAS_GRID_X]; oy=g[CANVAS_GRID_Y];
+    for(r=a[CANVAS_TOP];r<a[CANVAS_BOTTOM];++r) {
+        u8 *yd=PICTURE_MAP(y+r*pitch), *cd=PICTURE_MAP(c+r*pitch);
+        PICTURE_CACHE_FLUSH(y+r*pitch+x0,x1-x0);
+        PICTURE_CACHE_FLUSH(c+r*pitch+x0,x1-x0);
+        for(x=x0;x<x1 && x<ox;++x) { yd[x]=0; cd[x]=128; }
+        if(r>=oy && r<oy+g[CANVAS_GRID_H] && x<ox+g[CANVAS_GRID_W]) {
+            u32 end=x1<ox+g[CANVAS_GRID_W] ? x1 : ox+g[CANVAS_GRID_W];
+            canvas_preview_span(e,g,inside,yd+ox,cd+ox,r-oy,x-ox,end-ox);
+            x=end;
+        }
+        for(;x<x1;++x) { yd[x]=0; cd[x]=128; }
+        PICTURE_CACHE_FLUSH(y+r*pitch+x0,x1-x0);
+        PICTURE_CACHE_FLUSH(c+r*pitch+x0,x1-x0);
+    }
+}
+
+/* After the filter step: the border columns that the step took are drawn
+   again, and the job takes its own descriptors again. */
+void canvas_filter_end(u32 job,const u32 *frame) {
+    u32 d=frame[1], which, a[4], left, right, width;
+    volatile u32 *e;
+    if(WORD(job,CANVAS_FILTER_JOB_DESTINATION)!=d && (e=canvas_filter_entry(d,&which))!=0 &&
+       canvas_filter_area(e,d,a,&left,&right)) {
+        width=WORD(d,CANVAS_DESC_SIZE*4)&0xffffU;
+        canvas_filter_redraw(e,d,which,a,left,a[CANVAS_LEFT]);
+        canvas_filter_redraw(e,d,which,a,a[CANVAS_RIGHT],right<width ? right : width);
+    }
+    WORD(job,CANVAS_FILTER_JOB_SOURCE)=frame[0];
+    WORD(job,CANVAS_FILTER_JOB_DESTINATION)=frame[1];
+}
 
 /* The plane filters see the picture inside the border: the visible area of
    each plane is the picture, in the scale of the canvas in that plane. */
