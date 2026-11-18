@@ -17,6 +17,8 @@ import {
   MAX_EFFECTS,
   previewTable,
   type CardEffect,
+  type CatalogEffect,
+  type Cover,
   type Effect,
   type ImportedEffect,
 } from '../catalog';
@@ -24,13 +26,15 @@ import { type Language, type Strings } from '../i18n';
 import { forget, prefetchTable, preview, type PreviewEffect, type Source } from '../preview/render';
 import { DEFAULT_SAMPLE } from '../preview/samples';
 import { PhotoLoader } from '../preview/raw';
-import { editable, shelfCover } from '../import/edit';
+import { editable } from '../import/edit';
 import { missingNativeLooks, NATIVE_LOOKS } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
 import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
 import { type EffectFilter } from '../effectGroups';
 import { writeColorfulCovers } from '../coverPalette';
+import { isFilmCover, shownCover, type CoverChoice, type CustomCovers } from '../packageCovers';
+import { CoverDialog, type CoverDialogHandle } from './CoverDialog';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
 import { EditDialog, type EditDialogHandle } from './EditDialog';
@@ -40,19 +44,17 @@ import { NativeLookDialog, type NativeLookDialogHandle } from './NativeLookDialo
 const DEFAULT_PREVIEW = 'portra-400-endura-v1';
 
 /**
- * Shelf icon: prefer stored cover, then a known Cinema cover, then a stub for restored imports /
- * card-only GRFs. Avoids upscaling the camera's 40×40 pixels on the larger web tile.
+ * Shelf icon: the cover that the camera shows after a write (`shownCover`), drawn as an SVG. A
+ * native look on the card takes its known cover. An effect without cover fields shows the icon
+ * pixels of its file, which a write keeps.
  */
-function shelfIcon(effect: {
-  id?: string;
-  icon: string;
-  name: string;
-  cover?: Effect['cover'];
-  imported?: ImportedEffect['imported'];
-  card?: CardEffect['card'];
-}): Pick<Effect, 'icon' | 'cover'> {
-  const native = !effect.cover && effect.id ? NATIVE_LOOKS.find((look) => look.id === effect.id) : undefined;
-  return { icon: effect.icon, cover: native?.cover ?? shelfCover(effect) };
+function shelfIcon(effect: Effect | CardEffect, covers: CoverChoice): Pick<Effect, 'icon' | 'cover'> {
+  const native = NATIVE_LOOKS.find((look) => look.id === effect.id);
+  const site = !effect.imported && !effect.card;
+  const own = effect.cover ?? native?.cover;
+  const source = effect.imported?.kind === 'lut' || effect.imported?.kind === 'restored' ? 'own' : 'switch';
+  const custom = site ? covers.custom.get(effect.id) : undefined;
+  return { icon: effect.icon, cover: shownCover(own, source, covers.colorful, custom) };
 }
 
 type ListedEffect = Effect | CardEffect;
@@ -218,8 +220,8 @@ interface Props {
   onSelectionChange: (selection: ReadonlySet<string>) => void;
   /** The effects that this page imported for the selected camera, after the catalog effects. */
   imported: readonly ImportedEffect[];
-  /** Adds an import, in place of an earlier one with the same ID. */
-  onImport: (effect: ImportedEffect) => void;
+  /** Adds imports, each in place of an earlier one with the same ID. */
+  onImport: (effects: readonly ImportedEffect[]) => void;
   /** The selected camera can use the native looks of GR IV, so the list offers to unlock them. */
   nativeLooks: boolean;
   onRemove: (effect: ImportedEffect) => void;
@@ -235,6 +237,10 @@ interface Props {
   colorfulCovers: boolean;
   /** Persists the colorful-covers switch and refreshes card change detection. */
   onColorfulCovers: (on: boolean) => void;
+  /** The covers that the user gave site film looks, which win over the colorful switch. */
+  customCovers: CustomCovers;
+  /** Keeps the custom cover of a site film look, or removes it for null. */
+  onCustomCover: (id: string, cover: Cover | null) => void;
   /** The camera line of the page, for a recipe from a preset import. */
   family: Family;
   /** The recipe library of that camera line. */
@@ -277,11 +283,14 @@ export function EffectsSection({
   changedOnCard,
   colorfulCovers,
   onColorfulCovers,
+  customCovers,
+  onCustomCover,
   family,
   recipes,
   onAddRecipe,
 }: Props) {
   const catalog = use(loadCatalog(PREVIEW_TARGET));
+  const coverChoice: CoverChoice = { colorful: colorfulCovers, custom: customCovers };
   const effects: readonly Effect[] = [...catalog.effects, ...imported];
   const checked = resolveSelection(
     selection,
@@ -302,6 +311,15 @@ export function EffectsSection({
   const importer = useRef<ImportDialogHandle>(null);
   const unlocker = useRef<NativeLookDialogHandle>(null);
   const editor = useRef<EditDialogHandle>(null);
+  const coverEditor = useRef<CoverDialogHandle>(null);
+  /** The site film look of `effect` when the user can change its cover. */
+  const siteLook = (effect: Effect | CardEffect): CatalogEffect | undefined => {
+    if (effect.imported || effect.card) return undefined;
+    const site = catalog.effects.find((item) => item.id === effect.id);
+    return site && isFilmCover(site.cover) ? site : undefined;
+  };
+  const editCover = (site: CatalogEffect) =>
+    coverEditor.current?.open(site, colorfulCovers, customCovers.get(site.id));
   const [loader] = useState(() => new PhotoLoader());
   const [decoding, setDecoding] = useState(false);
   const ownPhoto = useCallback(
@@ -425,7 +443,7 @@ export function EffectsSection({
   function importEffects(effects: readonly ImportedEffect[]): boolean {
     const first = effects[0];
     if (!first) return false;
-    for (const effect of effects) onImport(effect);
+    onImport(effects);
     const { selection: next, full } = selectImport(
       checked,
       effects.map((effect) => effect.id),
@@ -589,6 +607,18 @@ export function EffectsSection({
                   changed={changedOnCard?.has(requested.id)}
                   strings={t}
                 />
+              )}
+              {requested && siteLook(requested) && (
+                <div className="preview-actions">
+                  <button
+                    type="button"
+                    className="link-button"
+                    aria-label={t.coverEditOf(requested.name)}
+                    onClick={() => editCover(siteLook(requested)!)}
+                  >
+                    {t.coverEdit}
+                  </button>
+                </div>
               )}
               {requested?.imported && (
                 <div className="preview-actions">
@@ -793,7 +823,7 @@ export function EffectsSection({
                   onClick={openUnlock}
                 >
                   <span className="tile-body">
-                    <CoverIcon cover={look.cover} colorful={colorfulCovers} />
+                    <CoverIcon cover={shownCover(look.cover, 'switch', colorfulCovers)!} />
                     <span className="tile-name">{look.name}</span>
                     <span className="tile-meta">{t.nativeNeeds}</span>
                   </span>
@@ -820,7 +850,7 @@ export function EffectsSection({
                 />
                 {effect.card ? (
                   <div className="tile-body">
-                    <EffectIcon effect={shelfIcon(effect)} colorful={colorfulCovers} />
+                    <EffectIcon effect={shelfIcon(effect, coverChoice)} />
                     <span className="tile-name">{effect.name}</span>
                     <span className="tile-meta">{t.cardOnlyEffect}</span>
                   </div>
@@ -835,7 +865,7 @@ export function EffectsSection({
                     onPointerDown={() => startPreview(effect)}
                     onClick={() => showEffect(effect)}
                   >
-                    <EffectIcon effect={shelfIcon(effect)} colorful={colorfulCovers} />
+                    <EffectIcon effect={shelfIcon(effect, coverChoice)} />
                     <span className="tile-name">{effect.name}</span>
                   </button>
                 )}
@@ -878,6 +908,7 @@ export function EffectsSection({
           />
         )}
         <EditDialog ref={editor} strings={t} onSave={onEdit} />
+        <CoverDialog ref={coverEditor} strings={t} onSave={onCustomCover} />
         {nativeLooks && catalog.baseGamma && (
           <NativeLookDialog
             ref={unlocker}

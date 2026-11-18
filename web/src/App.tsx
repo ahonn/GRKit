@@ -26,8 +26,7 @@ import {
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
 import {
-  changedCatalogCovers,
-  changedImports,
+  changedOnCard,
   coverLibraryAdds,
   extraCardEffects,
   libraryChanges,
@@ -38,6 +37,14 @@ import {
 } from './cardSession';
 import { readColorfulCovers } from './coverPalette';
 import {
+  cardCustomCovers,
+  loadCustomCovers,
+  mergeCustomCovers,
+  saveCustomCovers,
+  withCustomCover,
+  type LibraryItem,
+} from './customCovers';
+import {
   cameraForCard,
   CAMERAS,
   camerasForCard,
@@ -46,7 +53,15 @@ import {
   PREVIEW_TARGET,
   type Camera,
 } from './cameras';
-import { loadCatalog, MAX_EFFECTS, type Catalog, type CardEffect, type ImportedEffect, type PackageEffect } from './catalog';
+import {
+  loadCatalog,
+  MAX_EFFECTS,
+  type Catalog,
+  type CardEffect,
+  type Cover,
+  type ImportedEffect,
+  type PackageEffect,
+} from './catalog';
 import {
   CardChangesView,
   CardUninstall,
@@ -68,7 +83,7 @@ import { TermsNote } from './components/TermsNote';
 import { guideUrl } from './links';
 import { fastbootPath, installPath } from './languagePage';
 import { loadFonts } from './fonts';
-import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails, type LibraryDetails } from './import/library';
+import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails } from './import/library';
 import { restoreImports } from './import/lut';
 import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
 import { isLutImportId } from './import/names';
@@ -79,6 +94,7 @@ import {
   buildCardFiles,
   buildPackage,
   buildScriptsOff,
+  coverPixels,
   effectLabel,
   prefetchPackage,
   packageFilename,
@@ -86,6 +102,7 @@ import {
   scriptsOffCardFiles,
 } from './package';
 import { packageCard } from './packageCard';
+import type { CoverChoice, CustomCovers } from './packageCovers';
 import { useRecipeLibrary } from './recipeLibrary';
 import {
   writeRecipeFile,
@@ -173,9 +190,12 @@ export function InstallPage({
   const cardRun = useRef(0);
   // Color covers: shelf SVG and which packaging colors a write bakes into catalog GRFs.
   const [colorfulCovers, setColorfulCovers] = useState(() => readColorfulCovers());
-  // Catalog looks on the card whose icons differ from the colorful switch (gray vs packaging).
-  const [coverUpdates, setCoverUpdates] = useState<ReadonlySet<string>>(() => new Set());
-  const coverUpdateRun = useRef(0);
+  // The covers that the user gave site film looks. They win over the colorful switch.
+  const [customCovers, setCustomCovers] = useState<CustomCovers>(() => loadCustomCovers(browserStorage()));
+  const coverChoice: CoverChoice = { colorful: colorfulCovers, custom: customCovers };
+  // Film looks on the card whose file differs from what a write puts there (`changedOnCard`).
+  const [cardUpdates, setCardUpdates] = useState<ReadonlySet<string>>(() => new Set());
+  const cardUpdateRun = useRef(0);
 
   const t = STRINGS[language];
   const packageOpen = <PackageOpen strings={t} status={packageStatus} onOpen={openPackage} />;
@@ -291,53 +311,78 @@ export function InstallPage({
     resetBuild();
   }
 
-  /** Recomputes which film covers on the card would change under the colorful switch. */
-  async function refreshCoverUpdates(session: CardSession | null, colorful: boolean) {
-    const run = ++coverUpdateRun.current;
-    if (!session || !targets) {
-      if (run === coverUpdateRun.current) setCoverUpdates(new Set());
+  /**
+   * Recomputes which film looks on the card a write changes. The state of this render can be
+   * older than a change that the caller just made, so the caller gives the new covers or imports.
+   * A newer call makes the result of an older one stale.
+   */
+  async function refreshCardUpdates(
+    session: CardSession | null,
+    { covers = coverChoice, imports = imported }: { covers?: CoverChoice; imports?: readonly ImportedEffect[] } = {},
+  ) {
+    const run = ++cardUpdateRun.current;
+    if (!session) {
+      setCardUpdates(new Set());
       return;
     }
     try {
-      const catalog = (await loadCatalog(targets[0]!)).effects;
-      const changed = await changedCatalogCovers(session, catalog, colorful, imported);
-      if (run === coverUpdateRun.current) setCoverUpdates(changed);
+      const catalog = (await loadCatalog(PREVIEW_TARGET)).effects;
+      const changed = await changedOnCard(session, catalog, imports, covers);
+      if (run === cardUpdateRun.current) setCardUpdates(changed);
     } catch (error) {
       console.warn(error);
-      if (run === coverUpdateRun.current) setCoverUpdates(new Set());
+      if (run === cardUpdateRun.current) setCardUpdates(new Set());
     }
   }
 
   function changeColorfulCovers(on: boolean) {
     setColorfulCovers(on);
     resetBuild();
-    void refreshCoverUpdates(card, on);
+    void refreshCardUpdates(card, { covers: { ...coverChoice, colorful: on } });
+  }
+
+  /** Keeps `custom` as the covers of site film looks. */
+  function keepCustomCovers(custom: CustomCovers) {
+    setCustomCovers(custom);
+    saveCustomCovers(browserStorage(), custom);
+  }
+
+  /** Gives a site film look a custom cover, or the default cover again for null. */
+  function changeCustomCover(id: string, cover: Cover | null) {
+    const custom = withCustomCover(customCovers, id, cover);
+    keepCustomCovers(custom);
+    resetBuild();
+    void refreshCardUpdates(card, { covers: { ...coverChoice, custom } });
+  }
+
+  /** The imports after a change, as the next render has them. */
+  function changeImports(next: readonly ImportedEffect[]) {
+    setImported(next);
+    resetBuild();
+    void refreshCardUpdates(card, { imports: importsForCamera(next, camera.key) });
   }
 
   // The effects section checks an import (`selectImport`). An import with the ID of an earlier
   // one, such as a native look read again, takes its place.
-  function addImported(effect: ImportedEffect) {
-    setImported((current) => [...current.filter((item) => item.id !== effect.id), effect]);
-    void saveImport(effect);
-    resetBuild();
+  function addImported(effects: readonly ImportedEffect[]) {
+    const ids = new Set(effects.map((effect) => effect.id));
+    changeImports([...allImported.filter((item) => !ids.has(item.id)), ...effects]);
+    for (const effect of effects) void saveImport(effect);
   }
 
   // A new name or icon keeps the import in its place and keeps its ID.
   function editImported(effect: ImportedEffect) {
-    setImported((current) => current.map((item) => (item.id === effect.id ? effect : item)));
+    changeImports(allImported.map((item) => (item.id === effect.id ? effect : item)));
     void updateImport(effect);
-    resetBuild();
   }
 
   function removeImported(effect: ImportedEffect) {
-    setImported((current) => current.filter((item) => item !== effect));
+    changeImports(allImported.filter((item) => item !== effect));
     void deleteImport(effect.id);
     if (selection?.has(effect.id)) {
       const next = new Set(selection);
       next.delete(effect.id);
       changeSelection(next);
-    } else {
-      resetBuild();
     }
   }
 
@@ -445,27 +490,43 @@ export function InstallPage({
   }
 
   /**
-   * Adds the LUT imports that a card or a package keeps and this browser lacks: each import of
-   * its import library, or without one, its effect files of LUT imports. Returns the added
-   * imports. `source` names the card or the ZIP.
+   * Adds what a card or a package keeps and this browser lacks: the LUT imports and native looks
+   * of its import library, or without one, its effect files of LUT imports, and the custom covers
+   * of site film looks whose file still has them. `source` names the card or the ZIP. Returns the
+   * added imports, and the imports and the custom covers of the page after the change.
    */
   async function adoptImports(
     root: CardDirectory,
     session: CardSession,
     source: string,
     catalog: Catalog,
-  ): Promise<ImportedEffect[]> {
-    if (!catalog.baseGamma) return [];
+  ): Promise<{ added: ImportedEffect[]; imports: readonly ImportedEffect[]; custom: CustomCovers }> {
     const library = await readFile(root, IMPORTS_FILE);
     const entries = library ? await readLibrary(library).catch(() => []) : [];
     // The details join the restored imports by the ID of each library effect.
-    const details = new Map<string, LibraryDetails>();
+    const items: (LibraryItem & { effect: Uint8Array })[] = [];
     for (const entry of entries) {
       const label = await effectLabel(entry.effect);
-      if (label) details.set(label.id, entry.details);
+      if (label) items.push({ id: label.id, details: entry.details, effect: entry.effect });
     }
+    const siteIds = new Set(catalog.effects.map((effect) => effect.id));
+    const cardCovers = await cardCustomCovers(
+      items,
+      siteIds,
+      async (id) => {
+        const bytes = session.contents?.get(id);
+        return bytes ? (await effectLabel(bytes))?.icon : undefined;
+      },
+      coverPixels,
+    );
+    const custom = mergeCustomCovers(customCovers, cardCovers);
+    if (cardCovers.size > 0) keepCustomCovers(custom);
+    if (!catalog.baseGamma) return { added: [], imports: allImported, custom };
+    const details = new Map(items.map((item) => [item.id, item.details] as const));
     const files = [
-      ...entries.map((entry) => ({ bytes: entry.effect, tone: nativeTone(entry.details) })),
+      ...items
+        .filter((item) => item.details.kind !== 'cover')
+        .map((item) => ({ bytes: item.effect, tone: nativeTone(item.details) })),
       ...session.extra
         .filter((effect) => isLutImportId(effect.id))
         .map((effect) => ({ bytes: effect.card.bytes })),
@@ -478,8 +539,12 @@ export function InstallPage({
       new AbortController().signal,
     );
     const added = effects.map((effect) => withDetails(effect, details.get(effect.id)));
-    for (const effect of added) addImported(effect);
-    return added;
+    if (added.length === 0) return { added, imports: allImported, custom };
+    const ids = new Set(added.map((effect) => effect.id));
+    const imports = [...allImported.filter((item) => !ids.has(item.id)), ...added];
+    setImported(imports);
+    for (const effect of added) void saveImport(effect);
+    return { added, imports, custom };
   }
 
   /** Reads a GRKit.zip of an earlier download as the card that it makes, or fails for another file. */
@@ -509,7 +574,7 @@ export function InstallPage({
     try {
       const { root, session, catalog } = await readPackage(file);
       const fit = adoptCard(session);
-      const added = await adoptImports(root, session, file.name, catalog);
+      const { added } = await adoptImports(root, session, file.name, catalog);
       // The package works without its recipes, so a damaged library adds none.
       const recipes = await recipeLibrary.restorePackage(root).catch((error) => {
         console.warn(error);
@@ -558,9 +623,18 @@ export function InstallPage({
       void saveLastCard(root);
       resetBuild();
       if (fit.support) prefetchPackage(fit.support.targets, fit.id, language);
-      // The imports of an earlier browser come back with the card. The card works without them.
-      await adoptImports(root, session, root.name, catalog).catch((error) => console.warn(error));
-      if (run === cardRun.current) await refreshCoverUpdates(session, colorfulCovers);
+      // The imports and the custom covers of an earlier browser come back with the card. The
+      // card works without them.
+      const adopted = await adoptImports(root, session, root.name, catalog).catch((error) => {
+        console.warn(error);
+        return null;
+      });
+      if (run === cardRun.current) {
+        await refreshCardUpdates(session, {
+          covers: { ...coverChoice, custom: adopted?.custom ?? customCovers },
+          imports: importsForCamera(adopted?.imports ?? allImported, fit.key),
+        });
+      }
     } catch (error) {
       console.error(error);
       if (run === cardRun.current) setConnectMessage({ tone: 'error', lines: [failure] });
@@ -634,9 +708,9 @@ export function InstallPage({
 
   function disconnectCard() {
     cardRun.current += 1;
-    coverUpdateRun.current += 1;
+    cardUpdateRun.current += 1;
     setCard(null);
-    setCoverUpdates(new Set());
+    setCardUpdates(new Set());
     setLastCard(null);
     void forgetLastCard();
     setConnectMessage(null);
@@ -646,13 +720,12 @@ export function InstallPage({
 
   /** The changes from the card to the selection: `checked` gives the checked effect IDs. */
   function cardChanges(session: CardSession, checked: readonly string[]): CardChanges {
-    const changed = new Set([...changedImports(session, imported), ...coverUpdates]);
     const changes = planChanges(
       session.state,
       __GRKIT_VERSION__,
       plan.modules,
       plan.includeEffects
-        ? { before: [...session.effects.keys()], after: checked, changed: [...changed] }
+        ? { before: [...session.effects.keys()], after: checked, changed: [...cardUpdates] }
         : null,
       recipeLibrary.cardChange(session),
     );
@@ -671,26 +744,25 @@ export function InstallPage({
     try {
       const checked = await checkedEffects();
       const effects = plan.includeEffects ? cardPackageEffects(checked) : [];
-      const imports = await encodeLibrary(allImported);
       const catalog = await loadCatalog(PREVIEW_TARGET);
-      // Fresh cover diffs so a write right after toggling colorful still rewrites the library.
-      const coverChanged = plan.includeEffects
-        ? await changedCatalogCovers(session, catalog.effects, colorfulCovers, imported)
+      // Fresh differences, so a write right after a change of the covers still rewrites the files.
+      const changedFiles = plan.includeEffects
+        ? await changedOnCard(session, catalog.effects, imported, coverChoice)
         : new Set<string>();
-      if (run === cardRun.current) setCoverUpdates(coverChanged);
+      if (run === cardRun.current) setCardUpdates(changedFiles);
       const files = await buildCardFiles(
         targets,
         camera.id,
         effects,
         plan.modules,
         language,
-        imports,
+        (covers) => encodeLibrary(allImported, covers),
         (received) => {
           if (run === cardRun.current) setCardTask({ kind: 'preparing', received });
         },
         null,
         await leftOutEffects(effects),
-        colorfulCovers,
+        coverChoice,
       );
       const checkedIds = checked.map((effect) => effect.id);
       const changes = planChanges(
@@ -701,7 +773,7 @@ export function InstallPage({
           ? {
               before: [...session.effects.keys()],
               after: checkedIds,
-              changed: [...changedImports(session, imported), ...coverChanged],
+              changed: [...changedFiles],
             }
           : null,
         recipeLibrary.cardChange(session),
@@ -718,7 +790,7 @@ export function InstallPage({
       library.add.push(
         ...(await coverLibraryAdds(
           session,
-          coverChanged,
+          changedFiles,
           catalog.effects,
           imported,
           colorfulCovers,
@@ -740,7 +812,7 @@ export function InstallPage({
       if (run !== cardRun.current) return;
       const written = { ...next, written: true };
       setCard(written);
-      await refreshCoverUpdates(written, colorfulCovers);
+      await refreshCardUpdates(written);
       setApplyMessage({
         tone: 'ok',
         // The camera steps after the write: the MENU step for a first install and for SD scripts
@@ -787,13 +859,13 @@ export function InstallPage({
         effects,
         plan.modules,
         language,
-        await encodeLibrary(allImported),
+        (covers) => encodeLibrary(allImported, covers),
         (received, retrying) => {
           if (run === buildRun.current) setBuild({ state: 'building', received, retrying });
         },
         recipes,
         await leftOutEffects(effects),
-        colorfulCovers,
+        coverChoice,
       );
       if (run === buildRun.current) {
         save(blob, packageFilename(__GRKIT_VERSION__, camera.name, new Date()));
@@ -1005,13 +1077,11 @@ export function InstallPage({
                   nativeLooks={takesNativeLooks(camera.key)}
                   cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
-                  changedOnCard={
-                    active
-                      ? new Set([...changedImports(active, imported), ...coverUpdates])
-                      : undefined
-                  }
+                  changedOnCard={active ? cardUpdates : undefined}
                   colorfulCovers={colorfulCovers}
                   onColorfulCovers={changeColorfulCovers}
+                  customCovers={customCovers}
+                  onCustomCover={changeCustomCover}
                   family={family}
                   recipes={recipeLibrary.library}
                   onAddRecipe={(recipe) =>

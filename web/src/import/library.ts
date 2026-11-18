@@ -12,8 +12,12 @@ export const IMPORTS_FILE = 'SCRIPT/GRKIT/IMPORTS.BIN';
 
 /** What the library keeps of an import besides its effect file, which holds its name and icon. */
 export interface LibraryDetails {
-  /** `native` for a native look, absent for a LUT import. */
-  kind?: 'native';
+  /**
+   * `native` for a native look, `cover` for the custom cover of a site film look, absent for a LUT
+   * import. A `cover` entry holds the site effect with that cover; pages before custom covers skip
+   * it as an effect that the catalog has.
+   */
+  kind?: 'native' | 'cover';
   cover?: Cover;
   grade?: Grade;
   input?: Input;
@@ -23,6 +27,12 @@ export interface LibraryDetails {
   version?: string;
   /** The tone curves of a native look, which redraw its preview. */
   tone?: Uint16Array;
+}
+
+/** The custom cover of a site film look, and its effect file with that cover. */
+export interface LibraryCover {
+  cover: Cover;
+  effect: Uint8Array;
 }
 
 /** An import of a library: its effect file and its details. */
@@ -84,14 +94,21 @@ function detailsText(effect: ImportedEffect): string | null {
 }
 
 /**
- * The import library of `imports`, or null without an import that it can keep. A native look
- * goes in with the tone curves of its preview, so another browser shows it as after its unlock.
+ * The import library of `imports` and `covers`, or null without an entry that it can keep. A
+ * native look goes in with the tone curves of its preview, so another browser shows it as after
+ * its unlock. Each custom cover of a site film look goes in with the effect file that has it.
  */
-export async function encodeLibrary(imports: readonly ImportedEffect[]): Promise<Uint8Array | null> {
-  const kept = imports.flatMap((effect) => {
-    const details = detailsText(effect);
-    return details ? [{ details, blob: effect.imported.blob }] : [];
-  });
+export async function encodeLibrary(
+  imports: readonly ImportedEffect[],
+  covers: readonly LibraryCover[] = [],
+): Promise<Uint8Array | null> {
+  const kept = [
+    ...imports.flatMap((effect) => {
+      const details = detailsText(effect);
+      return details ? [{ details, blob: effect.imported.blob }] : [];
+    }),
+    ...covers.map(({ cover, effect }) => ({ details: JSON.stringify({ kind: 'cover', cover }), blob: effect })),
+  ];
   if (kept.length === 0) return null;
   const { ImportLibrary } = await loadWasm();
   const library = new ImportLibrary();
@@ -106,7 +123,8 @@ export async function encodeLibrary(imports: readonly ImportedEffect[]): Promise
 const isText = (value: unknown, max: number): value is string =>
   typeof value === 'string' && value.length >= 1 && value.length <= max;
 
-function readCover(value: unknown): Cover | undefined {
+/** `value` as a cover that the camera can draw, or undefined. */
+export function readCover(value: unknown): Cover | undefined {
   const cover = value as Partial<Cover> | null;
   if (
     typeof cover !== 'object' ||
@@ -149,7 +167,7 @@ export function readDetails(text: string): LibraryDetails {
     details.warnings = item.warnings as string[];
   }
   if (isText(item.source, 255)) details.source = item.source;
-  if (item.kind === 'native') details.kind = 'native';
+  if (item.kind === 'native' || item.kind === 'cover') details.kind = item.kind;
   if (isText(item.version, 16)) details.version = item.version;
   const tone = readTone(item.tone);
   if (tone) details.tone = tone;

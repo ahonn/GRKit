@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { INBOX, RECIPE_FILE, type CardDirectory, type CardFileHandle } from './card';
 import {
-  changedImports,
   extraCardEffects,
   openSession,
   packageEffects,
   withFamily,
-  type CardSession,
 } from './cardSession';
 import type { CardEffect, ImportedEffect, NativeImport } from './catalog';
 import type { Family } from './recipes';
@@ -64,22 +62,6 @@ describe.each([INBOX, 'GRKIT/EFFECTS'])('imports after connecting a card with ef
     expect(extraCardEffects(extra, [imported])).toEqual([]);
     expect(extraCardEffects(extra, [])).toEqual([cinema]);
     expect(packageEffects(extraCardEffects(extra, []))).toEqual(folder === INBOX ? [cinema] : []);
-  });
-});
-
-describe('changedImports', () => {
-  it('names the imports whose card file differs from the effect of the page', () => {
-    const session = {
-      contents: new Map([
-        [imported.id, new Uint8Array([1])],
-        ['lut-old', new Uint8Array([4, 5])],
-      ]),
-    } as unknown as CardSession;
-    const renamed = { ...imported, id: 'lut-old', imported: { ...imported.imported, blob: new Uint8Array([4, 6]) } };
-    const absent = { ...imported, id: 'lut-new' };
-    expect([...changedImports(session, [imported, renamed, absent])]).toEqual(['lut-old']);
-    // A session read before the page kept card files changes nothing.
-    expect(changedImports({} as CardSession, [renamed]).size).toBe(0);
   });
 });
 

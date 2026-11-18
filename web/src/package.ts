@@ -7,9 +7,18 @@ import {
   type Effect,
   type PackageEffect,
 } from './catalog';
+import type { LibraryCover } from './import/library';
 import { effectFilename } from './import/names';
 import { NATIVE_LOOKS } from './import/native';
-import { isCatalogEffect, isFilmCover, needsCoverRelabel, packageCover } from './packageCovers';
+import {
+  bakedCover,
+  isCatalogEffect,
+  isFilmCover,
+  NO_CUSTOM_COVERS,
+  packageCover,
+  type CoverChoice,
+  type CustomCovers,
+} from './packageCovers';
 import { fetchFile, type Progress } from './transfer';
 import wasmUrl from './wasm/grkit_wasm_bg.wasm?url';
 
@@ -116,39 +125,57 @@ async function sha256(bytes: Uint8Array): Promise<string> {
 }
 
 /**
- * Relabels `bytes` with the cover the colorful switch would bake, or returns them unchanged.
+ * `bytes` with the icon that a write bakes (`bakedCover`): the `custom` cover, or the colorful
+ * packaging of `cover`. Returns them unchanged when the file keeps its own icon.
  */
 export async function withPackagedCover(
   bytes: Uint8Array,
   name: string,
   cover: Cover | undefined,
   colorful: boolean,
+  custom?: Cover,
 ): Promise<{ bytes: Uint8Array; relabeled: boolean }> {
-  if (!needsCoverRelabel(cover, colorful) || !isFilmCover(cover)) {
-    return { bytes, relabeled: false };
-  }
-  const packed = packageCover(cover, colorful);
+  const baked = bakedCover(cover, colorful, custom);
+  if (!baked) return { bytes, relabeled: false };
   const { iconPixels, relabelEffect } = await loadWasm();
-  const icon = iconPixels(JSON.stringify(packed));
+  const icon = iconPixels(JSON.stringify(baked));
   return { bytes: relabelEffect(bytes, name, icon), relabeled: true };
 }
 
+/** `bytes` with the icon of `cover`, whatever icon the file has. */
+export async function withCoverIcon(bytes: Uint8Array, name: string, cover: Cover): Promise<Uint8Array> {
+  const { iconPixels, relabelEffect } = await loadWasm();
+  return relabelEffect(bytes, name, iconPixels(JSON.stringify(cover)));
+}
+
 /**
- * Site GRF bytes for a catalog effect, with packaging colors baked in when colorful is on.
- * Returns whether the bytes were relabeled (sha256 of the site file no longer applies).
+ * Site GRF bytes for a catalog effect, with its custom cover or the colorful packaging baked in.
+ * It checks the site file against the catalog checksum first, so a recolored file is checked too.
  */
 export async function catalogEffectBytes(
   effect: CatalogEffect,
   siteBytes: Uint8Array,
-  colorful: boolean,
+  covers: CoverChoice,
 ): Promise<{ bytes: Uint8Array; relabeled: boolean }> {
-  return withPackagedCover(siteBytes, effect.name, effect.cover, colorful);
+  if ((await sha256(siteBytes)) !== effect.sha256) {
+    throw new Error(`Effect checksum mismatch: ${effect.id}`);
+  }
+  return withPackagedCover(siteBytes, effect.name, effect.cover, covers.colorful, covers.custom.get(effect.id));
 }
 
-/** Expected ADJ icon pixels for a film cover under the colorful switch. */
-export async function expectedCoverIcon(cover: Cover, colorful: boolean): Promise<Uint8Array> {
+/**
+ * The ADJ icon pixels that a write leaves for a site film look: its custom cover, else its cover
+ * under the colorful switch (gray, as the site file has it, when the switch is off).
+ */
+export async function expectedCoverIcon(cover: Cover, colorful: boolean, custom?: Cover): Promise<Uint8Array> {
   const { iconPixels } = await loadWasm();
-  return iconPixels(JSON.stringify(packageCover(cover, colorful)));
+  return iconPixels(JSON.stringify(custom ?? packageCover(cover, colorful)));
+}
+
+/** The icon pixels of `cover` as the camera draws them. */
+export async function coverPixels(cover: Cover): Promise<Uint8Array> {
+  const { iconPixels } = await loadWasm();
+  return iconPixels(JSON.stringify(cover));
 }
 
 type Packager = InstanceType<Wasm['Package']>;
@@ -159,7 +186,6 @@ type Packager = InstanceType<Wasm['Package']>;
  * camera have the same effects, so the effects come from the first build.
  * `camera` selects the ModeSet file. `modules` names the module files that the package holds.
  * `language` selects the installation guide, which the site publishes as `guides/<camera>/<language>.pdf`.
- * `imports` is the import library of the browser (`import/library.ts`), or null without imports.
  * grkit-wasm checks each runtime file against `build.json` and each effect's format.
  * `onProgress` receives the number of bytes of the files of this package that have arrived, and
  * whether a file of it waits for a new attempt.
@@ -167,7 +193,9 @@ type Packager = InstanceType<Wasm['Package']>;
  * null. INSTALL copies it to the data folder.
  * `leftOut` names the `.GRF` files of the site effects that the person did not choose. The package
  * lists them, and the camera does not list them, also when an earlier package put them there.
- * `colorful` bakes packaging colors into catalog film-cover icons that have no stored colors.
+ * `covers` gives the colorful switch and the custom covers of site film looks, which the package
+ * bakes into the effect icons. `imports` makes the import library from the custom covers that the
+ * package holds, so another browser gets them back.
  */
 async function assemble<T>(
   targets: readonly string[],
@@ -175,13 +203,14 @@ async function assemble<T>(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
-  imports: Uint8Array | null,
+  imports: ImportLibraryOf,
   onProgress: (received: number, retrying: boolean) => void,
   finish: (builder: Packager) => T,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
-  colorful = false,
+  covers: CoverChoice = DEFAULT_COVERS,
 ): Promise<T> {
+  const { colorful } = covers;
   const used = new Set<string>([wasmUrl]);
   const use = (url: string) => {
     used.add(url);
@@ -225,7 +254,7 @@ async function assemble<T>(
         }
         const site = await use(effectUrl(targets[0]!, effect.file));
         return isCatalogEffect(effect)
-          ? catalogEffectBytes(effect, site, colorful)
+          ? catalogEffectBytes(effect, site, covers)
           : { bytes: site, relabeled: false };
       }),
     );
@@ -242,7 +271,6 @@ async function assemble<T>(
       builder.setCamera(camera);
       builder.setLanguage(language);
       builder.setGuide(guide);
-      if (imports) builder.setImports(imports);
       if (recipes) builder.setRecipes(recipes);
       for (const build of builds.slice(1)) builder.addBuild(build);
       for (const [number, target] of targets.entries()) {
@@ -252,20 +280,11 @@ async function assemble<T>(
           builder.addRuntimeFile(number, paths[index]!, bytes);
         }
       }
-      for (const [index, item] of (await effectBytes).entries()) {
-        const effect = effects[index]!;
-        const { bytes: blob, relabeled } = item!;
-        // An imported effect, a card effect, or a recolored catalog cover has no site checksum.
-        if (
-          !effect.imported &&
-          !effect.card &&
-          !relabeled &&
-          (await sha256(blob)) !== effect.sha256
-        ) {
-          throw new Error(`Effect checksum mismatch: ${effect.id}`);
-        }
-        builder.addEffect(blob);
-      }
+      // `catalogEffectBytes` checked each site file before it changed the icon.
+      const baked = (await effectBytes).map((item) => item.bytes);
+      for (const bytes of baked) builder.addEffect(bytes);
+      const library = await imports(libraryCovers(effects, baked, covers.custom));
+      if (library) builder.setImports(library);
       for (const file of leftOut) builder.leaveOutEffect(file);
       for (const bytes of await moduleBytes) {
         builder.addModule(bytes);
@@ -285,6 +304,29 @@ async function assemble<T>(
   }
 }
 
+/**
+ * The custom covers of the site film looks among `effects`, each with its file in the package
+ * (`baked`, in the order of `effects`), for the import library.
+ */
+export function libraryCovers(
+  effects: readonly PackageEffect[],
+  baked: readonly Uint8Array[],
+  custom: CustomCovers,
+): LibraryCover[] {
+  return effects.flatMap((effect, index) => {
+    const cover = isCatalogEffect(effect) ? custom.get(effect.id) : undefined;
+    return cover ? [{ cover, effect: baked[index]! }] : [];
+  });
+}
+
+/**
+ * Makes the import library of a package (`encodeLibrary`) from the custom covers that it holds,
+ * or gives null for a package without one.
+ */
+export type ImportLibraryOf = (covers: readonly LibraryCover[]) => Promise<Uint8Array | null>;
+
+const DEFAULT_COVERS: CoverChoice = { colorful: false, custom: NO_CUSTOM_COVERS };
+
 /** Builds GRKit.zip in the browser. See `assemble` for the arguments. */
 export function buildPackage(
   targets: readonly string[],
@@ -292,11 +334,11 @@ export function buildPackage(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
-  imports: Uint8Array | null,
+  imports: ImportLibraryOf,
   onProgress: (received: number, retrying: boolean) => void,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
-  colorful = false,
+  covers: CoverChoice = DEFAULT_COVERS,
 ): Promise<Blob> {
   return assemble(
     targets,
@@ -312,7 +354,7 @@ export function buildPackage(
     },
     recipes,
     leftOut,
-    colorful,
+    covers,
   );
 }
 
@@ -326,11 +368,11 @@ export function buildCardFiles(
   effects: readonly PackageEffect[],
   modules: readonly string[],
   language: string,
-  imports: Uint8Array | null,
+  imports: ImportLibraryOf,
   onProgress: (received: number) => void,
   recipes: Uint8Array | null = null,
   leftOut: readonly string[] = [],
-  colorful = false,
+  covers: CoverChoice = DEFAULT_COVERS,
 ): Promise<CardFile[]> {
   return assemble(
     targets,
@@ -348,7 +390,7 @@ export function buildCardFiles(
       }),
     recipes,
     leftOut,
-    colorful,
+    covers,
   );
 }
 

@@ -10,8 +10,8 @@ import {
 } from './card';
 import type { CardEffect, CatalogEffect, Cover, ImportedEffect, PackageEffect } from './catalog';
 import { NATIVE_LOOKS } from './import/native';
-import { isFilmCover } from './packageCovers';
-import { effectFile, effectLabel, expectedCoverIcon, withPackagedCover } from './package';
+import { isFilmCover, packageCover, type CoverChoice } from './packageCovers';
+import { effectFile, effectLabel, expectedCoverIcon, withCoverIcon, withPackagedCover } from './package';
 import { readRecipeFile, sameRecipes, type Family, type Recipe } from './recipes';
 
 /** The connected card, as the page compares it with the selection. */
@@ -113,19 +113,6 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((byte, i) => byte === b[i]);
 }
 
-/**
- * The IDs of the imports whose file on the card differs from the effect of the page, such as an
- * import with a new name. A write puts the new file on the card.
- */
-export function changedImports(session: CardSession, imported: readonly ImportedEffect[]): Set<string> {
-  const changed = new Set<string>();
-  for (const effect of imported) {
-    const bytes = session.contents?.get(effect.id);
-    if (bytes && !sameBytes(bytes, effect.imported.blob)) changed.add(effect.id);
-  }
-  return changed;
-}
-
 /** Cover to bake for an effect id: catalog/import cover, else a known Cinema cover. */
 function coverForPackaging(
   id: string,
@@ -140,52 +127,64 @@ function coverForPackaging(
 }
 
 /**
- * Film looks on the card whose ADJ icon differs from what a write would put there under the
- * colorful-covers switch. Includes catalog covers and Cinema Yellow/Green (unlock GRFs are gray
- * while the page cover stores cinema colors).
+ * The film looks on the card whose file differs from what a write puts there, so a write updates
+ * them:
+ * - an import, when its card file differs from its effect with the cover that `covers` bakes, such
+ *   as after a new name, or with the colorful switch turned on for a cover without colors;
+ * - a site film look, when its icon differs from its custom cover, or from its cover under the
+ *   colorful switch;
+ * - a native look that only the card has, when its icon differs from its cover under the switch.
  */
-export async function changedCatalogCovers(
+export async function changedOnCard(
   session: CardSession,
   catalog: readonly CatalogEffect[],
-  colorful: boolean,
-  imported: readonly ImportedEffect[] = [],
+  imported: readonly ImportedEffect[],
+  covers: CoverChoice,
 ): Promise<Set<string>> {
   const changed = new Set<string>();
-  if (!session.contents) return changed;
-  const ids = new Set<string>([
-    ...catalog.map((effect) => effect.id),
-    ...imported.map((effect) => effect.id),
-    ...NATIVE_LOOKS.map((look) => look.id),
-  ]);
-  for (const id of ids) {
-    if (!session.effects.has(id)) continue;
-    const cover = coverForPackaging(id, catalog, imported);
-    if (!isFilmCover(cover)) continue;
-    const bytes = session.contents.get(id);
+  const contents = session.contents;
+  if (!contents) return changed;
+  for (const effect of imported) {
+    const bytes = contents.get(effect.id);
     if (!bytes) continue;
+    const cover = coverForPackaging(effect.id, catalog, imported);
+    const next = await withPackagedCover(effect.imported.blob, effect.name, cover, covers.colorful);
+    if (!sameBytes(bytes, next.bytes)) changed.add(effect.id);
+  }
+  const importIds = new Set(imported.map((effect) => effect.id));
+  const siteIds = new Set(catalog.map((effect) => effect.id));
+  for (const id of new Set([...siteIds, ...NATIVE_LOOKS.map((look) => look.id)])) {
+    if (importIds.has(id) || !session.effects.has(id)) continue;
+    const cover = coverForPackaging(id, catalog, imported);
+    const bytes = contents.get(id);
+    if (!isFilmCover(cover) || !bytes) continue;
     const label = await effectLabel(bytes);
     if (!label) continue;
-    const expected = await expectedCoverIcon(cover, colorful);
+    const custom = siteIds.has(id) ? covers.custom.get(id) : undefined;
+    const expected = await expectedCoverIcon(cover, covers.colorful, custom);
     if (!sameBytes(label.icon, expected)) changed.add(id);
   }
   return changed;
 }
 
 /**
- * Library effect files to rewrite for colorful covers that are not already in `library.add`
- * (card-only Cinema looks never enter the package inbox).
+ * Library files of native looks that only the card has, with the icon that `changedOnCard` expects.
+ * The package has no file for them: the page cannot rebuild such a look without its firmware file,
+ * so a write relabels the card's own file. Site film looks and imports come from the package.
  */
 export async function coverLibraryAdds(
   session: CardSession,
-  coverChanged: ReadonlySet<string>,
+  changed: ReadonlySet<string>,
   catalog: readonly CatalogEffect[],
   imported: readonly ImportedEffect[],
   colorful: boolean,
   already: readonly CardFile[],
 ): Promise<CardFile[]> {
   const added = new Set(already.map((file) => file.path.toUpperCase()));
+  const own = new Set([...catalog, ...imported].map((effect) => effect.id));
   const out: CardFile[] = [];
-  for (const id of coverChanged) {
+  for (const id of changed) {
+    if (own.has(id)) continue;
     const paths = session.effects.get(id) ?? [];
     const libraryPath = paths.find((path) => path.toUpperCase().startsWith(`${LIBRARY}/`));
     if (!libraryPath) continue;
@@ -195,10 +194,9 @@ export async function coverLibraryAdds(
     const cover = coverForPackaging(id, catalog, imported);
     if (!bytes || !isFilmCover(cover)) continue;
     const label = await effectLabel(bytes);
-    const name = label?.name ?? imported.find((effect) => effect.id === id)?.name ?? id;
-    const next = await withPackagedCover(bytes, name, cover, colorful);
-    if (!next.relabeled) continue;
-    out.push({ path: fileName, bytes: next.bytes });
+    if (!label) continue;
+    // With the switch off, the gray cover goes back: `withPackagedCover` would keep the file.
+    out.push({ path: fileName, bytes: await withCoverIcon(bytes, label.name, packageCover(cover, colorful)) });
     added.add(fileName.toUpperCase());
   }
   return out;

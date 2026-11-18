@@ -52,39 +52,6 @@ export function editableCoverFields(effect: ImportedEffect): CoverFields | null 
 }
 
 /**
- * Cover metadata for the shelf when an editable import has none: brand/name from the effect name,
- * without `colors`, so the site draws a crisp gray SVG instead of upscaled GRF pixels.
- */
-export function coverStub(effectName: string): Cover {
-  const { template, brand, name, number, band } = coverFromFile(effectName);
-  return {
-    template,
-    brand,
-    name,
-    ...(number !== '' ? { number } : {}),
-    ...(template === 'box' ? { band } : {}),
-  };
-}
-
-/**
- * Cover to draw on the film shelf. Uses stored `cover` when present; otherwise invents a stub for
- * restored LUT imports and card-only GRFs so the tile is SVG instead of soft 40×40 camera pixels.
- * Catalog effects and native looks keep their own cover (or pixels) elsewhere.
- */
-export function shelfCover(effect: {
-  name: string;
-  cover?: Cover;
-  imported?: { kind: string };
-  card?: unknown;
-}): Cover | undefined {
-  if (effect.cover) return effect.cover;
-  if (effect.imported?.kind === 'lut' || effect.imported?.kind === 'restored' || effect.card) {
-    return coverStub(effect.name);
-  }
-  return undefined;
-}
-
-/**
  * `effect` with the name `name`, and with the film box `cover` as its icon when it is given. It
  * fails for a name or a cover that the camera cannot show.
  */

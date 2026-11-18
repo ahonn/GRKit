@@ -3,11 +3,9 @@ import type { ImportedEffect } from '../catalog';
 import { colorsFromLook } from '../coverPalette';
 import {
   coverFields,
-  coverStub,
   editable,
   editableCoverFields,
   sameCoverFields,
-  shelfCover,
 } from './edit';
 
 const effect = (kind: 'lut' | 'native' | 'restored', name = 'Warm') =>
@@ -96,29 +94,7 @@ describe('import edits', () => {
       number: '400',
       band: false,
     });
-    expect(coverStub('Kodak Portra 400')).toEqual({
-      template: 'box',
-      brand: 'Kodak',
-      name: 'PORTRA',
-      number: '400',
-      band: false,
-    });
     expect(editableCoverFields(effect('native'))).toBeNull();
   });
 
-  it('draws a shelf stub for restored imports and card-only GRFs without cover metadata', () => {
-    const stub = coverStub('Leica M9 STD');
-    expect(shelfCover({ name: 'Leica M9 STD', imported: { kind: 'restored' } })).toEqual(stub);
-    expect(shelfCover({ name: 'Leica M9 STD', card: { path: 'GRKIT/EFFECTS/A.GRF', bytes: new Uint8Array() } })).toEqual(
-      stub,
-    );
-    expect(shelfCover({ name: 'Warm', imported: { kind: 'native' } })).toBeUndefined();
-    expect(
-      shelfCover({
-        name: 'Portra 400',
-        cover: { template: 'box', brand: 'Kodak', name: 'PORTRA', number: '400' },
-        card: {},
-      }),
-    ).toEqual({ template: 'box', brand: 'Kodak', name: 'PORTRA', number: '400' });
-  });
 });
