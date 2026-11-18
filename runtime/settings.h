@@ -24,6 +24,7 @@ static __attribute__((unused)) volatile u32 *settings_table(volatile u32 *h) {
     volatile u32 *t=address ? MODULE_SETTINGS_MAP(address) : 0;
     return t && t[0]<=GRKIT_MODULE_SETTINGS_MAX ? t : 0;
 }
+#include "develop_settings.h"
 /* The number of values of a setting, or 0 for an unknown handle. */
 static __attribute__((unused)) u32 setting_limit(volatile u32 *h,u32 handle) {
     volatile u32 *t;
@@ -58,19 +59,21 @@ static __attribute__((unused)) u32 setting_value_row(volatile u32 *h,u32 handle,
 /* The value of a setting, or 0 for an unknown handle or a value out of its
    range. */
 static __attribute__((unused)) u32 setting_value(volatile u32 *h,u32 handle) {
-    volatile u32 *t;
+    volatile u32 *t, *copy;
     u32 value;
     if(handle==GRKIT_CORE_TONE) return tone_value(h);
+    /* A RAW development reads its own copy (runtime/develop_settings.h). */
+    copy=develop_copy_setting(h,handle);
     /* A core setting without values, such as CORE.RECIPE, whose rows are
        the recipes (runtime/recipes.h), has value 0. */
     if(IS_CORE_SETTING(handle)) {
         if(handle==GRKIT_CORE_ASPECT) return aspect_value(h);
-        value=h[core_setting_words[CORE_SETTING(handle)]/4];
+        value=copy ? *copy : h[core_setting_words[CORE_SETTING(handle)]/4];
         return value<core_setting_values[CORE_SETTING(handle)] ? value : 0;
     }
     t=settings_table(h);
     if(!t || handle>=t[0]) return 0;
-    value=t[SETTINGS_ENTRY(handle)+1];
+    value=copy ? *copy : t[SETTINGS_ENTRY(handle)+1];
     return value<t[SETTINGS_ENTRY(handle)+2] ? value : 0;
 }
 #endif

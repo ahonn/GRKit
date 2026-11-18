@@ -293,6 +293,20 @@ pub const DEVELOP_TONE: &[HookSpec] = &[
     bl("menu_develop_top_icon", Menu, Tuning),
 ];
 
+/// The GRKit row after the native rows of RawDevelopmentTopController
+/// (`runtime/menu.c`): the BL to the list setup and to the row count, the
+/// end test of the setup loop of the rows, the end of the fill of the rows,
+/// and the defaults of the decide, row name, and subtitle switches.
+pub const DEVELOP_TOP: &[HookSpec] = &[
+    bl("menu_develop_top_cells", Menu, Tuning),
+    bl("menu_develop_top_count", Menu, Tuning),
+    b("menu_develop_top_setup", Menu, Tuning),
+    b("menu_develop_top_fill", Menu, Tuning),
+    b("menu_develop_top_decide", Menu, Tuning),
+    b("menu_develop_top_name", Menu, Tuning),
+    b("menu_develop_top_value", Menu, Tuning),
+];
+
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the
 /// model and of the choice of a row in RawDevelopmentParameterSetController;

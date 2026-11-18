@@ -602,10 +602,13 @@ menu_settings_change:
     push {r0-r3, r12, lr}
     bl menu_settings_transition
     /* The C function gives the controller to change to, in r1, or 0: no
-       change happens. */
+       change happens. menu_settings_arg gives the third argument, r2. */
     cmp r0, #0
     beq 1f
     str r0, [sp, #4]
+    ldr r0, [sp, #8]
+    bl menu_settings_arg
+    str r0, [sp, #8]
     pop {r0-r3, r12, lr}
     .inst HOOK_MENU_SETTINGS_CHANGE_STOCK
     ldr pc, =HOOK_MENU_SETTINGS_CHANGE_RESUME
@@ -931,7 +934,11 @@ DEVELOP_BEFORE menu_develop_open, menu_develop_opened, HOOK_MENU_DEVELOP_OPEN_RE
 menu_develop_restore:
     push {r0-r3,r12,lr}
     bl menu_develop_restored
+    /* 0: the GRKit list changed nothing of the model, which keeps its
+       values. */
+    cmp r0, #0
     pop {r0-r3,r12,lr}
+    bxeq lr
     ldr pc, =HOOK_MENU_DEVELOP_RESTORE_TARGET
 /* The BLs to the label (model, category, value) of the subtitles: r3 gets
    the subtitle view. */
@@ -973,6 +980,73 @@ menu_develop_aspect_top_text:
     b menu_develop_aspect_label
 .ltorg
 #endif
+#endif
+#ifdef HOOK_MENU_DEVELOP_TOP_CELLS
+/* RawDevelopmentTopController: one GRKit row after its DEVELOP_TOP_ROWS
+   native rows (runtime/menu.c). The BL to the list setup gets a layout for
+   each row, the BL to the row count and the setup loop of the rows count
+   it, the end of the fill of the rows fills it, the default of the decide
+   switch opens it, and the defaults of the row name and subtitle switches
+   name it. */
+.global menu_develop_top_cells
+.type menu_develop_top_cells, %function
+menu_develop_top_cells:
+    push {r4, lr}
+    sub sp, sp, #16
+    ldrb r12, [r1]
+    mov r2, #0
+1:  strb r12, [sp, r2]
+    add r2, r2, #1
+    cmp r2, #DEVELOP_TOP_ROWS+1
+    bne 1b
+    mov r1, sp
+    ldr r12, =HOOK_MENU_DEVELOP_TOP_CELLS_TARGET
+    blx r12
+    add sp, sp, #16
+    pop {r4, pc}
+.global menu_develop_top_count
+.type menu_develop_top_count, %function
+menu_develop_top_count:
+    mov r1, #DEVELOP_TOP_ROWS+1
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_COUNT_TARGET
+.global menu_develop_top_setup
+.type menu_develop_top_setup, %function
+menu_develop_top_setup:
+    cmp r4, #DEVELOP_TOP_ROWS+1
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_SETUP_RESUME
+/* r9 the list view. menu_develop_top_row returns to the end of the fill. */
+.global menu_develop_top_fill
+.type menu_develop_top_fill, %function
+menu_develop_top_fill:
+    mov r0, r9
+    ldr lr, =HOOK_MENU_DEVELOP_TOP_FILL_TARGET
+    b menu_develop_top_row
+/* r0 the row, r4 the controller. */
+.global menu_develop_top_decide
+.type menu_develop_top_decide, %function
+menu_develop_top_decide:
+    cmp r0, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_DECIDE_TARGET
+    mov r0, r4
+    bl menu_develop_top_open
+    DEVELOP_TOP_DECIDE_END
+/* The defaults of the row name switch and of the subtitle switch (r0 the
+   row): the GRKit row has the name of menu_develop_top_text_id and no
+   value. */
+.global menu_develop_top_name
+.type menu_develop_top_name, %function
+menu_develop_top_name:
+    cmp r0, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_NAME_TARGET
+    bl menu_develop_top_text_id
+    DEVELOP_TOP_NAME_END
+.global menu_develop_top_value
+.type menu_develop_top_value, %function
+menu_develop_top_value:
+    cmp r0, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET+DEVELOP_TOP_NO_VALUE
+.ltorg
 #endif
 #include "crop.S"
 /* The exposure compensation of recipes (runtime/native_look.h) goes to the

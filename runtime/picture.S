@@ -133,15 +133,22 @@ dirty_resume:
 // for Off. The flags are those of `cmp r3, #3`. Without a module that uses
 // CORE.GRAIN, as after a soft Off of Grain (runtime/manage.h), the level is
 // Off.
+// A RAW development reads the level of its own settings
+// (picture_header_word).
 grain_level:
     ldr r3, =GRKIT_HEADER_REFERENCE
     ldr r3, [r3, #GRKIT_HOST_CAPABILITIES]
     tst r3, #GRKIT_CORE_GRAIN_BIT
-    ldrne r3, =GRKIT_HEADER_REFERENCE
-    ldrne r3, [r3, #GRKIT_HOST_GRAIN]
-    subne r3, r3, #1
     mvneq r3, #0
-    cmp r3, #3
+    beq 1f
+    push {r0-r2, r12, lr}
+    sub sp, sp, #4
+    mov r0, #GRKIT_HOST_GRAIN
+    bl picture_header_word
+    sub r3, r0, #1
+    add sp, sp, #4
+    pop {r0-r2, r12, lr}
+1:  cmp r3, #3
     bx lr
 
 // Replaces the BL to the stage gate. r0 = plan, r1 = shot settings. The caller
@@ -173,8 +180,13 @@ grain_gate:
 // PipelineGrainSize applies only with a module that uses CORE.GRAIN_SIZE, so
 // the header word is set. Changes r1 and the flags.
 grain_size_of:
-    ldr r1, =GRKIT_HEADER_REFERENCE
-    ldr r1, [r1, #GRKIT_HOST_GRAIN_SIZE]
+    push {r0, r2, r3, r12, lr}
+    sub sp, sp, #4
+    mov r0, #GRKIT_HOST_GRAIN_SIZE
+    bl picture_header_word
+    mov r1, r0
+    add sp, sp, #4
+    pop {r0, r2, r3, r12, lr}
     sub r1, r1, #1
     cmp r1, #2
     movls r0, r1

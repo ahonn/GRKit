@@ -920,6 +920,14 @@ static void fit_row_text(u32 view) {
 #ifndef MENU_ROW_TEXT_FIT
 #define MENU_ROW_TEXT_FIT(view) fit_row_text(view)
 #endif
+/* The steps of the GRKit list of a RAW development (develop_list_next). */
+#ifdef DEVELOP_TONE_LIST
+static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id);
+static u32 develop_list_arg(volatile u32 *h,u32 arg);
+#else
+#define develop_list_next(h,controller,id) (id)
+#define develop_list_arg(h,arg) (arg)
+#endif
 #include "menu_settings.h"
 #include "mode_dial.h"
 #include "persist.h"
@@ -1470,6 +1478,186 @@ static u32 develop_index(volatile u32 *h) {
     return DEVELOP_NONE;
 }
 static u32 develop_list(u32 controller) { return WORD(controller,CONTROLLER_ID)==DEVELOP_TONE_LIST; }
+/* ---- RAW development: its GRKit list ---------------------------------------
+   The GRKit row of the development (DEVELOP_TOP_ROWS) opens the Image
+   Control list of the development as its GRKit list. A list of the
+   development keeps the development as it is, which a MENU page would
+   start again from the DNG. The list shows each module of develop_names
+   that loaded and is on, with the icon of its value, as the root of ADJ
+   does. OK on a module shows the values of its page, and OK on a value
+   sets it for the development (runtime/develop_settings.h); then the
+   modules show again. A group shows its children, and OK on a child shows
+   its values. MENU on the values shows the modules again, and MENU on the
+   modules returns to the development. The native OK and MENU of the list
+   change to the development, and each step changes to the list again
+   instead (develop_list_next). A row gives the Image Control of the model
+   (menu_develop_category_answer), so the native OK and MENU keep it. */
+#define DEVELOP_LIST_OFF 0U
+#define DEVELOP_LIST_MODULES 1U
+/* The values of module page n: DEVELOP_LIST_PAGE + n. */
+#define DEVELOP_LIST_PAGE 0x100U
+/* DEVELOP_COPY_CANCEL: 1 after MENU on the list, DEVELOP_STEP while a step
+   changes to the list (develop_list_arg). */
+#define DEVELOP_STEP 2U
+#define DEVELOP_NAMES 4U
+static const char develop_names[DEVELOP_NAMES][8]={"GRAIN","GLOW","BORDER","DATE"};
+static volatile u32 *develop_word(volatile u32 *h,u32 at) { return services_word(h,SERVICES_DEVELOP+at); }
+static u32 develop_state(volatile u32 *h) {
+    return h[GRKIT_HOST_SERVICES/4] ? develop_word(h,DEVELOP_COPY_LIST)[0] : DEVELOP_LIST_OFF;
+}
+static u32 develop_grkit(volatile u32 *h,u32 controller) {
+    return develop_list(controller) && develop_state(h)!=DEVELOP_LIST_OFF;
+}
+static u32 develop_rows(volatile u32 *h) { return develop_word(h,DEVELOP_COPY_ROWS)[0]; }
+static u32 develop_module(volatile u32 *h,u32 row) { return develop_word(h,DEVELOP_COPY_MODULES)[0]>>(8U*row)&0xffU; }
+/* Whether the file name of listed module `module` is `name`. */
+static u32 develop_named(volatile u32 *h,u32 module,const char *name) {
+    const volatile u16 *file=(const volatile u16 *)MANAGE_MAP(manage_entry(h,module)+MANAGE_NAME);
+    u32 i;
+    for(i=0;i<MANAGE_NAME_UNITS;++i) {
+        if(file[i]!=(u8)name[i]) return 0;
+        if(!name[i]) return 1;
+    }
+    return 0;
+}
+static void develop_refresh(volatile u32 *h) {
+    u32 modules=0, n=0, k, m;
+    for(k=0;k<DEVELOP_NAMES;++k)
+        for(m=0;m<manage_count(h) && m<0x100U;++m)
+            if(develop_named(h,m,develop_names[k])) {
+                if(manage_status(h,m)==MANAGE_LOADED && !manage_halted(h,m) && listed_page(h,m)<module_pages(h))
+                    modules|=m<<(8U*n++);
+                break;
+            }
+    develop_word(h,DEVELOP_COPY_MODULES)[0]=modules;
+    develop_word(h,DEVELOP_COPY_ROWS)[0]=n;
+}
+/* The page that the list shows: the module page of a row of the modules,
+   or that of the values. The page code reads the selection of ADJ, which
+   develop_page_end gives back. */
+typedef struct { u32 level, module, choice; } DevelopPage;
+static const MenuPage *develop_page(volatile u32 *h,u32 slot,u32 level,DevelopPage *saved) {
+    saved->level=h[GRKIT_HOST_MENU_LEVEL/4];
+    saved->module=h[GRKIT_HOST_MODULE/4];
+    saved->choice=h[GRKIT_HOST_MODULE_CHOICE/4];
+    h[GRKIT_HOST_MENU_LEVEL/4]=level;
+    h[GRKIT_HOST_MODULE/4]=slot;
+    return menu_page(h,slot);
+}
+static void develop_page_end(volatile u32 *h,const DevelopPage *saved) {
+    h[GRKIT_HOST_MENU_LEVEL/4]=saved->level;
+    h[GRKIT_HOST_MODULE/4]=saved->module;
+    h[GRKIT_HOST_MODULE_CHOICE/4]=saved->choice;
+}
+static u32 develop_slot(volatile u32 *h,u32 row) { return listed_page(h,develop_module(h,row)); }
+/* The rows of the list. */
+static u32 develop_list_rows(volatile u32 *h) {
+    u32 state=develop_state(h), n;
+    DevelopPage saved;
+    if(state<DEVELOP_LIST_PAGE) return develop_rows(h);
+    n=develop_page(h,state-DEVELOP_LIST_PAGE,MENU_MODULE,&saved)->rows(h);
+    develop_page_end(h,&saved);
+    return n;
+}
+/* The icon of row `row`. */
+static u32 develop_list_icon(volatile u32 *h,u32 row) {
+    u32 state=develop_state(h), icon;
+    DevelopPage saved;
+    if(state<DEVELOP_LIST_PAGE) icon=develop_page(h,develop_slot(h,row),MENU_ROOT,&saved)->icon(h,0);
+    else icon=develop_page(h,state-DEVELOP_LIST_PAGE,MENU_MODULE,&saved)->icon(h,row);
+    develop_page_end(h,&saved);
+    return icon;
+}
+/* The row that the list opens on. */
+static u32 develop_list_current(volatile u32 *h) {
+    u32 state=develop_state(h), row;
+    DevelopPage saved;
+    if(state<DEVELOP_LIST_PAGE) return develop_word(h,DEVELOP_COPY_CURSOR)[0];
+    row=develop_page(h,state-DEVELOP_LIST_PAGE,MENU_MODULE,&saved)->committed(h);
+    develop_page_end(h,&saved);
+    return row;
+}
+/* The title of the list and the label of row `row`, for the subtitles. */
+static const u16 *develop_list_title(volatile u32 *h) {
+    u32 state=develop_state(h);
+    const u16 *title;
+    DevelopPage saved;
+    if(state<DEVELOP_LIST_PAGE) return grkit_title;
+    title=develop_page(h,state-DEVELOP_LIST_PAGE,MENU_MODULE,&saved)->title(h);
+    develop_page_end(h,&saved);
+    return title;
+}
+static const u16 *develop_list_label(volatile u32 *h,u32 row) {
+    u32 state=develop_state(h);
+    const u16 *label;
+    DevelopPage saved;
+    if(state<DEVELOP_LIST_PAGE) return row<develop_rows(h) ? manage_name(h,develop_module(h,row)) : no_text;
+    label=develop_page(h,state-DEVELOP_LIST_PAGE,MENU_MODULE,&saved)->label(h,row);
+    develop_page_end(h,&saved);
+    return label;
+}
+/* A change from the list (`controller`) to `id`: the next step of the
+   list, as the list or the development to change to. The native OK and
+   MENU change to the controller before the list: the development, or the
+   list again after a step. A change to another controller ends the
+   list. */
+static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id) {
+    u32 state=develop_state(h), top, cancel, row, slot, child;
+    const MenuPage *page;
+    DevelopPage saved;
+    if(state==DEVELOP_LIST_OFF || !controller || !develop_list(controller)) return id;
+    top=develop_word(h,DEVELOP_COPY_TOP)[0];
+    if(id!=top && id!=DEVELOP_TONE_LIST) {
+        develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_OFF;
+        return id;
+    }
+    /* The list stays the same controller. The return of the native OK and
+       MENU would clear its return target when the change completes, as on
+       a MENU page (runtime/menu_settings.h: menu_settings_transition). */
+    BYTE(controller,SETTINGS_BACK_PENDING)=0;
+    WORD(controller,SETTINGS_RETURN_TARGET)=top;
+    id=top;
+    cancel=develop_word(h,DEVELOP_COPY_CANCEL)[0]==1U;
+    develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
+    row=develop_word(h,DEVELOP_COPY_CURSOR)[0];
+    if(state<DEVELOP_LIST_PAGE) {
+        if(cancel || row>=develop_rows(h)) {
+            develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_OFF;
+            return id;
+        }
+        develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_PAGE+develop_slot(h,row);
+        develop_word(h,DEVELOP_COPY_MODULE_ROW)[0]=row;
+        develop_word(h,DEVELOP_COPY_CANCEL)[0]=DEVELOP_STEP;
+        return DEVELOP_TONE_LIST;
+    }
+    slot=state-DEVELOP_LIST_PAGE;
+    if(!cancel) {
+        page=develop_page(h,slot,MENU_MODULE,&saved);
+        child=page==&group_module ? group_child(h,row) : MODULE_TOTAL;
+        if(page!=&group_module) page->apply(h,row);
+        develop_page_end(h,&saved);
+        if(child<module_pages(h)) {
+            develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_PAGE+child;
+            develop_word(h,DEVELOP_COPY_CURSOR)[0]=0;
+            develop_word(h,DEVELOP_COPY_CANCEL)[0]=DEVELOP_STEP;
+            return DEVELOP_TONE_LIST;
+        }
+    }
+    /* The modules show again, with the cursor on the module that opened. */
+    develop_word(h,DEVELOP_COPY_CURSOR)[0]=develop_word(h,DEVELOP_COPY_MODULE_ROW)[0];
+    develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_MODULES;
+    develop_word(h,DEVELOP_COPY_CANCEL)[0]=DEVELOP_STEP;
+    return DEVELOP_TONE_LIST;
+}
+/* The third argument of a step of the list: the development, which the
+   list returns to, as when the development opens it. The native OK and
+   MENU change with the argument of a return, and a list that opens with it
+   would have nowhere to return to. */
+static u32 develop_list_arg(volatile u32 *h,u32 arg) {
+    if(develop_state(h)==DEVELOP_LIST_OFF || develop_word(h,DEVELOP_COPY_CANCEL)[0]!=DEVELOP_STEP) return arg;
+    develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
+    return develop_word(h,DEVELOP_COPY_TOP)[0];
+}
 /* A GRKit row of a list of the development: `icon`, no text, no mark. */
 static u32 develop_fill(u32 view,u32 icon) {
     static const u8 empty[1]={0};
@@ -1586,18 +1774,26 @@ A32_ENTRY u32 menu_develop_count_after(u32 count,u32 controller) {
     }
 #endif
     if(!develop_list(controller)) return count;
+    if(develop_grkit(h,controller)) {
+        u32 rows=develop_list_rows(h);
+        develop_grow(WORD(controller,DEVELOP_LIST_VIEW),rows);
+        return rows;
+    }
     h[GRKIT_HOST_DEVELOP_ROWS/4]=count;
     develop_grow(WORD(controller,DEVELOP_LIST_VIEW),count+develop_effects(h));
     return count+develop_effects(h);
 }
-/* The category and the value of an effect row: Standard. */
+/* The category and the value of an effect row: Standard; of a row of the
+   GRKit list, the Image Control of the model. */
 A32_ENTRY u32 menu_develop_category_answer(u32 model,u32 row) {
-    (void)model;
-    return develop_row(menu_header(),row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
+    volatile u32 *h=menu_header();
+    if(develop_state(h)!=DEVELOP_LIST_OFF) return BYTE(model,DEVELOP_CATEGORY);
+    return develop_row(h,row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
 }
 A32_ENTRY u32 menu_develop_value_answer(u32 model,u32 row) {
-    (void)model;
-    return develop_row(menu_header(),row)==DEVELOP_NONE ? DEVELOP_NONE : DEVELOP_STANDARD;
+    volatile u32 *h=menu_header();
+    if(develop_state(h)!=DEVELOP_LIST_OFF) return BYTE(model,DEVELOP_VALUES);
+    return develop_row(h,row)==DEVELOP_NONE ? DEVELOP_NONE : DEVELOP_STANDARD;
 }
 /* The fill of an effect row or a ratio row: its icon, no text, no mark. */
 A32_ENTRY u32 menu_develop_row_answer(u32 controller,u32 view,u32 row) {
@@ -1606,6 +1802,7 @@ A32_ENTRY u32 menu_develop_row_answer(u32 controller,u32 view,u32 row) {
 #ifdef DEVELOP_ASPECT_LIST
     if(aspect_list(controller)) return (i=aspect_ratio(h,row)) ? develop_fill(view,aspect_icon(h,i)) : DEVELOP_NONE;
 #endif
+    if(develop_grkit(h,controller)) return develop_fill(view,develop_list_icon(h,row));
     if(!develop_list(controller) || (i=develop_row(h,row))==DEVELOP_NONE) return DEVELOP_NONE;
     return develop_fill(view,0x8000+i);
 }
@@ -1624,6 +1821,7 @@ A32_ENTRY u32 menu_develop_current_answer(u32 controller,u32 row) {
     }
 #endif
     if(!develop_list(controller)) return DEVELOP_NONE;
+    if(develop_grkit(h,controller)) return row==develop_list_current(h);
     effect=develop_index(h);
     if(effect!=DEVELOP_NONE) return develop_row(h,row)==effect;
     return develop_row(h,row)==DEVELOP_NONE ? DEVELOP_NONE : 0;
@@ -1642,7 +1840,10 @@ static void develop_set(volatile u32 *h) {
 A32_ENTRY void menu_develop_choose(u32 controller,u32 row) {
     volatile u32 *h=menu_header();
     u32 i=develop_row(h,row);
-    (void)controller;
+    if(develop_grkit(h,controller)) {
+        develop_word(h,DEVELOP_COPY_CURSOR)[0]=row;
+        return;
+    }
     h[GRKIT_HOST_DEVELOP/4]=i==DEVELOP_NONE ? 1 : develop_record(h,i);
     develop_set(h);
 }
@@ -1651,10 +1852,18 @@ A32_ENTRY void menu_develop_opened(u32 controller) {
     if(develop_list(controller)) h[GRKIT_HOST_DEVELOP_SAVED/4]=h[GRKIT_HOST_DEVELOP/4];
     if(aspect_list(controller)) h[GRKIT_HOST_DEVELOP_RATIO_SAVED/4]=h[GRKIT_HOST_DEVELOP_RATIO/4];
 }
-A32_ENTRY void menu_develop_restored(void) {
+/* MENU on a list of the development: 1 for the native restore of the
+   model. MENU on the GRKit list goes one step back (develop_list_next),
+   and the model keeps its values. */
+A32_ENTRY u32 menu_develop_restored(void) {
     volatile u32 *h=menu_header();
+    if(develop_state(h)!=DEVELOP_LIST_OFF) {
+        develop_word(h,DEVELOP_COPY_CANCEL)[0]=1;
+        return 0;
+    }
     h[GRKIT_HOST_DEVELOP/4]=h[GRKIT_HOST_DEVELOP_SAVED/4];
     develop_set(h);
+    return 1;
 }
 /* Fn on the row of an effect opens the parameter page of the development for
    native Standard, whose set then holds the Fn adjustments of the effect
@@ -1665,6 +1874,7 @@ A32_ENTRY void menu_develop_restored(void) {
    its row. */
 A32_ENTRY u32 menu_develop_fn_answer(u32 controller) {
     volatile u32 *h=menu_header();
+    if(develop_grkit(h,controller)) return 0;
     if(!develop_list(controller) || develop_index(h)==DEVELOP_NONE) return DEVELOP_NONE;
 #ifdef DEVELOP_PARAMETERS
     develop_set(h);
@@ -1682,6 +1892,13 @@ A32_ENTRY u32 menu_develop_fn_answer(u32 controller) {
 A32_ENTRY u32 menu_develop_label(u32 model,u32 category,u32 value,u32 view) {
     volatile u32 *h=menu_header();
     u32 id=CALL3(FW_DEVELOP_TONE_TEXT)(model,category,value), i=develop_index(h);
+    /* The GRKit list shows the label of its highlighted row. */
+    if(develop_state(h)!=DEVELOP_LIST_OFF) {
+        h[GRKIT_HOST_DEVELOP_TEXT/4]=id;
+        descriptor(h+GRKIT_HOST_DEVELOP_NAME/4,develop_list_label(h,develop_word(h,DEVELOP_COPY_CURSOR)[0]));
+        CALL3(FW_STRING_VIEW_RESET)(view,0,0);
+        return id;
+    }
     if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) {
         h[GRKIT_HOST_DEVELOP_TEXT/4]=id;
         descriptor(h+GRKIT_HOST_DEVELOP_NAME/4,(const u16 *)(develop_record(h,i)+GRKIT_RECORD_NAME));
@@ -1736,7 +1953,53 @@ A32_ENTRY u32 menu_develop_aspect_top_icon(u32 model,u32 value) {
     return ratio ? aspect_icon(h,ratio) : CALL2(FW_DEVELOP_ASPECT_ICON)(model,value);
 }
 #endif
+#ifdef DEVELOP_TOP_ROWS
+/* The GRKit row after the native rows of RawDevelopmentTopController
+   (runtime/menu.S): its icon, no text, no mark. */
+A32_ENTRY void menu_develop_top_row(u32 view) {
+    static const u8 empty[1]={0};
+    u32 row=CALL2(FW_LIST_ROW)(view,DEVELOP_TOP_ROWS);
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(row,0),GRKIT_ICON_GRKIT);
+    CALL2(FW_STRING_VIEW_SET_ASCII)(CALL2(FW_ROW_CHILD)(row,1),(u32)empty);
+    CALL2(FW_ICON_VIEW_SET_ICON)(CALL2(FW_ROW_CHILD)(row,2),0);
+}
+/* The text ID of the name of the GRKit row: a camera text, as the text
+   views draw only those, which no view of the development shows
+   (develop_text). */
+#define DEVELOP_TOP_TEXT MENU_ROW_LABEL_TEXT
+A32_ENTRY u32 menu_develop_top_text_id(void) { return DEVELOP_TOP_TEXT; }
+/* Right on the GRKit row: the modules of the GRKit list of the
+   development. */
+A32_ENTRY void menu_develop_top_open(u32 controller) {
+    volatile u32 *h=menu_header();
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    develop_refresh(h);
+    develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_MODULES;
+    develop_word(h,DEVELOP_COPY_TOP)[0]=WORD(controller,CONTROLLER_ID);
+    develop_word(h,DEVELOP_COPY_CURSOR)[0]=0;
+    develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
+    CALL3(FW_CHANGE_CONTROLLER)(controller,DEVELOP_TONE_LIST,WORD(controller,CONTROLLER_ID));
+}
+#endif
 static u32 develop_text(volatile u32 *h,u32 id) {
+#ifdef DEVELOP_TOP_ROWS
+    /* The row name of the GRKit row of the development. The value of the
+       row has no text, so the name of an effect has its place. */
+    if(id==DEVELOP_TOP_TEXT && develop_running()) {
+        descriptor(h+GRKIT_HOST_DEVELOP_NAME/4,grkit_title);
+        return (u32)(h+GRKIT_HOST_DEVELOP_NAME/4);
+    }
+#endif
+    /* The title and the subtitle of the GRKit list. */
+    if(develop_state(h)!=DEVELOP_LIST_OFF) {
+#ifdef DEVELOP_TONE_TITLE
+        if(id==DEVELOP_TONE_TITLE) {
+            descriptor(develop_word(h,DEVELOP_COPY_TITLE),develop_list_title(h));
+            return (u32)develop_word(h,DEVELOP_COPY_TITLE);
+        }
+#endif
+        if(id && id==h[GRKIT_HOST_DEVELOP_TEXT/4]) return (u32)(h+GRKIT_HOST_DEVELOP_NAME/4);
+    }
     if(id && id==h[GRKIT_HOST_DEVELOP_TEXT/4] && develop_index(h)!=DEVELOP_NONE) return (u32)(h+GRKIT_HOST_DEVELOP_NAME/4);
     return aspect_text(h,id);
 }

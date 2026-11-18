@@ -272,6 +272,17 @@ const SITES: &[Site] = &[
     ("menu_develop_aspect_list_text", 0x5318b3f4, "cffa03eb"),
     ("menu_develop_aspect_top_text", 0x531867c0, "dc0d04eb"),
     ("menu_develop_aspect_top_icon", 0x53186a1c, "360d04eb"),
+    // RawDevelopmentTopController: the BL to the list setup and to the row
+    // count, the end test of the setup loop of the rows, the branch at the
+    // end of the fill of the rows, and the defaults of the decide, row name,
+    // and subtitle switches.
+    ("menu_develop_top_cells", 0x53185b5c, "ab3a08eb"),
+    ("menu_develop_top_count", 0x53185c48, "8f3c08eb"),
+    ("menu_develop_top_setup", 0x53185ca4, "090054e3"),
+    ("menu_develop_top_fill", 0x53186b08, "4fffffea"),
+    ("menu_develop_top_decide", 0x53185fd8, "5c0000ea"),
+    ("menu_develop_top_name", 0x53186d30, "1a0000ea"),
+    ("menu_develop_top_value", 0x5318669c, "4e0000ea"),
     // DigitalFilterProcess SetEffectParameter (0x5350304c), and its stage
     // gate (0x535131c0, plan +0x24).
     ("grain_particle", 0x535031b0, "9537d5e5"),

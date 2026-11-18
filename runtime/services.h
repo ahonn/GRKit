@@ -357,7 +357,29 @@
 #define UNDO_KEPT (4U * GRKIT_RECIPE_WORDS)
 #define UNDO_KEPT_MAX 44U
 #define UNDO_STEP_SIZE (UNDO_KEPT + 4U + 4U * UNDO_KEPT_MAX)
-#define SERVICES_SIZE (SERVICES_UNDO + GRKIT_RECIPE_UNDO * UNDO_STEP_SIZE)
+/* A RAW development (runtime/develop_settings.h): a mark that is
+   DEVELOP_COPY_VALID once a development started; the state of its GRKit
+   list (runtime/menu.c: DEVELOP_LIST_*), the controller that the list
+   returns to, the highlighted row, whether MENU left the list, the number
+   of modules of the list, the modules, a byte each, the text descriptor of
+   its title, and the row of the module whose values show; then the header words of the core settings and
+   the value of each module setting. */
+#define SERVICES_DEVELOP (SERVICES_UNDO + GRKIT_RECIPE_UNDO * UNDO_STEP_SIZE)
+#define DEVELOP_COPY_MARK 0U
+#define DEVELOP_COPY_VALID 0x44455631U
+#define DEVELOP_COPY_LIST 4U
+#define DEVELOP_COPY_TOP 8U
+#define DEVELOP_COPY_CURSOR 12U
+#define DEVELOP_COPY_CANCEL 16U
+#define DEVELOP_COPY_ROWS 20U
+#define DEVELOP_COPY_MODULES 24U
+#define DEVELOP_COPY_TITLE 28U
+#define DEVELOP_COPY_MODULE_ROW 36U
+#define DEVELOP_COPY_HEADER 40U
+#define DEVELOP_COPY_HEADER_WORDS 4U
+#define DEVELOP_COPY_MODULE (DEVELOP_COPY_HEADER + 4U * DEVELOP_COPY_HEADER_WORDS)
+#define DEVELOP_COPY_SIZE (DEVELOP_COPY_MODULE + 4U * GRKIT_MODULE_SETTINGS_MAX)
+#define SERVICES_SIZE (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

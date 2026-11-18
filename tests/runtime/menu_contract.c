@@ -333,8 +333,14 @@ static unsigned view_call(unsigned fn, unsigned a, unsigned b, unsigned c, unsig
 #endif
     return 0;
 }
+/* The flag word of a running RAW development (runtime/menu.c:
+   develop_running): no development runs. */
+static unsigned develop_guard;
 static unsigned *object_at(unsigned address)
 {
+#ifdef FW_DEVELOP_GUARD
+    if (address == (FW_DEVELOP_GUARD & ~3U)) return &develop_guard;
+#endif
     if (address >= FW_SUBMENU_KINDS && address < FW_SUBMENU_KINDS + sizeof(stock_kinds))
         return &stock_kinds[(address - FW_SUBMENU_KINDS) / 4];
 #ifdef FW_MENU_TABS

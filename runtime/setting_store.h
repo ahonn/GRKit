@@ -41,9 +41,17 @@ static __attribute__((unused)) void aspect_store(volatile u32 *h,u32 value) {
 }
 
 /* Set a setting. A value that the setting does not offer does nothing. A
-   change of a module setting counts in the table. */
+   change of a module setting counts in the table. While a RAW development
+   runs, a setting that it copies changes in the copy only, which is not
+   saved (runtime/develop_settings.h). */
 static __attribute__((unused)) void setting_store(volatile u32 *h,u32 handle,u32 value) {
-    volatile u32 *t;
+    volatile u32 *t, *copy=develop_copy_setting(h,handle);
+    if(copy) {
+        if(!setting_offered(h,handle,value) || *copy==value) return;
+        *copy=value;
+        services_emit(h,SERVICE_EVENT_SETTING_CHANGED,handle,value);
+        return;
+    }
     if(IS_CORE_SETTING(handle)) {
         /* A saved ratio can be hidden by the native aspect. Compare the
            stored selection so clearing that hidden ratio is persisted. */

@@ -505,9 +505,17 @@ void picture_develop_start(void) {
        ones (runtime/develop.h). */
     h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
     h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
+    develop_copy_start(h,settings_table(h));
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }
 #endif
+/* A header word of a core setting that the picture stages read: that of
+   the copy while a RAW development runs (runtime/develop_settings.h). For
+   runtime/picture.S. */
+u32 picture_header_word(u32 offset) {
+    volatile u32 *h=framing_header(), *copy=develop_copy_header(h,offset);
+    return copy ? *copy : h[offset/4];
+}
 /* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;

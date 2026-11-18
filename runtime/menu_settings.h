@@ -601,6 +601,8 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
         (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENTS) &&
         services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU &&
         MENU_OBJECT_BYTE(controller,SETTINGS_BACK_PENDING);
+    /* A step of the GRKit list of a RAW development (runtime/menu.c). */
+    id=develop_list_next(h,controller,id);
     id=menu_settings_controller(id);
     /* ADJ opens after INSTALL: it opens GRKit (RETURN_POWERON). */
     h[GRKIT_HOST_RETURN/4]=controller_return(h[GRKIT_HOST_RETURN/4],id,arg);
@@ -613,6 +615,9 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
     }
     return id;
 }
+/* The third argument of the controller change after menu_settings_transition
+   (menu.S: menu_settings_change). */
+A32_ENTRY u32 menu_settings_arg(u32 arg) { return develop_list_arg(menu_header(),arg); }
 /* The kind table that the submenu reads: the private entry at the index of
    the borrowed entry, or the native table. */
 A32_ENTRY u32 menu_settings_kinds(void) {
