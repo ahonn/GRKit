@@ -923,10 +923,8 @@ static void fit_row_text(u32 view) {
 /* The steps of the GRKit list of a RAW development (develop_list_next). */
 #ifdef DEVELOP_TONE_LIST
 static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id);
-static u32 develop_list_arg(volatile u32 *h,u32 arg);
 #else
 #define develop_list_next(h,controller,id) (id)
-#define develop_list_arg(h,arg) (arg)
 #endif
 #include "menu_settings.h"
 #include "mode_dial.h"
@@ -1489,15 +1487,18 @@ static u32 develop_list(u32 controller) { return WORD(controller,CONTROLLER_ID)=
    modules show again. A group shows its children, and OK on a child shows
    its values. MENU on the values shows the modules again, and MENU on the
    modules returns to the development. The native OK and MENU of the list
-   change to the development, and each step changes to the list again
-   instead (develop_list_next). A row gives the Image Control of the model
-   (menu_develop_category_answer), so the native OK and MENU keep it. */
+   return to the development (develop_list_next), which opens the list
+   again for the next step (menu_develop_top_shown): each step is a
+   native return and a native open, as the controller history of the
+   development expects. A row gives the Image Control of the model
+   (menu_develop_category_answer), and MENU skips the native restore, so
+   the model keeps its values. */
 #define DEVELOP_LIST_OFF 0U
 #define DEVELOP_LIST_MODULES 1U
 /* The values of module page n: DEVELOP_LIST_PAGE + n. */
 #define DEVELOP_LIST_PAGE 0x100U
-/* DEVELOP_COPY_CANCEL: 1 after MENU on the list, DEVELOP_STEP while a step
-   changes to the list (develop_list_arg). */
+/* DEVELOP_COPY_CANCEL: 1 after MENU on the list, DEVELOP_STEP while the
+   development opens the list again (menu_develop_top_shown). */
 #define DEVELOP_STEP 2U
 #define DEVELOP_NAMES 4U
 static const char develop_names[DEVELOP_NAMES][8]={"GRAIN","GLOW","BORDER","DATE"};
@@ -1596,27 +1597,28 @@ static const u16 *develop_list_label(volatile u32 *h,u32 row) {
     develop_page_end(h,&saved);
     return label;
 }
-/* A change from the list (`controller`) to `id`: the next step of the
-   list, as the list or the development to change to. The native OK and
-   MENU change to the controller before the list: the development, or the
-   list again after a step. A change to another controller ends the
-   list. */
+/* A change from the list (`controller`) to `id`: the return to the
+   development, after which the list may open again for its next step
+   (develop_list_step). A change to another controller ends the list. */
+static u32 develop_list_step(volatile u32 *h,u32 top);
 static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id) {
-    u32 state=develop_state(h), top, cancel, row, slot, child;
-    const MenuPage *page;
-    DevelopPage saved;
+    u32 state=develop_state(h), top;
     if(state==DEVELOP_LIST_OFF || !controller || !develop_list(controller)) return id;
     top=develop_word(h,DEVELOP_COPY_TOP)[0];
     if(id!=top && id!=DEVELOP_TONE_LIST) {
         develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_OFF;
         return id;
     }
-    /* The list stays the same controller. The return of the native OK and
-       MENU would clear its return target when the change completes, as on
-       a MENU page (runtime/menu_settings.h: menu_settings_transition). */
-    BYTE(controller,SETTINGS_BACK_PENDING)=0;
-    WORD(controller,SETTINGS_RETURN_TARGET)=top;
-    id=top;
+    develop_list_step(h,top);
+    return top;
+}
+/* The step of the list after its OK or MENU: DEVELOP_TONE_LIST when the
+   list opens again, with DEVELOP_STEP in DEVELOP_COPY_CANCEL, or `top`
+   when it ends. */
+static u32 develop_list_step(volatile u32 *h,u32 top) {
+    u32 state=develop_state(h), id=top, cancel, row, slot, child;
+    const MenuPage *page;
+    DevelopPage saved;
     cancel=develop_word(h,DEVELOP_COPY_CANCEL)[0]==1U;
     develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
     row=develop_word(h,DEVELOP_COPY_CURSOR)[0];
@@ -1648,15 +1650,6 @@ static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id) {
     develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_MODULES;
     develop_word(h,DEVELOP_COPY_CANCEL)[0]=DEVELOP_STEP;
     return DEVELOP_TONE_LIST;
-}
-/* The third argument of a step of the list: the development, which the
-   list returns to, as when the development opens it. The native OK and
-   MENU change with the argument of a return, and a list that opens with it
-   would have nowhere to return to. */
-static u32 develop_list_arg(volatile u32 *h,u32 arg) {
-    if(develop_state(h)==DEVELOP_LIST_OFF || develop_word(h,DEVELOP_COPY_CANCEL)[0]!=DEVELOP_STEP) return arg;
-    develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
-    return develop_word(h,DEVELOP_COPY_TOP)[0];
 }
 /* A GRKit row of a list of the development: `icon`, no text, no mark. */
 static u32 develop_fill(u32 view,u32 icon) {
@@ -1968,6 +1961,15 @@ A32_ENTRY void menu_develop_top_row(u32 view) {
    (develop_text). */
 #define DEVELOP_TOP_TEXT MENU_ROW_LABEL_TEXT
 A32_ENTRY u32 menu_develop_top_text_id(void) { return DEVELOP_TOP_TEXT; }
+/* The subtitle of the GRKit row (runtime/menu.S: menu_develop_top_value),
+   which shows when the list returns: the list opens again for its next
+   step. */
+A32_ENTRY void menu_develop_top_shown(u32 controller) {
+    volatile u32 *h=menu_header();
+    if(develop_state(h)==DEVELOP_LIST_OFF || develop_word(h,DEVELOP_COPY_CANCEL)[0]!=DEVELOP_STEP) return;
+    develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
+    CALL3(FW_CHANGE_CONTROLLER)(controller,DEVELOP_TONE_LIST,WORD(controller,CONTROLLER_ID));
+}
 /* Right on the GRKit row: the modules of the GRKit list of the
    development. */
 A32_ENTRY void menu_develop_top_open(u32 controller) {

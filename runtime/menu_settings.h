@@ -615,9 +615,6 @@ A32_ENTRY u32 menu_settings_transition(u32 controller,u32 id,u32 arg) {
     }
     return id;
 }
-/* The third argument of the controller change after menu_settings_transition
-   (menu.S: menu_settings_change). */
-A32_ENTRY u32 menu_settings_arg(u32 arg) { return develop_list_arg(menu_header(),arg); }
 /* The kind table that the submenu reads: the private entry at the index of
    the borrowed entry, or the native table. */
 A32_ENTRY u32 menu_settings_kinds(void) {

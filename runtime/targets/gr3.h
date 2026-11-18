@@ -254,8 +254,8 @@
 /* RawDevelopmentTopController: its native rows, then the GRKit row
    (runtime/menu.c); the end of the decide method of its rows (r4 the
    controller) and of its row name method (the text ID in r0); and the
-   offset from the default of its subtitle switch to the branch to the
-   subtitle without a value. */
+   offset from the default of its subtitle switch (r5 the controller) to
+   the branch to the subtitle without a value. */
 #define DEVELOP_TOP_ROWS 9
 /* The text ID of the title of the Image Control list of the development,
    which the GRKit list replaces (runtime/menu.c). */

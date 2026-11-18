@@ -602,13 +602,10 @@ menu_settings_change:
     push {r0-r3, r12, lr}
     bl menu_settings_transition
     /* The C function gives the controller to change to, in r1, or 0: no
-       change happens. menu_settings_arg gives the third argument, r2. */
+       change happens. */
     cmp r0, #0
     beq 1f
     str r0, [sp, #4]
-    ldr r0, [sp, #8]
-    bl menu_settings_arg
-    str r0, [sp, #8]
     pop {r0-r3, r12, lr}
     .inst HOOK_MENU_SETTINGS_CHANGE_STOCK
     ldr pc, =HOOK_MENU_SETTINGS_CHANGE_RESUME
@@ -984,10 +981,11 @@ menu_develop_aspect_top_text:
 #ifdef HOOK_MENU_DEVELOP_TOP_CELLS
 /* RawDevelopmentTopController: one GRKit row after its DEVELOP_TOP_ROWS
    native rows (runtime/menu.c). The BL to the list setup gets a layout for
-   each row, the BL to the row count and the setup loop of the rows count
-   it, the end of the fill of the rows fills it, the default of the decide
-   switch opens it, and the defaults of the row name and subtitle switches
-   name it. */
+   each row; the BL to the row count and the setup loop of the rows count the row;
+   the end of the fill of the rows fills it; the default of the decide
+   switch opens the list; and the defaults of the row name and subtitle
+   switches name the row, and the subtitle opens the list again for its
+   next step (r5 the controller). */
 .global menu_develop_top_cells
 .type menu_develop_top_cells, %function
 menu_develop_top_cells:
@@ -1045,6 +1043,10 @@ menu_develop_top_name:
 menu_develop_top_value:
     cmp r0, #DEVELOP_TOP_ROWS
     ldrne pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET
+    push {r0-r3, r12, lr}
+    mov r0, r5
+    bl menu_develop_top_shown
+    pop {r0-r3, r12, lr}
     ldr pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET+DEVELOP_TOP_NO_VALUE
 .ltorg
 #endif
