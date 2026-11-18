@@ -322,6 +322,10 @@ pub const DEVELOP_TOP_KINDS: &[HookSpec] = &[
     b("menu_develop_top_value", Menu, Tuning),
 ];
 
+/// The XMP packet of a DNG (`runtime/picture.S`): the add of the Copyright
+/// entry to IFD0, where the XMP entry goes before it, in tag order.
+pub const DNG_XMP: &[HookSpec] = &[b("picture_dng_xmp", Framing, Tuning)];
+
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the
 /// model and of the choice of a row in RawDevelopmentParameterSetController;

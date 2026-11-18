@@ -47,6 +47,7 @@ const GROUPS: &[&[HookSpec]] = &[
     GRAIN,
     DIAL,
     CANVAS,
+    common::DNG_XMP,
 ];
 
 /// Image Control processing (`runtime/targets/gr4-processing.S`): the BL to

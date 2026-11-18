@@ -373,6 +373,22 @@ JPEG_HEADER_STUB picture_jpeg_header, HOOK_PICTURE_JPEG_HEADER_TARGET
 JPEG_HEADER_STUB picture_jpeg_rewrite, HOOK_PICTURE_JPEG_REWRITE_TARGET
 #endif
 
+#ifdef HOOK_PICTURE_DNG_XMP
+/* The DNG writer adds the entries of IFD0 in tag order (r4 the entry
+   factory, r5 IFD0). Before the Copyright entry, picture_dng_xmp_add adds
+   the XMP entry (tag 700); then the replaced instruction runs. */
+.global picture_dng_xmp
+picture_dng_xmp:
+    push {r0-r3, r12, lr}
+    mov r0, r4
+    mov r1, r5
+    bl picture_dng_xmp_add
+    pop {r0-r3, r12, lr}
+    .inst HOOK_PICTURE_DNG_XMP_STOCK
+    ldr pc, =HOOK_PICTURE_DNG_XMP_RESUME
+.ltorg
+#endif
+
 /* Capture: the maker-note adjustments (tag 0x247) of a GRKit shot. Replaces
    the BL to the native fill: r0 = the setter + 8, r1 is the IFD entry, and r2
    the shot settings. The native fill runs first, and its result returns. */

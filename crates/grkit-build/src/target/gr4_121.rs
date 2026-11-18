@@ -305,6 +305,8 @@ const SITES: &[Site] = &[
     // Clarity (0x538cf1c4).
     ("canvas_filter_0", 0x53727400, "6f9f06eb"),
     ("canvas_filter_1", 0x53727a8c, "cc9d06eb"),
+    // The DNG writer: the add of the Copyright entry to IFD0.
+    ("picture_dng_xmp", 0x53828b28, "981208e3"),
 ];
 
 /// The stock instructions around the processing hooks.

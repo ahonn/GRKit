@@ -219,6 +219,11 @@
 #define NATIVE_DETAIL_ND_ICONS 0xef,0x183,0x184
 #define NATIVE_DETAIL_COMPENSATION_ICON 0x288U
 #define NATIVE_DETAIL_ISO_ICON 0x5eU
+/* The contents that playback opens (FW_CONTENTS): the handle of the open
+   file, and in it the path of the file, whose first byte, the drive
+   letter, is 0. */
+#define CONTENTS_HANDLE 0x24
+#define CONTENTS_PATH 0x30
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */

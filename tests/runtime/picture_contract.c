@@ -110,7 +110,23 @@ static uint32_t playback_tone;
    one byte for each parameter kind. */
 static uint8_t develop_set[17];
 #define DEVELOP_SET(kind) develop_set[(kind)]
+/* The services block of the core, which holds the settings copy of a
+   development (runtime/develop_settings.h). */
+#define TEST_SERVICES 0x58000000U
+static volatile uint32_t *mapped_services(uint32_t address);
+#define SERVICES_MAP(address) mapped_services(address)
+/* The start of the DNG of a development: `develop_file_size` bytes. */
+static const uint8_t *develop_file = (const uint8_t *)"";
+static uint32_t develop_file_size;
+#define PICTURE_DEVELOP_FILE(buf,size) (memcpy((buf), develop_file, develop_file_size < (size) ? develop_file_size : (size)), \
+    develop_file_size < (size) ? develop_file_size : (size))
 #include "picture.c"
+static uint32_t services_memory[(SERVICES_DEVELOP + DEVELOP_COPY_SIZE) / 4];
+static volatile uint32_t *mapped_services(uint32_t address)
+{
+    assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && (address & 3) == 0);
+    return services_memory + (address - TEST_SERVICES) / 4;
+}
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
 volatile u32 *framing_header(void) { return header; }
@@ -1705,6 +1721,38 @@ int main(void)
         picture_develop_start();
         assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
         assert(develop_crops == 1);
+        /* The development starts from the settings that its DNG records
+           (runtime/photo_record.h), not from the current ones. A value that
+           the setting does not offer, and a DNG without a record, keep the
+           current value. */
+        {
+            static const char xmp[] = "<x:xmpmeta grkit:Core=\"109=1,102=99\" grkit:Modules=\"\"/>";
+            uint8_t tiff[26 + sizeof(xmp)] = {'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0xbc, 0x02, 7, 0,
+                                              sizeof(xmp) - 1, 0, 0, 0, 26, 0, 0, 0};
+            u32 border = core_setting_words[CORE_SETTING(GRKIT_CORE_BORDER)];
+            u32 grain = core_setting_words[CORE_SETTING(GRKIT_CORE_GRAIN)];
+            volatile u32 *copy = services_memory + SERVICES_DEVELOP / 4 + DEVELOP_COPY_HEADER / 4;
+            u32 at_border = 0, at_grain = 0;
+            for (u32 i = 0; i < DEVELOP_COPY_HEADER_WORDS; ++i) {
+                if (develop_copy_words[i] == border) at_border = i;
+                if (develop_copy_words[i] == grain) at_grain = i;
+            }
+            memcpy(tiff + 26, xmp, sizeof(xmp) - 1);
+            header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+            header[border / 4] = 0;
+            header[grain / 4] = 2;
+            develop_file = tiff;
+            develop_file_size = sizeof(tiff) - 1;
+            picture_develop_start();
+            assert(copy[at_border] == 1 && copy[at_grain] == 2);
+            develop_file_size = 8;
+            picture_develop_start();
+            assert(copy[at_border] == 0 && copy[at_grain] == 2);
+            develop_file = (const uint8_t *)"";
+            develop_file_size = 0;
+            header[GRKIT_HOST_SERVICES / 4] = 0;
+            header[grain / 4] = 0;
+        }
         developing = 0;
         BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 0;
         BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;

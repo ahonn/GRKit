@@ -494,6 +494,45 @@ void framing_develop_crop(void);
    native processing for a native photo or an effect that the camera no
    longer has. It develops the native aspect of the DNG until its aspect list
    selects a Framing ratio (runtime/menu.c), and the crop of the DNG. */
+#include "photo_record.h"
+/* The longest path of a photo, as "C:\DCIM\100RICOH\R0000001.DNG". */
+#define PICTURE_PATH_MAX 64U
+#ifndef PICTURE_DEVELOP_FILE
+#ifdef FW_CONTENTS
+/* The first `size` bytes of the file that playback opened, the DNG of a
+   development, in `buf`: the count read, or 0. */
+static u32 picture_develop_file(u8 *buf,u32 size) {
+    u8 path[PICTURE_PATH_MAX];
+    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), len=0, i;
+    int file;
+    if(handle<0x40000000U || handle>0xbfffff00U) return 0;
+    /* The path has no drive letter: the photos of a development are on the
+       card. */
+    for(i=1;i<sizeof(path) && (path[i]=BYTE(handle,CONTENTS_PATH+i))!=0;++i) {}
+    if(i==sizeof(path)) return 0;
+    path[0]='C';
+    file=((int (*)(const u8 *,u32,u32))FW_FILE_OPEN)(path,0,0);
+    if(file<0) return 0;
+    ((int (*)(u32,void *,u32,u32 *))FW_FILE_READ)((u32)file,buf,size,&len);
+    ((int (*)(u32))FW_FILE_CLOSE)((u32)file);
+    return len<=size ? len : 0;
+}
+#define PICTURE_DEVELOP_FILE(buf,size) picture_develop_file((buf),(size))
+#else
+#define PICTURE_DEVELOP_FILE(buf,size) ((void)(buf),(void)(size),0U)
+#endif
+#endif
+/* The record of the DNG of a development (runtime/photo_record.h): the XMP
+   packet of IFD0 at the start of the file. */
+static void picture_develop_record(volatile u32 *h) {
+    u8 *buf;
+    u32 len, n=0, off;
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
+    len=PICTURE_DEVELOP_FILE(buf,DEVELOP_RECORD_SIZE);
+    if(!(off=photo_record_tiff_xmp(buf,len,&n))) return;
+    photo_record_apply(h,(const char *)buf+off,n);
+}
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
     u32 value=PICTURE_PLAYBACK_TONE(), record;
@@ -506,6 +545,7 @@ void picture_develop_start(void) {
     h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
     h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
     develop_copy_start(h,settings_table(h));
+    picture_develop_record(h);
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }
 #endif
@@ -997,6 +1037,29 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
    all follow +0x48. No segment is written while no module runs (the GRKit
    switch is Off, or safe mode), for a code without a name, or into a buffer
    without room for the largest APP7. */
+/* The XMP entry (tag 700) of IFD0 of a DNG (runtime/picture.S:
+   picture_dng_xmp), with the GRKit record of the shot
+   (runtime/photo_record.h): `factory` makes entries, and `ifd` takes them in
+   tag order. */
+#define PICTURE_XMP_TAG 700U
+#define PICTURE_TIFF_UNDEFINED 7U
+void picture_dng_xmp_add(u32 factory,u32 ifd) {
+#ifdef FW_IFD_APPEND
+    volatile u32 *h=framing_header();
+    char *packet;
+    u32 n, entry;
+    if(!h[GRKIT_HOST_SERVICES/4] || !h[GRKIT_HOST_CAPABILITIES/4]) return;
+    packet=(char *)services_word(h,SERVICES_DEVELOP+DEVELOP_COPY_RECORD);
+    n=photo_record_build(h,packet,DEVELOP_RECORD_SIZE);
+    if(!n) return;
+    entry=((u32 (*)(u32,u32,u32,u32,u32))WORD(WORD(factory,0),0xc))(factory,PICTURE_XMP_TAG,PICTURE_TIFF_UNDEFINED,n,0);
+    if(!entry) return;
+    ((void (*)(u32,u32))FW_IFD_APPEND)(ifd,entry);
+    ((void (*)(u32,u32,u32))FW_IFD_ENTRY_DATA)(entry,(u32)packet,n);
+#else
+    (void)factory; (void)ifd;
+#endif
+}
 void picture_jpeg_xmp(u32 writer) {
     volatile u32 *h=framing_header();
     u32 buffer=WORD(writer,JPEG_WRITER_BUFFER), size=WORD(writer,JPEG_WRITER_SIZE), at=WORD(writer,JPEG_WRITER_APP7);

@@ -83,6 +83,11 @@
    mm, below 256 for each lens, at METADATA_FOCAL_35MM (build header). */
 #define DEVELOP_STATE 4
 #define DEVELOP_SETTINGS 0x24
+/* The contents that playback opens (FW_CONTENTS): the handle of the open
+   file, and in it the path of the file, whose first byte, the drive
+   letter, is 0. */
+#define CONTENTS_HANDLE 0x38
+#define CONTENTS_PATH 0x30
 /* RAW development, the Fn adjustments (runtime/develop.h): RawDevelopmentModel
    holds the selected Image Control: the category at DEVELOP_CATEGORY and the
    value of each category from DEVELOP_VALUES. The build header gives the

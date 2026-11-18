@@ -168,6 +168,16 @@
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5324129c)
 #define FW_IFD_SET_SHORT FIRMWARE(0x5380dd48)
+/* The TIFF writer: append an entry to an IFD, and copy the data of an
+   entry (runtime/picture.c: picture_dng_xmp_add). */
+#define FW_IFD_APPEND FIRMWARE(0x5380d520)
+#define FW_IFD_ENTRY_DATA FIRMWARE(0x5380ddcc)
+/* The contents that playback opens (runtime/picture.c:
+   picture_develop_record), and the file calls of the RTOS. */
+#define FW_CONTENTS FIRMWARE(0x550b9ec0)
+#define FW_FILE_OPEN FIRMWARE(0x53ac2704)
+#define FW_FILE_READ FIRMWARE(0x53ac2820)
+#define FW_FILE_CLOSE FIRMWARE(0x53ac27b8)
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x5380dd60)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x538a5a18)

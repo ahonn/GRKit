@@ -362,8 +362,9 @@
    list (runtime/menu.c: DEVELOP_LIST_*), the controller that the list
    returns to, the highlighted row, whether MENU left the list, the number
    of modules of the list, the modules, a byte each, the text descriptor of
-   its title, and the row of the module whose values show; then the header words of the core settings and
-   the value of each module setting. */
+   its title, and the row of the module whose values show; then the header
+   words of the core settings, the value of each module setting, and the
+   buffer of the record of a photo. */
 #define SERVICES_DEVELOP (SERVICES_UNDO + GRKIT_RECIPE_UNDO * UNDO_STEP_SIZE)
 #define DEVELOP_COPY_MARK 0U
 #define DEVELOP_COPY_VALID 0x44455631U
@@ -378,7 +379,12 @@
 #define DEVELOP_COPY_HEADER 40U
 #define DEVELOP_COPY_HEADER_WORDS 4U
 #define DEVELOP_COPY_MODULE (DEVELOP_COPY_HEADER + 4U * DEVELOP_COPY_HEADER_WORDS)
-#define DEVELOP_COPY_SIZE (DEVELOP_COPY_MODULE + 4U * GRKIT_MODULE_SETTINGS_MAX)
+/* The buffer of the GRKit record of a photo (runtime/photo_record.h): the
+   packet that a DNG gets, or the start of the DNG that a development
+   reads. */
+#define DEVELOP_COPY_RECORD (DEVELOP_COPY_MODULE + 4U * GRKIT_MODULE_SETTINGS_MAX)
+#define DEVELOP_RECORD_SIZE 4096U
+#define DEVELOP_COPY_SIZE (DEVELOP_COPY_RECORD + DEVELOP_RECORD_SIZE)
 #define SERVICES_SIZE (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */

@@ -308,6 +308,8 @@ const SITES: &[Site] = &[
     // Clarity (0x53680dbc).
     ("canvas_filter_0", 0x535033e8, "73f605eb"),
     ("canvas_filter_1", 0x53503ab4, "c0f405eb"),
+    // The DNG writer: the add of the Copyright entry to IFD0.
+    ("picture_dng_xmp", 0x535f8ba0, "981208e3"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[
