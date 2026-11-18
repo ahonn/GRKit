@@ -39,9 +39,8 @@ const en = {
     installNote: 'Write GRKit straight to your SD card, or download GRKit.zip.',
     /** The install note where the browser cannot write to a card: a phone, a tablet, Safari, Firefox. */
     installNoteZip: 'Download GRKit.zip and copy the files to your SD card.',
-    /** The supported cameras under the install button, as one sentence before the install note. */
-    /** The cameras under the install button, short; the FAQ lists them in full. */
-    supports: 'Works with GR III, GR IIIx, and GR IV, HDF models included. GR IV Monochrome works without film looks.',
+    /** The cameras under the install button, short, as one sentence before the install note. */
+    supports: 'For GR III, GR IIIx, and GR IV, HDF models included. GR IV Monochrome: no film looks.',
     looks: 'Film looks',
     moreLooks: 'More looks',
     moreLooksCount: (count: number) => `${count} more film looks`,
@@ -77,8 +76,8 @@ const en = {
     faqTitle: 'Before you install',
     faq: [
       { q: 'Is GRKit free?', a: ['Yes. GRKit is free and open source on ', '[GitHub', ', under the MIT License. It needs no account.'] },
-      { q: 'Is it safe for my camera?', a: ['GRKit loads from the SD card and does not change the firmware, unless you choose to install the optional fast-boot firmware. Take out the card, and the camera works as before. GRKit comes with no warranty.'] },
-      { q: 'Which cameras does it work with?', a: ['GR III, GR IIIx, GR IV, their HDF models, and GR IV Monochrome without film looks. The install page lists the supported firmware versions. Earlier GR models are not supported.'] },
+      { q: 'Is it safe for my camera?', a: ['GRKit does not change the firmware. Only the optional fast-boot firmware does, and only if you install it. GRKit comes with no warranty.'] },
+      { q: 'Which cameras does it work with?', a: ['GR III, GR IIIx, and GR IV, on the firmware versions that the install page lists. Earlier GR models are not supported.'] },
       { q: 'What do I need?', a: ['An SD card and a card reader. On a computer, Chrome or Edge writes GRKit straight to the card. In other browsers, download GRKit.zip and copy it to the card.'] },
       { q: 'Does GRKit change my RAW files?', a: ['No. GRKit changes the JPEG. The RAW (DNG) file keeps the raw data from the camera.'] },
       { q: 'Does it slow down the camera?', a: ['GRKit loads about 8 to 10 seconds after power-on. Until then, the camera uses its own settings. With the optional fast-boot firmware, it loads in one to two seconds.'] },
@@ -280,7 +279,7 @@ const en = {
     `A package holds ${max} film looks. Uncheck others to include these looks.`,
   /** Why a file gave no looks (`NativeProblem`). */
   nativeErrors: {
-    unsupported: 'This file does not work. Only the GR IV firmware 1.11 and 1.20 work.',
+    unsupported: 'This file does not work. Choose the GR IV firmware 1.11, 1.20, or 1.21.',
     notFirmware: "This is not the GR IV firmware ZIP. Choose the ZIP file from Ricoh's GR IV page.",
     tooLarge: 'This file is too large to be the GR IV firmware.',
     failed: 'The looks cannot be read from this file. Try again.',
@@ -367,27 +366,18 @@ const en = {
   faqTitle: 'FAQ',
   faq: [
     {
-      q: 'GRK does not show up in ADJ.',
+      q: 'GRK is not in ADJ, or my first photos have no film look.',
       a: [
-        'GRKit loads about 8 to 10 seconds after power-on. It takes longer on GR IV and on the first start after an install or update. Wait, then press ADJ while you shoot and select the sixth entry, GRK. The first time, SD scripts must be on: hold MENU while you turn the camera on.',
-        ' To load it sooner, try ',
+        'GRKit loads about 8 to 10 seconds after power-on, longer on GR IV and on the first start after an install or update. Until then, the camera uses its own settings. Wait, then press ADJ while you shoot and select the sixth entry, GRK. To load it sooner, try ',
         '[Fast start',
         '.',
       ],
     },
     {
-      q: 'Why do my first photos after power-on have no film look?',
-      a: ['Until GRKit has loaded, the camera uses its own settings. Wait a few seconds after power-on, or try ', '[Fast start', '.'],
-    },
-    {
       q: 'Does GRKit change the camera firmware?',
       a: [
-        'No. GRKit loads from the SD card while the camera is on. Without the card, or after you uninstall GRKit, the camera works as before. The SD script setting, which lets the camera run GRKit from the card, stays on until you turn it off. Only the optional fast-boot firmware changes the firmware, and only if you install it.',
+        'No. Only the optional fast-boot firmware does, and only if you install it. The SD script setting, which lets the camera run GRKit from the card, stays on until you turn it off.',
       ],
-    },
-    {
-      q: 'Can GRKit load faster?',
-      a: ['Yes, with the optional ', '[fast-boot firmware', '. It needs a firmware update.'],
     },
     {
       q: 'Does a film look change my Image Control settings?',
@@ -407,13 +397,7 @@ const en = {
     },
     {
       q: 'Can I use these looks in Lightroom?',
-      a: ['Not directly: GRKit does not make Lightroom presets. The looks come from open-source film LUTs. Film look licenses, at the bottom of the page, gives the source of each look.'],
-    },
-    {
-      q: 'Which cameras does GRKit support?',
-      a: [
-        'GR III, GR IIIx, GR IV, their HDF models, and GR IV Monochrome without film looks, on the firmware versions in the camera list. Earlier GR models are not supported.',
-      ],
+      a: ['No. Film look licenses, at the bottom of the page, lists the open-source LUT of each look.'],
     },
     {
       q: 'Which GRKit version is on my card?',
@@ -430,7 +414,6 @@ const en = {
     compareHead: ['Official firmware', 'Fast-boot firmware'],
     compare: [
       ['GRKit loads', 'About 8 to 10 seconds after power-on', 'One to two seconds after power-on'],
-      ['GRKit features', 'All', 'The same, with the same package'],
       ['Install', 'Copy GRKit to the card', 'Update the firmware once, then copy GRKit to the card'],
       ['Versions', 'All that GRKit supports', 'The versions linked below'],
       ['Risk', 'The firmware does not change', 'If the update stops, the camera may not start. Ricoh may decline repairs.'],
@@ -469,7 +452,7 @@ const en = {
       'Select Execute, and press OK.',
       'The update starts. Do not turn the camera off or open the battery cover until the update is complete.',
       'When the update is complete, turn the camera off.',
-      'Turn the camera on, and make sure that it takes and plays back photos. Then delete the firmware file from the card. Fast start needs GRKit 1.5.0 or later. If the card has an older GRKit or none, install the latest as usual.',
+      'Turn the camera on, and make sure that it takes and plays back photos. Then delete the firmware file from the card. If the card has no GRKit, install it as usual.',
     ] as readonly string[],
     /** Before the list of the file name of each camera, in the step that copies the file. */
     fileNames: 'The camera finds the file only by its exact name:',
@@ -750,8 +733,8 @@ const zhHans: Strings = {
     faqTitle: '安装前须知',
     faq: [
       { q: '要付费吗？', a: ['不用。GRKit 免费开源，源代码在 ', '[GitHub', ' 上，采用 MIT 许可，也不需要注册账号。'] },
-      { q: '会不会弄坏相机？', a: ['GRKit 从存储卡加载，不修改固件，除非你自己选择安装可选的快速启动固件。取出存储卡，相机就恢复原样。GRKit 不提供任何担保。'] },
-      { q: '支持哪些相机？', a: ['GR III、GR IIIx、GR IV 及它们的 HDF 版本；GR IV Monochrome 也能用，但没有胶片风格。支持的固件版本见安装页。更早的 GR 机型不支持。'] },
+      { q: '会不会弄坏相机？', a: ['GRKit 不修改固件。只有可选的快速启动固件会修改，而且只在你安装它之后。GRKit 不提供任何担保。'] },
+      { q: '支持哪些相机？', a: ['GR III、GR IIIx 和 GR IV，固件版本见安装页。更早的 GR 机型不支持。'] },
       { q: '需要准备什么？', a: ['一张 SD 卡和一个读卡器。在电脑上用 Chrome 或 Edge，可以直接把 GRKit 写入存储卡；其他浏览器可以下载 GRKit.zip，再复制到卡里。'] },
       { q: '会改动 RAW 文件吗？', a: ['不会。GRKit 只改 JPEG，RAW（DNG）文件保留相机的原始数据。'] },
       { q: '会拖慢相机吗？', a: ['开机后约 8 到 10 秒 GRKit 才加载完，在此之前相机使用自己的设置。装上可选的快速启动固件后，一到两秒就能加载。'] },
@@ -933,7 +916,7 @@ const zhHans: Strings = {
   nativeDone: (version) => `找到 GR IV ${version}，这些色彩已加入胶片风格列表。`,
   nativeUnchecked: (max) => `一个安装包最多 ${max} 种胶片风格。取消勾选其他胶片风格后，才能加入这些色彩。`,
   nativeErrors: {
-    unsupported: '这个文件用不了。只支持 GR IV 1.11 和 1.20 版固件。',
+    unsupported: '这个文件用不了。请选择 GR IV 1.11、1.20 或 1.21 版固件。',
     notFirmware: '这不是 GR IV 固件的 ZIP 文件。请选择从理光 GR IV 页面下载的 ZIP。',
     tooLarge: '文件太大，不是 GR IV 固件。',
     failed: '无法从这个文件读取色彩，请重试。',
@@ -999,20 +982,12 @@ const zhHans: Strings = {
   faqTitle: '常见问题',
   faq: [
     {
-      q: 'ADJ 里没有 GRK？',
-      a: ['GRKit 在开机后约 8 到 10 秒加载，GR IV 以及安装或更新后的第一次开机会更久。稍等片刻，然后在拍摄时按 ADJ，选择第 6 项 GRK。首次使用前，需要按住 MENU 开机，打开 SD 脚本。', '想更快加载，可以试试', '[快速启动', '。'],
-    },
-    {
-      q: '为什么开机后头几张照片没有胶片风格？',
-      a: ['GRKit 加载完成前，相机使用自身的设置。开机后稍等几秒再拍，或者试试', '[快速启动', '。'],
+      q: 'ADJ 里没有 GRK，或开机后头几张照片没有胶片风格？',
+      a: ['GRKit 在开机后约 8 到 10 秒加载，GR IV 以及安装或更新后的第一次开机会更久。加载完成前，相机使用自身的设置。稍等片刻，然后在拍摄时按 ADJ，选择第 6 项 GRK。想更快加载，可以试试', '[快速启动', '。'],
     },
     {
       q: 'GRKit 会修改相机固件吗？',
-      a: ['不会。GRKit 在开机时从存储卡加载。取出存储卡或卸载 GRKit 后，相机和原来一样。SD 脚本设置（让相机从存储卡运行 GRKit）会一直开启，直到手动关闭。只有可选的快速启动固件会修改固件，而且只在你安装它之后。'],
-    },
-    {
-      q: '能让 GRKit 加载得更快吗？',
-      a: ['可以，使用可选的', '[快速启动固件', '。它需要更新一次固件。'],
+      a: ['不会。只有可选的快速启动固件会修改，而且只在你安装它之后。SD 脚本设置（让相机从存储卡运行 GRKit）会一直开启，直到手动关闭。'],
     },
     {
       q: '胶片风格会改掉我的影像控制设置吗？',
@@ -1032,11 +1007,7 @@ const zhHans: Strings = {
     },
     {
       q: '能在 Lightroom 里使用这些风格吗？',
-      a: ['不能直接使用，GRKit 不提供 Lightroom 预设。这些风格来自开源的胶片 LUT，页面底部的“胶片风格许可”列出了每个风格的来源。'],
-    },
-    {
-      q: 'GRKit 支持哪些相机？',
-      a: ['GR III、GR IIIx、GR IV 及其 HDF 机型，以及 GR IV Monochrome（不含胶片风格），固件版本见相机列表。更早的 GR 机型不支持。'],
+      a: ['不能。页面底部的“胶片风格许可”列出了每个风格所用的开源 LUT。'],
     },
     {
       q: '卡上装的是哪个版本？',
@@ -1049,7 +1020,6 @@ const zhHans: Strings = {
     compareHead: ['官方固件', '快速启动固件'],
     compare: [
       ['GRKit 加载', '开机后约 8 到 10 秒', '开机后一到两秒'],
-      ['GRKit 功能', '全部', '相同，用同一个安装包'],
       ['安装', '复制到存储卡', '先更新一次固件，再复制到存储卡'],
       ['支持版本', 'GRKit 支持的所有版本', '见下方链接'],
       ['风险', '不修改固件', '更新中断，相机可能无法开机。Ricoh 可能拒绝保修。'],
@@ -1081,7 +1051,7 @@ const zhHans: Strings = {
       '选择“执行”，按 OK。',
       '开始更新。更新完成前，不要关机或打开电池仓。',
       '更新完成后，关机。',
-      '开机，确认能正常拍照和回放。然后删除卡上的固件文件。快速启动需要 GRKit 1.5.0 或更新版本。卡上没有 GRKit 或版本较旧的，照常安装最新版。',
+      '开机，确认能正常拍照和回放。然后删除卡上的固件文件。卡上没有 GRKit 的，照常安装。',
     ],
     fileNames: '文件名必须完全一致，相机才能找到：',
     renamed: '下载文件夹里已有同名文件时，浏览器会在文件名里加编号，例如 fwdc239b (1).bin。请把卡上的文件改回原名。',
@@ -1333,8 +1303,8 @@ const zhHant: Strings = {
     faqTitle: '安裝前須知',
     faq: [
       { q: '要付費嗎？', a: ['不用。GRKit 免費開源，原始碼在 ', '[GitHub', ' 上，採用 MIT 授權，也不需要註冊帳號。'] },
-      { q: '會不會弄壞相機？', a: ['GRKit 從記憶卡載入，不修改韌體，除非你自己選擇安裝選用的快速啟動韌體。取出記憶卡，相機就恢復原樣。GRKit 不提供任何擔保。'] },
-      { q: '支援哪些相機？', a: ['GR III、GR IIIx、GR IV 及它們的 HDF 版本；GR IV Monochrome 也能用，但沒有底片風格。支援的韌體版本請見安裝頁。更早的 GR 機型不支援。'] },
+      { q: '會不會弄壞相機？', a: ['GRKit 不修改韌體。只有選用的快速啟動韌體會修改，而且只在你安裝它之後。GRKit 不提供任何擔保。'] },
+      { q: '支援哪些相機？', a: ['GR III、GR IIIx 和 GR IV，韌體版本請見安裝頁。更早的 GR 機型不支援。'] },
       { q: '需要準備什麼？', a: ['一張 SD 卡和一個讀卡機。在電腦上用 Chrome 或 Edge，可以直接把 GRKit 寫入記憶卡；其他瀏覽器可以下載 GRKit.zip，再複製到卡裡。'] },
       { q: '會改動 RAW 檔嗎？', a: ['不會。GRKit 只改 JPEG，RAW（DNG）檔保留相機的原始資料。'] },
       { q: '會拖慢相機嗎？', a: ['開機後約 8 到 10 秒 GRKit 才載入完成，在此之前相機使用自己的設定。裝上選用的快速啟動韌體後，一到兩秒就能載入。'] },
@@ -1516,7 +1486,7 @@ const zhHant: Strings = {
   nativeDone: (version) => `找到 GR IV ${version}，色彩已加入底片風格清單。`,
   nativeUnchecked: (max) => `最多可安裝 ${max} 種底片風格。取消勾選其他底片風格，才能加入這些色彩。`,
   nativeErrors: {
-    unsupported: '無法使用這個檔案。只支援 GR IV 1.11 與 1.20 版韌體。',
+    unsupported: '無法使用這個檔案。請選擇 GR IV 1.11、1.20 或 1.21 版韌體。',
     notFirmware: '這不是 GR IV 韌體的 ZIP 檔案。請選擇從理光 GR IV 頁面下載的 ZIP。',
     tooLarge: '檔案太大，不是 GR IV 韌體。',
     failed: '無法從這個檔案讀取色彩，請再試一次。',
@@ -1582,20 +1552,12 @@ const zhHant: Strings = {
   faqTitle: '常見問題',
   faq: [
     {
-      q: 'ADJ 裡沒有 GRK？',
-      a: ['GRKit 在開機後約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。稍等片刻，然後在拍攝時按 ADJ，選擇第 6 項 GRK。首次使用前，需要按住 MENU 開機，開啟 SD 腳本。', '想更快載入，可以試試', '[快速啟動', '。'],
-    },
-    {
-      q: '為什麼開機後頭幾張照片沒有底片風格？',
-      a: ['GRKit 載入完成前，相機使用原本的設定。開機後稍等幾秒再拍，或者試試', '[快速啟動', '。'],
+      q: 'ADJ 裡沒有 GRK，或開機後頭幾張照片沒有底片風格？',
+      a: ['GRKit 在開機後約 8 到 10 秒載入，GR IV 以及安裝或更新後的第一次開機會更久。載入完成前，相機使用原本的設定。稍等片刻，然後在拍攝時按 ADJ，選擇第 6 項 GRK。想更快載入，可以試試', '[快速啟動', '。'],
     },
     {
       q: 'GRKit 會修改相機韌體嗎？',
-      a: ['不會。GRKit 在開機時從記憶卡載入。取出記憶卡或解除安裝 GRKit 後，相機和原來一樣。SD 腳本設定（讓相機從記憶卡執行 GRKit）會一直開啟，直到你關閉它。只有選用的快速啟動韌體會修改韌體，而且只在你安裝它之後。'],
-    },
-    {
-      q: '能讓 GRKit 載入得更快嗎？',
-      a: ['可以，使用選用的', '[快速啟動韌體', '。它需要更新一次韌體。'],
+      a: ['不會。只有選用的快速啟動韌體會修改，而且只在你安裝它之後。SD 腳本設定（讓相機從記憶卡執行 GRKit）會一直開啟，直到你關閉它。'],
     },
     {
       q: '底片風格會改掉我的 影像控制 設定嗎？',
@@ -1615,11 +1577,7 @@ const zhHant: Strings = {
     },
     {
       q: '能在 Lightroom 裡使用這些風格嗎？',
-      a: ['不能直接使用，GRKit 不提供 Lightroom 預設集。這些風格來自開源的底片 LUT，頁面底部的「底片風格授權」列出了每個風格的來源。'],
-    },
-    {
-      q: 'GRKit 支援哪些相機？',
-      a: ['GR III、GR IIIx、GR IV 及其 HDF 機型，以及 GR IV Monochrome（不含底片風格），韌體版本見相機列表。更早的 GR 機型不支援。'],
+      a: ['不能。頁面底部的「底片風格授權」列出了每個風格所用的開源 LUT。'],
     },
     {
       q: '卡上裝的是哪個版本？',
@@ -1632,7 +1590,6 @@ const zhHant: Strings = {
     compareHead: ['官方韌體', '快速啟動韌體'],
     compare: [
       ['GRKit 載入', '開機後約 8 到 10 秒', '開機後一到兩秒'],
-      ['GRKit 功能', '全部', '相同，用同一個安裝包'],
       ['安裝', '複製到記憶卡', '先更新一次韌體，再複製到記憶卡'],
       ['支援版本', 'GRKit 支援的所有版本', '見下方連結'],
       ['風險', '不修改韌體', '更新中斷，相機可能無法開機。Ricoh 可能拒絕保固。'],
@@ -1664,7 +1621,7 @@ const zhHant: Strings = {
       '選擇「執行」，按 OK。',
       '開始更新。更新完成前，不要關機或打開電池蓋。',
       '更新完成後，關機。',
-      '開機，確認能正常拍照與播放。然後刪除卡上的韌體檔案。快速啟動需要 GRKit 1.5.0 或更新版本。卡上沒有 GRKit 或版本較舊的，照常安裝最新版。',
+      '開機，確認能正常拍照與播放。然後刪除卡上的韌體檔案。卡上沒有 GRKit 的，照常安裝。',
     ],
     fileNames: '檔名必須完全一致，相機才找得到：',
     renamed: '下載資料夾裡已有同名檔案時，瀏覽器會在檔名加上編號，例如 fwdc239b (1).bin。請把卡上的檔案改回原名。',
@@ -1883,7 +1840,7 @@ const ja: Strings = {
     install: 'インストール',
     installNote: 'SD カードに直接書き込むか、GRKit.zip をダウンロードします。',
     installNoteZip: 'GRKit.zip をダウンロードして SD カードにコピーします。',
-    supports: 'GR III、GR IIIx、GR IV（HDF モデルを含む）に対応しています。GR IV Monochrome ではフィルムルックを除いて使えます。',
+    supports: 'GR III、GR IIIx、GR IV（HDF モデルを含む）に対応。GR IV Monochrome はフィルムルックなし。',
     looks: 'フィルムルック',
     moreLooks: 'ほかのルック',
     moreLooksCount: (count) => `ほか ${count} 種類のフィルムルック`,
@@ -1916,8 +1873,8 @@ const ja: Strings = {
     faqTitle: 'インストールの前に',
     faq: [
       { q: '無料ですか？', a: ['はい。GRKit は MIT ライセンスのオープンソースで、無料です。ソースコードは ', '[GitHub', ' で公開しています。アカウントも要りません。'] },
-      { q: 'カメラが壊れる心配はありませんか？', a: ['GRKit は SD カードから読み込み、ファームウェアを変更しません。変更するのは、任意の高速起動ファームウェアを自分で入れた場合だけです。カードを抜けば、カメラはこれまでどおりに動きます。GRKit に保証はありません。'] },
-      { q: 'どのカメラに対応していますか？', a: ['GR III、GR IIIx、GR IV とそれぞれの HDF モデルに対応しています。GR IV Monochrome ではフィルムルック以外が使えます。対応ファームウェアはインストールページで確認できます。それより前の GR には対応していません。'] },
+      { q: 'カメラが壊れる心配はありませんか？', a: ['GRKit はファームウェアを変更しません。変更するのは、任意の高速起動ファームウェアを自分で入れた場合だけです。GRKit に保証はありません。'] },
+      { q: 'どのカメラに対応していますか？', a: ['GR III、GR IIIx、GR IV に対応しています。対応ファームウェアはインストールページで確認できます。それより前の GR には対応していません。'] },
       { q: '何が必要ですか？', a: ['SD カードとカードリーダーです。パソコンの Chrome か Edge なら、GRKit をカードに直接書き込めます。ほかのブラウザでは GRKit.zip をダウンロードしてカードにコピーします。'] },
       { q: 'RAW ファイルは変わりますか？', a: ['いいえ。GRKit が変えるのは JPEG だけです。RAW（DNG）ファイルにはカメラの RAW データがそのまま残ります。'] },
       { q: 'カメラの動作は遅くなりますか？', a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。それまではカメラ本来の設定で撮影されます。任意の高速起動ファームウェアを使うと、1〜2 秒で読み込まれます。'] },
@@ -2101,7 +2058,7 @@ const ja: Strings = {
   nativeUnchecked: (max) =>
     `1 つのパッケージに入るフィルムルックは最大 ${max} 個です。これらの色を入れるには、ほかのフィルムルックの選択を外してください。`,
   nativeErrors: {
-    unsupported: 'このファイルは使えません。使えるのは GR IV 1.11 と 1.20 のファームウェアだけです。',
+    unsupported: 'このファイルは使えません。GR IV 1.11、1.20、1.21 のファームウェアを選んでください。',
     notFirmware:
       'GR IV のファームウェアの ZIP ファイルではありません。リコーの GR IV のページからダウンロードした ZIP を選択してください。',
     tooLarge: 'ファイルが大きすぎます。GR IV のファームウェアではありません。',
@@ -2169,20 +2126,12 @@ const ja: Strings = {
   faqTitle: 'よくある質問',
   faq: [
     {
-      q: 'ADJ に GRK が表示されない',
-      a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。GR IV や、インストール・アップデート後の最初の起動ではもう少しかかります。少し待ってから、撮影画面で ADJ を押し、6 番目の項目「GRK」を選びます。初回は SD スクリプトをオンにする必要があります。MENU ボタンを押したまま電源を入れてください。', 'もっと早く読み込むには、', '[高速起動', 'をお試しください。'],
-    },
-    {
-      q: '電源を入れた直後の写真にフィルムルックがかからない',
-      a: ['GRKit が読み込まれるまでは、カメラ本来の設定で撮影されます。電源を入れてから数秒待つか、', '[高速起動', 'をお試しください。'],
+      q: 'ADJ に GRK が表示されない、または電源直後の写真にフィルムルックがかからない',
+      a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。GR IV や、インストール・アップデート後の最初の起動ではもう少しかかります。読み込まれるまでは、カメラ本来の設定で撮影されます。少し待ってから、撮影画面で ADJ を押し、6 番目の項目「GRK」を選びます。もっと早く読み込むには、', '[高速起動', 'をお試しください。'],
     },
     {
       q: 'GRKit はカメラのファームウェアを変更しますか？',
-      a: ['いいえ。GRKit は電源を入れるたびに SD カードから読み込まれます。カードを抜くか GRKit をアンインストールすると、カメラは元どおりに動きます。SD スクリプトの設定（カメラがカードの GRKit を実行するための設定）は、オフにするまでオンのままです。ファームウェアを変更するのは、オプションの高速起動ファームウェアをインストールした場合だけです。'],
-    },
-    {
-      q: 'GRKit をもっと早く読み込めますか？',
-      a: ['はい。オプションの', '[高速起動ファームウェア', 'を使います。ファームウェアの更新が一度必要です。'],
+      a: ['いいえ。変更するのは、オプションの高速起動ファームウェアをインストールした場合だけです。SD スクリプトの設定（カメラがカードの GRKit を実行するための設定）は、オフにするまでオンのままです。'],
     },
     {
       q: 'フィルムルックでイメージコントロールの設定は変わりますか？',
@@ -2202,11 +2151,7 @@ const ja: Strings = {
     },
     {
       q: 'これらのルックを Lightroom で使えますか？',
-      a: ['そのままでは使えません。GRKit は Lightroom のプリセットを作りません。ルックはオープンソースのフィルム LUT から作られています。ページ下部の「フィルムルックのライセンス」に、各ルックの出典があります。'],
-    },
-    {
-      q: 'GRKit が対応しているカメラは？',
-      a: ['GR III、GR IIIx、GR IV とそれぞれの HDF モデル、そして GR IV Monochrome（フィルムルックなし）です。ファームウェアはカメラ一覧のバージョンに対応しています。GR II 以前の機種には対応していません。'],
+      a: ['いいえ。ページ下部の「フィルムルックのライセンス」に、各ルックの元になったオープンソース LUT があります。'],
     },
     {
       q: 'カードの GRKit のバージョンは？',
@@ -2219,7 +2164,6 @@ const ja: Strings = {
     compareHead: ['公式ファームウェア', '高速起動ファームウェア'],
     compare: [
       ['GRKit の読み込み', '電源を入れてから約 8〜10 秒', '電源を入れて 1〜2 秒'],
-      ['GRKit の機能', 'すべて', '同じ（同じパッケージ）'],
       ['インストール', 'カードにコピー', '一度ファームウェアを更新してから、カードにコピー'],
       ['対応バージョン', 'GRKit が対応するすべてのバージョン', '下のリンクを参照'],
       ['リスク', 'ファームウェアを変更しない', '更新が止まるとカメラが起動しなくなるおそれがあります。Ricoh の修理を受けられない場合があります。'],
@@ -2251,7 +2195,7 @@ const ja: Strings = {
       '［実行］を選び、OK を押します。',
       '更新が始まります。更新が終わるまで、電源を切ったりバッテリーカバーを開けたりしないでください。',
       '更新が終わったら、電源を切ります。',
-      '電源を入れ、撮影と再生ができることを確かめます。そのあとカードのファームウェアのファイルを削除します。高速起動には GRKit 1.5.0 以降が必要です。カードに GRKit がない場合や古い場合は、いつもどおり最新版をインストールします。',
+      '電源を入れ、撮影と再生ができることを確かめます。そのあとカードのファームウェアのファイルを削除します。カードに GRKit がない場合は、いつもどおりインストールします。',
     ],
     fileNames: 'ファイル名が完全に一致しないと、カメラはファイルを見つけられません。',
     renamed: 'ダウンロードフォルダーに同じ名前のファイルがあると、ブラウザーは fwdc239b (1).bin のように番号を付けます。カードのファイル名を元に戻してください。',
@@ -2470,7 +2414,7 @@ const ko: Strings = {
     install: '설치하기',
     installNote: 'SD 카드에 바로 기록하거나 GRKit.zip을 다운로드합니다.',
     installNoteZip: 'GRKit.zip을 다운로드해 SD 카드에 복사합니다.',
-    supports: 'GR III, GR IIIx, GR IV와 각 HDF 모델에서 쓸 수 있습니다. GR IV Monochrome에서는 필름 룩을 제외하고 쓸 수 있습니다.',
+    supports: 'GR III, GR IIIx, GR IV와 각 HDF 모델용. GR IV Monochrome은 필름 룩 제외.',
     looks: '필름 룩',
     moreLooks: '더 많은 룩',
     moreLooksCount: (count) => `필름 룩 ${count}개 더`,
@@ -2503,8 +2447,8 @@ const ko: Strings = {
     faqTitle: '설치 전에',
     faq: [
       { q: '무료인가요?', a: ['네. GRKit은 MIT 라이선스의 오픈 소스로 무료이며, 소스 코드는 ', '[GitHub', '에 공개되어 있습니다. 계정도 필요 없습니다.'] },
-      { q: '카메라가 고장 나지는 않나요?', a: ['GRKit은 SD 카드에서 실행되며 펌웨어를 바꾸지 않습니다. 선택 사항인 빠른 시작 펌웨어를 직접 설치할 때만 펌웨어가 바뀝니다. 카드를 빼면 카메라는 예전과 똑같이 동작합니다. GRKit은 어떠한 보증도 제공하지 않습니다.'] },
-      { q: '어떤 카메라를 지원하나요?', a: ['GR III, GR IIIx, GR IV와 각 HDF 모델을 지원합니다. GR IV Monochrome에서는 필름 룩을 제외한 기능을 쓸 수 있습니다. 지원 펌웨어 버전은 설치 페이지에서 확인하세요. 이전 GR 모델은 지원하지 않습니다.'] },
+      { q: '카메라가 고장 나지는 않나요?', a: ['GRKit은 펌웨어를 바꾸지 않습니다. 선택 사항인 빠른 시작 펌웨어를 직접 설치할 때만 펌웨어가 바뀝니다. GRKit은 어떠한 보증도 제공하지 않습니다.'] },
+      { q: '어떤 카메라를 지원하나요?', a: ['GR III, GR IIIx, GR IV를 지원합니다. 지원 펌웨어 버전은 설치 페이지에서 확인하세요. 이전 GR 모델은 지원하지 않습니다.'] },
       { q: '무엇이 필요한가요?', a: ['SD 카드와 카드 리더기가 필요합니다. 컴퓨터의 Chrome이나 Edge에서는 GRKit을 카드에 바로 기록할 수 있습니다. 다른 브라우저에서는 GRKit.zip을 다운로드해 카드에 복사하세요.'] },
       { q: 'RAW 파일도 바뀌나요?', a: ['아니요. GRKit은 JPEG만 바꿉니다. RAW(DNG) 파일에는 카메라의 RAW 데이터가 그대로 남습니다.'] },
       { q: '카메라가 느려지나요?', a: ['GRKit은 전원을 켜고 약 8~10초 뒤에 로드됩니다. 그 전에는 카메라 자체 설정으로 촬영됩니다. 선택 사항인 빠른 시작 펌웨어를 쓰면 1~2초 만에 로드됩니다.'] },
@@ -2687,7 +2631,7 @@ const ko: Strings = {
   nativeUnchecked: (max) =>
     `패키지 하나에는 효과를 ${max}개까지 넣을 수 있습니다. 이 색감을 넣으려면 다른 효과의 선택을 해제하세요.`,
   nativeErrors: {
-    unsupported: '이 파일은 사용할 수 없습니다. GR IV 1.11과 1.20 펌웨어만 지원합니다.',
+    unsupported: '이 파일은 사용할 수 없습니다. GR IV 1.11, 1.20, 1.21 펌웨어를 선택하세요.',
     notFirmware: 'GR IV 펌웨어 ZIP 파일이 아닙니다. 리코 GR IV 페이지에서 받은 ZIP을 선택하세요.',
     tooLarge: '파일이 너무 큽니다. GR IV 펌웨어가 아닙니다.',
     failed: '이 파일에서 색감을 읽을 수 없습니다. 다시 시도하세요.',
@@ -2765,27 +2709,18 @@ const ko: Strings = {
   faqTitle: '자주 묻는 질문',
   faq: [
     {
-      q: 'ADJ 모드에 GRK가 보이지 않습니다.',
+      q: 'ADJ 모드에 GRK가 보이지 않거나, 전원을 켠 직후 사진에 필름 룩이 적용되지 않습니다.',
       a: [
-        'GRKit은 전원을 켜고 8~10초쯤 뒤에 실행됩니다. GR IV나 설치·업데이트 후 처음 켤 때는 더 걸립니다. 잠시 기다린 뒤 촬영 중에 ADJ를 누르고 여섯 번째 항목인 GRK를 선택하세요. 처음에는 SD 스크립트를 켜야 합니다. MENU 버튼을 누른 채 전원을 켜세요.',
-        ' 더 빨리 불러오려면 ',
+        'GRKit은 전원을 켜고 8~10초쯤 뒤에 실행됩니다. GR IV나 설치·업데이트 후 처음 켤 때는 더 걸립니다. 그 전에는 카메라 본래 설정으로 찍힙니다. 잠시 기다린 뒤 촬영 중에 ADJ를 누르고 여섯 번째 항목인 GRK를 선택하세요. 더 빨리 불러오려면 ',
         '[빠른 시작',
         '을 써 보세요.',
       ],
     },
     {
-      q: '전원을 켠 직후 찍은 사진에 필름 룩이 적용되지 않습니다.',
-      a: ['GRKit을 불러오기 전에는 카메라 본래 설정으로 찍힙니다. 전원을 켜고 몇 초 기다리거나 ', '[빠른 시작', '을 써 보세요.'],
-    },
-    {
       q: 'GRKit이 카메라 펌웨어를 바꾸나요?',
       a: [
-        '아니요. GRKit은 카메라가 켜져 있는 동안 SD 카드에서 실행됩니다. 카드를 빼거나 GRKit을 제거하면 카메라는 원래대로 동작합니다. SD 스크립트 설정(카메라가 카드의 GRKit을 실행하게 하는 설정)은 끌 때까지 켜진 상태로 남습니다. 펌웨어를 바꾸는 것은 선택 사항인 빠른 시작 펌웨어를 설치했을 때뿐입니다.',
+        '아니요. 펌웨어를 바꾸는 것은 선택 사항인 빠른 시작 펌웨어를 설치했을 때뿐입니다. SD 스크립트 설정(카메라가 카드의 GRKit을 실행하게 하는 설정)은 끌 때까지 켜진 상태로 남습니다.',
       ],
-    },
-    {
-      q: 'GRKit을 더 빨리 불러올 수 있나요?',
-      a: ['네. 선택 사항인 ', '[빠른 시작 펌웨어', '를 쓰면 됩니다. 펌웨어를 한 번 업데이트해야 합니다.'],
     },
     {
       q: '필름 룩을 쓰면 화상 컨트롤 설정이 바뀌나요?',
@@ -2805,13 +2740,7 @@ const ko: Strings = {
     },
     {
       q: '이 룩을 Lightroom에서 쓸 수 있나요?',
-      a: ['바로 쓸 수는 없습니다. GRKit은 Lightroom 프리셋을 만들지 않습니다. 룩은 오픈 소스 필름 LUT로 만들었습니다. 페이지 아래의 필름 룩 라이선스에서 각 룩의 출처를 볼 수 있습니다.'],
-    },
-    {
-      q: 'GRKit은 어떤 카메라를 지원하나요?',
-      a: [
-        '카메라 목록에 있는 펌웨어 버전의 GR III, GR IIIx, GR IV와 각 HDF 모델, 그리고 필름 룩을 뺀 GR IV Monochrome을 지원합니다. 그 이전 GR 모델은 지원하지 않습니다.',
-      ],
+      a: ['아니요. 페이지 아래의 필름 룩 라이선스에서 각 룩의 바탕이 된 오픈 소스 LUT를 볼 수 있습니다.'],
     },
     {
       q: '카드에 있는 GRKit 버전은 어떻게 확인하나요?',
@@ -2824,7 +2753,6 @@ const ko: Strings = {
     compareHead: ['공식 펌웨어', '빠른 시작 펌웨어'],
     compare: [
       ['GRKit 불러오기', '전원을 켜고 약 8~10초 뒤', '전원을 켜고 1~2초'],
-      ['GRKit 기능', '전부', '같음(같은 패키지)'],
       ['설치', '카드에 복사', '펌웨어를 한 번 업데이트한 뒤 카드에 복사'],
       ['지원 버전', 'GRKit이 지원하는 모든 버전', '아래 링크 참고'],
       ['위험', '펌웨어를 바꾸지 않음', '업데이트가 멈추면 카메라가 켜지지 않을 수 있습니다. Ricoh에서 수리를 거절할 수 있습니다.'],
@@ -2856,7 +2784,7 @@ const ko: Strings = {
       '[실행]을 선택하고 OK를 누릅니다.',
       '업데이트가 시작됩니다. 업데이트가 끝날 때까지 전원을 끄거나 배터리 덮개를 열지 마세요.',
       '업데이트가 끝나면 전원을 끕니다.',
-      '전원을 켜고 촬영과 재생이 되는지 확인합니다. 그다음 카드에서 펌웨어 파일을 지웁니다. 빠른 시작에는 GRKit 1.5.0 이상이 필요합니다. 카드에 GRKit이 없거나 이전 버전이면 평소처럼 최신 버전을 설치합니다.',
+      '전원을 켜고 촬영과 재생이 되는지 확인합니다. 그다음 카드에서 펌웨어 파일을 지웁니다. 카드에 GRKit이 없으면 평소처럼 설치합니다.',
     ],
     fileNames: '파일 이름이 정확히 같아야 카메라가 파일을 찾습니다.',
     renamed: '다운로드 폴더에 같은 이름의 파일이 있으면 브라우저가 fwdc239b (1).bin처럼 번호를 붙입니다. 카드의 파일 이름을 원래대로 바꿉니다.',
