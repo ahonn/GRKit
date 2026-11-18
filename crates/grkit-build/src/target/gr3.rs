@@ -41,6 +41,7 @@ const GROUPS: &[&[HookSpec]] = &[
     TONING,
     DIAL,
     CANVAS,
+    BATTERY,
 ];
 
 /// Image Control processing (`runtime/processing.S`): the BL to the parameter
@@ -127,3 +128,9 @@ const CANVAS: &[HookSpec] = &[
     bl("canvas_filter_0", Framing, PictureCanvas),
     bl("canvas_filter_1", Framing, PictureCanvas),
 ];
+
+/// Battery in Simple Display (`runtime/manage.h`): the compare of the display
+/// mode in UpdateViewBattery of LiveViewController, before the jump table
+/// that shows the battery icon at each level only with the full information
+/// (`runtime/menu.S: menu_battery_mode`).
+const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];

@@ -2324,7 +2324,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 32, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 36, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -5417,6 +5417,57 @@ static void the_section_starts_with_the_switch(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
+/* Battery in Simple Display is a row of GRKit Settings after Distance Unit
+   on a camera whose live view has its hook (LIVEVIEW_BATTERY_SIMPLE): Off,
+   as the camera, then On. A change saves, also in the copy of the file of
+   the user modes. Another camera keeps the setting, but shows no row. */
+static void battery_shows_in_the_simple_display(void)
+{
+    volatile u32 *h = test_header;
+    u32 n;
+    /* The switch is setting 12, Enable at Start setting 13, Distance Unit
+       setting 14, and Battery in Simple Display setting 15. */
+    install_stock_tab(10, 3);
+    settings_memory[0] = 16;
+    settings_memory[2 + 12 * 3 + 2] = 2;
+    settings_memory[2 + 13 * 3 + 2] = MANAGE_START_VALUES;
+    settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
+    settings_memory[2 + 15 * 3 + 1] = 0;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_BATTERY_VALUES;
+    manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
+    manage_memory[MANAGE_START / 4] = 13 + 1;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
+    manage_memory[MANAGE_BATTERY / 4] = 15 + 1;
+    menu_rows_install(h);
+    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
+#ifdef LIVEVIEW_BATTERY_SIMPLE
+    assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Distance Unit") &&
+           same(core_page_settings[2].label(h), "Battery in Simple Display") &&
+           same(core_page_settings[3].label(h), "Mode Dial") && same(core_page_settings[4].label(h), "ADJ Order"));
+    assert(core_row_setting(h, 2) == core_settings + 2);
+    assert(core_page_settings[2].values(h) == 2 && same(core_page_settings[2].value_text(h, 0), "Off") &&
+           same(core_page_settings[2].value_text(h, 1), "On"));
+#else
+    assert(settings_rows(h) == 4 && same(core_page_settings[2].label(h), "Mode Dial"));
+#endif
+    assert(core_settings[2].get(h) == 0 && !battery_simple(h));
+    n = h[GRKIT_HOST_STATE_CHANGES / 4];
+    core_settings[2].set(h, 1);
+    assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
+    assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
+    /* A value out of range changes nothing. */
+    core_settings[2].set(h, 2);
+    assert(battery_simple(h));
+    core_settings[2].set(h, 0);
+    assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
+    /* Without the setting in the module list, the icon stays as the camera
+       shows it. */
+    settings_memory[2 + 15 * 3 + 1] = 1;
+    manage_memory[MANAGE_BATTERY / 4] = 0;
+    assert(!battery_simple(h));
+    settings_memory[2 + 15 * 3 + 1] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
 /* In feet, the text hooks give the feet label of each Snap focus distance,
    on any screen, and the scale hooks the feet labels of the manual focus
    scale; in meters, and for other texts, the native ones. */
@@ -5940,6 +5991,7 @@ int main(void)
     a_color_only_module_gets_no_row();
     a_full_tab_gets_no_new_section();
     the_section_starts_with_the_switch();
+    battery_shows_in_the_simple_display();
     snap_distances_show_in_feet();
     a_unit_change_lays_out_the_distances_again();
 #endif

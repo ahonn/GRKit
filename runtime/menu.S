@@ -445,6 +445,29 @@ menu_string_text_entry:
 .ltorg
 #endif
 
+#ifdef HOOK_MENU_BATTERY_MODE
+/* Battery in Simple Display (runtime/manage.h). Replaces `cmp r3, #3` of
+   UpdateViewBattery of LiveViewController, where r3 is the display mode that
+   DISP selects: 0 full, 1 simple, 2 no information, 3 display off. The jump
+   table after it shows the battery icon at each level in mode 0, and only a
+   low battery in modes 1 and 2. With the setting on, the simple information
+   takes the entry of the full information. The live view calls this at each
+   update of its information. */
+.global menu_battery_mode
+.type menu_battery_mode, %function
+menu_battery_mode:
+    cmp r3, #1
+    bne 1f
+    push {r0-r3, r12, lr}
+    bl menu_battery_simple
+    cmp r0, #0
+    pop {r0-r3, r12, lr}
+    movne r3, #0
+1:  cmp r3, #3
+    ldr pc, =HOOK_MENU_BATTERY_MODE_RESUME
+.ltorg
+#endif
+
 /* The native parameter page edits the adjustments of a GRKit effect while
    GRKIT_HOST_PARAMETERS holds its record (menu.c). Each hook replaces the
    first instruction, `mov r12, sp`, of an Image Control model getter or setter

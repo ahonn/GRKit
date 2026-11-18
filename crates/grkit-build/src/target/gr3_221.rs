@@ -308,6 +308,7 @@ const SITES: &[Site] = &[
     // Clarity (0x53684394).
     ("canvas_filter_0", 0x53505e28, "59f905eb"),
     ("canvas_filter_1", 0x535064f4, "a6f705eb"),
+    ("menu_battery_mode", 0x53173198, "030053e3"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[
