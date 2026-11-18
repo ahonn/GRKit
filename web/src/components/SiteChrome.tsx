@@ -31,8 +31,9 @@ export function Masthead({ strings: t, language, page, onLanguage }: MastheadPro
       <div className="masthead-top">
         <div className="masthead-title">
           {/* The name is not the heading of the page: each page has its own h1. */}
-          <a href={LANGUAGE_PATHS[language]} className="masthead-name">
-            GRK<span className="dot">i</span>t
+          {/* The label keeps the name one word: the box would otherwise read as "GR Kit". */}
+          <a href={LANGUAGE_PATHS[language]} className="masthead-name" aria-label="GRKit">
+            GR<span className="kit">Kit</span>
           </a>
           <a className="masthead-version" href={RELEASE_URL}>
             v{__GRKIT_VERSION__}

@@ -425,19 +425,23 @@ label.download[aria-disabled='true'] {
 /* The dot of the i in Ricoh red. The text keeps its glyph: a gradient fills it, red down to the
    gap between the dot and the stem. In IBM Plex Sans Condensed Bold, the gap spans 33% to 38%
    of the content box at each font size. */
-.masthead-name .dot {
-  --dot-end: 35.5%;
-  background: linear-gradient(var(--accent) var(--dot-end), var(--ink) var(--dot-end));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* The wordmark: GR, then Kit in a red box as tall as about one em, as
+   resources/brand/logo/wordmark.svg draws it. */
+.masthead-name .kit {
+  display: inline-block;
+  margin-left: 0.11em;
+  padding: 0 0.12em;
+  background: var(--accent);
+  color: var(--paper);
 }
 
-/* On hover the name turns red as a link does, the stem of the i included. */
-.masthead-name:hover .dot {
-  background: var(--accent);
-  -webkit-background-clip: text;
-  background-clip: text;
+/* On hover the box darkens and GR keeps its color, so GR does not merge into the red box. */
+.masthead-name:hover {
+  color: var(--ink);
+}
+
+.masthead-name:hover .kit {
+  background: var(--warning);
 }
 
 .landing-copy .lead {
