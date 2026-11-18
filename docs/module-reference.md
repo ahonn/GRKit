@@ -311,7 +311,7 @@ A page of a setting of the module can also give 2 to 5 rows of a native settings
 
 A `settings` page shows one ADJ entry with its title and module tile. OK, Right, Fn, or a touch opens the native settings directly. Each row changes only its own setting. MENU shows Enable followed by the same rows.
 
-A `group` page shows one ADJ entry. OK opens an icon list of its children. A selection mark identifies each child that is on. OK on a child opens a list of the values of its first setting, with the value texts of its settings page and the child icon of each value. OK on a value sets it and closes ADJ, as on a choice page. MENU returns from the value list to the child's row of the group.
+A `group` page shows one ADJ entry. OK opens an icon list of its children. A selection mark identifies each child that is on. OK on a child opens a list of the values of its first setting, with the value texts of its settings page and the child icon of each value. OK on a value sets it and returns to the child's row of the group, as on a choice page. MENU returns there without a change.
 
 Fn on a child opens the child's native settings page. Returning to ADJ restores the selected child.
 
@@ -428,7 +428,7 @@ The UI services show the native message box of the camera. A text is a `GrkitTex
 - The box shows only while the GRKit page of ADJ is open. A call returns 1 when the box shows, else 0.
 - One box shows at a time. A toast closes when a new box opens. A message, a confirm, or a progress box takes each key until it closes.
 - ADJ exit closes the box without a callback.
-- OK on a row of a choice page commits the value and closes ADJ, as OK on a native value does. A commit can make the module show a box or open a native screen in its `SETTING_CHANGED` handler. ADJ then stays open on the page, so the box shows.
+- OK on a row of a choice page commits the value and returns to the GRKit list. On the page of a module's own ADJ entry, it closes ADJ, as OK on a native value does. The ADJ press commits and closes ADJ. A commit can make the module show a box or open a native screen in its `SETTING_CHANGED` handler. ADJ then stays open on the page, so the box shows.
 - `ui_confirm` shows Execute and Cancel, with the cursor on Cancel. Up, Down, Left, and Right move the cursor. OK calls `done(1, arg)` for Execute, else `done(0, arg)`. MENU calls `done(0, arg)`.
 - `ui_message` closes on OK or MENU and calls `done(arg)`.
 - A progress box takes the keys until `ui_progress_close`. Use a timer to move the bar.

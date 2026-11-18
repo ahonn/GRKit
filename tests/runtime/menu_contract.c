@@ -1328,9 +1328,10 @@ static void selected_framing_ratios_start_from_native_three_two(void)
         }
 }
 
-/* An ADJ exit that GRKit did not start, such as a half-press of the
-   shutter, commits the highlighted row of a page, as native ADJ keeps the
-   value under its cursor. An exit from the root commits nothing. */
+/* Left, Right, a touch on another entry, and an ADJ exit that GRKit did not
+   start, such as a half-press of the shutter, commit the highlighted row of
+   a page, as native ADJ keeps the value under its cursor. An exit from the
+   root commits nothing. */
 static void an_exit_from_a_page_commits_the_highlighted_row(void)
 {
     u32 value;
@@ -2434,6 +2435,23 @@ static void the_adj_order_page_moves_modules(void)
         assert(same(page[0].label(test_header), "Date Imprint") && menu_settings_current(0, 0, 0) == 2);
         assert(count_root(test_header) == roots_before - 1 && root_module(test_header, 0) == 2);
         assert(toolbar_pages(test_header, pages) == 1 && pages[0] == 3);
+        {
+            /* The entry of Date Imprint has no GRKit list behind it: OK on a
+               value closes ADJ, as on a native entry. The same page from the
+               GRKit list returns there. */
+            u32 controller = test_header[GRKIT_HOST_MENU_CONTROLLER / 4], level = test_header[GRKIT_HOST_MENU_LEVEL / 4];
+            u32 module = test_header[GRKIT_HOST_MODULE / 4];
+            test_header[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x1000;
+            test_header[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
+            test_header[GRKIT_HOST_MODULE / 4] = 3;
+            pin_word(test_header, MENU_ROWS_PIN)[0] = 1;
+            assert(pin_page(0x1000) == 3 && !confirm_returns(test_header, 0x1000));
+            pin_word(test_header, MENU_ROWS_PIN)[0] = 0;
+            assert(confirm_returns(test_header, 0x1000));
+            test_header[GRKIT_HOST_MENU_CONTROLLER / 4] = controller;
+            test_header[GRKIT_HOST_MENU_LEVEL / 4] = level;
+            test_header[GRKIT_HOST_MODULE / 4] = module;
+        }
         /* Hidden: Guides leaves the root, and the page lists it last. Its
            places: Top 1, Top 2, position 1 of the empty root, Hidden. */
         assert(same(page[1].label(test_header), "Guides") && menu_settings_count(0, 0, 1) == P + 2 + 1);
@@ -3043,14 +3061,26 @@ static void group_ok_opens_each_child_and_returns_to_its_row(void)
     assert(menu_back(h));
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes);
     assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 0);
-    /* The second child: OK on On sets it and closes ADJ. */
+    /* The second child: OK on On sets it and returns to the child's row of
+       the group (confirm_returns); an ADJ press would close ADJ. */
     h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
     assert(!confirm_selection(h));
     assert(h[GRKIT_HOST_MODULE / 4] == 6 && same(current_module(h)->title(h), "Second"));
     h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
+    h[GRKIT_HOST_MENU_EVENTS / 4] = 2;
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = EV_ADJ_PRESS;
+    assert(!confirm_returns(h, 0x1000));
+    h[GRKIT_HOST_MENU_EVENT_RING / 4] = 0;
+    assert(confirm_returns(h, 0x1000));
     assert(confirm_selection(h));
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
     assert(settings_memory[SETTINGS_ENTRY(16) + 1] == 1 && settings_memory[SETTINGS_ENTRY(0) + 1] == 0);
+    assert(menu_back(h));
+    assert(group_settings_row(h) && h[GRKIT_HOST_MENU_CURSOR / 4] == 1);
+    assert(menu_back(h));
+    assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && h[GRKIT_HOST_MENU_CURSOR / 4] == root_row(h, GUIDES_MODULE));
+    assert(!confirm_returns(h, 0x1000));
+    h[GRKIT_HOST_MENU_EVENTS / 4] = 0;
     /* The next ADJ opens on the row of the group. */
     menu_reopen(h);
     assert(h[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && h[GRKIT_HOST_MENU_CURSOR / 4] == root_row(h, GUIDES_MODULE));

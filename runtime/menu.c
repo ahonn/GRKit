@@ -1049,6 +1049,17 @@ static u32 row_stays(volatile u32 *h) {
     page=current_module(h);
     return page->stays && page->stays(h,h[GRKIT_HOST_MENU_CURSOR/4]);
 }
+/* Whether OK on a page that would close ADJ returns one level up instead: to
+   the GRKit list, or to the row of the group. The GRKit entry has one or two
+   levels more than a native entry, so a close after each value would start
+   each further change from the toolbar again. The page of an entry of a
+   module has no list behind it and closes, as a native entry does. An ADJ
+   press still closes, for a quick single change. */
+static u32 confirm_returns(volatile u32 *h,u32 controller) {
+    u32 pinned=pin_page(controller);
+    return h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE && !after_adj_press(h) &&
+           !(pinned<MODULE_TOTAL && h[GRKIT_HOST_MODULE/4]==pinned);
+}
 /* Confirm the current selection and return whether ADJ should close.
    Group OK toggles a child in place; an ADJ press only closes its list. An
    ADJ press also closes a page of actions without acting, as an ADJ exit
@@ -1079,7 +1090,25 @@ static u32 open_parameters(u32 controller) {
     CALL3(FW_CHANGE_CONTROLLER)(controller,IC_PARAMETERS_CONTROLLER,0x2000000);
     return 1;
 }
-A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
+/* A page keeps its highlighted row when ADJ leaves it for another entry or
+   exits: Left, Right, a touch on another entry, or an exit that GRKit did not
+   start, such as a half-press of the shutter. A native ADJ writes the value
+   under its cursor at each step, so it keeps that value in the same cases.
+   OK commits and returns (confirm_returns); only MENU leaves a page without
+   a commit, as the one way back on GRKit's own levels. The Modules page
+   opens settings on OK, so it commits nothing. The GRKit switch and group
+   toggles commit only on OK or a touch: leaving their pages must not change
+   an Enable setting. A page of actions, such as the camera recipes, acts
+   only on OK. */
+static void exit_commit(volatile u32 *h) {
+    u32 module=h[GRKIT_HOST_MODULE/4];
+    const MenuPage *page;
+    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_MODULE || module==MANAGE_MODULE || module==SWITCH_MODULE) return;
+    page=menu_page(h,module);
+    if(page!=&group_module && !(page->flags&MENU_PAGE_ACTIONS)) menu_confirm(h);
+}
+/* Select native slot `slot` from GRKit. */
+static void native_slot(u32 controller,u32 slot) {
     u32 pages[MANAGE_PINS];
     leave(controller);
     if(BYTE(controller,ADJ_SLOT)!=slot) CALL2(FW_ADJ_SELECT_SLOT)(controller,slot);
@@ -1087,19 +1116,10 @@ A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
     /* The native entry shows its own title. */
     title_fit(controller,ADJ_MOVIE(controller)==1 ? 0 : pins(menu_header(),pages));
 }
-/* GRKit leaves a page itself on OK, MENU, Fn, Left, Right, and touch. An
-   ADJ exit that GRKit did not start, such as a half-press of the shutter,
-   keeps the highlighted row of a page, as a native ADJ keeps the value under
-   its cursor. The Modules page opens settings on OK, so it commits nothing.
-   The GRKit switch and group toggles commit only on OK or a touch: leaving
-   their pages must not change an Enable setting. A page of actions, such as
-   the camera recipes, acts only on OK. */
-static void exit_commit(volatile u32 *h) {
-    u32 module=h[GRKIT_HOST_MODULE/4];
-    const MenuPage *page;
-    if(h[GRKIT_HOST_MENU_LEVEL/4]!=MENU_MODULE || module==MANAGE_MODULE || module==SWITCH_MODULE) return;
-    page=menu_page(h,module);
-    if(page!=&group_module && !(page->flags&MENU_PAGE_ACTIONS)) menu_confirm(h);
+/* A touch on a native entry. */
+A32_ENTRY void menu_native_touch(u32 controller,u32 slot) {
+    if(private_mode(controller)) exit_commit(menu_header());
+    native_slot(controller,slot);
 }
 A32_ENTRY void menu_exit(u32 controller) {
     volatile u32 *h=menu_header();
@@ -1303,10 +1323,12 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     /* OK and Right on a settings entry open its native controls. */
     if(direct_settings_event(h,kind) && open_settings(controller)) return 0;
     /* Left and Right otherwise move to the next ADJ entry from the root
-       and from a page. MENU returns from a page to the root. */
+       and from a page; a page keeps its highlighted row (exit_commit). MENU
+       returns from a page to the root. */
     if(kind==EV_LEFT || kind==EV_RIGHT) {
         u32 edge=h[GRKIT_HOST_MENU_EDGE/4], advance=advance_from_private(kind,edge), pages[MANAGE_PINS];
         u32 n=pins(h,pages), pin=pin_shown(controller);
+        exit_commit(h);
         /* The entries of modules sit between the native entries and GRKit:
            Right from the last one shows GRKit, Left from the first one the
            last native entry, and Left from GRKit the last entry of a module.
@@ -1323,7 +1345,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
             u32 i;
             for(i=0;i<5;++i) {
                 if(!CALL2(FW_ADJ_SLOT_TYPE)(controller,4-i)) continue;
-                menu_native_touch(controller,4-i);
+                native_slot(controller,4-i);
                 if(BYTE(controller,ADJ_SLOT)==4-i) break;
             }
             return 0;
@@ -1334,7 +1356,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
             for(i=0;i<5;++i) {
                 u32 slot=kind==EV_LEFT ? 4-i : i;
                 if(!CALL2(FW_ADJ_SLOT_TYPE)(controller,slot)) continue;
-                menu_native_touch(controller,slot);
+                native_slot(controller,slot);
                 if(BYTE(controller,ADJ_SLOT)==slot) break;
             }
             return 0;
@@ -1349,18 +1371,21 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
         render_step(controller,kind==EV_UP || kind==EV_DIAL_UP ? (u32)-1 : 1); return 0;
     }
     /* Confirm is 0xd8. Press and release events do not activate a profile.
-       OK on a root row opens its page. OK on a page row commits it and closes
-       ADJ, as OK on a native value does: the restored native list gets the
-       confirm, as after MENU on the root. Group OK toggles a child and keeps
-       the list open. An ADJ press closes that list without another toggle;
-       on other pages it commits the row first, but on a page of actions it
-       does nothing (confirm_selection).
+       OK on a root row opens its page. OK on a page row commits it and
+       returns to the GRKit list, or to the row of the group (confirm_returns).
+       On the page of an entry of a module it closes ADJ, as OK on a native
+       value does: the restored native list gets the confirm, as after MENU
+       on the root. Group OK opens a child and keeps the list open. An ADJ
+       press closes ADJ: on a group without opening a child, on other pages
+       after it commits the row, and on a page of actions without acting
+       (confirm_selection).
        If the commit made a module show a UI box or ask for a native screen,
        ADJ stays open on the page instead (ui_holds_page), as it does for a
        row whose page keeps it open (row_stays). */
     if(kind==EV_CONFIRM) {
-        u32 stays=row_stays(h), close=confirm_selection(h);
+        u32 stays=row_stays(h), returns=confirm_returns(h,controller), close=confirm_selection(h);
         if(close && (stays || ui_holds_page(h))) close=0;
+        else if(close && returns && menu_back(h)) close=0;
         if(close) {
             leave(controller);
             h[GRKIT_HOST_RETURN/4]=RETURN_CLOSING;
