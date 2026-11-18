@@ -22,10 +22,19 @@ dsaved = 0
 dchangeslast = dchanges
 filesearch 'C:\GRKIT\STATE.TXT'
 if result = 0 saved = changes - 1
+hint = 0
+quiet = 0 - 1
+idle = 0
 profile = registry[67]
 if profile <> 0 goto profile_watch
 :watch
 mpause 2000
+hint = registry[65] + registry[980] + registry[1012]
+if hint <> quiet idle = 30
+idle = idle + 1
+if idle <= 30 goto watch
+idle = 0
+quiet = hint - 1
 call capture
 if captured = 0 goto watch_state_saved
 if changes <> last goto watch_state_release
@@ -51,6 +60,11 @@ dstamp = dchanges
 call save_usermode
 :watch_usermode_saved
 dchangeslast = dchanges
+if captured = 0 goto watch
+if changes <> saved goto watch
+if rchanges <> rsaved goto watch
+if dchanges <> dsaved goto watch
+quiet = hint
 goto watch
 :save_state
 if stateok = 0 goto save_state_end
@@ -692,6 +706,11 @@ dstamp = dchanges
 call save_usermode
 :profile_poll_usermode_saved
 dchangeslast = dchanges
+if captured = 0 goto profile_poll
+if changes <> saved goto profile_poll
+if rchanges <> rsaved goto profile_poll
+if dchanges <> dsaved goto profile_poll
+quiet = hint
 goto profile_poll
 :profile_write
 ppolls = 0

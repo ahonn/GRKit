@@ -5858,6 +5858,49 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     assert(services_word(h, SERVICES_PERSIST_TIMER)[0] != timer);
     assert(dial_word(h, DIAL_TIMER)[0] == dial_timer_ids);
 }
+/* The resident loader exports after a count only. A page sets the module
+   of the next ADJ session without a count, so the end of a session counts
+   when its module differs from the module of the last export. */
+static void the_end_of_a_session_counts_a_module_that_no_export_holds(void)
+{
+    volatile u32 *h = test_header, *p;
+    u32 changes, root, first, second;
+    dial_reset();
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    root = root_module(h, 0);
+    first = root == 1 ? 3 : 1;
+    second = root == 2 ? 4 : 2;
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 1;
+    p = persist_test_buffer();
+    h[GRKIT_HOST_MODULE / 4] = first;
+    persist_baseline(h, p);
+    assert(persist_test_core(GRKIT_CORE_ADJ_MODULE) == first);
+    /* A page opened and the session ended there: nothing counted before. */
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
+    h[GRKIT_HOST_MODULE / 4] = second;
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1 && h[GRKIT_HOST_MODULE / 4] == second);
+    persist_test_request(1);
+    assert(persist_test_core(GRKIT_CORE_ADJ_MODULE) == second);
+    /* A session that ends on the exported module counts nothing. */
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    /* At the root the module is that of the highlighted row. A page left
+       the module at this row without a count, and the export holds another. */
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    h[GRKIT_HOST_MODULE / 4] = root;
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 2 && h[GRKIT_HOST_MODULE / 4] == root);
+    /* Without an export, a change of the module at the root counts. */
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 0;
+    h[GRKIT_HOST_MODULE / 4] = first;
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 3 && h[GRKIT_HOST_MODULE / 4] == root);
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 3);
+    h[GRKIT_HOST_MENU_LEVEL / 4] = 0;
+}
 
 int main(void)
 {
@@ -5966,5 +6009,6 @@ int main(void)
     persistence_freezes_the_complete_file_until_release();
     persistence_ignores_unsaved_values_and_rejects_incomplete_views();
     persistence_timer_runs_in_menus_and_preserves_early_dirty_values();
+    the_end_of_a_session_counts_a_module_that_no_export_holds();
     return 0;
 }
