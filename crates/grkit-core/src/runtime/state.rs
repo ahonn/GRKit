@@ -101,7 +101,7 @@ const _: () = assert!(DIAL_SET_WORDS <= DIAL_SET_KEY_STRIDE as usize);
 /// each word of what each user mode does (`abi::HOST_DIAL_SLOTS`, which
 /// follows `abi::HOST_DIAL_SETS`), then the positions of P/Av/Tv/M where
 /// GRKit is off (`abi::HOST_DIAL_SHARED_OFF`, which follows them), then the
-/// copy of the switch, Enable at Start, and Distance Unit
+/// copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW
 /// (`abi::HOST_MANAGE_COPY`, which follows it). The words after the sets have the keys of a fourth set
 /// (`DIAL_SLOT_KEY_BASE`).
 pub const DIAL_SET_STATE_WORDS: usize =
@@ -109,8 +109,8 @@ pub const DIAL_SET_STATE_WORDS: usize =
 /// The key of word 0 of the slot of U1.
 pub const DIAL_SLOT_KEY_BASE: u32 =
     DIAL_SET_KEY_BASE + DIAL_USER_MODES as u32 * DIAL_SET_KEY_STRIDE;
-/// The key of word 0 of the copy of the switch, Enable at Start, and
-/// Distance Unit: the key after that of the word of P/Av/Tv/M.
+/// The key of word 0 of the copy of the switch, Enable at Start, Distance
+/// Unit, and Uncropped RAW: the key after that of the word of P/Av/Tv/M.
 pub const MANAGE_COPY_KEY: u32 =
     DIAL_SLOT_KEY_BASE + (DIAL_SLOT_WORDS * DIAL_USER_MODES) as u32 + 1;
 const _: () = assert!(DIAL_SLOT_WORDS * DIAL_USER_MODES + 1 + MANAGE_COPY_WORDS < DIAL_SET_WORDS);
@@ -335,7 +335,7 @@ mod tests {
             dial_set_key(shared),
             DIAL_SLOT_KEY_BASE + (DIAL_SLOT_WORDS * DIAL_USER_MODES) as u32
         );
-        // The copy of the switch, Enable at Start, and Distance Unit follows
+        // The copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW follows
         // the word of P/Av/Tv/M, and ends the words.
         assert_eq!(dial_set_key(shared + 1), MANAGE_COPY_KEY);
         assert_eq!(

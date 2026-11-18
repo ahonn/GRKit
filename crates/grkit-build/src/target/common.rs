@@ -323,8 +323,14 @@ pub const DEVELOP_TOP_KINDS: &[HookSpec] = &[
 ];
 
 /// The XMP packet of a DNG (`runtime/picture.S`): the add of the Copyright
-/// entry to IFD0, where the XMP entry goes before it, in tag order.
-pub const DNG_XMP: &[HookSpec] = &[b("picture_dng_xmp", Framing, Tuning)];
+/// entry to IFD0, where the XMP entry goes before it, in tag order; and the
+/// first instruction of the tag setter of the DNG writer, which gets each
+/// entry once the writer has the shot, so the packet gets the crop of the
+/// shot there.
+pub const DNG_XMP: &[HookSpec] = &[
+    b("picture_dng_xmp", Framing, Tuning),
+    b("picture_dng_set", Framing, Tuning),
+];
 
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the

@@ -384,7 +384,14 @@
 #define DEVELOP_COPY_RECORD (DEVELOP_COPY_MODULE + 4U * GRKIT_MODULE_SETTINGS_MAX)
 #define DEVELOP_RECORD_SIZE 4096U
 #define DEVELOP_COPY_SIZE (DEVELOP_COPY_RECORD + DEVELOP_RECORD_SIZE)
-#define SERVICES_SIZE (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
+/* The Camera Raw crop in the XMP packet of the DNG that the camera writes
+   while Uncropped RAW is On (runtime/picture.c: picture_dng_xmp_add and
+   picture_dng_xmp_set): the entry of the packet, or 0, and the place of the
+   crop values in its data. */
+#define SERVICES_DNG_CROP (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
+#define DNG_CROP_ENTRY 0U
+#define DNG_CROP_AT 4U
+#define SERVICES_SIZE (SERVICES_DNG_CROP + 8U)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

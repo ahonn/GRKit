@@ -818,7 +818,7 @@ fn state_script() -> Vec<String> {
             // The words of the snapshot of each user mode that are not 0,
             // then those of what each user mode does, the word of P/Av/Tv/M
             // (runtime/mode_dial.h), and the copy of the switch, Enable at
-            // Start, and Distance Unit (runtime/manage.h), at their keys
+            // Start, Distance Unit, and Uncropped RAW (runtime/manage.h), at their keys
             // (state::dial_set_key). The save of the recipe file has the same
             // variables, which keeps the variables of the script few.
             lines.extend([
@@ -1313,7 +1313,7 @@ mod tests {
         assert_eq!(script.matches(&recipes).count(), 1);
         // Each index of the settings of the user modes is below
         // DIAL_SET_STATE_WORDS, which ends in the header with the copy of
-        // the switch, Enable at Start, and Distance Unit.
+        // the switch, Enable at Start, Distance Unit, and Uncropped RAW.
         assert!(script.contains(&format!(
             "if rindex >= {DIAL_SET_STATE_WORDS} goto set_word_end"
         )));

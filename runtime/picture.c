@@ -435,33 +435,76 @@ static u32 shot_record(volatile u32 *h,u32 shot) {
     return shot_word(h,shot,GRKIT_SHOT_RECORD,&record) ? record : 0;
 }
 
-/* The native sensor rectangle for this shot's digital crop and aspect 3:2.
-   The assembly bridge supplies the firmware's hard-float calling convention. */
+/* The native sensor rectangle of aspect 3:2 for a crop factor, the bits of
+   a float. The assembly bridge supplies the firmware's hard-float calling
+   convention. */
 #ifndef PICTURE_DNG_RECT
-void picture_dng_rect(u32 shot,u16 *rect);
-#define PICTURE_DNG_RECT(shot,rect) picture_dng_rect((shot),(rect))
+void picture_dng_rect(u32 factor,u16 *rect);
+#define PICTURE_DNG_RECT(factor,rect) picture_dng_rect((factor),(rect))
 #endif
 #ifndef PICTURE_IFD_SET_LONG
 #define PICTURE_IFD_SET_LONG(entry,index,value) (((void (*)(u32,u32,u32))FW_IFD_SET_LONG)(entry,index,value))
 #endif
-/* Called after the native DNG tag setter. Only a shot captured with a
-   Framing crop overrides its default RAW crop. JPEG geometry, the source
-   descriptor, and embedded previews keep their recorded composition. */
+/* The crop factor of the whole sensor, 1.0f. */
+#define PICTURE_FACTOR_ONE 0x3f800000U
+/* Whether Uncropped RAW is On (runtime/manage.h: CORE.RAW): the copy in
+   the header holds its value + 1. */
+static u32 picture_raw_uncropped(volatile u32 *h) {
+    return h[GRKIT_HOST_MANAGE_COPY/4+GRKIT_MANAGE_COPY_RAW]==2U;
+}
+/* {p, q} of each Framing ratio, by CORE.ASPECT value - 1 (runtime/sdk/grkit.h). */
+static const u8 picture_ratios[GRKIT_CORE_ASPECT_VALUES-1][2]={
+    {65,24},{16,9},{4,3},{47,20},{1,1},{5,4},{7,6},{3,4}};
+/* The crop of a shot in the DNG: x, y, width, and height, as the
+   DefaultCrop tags hold them (relative to ActiveArea, whose origin is at
+   +8/+12 of the information `info`). A shot captured with a Framing crop
+   keeps the 3:2 picture of its crop factor in `kept`, and its JPEG has the
+   centered box of its ratio in `shot_crop`: 1. Another shot has the native
+   values of the information (+0x18/+0x1c for the origin, +0x20/+0x24 for
+   the size, as the native setter takes them) in `shot_crop`: 0. */
+static u32 picture_shot_frame(volatile u32 *h,u32 shot,u32 info,u32 *kept,u32 *shot_crop) {
+    u32 crop, p, q, w, hh;
+    u16 rect[4];
+    if(!shot_word(h,shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=GRKIT_CORE_ASPECT_VALUES) {
+        shot_crop[0]=WORD(info,0x18)-WORD(info,8);
+        shot_crop[1]=WORD(info,0x1c)-WORD(info,12);
+        shot_crop[2]=WORD(info,0x20);
+        shot_crop[3]=WORD(info,0x24);
+        return 0;
+    }
+    PICTURE_DNG_RECT(WORD(shot,SHOT_CROP),rect);
+    kept[0]=rect[2]-WORD(info,8); kept[1]=rect[3]-WORD(info,12); kept[2]=rect[0]; kept[3]=rect[1];
+    w=rect[0]; hh=rect[1]; p=picture_ratios[crop-1][0]; q=picture_ratios[crop-1][1];
+    if(w*q>hh*p) w=core_divide(hh*p,q); else hh=core_divide(w*q,p);
+    shot_crop[0]=kept[0]+((rect[0]-w)>>1);
+    shot_crop[1]=kept[1]+((rect[1]-hh)>>1);
+    shot_crop[2]=w;
+    shot_crop[3]=hh;
+    return 1;
+}
+/* The whole 3:2 picture of the sensor, as picture_shot_frame gives a crop. */
+static void picture_whole(u32 info,u32 *whole) {
+    u16 rect[4];
+    PICTURE_DNG_RECT(PICTURE_FACTOR_ONE,rect);
+    whole[0]=rect[2]-WORD(info,8); whole[1]=rect[3]-WORD(info,12); whole[2]=rect[0]; whole[3]=rect[1];
+}
+/* Called after the native DNG tag setter of DefaultCropOrigin (`size` 0) or
+   DefaultCropSize (`size` 1). A Framing shot keeps the 3:2 picture of its
+   crop factor. With Uncropped RAW, each DNG keeps the whole 3:2 picture of
+   the sensor; its XMP packet has the crop of the shot as a Camera Raw crop
+   (picture_dng_xmp_add). JPEG geometry, the source descriptor, and embedded
+   previews keep their recorded composition. */
 /* This metadata path uses Thumb to fit beside the pixel-processing hooks. */
 #if defined(__arm__)
 __attribute__((target("thumb"),minsize))
 #endif
 void picture_dng_crop(u32 setter,u32 entry,u32 size) {
-    u32 shot=WORD(setter,DNG_SETTER_SHOT), crop, info, i;
-    u16 rect[4];
-    if(HALF(entry,6)!=4 || WORD(entry,8)!=2 || !shot_word(framing_header(),shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=GRKIT_CORE_ASPECT_VALUES) return;
-    PICTURE_DNG_RECT(shot,rect);
-    info=WORD(setter,DNG_SETTER_INFO);
-    for(i=0;i<2;++i) {
-        /* DNG origins are relative to ActiveArea, whose origin is at +8/+12. */
-        u32 value=size ? rect[i] : rect[i+2]-WORD(info,8+i*4);
-        PICTURE_IFD_SET_LONG(entry,i,value);
-    }
+    volatile u32 *h=framing_header();
+    u32 info=WORD(setter,DNG_SETTER_INFO), kept[4], shot_crop[4], i, *values=kept;
+    if(HALF(entry,6)!=4 || WORD(entry,8)!=2) return;
+    if(picture_raw_uncropped(h)) picture_whole(info,values=shot_crop);
+    else if(!picture_shot_frame(h,WORD(setter,DNG_SETTER_SHOT),info,kept,shot_crop)) return;
+    for(i=0;i<2;++i) PICTURE_IFD_SET_LONG(entry,i,values[(size ? 2U : 0U)+i]);
 }
 /* The quarter turns clockwise that show the picture of a shot upright, as
    its EXIF Orientation does (1: 0, 6: 1, 3: 2, 8: 3), from the posture of the
@@ -1040,29 +1083,65 @@ static void picture_record_name(u32 record,u16 *name) {
    picture_dng_xmp), with the packet of the photo (runtime/photo_xmp.h):
    `factory` makes entries, and `ifd` takes them in tag order. The look is
    the GRKit effect of the shot; a native look has no name here, as the
-   entry has no ImageTone code to read. */
+   entry has no ImageTone code to read. The writer does not have the shot
+   yet: with Uncropped RAW, the packet gets the Camera Raw crop of the whole
+   picture, which picture_dng_xmp_set makes the crop of the shot. */
 #define PICTURE_XMP_TAG 700U
+/* Whether an address is in the RAM of the camera. */
+#define PICTURE_RAM(address) ((address)>=0x40000000U && (address)<0xc0000000U)
 /* The DNG specification and exiftool take tag 700 as BYTE. */
 #define PICTURE_TIFF_BYTE 1U
 void picture_dng_xmp_add(u32 factory,u32 ifd) {
 #ifdef FW_IFD_APPEND
-    volatile u32 *h=framing_header();
+    volatile u32 *h=framing_header(), *stash;
     u8 *packet;
     u16 name[XMP_NAME_UNITS];
-    u32 n, entry, record;
+    u32 n, entry, record, crop_at=0, full;
     if(!h[GRKIT_HOST_SERVICES/4] || !h[GRKIT_HOST_CAPABILITIES/4]) return;
+    stash=services_word(h,SERVICES_DNG_CROP);
+    stash[DNG_CROP_ENTRY/4]=0;
     if((record=h[GRKIT_HOST_ACTIVE/4])) picture_record_name(record,name);
+    full=picture_raw_uncropped(h);
     packet=(u8 *)services_word(h,SERVICES_DEVELOP+DEVELOP_COPY_RECORD);
-    n=photo_xmp_build(h,packet,DEVELOP_RECORD_SIZE-(sizeof(xmp_end)-1),record ? name : 0,XMP_NAME_UNITS,1);
+    n=photo_xmp_build(h,packet,DEVELOP_RECORD_SIZE-(sizeof(xmp_end)-1),record ? name : 0,XMP_NAME_UNITS,1,
+                      full ? &crop_at : 0);
     if(!n) return;
     n=xmp_put(packet,n,xmp_end,sizeof(xmp_end)-1);
     entry=((u32 (*)(u32,u32,u32,u32,u32))WORD(WORD(factory,0),0xc))(factory,PICTURE_XMP_TAG,PICTURE_TIFF_BYTE,n,0);
     if(!entry) return;
     ((void (*)(u32,u32))FW_IFD_APPEND)(ifd,entry);
     ((void (*)(u32,u32,u32))FW_IFD_ENTRY_DATA)(entry,(u32)packet,n);
+    if(full) {
+        stash[DNG_CROP_AT/4]=crop_at;
+        stash[DNG_CROP_ENTRY/4]=entry;
+    }
 #else
     (void)factory; (void)ifd;
 #endif
+}
+/* The data of an entry. A host test maps it. */
+#ifndef PICTURE_DNG_DATA
+#define PICTURE_DNG_DATA(address,size) ((u8 *)(address))
+#endif
+/* For picture_dng_set (runtime/picture.S): the tag setter of the DNG writer
+   gets `entry`. For the XMP entry of picture_dng_xmp_add with a Camera Raw
+   crop, the crop of the whole picture becomes the crop of the shot, in
+   place: the setter has the information and the shot of the DNG by now. */
+void picture_dng_xmp_set(u32 setter,u32 entry) {
+    volatile u32 *h, *stash;
+    u32 info, shot, data, count, at, crop[8], kept[4];
+    if(HALF(entry,4)!=PICTURE_XMP_TAG) return;
+    h=framing_header();
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    stash=services_word(h,SERVICES_DNG_CROP);
+    if(stash[DNG_CROP_ENTRY/4]!=entry) return;
+    stash[DNG_CROP_ENTRY/4]=0;
+    info=WORD(setter,DNG_SETTER_INFO); shot=WORD(setter,DNG_SETTER_SHOT);
+    data=WORD(entry,0x10); count=WORD(entry,8); at=stash[DNG_CROP_AT/4];
+    if(!PICTURE_RAM(info) || !PICTURE_RAM(shot) || !data || at>=count) return;
+    picture_shot_frame(h,shot,info,kept,crop);
+    picture_whole(info,crop+4);
+    photo_xmp_crop_values(PICTURE_DNG_DATA(data,count),at,count,crop);
 }
 /* For picture_jpeg_header and picture_jpeg_rewrite (runtime/picture.S),
    after the firmware set up the APP1 Exif segment: the XMP segment of the
@@ -1092,7 +1171,7 @@ void picture_jpeg_xmp(u32 writer) {
     room-=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1;
     if(room>0xffffU) room=0xffffU;
     out=PICTURE_JPEG_MAP(buffer+at,size-at);
-    length=photo_xmp_build(h,(u8 *)out+XMP_SEGMENT_HEAD,room,look,units,settings);
+    length=photo_xmp_build(h,(u8 *)out+XMP_SEGMENT_HEAD,room,look,units,settings,0);
     segment=xmp_segment_size(length);
     if(!segment || segment>size-at || size-at-segment<XMP_APP7_RESERVE) return;
     xmp_finish_segment(out,segment,length);

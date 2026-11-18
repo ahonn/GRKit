@@ -63,9 +63,12 @@ static uint32_t ifd_entry, ifd_writes, ifd_values[32];
 #define PICTURE_IFD_SET_SHORT(entry,index,value) do { assert((index) < 32 && !((value) >> 16)); \
     ifd_entry = (entry); ifd_values[(index)] = (value); ++ifd_writes; } while (0)
 #define PICTURE_IFD_SET_LONG(entry,index,value) PICTURE_IFD_SET_SHORT(entry,index,value)
-static uint16_t dng_rect[4];
+/* The native rectangle of a crop factor: dng_full for the whole sensor
+   (1.0f) when it is set, else dng_rect. */
+static uint16_t dng_rect[4], dng_full[4];
 static uint32_t dng_rect_shot, dng_rect_calls;
-#define PICTURE_DNG_RECT(shot,rect) do { dng_rect_shot = (shot); ++dng_rect_calls; memcpy((rect),dng_rect,sizeof(dng_rect)); } while (0)
+#define PICTURE_DNG_RECT(factor,rect) do { dng_rect_shot = (factor); ++dng_rect_calls; \
+    memcpy((rect),(factor) == 0x3f800000U && dng_full[0] ? dng_full : dng_rect,sizeof(dng_rect)); } while (0)
 /* The module settings: those of Date Imprint, STYLE (handle 0, 6 values) and
    LOOK (handle 1, 3 values). */
 #define TEST_SETTINGS 0x5f000000U
@@ -122,8 +125,9 @@ static uint32_t develop_file_size;
 #define PICTURE_DEVELOP_FILE(buf,size) (memcpy((buf), develop_file, develop_file_size < (size) ? develop_file_size : (size)), \
     develop_file_size < (size) ? develop_file_size : (size))
 #define PHOTO_XMP_TEXT(address) ((const volatile u16 *)region((address), 2))
+#define PICTURE_DNG_DATA(address,size) ((u8 *)region((address), (size)))
 #include "picture.c"
-static uint32_t services_memory[(SERVICES_DEVELOP + DEVELOP_COPY_SIZE) / 4];
+static uint32_t services_memory[SERVICES_SIZE / 4];
 static volatile uint32_t *mapped_services(uint32_t address)
 {
     assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && (address & 3) == 0);
@@ -695,6 +699,7 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     reset();
     WORD(setter, DNG_SETTER_SHOT) = SHOT;
     WORD(setter, DNG_SETTER_INFO) = info;
+    WORD(SHOT, SHOT_CROP) = 0x3fd9999aU;
     HALF(entry, 6) = 4;
     WORD(entry, 8) = 2;
     WORD(info, 8) = 58; WORD(info, 12) = 28;
@@ -716,7 +721,7 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
         header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
         header[GRKIT_HOST_CAPABILITIES / 4] = 0;
         picture_dng_crop(setter, entry, 0);
-        assert(ifd_values[0] == 10 && ifd_values[1] == 12 && dng_rect_shot == SHOT);
+        assert(ifd_values[0] == 10 && ifd_values[1] == 12 && dng_rect_shot == 0x3fd9999aU);
         picture_dng_crop(setter, entry, 1);
         assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
         assert(WORD(info, 0x1c) == 932 && WORD(info, 0x24) == 2216);
@@ -742,6 +747,71 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     for (u32 i = 0; i < GRKIT_SHOT_ENTRIES; ++i) store_shot(SHOT + 0x100 + i * 4, 0);
     picture_dng_crop(setter, entry, 1);
     assert(ifd_writes == writes);
+    /* Uncropped RAW: each DNG keeps the whole 3:2 picture, and its XMP
+       packet has the crop of the shot as a Camera Raw crop: the native
+       values of a native shot, the centered box of the ratio of a Framing
+       shot. */
+    {
+        const u32 xmp = ARENA + 0xd000, data = ARENA + 0xe000;
+        volatile u32 *stash = services_memory + SERVICES_DNG_CROP / 4;
+        u32 kept[4], crop[8], at = 0, n;
+        char *text = (char *)region(data, 0x800);
+        dng_full[0] = 6000; dng_full[1] = 4000; dng_full[2] = 68; dng_full[3] = 40;
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 2;
+        store_shot(SHOT, 0);
+        picture_dng_crop(setter, entry, 0);
+        assert(ifd_values[0] == 10 && ifd_values[1] == 12);
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
+        /* The native values: origin 68 - 58 = 10 and 932 - 28 = 904, size
+           6000 x 2216 (16:9). */
+        assert(!picture_shot_frame(header, SHOT, info, kept, crop));
+        picture_whole(info, crop + 4);
+        assert(crop[0] == 10 && crop[1] == 904 && crop[2] == 6000 && crop[3] == 2216);
+        assert(crop[4] == 10 && crop[5] == 12 && crop[6] == 6000 && crop[7] == 4000);
+        /* The packet of IFD0 has the crop of the whole picture: the writer
+           has no shot yet. */
+        n = photo_xmp_build(header, (u8 *)text, 0x7ff, 0, 0, 0, &at);
+        text[n] = 0;
+        assert(n && strstr(text, " xmlns:crs=\"http://ns.adobe.com/camera-raw-settings/1.0/\" crs:HasCrop=\"True\" crs:CropAngle=\"0\""));
+        assert(strstr(text, " crs:CropLeft=\"0.00000\" crs:CropTop=\"0.00000\" crs:CropRight=\"1.00000\" crs:CropBottom=\"1.00000\"") ==
+               text + at);
+        /* The tag setter gets the entry: the crop of the shot, in place.
+           Another entry, and an entry that is not that of the packet, stay. */
+        HALF(xmp, 4) = 700; WORD(xmp, 8) = n; WORD(xmp, 0x10) = data;
+        header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+        stash[DNG_CROP_ENTRY / 4] = xmp; stash[DNG_CROP_AT / 4] = at;
+        picture_dng_xmp_set(setter, entry);
+        assert(stash[DNG_CROP_ENTRY / 4] == xmp);
+        picture_dng_xmp_set(setter, xmp);
+        assert(!stash[DNG_CROP_ENTRY / 4] && strlen(text) == n);
+        assert(strstr(text, " crs:CropLeft=\"0.00000\" crs:CropTop=\"0.22300\" crs:CropRight=\"1.00000\" crs:CropBottom=\"0.77700\"") ==
+               text + at);
+        text[at + 16] = '9';
+        picture_dng_xmp_set(setter, xmp);
+        assert(text[at + 16] == '9');
+        /* A Framing shot of 1:1: the box of 3200 x 3200 in the 4800 x 3200
+           picture of its crop factor; the DNG keeps the whole picture. */
+        header[GRKIT_HOST_FRAME_CROP / 4] = 5;
+        store_shot(SHOT, 0);
+        header[GRKIT_HOST_FRAME_CROP / 4] = 0;
+        assert(picture_shot_frame(header, SHOT, info, kept, crop));
+        assert(kept[0] == 610 && kept[1] == 412 && kept[2] == 4800 && kept[3] == 3200);
+        assert(crop[0] == 1410 && crop[1] == 412 && crop[2] == 3200 && crop[3] == 3200);
+        stash[DNG_CROP_ENTRY / 4] = xmp;
+        picture_dng_xmp_set(setter, xmp);
+        assert(strstr(text, " crs:CropLeft=\"0.23333\" crs:CropTop=\"0.10000\" crs:CropRight=\"0.76666\" crs:CropBottom=\"0.90000\"") ==
+               text + at);
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
+        /* Off: the Framing shot keeps the 3:2 picture of its crop factor. */
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 1;
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 4800 && ifd_values[1] == 3200);
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 0;
+        header[GRKIT_HOST_SERVICES / 4] = 0;
+        dng_full[0] = 0;
+    }
 }
 
 /* The XMP segment of a JPEG header (runtime/xmp.h, picture_jpeg_xmp). The

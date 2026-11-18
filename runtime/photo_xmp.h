@@ -10,6 +10,10 @@
    - grkit:State, "ID=value,..." with the state file ID and the value of each
      saved setting, in decimal. A RAW development starts from it
      (photo_xmp_apply). Names and texts can change; the IDs do not.
+   - With Uncropped RAW, the DNG keeps the whole picture of the sensor, and
+     the crop of the shot is a Camera Raw crop (crs:HasCrop and crs:Crop*),
+     which Lightroom and Camera Raw apply and can undo. The packet has the
+     crop of the whole picture until the DNG writer has the shot.
 
    The includer defines u8, u16, u32, core_divide, the header fields, WORD,
    settings_table, setting_value, runtime/develop_settings.h, runtime/crop.h,
@@ -140,14 +144,47 @@ static __attribute__((unused)) u32 photo_xmp_state(volatile u32 *h, u8 *out, u32
         if (t[SETTINGS_ENTRY(i)]) at = photo_xmp_pair(out, at, size, &first, t[SETTINGS_ENTRY(i)], setting_value(h, i));
     return photo_xmp_put(out, at, size, "\"");
 }
+/* ` crs:Name="0.12345"`: `part` of `whole` as a fraction with five
+   decimals, from 0.00000 to 1.00000. */
+static __attribute__((unused)) u32 photo_xmp_fraction(u8 *out, u32 at, u32 size, const char *name, u32 part, u32 whole) {
+    u32 n = whole && part < whole ? core_divide(part * 100000U, whole) : 100000U, digits = 100000U;
+    at = photo_xmp_put(out, at, size, name);
+    at = photo_xmp_put(out, at, size, n == 100000U ? "1." : "0.");
+    if (n == 100000U) n = 0;
+    while ((digits = core_divide(digits, 10U)) != 0) {
+        u32 d = core_divide(n, digits);
+        if (at >= size) return size + 1;
+        out[at++] = (u8)('0' + d);
+        n -= d * digits;
+    }
+    return photo_xmp_put(out, at, size, "\"");
+}
+/* The Camera Raw crop values, of the same length for each crop: `crop` is
+   x, y, width, and height of the crop of the shot, then of the whole picture
+   that the DNG keeps, as the DefaultCrop tags hold them (runtime/picture.c:
+   picture_shot_frame); or 0 for the whole picture. */
+static __attribute__((unused)) u32 photo_xmp_crop_values(u8 *out, u32 at, u32 size, const u32 *crop) {
+    u32 x = 0, y = 0, w = 1, hh = 1, fw = 1, fh = 1;
+    if (crop) {
+        x = crop[0] > crop[4] ? crop[0] - crop[4] : 0;
+        y = crop[1] > crop[5] ? crop[1] - crop[5] : 0;
+        w = crop[2]; hh = crop[3]; fw = crop[6]; fh = crop[7];
+    }
+    at = photo_xmp_fraction(out, at, size, " crs:CropLeft=\"", x, fw);
+    at = photo_xmp_fraction(out, at, size, " crs:CropTop=\"", y, fh);
+    at = photo_xmp_fraction(out, at, size, " crs:CropRight=\"", x + w, fw);
+    return photo_xmp_fraction(out, at, size, " crs:CropBottom=\"", y + hh, fh);
+}
 /* The packet in `out`, without its end (xmp_end): its length, or 0
    when it does not fit in `size` bytes or has nothing. `look` is the name of
-   the look (`max` UTF-16 units), or 0; `settings` adds the settings. */
+   the look (`max` UTF-16 units), or 0; `settings` adds the settings. `crop_at`
+   adds a Camera Raw crop of the whole picture, with the place of its values
+   (photo_xmp_crop_values) in *crop_at, or is 0. */
 static __attribute__((unused)) u32 photo_xmp_build(volatile u32 *h, u8 *out, u32 size, const volatile u16 *look, u32 max,
-                                                   u32 settings) {
+                                                   u32 settings, u32 *crop_at) {
     u32 at;
     if (look && !look[0]) look = 0;
-    if (!look && !settings) return 0;
+    if (!look && !settings && !crop_at) return 0;
     at = photo_xmp_put(out, 0, size, photo_xmp_head);
     if (look) {
         at = photo_xmp_put(out, at, size, " xmlns:dc=\"http://purl.org/dc/elements/1.1/\" grkit:FilmLook=\"");
@@ -157,6 +194,12 @@ static __attribute__((unused)) u32 photo_xmp_build(volatile u32 *h, u8 *out, u32
     if (settings) {
         at = photo_xmp_properties(h, out, at, size);
         at = photo_xmp_state(h, out, at, size);
+    }
+    if (crop_at) {
+        at = photo_xmp_put(out, at, size,
+                           " xmlns:crs=\"http://ns.adobe.com/camera-raw-settings/1.0/\" crs:HasCrop=\"True\" crs:CropAngle=\"0\"");
+        *crop_at = at;
+        at = photo_xmp_crop_values(out, at, size, 0);
     }
     if (look) {
         at = photo_xmp_put(out, at, size, "><dc:subject><rdf:Bag><rdf:li>");

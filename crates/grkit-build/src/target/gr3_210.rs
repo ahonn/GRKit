@@ -310,6 +310,8 @@ const SITES: &[Site] = &[
     ("canvas_filter_1", 0x53503ab4, "c0f405eb"),
     // The DNG writer: the add of the Copyright entry to IFD0.
     ("picture_dng_xmp", 0x535f8ba0, "981208e3"),
+    // The tag setter of the DNG writer: its first instruction.
+    ("picture_dng_set", 0x535fb17c, "0dc0a0e1"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

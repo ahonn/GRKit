@@ -41,7 +41,7 @@
      restores them into the header as the file has them
      (install_dial_sets); a set with more pairs than the header holds is
      damaged and stays out. The file also holds a copy of the switch, Enable
-     at Start, and Distance Unit (runtime/manage.h: manage_copy), which
+     at Start, Distance Unit, and Uncropped RAW (runtime/manage.h: manage_copy), which
      decides them before the main state file (read_manage_copy). */
 #include "recipe_id.h"
 static const char recipes_state_path[] = RECIPES_STATE_PATH, recipes_state_tmp_path[] = RECIPES_STATE_TMP_PATH;
@@ -312,7 +312,7 @@ static void install_dial_sets(u32 base)
     }
 }
 
-/* The copy of the switch, Enable at Start, and Distance Unit in the file
+/* The copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW in the file
    of the user modes decides them instead of the main state file: the core
    writes the copy with each change of them, and the loader never holds that
    file, so the copy is never older. The main state file can be: the core
@@ -324,9 +324,11 @@ static void install_dial_sets(u32 base)
    after read_state, so SCAN and INSTALL agree. */
 static void read_manage_copy(void)
 {
-    static const char *const keys[GRKIT_MANAGE_COPY_WORDS] = {MANAGE_SWITCH_KEY, MANAGE_START_KEY, MANAGE_UNIT_KEY};
-    static const u32 values[GRKIT_MANAGE_COPY_WORDS] = {2U, MANAGE_START_VALUES, MANAGE_UNIT_VALUES};
-    _Static_assert(GRKIT_MANAGE_COPY_SWITCH == 0U && GRKIT_MANAGE_COPY_START == 1U && GRKIT_MANAGE_COPY_UNIT == 2U,
+    static const char *const keys[GRKIT_MANAGE_COPY_WORDS] = {MANAGE_SWITCH_KEY, MANAGE_START_KEY, MANAGE_UNIT_KEY,
+                                                               MANAGE_RAW_KEY};
+    static const u32 values[GRKIT_MANAGE_COPY_WORDS] = {2U, MANAGE_START_VALUES, MANAGE_UNIT_VALUES, MANAGE_RAW_VALUES};
+    _Static_assert(GRKIT_MANAGE_COPY_SWITCH == 0U && GRKIT_MANAGE_COPY_START == 1U && GRKIT_MANAGE_COPY_UNIT == 2U &&
+                       GRKIT_MANAGE_COPY_RAW == 3U,
                    "the keys follow the words of the copy");
     long n = read_text(dial_sets_path, recipes_text, sizeof(recipes_text));
     if (n < 0) n = read_text(dial_sets_tmp_path, recipes_text, sizeof(recipes_text));
@@ -337,7 +339,7 @@ static void read_manage_copy(void)
             state_set(&saved_state, grm_state_id(keys[i]), value - 1U);
     }
 }
-/* Write the copy of the switch, Enable at Start, and Distance Unit into the
+/* Write the copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW into the
    header: the values of this start in `table`, which apply_state restored,
    for the handles of the module list. No count of changes moves, so the
    file of the user modes saves only after a change on the camera. Without a

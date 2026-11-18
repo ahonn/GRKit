@@ -27,7 +27,9 @@ picture_dng_size:
     b picture_dng_crop
 
 /* C uses soft-float; the native rectangle helper takes crop in s0 and
-   aspect on the stack. rect is {width,height,absolute x,absolute y}. */
+   aspect on the stack. picture_dng_rect(factor, rect): `factor` is the bits
+   of the float crop factor, and rect is {width,height,absolute x,absolute y}
+   of aspect 3:2. */
 .fpu vfpv3
 .thumb
 .thumb_func
@@ -36,8 +38,7 @@ picture_dng_rect:
     push {r4,lr}
     sub sp, sp, #8
     mov r4, r1
-    add r0, r0, #(SHOT_CROP & ~0xff)
-    vldr s0, [r0, #(SHOT_CROP & 0xff)]
+    vmov s0, r0
     movs r0, #0
     str r0, [sp]
     mov r0, r4
@@ -386,6 +387,19 @@ picture_dng_xmp:
     pop {r0-r3, r12, lr}
     .inst HOOK_PICTURE_DNG_XMP_STOCK
     ldr pc, =HOOK_PICTURE_DNG_XMP_RESUME
+.ltorg
+#endif
+/* The tag setter of the DNG writer, at its first instruction: r0 = the
+   setter, r1 = the entry to set. picture_dng_xmp_set (picture.c) gives the
+   XMP entry the crop of the shot. */
+#ifdef HOOK_PICTURE_DNG_SET
+.global picture_dng_set
+picture_dng_set:
+    push {r0-r3, r12, lr}
+    bl picture_dng_xmp_set
+    pop {r0-r3, r12, lr}
+    .inst HOOK_PICTURE_DNG_SET_STOCK
+    ldr pc, =HOOK_PICTURE_DNG_SET_RESUME
 .ltorg
 #endif
 
