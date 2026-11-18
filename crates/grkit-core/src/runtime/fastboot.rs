@@ -63,6 +63,13 @@ pub const FAST_STATUS_CODE_CHANGED: u32 = 997;
 /// The status when INSTALL found that its data changed since the last call:
 /// INSTALL did not run.
 pub const FAST_STATUS_DATA_CHANGED: u32 = 996;
+/// The status of a SCAN that did nothing, because an earlier fast INSTALL of
+/// the same fast-boot file failed (`FAST_OFF_FILE`): the loader uses Linux.
+pub const FAST_STATUS_OFF: u32 = 995;
+/// The marker of a failed fast INSTALL in the data folder: a magic word and
+/// the identity of the code of the fast-boot file (`runtime/fastboot/backend.c`).
+/// A new package has other code, so its first SCAN deletes the marker.
+pub const FAST_OFF_FILE: &str = "FASTOFF.BIN";
 /// The detail words of a changed status, before the status word: the address
 /// of the first changed page or block, then the number of changed ones. The
 /// loader reads them as `ba[FAST_DETAIL_INDEX]` and `ba[FAST_DETAIL_INDEX + 1]`.

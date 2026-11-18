@@ -87,6 +87,9 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                  #define FAST_DETAIL_INDEX {}\n\
                  /* The status when INSTALL found that its data changed. */\n\
                  #define FAST_STATUS_DATA_CHANGED {}\n\
+                 /* The status of a SCAN after an earlier failed fast INSTALL, and its marker. */\n\
+                 #define FAST_STATUS_OFF {}\n\
+                 #define FAST_OFF_FILE {:?}\n\
                  /* The plan header that SCAN gives the loader in the script array. */\n\
                  #define FAST_PLAN_INDEX {}\n\
                  #define FAST_PLAN_WORDS {}\n\
@@ -99,6 +102,12 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                 grkit_core::runtime::FAST_STATUS_INDEX,
                 grkit_core::runtime::FAST_DETAIL_INDEX,
                 grkit_core::runtime::FAST_STATUS_DATA_CHANGED,
+                grkit_core::runtime::FAST_STATUS_OFF,
+                format!(
+                    "{}\\{}",
+                    grkit_core::card::DATA_FOLDER,
+                    grkit_core::runtime::FAST_OFF_FILE
+                ),
                 grkit_core::runtime::FAST_PLAN_INDEX,
                 grkit_core::runtime::FAST_PLAN_WORDS,
                 grkit_core::card::LINUX_RAM_PLAN,

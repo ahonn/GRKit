@@ -86,6 +86,10 @@ static void write_report(int status)
     say("GRKit "); say(GRKIT_VERSION); say(" ("); say(target_marker + sizeof("GRKIT_TARGET=") - 1); say(")\r\n");
     say_camera();
     if (status) { say("\r\nGRKit did not install: error "); say_number((u32)status); say(".\r\n"); }
+    /* The check of the plan that failed (installer.c: PLAN_CHECK_*). */
+    if (status == STATUS_PLAN && install_plan_check) {
+        say("Plan check "); say_number(install_plan_check); say(", value "); say_number(install_plan_value); say(".\r\n");
+    }
     if (safe_mode) say("\r\nSafe mode: GRKIT\\SAFE exists, so no module loads. Delete it to load the modules.\r\n");
     if (profile_mode) say("\r\nProfile: GRKIT\\PROFILE exists, so GRKit writes its CPU use to GRKIT\\PROFILE.LOG. Delete it to stop.\r\n");
     say("\r\nModules (the package, and GRKIT\\MODULES):\r\n");

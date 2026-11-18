@@ -422,20 +422,25 @@ static u32 entry_word(u32 offset)
 /* Whether the entries of a listing without "." entries, as exFAT gives, have
    the layout above: 0 not known in this start, 1 yes, 2 no. The first such
    listing with a file compares the size of its entry with a status call,
-   and needs a stamp other than zero. */
+   and needs a stamp other than zero. A name that is not 8.3, such as the
+   "._" file that macOS writes before each file it copies, lists but does
+   not open, so the check takes the next file. */
 static int entry_layout __attribute__((section(".fast_keep")));
 static int entries_have_layout(const char *dos, const struct listing *l)
 {
     for (u32 i = 0; !entry_layout && i < l->count; ++i) {
         u32 n = slen(l->names[i]), d = slen(dos);
         /* A name that filled the field can be cut. */
-        if (l->directory[i] || !l->size[i] || n + 1 >= NAME_SIZE || d + 1 + n >= DOS_SIZE) continue;
+        if (l->directory[i] || !l->size[i] || l->names[i][0] == '.' || n + 1 >= NAME_SIZE ||
+            d + 1 + n >= DOS_SIZE)
+            continue;
         char path[DOS_SIZE];
         copy_name(path, dos);
         path[d] = '\\';
         copy_name(path + d + 1, l->names[i]);
         u32 st[16];
-        entry_layout = FS_SIZE(path, st) == 0 && st[2] == l->size[i] && l->stamp[i] ? 1 : 2;
+        if (FS_SIZE(path, st)) continue;
+        entry_layout = st[2] == l->size[i] && l->stamp[i] ? 1 : 2;
     }
     return entry_layout == 1;
 }
@@ -856,18 +861,82 @@ static int scan(u32 *array)
 /* The later calls, from the install file of the release after the script
    allocated the planned arrays: install. INSTALL reads the plan that SCAN
    left in RAM. The loader calls it again after a not-ready status. */
+extern u32 install_plan_check, install_plan_value;
 static int install(u32 *array)
 {
     int s = run("--install");
     RLOG(0, 0, 0, 0, "GR_MODULE_INSTALL_EXIT_%d", s);
+    /* A plan that INSTALL rejects: the check and its value of this INSTALL
+       (installer.c: PLAN_CHECK_*), for BOOT.TXT. */
+    if (s == STATUS_PLAN) {
+        array[FAST_DETAIL_INDEX] = install_plan_check;
+        array[FAST_DETAIL_INDEX + 1] = install_plan_value;
+    }
     array[FAST_STATUS_INDEX] = (u32)s;
     return s;
+}
+
+/* ---- the marker of a failed fast INSTALL ----------------------------------
+   A fast INSTALL that fails, other than for a camera that is not ready yet,
+   writes FAST_OFF_FILE with the identity of the code of this file. While the
+   marker names this code, SCAN does nothing and returns FAST_STATUS_OFF, and
+   the loader script uses Linux, as on the official firmware: the failure of
+   a fast start cannot be undone in the same start (the script cannot
+   allocate its arrays again), so each later start loads through Linux. A
+   new package has other code: its SCAN deletes the marker and tries the
+   fast start again. */
+#define FAST_OFF_MAGIC 0x46464f46U  /* "FOFF" */
+extern u32 fast_scan[];
+static u32 code_identity(void)
+{
+    u32 sum = 0x811c9dc5U;
+    for (const u32 *p = fast_scan; p < _code_end; ++p) { sum ^= *p; sum *= 0x01000193U; }
+    return sum;
+}
+/* 1 when the marker names the code of this file. A marker of other code
+   goes. */
+static int fast_off(u32 *array)
+{
+    (void)array;
+    u32 st[16], words[2] = {0, 0}, len = 0;
+    if (FS_SIZE(FAST_OFF_FILE, st)) return 0;
+    int f = st[2] == sizeof words ? FS_OPEN(FAST_OFF_FILE, MODE_RDWR, 0) : -1;
+    if (f >= 0) {
+        int failed = FS_READ((u32)f, words, sizeof words, &len);
+        FS_CLOSE((u32)f);
+        if (!failed && words[0] == FAST_OFF_MAGIC && words[1] == code_identity()) return 1;
+    }
+    FS_REMOVE(FAST_OFF_FILE);
+    return 0;
+}
+static void fast_off_write(void)
+{
+    u32 st[16], words[2] = {FAST_OFF_MAGIC, code_identity()}, len = 0;
+    if (FS_SIZE(FAST_OFF_FILE, st)) {
+        int f = FS_CREATE(FAST_OFF_FILE, 0);
+        if (f < 0) return;
+        FS_CLOSE((u32)f);
+    }
+    int f = FS_OPEN(FAST_OFF_FILE, MODE_TRUNCATE, 0);
+    if (f < 0) return;
+    FS_WRITE((u32)f, words, sizeof words, &len);
+    FS_CLOSE((u32)f);
+}
+static int final_failure(int s)
+{
+    return s && s != STATUS_LANGUAGE_NOT_READY && s != STATUS_RECORD_NOT_READY && s != STATUS_ICONS_NOT_READY &&
+           s != STATUS_SETTINGS_NOT_READY;
 }
 
 /* The sums are taken and checked on the stack of the script task, after the
    call left the stack of this file. */
 __attribute__((used)) int rtos_fastboot_scan(u32 *ba)
 {
+    if (on_stack(fast_off, ba, stack + STACK_SIZE)) {
+        RLOG(0, 0, 0, 0, "GRKit: an earlier fast INSTALL of this file failed");
+        ba[FAST_STATUS_INDEX] = FAST_STATUS_OFF;
+        return FAST_STATUS_OFF;
+    }
     data_keep();
     int s = on_stack(scan, ba, stack + STACK_SIZE);
     data_seal();
@@ -878,12 +947,14 @@ __attribute__((used)) int rtos_fastboot_install(u32 *ba)
     if (data_changed(ba)) {
         RLOG(0, 0, 0, 0, "GRKit: the fast-boot data changed after SCAN");
         ba[FAST_STATUS_INDEX] = FAST_STATUS_DATA_CHANGED;
+        fast_off_write();
         return FAST_STATUS_DATA_CHANGED;
     }
     data_reset();
     int s = on_stack(install, ba, stack + STACK_SIZE);
     /* After the install, so it does not delay it. */
     if (!s) pack_save();
+    else if (final_failure(s)) fast_off_write();
     data_seal();
     return s;
 }

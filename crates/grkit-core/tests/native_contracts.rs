@@ -1003,6 +1003,7 @@ fn the_package_scripts_test_the_install_statuses_of_the_core() {
     let header = fs::read_to_string(root().join("runtime/install_status.h")).unwrap();
     for (name, value) in [
         ("STATUS_RELOCATION", grkit_core::runtime::STATUS_RELOCATION),
+        ("STATUS_PLAN", grkit_core::runtime::STATUS_PLAN),
         (
             "STATUS_OTHER_BUILD",
             grkit_core::runtime::STATUS_OTHER_BUILD,

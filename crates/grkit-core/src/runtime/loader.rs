@@ -52,6 +52,10 @@ pub const STATUS_LOADER_NO_INSTALL: u32 = 62;
 /// The status of an INSTALL whose rollback failed (`runtime/install_status.h`):
 /// the firmware may keep some of the patches.
 const STATUS_ROLLBACK_FAILED: u32 = 24;
+/// The status of an INSTALL that found no valid plan, or a plan of another
+/// layout (`runtime/install_status.h`). The fast-boot file gives the check
+/// in the detail words (`fast_log_script`).
+pub const STATUS_PLAN: u32 = 37;
 /// The statuses of an INSTALL that ran before the camera was ready
 /// (`runtime/install_status.h`): language, record, icons, and settings. The
 /// loader tries again. On Linux INSTALL then writes no result file; through
@@ -161,6 +165,7 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             format!("faststatus = ba[{FAST_STATUS_INDEX}]"),
             "if faststatus = 0 goto plan_ready".into(),
             format!("fastreason = {FAST_OFF_SCAN}"),
+            format!("if faststatus = {FAST_STATUS_OFF} fastreason = {FAST_OFF_FAILED}"),
             "call fast_log".into(),
             "fast = 0".into(),
             ":linux".into(),
@@ -285,11 +290,17 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             "hadmodtiles = moduletiles".into(),
             "goto arrays_ready".into(),
             ":check_arrays".into(),
-            "if count <> hadcount goto reject".into(),
-            "if words <> hadwords goto reject".into(),
-            "if chunks <> hadchunks goto reject".into(),
-            "if modulewords <> hadmodwords goto reject".into(),
-            "if moduletiles <> hadmodtiles goto reject".into(),
+            "if count <> hadcount goto plan_differs".into(),
+            "if words <> hadwords goto plan_differs".into(),
+            "if chunks <> hadchunks goto plan_differs".into(),
+            "if modulewords <> hadmodwords goto plan_differs".into(),
+            "if moduletiles <> hadmodtiles goto plan_differs".into(),
+            "goto arrays_ready".into(),
+            // The Linux plan needs other arrays than the fast plan: the boot
+            // log gets both headers, and the start ends.
+            ":plan_differs".into(),
+            "call plan_log".into(),
+            "goto reject".into(),
             ":arrays_ready".into(),
         ]);
     }
@@ -377,9 +388,10 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             // leaves the firmware changed, so it stops the loader.
             ":install_not_run".into(),
             "errorstatus = faststatus".into(),
+            ":install_failed".into(),
+            // The detail words: a changed page or block, or a plan check.
             format!("fastaddress = ba[{FAST_DETAIL_INDEX}]"),
             format!("fastcount = ba[{}]", FAST_DETAIL_INDEX + 1),
-            ":install_failed".into(),
             "if fast = 0 goto reject".into(),
             // The fast-boot INSTALL writes no INSTALL.ERR.
             "failure = errorstatus".into(),
@@ -471,14 +483,16 @@ pub fn resident() -> Vec<u8> {
 /// Why a start with fast-boot files does not use them, or stops using them
 /// (`fastreason`, `fast_log_script`): the official firmware, another
 /// interface of the fast-boot firmware, a release without fast-boot files in
-/// the package, a missing fast-boot or install file, or a failed SCAN or
-/// INSTALL.
+/// the package, a missing fast-boot or install file, an earlier fast INSTALL
+/// of the same file that failed (`FAST_STATUS_OFF`), or a failed SCAN or
+/// INSTALL. The reasons from `FAST_OFF_SCAN` on log a status.
 const FAST_OFF_OFFICIAL: u32 = 1;
 const FAST_OFF_INTERFACE: u32 = 2;
 const FAST_OFF_RELEASE: u32 = 3;
 const FAST_OFF_FILES: u32 = 4;
-const FAST_OFF_SCAN: u32 = 5;
-const FAST_OFF_INSTALL: u32 = 6;
+const FAST_OFF_FAILED: u32 = 5;
+const FAST_OFF_SCAN: u32 = 6;
+const FAST_OFF_INSTALL: u32 = 7;
 
 /// The subroutine `fast_log`: one line in the boot log (`BOOT_LOG`) of a
 /// start that does not use its fast-boot files, with the reason. The person
@@ -490,16 +504,27 @@ const FAST_OFF_INSTALL: u32 = 6;
 /// - `fast-boot off: interface N`
 /// - `fast-boot RELEASE off: not in this package`
 /// - `fast-boot RELEASE off: files missing`
+/// - `fast-boot RELEASE off: an earlier fast install failed`
 /// - `fast-boot RELEASE scan STATUS, Linux used`
 /// - `fast-boot RELEASE install STATUS, Linux used`
 /// - `fast-boot RELEASE install STATUS at ADDRESS count N, Linux used`
+/// - `fast-boot RELEASE install 37 check C value V, Linux used`
+///
+/// The Linux SCAN after a failed fast INSTALL must give the plan header of
+/// the fast SCAN, because the script cannot allocate its arrays again. If
+/// not, `plan_log` writes `fast plan C W K M T, Linux plan C W K M T` (count,
+/// header words, icon chunks, module words, module tiles), and the start
+/// ends with INSTALL.ERR 61. The marker sends the next start through Linux.
 ///
 /// STATUS is that of `runtime/install_status.h`, `FAST_STATUS_NOT_RUN` when
 /// the head did not run SCAN or INSTALL, or `FAST_STATUS_NOT_READ` when the
 /// firmware did not read the file. `FAST_STATUS_CODE_CHANGED` and
 /// `FAST_STATUS_DATA_CHANGED` mean that other code wrote into the memory of
 /// the fast-boot file after SCAN: N code pages or data blocks changed, the
-/// first at ADDRESS (decimal).
+/// first at ADDRESS (decimal). Status 37 (STATUS_PLAN) names the check of
+/// the plan that failed and the value of INSTALL (installer.c: PLAN_CHECK_*).
+/// After a failed fast INSTALL the fast-boot file writes a marker, and the
+/// next starts log `off: an earlier fast install failed` until a new package.
 fn fast_log_script() -> Vec<String> {
     let log = format!("{DATA_FOLDER}\\{BOOT_LOG}");
     vec![
@@ -524,11 +549,13 @@ fn fast_log_script() -> Vec<String> {
         format!("if fastreason >= {FAST_OFF_RELEASE} filewrite lfh line"),
         format!("if fastreason = {FAST_OFF_RELEASE} filewrite lfh ' off: not in this package'"),
         format!("if fastreason = {FAST_OFF_FILES} filewrite lfh ' off: files missing'"),
+        format!("if fastreason = {FAST_OFF_FAILED} filewrite lfh ' off: an earlier fast install failed'"),
         format!("if fastreason = {FAST_OFF_SCAN} filewrite lfh ' scan '"),
         format!("if fastreason = {FAST_OFF_INSTALL} filewrite lfh ' install '"),
         format!("if fastreason >= {FAST_OFF_SCAN} int2str line faststatus"),
         format!("if fastreason >= {FAST_OFF_SCAN} filewrite lfh line"),
         format!("if fastreason <> {FAST_OFF_INSTALL} goto fast_log_changed_end"),
+        format!("if faststatus = {STATUS_PLAN} goto fast_log_check"),
         format!("if faststatus < {FAST_STATUS_DATA_CHANGED} goto fast_log_changed_end"),
         format!("if faststatus > {FAST_STATUS_CODE_CHANGED} goto fast_log_changed_end"),
         "filewrite lfh ' at '".into(),
@@ -537,11 +564,56 @@ fn fast_log_script() -> Vec<String> {
         "filewrite lfh ' count '".into(),
         "int2str line fastcount".into(),
         "filewrite lfh line".into(),
+        "goto fast_log_changed_end".into(),
+        ":fast_log_check".into(),
+        "filewrite lfh ' check '".into(),
+        "int2str line fastaddress".into(),
+        "filewrite lfh line".into(),
+        "filewrite lfh ' value '".into(),
+        "int2str line fastcount".into(),
+        "filewrite lfh line".into(),
         ":fast_log_changed_end".into(),
         format!("if fastreason >= {FAST_OFF_SCAN} filewrite lfh ', Linux used'"),
         "filewriteln lfh ''".into(),
         "fileclose lfh".into(),
         ":fast_log_end".into(),
+        "return".into(),
+        // `fast plan COUNT WORDS CHUNKS MODULEWORDS MODULETILES, Linux plan ...`
+        ":plan_log".into(),
+        format!("filesearch '{log}'"),
+        "if result = 0 goto plan_log_end".into(),
+        format!("fileopen lfh '{log}' 1"),
+        "if lfh < 0 goto plan_log_end".into(),
+        "filewrite lfh 'fast plan'".into(),
+        "planvalue = hadcount".into(),
+        "call plan_value".into(),
+        "planvalue = hadwords".into(),
+        "call plan_value".into(),
+        "planvalue = hadchunks".into(),
+        "call plan_value".into(),
+        "planvalue = hadmodwords".into(),
+        "call plan_value".into(),
+        "planvalue = hadmodtiles".into(),
+        "call plan_value".into(),
+        "filewrite lfh ', Linux plan'".into(),
+        "planvalue = count".into(),
+        "call plan_value".into(),
+        "planvalue = words".into(),
+        "call plan_value".into(),
+        "planvalue = chunks".into(),
+        "call plan_value".into(),
+        "planvalue = modulewords".into(),
+        "call plan_value".into(),
+        "planvalue = moduletiles".into(),
+        "call plan_value".into(),
+        "filewriteln lfh ''".into(),
+        "fileclose lfh".into(),
+        ":plan_log_end".into(),
+        "return".into(),
+        ":plan_value".into(),
+        "filewrite lfh ' '".into(),
+        "int2str line planvalue".into(),
+        "filewrite lfh line".into(),
         "return".into(),
     ]
 }
@@ -1629,11 +1701,14 @@ mod tests {
         // A fast-boot SCAN without a plan notes its status and falls back to
         // Linux. Only the Linux steps write INSTALL.ERR before their requests.
         let linux = at(":linux");
+        // A SCAN that an earlier failed fast INSTALL turned off (995) notes
+        // that instead.
         assert_eq!(
-            &lines[linux - 4..linux + 4],
+            &lines[linux - 5..linux + 4],
             [
                 "if faststatus = 0 goto plan_ready",
-                "fastreason = 5",
+                "fastreason = 6",
+                "if faststatus = 995 fastreason = 5",
                 "call fast_log",
                 "fast = 0",
                 ":linux",
@@ -1715,7 +1790,7 @@ mod tests {
         assert_eq!(lines[check + 1], "intdim registry words");
         let tail = at(&format!("intdim tailarea {TAIL_WORDS}"));
         assert_eq!(
-            lines[tail + 1..tail + 16],
+            lines[tail + 1..tail + 20],
             [
                 "allocated = 1",
                 "hadcount = count",
@@ -1725,11 +1800,16 @@ mod tests {
                 "hadmodtiles = moduletiles",
                 "goto arrays_ready",
                 ":check_arrays",
-                "if count <> hadcount goto reject",
-                "if words <> hadwords goto reject",
-                "if chunks <> hadchunks goto reject",
-                "if modulewords <> hadmodwords goto reject",
-                "if moduletiles <> hadmodtiles goto reject",
+                "if count <> hadcount goto plan_differs",
+                "if words <> hadwords goto plan_differs",
+                "if chunks <> hadchunks goto plan_differs",
+                "if modulewords <> hadmodwords goto plan_differs",
+                "if moduletiles <> hadmodtiles goto plan_differs",
+                "goto arrays_ready",
+                // Another plan: both headers go to the boot log.
+                ":plan_differs",
+                "call plan_log",
+                "goto reject",
                 ":arrays_ready",
                 "attempts = 0",
             ]
@@ -1774,14 +1854,15 @@ mod tests {
             [
                 ":install_not_run",
                 "errorstatus = faststatus",
+                ":install_failed",
+                // The detail words: a changed page or block, or a plan check.
                 "fastaddress = ba[252]",
                 "fastcount = ba[253]",
-                ":install_failed",
                 "if fast = 0 goto reject",
                 "failure = errorstatus",
                 "if errorstatus = 24 goto reject",
                 "faststatus = errorstatus",
-                "fastreason = 6",
+                "fastreason = 7",
                 "call fast_log",
                 "fast = 0",
                 "attempts = 0",
@@ -1825,7 +1906,10 @@ mod tests {
         assert_eq!(lines[calls[0] - 1], ":probed");
         for &call in &calls[1..] {
             assert_eq!(lines[call], "call fast_log");
-            assert!(lines[call - 1].starts_with("fastreason = "));
+            assert!(
+                lines[call - 1].starts_with("fastreason = ")
+                    || lines[call - 1] == "if faststatus = 995 fastreason = 5"
+            );
             assert_eq!(lines[call + 1], "fast = 0");
         }
         // The subroutine appends one line to GRKIT/BOOT.TXT.
@@ -1838,8 +1922,13 @@ mod tests {
             "filewrite lfh 'fast-boot'",
             "if fastreason = 1 filewrite lfh ' off: official firmware'",
             "if fastreason = 4 filewrite lfh ' off: files missing'",
-            "if fastreason = 6 filewrite lfh ' install '",
-            "if fastreason >= 5 filewrite lfh ', Linux used'",
+            "if fastreason = 5 filewrite lfh ' off: an earlier fast install failed'",
+            "if fastreason = 7 filewrite lfh ' install '",
+            "if faststatus = 37 goto fast_log_check",
+            "filewrite lfh ' check '",
+            "if fastreason >= 6 filewrite lfh ', Linux used'",
+            "filewrite lfh 'fast plan'",
+            "filewrite lfh ', Linux plan'",
             "filewriteln lfh ''",
             "fileclose lfh",
         ] {

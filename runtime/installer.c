@@ -378,13 +378,33 @@ static int relocate(void)
 /* SCAN wrote the plan at this power-on, and the loader allocated the arrays
    for it. INSTALL takes the effects from the plan, so that both steps install
    the same effects. */
+/* Which check of the plan failed with STATUS_PLAN (PLAN_CHECK_*), and the
+   value of this INSTALL for a layout check. REPORT.TXT names them, and the
+   RTOS backend gives them to the loader, which writes them to BOOT.TXT. */
+#define PLAN_CHECK_FILE 1U
+#define PLAN_CHECK_HEADER 2U
+#define PLAN_CHECK_CARD 3U
+#define PLAN_CHECK_SIZE 4U
+#define PLAN_CHECK_LISTED 5U
+#define PLAN_CHECK_PROFILE 6U
+#define PLAN_CHECK_WORDS 7U
+#define PLAN_CHECK_CHUNKS 8U
+#define PLAN_CHECK_MODULE_WORDS 9U
+#define PLAN_CHECK_MODULE_TILES 10U
+u32 install_plan_check, install_plan_value;
+static int plan_failed(u32 check, u32 value)
+{
+    install_plan_check = check;
+    install_plan_value = value;
+    return STATUS_PLAN;
+}
 /* The plan of this start from RAM. Its header must be the header on the card,
    which the loader allocated the arrays from. */
 static int read_plan(void)
 {
     u32 have = 0; long got = 0; u8 extra, header[GRKIT_PLAN_HEADER_SIZE];
     long fd = syscall6(5, (u32)ram_plan_path, 0x8800, 0, 0, 0, 0);
-    if (fd < 0) return STATUS_PLAN;
+    if (fd < 0) return plan_failed(PLAN_CHECK_FILE, 0);
     while (have < sizeof(plan)) {
         got = syscall6(3, fd, (u32)(plan + have), sizeof(plan) - have, 0, 0, 0);
         if (got <= 0) break;
@@ -393,14 +413,14 @@ static int read_plan(void)
     if (have == sizeof(plan)) got = syscall6(3, fd, (u32)&extra, 1, 0, 0, 0);
     syscall6(6, fd, 0, 0, 0, 0, 0);
     if (got < 0 || (have == sizeof(plan) && got) || have < GRKIT_PLAN_HEADER_SIZE ||
-        get32(plan + GRKIT_PLAN_MAGIC) != GRKIT_PLAN_MAGIC_VALUE) return STATUS_PLAN;
+        get32(plan + GRKIT_PLAN_MAGIC) != GRKIT_PLAN_MAGIC_VALUE) return plan_failed(PLAN_CHECK_HEADER, have);
 #ifdef RTOS_NATIVE
     /* The loader allocated the arrays from the header of this plan in its
        script array, so no card header exists. */
     (void)header;
 #else
     if (read_text(plan_path, header, sizeof(header)) != (long)sizeof(header) || !equal(header, plan, sizeof(header)))
-        return STATUS_PLAN;
+        return plan_failed(PLAN_CHECK_CARD, 0);
 #endif
     count = get32(plan + GRKIT_PLAN_COUNT);
     safe_mode = get32(plan + GRKIT_PLAN_MODES) & GRKIT_PLAN_SAFE;
@@ -410,7 +430,7 @@ static int read_plan(void)
     u32 effects_at = GRKIT_PLAN_HEADER_SIZE + count * GRKIT_GRF_MAX_SIZE;
     if (count > MAX_COUNT || listed_count > EFFECTS_LISTED || have != effects_at + listed_count * GRKIT_PLANNED_EFFECT_SIZE ||
         get32(plan + GRKIT_PLAN_SIZE) != have || get32(plan + GRKIT_PLAN_MODES) > (GRKIT_PLAN_SAFE | GRKIT_PLAN_PROFILE))
-        return STATUS_PLAN;
+        return plan_failed(PLAN_CHECK_SIZE, have);
     for (u32 i = 0; i < listed_count; ++i) {
         const u8 *entry = plan + effects_at + i * GRKIT_PLANNED_EFFECT_SIZE;
         copy(listed[i], entry + GRKIT_PLANNED_HEAD, LISTED_HEAD);
@@ -421,12 +441,12 @@ static int read_plan(void)
         listed_choice[i] = get32(entry + GRKIT_PLANNED_CHOICE);
         listed_record[i] = get32(entry + GRKIT_PLANNED_RECORD);
         if (listed_status[i] > EFFECT_UNREADABLE || listed_choice[i] >= EFFECT_CHOICE_VALUES ||
-            (listed_record[i] != EFFECTS_NO_RECORD && listed_record[i] >= count)) return STATUS_PLAN;
+            (listed_record[i] != EFFECTS_NO_RECORD && listed_record[i] >= count)) return plan_failed(PLAN_CHECK_LISTED, i);
     }
     for (u32 i = 0; i < count; ++i) {
         copy(profiles[i], plan + GRKIT_PLAN_HEADER_SIZE + i * GRKIT_GRF_MAX_SIZE, GRKIT_GRF_MAX_SIZE);
         u32 bytes = get32(profiles[i] + 8);
-        if ((bytes != GRKIT_GRF_SIZE && bytes != GRKIT_GRF_MAX_SIZE) || !valid_profile(profiles[i], bytes)) return STATUS_PLAN;
+        if ((bytes != GRKIT_GRF_SIZE && bytes != GRKIT_GRF_MAX_SIZE) || !valid_profile(profiles[i], bytes)) return plan_failed(PLAN_CHECK_PROFILE, i);
     }
     return 0;
 }
@@ -885,9 +905,11 @@ static int install(void)
     plan_modules();
     plan_array();
     layout();
-    if (get32(plan + GRKIT_PLAN_HEADER_WORDS) != size / 4 || get32(plan + GRKIT_PLAN_ICON_CHUNKS) != icon_chunks ||
-        get32(plan + GRKIT_PLAN_MODULE_WORDS) != module_words || get32(plan + GRKIT_PLAN_MODULE_TILES) != module_tiles)
-        return STATUS_PLAN;
+    /* The layout of this INSTALL must be the one that SCAN planned. */
+    if (get32(plan + GRKIT_PLAN_HEADER_WORDS) != size / 4) return plan_failed(PLAN_CHECK_WORDS, size / 4);
+    if (get32(plan + GRKIT_PLAN_ICON_CHUNKS) != icon_chunks) return plan_failed(PLAN_CHECK_CHUNKS, icon_chunks);
+    if (get32(plan + GRKIT_PLAN_MODULE_WORDS) != module_words) return plan_failed(PLAN_CHECK_MODULE_WORDS, module_words);
+    if (get32(plan + GRKIT_PLAN_MODULE_TILES) != module_tiles) return plan_failed(PLAN_CHECK_MODULE_TILES, module_tiles);
     if ((status = plan_code(relocated[TAIL_SYMBOL], TAIL_BYTES, CODE_END, &module_start))) return status;
     if ((status = check_arrays(&arrays))) return status;
     write_header(&arrays);
