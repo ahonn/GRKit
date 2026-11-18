@@ -190,6 +190,11 @@
 /* RAW development: the ID of the first development controller (gr4.h).
    1.21 adds a controller before it (1.20: 0x400001e). */
 #define DEVELOP_CONTROLLERS 0x400001fU
+/* RawDevelopmentTopController: the register of the mark of a row in its
+   fill switch, and the title text ID of the Image Control list
+   (runtime/targets/gr4.h). */
+#define DEVELOP_TOP_FILL_MARK r6
+#define DEVELOP_TONE_TITLE 0x134U
 /* RAW development, the Fn adjustments (runtime/develop.h): the parameter
    set of Standard in RawDevelopmentModel (gr4.h: DEVELOP_CATEGORY). */
 #define DEVELOP_PARAMETERS 0xb4

@@ -177,6 +177,11 @@
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x533742c8)
 /* RAW development: the ID of the first development controller (gr4.h). */
 #define DEVELOP_CONTROLLERS 0x400001eU
+/* RawDevelopmentTopController: the register of the mark of a row in its
+   fill switch, and the title text ID of the Image Control list
+   (runtime/targets/gr4.h). */
+#define DEVELOP_TOP_FILL_MARK r4
+#define DEVELOP_TONE_TITLE 0x123U
 /* RAW development, the Fn adjustments (runtime/develop.h): the parameter
    set of Standard in RawDevelopmentModel (gr4.h: DEVELOP_CATEGORY). */
 #define DEVELOP_PARAMETERS 0xb3

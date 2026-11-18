@@ -978,14 +978,47 @@ menu_develop_aspect_top_text:
 .ltorg
 #endif
 #endif
-#ifdef HOOK_MENU_DEVELOP_TOP_CELLS
+#ifdef HOOK_MENU_DEVELOP_TOP_DECIDE
 /* RawDevelopmentTopController: one GRKit row after its DEVELOP_TOP_ROWS
-   native rows (runtime/menu.c). The BL to the list setup gets a layout for
-   each row; the BL to the row count and the setup loop of the rows count the row;
-   the end of the fill of the rows fills it; the default of the decide
-   switch opens the list; and the defaults of the row name and subtitle
-   switches name the row, and the subtitle opens the list again for its
-   next step (r5 the controller). */
+   native rows (runtime/menu.c). The default of the switch of the rows that
+   opens a screen opens the GRKit list; the defaults of the row name and the
+   subtitle switches name the row, and the subtitle opens the list again for
+   its next step (r5 the controller). DEVELOP_TOP_ROW holds the row of GR
+   III, or the kind of row of GR IV, whose GRKit row is the kind after the
+   native ones. */
+/* r4 the controller. */
+.global menu_develop_top_decide
+.type menu_develop_top_decide, %function
+menu_develop_top_decide:
+    cmp DEVELOP_TOP_ROW, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_DECIDE_TARGET
+    mov r0, r4
+    bl menu_develop_top_open
+    DEVELOP_TOP_DECIDE_END
+.global menu_develop_top_name
+.type menu_develop_top_name, %function
+menu_develop_top_name:
+    cmp DEVELOP_TOP_ROW, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_NAME_TARGET
+    bl menu_develop_top_text_id
+    DEVELOP_TOP_NAME_END
+.global menu_develop_top_value
+.type menu_develop_top_value, %function
+menu_develop_top_value:
+    cmp DEVELOP_TOP_ROW, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET
+    push {r0-r3, r12, lr}
+    mov r0, r5
+    bl menu_develop_top_shown
+    pop {r0-r3, r12, lr}
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET+DEVELOP_TOP_NO_VALUE
+.ltorg
+#endif
+#ifdef HOOK_MENU_DEVELOP_TOP_CELLS
+/* GR III: the rows are DEVELOP_TOP_ROWS cells. The BL to the list setup
+   gets a layout for each row, the BL to the row count and the setup loop
+   of the rows count the GRKit row, and the end of the fill of the rows
+   fills it. */
 .global menu_develop_top_cells
 .type menu_develop_top_cells, %function
 menu_develop_top_cells:
@@ -1019,35 +1052,40 @@ menu_develop_top_fill:
     mov r0, r9
     ldr lr, =HOOK_MENU_DEVELOP_TOP_FILL_TARGET
     b menu_develop_top_row
-/* r0 the row, r4 the controller. */
-.global menu_develop_top_decide
-.type menu_develop_top_decide, %function
-menu_develop_top_decide:
-    cmp r0, #DEVELOP_TOP_ROWS
-    ldrne pc, =HOOK_MENU_DEVELOP_TOP_DECIDE_TARGET
-    mov r0, r4
-    bl menu_develop_top_open
-    DEVELOP_TOP_DECIDE_END
-/* The defaults of the row name switch and of the subtitle switch (r0 the
-   row): the GRKit row has the name of menu_develop_top_text_id and no
-   value. */
-.global menu_develop_top_name
-.type menu_develop_top_name, %function
-menu_develop_top_name:
-    cmp r0, #DEVELOP_TOP_ROWS
-    ldrne pc, =HOOK_MENU_DEVELOP_TOP_NAME_TARGET
-    bl menu_develop_top_text_id
-    DEVELOP_TOP_NAME_END
-.global menu_develop_top_value
-.type menu_develop_top_value, %function
-menu_develop_top_value:
-    cmp r0, #DEVELOP_TOP_ROWS
-    ldrne pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET
-    push {r0-r3, r12, lr}
-    mov r0, r5
-    bl menu_develop_top_shown
-    pop {r0-r3, r12, lr}
-    ldr pc, =HOOK_MENU_DEVELOP_TOP_VALUE_TARGET+DEVELOP_TOP_NO_VALUE
+.ltorg
+#endif
+#ifdef HOOK_MENU_DEVELOP_TOP_AVAILABLE
+/* GR IV: the rows are the kinds of row that the development has, which a
+   loop over the kinds finds. The default of the check of a kind takes the
+   GRKit kind, both ends of the loop take one kind more, and the default of
+   the fill of a kind gives it the GRKit icon. */
+/* r4 the kind. */
+.global menu_develop_top_available
+.type menu_develop_top_available, %function
+menu_develop_top_available:
+    cmp r4, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_AVAILABLE_TARGET
+    mov r0, #1
+    DEVELOP_TOP_AVAILABLE_END
+.global menu_develop_top_kinds_0
+.type menu_develop_top_kinds_0, %function
+menu_develop_top_kinds_0:
+    cmp r4, #DEVELOP_TOP_ROWS+1
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_KINDS_0_RESUME
+.global menu_develop_top_kinds_1
+.type menu_develop_top_kinds_1, %function
+menu_develop_top_kinds_1:
+    cmp r4, #DEVELOP_TOP_ROWS+1
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_KINDS_1_RESUME
+/* r2 the kind: the icon in r7, and no mark (DEVELOP_TOP_FILL_MARK). */
+.global menu_develop_top_kind_fill
+.type menu_develop_top_kind_fill, %function
+menu_develop_top_kind_fill:
+    cmp r2, #DEVELOP_TOP_ROWS
+    ldrne pc, =HOOK_MENU_DEVELOP_TOP_KIND_FILL_TARGET
+    ldr r7, =DEVELOP_TOP_ICON
+    mov DEVELOP_TOP_FILL_MARK, #0
+    ldr pc, =HOOK_MENU_DEVELOP_TOP_KIND_FILL_TARGET+DEVELOP_TOP_FILL_ROW
 .ltorg
 #endif
 #include "crop.S"

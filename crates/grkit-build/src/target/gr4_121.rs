@@ -270,6 +270,16 @@ const SITES: &[Site] = &[
     ("menu_develop_aspect_list_text", 0x531a435c, "638007eb"),
     ("menu_develop_aspect_top_text", 0x5319fc68, "209207eb"),
     ("menu_develop_aspect_top_icon", 0x5319ff58, "539107eb"),
+    // RawDevelopmentTopController: the default of the check of a kind of
+    // row, both end tests of the loop over the kinds, and the defaults of the
+    // fill, decide, row name, and subtitle switches.
+    ("menu_develop_top_available", 0x5319ea44, "230000ea"),
+    ("menu_develop_top_kinds_0", 0x5319eb44, "090054e3"),
+    ("menu_develop_top_kinds_1", 0x5319eb80, "090054e3"),
+    ("menu_develop_top_kind_fill", 0x5319fd88, "830000ea"),
+    ("menu_develop_top_decide", 0x5319f4d4, "5c0000ea"),
+    ("menu_develop_top_name", 0x531a0154, "1a0000ea"),
+    ("menu_develop_top_value", 0x5319fb44, "4e0000ea"),
     // DigitalFilterProcess SetEffectParameter (0x53726fe4), and its stage
     // gate (0x5373a4ac, plan +0x25).
     ("grain_enable", 0x537271c0, "b537d4e5"),

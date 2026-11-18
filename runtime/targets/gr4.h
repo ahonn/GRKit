@@ -108,6 +108,24 @@
 #define DEVELOP_CATEGORY_FIRST "ldrb r3, [r0, #5]"
 #define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
 #define DEVELOP_TOP_TITLE mov r3, r6
+/* RawDevelopmentTopController: the kinds of its native rows, then the
+   GRKit kind (runtime/menu.c); the register of the kind in its switches of
+   the kinds; the end of the decide method of its rows (r4 the controller),
+   of its row name method (the text ID in r0), and of its check of a kind
+   (1 in r0); the offset from the default of its subtitle switch (r5 the
+   controller) to the branch to the subtitle without a value; the offset
+   from the default of its fill switch to the branch to the fill of the row;
+   and the icon of the GRKit row, GRKIT_ICON_GRKIT. Each build header gives
+   the register of the mark of a row in that fill (DEVELOP_TOP_FILL_MARK)
+   and the title text ID of the Image Control list (DEVELOP_TONE_TITLE). */
+#define DEVELOP_TOP_ROWS 9
+#define DEVELOP_TOP_ROW r3
+#define DEVELOP_TOP_DECIDE_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
+#define DEVELOP_TOP_NAME_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
+#define DEVELOP_TOP_AVAILABLE_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
+#define DEVELOP_TOP_NO_VALUE 0x28
+#define DEVELOP_TOP_FILL_ROW 8
+#define DEVELOP_TOP_ICON 0x7ffe
 #define DEVELOP_LIST_VIEW 0x168
 #define DEVELOP_ROW_STYLE 0x1aU
 #define DEVELOP_ROW_HEIGHT 0x3aU

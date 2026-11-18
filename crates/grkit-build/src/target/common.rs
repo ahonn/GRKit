@@ -307,6 +307,21 @@ pub const DEVELOP_TOP: &[HookSpec] = &[
     b("menu_develop_top_value", Menu, Tuning),
 ];
 
+/// The GRKit row after the kinds of the native rows of
+/// RawDevelopmentTopController on GR IV (`runtime/menu.c`): the default of
+/// the check of a kind, both end tests of the loop over the kinds, the
+/// default of the fill switch, and the defaults of the decide, row name,
+/// and subtitle switches.
+pub const DEVELOP_TOP_KINDS: &[HookSpec] = &[
+    b("menu_develop_top_available", Menu, Tuning),
+    b("menu_develop_top_kinds_0", Menu, Tuning),
+    b("menu_develop_top_kinds_1", Menu, Tuning),
+    b("menu_develop_top_kind_fill", Menu, Tuning),
+    b("menu_develop_top_decide", Menu, Tuning),
+    b("menu_develop_top_name", Menu, Tuning),
+    b("menu_develop_top_value", Menu, Tuning),
+];
+
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the
 /// model and of the choice of a row in RawDevelopmentParameterSetController;

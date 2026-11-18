@@ -43,6 +43,7 @@ const GROUPS: &[&[HookSpec]] = &[
     CROP_LIVE,
     common::DEVELOP_TONE,
     common::DEVELOP_ASPECT,
+    common::DEVELOP_TOP_KINDS,
     GRAIN,
     DIAL,
     CANVAS,

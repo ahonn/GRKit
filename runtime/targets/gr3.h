@@ -252,14 +252,16 @@
 #define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
 #define DEVELOP_TOP_TITLE mov r3, r6
 /* RawDevelopmentTopController: its native rows, then the GRKit row
-   (runtime/menu.c); the end of the decide method of its rows (r4 the
-   controller) and of its row name method (the text ID in r0); and the
+   (runtime/menu.c); the register of the row in its switches of the rows;
+   the end of the decide method of its rows (r4 the controller) and of its
+   row name method (the text ID in r0); and the
    offset from the default of its subtitle switch (r5 the controller) to
    the branch to the subtitle without a value. */
 #define DEVELOP_TOP_ROWS 9
 /* The text ID of the title of the Image Control list of the development,
    which the GRKit list replaces (runtime/menu.c). */
 #define DEVELOP_TONE_TITLE 0x10aU
+#define DEVELOP_TOP_ROW r0
 #define DEVELOP_TOP_DECIDE_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
 #define DEVELOP_TOP_NAME_END sub sp, r11, #12; ldm sp, {r11, sp, pc}
 #define DEVELOP_TOP_NO_VALUE 0x28
