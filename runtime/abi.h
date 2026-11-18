@@ -630,6 +630,14 @@
 #define GRKIT_CORE_RECIPE_BIT 0x800
 #define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,1092,1096,0
 #define GRKIT_CORE_SETTING_VALUES 0,9,5,4,2,6,16,5,2,4,2,0
+/* The state file ID of each CORE setting that has a header word, or 0
+   (grkit_core::runtime::state_key_id). */
+#define GRKIT_CORE_SETTING_IDS 0U,484706023U,790270076U,977751003U,826089556U,458876999U,697053196U,660632122U,618415657U,862826181U,360900158U,0U
+/* The XMP packet of a photo (grkit_core::photo_xmp, runtime/photo_xmp.h): its
+   namespace, and each setting that changes the picture: its state file ID, its
+   core handle or 0, and its property. */
+#define GRKIT_PHOTO_XMP_NAMESPACE "https://grkit.app/ns/1.0/"
+#define GRKIT_PHOTO_XMP_SETTINGS {790270076U,0x102U,"Grain"},{977751003U,0x103U,"GrainSize"},{73603892U,0x0U,"Bloom"},{979977653U,0x0U,"Halation"},{208924775U,0x0U,"HalationColor"},{862826181U,0x109U,"Border"},{360900158U,0x10aU,"BorderColor"},{484706023U,0x101U,"Framing"},{660632122U,0x107U,"Crop"},{157666443U,0x0U,"DateImprint"},{247126882U,0x0U,"DateLook"},{330071171U,0x0U,"DatePosition"}
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100

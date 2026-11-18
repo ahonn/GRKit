@@ -345,6 +345,9 @@ static void flush(const Plane *p) {
 static u32 aspect_native(void) { return PICTURE_NATIVE_ASPECT(); }
 #include "settings.h"
 #include "services.h"
+#include "grm_format.h"
+#include "xmp.h"
+#include "photo_xmp.h"
 /* The module plane filters that INSTALL registered (GRKIT_HOST_MODULE_FILTERS),
    or 0 for a count out of range. Each has two words: its apply function, and
    its setting handle with its stage in the high half. */
@@ -494,7 +497,6 @@ void framing_develop_crop(void);
    native processing for a native photo or an effect that the camera no
    longer has. It develops the native aspect of the DNG until its aspect list
    selects a Framing ratio (runtime/menu.c), and the crop of the DNG. */
-#include "photo_record.h"
 /* The longest path of a photo, as "C:\DCIM\100RICOH\R0000001.DNG". */
 #define PICTURE_PATH_MAX 64U
 #ifndef PICTURE_DEVELOP_FILE
@@ -522,16 +524,16 @@ static u32 picture_develop_file(u8 *buf,u32 size) {
 #define PICTURE_DEVELOP_FILE(buf,size) ((void)(buf),(void)(size),0U)
 #endif
 #endif
-/* The record of the DNG of a development (runtime/photo_record.h): the XMP
-   packet of IFD0 at the start of the file. */
+/* The settings of the DNG of a development (runtime/photo_xmp.h: grkit:State
+   of the XMP packet of IFD0, at the start of the file). */
 static void picture_develop_record(volatile u32 *h) {
     u8 *buf;
     u32 len, n=0, off;
     if(!h[GRKIT_HOST_SERVICES/4]) return;
     buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
     len=PICTURE_DEVELOP_FILE(buf,DEVELOP_RECORD_SIZE);
-    if(!(off=photo_record_tiff_xmp(buf,len,&n))) return;
-    photo_record_apply(h,(const char *)buf+off,n);
+    if(!(off=photo_xmp_tiff(buf,len,&n))) return;
+    photo_xmp_apply(h,(const char *)buf+off,n);
 }
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
@@ -1017,7 +1019,6 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
 }
 #endif
 
-#include "xmp.h"
 /* The JPEG header writer of the firmware: +0x18 the header buffer, +0x1c its
    size, and +0x48 the offset of the APP7 preview segment. The header starts
    with SOI, the APP1 marker and length, and "Exif\0\0", so the TIFF block
@@ -1030,29 +1031,32 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
 #define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)(address))
 #endif
 #define XMP_NAME_UNITS ((GRKIT_RECORD_MONOCHROME-GRKIT_RECORD_NAME)/2)
-/* For picture_jpeg_header and picture_jpeg_rewrite (runtime/picture.S),
-   after the firmware set up the APP1 Exif segment: an XMP segment with the
-   name of the look of the picture goes at +0x48, and +0x48 moves past it. The
-   APP7 setup, the maker-note offset of APP7, and the place of the main image
-   all follow +0x48. No segment is written while no module runs (the GRKit
-   switch is Off, or safe mode), for a code without a name, or into a buffer
-   without room for the largest APP7. */
+/* The name of the look of record `record` in `name`. */
+static void picture_record_name(u32 record,u16 *name) {
+    u32 i;
+    for(i=0;i<XMP_NAME_UNITS;++i) name[i]=HALF(record,GRKIT_RECORD_NAME+i*2);
+}
 /* The XMP entry (tag 700) of IFD0 of a DNG (runtime/picture.S:
-   picture_dng_xmp), with the GRKit record of the shot
-   (runtime/photo_record.h): `factory` makes entries, and `ifd` takes them in
-   tag order. */
+   picture_dng_xmp), with the packet of the photo (runtime/photo_xmp.h):
+   `factory` makes entries, and `ifd` takes them in tag order. The look is
+   the GRKit effect of the shot; a native look has no name here, as the
+   entry has no ImageTone code to read. */
 #define PICTURE_XMP_TAG 700U
-#define PICTURE_TIFF_UNDEFINED 7U
+/* The DNG specification and exiftool take tag 700 as BYTE. */
+#define PICTURE_TIFF_BYTE 1U
 void picture_dng_xmp_add(u32 factory,u32 ifd) {
 #ifdef FW_IFD_APPEND
     volatile u32 *h=framing_header();
-    char *packet;
-    u32 n, entry;
+    u8 *packet;
+    u16 name[XMP_NAME_UNITS];
+    u32 n, entry, record;
     if(!h[GRKIT_HOST_SERVICES/4] || !h[GRKIT_HOST_CAPABILITIES/4]) return;
-    packet=(char *)services_word(h,SERVICES_DEVELOP+DEVELOP_COPY_RECORD);
-    n=photo_record_build(h,packet,DEVELOP_RECORD_SIZE);
+    if((record=h[GRKIT_HOST_ACTIVE/4])) picture_record_name(record,name);
+    packet=(u8 *)services_word(h,SERVICES_DEVELOP+DEVELOP_COPY_RECORD);
+    n=photo_xmp_build(h,packet,DEVELOP_RECORD_SIZE-(sizeof(xmp_end)-1),record ? name : 0,XMP_NAME_UNITS,1);
     if(!n) return;
-    entry=((u32 (*)(u32,u32,u32,u32,u32))WORD(WORD(factory,0),0xc))(factory,PICTURE_XMP_TAG,PICTURE_TIFF_UNDEFINED,n,0);
+    n=xmp_put(packet,n,xmp_end,sizeof(xmp_end)-1);
+    entry=((u32 (*)(u32,u32,u32,u32,u32))WORD(WORD(factory,0),0xc))(factory,PICTURE_XMP_TAG,PICTURE_TIFF_BYTE,n,0);
     if(!entry) return;
     ((void (*)(u32,u32))FW_IFD_APPEND)(ifd,entry);
     ((void (*)(u32,u32,u32))FW_IFD_ENTRY_DATA)(entry,(u32)packet,n);
@@ -1060,22 +1064,37 @@ void picture_dng_xmp_add(u32 factory,u32 ifd) {
     (void)factory; (void)ifd;
 #endif
 }
+/* For picture_jpeg_header and picture_jpeg_rewrite (runtime/picture.S),
+   after the firmware set up the APP1 Exif segment: the XMP segment of the
+   photo goes at +0x48, and +0x48 moves past it. The APP7 setup, the
+   maker-note offset of APP7, and the place of the main image all follow
+   +0x48. A capture and a RAW development record their settings. An edit in
+   playback, such as Resize, records only the look: the current settings are
+   not those of the photo. No segment is written while no module runs (the
+   GRKit switch is Off, or safe mode), or into a buffer without room for the
+   largest APP7. */
 void picture_jpeg_xmp(u32 writer) {
     volatile u32 *h=framing_header();
     u32 buffer=WORD(writer,JPEG_WRITER_BUFFER), size=WORD(writer,JPEG_WRITER_SIZE), at=WORD(writer,JPEG_WRITER_APP7);
-    u32 code, record, segment, units=XMP_NAME_UNITS, i;
+    u32 code, record, segment, units=XMP_NAME_UNITS, room, length, settings;
     u16 name[XMP_NATIVE_UNITS>XMP_NAME_UNITS ? XMP_NATIVE_UNITS : XMP_NAME_UNITS];
+    const u16 *look=name;
+    volatile u8 *out;
     if(!h || !h[GRKIT_HOST_CAPABILITIES/4] || !buffer || at<=JPEG_TIFF || at>size || (at&(XMP_ALIGN-1))) return;
-    if(!xmp_tone_code(PICTURE_JPEG_MAP(buffer+JPEG_TIFF,at-JPEG_TIFF),at-JPEG_TIFF,&code)) return;
-    if((record=record_of_code(h,code))) {
-        for(i=0;i<XMP_NAME_UNITS;++i) name[i]=HALF(record,GRKIT_RECORD_NAME+i*2);
-    } else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) {
-        units=XMP_NATIVE_UNITS;
-    } else {
-        return;
-    }
-    segment=xmp_segment_size(name,units);
+    if(!xmp_tone_code(PICTURE_JPEG_MAP(buffer+JPEG_TIFF,at-JPEG_TIFF),at-JPEG_TIFF,&code)) look=0;
+    else if((record=record_of_code(h,code))) picture_record_name(record,name);
+    else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) units=XMP_NATIVE_UNITS;
+    else look=0;
+    settings=!((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE] || PICTURE_DEVELOPING();
+    /* The packet goes in place: room for it, its end, and the largest APP7. */
+    room=size-at;
+    if(room<=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1) return;
+    room-=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1;
+    if(room>0xffffU) room=0xffffU;
+    out=PICTURE_JPEG_MAP(buffer+at,size-at);
+    length=photo_xmp_build(h,(u8 *)out+XMP_SEGMENT_HEAD,room,look,units,settings);
+    segment=xmp_segment_size(length);
     if(!segment || segment>size-at || size-at-segment<XMP_APP7_RESERVE) return;
-    xmp_write_segment(PICTURE_JPEG_MAP(buffer+at,segment),segment,name,units);
+    xmp_finish_segment(out,segment,length);
     WORD(writer,JPEG_WRITER_APP7)=at+segment;
 }

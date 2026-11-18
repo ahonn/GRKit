@@ -379,9 +379,8 @@
 #define DEVELOP_COPY_HEADER 40U
 #define DEVELOP_COPY_HEADER_WORDS 4U
 #define DEVELOP_COPY_MODULE (DEVELOP_COPY_HEADER + 4U * DEVELOP_COPY_HEADER_WORDS)
-/* The buffer of the GRKit record of a photo (runtime/photo_record.h): the
-   packet that a DNG gets, or the start of the DNG that a development
-   reads. */
+/* The buffer of the XMP packet of a photo (runtime/photo_xmp.h): the packet
+   that a DNG gets, or the start of the DNG that a development reads. */
 #define DEVELOP_COPY_RECORD (DEVELOP_COPY_MODULE + 4U * GRKIT_MODULE_SETTINGS_MAX)
 #define DEVELOP_RECORD_SIZE 4096U
 #define DEVELOP_COPY_SIZE (DEVELOP_COPY_RECORD + DEVELOP_RECORD_SIZE)

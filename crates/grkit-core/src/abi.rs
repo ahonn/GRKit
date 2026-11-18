@@ -1463,6 +1463,44 @@ pub fn header() -> String {
         )
     )
     .unwrap();
+    comment(
+        &mut out,
+        "The state file ID of each CORE setting that has a header word, or 0 \
+         (grkit_core::runtime::state_key_id).",
+    );
+    writeln!(
+        out,
+        "#define GRKIT_CORE_SETTING_IDS {}",
+        list(
+            capabilities::CAPABILITIES
+                .iter()
+                .map(|c| match c.state {
+                    capabilities::State::Word(_) =>
+                        format!("{}U", crate::runtime::state_key_id(&c.name())),
+                    capabilities::State::Effect | capabilities::State::Recipes => "0U".into(),
+                })
+                .collect()
+        )
+    )
+    .unwrap();
+    comment(
+        &mut out,
+        "The XMP packet of a photo (grkit_core::photo_xmp, runtime/photo_xmp.h): \
+         its namespace, and each setting that changes the picture: its state file \
+         ID, its core handle or 0, and its property.",
+    );
+    writeln!(
+        out,
+        "#define GRKIT_PHOTO_XMP_NAMESPACE \"{}\"",
+        crate::photo_xmp::NAMESPACE
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_PHOTO_XMP_SETTINGS {}",
+        crate::photo_xmp::c_settings()
+    )
+    .unwrap();
     out.push('\n');
 
     comment(

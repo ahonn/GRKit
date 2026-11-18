@@ -1,13 +1,10 @@
 #ifndef GRKIT_XMP_H
 #define GRKIT_XMP_H
-/* The XMP packet that names the look of a JPEG: an APP1 segment after the
-   APP1 Exif segment, with the look name as one keyword (dc:subject).
-   Lightroom and other catalogs read keywords; they do not read the maker
-   note.
-
-   The name comes from the ImageTone code (maker-note tag 0x4f) in the Exif
-   block of the same header: the name of the GRKit effect with that code, or
-   the name of a native look. The tone hook of the shot wrote the code
+/* The XMP segment of a JPEG: an APP1 segment after the APP1 Exif segment,
+   with the packet of the photo (runtime/photo_xmp.h). Its look name comes
+   from the ImageTone code (maker-note tag 0x4f) in the Exif block of the
+   same header: the name of the GRKit effect with that code, or the name of a
+   native look. The tone hook of the shot wrote the code
    (runtime/picture.S: picture_capture_tone), and a rewrite of the file in the
    camera copies it from the file. Thus the name always matches the code of
    its own file, and two shots cannot exchange names.
@@ -27,15 +24,6 @@
 #define XMP_TONE_TAG 0x4fU
 
 static const char xmp_namespace[] = "http://ns.adobe.com/xap/1.0/";
-static const char xmp_head[] =
-    "<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>"
-    "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">"
-    "<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">"
-    "<rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
-    "<dc:subject><rdf:Bag><rdf:li>";
-static const char xmp_tail[] =
-    "</rdf:li></rdf:Bag></dc:subject>"
-    "</rdf:Description></rdf:RDF></x:xmpmeta>";
 static const char xmp_end[] = "<?xpacket end=\"w\"?>";
 
 static __attribute__((unused)) u32 xmp_u16(const volatile u8 *p, u32 little) {
@@ -127,23 +115,22 @@ static __attribute__((unused)) u32 xmp_put(volatile u8 *out, u32 n, const char *
     for (i = 0; i < length; ++i) out[n + i] = (u8)text[i];
     return n + length;
 }
-/* The bytes of the APP1 segment of a name, marker included, on XMP_ALIGN;
-   0 for an empty name or a segment over the 64 KiB limit. */
-static __attribute__((unused)) u32 xmp_segment_size(const volatile u16 *name, u32 max) {
-    u32 text = xmp_put_name(0, name, max), body;
-    if (!text) return 0;
-    body = sizeof(xmp_namespace) + sizeof(xmp_head) - 1 + text + sizeof(xmp_tail) - 1 + sizeof(xmp_end) - 1;
-    body = (4 + body + XMP_ALIGN - 1) & ~(XMP_ALIGN - 1);
-    return body - 2 <= 0xffffU ? body : 0;
+/* The bytes before the packet in the APP1 segment: the marker, the length,
+   and the namespace with its NUL. */
+#define XMP_SEGMENT_HEAD (4U + sizeof(xmp_namespace))
+/* The bytes of the APP1 segment of a packet of `length` bytes without its
+   end (photo_xmp_build), marker included, on XMP_ALIGN; 0 over the 64 KiB
+   limit. */
+static __attribute__((unused)) u32 xmp_segment_size(u32 length) {
+    u32 body = (XMP_SEGMENT_HEAD + length + sizeof(xmp_end) - 1 + XMP_ALIGN - 1) & ~(XMP_ALIGN - 1);
+    return length && body - 2 <= 0xffffU ? body : 0;
 }
-/* Writes the segment of `size` bytes (xmp_segment_size) at `out`. */
-static __attribute__((unused)) void xmp_write_segment(volatile u8 *out, u32 size, const volatile u16 *name, u32 max) {
-    u32 n = 4, text;
+/* The segment of `size` bytes (xmp_segment_size) at `out`, around the packet
+   that is already at out + XMP_SEGMENT_HEAD, `length` bytes. */
+static __attribute__((unused)) void xmp_finish_segment(volatile u8 *out, u32 size, u32 length) {
+    u32 n = XMP_SEGMENT_HEAD + length;
     out[0] = 0xff; out[1] = 0xe1; out[2] = (u8)((size - 2) >> 8); out[3] = (u8)(size - 2);
-    n = xmp_put(out, n, xmp_namespace, sizeof(xmp_namespace));
-    n = xmp_put(out, n, xmp_head, sizeof(xmp_head) - 1);
-    text = xmp_put_name(out + n, name, max); n += text;
-    n = xmp_put(out, n, xmp_tail, sizeof(xmp_tail) - 1);
+    xmp_put(out, 4, xmp_namespace, sizeof(xmp_namespace));
     while (n < size - (sizeof(xmp_end) - 1)) out[n++] = ' ';
     xmp_put(out, n, xmp_end, sizeof(xmp_end) - 1);
 }
