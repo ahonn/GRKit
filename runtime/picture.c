@@ -544,11 +544,11 @@ void framing_develop_crop(void);
 #define PICTURE_PATH_MAX 64U
 #ifndef PICTURE_DEVELOP_FILE
 #ifdef FW_CONTENTS
-/* The first `size` bytes of the file that playback opened, the DNG of a
+/* `size` bytes at `offset` of the file that playback opened, the DNG of a
    development, in `buf`: the count read, or 0. */
-static u32 picture_develop_file(u8 *buf,u32 size) {
+static u32 picture_develop_file(u32 offset,u8 *buf,u32 size) {
     u8 path[PICTURE_PATH_MAX];
-    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), len=0, i;
+    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), len=0, position[2], i;
     int file;
     if(handle<0x40000000U || handle>0xbfffff00U) return 0;
     /* The path has no drive letter: the photos of a development are on the
@@ -558,25 +558,48 @@ static u32 picture_develop_file(u8 *buf,u32 size) {
     path[0]='C';
     file=((int (*)(const u8 *,u32,u32))FW_FILE_OPEN)(path,0,0);
     if(file<0) return 0;
-    ((int (*)(u32,void *,u32,u32 *))FW_FILE_READ)((u32)file,buf,size,&len);
+    /* The offset is 64 bits in r2 and r3, from the start of the file. */
+    if(!offset || !((int (*)(u32,u32,u32,u32,u32,u32 *))FW_FILE_SEEK)((u32)file,0,offset,0,0,position))
+        ((int (*)(u32,void *,u32,u32 *))FW_FILE_READ)((u32)file,buf,size,&len);
     ((int (*)(u32))FW_FILE_CLOSE)((u32)file);
     return len<=size ? len : 0;
 }
-#define PICTURE_DEVELOP_FILE(buf,size) picture_develop_file((buf),(size))
+#define PICTURE_DEVELOP_FILE(offset,buf,size) picture_develop_file((offset),(buf),(size))
 #else
-#define PICTURE_DEVELOP_FILE(buf,size) ((void)(buf),(void)(size),0U)
+#define PICTURE_DEVELOP_FILE(offset,buf,size) ((void)(offset),(void)(buf),(void)(size),0U)
 #endif
 #endif
+/* The most bytes of an XMP packet that a development searches for the
+   state. */
+#define PICTURE_XMP_SEARCH 0x10000U
+_Static_assert(PHOTO_XMP_STATE_BYTES+1U<=DEVELOP_RECORD_SIZE,"The buffer holds the state property with its value");
 /* The settings of the DNG of a development (runtime/photo_xmp.h: grkit:State
-   of the XMP packet of IFD0, at the start of the file). */
+   of the XMP packet of IFD0). The camera writes the packet at the start of
+   the file, within the buffer. Lightroom moves it to the end of the file when
+   it saves metadata there: then this reads the packet in parts, which
+   overlap by the length of the property name, and reads again from the
+   property, so that its value is in the buffer. */
 static void picture_develop_record(volatile u32 *h) {
     u8 *buf;
-    u32 len, n=0, off;
+    u32 len, n=0, off, at, where;
     if(!h[GRKIT_HOST_SERVICES/4]) return;
     buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
-    len=PICTURE_DEVELOP_FILE(buf,DEVELOP_RECORD_SIZE);
+    len=PICTURE_DEVELOP_FILE(0,buf,DEVELOP_RECORD_SIZE);
     if(!(off=photo_xmp_tiff(buf,len,&n))) return;
-    photo_xmp_apply(h,(const char *)buf+off,n);
+    if(off<=len && n<=len-off) {
+        photo_xmp_apply(h,(const char *)buf+off,n);
+        return;
+    }
+    if(n>PICTURE_XMP_SEARCH) n=PICTURE_XMP_SEARCH;
+    for(at=0;at<n;at+=DEVELOP_RECORD_SIZE-sizeof(PHOTO_XMP_STATE)) {
+        len=PICTURE_DEVELOP_FILE(off+at,buf,n-at<DEVELOP_RECORD_SIZE ? n-at : DEVELOP_RECORD_SIZE);
+        if(!len) return;
+        if(!(where=photo_xmp_where((const char *)buf,len,PHOTO_XMP_STATE))) continue;
+        at+=where-1U;
+        len=PICTURE_DEVELOP_FILE(off+at,buf,n-at<DEVELOP_RECORD_SIZE ? n-at : DEVELOP_RECORD_SIZE);
+        photo_xmp_apply(h,(const char *)buf,len);
+        return;
+    }
 }
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();

@@ -173,11 +173,14 @@
 #define FW_IFD_APPEND FIRMWARE(0x53807988)
 #define FW_IFD_ENTRY_DATA FIRMWARE(0x53808234)
 /* The contents that playback opens (runtime/picture.c:
-   picture_develop_record), and the file calls of the RTOS. */
+   picture_develop_record), and the file calls of the RTOS: open, read,
+   close, and seek (file, 0, the 64-bit offset, the origin, the place for
+   the new position). */
 #define FW_CONTENTS FIRMWARE(0x550b9ca0)
 #define FW_FILE_OPEN FIRMWARE(0x53abb704)
 #define FW_FILE_READ FIRMWARE(0x53abb820)
 #define FW_FILE_CLOSE FIRMWARE(0x53abb7b8)
+#define FW_FILE_SEEK FIRMWARE(0x53abbf1c)
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x538081c8)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x5389f158)

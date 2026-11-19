@@ -28,6 +28,11 @@ static const u32 photo_xmp_core_ids[] = {GRKIT_CORE_SETTING_IDS};
 /* English, the first menu language. */
 #define PHOTO_XMP_LANGUAGE 0U
 #define PHOTO_XMP_NO_SETTING 0xffffffffU
+/* The property of the state, and the most bytes of the property with its
+   value: each of GRKIT_MODULE_SETTINGS_MAX settings takes at most a
+   10-digit ID, `=`, a 5-digit value, and a comma. */
+#define PHOTO_XMP_STATE "grkit:State"
+#define PHOTO_XMP_STATE_BYTES (32U + 17U * (GRKIT_MODULE_SETTINGS_MAX + GRKIT_CORE_SETTING_COUNT))
 /* A menu text at an address. A host test maps it. */
 #ifndef PHOTO_XMP_TEXT
 #define PHOTO_XMP_TEXT(address) ((const volatile u16 *)(address))
@@ -136,7 +141,7 @@ static __attribute__((unused)) u32 photo_xmp_pair(u8 *out, u32 at, u32 size, u32
 static __attribute__((unused)) u32 photo_xmp_state(volatile u32 *h, u8 *out, u32 at, u32 size) {
     volatile u32 *t = settings_table(h);
     u32 first = 1, i;
-    at = photo_xmp_put(out, at, size, " grkit:State=\"");
+    at = photo_xmp_put(out, at, size, " " PHOTO_XMP_STATE "=\"");
     for (i = 0; i < GRKIT_CORE_SETTING_COUNT; ++i)
         if (photo_xmp_core_ids[i])
             at = photo_xmp_pair(out, at, size, &first, photo_xmp_core_ids[i], setting_value(h, GRKIT_CORE_SETTING_BASE + i));
@@ -220,9 +225,21 @@ static __attribute__((unused)) u32 photo_xmp_at(const char *xmp, u32 len, u32 i,
         if (xmp[i + k] != name[k]) return 0;
     return 1;
 }
+/* Where property `name` is in `xmp` of `len` bytes, after a blank (an
+   attribute) or `<` (an element): the place of the name, or 0. */
+static __attribute__((unused)) u32 photo_xmp_where(const char *xmp, u32 len, const char *name) {
+    u32 i, m = 0;
+    while (name[m]) ++m;
+    for (i = 1; i + m <= len; ++i)
+        if (photo_xmp_at(xmp, len, i, name, m) &&
+            (xmp[i - 1] == '<' || xmp[i - 1] == ' ' || xmp[i - 1] == '\t' || xmp[i - 1] == '\n' || xmp[i - 1] == '\r'))
+            return i;
+    return 0;
+}
 /* The value of property `name` in `xmp` of `len` bytes, as an attribute
    (name="..." after a blank) or as an element (<name>...</name>): its first
-   byte, or 0, with its length in *n. */
+   byte, or 0, with its length in *n. A value that does not end in `xmp` is
+   no value. */
 static __attribute__((unused)) const char *photo_xmp_find(const char *xmp, u32 len, const char *name, u32 *n) {
     u32 i, k, m = 0;
     char close;
@@ -240,6 +257,7 @@ static __attribute__((unused)) const char *photo_xmp_find(const char *xmp, u32 l
             continue;
         }
         for (i = k; i < len && xmp[i] != close; ++i) {}
+        if (i == len) return 0;
         *n = i - k;
         return xmp + k;
     }
@@ -265,7 +283,7 @@ static __attribute__((unused)) u32 photo_xmp_apply(volatile u32 *h, const char *
     volatile u32 *t = settings_table(h), *c, *word;
     const char *s;
     u32 n, at, id, value, i, k;
-    if (!h[GRKIT_HOST_SERVICES / 4] || (s = photo_xmp_find(xmp, len, "grkit:State", &n)) == 0) return 0;
+    if (!h[GRKIT_HOST_SERVICES / 4] || (s = photo_xmp_find(xmp, len, PHOTO_XMP_STATE, &n)) == 0) return 0;
     c = services_word(h, SERVICES_DEVELOP);
     for (at = 0; photo_xmp_next(s, n, &at, &id, &value);) {
         if (!id) continue;
@@ -287,10 +305,12 @@ static __attribute__((unused)) u32 photo_xmp_apply(volatile u32 *h, const char *
     return 1;
 }
 
-/* The XMP packet (tag 700) of IFD0 of the TIFF file in `buf`, of which
-   `len` bytes are read: its offset, with its length in *n, or 0. */
+/* The XMP packet (tag 700) of IFD0 of the TIFF file whose first `len` bytes
+   are in `buf`: its offset in the file, with its length in *n, or 0. The
+   packet can be anywhere in the file: Lightroom moves it to the end when it
+   saves metadata to the file. */
 static __attribute__((unused)) u32 photo_xmp_tiff(const u8 *buf, u32 len, u32 *n) {
-    u32 ifd, count, i, off;
+    u32 ifd, count, i;
     if (len < 8 || buf[0] != 'I' || buf[1] != 'I') return 0;
     ifd = buf[4] | buf[5] << 8 | buf[6] << 16 | (u32)buf[7] << 24;
     if (ifd > len - 2) return 0;
@@ -299,8 +319,7 @@ static __attribute__((unused)) u32 photo_xmp_tiff(const u8 *buf, u32 len, u32 *n
         const u8 *e = buf + ifd + 2 + i * 12;
         if ((e[0] | e[1] << 8) != 700) continue;
         *n = e[4] | e[5] << 8 | e[6] << 16 | (u32)e[7] << 24;
-        off = e[8] | e[9] << 8 | e[10] << 16 | (u32)e[11] << 24;
-        return off && off <= len && *n <= len - off ? off : 0;
+        return e[8] | e[9] << 8 | e[10] << 16 | (u32)e[11] << 24;
     }
     return 0;
 }

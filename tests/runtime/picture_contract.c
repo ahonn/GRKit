@@ -122,8 +122,16 @@ static volatile uint32_t *mapped_services(uint32_t address);
 /* The start of the DNG of a development: `develop_file_size` bytes. */
 static const uint8_t *develop_file = (const uint8_t *)"";
 static uint32_t develop_file_size;
-#define PICTURE_DEVELOP_FILE(buf,size) (memcpy((buf), develop_file, develop_file_size < (size) ? develop_file_size : (size)), \
-    develop_file_size < (size) ? develop_file_size : (size))
+static uint32_t develop_file_reads;
+static uint32_t develop_file_read(uint32_t offset, uint8_t *buf, uint32_t size)
+{
+    uint32_t n = offset < develop_file_size ? develop_file_size - offset : 0;
+    if (n > size) n = size;
+    ++develop_file_reads;
+    memcpy(buf, develop_file + offset, n);
+    return n;
+}
+#define PICTURE_DEVELOP_FILE(offset,buf,size) develop_file_read((offset), (buf), (size))
 #define PHOTO_XMP_TEXT(address) ((const volatile u16 *)region((address), 2))
 #define PICTURE_DNG_DATA(address,size) ((u8 *)region((address), (size)))
 #include "picture.c"
@@ -1911,6 +1919,34 @@ int main(void)
             develop_file_size = 8;
             picture_develop_start();
             assert(copy[at_border] == 0 && copy[at_grain] == 2);
+            /* Lightroom moves the packet to the end of the file: the state
+               is read from there, also when it is far in the packet and
+               across the parts that the development reads. */
+            {
+                static uint8_t moved[0x9000];
+                static const uint32_t places[] = {0, 3000, 4070, 4084, 4090, 4096, 8000, 12345};
+                for (u32 k = 0; k < sizeof(places) / sizeof(places[0]); ++k) {
+                    u32 n = (u32)strlen(xmp[0]), packet = 0x4000, total = places[k] + n + 600;
+                    memset(moved, ' ', sizeof(moved));
+                    memcpy(moved, ifd, sizeof(ifd));
+                    moved[14] = (uint8_t)total; moved[15] = (uint8_t)(total >> 8);
+                    moved[18] = (uint8_t)packet; moved[19] = (uint8_t)(packet >> 8);
+                    memcpy(moved + packet, "<x:xmpmeta>", 11);
+                    memcpy(moved + packet + 16 + places[k], xmp[0], n);
+                    header[border / 4] = 0;
+                    header[grain / 4] = 2;
+                    develop_file = moved;
+                    develop_file_size = packet + total;
+                    develop_file_reads = 0;
+                    picture_develop_start();
+                    assert(copy[at_border] == 1 && copy[at_grain] == 2 && develop_file_reads >= 3 && develop_file_reads <= 6);
+                }
+                /* A value that the file cuts off is no value. */
+                develop_file_size = 0x4000 + 16 + 12345 + (u32)strlen(xmp[0]) - 6;
+                moved[14] = (uint8_t)(develop_file_size - 0x4000); moved[15] = (uint8_t)((develop_file_size - 0x4000) >> 8);
+                picture_develop_start();
+                assert(copy[at_border] == 0 && copy[at_grain] == 2);
+            }
             develop_file = (const uint8_t *)"";
             develop_file_size = 0;
             header[GRKIT_HOST_SERVICES / 4] = 0;
