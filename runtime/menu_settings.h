@@ -96,7 +96,8 @@ static u32 menu_return(volatile u32 *h) {
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
    page. Its rows: Enable at Start while the switch shows, Distance Unit,
-   Uncropped RAW (runtime/manage.h: core_settings), Mode Dial (runtime/menu_dial.h), and
+   Uncropped RAW, Battery in Simple Display (runtime/manage.h:
+   core_settings), Mode Dial (runtime/menu_dial.h), and
    ADJ Order while ADJ shows a module.
    ADJ Order opens its page (MENU_ADJ_TARGET, runtime/menu_section.h), whose
    MENU returns here. The rows are the rows of the page as it opened
@@ -107,6 +108,7 @@ static u32 menu_return(volatile u32 *h) {
 #define CORE_ROW_DIAL 2U
 #define CORE_ROW_ADJ 3U
 #define CORE_ROW_RAW 4U
+#define CORE_ROW_BATTERY 5U
 #define MENU_ADJ_TARGET 0x2000fa0U
 static const Setting *dial_menu_setting(void);
 static void dial_page_opens(volatile u32 *h);
@@ -125,6 +127,7 @@ static void core_refresh(volatile u32 *h) {
     if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
     if(unit_handle(h)) kinds|=CORE_ROW_UNIT<<(4U*n++);
     if(raw_handle(h)) kinds|=CORE_ROW_RAW<<(4U*n++);
+    if(battery_handle(h)) kinds|=CORE_ROW_BATTERY<<(4U*n++);
     kinds|=CORE_ROW_DIAL<<(4U*n++);
     if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
     core_kinds(h)[0]=kinds|n<<24;
@@ -136,7 +139,8 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     if(row>=core_rows(h)) return 0;
     kind=core_kinds(h)[0]>>(4U*row)&15U;
     return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_UNIT ? core_settings+1 :
-           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
+           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_BATTERY ? core_settings+3 :
+           kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
 }
 #define CORE_ROW(n) \
     static const u16 *core_label_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
@@ -145,13 +149,14 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
         const Setting *s=core_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
     static u32 core_get_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->get(h) : 0; } \
     static void core_set_##n(volatile u32 *h,u32 value) { const Setting *s=core_row_setting(h,n); if(s) s->set(h,value); }
-CORE_ROW(0) CORE_ROW(1) CORE_ROW(2) CORE_ROW(3) CORE_ROW(4)
+CORE_ROW(0) CORE_ROW(1) CORE_ROW(2) CORE_ROW(3) CORE_ROW(4) CORE_ROW(5)
 static const Setting core_page_settings[SETTING_ROWS]={
     {core_label_0,core_values_0,core_text_0,core_get_0,core_set_0},
     {core_label_1,core_values_1,core_text_1,core_get_1,core_set_1},
     {core_label_2,core_values_2,core_text_2,core_get_2,core_set_2},
     {core_label_3,core_values_3,core_text_3,core_get_3,core_set_3},
     {core_label_4,core_values_4,core_text_4,core_get_4,core_set_4},
+    {core_label_5,core_values_5,core_text_5,core_get_5,core_set_5},
 };
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {

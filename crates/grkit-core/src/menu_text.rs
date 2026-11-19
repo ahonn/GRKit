@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 80;
+pub const STRINGS: usize = 81;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -87,6 +87,9 @@ struct Words {
     /// The Uncropped RAW row of GRKit Settings: a DNG keeps the whole picture
     /// of the sensor. Its values are On and Off.
     uncropped_raw: &'static str,
+    /// The Battery in Simple Display row of GRKit Settings. Its values are
+    /// the Off and On of the switch.
+    battery_simple: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
@@ -170,6 +173,7 @@ const ENGLISH: Words = Words {
     meters: "Meters",
     feet: "Feet",
     uncropped_raw: "Uncropped RAW",
+    battery_simple: "Battery in Simple Display",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -244,6 +248,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     meters: "米",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
+    battery_simple: "简单信息显示电量",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -315,6 +320,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     meters: "公尺",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
+    battery_simple: "簡單資訊顯示電量",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -388,6 +394,7 @@ const JAPANESE: Words = Words {
     meters: "メートル",
     feet: "フィート",
     uncropped_raw: "RAW クロップなし",
+    battery_simple: "簡易情報表示で電池表示",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -462,6 +469,7 @@ const KOREAN: Words = Words {
     meters: "미터",
     feet: "피트",
     uncropped_raw: "RAW 크롭 없음",
+    battery_simple: "간이 정보 표시에 배터리 표시",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -657,6 +665,11 @@ pub const RUNS: &[Run] = &[
         "The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and \
          TEXT_OFF.",
     ),
+    run(
+        "BATTERY",
+        1,
+        "The Battery in Simple Display row of GRKit Settings. Its values are TEXT_OFF and TEXT_ON.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -745,6 +758,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "UNIT" => words(&[w.grkit_settings, w.distance_unit, w.meters, w.feet]),
         "ORDER" => words(&[w.order]),
         "RAW" => words(&[w.uncropped_raw]),
+        "BATTERY" => words(&[w.battery_simple]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -905,6 +919,24 @@ mod tests {
         assert!(strings(Language::English, VERSION)[id("START")..]
             .iter()
             .all(|text| text.is_ascii()));
+    }
+
+    /// Battery in Simple Display is a row of GRKit Settings, which the camera
+    /// can draw in each language. The texts follow the native names of the
+    /// simple information display.
+    #[test]
+    fn battery_in_simple_display_has_its_row_in_each_language() {
+        let expected = [
+            (Language::English, "Battery in Simple Display"),
+            (Language::SimplifiedChinese, "简单信息显示电量"),
+            (Language::TraditionalChinese, "簡單資訊顯示電量"),
+            (Language::Japanese, "簡易情報表示で電池表示"),
+            (Language::Korean, "간이 정보 표시에 배터리 표시"),
+        ];
+        for (language, text) in expected {
+            assert_eq!(strings(language, VERSION)[id("BATTERY")], text);
+            assert_eq!(language.undrawable(text), None);
+        }
     }
 
     /// GRKit Settings holds Enable at Start and Distance Unit, whose

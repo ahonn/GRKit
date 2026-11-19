@@ -82,9 +82,9 @@ static u32 capabilities_running;
 static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
    choices of each module, the choices of `effects` effects, the switch,
-   Enable at Start, Distance Unit, and Uncropped RAW, then the order of the values of each
-   module. */
-#define CHOICE_ENTRIES(modules, effects) ((MANAGE_PER_MODULE + MANAGE_ORDER_WORDS) * (modules) + 4U + (effects))
+   Enable at Start, Distance Unit, Uncropped RAW, and Battery in Simple
+   Display, then the order of the values of each module. */
+#define CHOICE_ENTRIES(modules, effects) ((MANAGE_PER_MODULE + MANAGE_ORDER_WORDS) * (modules) + 5U + (effects))
 /* A set of a user mode of the mode dial (runtime/mode_dial.h) holds the
    module settings, the Enable of each module, and the switch. plan_modules
    leaves room for the choices of EFFECTS_LISTED effects, so the table holds
@@ -110,8 +110,8 @@ static u32 profile_mode;
 /* The capabilities that the loaded modules use (GRKIT_HOST_CAPABILITIES). */
 static u32 capabilities_used;
 static void read_state(void);
-/* The copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW, after
-   read_state (runtime/install_recipes.h). */
+/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, and
+   Battery in Simple Display, after read_state (runtime/install_recipes.h). */
 static void read_manage_copy(void);
 /* The words of the settings table and of the contexts (GrkitContext). */
 #define SETTINGS_WORDS(n) (2U + 3U * (n))
@@ -326,7 +326,8 @@ static int state_taken(u32 id)
         if (manage_id(i, "OFF") == id || manage_id(i, "POS") == id || manage_id(i, "ROWS") == id ||
             manage_id(i, manage_order_keys[0]) == id || manage_id(i, manage_order_keys[1]) == id) return 1;
     if (grm_state_id(MANAGE_SWITCH_KEY) == id || grm_state_id(MANAGE_START_KEY) == id ||
-        grm_state_id(MANAGE_UNIT_KEY) == id || grm_state_id(MANAGE_RAW_KEY) == id) return 1;
+        grm_state_id(MANAGE_UNIT_KEY) == id || grm_state_id(MANAGE_RAW_KEY) == id ||
+        grm_state_id(MANAGE_BATTERY_KEY) == id) return 1;
     for (u32 i = 0; i < listed_count; ++i)
         if (effect_choice_id(i) == id) return 1;
     return 0;

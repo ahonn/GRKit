@@ -145,13 +145,13 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 4, listed_choice[i]);
         store(entry + 8, EFFECT_CHOICE_VALUES);
     }
-    /* The GRKit switch, Enable at Start, Distance Unit, and Uncropped RAW
-       follow the choices of the effects. apply_state restores the saved
+    /* The GRKit switch, Enable at Start, Distance Unit, Uncropped RAW, and
+       Battery in Simple Display follow the choices of the effects. apply_state restores the saved
        values. The order
        of the values of each module follows them. */
     u32 switch_handle = setting_total + MANAGE_PER_MODULE * module_count + listed_count;
     u32 start_handle = switch_handle + 1, unit_handle = start_handle + 1, raw_handle = unit_handle + 1;
-    u32 order_handle = raw_handle + 1;
+    u32 battery_handle = raw_handle + 1, order_handle = battery_handle + 1;
     {
         u32 entry = array + 4 * SETTINGS_ENTRY(switch_handle);
         store(entry, grm_state_id(MANAGE_SWITCH_KEY));
@@ -169,6 +169,10 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry, grm_state_id(MANAGE_RAW_KEY));
         store(entry + 4, MANAGE_RAW_OFF);
         store(entry + 8, MANAGE_RAW_VALUES);
+        entry = array + 4 * SETTINGS_ENTRY(battery_handle);
+        store(entry, grm_state_id(MANAGE_BATTERY_KEY));
+        store(entry + 4, 0);
+        store(entry + 8, MANAGE_BATTERY_VALUES);
     }
     for (u32 i = 0; i < module_count; ++i)
         for (u32 k = 0; k < MANAGE_ORDER_WORDS; ++k) {
@@ -484,6 +488,7 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     store(list_at + MANAGE_START, start_handle + 1);
     store(list_at + MANAGE_UNIT, unit_handle + 1);
     store(list_at + MANAGE_RAW, raw_handle + 1);
+    store(list_at + MANAGE_BATTERY, battery_handle + 1);
     store(list_at + MANAGE_ORDERS, order_handle + 1);
     for (u32 i = 0; i < module_count; ++i) {
         u32 entry = list_at + MANAGE_HEADER + i * MANAGE_STRIDE, n = 0;

@@ -159,17 +159,18 @@ pub const DIAL_VALUE_ON: u32 = 0;
 pub const DIAL_VALUE_OFF: u32 = 1;
 pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
-/// A copy of four settings of the core that no snapshot holds, in the file
+/// A copy of five settings of the core that no snapshot holds, in the file
 /// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
 /// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
-/// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), and
-/// Uncropped RAW (`MANAGE_COPY_RAW`), each as its value + 1, or 0 without a
-/// copy.
+/// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), Uncropped RAW
+/// (`MANAGE_COPY_RAW`), and Battery in Simple Display
+/// (`MANAGE_COPY_BATTERY`), each as its value + 1, or 0 without a copy.
 pub const MANAGE_COPY_SWITCH: usize = 0;
 pub const MANAGE_COPY_START: usize = 1;
 pub const MANAGE_COPY_UNIT: usize = 2;
 pub const MANAGE_COPY_RAW: usize = 3;
-pub const MANAGE_COPY_WORDS: usize = 4;
+pub const MANAGE_COPY_BATTERY: usize = 4;
+pub const MANAGE_COPY_WORDS: usize = 5;
 
 /// The immutable main-state export in the module array. Offsets are bytes.
 /// CORE follows state_keys(), which excludes the final CORE.RECIPE handle.
@@ -541,8 +542,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// after HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). Bit 0,
     /// which no position has, is the older value for each of them off.
     HOST_DIAL_SHARED_OFF: 4;
-    /// The copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW,
-    /// `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
+    /// The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
+    /// and Battery in Simple Display, `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
     /// HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
     /// before the main state file, and writes the values of the start here.
     HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
@@ -1317,8 +1318,8 @@ pub fn header() -> String {
     }
     comment(
         &mut out,
-        "The copy of the switch, Enable at Start, Distance Unit, and Uncropped RAW \
-         (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value + 1, or \
+        "The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, \
+         and Battery in Simple Display (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value + 1, or \
          0 without a copy. In the file of the sets, word w has the key \
          GRKIT_MANAGE_COPY_KEY + w.",
     );
@@ -1327,6 +1328,7 @@ pub fn header() -> String {
         ("START", MANAGE_COPY_START as u32),
         ("UNIT", MANAGE_COPY_UNIT as u32),
         ("RAW", MANAGE_COPY_RAW as u32),
+        ("BATTERY", MANAGE_COPY_BATTERY as u32),
         ("WORDS", MANAGE_COPY_WORDS as u32),
         ("KEY", crate::runtime::MANAGE_COPY_KEY),
     ] {
