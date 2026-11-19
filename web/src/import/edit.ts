@@ -1,15 +1,16 @@
 import type { Cover, ImportedEffect } from '../catalog';
 import { lookFromColors } from '../coverPalette';
 import { loadWasm } from '../package';
+import { grayLookCover } from '../packageCovers';
 import { base64, coverFromFile, coverIcon, type CoverFields } from './names';
 
 // A LUT import keeps its ID when the user changes its name or its icon, so the camera keeps its Fn
 // adjustments and the card keeps it under the same file name. Only the effect file changes.
 
-/** Whether the page can change the name of `effect`: a LUT import, also one read back from a
- * package. A native look keeps the name of the camera. */
+/** Whether the page can change the name and the cover of `effect`: a LUT import, also one read
+ * back from a package, and a native look, whose cover follows the scheme like a site film look. */
 export const editable = (effect: ImportedEffect): boolean =>
-  effect.imported.kind === 'lut' || effect.imported.kind === 'restored';
+  effect.imported.kind === 'lut' || effect.imported.kind === 'restored' || effect.imported.kind === 'native';
 
 /** True when the edit dialog cover fields are unchanged (rename-only should keep the GRF icon). */
 export function sameCoverFields(a: CoverFields, b: CoverFields): boolean {
@@ -69,4 +70,20 @@ export async function relabelImport(
     ...(cover && icon && { cover: coverIcon(cover), icon: base64(icon) }),
     imported: { ...effect.imported, blob },
   } as ImportedEffect;
+}
+
+/**
+ * The native look `effect` with the name `name` and the individual cover `cover`, or without one
+ * (null): its import then records its film box cover and its file has the gray cover, and a write
+ * gives it the cover of the scheme (`importBytes`).
+ */
+export async function relabelNative(
+  effect: ImportedEffect,
+  base: Cover,
+  name: string,
+  cover: Cover | null,
+): Promise<ImportedEffect> {
+  const fields = coverFields(cover ?? grayLookCover(base))!;
+  const relabeled = await relabelImport(effect, name, fields);
+  return { ...relabeled, cover: cover ?? base };
 }

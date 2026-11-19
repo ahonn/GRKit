@@ -14,8 +14,8 @@ export interface Cover {
   /** A light band at the bottom of a film box (`box` only). */
   band?: boolean;
   /**
-   * RGB fills for the cover. Older catalogs omit it; with color covers on, the page then uses
-   * packaging colors from the film stock. Rust takes this object as-is — no named presets on the
+   * RGB fills for the cover. Older catalogs omit it; the page then uses packaging colors from the
+   * film stock where it draws colors. Rust takes this object as-is — no named presets on the
    * compiler side.
    */
   colors?: CoverColors;

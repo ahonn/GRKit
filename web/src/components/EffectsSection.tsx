@@ -2,6 +2,7 @@ import {
   Suspense,
   use,
   useCallback,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -18,7 +19,6 @@ import {
   previewTable,
   type CardEffect,
   type CatalogEffect,
-  type Cover,
   type Effect,
   type ImportedEffect,
 } from '../catalog';
@@ -32,9 +32,20 @@ import { importFit, resolveSelection, selectImport, type Selection } from '../se
 import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
 import { type EffectFilter } from '../effectGroups';
-import { writeColorfulCovers } from '../coverPalette';
-import { isFilmCover, shownCover, type CoverChoice, type CustomCovers } from '../packageCovers';
-import { CoverDialog, type CoverDialogHandle } from './CoverDialog';
+import { withCustomNames, withoutCustomCovers } from '../customCovers';
+import {
+  COVER_SCHEMES,
+  individualCover,
+  isFilmCover,
+  isMonoLook,
+  nativeCover,
+  schemeCover,
+  shownCover,
+  effectiveCover,
+  type CoverScheme,
+  type Customization,
+  type Customizations,
+} from '../packageCovers';
 import { CoverIcon, EffectIcon } from './EffectIcon';
 import { ErrorBoundary } from './ErrorBoundary';
 import { EditDialog, type EditDialogHandle } from './EditDialog';
@@ -45,16 +56,25 @@ const DEFAULT_PREVIEW = 'portra-400-endura-v1';
 
 /**
  * Shelf icon: the cover that the camera shows after a write (`shownCover`), drawn as an SVG. A
- * native look on the card takes its known cover. An effect without cover fields shows the icon
+ * site film look and a native look have their individual cover, else that of `scheme`; a native
+ * look that only the card has takes its known cover. An effect without cover fields shows the icon
  * pixels of its file, which a write keeps.
  */
-function shelfIcon(effect: Effect | CardEffect, covers: CoverChoice): Pick<Effect, 'icon' | 'cover'> {
+function shelfIcon(
+  effect: Effect | CardEffect,
+  customs: Customizations,
+  scheme: CoverScheme,
+): Pick<Effect, 'icon' | 'cover'> {
   const native = NATIVE_LOOKS.find((look) => look.id === effect.id);
   const site = !effect.imported && !effect.card;
   const own = effect.cover ?? native?.cover;
-  const source = effect.imported?.kind === 'lut' || effect.imported?.kind === 'restored' ? 'own' : 'switch';
-  const custom = site ? covers.custom.get(effect.id) : undefined;
-  return { icon: effect.icon, cover: shownCover(own, source, covers.colorful, custom) };
+  const source = effect.imported?.kind === 'lut' || effect.imported?.kind === 'restored' ? 'own' : 'site';
+  const custom = native
+    ? nativeCover(effect.id, effect.imported ? effect.cover : undefined, scheme)
+    : site
+      ? effectiveCover(effect, customs, scheme)
+      : undefined;
+  return { icon: effect.icon, cover: shownCover(own, source, custom) };
 }
 
 type ListedEffect = Effect | CardEffect;
@@ -62,10 +82,13 @@ type ListedEffect = Effect | CardEffect;
 type NativeLook = (typeof NATIVE_LOOKS)[number];
 
 type ListEntry =
-  | { kind: 'header'; key: string; label: string }
+  | { kind: 'header'; key: string; label: string; group?: CoverGroup }
   | { kind: 'effect'; effect: ListedEffect }
   | { kind: 'native'; look: NativeLook }
   | { kind: 'import'; key: 'import-color' | 'import-mono' };
+
+/** A group of the built-in looks whose covers reset together. */
+type CoverGroup = 'color' | 'mono';
 
 type ShelfGroup = 'color' | 'mono' | 'imported' | 'card';
 
@@ -102,6 +125,7 @@ function buildList(
   t: Strings,
   locked: readonly NativeLook[],
   canImport: boolean,
+  resettable: ReadonlySet<CoverGroup>,
 ): ListEntry[] {
   const catalog = catalogEffects.filter((effect) => matchesFilter(effect, filter));
   const imports = imported.filter((effect) => matchesFilter(effect, filter));
@@ -120,10 +144,11 @@ function buildList(
     return entries;
   }
 
-  // All: Color then B&W. Color / B&W filters: one flat shelf, no subtype headers.
+  // All: Color then B&W. Color / B&W filters: one flat shelf, with a header only to hold the reset
+  // of the covers of its group.
   // Card-only effects join the shelf so a Cinema look on the SD card is not also an unlock tile.
   // GR IV unlock tiles sit at the end of Color; Import LUT tiles close Color and B&W.
-  const showHeaders = filter === 'all';
+  const showHeader = (group: CoverGroup) => filter === 'all' || resettable.has(group);
   const pool = [...catalog, ...imports, ...cards];
   const color = pool.filter((effect) => !effect.monochrome);
   const mono = pool.filter((effect) => effect.monochrome);
@@ -132,7 +157,9 @@ function buildList(
   const importMono = canImport && filter !== 'color';
 
   if (color.length > 0 || showNative || importColor) {
-    if (showHeaders) entries.push({ kind: 'header', key: 'h-color', label: groupLabel('color', t) });
+    if (showHeader('color')) {
+      entries.push({ kind: 'header', key: 'h-color', label: groupLabel('color', t), group: 'color' });
+    }
     for (const effect of color) entries.push({ kind: 'effect', effect });
     if (showNative) {
       for (const look of locked) entries.push({ kind: 'native', look });
@@ -141,7 +168,9 @@ function buildList(
   }
 
   if (mono.length > 0 || importMono) {
-    if (showHeaders) entries.push({ kind: 'header', key: 'h-mono', label: groupLabel('mono', t) });
+    if (showHeader('mono')) {
+      entries.push({ kind: 'header', key: 'h-mono', label: groupLabel('mono', t), group: 'mono' });
+    }
     for (const effect of mono) entries.push({ kind: 'effect', effect });
     if (importMono) entries.push({ kind: 'import', key: 'import-mono' });
   }
@@ -231,16 +260,21 @@ interface Props {
   cardEffects: readonly CardEffect[];
   /** The IDs of the effects on the connected card, or null without a card. */
   onCard: ReadonlySet<string> | null;
-  /** The IDs of the imports whose file on the card differs, such as after a new name. */
+  /** The IDs of the film looks whose file on the card differs, such as after a new name. */
   changedOnCard?: ReadonlySet<string>;
-  /** Whether the shelf draws packaging colors; also drives which icons a write bakes into GRFs. */
-  colorfulCovers: boolean;
-  /** Persists the colorful-covers switch and refreshes card change detection. */
-  onColorfulCovers: (on: boolean) => void;
-  /** The covers that the user gave site film looks, which win over the colorful switch. */
-  customCovers: CustomCovers;
-  /** Keeps the custom cover of a site film look, or removes it for null. */
-  onCustomCover: (id: string, cover: Cover | null) => void;
+  /**
+   * The names and covers that the user gave site film looks. Without one, a site film look has
+   * its site name and the cover of `scheme`.
+   */
+  customizations: Customizations;
+  /** The cover scheme of site film looks without a custom cover. */
+  scheme: CoverScheme;
+  /** Keeps a new cover scheme. */
+  onScheme: (scheme: CoverScheme) => void;
+  /** Keeps the customization of a site film look; an empty one removes it. */
+  onCustomize: (id: string, custom: Customization) => void;
+  /** Keeps new customizations for several site film looks at once. */
+  onCustomizations: (customs: Customizations) => void;
   /** The camera line of the page, for a recipe from a preset import. */
   family: Family;
   /** The recipe library of that camera line. */
@@ -281,23 +315,44 @@ export function EffectsSection({
   cardEffects,
   onCard,
   changedOnCard,
-  colorfulCovers,
-  onColorfulCovers,
-  customCovers,
-  onCustomCover,
+  customizations,
+  scheme,
+  onScheme,
+  onCustomize,
+  onCustomizations,
   family,
   recipes,
   onAddRecipe,
 }: Props) {
   const catalog = use(loadCatalog(PREVIEW_TARGET));
-  const coverChoice: CoverChoice = { colorful: colorfulCovers, custom: customCovers };
-  const effects: readonly Effect[] = [...catalog.effects, ...imported];
+  // The site looks as the shelf names them: with the custom name of each that has one.
+  const siteEffects = withCustomNames(catalog.effects, customizations);
+  const effects: readonly Effect[] = [...siteEffects, ...imported];
   const checked = resolveSelection(
     selection,
     catalog.effects.map((effect) => effect.id),
     [...imported, ...cardEffects].map((effect) => effect.id),
   );
   const taken = new Set([...effects, ...cardEffects].map((effect) => effect.id));
+  // Whether the checked effects hold a built-in look with film box colors (a site film look or a
+  // native look), for the scheme switch.
+  const boxLooks = [...catalog.effects, ...NATIVE_LOOKS].some(
+    (effect) => checked.has(effect.id) && schemeCover(effect.cover, 'filmBox') !== undefined,
+  );
+  // The checked site film looks of each group with an individual cover, for its reset button.
+  const covered = (mono: boolean) =>
+    catalog.effects.filter(
+      (effect) =>
+        isMonoLook(effect) === mono &&
+        checked.has(effect.id) &&
+        individualCover(effect.cover, customizations.get(effect.id)?.cover),
+    );
+  const resets = (
+    [
+      { key: 'color', label: t.coversResetColor, looks: covered(false) },
+      { key: 'mono', label: t.coversResetMono, looks: covered(true) },
+    ] as const
+  ).filter((reset) => reset.looks.length > 0);
   // The count reads "of" the effects that a package can hold: each listed effect, up to the limit.
   // With more listed effects than the limit, it also gives how many are listed.
   const listed = effects.length + cardEffects.length;
@@ -311,15 +366,14 @@ export function EffectsSection({
   const importer = useRef<ImportDialogHandle>(null);
   const unlocker = useRef<NativeLookDialogHandle>(null);
   const editor = useRef<EditDialogHandle>(null);
-  const coverEditor = useRef<CoverDialogHandle>(null);
-  /** The site film look of `effect` when the user can change its cover. */
+  const schemeLabel = useId();
+  /** The site film look of `effect`, with its site name, when the user can edit it. */
   const siteLook = (effect: Effect | CardEffect): CatalogEffect | undefined => {
     if (effect.imported || effect.card) return undefined;
     const site = catalog.effects.find((item) => item.id === effect.id);
     return site && isFilmCover(site.cover) ? site : undefined;
   };
-  const editCover = (site: CatalogEffect) =>
-    coverEditor.current?.open(site, colorfulCovers, customCovers.get(site.id));
+  const editSite = (site: CatalogEffect) => editor.current?.openSite(site, customizations.get(site.id), scheme);
   const [loader] = useState(() => new PhotoLoader());
   const [decoding, setDecoding] = useState(false);
   const ownPhoto = useCallback(
@@ -401,13 +455,14 @@ export function EffectsSection({
   // What the frame waits for: a new photo, or the preview of the selected effect.
   const waiting = decoding ? t.decodingPhoto : isPending ? t.previewRendering(name) : null;
   const listEntries = buildList(
-    catalog.effects,
+    siteEffects,
     imported,
     cardEffects,
     filter,
     t,
     locked,
     Boolean(catalog.baseGamma),
+    new Set(resets.map((reset) => reset.key)),
   );
   const visibleEffects = listEntries.flatMap((entry) =>
     entry.kind === 'effect' ? [entry.effect] : [],
@@ -613,10 +668,10 @@ export function EffectsSection({
                   <button
                     type="button"
                     className="link-button"
-                    aria-label={t.coverEditOf(requested.name)}
-                    onClick={() => editCover(siteLook(requested)!)}
+                    aria-label={t.editOf(requested.name)}
+                    onClick={() => editSite(siteLook(requested)!)}
                   >
-                    {t.coverEdit}
+                    {t.editEffect}
                   </button>
                 </div>
               )}
@@ -626,7 +681,7 @@ export function EffectsSection({
                     <button
                       type="button"
                       className="link-button"
-                      onClick={() => editor.current?.open(requested)}
+                      onClick={() => editor.current?.open(requested, scheme)}
                     >
                       {t.editEffect}
                     </button>
@@ -733,20 +788,25 @@ export function EffectsSection({
             ))}
           </div>
           <div className="effects-bulk">
-            <label className="cover-color-switch">
-              <input
-                type="checkbox"
-                role="switch"
-                checked={colorfulCovers}
-                aria-checked={colorfulCovers}
-                onChange={(event) => {
-                  const on = event.target.checked;
-                  writeColorfulCovers(on);
-                  onColorfulCovers(on);
-                }}
-              />
-              <span>{t.colorfulCovers}</span>
-            </label>
+            {/* The scheme of the built-in covers without an individual cover. */}
+            {boxLooks && (
+              <div className="cover-scheme">
+                <span id={schemeLabel}>{t.coversFilmBox}</span>
+                <div className="effects-filters" role="group" aria-labelledby={schemeLabel}>
+                  {COVER_SCHEMES.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      className="filter-seg"
+                      aria-pressed={scheme === option}
+                      onClick={() => onScheme(option)}
+                    >
+                      {t.coverSchemes[option]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <button
               type="button"
               className="button small"
@@ -789,9 +849,19 @@ export function EffectsSection({
         <div className="effects-shelf" aria-label={t.effects}>
           {listEntries.map((entry) => {
             if (entry.kind === 'header') {
+              const reset = resets.find((item) => item.key === entry.group);
               return (
-                <div key={entry.key} className="shelf-label" role="presentation">
-                  {entry.label}
+                <div key={entry.key} className="shelf-label">
+                  <span>{entry.label}</span>
+                  {reset && (
+                    <button
+                      type="button"
+                      className="link-button cover-clear"
+                      onClick={() => onCustomizations(withoutCustomCovers(reset.looks, customizations))}
+                    >
+                      {reset.label}
+                    </button>
+                  )}
                 </div>
               );
             }
@@ -823,7 +893,7 @@ export function EffectsSection({
                   onClick={openUnlock}
                 >
                   <span className="tile-body">
-                    <CoverIcon cover={shownCover(look.cover, 'switch', colorfulCovers)!} />
+                    <CoverIcon cover={shownCover(look.cover, 'site', schemeCover(look.cover, scheme))!} />
                     <span className="tile-name">{look.name}</span>
                     <span className="tile-meta">{t.nativeNeeds}</span>
                   </span>
@@ -850,7 +920,7 @@ export function EffectsSection({
                 />
                 {effect.card ? (
                   <div className="tile-body">
-                    <EffectIcon effect={shelfIcon(effect, coverChoice)} />
+                    <EffectIcon effect={shelfIcon(effect, customizations, scheme)} />
                     <span className="tile-name">{effect.name}</span>
                     <span className="tile-meta">{t.cardOnlyEffect}</span>
                   </div>
@@ -865,9 +935,22 @@ export function EffectsSection({
                     onPointerDown={() => startPreview(effect)}
                     onClick={() => showEffect(effect)}
                   >
-                    <EffectIcon effect={shelfIcon(effect, coverChoice)} />
+                    <EffectIcon effect={shelfIcon(effect, customizations, scheme)} />
                     <span className="tile-name">{effect.name}</span>
                   </button>
+                )}
+                {/* A film look of the site edits as an import does; only an import can go. */}
+                {!effect.imported && siteLook(effect) && (
+                  <div className="tile-actions">
+                    <button
+                      type="button"
+                      className="link-button"
+                      aria-label={t.editOf(effect.name)}
+                      onClick={() => editSite(siteLook(effect)!)}
+                    >
+                      {t.editEffect}
+                    </button>
+                  </div>
                 )}
                 {effect.imported && (
                   <div className="tile-actions">
@@ -876,7 +959,7 @@ export function EffectsSection({
                         type="button"
                         className="link-button"
                         aria-label={t.editOf(effect.name)}
-                        onClick={() => editor.current?.open(effect)}
+                        onClick={() => editor.current?.open(effect, scheme)}
                       >
                         {t.editEffect}
                       </button>
@@ -907,8 +990,7 @@ export function EffectsSection({
             onAddRecipe={onAddRecipe}
           />
         )}
-        <EditDialog ref={editor} strings={t} onSave={onEdit} />
-        <CoverDialog ref={coverEditor} strings={t} onSave={onCustomCover} />
+        <EditDialog ref={editor} strings={t} onSave={onEdit} onSaveSite={onCustomize} />
         {nativeLooks && catalog.baseGamma && (
           <NativeLookDialog
             ref={unlocker}

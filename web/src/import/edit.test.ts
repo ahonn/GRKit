@@ -12,10 +12,10 @@ const effect = (kind: 'lut' | 'native' | 'restored', name = 'Warm') =>
   ({ name, imported: { kind } }) as unknown as ImportedEffect;
 
 describe('import edits', () => {
-  it('change LUT imports, also those read back from a package, and not the native looks', () => {
+  it('change LUT imports, also those read back from a package, and the native looks', () => {
     expect(editable(effect('lut'))).toBe(true);
     expect(editable(effect('restored'))).toBe(true);
-    expect(editable(effect('native'))).toBe(false);
+    expect(editable(effect('native'))).toBe(true);
   });
 
   it('edit the fields of film covers without inventing packaging looks for colorless covers', () => {
@@ -94,7 +94,6 @@ describe('import edits', () => {
       number: '400',
       band: false,
     });
-    expect(editableCoverFields(effect('native'))).toBeNull();
   });
 
 });

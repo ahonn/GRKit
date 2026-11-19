@@ -1,81 +1,151 @@
 import type { Cover, CatalogEffect, PackageEffect } from './catalog';
-import { NEUTRAL_COLORS, resolveColors, type CoverColors } from './coverPalette';
+import { colorsFromLook, NEUTRAL_COLORS, resolveColors, type CoverColors } from './coverPalette';
+import { groupOf } from './effectGroups';
 
-/** Film cover layouts that the packager can recolor. */
+/** Film cover layouts that a custom cover can replace. */
 export function isFilmCover(cover: Cover | undefined): cover is Cover {
   return !!cover && (cover.template === 'box' || cover.template === 'cine' || cover.template === 'stack');
 }
 
 /**
- * The covers that the user gave site film looks, by effect ID (`customCovers.ts`). Each one has
- * its `colors`, and it wins over the colorful switch.
+ * What the user changed of a site film look (`customCovers.ts`): its name, its cover, or both.
+ * A custom cover has its `colors`. A write bakes both into the effect file; the effect stays.
  */
-export type CustomCovers = ReadonlyMap<string, Cover>;
-
-/** How a write draws the film covers: the colorful switch and the custom covers. */
-export interface CoverChoice {
-  colorful: boolean;
-  custom: CustomCovers;
+export interface Customization {
+  name?: string;
+  cover?: Cover;
 }
 
-export const NO_CUSTOM_COVERS: CustomCovers = new Map();
+/** The customizations of site film looks, by effect ID. A look without one is as the site has it. */
+export type Customizations = ReadonlyMap<string, Customization>;
+
+export const NO_CUSTOMIZATIONS: Customizations = new Map();
 
 /**
- * Cover JSON to bake into a GRF for the colorful switch. Colorful on: stored or packaging
- * colors. Colorful off: no `colors` (classic gray), including Cinema looks whose web cover
- * stores yellow/green — the unlock GRF was gray, and a gray write keeps that.
+ * The cover that the site file of a film look has: without `colors`, the classic gray. This is
+ * also true of Cinema looks, whose page cover stores yellow or green.
  */
-export function packageCover(cover: Cover, colorful: boolean): Cover {
+export function grayCover(cover: Cover): Cover {
   if (!isFilmCover(cover)) return cover;
-  if (!colorful) {
-    const { colors: _colors, ...rest } = cover;
-    return rest;
-  }
-  return { ...cover, colors: resolveColors(cover) };
+  const { colors: _colors, ...rest } = cover;
+  return rest;
 }
 
 /**
- * The cover that a write bakes into an effect file, or null when the file keeps its own icon.
- * A custom cover always wins. Otherwise only the colorful switch recolors a film cover; with the
- * switch off the file stays as the site or the import made it.
+ * The default color scheme of the covers of built-in looks (site film looks and native looks)
+ * without an individual cover: `gray`, the cover of the site file; `colorFilmBox`, the colors of
+ * the film box for color looks and gray for B&W looks; or `filmBox`, the colors of the film box of
+ * each look.
  */
-export function bakedCover(own: Cover | undefined, colorful: boolean, custom?: Cover): Cover | null {
-  if (custom) return custom;
-  if (!isFilmCover(own) || !colorful) return null;
-  return packageCover(own, true);
+export type CoverScheme = 'gray' | 'colorFilmBox' | 'filmBox';
+
+export const COVER_SCHEMES: readonly CoverScheme[] = ['gray', 'colorFilmBox', 'filmBox'];
+
+/** Whether the look `effect` is a B&W look, as the B&W filter of the page groups it. */
+export const isMonoLook = (effect: { id: string; monochrome?: boolean }) =>
+  groupOf(effect.id, effect.monochrome ?? false) === 'mono';
+
+/** Whether the camera draws `a` and `b` the same. */
+export const sameCover = (a: Cover, b: Cover) =>
+  a.template === b.template &&
+  a.brand === b.brand &&
+  a.name === b.name &&
+  (a.number ?? '') === (b.number ?? '') &&
+  (a.template !== 'box' || (a.band ?? false) === (b.band ?? false)) &&
+  JSON.stringify(resolveColors(a)) === JSON.stringify(resolveColors(b));
+
+/** The gray cover of the built-in look with the cover `base`, with its colors. */
+export function grayLookCover(base: Cover): Cover {
+  return { ...grayCover(base), colors: NEUTRAL_COLORS };
+}
+
+/** The film box cover of the built-in look with the cover `base`, with its colors. */
+export function filmBoxCover(base: Cover): Cover {
+  return { ...grayCover(base), colors: resolveColors(base) };
+}
+
+/**
+ * The cover that `scheme` gives a built-in look (`base`, its site or native cover; `mono` for a
+ * B&W look) without an individual cover, or undefined when that is the gray cover of its file:
+ * always for `gray`, for a B&W look with `colorFilmBox`, and for a look whose film box is gray.
+ */
+export function schemeCover(base: Cover | undefined, scheme: CoverScheme, mono = false): Cover | undefined {
+  if (scheme === 'gray' || (scheme === 'colorFilmBox' && mono) || !isFilmCover(base)) return undefined;
+  const box = filmBoxCover(base);
+  return sameCover(box, grayLookCover(base)) ? undefined : box;
+}
+
+/**
+ * `cover` when it is an individual cover of the built-in look with the cover `base`: a cover
+ * other than its gray and its film box cover. Those two follow the scheme.
+ */
+export function individualCover(base: Cover | undefined, cover: Cover | undefined): Cover | undefined {
+  if (!cover || !isFilmCover(base)) return undefined;
+  return sameCover(cover, grayLookCover(base)) || sameCover(cover, filmBoxCover(base)) ? undefined : cover;
+}
+
+/**
+ * The cover that a write gives the site film look `effect`: its individual cover, else the cover
+ * of `scheme`. Undefined leaves the gray cover of the site file.
+ */
+export function effectiveCover(
+  effect: { id: string; cover?: Cover; monochrome?: boolean },
+  customs: Customizations,
+  scheme: CoverScheme,
+): Cover | undefined {
+  return (
+    individualCover(effect.cover, customs.get(effect.id)?.cover) ??
+    schemeCover(effect.cover, scheme, isMonoLook(effect))
+  );
+}
+
+/** A cover of a native look. The icon that grkit-wasm draws has the same fields. */
+const cinema = (number: string, look: 'cinemaYellow' | 'cinemaGreen'): Cover => ({
+  template: 'cine',
+  brand: 'RICOH',
+  name: 'CINEMA',
+  number,
+  colors: colorsFromLook(look),
+});
+
+/**
+ * The native looks that `nativeLooks` reads (the offered looks of grkit-core
+ * `gr4_looks::LOOKS`), in its order.
+ */
+export const NATIVE_LOOKS: readonly { id: string; name: string; cover: Cover }[] = [
+  { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', cover: cinema('YELLOW', 'cinemaYellow') },
+  { id: 'gr4-cinema-green', name: 'Cinema Green', cover: cinema('GREEN', 'cinemaGreen') },
+];
+
+/** The native look `id`, or undefined for another effect. */
+export const nativeLook = (id: string) => NATIVE_LOOKS.find((look) => look.id === id);
+
+/**
+ * The cover that a write gives a native look (`id`, a color look), whose import records
+ * `recorded`: an individual cover, else the cover of `scheme`. Undefined leaves the gray cover of its file, and
+ * is also the answer for another effect.
+ */
+export function nativeCover(id: string, recorded: Cover | undefined, scheme: CoverScheme): Cover | undefined {
+  const base = nativeLook(id)?.cover;
+  return individualCover(base, recorded) ?? schemeCover(base, scheme);
 }
 
 /**
  * Whose colors the effect file has: `own` for a LUT import, whose file has the colors of its
- * cover; `switch` for a site film look and a native look, whose file has the gray cover and
- * takes colors only from the colorful switch.
+ * cover; `site` for a site film look and a native look, whose file has the gray cover.
  */
-export type CoverSource = 'own' | 'switch';
+export type CoverSource = 'own' | 'site';
 
 /**
  * The cover that the camera shows for an effect after a write, with its colors, so the page draws
- * the same. A custom cover wins; an import cover with colors keeps them; else the colorful switch
- * gives packaging colors or gray. Undefined without film cover fields: the page then draws the
- * icon pixels of the file, which a write keeps.
+ * the same. A custom cover wins; an import cover with colors keeps them; else gray. Undefined
+ * without film cover fields: the page then draws the icon pixels of the file, which a write keeps.
  */
-export function shownCover(
-  own: Cover | undefined,
-  source: CoverSource,
-  colorful: boolean,
-  custom?: Cover,
-): Cover | undefined {
+export function shownCover(own: Cover | undefined, source: CoverSource, custom?: Cover): Cover | undefined {
   if (custom) return custom;
   if (!isFilmCover(own)) return undefined;
   if (source === 'own' && own.colors) return own;
-  return { ...own, colors: colorful ? resolveColors(own) : NEUTRAL_COLORS };
-}
-
-/**
- * True when a film cover must be relabeled for a colorful package. Cinema unlocks bake gray
- * icons while the page cover has colors — those need a rewrite when colorful is on.
- */
-export function needsCoverRelabel(cover: Cover | undefined, colorful: boolean): boolean {
-  return bakedCover(cover, colorful) !== null;
+  return { ...own, colors: NEUTRAL_COLORS };
 }
 
 /** Whether `effect` is a site catalog effect (has a published file and checksum). */

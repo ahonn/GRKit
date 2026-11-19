@@ -1,7 +1,7 @@
 import { GRADES, type Cover, type Grade, type ImportedEffect, type RestoredImport } from '../catalog';
 import { isCoverColors } from '../coverPalette';
 import { loadWasm } from '../package';
-import { INPUTS, isTone, type Input } from './names';
+import { INPUTS, isTone, validName, type Input } from './names';
 
 // The import library keeps each import of a browser in its packages (grkit-core `imports`), also
 // the imports that the package does not install. The camera does not read it. Another browser
@@ -13,12 +13,15 @@ export const IMPORTS_FILE = 'SCRIPT/GRKIT/IMPORTS.BIN';
 /** What the library keeps of an import besides its effect file, which holds its name and icon. */
 export interface LibraryDetails {
   /**
-   * `native` for a native look, `cover` for the custom cover of a site film look, absent for a LUT
-   * import. A `cover` entry holds the site effect with that cover; pages before custom covers skip
-   * it as an effect that the catalog has.
+   * `native` for a native look, `cover` for the customization of a site film look, absent for a
+   * LUT import. A `cover` entry holds the site effect with its custom name and cover, and only the
+   * fields that the user changed; pages before custom covers skip it as an effect that the
+   * catalog has.
    */
   kind?: 'native' | 'cover';
   cover?: Cover;
+  /** The custom name of a site film look (`kind: 'cover'`). */
+  name?: string;
   grade?: Grade;
   input?: Input;
   warnings?: readonly string[];
@@ -29,9 +32,10 @@ export interface LibraryDetails {
   tone?: Uint16Array;
 }
 
-/** The custom cover of a site film look, and its effect file with that cover. */
+/** The customization of a site film look, and its effect file with it. */
 export interface LibraryCover {
-  cover: Cover;
+  cover?: Cover;
+  name?: string;
   effect: Uint8Array;
 }
 
@@ -96,7 +100,7 @@ function detailsText(effect: ImportedEffect): string | null {
 /**
  * The import library of `imports` and `covers`, or null without an entry that it can keep. A
  * native look goes in with the tone curves of its preview, so another browser shows it as after
- * its unlock. Each custom cover of a site film look goes in with the effect file that has it.
+ * its unlock. Each customization of a site film look goes in with the effect file that has it.
  */
 export async function encodeLibrary(
   imports: readonly ImportedEffect[],
@@ -107,7 +111,10 @@ export async function encodeLibrary(
       const details = detailsText(effect);
       return details ? [{ details, blob: effect.imported.blob }] : [];
     }),
-    ...covers.map(({ cover, effect }) => ({ details: JSON.stringify({ kind: 'cover', cover }), blob: effect })),
+    ...covers.map(({ cover, name, effect }) => ({
+      details: JSON.stringify({ kind: 'cover', cover, name }),
+      blob: effect,
+    })),
   ];
   if (kept.length === 0) return null;
   const { ImportLibrary } = await loadWasm();
@@ -169,6 +176,7 @@ export function readDetails(text: string): LibraryDetails {
   if (isText(item.source, 255)) details.source = item.source;
   if (item.kind === 'native' || item.kind === 'cover') details.kind = item.kind;
   if (isText(item.version, 16)) details.version = item.version;
+  if (details.kind === 'cover' && typeof item.name === 'string' && validName(item.name)) details.name = item.name;
   const tone = readTone(item.tone);
   if (tone) details.tone = tone;
   return details;

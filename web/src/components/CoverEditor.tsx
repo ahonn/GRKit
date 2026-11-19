@@ -19,6 +19,36 @@ import { TaskSlot, type TaskResult } from '../import/task';
 import { CoverIcon } from './EffectIcon';
 
 /** The cover fields of an effect and why the camera cannot draw them (`coverProblem`). */
+/**
+ * A color set drawn in the blocks of the chosen layout: the body, the brand band (at the bottom
+ * for `stack`), the accent strip or stripes, and bars where the texts go. It has no text, so it
+ * stays legible at swatch size.
+ */
+function LayoutSwatch({
+  template,
+  band,
+  colors,
+}: {
+  template: CoverFields['template'];
+  band: boolean;
+  colors: ReturnType<typeof colorsFromLook>;
+}) {
+  const fill = (slot: keyof typeof colors) => rgbCss(colors[slot]);
+  const stack = template === 'stack';
+  return (
+    <svg className="import-cover-chip" viewBox="0 3 40 34" aria-hidden="true">
+      <rect x="0" y="3" width="40" height="34" fill={fill('body')} />
+      <rect x="0" y={stack ? 28 : 3} width="40" height="9" fill={fill('band')} />
+      <rect x="11" y={stack ? 31.5 : 6.5} width="18" height="2" fill={fill('brand')} />
+      <rect x="7" y={stack ? 10 : 16} width="26" height="2.5" fill={fill('text')} />
+      <rect x="13" y={stack ? 17 : 22} width="14" height="6" fill={fill('text')} />
+      {template === 'box' && band && <rect x="0" y="34" width="40" height="3" fill={fill('accent')} />}
+      {template === 'cine' &&
+        [32, 34, 36].map((y) => <rect key={y} x="0" y={y} width="40" height="1" fill={fill('accent')} />)}
+    </svg>
+  );
+}
+
 export interface CoverEditor {
   cover: CoverFields;
   /** Why the camera cannot draw the cover, or null while it can or while the check runs. */
@@ -160,11 +190,7 @@ export function CoverFieldset({ strings: t, editor, disabled }: Props) {
                       checked={cover.look === look}
                       onChange={() => edit('look', look)}
                     />
-                    <span className="import-cover-chip" aria-hidden="true">
-                      {(['band', 'brand', 'body', 'text', 'accent'] as const).map((slot) => (
-                        <span key={slot} style={{ background: rgbCss(colors[slot]) }} />
-                      ))}
-                    </span>
+                    <LayoutSwatch template={cover.template} band={cover.band} colors={colors} />
                     <span className="visually-hidden">{lookLabel(t, look)}</span>
                   </label>
                 );

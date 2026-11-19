@@ -10,8 +10,16 @@ import {
 } from './card';
 import type { CardEffect, CatalogEffect, Cover, ImportedEffect, PackageEffect } from './catalog';
 import { NATIVE_LOOKS } from './import/native';
-import { isFilmCover, packageCover, type CoverChoice } from './packageCovers';
-import { effectFile, effectLabel, expectedCoverIcon, withCoverIcon, withPackagedCover } from './package';
+import {
+  effectiveCover,
+  grayCover,
+  isFilmCover,
+  isMonoLook,
+  schemeCover,
+  type CoverScheme,
+  type Customizations,
+} from './packageCovers';
+import { coverPixels, effectFile, effectLabel, expectedCoverIcon, importBytes, withCoverIcon } from './package';
 import { readRecipeFile, sameRecipes, type Family, type Recipe } from './recipes';
 
 /** The connected card, as the page compares it with the selection. */
@@ -129,27 +137,25 @@ function coverForPackaging(
 /**
  * The film looks on the card whose file differs from what a write puts there, so a write updates
  * them:
- * - an import, when its card file differs from its effect with the cover that `covers` bakes, such
- *   as after a new name, or with the colorful switch turned on for a cover without colors;
- * - a site film look, when its icon differs from its custom cover, or from its cover under the
- *   colorful switch;
- * - a native look that only the card has, when its icon differs from its cover under the switch.
+ * - an import, when its card file differs from what a write puts there (`importBytes`), such as
+ *   after a new name, or for a native look after a change of `scheme`;
+ * - a site film look, when its name differs from its custom name, or from the site name without
+ *   one, or its icon from its cover (`effectiveCover`: individual, else of `scheme`);
+ * - a native look that only the card has, when its icon differs from the cover of `scheme`.
  */
 export async function changedOnCard(
   session: CardSession,
   catalog: readonly CatalogEffect[],
   imported: readonly ImportedEffect[],
-  covers: CoverChoice,
+  custom: Customizations,
+  scheme: CoverScheme = 'gray',
 ): Promise<Set<string>> {
   const changed = new Set<string>();
   const contents = session.contents;
   if (!contents) return changed;
   for (const effect of imported) {
     const bytes = contents.get(effect.id);
-    if (!bytes) continue;
-    const cover = coverForPackaging(effect.id, catalog, imported);
-    const next = await withPackagedCover(effect.imported.blob, effect.name, cover, covers.colorful);
-    if (!sameBytes(bytes, next.bytes)) changed.add(effect.id);
+    if (bytes && !sameBytes(bytes, await importBytes(effect, scheme))) changed.add(effect.id);
   }
   const importIds = new Set(imported.map((effect) => effect.id));
   const siteIds = new Set(catalog.map((effect) => effect.id));
@@ -160,15 +166,61 @@ export async function changedOnCard(
     if (!isFilmCover(cover) || !bytes) continue;
     const label = await effectLabel(bytes);
     if (!label) continue;
-    const custom = siteIds.has(id) ? covers.custom.get(id) : undefined;
-    const expected = await expectedCoverIcon(cover, covers.colorful, custom);
-    if (!sameBytes(label.icon, expected)) changed.add(id);
+    const site = siteIds.has(id) ? catalog.find((effect) => effect.id === id) : undefined;
+    const expected = await expectedCoverIcon(
+      cover,
+      site ? effectiveCover(site, custom, scheme) : schemeCover(cover, scheme),
+    );
+    const name = site && (custom.get(id)?.name ?? site.name);
+    if (!sameBytes(label.icon, expected) || (name !== undefined && label.name !== name)) changed.add(id);
   }
   return changed;
 }
 
+/** How many bytes of `a` and `b` differ, with the length difference counted. */
+function byteDistance(a: Uint8Array, b: Uint8Array): number {
+  let count = Math.abs(a.length - b.length);
+  for (let i = 0; i < Math.min(a.length, b.length); i++) if (a[i] !== b[i]) count++;
+  return count;
+}
+
 /**
- * Library files of native looks that only the card has, with the icon that `changedOnCard` expects.
+ * The cover scheme that the effect files of a card or a ZIP tell. Only the built-in looks of
+ * `looks` (site film looks and native looks) with film box colors and without an individual cover
+ * recorded on the card (`individual`) count, in two groups: color looks and B&W looks
+ * (`isMonoLook`). A group has film box covers when each of its looks has the icon of its film box.
+ * Both groups: `filmBox`; only the color group: `colorFilmBox`; else `gray`. A group without a look
+ * on the card takes what `browser` gives it. A write records no scheme, so the files are the only
+ * record. An icon counts as film box when it is nearer to the film box icon than to the gray one,
+ * so that a small change of the icon drawing since the write does not change the scheme.
+ */
+export async function schemeOnCard(
+  session: CardSession,
+  looks: readonly { id: string; cover?: Cover; monochrome?: boolean }[],
+  individual: ReadonlySet<string>,
+  browser: CoverScheme,
+): Promise<CoverScheme> {
+  // Per group: undefined without a counted look, else whether each has the film box icon.
+  const boxed: { color?: boolean; mono?: boolean } = {};
+  for (const look of looks) {
+    const box = schemeCover(look.cover, 'filmBox');
+    const bytes = session.contents?.get(look.id);
+    if (!box || !bytes || !session.effects.has(look.id) || individual.has(look.id)) continue;
+    const label = await effectLabel(bytes);
+    if (!label) continue;
+    const toBox = byteDistance(label.icon, await coverPixels(box));
+    const toGray = byteDistance(label.icon, await expectedCoverIcon(look.cover!));
+    const group = isMonoLook(look) ? 'mono' : 'color';
+    boxed[group] = (boxed[group] ?? true) && toBox < toGray;
+  }
+  const color = boxed.color ?? browser !== 'gray';
+  const mono = boxed.mono ?? browser === 'filmBox';
+  return color && mono ? 'filmBox' : color ? 'colorFilmBox' : 'gray';
+}
+
+/**
+ * Library files of native looks that only the card has, with the icon that `changedOnCard` expects:
+ * the cover of `scheme`.
  * The package has no file for them: the page cannot rebuild such a look without its firmware file,
  * so a write relabels the card's own file. Site film looks and imports come from the package.
  */
@@ -177,8 +229,8 @@ export async function coverLibraryAdds(
   changed: ReadonlySet<string>,
   catalog: readonly CatalogEffect[],
   imported: readonly ImportedEffect[],
-  colorful: boolean,
   already: readonly CardFile[],
+  scheme: CoverScheme = 'gray',
 ): Promise<CardFile[]> {
   const added = new Set(already.map((file) => file.path.toUpperCase()));
   const own = new Set([...catalog, ...imported].map((effect) => effect.id));
@@ -195,8 +247,7 @@ export async function coverLibraryAdds(
     if (!bytes || !isFilmCover(cover)) continue;
     const label = await effectLabel(bytes);
     if (!label) continue;
-    // With the switch off, the gray cover goes back: `withPackagedCover` would keep the file.
-    out.push({ path: fileName, bytes: await withCoverIcon(bytes, label.name, packageCover(cover, colorful)) });
+    out.push({ path: fileName, bytes: await withCoverIcon(bytes, label.name, schemeCover(cover, scheme) ?? grayCover(cover)) });
     added.add(fileName.toUpperCase());
   }
   return out;

@@ -1,5 +1,4 @@
-import type { Cover, ImportedEffect, NativeImport } from '../catalog';
-import { colorsFromLook } from '../coverPalette';
+import type { ImportedEffect, NativeImport } from '../catalog';
 import { provideTable } from '../preview/render';
 import type { NativeRequest, NativeResponse } from './native.worker';
 import { base64 } from './names';
@@ -14,23 +13,9 @@ let tableCount = 0;
 /** Ricoh's GR IV support page, which shows the firmware with its license. */
 export const FIRMWARE_PAGE = 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html';
 
-/** A cover of a native look. The icon that grkit-wasm draws has the same fields. */
-const cinema = (number: string, look: 'cinemaYellow' | 'cinemaGreen'): Cover => ({
-  template: 'cine',
-  brand: 'RICOH',
-  name: 'CINEMA',
-  number,
-  colors: colorsFromLook(look),
-});
+import { NATIVE_LOOKS } from '../packageCovers';
 
-/**
- * The native looks that `nativeLooks` reads (the offered looks of grkit-core
- * `gr4_looks::LOOKS`), in its order.
- */
-export const NATIVE_LOOKS: readonly { id: string; name: string; cover: Cover }[] = [
-  { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', cover: cinema('YELLOW', 'cinemaYellow') },
-  { id: 'gr4-cinema-green', name: 'Cinema Green', cover: cinema('GREEN', 'cinemaGreen') },
-];
+export { NATIVE_LOOKS };
 
 /**
  * The cameras whose Standard the native looks follow. GR IV has the looks built in, and on it

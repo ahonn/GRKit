@@ -39,11 +39,8 @@ export interface CoverColors {
  */
 export const COVER_INKS = {
   white: [255, 255, 255],
-  paper: [248, 244, 240],
-  cream: [255, 240, 200],
   warmWhite: [255, 236, 220],
   portraCream: [232, 212, 176],
-  portraText: [255, 242, 228],
   goldText: [255, 220, 120],
   silver: [236, 236, 236],
   gray: [214, 214, 214],
@@ -58,7 +55,6 @@ export const COVER_INKS = {
   graphite: [36, 36, 36],
   black: [20, 20, 20],
   ink: [16, 16, 16],
-  void: [12, 12, 12],
 
   kodakYellow: [242, 196, 24],
   kodakRed: [196, 24, 24],
@@ -70,21 +66,12 @@ export const COVER_INKS = {
   amber: [242, 168, 64],
 
   portraBrown: [96, 56, 40],
-  portraBody: [44, 36, 32],
   portraAccent: [212, 168, 120],
   brown: [40, 24, 16],
-  warmDark: [40, 32, 28],
-  navy: [24, 40, 72],
   purple: [96, 40, 128],
-  purpleDeep: [40, 24, 56],
-  purpleSoft: [255, 236, 255],
-  lilac: [236, 228, 255],
   violet: [120, 72, 168],
-  violetBody: [24, 16, 36],
 
   chromeBlue: [32, 140, 196],
-  sky: [200, 232, 255],
-  ocean: [20, 36, 56],
   teal: [24, 96, 120],
   blueAccent: [64, 144, 200],
 
@@ -98,21 +85,16 @@ export const COVER_INKS = {
   sage: [120, 168, 136],
   sageDark: [40, 48, 40],
   mint: [160, 200, 184],
-  mintText: [220, 255, 240],
-  leaf: [220, 255, 236],
   moss: [200, 240, 208],
   cineGreen: [56, 160, 88],
   cineGreenBody: [14, 40, 24],
   cineGreenText: [168, 232, 184],
   cineYellowBody: [40, 28, 8],
   greenDark: [28, 64, 28],
-  greenBody: [32, 40, 28],
-  eternaBody: [12, 16, 14],
   eternaAccent: [120, 140, 120],
 
   pink: [255, 120, 160],
   rose: [216, 152, 160],
-  blush: [255, 236, 228],
 } as const satisfies Record<string, CoverRgb>;
 
 export type CoverInkId = keyof typeof COVER_INKS;
@@ -129,39 +111,33 @@ export type CoverLookSlots = { readonly [K in keyof CoverColors]: CoverInkId };
 export const COVER_LOOKS = {
   // Must match `artwork.rs` `NEUTRAL_PALETTE` so omitting `colors` and writing `gray` bake the same pixels.
   gray: { band: 'gray', brand: 'classicBrand', body: 'classicBody', text: 'white', accent: 'gray' },
-  kodak: { band: 'kodakYellow', brand: 'kodakRed', body: 'graphite', text: 'white', accent: 'kodakYellow' },
-  gold: { band: 'kodakYellow', brand: 'kodakRed', body: 'navy', text: 'goldText', accent: 'kodakYellow' },
-  ultramax: { band: 'purple', brand: 'purpleSoft', body: 'purpleDeep', text: 'purpleSoft', accent: 'kodakYellow' },
-  ektar: { band: 'ektarRed', brand: 'warmWhite', body: 'black', text: 'warmWhite', accent: 'orange' },
-  ektachrome: { band: 'chromeBlue', brand: 'white', text: 'sky', body: 'ocean', accent: 'kodakYellow' },
-  kodachrome: { band: 'kodakRed', brand: 'warmWhite', body: 'black', text: 'warmWhite', accent: 'kodakYellow' },
+  kodak: { band: 'kodakYellow', brand: 'kodakRed', body: 'black', text: 'white', accent: 'kodakYellow' },
+  gold: { band: 'kodakYellow', brand: 'kodakRed', body: 'black', text: 'white', accent: 'kodakRed' },
+  ultramax: { band: 'purple', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
+  ektar: { band: 'orange', brand: 'white', body: 'black', text: 'white', accent: 'ektarRed' },
+  ektachrome: { band: 'chromeBlue', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
+  kodachrome: { band: 'kodakRed', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
   aerocolor: { band: 'charcoal', brand: 'kodakYellow', body: 'black', text: 'white', accent: 'kodakRed' },
-  portra: {
-    band: 'portraCream',
-    brand: 'portraBrown',
-    body: 'portraBody',
-    text: 'portraText',
-    accent: 'portraAccent',
-  },
-  trix: { band: 'black', brand: 'kodakYellow', body: 'ink', text: 'white', accent: 'kodakRed' },
-  tmax: { band: 'steel', brand: 'ink', body: 'charcoal', text: 'silver', accent: 'kodakYellow' },
-  doublex: { band: 'black', brand: 'kodakYellow', body: 'void', text: 'white', accent: 'mist' },
-  vision: { band: 'charcoal', brand: 'kodakYellow', body: 'ink', text: 'white', accent: 'kodakYellow' },
-  velvia: { band: 'velviaGreen', brand: 'cream', body: 'ocean', text: 'leaf', accent: 'ektarRed' },
-  provia: { band: 'teal', brand: 'white', body: 'ocean', text: 'sky', accent: 'blueAccent' },
-  astia: { band: 'sage', brand: 'sageDark', body: 'portraBody', text: 'blush', accent: 'rose' },
-  superia: { band: 'superiaGreen', brand: 'white', body: 'greenBody', text: 'cream', accent: 'kodakYellow' },
-  c200: { band: 'chartreuse', brand: 'greenDark', body: 'greenBody', text: 'cream', accent: 'fujiGreen' },
-  pro: { band: 'forest', brand: 'white', body: 'black', text: 'mintText', accent: 'mint' },
-  nps: { band: 'pine', brand: 'mintText', body: 'graphite', text: 'mintText', accent: 'mint' },
-  acros: { band: 'ink', brand: 'white', body: 'charcoal', text: 'silver', accent: 'fujiGreen' },
+  portra: { band: 'portraCream', brand: 'portraBrown', body: 'black', text: 'white', accent: 'portraAccent' },
+  trix: { band: 'kodakYellow', brand: 'black', body: 'black', text: 'white', accent: 'kodakRed' },
+  tmax: { band: 'steel', brand: 'ink', body: 'black', text: 'white', accent: 'kodakYellow' },
+  doublex: { band: 'charcoal', brand: 'kodakYellow', body: 'black', text: 'white', accent: 'mist' },
+  vision: { band: 'charcoal', brand: 'kodakYellow', body: 'black', text: 'white', accent: 'kodakYellow' },
+  velvia: { band: 'velviaGreen', brand: 'white', body: 'black', text: 'white', accent: 'ektarRed' },
+  provia: { band: 'teal', brand: 'white', body: 'black', text: 'white', accent: 'blueAccent' },
+  astia: { band: 'sage', brand: 'sageDark', body: 'black', text: 'white', accent: 'rose' },
+  superia: { band: 'superiaGreen', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
+  c200: { band: 'chartreuse', brand: 'greenDark', body: 'black', text: 'white', accent: 'fujiGreen' },
+  pro: { band: 'forest', brand: 'white', body: 'black', text: 'white', accent: 'mint' },
+  nps: { band: 'pine', brand: 'white', body: 'black', text: 'white', accent: 'mint' },
+  acros: { band: 'ash', brand: 'white', body: 'black', text: 'white', accent: 'fujiGreen' },
   instax: { band: 'fujiGreen', brand: 'white', body: 'white', text: 'graphite', accent: 'pink' },
-  eterna: { band: 'eternaGreen', brand: 'moss', body: 'eternaBody', text: 'moss', accent: 'eternaAccent' },
-  hp5: { band: 'ink', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
+  eterna: { band: 'eternaGreen', brand: 'moss', body: 'black', text: 'white', accent: 'eternaAccent' },
+  hp5: { band: 'ash', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
   delta: { band: 'silver', brand: 'ink', body: 'black', text: 'white', accent: 'kodakYellow' },
-  xp2: { band: 'violet', brand: 'white', body: 'violetBody', text: 'lilac', accent: 'kodakYellow' },
-  precisa: { band: 'agfaOrange', brand: 'white', body: 'warmDark', text: 'warmWhite', accent: 'ektarRed' },
-  vista: { band: 'vistaOrange', brand: 'brown', body: 'warmDark', text: 'portraText', accent: 'amber' },
+  xp2: { band: 'violet', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
+  precisa: { band: 'agfaOrange', brand: 'white', body: 'black', text: 'white', accent: 'ektarRed' },
+  vista: { band: 'vistaOrange', brand: 'brown', body: 'black', text: 'white', accent: 'amber' },
   cinema: { band: 'ash', brand: 'mist', body: 'ink', text: 'white', accent: 'steel' },
   cinemaYellow: {
     band: 'ricohRed',
@@ -178,31 +154,50 @@ export const COVER_LOOKS = {
     accent: 'cineGreen',
   },
   ricoh: { band: 'ricohRed', brand: 'white', body: 'ink', text: 'white', accent: 'mist' },
-  fuji: { band: 'fujiGreen', brand: 'white', body: 'graphite', text: 'white', accent: 'fujiGreen' },
+  fuji: { band: 'fujiGreen', brand: 'white', body: 'black', text: 'white', accent: 'fujiGreen' },
   ilford: { band: 'ink', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
-  agfa: { band: 'agfaOrange', brand: 'white', body: 'warmDark', text: 'warmWhite', accent: 'ektarRed' },
+  agfa: { band: 'agfaOrange', brand: 'white', body: 'black', text: 'white', accent: 'ektarRed' },
 } as const satisfies Record<string, CoverLookSlots>;
 
 export type CoverLookId = keyof typeof COVER_LOOKS;
 
 /**
- * Looks offered in the import / edit cover UI. A short brand-level set; stock packaging may
- * still use the fuller `COVER_LOOKS` table.
+ * Looks offered in the import / edit cover UI: every named look, by brand, so a person can give
+ * any cover the colors of a film box.
  */
 export const COVER_LOOK_IDS = [
   'gray',
   'kodak',
   'gold',
+  'ultramax',
   'portra',
   'ektar',
   'ektachrome',
+  'kodachrome',
+  'aerocolor',
+  'vision',
   'trix',
-  'velvia',
+  'tmax',
+  'doublex',
   'fuji',
+  'superia',
+  'c200',
+  'pro',
+  'nps',
+  'velvia',
+  'provia',
+  'astia',
   'instax',
+  'eterna',
+  'acros',
   'ilford',
+  'hp5',
+  'delta',
   'xp2',
+  'agfa',
   'precisa',
+  'vista',
+  'ricoh',
   'cinemaYellow',
   'cinemaGreen',
   'cinema',
@@ -335,11 +330,7 @@ export function packagingColors(
   return colorsFromLook(packagingLook(brand, name, template, number));
 }
 
-/**
- * Resolve RGB for drawing: stored `colors`, else packaging hues from brand + film name.
- * When the shelf color-covers switch is off, pass `colorful={false}` so covers without stored
- * `colors` stay classic gray; covers that already store `colors` keep those hues either way.
- */
+/** Resolve RGB for drawing: stored `colors`, else packaging hues from brand + film name. */
 export function resolveColors(cover: {
   brand: string;
   name: string;
@@ -348,52 +339,6 @@ export function resolveColors(cover: {
   colors?: CoverColors;
 }): CoverColors {
   return cover.colors ?? packagingColors(cover.brand, cover.name, cover.template, cover.number ?? '');
-}
-
-/** Shelf / preview fills: stored colors always win; otherwise packaging when colorful, else gray. */
-export function displayColors(
-  cover: {
-    brand: string;
-    name: string;
-    number?: string;
-    template: CoverTemplate;
-    colors?: CoverColors;
-  },
-  colorful: boolean,
-): CoverColors {
-  if (cover.colors || colorful) return resolveColors(cover);
-  return NEUTRAL_COLORS;
-}
-
-const COLORFUL_COVERS_KEY = 'grkit.colorfulCovers';
-
-/**
- * Whether the film shelf draws packaging colors. Default off so older GRFs (no stored `colors`)
- * stay gray until the user turns the switch on; preference is persisted in localStorage.
- */
-export function readColorfulCovers(): boolean {
-  try {
-    return localStorage.getItem(COLORFUL_COVERS_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-export function writeColorfulCovers(on: boolean): void {
-  try {
-    localStorage.setItem(COLORFUL_COVERS_KEY, on ? '1' : '0');
-  } catch {
-    // Preference only; without storage the page asks again next visit.
-  }
-}
-
-/**
- * Default look for a LUT import. Color covers on: a random editor look. Off: the first look
- * (`gray`), matching the neutral shelf tiles.
- */
-export function importCoverLook(colorful = readColorfulCovers()): CoverEditorLookId {
-  if (!colorful) return COVER_LOOK_IDS[0];
-  return randomCoverLook();
 }
 
 function pickRandom<T>(items: readonly T[], except?: unknown): T {

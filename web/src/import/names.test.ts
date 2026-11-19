@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readBaseGamma } from '../catalog';
-import { COVER_LOOK_IDS, colorsFromLook, importCoverLook } from '../coverPalette';
+import { colorsFromLook } from '../coverPalette';
 import { EFFECT_FILENAME_SAMPLE } from '../generated/site';
 import {
   base64,
@@ -125,15 +125,6 @@ describe('imported effect names', () => {
     expect(validCover({ ...cover, name: '' })).toBe(false);
     expect(validCoverText('')).toBe(false);
     expect(validCoverText('Thirteen char')).toBe(false);
-  });
-
-  it('picks a random editor look, or gray when color covers are off', () => {
-    expect(importCoverLook(false)).toBe('gray');
-    const picks = new Set(Array.from({ length: 40 }, () => importCoverLook(true)));
-    expect(picks.size).toBeGreaterThan(1);
-    for (const look of picks) {
-      expect(COVER_LOOK_IDS).toContain(look);
-    }
   });
 
   it('encodes icons as the catalog does', () => {

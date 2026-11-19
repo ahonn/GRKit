@@ -24,7 +24,6 @@ import {
   type CoverFields,
   type Input,
 } from '../import/names';
-import { importCoverLook } from '../coverPalette';
 import { presetRecipePlan } from '../import/presetRecipe';
 import { TaskSlot } from '../import/task';
 import { loadWasm } from '../package';
@@ -179,7 +178,7 @@ export function ImportDialog({
       return;
     }
     setName(nameFromFile(chosen.name));
-    void fillCover({ ...coverFromFile(chosen.name), look: importCoverLook() });
+    void fillCover({ ...coverFromFile(chosen.name), look: 'gray' });
     // A preset has no input encoding; skip the guess and import as Standard.
     if (isPreset(chosen.name)) {
       guess.cancel();

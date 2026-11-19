@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import type { Cover, Effect } from '../catalog';
-import { displayColors, rgbCss } from '../coverPalette';
+import { resolveColors, rgbCss } from '../coverPalette';
 
 const SIZE = 40;
 
@@ -70,13 +70,12 @@ function fitLarge(text: SVGTextElement | null) {
 
 /**
  * A film cover in the layout of the camera icon. Colors come from `cover.colors`, or packaging
- * hues from the film stock when omitted. Pass `colorful={false}` so covers without stored
- * `colors` stay classic gray (the shelf switch); stored `colors` still draw as saved.
+ * hues from the film stock when omitted.
  *
  * Templates: `box` top brand band; `cine` top band + bottom stripes; `stack` bottom brand band.
  */
-export function CoverIcon({ cover, colorful = true }: { cover: Cover; colorful?: boolean }) {
-  const colors = displayColors(cover, colorful);
+export function CoverIcon({ cover }: { cover: Cover }) {
+  const colors = resolveColors(cover);
   const stripes = cover.template === 'cine';
   const stack = cover.template === 'stack';
   const band = cover.template === 'box' && cover.band;
@@ -209,20 +208,14 @@ export function CoverIcon({ cover, colorful = true }: { cover: Cover; colorful?:
 }
 
 /**
- * The ADJ icon of an effect. A film cover draws as SVG; `colorful` only affects covers without
- * stored `colors`. Effects with no cover metadata use the baked 40×40 camera pixels.
+ * The ADJ icon of an effect. A film cover draws as SVG. Effects with no cover metadata use the
+ * baked 40×40 camera pixels.
  */
-export function EffectIcon({
-  effect,
-  colorful = true,
-}: {
-  effect: Pick<Effect, 'icon' | 'cover'>;
-  colorful?: boolean;
-}) {
+export function EffectIcon({ effect }: { effect: Pick<Effect, 'icon' | 'cover'> }) {
   const { icon, cover } = effect;
   const draw = useCallback((canvas: HTMLCanvasElement | null) => paint(canvas, icon), [icon]);
   if (cover) {
-    return <CoverIcon cover={cover} colorful={colorful} />;
+    return <CoverIcon cover={cover} />;
   }
   return <canvas ref={draw} className="effect-icon pixels" width={SIZE} height={SIZE} aria-hidden="true" />;
 }

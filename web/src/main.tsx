@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { InstallPage } from './App';
 import { canWriteCards } from './card';
 import { loadLastCard } from './cardStore';
+import { loadCatalog } from './catalog';
+import { migrateCoverScheme } from './customCovers';
+import { PREVIEW_TARGET } from './generated/site';
 import { loadImports } from './import/store';
 import { loadFonts } from './fonts';
 import { showLanguage, takeLegacyLanguage } from './i18n';
@@ -33,6 +36,14 @@ const target =
     : chosen !== language
       ? pagePath(chosen, page)
       : null;
+
+function browserStorage(): Storage | null {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
 
 /** The result of `task`, or `fallback` when the store is slow, so it does not hold the page back. */
 const soon = <T,>(task: Promise<T>, fallback: T) =>
@@ -66,10 +77,12 @@ if (target !== null) {
       </StrictMode>,
     );
   } else {
-    // The effects imported and the card connected on an earlier visit.
+    // The effects imported and the card connected on an earlier visit. A browser of the film box
+    // colors switch before the cover scheme moves its custom covers to a scheme once.
     const [imports, lastCard] = await Promise.all([
       soon(loadImports(), []),
       canWriteCards() ? soon(loadLastCard(), null) : null,
+      soon(migrateCoverScheme(browserStorage(), async () => (await loadCatalog(PREVIEW_TARGET)).effects), undefined),
     ]);
     root.render(
       <StrictMode>
