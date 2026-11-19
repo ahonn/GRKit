@@ -1,3 +1,18 @@
+## 1.6.4 (2026-11-19)
+
+### Fixes
+
+- In ADJ, OK on a GRKit value returns to the GRKit list instead of closing ADJ, and Left or Right keeps the highlighted value.
+- Battery in Simple Display shows the battery icon in the simple display, and Display Settings in GRKit Settings now holds it and Distance Unit.
+- With the fast-boot firmware, GRKit loads faster from exFAT cards that a Mac copied files to, and a camera whose fast start fails loads GRKit the normal way from the next power-on.
+- Film looks can show the colors of their film box, for color looks only or for all, and each film look can have its own name and cover.
+- GRKit uses less processor time while the camera is on and no setting changes, and Grain takes less time for each photo on GR III and GR IIIx.
+- Photos record their GRKit settings in XMP, so exiftool and other XMP readers show them.
+- RAW development keeps the Framing ratio of a photo that has a Border.
+- The RAW development preview keeps the Border color with Shading or Clarity, and puts the Shading vignette in the middle of the picture.
+- RAW development starts from the GRKit settings that the DNG records, and has a GRKit row that sets Grain, Glow, Border, and Date for that development only.
+- GRKit Settings has Uncropped RAW, which keeps the whole sensor picture in each DNG, and Lightroom and Camera Raw open it with the crop of the shot, which they can undo.
+
 ## 1.6.3 (2026-11-17)
 
 ### Fixes
