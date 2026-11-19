@@ -95,6 +95,9 @@ static uint32_t display_mode;
 static uint32_t developing, develop_settings = TEST_DEVELOP_SETTINGS;
 #define FRAMING_DEVELOPING() (developing)
 #define FRAMING_DEVELOP_SETTINGS() (develop_settings)
+/* The Framing ratio that the record of the DNG gives. */
+static uint32_t develop_recorded;
+#define FRAMING_DEVELOP_RATIO() (develop_recorded)
 static uint32_t invalidations, invalidated;
 #define FRAMING_INVALIDATE(view) (++invalidations, invalidated = (view))
 static uint32_t local_second;
@@ -1917,6 +1920,19 @@ int main(void)
             assert(framing_develop_select(TEST_OWNER,cases[i].aspect)==cases[i].value);
             assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==cases[i].file);
         }
+        /* A photo with a Border has the size of its canvas, which no
+           geometry has: the ratio that the DNG records gives the geometry.
+           A size with a geometry keeps it. */
+        HALF(TEST_METADATA,METADATA_SIZE)=(u16)(fixture_l[3][0]+256);
+        HALF(TEST_METADATA,METADATA_SIZE+4)=(u16)(fixture_l[3][1]+256);
+        assert(framing_develop_select(TEST_OWNER,1)==(DEVELOP_NATIVE_ASPECTS>>1&1 ? 0xffffffffU : 0));
+        assert(((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==1);
+        develop_recorded=7;
+        assert(framing_develop_select(TEST_OWNER,1)==0 && ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==5);
+        HALF(TEST_METADATA,METADATA_SIZE)=fixture_l[0][0];
+        HALF(TEST_METADATA,METADATA_SIZE+4)=fixture_l[0][1];
+        assert(framing_develop_select(TEST_OWNER,2)==0 && ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]==2);
+        develop_recorded=0;
         /* An aspect that the user selects takes the stock sizes, the recorded
            aspect (0) the geometry of the DNG again. */
         HALF(TEST_METADATA,METADATA_SIZE)=fixture_l[0][0];

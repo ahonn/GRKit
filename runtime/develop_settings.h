@@ -56,6 +56,7 @@ static __attribute__((unused)) void develop_copy_start(volatile u32 *h,volatile 
     u32 i;
     if(!h[GRKIT_HOST_SERVICES/4]) return;
     c=services_word(h,SERVICES_DEVELOP);
+    c[DEVELOP_COPY_ASPECT/4]=0;
     for(i=0;i<DEVELOP_COPY_HEADER_WORDS;++i) c[DEVELOP_COPY_HEADER/4+i]=h[develop_copy_words[i]/4];
     for(i=0;i<GRKIT_MODULE_SETTINGS_MAX;++i) c[DEVELOP_COPY_MODULE/4+i]=t && i<t[0] ? t[SETTINGS_ENTRY(i)+1] : 0;
     c[DEVELOP_COPY_MARK/4]=DEVELOP_COPY_VALID;

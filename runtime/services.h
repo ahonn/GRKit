@@ -362,7 +362,9 @@
    list (runtime/menu.c: DEVELOP_LIST_*), the controller that the list
    returns to, the highlighted row, whether MENU left the list, the number
    of modules of the list, the modules, a byte each, the text descriptor of
-   its title, and the row of the module whose values show; then the header
+   its title, the row of the module whose values show, and the string view
+   of its title, or 0 before the list drew one, and the Framing ratio that
+   the photo records, or 0 (runtime/photo_xmp.h: photo_xmp_apply); then the header
    words of the core settings, the value of each module setting, and the
    buffer of the record of a photo. */
 #define SERVICES_DEVELOP (SERVICES_UNDO + GRKIT_RECIPE_UNDO * UNDO_STEP_SIZE)
@@ -376,7 +378,9 @@
 #define DEVELOP_COPY_MODULES 24U
 #define DEVELOP_COPY_TITLE 28U
 #define DEVELOP_COPY_MODULE_ROW 36U
-#define DEVELOP_COPY_HEADER 40U
+#define DEVELOP_COPY_TITLE_VIEW 40U
+#define DEVELOP_COPY_ASPECT 44U
+#define DEVELOP_COPY_HEADER 48U
 #define DEVELOP_COPY_HEADER_WORDS 4U
 #define DEVELOP_COPY_MODULE (DEVELOP_COPY_HEADER + 4U * DEVELOP_COPY_HEADER_WORDS)
 /* The buffer of the XMP packet of a photo (runtime/photo_xmp.h): the packet

@@ -1947,6 +1947,29 @@ int main(void)
                 picture_develop_start();
                 assert(copy[at_border] == 0 && copy[at_grain] == 2);
             }
+            /* The Framing ratio of the photo, for the development of a
+               photo whose size has no geometry (runtime/framing.c): none
+               for a composition frame only, and none without a record. */
+            {
+                u32 ratio_id = photo_xmp_core_ids[CORE_SETTING(GRKIT_CORE_ASPECT)];
+                u32 mode_id = photo_xmp_core_ids[CORE_SETTING(GRKIT_CORE_ASPECT_MODE)];
+                volatile u32 *recorded = services_memory + SERVICES_DEVELOP / 4 + DEVELOP_COPY_ASPECT / 4;
+                for (u32 mode = 0; mode < 2; ++mode) {
+                    u32 n = (u32)snprintf(xmp[0], sizeof(xmp[0]), "<rdf:Description grkit:State=\"%u=%u,%u=7\"/>", mode_id, mode, ratio_id);
+                    memcpy(tiff, ifd, sizeof(ifd));
+                    tiff[14] = (uint8_t)n;
+                    memcpy(tiff + 26, xmp[0], n);
+                    develop_file = tiff;
+                    develop_file_size = 26 + n;
+                    assert(ratio_id && mode_id && picture_develop_ratio() == (mode ? 0U : 7U));
+                    picture_develop_start();
+                    assert(*recorded == (mode ? 0U : 7U));
+                }
+                develop_file_size = 8;
+                assert(!picture_develop_ratio());
+                picture_develop_start();
+                assert(!*recorded);
+            }
             develop_file = (const uint8_t *)"";
             develop_file_size = 0;
             header[GRKIT_HOST_SERVICES / 4] = 0;

@@ -963,9 +963,9 @@ A32_ENTRY void menu_viewfinder(u32 event) {
    the GRKit section use those of the borrowed rows (MENU_ROW_LABEL_TEXT).
    The Snap focus distances show in feet on each screen (distance_text). */
 #ifdef DEVELOP_TONE_LIST
-static u32 develop_text(volatile u32 *h,u32 id);
+static u32 develop_text(volatile u32 *h,u32 view,u32 id);
 #else
-#define develop_text(h,id) 0U
+#define develop_text(h,view,id) 0U
 #endif
 A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
     volatile u32 *h=menu_header();
@@ -973,7 +973,7 @@ A32_ENTRY u32 menu_text_override(u32 view,u32 id) {
     if(title) return title;
     title=distance_text(h,id);
     if(title) return title;
-    title=develop_text(h,id);
+    title=develop_text(h,view,id);
     if(title) return title;
     title=ui_text_override(h,view,id);
     if(title) return title;
@@ -1609,16 +1609,25 @@ static const u16 *develop_list_label(volatile u32 *h,u32 row) {
    development, after which the list may open again for its next step
    (develop_list_step). A change to another controller ends the list. */
 static u32 develop_list_step(volatile u32 *h,u32 top);
+/* The title view of the list keeps its measured width while its text ID
+   stays the same. Each step of the GRKit list, and the Image Control list
+   after it, has the same ID, so a longer title was cut to the width of the
+   title before it. Clear the text of the view that drew the title, so that
+   the title measures the text of the next step. The list keeps its views
+   while it is open, so the view is forgotten when the list ends. */
+static void develop_title_reset(volatile u32 *h) {
+    volatile u32 *view=develop_word(h,DEVELOP_COPY_TITLE_VIEW);
+    if(view[0]) CALL3(FW_STRING_VIEW_RESET)(view[0],0,0);
+    if(develop_state(h)==DEVELOP_LIST_OFF) view[0]=0;
+}
 static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id) {
     u32 state=develop_state(h), top;
     if(state==DEVELOP_LIST_OFF || !controller || !develop_list(controller)) return id;
     top=develop_word(h,DEVELOP_COPY_TOP)[0];
-    if(id!=top && id!=DEVELOP_TONE_LIST) {
-        develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_OFF;
-        return id;
-    }
-    develop_list_step(h,top);
-    return top;
+    if(id!=top && id!=DEVELOP_TONE_LIST) develop_word(h,DEVELOP_COPY_LIST)[0]=DEVELOP_LIST_OFF;
+    else { develop_list_step(h,top); id=top; }
+    develop_title_reset(h);
+    return id;
 }
 /* The step of the list after its OK or MENU: DEVELOP_TONE_LIST when the
    list opens again, with DEVELOP_STEP in DEVELOP_COPY_CANCEL, or `top`
@@ -1988,10 +1997,11 @@ A32_ENTRY void menu_develop_top_open(u32 controller) {
     develop_word(h,DEVELOP_COPY_TOP)[0]=WORD(controller,CONTROLLER_ID);
     develop_word(h,DEVELOP_COPY_CURSOR)[0]=0;
     develop_word(h,DEVELOP_COPY_CANCEL)[0]=0;
+    develop_word(h,DEVELOP_COPY_TITLE_VIEW)[0]=0;
     CALL3(FW_CHANGE_CONTROLLER)(controller,DEVELOP_TONE_LIST,WORD(controller,CONTROLLER_ID));
 }
 #endif
-static u32 develop_text(volatile u32 *h,u32 id) {
+static u32 develop_text(volatile u32 *h,u32 view,u32 id) {
 #ifdef DEVELOP_TOP_ROWS
     /* The row name of the GRKit row of the development. The value of the
        row has no text, so the name of an effect has its place. */
@@ -2004,6 +2014,7 @@ static u32 develop_text(volatile u32 *h,u32 id) {
     if(develop_state(h)!=DEVELOP_LIST_OFF) {
 #ifdef DEVELOP_TONE_TITLE
         if(id==DEVELOP_TONE_TITLE) {
+            develop_word(h,DEVELOP_COPY_TITLE_VIEW)[0]=view;
             descriptor(develop_word(h,DEVELOP_COPY_TITLE),develop_list_title(h));
             return (u32)develop_word(h,DEVELOP_COPY_TITLE);
         }

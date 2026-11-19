@@ -601,6 +601,18 @@ static void picture_develop_record(volatile u32 *h) {
         return;
     }
 }
+/* The Framing ratio that the photo of the development records, or 0
+   (runtime/framing.c: framing_develop_select). The development asks for its
+   initial aspect and its initial Image Control (picture_develop_start) in
+   an order that this code does not depend on: each reads the record. */
+u32 picture_develop_ratio(void) {
+    volatile u32 *h=framing_header(), *c;
+    if(!h[GRKIT_HOST_SERVICES/4]) return 0;
+    c=services_word(h,SERVICES_DEVELOP);
+    c[DEVELOP_COPY_ASPECT/4]=0;
+    picture_develop_record(h);
+    return c[DEVELOP_COPY_ASPECT/4];
+}
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
     u32 value=PICTURE_PLAYBACK_TONE(), record;

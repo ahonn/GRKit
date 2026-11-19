@@ -278,11 +278,15 @@ static __attribute__((unused)) u32 photo_xmp_next(const char *s, u32 n, u32 *at,
     return 1;
 }
 /* grkit:State of `xmp` into the copy of a development that starts: 1, or 0
-   without it. A value that the setting does not offer is left out. */
+   without it. A value that the setting does not offer is left out. The copy
+   also takes the Framing ratio of the photo (DEVELOP_COPY_ASPECT), which
+   the development has from the size of the photo otherwise
+   (runtime/framing.c): 0 for a composition frame only, which did not crop
+   the photo. */
 static __attribute__((unused)) u32 photo_xmp_apply(volatile u32 *h, const char *xmp, u32 len) {
     volatile u32 *t = settings_table(h), *c, *word;
     const char *s;
-    u32 n, at, id, value, i, k;
+    u32 n, at, id, value, i, k, ratio = 0, frame_only = 0;
     if (!h[GRKIT_HOST_SERVICES / 4] || (s = photo_xmp_find(xmp, len, PHOTO_XMP_STATE, &n)) == 0) return 0;
     c = services_word(h, SERVICES_DEVELOP);
     for (at = 0; photo_xmp_next(s, n, &at, &id, &value);) {
@@ -291,6 +295,8 @@ static __attribute__((unused)) u32 photo_xmp_apply(volatile u32 *h, const char *
             if (photo_xmp_core_ids[i] == id) break;
         if (i < GRKIT_CORE_SETTING_COUNT) {
             if (value >= core_setting_values[i]) continue;
+            if (core_setting_words[i] == GRKIT_HOST_FRAME_RATIO) ratio = value;
+            if (core_setting_words[i] == GRKIT_HOST_ASPECT_MODE) frame_only = value;
             word = c + DEVELOP_COPY_HEADER / 4;
             for (k = 0; k < DEVELOP_COPY_HEADER_WORDS; ++k)
                 if (develop_copy_words[k] == core_setting_words[i]) word[k] = value;
@@ -302,6 +308,7 @@ static __attribute__((unused)) u32 photo_xmp_apply(volatile u32 *h, const char *
                 break;
             }
     }
+    c[DEVELOP_COPY_ASPECT / 4] = frame_only ? 0 : ratio;
     return 1;
 }
 

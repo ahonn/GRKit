@@ -261,13 +261,30 @@ static u32 develop_size(void) {
 /* GRKIT_HOST_FRAME_FILE for a photo size: its Framing geometry, also that
    of a crop of a ratio, else 1. */
 static u32 develop_file(u32 size) { return framing_size_file(size&0xffffU,size>>16)&0xffU; }
+/* The Framing ratio that the photo of the DNG records, or 0: the record of
+   the DNG, which the start of a development reads (runtime/picture.c). */
+#ifndef FRAMING_DEVELOP_RATIO
+u32 picture_develop_ratio(void);
+#define FRAMING_DEVELOP_RATIO() picture_develop_ratio()
+#endif
+static u32 develop_recorded_ratio(volatile u32 *h) {
+    return h[GRKIT_HOST_SERVICES/4] ? services_word(h,SERVICES_DEVELOP)[DEVELOP_COPY_ASPECT/4] : 0;
+}
+/* The geometry of the photo of the DNG: that of its size, else that of the
+   Framing ratio `ratio` that it records. A photo with a Border has the size
+   of its canvas, which no geometry has, so it developed at the stock size
+   of its capture aspect, such as 4:3 for 7:6. */
+static u32 develop_photo_file(u32 ratio) {
+    u32 file=develop_file(develop_size());
+    return file==1 && ratio ? develop_file_of(ratio) : file;
+}
 /* The initial development aspect for the recorded capture aspect, or -1 for
    the native choice. A Framing size develops the recorded aspect (0) with
    the geometry of the size. A Framing 1:1 records the 4:3 id with a native
    1:1 size, so it develops the native 1:1. Another recorded aspect that the
    camera cannot develop also develops as recorded, with its stock size. */
 u32 framing_develop_select(u32 model,u32 aspect) {
-    u32 size=develop_size(), geometry=develop_file(size);
+    u32 size=develop_size(), geometry=develop_photo_file(FRAMING_DEVELOP_RATIO());
     (void)model;
     ((volatile u8 *)framing_header())[GRKIT_HOST_FRAME_FILE]=(u8)geometry;
     if(geometry>1) return 0;
@@ -282,7 +299,7 @@ void framing_develop_geometry(u32 model,u32 value) {
     volatile u32 *h=framing_header();
     u32 ratio=h[GRKIT_HOST_DEVELOP_RATIO/4];
     (void)model;
-    ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=(u8)(ratio ? develop_file_of(ratio) : value ? 1 : develop_file(develop_size()));
+    ((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE]=(u8)(ratio ? develop_file_of(ratio) : value ? 1 : develop_photo_file(develop_recorded_ratio(h)));
 }
 /* The capture aspect that the development sends for its aspect: the
    capture aspect of a Framing ratio, else the native conversion. The aspect
