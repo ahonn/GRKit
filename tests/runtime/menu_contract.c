@@ -5418,10 +5418,8 @@ static void the_section_starts_with_the_switch(void)
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
 /* Battery in Simple Display is a row of GRKit Settings after Distance Unit
-   and Uncropped RAW on a camera whose live view has its hook
-   (LIVEVIEW_BATTERY_SIMPLE): Off, as the camera, then On. A change saves,
-   also in the copy of the file of the user modes. Another camera keeps the
-   setting, but shows no row. */
+   and Uncropped RAW: Off, as the camera, then On. A change saves, also in
+   the copy of the file of the user modes. */
 static void battery_shows_in_the_simple_display(void)
 {
     volatile u32 *h = test_header;
@@ -5444,16 +5442,12 @@ static void battery_shows_in_the_simple_display(void)
     manage_memory[MANAGE_BATTERY / 4] = 15 + 1;
     menu_rows_install(h);
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
-#ifdef LIVEVIEW_BATTERY_SIMPLE
     assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Distance Unit") &&
            same(core_page_settings[2].label(h), "Battery in Simple Display") &&
            same(core_page_settings[3].label(h), "Mode Dial") && same(core_page_settings[4].label(h), "ADJ Order"));
     assert(core_row_setting(h, 2) == core_settings + 3);
     assert(core_page_settings[2].values(h) == 2 && same(core_page_settings[2].value_text(h, 0), "Off") &&
            same(core_page_settings[2].value_text(h, 1), "On"));
-#else
-    assert(settings_rows(h) == 4 && same(core_page_settings[2].label(h), "Mode Dial"));
-#endif
     assert(core_settings[3].get(h) == 0 && !battery_simple(h));
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
     core_settings[3].set(h, 1);
@@ -5470,13 +5464,9 @@ static void battery_shows_in_the_simple_display(void)
     manage_memory[MANAGE_RAW / 4] = 16 + 1;
     menu_rows_install(h);
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
-#ifdef LIVEVIEW_BATTERY_SIMPLE
     assert(settings_rows(h) == SETTING_ROWS && same(core_page_settings[2].label(h), "Uncropped RAW") &&
            same(core_page_settings[3].label(h), "Battery in Simple Display") &&
            same(core_page_settings[4].label(h), "Mode Dial") && same(core_page_settings[5].label(h), "ADJ Order"));
-#else
-    assert(settings_rows(h) == 5 && same(core_page_settings[3].label(h), "Mode Dial"));
-#endif
     h[GRKIT_HOST_SETTINGS / 4] = 0;
     manage_memory[MANAGE_RAW / 4] = 0;
     /* Without the setting in the module list, the icon stays as the camera

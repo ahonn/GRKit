@@ -305,6 +305,7 @@ const SITES: &[Site] = &[
     // Clarity (0x538ce51c).
     ("canvas_filter_0", 0x537269b0, "d99e06eb"),
     ("canvas_filter_1", 0x5372703c, "369d06eb"),
+    ("menu_battery_mode", 0x5318a2a8, "030053e3"),
     // The DNG writer: the add of the Copyright entry to IFD0.
     ("picture_dng_xmp", 0x53827c60, "981208e3"),
     // The tag setter of the DNG writer: its first instruction.

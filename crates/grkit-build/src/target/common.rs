@@ -332,6 +332,12 @@ pub const DNG_XMP: &[HookSpec] = &[
     b("picture_dng_set", Framing, Tuning),
 ];
 
+/// Battery in Simple Display (`runtime/manage.h`): the compare of the display
+/// mode in UpdateViewBattery of LiveViewController, before the jump table
+/// that shows the battery icon at each level only with the full information
+/// (`runtime/menu.S: menu_battery_mode`).
+pub const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];
+
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the
 /// model and of the choice of a row in RawDevelopmentParameterSetController;

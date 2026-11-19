@@ -96,8 +96,8 @@ static u32 menu_return(volatile u32 *h) {
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
    page. Its rows: Enable at Start while the switch shows, Distance Unit,
-   Uncropped RAW, Battery in Simple Display on a camera with
-   LIVEVIEW_BATTERY_SIMPLE (runtime/manage.h: core_settings), Mode Dial (runtime/menu_dial.h), and
+   Uncropped RAW, Battery in Simple Display (runtime/manage.h:
+   core_settings), Mode Dial (runtime/menu_dial.h), and
    ADJ Order while ADJ shows a module.
    ADJ Order opens its page (MENU_ADJ_TARGET, runtime/menu_section.h), whose
    MENU returns here. The rows are the rows of the page as it opened
@@ -127,9 +127,7 @@ static void core_refresh(volatile u32 *h) {
     if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
     if(unit_handle(h)) kinds|=CORE_ROW_UNIT<<(4U*n++);
     if(raw_handle(h)) kinds|=CORE_ROW_RAW<<(4U*n++);
-#ifdef LIVEVIEW_BATTERY_SIMPLE
     if(battery_handle(h)) kinds|=CORE_ROW_BATTERY<<(4U*n++);
-#endif
     kinds|=CORE_ROW_DIAL<<(4U*n++);
     if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
     core_kinds(h)[0]=kinds|n<<24;

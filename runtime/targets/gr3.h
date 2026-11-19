@@ -271,9 +271,6 @@
 #define DEVELOP_TOP_NAME_END sub sp, r11, #12; ldm sp, {r11, sp, pc}
 #define DEVELOP_TOP_NO_VALUE 0x28
 
-/* The live view has the hook of Battery in Simple Display (runtime/manage.h,
-   runtime/menu.S: menu_battery_mode), so GRKit Settings shows its row. */
-#define LIVEVIEW_BATTERY_SIMPLE 1
 /* LiveViewController: nonzero in movie mode, and the LCD canvas. */
 #define LIVEVIEW_MOVIE 0x2d2
 #define LIVEVIEW_CANVAS 0x15c

@@ -49,11 +49,9 @@
    (runtime/picture.c: picture_dng_crop). Its setting, CORE.RAW, follows
    Distance Unit in the table. The picture code reads it from the copy.
 
-   Battery in Simple Display, on the cameras whose live view the core hooks
-   for it (LIVEVIEW_BATTERY_SIMPLE of the family header), shows the battery
-   icon of the full information also in the simple information, where the
-   camera shows it only for a low battery (runtime/menu.S:
-   menu_battery_mode). Its
+   Battery in Simple Display shows the battery icon of the full information
+   also in the simple information of the live view, where the camera shows
+   it only for a low battery (runtime/menu.S: menu_battery_mode). Its
    setting, CORE.BATTERY, follows Uncropped RAW in the table. A change
    applies at the next update of the live view, which the return from MENU
    makes.

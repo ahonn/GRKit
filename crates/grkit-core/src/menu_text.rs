@@ -248,7 +248,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     meters: "米",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
-    battery_simple: "简易显示时显示电量",
+    battery_simple: "简单信息显示电量",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -320,7 +320,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     meters: "公尺",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
-    battery_simple: "簡易顯示時顯示電量",
+    battery_simple: "簡單資訊顯示電量",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -394,7 +394,7 @@ const JAPANESE: Words = Words {
     meters: "メートル",
     feet: "フィート",
     uncropped_raw: "RAW クロップなし",
-    battery_simple: "簡易表示でバッテリー表示",
+    battery_simple: "簡易情報表示で電池表示",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -469,7 +469,7 @@ const KOREAN: Words = Words {
     meters: "미터",
     feet: "피트",
     uncropped_raw: "RAW 크롭 없음",
-    battery_simple: "간단 표시에 배터리 표시",
+    battery_simple: "간이 정보 표시에 배터리 표시",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -922,15 +922,16 @@ mod tests {
     }
 
     /// Battery in Simple Display is a row of GRKit Settings, which the camera
-    /// can draw in each language.
+    /// can draw in each language. The texts follow the native names of the
+    /// simple information display.
     #[test]
     fn battery_in_simple_display_has_its_row_in_each_language() {
         let expected = [
             (Language::English, "Battery in Simple Display"),
-            (Language::SimplifiedChinese, "简易显示时显示电量"),
-            (Language::TraditionalChinese, "簡易顯示時顯示電量"),
-            (Language::Japanese, "簡易表示でバッテリー表示"),
-            (Language::Korean, "간단 표시에 배터리 표시"),
+            (Language::SimplifiedChinese, "简单信息显示电量"),
+            (Language::TraditionalChinese, "簡單資訊顯示電量"),
+            (Language::Japanese, "簡易情報表示で電池表示"),
+            (Language::Korean, "간이 정보 표시에 배터리 표시"),
         ];
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("BATTERY")], text);
