@@ -64,7 +64,8 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
 #define SETTINGS_FN 0x20000U
 /* A child opened from a module in MENU returns to that module page. */
 #define SETTINGS_PARENT 0x40000U
-/* ADJ Order, which GRKit Settings opens, returns to GRKit Settings. */
+/* A page that GRKit Settings opens, Display Settings or ADJ Order, returns
+   to GRKit Settings. */
 #define SETTINGS_IN_CORE 0x80000U
 #define SETTINGS_PARENTS (SETTINGS_PARENT|SETTINGS_IN_CORE)
 #define MENU_GROUP_TARGET 0x2000f60U
@@ -95,21 +96,29 @@ static u32 menu_return(volatile u32 *h) {
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
-   page. Its rows: Enable at Start while the switch shows, Distance Unit,
-   Uncropped RAW, Battery in Simple Display (runtime/manage.h:
-   core_settings), Mode Dial (runtime/menu_dial.h), and
-   ADJ Order while ADJ shows a module.
-   ADJ Order opens its page (MENU_ADJ_TARGET, runtime/menu_section.h), whose
-   MENU returns here. The rows are the rows of the page as it opened
-   (MENU_ROWS_CORE_KINDS), as a text hook must not read the module pages. */
+   page. Its rows: Enable at Start while the switch shows, Display Settings,
+   Uncropped RAW (runtime/manage.h: core_settings), Mode Dial
+   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module.
+   Display Settings and ADJ Order open their pages (MENU_DISPLAY_TARGET,
+   MENU_ADJ_TARGET, runtime/menu_section.h), whose MENU returns here. The
+   rows are the rows of the page as it opened (MENU_ROWS_CORE_KINDS), as a
+   text hook must not read the module pages.
+   A group of settings of the core gets a page, such as Display Settings,
+   once it has two settings or more. Each page keeps to SETTINGS_BORROWED
+   rows, so that each row has its own value page and the five row views of
+   a submenu that the firmware built before INSTALL show each row. */
 #define CORE_PAGE (LISTED_PAGE+1U)
+/* The page of Display Settings: the settings of the core that change what
+   the camera shows, Distance Unit and Battery in Simple Display
+   (runtime/manage.h: core_settings), each while the module list has it. */
+#define DISPLAY_PAGE (CORE_PAGE+1U)
 #define CORE_ROW_START 0U
-#define CORE_ROW_UNIT 1U
+#define CORE_ROW_DISPLAY 1U
 #define CORE_ROW_DIAL 2U
 #define CORE_ROW_ADJ 3U
 #define CORE_ROW_RAW 4U
-#define CORE_ROW_BATTERY 5U
 #define MENU_ADJ_TARGET 0x2000fa0U
+#define MENU_DISPLAY_TARGET 0x2000fc0U
 static const Setting *dial_menu_setting(void);
 static void dial_page_opens(volatile u32 *h);
 static const u16 *adj_order_label(volatile u32 *h) { return text(h,TEXT_ADJ); }
@@ -120,14 +129,32 @@ static u32 adj_order_select(volatile u32 *h,u32 controller,u32 value) {
 }
 static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text,no_value,no_set,adj_order_select,
     SETTING_ACTION};
+/* The rows of Display Settings, in order: Distance Unit, then Battery in
+   Simple Display, each while the module list has it. */
+static u32 display_rows(volatile u32 *h) { return (unit_handle(h)!=0)+(battery_handle(h)!=0); }
+_Static_assert(2U<=SETTINGS_BORROWED,"Each row of Display Settings has its value page");
+/* The setting of row `row` of Display Settings, or 0. */
+static const Setting *display_row_setting(volatile u32 *h,u32 row) {
+    if(unit_handle(h)) {
+        if(!row) return core_settings+1;
+        --row;
+    }
+    return battery_handle(h) && !row ? core_settings+3 : 0;
+}
+static const u16 *display_label(volatile u32 *h) { return text(h,TEXT_DISPLAY); }
+static u32 display_select(volatile u32 *h,u32 controller,u32 value) {
+    (void)h; (void)controller; (void)value;
+    return MENU_DISPLAY_TARGET;
+}
+static const Setting display_setting={display_label,one_value,adj_order_text,no_value,no_set,display_select,
+    SETTING_ACTION};
 static volatile u32 *core_kinds(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_CORE_KINDS); }
 static void core_refresh(volatile u32 *h) {
     u32 kinds=0, n=0;
     manage_adj_refresh(h);
     if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
-    if(unit_handle(h)) kinds|=CORE_ROW_UNIT<<(4U*n++);
+    if(display_rows(h)) kinds|=CORE_ROW_DISPLAY<<(4U*n++);
     if(raw_handle(h)) kinds|=CORE_ROW_RAW<<(4U*n++);
-    if(battery_handle(h)) kinds|=CORE_ROW_BATTERY<<(4U*n++);
     kinds|=CORE_ROW_DIAL<<(4U*n++);
     if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
     core_kinds(h)[0]=kinds|n<<24;
@@ -138,9 +165,8 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     u32 kind;
     if(row>=core_rows(h)) return 0;
     kind=core_kinds(h)[0]>>(4U*row)&15U;
-    return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_UNIT ? core_settings+1 :
-           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_BATTERY ? core_settings+3 :
-           kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
+    return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_DISPLAY ? &display_setting :
+           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
 }
 #define CORE_ROW(n) \
     static const u16 *core_label_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
@@ -158,11 +184,25 @@ static const Setting core_page_settings[SETTING_ROWS]={
     {core_label_4,core_values_4,core_text_4,core_get_4,core_set_4},
     {core_label_5,core_values_5,core_text_5,core_get_5,core_set_5},
 };
+#define DISPLAY_ROW(n) \
+    static const u16 *display_label_##n(volatile u32 *h) { \
+        const Setting *s=display_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
+    static u32 display_values_##n(volatile u32 *h) { const Setting *s=display_row_setting(h,n); return s ? s->values(h) : 0; } \
+    static const u16 *display_text_##n(volatile u32 *h,u32 value) { \
+        const Setting *s=display_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
+    static u32 display_get_##n(volatile u32 *h) { const Setting *s=display_row_setting(h,n); return s ? s->get(h) : 0; } \
+    static void display_set_##n(volatile u32 *h,u32 value) { const Setting *s=display_row_setting(h,n); if(s) s->set(h,value); }
+DISPLAY_ROW(0) DISPLAY_ROW(1)
+static const Setting display_page_settings[]={
+    {display_label_0,display_values_0,display_text_0,display_get_0,display_set_0},
+    {display_label_1,display_values_1,display_text_1,display_get_1,display_set_1},
+};
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {
     if(module==LISTED_PAGE) return listed_settings;
     if(module==SWITCH_MODULE) return switch_settings;
     if(module==CORE_PAGE) return core_page_settings;
+    if(module==DISPLAY_PAGE) return display_page_settings;
     if(module>=MODULE_TOTAL) return 0;
     if(one) { menu_page(h,module); return choice_one; }
     return menu_page(h,module)->settings;
@@ -206,6 +246,7 @@ static const Setting *settings_row_setting(volatile u32 *h,const Setting *page,u
     if(!page) return 0;
     if(page==listed_settings) return listed_setting(h,setting);
     if(page==core_page_settings) return core_row_setting(h,setting);
+    if(page==display_page_settings) return display_row_setting(h,setting);
     return page+setting;
 }
 static u32 settings_flags(volatile u32 *h,const Setting *page,u32 setting) {
@@ -898,6 +939,7 @@ static u32 settings_count(volatile u32 *h,const Setting *page) {
     else if(page==manage_settings) n=manage_adj_count(h);
     else if(page==listed_settings) n=listed_rows(h);
     else if(page==core_page_settings) n=core_rows(h);
+    else if(page==display_page_settings) n=display_rows(h);
     else while(n<SETTING_ROWS && page[n].label) ++n;
     return n<SUBMENU_ROWS ? n : SUBMENU_ROWS;
 }
@@ -945,7 +987,7 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
                    manage_name(h,listed(h)));
     else
     descriptor(block+SETTINGS_LABELS/4,module==MANAGE_MODULE ? manage_title(h) :
-               module==CORE_PAGE ? core_settings_title(h) :
+               module==CORE_PAGE ? core_settings_title(h) : module==DISPLAY_PAGE ? display_label(h) :
                module==SWITCH_MODULE ? grkit_title : menu_page(h,module)->title(h));
     for(i=0;i<SETTINGS_VIEW_SLOTS*3;++i) block[SETTINGS_VIEWS/4+i]=0;
     h[GRKIT_HOST_SETTINGS/4]=(module+1)|(one ? SETTINGS_ONE : 0);

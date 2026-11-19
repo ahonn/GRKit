@@ -1055,9 +1055,11 @@
 /* The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and
    TEXT_OFF. */
 #define TEXT_RAW 79
-/* The Battery in Simple Display row of GRKit Settings. Its values are TEXT_OFF
-   and TEXT_ON. */
+/* The Battery in Simple Display row of Display Settings. Its values are
+   TEXT_OFF and TEXT_ON. */
 #define TEXT_BATTERY 80
-#define GRKIT_TEXT_STRINGS 81
+/* The Display Settings row of GRKit Settings and the title of its page. */
+#define TEXT_DISPLAY 81
+#define GRKIT_TEXT_STRINGS 82
 
 #endif

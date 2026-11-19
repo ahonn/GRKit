@@ -5325,8 +5325,9 @@ static void a_color_only_module_gets_no_row(void)
 }
 /* While a module loaded, the section starts with the GRKit switch, then
    GRKit Settings. OK on the switch opens its value page, and OK on GRKit
-   Settings its page: Enable at Start, Distance Unit, Mode Dial, then ADJ
-   Order. A tab
+   Settings its page: Enable at Start, Display Settings, Mode Dial, then ADJ
+   Order. Display Settings opens its page with Distance Unit, and MENU there
+   returns to GRKit Settings. A tab
    without room for each row keeps the switch, GRKit Settings, and About
    GRKit. */
 static void the_section_starts_with_the_switch(void)
@@ -5366,10 +5367,27 @@ static void the_section_starts_with_the_switch(void)
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU);
     assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_page_settings);
     assert(settings_rows(h) == 4 && same(core_page_settings[0].label(h), "Enable at Start") &&
-           same(core_page_settings[1].label(h), "Distance Unit") && same(core_page_settings[2].label(h), "Mode Dial") &&
+           same(core_page_settings[1].label(h), "Display Settings") && same(core_page_settings[2].label(h), "Mode Dial") &&
            same(core_page_settings[3].label(h), "ADJ Order"));
-    assert(core_row_setting(h, 0) == core_settings && core_row_setting(h, 2) == dial_menu_setting() &&
-           core_row_setting(h, 3) == &adj_order_setting);
+    assert(core_row_setting(h, 0) == core_settings && core_row_setting(h, 1) == &display_setting &&
+           core_row_setting(h, 2) == dial_menu_setting() && core_row_setting(h, 3) == &adj_order_setting);
+    /* Display Settings is a row of an action, which opens its page, titled
+       Display Settings, with Distance Unit. MENU there returns to GRKit
+       Settings with the cursor on Display Settings, row 1. */
+    assert(settings_flags(h, core_page_settings, 1) == SETTING_ACTION);
+    assert(core_row_setting(h, 1)->select(h, 0, 0) == MENU_DISPLAY_TARGET);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    assert(menu_rows_controller(h, MENU_DISPLAY_TARGET) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == (DISPLAY_PAGE + 1 | SETTINGS_IN_CORE) &&
+           settings_page(h) == display_page_settings);
+    assert(same(display_label(h), "Display Settings"));
+    assert(settings_rows(h) == 1 && same(display_page_settings[0].label(h), "Distance Unit") &&
+           display_row_setting(h, 0) == core_settings + 1 && settings_flags(h, display_page_settings, 0) == 0);
+    assert(menu_rows_controller(h, SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1);
+    assert(services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] == 2);
+    services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] = 0;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     /* Enable at Start: On, Off, then Keep Last. A choice is a saved change
        for the next start, and the switch keeps its value in this session. */
     assert(core_settings[0].values(h) == 3 && same(core_settings[0].value_text(h, MANAGE_START_ON), "On") &&
@@ -5401,14 +5419,14 @@ static void the_section_starts_with_the_switch(void)
     assert(menu[MENU_ROWS_COUNT / 4] == 5 && BYTE(tab_copy(), MENU_TAB_ROWS) == MENU_TAB_MAX_ROWS);
     assert(menu_row(h, 3)[MENU_ROW_MODULE / 4] == 1);
     for (u32 slot = 0; slot < 5; ++slot) assert(menu_row(h, slot)[MENU_ROW_KIND / 4] == short_kinds[slot]);
-    /* Without the switch, as in safe mode, GRKit Settings has Distance Unit,
-       Mode Dial, and ADJ Order. */
+    /* Without the switch, as in safe mode, GRKit Settings has Display
+       Settings, Mode Dial, and ADJ Order. */
     install_stock_tab(10, 3);
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 5 && menu_row(h, 0)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
     assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings &&
-           settings_rows(h) == 3 && same(core_page_settings[0].label(h), "Distance Unit"));
+           settings_rows(h) == 3 && same(core_page_settings[0].label(h), "Display Settings"));
     h[GRKIT_HOST_SETTINGS / 4] = 0;
     /* Without Enable at Start and Distance Unit in the module list, GRKit
        Settings has Mode Dial and ADJ Order. */
@@ -5417,9 +5435,10 @@ static void the_section_starts_with_the_switch(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
-/* Battery in Simple Display is a row of GRKit Settings after Distance Unit
-   and Uncropped RAW: Off, as the camera, then On. A change saves, also in
-   the copy of the file of the user modes. */
+/* Battery in Simple Display is a row of Display Settings after Distance
+   Unit: Off, as the camera, then On. A change saves, also in the copy of the
+   file of the user modes. GRKit Settings has Display Settings after Enable
+   at Start, then Uncropped RAW. */
 static void battery_shows_in_the_simple_display(void)
 {
     volatile u32 *h = test_header;
@@ -5440,39 +5459,44 @@ static void battery_shows_in_the_simple_display(void)
     manage_memory[MANAGE_START / 4] = 13 + 1;
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     manage_memory[MANAGE_BATTERY / 4] = 15 + 1;
-    menu_rows_install(h);
-    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
-    assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Distance Unit") &&
-           same(core_page_settings[2].label(h), "Battery in Simple Display") &&
-           same(core_page_settings[3].label(h), "Mode Dial") && same(core_page_settings[4].label(h), "ADJ Order"));
-    assert(core_row_setting(h, 2) == core_settings + 3);
-    assert(core_page_settings[2].values(h) == 2 && same(core_page_settings[2].value_text(h, 0), "Off") &&
-           same(core_page_settings[2].value_text(h, 1), "On"));
-    assert(core_settings[3].get(h) == 0 && !battery_simple(h));
-    n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    core_settings[3].set(h, 1);
-    assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
-    assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
-    /* A value out of range changes nothing. */
-    core_settings[3].set(h, 2);
-    assert(battery_simple(h));
-    core_settings[3].set(h, 0);
-    assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
-    h[GRKIT_HOST_SETTINGS / 4] = 0;
-    /* With Uncropped RAW, the page has all six rows, and Battery in Simple
-       Display follows Uncropped RAW. */
     manage_memory[MANAGE_RAW / 4] = 16 + 1;
     menu_rows_install(h);
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
-    assert(settings_rows(h) == SETTING_ROWS && same(core_page_settings[2].label(h), "Uncropped RAW") &&
-           same(core_page_settings[3].label(h), "Battery in Simple Display") &&
-           same(core_page_settings[4].label(h), "Mode Dial") && same(core_page_settings[5].label(h), "ADJ Order"));
+    assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Display Settings") &&
+           same(core_page_settings[2].label(h), "Uncropped RAW") && same(core_page_settings[3].label(h), "Mode Dial") &&
+           same(core_page_settings[4].label(h), "ADJ Order"));
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    assert(menu_rows_controller(h, MENU_DISPLAY_TARGET) == SETTINGS_SUBMENU && settings_page(h) == display_page_settings);
+    assert(settings_rows(h) == 2 && same(display_page_settings[0].label(h), "Distance Unit") &&
+           same(display_page_settings[1].label(h), "Battery in Simple Display"));
+    assert(display_row_setting(h, 1) == core_settings + 3);
+    assert(display_page_settings[1].values(h) == 2 && same(display_page_settings[1].value_text(h, 0), "Off") &&
+           same(display_page_settings[1].value_text(h, 1), "On"));
+    assert(display_page_settings[1].get(h) == 0 && !battery_simple(h));
+    n = h[GRKIT_HOST_STATE_CHANGES / 4];
+    display_page_settings[1].set(h, 1);
+    assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
+    assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
+    /* A value out of range changes nothing. */
+    display_page_settings[1].set(h, 2);
+    assert(battery_simple(h));
+    display_page_settings[1].set(h, 0);
+    assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
+    /* Without Distance Unit, Display Settings has Battery in Simple Display
+       only. */
+    manage_memory[MANAGE_UNIT / 4] = 0;
+    assert(display_rows(h) == 1 && display_row_setting(h, 0) == core_settings + 3 && !display_row_setting(h, 1));
+    /* Without either, GRKit Settings has no Display Settings row. */
+    manage_memory[MANAGE_BATTERY / 4] = 0;
+    assert(display_rows(h) == 0);
+    core_refresh(h);
+    for (u32 row = 0; row < core_rows(h); ++row) assert(core_row_setting(h, row) != &display_setting);
     manage_memory[MANAGE_RAW / 4] = 0;
     /* Without the setting in the module list, the icon stays as the camera
        shows it. */
     settings_memory[2 + 15 * 3 + 1] = 1;
-    manage_memory[MANAGE_BATTERY / 4] = 0;
     assert(!battery_simple(h));
     settings_memory[2 + 15 * 3 + 1] = 0;
 }

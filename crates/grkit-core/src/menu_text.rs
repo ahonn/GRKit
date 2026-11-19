@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 81;
+pub const STRINGS: usize = 82;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -80,16 +80,19 @@ struct Words {
     dial_overwrite: (&'static str, &'static str),
     /// The GRKit Settings row of MENU and the title of its page.
     grkit_settings: &'static str,
-    /// The Distance Unit row of GRKit Settings, then its two values.
+    /// The Distance Unit row of Display Settings, then its two values.
     distance_unit: &'static str,
     meters: &'static str,
     feet: &'static str,
     /// The Uncropped RAW row of GRKit Settings: a DNG keeps the whole picture
     /// of the sensor. Its values are On and Off.
     uncropped_raw: &'static str,
-    /// The Battery in Simple Display row of GRKit Settings. Its values are
+    /// The Battery in Simple Display row of Display Settings. Its values are
     /// the Off and On of the switch.
     battery_simple: &'static str,
+    /// The Display Settings row of GRKit Settings and the title of its page,
+    /// which holds the display settings of the core.
+    display_settings: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
@@ -174,6 +177,7 @@ const ENGLISH: Words = Words {
     feet: "Feet",
     uncropped_raw: "Uncropped RAW",
     battery_simple: "Battery in Simple Display",
+    display_settings: "Display Settings",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -249,6 +253,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
     battery_simple: "简单信息显示电量",
+    display_settings: "显示设置",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -321,6 +326,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
     battery_simple: "簡單資訊顯示電量",
+    display_settings: "顯示設定",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -395,6 +401,7 @@ const JAPANESE: Words = Words {
     feet: "フィート",
     uncropped_raw: "RAW クロップなし",
     battery_simple: "簡易情報表示で電池表示",
+    display_settings: "表示設定",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -470,6 +477,7 @@ const KOREAN: Words = Words {
     feet: "피트",
     uncropped_raw: "RAW 크롭 없음",
     battery_simple: "간이 정보 표시에 배터리 표시",
+    display_settings: "표시 설정",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -668,7 +676,12 @@ pub const RUNS: &[Run] = &[
     run(
         "BATTERY",
         1,
-        "The Battery in Simple Display row of GRKit Settings. Its values are TEXT_OFF and TEXT_ON.",
+        "The Battery in Simple Display row of Display Settings. Its values are TEXT_OFF and TEXT_ON.",
+    ),
+    run(
+        "DISPLAY",
+        1,
+        "The Display Settings row of GRKit Settings and the title of its page.",
     ),
 ];
 
@@ -759,6 +772,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "ORDER" => words(&[w.order]),
         "RAW" => words(&[w.uncropped_raw]),
         "BATTERY" => words(&[w.battery_simple]),
+        "DISPLAY" => words(&[w.display_settings]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -921,7 +935,7 @@ mod tests {
             .all(|text| text.is_ascii()));
     }
 
-    /// Battery in Simple Display is a row of GRKit Settings, which the camera
+    /// Battery in Simple Display is a row of Display Settings, which the camera
     /// can draw in each language. The texts follow the native names of the
     /// simple information display.
     #[test]
@@ -935,6 +949,23 @@ mod tests {
         ];
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("BATTERY")], text);
+            assert_eq!(language.undrawable(text), None);
+        }
+    }
+
+    /// Display Settings is a row of GRKit Settings and the title of its
+    /// page, in the words of the display settings of the camera menu.
+    #[test]
+    fn display_settings_has_its_row_in_each_language() {
+        let expected = [
+            (Language::English, "Display Settings"),
+            (Language::SimplifiedChinese, "显示设置"),
+            (Language::TraditionalChinese, "顯示設定"),
+            (Language::Japanese, "表示設定"),
+            (Language::Korean, "표시 설정"),
+        ];
+        for (language, text) in expected {
+            assert_eq!(strings(language, VERSION)[id("DISPLAY")], text);
             assert_eq!(language.undrawable(text), None);
         }
     }

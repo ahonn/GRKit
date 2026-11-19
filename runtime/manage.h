@@ -39,18 +39,18 @@
    module stopped. A change of the switch during a session applies at once,
    and On or Off overrides it at the next start.
 
-   Distance Unit, the second setting of the GRKit Settings row, shows the
+   Distance Unit, a row of Display Settings in GRKit Settings, shows the
    focus distances of the camera in meters or in feet: the Snap focus
    distances (runtime/distance.h). Its setting, CORE.UNIT, follows Enable at
    Start in the table, and a change applies at once.
 
-   Uncropped RAW, the third setting, keeps the whole 3:2 picture of the
+   Uncropped RAW, a row of GRKit Settings, keeps the whole 3:2 picture of the
    sensor in each DNG, with the crop of the shot as Camera Raw settings
    (runtime/picture.c: picture_dng_crop). Its setting, CORE.RAW, follows
    Distance Unit in the table. The picture code reads it from the copy.
 
-   Battery in Simple Display shows the battery icon of the full information
-   also in the simple information of the live view, where the camera shows
+   Battery in Simple Display, a row of Display Settings, shows the battery
+   icon of the full information also in the simple information of the live view, where the camera shows
    it only for a low battery (runtime/menu.S: menu_battery_mode). Its
    setting, CORE.BATTERY, follows Uncropped RAW in the table. A change
    applies at the next update of the live view, which the return from MENU
@@ -547,11 +547,11 @@ static const Setting switch_settings[SETTING_ROWS]={
 };
 
 /* The GRKit Settings row of MENU opens a settings page of the core, titled
-   GRKit Settings (runtime/menu_settings.h: CORE_PAGE). Its first rows are
-   two settings of the core. Enable at Start: On, Off, then Keep Last. On
-   and Off are the texts of the switch. A choice applies at the next start;
-   the switch keeps its value in this session. Distance Unit: Meters, then
-   Feet, at once. */
+   GRKit Settings (runtime/menu_settings.h: CORE_PAGE), and its Display
+   Settings row a page of the display settings of the core (DISPLAY_PAGE).
+   Enable at Start: On, Off, then Keep Last. On and Off are the texts of the
+   switch. A choice applies at the next start; the switch keeps its value in
+   this session. Distance Unit: Meters, then Feet, at once. */
 static u32 start_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_START) : 0; }
 static u32 start_value(volatile u32 *h) {
     u32 at=start_handle(h);
