@@ -18,7 +18,7 @@
     "template": "box",
     "brand": "FUJIFILM",
     "name": "INSTAX",
-    "band": false
+    "band": true
   },
   "attribution": {
     "origin": "cube-fit",

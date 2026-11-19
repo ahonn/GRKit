@@ -19,7 +19,7 @@
     "brand": "FUJIFILM",
     "name": "SUPERIA",
     "number": "400",
-    "band": false
+    "band": true
   },
   "attribution": {
     "origin": "cube-fit",

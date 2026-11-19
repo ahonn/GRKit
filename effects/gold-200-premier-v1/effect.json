@@ -19,7 +19,7 @@
     "brand": "Kodak",
     "name": "GOLD",
     "number": "200",
-    "band": false
+    "band": true
   },
   "attribution": {
     "origin": "cube-fit",

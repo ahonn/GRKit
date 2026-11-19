@@ -19,7 +19,7 @@
     "brand": "FUJIFILM",
     "name": "FUJICOLOR",
     "number": "C200",
-    "band": false
+    "band": true
   },
   "attribution": {
     "origin": "cube-fit",

@@ -19,7 +19,7 @@
     "brand": "Kodak",
     "name": "ULTRAMAX",
     "number": "400",
-    "band": false
+    "band": true
   },
   "attribution": {
     "origin": "cube-fit",

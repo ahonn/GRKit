@@ -15,11 +15,10 @@
     7577
   ],
   "icon": {
-    "template": "box",
+    "template": "cine",
     "brand": "Kodak",
-    "name": "VISION3",
-    "number": "500T",
-    "band": true
+    "name": "5219",
+    "number": "500T"
   },
   "attribution": {
     "origin": "cube-fit",
