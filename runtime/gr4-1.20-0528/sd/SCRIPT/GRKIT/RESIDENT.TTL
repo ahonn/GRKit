@@ -5,7 +5,7 @@ if result = 0 foldercreate 'C:\GRKIT'
 foldersearch 'C:\GRKIT'
 if result = 0 stateok = 0
 legacy = 0
-export = registry[1626]
+export = registry[1628]
 if modulewords <> 0 goto resident_export
 if export <> 0 goto resident_export
 legacy = 1
@@ -22,10 +22,19 @@ dsaved = 0
 dchangeslast = dchanges
 filesearch 'C:\GRKIT\STATE.TXT'
 if result = 0 saved = changes - 1
+hint = 0
+quiet = 0 - 1
+idle = 0
 profile = registry[67]
 if profile <> 0 goto profile_watch
 :watch
 mpause 2000
+hint = registry[65] + registry[980] + registry[1012]
+if hint <> quiet idle = 30
+idle = idle + 1
+if idle <= 30 goto watch
+idle = 0
+quiet = hint - 1
 call capture
 if captured = 0 goto watch_state_saved
 if changes <> last goto watch_state_release
@@ -51,6 +60,11 @@ dstamp = dchanges
 call save_usermode
 :watch_usermode_saved
 dchangeslast = dchanges
+if captured = 0 goto watch
+if changes <> saved goto watch
+if rchanges <> rsaved goto watch
+if dchanges <> dsaved goto watch
+quiet = hint
 goto watch
 :save_state
 if stateok = 0 goto save_state_end
@@ -227,7 +241,7 @@ filecreate sfh 'C:\GRKIT\USERMODE.TMP'
 if sfh < 0 goto save_usermode_end
 rindex = 0
 :set_word
-if rindex >= 613 goto set_word_end
+if rindex >= 615 goto set_word_end
 rvalue = registry[1013 + rindex]
 if rvalue <= 0 goto set_word_next
 if rvalue > 999999999 goto set_word_next
@@ -274,7 +288,7 @@ return
 captured = 0
 if legacy <> 0 goto legacy_capture
 if modulewords < 457 return
-pbase = registry[1626]
+pbase = registry[1628]
 if pbase < 2 return
 pmax = modulewords - 457
 if pbase > pmax return
@@ -329,7 +343,7 @@ rest = offset % 4352
 if rest <> 0 goto legacy_values
 index = offset / 4352
 if index >= pcount goto legacy_values
-value0 = registry[1632 + index * 1088 + 446] and 65535
+value0 = registry[1634 + index * 1088 + 446] and 65535
 :legacy_values
 value1 = registry[52]
 value2 = registry[12]
@@ -343,10 +357,10 @@ value9 = registry[273]
 value10 = registry[274]
 return
 :legacy_parameters
-pcode = registry[1632 + pindex * 1088 + 446] and 32767
-pw0 = registry[1632 + pindex * 1088 + 459]
-pw1 = registry[1632 + pindex * 1088 + 460]
-pw2 = registry[1632 + pindex * 1088 + 461]
+pcode = registry[1634 + pindex * 1088 + 446] and 32767
+pw0 = registry[1634 + pindex * 1088 + 459]
+pw1 = registry[1634 + pindex * 1088 + 460]
+pw2 = registry[1634 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -375,7 +389,7 @@ pvalue = pvalue * 9 + pdigit
 pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
-ptone = (registry[1632 + pindex * 1088 + 463] >> 16) and 255
+ptone = (registry[1634 + pindex * 1088 + 463] >> 16) and 255
 return
 :profile_watch
 ppolls = 0
@@ -692,6 +706,11 @@ dstamp = dchanges
 call save_usermode
 :profile_poll_usermode_saved
 dchangeslast = dchanges
+if captured = 0 goto profile_poll
+if changes <> saved goto profile_poll
+if rchanges <> rsaved goto profile_poll
+if dchanges <> dsaved goto profile_poll
+quiet = hint
 goto profile_poll
 :profile_write
 ppolls = 0

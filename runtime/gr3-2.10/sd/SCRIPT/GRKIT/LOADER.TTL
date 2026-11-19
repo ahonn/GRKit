@@ -51,7 +51,8 @@ if fast = 609160 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F609160.BIN 0 call'
 if fast = 609170 sendln 'SYS_memovr C:\SCRIPT\GRKIT\F609170.BIN 0 call'
 faststatus = ba[254]
 if faststatus = 0 goto plan_ready
-fastreason = 5
+fastreason = 6
+if faststatus = 995 fastreason = 5
 call fast_log
 fast = 0
 :linux
@@ -109,7 +110,7 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 1632 + count * 1088
+expected = 1634 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 60) / 40
 if chunks != expectedchunks goto reject
@@ -153,11 +154,15 @@ hadmodwords = modulewords
 hadmodtiles = moduletiles
 goto arrays_ready
 :check_arrays
-if count <> hadcount goto reject
-if words <> hadwords goto reject
-if chunks <> hadchunks goto reject
-if modulewords <> hadmodwords goto reject
-if moduletiles <> hadmodtiles goto reject
+if count <> hadcount goto plan_differs
+if words <> hadwords goto plan_differs
+if chunks <> hadchunks goto plan_differs
+if modulewords <> hadmodwords goto plan_differs
+if moduletiles <> hadmodtiles goto plan_differs
+goto arrays_ready
+:plan_differs
+call plan_log
+goto reject
 :arrays_ready
 attempts = 0
 waits = 60
@@ -201,14 +206,14 @@ include 'C:\SCRIPT\GRKIT\RESIDENT.TTL'
 end
 :install_not_run
 errorstatus = faststatus
+:install_failed
 fastaddress = ba[252]
 fastcount = ba[253]
-:install_failed
 if fast = 0 goto reject
 failure = errorstatus
 if errorstatus = 24 goto reject
 faststatus = errorstatus
-fastreason = 6
+fastreason = 7
 call fast_log
 fast = 0
 attempts = 0
@@ -286,11 +291,13 @@ if fastreason >= 3 int2str line release
 if fastreason >= 3 filewrite lfh line
 if fastreason = 3 filewrite lfh ' off: not in this package'
 if fastreason = 4 filewrite lfh ' off: files missing'
-if fastreason = 5 filewrite lfh ' scan '
-if fastreason = 6 filewrite lfh ' install '
-if fastreason >= 5 int2str line faststatus
-if fastreason >= 5 filewrite lfh line
-if fastreason <> 6 goto fast_log_changed_end
+if fastreason = 5 filewrite lfh ' off: an earlier fast install failed'
+if fastreason = 6 filewrite lfh ' scan '
+if fastreason = 7 filewrite lfh ' install '
+if fastreason >= 6 int2str line faststatus
+if fastreason >= 6 filewrite lfh line
+if fastreason <> 7 goto fast_log_changed_end
+if faststatus = 37 goto fast_log_check
 if faststatus < 996 goto fast_log_changed_end
 if faststatus > 997 goto fast_log_changed_end
 filewrite lfh ' at '
@@ -299,9 +306,53 @@ filewrite lfh line
 filewrite lfh ' count '
 int2str line fastcount
 filewrite lfh line
+goto fast_log_changed_end
+:fast_log_check
+filewrite lfh ' check '
+int2str line fastaddress
+filewrite lfh line
+filewrite lfh ' value '
+int2str line fastcount
+filewrite lfh line
 :fast_log_changed_end
-if fastreason >= 5 filewrite lfh ', Linux used'
+if fastreason >= 6 filewrite lfh ', Linux used'
 filewriteln lfh ''
 fileclose lfh
 :fast_log_end
+return
+:plan_log
+filesearch 'C:\GRKIT\BOOT.TXT'
+if result = 0 goto plan_log_end
+fileopen lfh 'C:\GRKIT\BOOT.TXT' 1
+if lfh < 0 goto plan_log_end
+filewrite lfh 'fast plan'
+planvalue = hadcount
+call plan_value
+planvalue = hadwords
+call plan_value
+planvalue = hadchunks
+call plan_value
+planvalue = hadmodwords
+call plan_value
+planvalue = hadmodtiles
+call plan_value
+filewrite lfh ', Linux plan'
+planvalue = count
+call plan_value
+planvalue = words
+call plan_value
+planvalue = chunks
+call plan_value
+planvalue = modulewords
+call plan_value
+planvalue = moduletiles
+call plan_value
+filewriteln lfh ''
+fileclose lfh
+:plan_log_end
+return
+:plan_value
+filewrite lfh ' '
+int2str line planvalue
+filewrite lfh line
 return
