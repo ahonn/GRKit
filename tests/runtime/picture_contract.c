@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,9 +63,12 @@ static uint32_t ifd_entry, ifd_writes, ifd_values[32];
 #define PICTURE_IFD_SET_SHORT(entry,index,value) do { assert((index) < 32 && !((value) >> 16)); \
     ifd_entry = (entry); ifd_values[(index)] = (value); ++ifd_writes; } while (0)
 #define PICTURE_IFD_SET_LONG(entry,index,value) PICTURE_IFD_SET_SHORT(entry,index,value)
-static uint16_t dng_rect[4];
+/* The native rectangle of a crop factor: dng_full for the whole sensor
+   (1.0f) when it is set, else dng_rect. */
+static uint16_t dng_rect[4], dng_full[4];
 static uint32_t dng_rect_shot, dng_rect_calls;
-#define PICTURE_DNG_RECT(shot,rect) do { dng_rect_shot = (shot); ++dng_rect_calls; memcpy((rect),dng_rect,sizeof(dng_rect)); } while (0)
+#define PICTURE_DNG_RECT(factor,rect) do { dng_rect_shot = (factor); ++dng_rect_calls; \
+    memcpy((rect),(factor) == 0x3f800000U && dng_full[0] ? dng_full : dng_rect,sizeof(dng_rect)); } while (0)
 /* The module settings: those of Date Imprint, STYLE (handle 0, 6 values) and
    LOOK (handle 1, 3 values). */
 #define TEST_SETTINGS 0x5f000000U
@@ -110,7 +114,25 @@ static uint32_t playback_tone;
    one byte for each parameter kind. */
 static uint8_t develop_set[17];
 #define DEVELOP_SET(kind) develop_set[(kind)]
+/* The services block of the core, which holds the settings copy of a
+   development (runtime/develop_settings.h). */
+#define TEST_SERVICES 0x58000000U
+static volatile uint32_t *mapped_services(uint32_t address);
+#define SERVICES_MAP(address) mapped_services(address)
+/* The start of the DNG of a development: `develop_file_size` bytes. */
+static const uint8_t *develop_file = (const uint8_t *)"";
+static uint32_t develop_file_size;
+#define PICTURE_DEVELOP_FILE(buf,size) (memcpy((buf), develop_file, develop_file_size < (size) ? develop_file_size : (size)), \
+    develop_file_size < (size) ? develop_file_size : (size))
+#define PHOTO_XMP_TEXT(address) ((const volatile u16 *)region((address), 2))
+#define PICTURE_DNG_DATA(address,size) ((u8 *)region((address), (size)))
 #include "picture.c"
+static uint32_t services_memory[SERVICES_SIZE / 4];
+static volatile uint32_t *mapped_services(uint32_t address)
+{
+    assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && (address & 3) == 0);
+    return services_memory + (address - TEST_SERVICES) / 4;
+}
 
 static volatile u32 header[GRKIT_HOST_HEADER_SIZE / 4];
 volatile u32 *framing_header(void) { return header; }
@@ -677,6 +699,7 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     reset();
     WORD(setter, DNG_SETTER_SHOT) = SHOT;
     WORD(setter, DNG_SETTER_INFO) = info;
+    WORD(SHOT, SHOT_CROP) = 0x3fd9999aU;
     HALF(entry, 6) = 4;
     WORD(entry, 8) = 2;
     WORD(info, 8) = 58; WORD(info, 12) = 28;
@@ -698,7 +721,7 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
         header[GRKIT_HOST_FRAME_RATIO / 4] = 0;
         header[GRKIT_HOST_CAPABILITIES / 4] = 0;
         picture_dng_crop(setter, entry, 0);
-        assert(ifd_values[0] == 10 && ifd_values[1] == 12 && dng_rect_shot == SHOT);
+        assert(ifd_values[0] == 10 && ifd_values[1] == 12 && dng_rect_shot == 0x3fd9999aU);
         picture_dng_crop(setter, entry, 1);
         assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
         assert(WORD(info, 0x1c) == 932 && WORD(info, 0x24) == 2216);
@@ -724,6 +747,71 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
     for (u32 i = 0; i < GRKIT_SHOT_ENTRIES; ++i) store_shot(SHOT + 0x100 + i * 4, 0);
     picture_dng_crop(setter, entry, 1);
     assert(ifd_writes == writes);
+    /* Uncropped RAW: each DNG keeps the whole 3:2 picture, and its XMP
+       packet has the crop of the shot as a Camera Raw crop: the native
+       values of a native shot, the centered box of the ratio of a Framing
+       shot. */
+    {
+        const u32 xmp = ARENA + 0xd000, data = ARENA + 0xe000;
+        volatile u32 *stash = services_memory + SERVICES_DNG_CROP / 4;
+        u32 kept[4], crop[8], at = 0, n;
+        char *text = (char *)region(data, 0x800);
+        dng_full[0] = 6000; dng_full[1] = 4000; dng_full[2] = 68; dng_full[3] = 40;
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 2;
+        store_shot(SHOT, 0);
+        picture_dng_crop(setter, entry, 0);
+        assert(ifd_values[0] == 10 && ifd_values[1] == 12);
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
+        /* The native values: origin 68 - 58 = 10 and 932 - 28 = 904, size
+           6000 x 2216 (16:9). */
+        assert(!picture_shot_frame(header, SHOT, info, kept, crop));
+        picture_whole(info, crop + 4);
+        assert(crop[0] == 10 && crop[1] == 904 && crop[2] == 6000 && crop[3] == 2216);
+        assert(crop[4] == 10 && crop[5] == 12 && crop[6] == 6000 && crop[7] == 4000);
+        /* The packet of IFD0 has the crop of the whole picture: the writer
+           has no shot yet. */
+        n = photo_xmp_build(header, (u8 *)text, 0x7ff, 0, 0, 0, &at);
+        text[n] = 0;
+        assert(n && strstr(text, " xmlns:crs=\"http://ns.adobe.com/camera-raw-settings/1.0/\" crs:HasCrop=\"True\" crs:CropAngle=\"0\""));
+        assert(strstr(text, " crs:CropLeft=\"0.00000\" crs:CropTop=\"0.00000\" crs:CropRight=\"1.00000\" crs:CropBottom=\"1.00000\"") ==
+               text + at);
+        /* The tag setter gets the entry: the crop of the shot, in place.
+           Another entry, and an entry that is not that of the packet, stay. */
+        HALF(xmp, 4) = 700; WORD(xmp, 8) = n; WORD(xmp, 0x10) = data;
+        header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+        stash[DNG_CROP_ENTRY / 4] = xmp; stash[DNG_CROP_AT / 4] = at;
+        picture_dng_xmp_set(setter, entry);
+        assert(stash[DNG_CROP_ENTRY / 4] == xmp);
+        picture_dng_xmp_set(setter, xmp);
+        assert(!stash[DNG_CROP_ENTRY / 4] && strlen(text) == n);
+        assert(strstr(text, " crs:CropLeft=\"0.00000\" crs:CropTop=\"0.22300\" crs:CropRight=\"1.00000\" crs:CropBottom=\"0.77700\"") ==
+               text + at);
+        text[at + 16] = '9';
+        picture_dng_xmp_set(setter, xmp);
+        assert(text[at + 16] == '9');
+        /* A Framing shot of 1:1: the box of 3200 x 3200 in the 4800 x 3200
+           picture of its crop factor; the DNG keeps the whole picture. */
+        header[GRKIT_HOST_FRAME_CROP / 4] = 5;
+        store_shot(SHOT, 0);
+        header[GRKIT_HOST_FRAME_CROP / 4] = 0;
+        assert(picture_shot_frame(header, SHOT, info, kept, crop));
+        assert(kept[0] == 610 && kept[1] == 412 && kept[2] == 4800 && kept[3] == 3200);
+        assert(crop[0] == 1410 && crop[1] == 412 && crop[2] == 3200 && crop[3] == 3200);
+        stash[DNG_CROP_ENTRY / 4] = xmp;
+        picture_dng_xmp_set(setter, xmp);
+        assert(strstr(text, " crs:CropLeft=\"0.23333\" crs:CropTop=\"0.10000\" crs:CropRight=\"0.76666\" crs:CropBottom=\"0.90000\"") ==
+               text + at);
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 6000 && ifd_values[1] == 4000);
+        /* Off: the Framing shot keeps the 3:2 picture of its crop factor. */
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 1;
+        picture_dng_crop(setter, entry, 1);
+        assert(ifd_values[0] == 4800 && ifd_values[1] == 3200);
+        header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_RAW] = 0;
+        header[GRKIT_HOST_SERVICES / 4] = 0;
+        dng_full[0] = 0;
+    }
 }
 
 /* The XMP segment of a JPEG header (runtime/xmp.h, picture_jpeg_xmp). The
@@ -778,11 +866,15 @@ static const char *jpeg_keyword(uint32_t code)
     jpeg_header(code, 0x20000);
     picture_jpeg_xmp(JPEG_WRITER);
     if (!(text = jpeg_packet(&segment))) return 0;
-    assert(!(segment % XMP_ALIGN) && segment < 0x300);
+    assert(!(segment % XMP_ALIGN) && segment < 0x1000);
     assert(!strstr(text, "dc:description"));
     start = strstr(text, "<dc:subject><rdf:Bag><rdf:li>");
     end = strstr(text, "</rdf:li></rdf:Bag></dc:subject>");
-    assert(start && end && end > start && (size_t)(end - start) < sizeof(keyword) + 29);
+    if (!start) {
+        assert(!end && !strstr(text, "grkit:FilmLook"));
+        return 0;
+    }
+    assert(end && end > start && (size_t)(end - start) < sizeof(keyword) + 29);
     start += 29;
     memcpy(keyword, start, (size_t)(end - start));
     keyword[end - start] = 0;
@@ -819,6 +911,45 @@ static void capture_tone_contract(void)
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
     playback_tone = 0;
 }
+/* A module page for the English texts of the packet (runtime/photo_xmp.h):
+   the page of CORE.GRAIN, with a row of CORE.BORDER_COLOR, and a child page
+   of CORE.BORDER. */
+#define XMP_PAGE (ARENA + 0x200000)
+static uint32_t xmp_texts(uint32_t table, uint32_t strings, const char *const *labels, uint32_t count)
+{
+    for (uint32_t v = 0; v < count; ++v)
+        for (uint32_t language = 0; language < GRKIT_TEXT_LANGUAGES; ++language) {
+            const char *text = language == 0 ? labels[v] : "x";
+            uint32_t at = strings + (v * GRKIT_TEXT_LANGUAGES + language) * 0x20;
+            WORD(table, (v * GRKIT_TEXT_LANGUAGES + language) * 4) = at;
+            for (uint32_t i = 0; i == 0 || text[i - 1]; ++i) HALF(at, i * 2) = (uint8_t)text[i];
+        }
+    return table;
+}
+static void xmp_page(void)
+{
+    static const char *const grain[] = {"Off", "Weak", "Medium"};
+    static const char *const color[] = {"White", "Black"};
+    static const char *const border[] = {"Off", "Thin"};
+    WORD(XMP_PAGE, 0) = GRM_PAGE_SETTINGS_AT + 4;
+    WORD(XMP_PAGE, GRM_PAGE_LABELS_AT) = xmp_texts(XMP_PAGE + 0x100, XMP_PAGE + 0x1000, grain, 3);
+    WORD(XMP_PAGE, GRM_PAGE_SETTING_ROWS_AT) = 1;
+    WORD(XMP_PAGE, GRM_PAGE_SETTINGS_AT) = XMP_PAGE + 0x400;
+    WORD(XMP_PAGE + 0x400, GRM_ROW_SETTING_AT) = GRKIT_CORE_BORDER_COLOR;
+    WORD(XMP_PAGE + 0x400, GRM_ROW_VALUES_AT) = xmp_texts(XMP_PAGE + 0x600, XMP_PAGE + 0x3000, color, 2);
+    header[GRKIT_HOST_MODULE_PAGES / 4] = XMP_PAGE;
+    header[GRKIT_HOST_MODULE_PAGES / 4 + 1] = GRKIT_CORE_GRAIN;
+    /* A child page of a group: its setting is a row, and the page has no
+       rows of its own. */
+    WORD(XMP_PAGE + 0x8000, 0) = GRM_PAGE_SETTINGS_AT + 4;
+    WORD(XMP_PAGE + 0x8000, GRM_PAGE_SETTING_ROWS_AT) = 1;
+    WORD(XMP_PAGE + 0x8000, GRM_PAGE_SETTINGS_AT) = XMP_PAGE + 0x8400;
+    WORD(XMP_PAGE + 0x8400, GRM_ROW_SETTING_AT) = GRKIT_CORE_BORDER;
+    WORD(XMP_PAGE + 0x8400, GRM_ROW_VALUES_AT) = xmp_texts(XMP_PAGE + 0x8600, XMP_PAGE + 0x9000, border, 2);
+    header[GRKIT_HOST_MODULE_PAGES / 4 + 3] = XMP_PAGE + 0x8000;
+    header[GRKIT_HOST_MODULE_PAGES / 4 + 4] = GRKIT_CORE_BORDER;
+    header[GRKIT_HOST_MODULE_PAGE_COUNT / 4] = 2;
+}
 static void jpeg_xmp_contract(void)
 {
     static const uint16_t trix[] = {'T', 'r', 'i', '-', 'X', ' ', '<', '4', '0', '0', '>', ' ', '&', ' ', '"', 0xdc, '"', 0};
@@ -832,7 +963,7 @@ static void jpeg_xmp_contract(void)
     /* The name of the effect with the code, as escaped UTF-8. */
     assert(!strcmp(jpeg_keyword(0x9234), "Tri-X &lt;400&gt; &amp; &quot;\xc3\x9c&quot;"));
     assert(!strcmp(jpeg_keyword(0x9235), "Portra 400"));
-    /* A native look gets its menu name; a code without a name gets no segment. */
+    /* A native look gets its menu name; a code without a name gets none. */
     assert(!strcmp(jpeg_keyword(0x100), "Standard"));
     assert(!strcmp(jpeg_keyword(0x105), "Hi-Contrast B&amp;W"));
     assert(!strcmp(jpeg_keyword(0x10b), "Negative Film"));
@@ -871,11 +1002,47 @@ static void jpeg_xmp_contract(void)
     WORD(JPEG_WRITER, JPEG_WRITER_APP7) = JPEG_APP7 + 4;
     picture_jpeg_xmp(JPEG_WRITER);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7 + 4);
-    /* A header without a Ricoh maker note: no segment. */
+    /* A header without a Ricoh maker note: the settings without a look. */
+    jpeg_header(0x9235, 0x20000);
+    memcpy(region(JPEG_BUFFER + JPEG_TIFF + 44, 8), "PENTAX\0\0", 8);
+    picture_jpeg_xmp(JPEG_WRITER);
+    {
+        const char *text = jpeg_packet(&segment);
+        assert(text && strstr(text, " grkit:State=\"") && !strstr(text, "FilmLook") && !strstr(text, "dc:subject"));
+    }
+    /* An edit in playback, such as Resize: the look, not the current settings. */
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 1;
+    assert(!strcmp(jpeg_keyword(0x9235), "Portra 400"));
+    assert(!strstr(jpeg_packet(&segment), "grkit:State") && !strstr(jpeg_packet(&segment), "grkit:Grain="));
     jpeg_header(0x9235, 0x20000);
     memcpy(region(JPEG_BUFFER + JPEG_TIFF + 44, 8), "PENTAX\0\0", 8);
     picture_jpeg_xmp(JPEG_WRITER);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7);
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
+    /* A capture: the look, each setting that changes the picture with its
+       English menu text or else its number, and grkit:State. Framing and
+       Crop name a crop: their frame-only modes leave them out. */
+    reset();
+    HALF(record(2), GRKIT_RECORD_CODE) = 0x9235;
+    effect_name(record(2), portra, 11);
+    xmp_page();
+    header[core_setting_words[CORE_SETTING(GRKIT_CORE_GRAIN)] / 4] = 2;
+    header[core_setting_words[CORE_SETTING(GRKIT_CORE_BORDER)] / 4] = 1;
+    assert(!strcmp(jpeg_keyword(0x9235), "Portra 400"));
+    {
+        char state[64];
+        const char *text = jpeg_packet(&segment);
+        assert(strstr(text, "xmlns:grkit=\"https://grkit.app/ns/1.0/\""));
+        assert(strstr(text, " grkit:FilmLook=\"Portra 400\""));
+        assert(strstr(text, " grkit:Grain=\"Medium\" grkit:GrainSize=\"0\""));
+        assert(strstr(text, " grkit:Border=\"Thin\" grkit:BorderColor=\"White\""));
+        assert(strstr(text, " grkit:Framing=\"0\" grkit:Crop=\"0\""));
+        snprintf(state, sizeof(state), " grkit:State=\"%u=", photo_xmp_core_ids[0] ? photo_xmp_core_ids[0] : photo_xmp_core_ids[1]);
+        assert(strstr(text, state) && strstr(text, ",862826181=1,"));
+    }
+    header[core_setting_words[CORE_SETTING(GRKIT_CORE_ASPECT_MODE)] / 4] = 1;
+    jpeg_keyword(0x9235);
+    assert(!strstr(jpeg_packet(&segment), "grkit:Framing") && strstr(jpeg_packet(&segment), "grkit:Crop="));
     /* UTF-16 to UTF-8: a pair, a lone surrogate, a control, and a name without NUL. */
     static const uint16_t pair[] = {0xd83c, 0xdf9e, 0xd800, 'A', 0x0a, 0};
     static const uint16_t full[XMP_NAME_UNITS] = {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',
@@ -883,7 +1050,7 @@ static void jpeg_xmp_contract(void)
     uint8_t out[64];
     assert(xmp_put_name(out, pair, 6) == 9 && !memcmp(out, "\xf0\x9f\x8e\x9e\xef\xbf\xbd" "A ", 9));
     assert(xmp_put_name(0, full, XMP_NAME_UNITS) == XMP_NAME_UNITS);
-    assert(!xmp_segment_size(pair + 5, 1));
+    assert(!xmp_segment_size(0));
     /* Each native name fits a record name. */
     uint16_t name[XMP_NATIVE_UNITS];
     for (uint32_t code = XMP_NATIVE_FIRST; code < XMP_NATIVE_FIRST + 14; ++code) assert(xmp_native_name(code, name, XMP_NATIVE_UNITS));
@@ -1705,6 +1872,50 @@ int main(void)
         picture_develop_start();
         assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
         assert(develop_crops == 1);
+        /* The development starts from the settings that its DNG records
+           (runtime/photo_xmp.h: grkit:State), not from the current ones,
+           as an attribute or as an element. A value that the setting does
+           not offer, and a DNG without a record, keep the current value. */
+        {
+            u32 border = core_setting_words[CORE_SETTING(GRKIT_CORE_BORDER)];
+            u32 grain = core_setting_words[CORE_SETTING(GRKIT_CORE_GRAIN)];
+            u32 border_id = photo_xmp_core_ids[CORE_SETTING(GRKIT_CORE_BORDER)];
+            u32 grain_id = photo_xmp_core_ids[CORE_SETTING(GRKIT_CORE_GRAIN)];
+            volatile u32 *copy = services_memory + SERVICES_DEVELOP / 4 + DEVELOP_COPY_HEADER / 4;
+            u32 at_border = 0, at_grain = 0;
+            char xmp[2][160];
+            uint8_t tiff[26 + sizeof(xmp[0])];
+            static const uint8_t ifd[22] = {'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0xbc, 0x02, 7, 0, 0, 0, 0, 0, 26, 0, 0, 0};
+            for (u32 i = 0; i < DEVELOP_COPY_HEADER_WORDS; ++i) {
+                if (develop_copy_words[i] == border) at_border = i;
+                if (develop_copy_words[i] == grain) at_grain = i;
+            }
+            assert(border_id == 862826181U && grain_id);
+            snprintf(xmp[0], sizeof(xmp[0]), "<rdf:Description grkit:Border=\"Thin\" grkit:State=\"%u=1,%u=99,5=1\"/>",
+                     border_id, grain_id);
+            snprintf(xmp[1], sizeof(xmp[1]), "<rdf:Description><grkit:State>%u=1, %u=99</grkit:State></rdf:Description>",
+                     border_id, grain_id);
+            header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+            for (u32 form = 0; form < 2; ++form) {
+                u32 n = (u32)strlen(xmp[form]);
+                memcpy(tiff, ifd, sizeof(ifd));
+                tiff[14] = (uint8_t)n;
+                memcpy(tiff + 26, xmp[form], n);
+                header[border / 4] = 0;
+                header[grain / 4] = 2;
+                develop_file = tiff;
+                develop_file_size = 26 + n;
+                picture_develop_start();
+                assert(copy[at_border] == 1 && copy[at_grain] == 2);
+            }
+            develop_file_size = 8;
+            picture_develop_start();
+            assert(copy[at_border] == 0 && copy[at_grain] == 2);
+            develop_file = (const uint8_t *)"";
+            develop_file_size = 0;
+            header[GRKIT_HOST_SERVICES / 4] = 0;
+            header[grain / 4] = 0;
+        }
         developing = 0;
         BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 0;
         BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;

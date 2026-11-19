@@ -318,6 +318,12 @@ static void reset(void)
     assert(header[GRKIT_HOST_FRAME_OWNER/4]==TEST_OWNER);
     assert(header[GRKIT_HOST_FRAME_CANVAS/4]==TEST_CANVAS);
 }
+/* The binds up to the next search of a live view without a drawing
+   (runtime/viewfinder.h: BIND_IDLE_PERIOD). */
+static void bind_to_the_search(void)
+{
+    for(u32 i=0;i<BIND_IDLE_PERIOD;++i) framing_bind(TEST_OWNER);
+}
 static void assert_untouched(void)
 {
     for (u32 i=0; i<sizeof(pixels)/sizeof(pixels[0]); ++i) assert(pixels[i]==SENTINEL);
@@ -1796,17 +1802,23 @@ int main(void)
     reset();
     assert(invalidations >= 1 && invalidated == TEST_CANVAS);
     invalidations = 0;
+    /* Until it draws, the live view requests the redraw again at each
+       search, not at each bind. */
+    for(u32 i=1;i<BIND_IDLE_PERIOD;++i) framing_bind(TEST_OWNER);
+    assert(invalidations == 0);
     framing_bind(TEST_OWNER);
     assert(invalidations == 1);
     framing_paint(TEST_CANVAS, TEST_BITMAP);
-    framing_bind(TEST_OWNER);
+    bind_to_the_search();
     assert(invalidations == 1);
     header[GRKIT_HOST_FRAME_RATIO/4] = 0;
     header[GRKIT_HOST_FRAME_BITMAP/4] = 0;
-    framing_bind(TEST_OWNER);
+    bind_to_the_search();
     assert(invalidations == 1);
+    /* A value that changes without a count of the change, such as a
+       condition on a native setting, shows at the next search. */
     GUIDE_STYLE=2;
-    framing_bind(TEST_OWNER);
+    bind_to_the_search();
     assert(invalidations == 2);
     /* A setting that changed since the last redraw, for example on a native
        settings page, redraws a canvas that has drawn once. */
@@ -1824,6 +1836,14 @@ int main(void)
     ++header[GRKIT_HOST_STATE_CHANGES/4];
     framing_bind(TEST_OWNER);
     assert(invalidations == 4);
+    /* Another canvas searches at its first bind. */
+    reset();
+    invalidations = 0;
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 0);
+    header[GRKIT_HOST_FRAME_CANVAS/4] = 0;
+    framing_bind(TEST_OWNER);
+    assert(invalidations == 1);
     /* Returning to the live view ends the playback 65:24 variant. */
     reset();
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE]=2;

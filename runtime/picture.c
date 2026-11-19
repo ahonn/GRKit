@@ -345,6 +345,9 @@ static void flush(const Plane *p) {
 static u32 aspect_native(void) { return PICTURE_NATIVE_ASPECT(); }
 #include "settings.h"
 #include "services.h"
+#include "grm_format.h"
+#include "xmp.h"
+#include "photo_xmp.h"
 /* The module plane filters that INSTALL registered (GRKIT_HOST_MODULE_FILTERS),
    or 0 for a count out of range. Each has two words: its apply function, and
    its setting handle with its stage in the high half. */
@@ -432,33 +435,76 @@ static u32 shot_record(volatile u32 *h,u32 shot) {
     return shot_word(h,shot,GRKIT_SHOT_RECORD,&record) ? record : 0;
 }
 
-/* The native sensor rectangle for this shot's digital crop and aspect 3:2.
-   The assembly bridge supplies the firmware's hard-float calling convention. */
+/* The native sensor rectangle of aspect 3:2 for a crop factor, the bits of
+   a float. The assembly bridge supplies the firmware's hard-float calling
+   convention. */
 #ifndef PICTURE_DNG_RECT
-void picture_dng_rect(u32 shot,u16 *rect);
-#define PICTURE_DNG_RECT(shot,rect) picture_dng_rect((shot),(rect))
+void picture_dng_rect(u32 factor,u16 *rect);
+#define PICTURE_DNG_RECT(factor,rect) picture_dng_rect((factor),(rect))
 #endif
 #ifndef PICTURE_IFD_SET_LONG
 #define PICTURE_IFD_SET_LONG(entry,index,value) (((void (*)(u32,u32,u32))FW_IFD_SET_LONG)(entry,index,value))
 #endif
-/* Called after the native DNG tag setter. Only a shot captured with a
-   Framing crop overrides its default RAW crop. JPEG geometry, the source
-   descriptor, and embedded previews keep their recorded composition. */
+/* The crop factor of the whole sensor, 1.0f. */
+#define PICTURE_FACTOR_ONE 0x3f800000U
+/* Whether Uncropped RAW is On (runtime/manage.h: CORE.RAW): the copy in
+   the header holds its value + 1. */
+static u32 picture_raw_uncropped(volatile u32 *h) {
+    return h[GRKIT_HOST_MANAGE_COPY/4+GRKIT_MANAGE_COPY_RAW]==2U;
+}
+/* {p, q} of each Framing ratio, by CORE.ASPECT value - 1 (runtime/sdk/grkit.h). */
+static const u8 picture_ratios[GRKIT_CORE_ASPECT_VALUES-1][2]={
+    {65,24},{16,9},{4,3},{47,20},{1,1},{5,4},{7,6},{3,4}};
+/* The crop of a shot in the DNG: x, y, width, and height, as the
+   DefaultCrop tags hold them (relative to ActiveArea, whose origin is at
+   +8/+12 of the information `info`). A shot captured with a Framing crop
+   keeps the 3:2 picture of its crop factor in `kept`, and its JPEG has the
+   centered box of its ratio in `shot_crop`: 1. Another shot has the native
+   values of the information (+0x18/+0x1c for the origin, +0x20/+0x24 for
+   the size, as the native setter takes them) in `shot_crop`: 0. */
+static u32 picture_shot_frame(volatile u32 *h,u32 shot,u32 info,u32 *kept,u32 *shot_crop) {
+    u32 crop, p, q, w, hh;
+    u16 rect[4];
+    if(!shot_word(h,shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=GRKIT_CORE_ASPECT_VALUES) {
+        shot_crop[0]=WORD(info,0x18)-WORD(info,8);
+        shot_crop[1]=WORD(info,0x1c)-WORD(info,12);
+        shot_crop[2]=WORD(info,0x20);
+        shot_crop[3]=WORD(info,0x24);
+        return 0;
+    }
+    PICTURE_DNG_RECT(WORD(shot,SHOT_CROP),rect);
+    kept[0]=rect[2]-WORD(info,8); kept[1]=rect[3]-WORD(info,12); kept[2]=rect[0]; kept[3]=rect[1];
+    w=rect[0]; hh=rect[1]; p=picture_ratios[crop-1][0]; q=picture_ratios[crop-1][1];
+    if(w*q>hh*p) w=core_divide(hh*p,q); else hh=core_divide(w*q,p);
+    shot_crop[0]=kept[0]+((rect[0]-w)>>1);
+    shot_crop[1]=kept[1]+((rect[1]-hh)>>1);
+    shot_crop[2]=w;
+    shot_crop[3]=hh;
+    return 1;
+}
+/* The whole 3:2 picture of the sensor, as picture_shot_frame gives a crop. */
+static void picture_whole(u32 info,u32 *whole) {
+    u16 rect[4];
+    PICTURE_DNG_RECT(PICTURE_FACTOR_ONE,rect);
+    whole[0]=rect[2]-WORD(info,8); whole[1]=rect[3]-WORD(info,12); whole[2]=rect[0]; whole[3]=rect[1];
+}
+/* Called after the native DNG tag setter of DefaultCropOrigin (`size` 0) or
+   DefaultCropSize (`size` 1). A Framing shot keeps the 3:2 picture of its
+   crop factor. With Uncropped RAW, each DNG keeps the whole 3:2 picture of
+   the sensor; its XMP packet has the crop of the shot as a Camera Raw crop
+   (picture_dng_xmp_add). JPEG geometry, the source descriptor, and embedded
+   previews keep their recorded composition. */
 /* This metadata path uses Thumb to fit beside the pixel-processing hooks. */
 #if defined(__arm__)
 __attribute__((target("thumb"),minsize))
 #endif
 void picture_dng_crop(u32 setter,u32 entry,u32 size) {
-    u32 shot=WORD(setter,DNG_SETTER_SHOT), crop, info, i;
-    u16 rect[4];
-    if(HALF(entry,6)!=4 || WORD(entry,8)!=2 || !shot_word(framing_header(),shot,GRKIT_SHOT_FRAME_CROP,&crop) || !crop || crop>=GRKIT_CORE_ASPECT_VALUES) return;
-    PICTURE_DNG_RECT(shot,rect);
-    info=WORD(setter,DNG_SETTER_INFO);
-    for(i=0;i<2;++i) {
-        /* DNG origins are relative to ActiveArea, whose origin is at +8/+12. */
-        u32 value=size ? rect[i] : rect[i+2]-WORD(info,8+i*4);
-        PICTURE_IFD_SET_LONG(entry,i,value);
-    }
+    volatile u32 *h=framing_header();
+    u32 info=WORD(setter,DNG_SETTER_INFO), kept[4], shot_crop[4], i, *values=kept;
+    if(HALF(entry,6)!=4 || WORD(entry,8)!=2) return;
+    if(picture_raw_uncropped(h)) picture_whole(info,values=shot_crop);
+    else if(!picture_shot_frame(h,WORD(setter,DNG_SETTER_SHOT),info,kept,shot_crop)) return;
+    for(i=0;i<2;++i) PICTURE_IFD_SET_LONG(entry,i,values[(size ? 2U : 0U)+i]);
 }
 /* The quarter turns clockwise that show the picture of a shot upright, as
    its EXIF Orientation does (1: 0, 6: 1, 3: 2, 8: 3), from the posture of the
@@ -494,6 +540,44 @@ void framing_develop_crop(void);
    native processing for a native photo or an effect that the camera no
    longer has. It develops the native aspect of the DNG until its aspect list
    selects a Framing ratio (runtime/menu.c), and the crop of the DNG. */
+/* The longest path of a photo, as "C:\DCIM\100RICOH\R0000001.DNG". */
+#define PICTURE_PATH_MAX 64U
+#ifndef PICTURE_DEVELOP_FILE
+#ifdef FW_CONTENTS
+/* The first `size` bytes of the file that playback opened, the DNG of a
+   development, in `buf`: the count read, or 0. */
+static u32 picture_develop_file(u8 *buf,u32 size) {
+    u8 path[PICTURE_PATH_MAX];
+    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), len=0, i;
+    int file;
+    if(handle<0x40000000U || handle>0xbfffff00U) return 0;
+    /* The path has no drive letter: the photos of a development are on the
+       card. */
+    for(i=1;i<sizeof(path) && (path[i]=BYTE(handle,CONTENTS_PATH+i))!=0;++i) {}
+    if(i==sizeof(path)) return 0;
+    path[0]='C';
+    file=((int (*)(const u8 *,u32,u32))FW_FILE_OPEN)(path,0,0);
+    if(file<0) return 0;
+    ((int (*)(u32,void *,u32,u32 *))FW_FILE_READ)((u32)file,buf,size,&len);
+    ((int (*)(u32))FW_FILE_CLOSE)((u32)file);
+    return len<=size ? len : 0;
+}
+#define PICTURE_DEVELOP_FILE(buf,size) picture_develop_file((buf),(size))
+#else
+#define PICTURE_DEVELOP_FILE(buf,size) ((void)(buf),(void)(size),0U)
+#endif
+#endif
+/* The settings of the DNG of a development (runtime/photo_xmp.h: grkit:State
+   of the XMP packet of IFD0, at the start of the file). */
+static void picture_develop_record(volatile u32 *h) {
+    u8 *buf;
+    u32 len, n=0, off;
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
+    len=PICTURE_DEVELOP_FILE(buf,DEVELOP_RECORD_SIZE);
+    if(!(off=photo_xmp_tiff(buf,len,&n))) return;
+    photo_xmp_apply(h,(const char *)buf+off,n);
+}
 void picture_develop_start(void) {
     volatile u32 *h=framing_header();
     u32 value=PICTURE_PLAYBACK_TONE(), record;
@@ -506,6 +590,7 @@ void picture_develop_start(void) {
     h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
     h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
     develop_copy_start(h,settings_table(h));
+    picture_develop_record(h);
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
 }
 #endif
@@ -709,275 +794,27 @@ static u32 grain_counter(u32 *high) { *high=0; return 0; }
 #define GRAIN_COUNTER_MHZ SYSTEM_COUNTER_MHZ
 #endif
 #define GRAIN_ROW_MAX 8192U
-/* The camera build has no FPU (CAMERA_TARGET in crates/grkit-build), so the
-   camera runs the scalar code. The NEON code runs only in the host test on
-   an ARM host (tests/runtime/picture_contract.c), which compares the noise
-   with one reference, as it does for the scalar code on other hosts. */
-#if defined(__ARM_NEON) && !defined(GRAIN_SCALAR)
-#include <arm_neon.h>
-#define GRAIN_NEON 1
-#endif
-/* Four xorshift128 generators side by side: generator i gives bytes 4i to
-   4i + 3 of each 16 bytes, in little-endian order. */
-typedef struct { u32 a[4],b[4],c[4],d[4]; } GrainRandom;
-/* A word of a byte buffer. */
-typedef u32 __attribute__((may_alias)) GrainWord;
-/* splitmix32 of the count, so that close counts give unrelated states. */
-static u32 grain_mix(u32 *x) {
-    u32 z=(*x+=0x9e3779b9U);
-    z=(z^(z>>16))*0x85ebca6bU;
-    z=(z^(z>>13))*0xc2b2ae35U;
-    return z^(z>>16);
-}
-static void grain_seed(GrainRandom *r,u32 seed) {
-    u32 i;
-    for(i=0;i<4;++i) { r->a[i]=grain_mix(&seed); r->b[i]=grain_mix(&seed); r->c[i]=grain_mix(&seed); r->d[i]=grain_mix(&seed)|1U; }
-}
-#ifdef GRAIN_NEON
-/* One step of the four generators: the next 16 bytes from the oldest state
-   word `a` and the newest `d`. */
-static inline __attribute__((always_inline)) uint32x4_t grain_step(uint32x4_t a,uint32x4_t d) {
-    uint32x4_t t=veorq_u32(a,vshlq_n_u32(a,11));
-    return veorq_u32(veorq_u32(d,vshrq_n_u32(d,19)),veorq_u32(t,vshrq_n_u32(t,8)));
-}
-#endif
-/* `pitch` random bytes; a pitch is a multiple of 16. */
-static void grain_random_row(GrainRandom *r,u8 *row,u32 pitch) {
-    u32 x=0;
-#ifdef GRAIN_NEON
-    uint32x4_t a=vld1q_u32(r->a),b=vld1q_u32(r->b),c=vld1q_u32(r->c),d=vld1q_u32(r->d),d1,d2,d3,d4;
-    /* Four steps rename the state instead of moving it: a b c d become the
-       four outputs. */
-    for(;x+64<=pitch;x+=64) {
-        d1=grain_step(a,d); d2=grain_step(b,d1); d3=grain_step(c,d2); d4=grain_step(d,d3);
-        vst1q_u8(row+x,vreinterpretq_u8_u32(d1)); vst1q_u8(row+x+16,vreinterpretq_u8_u32(d2));
-        vst1q_u8(row+x+32,vreinterpretq_u8_u32(d3)); vst1q_u8(row+x+48,vreinterpretq_u8_u32(d4));
-        a=d1; b=d2; c=d3; d=d4;
-    }
-    for(;x+16<=pitch;x+=16) {
-        d1=grain_step(a,d);
-        a=b; b=c; c=d; d=d1;
-        vst1q_u8(row+x,vreinterpretq_u8_u32(d1));
-    }
-    vst1q_u32(r->a,a); vst1q_u32(r->b,b); vst1q_u32(r->c,c); vst1q_u32(r->d,d);
-#else
-    u32 i,t,v,word=!((u32)row&3U);
-    for(;x+16<=pitch;x+=16) for(i=0;i<4;++i) {
-        t=r->a[i]^(r->a[i]<<11);
-        r->a[i]=r->b[i]; r->b[i]=r->c[i]; r->c[i]=r->d[i];
-        v=r->d[i]=r->d[i]^(r->d[i]>>19)^t^(t>>8);
-        /* The camera is little-endian, so a word store writes the four bytes. */
-        if(word) ((GrainWord *)(void *)(row+x))[i]=v;
-        else { row[x+4*i]=(u8)v; row[x+4*i+1]=(u8)(v>>8); row[x+4*i+2]=(u8)(v>>16); row[x+4*i+3]=(u8)(v>>24); }
-    }
-#endif
-}
-/* Medium and large grain add two tiles of blurred noise. A blur of the whole
-   plane took about half a second for each shot on a GR III (GRKIT/PROFILE),
-   and the camera waited for it before playback and power-off. Each shot
-   blurs two new tiles of random bytes, 256 and 240 samples wide. Each tile
-   repeats across the plane from its own random place, and the plane gets
-   their sum. A tile wraps at its edges, so neither has a seam, and the sum
-   repeats only every 3840 samples, the least common multiple of the widths.
-   Each row and column of a tile then has the mean 128 (grain_center).
-   Patches of one tile left seams that showed as a grid in the photos.
-
-   The tile blur is the binomial filter of 1 2 1 or 1 4 6 4 1, down the
-   columns and then along the rows. The weights of the two passes sum to 16
-   for 3 taps and to 256 for 5 taps, so the mean of random bytes is 128 times
-   that sum. The filter scales the standard deviation by the sum of the
-   squared weights of one pass, 6 or 70, so the deviation from the mean
-   divided by 6 or 70 has the standard deviation of one random byte. The
-   division is a multiply by 5461 (1 / 6.0004) or 468 (1 / 70.02). A tile
-   keeps 128 plus half of that deviation, so it rarely reaches 0 or 255.
-   The plane gets 128 plus the sum of the two half deviations times sqrt 2:
-   the sum plus 13573 / 32768 (sqrt 2 - 1) of it, limited to 0..255 once,
-   with the standard deviation of one random byte. */
-#define GRAIN_GAIN(taps) ((taps)==3 ? 5461 : 468)
-#define GRAIN_SQRT2_PART 13573
-#define GRAIN_TILE_A 256U
-#define GRAIN_TILE_B 240U
-#define GRAIN_NOISE_BYTES (GRAIN_TILE_A*GRAIN_TILE_A+GRAIN_TILE_B*GRAIN_TILE_B+6U*GRAIN_TILE_A)
-_Static_assert(!(GRAIN_TILE_A%16U) && !(GRAIN_TILE_B%16U) && GRAIN_TILE_B<=GRAIN_TILE_A,
-               "Each tile row is whole 16-byte blocks, and the work rows fit both tiles");
-/* Copy `n` bytes, a multiple of 16. */
-static void grain_copy(u8 *out,const u8 *in,u32 n) {
-    u32 i;
-#ifdef GRAIN_NEON
-    for(i=0;i<n;i+=16) vst1q_u8(out+i,vld1q_u8(in+i));
-#else
-    for(i=0;i<n;++i) out[i]=in[i];
-#endif
-}
-/* Blur the random n x n tile in place, with its edges wrapped. `keep` holds
-   four rows of the random bytes: rows 0 and 1, which the last rows read, and
-   the two rows above the current one. `sums` holds the column sums of one
-   row. */
-static void grain_tile(u8 *tile,u32 n,u8 *keep,u16 *sums,u32 taps) {
-    static const u8 k3[3]={1,2,1},k5[5]={1,4,6,4,1};
-    const u8 *k=taps==3 ? k3 : k5, *rows[5];
-    u32 half=taps/2,x,y,j;
-    int s,v;
-    grain_copy(keep,tile,2*n);
-    for(y=0;y<n;++y) {
-        for(j=0;j<taps;++j) {
-            int r=(int)y+(int)j-(int)half;
-            if(r<0) rows[j]=tile+(u32)(r+(int)n)*n;
-            else if((u32)r>=n) rows[j]=keep+((u32)r-n)*n;
-            else if((u32)r<y) rows[j]=keep+(2+((u32)r&1))*n;
-            else rows[j]=tile+(u32)r*n;
-        }
-        for(x=0;x<n;++x) {
-            u32 c=0;
-            for(j=0;j<taps;++j) c+=k[j]*rows[j][x];
-            sums[x]=(u16)c;
-        }
-        /* Row y - 2 has its last reader above. */
-        grain_copy(keep+(2+(y&1))*n,tile+y*n,n);
-        for(x=0;x<n;++x) {
-            /* Column x - half + j, wrapped: a runs from n - half to 2n - 1 + half. */
-            u32 a=x+n-half;
-            s=-128*(taps==3 ? 16 : 256);
-            for(j=0;j<taps;++j,++a) s+=k[j]*sums[a<n ? a : a-n<n ? a-n : a-2*n];
-            v=128+((2*s*GRAIN_GAIN(taps)+65536)>>17);
-            tile[y*n+x]=(u8)(v<0 ? 0 : v>255 ? 255 : v);
-        }
-    }
-}
-/* The rounded mean of n values that sum to `sum`. */
-static int grain_mean(int sum,u32 n) {
-    return sum<0 ? -(int)core_divide((u32)-sum+n/2U,n) : (int)core_divide((u32)sum+n/2U,n);
-}
-static u8 grain_shift(u8 v,int d) { int s=(int)v-d; return (u8)(s<0 ? 0 : s>255 ? 255 : s); }
-/* Bring the mean of each row, then of each column, of the tile to 128. A
-   row of a tile repeats along the whole plane, so the small mean of its
-   samples did not average away and showed as a faint line across the photo;
-   a column did the same downwards. */
-static void grain_center(u8 *tile,u32 n) {
-    u32 x,y;
-    int s,d;
-    for(y=0;y<n;++y) {
-        for(x=0,s=0;x<n;++x) s+=(int)tile[y*n+x]-128;
-        d=grain_mean(s,n);
-        for(x=0;x<n;++x) tile[y*n+x]=grain_shift(tile[y*n+x],d);
-    }
-    for(x=0;x<n;++x) {
-        for(y=0,s=0;y<n;++y) s+=(int)tile[y*n+x]-128;
-        d=grain_mean(s,n);
-        for(y=0;y<n;++y) tile[y*n+x]=grain_shift(tile[y*n+x],d);
-    }
-}
-/* The sample of the plane for each sum of two half deviations, 0 to 510:
-   128 plus the deviation of the sum times sqrt 2, limited to 0..255. */
-#define GRAIN_SUMS 511U
-static u8 grain_sample(u32 sum) {
-    int s=(int)sum-256, v=128+s+((2*s*GRAIN_SQRT2_PART+32768)>>16);
-    return (u8)(v<0 ? 0 : v>255 ? 255 : v);
-}
-/* 16 samples of the plane from two half deviations. The scalar code reads
-   the samples from `sums` (grain_sample of each sum). */
-static void grain_add16(u8 *out,const u8 *a,const u8 *b,const u8 *sums) {
-#ifdef GRAIN_NEON
-    uint8x16_t va=vld1q_u8(a),vb=vld1q_u8(b);
-    (void)sums;
-    int16x8_t lo=vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(va),vget_low_u8(vb))),vdupq_n_s16(256));
-    int16x8_t hi=vsubq_s16(vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(va),vget_high_u8(vb))),vdupq_n_s16(256));
-    lo=vaddq_s16(vaddq_s16(lo,vqrdmulhq_s16(lo,vdupq_n_s16(GRAIN_SQRT2_PART))),vdupq_n_s16(128));
-    hi=vaddq_s16(vaddq_s16(hi,vqrdmulhq_s16(hi,vdupq_n_s16(GRAIN_SQRT2_PART))),vdupq_n_s16(128));
-    vst1q_u8(out,vcombine_u8(vqmovun_s16(lo),vqmovun_s16(hi)));
-#else
-    u32 i;
-    for(i=0;i<16;++i) out[i]=sums[a[i]+b[i]];
-#endif
-}
-/* The sum of the two tiles repeats every GRAIN_PERIOD samples along a row,
-   and every GRAIN_PERIOD rows down the plane: the least common multiple of
-   the tile widths. */
-#define GRAIN_PERIOD 3840U
-_Static_assert(!(GRAIN_PERIOD%GRAIN_TILE_A) && !(GRAIN_PERIOD%GRAIN_TILE_B) && !(GRAIN_PERIOD%16U),
-               "A period holds whole tiles and whole 16-sample blocks");
-/* Copy `n` bytes from `in` to `out` forwards, so a copy onto a later part of
-   its own source repeats it. A multiple of 16 bytes. */
-static void grain_repeat(u8 *out,const u8 *in,u32 n) {
-    u32 i;
-    if(!(((u32)out|(u32)in)&3U)) {
-        GrainWord *o=(GrainWord *)(void *)out;
-        const GrainWord *s=(const GrainWord *)(const void *)in;
-        for(i=0;i<n/4U;++i) o[i]=s[i];
-    } else {
-        for(i=0;i<n;++i) out[i]=in[i];
-    }
-}
-/* Fill the plane with the sum of the two tiles, each from the place that
-   `place_a` and `place_b` give: the start column in 16-sample blocks in the
-   low half, the start row in the high half. The samples after the first
-   period of a row, and the rows after the first period, repeat earlier ones. */
-static void grain_layers(u8 *plane,u32 pitch,u32 height,const u8 *a,const u8 *b,u32 place_a,u32 place_b) {
-    u32 y,x,row_a=place_a>>16,row_b=place_b>>16,width=pitch<GRAIN_PERIOD ? pitch : GRAIN_PERIOD;
-    u8 sums[GRAIN_SUMS];
-    for(x=0;x<GRAIN_SUMS;++x) sums[x]=grain_sample(x);
-    for(y=0;y<height;++y) {
-        const u8 *line_a=a+row_a*GRAIN_TILE_A,*line_b=b+row_b*GRAIN_TILE_B;
-        u32 column_a=(place_a&0xffffU)*16U,column_b=(place_b&0xffffU)*16U;
-        u8 *out=plane+y*pitch;
-        if(y>=GRAIN_PERIOD) grain_repeat(out,out-GRAIN_PERIOD*pitch,pitch);
-        else {
-            for(x=0;x<width;x+=16) {
-                grain_add16(out+x,line_a+column_a,line_b+column_b,sums);
-                column_a+=16; if(column_a==GRAIN_TILE_A) column_a=0;
-                column_b+=16; if(column_b==GRAIN_TILE_B) column_b=0;
-            }
-            if(pitch>width) grain_repeat(out+width,out,pitch-width);
-        }
-        if(++row_a==GRAIN_TILE_A) row_a=0;
-        if(++row_b==GRAIN_TILE_B) row_b=0;
-    }
-}
-/* A place in a tile of width n from a random word. The divisions are by
-   constants, which compile to multiplies. */
-static u32 grain_place(u32 p,u32 n) {
-    return (((p>>8)%n)<<16)|((p&0xffU)%(n/16U));
-}
+#include "grain_noise.h"
 /* Replaces the noise fill of the granulation (grain_fill in picture.S). The
    profile counts the microseconds of the generic timer, which all cores
    share: the task can move to another core, whose cycle counter is another
    one (runtime/profile.h). */
 void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
     volatile u32 *h=framing_header();
-    u32 shot=h[GRKIT_HOST_GRAIN_SHOT/4],table=h[GRKIT_HOST_PROFILE/4],high,low,block,y;
-    GrainRandom r;
+    u32 shot=h[GRKIT_HOST_GRAIN_SHOT/4],table=h[GRKIT_HOST_PROFILE/4],high,low,block;
     if(!shot || shot>3 || !pitch || pitch%16 || pitch>GRAIN_ROW_MAX || pitch*height!=size || height<1) {
         GRAIN_NATIVE_FILL(buffer,size);
         return;
     }
     low=GRAIN_COUNTER(&high);
-    grain_seed(&r,low^high*0x27d4eb2dU);
+    /* Small, or no memory for the tiles: one random byte each. */
     block=shot==1 ? 0 : GRAIN_ALLOCATE(GRAIN_NOISE_BYTES);
-    if(!block) {
-        /* Small, or no memory for the tiles: one random byte each. */
-        for(y=0;y<height;++y) grain_random_row(&r,GRAIN_MAP(buffer)+y*pitch,pitch);
-    } else {
-        u8 *a=GRAIN_MAP(block),*b=a+GRAIN_TILE_A*GRAIN_TILE_A,*keep=b+GRAIN_TILE_B*GRAIN_TILE_B;
-        u16 *sums=(u16 *)(keep+4*GRAIN_TILE_A);
-        u32 taps=shot==2 ? 3 : 5,seed,place_a,place_b;
-        for(y=0;y<GRAIN_TILE_A;++y) grain_random_row(&r,a+y*GRAIN_TILE_A,GRAIN_TILE_A);
-        for(y=0;y<GRAIN_TILE_B;++y) grain_random_row(&r,b+y*GRAIN_TILE_B,GRAIN_TILE_B);
-        grain_tile(a,GRAIN_TILE_A,keep,sums,taps);
-        grain_tile(b,GRAIN_TILE_B,keep,sums,taps);
-        grain_center(a,GRAIN_TILE_A);
-        grain_center(b,GRAIN_TILE_B);
-        /* One statement each: the order of the draws is fixed. */
-        seed=r.d[0];
-        place_a=grain_place(grain_mix(&seed),GRAIN_TILE_A);
-        place_b=grain_place(grain_mix(&seed),GRAIN_TILE_B);
-        grain_layers(GRAIN_MAP(buffer),pitch,height,a,b,place_a,place_b);
-        GRAIN_RELEASE(block);
-    }
+    grain_plane(GRAIN_MAP(buffer),pitch,height,low^high*0x27d4eb2dU,shot==2 ? 3 : 5,block ? GRAIN_MAP(block) : 0);
+    if(block) GRAIN_RELEASE(block);
     if(table) profile_add(table,GRKIT_PROFILE_PICTURE_GRAIN,core_divide(GRAIN_COUNTER(&high)-low,GRAIN_COUNTER_MHZ));
 }
 #endif
 
-#include "xmp.h"
 /* The JPEG header writer of the firmware: +0x18 the header buffer, +0x1c its
    size, and +0x48 the offset of the APP7 preview segment. The header starts
    with SOI, the APP1 marker and length, and "Exif\0\0", so the TIFF block
@@ -990,29 +827,106 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
 #define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)(address))
 #endif
 #define XMP_NAME_UNITS ((GRKIT_RECORD_MONOCHROME-GRKIT_RECORD_NAME)/2)
+/* The name of the look of record `record` in `name`. */
+static void picture_record_name(u32 record,u16 *name) {
+    u32 i;
+    for(i=0;i<XMP_NAME_UNITS;++i) name[i]=HALF(record,GRKIT_RECORD_NAME+i*2);
+}
+/* The XMP entry (tag 700) of IFD0 of a DNG (runtime/picture.S:
+   picture_dng_xmp), with the packet of the photo (runtime/photo_xmp.h):
+   `factory` makes entries, and `ifd` takes them in tag order. The look is
+   the GRKit effect of the shot; a native look has no name here, as the
+   entry has no ImageTone code to read. The writer does not have the shot
+   yet: with Uncropped RAW, the packet gets the Camera Raw crop of the whole
+   picture, which picture_dng_xmp_set makes the crop of the shot. */
+#define PICTURE_XMP_TAG 700U
+/* Whether an address is in the RAM of the camera. */
+#define PICTURE_RAM(address) ((address)>=0x40000000U && (address)<0xc0000000U)
+/* The DNG specification and exiftool take tag 700 as BYTE. */
+#define PICTURE_TIFF_BYTE 1U
+void picture_dng_xmp_add(u32 factory,u32 ifd) {
+#ifdef FW_IFD_APPEND
+    volatile u32 *h=framing_header(), *stash;
+    u8 *packet;
+    u16 name[XMP_NAME_UNITS];
+    u32 n, entry, record, crop_at=0, full;
+    if(!h[GRKIT_HOST_SERVICES/4] || !h[GRKIT_HOST_CAPABILITIES/4]) return;
+    stash=services_word(h,SERVICES_DNG_CROP);
+    stash[DNG_CROP_ENTRY/4]=0;
+    if((record=h[GRKIT_HOST_ACTIVE/4])) picture_record_name(record,name);
+    full=picture_raw_uncropped(h);
+    packet=(u8 *)services_word(h,SERVICES_DEVELOP+DEVELOP_COPY_RECORD);
+    n=photo_xmp_build(h,packet,DEVELOP_RECORD_SIZE-(sizeof(xmp_end)-1),record ? name : 0,XMP_NAME_UNITS,1,
+                      full ? &crop_at : 0);
+    if(!n) return;
+    n=xmp_put(packet,n,xmp_end,sizeof(xmp_end)-1);
+    entry=((u32 (*)(u32,u32,u32,u32,u32))WORD(WORD(factory,0),0xc))(factory,PICTURE_XMP_TAG,PICTURE_TIFF_BYTE,n,0);
+    if(!entry) return;
+    ((void (*)(u32,u32))FW_IFD_APPEND)(ifd,entry);
+    ((void (*)(u32,u32,u32))FW_IFD_ENTRY_DATA)(entry,(u32)packet,n);
+    if(full) {
+        stash[DNG_CROP_AT/4]=crop_at;
+        stash[DNG_CROP_ENTRY/4]=entry;
+    }
+#else
+    (void)factory; (void)ifd;
+#endif
+}
+/* The data of an entry. A host test maps it. */
+#ifndef PICTURE_DNG_DATA
+#define PICTURE_DNG_DATA(address,size) ((u8 *)(address))
+#endif
+/* For picture_dng_set (runtime/picture.S): the tag setter of the DNG writer
+   gets `entry`. For the XMP entry of picture_dng_xmp_add with a Camera Raw
+   crop, the crop of the whole picture becomes the crop of the shot, in
+   place: the setter has the information and the shot of the DNG by now. */
+void picture_dng_xmp_set(u32 setter,u32 entry) {
+    volatile u32 *h, *stash;
+    u32 info, shot, data, count, at, crop[8], kept[4];
+    if(HALF(entry,4)!=PICTURE_XMP_TAG) return;
+    h=framing_header();
+    if(!h[GRKIT_HOST_SERVICES/4]) return;
+    stash=services_word(h,SERVICES_DNG_CROP);
+    if(stash[DNG_CROP_ENTRY/4]!=entry) return;
+    stash[DNG_CROP_ENTRY/4]=0;
+    info=WORD(setter,DNG_SETTER_INFO); shot=WORD(setter,DNG_SETTER_SHOT);
+    data=WORD(entry,0x10); count=WORD(entry,8); at=stash[DNG_CROP_AT/4];
+    if(!PICTURE_RAM(info) || !PICTURE_RAM(shot) || !data || at>=count) return;
+    picture_shot_frame(h,shot,info,kept,crop);
+    picture_whole(info,crop+4);
+    photo_xmp_crop_values(PICTURE_DNG_DATA(data,count),at,count,crop);
+}
 /* For picture_jpeg_header and picture_jpeg_rewrite (runtime/picture.S),
-   after the firmware set up the APP1 Exif segment: an XMP segment with the
-   name of the look of the picture goes at +0x48, and +0x48 moves past it. The
-   APP7 setup, the maker-note offset of APP7, and the place of the main image
-   all follow +0x48. No segment is written while no module runs (the GRKit
-   switch is Off, or safe mode), for a code without a name, or into a buffer
-   without room for the largest APP7. */
+   after the firmware set up the APP1 Exif segment: the XMP segment of the
+   photo goes at +0x48, and +0x48 moves past it. The APP7 setup, the
+   maker-note offset of APP7, and the place of the main image all follow
+   +0x48. A capture and a RAW development record their settings. An edit in
+   playback, such as Resize, records only the look: the current settings are
+   not those of the photo. No segment is written while no module runs (the
+   GRKit switch is Off, or safe mode), or into a buffer without room for the
+   largest APP7. */
 void picture_jpeg_xmp(u32 writer) {
     volatile u32 *h=framing_header();
     u32 buffer=WORD(writer,JPEG_WRITER_BUFFER), size=WORD(writer,JPEG_WRITER_SIZE), at=WORD(writer,JPEG_WRITER_APP7);
-    u32 code, record, segment, units=XMP_NAME_UNITS, i;
+    u32 code, record, segment, units=XMP_NAME_UNITS, room, length, settings;
     u16 name[XMP_NATIVE_UNITS>XMP_NAME_UNITS ? XMP_NATIVE_UNITS : XMP_NAME_UNITS];
+    const u16 *look=name;
+    volatile u8 *out;
     if(!h || !h[GRKIT_HOST_CAPABILITIES/4] || !buffer || at<=JPEG_TIFF || at>size || (at&(XMP_ALIGN-1))) return;
-    if(!xmp_tone_code(PICTURE_JPEG_MAP(buffer+JPEG_TIFF,at-JPEG_TIFF),at-JPEG_TIFF,&code)) return;
-    if((record=record_of_code(h,code))) {
-        for(i=0;i<XMP_NAME_UNITS;++i) name[i]=HALF(record,GRKIT_RECORD_NAME+i*2);
-    } else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) {
-        units=XMP_NATIVE_UNITS;
-    } else {
-        return;
-    }
-    segment=xmp_segment_size(name,units);
+    if(!xmp_tone_code(PICTURE_JPEG_MAP(buffer+JPEG_TIFF,at-JPEG_TIFF),at-JPEG_TIFF,&code)) look=0;
+    else if((record=record_of_code(h,code))) picture_record_name(record,name);
+    else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) units=XMP_NATIVE_UNITS;
+    else look=0;
+    settings=!((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE] || PICTURE_DEVELOPING();
+    /* The packet goes in place: room for it, its end, and the largest APP7. */
+    room=size-at;
+    if(room<=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1) return;
+    room-=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1;
+    if(room>0xffffU) room=0xffffU;
+    out=PICTURE_JPEG_MAP(buffer+at,size-at);
+    length=photo_xmp_build(h,(u8 *)out+XMP_SEGMENT_HEAD,room,look,units,settings,0);
+    segment=xmp_segment_size(length);
     if(!segment || segment>size-at || size-at-segment<XMP_APP7_RESERVE) return;
-    xmp_write_segment(PICTURE_JPEG_MAP(buffer+at,segment),segment,name,units);
+    xmp_finish_segment(out,segment,length);
     WORD(writer,JPEG_WRITER_APP7)=at+segment;
 }

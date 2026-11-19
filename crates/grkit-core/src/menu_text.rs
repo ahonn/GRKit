@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 80;
+pub const STRINGS: usize = 81;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -84,6 +84,9 @@ struct Words {
     distance_unit: &'static str,
     meters: &'static str,
     feet: &'static str,
+    /// The Uncropped RAW row of GRKit Settings: a DNG keeps the whole picture
+    /// of the sensor. Its values are On and Off.
+    uncropped_raw: &'static str,
     /// The Battery in Simple Display row of GRKit Settings. Its values are
     /// the Off and On of the switch.
     battery_simple: &'static str,
@@ -169,6 +172,7 @@ const ENGLISH: Words = Words {
     distance_unit: "Distance Unit",
     meters: "Meters",
     feet: "Feet",
+    uncropped_raw: "Uncropped RAW",
     battery_simple: "Battery in Simple Display",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
@@ -243,6 +247,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     distance_unit: "距离单位",
     meters: "米",
     feet: "英尺",
+    uncropped_raw: "RAW 不裁切",
     battery_simple: "简易显示时显示电量",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
@@ -314,6 +319,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     distance_unit: "距離單位",
     meters: "公尺",
     feet: "英尺",
+    uncropped_raw: "RAW 不裁切",
     battery_simple: "簡易顯示時顯示電量",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
@@ -387,6 +393,7 @@ const JAPANESE: Words = Words {
     distance_unit: "距離の単位",
     meters: "メートル",
     feet: "フィート",
+    uncropped_raw: "RAW クロップなし",
     battery_simple: "簡易表示でバッテリー表示",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
@@ -461,6 +468,7 @@ const KOREAN: Words = Words {
     distance_unit: "거리 단위",
     meters: "미터",
     feet: "피트",
+    uncropped_raw: "RAW 크롭 없음",
     battery_simple: "간단 표시에 배터리 표시",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
@@ -652,6 +660,12 @@ pub const RUNS: &[Run] = &[
         "The settings row that orders the options of a module page.",
     ),
     run(
+        "RAW",
+        1,
+        "The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and \
+         TEXT_OFF.",
+    ),
+    run(
         "BATTERY",
         1,
         "The Battery in Simple Display row of GRKit Settings. Its values are TEXT_OFF and TEXT_ON.",
@@ -743,6 +757,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         ]),
         "UNIT" => words(&[w.grkit_settings, w.distance_unit, w.meters, w.feet]),
         "ORDER" => words(&[w.order]),
+        "RAW" => words(&[w.uncropped_raw]),
         "BATTERY" => words(&[w.battery_simple]),
         _ => unreachable!("Unknown menu text run {name}"),
     }

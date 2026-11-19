@@ -219,6 +219,11 @@
 #define NATIVE_DETAIL_ND_ICONS 0xef,0x183,0x184
 #define NATIVE_DETAIL_COMPENSATION_ICON 0x288U
 #define NATIVE_DETAIL_ISO_ICON 0x5eU
+/* The contents that playback opens (FW_CONTENTS): the handle of the open
+   file, and in it the path of the file, whose first byte, the drive
+   letter, is 0. */
+#define CONTENTS_HANDLE 0x24
+#define CONTENTS_PATH 0x30
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */
@@ -252,14 +257,16 @@
 #define DEVELOP_LIST_TITLE ldr r3, [r4, #0x160]
 #define DEVELOP_TOP_TITLE mov r3, r6
 /* RawDevelopmentTopController: its native rows, then the GRKit row
-   (runtime/menu.c); the end of the decide method of its rows (r4 the
-   controller) and of its row name method (the text ID in r0); and the
-   offset from the default of its subtitle switch to the branch to the
-   subtitle without a value. */
+   (runtime/menu.c); the register of the row in its switches of the rows;
+   the end of the decide method of its rows (r4 the controller) and of its
+   row name method (the text ID in r0); and the
+   offset from the default of its subtitle switch (r5 the controller) to
+   the branch to the subtitle without a value. */
 #define DEVELOP_TOP_ROWS 9
 /* The text ID of the title of the Image Control list of the development,
    which the GRKit list replaces (runtime/menu.c). */
 #define DEVELOP_TONE_TITLE 0x10aU
+#define DEVELOP_TOP_ROW r0
 #define DEVELOP_TOP_DECIDE_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
 #define DEVELOP_TOP_NAME_END sub sp, r11, #12; ldm sp, {r11, sp, pc}
 #define DEVELOP_TOP_NO_VALUE 0x28

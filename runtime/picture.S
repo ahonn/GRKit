@@ -27,7 +27,9 @@ picture_dng_size:
     b picture_dng_crop
 
 /* C uses soft-float; the native rectangle helper takes crop in s0 and
-   aspect on the stack. rect is {width,height,absolute x,absolute y}. */
+   aspect on the stack. picture_dng_rect(factor, rect): `factor` is the bits
+   of the float crop factor, and rect is {width,height,absolute x,absolute y}
+   of aspect 3:2. */
 .fpu vfpv3
 .thumb
 .thumb_func
@@ -36,8 +38,7 @@ picture_dng_rect:
     push {r4,lr}
     sub sp, sp, #8
     mov r4, r1
-    add r0, r0, #(SHOT_CROP & ~0xff)
-    vldr s0, [r0, #(SHOT_CROP & 0xff)]
+    vmov s0, r0
     movs r0, #0
     str r0, [sp]
     mov r0, r4
@@ -371,6 +372,35 @@ JPEG_HEADER_STUB picture_jpeg_header, HOOK_PICTURE_JPEG_HEADER_TARGET
 #endif
 #ifdef HOOK_PICTURE_JPEG_REWRITE_TARGET
 JPEG_HEADER_STUB picture_jpeg_rewrite, HOOK_PICTURE_JPEG_REWRITE_TARGET
+#endif
+
+#ifdef HOOK_PICTURE_DNG_XMP
+/* The DNG writer adds the entries of IFD0 in tag order (r4 the entry
+   factory, r5 IFD0). Before the Copyright entry, picture_dng_xmp_add adds
+   the XMP entry (tag 700); then the replaced instruction runs. */
+.global picture_dng_xmp
+picture_dng_xmp:
+    push {r0-r3, r12, lr}
+    mov r0, r4
+    mov r1, r5
+    bl picture_dng_xmp_add
+    pop {r0-r3, r12, lr}
+    .inst HOOK_PICTURE_DNG_XMP_STOCK
+    ldr pc, =HOOK_PICTURE_DNG_XMP_RESUME
+.ltorg
+#endif
+/* The tag setter of the DNG writer, at its first instruction: r0 = the
+   setter, r1 = the entry to set. picture_dng_xmp_set (picture.c) gives the
+   XMP entry the crop of the shot. */
+#ifdef HOOK_PICTURE_DNG_SET
+.global picture_dng_set
+picture_dng_set:
+    push {r0-r3, r12, lr}
+    bl picture_dng_xmp_set
+    pop {r0-r3, r12, lr}
+    .inst HOOK_PICTURE_DNG_SET_STOCK
+    ldr pc, =HOOK_PICTURE_DNG_SET_RESUME
+.ltorg
 #endif
 
 /* Capture: the maker-note adjustments (tag 0x247) of a GRKit shot. Replaces

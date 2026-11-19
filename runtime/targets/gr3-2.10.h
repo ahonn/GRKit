@@ -159,6 +159,16 @@
 #define FW_STRING_VIEW_STYLE FIRMWARE(0x53390ff8)
 /* Maker-note IFD entry setter: (entry, 0, value) stores a u16 value. */
 #define FW_IFD_SET_SHORT FIRMWARE(0x535d02c8)
+/* The TIFF writer: append an entry to an IFD, and copy the data of an
+   entry (runtime/picture.c: picture_dng_xmp_add). */
+#define FW_IFD_APPEND FIRMWARE(0x535cfaa0)
+#define FW_IFD_ENTRY_DATA FIRMWARE(0x535d034c)
+/* The contents that playback opens (runtime/picture.c:
+   picture_develop_record), and the file calls of the RTOS. */
+#define FW_CONTENTS FIRMWARE(0x550870a8)
+#define FW_FILE_OPEN FIRMWARE(0x53841464)
+#define FW_FILE_READ FIRMWARE(0x53841580)
+#define FW_FILE_CLOSE FIRMWARE(0x53841518)
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x535d02e0)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x5365f0ec)

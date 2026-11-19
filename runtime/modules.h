@@ -170,13 +170,9 @@ static u32 choice_value_row(volatile u32 *h,u32 value) {
     }
     return 0;
 }
-/* The text of a crop (CORE.CROP value) on GR IIIx, whose module texts name
-   the focal lengths of a 28 mm lens, or 0 for the module text. */
-static const u16 crop_texts_40mm[GRKIT_CORE_CROP_VALUES-1][6]={
-    {'5','0','m','m',0},{'5','7','m','m',0},{'7','1','m','m',0},{'1','0','0','m','m',0}};
+/* The text of a crop on GR IIIx (runtime/crop.h), or 0 for the module text. */
 static const u16 *crop_text(u32 handle,u32 value) {
-    if(handle!=GRKIT_CORE_CROP || !value || value>=GRKIT_CORE_CROP_VALUES || !CROP_LENS_40MM()) return 0;
-    return crop_texts_40mm[value-1];
+    return handle==GRKIT_CORE_CROP ? crop_lens_text(value) : 0;
 }
 /* The tile of a value of a page: on GR IIIx, a crop shows the tile of its
    own focal length, which follows the tiles of the other cameras

@@ -93,6 +93,13 @@ static __attribute__((unused)) u32 crop_zoom_near(u32 a,u32 b) { return a+2U>=b 
 #ifndef CROP_LENS_40MM
 #define CROP_LENS_40MM() 0
 #endif
+/* The text of a crop (CORE.CROP value) on GR IIIx, whose module texts name
+   the focal lengths of a 28 mm lens, or 0 for the module text. */
+static const u16 crop_texts_40mm[GRKIT_CORE_CROP_VALUES-1][6]={
+    {'5','0','m','m',0},{'5','7','m','m',0},{'7','1','m','m',0},{'1','0','0','m','m',0}};
+static __attribute__((unused)) const u16 *crop_lens_text(u32 value) {
+    return value && value<GRKIT_CORE_CROP_VALUES && CROP_LENS_40MM() ? crop_texts_40mm[value-1] : 0;
+}
 #ifdef CROP_FOCALS
 #ifndef CROP_FOCALS_LENS_40MM
 #define CROP_FOCALS_LENS_40MM CROP_FOCALS

@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6532
+#define GRKIT_HOST_HEADER_SIZE 6536
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -154,15 +154,16 @@
 #define GRKIT_DIAL_SLOT_NAME 1U
 #define GRKIT_DIAL_SLOT_WORDS 2U
 #define GRKIT_DIAL_SLOT_KEY_BASE 992003000U
-/* The copy of the switch, Enable at Start, Distance Unit, and Battery in
-   Simple Display (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value
-   + 1, or 0 without a copy. In the file of the sets, word w has the key
-   GRKIT_MANAGE_COPY_KEY + w. */
+/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, and
+   Battery in Simple Display (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each
+   as its value + 1, or 0 without a copy. In the file of the sets, word w has
+   the key GRKIT_MANAGE_COPY_KEY + w. */
 #define GRKIT_MANAGE_COPY_SWITCH 0U
 #define GRKIT_MANAGE_COPY_START 1U
 #define GRKIT_MANAGE_COPY_UNIT 2U
-#define GRKIT_MANAGE_COPY_BATTERY 3U
-#define GRKIT_MANAGE_COPY_WORDS 4U
+#define GRKIT_MANAGE_COPY_RAW 3U
+#define GRKIT_MANAGE_COPY_BATTERY 4U
+#define GRKIT_MANAGE_COPY_WORDS 5U
 #define GRKIT_MANAGE_COPY_KEY 992003007U
 #define GRKIT_DIAL_VALUE_ON 0U
 #define GRKIT_DIAL_VALUE_OFF 1U
@@ -414,7 +415,9 @@
 #define GRKIT_HOST_LEGACY_TONE_OWNER 976
 /* CORE.ASPECT_MODE: 0 crops photos, 1 draws a composition frame only. */
 #define GRKIT_HOST_ASPECT_MODE 980
-/* Native aspect + 1 at the last live-view bind, or 0 before the first bind. */
+/* The last live-view bind: the native aspect + 1 in the low byte, or 0 before
+   the first bind, and above it the binds since the live view last looked for
+   something to draw (runtime/viewfinder.h). */
 #define GRKIT_HOST_FRAME_NATIVE 984
 /* The Framing ratio of the RAW development in playback (a CORE.ASPECT value),
    or 0 for its native aspect. The start of a development clears it
@@ -539,28 +542,29 @@
    HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). Bit 0, which no
    position has, is the older value for each of them off. */
 #define GRKIT_HOST_DIAL_SHARED_OFF 6488
-/* The copy of the switch, Enable at Start, Distance Unit, and Battery in
-   Simple Display, `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
-   HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
-   before the main state file, and writes the values of the start here. */
+/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, and
+   Battery in Simple Display, `MANAGE_COPY_WORDS` words (runtime/manage.h),
+   right after HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from
+   the copy before the main state file, and writes the values of the start
+   here. */
 #define GRKIT_HOST_MANAGE_COPY 6492
-#define GRKIT_HOST_MANAGE_COPY_WORDS 4
+#define GRKIT_HOST_MANAGE_COPY_WORDS 5
 /* Word index of the PERSIST buffer within modulecode, not a native address. */
-#define GRKIT_HOST_PERSIST_WORD 6508
+#define GRKIT_HOST_PERSIST_WORD 6512
 /* The record of the ADJ preview of a recipe whose Fn adjustments the live view
    takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the record, while
    GRKIT_HOST_PREVIEW is that record; else 0 (runtime/recipe_preview.h,
    runtime/processing.h). */
-#define GRKIT_HOST_PREVIEW_FN 6512
+#define GRKIT_HOST_PREVIEW_FN 6516
 /* Those adjustments: one stored byte each, in the order of RECORD_PARAMETERS.
    It follows GRKIT_HOST_PREVIEW_FN. */
-#define GRKIT_HOST_PREVIEW_FN_BYTES 6516
+#define GRKIT_HOST_PREVIEW_FN_BYTES 6520
 #define GRKIT_HOST_PREVIEW_FN_BYTES_WORDS 3
 /* The copy of the native settings record from the start of the ADJ preview of
    a recipe, in the services block, or 0 while no preview writes native
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
-#define GRKIT_HOST_RECIPE_PREVIEW 6528
+#define GRKIT_HOST_RECIPE_PREVIEW 6532
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -631,6 +635,14 @@
 #define GRKIT_CORE_RECIPE_BIT 0x800
 #define GRKIT_CORE_SETTING_WORDS 0,208,48,240,980,256,188,1048,1052,1092,1096,0
 #define GRKIT_CORE_SETTING_VALUES 0,9,5,4,2,6,16,5,2,4,2,0
+/* The state file ID of each CORE setting that has a header word, or 0
+   (grkit_core::runtime::state_key_id). */
+#define GRKIT_CORE_SETTING_IDS 0U,484706023U,790270076U,977751003U,826089556U,458876999U,697053196U,660632122U,618415657U,862826181U,360900158U,0U
+/* The XMP packet of a photo (grkit_core::photo_xmp, runtime/photo_xmp.h): its
+   namespace, and each setting that changes the picture: its state file ID, its
+   core handle or 0, and its property. */
+#define GRKIT_PHOTO_XMP_NAMESPACE "https://grkit.app/ns/1.0/"
+#define GRKIT_PHOTO_XMP_SETTINGS {790270076U,0x102U,"Grain"},{977751003U,0x103U,"GrainSize"},{73603892U,0x0U,"Bloom"},{979977653U,0x0U,"Halation"},{208924775U,0x0U,"HalationColor"},{862826181U,0x109U,"Border"},{360900158U,0x10aU,"BorderColor"},{484706023U,0x101U,"Framing"},{660632122U,0x107U,"Crop"},{157666443U,0x0U,"DateImprint"},{247126882U,0x0U,"DateLook"},{330071171U,0x0U,"DatePosition"}
 
 /* An Image Control record. The records follow the header. */
 #define GRKIT_RECORD_SIZE 0x1100
@@ -1040,9 +1052,12 @@
 #define TEXT_UNIT 74
 /* The settings row that orders the options of a module page. */
 #define TEXT_ORDER 78
+/* The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and
+   TEXT_OFF. */
+#define TEXT_RAW 79
 /* The Battery in Simple Display row of GRKit Settings. Its values are TEXT_OFF
    and TEXT_ON. */
-#define TEXT_BATTERY 79
-#define GRKIT_TEXT_STRINGS 80
+#define TEXT_BATTERY 80
+#define GRKIT_TEXT_STRINGS 81
 
 #endif

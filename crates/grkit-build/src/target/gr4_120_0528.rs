@@ -274,6 +274,16 @@ const SITES: &[Site] = &[
     ("menu_develop_aspect_list_text", 0x531a38cc, "177c07eb"),
     ("menu_develop_aspect_top_text", 0x5319f234, "bd8d07eb"),
     ("menu_develop_aspect_top_icon", 0x5319f4d4, "048d07eb"),
+    // RawDevelopmentTopController: the default of the check of a kind of
+    // row, both end tests of the loop over the kinds, and the defaults of the
+    // fill, decide, row name, and subtitle switches.
+    ("menu_develop_top_available", 0x5319e010, "230000ea"),
+    ("menu_develop_top_kinds_0", 0x5319e110, "090054e3"),
+    ("menu_develop_top_kinds_1", 0x5319e14c, "090054e3"),
+    ("menu_develop_top_kind_fill", 0x5319f354, "6b0000ea"),
+    ("menu_develop_top_decide", 0x5319eaa0, "5c0000ea"),
+    ("menu_develop_top_name", 0x5319f6c0, "1a0000ea"),
+    ("menu_develop_top_value", 0x5319f110, "4e0000ea"),
     // DigitalFilterProcess SetEffectParameter (0x537212ec), and its stage
     // gate (0x537347ac, plan +0x25).
     ("grain_enable", 0x537214c0, "b537d4e5"),
@@ -299,6 +309,10 @@ const SITES: &[Site] = &[
     // Clarity (0x538c7c5c).
     ("canvas_filter_0", 0x53721700, "559906eb"),
     ("canvas_filter_1", 0x53721d8c, "b29706eb"),
+    // The DNG writer: the add of the Copyright entry to IFD0.
+    ("picture_dng_xmp", 0x538220b0, "981208e3"),
+    // The tag setter of the DNG writer: its first instruction.
+    ("picture_dng_set", 0x53824858, "0dc0a0e1"),
 ];
 
 /// The stock instructions around the processing hooks.

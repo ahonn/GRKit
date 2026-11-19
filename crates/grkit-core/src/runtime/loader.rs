@@ -17,6 +17,10 @@ use crate::card::{DATA_FOLDER, LINUX_DIRECTORY, RTOS_PACKAGE_FOLDER};
 /// state file when two reads in a row agree, so a change reaches the card
 /// one to two intervals after the last change.
 pub const STATE_POLL_MS: u32 = 2000;
+/// The resident loader requests an export of the settings only after a change
+/// counter of the header moves, and once after this number of idle polls: a
+/// change that no counter shows saves within about one minute.
+pub const STATE_IDLE_POLLS: u32 = 30;
 /// In the development profile (runtime/profile.h), the resident loader
 /// writes the counts of the core to `PROFILE.LOG` in the data folder after
 /// this many polls, and clears them.
@@ -662,11 +666,14 @@ fn state_script() -> Vec<String> {
     lines.extend([
         format!("filesearch '{}'", state_path(StateFile::Main, "TXT")),
         "if result = 0 saved = changes - 1".into(),
+        // No sum of the counters is negative, so the first poll is complete.
+        "hint = 0".into(),
+        "quiet = 0 - 1".into(),
+        "idle = 0".into(),
         format!("profile = {}", word(HOST_PROFILE)),
         "if profile <> 0 goto profile_watch".into(),
-        ":watch".into(),
-        format!("mpause {STATE_POLL_MS}"),
     ]);
+    lines.extend(watch_idle("watch"));
     lines.extend(watch_poll("watch"));
 
     // Save each file after a change of one of its keys. `filerename` cannot
@@ -811,7 +818,7 @@ fn state_script() -> Vec<String> {
             // The words of the snapshot of each user mode that are not 0,
             // then those of what each user mode does, the word of P/Av/Tv/M
             // (runtime/mode_dial.h), and the copy of the switch, Enable at
-            // Start, and Distance Unit (runtime/manage.h), at their keys
+            // Start, Distance Unit, and Uncropped RAW (runtime/manage.h), at their keys
             // (state::dial_set_key). The save of the recipe file has the same
             // variables, which keeps the variables of the script few.
             lines.extend([
@@ -1136,6 +1143,28 @@ fn legacy_capture() -> Vec<String> {
     lines
 }
 
+/// The idle loop of the resident loader. An export costs a request to the App
+/// task and about 60 script lines, so a poll asks for one only when the sum
+/// of the change counters differs from `quiet`, its value at the last poll
+/// that left nothing to save. Each counter only grows, so the sum moves with
+/// each of them. The export revision still decides what the loader saves.
+fn watch_idle(name: &str) -> Vec<String> {
+    let counters = StateFile::ALL
+        .map(|file| format!("registry[{}]", watch_names(file).1 / 4))
+        .join(" + ");
+    vec![
+        format!(":{name}"),
+        format!("mpause {STATE_POLL_MS}"),
+        format!("hint = {counters}"),
+        format!("if hint <> quiet idle = {STATE_IDLE_POLLS}"),
+        "idle = idle + 1".into(),
+        format!("if idle <= {STATE_IDLE_POLLS} goto {name}"),
+        "idle = 0".into(),
+        // A poll that leaves a save pending keeps the next polls complete.
+        "quiet = hint - 1".into(),
+    ]
+}
+
 /// Debounce each file independently. Temporary U-mode edits neither change
 /// the main export revision nor postpone its save. Release the export on
 /// every completed capture, including a skipped or failed save.
@@ -1166,7 +1195,13 @@ fn watch_poll(name: &str) -> Vec<String> {
             format!("{changes}last = {changes}"),
         ]);
     }
-    lines.push(format!("goto {name}"));
+    // Nothing is left to save: the next polls wait for a counter.
+    lines.push(format!("if captured = 0 goto {name}"));
+    for file in StateFile::ALL {
+        let (changes, _, saved, _) = watch_names(file);
+        lines.push(format!("if {changes} <> {saved} goto {name}"));
+    }
+    lines.extend(["quiet = hint".into(), format!("goto {name}")]);
     lines
 }
 
@@ -1278,7 +1313,7 @@ mod tests {
         assert_eq!(script.matches(&recipes).count(), 1);
         // Each index of the settings of the user modes is below
         // DIAL_SET_STATE_WORDS, which ends in the header with the copy of
-        // the switch, Enable at Start, and Distance Unit.
+        // the switch, Enable at Start, Distance Unit, and Uncropped RAW.
         assert!(script.contains(&format!(
             "if rindex >= {DIAL_SET_STATE_WORDS} goto set_word_end"
         )));
@@ -1341,7 +1376,7 @@ mod tests {
     fn the_resident_script_saves_after_the_selections_settle() {
         let script = state_script();
         let start = at(&script, ":watch");
-        assert_eq!(script[start + 2], "call capture");
+        assert_eq!(script[start + watch_idle("watch").len()], "call capture");
         assert!(!script
             .iter()
             .any(|line| line.contains("hold") || line.contains("total =")));
@@ -1398,6 +1433,61 @@ mod tests {
                 script[ack - 2],
                 format!("filesearch '{}'", state_path(file, "TXT"))
             );
+        }
+    }
+
+    /// An idle poll reads the change counters and asks for no export. A
+    /// counter that moved, a pending save, and each `STATE_IDLE_POLLS` idle
+    /// polls give a complete poll.
+    #[test]
+    fn the_resident_exports_only_after_a_counter_moves() {
+        let script = state_script();
+        let start = at(&script, ":watch");
+        let idle = watch_idle("watch");
+        assert_eq!(script[start..start + idle.len()], idle);
+        assert_eq!(idle[1], format!("mpause {STATE_POLL_MS}"));
+        assert_eq!(
+            idle[2],
+            format!(
+                "hint = registry[{}] + registry[{}] + registry[{}]",
+                HOST_STATE_CHANGES / 4,
+                HOST_RECIPE_CHANGES / 4,
+                HOST_DIAL_SET_CHANGES / 4
+            )
+        );
+        assert_eq!(
+            idle[3..6],
+            [
+                format!("if hint <> quiet idle = {STATE_IDLE_POLLS}"),
+                "idle = idle + 1".to_string(),
+                format!("if idle <= {STATE_IDLE_POLLS} goto watch"),
+            ]
+        );
+        // The idle loop has no call, no export word, and no file command.
+        assert!(!idle[..6].iter().any(|line| line.contains("call ")
+            || line.contains("modulecode[")
+            || line.contains("file")));
+        // A complete poll starts as not quiet, and the first poll is complete.
+        assert_eq!(idle[idle.len() - 1], "quiet = hint - 1");
+        assert!(script[..start].contains(&"quiet = 0 - 1".into()));
+        assert!(script[..start].contains(&"hint = 0".into()));
+        assert!(script[..start].contains(&"idle = 0".into()));
+        // Only a poll with an export and no pending save ends quiet.
+        for name in ["watch", "profile_poll"] {
+            let poll = watch_poll(name);
+            let quiet = at(&poll, "quiet = hint");
+            assert_eq!(poll[quiet + 1], format!("goto {name}"));
+            assert_eq!(quiet + 2, poll.len());
+            assert_eq!(
+                poll[quiet - 4..quiet],
+                [
+                    format!("if captured = 0 goto {name}"),
+                    format!("if changes <> saved goto {name}"),
+                    format!("if rchanges <> rsaved goto {name}"),
+                    format!("if dchanges <> dsaved goto {name}"),
+                ]
+            );
+            assert!(at(&poll, "call release_capture") < quiet - 4);
         }
     }
 

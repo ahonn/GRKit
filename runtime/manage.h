@@ -44,14 +44,21 @@
    distances (runtime/distance.h). Its setting, CORE.UNIT, follows Enable at
    Start in the table, and a change applies at once.
 
+   Uncropped RAW, the third setting, keeps the whole 3:2 picture of the
+   sensor in each DNG, with the crop of the shot as Camera Raw settings
+   (runtime/picture.c: picture_dng_crop). Its setting, CORE.RAW, follows
+   Distance Unit in the table. The picture code reads it from the copy.
+
    Battery in Simple Display, on the cameras whose live view the core hooks
    for it (LIVEVIEW_BATTERY_SIMPLE of the family header), shows the battery
    icon of the full information also in the simple information, where the
-   camera shows it only for a low battery. Its setting, CORE.BATTERY, follows
-   Distance Unit in the table. A change applies at the next update of the
-   live view, which the return from MENU makes.
+   camera shows it only for a low battery (runtime/menu.S:
+   menu_battery_mode). Its
+   setting, CORE.BATTERY, follows Uncropped RAW in the table. A change
+   applies at the next update of the live view, which the return from MENU
+   makes.
 
-   The header keeps a copy of these four settings (GRKIT_HOST_MANAGE_COPY,
+   The header keeps a copy of these five settings (GRKIT_HOST_MANAGE_COPY,
    manage_copy), which the resident loader saves in the file of the user
    modes of the mode dial. On a user mode with a snapshot, the core holds
    the main state file (runtime/mode_dial.h), but not that file, so a change
@@ -78,9 +85,11 @@
 #define MANAGE_START 20U
 /* The handle + 1 of CORE.UNIT, Distance Unit, or 0 without it. */
 #define MANAGE_UNIT 24U
+/* The handle + 1 of CORE.RAW, Uncropped RAW, or 0 without it. */
+#define MANAGE_RAW 28U
 /* The handle + 1 of CORE.BATTERY, Battery in Simple Display, or 0 without
    it. */
-#define MANAGE_BATTERY 28U
+#define MANAGE_BATTERY 32U
 /* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
    CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
    The two settings hold the values of the page of the module after its
@@ -92,12 +101,12 @@
    (runtime/modules.h: choice_sequence), so the nibbles order each page with
    options: its MANAGE_OPTION_VALUES - 1 values after the first row but the
    last one, which follows. */
-#define MANAGE_ORDERS 32U
+#define MANAGE_ORDERS 36U
 #define MANAGE_ORDER_WORDS 2U
 #define MANAGE_ORDER_NIBBLES 7U
 #define MANAGE_ORDER_VALUES (MANAGE_ORDER_NIBBLES * MANAGE_ORDER_WORDS)
 #define MANAGE_ORDER_LIMIT (1U << 4U * MANAGE_ORDER_NIBBLES)
-#define MANAGE_HEADER 36U
+#define MANAGE_HEADER 40U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -154,6 +163,11 @@
 #define MANAGE_UNIT_METERS 0U
 #define MANAGE_UNIT_FEET 1U
 #define MANAGE_UNIT_VALUES 2U
+/* The setting of Uncropped RAW and its values. */
+#define MANAGE_RAW_KEY "CORE.RAW"
+#define MANAGE_RAW_OFF 0U
+#define MANAGE_RAW_ON 1U
+#define MANAGE_RAW_VALUES 2U
 /* The setting of Battery in Simple Display: 0 Off, as the camera, 1 On. */
 #define MANAGE_BATTERY_KEY "CORE.BATTERY"
 #define MANAGE_BATTERY_VALUES 2U
@@ -301,15 +315,17 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&(GRKIT_CORE_ASPECT_BIT|GRKIT_CORE_ASPECT_MODE_BIT)) aspect_refresh(h);
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
-/* Keep the switch, Enable at Start, Distance Unit, and Battery in Simple
-   Display in their copy, each as its value + 1, after a change of one of them. A copy that changes
+/* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, and
+   Battery in Simple Display in their copy, each as its value + 1, after a
+   change of one of them. A copy that changes
    counts as a change of the file of the user modes, which the loader saves
    independently of the main state file. Off of the mode dial is not the
    switch and changes no copy. */
 _Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
                MANAGE_UNIT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_UNIT &&
+               MANAGE_RAW==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_RAW &&
                MANAGE_BATTERY==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY && GRKIT_MANAGE_COPY_SWITCH==0U &&
-               GRKIT_MANAGE_COPY_WORDS==4U, "The copy follows the handles of the module list");
+               GRKIT_MANAGE_COPY_WORDS==5U, "The copy follows the handles of the module list");
 static void manage_copy(volatile u32 *h) {
     u32 i, at, value, changed=0;
     if(!h[GRKIT_HOST_MANAGE/4]) return;
@@ -574,6 +590,21 @@ static const u16 *unit_label(volatile u32 *h) { return text(h,TEXT_UNIT+1); }
 static u32 unit_values(volatile u32 *h) { (void)h; return MANAGE_UNIT_VALUES; }
 static const u16 *unit_value_text(volatile u32 *h,u32 value) { return text(h,TEXT_UNIT+2+(value==MANAGE_UNIT_FEET)); }
 static const u16 *core_settings_title(volatile u32 *h) { return text(h,TEXT_UNIT); }
+static u32 raw_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_RAW) : 0; }
+static u32 raw_value(volatile u32 *h) {
+    u32 at=raw_handle(h);
+    return at && setting_value(h,at-1)==MANAGE_RAW_ON ? MANAGE_RAW_ON : MANAGE_RAW_OFF;
+}
+static void raw_set(volatile u32 *h,u32 value) {
+    u32 at=raw_handle(h);
+    if(at && value<MANAGE_RAW_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
+}
+static const u16 *raw_label(volatile u32 *h) { return text(h,TEXT_RAW); }
+static u32 raw_values(volatile u32 *h) { (void)h; return MANAGE_RAW_VALUES; }
+static const u16 *raw_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,value!=MANAGE_RAW_ON); }
 static u32 battery_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_BATTERY) : 0; }
 /* Whether the simple information of the live view shows the battery icon. */
 static u32 battery_simple(volatile u32 *h) {
@@ -593,7 +624,8 @@ static u32 battery_values(volatile u32 *h) { (void)h; return MANAGE_BATTERY_VALU
 static const u16 *battery_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,!value); }
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
+#define RAW_SETTING {raw_label,raw_values,raw_value_text,raw_value,raw_set}
 #define BATTERY_SETTING {battery_label,battery_values,battery_value_text,battery_simple,battery_set}
-static const Setting core_settings[3]={START_SETTING,UNIT_SETTING,BATTERY_SETTING};
+static const Setting core_settings[4]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING};
 #endif
 #endif

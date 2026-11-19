@@ -42,6 +42,7 @@ const GROUPS: &[&[HookSpec]] = &[
     DIAL,
     CANVAS,
     BATTERY,
+    common::DNG_XMP,
 ];
 
 /// Image Control processing (`runtime/processing.S`): the BL to the parameter

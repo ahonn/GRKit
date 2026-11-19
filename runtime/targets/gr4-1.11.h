@@ -156,6 +156,16 @@
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5323f67c)
 #define FW_IFD_SET_SHORT FIRMWARE(0x537e7148)
+/* The TIFF writer: append an entry to an IFD, and copy the data of an
+   entry (runtime/picture.c: picture_dng_xmp_add). */
+#define FW_IFD_APPEND FIRMWARE(0x537e6920)
+#define FW_IFD_ENTRY_DATA FIRMWARE(0x537e71cc)
+/* The contents that playback opens (runtime/picture.c:
+   picture_develop_record), and the file calls of the RTOS. */
+#define FW_CONTENTS FIRMWARE(0x550b8234)
+#define FW_FILE_OPEN FIRMWARE(0x53a9a3c0)
+#define FW_FILE_READ FIRMWARE(0x53a9a4dc)
+#define FW_FILE_CLOSE FIRMWARE(0x53a9a474)
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x537e7160)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x5387e108)
@@ -177,6 +187,11 @@
 #define FW_DEVELOP_TONE_ICON FIRMWARE(0x533742c8)
 /* RAW development: the ID of the first development controller (gr4.h). */
 #define DEVELOP_CONTROLLERS 0x400001eU
+/* RawDevelopmentTopController: the register of the mark of a row in its
+   fill switch, and the title text ID of the Image Control list
+   (runtime/targets/gr4.h). */
+#define DEVELOP_TOP_FILL_MARK r4
+#define DEVELOP_TONE_TITLE 0x123U
 /* RAW development, the Fn adjustments (runtime/develop.h): the parameter
    set of Standard in RawDevelopmentModel (gr4.h: DEVELOP_CATEGORY). */
 #define DEVELOP_PARAMETERS 0xb3

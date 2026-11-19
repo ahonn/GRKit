@@ -17,9 +17,12 @@ pub struct Toolchain {
 /// The target flags of each camera-side object: the core components and the
 /// modules. The float ABI is explicit because the default differs between
 /// clang builds of one version: the Ubuntu clang of the release builds turns
-/// the FPU off, and some other builds turn NEON on. The objects use no FPU,
-/// so a local build has the bytes of the release build, and no hook uses the
-/// VFP or NEON registers, which a firmware task may not save.
+/// the FPU off, and some other builds turn NEON on. The compiler emits no FPU
+/// code, so a local build has the bytes of the release build, and no hook
+/// uses the VFP or NEON registers, which a firmware task may not save. NEON
+/// code is an assembly part, only where the task keeps those registers: the
+/// picture filters of the modules, and the grain noise
+/// (`runtime/grain_noise.h`).
 pub const CAMERA_TARGET: [&str; 3] = [
     "--target=arm-none-eabi",
     "-march=armv7-a",

@@ -2324,7 +2324,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 36, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 40, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -5418,22 +5418,26 @@ static void the_section_starts_with_the_switch(void)
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
 /* Battery in Simple Display is a row of GRKit Settings after Distance Unit
-   on a camera whose live view has its hook (LIVEVIEW_BATTERY_SIMPLE): Off,
-   as the camera, then On. A change saves, also in the copy of the file of
-   the user modes. Another camera keeps the setting, but shows no row. */
+   and Uncropped RAW on a camera whose live view has its hook
+   (LIVEVIEW_BATTERY_SIMPLE): Off, as the camera, then On. A change saves,
+   also in the copy of the file of the user modes. Another camera keeps the
+   setting, but shows no row. */
 static void battery_shows_in_the_simple_display(void)
 {
     volatile u32 *h = test_header;
     u32 n;
     /* The switch is setting 12, Enable at Start setting 13, Distance Unit
-       setting 14, and Battery in Simple Display setting 15. */
+       setting 14, Battery in Simple Display setting 15, and Uncropped RAW
+       setting 16. */
     install_stock_tab(10, 3);
-    settings_memory[0] = 16;
+    settings_memory[0] = 17;
     settings_memory[2 + 12 * 3 + 2] = 2;
     settings_memory[2 + 13 * 3 + 2] = MANAGE_START_VALUES;
     settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
     settings_memory[2 + 15 * 3 + 1] = 0;
     settings_memory[2 + 15 * 3 + 2] = MANAGE_BATTERY_VALUES;
+    settings_memory[2 + 16 * 3 + 1] = MANAGE_RAW_OFF;
+    settings_memory[2 + 16 * 3 + 2] = MANAGE_RAW_VALUES;
     manage_memory[MANAGE_SWITCH / 4] = 12 + 1;
     manage_memory[MANAGE_START / 4] = 13 + 1;
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
@@ -5444,29 +5448,43 @@ static void battery_shows_in_the_simple_display(void)
     assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Distance Unit") &&
            same(core_page_settings[2].label(h), "Battery in Simple Display") &&
            same(core_page_settings[3].label(h), "Mode Dial") && same(core_page_settings[4].label(h), "ADJ Order"));
-    assert(core_row_setting(h, 2) == core_settings + 2);
+    assert(core_row_setting(h, 2) == core_settings + 3);
     assert(core_page_settings[2].values(h) == 2 && same(core_page_settings[2].value_text(h, 0), "Off") &&
            same(core_page_settings[2].value_text(h, 1), "On"));
 #else
     assert(settings_rows(h) == 4 && same(core_page_settings[2].label(h), "Mode Dial"));
 #endif
-    assert(core_settings[2].get(h) == 0 && !battery_simple(h));
+    assert(core_settings[3].get(h) == 0 && !battery_simple(h));
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    core_settings[2].set(h, 1);
+    core_settings[3].set(h, 1);
     assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
     assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
     /* A value out of range changes nothing. */
-    core_settings[2].set(h, 2);
+    core_settings[3].set(h, 2);
     assert(battery_simple(h));
-    core_settings[2].set(h, 0);
+    core_settings[3].set(h, 0);
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    /* With Uncropped RAW, the page has all six rows, and Battery in Simple
+       Display follows Uncropped RAW. */
+    manage_memory[MANAGE_RAW / 4] = 16 + 1;
+    menu_rows_install(h);
+    assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
+#ifdef LIVEVIEW_BATTERY_SIMPLE
+    assert(settings_rows(h) == SETTING_ROWS && same(core_page_settings[2].label(h), "Uncropped RAW") &&
+           same(core_page_settings[3].label(h), "Battery in Simple Display") &&
+           same(core_page_settings[4].label(h), "Mode Dial") && same(core_page_settings[5].label(h), "ADJ Order"));
+#else
+    assert(settings_rows(h) == 5 && same(core_page_settings[3].label(h), "Mode Dial"));
+#endif
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    manage_memory[MANAGE_RAW / 4] = 0;
     /* Without the setting in the module list, the icon stays as the camera
        shows it. */
     settings_memory[2 + 15 * 3 + 1] = 1;
     manage_memory[MANAGE_BATTERY / 4] = 0;
     assert(!battery_simple(h));
     settings_memory[2 + 15 * 3 + 1] = 0;
-    h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
 /* In feet, the text hooks give the feet label of each Snap focus distance,
    on any screen, and the scale hooks the feet labels of the manual focus
@@ -5909,6 +5927,49 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     assert(services_word(h, SERVICES_PERSIST_TIMER)[0] != timer);
     assert(dial_word(h, DIAL_TIMER)[0] == dial_timer_ids);
 }
+/* The resident loader exports after a count only. A page sets the module
+   of the next ADJ session without a count, so the end of a session counts
+   when its module differs from the module of the last export. */
+static void the_end_of_a_session_counts_a_module_that_no_export_holds(void)
+{
+    volatile u32 *h = test_header, *p;
+    u32 changes, root, first, second;
+    dial_reset();
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+    root = root_module(h, 0);
+    first = root == 1 ? 3 : 1;
+    second = root == 2 ? 4 : 2;
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 1;
+    p = persist_test_buffer();
+    h[GRKIT_HOST_MODULE / 4] = first;
+    persist_baseline(h, p);
+    assert(persist_test_core(GRKIT_CORE_ADJ_MODULE) == first);
+    /* A page opened and the session ended there: nothing counted before. */
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_MODULE;
+    h[GRKIT_HOST_MODULE / 4] = second;
+    changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1 && h[GRKIT_HOST_MODULE / 4] == second);
+    persist_test_request(1);
+    assert(persist_test_core(GRKIT_CORE_ADJ_MODULE) == second);
+    /* A session that ends on the exported module counts nothing. */
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 1);
+    /* At the root the module is that of the highlighted row. A page left
+       the module at this row without a count, and the export holds another. */
+    h[GRKIT_HOST_MENU_LEVEL / 4] = MENU_ROOT;
+    h[GRKIT_HOST_MODULE / 4] = root;
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 2 && h[GRKIT_HOST_MODULE / 4] == root);
+    /* Without an export, a change of the module at the root counts. */
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 0;
+    h[GRKIT_HOST_MODULE / 4] = first;
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 3 && h[GRKIT_HOST_MODULE / 4] == root);
+    leave_module(h);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == changes + 3);
+    h[GRKIT_HOST_MENU_LEVEL / 4] = 0;
+}
 
 int main(void)
 {
@@ -6018,5 +6079,6 @@ int main(void)
     persistence_freezes_the_complete_file_until_release();
     persistence_ignores_unsaved_values_and_rejects_incomplete_views();
     persistence_timer_runs_in_menus_and_preserves_early_dirty_values();
+    the_end_of_a_session_counts_a_module_that_no_export_holds();
     return 0;
 }

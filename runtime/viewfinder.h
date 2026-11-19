@@ -303,11 +303,21 @@ static GRKIT_ICON_COMPACT u32 native_grid_hidden(volatile u32 *h) {
 static GRKIT_ICON_COMPACT u32 overlay_active(volatile u32 *h) {
     return cue_shown(h) || layers_active(h) || status_shown(h) || crop_badge_shown(h)<GRKIT_LABEL_COUNT;
 }
+/* The camera binds the live view several times in each frame. A live view
+   without a drawing looks for something to draw (overlay_active reads each
+   layer and each indicator) at the first bind of a canvas, when the native
+   aspect changes, and then at each BIND_IDLE_PERIOD-th bind. A changed
+   setting and the cue redraw at once. GRKIT_HOST_FRAME_NATIVE holds the
+   native aspect + 1 in its low byte and the binds since that search above. */
+#define BIND_IDLE_PERIOD 8U
+#define BIND_NATIVE(word) ((word)&0xffU)
+#define BIND_IDLE(word) ((word)>>8)
 static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
-    u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=h[GRKIT_HOST_FRAME_NATIVE/4]!=native;
-    h[GRKIT_HOST_FRAME_NATIVE/4]=native;
+    u32 last=h[GRKIT_HOST_FRAME_NATIVE/4], canvas=WORD(controller,LIVEVIEW_CANVAS);
+    u32 native=FRAMING_NATIVE_ASPECT()+1, native_changed=BIND_NATIVE(last)!=native;
+    u32 idle=h[GRKIT_HOST_FRAME_CANVAS/4]==canvas ? BIND_IDLE(last)+1U : BIND_IDLE_PERIOD;
     h[GRKIT_HOST_FRAME_OWNER/4]=controller;
-    h[GRKIT_HOST_FRAME_CANVAS/4]=WORD(controller,LIVEVIEW_CANVAS);
+    h[GRKIT_HOST_FRAME_CANVAS/4]=canvas;
     /* Nothing else invalidates a still live view, so these need a redraw: a
        selection that has not drawn on this canvas yet, such as one restored
        at power-on, a cue that starts or ends, and a setting that changed
@@ -315,12 +325,18 @@ static GRKIT_ICON_COMPACT void viewfinder_bind(volatile u32 *h,u32 controller) {
        native settings page. A crop does not restart the live view. */
     if(h[GRKIT_HOST_FRAME_CANVAS/4]) {
         u32 changes=h[GRKIT_HOST_STATE_CHANGES/4], changed=h[GRKIT_HOST_FRAME_CHANGES/4]!=changes;
+        u32 redraw=cue_update(h,controller) || changed;
         h[GRKIT_HOST_FRAME_CHANGES/4]=changes;
-        if(cue_update(h,controller) || changed || (native_changed &&
-           (h[GRKIT_HOST_FRAME_BITMAP/4] || overlay_active(h))) ||
-           (!h[GRKIT_HOST_FRAME_BITMAP/4] && overlay_active(h)))
-            FRAMING_INVALIDATE(h[GRKIT_HOST_FRAME_CANVAS/4]);
-    }
+        if(h[GRKIT_HOST_FRAME_BITMAP/4]) {
+            idle=0;
+            redraw=redraw || native_changed;
+        } else if(native_changed || idle>=BIND_IDLE_PERIOD) {
+            idle=0;
+            redraw=redraw || overlay_active(h);
+        }
+        if(redraw) FRAMING_INVALIDATE(h[GRKIT_HOST_FRAME_CANVAS/4]);
+    } else idle=0;
+    h[GRKIT_HOST_FRAME_NATIVE/4]=native|idle<<8;
     /* The first shooting screen after INSTALL: the modules are ready. This
        hook runs in the App task. */
     if(h[GRKIT_HOST_FRAME_CANVAS/4]) services_ready(h);

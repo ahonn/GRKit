@@ -24,6 +24,7 @@ pub mod native;
 pub mod native_look;
 pub mod native_tone;
 pub mod packaging;
+pub mod photo_xmp;
 pub mod png;
 pub mod recipes;
 pub mod runtime;
