@@ -3003,6 +3003,17 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
     assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY);
+    /* The information page shows a GRKit view: nothing changes. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = INFO_CONTROLLER;
+    services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = MENU_ABOUT_GRKIT;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY);
+    services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = 0;
+    /* Playback and the other pages of MENU take a change, as the shooting
+       screen does. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0x4000000;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && effects_off(h, 0));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 0));
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
     /* A new order: each effect once. */
     words[0] = 0x1002; words[1] = 0x1000; words[2] = 0x1001;
@@ -3029,6 +3040,89 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     control_poll(h);
     assert(box->state_changes == before + 1 && box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4]);
     h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
+}
+
+/* The Wi-Fi service reads and changes the recipes through the mailbox
+   (runtime/control_recipes.h), by their IDs. */
+static void put_recipe(volatile u32 *h, u32 slot, u32 id, u32 off)
+{
+    h[GRKIT_HOST_RECIPES / 4 + slot * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_OFF;
+    h[GRKIT_HOST_RECIPES / 4 + slot * GRKIT_RECIPE_WORDS + RECIPE_MODULE_WORD] = off ? RECIPE_OFF : 0;
+    h[GRKIT_HOST_RECIPE_IDS / 4 + slot] = id;
+}
+static u32 recipe_id_of(u32 slot) { return test_header[GRKIT_HOST_RECIPE_IDS / 4 + slot]; }
+static void the_service_reads_and_changes_the_recipes(void)
+{
+    reset();
+    install_effect_list();
+    volatile u32 *h = test_header;
+    u32 length, words[16];
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == CONTROL_UNSUPPORTED);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    /* Two recipes on, one off. */
+    put_recipe(h, 0, 11, 0); put_recipe(h, 1, 12, 0); put_recipe(h, 2, 13, 1);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0);
+    assert(length == GRKIT_CONTROL_RECIPES_HEADER + 3 * GRKIT_CONTROL_RECIPE_ENTRY);
+    assert(control_words[0] == 3 && control_words[1] == 2 && control_words[5] == 0 && control_words[6] == 3);
+    assert(control_words[7] == 11 && control_words[7 + 11] == 12 && control_words[7 + 22] == 13);
+    words[0] = 4;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == CONTROL_INVALID);
+    /* Off goes before the others that are off; on, after the ones on. */
+    words[0] = 11; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(recipe_entries(h) == 1 && recipe_id_of(0) == 12 && recipe_id_of(1) == 11 && recipe_id_of(2) == 13);
+    words[0] = 13; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(recipe_entries(h) == 2 && recipe_id_of(1) == 13 && recipe_id_of(2) == 11);
+    /* The order of the ones on, each once. */
+    words[0] = 13; words[1] = 12;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == 0);
+    assert(recipe_id_of(0) == 13 && recipe_id_of(1) == 12);
+    words[1] = 13;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == CONTROL_INVALID);
+    words[1] = 11;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    /* A name of printable ASCII; none gives the automatic name. */
+    words[0] = 12; memcpy(&words[1], "Odd", 3);
+    {
+        static struct control_request request;
+        /* NUL-padded to whole words; an odd length is not one. */
+        request.command = GRKIT_CONTROL_RECIPE_RENAME; request.length = 7;
+        memcpy(request.payload, words, 7);
+        assert(control_looks(h, &request, &length) == CONTROL_BAD_LENGTH);
+        request.length = 8; request.payload[7] = 0;
+        assert(control_looks(h, &request, &length) == 0);
+    }
+    assert(recipe_name_length(h, 1) == 3 && recipe_name_char(h, 1, 0) == 'O');
+    /* A page of GRKit is open: nothing changes. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    words[0] = 12;
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == CONTROL_BUSY && recipe_count(h) == 3);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0x4000000;
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == 0 && recipe_count(h) == 2);
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == CONTROL_CHANGED);
+    /* An apply leaves an undo step, and the undo removes it. */
+    words[0] = 13;
+    assert(look_command(GRKIT_CONTROL_RECIPE_APPLY, words, 1, &length) == 0 && length == 4 && recipe_undo_count(h) == 1);
+    /* The current recipe can be one that is off. */
+    words[0] = 13; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0 && !recipe_entries(h));
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0 && control_words[2] == 0);
+    words[0] = 13; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == 0 && control_words[0] == 0);
+    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == CONTROL_INVALID);
+    /* An added recipe is on after the ones on, with a new ID. */
+    for (u32 i = 0; i < GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS; ++i) words[i] = 0;
+    words[0] = RECIPE_USED | RECIPE_LOOK_OFF;
+    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == 0);
+    assert(recipe_entries(h) == 2 && recipe_count(h) == 3 && recipe_id_of(1) == control_words[0] && control_words[0]);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == CONTROL_INVALID);
 }
 
 /* The MENU pages: the settings page of a module in the GRKit section,
@@ -6718,6 +6812,7 @@ int main(void)
     the_switch_stops_each_module_at_once();
     film_look_lists_the_installed_effects_that_are_on();
     the_service_reads_and_sets_the_effect_choices();
+    the_service_reads_and_changes_the_recipes();
     /* The MENU page blocks after the first continue the screen that the block
        before them leaves. */
     settings_entry_enable_preserves_each_value();

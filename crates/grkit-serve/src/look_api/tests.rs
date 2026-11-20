@@ -123,6 +123,7 @@ impl Fixture {
             software_pending: self.pending,
             root: self.root.path(),
             release_keys: &keys,
+            family: Some(grkit_core::recipes::Family::Gr3),
         };
         self.api
             .handle(&request, body, &context, &self.changes)

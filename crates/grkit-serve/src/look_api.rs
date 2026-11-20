@@ -59,6 +59,8 @@ pub struct RequestContext<'a> {
     pub root: &'a Path,
     /// The keys that sign the release whose official Looks the card names.
     pub release_keys: &'a [[u8; 32]],
+    /// The recipe family of the camera, when its model is known.
+    pub family: Option<grkit_core::recipes::Family>,
 }
 
 /// What the service keeps about one card while the camera stays on.
@@ -816,9 +818,12 @@ fn patch(
     let enabled = fields.get("enabled").and_then(Value::as_bool);
     // Check each field before the first change.
     if let Some(name) = name {
-        if !matches!(look.source, "custom" | "native")
-            && !(look.source == "official" && session.covers.official.renamable(&look.file.id))
-        {
+        let renamable = match look.source {
+            "custom" | "native" => true,
+            "official" => session.covers.official.renamable(&look.file.id),
+            _ => false,
+        };
+        if !renamable {
             return Err(official_read_only());
         }
         if !(1..=effects::NAME_MAX).contains(&name.len())
@@ -1165,5 +1170,6 @@ fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
 }
 
 mod covers;
+mod recipe_api;
 #[cfg(test)]
 mod tests;
