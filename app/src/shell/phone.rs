@@ -1,4 +1,4 @@
-//! Three tabs (Camera, Looks, Settings) with navigation stacks kept mounted.
+//! Four tabs (Camera, Looks, Recipes, Settings) with navigation stacks kept mounted.
 
 use nsh_base::{nav_stack, theme};
 use nsh_core::{
@@ -9,7 +9,8 @@ use nsh_core::{
 
 use crate::pages::{
     CoverTarget, add_page, camera_root, cover_page, import_page, look_page, looks_root,
-    release_history_page, saved_cameras_page, scheme_page, settings_root, software_page,
+    preset_page, presets_page, recipe_page, recipes_root, release_history_page, saved_cameras_page,
+    scheme_page, settings_root, software_page,
 };
 use crate::store::{AppState, Route, Tab};
 use crate::strings::tr;
@@ -21,9 +22,17 @@ const LOOKS_ICON: &str = if cfg!(target_os = "android") {
     "camera.filters"
 };
 
+/// An SF Symbol on iOS; the app's drawable on Android.
+const RECIPES_ICON: &str = if cfg!(target_os = "android") {
+    "recipes"
+} else {
+    "list.bullet.rectangle.portrait"
+};
+
 const TABS: &[(Tab, &str, &str)] = &[
     (Tab::Camera, "tab.camera", "camera"),
     (Tab::Looks, "tab.looks", LOOKS_ICON),
+    (Tab::Recipes, "tab.recipes", RECIPES_ICON),
     (Tab::Settings, "tab.settings", "gearshape"),
 ];
 
@@ -78,6 +87,7 @@ fn root(app: AppState, tab: Tab) -> AnyElement {
     match tab {
         Tab::Camera => camera_root(app).into_element(),
         Tab::Looks => looks_root(app).into_element(),
+        Tab::Recipes => recipes_root(app).into_element(),
         Tab::Settings => settings_root(app).into_element(),
     }
 }
@@ -97,6 +107,9 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::LookImportCover => cover_page(app, CoverTarget::Import, back).into_element(),
         Route::SavedCameras => saved_cameras_page(app, back).into_element(),
         Route::LookScheme => scheme_page(app, back).into_element(),
+        Route::RecipeDetail(id) => recipe_page(app, id, back).into_element(),
+        Route::RecipePresets => presets_page(app, back).into_element(),
+        Route::RecipePreset(id) => preset_page(app, id, back).into_element(),
     }
 }
 

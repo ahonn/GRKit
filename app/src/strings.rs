@@ -4,7 +4,7 @@
 
 use nsh_core::prelude::*;
 
-fn is_zh() -> bool {
+pub fn is_zh() -> bool {
     let tag = locale().to_string();
     tag.starts_with("zh")
 }
@@ -227,6 +227,7 @@ fn en(key: &str) -> &'static str {
         "settings.gr_snap_desc" => "Wireless transfer and remote for RICOH GR",
         "settings.view" => "View",
         _ => crate::strings_looks::en(key)
+            .or_else(|| crate::strings_recipes::en(key))
             .or_else(|| crate::strings_connect::en(key))
             .unwrap_or("???"),
     }
@@ -389,7 +390,9 @@ fn zh(key: &str) -> Option<&'static str> {
         "settings.gr_snap_desc" => "RICOH GR 的无线传输与遥控",
         "settings.view" => "查看",
         _ => {
-            return crate::strings_looks::zh(key).or_else(|| crate::strings_connect::zh(key));
+            return crate::strings_looks::zh(key)
+                .or_else(|| crate::strings_recipes::zh(key))
+                .or_else(|| crate::strings_connect::zh(key));
         }
     })
 }

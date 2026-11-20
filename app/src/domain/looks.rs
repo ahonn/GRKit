@@ -438,8 +438,7 @@ pub enum LookError {
     ConnectionLost,
     /// The card or runtime is not ready yet.
     NotReady,
-    /// The camera shows a menu or a preview: it changes Looks only on the
-    /// shooting screen.
+    /// The camera shows a GRKit page, which keeps its rows while it shows.
     CameraBusy,
     /// The camera lists the Look only after it starts again.
     RestartRequired,

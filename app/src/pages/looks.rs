@@ -145,7 +145,7 @@ fn on_camera(app: AppState) -> AnyElement {
 }
 
 /// A titled group of covers with its count and a note.
-fn section(
+pub(crate) fn section(
     title: String,
     count: String,
     content: impl IntoElement,
@@ -185,12 +185,12 @@ pub fn grid(tiles: Vec<AnyElement>) -> impl IntoElement {
 }
 
 /// The height of a row of the Looks lists.
-const ROW_HEIGHT: f32 = 64.0;
+pub(crate) const ROW_HEIGHT: f32 = 64.0;
 /// The side of the cover in a row.
-const ROW_COVER: f32 = 44.0;
+pub(crate) const ROW_COVER: f32 = 44.0;
 
 /// Rows on a card. Its background shows where a dragged row will land.
-fn list(rows: Vec<AnyElement>) -> impl IntoElement {
+pub(crate) fn list(rows: Vec<AnyElement>) -> impl IntoElement {
     let mut card = view()
         .rounded(px(10.0))
         .border_1()
@@ -209,6 +209,34 @@ fn list(rows: Vec<AnyElement>) -> impl IntoElement {
 fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElement {
     let count = looks.len();
     let movable = editable && count > 1;
+    let menus: Vec<Look> = looks.clone();
+    let rows = looks.into_iter().map(Some).collect::<Vec<_>>();
+    let rows = std::cell::RefCell::new(rows);
+    reorder_list(
+        count,
+        movable,
+        move |from, to| app.move_shown_look(from, to),
+        move |index, closed| look_menu_then(app, menus[index].clone(), closed),
+        move |index, gestures| {
+            let look = rows.borrow_mut()[index].take().expect("each row once");
+            let gestures = gestures.unwrap_or_else(|| RowGestures::menu(app, &look, editable));
+            look_row(app, look, editable, index + 1 == count, Some(gestures)).into_element()
+        },
+    )
+}
+
+/// Rows that a long press lifts and a drag moves: the rows it passes move
+/// aside, so the gap shows where it lands, and `on_move` gets the place
+/// where it is let go. Letting go without a drag calls `menu` with what to
+/// do once the menu closes. `row` makes each row, with the gestures of a
+/// movable list.
+pub(crate) fn reorder_list(
+    count: usize,
+    movable: bool,
+    on_move: impl Fn(usize, usize) + Copy + 'static,
+    menu: impl Fn(usize, Box<dyn FnOnce()>) + Clone + 'static,
+    row: impl Fn(usize, Option<RowGestures>) -> AnyElement,
+) -> impl IntoElement {
     // The row that a long press lifted, which stays lifted until it is
     // dragged; the row being dragged, and how far.
     let armed = signal(None::<usize>);
@@ -228,10 +256,8 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
         dragging.set(None);
         offset.set(0.0);
     };
-    let rows = looks
-        .into_iter()
-        .enumerate()
-        .map(|(index, look)| {
+    let rows = (0..count)
+        .map(|index| {
             let held = move || armed.get() == Some(index);
             let lifted = move || dragging.get() == Some(index);
             // A row between the dragged row and its target moves one row
@@ -241,6 +267,30 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                 (Some(from), Some(to)) if to <= index && index < from => ROW_HEIGHT,
                 _ => 0.0,
             };
+            let gestures = movable.then(|| {
+                let menu = menu.clone();
+                RowGestures {
+                    long_press: Box::new(move || {
+                        dragged.set(false);
+                        armed.set(Some(index))
+                    }),
+                    // Let go without a drag: the menu of the row. The row
+                    // stays lifted, and can still be dragged, until the menu
+                    // closes.
+                    release: Some(Box::new(move || {
+                        if armed.get() == Some(index) && !dragged.get() {
+                            menu(
+                                index,
+                                Box::new(move || {
+                                    if dragging.get().is_none() {
+                                        armed.set(None)
+                                    }
+                                }),
+                            );
+                        }
+                    })),
+                }
+            });
             view()
                 .relative()
                 .translate_y(move || px(if lifted() { offset.get() } else { shift() }))
@@ -259,8 +309,8 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                         },
                     ])
                     .on_accessibility_action(move |action: &str| match action {
-                        "move_earlier" => app.move_shown_look(index, index.saturating_sub(1)),
-                        "move_later" => app.move_shown_look(index, (index + 1).min(count - 1)),
+                        "move_earlier" => on_move(index, index.saturating_sub(1)),
+                        "move_later" => on_move(index, (index + 1).min(count - 1)),
                         _ => {}
                     })
                     .claim_touches(TouchClaim::on_move().ask(move |request: &ClaimRequest| {
@@ -280,7 +330,7 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                     .on_responder_release(move |_: &ResponderEvent| {
                         let to = target().unwrap_or(index);
                         end();
-                        app.move_shown_look(index, to);
+                        on_move(index, to);
                     })
                     .on_responder_terminate(move |_: &ResponderEvent| end())
                 })
@@ -300,32 +350,7 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                         }])
                         .opacity(move || if lifted() || held() { 1.0_f32 } else { 0.0_f32 }),
                 )
-                .child({
-                    let menu_look = look.clone();
-                    let gestures = if movable {
-                        RowGestures {
-                            long_press: Box::new(move || {
-                                dragged.set(false);
-                                armed.set(Some(index))
-                            }),
-                            // Let go without a drag: the menu of the row. The
-                            // row stays lifted, and can still be dragged, until
-                            // the menu closes.
-                            release: Some(Box::new(move || {
-                                if armed.get() == Some(index) && !dragged.get() {
-                                    look_menu_then(app, menu_look.clone(), move || {
-                                        if dragging.get().is_none() {
-                                            armed.set(None)
-                                        }
-                                    });
-                                }
-                            })),
-                        }
-                    } else {
-                        RowGestures::menu(app, &look, editable)
-                    };
-                    look_row(app, look, editable, index + 1 == count, Some(gestures))
-                })
+                .child(row(index, gestures))
                 .into_element()
         })
         .collect();
@@ -347,9 +372,9 @@ fn look_status(look: &Look) -> Option<(String, bool)> {
 /// and the check that shows or hides it in the camera menu.
 /// What a held row does: lift it for a drag, or open its menu, and what
 /// letting go does.
-struct RowGestures {
-    long_press: Box<dyn Fn()>,
-    release: Option<Box<dyn Fn()>>,
+pub(crate) struct RowGestures {
+    pub long_press: Box<dyn Fn()>,
+    pub release: Option<Box<dyn Fn()>>,
 }
 
 impl RowGestures {
@@ -645,7 +670,7 @@ pub fn corner_icon(markup: &str) -> AnyElement {
 }
 
 /// Shown in the camera menu: a filled check; hidden: an empty circle.
-fn round_check(
+pub(crate) fn round_check(
     on: bool,
     label: String,
     enabled: bool,
@@ -853,7 +878,7 @@ pub fn look_kind(look: &Look) -> String {
     }
 }
 
-fn no_camera(app: AppState) -> impl IntoElement {
+pub(crate) fn no_camera(app: AppState) -> impl IntoElement {
     grouped_card(
         view()
             .p_6()

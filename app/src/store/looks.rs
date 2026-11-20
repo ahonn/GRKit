@@ -647,45 +647,16 @@ impl AppState {
         });
         self.root.run(|| {
             spawn(async move {
-                let source = Source::Catalog {
-                    look: item.look.clone(),
+                let (grf, cover, demo_cover) = match self.official_grf(&item).await {
+                    Ok(parts) => parts,
+                    Err(error) => {
+                        self.looks.adding.update(|a| {
+                            a.remove(&id);
+                        });
+                        self.alert_look_error(error);
+                        return;
+                    }
                 };
-                let Some(grf) = self.source_bytes(&source).await else {
-                    self.looks.adding.update(|a| {
-                        a.remove(&id);
-                    });
-                    self.alert_look_error(LookError::Service(tr("looks.catalog_offline", &[])));
-                    return;
-                };
-                // The Look gets the cover of the scheme of the card. Its file
-                // has the gray cover, which the camera knows.
-                let scheme = self
-                    .looks
-                    .snapshot
-                    .get()
-                    .map(|snapshot| snapshot.official_covers)
-                    .unwrap_or_default();
-                let film_box = scheme.variant(item.look.monochrome) == Variant::FilmBox;
-                let cover = item
-                    .look
-                    .film_cover()
-                    .filter(|_| film_box)
-                    .map(|statement| statement.film_box());
-                let grf = match &cover {
-                    Some(cover) => match look_media::with_cover(&grf, cover) {
-                        Ok(grf) => grf,
-                        Err(error) => {
-                            self.looks.adding.update(|a| {
-                                a.remove(&id);
-                            });
-                            self.alert_look_error(LookError::Service(error.to_string()));
-                            return;
-                        }
-                    },
-                    None => grf,
-                };
-                // The demo camera knows the release covers from the catalog.
-                let demo_cover = cover.clone().or_else(|| item.look.film_cover());
                 let finish = move |app: AppState, _ok: bool| {
                     app.looks.adding.update(|a| {
                         a.remove(&item.look.id);
@@ -703,6 +674,74 @@ impl AppState {
                 );
             });
         });
+    }
+
+    /// The file of an official Look as the camera gets it, with the cover of
+    /// the scheme of the card, the cover it sends, and the cover the demo
+    /// camera keeps.
+    async fn official_grf(
+        self,
+        item: &CatalogItem,
+    ) -> Result<(Vec<u8>, Option<Cover>, Option<Cover>), LookError> {
+        let source = Source::Catalog {
+            look: item.look.clone(),
+        };
+        let grf = self
+            .source_bytes(&source)
+            .await
+            .ok_or_else(|| LookError::Service(tr("looks.catalog_offline", &[])))?;
+        // The Look gets the cover of the scheme of the card. Its file has the
+        // gray cover, which the camera knows.
+        let scheme = self
+            .looks
+            .snapshot
+            .get()
+            .map(|snapshot| snapshot.official_covers)
+            .unwrap_or_default();
+        let film_box = scheme.variant(item.look.monochrome) == Variant::FilmBox;
+        let cover = item
+            .look
+            .film_cover()
+            .filter(|_| film_box)
+            .map(|statement| statement.film_box());
+        let grf = match &cover {
+            Some(cover) => look_media::with_cover(&grf, cover)
+                .map_err(|error| LookError::Service(error.to_string()))?,
+            None => grf,
+        };
+        // The demo camera knows the release covers from the catalog.
+        let demo_cover = cover.clone().or_else(|| item.look.film_cover());
+        Ok((grf, cover, demo_cover))
+    }
+
+    /// Add the official Look `id` that a recipe needs, unless the camera has
+    /// it. The camera lists a new Look after it starts again.
+    pub(crate) async fn ensure_official_look(self, id: &str) -> Result<(), LookError> {
+        if self.look(id).is_some() {
+            return Ok(());
+        }
+        self.ensure_catalog().await;
+        let item = self
+            .looks
+            .catalog
+            .get()
+            .and_then(|items| items.into_iter().find(|item| item.look.id == id))
+            .ok_or_else(|| LookError::Service(tr("looks.catalog_offline", &[])))?;
+        let (grf, cover, demo_cover) = self.official_grf(&item).await?;
+        let result = if self.demo() {
+            self.looks.fake.with(|fake| {
+                fake.borrow_mut()
+                    .as_mut()
+                    .map_or(Err(LookError::ConnectionLost), |f| {
+                        f.put(&grf, true, demo_cover)
+                    })
+            })
+        } else {
+            let snapshot = self.looks.snapshot.get().ok_or(LookError::Changed)?;
+            remote::put_content(&CameraContext::from(&snapshot), id, grf, cover.as_ref()).await
+        };
+        self.refresh_looks();
+        result
     }
 
     fn taken_ids(self) -> BTreeSet<String> {

@@ -626,8 +626,8 @@ looks.error.camera_title:
   en: Camera Busy
   zh-CN: 相机正忙
 looks.error.camera_body:
-  en: Close the menu on the camera and go back to the shooting screen. Then try again.
-  zh-CN: 请关闭相机上的菜单，回到拍摄画面后再试。
+  en: Close the GRKit page on the camera, then try again.
+  zh-CN: 请关闭相机上的 GRKit 页面后再试。
 looks.error.restart_title:
   en: Restart the Camera
   zh-CN: 请重启相机
@@ -1363,3 +1363,539 @@ looks.cover_preview:
 looks.use_more:
   en: " and %{more} more"
   zh-CN: " 等 %{total} 个"
+
+# Recipes
+tab.recipes:
+  en: "Recipes"
+  zh-CN: "配方"
+recipes.title:
+  en: "Recipes"
+  zh-CN: "配方"
+recipes.add_title:
+  en: "Add Preset Recipes"
+  zh-CN: "添加推荐配方"
+recipes.no_camera_body:
+  en: "Connect your camera to see and apply its recipes."
+  zh-CN: "连接相机后，可以查看和应用它的配方。"
+recipes.read_failed:
+  en: "Can't read the recipes."
+  zh-CN: "无法读取配方。"
+recipes.empty_title:
+  en: "No Recipes Yet"
+  zh-CN: "还没有配方"
+recipes.empty_body:
+  en: "Set up the camera, then save it with MENU → Recipes → Save Current Settings. Or add a preset."
+  zh-CN: "在相机上调好设置后，用「MENU」→「配方」→「保存设置」保存一个。也可以添加推荐配方。"
+recipes.menu:
+  en: "Camera Menu"
+  zh-CN: "相机菜单"
+recipes.menu_note:
+  en: "Same order as ADJ on the camera. Touch and hold to reorder."
+  zh-CN: "和相机 ADJ 中的顺序相同。长按可以拖动排序。"
+recipes.off:
+  en: "Off"
+  zh-CN: "已关闭"
+recipes.off_note:
+  en: "Recipes that are off stay on the card and don't show in the camera menu."
+  zh-CN: "关闭的配方仍在卡上，不在相机菜单中显示。"
+recipes.look_missing:
+  en: "Film look not on camera"
+  zh-CN: "相机上没有这个胶片风格"
+recipes.look_kept:
+  en: "Keeps the look"
+  zh-CN: "保持当前风格"
+recipes.grain:
+  en: "Grain"
+  zh-CN: "颗粒感"
+recipes.halation:
+  en: "Halation"
+  zh-CN: "胶片光晕"
+recipes.bloom:
+  en: "Bloom"
+  zh-CN: "柔光"
+recipes.current:
+  en: "Current"
+  zh-CN: "当前"
+recipes.hide_named:
+  en: "Turn off %{name} in the menu"
+  zh-CN: "在菜单中关闭 %{name}"
+recipes.show_named:
+  en: "Turn on %{name} in the menu"
+  zh-CN: "在菜单中开启 %{name}"
+recipes.apply:
+  en: "Apply to Camera"
+  zh-CN: "应用到相机"
+recipes.menu_hide:
+  en: "Turn Off in Menu"
+  zh-CN: "在菜单中关闭"
+recipes.menu_show:
+  en: "Turn On in Menu"
+  zh-CN: "在菜单中开启"
+recipes.rename:
+  en: "Rename"
+  zh-CN: "重命名"
+recipes.delete:
+  en: "Delete Recipe"
+  zh-CN: "删除配方"
+recipes.delete_title:
+  en: "Delete %{name}?"
+  zh-CN: "删除 %{name}？"
+recipes.delete_body:
+  en: "This can't be undone."
+  zh-CN: "删除后无法恢复。"
+recipes.image_control:
+  en: "Image Control"
+  zh-CN: "图像控制"
+recipes.position:
+  en: "In the camera menu · No. %{n}"
+  zh-CN: "在相机菜单中 · 第 %{n} 个"
+recipes.is_off:
+  en: "Off in the camera menu"
+  zh-CN: "在相机菜单中已关闭"
+recipes.show_in_menu:
+  en: "Show in Camera Menu"
+  zh-CN: "在相机菜单中显示"
+recipes.in_adj:
+  en: "In ADJ"
+  zh-CN: "在 ADJ 中"
+recipes.hidden:
+  en: "Hidden"
+  zh-CN: "隐藏"
+recipes.hidden_note:
+  en: "Hiding in ADJ is set on the camera."
+  zh-CN: "在 ADJ 中隐藏只能在相机上设置。"
+recipes.read_only_note:
+  en: "Settings change only on the camera: apply this recipe, adjust, then save with MENU → Recipes → Save Current Settings."
+  zh-CN: "参数只能在相机上调整：应用这个配方，调好后用「MENU」→「配方」→「保存设置」另存。"
+recipes.presets_title:
+  en: "Preset Recipes"
+  zh-CN: "推荐配方"
+recipes.presets_offline:
+  en: "Can't load the presets. Connect to the internet once, then try again."
+  zh-CN: "无法加载推荐配方。请先连接一次互联网，再试一次。"
+recipes.presets_note:
+  en: "Presets for %{model}."
+  zh-CN: "只列出适用于 %{model} 的推荐配方。"
+recipes.by:
+  en: "By %{name}"
+  zh-CN: "作者：%{name}"
+recipes.on_camera:
+  en: "On camera"
+  zh-CN: "已在相机上"
+recipes.adding:
+  en: "Adding…"
+  zh-CN: "添加中…"
+recipes.add:
+  en: "Add"
+  zh-CN: "添加"
+recipes.add_named:
+  en: "Add %{name}"
+  zh-CN: "添加 %{name}"
+recipes.adds_look:
+  en: "Also adds the film look %{look}"
+  zh-CN: "会一起添加胶片风格 %{look}"
+recipes.adds_look_note:
+  en: "The camera doesn't have %{look}. It's added too and works after the camera restarts."
+  zh-CN: "相机上没有 %{look}，会一起添加，相机重启后可用。"
+recipes.add_to_camera:
+  en: "Add to Camera"
+  zh-CN: "添加到相机"
+recipes.name_note:
+  en: "The camera menu shows this name. Up to 16 letters, digits, spaces, or symbols. Leave empty for the automatic name."
+  zh-CN: "相机菜单显示这个名称。最多 16 个字符：英文字母、数字、空格和符号。留空使用自动名称。"
+recipes.applied:
+  en: "Applied %{name}"
+  zh-CN: "已应用 %{name}"
+recipes.undo:
+  en: "Undo"
+  zh-CN: "撤销"
+recipes.undone:
+  en: "Undone"
+  zh-CN: "已撤销"
+recipes.added:
+  en: "Added %{name}"
+  zh-CN: "已添加 %{name}"
+recipes.keep:
+  en: "Keeps camera setting"
+  zh-CN: "保持相机当前值"
+recipes.native_grain:
+  en: "Grain Effect"
+  zh-CN: "颗粒效果"
+recipes.border:
+  en: "Border"
+  zh-CN: "边框"
+recipes.style:
+  en: "Style"
+  zh-CN: "风格"
+recipes.wb_mode:
+  en: "Mode"
+  zh-CN: "模式"
+recipes.white_balance:
+  en: "White Balance"
+  zh-CN: "白平衡"
+recipes.corrections:
+  en: "Corrections"
+  zh-CN: "校正"
+recipes.exposure:
+  en: "Exposure"
+  zh-CN: "曝光"
+recipes.compensation:
+  en: "Exposure Comp."
+  zh-CN: "曝光补偿"
+recipes.iso_limit:
+  en: "ISO Upper Limit"
+  zh-CN: "ISO 上限"
+recipes.metering:
+  en: "Metering"
+  zh-CN: "测光"
+recipes.nd:
+  en: "ND Filter"
+  zh-CN: "ND 滤镜"
+recipes.metering.multi:
+  en: "Multi-segment"
+  zh-CN: "多区测光"
+recipes.metering.center:
+  en: "Center-weighted"
+  zh-CN: "中央重点测光"
+recipes.metering.spot:
+  en: "Spot"
+  zh-CN: "点测光"
+recipes.metering.highlight:
+  en: "Highlight-weighted"
+  zh-CN: "高光优先测光"
+recipes.error.busy_title:
+  en: "Camera Busy"
+  zh-CN: "相机正忙"
+recipes.error.busy_body:
+  en: "Close the GRKit page on the camera, then try again."
+  zh-CN: "请关闭相机上的 GRKit 页面后再试。"
+recipes.error.menu_full_title:
+  en: "Camera Menu Full"
+  zh-CN: "相机菜单已满"
+recipes.error.menu_full_body:
+  en: "The menu shows up to %{max} recipes. Turn one off first."
+  zh-CN: "最多显示 %{max} 个配方。请先关闭一个。"
+recipes.error.card_full_title:
+  en: "Recipes Full"
+  zh-CN: "配方已满"
+recipes.error.card_full_body:
+  en: "The card holds up to %{max} recipes. Delete one first."
+  zh-CN: "存储卡上最多 %{max} 个配方。请先删除一个。"
+recipes.error.undo_title:
+  en: "Nothing to Undo"
+  zh-CN: "没有可撤销的操作"
+recipes.error.undo_body:
+  en: "The camera has no earlier settings to go back to."
+  zh-CN: "相机上没有可以恢复的设置。"
+recipes.error.look_title:
+  en: "Film Look Missing"
+  zh-CN: "缺少胶片风格"
+recipes.error.look_body:
+  en: "The camera doesn't have the film look of this recipe. Add it on the Film Looks tab and restart the camera."
+  zh-CN: "相机上没有这个配方的胶片风格。请在「胶片风格」中添加，并重启相机。"
+recipes.error.unsupported_title:
+  en: "Can't Apply"
+  zh-CN: "无法应用"
+recipes.error.unsupported_body:
+  en: "This camera can't use some settings of this recipe."
+  zh-CN: "这台相机不支持这个配方的部分设置。"
+recipes.grain.0:
+  en: "Off"
+  zh-CN: "关闭"
+recipes.grain.1:
+  en: "Weak"
+  zh-CN: "弱"
+recipes.grain.2:
+  en: "Medium"
+  zh-CN: "中"
+recipes.grain.3:
+  en: "Strong"
+  zh-CN: "强"
+recipes.grain.4:
+  en: "Extra Strong"
+  zh-CN: "很强"
+recipes.glow.0:
+  en: "Off"
+  zh-CN: "关闭"
+recipes.glow.1:
+  en: "Weak"
+  zh-CN: "弱"
+recipes.glow.2:
+  en: "Medium"
+  zh-CN: "中"
+recipes.glow.3:
+  en: "Strong"
+  zh-CN: "强"
+recipes.color.0:
+  en: "Red"
+  zh-CN: "红色"
+recipes.color.1:
+  en: "Orange"
+  zh-CN: "橙色"
+recipes.color.2:
+  en: "Gold"
+  zh-CN: "金色"
+recipes.color.3:
+  en: "White"
+  zh-CN: "白色"
+recipes.border.0:
+  en: "Off"
+  zh-CN: "关闭"
+recipes.border.1:
+  en: "Thin"
+  zh-CN: "细"
+recipes.border.2:
+  en: "Wide"
+  zh-CN: "宽"
+recipes.border.3:
+  en: "Instant"
+  zh-CN: "拍立得"
+recipes.border_color.0:
+  en: "White"
+  zh-CN: "白色"
+recipes.border_color.1:
+  en: "Black"
+  zh-CN: "黑色"
+recipes.level.0:
+  en: "Saturation"
+  zh-CN: "饱和度"
+recipes.level.1:
+  en: "Hue"
+  zh-CN: "色相"
+recipes.level.2:
+  en: "High/Low Key"
+  zh-CN: "高调/低调"
+recipes.level.3:
+  en: "Contrast"
+  zh-CN: "对比度"
+recipes.level.4:
+  en: "Contrast (Highlight)"
+  zh-CN: "对比度（高光）"
+recipes.level.5:
+  en: "Contrast (Shadow)"
+  zh-CN: "对比度（阴影）"
+recipes.level.6:
+  en: "Sharpness"
+  zh-CN: "锐度"
+recipes.level.7:
+  en: "Shading"
+  zh-CN: "暗角"
+recipes.level.8:
+  en: "Clarity"
+  zh-CN: "清晰度"
+recipes.correction.0:
+  en: "Highlight Correction"
+  zh-CN: "高光补偿"
+recipes.correction.1:
+  en: "Shadow Correction"
+  zh-CN: "阴影补偿"
+recipes.correction.2:
+  en: "Peripheral Illumination Corr."
+  zh-CN: "周边光量补偿"
+recipes.correction.3:
+  en: "High-ISO Noise Reduction"
+  zh-CN: "高 ISO 降噪"
+recipes.value.Auto:
+  en: "Auto"
+  zh-CN: "自动"
+recipes.value.On:
+  en: "On"
+  zh-CN: "开"
+recipes.value.Off:
+  en: "Off"
+  zh-CN: "关"
+recipes.value.Low:
+  en: "Low"
+  zh-CN: "低"
+recipes.value.Mid:
+  en: "Medium"
+  zh-CN: "中"
+recipes.value.High:
+  en: "High"
+  zh-CN: "高"
+recipes.value.Custom:
+  en: "Custom"
+  zh-CN: "自定义"
+recipes.wb.0:
+  en: "Auto WB"
+  zh-CN: "自动白平衡"
+recipes.wb.1:
+  en: "Multi Auto WB"
+  zh-CN: "多区自动白平衡"
+recipes.wb.2:
+  en: "Auto WB (Warm)"
+  zh-CN: "自动白平衡（暖色）"
+recipes.wb.3:
+  en: "Auto WB (White)"
+  zh-CN: "自动白平衡（白色）"
+recipes.wb.4:
+  en: "Daylight"
+  zh-CN: "日光"
+recipes.wb.5:
+  en: "Shade"
+  zh-CN: "阴影"
+recipes.wb.6:
+  en: "Cloudy"
+  zh-CN: "阴天"
+recipes.wb.7:
+  en: "Fluorescent D"
+  zh-CN: "荧光灯 D"
+recipes.wb.8:
+  en: "Fluorescent N"
+  zh-CN: "荧光灯 N"
+recipes.wb.9:
+  en: "Fluorescent W"
+  zh-CN: "荧光灯 W"
+recipes.wb.10:
+  en: "Fluorescent L"
+  zh-CN: "荧光灯 L"
+recipes.wb.11:
+  en: "Tungsten"
+  zh-CN: "白炽灯"
+recipes.wb.12:
+  en: "CTE"
+  zh-CN: "CTE"
+recipes.wb.13:
+  en: "Manual"
+  zh-CN: "手动"
+recipes.wb.14:
+  en: "Color Temperature"
+  zh-CN: "色温"
+recipes.wb.15:
+  en: "Custom 1"
+  zh-CN: "自定义 1"
+recipes.wb.16:
+  en: "Custom 2"
+  zh-CN: "自定义 2"
+recipes.wb.17:
+  en: "Custom 3"
+  zh-CN: "自定义 3"
+recipes.type.0:
+  en: "Standard"
+  zh-CN: "标准"
+recipes.type.1:
+  en: "Vivid"
+  zh-CN: "鲜艳"
+recipes.type.2:
+  en: "Monotone"
+  zh-CN: "单色"
+recipes.type.3:
+  en: "Soft Monotone"
+  zh-CN: "柔和单色"
+recipes.type.4:
+  en: "Hard Monotone"
+  zh-CN: "硬调单色"
+recipes.type.5:
+  en: "Hi-Contrast B&W"
+  zh-CN: "高对比度黑白"
+recipes.type.6:
+  en: "Negative Film"
+  zh-CN: "负片"
+recipes.type.7:
+  en: "Positive Film"
+  zh-CN: "正片"
+recipes.type.8:
+  en: "Bleach Bypass"
+  zh-CN: "漂白效果"
+recipes.type.9:
+  en: "Retro"
+  zh-CN: "复古"
+recipes.type.10:
+  en: "HDR Tone"
+  zh-CN: "HDR 色调"
+recipes.type.11:
+  en: "Cross Processing"
+  zh-CN: "交叉冲印"
+recipes.type.12:
+  en: "Cinema (Yellow)"
+  zh-CN: "电影（黄）"
+recipes.type.13:
+  en: "Cinema (Green)"
+  zh-CN: "电影（绿）"
+recipes.type.14:
+  en: "Standard"
+  zh-CN: "标准"
+recipes.type.15:
+  en: "Soft"
+  zh-CN: "柔和"
+recipes.type.16:
+  en: "Hi-Contrast"
+  zh-CN: "高对比度"
+recipes.type.17:
+  en: "Grainy"
+  zh-CN: "颗粒"
+recipes.type.18:
+  en: "Solid"
+  zh-CN: "硬朗"
+recipes.type.19:
+  en: "HDR Tone"
+  zh-CN: "HDR 色调"
+recipes.type.20:
+  en: "Solarization"
+  zh-CN: "中途曝光"
+recipes.film_look:
+  en: "Film Look"
+  zh-CN: "胶片风格"
+recipes.type_short.0:
+  en: "Std"
+  zh-CN: "标准"
+recipes.type_short.1:
+  en: "Vivid"
+  zh-CN: "鲜艳"
+recipes.type_short.2:
+  en: "Mono"
+  zh-CN: "单色"
+recipes.type_short.3:
+  en: "Soft Mono"
+  zh-CN: "柔和单色"
+recipes.type_short.4:
+  en: "Hard Mono"
+  zh-CN: "硬调单色"
+recipes.type_short.5:
+  en: "Hi-Con B&W"
+  zh-CN: "高对比度黑白"
+recipes.type_short.6:
+  en: "Nega"
+  zh-CN: "负片"
+recipes.type_short.7:
+  en: "Posi"
+  zh-CN: "正片"
+recipes.type_short.8:
+  en: "Bleach"
+  zh-CN: "漂白"
+recipes.type_short.9:
+  en: "Retro"
+  zh-CN: "复古"
+recipes.type_short.10:
+  en: "HDR"
+  zh-CN: "HDR"
+recipes.type_short.11:
+  en: "Cross"
+  zh-CN: "交叉冲印"
+recipes.type_short.12:
+  en: "Cine Y"
+  zh-CN: "电影黄"
+recipes.type_short.13:
+  en: "Cine G"
+  zh-CN: "电影绿"
+recipes.type_short.14:
+  en: "Std"
+  zh-CN: "标准"
+recipes.type_short.15:
+  en: "Soft"
+  zh-CN: "柔和"
+recipes.type_short.16:
+  en: "Hi-Con"
+  zh-CN: "高对比度"
+recipes.type_short.17:
+  en: "Grainy"
+  zh-CN: "颗粒"
+recipes.type_short.18:
+  en: "Solid"
+  zh-CN: "硬朗"
+recipes.type_short.19:
+  en: "HDR"
+  zh-CN: "HDR"
+recipes.type_short.20:
+  en: "Solar"
+  zh-CN: "中途曝光"

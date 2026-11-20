@@ -269,16 +269,17 @@ impl AppState {
         }
     }
 
-    /// Close pages that need the camera. The Looks tab goes back to the
+    /// Close pages that need the camera. The Looks and Recipes tabs go back to the
     /// camera tab, where the reconnect is, and is restored after it.
     fn leave_camera_pages(self) {
         // The Looks tab and every page on it read the camera, and so does
         // Software Update.
-        if self.tab() == Tab::Looks {
-            self.return_tab.set(Some(Tab::Looks));
+        if matches!(self.tab(), Tab::Looks | Tab::Recipes) {
+            self.return_tab.set(Some(self.tab()));
             self.set_tab(Tab::Camera);
         }
         self.pop_to(Tab::Looks, 0);
+        self.pop_to(Tab::Recipes, 0);
         if self.route_at(Tab::Camera, 0) == Some(Route::SoftwareUpdate) {
             self.pop_to(Tab::Camera, 0);
         }

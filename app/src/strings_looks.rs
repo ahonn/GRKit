@@ -156,9 +156,7 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.error.busy_title" => "Camera Busy",
         "looks.error.busy_body" => "Another change is running. Try again in a moment.",
         "looks.error.camera_title" => "Camera Busy",
-        "looks.error.camera_body" => {
-            "Close the menu on the camera and go back to the shooting screen. Then try again."
-        }
+        "looks.error.camera_body" => "Close the GRKit page on the camera, then try again.",
         "looks.error.restart_title" => "Restart the Camera",
         "looks.error.restart_body" => "The camera lists this film look after it starts again.",
         "looks.error.changed_title" => "Film Looks Changed",
@@ -397,7 +395,7 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.error.busy_title" => "相机正忙",
         "looks.error.busy_body" => "另一项修改正在进行，请稍后再试。",
         "looks.error.camera_title" => "相机正忙",
-        "looks.error.camera_body" => "请关闭相机上的菜单，回到拍摄画面后再试。",
+        "looks.error.camera_body" => "请关闭相机上的 GRKit 页面后再试。",
         "looks.error.restart_title" => "请重启相机",
         "looks.error.restart_body" => "相机重启后才会列出这个胶片风格。",
         "looks.error.changed_title" => "胶片风格已变化",

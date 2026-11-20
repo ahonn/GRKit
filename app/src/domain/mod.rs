@@ -17,6 +17,7 @@ pub mod link_health;
 pub mod look_media;
 pub mod looks;
 pub mod nearby_watch;
+pub mod recipes;
 pub mod release_notes;
 mod remembered;
 pub mod saved_connect;

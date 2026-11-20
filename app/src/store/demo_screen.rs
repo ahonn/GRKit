@@ -138,6 +138,30 @@ pub enum DemoScreen {
     U18,
     /// U19 — Update History.
     U19,
+    /// R1 — Recipes list.
+    R1,
+    /// R2 — Recipe on a Film Look.
+    R2,
+    /// R3 — Recipe on Image Control.
+    R3,
+    /// R4 — Recipe menu.
+    R4,
+    /// R5 — Applied, with Undo.
+    R5,
+    /// R6 — Preset recipes.
+    R6,
+    /// R7 — Preset that adds its Film Look.
+    R7,
+    /// R8 — Rename a recipe.
+    R8,
+    /// R9 — Delete a recipe.
+    R9,
+    /// R10 — Camera menu full.
+    R10,
+    /// R11 — No recipes.
+    R11,
+    /// R12 — Recipes without a camera.
+    R12,
 }
 
 /// Every id string the env / CLI accept, in design order.
@@ -200,6 +224,18 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("U17", DemoScreen::U17),
     ("U18", DemoScreen::U18),
     ("U19", DemoScreen::U19),
+    ("R1", DemoScreen::R1),
+    ("R2", DemoScreen::R2),
+    ("R3", DemoScreen::R3),
+    ("R4", DemoScreen::R4),
+    ("R5", DemoScreen::R5),
+    ("R6", DemoScreen::R6),
+    ("R7", DemoScreen::R7),
+    ("R8", DemoScreen::R8),
+    ("R9", DemoScreen::R9),
+    ("R10", DemoScreen::R10),
+    ("R11", DemoScreen::R11),
+    ("R12", DemoScreen::R12),
 ];
 
 /// Parse a design id (`A5`, `a5`, …). Unknown → `None` (normal demo).
@@ -638,6 +674,68 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             app.status.set(None);
             app.alert_look_error(crate::domain::LookError::ConnectionLost);
         }
+        DemoScreen::R1 => seed_recipes(app),
+        DemoScreen::R2 => {
+            seed_recipes(app);
+            app.push(Route::RecipeDetail(1));
+        }
+        DemoScreen::R3 => {
+            seed_recipes(app);
+            app.push(Route::RecipeDetail(3));
+        }
+        DemoScreen::R4 => {
+            seed_recipes(app);
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                if let Some(item) = app.recipe(1) {
+                    crate::pages::recipe_menu(app, item, Box::new(|| {}));
+                }
+            });
+        }
+        DemoScreen::R5 => {
+            seed_recipes(app);
+            app.apply_recipe(2);
+        }
+        DemoScreen::R6 => {
+            seed_recipes(app);
+            app.open_recipe_presets();
+        }
+        DemoScreen::R7 => {
+            seed_recipes(app);
+            app.load_catalog();
+            app.open_recipe_presets();
+            app.push(Route::RecipePreset("cinestill-800t".into()));
+        }
+        DemoScreen::R8 => {
+            seed_recipes(app);
+            app.push(Route::RecipeDetail(1));
+            app.set_sheet(Some(Sheet::RenameRecipe(1)));
+        }
+        DemoScreen::R9 => {
+            seed_recipes(app);
+            app.push(Route::RecipeDetail(1));
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                crate::pages::confirm_delete_recipe(app, 1, "Odd Film".into());
+            });
+        }
+        DemoScreen::R10 => {
+            app.with_fake_recipes(|f| f.max_on = f.on_count());
+            seed_recipes(app);
+            app.set_recipe_enabled(6, true);
+        }
+        DemoScreen::R11 => {
+            app.with_fake_recipes(|f| f.recipes.clear());
+            seed_recipes(app);
+        }
+        DemoScreen::R12 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_sheet(None);
+            app.set_tab(Tab::Recipes);
+        }
     }
 }
 
@@ -649,6 +747,15 @@ fn seed_looks(app: AppState) {
     app.set_sheet(None);
     app.set_tab(Tab::Looks);
     app.refresh_looks();
+}
+
+/// Connected, on the Recipes tab, with the demo camera's recipes and
+/// Looks read.
+fn seed_recipes(app: AppState) {
+    seed_connected_up_to_date(app);
+    app.set_sheet(None);
+    app.refresh_looks();
+    app.set_tab(Tab::Recipes);
 }
 
 /// Ask to delete Portra 400 after the page shows.
@@ -672,6 +779,9 @@ pub fn shows_alert(screen: DemoScreen) -> bool {
             | DemoScreen::L15
             | DemoScreen::L18
             | DemoScreen::U10
+            | DemoScreen::R4
+            | DemoScreen::R9
+            | DemoScreen::R10
     )
 }
 
@@ -848,5 +958,17 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::U17 => "GRKit updated to 1.7.0",
         DemoScreen::U18 => "GRKit App Needs an Update",
         DemoScreen::U19 => "View on GitHub",
+        DemoScreen::R1 => "Camera Menu",
+        DemoScreen::R2 => "Apply to Camera",
+        DemoScreen::R3 => "Image Control",
+        DemoScreen::R4 => "Odd Film",
+        DemoScreen::R5 => "Applied Street",
+        DemoScreen::R6 => "Presets for GR III.",
+        DemoScreen::R7 => "Add to Camera",
+        DemoScreen::R8 => "Rename",
+        DemoScreen::R9 => "Delete Odd Film?",
+        DemoScreen::R10 => "Camera Menu Full",
+        DemoScreen::R11 => "No Recipes Yet",
+        DemoScreen::R12 => "No Camera Connected",
     }
 }

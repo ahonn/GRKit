@@ -159,6 +159,8 @@ pub struct Release {
     pub version: String,
     /// The notes of recent releases, from the index: display only.
     pub notes: Vec<grkit_core::release_index::VersionNotes>,
+    /// The recipe presets of the site: display and settings only.
+    pub presets: Vec<grkit_core::release_index::IndexPreset>,
     /// Upper estimate of the release files, before applying camera selections.
     pub bytes: u64,
     base: String,
@@ -347,6 +349,7 @@ async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem>
     Ok(Release {
         version: index.version.clone(),
         notes: index.notes.clone(),
+        presets: index.presets.clone(),
         bytes,
         base,
         index,
@@ -624,6 +627,7 @@ mod tests {
         let release = Release {
             version: index.version.clone(),
             notes: Vec::new(),
+            presets: Vec::new(),
             bytes: 2,
             base: "https://example.test".into(),
             index,

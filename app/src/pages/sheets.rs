@@ -34,7 +34,9 @@ fn swipe_closes(app: AppState) -> bool {
 fn dismiss(app: AppState) {
     match app.sheet() {
         Some(Sheet::Nearby) => app.dismiss_nearby(),
-        Some(Sheet::Scan | Sheet::ImportLook | Sheet::RenameLook(_)) => app.set_sheet(None),
+        Some(Sheet::Scan | Sheet::ImportLook | Sheet::RenameLook(_) | Sheet::RenameRecipe(_)) => {
+            app.set_sheet(None)
+        }
         Some(Sheet::Connecting { .. }) => app.cancel_connect(),
         Some(Sheet::ConnectError(_)) => app.dismiss_connect_error(),
         // An update under way asks first; a restart cannot be stopped.
@@ -57,6 +59,9 @@ fn sheet_body(app: AppState) -> AnyElement {
         Some(Sheet::Scan) => scan(app.clone()).into_element(),
         Some(Sheet::ImportLook) => crate::pages::import_sheet(app.clone()).into_element(),
         Some(Sheet::RenameLook(id)) => crate::pages::rename_sheet(app.clone(), id).into_element(),
+        Some(Sheet::RenameRecipe(id)) => {
+            crate::pages::recipe_rename_sheet(app.clone(), id).into_element()
+        }
         Some(Sheet::Connecting { step }) => connecting(app.clone(), step).into_element(),
         Some(Sheet::ConnectError(error)) => connect_error_sheet(app.clone(), error).into_element(),
         Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => {
@@ -85,7 +90,7 @@ fn sheet_buttons(app: AppState) -> (Option<Action>, Option<Action>) {
                 .then(|| Box::new(move || app.pin_scan_list()) as Box<dyn Fn()>);
             (back, close(Box::new(move || app.set_sheet(None))))
         }
-        Some(Sheet::ImportLook | Sheet::RenameLook(_)) => {
+        Some(Sheet::ImportLook | Sheet::RenameLook(_) | Sheet::RenameRecipe(_)) => {
             (None, close(Box::new(move || app.set_sheet(None))))
         }
         Some(Sheet::ConnectError(_)) => {

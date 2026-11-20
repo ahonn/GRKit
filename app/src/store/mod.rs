@@ -7,10 +7,12 @@ mod connect;
 mod demo_screen;
 mod liveness;
 mod looks;
+mod recipes;
 mod update;
 mod warmup;
 
 pub use looks::{CatalogItem, ImportDraft, LooksStore};
+pub use recipes::{RecipesStore, native_type_name, native_type_short};
 
 pub use demo_screen::{
     DEMO_SCREEN_IDS, DemoScreen, demo_screen_from_env, key_text, parse_demo_screen, shows_alert,
@@ -54,6 +56,7 @@ pub(crate) const MAX_DEPTH: usize = 4;
 pub enum Tab {
     Camera,
     Looks,
+    Recipes,
     Settings,
 }
 
@@ -77,6 +80,12 @@ pub enum Route {
     SavedCameras,
     /// The cover colors of the built-in Looks, from the Looks list.
     LookScheme,
+    /// One recipe on the camera, by ID.
+    RecipeDetail(u32),
+    /// The presets of the site.
+    RecipePresets,
+    /// One preset, by ID.
+    RecipePreset(String),
 }
 
 /// Modal sheets over the camera tab.
@@ -103,6 +112,8 @@ pub enum Sheet {
     ImportLook,
     /// Rename the Look with this ID.
     RenameLook(String),
+    /// Rename the recipe with this ID.
+    RenameRecipe(u32),
 }
 
 /// The package assembled for a target version: (version, zip bytes).
@@ -113,8 +124,9 @@ type StagedPackage = (String, Vec<u8>);
 pub struct AppState {
     demo: bool,
     tab: Signal<Tab>,
-    stacks: Signal<[Vec<Route>; 3]>,
+    stacks: Signal<[Vec<Route>; 4]>,
     pub(crate) looks: LooksStore,
+    pub(crate) recipes: RecipesStore,
     sheet: Signal<Option<Sheet>>,
     pub(crate) status: Signal<Option<CameraStatus>>,
     pub(crate) package: Signal<Option<PackageInfo>>,
@@ -217,8 +229,9 @@ impl AppState {
             journal: signal(None),
             staged: stored(RefCell::new(None)),
             tab: signal(Tab::Camera),
-            stacks: signal([Vec::new(), Vec::new(), Vec::new()]),
+            stacks: signal([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
             looks: LooksStore::new(demo),
+            recipes: RecipesStore::new(demo),
             sheet: signal(None),
             status: signal(None),
             package: signal(None),
@@ -252,6 +265,7 @@ impl AppState {
         // Development: open a tab at launch, for simulator runs without taps.
         match platform::config_value("GRKIT_START_TAB").as_deref() {
             Some("looks") => app.tab.set(Tab::Looks),
+            Some("recipes") => app.set_tab(Tab::Recipes),
             Some("looks-add") => {
                 app.tab.set(Tab::Looks);
                 app.open_add();
@@ -309,6 +323,9 @@ impl AppState {
         self.tab.set(tab);
         if tab == Tab::Looks {
             self.open_looks();
+        }
+        if tab == Tab::Recipes {
+            self.open_recipes();
         }
     }
 
@@ -425,6 +442,12 @@ impl AppState {
     /// Show a short notice; it outlives the page that asks for it.
     pub fn show_toast(self, message: String) {
         self.root.run(|| self.toasts.show(message));
+    }
+
+    /// Show a short notice with one action, such as Undo.
+    pub fn show_toast_action(self, message: String, title: String, action: impl Fn() + 'static) {
+        self.root
+            .run(|| self.toasts.show_action(message, title, action));
     }
 
     /// The camera is connected and its link answers.
@@ -981,7 +1004,8 @@ fn tab_index(tab: Tab) -> usize {
     match tab {
         Tab::Camera => 0,
         Tab::Looks => 1,
-        Tab::Settings => 2,
+        Tab::Recipes => 2,
+        Tab::Settings => 3,
     }
 }
 

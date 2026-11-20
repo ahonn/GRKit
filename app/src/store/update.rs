@@ -74,6 +74,7 @@ impl AppState {
                                 }
                             });
                             self.release_notes.set(release.notes.clone());
+                            self.recipes.presets.set(release.presets.clone());
                             self.release.with(|slot| *slot.borrow_mut() = Some(release));
                         }
                         Err(problem) => self.release_problem.set(Some(problem)),

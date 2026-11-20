@@ -285,7 +285,7 @@ pub fn rename_sheet(app: AppState, id: String) -> impl IntoElement {
 }
 
 /// The name field of the rename sheet, focused when it opens.
-fn name_input(name: Signal<String>, on_submit: impl Fn() + 'static) -> impl IntoElement {
+pub(crate) fn name_input(name: Signal<String>, on_submit: impl Fn() + 'static) -> impl IntoElement {
     view()
         .flex_row()
         .items_center()

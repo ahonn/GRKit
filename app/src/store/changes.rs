@@ -115,6 +115,10 @@ impl AppState {
         if self.looks_snapshot().is_some() && !self.looks_loading() && self.look_busy().is_none() {
             self.refresh_looks();
         }
+        // A recipe saved, applied, or moved on the camera.
+        if self.recipes_snapshot().is_some() && self.recipe_busy().is_none() {
+            self.refresh_recipes();
+        }
     }
 
     /// The change stream got a frame lately, so the camera service answers.
