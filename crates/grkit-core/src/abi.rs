@@ -244,6 +244,40 @@ pub const CONTROL_LOOK_TURN: u32 = 4;
 /// key of each listed effect, in the new order.
 pub const CONTROL_LOOKS_ORDER: u32 = 5;
 pub const CONTROL_LOOKS_HEADER: usize = 16;
+/// The recipes (runtime/control_recipes.h), `CONTROL_RECIPES_PAGE` at a
+/// time. The payload is the first slot. The response is
+/// `CONTROL_RECIPES_HEADER` bytes: the number of recipes, the number that
+/// are on (they come first), the slot of the first recipe that is on and
+/// matches the current settings or `CONTROL_RECIPE_NONE`, the count of
+/// recipe changes (`HOST_RECIPE_CHANGES`), the number of undo steps, the
+/// first slot, and the number of entries. Then `CONTROL_RECIPE_ENTRY` bytes
+/// for each recipe: its ID, its `RECIPE_WORDS` words, and its
+/// `RECIPE_NAME_WORDS` name words.
+pub const CONTROL_RECIPES_READ: u32 = 6;
+/// Turn a recipe on or off: its ID, and 1 for Off or 0 for On. A recipe that
+/// turns on goes after the others that are on, one that turns off before
+/// the others that are off.
+pub const CONTROL_RECIPE_TURN: u32 = 7;
+/// The order of the recipes that are on: the ID of each, in the new order.
+pub const CONTROL_RECIPES_ORDER: u32 = 8;
+/// Rename a recipe: its ID and at most `RECIPE_NAME_CHARS` ASCII bytes; no
+/// bytes give the automatic name.
+pub const CONTROL_RECIPE_RENAME: u32 = 9;
+/// Delete a recipe: its ID.
+pub const CONTROL_RECIPE_DELETE: u32 = 10;
+/// Apply a recipe, as OK in ADJ does: its ID. The response is the result
+/// of the apply (RECIPE_READY with the skipped bits, or the reason).
+pub const CONTROL_RECIPE_APPLY: u32 = 11;
+/// Undo the newest apply. The response is the number of undo steps left.
+pub const CONTROL_RECIPE_UNDO: u32 = 12;
+/// Add a recipe: its `RECIPE_WORDS` words and `RECIPE_NAME_WORDS` name
+/// words. It is on after the others that are on while fewer than
+/// `RECIPE_ON_MAX` are on, else off. The response is its ID.
+pub const CONTROL_RECIPE_ADD: u32 = 13;
+pub const CONTROL_RECIPES_HEADER: usize = 28;
+pub const CONTROL_RECIPE_ENTRY: usize = 4 * (1 + RECIPE_WORDS + RECIPE_NAME_WORDS);
+pub const CONTROL_RECIPES_PAGE: usize = 32;
+pub const CONTROL_RECIPE_NONE: u32 = u32::MAX;
 pub const CONTROL_LOOK_ENTRY: usize = 12;
 pub const CONTROL_REQUEST_SIZE: usize = 16 + CONTROL_PAYLOAD_BYTES;
 packed_fields!(CONTROL_FIELDS, CONTROL_SIZE {
@@ -1531,6 +1565,9 @@ pub fn header() -> String {
         ("CONTROL_REQUEST_SIZE", CONTROL_REQUEST_SIZE),
         ("CONTROL_LOOKS_HEADER", CONTROL_LOOKS_HEADER),
         ("CONTROL_LOOK_ENTRY", CONTROL_LOOK_ENTRY),
+        ("CONTROL_RECIPES_HEADER", CONTROL_RECIPES_HEADER),
+        ("CONTROL_RECIPE_ENTRY", CONTROL_RECIPE_ENTRY),
+        ("CONTROL_RECIPES_PAGE", CONTROL_RECIPES_PAGE),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
@@ -1562,6 +1599,15 @@ pub fn header() -> String {
         ("CONTROL_LOOKS_READ", CONTROL_LOOKS_READ),
         ("CONTROL_LOOK_TURN", CONTROL_LOOK_TURN),
         ("CONTROL_LOOKS_ORDER", CONTROL_LOOKS_ORDER),
+        ("CONTROL_RECIPES_READ", CONTROL_RECIPES_READ),
+        ("CONTROL_RECIPE_TURN", CONTROL_RECIPE_TURN),
+        ("CONTROL_RECIPES_ORDER", CONTROL_RECIPES_ORDER),
+        ("CONTROL_RECIPE_RENAME", CONTROL_RECIPE_RENAME),
+        ("CONTROL_RECIPE_DELETE", CONTROL_RECIPE_DELETE),
+        ("CONTROL_RECIPE_APPLY", CONTROL_RECIPE_APPLY),
+        ("CONTROL_RECIPE_UNDO", CONTROL_RECIPE_UNDO),
+        ("CONTROL_RECIPE_ADD", CONTROL_RECIPE_ADD),
+        ("CONTROL_RECIPE_NONE", CONTROL_RECIPE_NONE),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }

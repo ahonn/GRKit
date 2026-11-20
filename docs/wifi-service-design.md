@@ -1,6 +1,6 @@
 # Wi-Fi service v1 design
 
-Status: revised 2026-11-19. Film Looks and software update are implemented as this document describes. Recipes and module settings are proposals. The owner replaced the first Look design, which loaded Look files while the camera ran, with the simpler rule of section 8: a choice applies at once, and a file applies at the next start.
+Status: revised 2026-11-19. Film Looks, recipes, and software update are implemented as this document describes. Module settings are a proposal. The owner replaced the first Look design, which loaded Look files while the camera ran, with the simpler rule of section 8: a choice applies at once, and a file applies at the next start.
 
 GRKit is developing its first public Wi-Fi protocol. Replace the current development endpoints and clients together. Do not add legacy adapters or a v2 namespace.
 
@@ -138,7 +138,7 @@ Example `/props` response, with illustrative values:
   "writeAccess": {"allowed": true, "reason": null},
   "capabilities": {
     "looks": {"read": true, "write": true, "appliesAtRestart": ["content", "name", "delete", "covers"]},
-    "recipes": {"read": false, "write": false},
+    "recipes": {"read": true, "write": true},
     "moduleSettings": {"read": false, "write": false}
   },
   "limits": {
@@ -277,23 +277,19 @@ A rename keeps the cover, except the default cover of the old name. That cover n
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/recipes` | List recipes, compatibility, and order |
-| GET | `/recipes/{id}` | Read a complete portable recipe and dependencies |
-| PUT | `/recipes/{id}` | Create or replace a recipe from JSON |
-| PATCH | `/recipes/{id}` | Edit documented fields, enabled state, or visibility |
-| DELETE | `/recipes/{id}` | Remove a recipe, with reference checks |
-| GET, PUT | `/recipes/order` | Read or replace recipe order |
-| POST | `/recipes/{id}/apply` | Apply a recipe to current camera parameters |
+| GET | `/recipes` | List the recipes: settings, on/off, order, names, the current recipe, the undo count |
+| POST | `/recipes` | Add a preset of the release index: `{"preset": id}` |
+| PATCH | `/recipes/{id}` | Turn on or off (`{"enabled": bool}`), or rename (`{"name": string \| null}`) |
+| DELETE | `/recipes/{id}` | Remove a recipe |
+| PUT | `/recipes/order` | Replace the order of the recipes that are on: `{"ids": [...]}` |
+| POST | `/recipes/{id}/apply` | Apply a recipe to the camera settings |
+| POST | `/recipes/undo` | Undo the last apply, with the undo steps of ADJ |
 
-Portable JSON declares a schema identifier, camera family, stable recipe ID, Look ID, adjustments, and named module settings. It does not expose RAM offsets or slot indices.
+The ID of a recipe is the stable ID that the runtime keeps with the recipe when it moves. The list gives each recipe its semantic settings, its Look ID and name for a recipe on a Look, its readiness, and its automatic name when it has no name. The recipes that are on come first, at most 40. The card keeps 64.
 
-Native camera parameters use semantic names rather than firmware numeric indices. Unsupported fields produce compatibility errors. The service does not silently omit recipe settings.
+Each change applies at once. The runtime changes the recipes in camera RAM, and the resident loader saves the recipe file after the change, as after a change in MENU. A preset that names a Look that is not on the card returns 409 `recipe_look_missing`; the phone adds the Look first. Other errors: 409 `menu_full`, `card_full`, `nothing_to_undo`, `recipe_unsupported`, `runtime_changed`, and 422 `invalid_name`.
 
-Read camera-created recipes as well as imported recipes. Resolve compact effect codes to stable IDs. Ambiguous references return an explicit unresolved dependency and prevent apply or destructive edits.
-
-For sharing, the phone reads the recipe and each referenced GRF with their content hashes. It checks the hashes again before publishing the assembled bundle locally. A difference restarts the export.
-
-Original LUT files are not recoverable from GRF content. Sharing a converted Look must not label it as the original LUT.
+Recipe parameters are read-only. The camera makes recipes with Save Current Settings. Portable recipe JSON and sharing are not in v1.
 
 ### Modules and current parameters
 
@@ -309,8 +305,6 @@ Definitions include key, type, allowed values, range, step, unit, dependencies, 
 PATCH groups related values into one request. The service validates the final combination. Unsupported or read-only values reject the entire request.
 
 A parameter request succeeds only after runtime acknowledgement and persistence. The implementation can coalesce slider input in the phone. It must not claim persistence before the durable state exists.
-
-Recipe apply accepts `expectedRecipeRevision` and `expectedParameterRevision` in its JSON body. These bind the source recipe and target parameters. The commit rechecks both resources and dependencies.
 
 Installing executable modules remains part of signed software installation. These endpoints cannot upload code, write arbitrary paths, or execute commands.
 
@@ -373,7 +367,7 @@ Once the camera confirms, finish or recover the transaction. Do not promise canc
 
 The phone never repeats a software request automatically after an unknown result. It reads the resource and continues from the state that it finds.
 
-Recipes, parameters, and module settings are not implemented. When they are, a change that the App task can set at once follows the Looks: no request record.
+Recipe changes follow the Looks: the App task sets them at once, with no request record. Parameters and module settings are not implemented; when they are, they follow the same rule.
 
 ## 7. WebSocket changes
 
@@ -421,7 +415,7 @@ A Look change is one of two kinds:
 
 The camera settings stay the only record of on, off, and order. The card files stay the only record of which Looks exist. No manifest joins them, so a change in the camera menu and a change from the phone cannot disagree.
 
-The service sends a choice through a small mailbox in camera RAM, which the App task polls. The App task answers in one poll and never waits for the card. It changes a choice only on the shooting screen, without a GRKit page, a preview, or a development: a page that lists the Looks keeps its rows while it shows. Otherwise it answers that the camera is busy, and the service returns 503 `camera_busy` at once.
+The service sends a choice through a small mailbox in camera RAM, which the App task polls. The App task answers in one poll and never waits for the card. It changes a choice on the shooting screen, in playback, and on the native pages of MENU: each GRKit row of MENU reads its value when it draws. It does not change a choice while a GRKit page shows (ADJ, a preview, a development, the GRKit settings pages of MENU, or the information page with a GRKit view), because such a page keeps its rows while it shows. Then it answers that the camera is busy, and the service returns 503 `camera_busy` at once. The same rule applies to the recipes.
 
 `GET /looks` joins the Look files with the choices of the camera. A file that the camera does not list has `pending: "add"`. A file whose content changed since the service started has `pending: "update"`. A Look that the camera lists without a file is removed and is not in the list.
 

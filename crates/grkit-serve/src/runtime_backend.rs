@@ -82,7 +82,7 @@ impl LookUse {
 /// A recipe name of four 7-bit ASCII characters in each word, the first in
 /// the low bits, up to the first 0. None for the automatic name or a name
 /// that is not printable ASCII.
-fn recipe_name(words: &[u32]) -> Option<String> {
+pub(crate) fn recipe_name(words: &[u32]) -> Option<String> {
     if words.iter().any(|word| word >> 28 != 0) {
         return None;
     }
@@ -191,6 +191,12 @@ pub trait RuntimeBackend: Send {
     fn order(&mut self, _keys: &[u32]) -> Result<()> {
         Err(unavailable())
     }
+    /// A command of the recipes (`runtime/control_recipes.h`): its result
+    /// code and response bytes. Only a mailbox that does not answer is an
+    /// error.
+    fn exchange(&mut self, _command: u32, _payload: &[u8]) -> Result<(u32, Vec<u8>)> {
+        Err(unavailable())
+    }
 }
 
 /// A service without a camera: the tests of the other resources, and the
@@ -204,6 +210,14 @@ fn unavailable() -> Problem {
         503,
         "runtime_unavailable",
         "GRKit does not run, or its control mailbox was not found.",
+    )
+}
+/// A page of GRKit shows on the camera (`control_looks_idle`).
+pub fn camera_busy() -> Problem {
+    Problem::new(
+        503,
+        "camera_busy",
+        "Close the GRKit page on the camera and try again.",
     )
 }
 fn invalid(detail: &'static str) -> Problem {
@@ -227,7 +241,7 @@ impl<M: crate::control::MailboxIo> ControlBackend<M> {
     pub fn new(client: crate::control::Client<M>, nonce: [u8; 16]) -> Self {
         Self { client, nonce }
     }
-    fn command(&mut self, command: u32, payload: &[u8]) -> Result<Vec<u8>> {
+    fn raw(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
         let reply = self
             .client
             .exchange(self.nonce, command, payload, COMMAND_TIMEOUT)
@@ -235,13 +249,13 @@ impl<M: crate::control::MailboxIo> ControlBackend<M> {
             .ok_or_else(|| {
                 Problem::new(503, "runtime_busy", "The camera did not answer. Try again.")
             })?;
-        match reply.result {
-            0 => Ok(reply.bytes),
-            CONTROL_BUSY => Err(Problem::new(
-                503,
-                "camera_busy",
-                "Close the menu on the camera and return to the shooting screen.",
-            )),
+        Ok((reply.result, reply.bytes))
+    }
+    fn command(&mut self, command: u32, payload: &[u8]) -> Result<Vec<u8>> {
+        let (result, bytes) = self.raw(command, payload)?;
+        match result {
+            0 => Ok(bytes),
+            CONTROL_BUSY => Err(camera_busy()),
             CONTROL_CHANGED => Err(Problem::new(
                 409,
                 "runtime_changed",
@@ -275,6 +289,9 @@ impl<M: crate::control::MailboxIo + Send> RuntimeBackend for ControlBackend<M> {
     fn order(&mut self, keys: &[u32]) -> Result<()> {
         let payload: Vec<u8> = keys.iter().flat_map(|key| key.to_le_bytes()).collect();
         self.command(CONTROL_LOOKS_ORDER, &payload).map(drop)
+    }
+    fn exchange(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
+        self.raw(command, payload)
     }
 }
 
@@ -338,6 +355,9 @@ impl RuntimeBackend for LazyLinuxBackend {
     }
     fn order(&mut self, keys: &[u32]) -> Result<()> {
         self.session()?.order(keys)
+    }
+    fn exchange(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
+        self.session()?.exchange(command, payload)
     }
 }
 

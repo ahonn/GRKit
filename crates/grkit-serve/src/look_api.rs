@@ -59,6 +59,8 @@ pub struct RequestContext<'a> {
     pub root: &'a Path,
     /// The keys that sign the release whose official Looks the card names.
     pub release_keys: &'a [[u8; 32]],
+    /// The recipe family of the camera, when its model is known.
+    pub family: Option<grkit_core::recipes::Family>,
 }
 
 /// What the service keeps about one card while the camera stays on.
@@ -1165,5 +1167,6 @@ fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
 }
 
 mod covers;
+mod recipe_api;
 #[cfg(test)]
 mod tests;
