@@ -14,6 +14,11 @@
 /* Settings domain (FW_SETTINGS_DOMAIN): +0x518 -> control -> payload with the
    native Image Control type at SETTINGS_IC_TYPE. Standard is type 11. */
 #define SETTINGS_IC_TYPE 0x77c
+/* The state of the Wi-Fi access point of the camera in the same payload:
+   SETTINGS_WLAN_STATION while a phone is connected. */
+#define SETTINGS_WLAN_STATE 0x230
+/* 1 while the Wi-Fi access point of the camera is on. */
+#define SETTINGS_WLAN_ENABLED 0x7da
 /* The native monochrome types, as a bit mask of the type: 13 to 16 are
    Monotone, Soft Monotone, Hard Monotone, and Hi-Contrast B&W (ImageTone 258
    to 261). The shot settings hold the type at the same offset as the

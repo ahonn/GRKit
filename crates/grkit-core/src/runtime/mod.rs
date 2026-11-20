@@ -25,6 +25,7 @@ mod fastboot;
 mod files;
 mod loader;
 mod state;
+pub mod update;
 
 pub use fastboot::*;
 pub use files::*;

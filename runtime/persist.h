@@ -62,11 +62,27 @@ static void persist_poll(volatile u32 *h) {
     PERSIST_BARRIER();
     out[GRKIT_PERSIST_READY/4]=request;
 }
+/* Whether the poll has work: a phone on the Wi-Fi of the camera, which can
+   send a request at any time, a request of the Wi-Fi service, or a request
+   of the resident loader for the saved state. Without one, the timer does
+   not run, and each timer dispatch of the App task checks again
+   (runtime/menu.c: menu_timers_due). */
+static u32 persist_wanted(volatile u32 *h) {
+    volatile u32 *out=services_word(h,SERVICES_PERSIST);
+    return MENU_WLAN_STATION() || out[GRKIT_PERSIST_REQUEST/4]!=out[GRKIT_PERSIST_READY/4] ||
+           control_pending(h);
+}
 static void persist_ready(volatile u32 *h) {
     volatile u32 *timer=services_word(h,SERVICES_PERSIST_TIMER);
     if(!h[GRKIT_HOST_PERSIST_WORD/4] || timer[0]) return;
+    control_poll(h);
     persist_poll(h);
-    timer[0]=PERSIST_TIMER_START(PERSIST_POLL_MS);
+    if(persist_wanted(h)) timer[0]=PERSIST_TIMER_START(PERSIST_POLL_MS);
+}
+/* A timer dispatch of the App task: poll once when there is work and the
+   timer does not run. */
+static void persist_due(volatile u32 *h) {
+    if(!services_word(h,SERVICES_PERSIST_TIMER)[0] && persist_wanted(h)) persist_ready(h);
 }
 static u32 persist_fired(volatile u32 *h,u32 id) {
     volatile u32 *timer=services_word(h,SERVICES_PERSIST_TIMER);

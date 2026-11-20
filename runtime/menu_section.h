@@ -193,16 +193,25 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
         settings_start(h,LISTED_PAGE);
         return SETTINGS_SUBMENU;
     }
-    /* About GRKit opens the camera information page (menu_info_fill). */
+    /* About GRKit opens the page of an update over Wi-Fi that waits, the
+       first row of GRKit Settings (runtime/menu_settings.h: update_setting),
+       else the camera information page (menu_info_fill). */
+    if(h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING) {
+        settings_start(h,CORE_PAGE);
+        return settings_pages[0];
+    }
     services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]=MENU_ABOUT_GRKIT;
     return INFO_CONTROLLER;
 }
 static const u16 no_text[]={0};
-/* The value of the About GRKit row: safe mode, an effects choice for the
-   next start, or the version. */
+/* The value of the About GRKit row: safe mode, an update over Wi-Fi that
+   waits, an effects choice or a confirmed update for the next start, or the
+   version. */
 static const u16 *grkit_value(volatile u32 *h) {
     if(manage_word(h,MANAGE_FLAGS)&MANAGE_SAFE_MODE) return text(h,TEXT_SAFE_MODE);
-    if(effects_changed(h)) return text(h,TEXT_RESTART);
+    if(h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING) return update_title(h);
+    if(effects_changed(h) || h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_CONFIRMED ||
+       h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_READY) return text(h,TEXT_RESTART);
     return text(h,TEXT_ABOUT+2);
 }
 /* A filler: the label and the value of row view `row`. The views are known

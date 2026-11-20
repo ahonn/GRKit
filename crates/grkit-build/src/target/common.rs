@@ -115,6 +115,11 @@ const MENU_PAGES: &[HookSpec] = &[
     b("menu_settings_change", Menu, MenuPage),
     // The update of the camera information page, which About GRKit shows.
     b("menu_info_update", Menu, MenuPage),
+    // The dispatch of the expired timers of the App task, which runs in each
+    // start: on the shooting screen, in playback, and in the standby of a
+    // Bluetooth start. It starts the poll of the saved state and the
+    // mailbox of the Wi-Fi service (`runtime/persist.h`).
+    b("menu_timer_dispatch", Menu, MenuPage),
     // An options page shows checkboxes (`runtime/menu_settings.h`): the
     // controller factory gives it a second SelectMenuController, the list of
     // that controller gets checkbox rows, and its start does not hide their

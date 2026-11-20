@@ -731,6 +731,18 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
     Ok((effect, icon))
 }
 
+/// The name that `body_hash` gives each effect.
+const BODY_NAME: &str = "-";
+
+/// The SHA-256 of a GRF without its name and cover: the file encoded again with the name
+/// `BODY_NAME` and an all-zero icon. Two files that differ only in the name or the icon, and so
+/// in the CRC, have the same body hash.
+pub fn body_hash(blob: &[u8]) -> Result<String> {
+    let (mut effect, _) = decode(blob)?;
+    effect.name = BODY_NAME.to_owned();
+    Ok(hex::encode(Sha256::digest(effect.encode(&[0; ICON_SIZE])?)))
+}
+
 pub fn interpolate_curve(points: &Value) -> Result<Vec<u16>> {
     let error = "Expected increasing curve knots from index 0 to 255";
     let values = points.as_array().context(error)?;

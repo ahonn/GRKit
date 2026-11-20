@@ -127,6 +127,13 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         grkit_core::packaging::TARGET_MARKER,
         target.name
     )?;
+    // An update over Wi-Fi shows the version of a package (packaging).
+    writeln!(
+        result,
+        "static const char version_marker[] __attribute__((used)) = \"{}{}\";",
+        grkit_core::packaging::VERSION_MARKER,
+        version
+    )?;
     if target.icon_descriptor_bytes()? == 12 {
         // GR IV icon descriptors: width and a valid flag, height, pixel offset.
         result.push_str("#define GRKIT_ICON_DESCRIPTOR_12 1\n");
@@ -575,6 +582,11 @@ fn relocation_tables(
         defines.push(format!(
             "#define {name} (relocated[{symbol}] + {offset:#x}U)"
         ));
+        // The symbols that `--control-info` resolves by themselves
+        // (runtime/installer.c).
+        if matches!(name, "ARRAY_COUNT" | "ARRAY_TABLE" | "HEAP_MIN") {
+            defines.push(format!("#define {name}_SYMBOL {symbol}U"));
+        }
     }
     let mut tables = Vec::new();
     let mut initialized = Vec::new();
