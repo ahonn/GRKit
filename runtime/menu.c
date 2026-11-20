@@ -939,6 +939,7 @@ static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id);
 #include "menu_section.h"
 #include "menu_about.h"
 #include "distance.h"
+#include "goodbye.h"
 /* Whether the simple information of the live view shows the battery icon as
    the full information does (runtime/menu.S: menu_battery_mode). */
 A32_ENTRY u32 menu_battery_simple(void) { return battery_simple(menu_header()); }

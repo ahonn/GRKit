@@ -468,6 +468,64 @@ menu_battery_mode:
 .ltorg
 #endif
 
+#ifdef HOOK_MENU_GOODBYE
+/* Custom Shutdown Screen (runtime/goodbye.h). */
+.global menu_goodbye
+.type menu_goodbye, %function
+menu_goodbye:
+    push {r0-r3, r4, r5, r12, lr}
+#if FW_GOODBYE_INDEXES
+    /* Replaces `ldr r1, [ip, r1, lsl #2]` of the function that makes the
+       playback request of a picture of the JPEG table: r1 is the index of
+       the picture and ip the table. The record of the card picture takes
+       the place of the record of a picture of the power-off. */
+    mov r0, r1
+    bl menu_goodbye_record
+    cmp r0, #0
+    strne r0, [sp, #4]
+    pop {r0-r3, r4, r5, r12, lr}
+    ldreq r1, [r12, r1, lsl #2]
+    ldr pc, =HOOK_MENU_GOODBYE_RESUME
+#else
+    /* Replaces the BL of the GoodBye controller to the ending screen
+       service, which gives the picture of the power-off: r1 is the path
+       buffer, r2 the place of the width, and r3 that of the height. The
+       controller does not read what the service returns. */
+    mov r0, r1
+    mov r1, r2
+    mov r2, r3
+    bl menu_goodbye_select
+    cmp r0, #0
+    pop {r0-r3, r4, r5, r12, lr}
+    ldrne pc, =HOOK_MENU_GOODBYE_RESUME
+    ldr lr, =HOOK_MENU_GOODBYE_RESUME
+    ldr pc, =HOOK_MENU_GOODBYE_TARGET
+#endif
+.ltorg
+#endif
+
+#ifdef HOOK_MENU_GOODBYE_TEXT_0
+/* Shutdown Screen Text (runtime/goodbye.h). Each hook replaces the first
+   instruction, `mov r12, sp`, of a function of the GoodBye controller, r0,
+   that shows the text over the picture of the power-off: the shots of
+   today, or those with the total and the firmware version. */
+.macro GOODBYE_TEXT index, resume
+.global menu_goodbye_text_\index
+.type menu_goodbye_text_\index, %function
+menu_goodbye_text_\index:
+    push {r0-r3, r4, r5, r12, lr}
+    bl menu_goodbye_text_hide
+    cmp r0, #0
+    pop {r0-r3, r4, r5, r12, lr}
+    bxne lr
+    mov r12, sp
+    ldr pc, =\resume
+.endm
+GOODBYE_TEXT 0, HOOK_MENU_GOODBYE_TEXT_0_RESUME
+GOODBYE_TEXT 1, HOOK_MENU_GOODBYE_TEXT_1_RESUME
+.ltorg
+#endif
+
 /* The native parameter page edits the adjustments of a GRKit effect while
    GRKIT_HOST_PARAMETERS holds its record (menu.c). Each hook replaces the
    first instruction, `mov r12, sp`, of an Image Control model getter or setter

@@ -3308,3 +3308,50 @@ button.row-body {
 .recipe-details dd {
   margin: 0;
 }
+
+.shutdown {
+  gap: 16px;
+}
+
+.shutdown-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+/* The picture as the camera screen shows it, with the text of the camera over it. */
+.shutdown-screen {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  border: 1px solid var(--line);
+}
+
+.shutdown-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.shutdown-text {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: #fff;
+  font-family: var(--mono);
+  paint-order: stroke;
+  stroke: rgb(0 0 0 / 55%);
+  stroke-width: 2px;
+}
+
+.shutdown-text rect {
+  stroke: none;
+}
+
+.shutdown-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

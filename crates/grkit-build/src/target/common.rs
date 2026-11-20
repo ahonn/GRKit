@@ -338,6 +338,21 @@ pub const DNG_XMP: &[HookSpec] = &[
 /// (`runtime/menu.S: menu_battery_mode`).
 pub const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];
 
+/// Custom Shutdown Screen (`runtime/goodbye.h`): where playback takes the
+/// picture that the GoodBye controller shows at the power-off. In a build
+/// with a JPEG table, the load of the record of a picture from that table.
+/// In a build with the ending screen service, the BL of the GoodBye
+/// controller to that service (`runtime/menu.S: menu_goodbye`).
+///
+/// Shutdown Screen Text: the entries of the two functions of the GoodBye
+/// controller that show its text over that picture
+/// (`runtime/menu.S: menu_goodbye_text_*`).
+pub const GOODBYE: &[HookSpec] = &[
+    b("menu_goodbye", Menu, MenuPage),
+    b("menu_goodbye_text_0", Menu, MenuPage),
+    b("menu_goodbye_text_1", Menu, MenuPage),
+];
+
 /// The aspect list of a RAW development lists the Framing ratios after the
 /// native rows (`runtime/menu.c`). The entries of the row to value of the
 /// model and of the choice of a row in RawDevelopmentParameterSetController;

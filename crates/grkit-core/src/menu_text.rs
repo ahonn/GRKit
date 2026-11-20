@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 82;
+pub const STRINGS: usize = 84;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -93,6 +93,13 @@ struct Words {
     /// The Display Settings row of GRKit Settings and the title of its page,
     /// which holds the display settings of the core.
     display_settings: &'static str,
+    /// The Custom Shutdown Screen row of Display Settings. Its values are the
+    /// Off and On of the switch.
+    shutdown_screen: &'static str,
+    /// The Shutdown Screen Text row of Display Settings: the shot counts and
+    /// the firmware version that the camera draws over the picture of the
+    /// power-off. Its values are the Off and On of the switch.
+    shutdown_text: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
@@ -178,6 +185,8 @@ const ENGLISH: Words = Words {
     uncropped_raw: "Uncropped RAW",
     battery_simple: "Battery in Simple Display",
     display_settings: "Display Settings",
+    shutdown_screen: "Custom Shutdown Screen",
+    shutdown_text: "Shutdown Screen Text",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -254,6 +263,8 @@ const SIMPLIFIED_CHINESE: Words = Words {
     uncropped_raw: "RAW 不裁切",
     battery_simple: "简单信息显示电量",
     display_settings: "显示设置",
+    shutdown_screen: "自定义关机画面",
+    shutdown_text: "关机画面文字",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -327,6 +338,8 @@ const TRADITIONAL_CHINESE: Words = Words {
     uncropped_raw: "RAW 不裁切",
     battery_simple: "簡單資訊顯示電量",
     display_settings: "顯示設定",
+    shutdown_screen: "自訂關機畫面",
+    shutdown_text: "關機畫面文字",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -402,6 +415,8 @@ const JAPANESE: Words = Words {
     uncropped_raw: "RAW クロップなし",
     battery_simple: "簡易情報表示で電池表示",
     display_settings: "表示設定",
+    shutdown_screen: "カスタム終了画面",
+    shutdown_text: "終了画面の文字",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -478,6 +493,8 @@ const KOREAN: Words = Words {
     uncropped_raw: "RAW 크롭 없음",
     battery_simple: "간이 정보 표시에 배터리 표시",
     display_settings: "표시 설정",
+    shutdown_screen: "사용자 지정 종료 화면",
+    shutdown_text: "종료 화면 텍스트",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -683,6 +700,12 @@ pub const RUNS: &[Run] = &[
         1,
         "The Display Settings row of GRKit Settings and the title of its page.",
     ),
+    run(
+        "GOODBYE",
+        2,
+        "The Custom Shutdown Screen row of Display Settings, then its Shutdown Screen Text \
+         row. The values of both are TEXT_OFF and TEXT_ON.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -773,6 +796,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "RAW" => words(&[w.uncropped_raw]),
         "BATTERY" => words(&[w.battery_simple]),
         "DISPLAY" => words(&[w.display_settings]),
+        "GOODBYE" => words(&[w.shutdown_screen, w.shutdown_text]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -950,6 +974,37 @@ mod tests {
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("BATTERY")], text);
             assert_eq!(language.undrawable(text), None);
+        }
+    }
+
+    /// Custom Shutdown Screen and Shutdown Screen Text are rows of Display
+    /// Settings, which the camera can draw in each language.
+    #[test]
+    fn the_shutdown_screen_has_its_rows_in_each_language() {
+        let expected = [
+            (
+                Language::English,
+                ["Custom Shutdown Screen", "Shutdown Screen Text"],
+            ),
+            (
+                Language::SimplifiedChinese,
+                ["自定义关机画面", "关机画面文字"],
+            ),
+            (
+                Language::TraditionalChinese,
+                ["自訂關機畫面", "關機畫面文字"],
+            ),
+            (Language::Japanese, ["カスタム終了画面", "終了画面の文字"]),
+            (
+                Language::Korean,
+                ["사용자 지정 종료 화면", "종료 화면 텍스트"],
+            ),
+        ];
+        for (language, texts) in expected {
+            for (i, text) in texts.into_iter().enumerate() {
+                assert_eq!(strings(language, VERSION)[id("GOODBYE") + i], text);
+                assert_eq!(language.undrawable(text), None);
+            }
         }
     }
 

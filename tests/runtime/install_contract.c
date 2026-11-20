@@ -759,12 +759,12 @@ static void install_writes_the_settings_and_the_contexts(void)
     save_state(pairs, sizeof pairs / sizeof pairs[0] / 2);
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, the
-       switch, Enable at Start, Distance Unit, Uncropped RAW, and Battery in
-       Simple Display, the order of the values
+       switch, Enable at Start, Distance Unit, Uncropped RAW, Battery in
+       Simple Display, Custom Shutdown Screen, and Shutdown Screen Text, the order of the values
        of each module, then the saved values that no setting takes: CORE.GRAIN, which no module uses, and unknown keys,
        including a value 0. The saved unit is a setting, not a kept value:
        apply_state restores it. */
-    assert(word(ARRAY_AT) == 22 && word(ARRAY_AT + 4) == 0);
+    assert(word(ARRAY_AT) == 24 && word(ARRAY_AT + 4) == 0);
     expect_setting(0, id_of("GUIDES.STYLE"), 0, 6);
     expect_setting(1, id_of("GUIDES.COLOR"), 0, 3);
     expect_setting(2, 0, 0, 2);
@@ -780,16 +780,18 @@ static void install_writes_the_settings_and_the_contexts(void)
     expect_setting(12, id_of("CORE.UNIT"), MANAGE_UNIT_METERS, MANAGE_UNIT_VALUES);
     expect_setting(13, id_of("CORE.RAW"), MANAGE_RAW_OFF, MANAGE_RAW_VALUES);
     expect_setting(14, id_of("CORE.BATTERY"), 0, MANAGE_BATTERY_VALUES);
-    expect_setting(15, id_of("CORE.ORDER.GUIDES"), 0x321, MANAGE_ORDER_LIMIT);
-    expect_setting(16, id_of("CORE.ORDER2.GUIDES"), 0, MANAGE_ORDER_LIMIT);
-    expect_setting(17, id_of("CORE.ORDER.DATE"), 0, MANAGE_ORDER_LIMIT);
-    expect_setting(18, id_of("CORE.ORDER2.DATE"), 0x7, MANAGE_ORDER_LIMIT);
-    expect_setting(19, 12345, 7, 8);
-    expect_setting(20, 23456, 0, 1);
-    expect_setting(21, id_of("CORE.GRAIN"), 1, 2);
+    expect_setting(15, id_of("CORE.GOODBYE"), MANAGE_GOODBYE_ON, MANAGE_GOODBYE_VALUES);
+    expect_setting(16, id_of("CORE.BYETEXT"), MANAGE_GOODBYE_TEXT_ON, MANAGE_GOODBYE_TEXT_VALUES);
+    expect_setting(17, id_of("CORE.ORDER.GUIDES"), 0x321, MANAGE_ORDER_LIMIT);
+    expect_setting(18, id_of("CORE.ORDER2.GUIDES"), 0, MANAGE_ORDER_LIMIT);
+    expect_setting(19, id_of("CORE.ORDER.DATE"), 0, MANAGE_ORDER_LIMIT);
+    expect_setting(20, id_of("CORE.ORDER2.DATE"), 0x7, MANAGE_ORDER_LIMIT);
+    expect_setting(21, 12345, 7, 8);
+    expect_setting(22, 23456, 0, 1);
+    expect_setting(23, id_of("CORE.GRAIN"), 1, 2);
     /* The contexts: the first setting, the count, reserved, then the handle
        of each used setting. */
-    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(22);
+    u32 context = ARRAY_AT + 4 * SETTINGS_WORDS(24);
     assert(word(context) == 0 && word(context + 4) == 3 && word(context + 8) == 0);
     assert(word(context + 12) == GRKIT_CORE_ASPECT && word(context + 16) == GRM_NO_SETTING);
     u32 date_context = context + 4 * CONTEXT_WORDS(2);
@@ -805,10 +807,12 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert(word(module_list + MANAGE_SETTINGS) == 4);
     assert(word(module_list + MANAGE_SWITCH) == 10 + 1);
     assert(word(module_list + MANAGE_START) == 11 + 1);
-    assert(word(module_list + MANAGE_ORDERS) == 15 + 1);
+    assert(word(module_list + MANAGE_ORDERS) == 17 + 1);
     assert(word(module_list + MANAGE_UNIT) == 12 + 1);
     assert(word(module_list + MANAGE_RAW) == 13 + 1);
     assert(word(module_list + MANAGE_BATTERY) == 14 + 1);
+    assert(word(module_list + MANAGE_GOODBYE) == 15 + 1);
+    assert(word(module_list + MANAGE_GOODBYE_TEXT) == 16 + 1);
 }
 /* Defaults initialize both saved and transient settings. Explicit saved zero
    survives a restart and a period without the module installed. */

@@ -271,6 +271,18 @@ static uintptr_t test_select_method(uintptr_t address);
 #define CALL3(a) ((unsigned (*)(unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #define CALL4(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #define CALL5(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
+/* The file of the shutdown picture on the test card: its length and the
+   bytes of its start. */
+static unsigned goodbye_length, goodbye_head_bytes;
+static unsigned char goodbye_head[200];
+static unsigned test_goodbye_file(const char *path, unsigned char *head, unsigned size, unsigned *read)
+{
+    assert(!strcmp(path, "C:\\GRKIT\\GOODBYE.JPG"));
+    *read = goodbye_head_bytes < size ? goodbye_head_bytes : size;
+    memcpy(head, goodbye_head, *read);
+    return goodbye_length;
+}
+#define GOODBYE_FILE(path, head, size, read) test_goodbye_file((path), (head), (size), (read))
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 static void native_set_record(const char *const *argv)
@@ -2324,7 +2336,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 40, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 48, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -5500,6 +5512,130 @@ static void battery_shows_in_the_simple_display(void)
     assert(!battery_simple(h));
     settings_memory[2 + 15 * 3 + 1] = 0;
 }
+/* Custom Shutdown Screen is the last row of Display Settings: Off, the
+   picture of the firmware, then On. A change saves, also in the copy of the
+   file of the user modes. */
+static void the_shutdown_screen_has_its_row(void)
+{
+    volatile u32 *h = test_header;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 16;
+    settings_memory[2 + 14 * 3 + 2] = MANAGE_UNIT_VALUES;
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
+    manage_memory[MANAGE_UNIT / 4] = 14 + 1;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 4);
+    assert(same(display_page_settings[1].label(h), "Custom Shutdown Screen") &&
+           same(display_page_settings[1].value_text(h, 0), "Off") &&
+           same(display_page_settings[1].value_text(h, 1), "On"));
+    assert(goodbye_custom(h));
+    display_page_settings[1].set(h, MANAGE_GOODBYE_OFF);
+    assert(!goodbye_custom(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE] == 0 + 1);
+    /* Without the setting in the module list, the camera shows its picture. */
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    assert(!goodbye_custom(h) && display_rows(h) == 1);
+    manage_memory[MANAGE_UNIT / 4] = 0;
+    settings_memory[2 + 15 * 3 + 1] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
+/* Whether the hook of the power-off gives the picture of the card: its
+   record, or its path and size. */
+static u32 goodbye_given(void)
+{
+#if FW_GOODBYE_INDEXES
+    /* Index 2 is the picture of the power-off of each build with the table,
+       and index 0 the picture of another screen. */
+    u32 record = menu_goodbye_record(2);
+    assert(!menu_goodbye_record(0) && !menu_goodbye_record(40));
+    if (!record) return 0;
+    assert(record == (u32)(uintptr_t)&goodbye_record);
+    assert(goodbye_record.width == 720 && goodbye_record.height == 480 && goodbye_record.path == goodbye_path);
+#else
+    u8 path[FW_GOODBYE_PATH];
+    u32 width = 0, height = 0;
+    if (!menu_goodbye_select(path, &width, &height)) return 0;
+    assert(!strcmp((const char *)path, "C:\\GRKIT\\GOODBYE.JPG") && width == 720 && height == 480);
+#endif
+    return 1;
+}
+/* The power-off shows the picture of the card while the setting is on and
+   the file is one that the camera can show. */
+static void the_shutdown_screen_takes_a_usable_file(void)
+{
+    /* The start of a picture of the site: SOI, the JFIF segment, two
+       quantization tables, then the frame. */
+    static const unsigned char frame[] = {0xff, 0xc0, 0, 17, 8, 0x01, 0xe0, 0x02, 0xd0, 3,
+                                          1,    0x22, 0, 2,  0x11, 1, 3, 0x11, 1};
+    volatile u32 *h = test_header;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 16;
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    memset(goodbye_head, 0, sizeof goodbye_head);
+    memcpy(goodbye_head, "\xff\xd8\xff\xe0\x00\x10", 6);
+    memcpy(goodbye_head + 20, "\xff\xdb\x00\x43", 4);
+    memcpy(goodbye_head + 89, "\xff\xdb\x00\x43", 4);
+    memcpy(goodbye_head + 158, frame, sizeof frame);
+    goodbye_head_bytes = sizeof goodbye_head;
+    goodbye_length = GOODBYE_BYTES_MAX;
+    assert(goodbye_given());
+    /* A file that is longer than the buffer of the firmware, no file, a
+       frame of another size, and a progressive frame. */
+    goodbye_length = GOODBYE_BYTES_MAX + 1;
+    assert(!goodbye_given());
+    goodbye_length = 0;
+    assert(!goodbye_given());
+    goodbye_length = 40000;
+    goodbye_head[158 + 8] = 0xd1;
+    assert(!goodbye_given());
+    goodbye_head[158 + 8] = 0xd0;
+    goodbye_head[158 + 1] = 0xc2;
+    assert(!goodbye_given());
+    goodbye_head[158 + 1] = 0xc0;
+    assert(goodbye_given());
+    /* Off shows the picture of the firmware. */
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_OFF;
+    assert(!goodbye_given());
+    settings_memory[2 + 15 * 3 + 1] = 0;
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
+/* Shutdown Screen Text is the row after Custom Shutdown Screen. Off hides
+   the six views over the picture of the GoodBye controller, in
+   place of the function of the firmware that shows them; On, the default,
+   and a camera without the setting leave them to the firmware. */
+static void the_shutdown_text_hides_its_views(void)
+{
+    volatile u32 *h = test_header;
+    u32 controller = TEST_OBJECTS + 0x400, i;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 17;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
+    settings_memory[2 + 16 * 3 + 1] = MANAGE_GOODBYE_TEXT_ON;
+    settings_memory[2 + 16 * 3 + 2] = MANAGE_GOODBYE_TEXT_VALUES;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 16 + 1;
+    for (i = 0; i < 6; ++i) *object_at(controller + GOODBYE_VIEWS + 4 * i) = TEST_OBJECTS + 0x800 + 0x40 * i;
+    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 5 &&
+           same(display_page_settings[1].label(h), "Shutdown Screen Text") && display_page_settings[1].get(h) == 1);
+    view_calls = 0;
+    assert(!menu_goodbye_text_hide(controller) && view_calls == 0);
+    display_page_settings[1].set(h, MANAGE_GOODBYE_TEXT_OFF);
+    assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE_TEXT] == 0 + 1);
+    assert(menu_goodbye_text_hide(controller) && view_calls == 6);
+    for (i = 0; i < 6; ++i)
+        assert(view_functions[i] == FW_VIEW_SET_VISIBLE && view_args[i][0] == TEST_OBJECTS + 0x800 + 0x40 * i &&
+               view_args[i][1] == 0);
+    view_calls = 0;
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 0;
+    assert(!menu_goodbye_text_hide(controller));
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    settings_memory[2 + 16 * 3 + 1] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
 /* In feet, the text hooks give the feet label of each Snap focus distance,
    on any screen, and the scale hooks the feet labels of the manual focus
    scale; in meters, and for other texts, the native ones. */
@@ -6067,6 +6203,9 @@ int main(void)
     a_full_tab_gets_no_new_section();
     the_section_starts_with_the_switch();
     battery_shows_in_the_simple_display();
+    the_shutdown_screen_has_its_row();
+    the_shutdown_screen_takes_a_usable_file();
+    the_shutdown_text_hides_its_views();
     snap_distances_show_in_feet();
     a_unit_change_lays_out_the_distances_again();
 #endif

@@ -109,8 +109,9 @@ static u32 menu_return(volatile u32 *h) {
    a submenu that the firmware built before INSTALL show each row. */
 #define CORE_PAGE (LISTED_PAGE+1U)
 /* The page of Display Settings: the settings of the core that change what
-   the camera shows, Distance Unit and Battery in Simple Display
-   (runtime/manage.h: core_settings), each while the module list has it. */
+   the camera shows, Distance Unit, Battery in Simple Display, Custom
+   Shutdown Screen, and Shutdown Screen Text (runtime/manage.h: core_settings), each while the module
+   list has it. */
 #define DISPLAY_PAGE (CORE_PAGE+1U)
 #define CORE_ROW_START 0U
 #define CORE_ROW_DISPLAY 1U
@@ -129,17 +130,28 @@ static u32 adj_order_select(volatile u32 *h,u32 controller,u32 value) {
 }
 static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text,no_value,no_set,adj_order_select,
     SETTING_ACTION};
-/* The rows of Display Settings, in order: Distance Unit, then Battery in
-   Simple Display, each while the module list has it. */
-static u32 display_rows(volatile u32 *h) { return (unit_handle(h)!=0)+(battery_handle(h)!=0); }
-_Static_assert(2U<=SETTINGS_BORROWED,"Each row of Display Settings has its value page");
+/* The rows of Display Settings, in order: Distance Unit, Battery in Simple
+   Display, Custom Shutdown Screen, then Shutdown Screen Text, each while the
+   module list has it. */
+static u32 display_rows(volatile u32 *h) {
+    return (unit_handle(h)!=0)+(battery_handle(h)!=0)+(goodbye_handle(h)!=0)+(goodbye_text_handle(h)!=0);
+}
+_Static_assert(4U<=SETTINGS_BORROWED,"Each row of Display Settings has its value page");
 /* The setting of row `row` of Display Settings, or 0. */
 static const Setting *display_row_setting(volatile u32 *h,u32 row) {
     if(unit_handle(h)) {
         if(!row) return core_settings+1;
         --row;
     }
-    return battery_handle(h) && !row ? core_settings+3 : 0;
+    if(battery_handle(h)) {
+        if(!row) return core_settings+3;
+        --row;
+    }
+    if(goodbye_handle(h)) {
+        if(!row) return core_settings+4;
+        --row;
+    }
+    return goodbye_text_handle(h) && !row ? core_settings+5 : 0;
 }
 static const u16 *display_label(volatile u32 *h) { return text(h,TEXT_DISPLAY); }
 static u32 display_select(volatile u32 *h,u32 controller,u32 value) {
@@ -192,10 +204,12 @@ static const Setting core_page_settings[SETTING_ROWS]={
         const Setting *s=display_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
     static u32 display_get_##n(volatile u32 *h) { const Setting *s=display_row_setting(h,n); return s ? s->get(h) : 0; } \
     static void display_set_##n(volatile u32 *h,u32 value) { const Setting *s=display_row_setting(h,n); if(s) s->set(h,value); }
-DISPLAY_ROW(0) DISPLAY_ROW(1)
+DISPLAY_ROW(0) DISPLAY_ROW(1) DISPLAY_ROW(2) DISPLAY_ROW(3)
 static const Setting display_page_settings[]={
     {display_label_0,display_values_0,display_text_0,display_get_0,display_set_0},
     {display_label_1,display_values_1,display_text_1,display_get_1,display_set_1},
+    {display_label_2,display_values_2,display_text_2,display_get_2,display_set_2},
+    {display_label_3,display_values_3,display_text_3,display_get_3,display_set_3},
 };
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {

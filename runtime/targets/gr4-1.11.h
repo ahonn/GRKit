@@ -169,6 +169,13 @@
 #define FW_FILE_READ FIRMWARE(0x53a9a4dc)
 #define FW_FILE_CLOSE FIRMWARE(0x53a9a474)
 #define FW_FILE_SEEK FIRMWARE(0x53a9abd8)
+/* The stat of the RTOS: (path, three words) gives 0 and the length of the
+   file in word 2, or not 0 without the file. */
+#define FW_FILE_STAT FIRMWARE(0x53a966f8)
+/* The pictures of the JPEG table of the firmware that the power-off shows,
+   by the edition of the camera, a bit for each index: 1, 2, 3, and 11
+   (runtime/goodbye.h). */
+#define FW_GOODBYE_INDEXES 0x80eU
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x537e7160)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x5387e108)

@@ -61,6 +61,8 @@ export const RECIPE_FILE = 'GRKIT/RECIPES.TXT';
  * the recipes of this file to `RECIPE_FILE` once. A card write has no use for it and deletes it.
  */
 export const RECIPES_PACKAGE = 'SCRIPT/GRKIT/RECIPES.BIN';
+/** The picture of Custom Shutdown Screen (`grkit_core::goodbye`), which the site reads and writes. */
+export const SHUTDOWN_PICTURE = 'GRKIT/GOODBYE.JPG';
 
 /**
  * The files that a write puts on the card last, in this order. Until `STARTUP.TTL` changes, an
@@ -129,6 +131,8 @@ export interface CardState {
   modeset: { name: string; command: 'on' | 'off' | 'other' } | null;
   /** The text of the recipe file (`RECIPE_FILE`), or null without one. */
   recipeText: string | null;
+  /** The file of the shutdown picture (`SHUTDOWN_PICTURE`), or null without one. */
+  shutdownPicture: Uint8Array | null;
 }
 
 /** A ModeSet file name: 8 digits, a dot, and 3 digits, such as `00078350.588`. */
@@ -222,6 +226,7 @@ export async function readCard(root: CardDirectory): Promise<CardState> {
     rootNames: rootNames.filter(visible),
     modeset: await readModeset(root, rootNames.filter((name) => visible(name) && isModeset(name))),
     recipeText: await readText(root, RECIPE_FILE),
+    shutdownPicture: await readFile(root, SHUTDOWN_PICTURE),
   };
 }
 
@@ -430,6 +435,8 @@ export interface CardChanges {
   updateEffects: string[];
   /** The recipe file: the write replaces it with the library of the site, or leaves it. */
   recipes: 'same' | 'write';
+  /** The shutdown picture: the write puts the file of the site on the card, deletes it, or leaves it. */
+  shutdown: 'same' | 'write' | 'remove';
 }
 
 /**
@@ -443,6 +450,7 @@ export function planChanges(
   modules: readonly string[],
   effects: { before: readonly string[]; after: readonly string[]; changed?: readonly string[] } | null,
   recipes: 'same' | 'write' = 'same',
+  shutdown: CardChanges['shutdown'] = 'same',
 ): CardChanges {
   const onCard = cardModules(state);
   return {
@@ -462,6 +470,7 @@ export function planChanges(
       ? (effects.changed ?? []).filter((id) => effects.before.includes(id) && effects.after.includes(id))
       : [],
     recipes,
+    shutdown,
   };
 }
 
@@ -485,6 +494,7 @@ export function hasChanges(changes: CardChanges): boolean {
     changes.scriptsOn ||
     changes.cleanLegacy ||
     changes.recipes !== 'same' ||
+    changes.shutdown !== 'same' ||
       changes.addModules.length +
         changes.removeModules.length +
         changes.addEffects.length +

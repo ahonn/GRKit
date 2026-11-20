@@ -12,7 +12,7 @@ use grkit_core::recipes;
 use grkit_core::{
     camera::{self, Camera},
     cube::Cube,
-    effects, fit,
+    effects, fit, goodbye,
     language::Language,
     lut_image,
     packaging::{self, EffectSet},
@@ -410,6 +410,24 @@ pub fn effect_preview(blob: &[u8], base_gamma: &[u16], tone: &[u16]) -> Result<V
     site::native_preview_lut(&base_gamma, &effect, curves.as_ref())
 }
 
+/// The file of Custom Shutdown Screen (`grkit_core::goodbye`) from `rgba`, the
+/// RGBA pixels of a canvas of `goodbye::WIDTH` by `goodbye::HEIGHT`. The file
+/// has no transparency: a pixel shows over black by its alpha.
+pub fn shutdown_picture(rgba: &[u8]) -> Result<Vec<u8>> {
+    let rgb: Vec<u8> = rgba
+        .chunks_exact(4)
+        .flat_map(|pixel| {
+            let alpha = pixel[3] as u32;
+            [0, 1, 2].map(|channel| ((pixel[channel] as u32 * alpha + 127) / 255) as u8)
+        })
+        .collect();
+    ensure!(
+        rgba.len().is_multiple_of(4),
+        "The pixels of the shutdown picture are not RGBA"
+    );
+    goodbye::encode(&rgb)
+}
+
 /// Builds a GRKit SD package from the runtime build of each firmware build of
 /// the camera and compiled effects.
 ///
@@ -609,6 +627,19 @@ pub fn package_files_js(bytes: &[u8]) -> Result<Vec<CardFile>, JsError> {
                 .collect()
         })
         .map_err(js_error)
+}
+
+/// Returns the file of Custom Shutdown Screen, `GRKIT/GOODBYE.JPG` on the card, from the RGBA
+/// pixels of a canvas of 720 by 480 pixels.
+#[wasm_bindgen(js_name = shutdownPicture)]
+pub fn shutdown_picture_js(rgba: &[u8]) -> Result<Vec<u8>, JsError> {
+    shutdown_picture(rgba).map_err(js_error)
+}
+
+/// Whether the camera shows `bytes` as the file of Custom Shutdown Screen.
+#[wasm_bindgen(js_name = shutdownPictureUsable)]
+pub fn shutdown_picture_usable_js(bytes: &[u8]) -> bool {
+    goodbye::usable(bytes)
 }
 
 /// Collects the imports of a browser for the import library of a package

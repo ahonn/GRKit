@@ -19,6 +19,7 @@ import {
   RECIPE_FILE,
   RECIPES_PACKAGE,
   removeGrkit,
+  SHUTDOWN_PICTURE,
   removeModesetFiles,
   writeFiles,
   type CardChanges,
@@ -78,6 +79,7 @@ import { ChangeBadge, EffectsSection } from './components/EffectsSection';
 import { CopyLink } from './components/CopyLink';
 import { PackageOpen, type PackageStatus } from './components/PackageOpen';
 import { RecipesSection } from './components/RecipesSection';
+import { ShutdownSection } from './components/ShutdownSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FastbootHint } from './components/FastbootHint';
 import { RichText } from './components/RichText';
@@ -117,6 +119,7 @@ import {
   type Family,
   type Recipe,
 } from './recipes';
+import { pictureChange, type PictureChoice } from './shutdownPicture';
 import { loadSelection, resolveSelection, saveSelection, type Selection } from './selection';
 import { TransferError } from './transfer';
 
@@ -202,6 +205,8 @@ export function InstallPage({
   const [scheme, setScheme] = useState<CoverScheme>(() => loadCoverScheme(browserStorage()));
   // Film looks on the card whose file differs from what a write puts there (`changedOnCard`).
   const [cardUpdates, setCardUpdates] = useState<ReadonlySet<string>>(() => new Set());
+  /** The shutdown picture that the user made on this page, or its removal from the card. */
+  const [picture, setPicture] = useState<PictureChoice>(null);
   const cardUpdateRun = useRef(0);
 
   const t = STRINGS[language];
@@ -773,6 +778,7 @@ export function InstallPage({
         ? { before: [...session.effects.keys()], after: checked, changed: [...cardUpdates] }
         : null,
       recipeLibrary.cardChange(session),
+      pictureChange(session.state.shutdownPicture, picture),
     );
     return session.written && changes.grkit === 'update' ? { ...changes, grkit: 'same' } : changes;
   }
@@ -823,6 +829,7 @@ export function InstallPage({
             }
           : null,
         recipeLibrary.cardChange(session),
+        pictureChange(session.state.shutdownPicture, picture),
       );
       const planned =
         session.written && changes.grkit === 'update' ? { ...changes, grkit: 'same' as const } : changes;
@@ -850,6 +857,11 @@ export function InstallPage({
         files.push({ path: RECIPE_FILE, bytes: new TextEncoder().encode(text) });
         library.remove.push(RECIPES_PACKAGE);
       }
+      if (planned.shutdown === 'write' && picture instanceof Uint8Array) {
+        files.push({ path: SHUTDOWN_PICTURE, bytes: picture });
+      } else if (planned.shutdown === 'remove') {
+        library.remove.push(SHUTDOWN_PICTURE);
+      }
       await applyChanges(session.root, session.state, files, library, ({ written, total }) => {
         if (run !== cardRun.current) return;
         setCardTask(written < total ? { kind: 'writing', written, total } : { kind: 'finishing' });
@@ -858,6 +870,8 @@ export function InstallPage({
       if (run !== cardRun.current) return;
       const written = { ...next, written: true };
       setCard(written);
+      // The card has the picture now, or no picture.
+      setPicture(null);
       await refreshCardUpdates(written);
       setApplyMessage({
         tone: 'ok',
@@ -1172,6 +1186,18 @@ export function InstallPage({
           </section>
         )}
 
+        <section className="section" aria-labelledby="shutdown-label">
+          <h2 id="shutdown-label" ref={scrollToAnchor}>{t.shutdown.title}</h2>
+          <ShutdownSection
+            strings={t}
+            toCard={mode === 'card' && !!card}
+            onCard={mode === 'card' ? (card?.state.shutdownPicture ?? null) : null}
+            choice={picture}
+            onChoice={setPicture}
+            firmware={support?.firmware ?? ''}
+          />
+        </section>
+
         <section className="section" aria-labelledby="package-label">
           <h2 id="package-label" ref={scrollToAnchor}>{mode === 'card' ? t.install : t.package}</h2>
           {mode === 'card' && !card ? (
@@ -1214,6 +1240,7 @@ export function InstallPage({
                     camera={camera.name}
                     firmware={support?.firmware ?? '—'}
                     recipes={recipeLibrary.changeLine(card, language, t.moduleNames.recipes)}
+                    shutdown={t.shutdown.title}
                   />
                 </Suspense>
               </ErrorBoundary>
@@ -1451,6 +1478,8 @@ interface ChangesSectionProps {
   changes: (session: CardSession, checked: readonly string[]) => CardChanges;
   modules: readonly string[];
   recipes: { label: string; text: string } | null;
+  /** The label of the change of the shutdown picture. */
+  shutdown: string;
   canWrite: boolean;
   busy: boolean;
   task: CardTask;
@@ -1497,6 +1526,7 @@ function CardNext({
     next.removeEffects.length +
     next.updateEffects.length +
     (next.scriptsOn ? 1 : 0) +
+    (next.shutdown === 'same' ? 0 : 1) +
     (next.cleanLegacy ? 1 : 0);
   const lines =
     next.grkit === 'install'

@@ -145,13 +145,14 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 4, listed_choice[i]);
         store(entry + 8, EFFECT_CHOICE_VALUES);
     }
-    /* The GRKit switch, Enable at Start, Distance Unit, Uncropped RAW, and
-       Battery in Simple Display follow the choices of the effects. apply_state restores the saved
-       values. The order
-       of the values of each module follows them. */
+    /* The GRKit switch, Enable at Start, Distance Unit, Uncropped RAW,
+       Battery in Simple Display, Custom Shutdown Screen, and Shutdown Screen Text
+       follow the choices of the effects. apply_state restores the saved values. The order of the
+       values of each module follows them. */
     u32 switch_handle = setting_total + MANAGE_PER_MODULE * module_count + listed_count;
     u32 start_handle = switch_handle + 1, unit_handle = start_handle + 1, raw_handle = unit_handle + 1;
-    u32 battery_handle = raw_handle + 1, order_handle = battery_handle + 1;
+    u32 battery_handle = raw_handle + 1, goodbye_handle = battery_handle + 1;
+    u32 goodbye_text_handle = goodbye_handle + 1, order_handle = goodbye_text_handle + 1;
     {
         u32 entry = array + 4 * SETTINGS_ENTRY(switch_handle);
         store(entry, grm_state_id(MANAGE_SWITCH_KEY));
@@ -173,6 +174,14 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry, grm_state_id(MANAGE_BATTERY_KEY));
         store(entry + 4, 0);
         store(entry + 8, MANAGE_BATTERY_VALUES);
+        entry = array + 4 * SETTINGS_ENTRY(goodbye_handle);
+        store(entry, grm_state_id(MANAGE_GOODBYE_KEY));
+        store(entry + 4, MANAGE_GOODBYE_ON);
+        store(entry + 8, MANAGE_GOODBYE_VALUES);
+        entry = array + 4 * SETTINGS_ENTRY(goodbye_text_handle);
+        store(entry, grm_state_id(MANAGE_GOODBYE_TEXT_KEY));
+        store(entry + 4, MANAGE_GOODBYE_TEXT_ON);
+        store(entry + 8, MANAGE_GOODBYE_TEXT_VALUES);
     }
     for (u32 i = 0; i < module_count; ++i)
         for (u32 k = 0; k < MANAGE_ORDER_WORDS; ++k) {
@@ -489,6 +498,8 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
     store(list_at + MANAGE_UNIT, unit_handle + 1);
     store(list_at + MANAGE_RAW, raw_handle + 1);
     store(list_at + MANAGE_BATTERY, battery_handle + 1);
+    store(list_at + MANAGE_GOODBYE, goodbye_handle + 1);
+    store(list_at + MANAGE_GOODBYE_TEXT, goodbye_text_handle + 1);
     store(list_at + MANAGE_ORDERS, order_handle + 1);
     for (u32 i = 0; i < module_count; ++i) {
         u32 entry = list_at + MANAGE_HEADER + i * MANAGE_STRIDE, n = 0;

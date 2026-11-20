@@ -172,6 +172,9 @@
 #define FW_FILE_READ FIRMWARE(0x53841580)
 #define FW_FILE_CLOSE FIRMWARE(0x53841518)
 #define FW_FILE_SEEK FIRMWARE(0x53841c7c)
+/* The stat of the RTOS: (path, three words) gives 0 and the length of the
+   file in word 2, or not 0 without the file. */
+#define FW_FILE_STAT FIRMWARE(0x5383d79c)
 /* DNG LONG tag element writer and native sensor rectangle helper. */
 #define FW_IFD_SET_LONG FIRMWARE(0x535d02e0)
 #define FW_DNG_NATIVE_RECT FIRMWARE(0x5365f0ec)

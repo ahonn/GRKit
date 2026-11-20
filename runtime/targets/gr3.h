@@ -584,4 +584,10 @@
 #define CANVAS_FILL_BLACK 1U
 #define CANVAS_FILL_WHITE 2U
 
+/* The pictures of the JPEG table of the firmware that the power-off shows,
+   by the edition of the camera, a bit for each index: 2, 3, and 10 to 14.
+   The earlier builds have no pictures 13 and 14, and ask for none
+   (runtime/goodbye.h). */
+#define FW_GOODBYE_INDEXES 0x7c0cU
+
 #endif

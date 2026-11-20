@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6536
+#define GRKIT_HOST_HEADER_SIZE 6544
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -154,16 +154,19 @@
 #define GRKIT_DIAL_SLOT_NAME 1U
 #define GRKIT_DIAL_SLOT_WORDS 2U
 #define GRKIT_DIAL_SLOT_KEY_BASE 992003000U
-/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, and
-   Battery in Simple Display (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each
-   as its value + 1, or 0 without a copy. In the file of the sets, word w has
-   the key GRKIT_MANAGE_COPY_KEY + w. */
+/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
+   Battery in Simple Display, Shutdown Screen, and Shutdown Screen Text
+   (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value + 1, or 0
+   without a copy. In the file of the sets, word w has the key
+   GRKIT_MANAGE_COPY_KEY + w. */
 #define GRKIT_MANAGE_COPY_SWITCH 0U
 #define GRKIT_MANAGE_COPY_START 1U
 #define GRKIT_MANAGE_COPY_UNIT 2U
 #define GRKIT_MANAGE_COPY_RAW 3U
 #define GRKIT_MANAGE_COPY_BATTERY 4U
-#define GRKIT_MANAGE_COPY_WORDS 5U
+#define GRKIT_MANAGE_COPY_GOODBYE 5U
+#define GRKIT_MANAGE_COPY_GOODBYE_TEXT 6U
+#define GRKIT_MANAGE_COPY_WORDS 7U
 #define GRKIT_MANAGE_COPY_KEY 992003007U
 #define GRKIT_DIAL_VALUE_ON 0U
 #define GRKIT_DIAL_VALUE_OFF 1U
@@ -542,29 +545,29 @@
    HOST_DIAL_SLOTS, in the same file (runtime/mode_dial.h). Bit 0, which no
    position has, is the older value for each of them off. */
 #define GRKIT_HOST_DIAL_SHARED_OFF 6488
-/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, and
-   Battery in Simple Display, `MANAGE_COPY_WORDS` words (runtime/manage.h),
-   right after HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from
-   the copy before the main state file, and writes the values of the start
-   here. */
+/* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
+   Battery in Simple Display, Shutdown Screen, and Shutdown Screen Text,
+   `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
+   HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
+   before the main state file, and writes the values of the start here. */
 #define GRKIT_HOST_MANAGE_COPY 6492
-#define GRKIT_HOST_MANAGE_COPY_WORDS 5
+#define GRKIT_HOST_MANAGE_COPY_WORDS 7
 /* Word index of the PERSIST buffer within modulecode, not a native address. */
-#define GRKIT_HOST_PERSIST_WORD 6512
+#define GRKIT_HOST_PERSIST_WORD 6520
 /* The record of the ADJ preview of a recipe whose Fn adjustments the live view
    takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the record, while
    GRKIT_HOST_PREVIEW is that record; else 0 (runtime/recipe_preview.h,
    runtime/processing.h). */
-#define GRKIT_HOST_PREVIEW_FN 6516
+#define GRKIT_HOST_PREVIEW_FN 6524
 /* Those adjustments: one stored byte each, in the order of RECORD_PARAMETERS.
    It follows GRKIT_HOST_PREVIEW_FN. */
-#define GRKIT_HOST_PREVIEW_FN_BYTES 6520
+#define GRKIT_HOST_PREVIEW_FN_BYTES 6528
 #define GRKIT_HOST_PREVIEW_FN_BYTES_WORDS 3
 /* The copy of the native settings record from the start of the ADJ preview of
    a recipe, in the services block, or 0 while no preview writes native
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
-#define GRKIT_HOST_RECIPE_PREVIEW 6532
+#define GRKIT_HOST_RECIPE_PREVIEW 6540
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -1060,6 +1063,9 @@
 #define TEXT_BATTERY 80
 /* The Display Settings row of GRKit Settings and the title of its page. */
 #define TEXT_DISPLAY 81
-#define GRKIT_TEXT_STRINGS 82
+/* The Custom Shutdown Screen row of Display Settings, then its Shutdown Screen
+   Text row. The values of both are TEXT_OFF and TEXT_ON. */
+#define TEXT_GOODBYE 82
+#define GRKIT_TEXT_STRINGS 84
 
 #endif

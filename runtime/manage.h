@@ -56,7 +56,19 @@
    applies at the next update of the live view, which the return from MENU
    makes.
 
-   The header keeps a copy of these five settings (GRKIT_HOST_MANAGE_COPY,
+   Custom Shutdown Screen, a row of Display Settings, shows the picture
+   GRKIT/GOODBYE.JPG of the card when the camera turns off, in place of the
+   picture of the firmware (runtime/goodbye.h). Its setting, CORE.GOODBYE,
+   follows Battery in Simple Display in the table. On is the default, so the
+   file alone gives the picture. A change applies at the next power-off.
+
+   Shutdown Screen Text, the row after it, shows or hides the text that the
+   camera draws over the picture of the power-off, the shot counts and the
+   firmware version, over the picture of the firmware too (runtime/goodbye.h).
+   Its setting, CORE.BYETEXT, follows Custom Shutdown Screen in the table. On,
+   as the camera, is the default.
+
+   The header keeps a copy of these seven settings (GRKIT_HOST_MANAGE_COPY,
    manage_copy), which the resident loader saves in the file of the user
    modes of the mode dial. On a user mode with a snapshot, the core holds
    the main state file (runtime/mode_dial.h), but not that file, so a change
@@ -88,6 +100,11 @@
 /* The handle + 1 of CORE.BATTERY, Battery in Simple Display, or 0 without
    it. */
 #define MANAGE_BATTERY 32U
+/* The handle + 1 of CORE.GOODBYE, Custom Shutdown Screen, or 0 without
+   it. */
+#define MANAGE_GOODBYE 36U
+/* The handle + 1 of CORE.BYETEXT, Shutdown Screen Text, or 0 without it. */
+#define MANAGE_GOODBYE_TEXT 40U
 /* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
    CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
    The two settings hold the values of the page of the module after its
@@ -99,12 +116,12 @@
    (runtime/modules.h: choice_sequence), so the nibbles order each page with
    options: its MANAGE_OPTION_VALUES - 1 values after the first row but the
    last one, which follows. */
-#define MANAGE_ORDERS 36U
+#define MANAGE_ORDERS 44U
 #define MANAGE_ORDER_WORDS 2U
 #define MANAGE_ORDER_NIBBLES 7U
 #define MANAGE_ORDER_VALUES (MANAGE_ORDER_NIBBLES * MANAGE_ORDER_WORDS)
 #define MANAGE_ORDER_LIMIT (1U << 4U * MANAGE_ORDER_NIBBLES)
-#define MANAGE_HEADER 40U
+#define MANAGE_HEADER 48U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -169,6 +186,18 @@
 /* The setting of Battery in Simple Display: 0 Off, as the camera, 1 On. */
 #define MANAGE_BATTERY_KEY "CORE.BATTERY"
 #define MANAGE_BATTERY_VALUES 2U
+/* The setting of Custom Shutdown Screen: 0 Off, the picture of the firmware,
+   1 On, the default. */
+#define MANAGE_GOODBYE_KEY "CORE.GOODBYE"
+#define MANAGE_GOODBYE_OFF 0U
+#define MANAGE_GOODBYE_ON 1U
+#define MANAGE_GOODBYE_VALUES 2U
+/* The setting of Shutdown Screen Text: 0 Off, no text, 1 On, as the camera,
+   the default. */
+#define MANAGE_GOODBYE_TEXT_KEY "CORE.BYETEXT"
+#define MANAGE_GOODBYE_TEXT_OFF 0U
+#define MANAGE_GOODBYE_TEXT_ON 1U
+#define MANAGE_GOODBYE_TEXT_VALUES 2U
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -313,17 +342,20 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&(GRKIT_CORE_ASPECT_BIT|GRKIT_CORE_ASPECT_MODE_BIT)) aspect_refresh(h);
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
-/* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, and
-   Battery in Simple Display in their copy, each as its value + 1, after a
-   change of one of them. A copy that changes
+/* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, Battery
+   in Simple Display, Custom Shutdown Screen, and Shutdown Screen Text in
+   their copy, each as its value + 1, after a change of one of them. A copy
+   that changes
    counts as a change of the file of the user modes, which the loader saves
    independently of the main state file. Off of the mode dial is not the
    switch and changes no copy. */
 _Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
                MANAGE_UNIT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_UNIT &&
                MANAGE_RAW==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_RAW &&
-               MANAGE_BATTERY==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY && GRKIT_MANAGE_COPY_SWITCH==0U &&
-               GRKIT_MANAGE_COPY_WORDS==5U, "The copy follows the handles of the module list");
+               MANAGE_BATTERY==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY &&
+               MANAGE_GOODBYE==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE &&
+               MANAGE_GOODBYE_TEXT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE_TEXT && GRKIT_MANAGE_COPY_SWITCH==0U &&
+               GRKIT_MANAGE_COPY_WORDS==7U, "The copy follows the handles of the module list");
 static void manage_copy(volatile u32 *h) {
     u32 i, at, value, changed=0;
     if(!h[GRKIT_HOST_MANAGE/4]) return;
@@ -620,10 +652,46 @@ static const u16 *battery_label(volatile u32 *h) { return text(h,TEXT_BATTERY); 
 static u32 battery_values(volatile u32 *h) { (void)h; return MANAGE_BATTERY_VALUES; }
 /* Off, then On: the texts of the switch. */
 static const u16 *battery_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,!value); }
+static u32 goodbye_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_GOODBYE) : 0; }
+/* Whether the power-off shows the picture of the card. */
+static u32 goodbye_custom(volatile u32 *h) {
+    u32 at=goodbye_handle(h);
+    return at && setting_value(h,at-1)==MANAGE_GOODBYE_ON;
+}
+static void goodbye_set(volatile u32 *h,u32 value) {
+    u32 at=goodbye_handle(h);
+    if(at && value<MANAGE_GOODBYE_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
+}
+static const u16 *goodbye_label(volatile u32 *h) { return text(h,TEXT_GOODBYE); }
+static u32 goodbye_values(volatile u32 *h) { (void)h; return MANAGE_GOODBYE_VALUES; }
+static const u16 *goodbye_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,value!=MANAGE_GOODBYE_ON); }
+static u32 goodbye_text_handle(volatile u32 *h) {
+    return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_GOODBYE_TEXT) : 0;
+}
+/* Whether the camera draws its text over the picture of the power-off:
+   without the setting, as the camera. */
+static u32 goodbye_text_shown(volatile u32 *h) {
+    u32 at=goodbye_text_handle(h);
+    return !at || setting_value(h,at-1)!=MANAGE_GOODBYE_TEXT_OFF;
+}
+static void goodbye_text_set(volatile u32 *h,u32 value) {
+    u32 at=goodbye_text_handle(h);
+    if(at && value<MANAGE_GOODBYE_TEXT_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
+}
+static const u16 *goodbye_text_label(volatile u32 *h) { return text(h,TEXT_GOODBYE+1); }
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
 #define RAW_SETTING {raw_label,raw_values,raw_value_text,raw_value,raw_set}
 #define BATTERY_SETTING {battery_label,battery_values,battery_value_text,battery_simple,battery_set}
-static const Setting core_settings[4]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING};
+#define GOODBYE_SETTING {goodbye_label,goodbye_values,goodbye_value_text,goodbye_custom,goodbye_set}
+#define GOODBYE_TEXT_SETTING {goodbye_text_label,goodbye_values,goodbye_value_text,goodbye_text_shown,goodbye_text_set}
+static const Setting core_settings[6]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING,GOODBYE_SETTING,
+    GOODBYE_TEXT_SETTING};
 #endif
 #endif

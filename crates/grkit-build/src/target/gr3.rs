@@ -42,6 +42,7 @@ const GROUPS: &[&[HookSpec]] = &[
     DIAL,
     CANVAS,
     common::BATTERY,
+    common::GOODBYE,
     common::DNG_XMP,
 ];
 

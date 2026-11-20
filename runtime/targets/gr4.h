@@ -544,4 +544,9 @@
 #define CANVAS_FILL_BLACK 1U
 #define CANVAS_FILL_WHITE 2U
 
+/* The bytes of the path buffer of the ending screen service, which gives the
+   picture of the power-off in the builds without FW_GOODBYE_INDEXES
+   (runtime/goodbye.h). */
+#define FW_GOODBYE_PATH 0x40U
+
 #endif
