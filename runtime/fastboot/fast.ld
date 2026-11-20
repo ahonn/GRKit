@@ -13,7 +13,7 @@ ENTRY(fast_head)
 SECTIONS {
   . = 0x54c00000;
   .head : { *(.head) }
-  ASSERT(code_sums == 0x54c00200, "The code sums of the head moved")
+  ASSERT(code_sums == 0x54c00280, "The code sums of the head moved")
   ASSERT(code_pages == 0x54c003d0, "The code pages word of the head moved")
   ASSERT(code_end == 0x54c003d8, "The code end word of the head moved")
   ASSERT(fast_status == 0x54c003f8, "The status word of the head moved")

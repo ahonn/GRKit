@@ -44,7 +44,7 @@ static long syscall6(u32 number, u32 a, u32 b, u32 c, u32 d, u32 e, u32 f)
 }
 #endif
 /* The loader script allocates one array before the planned ones: the array
-   of the firmware probe and the fast-boot head (runtime::fast). */
+   of the firmware identity words and the fast-boot head (runtime::fast). */
 #define ARRAY_LEAD 1U
 #define ARRAYS (ARRAY_TABLE + ARRAY_LEAD * 8U)
 static volatile u8 *mapping;

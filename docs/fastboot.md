@@ -1,7 +1,7 @@
 # Fast-boot firmware
 
 GRKit does not need this firmware. On the official firmware, GRKit loads from the SD card after the camera's Linux mounts the card, about 8 to 10 seconds after power-on.
-The fast-boot firmware is the official firmware with three small changes. With it, SD scripts can run code from the card at power-on, and GRKit loads before Linux mounts the card.
+The fast-boot firmware is the official firmware with two small changes. With it, SD scripts can run code from the card at power-on, and GRKit loads before Linux mounts the card.
 
 > [!WARNING]
 > The fast-boot firmware has been tested on GR III, GR IIIx, GR IIIx HDF, GR IV, GR IV HDF, and GR IV Monochrome cameras.
@@ -11,9 +11,10 @@ The fast-boot firmware is the official firmware with three small changes. With i
 
 The changes are in the RTOS of the official update file. The rest of the firmware does not change. The file gets new check words and sizes, and the changed parts of the RTOS are stored uncompressed.
 
-1. The sections of the RTOS code region (0x53000000 to 0x55000000) become writable.
-2. `SYS_buildinfo` gets the probe of `fastboot/patch/probe.S`.
-3. `SYS_memovr` gets the loader of `fastboot/patch/stub.S`.
+1. `SYS_buildinfo` gets the identity check of `fastboot/patch/identify.S`.
+2. `SYS_memovr` gets the loader of `fastboot/patch/stub.S`.
+
+The RTOS code region (0x53000000 to 0x55000000) stays read-only, as in the official firmware. The fast-boot firmware of interface 1 also made it writable at all times.
 
 The official firmware has the two commands, but uses neither. Each release table in `fastboot/releases/` gives the SHA-256 of the official update file, of its RTOS, and of the result.
 
@@ -34,7 +35,7 @@ Any SD script can use the two commands. A script gives a script array by its num
 | Word | Value |
 | --- | --- |
 | 0 | `1129202771` (`0x434e4453`) |
-| 1 | the interface version, 1 |
+| 1 | the interface version, 2 (1 in earlier fast-boot firmware) |
 | 2 | the project number: 588 GR III, 609 GR IIIx, 636 GR IV |
 | 3 | the firmware version: 210 for 2.10 |
 
@@ -44,18 +45,18 @@ The official command prints the build information and does not change the array.
 
 - The command reads at most the size of the array.
 - After the read, it cleans the data cache and invalidates the instruction cache.
-- With a fourth argument, it calls the array as ARM code, with r0 = the address of the array and r1 = the bytes read. The code runs in the script task and returns to the script.
+- With a fourth argument, it calls the array as ARM code, with r0 = the address of the array and r1 = the bytes read. The code runs in the script task and returns to the script. The task can move to another core during the call. Code that writes the RTOS code region makes its sections writable in the L1 table for the call, and read-only again before it returns (`runtime/fastboot/head.S`).
 - It does nothing if the index is not that of an array, or if the file is empty, missing, or not read.
 
 > [!CAUTION]
 > On the official firmware, `SYS_memovr` is a memory test that overruns a buffer.
-> Send `SYS_memovr` only after `SYS_buildinfo` gave word 0 = `1129202771` and word 1 = 1.
+> Send `SYS_memovr` only after `SYS_buildinfo` gave word 0 = `1129202771` and an interface version that the script knows.
 
 ```text
-intdim probe 256
+intdim identity 256
 sendln 'SYS_buildinfo 0'
-if probe[0] <> 1129202771 goto official
-if probe[1] <> 1 goto official
+if identity[0] <> 1129202771 goto official
+if identity[1] <> 2 goto official
 sendln 'SYS_memovr C:\SCRIPT\APP\CODE.BIN 0 call'
 :official
 ```
@@ -66,9 +67,9 @@ A later interface has another version in word 1. A script that does not know the
 
 A GRKit package has two files for each release of its camera: the fast-boot file `SCRIPT/GRKIT/F<project><version>.BIN` and its install file `SCRIPT/GRKIT/I<project><version>.BIN`. The same package works on the official firmware.
 
-1. The loader script probes the firmware.
+1. The loader script identifies the firmware with `SYS_buildinfo`. It takes interface 1 and 2.
 2. On the fast-boot firmware, it reads the first 1 KB of the fast-boot file of the release and calls it. That head loads the whole file to the top of the RTOS code region and runs SCAN. SCAN keeps the whole plan in the memory of the file and gives the plan header to the loader in the script array, so it writes no plan file to the card. The file reads each card file and directory of the start once and keeps it in memory until INSTALL ends. The listing of a folder gives the size and the time stamp of each file, so a file of a listed folder needs no status call. `GRKIT/IMPORTED.TXT` also records the size and the time stamp of each package effect, so a start reads a package effect only after it changed. After a successful INSTALL, the file writes the effects of the library and the modules that the start read into one file, `GRKIT/CACHE.PAK`, with the size and the time stamp of each. The next start reads that file in one call and takes a file from it only while its listing gives the same size and time stamp. A sum covers the whole file, so a file that a power loss cut is not used. GRKit packages give each file a time that follows from its bytes, so a copy of a package with other bytes does not look unchanged.
-3. The loader allocates the arrays of the plan and calls the install file. The install file is the same head with the install vector and a sum for each 4 KB code page. It does not load the file again: it compares each code page in memory with its sum, and calls INSTALL in the loaded file only if no page changed. INSTALL first compares the data of the file with the sums that the last call left, then reads the plan from memory. INSTALL gives its status in the script array and writes no `INSTALL.OK` or `INSTALL.LCK`. After a not-ready status, the loader calls the install file again, and INSTALL starts as at the first call.
+3. The loader allocates the arrays of the plan and calls the install file. The install file is the same head with the install vector and a sum for each code page. It does not load the file again: it compares each code page in memory with its sum, and calls INSTALL in the loaded file only if no page changed. INSTALL first compares the data of the file with the sums that the last call left, then reads the plan from memory. INSTALL gives its status in the script array and writes no `INSTALL.OK` or `INSTALL.LCK`. After a not-ready status, the loader calls the install file again, and INSTALL starts as at the first call.
 4. If SCAN writes no plan, or INSTALL fails or does not run, the loader runs SCAN and INSTALL on Linux, as on the official firmware. After a failed INSTALL, the new plan must have the sizes of the arrays that the loader already allocated; if not, that start ends without GRKit. A failed rollback (status 24) stops the loader instead.
 5. A failed INSTALL, other than for a camera that is not ready yet, also writes `GRKIT/FASTOFF.BIN` with the identity of the code of the fast-boot file. While the marker names that code, SCAN does nothing, and each start loads through Linux. A new package has other code, so its first start deletes the marker and tries the fast start again.
 
@@ -76,7 +77,7 @@ When a start does not use the fast-boot files, or stops using them, the loader a
 
 | Line | Meaning |
 |---|---|
-| `fast-boot off: official firmware` | The probe found no fast-boot firmware. |
+| `fast-boot off: official firmware` | `SYS_buildinfo` found no fast-boot firmware. |
 | `fast-boot off: interface N` | The fast-boot firmware has another interface version. |
 | `fast-boot RELEASE off: not in this package` | The package has no fast-boot file for the firmware release. |
 | `fast-boot RELEASE off: files missing` | The fast-boot file or its install file is not on the card. |

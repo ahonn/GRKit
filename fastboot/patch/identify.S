@@ -18,8 +18,8 @@
         .syntax unified
         .arm
         .text
-        .global probe
-probe:
+        .global identify
+identify:
         push    {r4, lr}
         cmp     r0, #2
         blt     9f

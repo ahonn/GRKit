@@ -23,7 +23,7 @@ fn fastboot_code_matches_its_source() {
     let sources = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fastboot/patch");
     let directory = tempfile::tempdir().unwrap();
     for release in releases() {
-        for (handler, name) in release.handlers.iter().zip(["stub", "probe"]) {
+        for (handler, name) in release.handlers.iter().zip(["stub", "identify"]) {
             let mut defines: Vec<String> = release
                 .calls
                 .iter()

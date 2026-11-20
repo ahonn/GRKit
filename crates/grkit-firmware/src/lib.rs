@@ -1,11 +1,14 @@
 //! The fast-boot firmware: an official firmware update file of GR III,
-//! GR IIIx, or GR IV with three changes in the RTOS (docs/fastboot.md).
+//! GR IIIx, or GR IV with two changes in the RTOS (docs/fastboot.md).
 //!
-//! 1. The sections of the RTOS code region become writable.
-//! 2. `SYS_buildinfo INDEX` writes the probe words into a script array
-//!    (`fastboot/patch/probe.S`).
-//! 3. `SYS_memovr PATH INDEX [call]` reads a card file into a script array
+//! 1. `SYS_buildinfo INDEX` writes the identity words into a script
+//!    array (`fastboot/patch/identify.S`).
+//! 2. `SYS_memovr PATH INDEX [call]` reads a card file into a script array
 //!    and can call it (`fastboot/patch/stub.S`).
+//!
+//! The RTOS code region stays read-only. Code that the command calls makes
+//! the sections that it writes writable for the call only (interface 2;
+//! `runtime/fastboot/head.S`). Interface 1 made them writable at all times.
 //!
 //! `fastboot/releases/` has the changes of each release. A person patches
 //! the official file that they downloaded, or the official ZIP that holds
@@ -24,10 +27,10 @@ use std::{
     io::{Cursor, Read},
 };
 
-/// The probe words that `SYS_buildinfo` writes: "SDNC", then the version of
+/// The identity words that `SYS_buildinfo` writes: "SDNC", then the version of
 /// the interface.
 pub const MAGIC: u32 = 0x434e_4453;
-pub const INTERFACE: u32 = 1;
+pub const INTERFACE: u32 = 2;
 
 /// The RTOS link address.
 const RTOS_BASE: u32 = 0x5300_0000;
@@ -36,11 +39,11 @@ const RTOS_BASE: u32 = 0x5300_0000;
 const L1_TABLE: usize = 0x4000;
 const CODE_SECTIONS: std::ops::Range<usize> = 0x530..0x550;
 /// The low 20 bits of each of those entries in the official image: a
-/// section, read-only (APX set). The change clears APX and sets AP[0], so
-/// the section is writable.
+/// section, read-only (APX set). The patch keeps them; the head of a
+/// GRKit fast-boot file finds the sections by these bits
+/// (`runtime/fastboot/head.S`, CODE_SECTION without APX), so the patch
+/// refuses an RTOS with another layout.
 const SECTION_ATTRIBUTES: u32 = 0x1c826;
-const APX: u32 = 0x8000;
-const AP0: u32 = 0x0400;
 
 /// The release tables, by name (`fastboot/releases/<name>.json`).
 const TABLES: [(&str, &str); 9] = [
@@ -117,7 +120,7 @@ pub struct Release {
     /// The camera ID of GRKit, such as `gr3`.
     pub camera: String,
     pub firmware: String,
-    /// The project number that the probe gives, such as 588.
+    /// The project number in the identity words, such as 588.
     pub project: u32,
     /// The official update file.
     pub update: Digest256,
@@ -263,7 +266,6 @@ fn patch_release(update: &[u8], release: &Release) -> Result<Vec<u8>> {
             entry & 0xfffff == SECTION_ATTRIBUTES,
             "The code region of the RTOS has another layout"
         );
-        rtos[at..at + 4].copy_from_slice(&((entry & !APX) | AP0).to_le_bytes());
     }
     for handler in &release.handlers {
         let address = u32::from_str_radix(handler.address.trim_start_matches("0x"), 16)
@@ -372,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn a_patch_changes_the_code_region_and_the_handlers_only() {
+    fn a_patch_changes_the_handlers_only() {
         let (file, release) = sample();
         let patched = patch_release(&file, &release).unwrap();
         let before = update::Update::read(&file).unwrap();
@@ -381,7 +383,7 @@ mod tests {
         let rtos = &after.decoded[section.clone()];
         for index in CODE_SECTIONS {
             let entry = u32::from_le_bytes(rtos[L1_TABLE + index * 4..][..4].try_into().unwrap());
-            assert_eq!(entry, ((index as u32) << 20) | 0x14c26);
+            assert_eq!(entry, ((index as u32) << 20) | SECTION_ATTRIBUTES);
         }
         assert_eq!(&rtos[0x7000..0x7008], [1, 2, 3, 4, 5, 6, 7, 8]);
         assert_eq!(&rtos[0x7100..0x7108], b"\x11\x12ndler2");

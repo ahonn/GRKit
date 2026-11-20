@@ -3,15 +3,15 @@
 //! A firmware build with the fast-boot loader has two script commands that
 //! read and run code from the card:
 //!
-//! - `SYS_buildinfo 0` writes the probe words (`FAST_PROBE`) into the first
+//! - `SYS_buildinfo 0` writes the identity words (`FAST_IDENTITY_MAGIC`) into the first
 //!   script array: a magic word, the interface version, the project number of
 //!   the camera, and the firmware version.
 //! - `SYS_memovr PATH 0 call` reads the start of `PATH` into the first script
 //!   array and calls it there.
 //!
 //! The official firmware has other commands under these names. Its
-//! `SYS_buildinfo` ignores the argument, so the probe words stay 0. The loader
-//! sends `SYS_memovr` only after the probe found the fast-boot loader.
+//! `SYS_buildinfo` ignores the argument, so the identity words stay 0. The
+//! loader sends `SYS_memovr` only after they named the fast-boot loader.
 //!
 //! A fast-boot file (`F<project><version>.BIN`, `FastRelease::path`) is the
 //! installer of a runtime build, built for the RTOS side of one firmware
@@ -31,10 +31,15 @@ use crate::camera::{Camera, CAMERAS};
 use crate::card::{PACKAGE_FOLDER, RTOS_PACKAGE_FOLDER};
 use crate::Files;
 
-/// The probe words of a firmware build with the fast-boot loader, in the
-/// first script array: "SDNC", then the version of the interface.
-pub const FAST_PROBE_MAGIC: u32 = 0x434e_4453;
-pub const FAST_INTERFACE: u32 = 1;
+/// The identity words of a firmware build with the fast-boot loader, in the
+/// first script array: "SDNC", then the version of the interface. The
+/// loader takes the versions from `FAST_INTERFACE_FIRST` to
+/// `FAST_INTERFACE`: interface 1 leaves the RTOS code region writable,
+/// interface 2 leaves it read-only, and the head makes it writable for its
+/// call (`runtime/fastboot/head.S`).
+pub const FAST_IDENTITY_MAGIC: u32 = 0x434e_4453;
+pub const FAST_INTERFACE_FIRST: u32 = 1;
+pub const FAST_INTERFACE: u32 = 2;
 
 /// The address of a fast-boot file in the RTOS: its head, then at
 /// `FAST_BASE + FAST_HEAD_SIZE` the scan vector, then the install vector
@@ -81,8 +86,8 @@ pub const FAST_INSTALL_VECTOR: u32 = FAST_SCAN_VECTOR + 4;
 
 /// The code sums in the head (`runtime/fastboot/head.S`): one word for each
 /// code page, from the scan vector to the end of the code (`_code_end`).
-pub const FAST_SUMS_OFFSET: usize = 0x200;
-pub const FAST_SUMS_WORDS: usize = 116;
+pub const FAST_SUMS_OFFSET: usize = 0x280;
+pub const FAST_SUMS_WORDS: usize = 84;
 /// The number of code pages: 0 in a fast-boot file, which loads the file.
 pub const FAST_PAGES_OFFSET: usize = FAST_SUMS_OFFSET + FAST_SUMS_WORDS * 4;
 /// The size of a code page as a shift: 12 is 4 KB.
@@ -174,7 +179,7 @@ impl FastRelease {
         Ok(release)
     }
 
-    /// The firmware version as the probe gives it: 2.10 is 210.
+    /// The firmware version as the identity words give it: 2.10 is 210.
     fn version(&self) -> Option<u32> {
         let (major, minor) = self.firmware.split_once('.')?;
         let digits = format!("{major}{minor}");

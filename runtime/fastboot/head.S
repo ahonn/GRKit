@@ -17,10 +17,26 @@
    sum and calls INSTALL in the loaded file only if no page changed after
    SCAN. Otherwise it writes the address of the first changed page and the
    number of changed pages, and the status 997 (runtime::FAST_DETAIL_OFFSET,
-   FAST_STATUS_CODE_CHANGED). */
+   FAST_STATUS_CODE_CHANGED).
+
+   The fast-boot firmware leaves the RTOS code region read-only, as the
+   official firmware does (docs/fastboot.md, interface 2). The head makes
+   the code sections writable for the call only: before the load or the
+   check, and read-only again before it returns to the script. The script
+   task can move to another core during the call, so the change is in the
+   L1 table, which every core uses, and not in the domain access of one
+   core. A firmware of interface 1 has writable code sections; the head
+   leaves them read-only too. */
 #include "target.h"
 #include "fast.h"
 /* The build defines FAST_BASE (runtime::FAST_BASE), the address of fast.ld. */
+
+/* The access bits of a code section: APX clear and AP 11 (writable), or APX
+   set and AP 10 (read-only, as in the official firmware). CODE_SECTION is
+   the low 20 bits of each entry without them (crates/grkit-firmware). */
+#define CODE_WRITABLE 0x0400
+#define CODE_READ_ONLY 0x8000
+#define CODE_SECTION 0x14826
 
         .syntax unified
         .arm
@@ -30,6 +46,8 @@ fast_head:
         push    {r4-r8, lr}
         sub     sp, sp, #72             @ [sp] the read length, [sp+8] the file status
         mov     r7, r0                  @ the script array
+        mov     r0, #CODE_WRITABLE
+        bl      code_access
         ldr     r0, code_pages
         cmp     r0, #0
         bne     resident
@@ -123,8 +141,51 @@ fail:
         ldr     ip, =RT_PRINTF
         blx     ip
 done:
+        mov     r0, #CODE_READ_ONLY
+        bl      code_access
         add     sp, sp, #72
         pop     {r4-r8, pc}
+
+@ Set the access bits of each 1 MB section of the RTOS code region (0x53000000
+@ to 0x55000000) in the L1 table: r0 = CODE_WRITABLE or CODE_READ_ONLY. An
+@ entry that is not a section with the attributes of the official firmware
+@ stays as it is. The table is in a read-only section, so this core writes
+@ it with manager access to all domains and the interrupts off. The table
+@ walk does not use the caches (TTBR0 has no cache attributes): each entry
+@ is cleaned to the point of coherency, then the TLBs of all cores are
+@ invalidated.
+code_access:
+        push    {r4-r6, lr}
+        mrs     ip, cpsr
+        cpsid   if
+        mrc     p15, 0, r3, c3, c0, 0   @ DACR
+        mvn     r1, #0
+        mcr     p15, 0, r1, c3, c0, 0
+        isb
+        mrc     p15, 0, r1, c2, c0, 0   @ TTBR0
+        bfc     r1, #0, #14
+        add     r1, r1, #(0x530 * 4)
+        add     r2, r1, #(0x20 * 4)
+        ldr     r5, =CODE_SECTION
+1:      ldr     r4, [r1]
+        bic     r4, r4, #(CODE_WRITABLE | CODE_READ_ONLY)
+        eor     r6, r4, r5
+        lsls    r6, r6, #12             @ the low 20 bits
+        orreq   r4, r4, r0
+        streq   r4, [r1]
+        mcr     p15, 0, r1, c7, c10, 1  @ DCCMVAC
+        add     r1, r1, #4
+        cmp     r1, r2
+        blo     1b
+        dsb
+        mcr     p15, 0, r0, c8, c3, 0   @ TLBIALLIS
+        mcr     p15, 0, r0, c7, c1, 6   @ BPIALLIS
+        dsb
+        isb
+        mcr     p15, 0, r3, c3, c0, 0
+        isb
+        msr     cpsr_c, ip
+        pop     {r4-r6, pc}
         .ltorg
 name:   .asciz FAST_PATH
 failed: .asciz "GRKit: the fast-boot file is not complete\n"
@@ -132,10 +193,10 @@ failed: .asciz "GRKit: the fast-boot file is not complete\n"
 /* The sum of each code page (runtime::FAST_SUMS_OFFSET), the number of
    pages, 0 in this file, which loads the file, and the page size as a
    shift: runtime::install_file writes them into the install file. */
-        .org    0x200
+        .org    0x280
         .global code_sums
 code_sums:
-        .space  116 * 4
+        .space  84 * 4
         .global code_pages
 code_pages:
         .word   0

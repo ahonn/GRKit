@@ -80,7 +80,7 @@ pub fn loader_for(icon_stride: usize) -> Vec<u8> {
 ///
 /// The first script array (`ba`) comes before the planned arrays, as the
 /// installer expects (`ARRAY_LEAD`). With fast-boot files, the loader first
-/// asks the firmware for the probe words in `ba`. On a firmware build with the
+/// asks the firmware for the identity words in `ba`. On a firmware build with the
 /// fast-boot loader and a fast-boot file for its release, the loader runs
 /// SCAN through that file and INSTALL through its install file, with no
 /// Linux command and no wait. If that SCAN writes no plan, or that INSTALL
@@ -114,22 +114,23 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
             "allocated = 0".into(),
             // Why the start does not use the fast-boot files (fast_log).
             format!("fastreason = {FAST_OFF_OFFICIAL}"),
-            // The probe words stay 0 on the official firmware, whatever the
+            // The identity words stay 0 on the official firmware, whatever the
             // memory of the array held.
             "ba[0] = 0".into(),
             "ba[1] = 0".into(),
             "sendln 'SYS_buildinfo 0'".into(),
-            format!("if ba[0] <> {FAST_PROBE_MAGIC} goto probed"),
+            format!("if ba[0] <> {FAST_IDENTITY_MAGIC} goto identified"),
             format!("fastreason = {FAST_OFF_INTERFACE}"),
             "fastinterface = ba[1]".into(),
-            format!("if ba[1] <> {FAST_INTERFACE} goto probed"),
+            format!("if ba[1] < {FAST_INTERFACE_FIRST} goto identified"),
+            format!("if ba[1] > {FAST_INTERFACE} goto identified"),
             format!("fastreason = {FAST_OFF_RELEASE}"),
             "release = ba[2] * 1000 + ba[3]".into(),
         ]);
         // A release runs its fast-boot file and its install file, so both
         // must be on the card.
         for (index, release) in fast.iter().enumerate() {
-            let next = format!("probe{}", index + 1);
+            let next = format!("next_release{}", index + 1);
             lines.extend([
                 format!("if release <> {} goto {next}", release.number()),
                 format!("fastreason = {FAST_OFF_FILES}"),
@@ -140,7 +141,7 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
                 format!(":{next}"),
             ]);
         }
-        lines.extend([":probed".into(), "if fast = 0 call fast_log".into()]);
+        lines.extend([":identified".into(), "if fast = 0 call fast_log".into()]);
     }
     lines.extend([
         "attempts = 0".into(),
@@ -1711,11 +1712,11 @@ mod tests {
     }
 
     /// The official firmware has another command under the name of the
-    /// fast-boot loader, so the loader sends it only after the probe found
+    /// fast-boot loader, so the loader sends it only after the identity words named
     /// the fast-boot loader and its file is on the card. A first array comes
     /// before the planned arrays, with or without fast-boot files.
     #[test]
-    fn the_loader_runs_code_from_the_card_only_after_the_probe() {
+    fn the_loader_runs_code_from_the_card_only_after_the_identity_check() {
         use crate::camera::GR3;
         let releases = ["2.10", "2.20"].map(|firmware| FastRelease::new(&GR3, firmware).unwrap());
         let script = String::from_utf8(loader_with(ICON_STRIDE, &releases)).unwrap();
@@ -1728,30 +1729,32 @@ mod tests {
         };
         let first_array = lines.iter().position(|l| l.starts_with("intdim ")).unwrap();
         assert_eq!(lines[first_array], "intdim ba 256");
-        let probe = at("sendln 'SYS_buildinfo 0'");
-        assert!(first_array < probe);
-        // The probe words are 0 before the probe, so stale memory never
+        let identify = at("sendln 'SYS_buildinfo 0'");
+        assert!(first_array < identify);
+        // The identity words are 0 before the request, so stale memory never
         // passes it on the official firmware.
-        assert_eq!(lines[probe - 2..probe], ["ba[0] = 0", "ba[1] = 0"]);
+        assert_eq!(lines[identify - 2..identify], ["ba[0] = 0", "ba[1] = 0"]);
         assert_eq!(
-            lines[probe + 1..probe + 7],
+            lines[identify + 1..identify + 8],
             [
-                "if ba[0] <> 1129202771 goto probed",
+                "if ba[0] <> 1129202771 goto identified",
                 "fastreason = 2",
                 "fastinterface = ba[1]",
-                "if ba[1] <> 1 goto probed",
+                "if ba[1] < 1 goto identified",
+                "if ba[1] > 2 goto identified",
                 "fastreason = 3",
                 "release = ba[2] * 1000 + ba[3]",
             ]
         );
-        let probed = at(":probed");
-        // Only the probe sets a release, and only with its file on the card.
+        let identified = at(":identified");
+        // Only the identity check sets a release, and only with its file on the
+        // card.
         for (index, line) in lines.iter().enumerate() {
             if line.contains("fast = ")
                 && !line.ends_with("fast = 0")
                 && !line.starts_with("if fast")
             {
-                assert!(probe < index && index < probed, "{line}");
+                assert!(identify < index && index < identified, "{line}");
                 assert!(lines[index - 1].starts_with("filesearch "), "{line}");
             }
         }
@@ -1764,10 +1767,10 @@ mod tests {
             assert_eq!(
                 lines[set - 5..set],
                 [
-                    format!("if release <> {number} goto probe{}", index + 1),
+                    format!("if release <> {number} goto next_release{}", index + 1),
                     "fastreason = 4".into(),
                     format!("filesearch '{path}'"),
-                    format!("if result = 0 goto probe{}", index + 1),
+                    format!("if result = 0 goto next_release{}", index + 1),
                     format!("filesearch '{install}'"),
                 ]
             );
@@ -1837,19 +1840,19 @@ mod tests {
             [
                 "goto plan_read",
                 ":plan_fast",
-                "planmagic = ba[128]",
-                "count = ba[129]",
-                "words = ba[130]",
-                "chunks = ba[131]",
-                "modulewords = ba[133]",
-                "moduletiles = ba[134]",
+                "planmagic = ba[160]",
+                "count = ba[161]",
+                "words = ba[162]",
+                "chunks = ba[163]",
+                "modulewords = ba[165]",
+                "moduletiles = ba[166]",
                 ":plan_read",
             ]
         );
         assert_eq!(lines[at(":plan_ready") + 2], "if fast <> 0 goto plan_fast");
         at("if fast = 0 sendln 'lcmd sh /media/storage1/SCRIPT/GRKIT/INSTALL.SH'");
 
-        // Without fast-boot files, the loader asks for no probe and runs no
+        // Without fast-boot files, the loader asks for no identity words and runs no
         // code from the card.
         let plain = String::from_utf8(loader()).unwrap();
         assert!(!plain.contains("SYS_buildinfo"));
@@ -1983,7 +1986,7 @@ mod tests {
                 .position(|l| *l == line)
                 .unwrap_or_else(|| panic!("{line}"))
         };
-        // Three calls: after the probe, after SCAN, after INSTALL. Each sets
+        // Three calls: after the identity check, after SCAN, after INSTALL. Each sets
         // the reason first, and each but the first ends the fast-boot steps.
         let calls: Vec<_> = lines
             .iter()
@@ -1993,7 +1996,7 @@ mod tests {
             .collect();
         assert_eq!(calls.len(), 3);
         assert_eq!(lines[calls[0]], "if fast = 0 call fast_log");
-        assert_eq!(lines[calls[0] - 1], ":probed");
+        assert_eq!(lines[calls[0] - 1], ":identified");
         for &call in &calls[1..] {
             assert_eq!(lines[call], "call fast_log");
             assert!(
