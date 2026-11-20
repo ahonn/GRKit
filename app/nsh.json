@@ -1,0 +1,42 @@
+{
+  "name": "GRKit",
+  "id": "studio.techflow.grkit",
+  "version": "1.0.0",
+  "build": 1,
+  "rust": ".",
+  "root": "App",
+  "theme": "theme.json",
+  "appearance": "system",
+  "capabilities": {
+    "network": {
+      "hosts": [
+        "grkit.app",
+        "192.168.0.1"
+      ]
+    },
+    "openUrl": {
+      "schemes": [
+        "https",
+        "itms-apps",
+        "app-settings"
+      ]
+    },
+    "picker": true
+  },
+  "ios": {
+    "infoPlist": {
+      "MinimumOSVersion": "17.0",
+      "NSBluetoothAlwaysUsageDescription": "GRKit uses Bluetooth to find your camera and turn on its Wi-Fi.",
+      "NSBonjourServices": [
+        "_grkit_probe._tcp"
+      ],
+      "NSLocalNetworkUsageDescription": "GRKit talks to the camera over its Wi-Fi network.",
+      "NSAccessorySetupKitSupports": [
+        "WiFi"
+      ],
+      "NSAppTransportSecurity": {
+        "NSAllowsLocalNetworking": true
+      }
+    }
+  }
+}

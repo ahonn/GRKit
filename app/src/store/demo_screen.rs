@@ -1,0 +1,514 @@
+//! Demo screen ids for screenshots: `GRKIT_DEMO_SCREEN` / `--demo-screen`.
+//!
+//! When demo mode is on and an id is set, [`apply`] jumps the FakeCamera and UI
+//! to that design screen (sheet, push, or alert) and freezes the ticker so the
+//! frame stays still for a screenshot. Unknown ids leave the normal demo.
+
+use std::{
+    env,
+    time::{Duration, Instant},
+};
+
+use nsh_core::prelude::*;
+
+use crate::domain::fake_looks::DEMO_CUSTOM_ID;
+use crate::domain::{
+    CameraLink, FakeCamera, FakeConfig, UpdateError, UpdateKind, UpdatePhase, block_on_ready,
+};
+use crate::store::{AppState, Route, Sheet, Tab};
+
+/// Design-file screen ids used for demo screenshots.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DemoScreen {
+    /// A1 — first launch (empty Camera tab).
+    A1,
+    /// A2 — camera nearby sheet.
+    A2,
+    /// A3 — add a camera sheet.
+    A3,
+    /// A4 — connecting checklist.
+    A4,
+    /// A5 — connected, update available.
+    A5,
+    /// A6 — connected, up to date.
+    A6,
+    /// A7 — Settings tab.
+    A7,
+    /// B1 — Software Update (update available).
+    B1,
+    /// B2 — sending (~62% progress).
+    B2,
+    /// B3 — confirm on the camera (countdown).
+    B3,
+    /// B4 — restart the camera.
+    B4,
+    /// B5 — update installed.
+    B5,
+    /// C4 — card full error.
+    C4,
+    /// C5 — not confirmed error.
+    C5,
+    /// L1 — Looks on the camera, in menu order.
+    L1,
+    /// L2 — an official Look.
+    L2,
+    /// L3 — an imported Look.
+    L3,
+    /// L4 — a new Look converted, ready to send.
+    L4,
+    /// L5 — delete the Look in use (alert).
+    L5,
+    /// L6 — a Look that recipes use cannot be deleted (alert).
+    L6,
+    /// L7 — the Add page, one Look being added.
+    L7,
+    /// L8 — import a Look sheet.
+    L8,
+    /// L9 — a new Look: file, name, LUT input and cover.
+    L9,
+    /// L10 — Looks without a camera.
+    L10,
+    /// L11 — an update waits on the camera (read only).
+    L11,
+    /// L12 — no room on the camera (alert).
+    L12,
+    /// L13 — the cover editor of an official Look.
+    L13,
+    /// A8 — saved cameras, none connected.
+    A8,
+    /// A9 — the connection was lost.
+    A9,
+    /// A10 — Add Camera found one camera.
+    A10,
+    /// A11 — a connect error, in the connect sheet.
+    A11,
+    /// A12 — the camera has no GRKit.
+    A12,
+    /// A13 — Settings › Saved Cameras.
+    A13,
+}
+
+/// Every id string the env / CLI accept, in design order.
+pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
+    ("A1", DemoScreen::A1),
+    ("A2", DemoScreen::A2),
+    ("A3", DemoScreen::A3),
+    ("A4", DemoScreen::A4),
+    ("A5", DemoScreen::A5),
+    ("A6", DemoScreen::A6),
+    ("A7", DemoScreen::A7),
+    ("B1", DemoScreen::B1),
+    ("B2", DemoScreen::B2),
+    ("B3", DemoScreen::B3),
+    ("B4", DemoScreen::B4),
+    ("B5", DemoScreen::B5),
+    ("C4", DemoScreen::C4),
+    ("C5", DemoScreen::C5),
+    ("L1", DemoScreen::L1),
+    ("L2", DemoScreen::L2),
+    ("L3", DemoScreen::L3),
+    ("L4", DemoScreen::L4),
+    ("L5", DemoScreen::L5),
+    ("L6", DemoScreen::L6),
+    ("L7", DemoScreen::L7),
+    ("L8", DemoScreen::L8),
+    ("L9", DemoScreen::L9),
+    ("L10", DemoScreen::L10),
+    ("L11", DemoScreen::L11),
+    ("L12", DemoScreen::L12),
+    ("L13", DemoScreen::L13),
+    ("A8", DemoScreen::A8),
+    ("A9", DemoScreen::A9),
+    ("A10", DemoScreen::A10),
+    ("A11", DemoScreen::A11),
+    ("A12", DemoScreen::A12),
+    ("A13", DemoScreen::A13),
+];
+
+/// Parse a design id (`A5`, `a5`, …). Unknown → `None` (normal demo).
+pub fn parse_demo_screen(id: &str) -> Option<DemoScreen> {
+    let id = id.trim();
+    DEMO_SCREEN_IDS
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(id))
+        .map(|(_, screen)| *screen)
+}
+
+/// Screen from `GRKIT_DEMO_SCREEN` or `--demo-screen <id>`.
+pub fn demo_screen_from_env() -> Option<DemoScreen> {
+    if let Some(id) = crate::platform::config_value("GRKIT_DEMO_SCREEN")
+        && let Some(screen) = parse_demo_screen(&id)
+    {
+        return Some(screen);
+    }
+    let mut args = env::args().skip(1).peekable();
+    while let Some(arg) = args.next() {
+        if arg == "--demo-screen" {
+            return args.next().as_deref().and_then(parse_demo_screen);
+        }
+        if let Some(id) = arg.strip_prefix("--demo-screen=") {
+            return parse_demo_screen(id);
+        }
+    }
+    None
+}
+
+/// Jump `app` to `screen` and freeze timed advances for a stable screenshot.
+pub fn apply(app: AppState, screen: DemoScreen) {
+    app.set_frozen(true);
+    match screen {
+        DemoScreen::A1 => {
+            // Empty first launch: nearby fake stays for later Add Camera.
+            app.status.set(None);
+            app.package.set(None);
+            app.set_sheet(None);
+            app.set_tab(Tab::Camera);
+        }
+        DemoScreen::A2 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Nearby));
+        }
+        DemoScreen::A3 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Scan));
+            app.pin_scan_list();
+        }
+        DemoScreen::A8 => {
+            seed_saved(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
+        DemoScreen::A9 => {
+            seed_saved(app);
+            app.show_toast(crate::strings::tr("cam.lost_title", &[]));
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
+        DemoScreen::A10 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_tab(Tab::Camera);
+            app.open_scan();
+        }
+        DemoScreen::A11 => {
+            seed_saved(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::ConnectError(
+                crate::domain::LinkError::WifiJoinTimeout,
+            )));
+        }
+        DemoScreen::A12 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::ConnectError(
+                crate::domain::LinkError::NeedsGrkit,
+            )));
+        }
+        DemoScreen::A13 => {
+            seed_saved(app);
+            seed_connected_available(app);
+            app.set_tab(Tab::Settings);
+            app.set_sheet(None);
+            app.push(Route::SavedCameras);
+        }
+        DemoScreen::A4 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Connecting { step: 1 }));
+        }
+        DemoScreen::A5 => {
+            seed_saved(app);
+            seed_connected_available(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.refresh_looks();
+        }
+        DemoScreen::A6 => {
+            seed_connected_up_to_date(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
+        DemoScreen::A7 => {
+            seed_saved(app);
+            seed_connected_available(app);
+            app.set_tab(Tab::Settings);
+            app.set_sheet(None);
+        }
+        DemoScreen::B1 => {
+            seed_connected_available(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.push(Route::SoftwareUpdate);
+        }
+        DemoScreen::B2 => {
+            seed_connected_available(app);
+            seed_sending(app, UpdateKind::Install, 0.62);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Sending));
+        }
+        DemoScreen::B3 => {
+            seed_connected_available(app);
+            seed_waiting(app, UpdateKind::Install);
+            app.set_tab(Tab::Camera);
+            app.confirm_deadline
+                .set(Some(Instant::now() + Duration::from_secs(4 * 60 + 32)));
+            app.set_sheet(Some(Sheet::Confirm));
+        }
+        DemoScreen::B4 => {
+            seed_connected_available(app);
+            seed_restart(app, UpdateKind::Install);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Restart));
+        }
+        DemoScreen::B5 => {
+            seed_connected_up_to_date(app);
+            app.baseline.set(Some("1.6.1".into()));
+            app.phase.set(UpdatePhase::Installed {
+                kind: UpdateKind::Install,
+                version: "1.7.0".into(),
+            });
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Installed {
+                version: "1.7.0".into(),
+                previous: "1.6.1".into(),
+            }));
+        }
+        DemoScreen::C4 => {
+            seed_connected_available(app);
+            app.phase.set(UpdatePhase::Failed(UpdateError::CardFull {
+                bytes_needed: 12 * 1024 * 1024,
+            }));
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Error(UpdateError::CardFull {
+                bytes_needed: 12 * 1024 * 1024,
+            })));
+        }
+        DemoScreen::C5 => {
+            seed_connected_available(app);
+            app.phase
+                .set(UpdatePhase::Failed(UpdateError::NotConfirmed));
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Error(UpdateError::NotConfirmed)));
+        }
+        DemoScreen::L1 => seed_looks(app),
+        DemoScreen::L2 => {
+            seed_looks(app);
+            app.push(Route::LookDetail(PORTRA.into()));
+        }
+        DemoScreen::L3 => {
+            seed_looks(app);
+            app.push(Route::LookDetail(DEMO_CUSTOM_ID.into()));
+        }
+        DemoScreen::L4 => {
+            seed_looks(app);
+            app.seed_import_draft();
+            app.push(Route::LookImport);
+            app.finish_import();
+        }
+        DemoScreen::L5 => {
+            app.with_fake_looks(|f| f.set_used_by(PORTRA, 0));
+            seed_looks(app);
+            app.push(Route::LookDetail(PORTRA.into()));
+            ask_delete(app);
+        }
+        DemoScreen::L6 => {
+            seed_looks(app);
+            app.push(Route::LookDetail(PORTRA.into()));
+            ask_delete(app);
+        }
+        DemoScreen::L7 => {
+            seed_looks(app);
+            app.open_add();
+            app.seed_adding("provia-100f-v1");
+        }
+        DemoScreen::L8 => {
+            seed_looks(app);
+            app.set_sheet(Some(Sheet::ImportLook));
+        }
+        DemoScreen::L9 => {
+            seed_looks(app);
+            app.seed_import_draft();
+            app.push(Route::LookImport);
+        }
+        DemoScreen::L10 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_sheet(None);
+            app.set_tab(Tab::Looks);
+        }
+        DemoScreen::L11 => {
+            app.with_fake_looks(|f| f.update_pending = true);
+            seed_looks(app);
+        }
+        DemoScreen::L12 => {
+            seed_looks(app);
+            app.open_add();
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                app.alert_look_error(crate::domain::LookError::NoRoom);
+            });
+        }
+        DemoScreen::L13 => {
+            seed_looks(app);
+            app.push(Route::LookDetail(PORTRA.into()));
+            app.push(Route::LookCover(PORTRA.into()));
+        }
+    }
+}
+
+const PORTRA: &str = "portra-400-endura-v1";
+
+/// Connected, on the Looks tab, with the demo camera's Looks read.
+fn seed_looks(app: AppState) {
+    seed_connected_up_to_date(app);
+    app.set_sheet(None);
+    app.set_tab(Tab::Looks);
+    app.refresh_looks();
+}
+
+/// Ask to delete Portra 400 after the page shows.
+fn ask_delete(app: AppState) {
+    spawn(async move {
+        next_frame().await;
+        next_frame().await;
+        if let Some(look) = app.look(PORTRA) {
+            crate::pages::confirm_delete(app, look);
+        }
+    });
+}
+
+/// Screens whose key text is an alert title.
+pub fn shows_alert(screen: DemoScreen) -> bool {
+    matches!(screen, DemoScreen::L5 | DemoScreen::L6 | DemoScreen::L12)
+}
+
+/// Two saved cameras, the GR III the most recent.
+fn seed_saved(app: AppState) {
+    use crate::domain::{CameraModel, RememberedCamera};
+    app.remember_camera(RememberedCamera::new(
+        "DEMO-GR4",
+        CameraModel::Gr4,
+        "GR_7F2E10",
+    ));
+    app.remember_camera(RememberedCamera::new(
+        "DEMO-GR3",
+        CameraModel::Gr3,
+        "GR_A1B2C3",
+    ));
+}
+
+fn seed_connected_available(app: AppState) {
+    app.camera.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let cam = slot.get_or_insert_with(|| FakeCamera::new(FakeConfig::default()));
+        let _ = block_on_ready(cam.connect());
+        if let Ok(status) = block_on_ready(cam.read_status()) {
+            app.status.set(Some(status));
+        }
+        if let Ok(package) = block_on_ready(cam.read_package()) {
+            app.package.set(Some(package));
+        }
+    });
+}
+
+fn seed_connected_up_to_date(app: AppState) {
+    app.camera.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let cfg = FakeConfig {
+            installed: "1.7.0".into(),
+            available: "1.7.0".into(),
+            ..FakeConfig::default()
+        };
+        let mut cam = FakeCamera::new(cfg);
+        let _ = block_on_ready(cam.connect());
+        cam.set_up_to_date("1.7.0");
+        if let Ok(status) = block_on_ready(cam.read_status()) {
+            app.status.set(Some(status));
+        }
+        if let Ok(package) = block_on_ready(cam.read_package()) {
+            app.package.set(Some(package));
+        }
+        *slot = Some(cam);
+    });
+}
+
+fn seed_sending(app: AppState, kind: UpdateKind, progress: f32) {
+    app.camera.with(|slot| {
+        if let Some(cam) = slot.borrow_mut().as_mut() {
+            cam.seed_sending(kind, progress);
+            app.phase.set(cam.flow().phase().clone());
+            app.baseline
+                .set(cam.flow().baseline_version().map(str::to_owned));
+        }
+    });
+}
+
+fn seed_waiting(app: AppState, kind: UpdateKind) {
+    app.camera.with(|slot| {
+        if let Some(cam) = slot.borrow_mut().as_mut() {
+            cam.seed_waiting(kind);
+            app.phase.set(cam.flow().phase().clone());
+            app.baseline
+                .set(cam.flow().baseline_version().map(str::to_owned));
+        }
+    });
+}
+
+fn seed_restart(app: AppState, kind: UpdateKind) {
+    app.camera.with(|slot| {
+        if let Some(cam) = slot.borrow_mut().as_mut() {
+            cam.seed_restart(kind);
+            app.phase.set(cam.flow().phase().clone());
+            app.baseline
+                .set(cam.flow().baseline_version().map(str::to_owned));
+        }
+    });
+}
+
+/// Key English text a headless test looks for on each screen.
+pub fn key_text(screen: DemoScreen) -> &'static str {
+    match screen {
+        DemoScreen::A1 => "Add Your Camera",
+        DemoScreen::A2 => "Connect",
+        DemoScreen::A3 => "Add a Camera",
+        DemoScreen::A4 => "Connecting to RICOH GR III",
+        DemoScreen::A5 => "New version · 4.7 MB",
+        DemoScreen::A6 => "GRKit Is Up to Date",
+        DemoScreen::A7 => "More from the Maker",
+        DemoScreen::B1 => "Update Now",
+        DemoScreen::B2 => "Sending to your camera…",
+        DemoScreen::B3 => "Confirm on the Camera",
+        DemoScreen::B4 => "Restart the Camera",
+        DemoScreen::B5 => "GRKit 1.7.0 Is Installed",
+        DemoScreen::C4 => "Card Is Full",
+        DemoScreen::C5 => "Not Confirmed",
+        DemoScreen::L1 => "Camera Menu",
+        DemoScreen::L2 => "Menu Order",
+        DemoScreen::L3 => "Replace with Another File",
+        DemoScreen::L4 => "Put on Camera",
+        DemoScreen::L5 => "Delete Portra 400?",
+        DemoScreen::L6 => "Can’t Delete Portra 400",
+        DemoScreen::L7 => "Import LUT",
+        DemoScreen::L8 => "Lightroom Preset",
+        DemoScreen::L9 => "LUT Input",
+        DemoScreen::L10 => "No Camera Connected",
+        DemoScreen::L11 => "An update is waiting on the camera",
+        DemoScreen::L12 => "No Room on the Camera",
+        DemoScreen::L13 => "Film name",
+        DemoScreen::A8 => "Other Cameras",
+        DemoScreen::A9 => "Lost Connection",
+        DemoScreen::A10 => "First time with this camera? On the camera, choose",
+        DemoScreen::A11 => "Camera Wi-Fi Unreachable",
+        DemoScreen::A12 => "No GRKit on the Camera",
+        DemoScreen::A13 => {
+            "Disconnect the current camera to connect another. Press and hold a camera to remove it."
+        }
+    }
+}

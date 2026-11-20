@@ -1,0 +1,475 @@
+//! Looks copy in English and Simplified Chinese. Keys match `locales/app.yml`.
+
+pub fn en(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "tab.looks" => "Film Looks",
+        "looks.title" => "Film Looks",
+        "looks.menu_order" => "Menu Order",
+        "looks.in_use" => "In Use",
+        "looks.off" => "Off",
+        "looks.not_loaded" => "Not loaded",
+        "looks.official" => "Official",
+        "looks.imported" => "Imported",
+        "looks.unknown" => "Unknown source",
+        "looks.group.negative" => "Negative",
+        "looks.group.slide" => "Slide",
+        "looks.group.cinema" => "Cinema",
+        "looks.group.instant" => "Instant",
+        "looks.group.mono" => "B&W",
+        "looks.filter.all" => "All",
+        "looks.filter.color" => "Color",
+        "looks.filter.mono" => "B&W",
+        "looks.add_named" => "Add %{name}",
+        "looks.adding" => "Adding",
+        "looks.import_action" => "Import LUT",
+        "looks.loading" => "Reading the film looks…",
+        "looks.catalog_loading" => "Loading the film looks…",
+        "looks.catalog_offline" => {
+            "Connect to the internet once to download the official film looks."
+        }
+        "looks.catalog_unsupported" => "This firmware has no official film looks.",
+        "looks.no_camera_title" => "No Camera Connected",
+        "looks.no_camera_body" => "Connect your camera to see and change its film looks.",
+        "looks.connect" => "Connect",
+        "looks.pending_title" => "An update is waiting on the camera",
+        "looks.pending_body" => {
+            "Install or cancel it on the camera. Then you can change film looks."
+        }
+        "looks.restart_body" => {
+            "Turn the camera off and on. New and changed film looks then show in the menu."
+        }
+        "looks.after_restart" => "After restart",
+        "looks.read_failed" => "Could not read the film looks on the camera.",
+        "looks.retry" => "Try Again",
+        "looks.show_in_menu" => "Show in Camera Menu",
+        "looks.show_note" => "Off hides it in the menu only. The file stays on the card.",
+        "looks.used_by" => "Used By",
+        "looks.recipes_one" => "1 recipe",
+        "looks.recipes_many" => "%{count} recipes",
+        "looks.none" => "None",
+        "looks.delete" => "Delete Film Look",
+        "looks.name" => "Name",
+        "looks.cover" => "Cover",
+        "looks.cover_on_camera" => "On the camera",
+        "looks.cover_random" => "Random",
+        "looks.cover_default" => "Use the Default Cover",
+        "looks.cover_brand" => "Brand",
+        "looks.cover_film" => "Film name",
+        "looks.cover_number" => "Number",
+        "looks.cover_optional" => "Optional",
+        "looks.cover_text_note" => {
+            "Each text: 1 to 12 English letters, digits, spaces, or symbols."
+        }
+        "looks.cover_too_wide" => "The camera cannot draw this cover. Shorten the text.",
+        "looks.cover_note" => "The camera shows this cover in ADJ. The film look stays the same.",
+        "looks.cover_layout" => "Layout",
+        "looks.layout.box" => "Film box",
+        "looks.layout.box2" => "Film box 2",
+        "looks.layout.cine" => "Cinema label",
+        "looks.layout.stack" => "Bottom brand",
+        "looks.cover_colors" => "Colors",
+        "looks.native" => "GR IV film look",
+        "looks.covers" => "Covers",
+        "looks.covers_film_box" => "Film box colors",
+        "looks.covers_scheme.gray" => "Off",
+        "looks.covers_scheme.colorFilmBox" => "Color",
+        "looks.covers_scheme.filmBox" => "All",
+        "looks.covers_reset_color" => "Reset color covers",
+        "looks.covers_reset_mono" => "Reset B&W covers",
+        "looks.cover_look.gray" => "Gray",
+        "looks.cover_look.kodak" => "Kodak yellow",
+        "looks.cover_look.gold" => "Gold",
+        "looks.cover_look.ultramax" => "UltraMax",
+        "looks.cover_look.portra" => "Portra",
+        "looks.cover_look.ektar" => "Ektar",
+        "looks.cover_look.ektachrome" => "Ektachrome",
+        "looks.cover_look.kodachrome" => "Kodachrome",
+        "looks.cover_look.aerocolor" => "Aerocolor",
+        "looks.cover_look.vision" => "Vision3",
+        "looks.cover_look.trix" => "Tri-X",
+        "looks.cover_look.tmax" => "T-Max",
+        "looks.cover_look.doublex" => "Double-X",
+        "looks.cover_look.fuji" => "Fujifilm",
+        "looks.cover_look.superia" => "Superia",
+        "looks.cover_look.c200" => "C200",
+        "looks.cover_look.pro" => "Pro 400H",
+        "looks.cover_look.nps" => "160C",
+        "looks.cover_look.velvia" => "Velvia",
+        "looks.cover_look.provia" => "Provia",
+        "looks.cover_look.astia" => "Astia",
+        "looks.cover_look.instax" => "Instax",
+        "looks.cover_look.eterna" => "Eterna",
+        "looks.cover_look.acros" => "Acros",
+        "looks.cover_look.ilford" => "Ilford",
+        "looks.cover_look.hp5" => "HP5",
+        "looks.cover_look.delta" => "Delta",
+        "looks.cover_look.xp2" => "XP2",
+        "looks.cover_look.agfa" => "Agfa",
+        "looks.cover_look.precisa" => "Precisa",
+        "looks.cover_look.vista" => "Vista",
+        "looks.cover_look.ricoh" => "Ricoh",
+        "looks.cover_look.cinemaYellow" => "Cinema Yellow",
+        "looks.cover_look.cinemaGreen" => "Cinema Green",
+        "looks.cover_look.cinema" => "Cinema",
+        "looks.source" => "Source",
+        "looks.source_file" => "File",
+        "looks.replace" => "Replace with Another File",
+        "looks.loaded" => "Loaded",
+        "looks.delete_title" => "Delete %{name}?",
+        "looks.delete_body" => "It is removed from the card.",
+        "looks.delete_active_body" => "It is the film look in use. The camera switches to Off.",
+        "looks.cannot_delete_title" => "Can’t Delete %{name}",
+        "looks.cannot_delete_body" => "Recipes use this film look. Change those recipes first.",
+        "looks.cancel" => "Cancel",
+        "looks.delete_action" => "Delete",
+        "looks.ok" => "OK",
+        "looks.move_up" => "Move Up",
+        "looks.move_down" => "Move Down",
+        "looks.rename_title" => "Rename",
+        "looks.name_note" => {
+            "The camera menu shows this name. 1 to 16 characters: English letters, digits, spaces, and symbols."
+        }
+        "looks.save" => "Save",
+        "looks.import_title" => "Import a Film Look",
+        "looks.import_body" => "Make a film look from a file on your phone.",
+        "looks.import_lut" => "LUT File",
+        "looks.import_lut_ext" => ".cube or LUT image",
+        "looks.import_preset" => "Lightroom Preset",
+        "looks.import_preset_ext" => ".xmp",
+        "looks.import_note" => "Your phone converts the file. The camera gets the film look.",
+        "looks.new_title" => "Import LUT",
+        "looks.replace_title" => "Replace Film Look",
+        "looks.send" => "Put on Camera",
+        "looks.sending" => "Sending…",
+        "looks.send_note" => {
+            "It is saved on the card of the camera and shows in the camera menu after a restart."
+        }
+        "looks.choose_again" => "Choose Another File",
+        "looks.error.lost_title" => "Camera Disconnected",
+        "looks.error.lost_body" => "Reconnect to the camera and try again.",
+        "looks.error.not_ready_title" => "Camera Not Ready",
+        "looks.error.not_ready_body" => "The card or the camera is busy. Try again in a moment.",
+        "looks.error.in_use_title" => "Film Look Used by Recipes",
+        "looks.error.in_use_body" => "Change the recipes that use this film look first.",
+        "looks.error.active_title" => "Film Look in Use",
+        "looks.error.active_body" => "Delete it again to switch the camera to Off.",
+        "looks.error.official_title" => "Official Film Look",
+        "looks.error.official_body" => {
+            "Official film looks keep their colors. Only the name and cover can change."
+        }
+        "looks.error.full_title" => "No Room on the Camera",
+        "looks.error.full_body" => {
+            "The camera has loaded all the film looks it can. Turn one off first."
+        }
+        "looks.error.pending_title" => "An Update Is Waiting",
+        "looks.error.pending_body" => {
+            "Install or cancel it on the camera. Then you can change film looks."
+        }
+        "looks.error.off_title" => "Phone Changes Are Off",
+        "looks.error.off_body" => "The camera does not accept changes from the phone now.",
+        "looks.error.busy_title" => "Camera Busy",
+        "looks.error.busy_body" => "Another change is running. Try again in a moment.",
+        "looks.error.camera_title" => "Camera Busy",
+        "looks.error.camera_body" => {
+            "Close the menu on the camera and go back to the shooting screen. Then try again."
+        }
+        "looks.error.restart_title" => "Restart the Camera",
+        "looks.error.restart_body" => "The camera lists this film look after it starts again.",
+        "looks.error.changed_title" => "Film Looks Changed",
+        "looks.error.changed_body" => {
+            "The film looks changed on the camera. Check them and try again."
+        }
+        "looks.error.name_title" => "Invalid Name",
+        "looks.error.name_body" => "Use 1 to 16 English letters, digits or symbols.",
+        "looks.error.gone_title" => "Film Look Not Found",
+        "looks.error.gone_body" => "The film look is no longer on the camera.",
+        "looks.error.cover_title" => "Cover Not Saved",
+        "looks.error.cover_list_body" => {
+            "The cover list on the card cannot be read or is full. Nothing changed."
+        }
+        "looks.error.cover_saved_body" => {
+            "The film look was saved, but its cover was not. Try again."
+        }
+        "looks.error.import_title" => "Cannot Convert the File",
+        "looks.error.import_body" => {
+            "Choose a .cube file, a LUT image, or a Lightroom .xmp preset."
+        }
+        "looks.error.service_title" => "Change Failed",
+        "looks.error.service_body" => "The camera refused the change.",
+        "looks.add_title" => "Add Film Looks",
+        "looks.add_note" => {
+            "These film looks are not on the camera. An added film look goes to the card and shows in the camera menu after a restart."
+        }
+        "looks.added_named" => "Take back %{name}",
+        "looks.menu" => "Camera Menu",
+        "looks.menu_note" => {
+            "Same order as ADJ on the camera. Touch and hold a film look, then drag it to move it."
+        }
+        "looks.off_section" => "Off",
+        "looks.off_note" => {
+            "Film looks that are off stay on the card. The camera menu does not show them."
+        }
+        "looks.hide_named" => "Hide %{name} in the camera menu",
+        "looks.show_named" => "Show %{name} in the camera menu",
+        "looks.restart_one" => "1 change applies after a restart",
+        "looks.restart_many" => "%{count} changes apply after a restart",
+        "looks.covers_note" => {
+            "Official film looks and Cinema looks without a cover of their own use these colors. Color gives colors to color film looks only, and B&W film looks stay gray. Changes apply after a restart."
+        }
+        "looks.menu_place" => "No. %{place}",
+        "looks.official_note" => {
+            "Official film looks keep their colors. Their name and cover can change."
+        }
+        "looks.import_again" => "Import Another",
+        "looks.change_file" => "Change",
+        "looks.import_name" => "Film look name",
+        "looks.input" => "LUT Input",
+        "looks.input_auto" => "Auto: %{input}",
+        "looks.input_auto_plain" => "Auto",
+        "looks.input_reading" => "Auto: reading the LUT…",
+        "looks.input_standard" => "Standard: a GR JPEG in Standard",
+        "looks.input_srgb" => "sRGB: scene light without a tone curve",
+        "looks.input_note" => {
+            "The data cannot tell Standard from sRGB, or from a flat look for a camera log. If the LUT was made for sRGB or a log, choose that input."
+        }
+        "looks.input_log_note" => {
+            "GRKit reads V-Log and F-Log only. A LUT for another camera log, such as S-Log3, LogC, C-Log, or N-Log, imports with wrong colors."
+        }
+        "looks.import_fit_note" => {
+            "The camera cannot load a LUT. GRKit gets near it with the color controls of the camera, but not exactly. Your phone does the conversion."
+        }
+        "looks.import" => "Import",
+        "looks.converting_short" => "Converting…",
+        "looks.imported_with" => "Imported LUT · Input %{input}",
+        "looks.imported_preset" => "Imported Lightroom preset",
+        "looks.fit" => "Fit",
+        "looks.fit.A" => "Nearly the same as the LUT.",
+        "looks.fit.B" => "The same look with small differences.",
+        "looks.fit.C" => "A similar look with visible color differences.",
+        "looks.fit.D" => "A different look. The camera cannot make this LUT.",
+        "looks.cover_default_note" => {
+            "The default cover follows Film box colors. The camera shows this cover in ADJ, and the film look stays the same. Cover changes apply after a restart."
+        }
+        _ => return None,
+    })
+}
+
+pub fn zh(key: &str) -> Option<&'static str> {
+    Some(match key {
+        "tab.looks" => "胶片风格",
+        "looks.title" => "胶片风格",
+        "looks.menu_order" => "菜单顺序",
+        "looks.in_use" => "使用中",
+        "looks.off" => "已关闭",
+        "looks.not_loaded" => "未载入",
+        "looks.official" => "官方",
+        "looks.imported" => "导入",
+        "looks.unknown" => "来源未知",
+        "looks.group.negative" => "负片",
+        "looks.group.slide" => "反转片",
+        "looks.group.cinema" => "电影",
+        "looks.group.instant" => "拍立得",
+        "looks.group.mono" => "黑白",
+        "looks.filter.all" => "全部",
+        "looks.filter.color" => "彩色",
+        "looks.filter.mono" => "黑白",
+        "looks.add_named" => "添加 %{name}",
+        "looks.adding" => "正在添加",
+        "looks.import_action" => "导入 LUT",
+        "looks.loading" => "正在读取胶片风格…",
+        "looks.catalog_loading" => "正在加载胶片风格…",
+        "looks.catalog_offline" => "需要联网一次来下载官方胶片风格。",
+        "looks.catalog_unsupported" => "这个固件没有官方胶片风格。",
+        "looks.no_camera_title" => "未连接相机",
+        "looks.no_camera_body" => "连接相机后，可以查看和修改它的胶片风格。",
+        "looks.connect" => "连接",
+        "looks.pending_title" => "相机上有等待中的更新",
+        "looks.pending_body" => "在相机上安装或取消它后，才能修改胶片风格。",
+        "looks.restart_body" => "关闭相机再打开后，新加和改过的胶片风格出现在菜单中。",
+        "looks.after_restart" => "重启后生效",
+        "looks.read_failed" => "无法读取相机上的胶片风格。",
+        "looks.retry" => "重试",
+        "looks.show_in_menu" => "在相机菜单中显示",
+        "looks.show_note" => "关闭后只在菜单中隐藏，文件仍在卡上。",
+        "looks.used_by" => "被使用",
+        "looks.recipes_one" => "1 个配方",
+        "looks.recipes_many" => "%{count} 个配方",
+        "looks.none" => "无",
+        "looks.delete" => "删除胶片风格",
+        "looks.name" => "名称",
+        "looks.cover" => "封面",
+        "looks.cover_on_camera" => "相机上显示",
+        "looks.cover_random" => "随机",
+        "looks.cover_default" => "使用默认封面",
+        "looks.cover_brand" => "品牌",
+        "looks.cover_film" => "胶片名",
+        "looks.cover_number" => "数字",
+        "looks.cover_optional" => "可选",
+        "looks.cover_text_note" => "每项 1 到 12 个字符：英文字母、数字、空格或符号。",
+        "looks.cover_too_wide" => "相机画不下这个封面，请缩短文字。",
+        "looks.cover_note" => "相机在 ADJ 中显示这个封面，胶片风格本身不变。",
+        "looks.cover_layout" => "版式",
+        "looks.layout.box" => "胶盒",
+        "looks.layout.box2" => "胶盒2",
+        "looks.layout.cine" => "电影标",
+        "looks.layout.stack" => "底品牌带",
+        "looks.cover_colors" => "配色",
+        "looks.native" => "GR IV 色彩",
+        "looks.covers" => "封面",
+        "looks.covers_film_box" => "胶片盒配色",
+        "looks.covers_scheme.gray" => "关闭",
+        "looks.covers_scheme.colorFilmBox" => "彩色",
+        "looks.covers_scheme.filmBox" => "全部",
+        "looks.covers_reset_color" => "重置彩色封面",
+        "looks.covers_reset_mono" => "重置黑白封面",
+        "looks.cover_look.gray" => "灰",
+        "looks.cover_look.kodak" => "柯达黄",
+        "looks.cover_look.gold" => "Gold",
+        "looks.cover_look.ultramax" => "UltraMax",
+        "looks.cover_look.portra" => "Portra",
+        "looks.cover_look.ektar" => "Ektar",
+        "looks.cover_look.ektachrome" => "Ektachrome",
+        "looks.cover_look.kodachrome" => "Kodachrome",
+        "looks.cover_look.aerocolor" => "Aerocolor",
+        "looks.cover_look.vision" => "Vision3",
+        "looks.cover_look.trix" => "Tri-X",
+        "looks.cover_look.tmax" => "T-Max",
+        "looks.cover_look.doublex" => "Double-X",
+        "looks.cover_look.fuji" => "富士",
+        "looks.cover_look.superia" => "Superia",
+        "looks.cover_look.c200" => "C200",
+        "looks.cover_look.pro" => "Pro 400H",
+        "looks.cover_look.nps" => "160C",
+        "looks.cover_look.velvia" => "Velvia",
+        "looks.cover_look.provia" => "Provia",
+        "looks.cover_look.astia" => "Astia",
+        "looks.cover_look.instax" => "Instax",
+        "looks.cover_look.eterna" => "Eterna",
+        "looks.cover_look.acros" => "Acros",
+        "looks.cover_look.ilford" => "伊尔福",
+        "looks.cover_look.hp5" => "HP5",
+        "looks.cover_look.delta" => "Delta",
+        "looks.cover_look.xp2" => "XP2",
+        "looks.cover_look.agfa" => "爱克发",
+        "looks.cover_look.precisa" => "Precisa",
+        "looks.cover_look.vista" => "Vista",
+        "looks.cover_look.ricoh" => "理光",
+        "looks.cover_look.cinemaYellow" => "Cinema Yellow",
+        "looks.cover_look.cinemaGreen" => "Cinema Green",
+        "looks.cover_look.cinema" => "电影",
+        "looks.source" => "来源",
+        "looks.source_file" => "文件",
+        "looks.replace" => "换用其他文件",
+        "looks.loaded" => "已载入",
+        "looks.delete_title" => "删除 %{name}？",
+        "looks.delete_body" => "它会从存储卡上删除。",
+        "looks.delete_active_body" => "这是正在使用的胶片风格，相机会切换为关闭。",
+        "looks.cannot_delete_title" => "无法删除 %{name}",
+        "looks.cannot_delete_body" => "有配方使用这个胶片风格，请先修改这些配方。",
+        "looks.cancel" => "取消",
+        "looks.delete_action" => "删除",
+        "looks.ok" => "好",
+        "looks.move_up" => "上移",
+        "looks.move_down" => "下移",
+        "looks.rename_title" => "重命名",
+        "looks.name_note" => "相机菜单显示这个名称。1 到 16 个字符：英文字母、数字、空格和符号。",
+        "looks.save" => "保存",
+        "looks.import_title" => "导入胶片风格",
+        "looks.import_body" => "用手机上的文件制作胶片风格。",
+        "looks.import_lut" => "LUT 文件",
+        "looks.import_lut_ext" => ".cube 或 LUT 图片",
+        "looks.import_preset" => "Lightroom 预设",
+        "looks.import_preset_ext" => ".xmp",
+        "looks.import_note" => "手机转换文件，相机收到的是胶片风格。",
+        "looks.new_title" => "导入 LUT",
+        "looks.replace_title" => "替换胶片风格",
+        "looks.send" => "放到相机上",
+        "looks.sending" => "正在发送…",
+        "looks.send_note" => "保存在相机的卡上，相机重启后出现在菜单中。",
+        "looks.choose_again" => "选择其他文件",
+        "looks.error.lost_title" => "相机已断开",
+        "looks.error.lost_body" => "请重新连接相机后再试。",
+        "looks.error.not_ready_title" => "相机未就绪",
+        "looks.error.not_ready_body" => "存储卡或相机正忙，请稍后再试。",
+        "looks.error.in_use_title" => "胶片风格正被配方使用",
+        "looks.error.in_use_body" => "请先修改使用这个胶片风格的配方。",
+        "looks.error.active_title" => "胶片风格正在使用",
+        "looks.error.active_body" => "再次删除会让相机切换为关闭。",
+        "looks.error.official_title" => "官方胶片风格",
+        "looks.error.official_body" => "官方胶片风格不能修改颜色，只能修改名称和封面。",
+        "looks.error.full_title" => "相机没有空间",
+        "looks.error.full_body" => "相机能载入的胶片风格已满，请先关闭一个胶片风格。",
+        "looks.error.pending_title" => "有等待中的更新",
+        "looks.error.pending_body" => "在相机上安装或取消它后，才能修改胶片风格。",
+        "looks.error.off_title" => "手机修改已关闭",
+        "looks.error.off_body" => "相机现在不接受手机的修改。",
+        "looks.error.busy_title" => "相机正忙",
+        "looks.error.busy_body" => "另一项修改正在进行，请稍后再试。",
+        "looks.error.camera_title" => "相机正忙",
+        "looks.error.camera_body" => "请关闭相机上的菜单，回到拍摄画面后再试。",
+        "looks.error.restart_title" => "请重启相机",
+        "looks.error.restart_body" => "相机重启后才会列出这个胶片风格。",
+        "looks.error.changed_title" => "胶片风格已变化",
+        "looks.error.changed_body" => "相机上的胶片风格有变化，请确认后再试。",
+        "looks.error.name_title" => "名称无效",
+        "looks.error.name_body" => "请使用 1 到 16 个英文字母、数字或符号。",
+        "looks.error.gone_title" => "找不到胶片风格",
+        "looks.error.gone_body" => "这个胶片风格已不在相机上。",
+        "looks.error.cover_title" => "封面未保存",
+        "looks.error.cover_list_body" => "无法读取存储卡上的封面列表，或列表已满。没有做任何修改。",
+        "looks.error.cover_saved_body" => "胶片风格已保存，但封面没有保存。请再试一次。",
+        "looks.error.import_title" => "无法转换文件",
+        "looks.error.import_body" => "请选择 .cube 文件、LUT 图片或 Lightroom .xmp 预设。",
+        "looks.error.service_title" => "修改失败",
+        "looks.error.service_body" => "相机拒绝了这次修改。",
+        "looks.add_title" => "添加胶片风格",
+        "looks.add_note" => {
+            "这里是还不在相机上的胶片风格。添加的会写到卡上，相机重启后出现在菜单中。"
+        }
+        "looks.added_named" => "撤回 %{name}",
+        "looks.menu" => "相机菜单",
+        "looks.menu_note" => "和相机 ADJ 中的顺序相同。长按胶片风格拖动，调整顺序。",
+        "looks.off_section" => "已关闭",
+        "looks.off_note" => "关闭的胶片风格仍在卡上，不在相机菜单中显示。",
+        "looks.hide_named" => "在菜单中关闭 %{name}",
+        "looks.show_named" => "在菜单中开启 %{name}",
+        "looks.restart_one" => "1 项改动在相机重启后生效",
+        "looks.restart_many" => "%{count} 项改动在相机重启后生效",
+        "looks.covers_note" => {
+            "没有单独改过封面的官方胶片风格和 Cinema 用这里的配色：彩色只给彩色胶片风格配色，黑白保持灰色。改动在相机重启后生效。"
+        }
+        "looks.menu_place" => "第 %{place} 个",
+        "looks.official_note" => "官方胶片风格的色彩不能修改，名称和封面可以修改。",
+        "looks.import_again" => "再导入",
+        "looks.change_file" => "更换",
+        "looks.import_name" => "胶片风格名称",
+        "looks.input" => "LUT 输入",
+        "looks.input_auto" => "自动：%{input}",
+        "looks.input_auto_plain" => "自动",
+        "looks.input_reading" => "自动：正在读取 LUT…",
+        "looks.input_standard" => "Standard：标准模式的 GR JPEG",
+        "looks.input_srgb" => "sRGB：未加色调曲线的场景光",
+        "looks.input_note" => {
+            "数据无法区分 Standard、sRGB，以及为相机 log 制作的平淡风格。如果 LUT 是为 sRGB 或某种 log 制作的，请选择对应的输入。"
+        }
+        "looks.input_log_note" => {
+            "GRKit 只支持 V-Log 和 F-Log。为其他相机 log（如 S-Log3、LogC、C-Log、N-Log）制作的 LUT，导入后颜色会出错。"
+        }
+        "looks.import_fit_note" => {
+            "相机不能直接加载 LUT，GRKit 用相机自带的调色功能去接近它，只能接近，不能完全一致。转换在手机上完成。"
+        }
+        "looks.import" => "导入",
+        "looks.converting_short" => "正在转换…",
+        "looks.imported_with" => "导入的 LUT · 输入 %{input}",
+        "looks.imported_preset" => "导入的 Lightroom 预设",
+        "looks.fit" => "拟合",
+        "looks.fit.A" => "与 LUT 几乎相同。",
+        "looks.fit.B" => "观感相同，有细微差异。",
+        "looks.fit.C" => "观感相近，颜色有可见差异。",
+        "looks.fit.D" => "观感不同，相机无法实现这个 LUT。",
+        "looks.cover_default_note" => {
+            "默认封面跟随“胶片盒配色”的设置。相机在 ADJ 中显示这个封面，胶片风格本身不变。封面改动在相机重启后生效。"
+        }
+        _ => return None,
+    })
+}

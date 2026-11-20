@@ -1,0 +1,1223 @@
+_version: 2
+
+tab.camera:
+  en: Camera
+  zh-CN: 相机
+tab.settings:
+  en: Settings
+  zh-CN: 设置
+
+home.title:
+  en: Add Your Camera
+  zh-CN: 添加你的相机
+home.subtitle:
+  en: Connect your camera. Manage GRKit.
+  zh-CN: 连接相机，管理 GRKit。
+home.add:
+  en: Add Camera
+  zh-CN: 添加相机
+home.footnote:
+  en: Needs GRKit 1.7.0 or later on the camera.
+  zh-CN: 相机上需要 GRKit 1.7.0 或更高版本。
+error.old_title:
+  en: GRKit Needs an Update
+  zh-CN: 需要更新 GRKit
+error.old_body:
+  en: Install GRKit 1.7.0 or later on the card first.
+  zh-CN: 请先在卡上安装 GRKit 1.7.0 或更高版本。
+
+nearby.title_suffix:
+  en: ""
+  zh-CN: ""
+nearby.powered_on:
+  en: Powered on
+  zh-CN: 已开机
+nearby.hint:
+  en: "First time with this camera? On the camera, select Bluetooth Setting → Action Mode On → Pairing → Execute Pairing"
+  zh-CN: 首次连接？请在相机上选择“蓝牙设置 → 打开动作模式 → 配对 → 执行配对”
+pair.hint_gr3:
+  en: "First time with this camera? On the camera, select Bluetooth Setting → Action Mode On → Pairing → Execute Pairing"
+  zh-CN: 首次连接？请在相机上选择“蓝牙设置 → 打开动作模式 → 配对 → 执行配对”
+pair.hint_gr4:
+  en: "First time with this camera? On the camera, select Wireless Communication → Action Mode On → Pairing → Execute Pairing"
+  zh-CN: 首次连接？请在相机上选择“无线通信 → 打开动作模式 → 配对 → 执行配对”
+nearby.connect:
+  en: Connect
+  zh-CN: 连接
+nearby.not_now:
+  en: Not Now
+  zh-CN: 暂不
+
+scan.title:
+  en: Add a Camera
+  zh-CN: 添加相机
+scan.subtitle:
+  en: "Keep it close by, with Bluetooth on."
+  zh-CN: "请把相机放在附近，并开启相机蓝牙。"
+scan.looking:
+  en: Looking for cameras
+  zh-CN: 正在查找相机
+scan.nearby_off:
+  en: Standby
+  zh-CN: 待机
+scan.hint:
+  en: "First time? On the camera: Bluetooth Setting → Action Mode On → Pairing → Execute Pairing"
+  zh-CN: 首次连接？在相机上：蓝牙设置 → 打开动作模式 → 配对 → 执行配对
+scan.close:
+  en: Close
+  zh-CN: 关闭
+scan.back:
+  en: Back to Cameras
+  zh-CN: 返回相机列表
+
+connecting.title:
+  en: Connecting to %{model}
+  zh-CN: 正在连接 %{model}
+connecting.keep_on:
+  en: Keep the camera on and nearby.
+  zh-CN: 请保持相机开机并在附近。
+connecting.bt:
+  en: Connect over Bluetooth
+  zh-CN: 通过蓝牙连接
+connecting.wifi:
+  en: Join the camera's Wi-Fi
+  zh-CN: 加入相机的 Wi-Fi
+connecting.wifi_sub:
+  en: If iOS asks, allow it.
+  zh-CN: 若系统询问，请允许。
+connecting.version:
+  en: Read GRKit version
+  zh-CN: 读取 GRKit 版本
+
+connected.status:
+  en: Connected
+  zh-CN: 已连接
+connected.offline:
+  en: Not Connected
+  zh-CN: 未连接
+connected.reconnecting:
+  en: Reconnecting…
+  zh-CN: 正在重新连接…
+connected.whats_new:
+  en: What's New
+  zh-CN: 新功能
+connected.update:
+  en: Update
+  zh-CN: 更新
+connected.grkit:
+  en: GRKit
+  zh-CN: GRKit
+connected.firmware:
+  en: Firmware
+  zh-CN: 固件
+connected.up_to_date:
+  en: GRKit Is Up to Date
+  zh-CN: GRKit 已是最新
+connected.software_update:
+  en: Software Update
+  zh-CN: 软件更新
+
+software.title:
+  en: Software Update
+  zh-CN: 软件更新
+software.installed:
+  en: Installed
+  zh-CN: 已安装
+software.looks_stay:
+  en: Your film looks and settings stay.
+  zh-CN: 你的胶片风格和设置会保留。
+software.update_now:
+  en: Update Now
+  zh-CN: 立即更新
+software.confirm_note:
+  en: Confirm on the camera, then restart it.
+  zh-CN: 请在相机上确认，然后重启相机。
+software.up_to_date:
+  en: GRKit is up to date
+  zh-CN: GRKit 已是最新
+software.learn_more:
+  en: Learn More…
+  zh-CN: 了解更多…
+
+sending.title:
+  en: Updating %{model}
+  zh-CN: 正在更新 %{model}
+sending.progress:
+  en: Sending to your camera…
+  zh-CN: 正在发送到相机…
+sending.step_send:
+  en: Send to camera
+  zh-CN: 发送到相机
+sending.step_confirm:
+  en: Confirm on camera
+  zh-CN: 在相机上确认
+sending.step_restart:
+  en: Restart camera
+  zh-CN: 重启相机
+sending.keep_on:
+  en: Keep the camera on.
+  zh-CN: 请保持相机开机。
+sending.cancel:
+  en: Cancel
+  zh-CN: 取消
+
+confirm.title:
+  en: Confirm on the Camera
+  zh-CN: 在相机上确认
+confirm.subtitle:
+  en: The update is on the camera and verified.
+  zh-CN: 更新已在相机上并通过校验。
+confirm.step1:
+  en: MENU → About GRKit
+  zh-CN: 菜单 → 关于 GRKit
+confirm.step2:
+  en: Choose Install
+  zh-CN: 选择安装
+confirm.step3:
+  en: Choose Execute
+  zh-CN: 选择执行
+confirm.waiting:
+  en: Waiting for the camera · %{time}
+  zh-CN: 等待相机 · %{time}
+
+restart.title:
+  en: Restart the Camera
+  zh-CN: 重启相机
+restart.subtitle:
+  en: "Turn the camera off and on, then reconnect to verify the installed version."
+  zh-CN: "请将相机关机再开机，然后重新连接以确认已安装的版本。"
+restart.done:
+  en: "Check Installed Version"
+  zh-CN: "检查已安装版本"
+restart.cancel:
+  en: Cancel Update
+  zh-CN: 取消更新
+
+installed.title:
+  en: GRKit %{version} Is Installed
+  zh-CN: GRKit %{version} 已安装
+installed.done:
+  en: Done
+  zh-CN: 完成
+
+error.card_full_title:
+  en: Card Is Full
+  zh-CN: 存储卡已满
+error.card_full_body:
+  en: Free %{size}, then try again.
+  zh-CN: 请先腾出 %{size}，然后重试。
+error.not_confirmed_title:
+  en: Not Confirmed
+  zh-CN: 未确认
+error.not_confirmed_body:
+  en: "Confirmation timed out. Check the camera before trying again."
+  zh-CN: "确认已超时。请先检查相机，再重试。"
+error.refused_title:
+  en: Update Refused
+  zh-CN: 更新被拒绝
+error.refused_body:
+  en: "The camera refused this package. Check that it supports your camera and firmware."
+  zh-CN: "相机拒绝了此更新包。请确认更新包支持你的相机和固件版本。"
+error.lost_title:
+  en: Connection Lost
+  zh-CN: 连接已断开
+error.lost_body:
+  en: "Reconnect to check the update status. The camera may still have a pending update."
+  zh-CN: "请重新连接以检查更新状态。相机上可能仍有待处理的更新。"
+error.connect_lost_body:
+  en: Keep the camera on and close to your phone, then try again.
+  zh-CN: 请让相机保持开机并靠近手机，然后重试。
+error.pair_title:
+  en: Pairing Needed
+  zh-CN: 需要配对
+error.pair_body:
+  en: Complete pairing on the camera, then try again.
+  zh-CN: 请先在相机上完成配对，然后重试。
+error.wifi_title:
+  en: Could Not Join Wi-Fi
+  zh-CN: 无法加入 Wi-Fi
+error.wifi_body:
+  en: Allow the network prompt, keep the camera nearby, then try again.
+  zh-CN: 请允许系统网络提示，保持相机在附近，然后重试。
+error.card_ready_title:
+  en: Camera Not Ready
+  zh-CN: 相机未就绪
+error.card_ready_body:
+  en: The memory card is still starting. Try again in a moment.
+  zh-CN: 存储卡仍在启动，请稍后再试。
+error.bt_title:
+  en: Bluetooth Unavailable
+  zh-CN: 蓝牙不可用
+error.bt_body:
+  en: Turn on Bluetooth and allow access for GRKit.
+  zh-CN: 请打开蓝牙并允许 GRKit 使用。
+error.try_again:
+  en: Try Again
+  zh-CN: 重试
+error.send_again:
+  en: Send Again
+  zh-CN: 重新发送
+error.close:
+  en: Close
+  zh-CN: 关闭
+
+settings.title:
+  en: Settings
+  zh-CN: 设置
+settings.about:
+  en: About
+  zh-CN: 关于
+settings.version:
+  en: Version
+  zh-CN: 版本
+settings.rate:
+  en: Rate GRKit
+  zh-CN: 为 GRKit 评分
+settings.privacy:
+  en: Privacy Policy
+  zh-CN: 隐私政策
+settings.more_maker:
+  en: More from the Maker
+  zh-CN: 来自同一作者
+settings.gr_snap_name:
+  en: GR Snap
+  zh-CN: GR Snap
+settings.gr_snap_desc:
+  en: Wireless transfer and remote for RICOH GR
+  zh-CN: RICOH GR 的无线传输与遥控
+settings.view:
+  en: View
+  zh-CN: 查看
+
+connecting.cancel:
+  en: Cancel
+  zh-CN: 取消
+
+software.unavailable:
+  en: "Update information unavailable"
+  zh-CN: "暂时无法获取更新信息"
+
+sending.preparing:
+  en: "Preparing and sending package…"
+  zh-CN: "正在准备并发送更新包…"
+
+installed.verified:
+  en: "The camera is running this version."
+  zh-CN: "已确认相机正在运行此版本。"
+
+error.service_title:
+  en: "Could Not Complete the Request"
+  zh-CN: "无法完成请求"
+
+error.download_title:
+  en: "Could Not Prepare the Update"
+  zh-CN: "无法准备更新"
+error.download_body:
+  en: "Could not download the update. Check the internet connection and try again."
+  zh-CN: "无法下载更新。请检查网络连接后重试。"
+
+software.check:
+  en: "Check for Updates"
+  zh-CN: "检查更新"
+
+software.checking:
+  en: "Checking for updates…"
+  zh-CN: "正在检查更新…"
+
+error.cancel_pending:
+  en: "Cancel Pending Update"
+  zh-CN: "取消待处理的更新"
+
+loading.camera:
+  en: Connecting to your camera…
+  zh-CN: 正在连接相机…
+loading.update:
+  en: Checking for updates…
+  zh-CN: 正在检查更新…
+
+android.connecting.wifi_sub:
+  en: Choose the camera in the Android network prompt. Stay connected even without internet.
+  zh-CN: 请在 Android 网络提示中选择相机。即使没有互联网，也请保持连接。
+android.error.bt_body:
+  en: Turn on Bluetooth. In Android Settings, allow Nearby devices for GRKit on Android 12 or later. On Android 11 or earlier, allow Location and turn on Location services.
+  zh-CN: 请打开蓝牙。在 Android 设置中，Android 12 及更新版本需允许 GRKit 使用“附近的设备”；Android 11 及更早版本需允许位置权限，并打开定位服务。
+android.error.wifi_body:
+  en: Select the camera in the network prompt. On Android 13 or later, allow Nearby devices for GRKit. On Android 12 or earlier, allow Location and turn on Location services.
+  zh-CN: 请在网络提示中选择相机。Android 13 及更新版本需允许 GRKit 使用“附近的设备”；Android 12 及更早版本需允许位置权限，并打开定位服务。
+
+# Looks
+tab.looks:
+  en: Film Looks
+  zh-CN: 胶片风格
+looks.title:
+  en: Film Looks
+  zh-CN: 胶片风格
+looks.menu_order:
+  en: "Menu Order"
+  zh-CN: "菜单顺序"
+looks.in_use:
+  en: In Use
+  zh-CN: 使用中
+looks.off:
+  en: Off
+  zh-CN: 已关闭
+looks.not_loaded:
+  en: Not loaded
+  zh-CN: 未载入
+looks.official:
+  en: Official
+  zh-CN: 官方
+looks.imported:
+  en: Imported
+  zh-CN: 导入
+looks.unknown:
+  en: Unknown source
+  zh-CN: 来源未知
+looks.group.negative:
+  en: Negative
+  zh-CN: 负片
+looks.group.slide:
+  en: Slide
+  zh-CN: 反转片
+looks.group.cinema:
+  en: Cinema
+  zh-CN: 电影
+looks.group.instant:
+  en: Instant
+  zh-CN: 拍立得
+looks.group.mono:
+  en: "B&W"
+  zh-CN: 黑白
+looks.filter.all:
+  en: All
+  zh-CN: 全部
+looks.filter.color:
+  en: Color
+  zh-CN: 彩色
+looks.filter.mono:
+  en: "B&W"
+  zh-CN: 黑白
+looks.add_named:
+  en: "Add %{name}"
+  zh-CN: "添加 %{name}"
+looks.adding:
+  en: Adding
+  zh-CN: 正在添加
+looks.import_action:
+  en: "Import LUT"
+  zh-CN: "导入 LUT"
+looks.loading:
+  en: Reading the film looks…
+  zh-CN: 正在读取胶片风格…
+looks.catalog_loading:
+  en: Loading the film looks…
+  zh-CN: 正在加载胶片风格…
+looks.catalog_offline:
+  en: Connect to the internet once to download the official film looks.
+  zh-CN: 需要联网一次来下载官方胶片风格。
+looks.catalog_unsupported:
+  en: This firmware has no official film looks.
+  zh-CN: 这个固件没有官方胶片风格。
+looks.no_camera_title:
+  en: No Camera Connected
+  zh-CN: 未连接相机
+looks.no_camera_body:
+  en: Connect your camera to see and change its film looks.
+  zh-CN: 连接相机后，可以查看和修改它的胶片风格。
+looks.connect:
+  en: Connect
+  zh-CN: 连接
+looks.pending_title:
+  en: An update is waiting on the camera
+  zh-CN: 相机上有等待中的更新
+looks.pending_body:
+  en: Install or cancel it on the camera. Then you can change film looks.
+  zh-CN: 在相机上安装或取消它后，才能修改胶片风格。
+looks.restart_body:
+  en: "Turn the camera off and on. New and changed film looks then show in the menu."
+  zh-CN: "关闭相机再打开后，新加和改过的胶片风格出现在菜单中。"
+looks.after_restart:
+  en: After restart
+  zh-CN: 重启后生效
+looks.read_failed:
+  en: Could not read the film looks on the camera.
+  zh-CN: 无法读取相机上的胶片风格。
+looks.retry:
+  en: Try Again
+  zh-CN: 重试
+looks.show_in_menu:
+  en: Show in Camera Menu
+  zh-CN: 在相机菜单中显示
+looks.show_note:
+  en: "Off hides it in the menu only. The file stays on the card."
+  zh-CN: "关闭后只在菜单中隐藏，文件仍在卡上。"
+looks.used_by:
+  en: Used By
+  zh-CN: 被使用
+looks.recipes_one:
+  en: 1 recipe
+  zh-CN: 1 个配方
+looks.recipes_many:
+  en: "%{count} recipes"
+  zh-CN: "%{count} 个配方"
+looks.none:
+  en: None
+  zh-CN: 无
+looks.delete:
+  en: Delete Film Look
+  zh-CN: 删除胶片风格
+looks.name:
+  en: Name
+  zh-CN: 名称
+looks.cover:
+  en: Cover
+  zh-CN: 封面
+looks.cover_on_camera:
+  en: On the camera
+  zh-CN: 相机上显示
+looks.cover_random:
+  en: Random
+  zh-CN: 随机
+looks.cover_default:
+  en: Use the Default Cover
+  zh-CN: 使用默认封面
+looks.cover_brand:
+  en: Brand
+  zh-CN: 品牌
+looks.cover_film:
+  en: Film name
+  zh-CN: 胶片名
+looks.cover_number:
+  en: Number
+  zh-CN: 数字
+looks.cover_optional:
+  en: Optional
+  zh-CN: 可选
+looks.cover_text_note:
+  en: "Each text: 1 to 12 English letters, digits, spaces, or symbols."
+  zh-CN: 每项 1 到 12 个字符：英文字母、数字、空格或符号。
+looks.cover_too_wide:
+  en: The camera cannot draw this cover. Shorten the text.
+  zh-CN: 相机画不下这个封面，请缩短文字。
+looks.cover_note:
+  en: The camera shows this cover in ADJ. The film look stays the same.
+  zh-CN: 相机在 ADJ 中显示这个封面，胶片风格本身不变。
+looks.cover_layout:
+  en: Layout
+  zh-CN: 版式
+looks.layout.box:
+  en: Film box
+  zh-CN: 胶盒
+looks.layout.box2:
+  en: Film box 2
+  zh-CN: 胶盒2
+looks.layout.cine:
+  en: Cinema label
+  zh-CN: 电影标
+looks.layout.stack:
+  en: Bottom brand
+  zh-CN: 底品牌带
+looks.cover_colors:
+  en: Colors
+  zh-CN: 配色
+looks.native:
+  en: GR IV film look
+  zh-CN: GR IV 色彩
+looks.covers:
+  en: Covers
+  zh-CN: 封面
+looks.covers_film_box:
+  en: Film box colors
+  zh-CN: 胶片盒配色
+looks.covers_scheme.gray:
+  en: Off
+  zh-CN: 关闭
+looks.covers_scheme.colorFilmBox:
+  en: Color
+  zh-CN: 彩色
+looks.covers_scheme.filmBox:
+  en: All
+  zh-CN: 全部
+looks.covers_reset_color:
+  en: Reset color covers
+  zh-CN: 重置彩色封面
+looks.covers_reset_mono:
+  en: "Reset B&W covers"
+  zh-CN: 重置黑白封面
+looks.cover_look.gray:
+  en: Gray
+  zh-CN: 灰
+looks.cover_look.kodak:
+  en: Kodak yellow
+  zh-CN: 柯达黄
+looks.cover_look.gold:
+  en: Gold
+  zh-CN: Gold
+looks.cover_look.ultramax:
+  en: UltraMax
+  zh-CN: UltraMax
+looks.cover_look.portra:
+  en: Portra
+  zh-CN: Portra
+looks.cover_look.ektar:
+  en: Ektar
+  zh-CN: Ektar
+looks.cover_look.ektachrome:
+  en: Ektachrome
+  zh-CN: Ektachrome
+looks.cover_look.kodachrome:
+  en: Kodachrome
+  zh-CN: Kodachrome
+looks.cover_look.aerocolor:
+  en: Aerocolor
+  zh-CN: Aerocolor
+looks.cover_look.vision:
+  en: Vision3
+  zh-CN: Vision3
+looks.cover_look.trix:
+  en: Tri-X
+  zh-CN: Tri-X
+looks.cover_look.tmax:
+  en: T-Max
+  zh-CN: T-Max
+looks.cover_look.doublex:
+  en: Double-X
+  zh-CN: Double-X
+looks.cover_look.fuji:
+  en: Fujifilm
+  zh-CN: 富士
+looks.cover_look.superia:
+  en: Superia
+  zh-CN: Superia
+looks.cover_look.c200:
+  en: C200
+  zh-CN: C200
+looks.cover_look.pro:
+  en: Pro 400H
+  zh-CN: Pro 400H
+looks.cover_look.nps:
+  en: "160C"
+  zh-CN: "160C"
+looks.cover_look.velvia:
+  en: Velvia
+  zh-CN: Velvia
+looks.cover_look.provia:
+  en: Provia
+  zh-CN: Provia
+looks.cover_look.astia:
+  en: Astia
+  zh-CN: Astia
+looks.cover_look.instax:
+  en: Instax
+  zh-CN: Instax
+looks.cover_look.eterna:
+  en: Eterna
+  zh-CN: Eterna
+looks.cover_look.acros:
+  en: Acros
+  zh-CN: Acros
+looks.cover_look.ilford:
+  en: Ilford
+  zh-CN: 伊尔福
+looks.cover_look.hp5:
+  en: HP5
+  zh-CN: HP5
+looks.cover_look.delta:
+  en: Delta
+  zh-CN: Delta
+looks.cover_look.xp2:
+  en: XP2
+  zh-CN: XP2
+looks.cover_look.agfa:
+  en: Agfa
+  zh-CN: 爱克发
+looks.cover_look.precisa:
+  en: Precisa
+  zh-CN: Precisa
+looks.cover_look.vista:
+  en: Vista
+  zh-CN: Vista
+looks.cover_look.ricoh:
+  en: Ricoh
+  zh-CN: 理光
+looks.cover_look.cinemaYellow:
+  en: Cinema Yellow
+  zh-CN: Cinema Yellow
+looks.cover_look.cinemaGreen:
+  en: Cinema Green
+  zh-CN: Cinema Green
+looks.cover_look.cinema:
+  en: Cinema
+  zh-CN: 电影
+looks.source:
+  en: Source
+  zh-CN: 来源
+looks.source_file:
+  en: File
+  zh-CN: 文件
+looks.replace:
+  en: Replace with Another File
+  zh-CN: 换用其他文件
+looks.loaded:
+  en: Loaded
+  zh-CN: 已载入
+looks.delete_title:
+  en: "Delete %{name}?"
+  zh-CN: "删除 %{name}？"
+looks.delete_body:
+  en: It is removed from the card.
+  zh-CN: 它会从存储卡上删除。
+looks.delete_active_body:
+  en: It is the film look in use. The camera switches to Off.
+  zh-CN: 这是正在使用的胶片风格，相机会切换为关闭。
+looks.cannot_delete_title:
+  en: "Can’t Delete %{name}"
+  zh-CN: "无法删除 %{name}"
+looks.cannot_delete_body:
+  en: Recipes use this film look. Change those recipes first.
+  zh-CN: 有配方使用这个胶片风格，请先修改这些配方。
+looks.cancel:
+  en: Cancel
+  zh-CN: 取消
+looks.delete_action:
+  en: Delete
+  zh-CN: 删除
+looks.ok:
+  en: OK
+  zh-CN: 好
+looks.move_up:
+  en: Move Up
+  zh-CN: 上移
+looks.move_down:
+  en: Move Down
+  zh-CN: 下移
+looks.rename_title:
+  en: Rename
+  zh-CN: 重命名
+looks.name_note:
+  en: "The camera menu shows this name. 1 to 16 characters: English letters, digits, spaces, and symbols."
+  zh-CN: "相机菜单显示这个名称。1 到 16 个字符：英文字母、数字、空格和符号。"
+looks.save:
+  en: Save
+  zh-CN: 保存
+looks.import_title:
+  en: Import a Film Look
+  zh-CN: 导入胶片风格
+looks.import_body:
+  en: Make a film look from a file on your phone.
+  zh-CN: 用手机上的文件制作胶片风格。
+looks.import_lut:
+  en: LUT File
+  zh-CN: LUT 文件
+looks.import_lut_ext:
+  en: ".cube or LUT image"
+  zh-CN: ".cube 或 LUT 图片"
+looks.import_preset:
+  en: Lightroom Preset
+  zh-CN: Lightroom 预设
+looks.import_preset_ext:
+  en: ".xmp"
+  zh-CN: ".xmp"
+looks.import_note:
+  en: Your phone converts the file. The camera gets the film look.
+  zh-CN: 手机转换文件，相机收到的是胶片风格。
+looks.new_title:
+  en: "Import LUT"
+  zh-CN: "导入 LUT"
+looks.replace_title:
+  en: Replace Film Look
+  zh-CN: 替换胶片风格
+looks.send:
+  en: "Put on Camera"
+  zh-CN: "放到相机上"
+looks.sending:
+  en: Sending…
+  zh-CN: 正在发送…
+looks.send_note:
+  en: "It is saved on the card of the camera and shows in the camera menu after a restart."
+  zh-CN: "保存在相机的卡上，相机重启后出现在菜单中。"
+looks.choose_again:
+  en: Choose Another File
+  zh-CN: 选择其他文件
+looks.error.lost_title:
+  en: Camera Disconnected
+  zh-CN: 相机已断开
+looks.error.lost_body:
+  en: Reconnect to the camera and try again.
+  zh-CN: 请重新连接相机后再试。
+looks.error.not_ready_title:
+  en: Camera Not Ready
+  zh-CN: 相机未就绪
+looks.error.not_ready_body:
+  en: The card or the camera is busy. Try again in a moment.
+  zh-CN: 存储卡或相机正忙，请稍后再试。
+looks.error.in_use_title:
+  en: Film Look Used by Recipes
+  zh-CN: 胶片风格正被配方使用
+looks.error.in_use_body:
+  en: Change the recipes that use this film look first.
+  zh-CN: 请先修改使用这个胶片风格的配方。
+looks.error.active_title:
+  en: Film Look in Use
+  zh-CN: 胶片风格正在使用
+looks.error.active_body:
+  en: Delete it again to switch the camera to Off.
+  zh-CN: 再次删除会让相机切换为关闭。
+looks.error.official_title:
+  en: Official Film Look
+  zh-CN: 官方胶片风格
+looks.error.official_body:
+  en: Official film looks keep their colors. Only the name and cover can change.
+  zh-CN: 官方胶片风格不能修改颜色，只能修改名称和封面。
+looks.error.full_title:
+  en: No Room on the Camera
+  zh-CN: 相机没有空间
+looks.error.full_body:
+  en: The camera has loaded all the film looks it can. Turn one off first.
+  zh-CN: 相机能载入的胶片风格已满，请先关闭一个胶片风格。
+looks.error.pending_title:
+  en: An Update Is Waiting
+  zh-CN: 有等待中的更新
+looks.error.pending_body:
+  en: Install or cancel it on the camera. Then you can change film looks.
+  zh-CN: 在相机上安装或取消它后，才能修改胶片风格。
+looks.error.off_title:
+  en: Phone Changes Are Off
+  zh-CN: 手机修改已关闭
+looks.error.off_body:
+  en: The camera does not accept changes from the phone now.
+  zh-CN: 相机现在不接受手机的修改。
+looks.error.busy_title:
+  en: Camera Busy
+  zh-CN: 相机正忙
+looks.error.busy_body:
+  en: Another change is running. Try again in a moment.
+  zh-CN: 另一项修改正在进行，请稍后再试。
+looks.error.camera_title:
+  en: Camera Busy
+  zh-CN: 相机正忙
+looks.error.camera_body:
+  en: Close the menu on the camera and go back to the shooting screen. Then try again.
+  zh-CN: 请关闭相机上的菜单，回到拍摄画面后再试。
+looks.error.restart_title:
+  en: Restart the Camera
+  zh-CN: 请重启相机
+looks.error.restart_body:
+  en: The camera lists this film look after it starts again.
+  zh-CN: 相机重启后才会列出这个胶片风格。
+looks.error.changed_title:
+  en: Film Looks Changed
+  zh-CN: 胶片风格已变化
+looks.error.changed_body:
+  en: The film looks changed on the camera. Check them and try again.
+  zh-CN: 相机上的胶片风格有变化，请确认后再试。
+looks.error.name_title:
+  en: Invalid Name
+  zh-CN: 名称无效
+looks.error.name_body:
+  en: Use 1 to 16 English letters, digits or symbols.
+  zh-CN: 请使用 1 到 16 个英文字母、数字或符号。
+looks.error.gone_title:
+  en: Film Look Not Found
+  zh-CN: 找不到胶片风格
+looks.error.gone_body:
+  en: The film look is no longer on the camera.
+  zh-CN: 这个胶片风格已不在相机上。
+looks.error.cover_title:
+  en: Cover Not Saved
+  zh-CN: 封面未保存
+looks.error.cover_list_body:
+  en: The cover list on the card cannot be read or is full. Nothing changed.
+  zh-CN: 无法读取存储卡上的封面列表，或列表已满。没有做任何修改。
+looks.error.cover_saved_body:
+  en: The film look was saved, but its cover was not. Try again.
+  zh-CN: 胶片风格已保存，但封面没有保存。请再试一次。
+looks.error.import_title:
+  en: Cannot Convert the File
+  zh-CN: 无法转换文件
+looks.error.import_body:
+  en: Choose a .cube file, a LUT image, or a Lightroom .xmp preset.
+  zh-CN: 请选择 .cube 文件、LUT 图片或 Lightroom .xmp 预设。
+looks.error.service_title:
+  en: Change Failed
+  zh-CN: 修改失败
+looks.error.service_body:
+  en: The camera refused the change.
+  zh-CN: 相机拒绝了这次修改。
+looks.add_title:
+  en: "Add Film Looks"
+  zh-CN: "添加胶片风格"
+looks.add_note:
+  en: "These film looks are not on the camera. An added film look goes to the card and shows in the camera menu after a restart."
+  zh-CN: "这里是还不在相机上的胶片风格。添加的会写到卡上，相机重启后出现在菜单中。"
+looks.added_named:
+  en: "Take back %{name}"
+  zh-CN: "撤回 %{name}"
+looks.menu:
+  en: "Camera Menu"
+  zh-CN: "相机菜单"
+looks.menu_note:
+  en: "Same order as ADJ on the camera. Touch and hold a film look, then drag it to move it."
+  zh-CN: "和相机 ADJ 中的顺序相同。长按胶片风格拖动，调整顺序。"
+looks.off_section:
+  en: "Off"
+  zh-CN: "已关闭"
+looks.off_note:
+  en: "Film looks that are off stay on the card. The camera menu does not show them."
+  zh-CN: "关闭的胶片风格仍在卡上，不在相机菜单中显示。"
+looks.hide_named:
+  en: "Hide %{name} in the camera menu"
+  zh-CN: "在菜单中关闭 %{name}"
+looks.show_named:
+  en: "Show %{name} in the camera menu"
+  zh-CN: "在菜单中开启 %{name}"
+looks.restart_one:
+  en: "1 change applies after a restart"
+  zh-CN: "1 项改动在相机重启后生效"
+looks.restart_many:
+  en: "%{count} changes apply after a restart"
+  zh-CN: "%{count} 项改动在相机重启后生效"
+looks.covers_note:
+  en: "Official film looks and Cinema looks without a cover of their own use these colors. Color gives colors to color film looks only, and B&W film looks stay gray. Changes apply after a restart."
+  zh-CN: "没有单独改过封面的官方胶片风格和 Cinema 用这里的配色：彩色只给彩色胶片风格配色，黑白保持灰色。改动在相机重启后生效。"
+looks.menu_place:
+  en: "No. %{place}"
+  zh-CN: "第 %{place} 个"
+looks.official_note:
+  en: "Official film looks keep their colors. Their name and cover can change."
+  zh-CN: "官方胶片风格的色彩不能修改，名称和封面可以修改。"
+looks.import_again:
+  en: "Import Another"
+  zh-CN: "再导入"
+looks.change_file:
+  en: "Change"
+  zh-CN: "更换"
+looks.import_name:
+  en: "Film look name"
+  zh-CN: "胶片风格名称"
+looks.input:
+  en: "LUT Input"
+  zh-CN: "LUT 输入"
+looks.input_auto:
+  en: "Auto: %{input}"
+  zh-CN: "自动：%{input}"
+looks.input_auto_plain:
+  en: "Auto"
+  zh-CN: "自动"
+looks.input_reading:
+  en: "Auto: reading the LUT…"
+  zh-CN: "自动：正在读取 LUT…"
+looks.input_standard:
+  en: "Standard: a GR JPEG in Standard"
+  zh-CN: "Standard：标准模式的 GR JPEG"
+looks.input_srgb:
+  en: "sRGB: scene light without a tone curve"
+  zh-CN: "sRGB：未加色调曲线的场景光"
+looks.input_note:
+  en: "The data cannot tell Standard from sRGB, or from a flat look for a camera log. If the LUT was made for sRGB or a log, choose that input."
+  zh-CN: "数据无法区分 Standard、sRGB，以及为相机 log 制作的平淡风格。如果 LUT 是为 sRGB 或某种 log 制作的，请选择对应的输入。"
+looks.input_log_note:
+  en: "GRKit reads V-Log and F-Log only. A LUT for another camera log, such as S-Log3, LogC, C-Log, or N-Log, imports with wrong colors."
+  zh-CN: "GRKit 只支持 V-Log 和 F-Log。为其他相机 log（如 S-Log3、LogC、C-Log、N-Log）制作的 LUT，导入后颜色会出错。"
+looks.import_fit_note:
+  en: "The camera cannot load a LUT. GRKit gets near it with the color controls of the camera, but not exactly. Your phone does the conversion."
+  zh-CN: "相机不能直接加载 LUT，GRKit 用相机自带的调色功能去接近它，只能接近，不能完全一致。转换在手机上完成。"
+looks.import:
+  en: "Import"
+  zh-CN: "导入"
+looks.converting_short:
+  en: "Converting…"
+  zh-CN: "正在转换…"
+looks.imported_with:
+  en: "Imported LUT · Input %{input}"
+  zh-CN: "导入的 LUT · 输入 %{input}"
+looks.imported_preset:
+  en: "Imported Lightroom preset"
+  zh-CN: "导入的 Lightroom 预设"
+looks.fit:
+  en: "Fit"
+  zh-CN: "拟合"
+looks.fit.A:
+  en: "Nearly the same as the LUT."
+  zh-CN: "与 LUT 几乎相同。"
+looks.fit.B:
+  en: "The same look with small differences."
+  zh-CN: "观感相同，有细微差异。"
+looks.fit.C:
+  en: "A similar look with visible color differences."
+  zh-CN: "观感相近，颜色有可见差异。"
+looks.fit.D:
+  en: "A different look. The camera cannot make this LUT."
+  zh-CN: "观感不同，相机无法实现这个 LUT。"
+looks.cover_default_note:
+  en: "The default cover follows Film box colors. The camera shows this cover in ADJ, and the film look stays the same. Cover changes apply after a restart."
+  zh-CN: "默认封面跟随“胶片盒配色”的设置。相机在 ADJ 中显示这个封面，胶片风格本身不变。封面改动在相机重启后生效。"
+
+# Connection errors
+conn.open_settings:
+  en: "Open Settings"
+  zh-CN: "打开设置"
+conn.switched_wifi:
+  en: "I've Switched Wi-Fi"
+  zh-CN: "已切换 Wi-Fi"
+conn.ble_failed.title:
+  en: "Bluetooth Connection Failed"
+  zh-CN: "蓝牙连接失败"
+conn.ble_failed.body:
+  en: "Toggle Bluetooth off and on, then retry."
+  zh-CN: "请关闭蓝牙后再打开，然后重试。"
+conn.ble_auth.title:
+  en: "Pairing Didn't Complete"
+  zh-CN: "配对未完成"
+conn.ble_auth.body:
+  en: "The camera didn't finish pairing. On the camera, select Pairing → Execute Pairing, then try again. If that fails, forget this camera in Settings → Bluetooth first."
+  zh-CN: "相机没有完成配对。请在相机上选择「配对」→「执行配对」，然后重试。如果仍然失败，请先在「设置」→「蓝牙」中忽略此相机。"
+conn.ble_pair.title:
+  en: "Pair on the Camera"
+  zh-CN: "请在相机上执行蓝牙配对"
+conn.ble_pair.body:
+  en: "On the camera, select Pairing → Execute Pairing, then tap Try Again."
+  zh-CN: "请在相机上选择「配对」→「执行配对」，然后点按「重试」。"
+conn.ble_stale.title:
+  en: "Camera Forgot This Device"
+  zh-CN: "相机已不记得此设备"
+conn.ble_stale.body:
+  en: "In Settings → Bluetooth, tap ⓘ next to this camera and choose Forget This Device. Then pair again on the camera and try again."
+  zh-CN: "请在「设置」→「蓝牙」中点击此相机旁的 ⓘ，选择「忽略此设备」。然后在相机上重新配对并重试。"
+conn.ble_timeout.title:
+  en: "Camera Not Responding"
+  zh-CN: "相机无响应"
+conn.ble_timeout.body:
+  en: "Turn the camera on and keep it close by, then try again."
+  zh-CN: "请打开相机电源并放在附近，然后重试。"
+conn.wifi_denied.title:
+  en: "Wi-Fi Join Canceled"
+  zh-CN: "已取消加入 Wi-Fi"
+conn.wifi_denied.body:
+  en: "GRKit needs to join your camera's Wi-Fi network to connect. Tap Join on the next system prompt, or join the camera's Wi-Fi manually from the Wi-Fi section of the Settings app."
+  zh-CN: "GRKit 需要加入相机的 Wi-Fi 才能连接。请在下次系统提示中点击「加入」，或前往「设置」App 的「Wi-Fi」页面手动加入相机 Wi-Fi。"
+conn.wifi_password.title:
+  en: "Wrong Wi-Fi Password"
+  zh-CN: "Wi-Fi 密码错误"
+conn.wifi_password.body:
+  en: "The camera's Wi-Fi password may have changed. Pair on the camera again, then try again."
+  zh-CN: "相机的 Wi-Fi 密码可能已更改。请在相机上重新配对，然后重试。"
+conn.wifi_ssid.title:
+  en: "Invalid Wi-Fi Name"
+  zh-CN: "Wi-Fi 名称无效"
+conn.wifi_ssid.body:
+  en: "Check the camera's SSID."
+  zh-CN: "请检查相机的 SSID。"
+conn.wifi_config.title:
+  en: "Wi-Fi Settings Rejected"
+  zh-CN: "Wi-Fi 设置被拒绝"
+conn.wifi_config.body:
+  en: "iOS couldn't apply these Wi-Fi settings. Try again."
+  zh-CN: "iOS 无法应用此 Wi-Fi 设置，请重试。"
+android.conn.wifi_config.body:
+  en: "Android couldn't apply these Wi-Fi settings. Try again."
+  zh-CN: "Android 无法应用此 Wi-Fi 设置，请重试。"
+conn.wifi_failed.title:
+  en: "Camera Wi-Fi Not Ready"
+  zh-CN: "相机 Wi-Fi 尚未就绪"
+conn.wifi_failed.body:
+  en: "The camera's Wi-Fi hasn't started yet. Keep the camera on for a few seconds, then try again."
+  zh-CN: "相机的 Wi-Fi 还没有启动。请保持相机开机几秒钟，然后重试。"
+conn.wifi_timeout.title:
+  en: "Camera Wi-Fi Unreachable"
+  zh-CN: "无法连接相机 Wi-Fi"
+conn.wifi_timeout.body:
+  en: "Make sure the camera is on and its Wi-Fi is enabled."
+  zh-CN: "请确认相机已开机且 Wi-Fi 已开启。"
+conn.network_not_ready.title:
+  en: "Still Switching to Camera Wi-Fi"
+  zh-CN: "正在切换到相机 Wi-Fi"
+conn.network_not_ready.body:
+  en: "Your device joined the camera's Wi-Fi but hasn't switched over yet. Wait a moment, then try again."
+  zh-CN: "设备已加入相机 Wi-Fi，但还没有切换过去。请稍等片刻后重试。"
+conn.subnet.title:
+  en: "Wi-Fi Address Conflict"
+  zh-CN: "Wi-Fi 网段与相机冲突"
+conn.subnet.body:
+  en: "Your Wi-Fi hands out the same addresses as the camera (192.168.0.x), so GRKit keeps reaching your router instead. Turn on Airplane Mode and switch only Wi-Fi back on, or pick the camera's Wi-Fi in the Settings app, then return here."
+  zh-CN: "你的 Wi-Fi 分配的地址和相机在同一网段（192.168.0.x），GRKit 连上的其实是你的路由器。请先打开飞行模式，再单独打开 Wi-Fi；或者在「设置」App 中手动选择相机的 Wi-Fi，然后回到这里。"
+conn.verify.title:
+  en: "Camera Isn't Responding"
+  zh-CN: "相机无响应"
+conn.verify.body:
+  en: "Wi-Fi joined but no reply. Restart the camera."
+  zh-CN: "已加入 Wi-Fi 但相机无响应，请重启相机。"
+conn.local_network.title:
+  en: "Local Network Access Denied"
+  zh-CN: "本地网络访问被拒绝"
+conn.local_network.body:
+  en: "GRKit needs Local Network access to talk to your camera. Enable it in Settings → GRKit → Local Network."
+  zh-CN: "GRKit 需要本地网络权限才能与相机通信。请前往「设置」→「GRKit」→「本地网络」开启。"
+android.conn.local_network.body:
+  en: "GRKit needs the Nearby devices permission to talk to your camera over Wi-Fi. Tap Open Settings, then allow it in Permissions → Nearby devices."
+  zh-CN: "GRKit 需要“附近的设备”权限才能通过 Wi-Fi 与相机通信。请轻点“打开设置”，然后在“权限”→“附近的设备”中允许。"
+conn.not_gr.title:
+  en: "Not a GR Camera"
+  zh-CN: "不是 GR 相机"
+conn.not_gr.body:
+  en: "Looks like you're on a different Wi-Fi network. Switch to your camera's Wi-Fi."
+  zh-CN: "看起来你连接到了其他 Wi-Fi，请切换到相机的 Wi-Fi。"
+conn.unsupported.title:
+  en: "Unsupported Camera Response"
+  zh-CN: "无法识别的相机响应"
+conn.unsupported.body:
+  en: "The camera replied, but GRKit couldn't understand the response. Update GRKit on the camera and try again."
+  zh-CN: "相机有响应，但 GRKit 无法识别。请更新相机上的 GRKit 后重试。"
+conn.unknown.title:
+  en: "Couldn't Connect"
+  zh-CN: "连接失败"
+conn.unknown.body:
+  en: "Something went wrong. Please retry."
+  zh-CN: "出了点问题，请重试。"
+cam.title:
+  en: "Camera"
+  zh-CN: "相机"
+cam.detect:
+  en: "Joined camera Wi-Fi? Detect now"
+  zh-CN: "已加入相机 Wi‑Fi？立即检测"
+cam.nearby:
+  en: "On · Nearby"
+  zh-CN: "已开机 · 在附近"
+cam.others:
+  en: "Other Cameras"
+  zh-CN: "其他相机"
+cam.lost_title:
+  en: "Lost Connection"
+  zh-CN: "连接已断开"
+cam.update_sub:
+  en: "New version · %{size}"
+  zh-CN: "有新版本 · %{size}"
+cam.update_sub_plain:
+  en: "New version"
+  zh-CN: "有新版本"
+cam.looks_active:
+  en: "%{name} in use · %{count} in menu"
+  zh-CN: "%{name} 使用中 · 菜单中 %{count} 个"
+cam.looks_count:
+  en: "%{count} in menu"
+  zh-CN: "菜单中 %{count} 个"
+cam.remove:
+  en: "Remove Camera"
+  zh-CN: "移除相机"
+cam.remove_body:
+  en: "Remove “%{name}” from saved cameras?"
+  zh-CN: "确定从已保存的相机中移除「%{name}」吗？"
+cam.remove_confirm:
+  en: "Remove"
+  zh-CN: "移除"
+cam.cancel:
+  en: "Cancel"
+  zh-CN: "取消"
+cam.connected:
+  en: "Connected"
+  zh-CN: "已连接"
+cam.saved:
+  en: "Saved Cameras"
+  zh-CN: "已保存的相机"
+cam.saved_note:
+  en: "Disconnect the current camera to connect another. Press and hold a camera to remove it."
+  zh-CN: "断开当前相机后，才能连接另一台。长按相机可以移除。"
+cam.settings_group:
+  en: "Camera"
+  zh-CN: "相机"
+cam.help:
+  en: "Help & Feedback"
+  zh-CN: "帮助与反馈"
+cam.disconnect:
+  en: "Disconnect"
+  zh-CN: "断开连接"
+cam.disconnect_title:
+  en: "Disconnect Camera"
+  zh-CN: "断开相机"
+cam.disconnect_body:
+  en: "This disconnects the camera and turns off its Wi-Fi. Your phone returns to its previous network."
+  zh-CN: "将断开与相机的连接，并关闭相机 Wi‑Fi。手机会自动连回原来的网络。"
+cam.disconnect_confirm:
+  en: "Disconnect"
+  zh-CN: "断开"
+cam.power:
+  en: "Turn Off Camera"
+  zh-CN: "关闭相机"
+cam.power_title:
+  en: "Turn Off Camera"
+  zh-CN: "关闭相机"
+cam.power_body:
+  en: "This disconnects the camera and turns it off."
+  zh-CN: "将断开与相机的连接，并关闭相机电源。"
+cam.power_confirm:
+  en: "Turn Off"
+  zh-CN: "关机"
+cam.prompt_title:
+  en: "Connect %{model}?"
+  zh-CN: "连接 %{model}？"
+cam.prompt_body:
+  en: "The camera is on and nearby."
+  zh-CN: "相机已开机，就在附近。"
+cam.first_time:
+  en: "First connection? On the camera, choose"
+  zh-CN: "第一次连接？请先在相机上选择"
+cam.first_time_device:
+  en: "First time with this camera? On the camera, choose"
+  zh-CN: "第一次连接这台相机？请先在相机上选择"
+cam.path_common:
+  en: "Pairing → Execute Pairing"
+  zh-CN: "「配对」→「执行配对」"
+cam.path_gr3:
+  en: "Bluetooth Setting → Pairing → Execute Pairing"
+  zh-CN: "「蓝牙设定」→「配对」→「执行配对」"
+cam.path_gr4:
+  en: "Wireless Communication → Pairing → Execute Pairing"
+  zh-CN: "「无线通信设定」→「配对」→「执行配对」"
+cam.step_pair:
+  en: "Pairing with camera"
+  zh-CN: "正在与相机配对"
+cam.step_wake:
+  en: "Connecting to camera"
+  zh-CN: "正在连接相机"
+cam.step_wake_sub:
+  en: "Waking the camera over Bluetooth."
+  zh-CN: "正在通过蓝牙唤醒相机。"
+cam.step_pair_gr3:
+  en: "The camera may show a passkey. Enter it when iOS asks."
+  zh-CN: "相机可能会显示配对码，iOS 弹窗出现时输入即可。"
+cam.step_pair_gr4:
+  en: "The camera may ask to confirm pairing. Accept it on the camera."
+  zh-CN: "相机可能会弹出配对确认，请在相机上同意。"
+cam.step_wifi:
+  en: "Joining camera Wi-Fi"
+  zh-CN: "正在加入相机 Wi‑Fi"
+cam.step_wifi_sub:
+  en: "If iOS asks, allow GRKit to connect to the camera."
+  zh-CN: "若 iOS 弹出提示，请允许 GRKit 连接相机。"
+cam.step_wifi_slow:
+  en: "GR IV takes longer to start its Wi-Fi. Please wait."
+  zh-CN: "GR IV 启动 Wi‑Fi 需要更长时间，请稍候。"
+cam.step_verify:
+  en: "Contacting the camera"
+  zh-CN: "正在与相机通信"
+cam.step_verify_sub:
+  en: "Checking the connection."
+  zh-CN: "正在检查连接。"
+cam.gr4_wifi_note:
+  en: "GR IV takes longer to start its Wi-Fi."
+  zh-CN: "GR IV 启动 Wi‑Fi 需要更长时间。"
+cam.no_grkit_title:
+  en: "No GRKit on the Camera"
+  zh-CN: "相机上没有 GRKit"
+cam.no_grkit_body:
+  en: "Install GRKit 1.7.0 or later on the memory card."
+  zh-CN: "需要在存储卡上安装 GRKit 1.7.0 或更高版本。"
+cam.install_guide:
+  en: "Installation Guide"
+  zh-CN: "查看安装说明"
+android.cam.step_wifi_sub:
+  en: "If Android asks, allow GRKit to connect to the camera."
+  zh-CN: "若系统弹出提示，请允许 GRKit 连接相机。"
+android.cam.step_pair_gr3:
+  en: "The camera may show a passkey. Enter it when Android asks."
+  zh-CN: "相机可能会显示配对码，系统弹窗出现时输入即可。"
