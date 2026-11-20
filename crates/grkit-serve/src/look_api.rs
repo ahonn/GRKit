@@ -27,7 +27,7 @@ use crate::{
     changes::{Changed, Changes},
     looks::{self, LookFile, MAX_LISTED},
     protocol::Problem,
-    runtime_backend::{look_key, RuntimeBackend, RuntimeLooks},
+    runtime_backend::{look_key, RuntimeBackend, RuntimeLooks, UseOrigin},
     Request,
 };
 use covers::{built_in, Covers, Official};
@@ -79,6 +79,21 @@ pub struct LookApi {
     session: Mutex<Option<Session>>,
 }
 
+/// The uses of a Look that its info names; `usedBy` counts them all.
+const USES_LISTED: usize = 8;
+
+/// A recipe (its name, or none for the automatic one, and its number) or a
+/// user mode of the mode dial.
+fn use_json(origin: &UseOrigin) -> Value {
+    match origin {
+        UseOrigin::Recipe { slot, number, name } => {
+            json!({"kind":"recipe","slot":slot,"number":number,"name":name})
+        }
+        UseOrigin::Dial { mode } => json!({"kind":"dial","mode":mode}),
+        UseOrigin::Unknown => json!({"kind":"unknown"}),
+    }
+}
+
 /// One Look of the list.
 struct Look {
     file: LookFile,
@@ -88,6 +103,8 @@ struct Look {
     selected: bool,
     /// The recipes and mode-dial sets that name the Look.
     used_by: usize,
+    /// Where the first `USES_LISTED` of them are.
+    uses: Vec<UseOrigin>,
     /// "add" or "update" while the file waits for the next start.
     pending: Option<&'static str>,
     /// The key in the running camera, when the camera lists the Look.
@@ -105,7 +122,8 @@ impl Look {
     }
     fn info(&self) -> Value {
         json!({"id":self.file.id,"source":self.source,"loaded":self.loaded,"selected":self.selected,
-            "usedBy":self.used_by,"pending":self.pending})
+            "usedBy":self.used_by,"uses":self.uses.iter().map(use_json).collect::<Vec<_>>(),
+            "pending":self.pending})
     }
 }
 
@@ -440,11 +458,14 @@ fn join(
                 enabled: listed.is_none_or(|look| look.enabled),
                 loaded: listed.is_some_and(|look| look.loaded),
                 selected: runtime.selected == Some(key),
-                used_by: runtime
-                    .used_codes
+                used_by: runtime.uses.iter().filter(|used| used.code == code).count(),
+                uses: runtime
+                    .uses
                     .iter()
-                    .filter(|used| **used == code)
-                    .count(),
+                    .filter(|used| used.code == code)
+                    .take(USES_LISTED)
+                    .map(|used| used.origin.clone())
+                    .collect(),
                 pending: match listed {
                     None => Some("add"),
                     Some(_) if changed => Some("update"),

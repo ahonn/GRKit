@@ -31,8 +31,68 @@ pub struct RuntimeLooks {
     pub selected: Option<u32>,
     /// The count of setting changes of the camera (`HOST_STATE_CHANGES`).
     pub state_changes: u32,
-    /// The recipe code of each effect that a recipe or a mode-dial set names.
-    pub used_codes: Vec<u32>,
+    /// Each recipe or mode-dial set that names an effect.
+    pub uses: Vec<LookUse>,
+}
+
+/// A recipe or a mode-dial set that names an effect.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LookUse {
+    /// The recipe code of the effect.
+    pub code: u32,
+    pub origin: UseOrigin,
+}
+
+/// Where a use is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UseOrigin {
+    /// The recipe in `slot`: the name that the person gave it, when the
+    /// camera sent it (None for the automatic name), and its number.
+    Recipe {
+        slot: u32,
+        number: u32,
+        name: Option<String>,
+    },
+    /// The set of user mode `mode` of the mode dial (U1 is 1).
+    Dial { mode: u32 },
+    /// A camera that does not say.
+    Unknown,
+}
+
+impl LookUse {
+    /// The use of `word`, and its recipe name from `name` when it has one.
+    fn decode(word: u32, name: Option<&[u32]>) -> Self {
+        let origin = word >> CONTROL_USE_ORIGIN_SHIFT & CONTROL_USE_ORIGIN_MASK;
+        let origin = match origin {
+            0 => UseOrigin::Unknown,
+            mode if word & CONTROL_USE_DIAL != 0 => UseOrigin::Dial { mode },
+            slot => UseOrigin::Recipe {
+                slot: slot - 1,
+                number: word >> CONTROL_USE_NUMBER_SHIFT & CONTROL_USE_NUMBER_MASK,
+                name: name.and_then(recipe_name),
+            },
+        };
+        LookUse {
+            code: word & 0x7fff,
+            origin,
+        }
+    }
+}
+
+/// A recipe name of four 7-bit ASCII characters in each word, the first in
+/// the low bits, up to the first 0. None for the automatic name or a name
+/// that is not printable ASCII.
+fn recipe_name(words: &[u32]) -> Option<String> {
+    if words.iter().any(|word| word >> 28 != 0) {
+        return None;
+    }
+    let name: Vec<u8> = words
+        .iter()
+        .flat_map(|word| (0..4).map(move |i| (word >> (7 * i) & 0x7f) as u8))
+        .take_while(|c| *c != 0)
+        .collect();
+    let printable = name.iter().all(|c| (0x20..=0x7e).contains(c));
+    (printable && !name.is_empty()).then(|| String::from_utf8_lossy(&name).into_owned())
 }
 
 impl RuntimeLooks {
@@ -46,7 +106,7 @@ impl RuntimeLooks {
             return Err(malformed());
         }
         let (count, codes) = (words[0] as usize, words[3] as usize);
-        if count > crate::looks::MAX_LISTED || words.len() != header + count * entry + codes {
+        if count > crate::looks::MAX_LISTED || words.len() < header + count * entry + codes {
             return Err(malformed());
         }
         let looks: Vec<_> = words[header..header + count * entry]
@@ -68,7 +128,7 @@ impl RuntimeLooks {
             looks,
             selected: (words[1] != 0).then_some(words[1]),
             state_changes: words[2],
-            used_codes: words[header + count * entry..].to_vec(),
+            uses: decode_uses(&words[header + count * entry..], codes).ok_or_else(malformed)?,
         })
     }
 
@@ -82,6 +142,26 @@ impl RuntimeLooks {
         });
         order.into_iter().map(|(_, look)| look.key).collect()
     }
+}
+
+/// The `count` uses after the effects: each word, then the name words of a
+/// named recipe. None unless the words end with the last use.
+fn decode_uses(words: &[u32], count: usize) -> Option<Vec<LookUse>> {
+    let mut uses = Vec::with_capacity(count.min(words.len()));
+    let mut at = 0;
+    for _ in 0..count {
+        let word = *words.get(at)?;
+        at += 1;
+        let name = if word & CONTROL_USE_NAMED != 0 {
+            let name = words.get(at..at + RECIPE_NAME_WORDS)?;
+            at += RECIPE_NAME_WORDS;
+            Some(name)
+        } else {
+            None
+        };
+        uses.push(LookUse::decode(word, name));
+    }
+    (at == words.len()).then_some(uses)
 }
 
 /// The key of an effect in the running camera: the state ID of its choice.
@@ -266,13 +346,66 @@ mod tests {
     use super::*;
     use crate::control::{tests::Memory, Client};
 
-    fn list(looks: &[(u32, u32, u32)], selected: u32, codes: &[u32]) -> Vec<u8> {
-        let mut words = vec![looks.len() as u32, selected, 41, codes.len() as u32];
+    /// `codes` are the words of the uses, `count` how many uses they hold.
+    fn list_of(looks: &[(u32, u32, u32)], selected: u32, codes: &[u32], count: usize) -> Vec<u8> {
+        let mut words = vec![looks.len() as u32, selected, 41, count as u32];
         for (key, choice, loaded) in looks {
             words.extend([*key, *choice, *loaded]);
         }
         words.extend(codes);
         words.iter().flat_map(|word| word.to_le_bytes()).collect()
+    }
+    fn list(looks: &[(u32, u32, u32)], selected: u32, codes: &[u32]) -> Vec<u8> {
+        list_of(looks, selected, codes, codes.len())
+    }
+
+    #[test]
+    fn uses_name_their_recipe_or_dial_mode() {
+        let named =
+            7 | 4 << CONTROL_USE_ORIGIN_SHIFT | 2 << CONTROL_USE_NUMBER_SHIFT | CONTROL_USE_NAMED;
+        let odd = u32::from(b'O') | u32::from(b'd') << 7 | u32::from(b'd') << 14;
+        let dial = 9 | 2 << CONTROL_USE_ORIGIN_SHIFT | CONTROL_USE_DIAL;
+        let words = [
+            named,
+            odd,
+            0,
+            0,
+            0,
+            5 | 1 << CONTROL_USE_ORIGIN_SHIFT,
+            dial,
+            3,
+        ];
+        let looks = RuntimeLooks::decode(&list_of(&[], 0, &words, 4)).unwrap();
+        let origins: Vec<_> = looks
+            .uses
+            .iter()
+            .map(|u| (u.code, u.origin.clone()))
+            .collect();
+        assert_eq!(
+            origins,
+            [
+                (
+                    7,
+                    UseOrigin::Recipe {
+                        slot: 3,
+                        number: 2,
+                        name: Some("Odd".into())
+                    }
+                ),
+                (
+                    5,
+                    UseOrigin::Recipe {
+                        slot: 0,
+                        number: 0,
+                        name: None
+                    }
+                ),
+                (9, UseOrigin::Dial { mode: 2 }),
+                (3, UseOrigin::Unknown),
+            ]
+        );
+        // The name words of a named use must follow it.
+        assert!(RuntimeLooks::decode(&list_of(&[], 0, &[named, odd], 1)).is_err());
     }
 
     #[test]
@@ -295,7 +428,10 @@ mod tests {
         );
         assert_eq!(looks.selected, Some(12));
         assert_eq!(looks.state_changes, 41);
-        assert_eq!(looks.used_codes, [7, 9]);
+        assert_eq!(
+            looks.uses.iter().map(|u| u.code).collect::<Vec<_>>(),
+            [7, 9]
+        );
         assert_eq!(looks.menu_order(), [12, 11, 10]);
         assert_eq!(
             RuntimeLooks::decode(&list(&[], 0, &[])).unwrap(),

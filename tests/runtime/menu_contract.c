@@ -3094,13 +3094,17 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
     /* Velvia 100 is committed. A recipe and a mode-dial set name effects. */
     setting_store(h, GRKIT_CORE_TONE, 2);
-    h[GRKIT_HOST_RECIPES / 4 + 3 * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_EFFECT | 0x123U << RECIPE_CODE_SHIFT;
+    /* Recipe slot 3, number 2, named "Odd", uses effect 0x123: the use
+       names its slot + 1 and number, and the name words follow it. */
+    h[GRKIT_HOST_RECIPES / 4 + 3 * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_EFFECT | 0x123U << RECIPE_CODE_SHIFT | 2U << RECIPE_NUMBER_SHIFT;
+    h[GRKIT_HOST_RECIPE_NAMES / 4 + 3 * GRKIT_RECIPE_NAME_WORDS] = 'O' | 'd' << 7 | 'd' << 14;
     assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == 0);
-    assert(length == GRKIT_CONTROL_LOOKS_HEADER + 3 * GRKIT_CONTROL_LOOK_ENTRY + 4);
+    assert(length == GRKIT_CONTROL_LOOKS_HEADER + 3 * GRKIT_CONTROL_LOOK_ENTRY + 4 + 4 * GRKIT_RECIPE_NAME_WORDS);
     assert(control_words[0] == 3 && control_words[1] == 0x1001 && control_words[2] == h[GRKIT_HOST_STATE_CHANGES / 4] && control_words[3] == 1);
     assert(control_words[4] == 0x1000 && control_words[5] == 0 && control_words[6] == 1);
     assert(control_words[10] == 0x1002 && control_words[11] == 1 && control_words[12] == 0);
-    assert(control_words[13] == 0x123);
+    assert(control_words[13] == (0x123U | 4U << GRKIT_CONTROL_USE_ORIGIN_SHIFT | 2U << GRKIT_CONTROL_USE_NUMBER_SHIFT | GRKIT_CONTROL_USE_NAMED));
+    assert(control_words[14] == ('O' | 'd' << 7 | 'd' << 14) && !control_words[15]);
     assert(look_command(GRKIT_CONTROL_LOOKS_READ, words, 1, &length) == CONTROL_BAD_LENGTH);
     /* Off of the committed effect commits Off, as its checkbox does. */
     words[0] = 0x1001; words[1] = 1;
