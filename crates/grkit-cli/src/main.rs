@@ -218,6 +218,26 @@ enum Command {
         site: PathBuf,
         #[arg(long)]
         out: PathBuf,
+        /// Release notes: a JSON list of `{"version", "body"}`, each body in
+        /// Markdown, as GitHub releases hold them. The index keeps the bullet
+        /// items as plain text.
+        #[arg(long)]
+        notes: Option<PathBuf>,
+        /// The descriptions of the recipe presets: a JSON object of language
+        /// codes, each an object of preset IDs and their text. The index
+        /// holds each preset of the site, with these descriptions.
+        #[arg(long)]
+        preset_text: Option<PathBuf>,
+    },
+    /// Write a release index with other release notes: the index given, with
+    /// the notes of `--notes` (as for `release-index`) in place of its own.
+    ReleaseNotes {
+        #[arg(long)]
+        index: PathBuf,
+        #[arg(long)]
+        notes: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
     },
 }
 
@@ -901,18 +921,76 @@ fn run(command: Command) -> Result<Value> {
             let (target, files) = storage::export_runtime(&build, &out)?;
             Ok(json!({"output": out, "target": target, "files": files}))
         }
-        Command::ReleaseIndex { site, out } => {
+        Command::ReleaseIndex {
+            site,
+            out,
+            notes,
+            preset_text,
+        } => {
             let contents = storage::read_release_site(&site)?;
-            let index = release_index::Index::of_site(&contents)?;
+            let mut index = release_index::Index::of_site(&contents)?;
+            if let Some(notes) = notes {
+                index.notes = read_release_notes(&notes)?;
+            }
+            let text = match preset_text {
+                Some(path) => serde_json::from_slice(
+                    &std::fs::read(&path).with_context(|| format!("Read {}", path.display()))?,
+                )
+                .with_context(|| format!("Read the preset descriptions in {}", path.display()))?,
+                None => Default::default(),
+            };
+            index.presets = release_index::IndexPreset::all(&text);
             storage::write_new(&out, &index.to_bytes()?)?;
             Ok(json!({
                 "path": out,
                 "version": index.version,
                 "cameras": index.cameras.len(),
                 "files": index.files.len(),
+                "notes": index.notes.len(),
+                "presets": index.presets.len(),
             }))
         }
+        Command::ReleaseNotes { index, notes, out } => {
+            let bytes =
+                std::fs::read(&index).with_context(|| format!("Read {}", index.display()))?;
+            let mut index = release_index::Index::parse(&bytes)?;
+            index.notes = read_release_notes(&notes)?;
+            storage::write_new(&out, &index.to_bytes()?)?;
+            Ok(json!({"path": out, "version": index.version, "notes": index.notes.len()}))
+        }
     }
+}
+
+/// The most bytes of a release notes input.
+const NOTES_INPUT_LIMIT: u64 = 1024 * 1024;
+
+/// Reads the release notes input of `release-index` and `release-notes`.
+fn read_release_notes(path: &std::path::Path) -> Result<Vec<release_index::VersionNotes>> {
+    let size = std::fs::metadata(path)
+        .with_context(|| format!("Read {}", path.display()))?
+        .len();
+    ensure!(
+        size <= NOTES_INPUT_LIMIT,
+        "{} is larger than {NOTES_INPUT_LIMIT} bytes",
+        path.display()
+    );
+    let value: Value = serde_json::from_slice(&std::fs::read(path)?)
+        .with_context(|| format!("Read {}", path.display()))?;
+    let releases = value
+        .as_array()
+        .with_context(|| format!("{} is not a list", path.display()))?
+        .iter()
+        .map(|release| {
+            let field = |name: &str| {
+                release[name]
+                    .as_str()
+                    .map(str::to_owned)
+                    .with_context(|| format!("A release in {} has no {name}", path.display()))
+            };
+            Ok((field("version")?, field("body")?))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    release_index::notes_from_markdown(&releases)
 }
 
 fn main() -> std::process::ExitCode {
@@ -980,5 +1058,17 @@ mod tests {
                 .unwrap();
             assert_eq!(effects::decode(&blob).unwrap().1, expected, "{id}");
         }
+    }
+
+    #[test]
+    fn the_notes_input_is_a_bounded_list_of_bodies() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.json");
+        std::fs::write(&path, r#"[{"version": "v1.7.0", "body": "- New"}]"#).unwrap();
+        assert_eq!(read_release_notes(&path).unwrap()[0].items, ["New"]);
+        std::fs::write(&path, r#"[{"version": "1.7.0"}]"#).unwrap();
+        assert!(read_release_notes(&path).is_err());
+        std::fs::write(&path, vec![b' '; NOTES_INPUT_LIMIT as usize + 1]).unwrap();
+        assert!(read_release_notes(&path).is_err());
     }
 }
