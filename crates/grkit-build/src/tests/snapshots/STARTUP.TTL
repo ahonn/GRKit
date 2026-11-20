@@ -1,3 +1,9 @@
+filesearch 'C:\SCRIPT\GRKIT\COMMIT.TTL'
+if result = 0 goto update_done
+include 'C:\SCRIPT\GRKIT\COMMIT.TTL'
+filesearch 'C:\SCRIPT\GRKIT\COMMIT.TTL'
+if result <> 0 goto done
+:update_done
 filesearch 'C:\SCRIPT\GRKIT\LOADER.TTL'
 if result = 0 goto done
 include 'C:\SCRIPT\GRKIT\LOADER.TTL'

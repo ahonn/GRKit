@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6536
+#define GRKIT_HOST_HEADER_SIZE 6556
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -187,6 +187,12 @@
 #define GRKIT_RECIPES_CHANGED(h) (++(h)[GRKIT_HOST_RECIPE_CHANGES/4])
 #define GRKIT_HOST_MAGIC_VALUE 0x314d5247
 #define GRKIT_HOST_VERSION_VALUE 1
+#define GRKIT_UPDATE_WAITING 1U
+#define GRKIT_UPDATE_CONFIRMED 2U
+#define GRKIT_UPDATE_READY 3U
+#define GRKIT_CUE_PENDING 1U
+#define GRKIT_CUE_UPDATE_READY 1U
+#define GRKIT_CUE_UPDATED 2U
 /* Number of Image Control records. */
 #define GRKIT_HOST_COUNT 0
 /* Address of record 0. The records follow the header without gaps. */
@@ -551,20 +557,41 @@
 #define GRKIT_HOST_MANAGE_COPY_WORDS 5
 /* Word index of the PERSIST buffer within modulecode, not a native address. */
 #define GRKIT_HOST_PERSIST_WORD 6512
+/* The word index of the mailbox of the Wi-Fi service in the module array, or 0
+   without modules (runtime/control_mailbox.h). */
+#define GRKIT_HOST_CONTROL_WORD 6516
 /* The record of the ADJ preview of a recipe whose Fn adjustments the live view
    takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the record, while
    GRKIT_HOST_PREVIEW is that record; else 0 (runtime/recipe_preview.h,
    runtime/processing.h). */
-#define GRKIT_HOST_PREVIEW_FN 6516
+#define GRKIT_HOST_PREVIEW_FN 6520
 /* Those adjustments: one stored byte each, in the order of RECORD_PARAMETERS.
    It follows GRKIT_HOST_PREVIEW_FN. */
-#define GRKIT_HOST_PREVIEW_FN_BYTES 6520
+#define GRKIT_HOST_PREVIEW_FN_BYTES 6524
 #define GRKIT_HOST_PREVIEW_FN_BYTES_WORDS 3
 /* The copy of the native settings record from the start of the ADJ preview of
    a recipe, in the services block, or 0 while no preview writes native
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
-#define GRKIT_HOST_RECIPE_PREVIEW 6532
+#define GRKIT_HOST_RECIPE_PREVIEW 6536
+/* An update over Wi-Fi (grkit_core::runtime::update): UPDATE_WAITING while its
+   journal waits for the confirmation on the camera, which the resident loader
+   sets; UPDATE_CONFIRMED after the confirmation in GRKit Settings
+   (runtime/menu_settings.h); UPDATE_READY after the resident loader made the
+   journal run at the next power-on; else 0. */
+#define GRKIT_HOST_UPDATE 6540
+/* The version of that update, from `card::VERSION_FILE`: major << 16, minor <<
+   8, and patch, or 0 when the package does not name it. */
+#define GRKIT_HOST_UPDATE_VERSION 6544
+/* The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
+   CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATED at the
+   first start after one installed. The cue sets it back to 0 when it ends
+   (runtime/viewfinder.h). */
+#define GRKIT_HOST_CUE_LABEL 6548
+/* 1 while the Wi-Fi access point of the camera is on, else 0. The App task
+   copies it at each timer dispatch (runtime/menu.c); the resident loader
+   starts the Wi-Fi service while it is 1 and stops it at 0. */
+#define GRKIT_HOST_WLAN 6552
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -590,6 +617,62 @@
 #define GRKIT_PERSIST_MODULE_WORDS 2U
 #define GRKIT_PERSIST_SIZE 1828U
 #define GRKIT_PERSIST_WORDS 457U
+
+#define GRKIT_CONTROL_MAGIC 0
+#define GRKIT_CONTROL_VERSION 4
+#define GRKIT_CONTROL_CAPACITY 8
+#define GRKIT_CONTROL_EPOCH 12
+#define GRKIT_CONTROL_EPOCH_WORDS 4
+#define GRKIT_CONTROL_STATE_CHANGES 28
+#define GRKIT_CONTROL_DESCRIPTOR_PADDING 32
+#define GRKIT_CONTROL_DESCRIPTOR_PADDING_WORDS 8
+#define GRKIT_CONTROL_REQUEST 64
+#define GRKIT_CONTROL_RELEASE 68
+#define GRKIT_CONTROL_REQUEST_EPOCH 72
+#define GRKIT_CONTROL_REQUEST_EPOCH_WORDS 4
+#define GRKIT_CONTROL_COMMAND 88
+#define GRKIT_CONTROL_LENGTH 92
+#define GRKIT_CONTROL_CHECKSUM 96
+/* CONTROL_SERVICE_RUNNING while the Wi-Fi service runs: the service writes it
+   as it starts and clears it as it stops. The resident loader starts and stops
+   the service with it and GRKIT_HOST_WLAN. */
+#define GRKIT_CONTROL_SERVICE 100
+#define GRKIT_CONTROL_PRODUCER_PADDING 104
+#define GRKIT_CONTROL_PRODUCER_PADDING_WORDS 6
+#define GRKIT_CONTROL_CLAIMED 128
+#define GRKIT_CONTROL_READY 132
+#define GRKIT_CONTROL_RESULT 136
+#define GRKIT_CONTROL_RESPONSE_LENGTH 140
+#define GRKIT_CONTROL_RESPONSE_CHECKSUM 144
+#define GRKIT_CONTROL_CONSUMER_PADDING 148
+#define GRKIT_CONTROL_CONSUMER_PADDING_WORDS 11
+#define GRKIT_CONTROL_PAYLOAD 192
+#define GRKIT_CONTROL_PAYLOAD_WORDS 512
+#define GRKIT_CONTROL_RESPONSE 2240
+#define GRKIT_CONTROL_RESPONSE_WORDS 512
+#define GRKIT_CONTROL_SIZE 4288U
+#define GRKIT_CONTROL_WORDS 1072U
+#define GRKIT_CONTROL_PAYLOAD_BYTES 2048U
+#define GRKIT_CONTROL_REQUEST_SIZE 2064U
+#define GRKIT_CONTROL_LOOKS_HEADER 16U
+#define GRKIT_CONTROL_LOOK_ENTRY 12U
+#define GRKIT_CONTROL_MAGIC_VALUE 1196573489U
+#define GRKIT_CONTROL_VERSION_VALUE 1U
+#define GRKIT_CONTROL_SEQUENCE_MAX 2147483647U
+#define GRKIT_CONTROL_EMPTY 0U
+#define GRKIT_CONTROL_ACCEPTED 1U
+#define GRKIT_CONTROL_BAD_CONTEXT 16U
+#define GRKIT_CONTROL_BAD_LENGTH 17U
+#define GRKIT_CONTROL_BAD_DIGEST 18U
+#define GRKIT_CONTROL_CHANGED 19U
+#define GRKIT_CONTROL_UNSUPPORTED 20U
+#define GRKIT_CONTROL_INVALID 21U
+#define GRKIT_CONTROL_BUSY 22U
+#define GRKIT_CONTROL_ATTACH 1U
+#define GRKIT_CONTROL_PING 2U
+#define GRKIT_CONTROL_LOOKS_READ 3U
+#define GRKIT_CONTROL_LOOK_TURN 4U
+#define GRKIT_CONTROL_LOOKS_ORDER 5U
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
@@ -925,7 +1008,7 @@
    glyphs from GRKIT_GLYPH_FIRST. For entry n, a u16 width, a u16 height, and
    the u32 offset of its pixels from the table start at 8 n. Each pixel is one
    byte of text coverage, row by row. */
-#define GRKIT_LABELS_SIZE 77824
+#define GRKIT_LABELS_SIZE 86016
 /* The profile table after the labels (runtime/profile.h). For each of the
    first GRKIT_PROFILE_MODULES listed modules, at GRKIT_PROFILE_MODULE_SIZE n:
    its code start, its code end, and GRKIT_PROFILE_NAME_BYTES ASCII bytes of
@@ -933,7 +1016,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 244360
+#define GRKIT_PROFILE 252552
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -954,10 +1037,10 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 248956
+#define GRKIT_TAIL_SIZE 257148
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 244860
+#define GRKIT_TONE_CURVES 253052
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192
@@ -977,15 +1060,15 @@
 #define GRKIT_TEXT_RECORDS 40
 #define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)
 #define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)
-#define GRKIT_LABEL_COUNT 22
+#define GRKIT_LABEL_COUNT 24
 #define GRKIT_LABEL_CROP_CAMERA 19
 #define GRKIT_MODULE_LABEL_COUNT 14
-#define GRKIT_GLYPH_FIRST 22
+#define GRKIT_GLYPH_FIRST 24
 #define GRKIT_GLYPH_COUNT 95
 #define GRKIT_GLYPH_HEIGHT 28
-#define GRKIT_SMALL_GLYPH_FIRST 117
+#define GRKIT_SMALL_GLYPH_FIRST 119
 #define GRKIT_SMALL_GLYPH_HEIGHT 20
-#define GRKIT_CAPTION_FIRST 212
+#define GRKIT_CAPTION_FIRST 214
 #define GRKIT_CAPTION_CHARACTERS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 #define GRKIT_CAPTION_TOP 22
 #define GRKIT_CAPTION_INK 255
@@ -1060,6 +1143,10 @@
 #define TEXT_BATTERY 80
 /* The Display Settings row of GRKit Settings and the title of its page. */
 #define TEXT_DISPLAY 81
-#define GRKIT_TEXT_STRINGS 82
+/* The GRKit Settings row of an update over Wi-Fi that waits for its
+   confirmation, then its values Later and Install, then the text of its
+   confirm before and after the version. */
+#define TEXT_UPDATE 82
+#define GRKIT_TEXT_STRINGS 87
 
 #endif

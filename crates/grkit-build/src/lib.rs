@@ -189,16 +189,23 @@ pub fn materialize_runtime(directory: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Builds the runtime of `target` into `output`. With `serve`, the path of
+/// `SERVE.BIN` (crates/grkit-serve, built for the camera's Linux), the
+/// runtime also has the service (`grkit_core::card::SERVE_FILE`).
 pub fn build_runtime(
     target: &'static target::Target,
     firmware: &Path,
     output: &Path,
     clang: &str,
     lld: &str,
+    serve: Option<&Path>,
 ) -> Result<BuildResult> {
     let image = verify_firmware(firmware, target)?;
     let tools = Toolchain::discover(clang, lld)?;
-    build_image(&image, output, &tools)
+    let serve = serve
+        .map(|path| fs::read(path).with_context(|| format!("Read {}", path.display())))
+        .transpose()?;
+    build_image_with(&image, output, &tools, serve.as_deref())
 }
 
 /// Build the module `id` from C `sources` into a module file (`grkit_core::grm`).
@@ -323,10 +330,21 @@ fn core_symbol(
 }
 
 /// Internal build entry; only the public firmware entry verifies release identity.
+#[cfg(test)]
 fn build_image(
     image: &firmware::FirmwareImage,
     output: &Path,
     tools: &Toolchain,
+) -> Result<BuildResult> {
+    build_image_with(image, output, tools, None)
+}
+
+/// `build_image`, with the service `serve` (`build_runtime`).
+fn build_image_with(
+    image: &firmware::FirmwareImage,
+    output: &Path,
+    tools: &Toolchain,
+    serve: Option<&[u8]>,
 ) -> Result<BuildResult> {
     if let Some(parent) = output.parent().filter(|p| !p.as_os_str().is_empty()) {
         fs::create_dir_all(parent)?;
@@ -439,7 +457,11 @@ fn build_image(
         ],
     )?;
     let fast = fastboot::files(tools, &objects, &runtime, image.target.name)?;
-    let files = runtime_files_with(&fs::read(binary)?, &fast, icon_stride(image.target.name)?);
+    let mut files = runtime_files_with(&fs::read(binary)?, &fast, icon_stride(image.target.name)?);
+    if let Some(serve) = serve {
+        grkit_core::packaging::check_service(serve)?;
+        files.insert(grkit_core::card::SERVE_FILE.to_owned(), serve.to_vec());
+    }
     ensure!(
         !files
             .values()

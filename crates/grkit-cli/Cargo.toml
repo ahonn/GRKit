@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+hex.workspace = true
 clap.workspace = true
 grkit-core.workspace = true
 grkit-build.workspace = true

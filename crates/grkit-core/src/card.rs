@@ -22,6 +22,33 @@ macro_rules! linux_card {
     };
 }
 
+/// The card root on Linux.
+pub const LINUX_CARD: &str = "/media/storage1";
+/// The startup script of the firmware, which runs the loader.
+pub const STARTUP_FILE: &str = "SCRIPT/STARTUP.TTL";
+/// An update over Wi-Fi (`runtime::update`): the new files wait in
+/// `UPDATE_FOLDER` at their paths in the package folder, and the files that
+/// they replace or remove go to `BACKUP_FOLDER`, because the card cannot
+/// replace a file. `JOURNAL_FILE` moves them at the next power-on, before the
+/// loader runs. The service deletes the old files after a successful update.
+pub const UPDATE_FOLDER: &str = concat!(package_folder!("/"), "NEW");
+pub const BACKUP_FOLDER: &str = concat!(package_folder!("/"), "OLD");
+pub const JOURNAL_FILE: &str = concat!(package_folder!("/"), "/COMMIT.TTL");
+/// The record of the software request of the last update, in
+/// `BACKUP_FOLDER`. The service keeps it when it deletes the old files.
+pub const BACKUP_RECORD: &str = concat!(package_folder!("/"), "OLD/RECORD.JSN");
+/// The journal of an update that waits for the confirmation on the camera.
+/// The resident loader renames it to `JOURNAL_FILE` after the confirmation.
+pub const REQUEST_FILE: &str = concat!(package_folder!("/"), "/COMMIT.REQ");
+/// The version of the package of an update, as six digits: two each for the
+/// major, minor, and patch numbers, such as `010700` for 1.7.0. The service
+/// writes it before `REQUEST_FILE`. It stays after the install, so the next
+/// start tells that an update installed, and the resident loader deletes it.
+pub const VERSION_FILE: &str = concat!(package_folder!("/"), "/COMMIT.VER");
+/// The journal while the service writes it. The service renames it to
+/// `REQUEST_FILE` after it wrote all of it.
+pub const DRAFT_FILE: &str = concat!(package_folder!("/"), "/COMMIT.TMP");
+
 /// The package folder on the card: the loader, the core, the package list,
 /// the package modules in `MODULES`, and the inbox of the package effects in
 /// `EFFECTS`, which SCAN copies into the effects library.
@@ -60,6 +87,11 @@ pub const RESIDENT_FILE: &str = concat!(package_folder!("/"), "/RESIDENT.TTL");
 pub const CORE_FILE: &str = concat!(package_folder!("/"), "/CORE.BIN");
 pub const SCAN_FILE: &str = concat!(package_folder!("/"), "/SCAN.SH");
 pub const INSTALL_FILE: &str = concat!(package_folder!("/"), "/INSTALL.SH");
+/// The service on the camera's Linux, which a phone reaches over the camera's
+/// Wi-Fi (crates/grkit-serve). It is the same file for each runtime build. A
+/// runtime has it only when its build was given one. It starts from the card
+/// and then runs from a copy in RAM, so it keeps no file on the card open.
+pub const SERVE_FILE: &str = concat!(package_folder!("/"), "/SERVE.BIN");
 /// The import library of the site (`crate::imports`). The camera does not read it.
 pub const IMPORTS_FILE: &str = concat!(package_folder!("/"), "/IMPORTS.BIN");
 /// The package list (`runtime/install_library.h`): the file name of each

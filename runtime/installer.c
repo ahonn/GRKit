@@ -16,6 +16,7 @@ struct patch { u32 address, size, kind; const u8 *before; u8 *after; };
 /* The layout of the state of the core services. */
 #include "services.h"
 #include "install_status.h"
+#include "control_mailbox.h"
 
 /* RTOS_NATIVE builds the installer into the RTOS-side loader of
    runtime/fastboot/, whose backend.c serves the same calls without Linux. */
@@ -307,6 +308,7 @@ static void prepare_relocation(void)
     relocation.symbol_at = relocated;
     relocation.hint = 0;
     relocation.optional = window_optional;
+    relocation.required = 0;
     if (read_text(relocation_path, (u8 *)hint_words, sizeof(hint_words)) == (long)sizeof(hint_words) &&
         hint_words[0] == HINT_MAGIC && hint_words[1] == RELOCATION_WINDOW_COUNT && hint_words[2] == word(RTOS_IDENTITY))
         relocation.hint = hint_words + HINT_KEY;
@@ -834,6 +836,7 @@ static int write_modules(const struct arrays *a, u32 pixels, u32 code)
     store(base + GRKIT_HOST_SERVICES, services_block);
     store(base + GRKIT_HOST_MODULE_SETTINGS, a->module_array);
     store(base + GRKIT_HOST_PERSIST_WORD, (services_block + SERVICES_PERSIST - a->module_array) / 4U);
+    store(base + GRKIT_HOST_CONTROL_WORD, (SERVICES_CONTROL_ADDRESS(services_block) - a->module_array) / 4U);
     store(base + GRKIT_HOST_CAPABILITIES, capabilities_running);
     store(base + GRKIT_HOST_MODULE_PAGE_COUNT, module_page_count);
     for (u32 i = 0; i < module_page_count * 3; ++i) store(base + GRKIT_HOST_MODULE_PAGES + i * 4, module_pages[i]);
@@ -938,6 +941,17 @@ static int install(void)
         u32 persist = services_block + SERVICES_PERSIST;
         persist_baseline((volatile u32 *)at(arrays.base), (volatile u32 *)at(persist));
         if (!sync_alias(persist, GRKIT_PERSIST_SIZE)) return STATUS_SYNC;
+        /* The mailbox of the Wi-Fi service starts without an epoch: the
+           service attaches after it finds the mailbox (control_info). */
+        const u32 epoch[4]={0,0,0,0};
+        u32 control=SERVICES_CONTROL_ADDRESS(services_block);
+        control_init((volatile struct control_mailbox *)at(control),epoch);
+#ifdef RTOS_NATIVE
+        /* sync_alias of the fast path cleans only code. Clean each line of
+           the mailbox once, before a producer can attach. */
+        CONTROL_CLEAN((volatile void *)at(control),GRKIT_CONTROL_SIZE);
+#endif
+        if (!sync_alias(control, GRKIT_CONTROL_SIZE)) return STATUS_SYNC;
     }
     check_recipes(arrays.base, count, module_count ? arrays.module_array : 0, capabilities_running);
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
@@ -952,6 +966,65 @@ static int install(void)
     print("GR_MODULE_INSTALLED "); number(count); print("\n");
     return 0;
 }
+#ifndef RTOS_NATIVE
+/* --control-info: find the mailbox of the Wi-Fi service in a camera that
+   runs GRKit, from the array table of the script interpreter. The pointers
+   of a header are not enough: the whole mailbox must lie in the module
+   array that the resident loader still holds. This path only reads. */
+static int control_info(void)
+{
+    u8 required[RELOCATION_SYMBOL_COUNT];
+    zero(required,sizeof(required));
+    required[ARRAY_COUNT_SYMBOL]=required[ARRAY_TABLE_SYMBOL]=required[HEAP_MIN_SYMBOL]=1;
+    relocation.read=read_word;
+    relocation.window_at=window_at;
+    relocation.symbol_at=relocated;
+    relocation.required=required;
+    if(!relocation_resolve(&relocation_tables,&relocation)) return STATUS_RELOCATION;
+    u32 n=*(volatile u16 *)at(ARRAY_COUNT), i, module_words_live=0;
+    if(n<ARRAY_LEAD+3 || n>ARRAY_LEAD+3+MAX_CHUNKS) return STATUS_NO_HEADER;
+    u32 base=word(ARRAYS+4);
+    if(!heap(base,GRKIT_HOST_HEADER_SIZE) || word(base+GRKIT_HOST_MAGIC)!=GRKIT_HOST_MAGIC_VALUE ||
+       word(base+GRKIT_HOST_VERSION)!=GRKIT_HOST_VERSION_VALUE) return STATUS_NO_HEADER;
+    u32 module=word(base+GRKIT_HOST_MODULE_SETTINGS), offset=word(base+GRKIT_HOST_CONTROL_WORD);
+    u32 services=word(base+GRKIT_HOST_SERVICES);
+    if(!module || !offset) return STATUS_NO_HEADER;
+    for(i=ARRAY_LEAD;i<n;++i) if(word(ARRAY_TABLE+8*i+4)==module) {
+        module_words_live=word(ARRAY_TABLE+8*i); break;
+    }
+    if(!module_words_live || module_words_live>(HEAP_END-HEAP_MIN)/4 ||
+       !heap(module,module_words_live*4) || offset>module_words_live ||
+       GRKIT_CONTROL_WORDS>module_words_live-offset) return STATUS_NO_HEADER;
+    u32 control=module+offset*4;
+    if(services<module || services>control || control!=SERVICES_CONTROL_ADDRESS(services) ||
+       word(control+GRKIT_CONTROL_MAGIC)!=GRKIT_CONTROL_MAGIC_VALUE ||
+       word(control+GRKIT_CONTROL_VERSION)!=GRKIT_CONTROL_VERSION_VALUE ||
+       word(control+GRKIT_CONTROL_CAPACITY)!=GRKIT_CONTROL_PAYLOAD_BYTES) return STATUS_NO_HEADER;
+    print("{\"headerAddress\":"); number(base);
+    print(",\"mailboxAddress\":"); number(control);
+    print(",\"mailboxSize\":"); number(GRKIT_CONTROL_SIZE);
+    print(",\"mailboxVersion\":"); number(GRKIT_CONTROL_VERSION_VALUE);
+    print(",\"epoch\":[");
+    for(i=0;i<4;++i) { if(i) print(","); number(word(control+GRKIT_CONTROL_EPOCH+4*i)); }
+    print("]");
+    print("}\n");
+    return 0;
+}
+static int control_discover(void)
+{
+    long fd=syscall6(5,(u32)"/dev/mem",0x101000,0,0,0,0);
+    if(fd<0) return STATUS_NO_MEMORY;
+    long mapped=syscall6(192,0,MAP_SIZE,1,1,fd,MAP_BASE>>12);
+    int status=STATUS_NO_MAPPING;
+    if((u32)mapped<0xfffff001U) {
+        mapping=(volatile u8 *)mapped;
+        status=control_info();
+        syscall6(91,(u32)mapping,MAP_SIZE,0,0,0,0);
+    }
+    syscall6(6,fd,0,0,0,0,0);
+    return status;
+}
+#endif
 #ifdef MODULE_DIAGNOSTICS
 /* Diagnostic builds can select profiles independently of the menu. */
 static int select_profile(const char *id)
@@ -1074,6 +1147,10 @@ __attribute__((used)) void start(u32 *stack)
     if (argc == 2 && text_equal(argv[1], "--known")) mode = INSTALL_KNOWN;
     else if (argc == 2 && text_equal(argv[1], "--try")) mode = INSTALL_TRY;
     int installing = argc == 2 && (mode != INSTALL_LAST || text_equal(argv[1], "--install"));
+#ifndef RTOS_NATIVE
+    if (argc == 2 && text_equal(argv[1], "--control-info")) status = control_discover();
+    else
+#endif
     if (argc == 2 && text_equal(argv[1], "--scan")) status = scan();
     else if (installing
 #ifdef MODULE_DIAGNOSTICS

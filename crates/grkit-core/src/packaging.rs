@@ -129,11 +129,24 @@ pub fn read_manifest(blob: &[u8]) -> Result<Value> {
 
 /// The prefix of the string that names the runtime build in `CORE.BIN`.
 pub const TARGET_MARKER: &str = "GRKIT_TARGET=";
+/// The prefix of the string that names the GRKit version in `CORE.BIN`.
+pub const VERSION_MARKER: &str = "GRKIT_VERSION=";
 
 /// The runtime build that `CORE.BIN` names, if it names one. Runtimes from
 /// before a camera had several builds do not.
 fn marked_target(binary: &[u8]) -> Option<&str> {
-    let marker = TARGET_MARKER.as_bytes();
+    marked(binary, TARGET_MARKER)
+}
+
+/// The GRKit version that `CORE.BIN` names, such as `1.6.1`, if it names
+/// one. Runtimes from before the update over Wi-Fi do not.
+pub fn marked_version(binary: &[u8]) -> Option<&str> {
+    marked(binary, VERSION_MARKER)
+}
+
+/// The string after `marker` in `binary`, up to its NUL.
+fn marked<'a>(binary: &'a [u8], marker: &str) -> Option<&'a str> {
+    let marker = marker.as_bytes();
     let start = binary
         .windows(marker.len())
         .position(|part| part == marker)?
@@ -206,7 +219,7 @@ fn package_targets(runtime: &Files, camera: &Camera) -> Result<Vec<&'static str>
         check_installer(binary)?;
     }
     ensure!(
-        *runtime
+        without_service(runtime)?
             == runtime::package_runtime_files_with(
                 &binaries,
                 &fast,
@@ -231,7 +244,7 @@ fn check_installer(binary: &[u8]) -> Result<()> {
 
 /// The runtime files of a package with each runtime of `camera`, in release
 /// order (`runtime::package_runtime_files`).
-fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<Files> {
+pub(crate) fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<Files> {
     let targets: Vec<&str> = runtimes.iter().map(VerifiedRuntime::target).collect();
     ensure!(
         targets == camera.targets(),
@@ -256,8 +269,28 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
             .map(|(path, bytes)| (path.clone(), bytes.clone()));
         fast.extend(own);
     }
-    let files =
+    let mut files =
         runtime::package_runtime_files_with(&binaries, &fast, runtime::icon_stride(targets[0])?);
+    // The service is the same file for each build, so a package has it when
+    // each of its runtimes has the same one.
+    let services: Vec<Option<&Vec<u8>>> = runtimes
+        .iter()
+        .map(|runtime| runtime.files().get(card::SERVE_FILE))
+        .collect();
+    if let Some(Some(service)) = services.first() {
+        ensure!(
+            services.iter().all(|other| *other == Some(*service)),
+            "Each runtime of a package needs the same {}",
+            card::SERVE_FILE
+        );
+        files.insert(card::SERVE_FILE.to_owned(), (*service).clone());
+    } else {
+        ensure!(
+            services.iter().all(Option::is_none),
+            "Each runtime of a package needs the same {}",
+            card::SERVE_FILE
+        );
+    }
     // The builds of a camera share every file but the core file and the
     // fast-boot files. The package has its own scripts that run them.
     let own = [
@@ -286,8 +319,49 @@ fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<File
 /// fast-boot file, or the install file of one (`runtime::fastboot`).
 pub fn is_runtime_path(name: &str) -> bool {
     RUNTIME_PATHS.contains(&name)
+        || name == card::SERVE_FILE
         || runtime::FastRelease::of_path(name).is_some()
         || runtime::FastRelease::of_install_path(name).is_some()
+}
+
+/// Checks that `binary` is a service (`card::SERVE_FILE`): a static ARM
+/// program, which runs on the Linux of each camera without its libraries.
+pub fn check_service(binary: &[u8]) -> Result<()> {
+    ensure!(
+        binary.len() >= 52
+            && binary[..6] == *b"\x7fELF\x01\x01"
+            && binary[16..20] == *b"\x02\x00\x28\x00",
+        "Expected an ARM program as {}",
+        card::SERVE_FILE
+    );
+    let start = u32::from_le_bytes(binary[28..32].try_into().unwrap()) as usize;
+    let size = u16::from_le_bytes(binary[42..44].try_into().unwrap()) as usize;
+    let count = u16::from_le_bytes(binary[44..46].try_into().unwrap()) as usize;
+    ensure!(
+        size == 32
+            && start
+                .checked_add(size * count)
+                .is_some_and(|end| end <= binary.len()),
+        "Expected the program headers of {}",
+        card::SERVE_FILE
+    );
+    // PT_INTERP names the dynamic linker of a program that needs libraries.
+    ensure!(
+        (0..count).all(|index| binary[start + index * size..][..4] != 3u32.to_le_bytes()),
+        "Expected a static program as {}",
+        card::SERVE_FILE
+    );
+    Ok(())
+}
+
+/// The runtime files without the service (`card::SERVE_FILE`), after a check
+/// of the service. The scripts are the same with or without it.
+fn without_service(files: &Files) -> Result<Files> {
+    let mut files = files.clone();
+    if let Some(binary) = files.remove(card::SERVE_FILE) {
+        check_service(&binary)?;
+    }
+    Ok(files)
 }
 
 /// The fast-boot files of `files` (`runtime::fast_files`), each checked as
@@ -333,7 +407,8 @@ pub fn validate_runtime(files: &Files, target: &str) -> Result<()> {
     let binary = &files[card::CORE_FILE];
     check_installer(binary)?;
     ensure!(
-        *files == runtime::runtime_files_with(binary, &fast, runtime::icon_stride(target)?),
+        without_service(files)?
+            == runtime::runtime_files_with(binary, &fast, runtime::icon_stride(target)?),
         "Runtime scripts differ from the production templates"
     );
     if let Some(name) = marked_target(binary) {
@@ -442,6 +517,11 @@ pub struct EffectSet {
 }
 
 impl EffectSet {
+    /// The compiled effects, in filename order.
+    pub fn blobs(&self) -> impl Iterator<Item = &[u8]> {
+        self.files.values().map(Vec::as_slice)
+    }
+
     /// Adds one compiled effect and returns its ID. It refuses an effect that does not
     /// decode, a second effect with the same filename, and more than `runtime::MAX_COUNT`
     /// effects.
@@ -586,6 +666,12 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         .map(|name| (*name).to_owned())
         .chain((0..cores).map(|index| runtime::core_path_of(index, cores)))
         .chain(fast_paths)
+        // The service of a runtime that has one, which package_targets checks.
+        .chain(
+            contents
+                .contains_key(&format!("SD_ROOT/{}", card::SERVE_FILE))
+                .then(|| card::SERVE_FILE.to_owned()),
+        )
         .collect();
     let mut mandatory: BTreeSet<String> = runtime_paths
         .iter()
@@ -609,23 +695,102 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         .map(|name| (name.clone(), contents[&format!("SD_ROOT/{name}")].clone()))
         .collect();
     let targets = package_targets(&runtime, camera)?;
-    let mut ids = BTreeSet::new();
-    let mut module_ids = BTreeSet::new();
-    let mut native_slots = BTreeMap::new();
-    let mut status_icons = 0;
-    let mut listed = Vec::new();
+    let mut data = DataCheck::new(camera);
     let mut language = None;
-    let mut library = 0;
-    let mut recipe_count = 0;
+    let mut signed = 0;
     for (name, blob) in contents
         .iter()
         .filter(|(name, _)| !mandatory.contains(*name))
     {
+        if crate::release::check_card_evidence(name, blob, contents)? {
+            continue;
+        }
+        if data.check(name, blob)? {
+            continue;
+        }
+        if let Some(guide) = Language::ALL
+            .into_iter()
+            .find(|language| language.guide_path() == *name)
+        {
+            ensure!(language.is_none(), "Package has more than one guide");
+            check_guide(blob)?;
+            language = Some(guide);
+        } else if [
+            crate::release::STATEMENT_ENTRY,
+            crate::release::SIGNATURE_ENTRY,
+        ]
+        .contains(&name.as_str())
+        {
+            signed += 1;
+        } else {
+            bail!("Package contains unexpected files: {name}");
+        }
+    }
+    // `release::check_files` checks a signed package against its statement.
+    ensure!(
+        signed != 1,
+        "A signed package needs both {} and {}",
+        crate::release::STATEMENT_ENTRY,
+        crate::release::SIGNATURE_ENTRY
+    );
+    let data = data.finish(&contents[&format!("SD_ROOT/{PACKAGE_LIST}")])?;
+    Ok(Contents {
+        camera,
+        targets,
+        effect_ids: data.effect_ids,
+        modules: data.modules,
+        language: language.context("Package has no installation guide")?,
+        imports: data.imports,
+        recipes: data.recipes,
+        entries: contents.len(),
+    })
+}
+
+/// The checks of the package files that are data or modules, which a package
+/// built on a phone or a page can hold: effects, modules, the recipe and
+/// import libraries, and the package list. The runtime has its own checks.
+pub(crate) struct DataCheck {
+    camera: &'static Camera,
+    ids: BTreeSet<String>,
+    module_ids: BTreeSet<String>,
+    native_slots: BTreeMap<u32, String>,
+    status_icons: usize,
+    listed: Vec<String>,
+    imports: usize,
+    recipes: usize,
+}
+
+/// What `DataCheck` found.
+pub(crate) struct Data {
+    pub effect_ids: Vec<String>,
+    pub modules: Vec<String>,
+    pub imports: usize,
+    pub recipes: usize,
+}
+
+impl DataCheck {
+    pub(crate) fn new(camera: &'static Camera) -> Self {
+        DataCheck {
+            camera,
+            ids: BTreeSet::new(),
+            module_ids: BTreeSet::new(),
+            native_slots: BTreeMap::new(),
+            status_icons: 0,
+            listed: Vec::new(),
+            imports: 0,
+            recipes: 0,
+        }
+    }
+
+    /// Checks the package entry `name`: true for a file of the data, false
+    /// for another file.
+    pub(crate) fn check(&mut self, name: &str, blob: &[u8]) -> Result<bool> {
+        let camera = self.camera;
         ensure!(
             !name.starts_with(&format!("SD_ROOT/{}/", crate::card::DATA_FOLDER_PATH)),
             "A package holds no file of the data folder: {name}"
         );
-        if *name == format!("SD_ROOT/{RECIPES_PACKAGE_PATH}") {
+        if name == format!("SD_ROOT/{RECIPES_PACKAGE_PATH}") {
             let library = recipes::decode(blob).context("Read the recipe library")?;
             ensure!(
                 library.iter().all(|recipe| camera
@@ -634,15 +799,16 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
                     .all(|target| target.starts_with(recipe.family.native().key()))),
                 "The recipe library has a recipe of another camera"
             );
-            recipe_count = library.len();
+            self.recipes = library.len();
         } else if is_effect_path(name) {
             let id = effects::decode(blob)?.0.id;
             ensure!(
                 name.rsplit('/').next() == Some(effects::filename(&id)?.as_str()),
                 "Profile filename does not match its stable ID"
             );
-            ensure!(ids.insert(id), "Duplicate effect ID");
-            listed.push(name.rsplit('/').next().unwrap_or_default().to_owned());
+            ensure!(self.ids.insert(id), "Duplicate effect ID");
+            self.listed
+                .push(name.rsplit('/').next().unwrap_or_default().to_owned());
         } else if let Some(file) = name
             .strip_prefix("SD_ROOT/")
             .and_then(|path| path.strip_prefix(crate::grm::FOLDER))
@@ -661,14 +827,14 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
             {
                 match placement {
                     crate::grm::IndicatorPlacement::NativeSlot(slot) => {
-                        if let Some(owner) = native_slots.insert(slot, module.id.clone()) {
+                        if let Some(owner) = self.native_slots.insert(slot, module.id.clone()) {
                             bail!("Viewfinder slot image_control is registered by both {owner} and {}", module.id);
                         }
                     }
                     crate::grm::IndicatorPlacement::StatusRow => {
-                        status_icons += 1;
+                        self.status_icons += 1;
                         ensure!(
-                            status_icons <= crate::abi::STATUS_ICONS_MAX,
+                            self.status_icons <= crate::abi::STATUS_ICONS_MAX,
                             "The package exceeds the viewfinder status-row capacity of {} icons at module {}",
                             crate::abi::STATUS_ICONS_MAX,
                             module.id
@@ -676,74 +842,76 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
                     }
                 }
             }
-            listed.push(file.to_owned());
-            module_ids.insert(module.id);
-        } else if let Some(guide) = Language::ALL
-            .into_iter()
-            .find(|language| language.guide_path() == *name)
-        {
-            ensure!(language.is_none(), "Package has more than one guide");
-            check_guide(blob)?;
-            language = Some(guide);
-        } else if *name == format!("SD_ROOT/{}", card::IMPORTS_FILE) {
-            library = imports::decode(blob)
+            self.listed.push(file.to_owned());
+            self.module_ids.insert(module.id);
+        } else if name == format!("SD_ROOT/{}", card::IMPORTS_FILE) {
+            self.imports = imports::decode(blob)
                 .context("Read the import library")?
                 .len();
         } else {
-            bail!("Package contains unexpected files: {name}");
+            return Ok(false);
         }
+        Ok(true)
     }
-    // The effects that the list leaves out are effects that the package does not hold.
-    let list = &contents[&format!("SD_ROOT/{PACKAGE_LIST}")];
-    let left_out: BTreeSet<String> = std::str::from_utf8(list)
-        .context("Read the package list")?
-        .lines()
-        .filter_map(|line| line.strip_prefix('-'))
-        .map(str::to_owned)
-        .collect();
-    ensure!(
-        left_out
-            .iter()
-            .all(|name| effect_file_name(name) && !listed.contains(name)),
-        "{PACKAGE_LIST} leaves out an effect that is not valid or that the package holds"
-    );
-    ensure!(
-        *list == package_list(listed.iter(), &left_out),
-        "{PACKAGE_LIST} must list the effect and module files of the package"
-    );
-    ensure!(
-        ids.len() <= runtime::MAX_COUNT,
-        "Target effect capacity exceeded"
-    );
-    ensure!(
-        camera.effects || ids.is_empty(),
-        "{} has no Image Control yet, so a package for it cannot have effects",
-        camera.name
-    );
-    // The effects show only on the page of Image Control, which shows only
-    // with effects.
-    let needs_effects =
-        |id: &String| modules::official(id).is_some_and(|module| module.needs_effects);
-    ensure!(
-        ids.is_empty() || module_ids.iter().any(needs_effects),
-        "The effects need the Image Control module"
-    );
-    ensure!(
-        module_ids
-            .iter()
-            .any(|id| !needs_effects(id) || !ids.is_empty()),
-        "The package shows nothing: add a module other than Image Control, or add effects"
-    );
-    Ok(Contents {
-        camera,
-        targets,
-        effect_ids: ids.into_iter().collect(),
-        modules: module_ids.into_iter().collect(),
-        language: language.context("Package has no installation guide")?,
-        imports: library,
-        recipes: recipe_count,
-        entries: contents.len(),
-    })
+
+    /// Checks the package list `list` against the files, and the capacity.
+    pub(crate) fn finish(self, list: &[u8]) -> Result<Data> {
+        let DataCheck {
+            camera,
+            ids,
+            module_ids,
+            listed,
+            imports,
+            recipes,
+            ..
+        } = self;
+        // The effects that the list leaves out are effects that the package does not hold.
+        let left_out: BTreeSet<String> = std::str::from_utf8(list)
+            .context("Read the package list")?
+            .lines()
+            .filter_map(|line| line.strip_prefix('-'))
+            .map(str::to_owned)
+            .collect();
+        ensure!(
+            left_out
+                .iter()
+                .all(|name| effect_file_name(name) && !listed.contains(name)),
+            "{PACKAGE_LIST} leaves out an effect that is not valid or that the package holds"
+        );
+        ensure!(
+            *list == package_list(listed.iter(), &left_out),
+            "{PACKAGE_LIST} must list the effect and module files of the package"
+        );
+        ensure!(
+            ids.len() <= runtime::MAX_COUNT,
+            "Target effect capacity exceeded"
+        );
+        ensure!(
+            camera.effects || ids.is_empty(),
+            "{} has no Image Control yet, so a package for it cannot have effects",
+            camera.name
+        );
+        // The effects show only on the page of Image Control, which shows only
+        // with effects.
+        let needs_effects =
+            |id: &String| modules::official(id).is_some_and(|module| module.needs_effects);
+        ensure!(
+            ids.is_empty() || module_ids.iter().any(needs_effects),
+            "The effects need the Image Control module"
+        );
+        ensure!(
+            module_ids
+                .iter()
+                .any(|id| !needs_effects(id) || !ids.is_empty()),
+            "The package shows nothing: add a module other than Image Control, or add effects"
+        );
+        Ok(Data {
+            effect_ids: ids.into_iter().collect(),
+            modules: module_ids.into_iter().collect(),
+            imports,
+            recipes,
+        })
+    }
 }
 
 /// Checks that `pdf` is a PDF document. The release builds the guides.
@@ -755,7 +923,7 @@ fn check_guide(pdf: &[u8]) -> Result<()> {
     Ok(())
 }
 
-fn checksum_list(contents: &Files) -> Vec<u8> {
+pub(crate) fn checksum_list(contents: &Files) -> Vec<u8> {
     contents
         .iter()
         .filter(|(name, _)| name.as_str() != "SHA256SUMS")
@@ -803,6 +971,9 @@ pub struct Extras<'a> {
     /// The recipe library (`RECIPES_PACKAGE_PATH`, `crate::recipes`), which INSTALL merges
     /// into the recipes of the camera.
     pub recipes: Option<&'a [u8]>,
+    /// The statement of the release and its signature (`crate::release`),
+    /// which the service on the camera needs for an update over Wi-Fi.
+    pub release: Option<(&'a [u8], &'a [u8])>,
 }
 
 /// Builds the package ZIP for one camera from the runtime of each of its
@@ -868,8 +1039,32 @@ pub fn assemble_with(
         contents.insert(format!("SD_ROOT/{}", card::IMPORTS_FILE), bytes.to_vec());
     }
     contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());
+    if let Some((statement, signature)) = extras.release {
+        contents.insert(crate::release::STATEMENT_ENTRY.into(), statement.to_vec());
+        contents.insert(crate::release::SIGNATURE_ENTRY.into(), signature.to_vec());
+        contents.insert(
+            format!("SD_ROOT/{}", crate::release::CARD_STATEMENT),
+            statement.to_vec(),
+        );
+        contents.insert(
+            format!("SD_ROOT/{}", crate::release::CARD_SIGNATURE),
+            signature.to_vec(),
+        );
+    }
     contents.insert("SHA256SUMS".into(), checksum_list(&contents));
     validate_contents(&contents)?;
+    // The release signed the files of this package. The service checks the
+    // signature itself.
+    if let Some((statement, _)) = extras.release {
+        let statement = crate::release::Statement::parse(statement)?;
+        ensure!(
+            statement.camera == camera,
+            "The release statement is for the {}, not the {}",
+            statement.camera.name,
+            camera.name
+        );
+        crate::release::check_files(&contents, &statement)?;
+    }
     let bytes = write_zip(contents)?;
     // Read the ZIP back as `grkit verify` does, so the writer cannot drift from the checks.
     let contents = verify_package(&bytes)?;
@@ -971,6 +1166,19 @@ pub fn card_files(bytes: &[u8]) -> Result<Files> {
         .collect())
 }
 
+/// `card_files`, with what the package holds, as `verify_package` gives it.
+pub fn verified_card_files(bytes: &[u8]) -> Result<(Contents, Files)> {
+    let (contents, entries) = read_package(bytes)?;
+    let files = entries
+        .into_iter()
+        .filter_map(|(name, blob)| {
+            name.strip_prefix("SD_ROOT/")
+                .map(|path| (path.to_owned(), blob))
+        })
+        .collect();
+    Ok((contents, files))
+}
+
 /// The files that a GRKit ZIP of any release puts on the card, at their paths from the card
 /// root, so the site can read a ZIP as the card that holds it. The archive limits apply, but the
 /// package checks do not: a ZIP of an older release, whose runtime this version does not know,
@@ -998,7 +1206,7 @@ fn read_package(bytes: &[u8]) -> Result<(Contents, Files)> {
 
 /// The entries of a ZIP within the package limits: safe, unique names, no links, and bounded
 /// sizes.
-fn read_entries(bytes: &[u8]) -> Result<Files> {
+pub(crate) fn read_entries(bytes: &[u8]) -> Result<Files> {
     let declared_entries = declared_entry_count(bytes)?;
     let mut archive = ZipArchive::new(Cursor::new(bytes)).context("Invalid ZIP archive")?;
     // zip indexes names in a map. Check the raw count so duplicate names cannot disappear.

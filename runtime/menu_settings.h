@@ -96,9 +96,10 @@ static u32 menu_return(volatile u32 *h) {
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
-   page. Its rows: Enable at Start while the switch shows, Display Settings,
-   Uncropped RAW (runtime/manage.h: core_settings), Mode Dial
-   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module.
+   page. Its rows: Update while an update over Wi-Fi waits (update_setting),
+   Enable at Start while the switch shows, Display Settings, Uncropped RAW
+   (runtime/manage.h: core_settings), Mode Dial (runtime/menu_dial.h), and
+   ADJ Order while ADJ shows a module.
    Display Settings and ADJ Order open their pages (MENU_DISPLAY_TARGET,
    MENU_ADJ_TARGET, runtime/menu_section.h), whose MENU returns here. The
    rows are the rows of the page as it opened (MENU_ROWS_CORE_KINDS), as a
@@ -117,6 +118,7 @@ static u32 menu_return(volatile u32 *h) {
 #define CORE_ROW_DIAL 2U
 #define CORE_ROW_ADJ 3U
 #define CORE_ROW_RAW 4U
+#define CORE_ROW_UPDATE 5U
 #define MENU_ADJ_TARGET 0x2000fa0U
 #define MENU_DISPLAY_TARGET 0x2000fc0U
 static const Setting *dial_menu_setting(void);
@@ -148,10 +150,71 @@ static u32 display_select(volatile u32 *h,u32 controller,u32 value) {
 }
 static const Setting display_setting={display_label,one_value,adj_order_text,no_value,no_set,display_select,
     SETTING_ACTION};
+/* Update: an update over Wi-Fi waits for the confirmation on the camera
+   (GRKIT_HOST_UPDATE). The row shows from the resident loader's notice of
+   the update until the next power-on; About GRKit opens its page too
+   (runtime/menu_section.h). The page is the page of the core, with the
+   version of the update in its title, and the values Later and Install. OK
+   on Install asks in a confirm box; Execute confirms the update, and the
+   resident loader then makes it run at the next power-on, and the page
+   returns to the page that opened it, as MENU does: About GRKit or GRKit
+   Settings. After the confirmation, Install reads Restart to apply. */
+#define UPDATE_INSTALL 1U
+static void settings_value_again(volatile u32 *h,u32 back);
+static void settings_value_leave(volatile u32 *h);
+static u32 update_shown(volatile u32 *h) { return h[GRKIT_HOST_UPDATE/4]-GRKIT_UPDATE_WAITING<=GRKIT_UPDATE_READY-GRKIT_UPDATE_WAITING; }
+static u32 update_confirmed(volatile u32 *h) { return update_shown(h) && h[GRKIT_HOST_UPDATE/4]!=GRKIT_UPDATE_WAITING; }
+/* Append the version of the update, such as 1.7.0, or nothing when the
+   package does not name it. */
+static u32 update_append_version(volatile u32 *h,volatile u16 *to,u32 at) {
+    static const u16 dot[]={'.',0};
+    u32 version=h[GRKIT_HOST_UPDATE_VERSION/4];
+    if(!version) return at;
+    at=recipe_append(to,recipe_append_number(to,at,version>>16&255U),dot);
+    at=recipe_append(to,recipe_append_number(to,at,version>>8&255U),dot);
+    return recipe_append_number(to,at,version&255U);
+}
+/* Update and the version, in the text of About GRKit and of the page. */
+static const u16 *update_title(volatile u32 *h) {
+    static const u16 space[]={' ',0};
+    volatile u16 *to=recipe_text_at(h,RECIPE_UPDATE_AT);
+    u32 at=recipe_append(to,0,text(h,TEXT_UPDATE));
+    if(h[GRKIT_HOST_UPDATE_VERSION/4]) update_append_version(h,to,recipe_append(to,at,space));
+    return (const u16 *)to;
+}
+static const u16 *update_label(volatile u32 *h) { return text(h,TEXT_UPDATE); }
+static u32 update_values(volatile u32 *h) { (void)h; return 2; }
+static const u16 *update_value_text(volatile u32 *h,u32 value) {
+    if(value!=UPDATE_INSTALL) return text(h,TEXT_UPDATE+1);
+    return update_confirmed(h) ? text(h,TEXT_RESTART) : text(h,TEXT_UPDATE+2);
+}
+static u32 update_value(volatile u32 *h) { return update_confirmed(h) ? UPDATE_INSTALL : 0; }
+/* Execute or Cancel of the confirm: Execute confirms the update and
+   leaves the page. */
+static void update_box_done(u32 executed,u32 arg) {
+    volatile u32 *h=menu_header();
+    (void)arg;
+    if(executed==1U && h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING) {
+        h[GRKIT_HOST_UPDATE/4]=GRKIT_UPDATE_CONFIRMED;
+        settings_value_leave(h);
+    }
+}
+/* OK on Install asks first; OK on Later, and MENU, return as usual. */
+static u32 update_select(volatile u32 *h,u32 controller,u32 value) {
+    volatile u16 *to;
+    if(value!=UPDATE_INSTALL || h[GRKIT_HOST_UPDATE/4]!=GRKIT_UPDATE_WAITING) return 0;
+    to=recipe_text_at(h,RECIPE_BOX_AT);
+    recipe_append(to,update_append_version(h,to,recipe_append(to,0,text(h,TEXT_UPDATE+3))),text(h,TEXT_UPDATE+4));
+    ui_confirm_on(h,controller,recipe_box(h),update_box_done,0);
+    return 1;
+}
+static const Setting update_setting={update_label,update_values,update_value_text,update_value,no_set,update_select,
+    SETTING_OWN_PAGE,update_value,update_title};
 static volatile u32 *core_kinds(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_CORE_KINDS); }
 static void core_refresh(volatile u32 *h) {
     u32 kinds=0, n=0;
     manage_adj_refresh(h);
+    if(update_shown(h)) kinds|=CORE_ROW_UPDATE<<(4U*n++);
     if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
     if(display_rows(h)) kinds|=CORE_ROW_DISPLAY<<(4U*n++);
     if(raw_handle(h)) kinds|=CORE_ROW_RAW<<(4U*n++);
@@ -166,7 +229,8 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     if(row>=core_rows(h)) return 0;
     kind=core_kinds(h)[0]>>(4U*row)&15U;
     return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_DISPLAY ? &display_setting :
-           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
+           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_DIAL ? dial_menu_setting() :
+           kind==CORE_ROW_UPDATE ? &update_setting : &adj_order_setting;
 }
 #define CORE_ROW(n) \
     static const u16 *core_label_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
@@ -316,6 +380,16 @@ static void settings_value_again(volatile u32 *h,u32 back) {
     u32 page=check_word(h,settings_options(h,settings_page(h),setting) ? CHECK_PAGE : CHECK_RADIO)[0];
     if(!page || !check_word(h,CHECK_ID)[0]) return;
     CALL3(FW_CHANGE_CONTROLLER)(page,back ? SETTINGS_SUBMENU : check_word(h,CHECK_ID)[0],0x10000000);
+}
+/* Return from the open own value page to the controller that opened it,
+   as MENU does: a page that a row of MENU opens returns to MENU, and a row
+   of a settings page to that page. */
+static void settings_value_leave(volatile u32 *h) {
+    u32 setting=check_word(h,CHECK_SETTING)[0];
+    u32 page=check_word(h,settings_options(h,settings_page(h),setting) ? CHECK_PAGE : CHECK_RADIO)[0], target;
+    if(!page || !check_word(h,CHECK_ID)[0]) return;
+    target=MENU_OBJECT_WORD(page,SETTINGS_RETURN_TARGET);
+    CALL3(FW_CHANGE_CONTROLLER)(page,target ? target : SETTINGS_SUBMENU,0x10000000);
 }
 /* Open the keyboard from the own value page `controller` of MENU, which
    the keyboard returns to, with `text` of at most `limit` characters: 1, or
