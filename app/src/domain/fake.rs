@@ -215,17 +215,28 @@ impl FakeCamera {
             UpdatePhase::Confirmed { .. } => {
                 self.flow.mark_restart();
             }
-            UpdatePhase::Restart { .. } => {
-                let version = self.config.available.clone();
-                self.live_version = version.clone();
-                self.camera.installed_version = version.clone();
-                self.package.installed = version.clone();
-                self.package.available = None;
-                self.flow.mark_installed(version);
-                self.kind = None;
-            }
+            // The camera installs at its next start: see [`Self::restart`].
             _ => {}
         }
+    }
+
+    /// The camera restarted after a confirmed update: it runs the new
+    /// version.
+    pub fn restart(&mut self) {
+        if !matches!(
+            self.flow.phase(),
+            UpdatePhase::Restart { .. } | UpdatePhase::Confirmed { .. }
+        ) {
+            return;
+        }
+        self.flow.mark_restart();
+        let version = self.config.available.clone();
+        self.live_version = version.clone();
+        self.camera.installed_version = version.clone();
+        self.package.installed = version.clone();
+        self.package.available = None;
+        self.flow.mark_installed(version);
+        self.kind = None;
     }
 
     fn sync_package_from_live(&mut self) {
@@ -311,9 +322,14 @@ impl CameraLink for FakeCamera {
     async fn poll_update(&mut self) -> Result<UpdatePoll, LinkError> {
         self.tick();
         Ok(match self.flow.phase().clone() {
-            UpdatePhase::Sending { progress, .. } => UpdatePoll::Sending { progress },
+            UpdatePhase::Downloading { progress, .. } | UpdatePhase::Sending { progress, .. } => {
+                UpdatePoll::Sending { progress }
+            }
             UpdatePhase::WaitingConfirm { .. } => UpdatePoll::WaitingConfirm,
-            UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => UpdatePoll::Confirmed,
+            UpdatePhase::Confirmed { .. }
+            | UpdatePhase::Restart { .. }
+            | UpdatePhase::Restarting { .. }
+            | UpdatePhase::ManualRestart { .. } => UpdatePoll::Confirmed,
             UpdatePhase::Installed { version, .. } => UpdatePoll::Installed { version },
             UpdatePhase::Failed(error) => UpdatePoll::Failed(error),
             UpdatePhase::Idle => UpdatePoll::Sending { progress: 0.0 },
@@ -357,6 +373,8 @@ mod tests {
         for _ in 0..40 {
             match block_on_ready(cam.poll_update()).unwrap() {
                 UpdatePoll::WaitingConfirm => saw_waiting = true,
+                // The new version runs only after a restart.
+                UpdatePoll::Confirmed => cam.restart(),
                 UpdatePoll::Installed { version } => {
                     installed = Some(version);
                     break;

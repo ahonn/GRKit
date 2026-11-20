@@ -4,19 +4,29 @@ use nsh_base::{SheetEvent, progress, sheet, theme};
 use nsh_core::prelude::*;
 use std::time::Duration;
 
-use crate::domain::{CameraModel, LinkError, UpdateError, UpdatePhase};
+use crate::domain::{CameraModel, LinkError, RestartStep, UpdateError, UpdatePhase, update_step};
 use crate::store::{AppState, Sheet, link_error_body, link_error_title};
 use crate::strings::{format_bytes, tr};
 use crate::ui::{
-    NATIVE_SHEET, STEP1, STEP2, STEP3, StepState, activity_indicator, camera_art, checklist_row,
-    connection_button, connection_icon, failed_icon, secondary_button, sheet_primary_button,
-    sheet_shell, sheet_surface, token, touch_target,
+    NATIVE_SHEET, StepState, activity_indicator, camera_art, connection_button, connection_icon,
+    failed_icon, secondary_button, sheet_primary_button, sheet_surface, token, touch_target,
 };
 
 /// Every sheet closes with a swipe down or a press on the backdrop, as in
-/// the camera app.
+/// the camera app. A restart under way stays.
 fn dismissible(app: AppState) -> bool {
-    app.sheet().is_some()
+    app.sheet().is_some() && !app.update_restarting()
+}
+
+/// An update under way asks before a swipe stops it, so the sheet only
+/// reports the swipe.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+fn swipe_closes(app: AppState) -> bool {
+    dismissible(app)
+        && !matches!(
+            app.sheet(),
+            Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart)
+        )
 }
 
 /// The user swiped a sheet away: what its own way out does (close, Not
@@ -27,9 +37,15 @@ fn dismiss(app: AppState) {
         Some(Sheet::Scan | Sheet::ImportLook) => app.set_sheet(None),
         Some(Sheet::Connecting { .. }) => app.cancel_connect(),
         Some(Sheet::ConnectError(_)) => app.dismiss_connect_error(),
-        Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => app.cancel_update(),
+        // An update under way asks first; a restart cannot be stopped.
+        Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => {
+            if !app.update_restarting() {
+                app.ask_cancel_update()
+            }
+        }
         Some(Sheet::Installed { .. }) => app.dismiss_installed(),
         Some(Sheet::Error(_)) => app.dismiss_error(),
+        Some(Sheet::InstallFailed) => app.dismiss_install_failed(),
         None => {}
     }
 }
@@ -42,13 +58,14 @@ fn sheet_body(app: AppState) -> AnyElement {
         Some(Sheet::ImportLook) => crate::pages::import_sheet(app.clone()).into_element(),
         Some(Sheet::Connecting { step }) => connecting(app.clone(), step).into_element(),
         Some(Sheet::ConnectError(error)) => connect_error_sheet(app.clone(), error).into_element(),
-        Some(Sheet::Sending) => sending(app.clone()).into_element(),
-        Some(Sheet::Confirm) => confirm(app.clone()).into_element(),
-        Some(Sheet::Restart) => restart(app.clone()).into_element(),
-        Some(Sheet::Installed { version, previous }) => {
-            installed(app.clone(), version, previous).into_element()
+        Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => {
+            update_sheet(app, None, None).into_element()
         }
-        Some(Sheet::Error(error)) => error_sheet(app.clone(), error).into_element(),
+        Some(Sheet::Installed { version, .. }) => {
+            update_sheet(app, None, Some(version)).into_element()
+        }
+        Some(Sheet::Error(error)) => update_sheet(app, Some(error), None).into_element(),
+        Some(Sheet::InstallFailed) => install_failed(app).into_element(),
         None => view().into_element(),
     }
 }
@@ -71,6 +88,8 @@ fn sheet_buttons(app: AppState) -> (Option<Action>, Option<Action>) {
         Some(Sheet::ConnectError(_)) => {
             (None, close(Box::new(move || app.dismiss_connect_error())))
         }
+        Some(Sheet::Error(_)) => (None, close(Box::new(move || app.dismiss_error()))),
+        Some(Sheet::InstallFailed) => (None, close(Box::new(move || app.dismiss_install_failed()))),
         _ => (None, None),
     }
 }
@@ -96,14 +115,10 @@ pub fn overlay(app: AppState) -> impl IntoElement {
                     .presentation(ModalPresentation::PageSheet)
                     .detents(move || vec![SheetDetent::Height(height.get())])
                     .grabber(move || dismissible(app))
-                    .close_on_swipe(move || dismissible(app))
-                    .close_on_backdrop_press(move || dismissible(app))
+                    .close_on_swipe(move || swipe_closes(app))
+                    .close_on_backdrop_press(move || swipe_closes(app))
                     .close_on_escape(move || dismissible(app))
-                    .on_cancel(move || {
-                        if dismissible(app) {
-                            dismiss(app)
-                        }
-                    })
+                    .on_cancel(move || dismiss(app))
                     .child(nav_stack().flex_1().child(dynamic(move || {
                         // A back button comes and goes with the page.
                         let back = sheet_buttons(app).0.is_some();
@@ -344,8 +359,8 @@ fn step_indicator(state: StepState, changed: bool) -> AnyElement {
                 .rounded_full()
                 .items_center()
                 .justify_center()
-                .bg(move || token("tint"))
-                .text_color(move || rgb(0xFFFFFF))
+                .bg(move || theme().foreground)
+                .text_color(move || theme().background)
                 .child(svg(nsh_core::element::ImageSrc::svg_markup(CHECK)).size(px(12.0)));
             if changed {
                 badge
@@ -729,6 +744,7 @@ fn connect_error_sheet(app: AppState, error: LinkError) -> impl IntoElement {
         });
     };
     let no_grkit = error == LinkError::NeedsGrkit;
+    let app_old = error == LinkError::AppTooOld;
     // The steps, dimmed and cut at the one that failed.
     let steps = error.failed_step().map(|failed| {
         let copy = step_copy(app, model);
@@ -773,7 +789,14 @@ fn connect_error_sheet(app: AppState, error: LinkError) -> impl IntoElement {
                 view()
                     .w_full()
                     .gap_1()
-                    .child(if no_grkit {
+                    .child(if app_old {
+                        sheet_primary_button(tr("app.store", &[]), || {
+                            spawn(async {
+                                let _ = open_url(crate::store::app_store_url()).await;
+                            });
+                        })
+                        .into_element()
+                    } else if no_grkit {
                         sheet_primary_button(tr("cam.install_guide", &[]), || {
                             spawn(async {
                                 let _ = open_url(crate::store::INSTALL_URL).await;
@@ -803,7 +826,7 @@ fn connect_error_sheet(app: AppState, error: LinkError) -> impl IntoElement {
                             secondary_button(tr("conn.open_settings", &[]), open_settings)
                         }),
                     )
-                    .child((!no_grkit).then(|| {
+                    .child((!no_grkit && !app_old).then(|| {
                         secondary_button(tr("cam.detect", &[]), move || {
                             app.dismiss_connect_error();
                             app.detect_now();
@@ -813,327 +836,111 @@ fn connect_error_sheet(app: AppState, error: LinkError) -> impl IntoElement {
     )
 }
 
-fn sending(app: AppState) -> impl IntoElement {
-    let model = app.model_name();
-    let progress_val = match app.flow_phase() {
-        UpdatePhase::Sending { progress, .. } => progress * 100.0,
-        _ => 100.0,
+/// The update sheet: one sheet whose steps advance in place, from the
+/// download to the restart, and that turns into the error that stopped it.
+fn update_sheet(
+    app: AppState,
+    error: Option<UpdateError>,
+    installed: Option<String>,
+) -> impl IntoElement {
+    let phase = app.flow_phase();
+    let step = match (&error, &installed) {
+        (Some(error), _) => error.failed_step(),
+        (_, Some(_)) => 4,
+        _ => update_step(&phase),
     };
-    let indeterminate = progress_val < 0.0;
-    let version = app.package().and_then(|p| p.available);
-    sheet_shell(
-        tr("sending.title", &[("model", &model)]),
-        version.map(|version| format!("GRKit {version}")),
-        Some(app.nearby_model().unwrap_or(CameraModel::Gr3)),
-        false,
-        || {},
-        view()
-            .w_full()
-            .gap_4()
-            .items_center()
-            .child(
-                view()
-                    .w_full()
-                    .gap_3()
-                    .p_4()
-                    .rounded(px(8.0))
-                    .bg(move || theme().muted)
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                text(tr(
-                                    if indeterminate {
-                                        "sending.preparing"
-                                    } else {
-                                        "sending.progress"
-                                    },
-                                    &[],
-                                ))
-                                .text_size(px(17.0))
-                                .font_weight(FontWeight::SEMIBOLD),
-                            )
-                            .child((!indeterminate).then(|| {
-                                text(format!("{progress_val:.0}%"))
-                                    .text_size(px(15.0))
-                                    .line_height(px(22.0))
-                                    .text_color(move || theme().muted_foreground)
-                            })),
-                    )
-                    .child((!indeterminate).then(|| {
-                        progress()
-                            .value(progress_val)
-                            .accessibility_label(tr("sending.progress", &[]))
-                            .track_style(|s| {
-                                s.h(px(4.0))
-                                    .rounded(px(3.0))
-                                    .overflow_hidden()
-                                    .bg(move || if dark() { rgb(0x3A3A3C) } else { rgb(0xE3E3E8) })
-                            })
-                            .indicator_style(|s| {
-                                s.h(px(4.0)).rounded(px(3.0)).bg(move || token("tint"))
-                            })
-                    })),
-            )
-            .child(
-                view()
-                    .w_full()
-                    .gap_1()
-                    .child(checklist_row(
-                        &tr("sending.step_confirm", &[]),
-                        None,
-                        StepState::Waiting,
-                    ))
-                    .child(checklist_row(
-                        &tr("sending.step_restart", &[]),
-                        None,
-                        StepState::Waiting,
-                    )),
-            )
-            .child(
-                text(move || tr("sending.keep_on", &[]))
-                    .text_size(px(13.0))
-                    .line_height(px(18.0))
-                    .text_color(move || theme().muted_foreground),
-            )
-            .child(secondary_button(tr("sending.cancel", &[]), move || {
-                app.cancel_update()
-            })),
-    )
-}
-
-fn confirm(app: AppState) -> impl IntoElement {
-    sheet_shell(
-        tr("confirm.title", &[]),
-        Some(tr("confirm.subtitle", &[])),
-        None,
-        false,
-        || {},
-        view()
-            .w_full()
-            .gap_4()
-            .child(installation_steps())
-            .child(
-                view()
-                    .w_full()
-                    .p_4()
-                    .rounded(px(8.0))
-                    .bg(move || theme().muted)
-                    .child(
-                        text(move || {
-                            tr(
-                                "confirm.waiting",
-                                &[("time", &app.confirm_deadline_label())],
-                            )
-                        })
-                        .text_size(px(15.0))
-                        .line_height(px(22.0))
-                        .text_color(move || token("link"))
-                        .text_center(),
-                    ),
-            )
-            .child(secondary_button(tr("sending.cancel", &[]), move || {
-                app.cancel_update()
-            })),
-    )
-}
-
-// The guide has a fixed cross-axis extent. Native iOS scroll views can otherwise
-// move vertically when their content exceeds their height, even in horizontal mode.
-const GUIDE_WIDTH: f32 = 300.0;
-const GUIDE_HEIGHT: f32 = 258.0;
-const GUIDE_STRIDE: f32 = GUIDE_WIDTH + 12.0;
-
-fn installation_steps() -> impl IntoElement {
-    let index = signal(0u32);
-    let track = element_ref();
-    view()
-        .gap_1()
-        .child(
-            scroll()
-                .element_ref(&track)
-                .horizontal()
-                .scrollbar(false)
-                .bounces(false)
-                .snap_interval(Points(GUIDE_STRIDE))
-                .disable_interval_momentum(true)
-                .deceleration(0.99)
-                .h(px(GUIDE_HEIGHT))
-                .mx(px(-20.0))
-                .px(px(26.0))
-                .gap(px(12.0))
-                .label("Steps on the camera")
-                .on_scroll_end(move |offset: &Point<Points>| {
-                    index.set((offset.x.0 / GUIDE_STRIDE).round().clamp(0.0, 2.0) as u32);
-                })
-                .child(step_slide(STEP1, 1, tr("confirm.step1", &[])))
-                .child(step_slide(STEP2, 2, tr("confirm.step2", &[])))
-                .child(step_slide(STEP3, 3, tr("confirm.step3", &[]))),
-        )
-        .child(
-            view()
-                .flex_row()
-                .justify_center()
-                .child(page_dot(0, index, track))
-                .child(page_dot(1, index, track))
-                .child(page_dot(2, index, track)),
-        )
-}
-
-fn page_dot(i: u32, index: Signal<u32>, track: ElementRef) -> impl IntoElement {
-    let caption_key = ["confirm.step1", "confirm.step2", "confirm.step3"][i as usize];
-    view()
-        .size(px(touch_target()))
-        .items_center()
-        .justify_center()
-        .role(AccessibilityRole::Button)
-        .label(format!("{}: {}", i + 1, tr(caption_key, &[])))
-        .on_press(move || {
-            index.set(i);
-            track.scroll_to_offset(Points(i as f32 * GUIDE_STRIDE), !reduce_motion());
-        })
-        .child(view().size(px(7.0)).rounded_full().bg(move || {
-            if index.get() == i {
-                token("tint")
+    let version = installed
+        .clone()
+        .or_else(|| app.package().and_then(|p| p.available))
+        .unwrap_or_default();
+    let model = format!("RICOH {}", app.model_name());
+    let (title, subtitle) = update_copy(&phase, error.as_ref(), installed.as_deref(), &model);
+    let titles = [
+        tr("update.step_download", &[]),
+        tr("update.step_send", &[]),
+        tr("update.step_confirm", &[]),
+        tr("update.step_restart", &[]),
+    ];
+    let failed = error.is_some();
+    // An error shows the steps up to the one it stopped at, dimmed.
+    let shown = if failed { step + 1 } else { 4 };
+    let steps = view()
+        .w_full()
+        .when(failed, |v| v.opacity(0.5))
+        .children((0..shown).map(|index| {
+            let state = if failed && index == step {
+                StepState::Failed
+            } else if index < step {
+                StepState::Done
+            } else if index == step {
+                StepState::Current
             } else {
-                rgb(0xC7C7CC).into()
-            }
-        }))
-}
-
-fn step_slide(asset: ImageAsset, number: u8, caption: String) -> impl IntoElement {
-    view()
-        .w(px(GUIDE_WIDTH))
-        .h(px(GUIDE_HEIGHT))
-        .overflow_hidden()
-        .flex_shrink_0()
-        .child(
-            view()
-                .gap(px(10.0))
-                .child(
-                    view().p(px(6.0)).rounded(px(10.0)).bg(rgb(0x111113)).child(
-                        image(asset)
-                            .w_full()
-                            .aspect_ratio(3.0 / 2.0)
-                            .rounded(px(16.0))
-                            .object_fit(ResizeMode::Cover),
-                    ),
-                )
-                .child(
-                    view()
-                        .flex_row()
-                        .h(px(44.0))
-                        .items_center()
-                        .gap(px(10.0))
-                        .px_1()
-                        .child(
-                            view()
-                                .size(px(24.0))
-                                .rounded_full()
-                                .items_center()
-                                .justify_center()
-                                .bg(move || token("tint"))
-                                .child(
-                                    text(format!("{number}"))
-                                        .text_size(px(13.0))
-                                        .line_height(px(18.0))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(move || theme().background),
-                                ),
-                        )
-                        .child(
-                            text(caption)
-                                .flex_1()
-                                .line_height(px(22.0))
-                                .number_of_lines(2u32)
-                                .text_size(px(17.0))
-                                .font_weight(FontWeight::MEDIUM),
-                        ),
-                ),
-        )
-}
-
-fn restart(app: AppState) -> impl IntoElement {
-    sheet_shell(
-        tr("restart.title", &[]),
-        Some(tr("restart.subtitle", &[])),
-        Some(app.nearby_model().unwrap_or(CameraModel::Gr3)),
-        false,
-        || {},
-        view()
-            .w_full()
-            .gap_4()
-            .items_center()
-            .child(steps_box(2))
-            .child(
-                view()
-                    .w_full()
-                    .gap_1()
-                    .child(sheet_primary_button(tr("restart.done", &[]), {
-                        let app = app.clone();
-                        move || app.finish_restart()
-                    }))
-                    .child(secondary_button(tr("restart.cancel", &[]), move || {
-                        app.cancel_update()
-                    })),
-            ),
+                StepState::Waiting
+            };
+            let extra = (!failed && index == step).then(|| step_detail(app, &phase, &version));
+            update_step_row(&titles[index], state, index + 1 == shown, extra).into_element()
+        }));
+    connection_shell(
+        title,
+        Some(subtitle),
+        failed,
+        move || app.dismiss_error(),
+        view().w_full().gap_4().child(steps).child(update_buttons(
+            app,
+            &phase,
+            error,
+            installed.is_some(),
+        )),
     )
 }
 
-fn installed(app: AppState, version: String, _previous: String) -> impl IntoElement {
-    sheet_shell(
-        tr("installed.title", &[("version", &version)]),
-        Some(tr("installed.verified", &[])),
-        None,
-        false,
-        || {},
-        view()
-            .w_full()
-            .gap_5()
-            .child(
-                view()
-                    .flex_row()
-                    .items_center()
-                    .justify_center()
-                    .gap_4()
-                    .py_3()
-                    .child(camera_art(
-                        app.nearby_model().unwrap_or(CameraModel::Gr3),
-                        120.0,
-                        false,
-                    ))
-                    .child(
-                        view()
-                            .size(px(32.0))
-                            .rounded_full()
-                            .items_center()
-                            .justify_center()
-                            .bg(move || token("success-soft"))
-                            .text_color(move || token("success"))
-                            .child(connection_icon("M5 12l4 4L19 6")),
-                    ),
-            )
-            .child(sheet_primary_button(tr("installed.done", &[]), move || {
-                app.dismiss_installed()
-            })),
-    )
-}
-
-fn error_sheet(app: AppState, error: UpdateError) -> impl IntoElement {
-    let (title, body, retry_label, retry) = match &error {
-        UpdateError::Service(message) => (
-            tr("error.service_title", &[]),
-            message.clone(),
-            tr("error.try_again", &[]),
-            true,
+/// The title and the line under it for the update sheet.
+fn update_copy(
+    phase: &UpdatePhase,
+    error: Option<&UpdateError>,
+    installed: Option<&str>,
+    model: &str,
+) -> (String, String) {
+    if let Some(error) = error {
+        return update_error_copy(error);
+    }
+    if let Some(version) = installed {
+        return (
+            tr("installed.title", &[("version", version)]),
+            tr("installed.verified", &[]),
+        );
+    }
+    let key = |k: &str| tr(k, &[]);
+    match phase {
+        UpdatePhase::WaitingConfirm { .. } => (key("confirm.title"), key("confirm.subtitle")),
+        UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => {
+            (key("restart.title"), key("restart.subtitle"))
+        }
+        UpdatePhase::Restarting { .. } => {
+            (key("restart.running_title"), key("restart.running_body"))
+        }
+        UpdatePhase::ManualRestart { .. } => (key("restart.title"), key("restart.manual_body")),
+        _ => (
+            tr("update.title", &[("model", model)]),
+            key("update.keep_on"),
         ),
-        UpdateError::Download(message) => (
+    }
+}
+
+fn update_error_copy(error: &UpdateError) -> (String, String) {
+    match error {
+        UpdateError::Service(message) => (tr("error.service_title", &[]), message.clone()),
+        UpdateError::Download(_) => (
             tr("error.download_title", &[]),
-            message.clone(),
-            tr("error.try_again", &[]),
-            true,
+            tr("update.download_body", &[]),
+        ),
+        UpdateError::ModuleNotKept(id) => (
+            tr("error.module_title", &[]),
+            tr("error.module_body", &[("module", id)]),
+        ),
+        UpdateError::PackageInvalid => (
+            tr("error.package_title", &[]),
+            tr("error.package_body", &[]),
         ),
         UpdateError::CardFull { bytes_needed } => (
             tr("error.card_full_title", &[]),
@@ -1141,80 +948,368 @@ fn error_sheet(app: AppState, error: UpdateError) -> impl IntoElement {
                 "error.card_full_body",
                 &[("size", &format_bytes(*bytes_needed))],
             ),
-            tr("error.try_again", &[]),
-            true,
         ),
         UpdateError::NotConfirmed => (
             tr("error.not_confirmed_title", &[]),
             tr("error.not_confirmed_body", &[]),
-            tr("error.send_again", &[]),
-            true,
         ),
         UpdateError::Refused => (
             tr("error.refused_title", &[]),
             tr("error.refused_body", &[]),
-            tr("error.try_again", &[]),
-            true,
         ),
-        UpdateError::ConnectionLost => (
-            tr("error.lost_title", &[]),
-            tr("error.lost_body", &[]),
-            tr("error.try_again", &[]),
-            false,
-        ),
+        UpdateError::ConnectionLost => (tr("error.lost_title", &[]), tr("error.lost_body", &[])),
+    }
+}
+
+/// What the step under way shows below its name.
+fn step_detail(app: AppState, phase: &UpdatePhase, version: &str) -> AnyElement {
+    let note = |key: &'static str| {
+        text(tr(key, &[]))
+            .text_size(px(13.0))
+            .line_height(px(18.0))
+            .text_color(move || theme().muted_foreground)
+            .into_element()
     };
-    sheet_shell(
-        title,
-        Some(body),
-        None,
-        false,
-        || {},
-        view()
+    match phase {
+        UpdatePhase::Downloading { progress, .. } | UpdatePhase::Sending { progress, .. } => view()
             .w_full()
-            .gap_1()
-            .child(retry.then(|| {
-                sheet_primary_button(retry_label, {
-                    let app = app.clone();
-                    move || app.retry_update()
+            .gap_2()
+            .child((*progress >= 0.0).then(|| progress_bar(*progress)))
+            .into_element(),
+        UpdatePhase::WaitingConfirm { .. } => confirm_detail(app, version).into_element(),
+        UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => note("restart.auto_body"),
+        UpdatePhase::Restarting { step, .. } => restart_progress(*step).into_element(),
+        _ => view().into_element(),
+    }
+}
+
+/// A black bar with its percentage.
+fn progress_bar(value: f32) -> impl IntoElement {
+    let percent = (value * 100.0).clamp(0.0, 100.0);
+    view()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(10.0))
+        .child(
+            progress()
+                .flex_1()
+                .value(percent)
+                .accessibility_label(tr("update.title", &[]))
+                .track_style(|s| {
+                    s.h(px(4.0))
+                        .rounded(px(2.0))
+                        .overflow_hidden()
+                        .bg(move || if dark() { rgb(0x3A3A3C) } else { rgb(0xE3E3E8) })
                 })
+                .indicator_style(|s| s.h(px(4.0)).bg(move || theme().foreground)),
+        )
+        .child(
+            text(format!("{percent:.0}%"))
+                .text_size(px(13.0))
+                .text_color(move || theme().muted_foreground),
+        )
+}
+
+/// The confirm step: the camera's menu with the row to open, the three
+/// choices on the camera, and the time left.
+fn confirm_detail(app: AppState, version: &str) -> impl IntoElement {
+    let value = tr("update.menu_value", &[("version", version)]);
+    let menu_row = |label: String, value: Option<String>, selected: bool| {
+        view()
+            .flex_row()
+            .justify_between()
+            .px(px(10.0))
+            .py(px(6.0))
+            .rounded(px(6.0))
+            .when(selected, |v| {
+                v.bg(rgb(0x2E2E32)).border_1().border_color(rgb(0xFFFFFF))
+            })
+            .child(text(label).text_size(px(13.0)).text_color(if selected {
+                rgb(0xFFFFFF)
+            } else {
+                rgb(0x8A8A8A)
             }))
+            .child(value.map(|v| text(v).text_size(px(13.0)).text_color(rgb(0xFFFFFF))))
+    };
+    let number = |n: u8, copy: String| {
+        view()
+            .flex_row()
+            .items_center()
+            .gap(px(10.0))
+            .child(
+                view()
+                    .size(px(20.0))
+                    .rounded_full()
+                    .items_center()
+                    .justify_center()
+                    .bg(move || theme().foreground)
+                    .child(
+                        text(n.to_string())
+                            .text_size(px(12.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(move || theme().background),
+                    ),
+            )
+            .child(
+                text(copy)
+                    .flex_1()
+                    .text_size(px(15.0))
+                    .line_height(px(20.0)),
+            )
+    };
+    view()
+        .w_full()
+        .gap(px(8.0))
+        .child(
+            view()
+                .w_full()
+                .p(px(10.0))
+                .gap(px(4.0))
+                .rounded(px(12.0))
+                .bg(rgb(0x111113))
+                .role(AccessibilityRole::Image)
+                .label(format!("{} · {value}", tr("update.menu_about", &[])))
+                .child(menu_row(tr("update.menu_settings", &[]), None, false))
+                .child(menu_row(
+                    tr("update.menu_about", &[]),
+                    Some(value.clone()),
+                    true,
+                )),
+        )
+        .child(number(1, tr("confirm.step1", &[])))
+        .child(number(2, tr("confirm.step2", &[])))
+        .child(number(3, tr("confirm.step3", &[])))
+        .child(
+            text(move || {
+                tr(
+                    "confirm.waiting",
+                    &[("time", &app.confirm_deadline_label())],
+                )
+            })
+            .text_size(px(15.0))
+            .line_height(px(20.0))
+            .text_color(move || theme().muted_foreground),
+        )
+}
+
+/// The restart the phone runs: off, on, and the reconnect.
+fn restart_progress(step: RestartStep) -> impl IntoElement {
+    let at = match step {
+        RestartStep::PoweringOff => 0,
+        RestartStep::PoweringOn => 1,
+        RestartStep::Reconnecting => 2,
+    };
+    let rows = [
+        ("restart.step_off", "restart.step_off_done"),
+        ("restart.step_on", "restart.step_on_done"),
+        ("restart.step_check", "restart.step_check"),
+    ];
+    view()
+        .w_full()
+        .gap(px(6.0))
+        .children(rows.iter().enumerate().map(|(i, (running, done))| {
+            let state = if i < at {
+                StepState::Done
+            } else if i == at {
+                StepState::Current
+            } else {
+                StepState::Waiting
+            };
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(10.0))
+                .child(
+                    view()
+                        .size(px(14.0))
+                        .items_center()
+                        .justify_center()
+                        .child(match state {
+                            StepState::Current => activity_indicator(14.0),
+                            StepState::Done => text("✓")
+                                .text_size(px(13.0))
+                                .font_weight(FontWeight::BOLD)
+                                .into_element(),
+                            _ => view()
+                                .size(px(8.0))
+                                .rounded_full()
+                                .border_1()
+                                .border_color(move || theme().border)
+                                .into_element(),
+                        }),
+                )
+                .child(
+                    text(tr(if i < at { done } else { running }, &[]))
+                        .text_size(px(15.0))
+                        .text_color(move || match state {
+                            StepState::Waiting => theme().muted_foreground,
+                            _ => theme().foreground,
+                        }),
+                )
+                .into_element()
+        }))
+}
+
+/// One step of the update sheet: the connect step's look, with room for
+/// the step's own detail.
+fn update_step_row(
+    title: &str,
+    state: StepState,
+    last: bool,
+    extra: Option<AnyElement>,
+) -> impl IntoElement {
+    let opacity = match state {
+        StepState::Waiting => 0.4,
+        StepState::Current | StepState::Failed => 1.0,
+        StepState::Done => 0.6,
+    };
+    view()
+        .flex_row()
+        .child(
+            view()
+                .w(px(STEP_INDICATOR))
+                .items_center()
+                .child(step_indicator(state, false))
+                .child((!last).then(|| {
+                    view()
+                        .flex_1()
+                        .w(px(1.5))
+                        .min_h(px(10.0))
+                        .mt_1()
+                        .bg(move || theme().border)
+                })),
+        )
+        .child(
+            view()
+                .flex_1()
+                .pl_3()
+                .pb(px(14.0))
+                .gap_2()
+                .child(
+                    text(title.to_owned())
+                        .text_size(px(16.0))
+                        .line_height(px(22.0))
+                        .font_weight(if matches!(state, StepState::Waiting) {
+                            FontWeight::NORMAL
+                        } else {
+                            FontWeight::MEDIUM
+                        })
+                        .opacity(opacity),
+                )
+                .child(extra),
+        )
+}
+
+fn update_buttons(
+    app: AppState,
+    phase: &UpdatePhase,
+    error: Option<UpdateError>,
+    installed: bool,
+) -> AnyElement {
+    let buttons = view().w_full().gap_1();
+    if installed {
+        return buttons
+            .child(sheet_primary_button(tr("installed.done", &[]), move || {
+                app.dismiss_installed()
+            }))
+            .into_element();
+    }
+    if let Some(error) = error {
+        let (primary, key): (Option<Box<dyn Fn()>>, &str) = match error {
+            UpdateError::Refused | UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid => {
+                (None, "")
+            }
+            UpdateError::ConnectionLost => (
+                Some(Box::new(move || app.retry_update())),
+                "update.reconnect",
+            ),
+            UpdateError::NotConfirmed => (
+                Some(Box::new(move || app.retry_update())),
+                "error.send_again",
+            ),
+            _ => (
+                Some(Box::new(move || app.retry_update())),
+                "error.try_again",
+            ),
+        };
+        return buttons
+            .child(match primary {
+                Some(action) => sheet_primary_button(tr(key, &[]), action).into_element(),
+                None => sheet_primary_button(tr("update.ok", &[]), move || app.dismiss_error())
+                    .into_element(),
+            })
             .child((!app.demo() && app.has_pending_update()).then(|| {
                 secondary_button(tr("error.cancel_pending", &[]), move || app.cancel_update())
             }))
-            .child(secondary_button(tr("error.close", &[]), move || {
-                app.dismiss_error()
-            })),
+            .child(
+                primary_is_some(&error)
+                    .then(|| secondary_button(tr("error.close", &[]), move || app.dismiss_error())),
+            )
+            .into_element();
+    }
+    match phase {
+        UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => buttons
+            .child(sheet_primary_button(tr("restart.run", &[]), move || {
+                app.restart_for_update()
+            }))
+            .child(secondary_button(tr("restart.manual", &[]), move || {
+                app.restart_manually()
+            }))
+            .into_element(),
+        UpdatePhase::ManualRestart { .. } => buttons
+            .child(sheet_primary_button(
+                tr("update.reconnect", &[]),
+                move || app.reconnect_for_update(),
+            ))
+            .into_element(),
+        UpdatePhase::Restarting { .. } => buttons.into_element(),
+        _ => buttons
+            .child(secondary_button(tr("update.cancel", &[]), move || {
+                app.ask_cancel_update()
+            }))
+            .into_element(),
+    }
+}
+
+fn primary_is_some(error: &UpdateError) -> bool {
+    !matches!(
+        error,
+        UpdateError::Refused | UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid
     )
 }
 
-fn steps_box(current: u8) -> impl IntoElement {
-    view()
-        .w_full()
-        .rounded(px(10.0))
-        .bg(move || theme().muted)
-        .child(checklist_row(
-            &tr("sending.step_send", &[]),
-            None,
-            step_state(current, 0),
-        ))
-        .child(checklist_row(
-            &tr("sending.step_confirm", &[]),
-            None,
-            step_state(current, 1),
-        ))
-        .child(checklist_row(
-            &tr("sending.step_restart", &[]),
-            None,
-            step_state(current, 2),
-        ))
-}
-
-fn step_state(current: u8, index: u8) -> StepState {
-    if current > index {
-        StepState::Done
-    } else if current == index {
-        StepState::Current
-    } else {
-        StepState::Waiting
-    }
+/// A confirmed update did not install: the camera runs without GRKit.
+fn install_failed(app: AppState) -> impl IntoElement {
+    let model = app.selected_model().unwrap_or(CameraModel::Gr3);
+    connection_shell(
+        tr("update.failed_title", &[]),
+        Some(tr("update.failed_sub", &[])),
+        true,
+        move || app.dismiss_install_failed(),
+        view()
+            .w_full()
+            .gap_4()
+            .child(art_box(model))
+            .child(
+                text(tr("update.failed_body", &[]))
+                    .text_size(px(14.0))
+                    .line_height(px(20.0))
+                    .text_color(move || theme().foreground),
+            )
+            .child(
+                view()
+                    .w_full()
+                    .gap_1()
+                    .child(sheet_primary_button(
+                        tr("update.reconnect", &[]),
+                        move || app.reconnect_install_failed(),
+                    ))
+                    .child(secondary_button(tr("update.open_site", &[]), || {
+                        spawn(async {
+                            let _ = open_url(crate::store::INSTALL_URL).await;
+                        });
+                    })),
+            ),
+    )
 }

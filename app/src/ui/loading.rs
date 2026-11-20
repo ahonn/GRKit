@@ -12,33 +12,6 @@ pub fn skeleton_bar(width: f32, height: f32) -> impl IntoElement {
         .bg(move || theme().muted)
 }
 
-pub fn update_skeleton() -> impl IntoElement {
-    grouped_card(
-        view()
-            .p_4()
-            .gap_3()
-            .child(
-                view()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(skeleton_bar(48.0, 48.0))
-                    .child(
-                        view()
-                            .gap_2()
-                            .child(skeleton_bar(150.0, 20.0))
-                            .child(skeleton_bar(190.0, 14.0)),
-                    ),
-            )
-            .child(
-                text(tr("loading.update", &[]))
-                    .text_size(px(13.0))
-                    .line_height(px(18.0))
-                    .text_color(move || theme().muted_foreground),
-            ),
-    )
-}
-
 pub fn camera_skeleton() -> impl IntoElement {
     grouped_card(
         view()

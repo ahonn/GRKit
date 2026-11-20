@@ -254,6 +254,9 @@ fn start_phone_with(
             .map_or((url.as_str(), None), |(p, q)| (p, Some(q)));
         let parts: Vec<&str> = path.split('/').collect();
         let answer = match (request.method.as_str(), parts.as_slice()) {
+            ("GET", ["", "v1", "ping"]) => {
+                response(200, json!({"protocol": 1, "bootId": "boot-test"}))
+            }
             ("GET", ["", "v1", "props"]) => response(
                 200,
                 json!({
@@ -419,8 +422,8 @@ fn start_phone_with(
 }
 
 fn open_looks(app: &mut Headless) {
-    // The release site answers 404, so the camera card offers Software Update.
-    app.wait_for_within("Software Update", WAIT).unwrap();
+    // The camera card shows the versions once connected.
+    app.wait_for_within("Firmware", WAIT).unwrap();
     app.press("role:button[Film Looks]").unwrap();
     app.wait_for_within("Camera Menu", WAIT).unwrap();
 }

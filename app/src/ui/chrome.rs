@@ -13,9 +13,6 @@ const ART_GR3: ImageAsset = asset!("art-gr3.png");
 const ART_GR3X: ImageAsset = asset!("art-gr3x.png");
 const ART_GR4: ImageAsset = asset!("art-gr4.png");
 const GR_SNAP: ImageAsset = asset!("gr-snap.png");
-pub const STEP1: ImageAsset = asset!("step1.jpg");
-pub const STEP2: ImageAsset = asset!("step2.jpg");
-pub const STEP3: ImageAsset = asset!("step3.jpg");
 
 /// The platform's own loader, which each platform registers as a native
 /// view: Android's indeterminate `ProgressBar` (`MainActivity`), iOS's
@@ -284,39 +281,6 @@ pub fn chevron_row(
         )
 }
 
-pub fn checklist_row(title: &str, subtitle: Option<&str>, state: StepState) -> impl IntoElement {
-    let title = title.to_owned();
-    let subtitle = subtitle.map(str::to_owned);
-    view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .min_h(px(50.0))
-        .px_4()
-        .child(step_icon(state))
-        .child(
-            view()
-                .flex_1()
-                .gap(px(2.0))
-                .child(
-                    text(title)
-                        .text_size(px(17.0))
-                        .style_when(matches!(state, StepState::Current | StepState::Done), |s| {
-                            s.font_weight(FontWeight::SEMIBOLD)
-                        })
-                        .text_color(move || match state {
-                            StepState::Waiting => theme().muted_foreground,
-                            _ => theme().foreground,
-                        }),
-                )
-                .child(subtitle.map(|s| {
-                    text(s)
-                        .text_size(px(13.0))
-                        .text_color(move || theme().muted_foreground)
-                })),
-        )
-}
-
 #[derive(Clone, Copy)]
 pub enum StepState {
     Done,
@@ -324,47 +288,6 @@ pub enum StepState {
     Waiting,
     /// The step an error stopped at.
     Failed,
-}
-
-fn step_icon(state: StepState) -> impl IntoElement {
-    match state {
-        StepState::Done => view()
-            .size(px(22.0))
-            .rounded_full()
-            .items_center()
-            .justify_center()
-            .bg(move || token("success"))
-            .child(
-                text("✓")
-                    .text_size(px(12.0))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(move || token("button-foreground")),
-            )
-            .into_element(),
-        // Filled ring: outer stroke + solid center (spinner alternative).
-        StepState::Current => view()
-            .size(px(22.0))
-            .rounded_full()
-            .items_center()
-            .justify_center()
-            .border_2()
-            .border_color(move || theme().foreground)
-            .child(
-                view()
-                    .size(px(8.0))
-                    .rounded_full()
-                    .bg(move || theme().foreground),
-            )
-            .into_element(),
-        StepState::Waiting => view()
-            .size(px(22.0))
-            .rounded_full()
-            .border_2()
-            .border_color(move || theme().muted_foreground)
-            .opacity(0.35)
-            .into_element(),
-        StepState::Failed => failed_icon(22.0).into_element(),
-    }
 }
 
 /// iOS presents the sheets natively: the system draws the grabber, the
@@ -430,18 +353,28 @@ pub fn sheet_shell(
         .child(body)
 }
 
+/// The GRKit tile: GR and Kit in its red box on black.
 pub fn gr_mark(size: f32) -> impl IntoElement {
     view()
         .size(px(size))
-        .rounded(px(8.0))
+        .rounded(px(size * 0.23))
+        .flex_row()
         .items_center()
         .justify_center()
-        .bg(move || token("button"))
+        .bg(rgb(0x0B0B0B))
         .child(
             text("GR")
-                .text_size(px(size * 0.33))
+                .text_size(px(size * 0.29))
                 .font_weight(FontWeight::BOLD)
-                .text_color(move || token("button-foreground")),
+                .text_color(rgb(0xFFFFFF)),
+        )
+        .child(
+            view().ml(px(2.0)).px(px(3.0)).bg(rgb(0xCF142B)).child(
+                text("Kit")
+                    .text_size(px(size * 0.21))
+                    .font_weight(FontWeight::BOLD)
+                    .text_color(rgb(0xFFFFFF)),
+            ),
         )
 }
 

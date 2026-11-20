@@ -19,7 +19,7 @@ use nsh_core::{
     prelude::{data_dir, fetch},
 };
 
-use crate::domain::{CameraModel, PackageResponse};
+use crate::domain::{CameraModel, PackageResponse, ReleaseProblem, firmware_problem};
 
 const INDEX_LIMIT: usize = 2 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(45);
@@ -157,6 +157,8 @@ fn cache_write(dir: &Path, name: &str, bytes: &[u8]) {
 #[derive(Clone, Debug)]
 pub struct Release {
     pub version: String,
+    /// The notes of recent releases, from the index: display only.
+    pub notes: Vec<grkit_core::release_index::VersionNotes>,
     /// Upper estimate of the release files, before applying camera selections.
     pub bytes: u64,
     base: String,
@@ -234,21 +236,38 @@ async fn indexed_file(base: &str, index: &Index, path: &str) -> Result<Vec<u8>, 
     Ok(bytes)
 }
 
-/// Read and authenticate release metadata before offering an update.
-pub async fn latest(model: CameraModel, firmware: &str) -> Result<Release, String> {
+/// Read and authenticate release metadata before offering an update. The
+/// error says what the Software Update page tells the person; the details
+/// go to the log.
+pub async fn latest(model: CameraModel, firmware: &str) -> Result<Release, ReleaseProblem> {
     let camera = camera_for(model);
-    if !camera
-        .releases
-        .iter()
-        .any(|supported| supported.firmware == firmware)
-    {
-        return Err(format!("Unsupported {} firmware: {firmware}", camera.name));
+    let supported: Vec<&str> = camera.releases.iter().map(|r| r.firmware).collect();
+    if let Some(problem) = firmware_problem(&supported, firmware) {
+        log::warn!("Unsupported {} firmware: {firmware}", camera.name);
+        return Err(problem);
     }
+    latest_for(camera).await.map_err(|(problem, detail)| {
+        log::warn!("Release check failed: {detail}");
+        problem
+    })
+}
+
+type Problem = (ReleaseProblem, String);
+
+fn network(detail: String) -> Problem {
+    (ReleaseProblem::Network, detail)
+}
+
+fn newer_app(detail: String) -> Problem {
+    (ReleaseProblem::AppTooOld, detail)
+}
+
+async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem> {
     let base = super::config_value("GRKIT_RELEASE_BASE")
         .unwrap_or_else(|| "https://grkit.app".into())
         .trim_end_matches('/')
         .to_owned();
-    let keys = trusted_keys(&base)?;
+    let keys = trusted_keys(&base).map_err(network)?;
     let cache = cache_dir();
     let index_name = format!(
         "index-{}-{}.json",
@@ -274,28 +293,36 @@ pub async fn latest(model: CameraModel, firmware: &str) -> Result<Release, Strin
                     log::info!("Using cached release metadata: {error}");
                     bytes
                 }
-                None => return Err(error),
+                None => return Err(network(error)),
             }
         }
     };
-    let index = Index::parse(&index_bytes).map_err(|error| error.to_string())?;
+    let index = Index::parse(&index_bytes).map_err(|error| newer_app(error.to_string()))?;
     for path in index.files.keys() {
-        checked_path(path)?;
+        checked_path(path).map_err(newer_app)?;
     }
     let entry = index
         .cameras
         .get(camera.id)
-        .ok_or_else(|| format!("No release for {}", camera.name))?;
+        .ok_or_else(|| newer_app(format!("No release for {}", camera.name)))?;
     let expected: Vec<_> = camera.targets().into_iter().map(str::to_owned).collect();
     if entry.targets != expected {
-        return Err("Release runtime targets do not match this camera".into());
+        return Err(newer_app(
+            "Release runtime targets do not match this camera".into(),
+        ));
     }
-    let statement_bytes = indexed_file(&base, &index, &entry.statement).await?;
-    let signature = indexed_file(&base, &index, &entry.signature).await?;
-    let statement =
-        release::verify(&statement_bytes, &signature, &keys).map_err(|error| error.to_string())?;
+    let statement_bytes = indexed_file(&base, &index, &entry.statement)
+        .await
+        .map_err(network)?;
+    let signature = indexed_file(&base, &index, &entry.signature)
+        .await
+        .map_err(network)?;
+    let statement = release::verify(&statement_bytes, &signature, &keys)
+        .map_err(|error| network(error.to_string()))?;
     if statement.camera != camera || statement.version != index.version {
-        return Err("Signed release does not match the camera or index version".into());
+        return Err(network(
+            "Signed release does not match the camera or index version".into(),
+        ));
     }
     // Persist only after the official statement authenticates this camera and
     // version. Cache reads repeat all signature, path and payload checks.
@@ -311,17 +338,15 @@ pub async fn latest(model: CameraModel, firmware: &str) -> Result<Release, Strin
                 .iter()
                 .any(|target| path.starts_with(&format!("runtime/{target}/")))
                 || path.starts_with("modules/")
-                || entry.targets.first().is_some_and(|target| {
-                    path.starts_with(&format!("effects/{target}/")) && path.ends_with(".GRF")
-                })
                 || entry.guides.get("en") == Some(path)
                 || **path == entry.statement
                 || **path == entry.signature
         })
         .try_fold(0u64, |sum, (_, info)| sum.checked_add(info.size))
-        .ok_or_else(|| "Release size overflow".to_owned())?;
+        .ok_or_else(|| network("Release size overflow".to_owned()))?;
     Ok(Release {
         version: index.version.clone(),
+        notes: index.notes.clone(),
         bytes,
         base,
         index,
@@ -352,24 +377,38 @@ fn names(value: &Option<serde_json::Value>, field: &str) -> Result<Vec<String>, 
         .collect()
 }
 
-#[derive(Debug)]
-struct Selection {
-    modules: Vec<String>,
-    effects: Vec<String>,
-    left_out: Vec<String>,
+/// Why a release could not become an update package.
+#[derive(Debug, PartialEq, Eq)]
+pub enum DownloadError {
+    /// A file of the release could not be fetched or did not match.
+    Network(String),
+    /// The camera has a module that the release does not have.
+    ModuleNotKept(String),
+    /// The release files do not make a valid package.
+    Package(String),
 }
 
-/// Select only existing effects and modules. Unknown/custom files fail closed:
-/// the camera service deletes package-owned files omitted from an update.
-fn selected_paths(release: &Release, snapshot: &PackageResponse) -> Result<Selection, String> {
-    let modules = names(&snapshot.modules, "modules")?;
-    let effects = names(&snapshot.effects, "effects")?;
-    let left_out = names(&snapshot.left_out, "left_out")?;
-    let target = release.index.cameras[release.camera.id]
-        .targets
-        .first()
-        .ok_or_else(|| "Release has no runtime target".to_owned())?;
-    let module_paths = modules
+impl std::fmt::Display for DownloadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DownloadError::Network(message) | DownloadError::Package(message) => {
+                f.write_str(message)
+            }
+            DownloadError::ModuleNotKept(id) => write!(f, "The release has no module {id}"),
+        }
+    }
+}
+
+/// The module files of the release that keep the camera's modules. An
+/// update carries no Looks: the camera keeps its own, and the phone
+/// manages them on their own. A module that the release lacks blocks the
+/// update, as the camera removes a package module that an update omits.
+fn selected_modules(
+    release: &Release,
+    snapshot: &PackageResponse,
+) -> Result<Vec<String>, DownloadError> {
+    names(&snapshot.modules, "modules")
+        .map_err(DownloadError::Package)?
         .into_iter()
         .map(|id| {
             let filename = format!("{id}.GRM");
@@ -377,82 +416,64 @@ fn selected_paths(release: &Release, snapshot: &PackageResponse) -> Result<Selec
             if !release.statement.modules.contains_key(&filename)
                 || !release.index.files.contains_key(&path)
             {
-                return Err(format!(
-                    "Cannot preserve installed module {id}; use an SD-card update"
-                ));
+                return Err(DownloadError::ModuleNotKept(id));
             }
             Ok(path)
         })
-        .collect::<Result<Vec<_>, _>>()?;
-    let effect_paths = effects
-        .into_iter()
-        .map(|filename| {
-            let path = format!("effects/{target}/{filename}");
-            if !filename.ends_with(".GRF") || !release.index.files.contains_key(&path) {
-                return Err(format!(
-                    "Cannot preserve installed effect {filename}; use an SD-card update"
-                ));
-            }
-            Ok(path)
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(Selection {
-        modules: module_paths,
-        effects: effect_paths,
-        left_out,
-    })
+        .collect()
 }
 
-/// Download, hash-check and assemble a signed update while preserving selections.
+/// Download, hash-check and assemble a signed update that keeps the camera's
+/// modules and carries no Looks.
 /// Progress reports completed file bytes; NSH fetch does not expose byte streaming.
 pub async fn download(
     release: &Release,
     snapshot: &PackageResponse,
     on_progress: impl Fn(f32),
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, DownloadError> {
     let entry = &release.index.cameras[release.camera.id];
-    let Selection {
-        modules: module_paths,
-        effects: effect_paths,
-        left_out,
-    } = selected_paths(release, snapshot)?;
+    let module_paths = selected_modules(release, snapshot)?;
+    let package = DownloadError::Package;
     let guide_path = entry
         .guides
         .get("en")
-        .ok_or_else(|| "Release has no English guide".to_owned())?;
+        .ok_or_else(|| package("Release has no English guide".to_owned()))?;
     let mut paths = BTreeSet::new();
     let mut manifests = Vec::new();
     for target in &entry.targets {
         let path = format!("runtime/{target}/build.json");
-        let manifest = indexed_file(&release.base, &release.index, &path).await?;
+        let manifest = indexed_file(&release.base, &release.index, &path)
+            .await
+            .map_err(DownloadError::Network)?;
         for runtime_path in
-            packaging::manifest_paths(&manifest).map_err(|error| error.to_string())?
+            packaging::manifest_paths(&manifest).map_err(|error| package(error.to_string()))?
         {
-            checked_path(&runtime_path)?;
+            checked_path(&runtime_path).map_err(package)?;
             paths.insert(format!("runtime/{target}/sd/{runtime_path}"));
         }
         manifests.push((target, manifest));
     }
     paths.extend(module_paths.iter().cloned());
-    paths.extend(effect_paths.iter().cloned());
     paths.insert(guide_path.clone());
     let total = paths.iter().try_fold(0u64, |sum, path| {
         let info = release
             .index
             .files
             .get(path)
-            .ok_or_else(|| format!("Release has no file: {path}"))?;
+            .ok_or_else(|| package(format!("Release has no file: {path}")))?;
         sum.checked_add(info.size)
-            .ok_or_else(|| "Release size overflow".to_owned())
+            .ok_or_else(|| package("Release size overflow".to_owned()))
     })?;
     if total > packaging::MAX_TOTAL_SIZE as u64 {
-        return Err("Release exceeds the package size limit".into());
+        return Err(package("Release exceeds the package size limit".into()));
     }
     on_progress(0.0);
     let mut received = 0u64;
     let mut files = Files::new();
     for path in paths {
-        let bytes = indexed_file(&release.base, &release.index, &path).await?;
+        let bytes = indexed_file(&release.base, &release.index, &path)
+            .await
+            .map_err(DownloadError::Network)?;
         received += bytes.len() as u64;
         files.insert(path, bytes);
         on_progress(received as f32 / total.max(1) as f32);
@@ -468,9 +489,11 @@ pub async fn download(
             })
             .collect();
         let runtime = packaging::load_runtime(&manifest, &runtime_files)
-            .map_err(|error| error.to_string())?;
+            .map_err(|error| package(error.to_string()))?;
         if runtime.target() != target {
-            return Err("Runtime manifest target differs from the release index".into());
+            return Err(package(
+                "Runtime manifest target differs from the release index".into(),
+            ));
         }
         runtimes.push(runtime);
     }
@@ -478,22 +501,8 @@ pub async fn download(
         .iter()
         .map(|path| files[path].clone())
         .collect();
-    let mut effects = packaging::EffectSet::default();
-    for path in effect_paths {
-        let id = effects
-            .insert(files[&path].clone())
-            .map_err(|error| error.to_string())?;
-        let filename = grkit_core::effects::filename(&id).map_err(|error| error.to_string())?;
-        if !path.ends_with(&format!("/{filename}")) {
-            return Err("Release effect filename differs from its identity".into());
-        }
-    }
-    for name in left_out {
-        effects
-            .leave_out(&name)
-            .map_err(|error| error.to_string())?;
-    }
-    let package = packaging::assemble_with(
+    let effects = packaging::EffectSet::default();
+    let assembled = packaging::assemble_with(
         &runtimes,
         &effects,
         &modules,
@@ -507,10 +516,13 @@ pub async fn download(
             ..Default::default()
         },
     )
-    .map_err(|error| error.to_string())?;
-    release::verify_update(&package.bytes, &trusted_keys(&release.base)?)
-        .map_err(|error| error.to_string())?;
-    Ok(package.bytes)
+    .map_err(|error| package(error.to_string()))?;
+    release::verify_update(
+        &assembled.bytes,
+        &trusted_keys(&release.base).map_err(package)?,
+    )
+    .map_err(|error| package(error.to_string()))?;
+    Ok(assembled.bytes)
 }
 
 #[cfg(test)]
@@ -611,6 +623,7 @@ mod tests {
         })).unwrap()).unwrap();
         let release = Release {
             version: index.version.clone(),
+            notes: Vec::new(),
             bytes: 2,
             base: "https://example.test".into(),
             index,
@@ -636,29 +649,19 @@ mod tests {
     }
 
     #[test]
-    fn selections_preserve_modules_effects_and_explicit_omissions() {
-        let (release, snapshot) = selection_fixture();
-        let selection = selected_paths(&release, &snapshot).unwrap();
-        assert_eq!(selection.modules, ["modules/FILMLOOK.GRM"]);
-        assert_eq!(selection.effects, ["effects/gr3-2.10/KNOWN.GRF"]);
-        assert_eq!(selection.left_out, ["OMITTED.GRF"]);
-    }
-
-    #[test]
-    fn unavailable_installed_files_block_update_instead_of_disappearing() {
+    fn an_update_keeps_the_modules_and_carries_no_looks() {
         let (release, mut snapshot) = selection_fixture();
-        snapshot.effects = Some(serde_json::json!(["CUSTOM.GRF"]));
-        assert!(
-            selected_paths(&release, &snapshot)
-                .unwrap_err()
-                .contains("Cannot preserve installed effect")
+        assert_eq!(
+            selected_modules(&release, &snapshot).unwrap(),
+            ["modules/FILMLOOK.GRM"]
         );
-        snapshot.effects = Some(serde_json::json!([]));
+        // Looks that the release lacks do not block the update.
+        snapshot.effects = Some(serde_json::json!(["CUSTOM.GRF"]));
+        assert!(selected_modules(&release, &snapshot).is_ok());
         snapshot.modules = Some(serde_json::json!(["CUSTOM"]));
-        assert!(
-            selected_paths(&release, &snapshot)
-                .unwrap_err()
-                .contains("Cannot preserve installed module")
+        assert_eq!(
+            selected_modules(&release, &snapshot),
+            Err(DownloadError::ModuleNotKept("CUSTOM".into()))
         );
     }
 

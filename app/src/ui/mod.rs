@@ -5,7 +5,7 @@ mod chrome;
 pub use chrome::*;
 
 mod loading;
-pub use loading::{camera_skeleton, update_skeleton};
+pub use loading::camera_skeleton;
 
 mod page_scroll;
 pub use page_scroll::page_scroll;

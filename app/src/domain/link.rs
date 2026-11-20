@@ -86,6 +86,8 @@ pub enum LinkError {
     CardNotReady,
     /// Camera has no GRKit service or an older version than 1.7.0.
     NeedsGrkit,
+    /// The camera's GRKit speaks a newer service protocol than this app.
+    AppTooOld,
     /// Unexpected HTTP or transport failure.
     Http(String),
 }
@@ -162,6 +164,7 @@ impl LinkError {
             LinkError::VerifyFailed => ("conn.verify.title", "conn.verify.body", Retry),
             LinkError::CardNotReady => ("error.card_ready_title", "error.card_ready_body", Retry),
             LinkError::NeedsGrkit => ("cam.no_grkit_title", "cam.no_grkit_body", Retry),
+            LinkError::AppTooOld => ("conn.app_old.title", "conn.app_old.body", None),
             LinkError::Http(_) => ("conn.unsupported.title", "conn.unsupported.body", None),
             LinkError::Busy | LinkError::Cancelled => {
                 ("conn.unknown.title", "conn.unknown.body", Retry)

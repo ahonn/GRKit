@@ -16,4 +16,4 @@ pub use look_pages::{confirm_delete, import_page, look_page, rename_page};
 pub use looks::{import_sheet, looks_root};
 pub use settings::{saved_cameras_page, settings_root};
 pub use sheets::overlay;
-pub use software::software_page;
+pub use software::{release_history_page, software_page};

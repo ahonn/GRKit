@@ -11,7 +11,7 @@ use std::{
 use grkit_app::App;
 use nsh_core::platform::{HttpBody, HttpRequest, Os};
 use nsh_engine::{EngineConfig, Root};
-use nsh_testing::{Headless, StubNetwork, StubResponse, StubRoute};
+use nsh_testing::{DialogAnswer, Headless, StubNetwork, StubResponse, StubRoute};
 use serde_json::json;
 
 const WAIT: Duration = Duration::from_secs(10);
@@ -205,6 +205,7 @@ fn start_phone_with_delay(
                 "limits": {},
                 "activeRequests": []
             }),
+            ("GET", "http://camera.test/v1/ping") => json!({"protocol": 1, "bootId": "boot-test"}),
             ("GET", "http://camera.test/v1/update") => json!({
                 "inventory": {
                     "package": {
@@ -270,6 +271,9 @@ fn an_update_whose_answer_was_lost_is_found_on_the_camera_and_completes() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let (mut app, camera, network) = start_phone_after_a_lost_answer(&environment);
+    // The update found on the camera shows on the camera tab first.
+    app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
+    app.press("GRKit 1.8.0 to Confirm").unwrap();
     app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
     camera.lock().unwrap().journal = "confirmed";
     app.wait_for_within("Restart the Camera", WAIT).unwrap();
@@ -279,7 +283,9 @@ fn an_update_whose_answer_was_lost_is_found_on_the_camera_and_completes() {
         camera.version = "1.8.0";
         camera.request_id = None;
     }
-    app.press("Check Installed Version").unwrap();
+    // The restart the person runs, then a reconnect.
+    app.press("Restart Manually").unwrap();
+    app.press("Reconnect").unwrap();
     app.wait_for_within("GRKit 1.8.0 Is Installed", WAIT)
         .unwrap();
     app.press("Done").unwrap();
@@ -293,8 +299,12 @@ fn cancelling_an_update_posts_cancel_and_verifies_the_camera_journal() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let (mut app, camera, network) = start_phone_after_a_lost_answer(&environment);
+    // The update found on the camera shows on the camera tab first.
+    app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
+    app.press("GRKit 1.8.0 to Confirm").unwrap();
     app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
-    app.press("Cancel").unwrap();
+    app.on_dialog(|_| DialogAnswer::Press("Cancel Update".into()));
+    app.press("Cancel Update").unwrap();
     app.wait_for_gone("Confirm on the Camera", WAIT).unwrap();
     let requests = network.requests();
     let cancellation = requests
@@ -321,7 +331,7 @@ fn automatic_connection_starts_with_a_local_placeholder() {
     app.wait_for_gone("Add Your Camera", WAIT).unwrap();
     app.wait_for_gone("Connecting to RICOH GR III", WAIT)
         .unwrap();
-    app.wait_for_within("Software Update", WAIT).unwrap();
+    app.wait_for_within("Firmware", WAIT).unwrap();
     app.wait_for_gone("Connecting to your camera…", WAIT)
         .unwrap();
 }

@@ -46,19 +46,18 @@ fn demo_add_camera_update_confirm_restart_installed() {
     app.wait_for("Connect").unwrap();
     app.press("Connect").unwrap();
 
-    app.wait_for_within("Connected", WAIT).unwrap();
-    app.wait_for("Update").unwrap();
+    app.wait_for_within("GRKit 1.7.0 Available", WAIT).unwrap();
+    app.press("GRKit 1.7.0 Available").unwrap();
     app.press("Update").unwrap();
 
-    app.wait_for_within("Sending to your camera…", WAIT)
-        .unwrap();
+    app.wait_for_within("Updating RICOH GR III", WAIT).unwrap();
     app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
     app.wait_for_within("Restart the Camera", WAIT).unwrap();
-    app.press("Check Installed Version").unwrap();
+    app.press("Restart Camera").unwrap();
     app.wait_for_within("GRKit 1.7.0 Is Installed", WAIT)
         .unwrap();
     app.press("Done").unwrap();
-    app.wait_for_within("GRKit Is Up to Date", WAIT).unwrap();
+    app.wait_for_gone("GRKit 1.7.0 Available", WAIT).unwrap();
 }
 
 #[test]
@@ -69,11 +68,13 @@ fn demo_card_full_error() {
     app.wait_for("Add Your Camera").unwrap();
     app.press("Add Camera").unwrap();
     app.press("Connect").unwrap();
-    app.wait_for_within("Update", WAIT).unwrap();
+    app.wait_for_within("GRKit 1.7.0 Available", WAIT).unwrap();
+    app.press("GRKit 1.7.0 Available").unwrap();
     app.press("Update").unwrap();
     app.wait_for_within("Card Is Full", WAIT).unwrap();
-    app.wait_for("Free 12 MB, then try again.").unwrap();
-    app.press("Close").unwrap();
+    app.wait_for("12 MB more is needed. Delete some photos on the camera, then try again.")
+        .unwrap();
+    app.press("Close >> nth=1").unwrap();
     app.wait_for_gone("Card Is Full", WAIT).unwrap();
 }
 

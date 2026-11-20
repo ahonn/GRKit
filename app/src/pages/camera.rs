@@ -8,8 +8,8 @@ use crate::domain::{CameraModel, RememberedCamera};
 use crate::store::{AppState, Tab, is_up_to_date};
 use crate::strings::tr;
 use crate::ui::{
-    camera_art, chevron_row, connection_button, cover_view, gr_mark, grouped_card, primary_button,
-    secondary_button, section_title, token, wordmark,
+    camera_art, connection_button, cover_view, gr_mark, grouped_card, secondary_button,
+    section_title, token, wordmark,
 };
 
 /// The height of the wordmark at the top of the disconnected camera tab.
@@ -362,112 +362,97 @@ fn connected(app: AppState, model: CameraModel) -> impl IntoElement {
                         )
                         .child(dynamic(move || version_card(app))),
                 ))
-                .child(dynamic(move || update_section(app)))
-                .child(dynamic(move || looks_row(app))),
+                // One column for the rows that come and go, so a missing
+                // row leaves no gap.
+                .child(dynamic(move || {
+                    view().gap_4().child(update_card(app)).child(looks_row(app))
+                })),
         )
 }
 
-fn update_section(app: AppState) -> AnyElement {
+/// One row about an update: one the phone can install, or one that waits
+/// on the camera for its confirmation or a restart. Nothing when GRKit is
+/// up to date or the check has no answer.
+fn update_card(app: AppState) -> Option<AnyElement> {
+    use crate::domain::JournalState;
     let package = app.package();
-    let update_unknown = !app.demo() && package.as_ref().is_none_or(|p| p.available.is_none());
-    let up_to_date = package.as_ref().is_some_and(is_up_to_date);
-    if update_unknown && app.release_checking() {
-        crate::ui::update_skeleton().into_element()
-    } else if update_unknown {
-        grouped_card(chevron_row(
-            tr("connected.software_update", &[]),
-            Some(tr(
-                if app.release_checking() {
-                    "software.checking"
-                } else {
-                    "software.unavailable"
-                },
-                &[],
-            )),
-            move || app.open_software_update(),
-        ))
-        .into_element()
-    } else if up_to_date {
-        up_to_date_card(app).into_element()
-    } else {
-        update_available_card(app).into_element()
-    }
-}
-
-fn update_available_card(app: AppState) -> impl IntoElement {
-    let package = app.package();
-    let version = package
-        .as_ref()
-        .and_then(|p| p.available.clone())
-        .unwrap_or_default();
-    let subtitle = match package.as_ref().filter(|p| p.package_bytes > 0) {
-        Some(p) => tr(
-            "cam.update_sub",
-            &[(
-                "size",
-                &format!("{:.1} MB", p.package_bytes as f64 / 1_000_000.0),
-            )],
-        ),
-        None => tr("cam.update_sub_plain", &[]),
+    let available = package.as_ref().and_then(|p| p.available.clone());
+    let version = match app.camera_journal() {
+        Some(_) => app.pending_version().unwrap_or_default(),
+        None => available.clone().unwrap_or_default(),
     };
-    grouped_card(
+    let named = |key: &str, args: &[(&str, &str)]| tr(key, args);
+    let (title, subtitle, pending): (String, Box<dyn Fn() -> String>, bool) =
+        match app.camera_journal() {
+            Some(JournalState::Waiting) => (
+                named("cam.update_waiting", &[("version", &version)]),
+                Box::new(move || {
+                    tr(
+                        "cam.update_waiting_sub",
+                        &[("time", &app.confirm_deadline_label())],
+                    )
+                }),
+                true,
+            ),
+            Some(JournalState::Confirmed) => (
+                named("cam.update_ready", &[("version", &version)]),
+                Box::new(|| tr("cam.update_ready_sub", &[])),
+                true,
+            ),
+            _ if available.is_some() && !package.as_ref().is_some_and(is_up_to_date) => (
+                named("cam.update_available", &[("version", &version)]),
+                Box::new(|| tr("cam.update_available_sub", &[])),
+                false,
+            ),
+            _ => return None,
+        };
+    // Without a known version, the title names GRKit alone.
+    let title = title.replace("GRKit  ", "GRKit ");
+    let card = grouped_card(
         view()
-            .p_4()
-            .gap_4()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .min_h(px(68.0))
+            .px_4()
+            .role(AccessibilityRole::Button)
+            .label(title.clone())
+            .on_press(move || {
+                if pending {
+                    app.open_pending_update()
+                } else {
+                    app.open_software_update()
+                }
+            })
+            .active(|s| s.opacity(0.72).bg(move || theme().accent))
+            .child(gr_mark(44.0))
             .child(
                 view()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .role(AccessibilityRole::Button)
-                    .label(format!("GRKit {version}"))
-                    .active(|s| s.opacity(0.72))
-                    .on_press({
-                        let app = app.clone();
-                        move || app.open_software_update()
-                    })
-                    .child(gr_mark(48.0))
+                    .flex_1()
+                    .gap(px(2.0))
                     .child(
-                        view()
-                            .flex_1()
-                            .gap(px(4.0))
-                            .child(
-                                text(format!("GRKit {version}"))
-                                    .text_size(px(17.0))
-                                    .font_weight(FontWeight::SEMIBOLD),
-                            )
-                            .child(
-                                text(subtitle)
-                                    .text_size(px(15.0))
-                                    .line_height(px(22.0))
-                                    .text_color(move || theme().muted_foreground),
-                            ),
+                        text(title)
+                            .text_size(px(17.0))
+                            .font_weight(FontWeight::SEMIBOLD),
                     )
                     .child(
-                        text("›")
-                            .text_size(px(24.0))
+                        text(subtitle)
+                            .text_size(px(15.0))
                             .text_color(move || theme().muted_foreground),
                     ),
             )
-            .child(primary_button(tr("connected.update", &[]), move || {
-                app.begin_update(crate::domain::UpdateKind::Install)
-            })),
-    )
-}
-
-fn up_to_date_card(app: AppState) -> impl IntoElement {
-    grouped_card(chevron_row(
-        tr("connected.up_to_date", &[]),
-        Some(tr("connected.software_update", &[])),
-        move || app.open_software_update(),
-    ))
+            .child(
+                text("›")
+                    .text_size(px(22.0))
+                    .text_color(move || theme().muted_foreground),
+            ),
+    );
+    Some(card.into_element())
 }
 
 /// The Look in use and how many the camera menu shows; opens the Looks tab.
-fn looks_row(app: AppState) -> AnyElement {
-    let Some(snapshot) = app.looks_snapshot() else {
-        return view().into_element();
-    };
+fn looks_row(app: AppState) -> Option<AnyElement> {
+    let snapshot = app.looks_snapshot()?;
     let shown = snapshot
         .looks
         .iter()
@@ -483,7 +468,7 @@ fn looks_row(app: AppState) -> AnyElement {
         None => tr("cam.looks_count", &[("count", &shown)]),
     };
     let cover = selected.and_then(|look| look.cover.clone());
-    grouped_card(
+    let row = grouped_card(
         view()
             .flex_row()
             .items_center()
@@ -515,8 +500,8 @@ fn looks_row(app: AppState) -> AnyElement {
                     .text_size(px(22.0))
                     .text_color(move || theme().muted_foreground),
             ),
-    )
-    .into_element()
+    );
+    Some(row.into_element())
 }
 
 fn version_card(app: AppState) -> impl IntoElement {
@@ -532,11 +517,16 @@ fn version_card(app: AppState) -> impl IntoElement {
     view()
         .flex_row()
         .gap_2()
-        .child(version_tile(grkit, tr("connected.grkit", &[])))
+        .child(
+            version_tile(grkit, tr("connected.grkit", &[]))
+                .role(AccessibilityRole::Button)
+                .on_press(move || app.open_software_update())
+                .active(|s| s.opacity(0.72)),
+        )
         .child(version_tile(firmware, tr("connected.firmware", &[])))
 }
 
-fn version_tile(value: String, label: String) -> impl IntoElement {
+fn version_tile(value: String, label: String) -> View {
     view()
         .flex_1()
         .gap(px(4.0))

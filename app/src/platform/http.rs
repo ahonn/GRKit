@@ -46,7 +46,11 @@ pub async fn wait_until_ready() -> Result<(), LinkError> {
             }
             StatusAttempt::Fatal(err) => {
                 log::warn!("HTTP props fatal: {err:?}");
-                return Err(err);
+                return Err(if service_needs_newer_app(&base).await {
+                    LinkError::AppTooOld
+                } else {
+                    err
+                });
             }
             StatusAttempt::CardNotReady => true,
             StatusAttempt::Unreachable => false,
@@ -114,6 +118,9 @@ pub async fn read_package_within(
     if !response.ok() {
         return Err(LinkError::Http(format!("props HTTP {}", response.status())));
     }
+    if service_needs_newer_app(&base).await {
+        return Err(LinkError::AppTooOld);
+    }
     let text = response.text();
     let props = parse_props(&text).map_err(|e| {
         log::warn!("HTTP props parse failed len={} err={e}", text.len());
@@ -138,6 +145,15 @@ pub async fn read_package_within(
         },
         info,
     ))
+}
+
+/// The service speaks a newer protocol than this app (`GET /v1/ping`). A
+/// service that does not answer the ping is not newer.
+async fn service_needs_newer_app(base: &str) -> bool {
+    match camera_get(format!("{base}/v1/ping")).await {
+        Ok(response) if response.ok() => crate::domain::needs_newer_app(&response.text()),
+        _ => false,
+    }
 }
 
 /// Whether the camera's own HTTP API (port 80) answers.

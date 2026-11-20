@@ -66,7 +66,12 @@ pub struct UpdateIntent {
     pub camera_id: String,
     pub kind: UpdateKind,
     pub baseline: String,
+    /// The version the update installs; empty for an update another phone
+    /// or the website sent, whose version the camera does not report.
     pub target: String,
+    /// The camera confirmed the update: the next start installs it.
+    #[serde(default)]
+    pub confirmed: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -77,11 +82,21 @@ pub enum UpdateObservation {
     Stopped,
 }
 
-pub fn observe_update(state: JournalState, installed: &str, target: &str) -> UpdateObservation {
+/// What the camera's journal says about `intent`, with `installed` the
+/// version the camera runs now. Without a known target, a version other
+/// than the baseline is the installed update.
+pub fn observe_update(
+    state: JournalState,
+    installed: &str,
+    intent: &UpdateIntent,
+) -> UpdateObservation {
     match state {
         JournalState::Waiting => UpdateObservation::Waiting,
         JournalState::Confirmed => UpdateObservation::Restart,
-        JournalState::None if installed == target => UpdateObservation::Installed,
+        JournalState::None if installed == intent.target => UpdateObservation::Installed,
+        JournalState::None if intent.target.is_empty() && installed != intent.baseline => {
+            UpdateObservation::Installed
+        }
         JournalState::None => UpdateObservation::Stopped,
     }
 }
@@ -124,21 +139,39 @@ mod tests {
     use super::*;
     #[test]
     fn a_missing_journal_only_succeeds_at_the_target_version() {
+        let intent = |target: &str| UpdateIntent {
+            camera_id: "c".into(),
+            kind: UpdateKind::Install,
+            baseline: "1.7.0".into(),
+            target: target.into(),
+            confirmed: false,
+        };
+        let known = intent("1.8.0");
         assert_eq!(
-            observe_update(JournalState::None, "1.7.0", "1.8.0"),
+            observe_update(JournalState::None, "1.7.0", &known),
             UpdateObservation::Stopped
         );
         assert_eq!(
-            observe_update(JournalState::None, "1.8.0", "1.8.0"),
+            observe_update(JournalState::None, "1.8.0", &known),
             UpdateObservation::Installed
         );
         assert_eq!(
-            observe_update(JournalState::Confirmed, "1.8.0", "1.8.0"),
+            observe_update(JournalState::Confirmed, "1.8.0", &known),
             UpdateObservation::Restart
         );
         assert_eq!(
-            observe_update(JournalState::Waiting, "1.8.0", "1.8.0"),
+            observe_update(JournalState::Waiting, "1.8.0", &known),
             UpdateObservation::Waiting
+        );
+        // An update another client sent: any newer start is the install.
+        let unknown = intent("");
+        assert_eq!(
+            observe_update(JournalState::None, "1.7.0", &unknown),
+            UpdateObservation::Stopped
+        );
+        assert_eq!(
+            observe_update(JournalState::None, "1.8.0", &unknown),
+            UpdateObservation::Installed
         );
     }
     #[test]

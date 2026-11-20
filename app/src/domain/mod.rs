@@ -17,6 +17,7 @@ pub mod link_health;
 pub mod look_media;
 pub mod looks;
 pub mod nearby_watch;
+pub mod release_notes;
 mod remembered;
 pub mod saved_connect;
 mod update;
@@ -54,5 +55,9 @@ pub use remembered::{
     RememberedCamera, SAVED_MAX, decode as decode_saved, encode as encode_saved,
     remove as remove_saved, upsert as upsert_saved,
 };
-pub use update::{CONFIRM_DEADLINE, UpdateError, UpdateFlow, UpdateKind, UpdatePhase};
+pub use update::{
+    CARD_SPARE_BYTES, CONFIRM_DEADLINE, ReleaseProblem, RestartStep, SERVICE_PROTOCOL, UpdateError,
+    UpdateFlow, UpdateKind, UpdatePhase, cancel_body_key, card_shortfall, firmware_problem,
+    needs_newer_app, update_step,
+};
 pub use wifi_cred::decode_cred;

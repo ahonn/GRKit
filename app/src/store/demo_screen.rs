@@ -12,8 +12,10 @@ use std::{
 use nsh_core::prelude::*;
 
 use crate::domain::fake_looks::DEMO_CUSTOM_ID;
+use crate::domain::release_notes::VersionNotes;
 use crate::domain::{
-    CameraLink, FakeCamera, FakeConfig, UpdateError, UpdateKind, UpdatePhase, block_on_ready,
+    CameraLink, FakeCamera, FakeConfig, ReleaseProblem, UpdateError, UpdateKind, UpdatePhase,
+    block_on_ready,
 };
 use crate::store::{AppState, Route, Sheet, Tab};
 
@@ -86,6 +88,44 @@ pub enum DemoScreen {
     A12,
     /// A13 — Settings › Saved Cameras.
     A13,
+    /// U1 — Software Update, up to date.
+    U1,
+    /// U2 — Software Update, checking.
+    U2,
+    /// U3 — Software Update, the check failed.
+    U3,
+    /// U4 — Software Update, the camera firmware is too old.
+    U4,
+    /// U5 — Software Update, the firmware is newer than GRKit.
+    U5,
+    /// U6 — Software Update, the app is too old.
+    U6,
+    /// U7 — The update sheet, downloading.
+    U7,
+    /// U8 — The restart the phone runs.
+    U8,
+    /// U9 — The person restarts the camera.
+    U9,
+    /// U10 — Cancel the update (alert).
+    U10,
+    /// U11 — The connection was lost during the update.
+    U11,
+    /// U12 — The download failed.
+    U12,
+    /// U13 — The camera refused the package.
+    U13,
+    /// U14 — Camera tab, an update waits for its confirmation.
+    U14,
+    /// U15 — Camera tab, an update waits for a restart.
+    U15,
+    /// U16 — A confirmed update did not install.
+    U16,
+    /// U17 — GRKit was updated while the app was away (toast).
+    U17,
+    /// U18 — The camera's GRKit is newer than the app.
+    U18,
+    /// U19 — Update History.
+    U19,
 }
 
 /// Every id string the env / CLI accept, in design order.
@@ -123,6 +163,25 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("A11", DemoScreen::A11),
     ("A12", DemoScreen::A12),
     ("A13", DemoScreen::A13),
+    ("U1", DemoScreen::U1),
+    ("U2", DemoScreen::U2),
+    ("U3", DemoScreen::U3),
+    ("U4", DemoScreen::U4),
+    ("U5", DemoScreen::U5),
+    ("U6", DemoScreen::U6),
+    ("U7", DemoScreen::U7),
+    ("U8", DemoScreen::U8),
+    ("U9", DemoScreen::U9),
+    ("U10", DemoScreen::U10),
+    ("U11", DemoScreen::U11),
+    ("U12", DemoScreen::U12),
+    ("U13", DemoScreen::U13),
+    ("U14", DemoScreen::U14),
+    ("U15", DemoScreen::U15),
+    ("U16", DemoScreen::U16),
+    ("U17", DemoScreen::U17),
+    ("U18", DemoScreen::U18),
+    ("U19", DemoScreen::U19),
 ];
 
 /// Parse a design id (`A5`, `a5`, …). Unknown → `None` (normal demo).
@@ -153,9 +212,63 @@ pub fn demo_screen_from_env() -> Option<DemoScreen> {
     None
 }
 
+/// Release notes for the demo: the features of the version on offer, and
+/// the real notes of three releases.
+fn demo_notes() -> Vec<VersionNotes> {
+    [
+        (
+            "1.7.0",
+            &[
+                "The GRKit app updates GRKit over the camera's Wi‑Fi: the camera checks the signature of the update, you confirm it in About GRKit, and it installs at the next start.",
+                "The GRKit app lists the film looks on the camera, turns them on or off, orders them, and changes their names and covers.",
+                "The camera runs the GRKit Wi‑Fi service only while its Wi‑Fi is on.",
+                "Without a connected phone, the Wi‑Fi service uses no processor time.",
+            ][..],
+        ),
+        (
+            "1.6.4",
+            &[
+                "In ADJ, OK on a GRKit value returns to the GRKit list instead of closing ADJ, and Left or Right keeps the highlighted value.",
+                "Battery in Simple Display shows the battery icon in the simple display, and Display Settings in GRKit Settings now holds it and Distance Unit.",
+                "With the fast-boot firmware, GRKit loads faster from exFAT cards that a Mac copied files to, and a camera whose fast start fails loads GRKit the normal way from the next power-on.",
+                "Film looks can show the colors of their film box, for color looks only or for all, and each film look can have its own name and cover.",
+                "GRKit uses less processor time while the camera is on and no setting changes, and Grain takes less time for each photo on GR III and GR IIIx.",
+                "Photos record their GRKit settings in XMP, so exiftool and other XMP readers show them.",
+                "RAW development keeps the Framing ratio of a photo that has a Border.",
+                "The RAW development preview keeps the Border color with Shading or Clarity, and puts the Shading vignette in the middle of the picture.",
+                "RAW development starts from the GRKit settings that the DNG records, and has a GRKit row that sets Grain, Glow, Border, and Date for that development only.",
+                "GRKit Settings has Uncropped RAW, which keeps the whole sensor picture in each DNG, and Lightroom and Camera Raw open it with the crop of the shot, which they can undo.",
+            ][..],
+        ),
+        (
+            "1.6.3",
+            &[
+                "Color covers shows the packaging colors of each film look on the shelf and writes them onto the card.",
+                "Import a Lightroom .xmp preset as a film look, and optionally add a recipe with its exposure, grain, and white balance.",
+            ][..],
+        ),
+        (
+            "1.6.2",
+            &[
+                "With a border, the review after a cropped shot shows the border at once, and the picture stays in place when playback opens.",
+                "The crop badge in the live view looks the same for each focal length.",
+                "Order in the MENU page of Film Look, Recipes, Framing, Guides, and Date Imprint sets the order of their choices in ADJ.",
+            ][..],
+        ),
+    ]
+    .into_iter()
+    .map(|(version, items)| VersionNotes {
+        version: version.into(),
+        items: items.iter().map(|i| (*i).to_owned()).collect(),
+    })
+    .collect()
+}
+
 /// Jump `app` to `screen` and freeze timed advances for a stable screenshot.
 pub fn apply(app: AppState, screen: DemoScreen) {
     app.set_frozen(true);
+    app.release_notes.set(demo_notes());
+    app.update_shown.set(true);
     match screen {
         DemoScreen::A1 => {
             // Empty first launch: nearby fake stays for later Add Camera.
@@ -296,6 +409,115 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             app.set_tab(Tab::Camera);
             app.set_sheet(Some(Sheet::Error(UpdateError::NotConfirmed)));
         }
+        DemoScreen::U1 => {
+            // A version with notes, so the page shows them.
+            seed_connected_up_to_date_at(app, "1.6.4");
+            app.set_tab(Tab::Camera);
+            app.push(Route::SoftwareUpdate);
+        }
+        DemoScreen::U2 => software_with(app, None, true),
+        DemoScreen::U3 => software_with(app, Some(ReleaseProblem::Network), false),
+        DemoScreen::U4 => software_with(
+            app,
+            Some(ReleaseProblem::FirmwareTooOld {
+                required: "2.21".into(),
+            }),
+            false,
+        ),
+        DemoScreen::U5 => software_with(app, Some(ReleaseProblem::FirmwareTooNew), false),
+        DemoScreen::U6 => software_with(app, Some(ReleaseProblem::AppTooOld), false),
+        DemoScreen::U7 => {
+            seed_connected_available(app);
+            app.update_shown.set(true);
+            app.phase.set(UpdatePhase::Downloading {
+                progress: 0.35,
+                kind: UpdateKind::Install,
+            });
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Sending));
+        }
+        DemoScreen::U8 => {
+            seed_connected_available(app);
+            seed_restart(app, UpdateKind::Install);
+            app.update_shown.set(true);
+            app.phase.set(UpdatePhase::Restarting {
+                kind: UpdateKind::Install,
+                step: crate::domain::RestartStep::PoweringOn,
+            });
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Restart));
+        }
+        DemoScreen::U9 => {
+            seed_connected_available(app);
+            seed_restart(app, UpdateKind::Install);
+            app.update_shown.set(true);
+            app.phase.set(UpdatePhase::ManualRestart {
+                kind: UpdateKind::Install,
+            });
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Restart));
+        }
+        DemoScreen::U10 => {
+            seed_connected_available(app);
+            seed_sending(app, UpdateKind::Install, 0.42);
+            app.update_shown.set(true);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::Sending));
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                app.ask_cancel_update();
+            });
+        }
+        DemoScreen::U11 => update_error(app, UpdateError::ConnectionLost),
+        DemoScreen::U12 => update_error(app, UpdateError::Download(String::new())),
+        DemoScreen::U13 => update_error(app, UpdateError::Refused),
+        DemoScreen::U14 => {
+            seed_connected_available(app);
+            app.journal.set(Some(crate::domain::JournalState::Waiting));
+            app.confirm_deadline
+                .set(Some(Instant::now() + Duration::from_secs(4 * 60 + 12)));
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.refresh_looks();
+        }
+        DemoScreen::U15 => {
+            seed_connected_available(app);
+            app.journal
+                .set(Some(crate::domain::JournalState::Confirmed));
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.refresh_looks();
+        }
+        DemoScreen::U16 => {
+            seed_saved(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::InstallFailed));
+        }
+        DemoScreen::U17 => {
+            seed_connected_up_to_date(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.refresh_looks();
+            app.show_toast(crate::strings::tr(
+                "update.updated_toast",
+                &[("version", "1.7.0")],
+            ));
+        }
+        DemoScreen::U19 => {
+            seed_connected_available(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.push(Route::SoftwareUpdate);
+            app.push(Route::ReleaseHistory);
+        }
+        DemoScreen::U18 => {
+            seed_saved(app);
+            app.set_tab(Tab::Camera);
+            app.set_sheet(Some(Sheet::ConnectError(
+                crate::domain::LinkError::AppTooOld,
+            )));
+        }
         DemoScreen::L1 => seed_looks(app),
         DemoScreen::L2 => {
             seed_looks(app);
@@ -386,7 +608,10 @@ fn ask_delete(app: AppState) {
 
 /// Screens whose key text is an alert title.
 pub fn shows_alert(screen: DemoScreen) -> bool {
-    matches!(screen, DemoScreen::L5 | DemoScreen::L6 | DemoScreen::L12)
+    matches!(
+        screen,
+        DemoScreen::L5 | DemoScreen::L6 | DemoScreen::L12 | DemoScreen::U10
+    )
 }
 
 /// Two saved cameras, the GR III the most recent.
@@ -419,16 +644,20 @@ fn seed_connected_available(app: AppState) {
 }
 
 fn seed_connected_up_to_date(app: AppState) {
+    seed_connected_up_to_date_at(app, "1.7.0");
+}
+
+fn seed_connected_up_to_date_at(app: AppState, version: &str) {
     app.camera.with(|slot| {
         let mut slot = slot.borrow_mut();
         let cfg = FakeConfig {
-            installed: "1.7.0".into(),
-            available: "1.7.0".into(),
+            installed: version.into(),
+            available: version.into(),
             ..FakeConfig::default()
         };
         let mut cam = FakeCamera::new(cfg);
         let _ = block_on_ready(cam.connect());
-        cam.set_up_to_date("1.7.0");
+        cam.set_up_to_date(version);
         if let Ok(status) = block_on_ready(cam.read_status()) {
             app.status.set(Some(status));
         }
@@ -437,6 +666,29 @@ fn seed_connected_up_to_date(app: AppState) {
         }
         *slot = Some(cam);
     });
+}
+
+/// Software Update with no release: under way, or with `problem`.
+fn software_with(app: AppState, problem: Option<ReleaseProblem>, checking: bool) {
+    seed_connected_available(app);
+    app.package.update(|p| {
+        if let Some(p) = p {
+            p.available = None;
+        }
+    });
+    app.release_busy.set(checking);
+    app.release_problem.set(problem);
+    app.set_tab(Tab::Camera);
+    app.push(Route::SoftwareUpdate);
+}
+
+/// The update sheet stopped by `error`.
+fn update_error(app: AppState, error: UpdateError) {
+    seed_connected_available(app);
+    app.update_shown.set(true);
+    app.phase.set(UpdatePhase::Failed(error.clone()));
+    app.set_tab(Tab::Camera);
+    app.set_sheet(Some(Sheet::Error(error)));
 }
 
 fn seed_sending(app: AppState, kind: UpdateKind, progress: f32) {
@@ -479,16 +731,16 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::A2 => "Connect",
         DemoScreen::A3 => "Add a Camera",
         DemoScreen::A4 => "Connecting to RICOH GR III",
-        DemoScreen::A5 => "New version · 4.7 MB",
-        DemoScreen::A6 => "GRKit Is Up to Date",
+        DemoScreen::A5 => "GRKit 1.7.0 Available",
+        DemoScreen::A6 => "1.7.0",
         DemoScreen::A7 => "More from the Maker",
-        DemoScreen::B1 => "Update Now",
-        DemoScreen::B2 => "Sending to your camera…",
+        DemoScreen::B1 => "What's New",
+        DemoScreen::B2 => "62%",
         DemoScreen::B3 => "Confirm on the Camera",
         DemoScreen::B4 => "Restart the Camera",
         DemoScreen::B5 => "GRKit 1.7.0 Is Installed",
         DemoScreen::C4 => "Card Is Full",
-        DemoScreen::C5 => "Not Confirmed",
+        DemoScreen::C5 => "Not Confirmed on the Camera",
         DemoScreen::L1 => "Camera Menu",
         DemoScreen::L2 => "Menu Order",
         DemoScreen::L3 => "Replace with Another File",
@@ -505,10 +757,29 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::A8 => "Other Cameras",
         DemoScreen::A9 => "Lost Connection",
         DemoScreen::A10 => "First time with this camera? On the camera, choose",
-        DemoScreen::A11 => "Camera Wi-Fi Unreachable",
+        DemoScreen::A11 => "Camera Wi‑Fi Unreachable",
         DemoScreen::A12 => "No GRKit on the Camera",
         DemoScreen::A13 => {
             "Disconnect the current camera to connect another. Press and hold a camera to remove it."
         }
+        DemoScreen::U1 => "What's New in This Version",
+        DemoScreen::U2 => "Checking for updates…",
+        DemoScreen::U3 => "Couldn't check for updates",
+        DemoScreen::U4 => "Camera firmware needs an update",
+        DemoScreen::U5 => "This firmware isn't supported yet",
+        DemoScreen::U6 => "GRKit app needs an update",
+        DemoScreen::U7 => "35%",
+        DemoScreen::U8 => "Turning on…",
+        DemoScreen::U9 => "Turn the camera off and on, then reconnect.",
+        DemoScreen::U10 => "Cancel the Update?",
+        DemoScreen::U11 => "Connection Lost",
+        DemoScreen::U12 => "Couldn't Download the Update",
+        DemoScreen::U13 => "The Camera Refused the Update",
+        DemoScreen::U14 => "GRKit 1.7.0 to Confirm",
+        DemoScreen::U15 => "GRKit 1.7.0 to Install",
+        DemoScreen::U16 => "Update Didn't Finish",
+        DemoScreen::U17 => "GRKit updated to 1.7.0",
+        DemoScreen::U18 => "GRKit App Needs an Update",
+        DemoScreen::U19 => "View on GitHub",
     }
 }

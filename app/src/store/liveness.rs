@@ -215,6 +215,20 @@ impl AppState {
         });
     }
 
+    /// Turn the camera off for an update's restart and end the link the
+    /// way the person's own power off does, without a notice.
+    pub(super) async fn power_off_for_update(self, peripheral_id: &str) {
+        self.auto_suppressed.set(true);
+        let mut finished = platform::http::camera_finish(true).await;
+        if !finished {
+            finished = platform::end_session_over_bluetooth(peripheral_id, true).await;
+        }
+        app_info!("update restart: power off finished={finished}");
+        if self.link_connected() {
+            self.health_step(|h| h.down(DownReason::User));
+        }
+    }
+
     /// The connected camera advertised that it powered off: it is gone.
     pub(super) fn camera_powered_off(self, peripheral_id: &str) {
         let ours = self

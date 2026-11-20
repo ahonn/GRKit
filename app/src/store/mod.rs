@@ -42,6 +42,8 @@ pub const INSTALL_URL: &str = "https://grkit.app/";
 /// The public feedback board.
 pub const HELP_URL: &str = "https://grkit.userjot.com";
 pub const GR_SNAP_URL: &str = "https://apps.apple.com/app/gr-snap-ricoh-gr-wireless/id6768040383";
+/// Every GRKit release.
+pub const RELEASES_URL: &str = "https://github.com/ahonn/GRKit/releases";
 pub const APP_VERSION: &str = "1.0.0";
 pub const APP_BUILD: &str = "1";
 
@@ -59,6 +61,8 @@ pub enum Tab {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
     SoftwareUpdate,
+    /// The notes of earlier GRKit versions, from Software Update.
+    ReleaseHistory,
     /// One Look on the camera, by ID.
     LookDetail(String),
     /// Rename an imported Look.
@@ -92,9 +96,15 @@ pub enum Sheet {
         previous: String,
     },
     Error(UpdateError),
+    /// A confirmed update did not install: GRKit does not answer after the
+    /// restart.
+    InstallFailed,
     /// Choose what kind of file becomes a new Look.
     ImportLook,
 }
+
+/// The package assembled for a target version: (version, zip bytes).
+type StagedPackage = (String, Vec<u8>);
 
 /// Shared app state provided at the root (`Copy` handle on signals).
 #[derive(Clone, Copy)]
@@ -156,8 +166,17 @@ pub struct AppState {
     update_reconnect: Signal<bool>,
     update_kind: Signal<UpdateKind>,
     release_busy: Signal<bool>,
-    release_error: Signal<Option<String>>,
+    release_problem: Signal<Option<crate::domain::ReleaseProblem>>,
+    release_notes: Signal<Vec<crate::domain::release_notes::VersionNotes>>,
     release: Stored<RefCell<Option<platform::release::Release>>>,
+    /// The phone restarts the camera for the update.
+    restart_request: Signal<bool>,
+    /// The person opened the update: its steps show in the sheet.
+    update_shown: Signal<bool>,
+    /// The update journal of the connected camera, when one waits.
+    journal: Signal<Option<crate::domain::JournalState>>,
+    /// The package assembled for the update target, kept for a send again.
+    staged: Stored<RefCell<Option<StagedPackage>>>,
 }
 
 impl AppState {
@@ -188,8 +207,13 @@ impl AppState {
             update_reconnect: signal(false),
             update_kind: signal(UpdateKind::Install),
             release_busy: signal(false),
-            release_error: signal(None),
+            release_problem: signal(None),
+            release_notes: signal(Vec::new()),
             release: stored(RefCell::new(None)),
+            restart_request: signal(false),
+            update_shown: signal(false),
+            journal: signal(None),
+            staged: stored(RefCell::new(None)),
             tab: signal(Tab::Camera),
             stacks: signal([Vec::new(), Vec::new(), Vec::new()]),
             looks: LooksStore::new(demo),
@@ -656,6 +680,7 @@ impl AppState {
             return;
         }
         self.set_frozen(false);
+        self.update_shown.set(true);
         let ok = self.camera.with(|slot| {
             let mut slot = slot.borrow_mut();
             let Some(cam) = slot.as_mut() else {
@@ -718,7 +743,14 @@ impl AppState {
             .or_else(|| self.baseline.get())
             .unwrap_or_else(|| "1.6.1".into());
         let restarting = matches!(flow.phase(), UpdatePhase::Restart { .. });
-        self.phase.set(flow.phase().clone());
+        // The phone's own restart steps stand over the camera's phase.
+        let own_restart = matches!(
+            self.phase.get(),
+            UpdatePhase::Restarting { .. } | UpdatePhase::ManualRestart { .. }
+        );
+        if !(own_restart && restarting) {
+            self.phase.set(flow.phase().clone());
+        }
         if let Some(package) = package {
             self.package.set(Some(package));
         }
@@ -743,6 +775,9 @@ impl AppState {
                 }));
             }
             UpdatePoll::Installed { version } => {
+                if !matches!(self.sheet.get(), Some(Sheet::Installed { .. })) {
+                    haptic(Haptic::Notification(HapticNotification::Success));
+                }
                 self.sheet.set(Some(Sheet::Installed { version, previous }));
             }
             UpdatePoll::Failed(error) => self.sheet.set(Some(Sheet::Error(error))),
@@ -756,22 +791,99 @@ impl AppState {
             .unwrap_or(Duration::from_secs(5 * 60))
     }
 
-    pub fn finish_restart(self) {
+    /// The restart step's main action: the phone turns the camera off and on
+    /// again, then reads the version.
+    pub fn restart_for_update(self) {
+        let kind = self.update_kind.get();
         if !self.demo() {
-            self.update_reconnect.set(true);
-            self.resume_update();
+            self.request_restart();
             return;
         }
         self.set_frozen(false);
-        for _ in 0..8 {
-            self.tick_update();
-            if matches!(
-                self.flow_phase(),
-                UpdatePhase::Installed { .. } | UpdatePhase::Failed(_)
-            ) || matches!(self.sheet(), Some(Sheet::Installed { .. }))
-            {
-                break;
+        self.phase.set(UpdatePhase::Restarting {
+            kind,
+            step: crate::domain::RestartStep::PoweringOff,
+        });
+        self.root.run(|| {
+            spawn(async move {
+                for step in [
+                    crate::domain::RestartStep::PoweringOn,
+                    crate::domain::RestartStep::Reconnecting,
+                ] {
+                    timer(Duration::from_millis(900)).await;
+                    self.phase.set(UpdatePhase::Restarting { kind, step });
+                }
+                timer(Duration::from_millis(900)).await;
+                self.demo_camera_restarted();
+            })
+        });
+    }
+
+    /// The person restarts the camera: the sheet says how, then offers to
+    /// reconnect.
+    pub fn restart_manually(self) {
+        self.phase.set(UpdatePhase::ManualRestart {
+            kind: self.update_kind.get(),
+        });
+    }
+
+    /// Reconnect after the person restarted the camera.
+    pub fn reconnect_for_update(self) {
+        if self.demo() {
+            self.demo_camera_restarted();
+            return;
+        }
+        self.update_reconnect.set(true);
+        self.resume_update();
+    }
+
+    fn demo_camera_restarted(self) {
+        self.camera.with(|slot| {
+            if let Some(cam) = slot.borrow_mut().as_mut() {
+                cam.restart();
             }
+        });
+        self.phase.set(UpdatePhase::Restart {
+            kind: self.update_kind.get(),
+        });
+        self.tick_update();
+    }
+
+    /// Ask before an update stops: the cancel button and a swipe down.
+    pub fn ask_cancel_update(self) {
+        let step = crate::domain::update_step(&self.flow_phase());
+        spawn(async move {
+            let answer = nsh_base::alert_dialog()
+                .title(crate::strings::tr("update.cancel_title", &[]))
+                .description(crate::strings::tr(
+                    crate::domain::cancel_body_key(step),
+                    &[],
+                ))
+                .cancel("keep", crate::strings::tr("update.cancel_keep", &[]))
+                .destructive("cancel", crate::strings::tr("update.cancel_confirm", &[]))
+                .show()
+                .await;
+            if answer.ok().and_then(|a| a.action).as_deref() == Some("cancel") {
+                self.cancel_update();
+            }
+        });
+    }
+
+    /// The restart is under way: it cannot be stopped or swiped away.
+    pub fn update_restarting(self) -> bool {
+        matches!(self.flow_phase(), UpdatePhase::Restarting { .. })
+    }
+
+    pub fn dismiss_install_failed(self) {
+        self.sheet.set(None);
+        self.update_shown.set(false);
+    }
+
+    /// Connect again after a restart that left GRKit off.
+    pub fn reconnect_install_failed(self) {
+        self.dismiss_install_failed();
+        if let Some(camera) = self.remembered() {
+            self.connect_camera(&camera.peripheral_id);
         }
     }
 
@@ -784,6 +896,8 @@ impl AppState {
         });
         self.phase.set(UpdatePhase::Idle);
         self.sheet.set(None);
+        self.update_shown.set(false);
+        self.journal.set(None);
         self.confirm_deadline.set(None);
         self.stacks
             .update(|stacks| stacks[tab_index(Tab::Camera)].clear());
@@ -797,6 +911,7 @@ impl AppState {
         });
         self.phase.set(UpdatePhase::Idle);
         self.sheet.set(None);
+        self.update_shown.set(false);
         self.confirm_deadline.set(None);
     }
 
@@ -812,6 +927,8 @@ impl AppState {
         });
         self.phase.set(UpdatePhase::Idle);
         self.sheet.set(None);
+        self.update_shown.set(false);
+        self.journal.set(None);
         self.confirm_deadline.set(None);
     }
 
@@ -840,7 +957,9 @@ impl AppState {
                 if self.frozen() {
                     continue;
                 }
-                if self.sheet() == Some(Sheet::Confirm) {
+                if self.sheet() == Some(Sheet::Confirm)
+                    || self.journal.get() == Some(crate::domain::JournalState::Waiting)
+                {
                     self.confirm_tick.set(self.confirm_remaining().as_secs());
                 }
                 match self.sheet() {
@@ -911,6 +1030,15 @@ pub fn is_up_to_date(package: &PackageInfo) -> bool {
         .available
         .as_ref()
         .is_none_or(|available| crate::domain::version_at_least(&package.installed, available))
+}
+
+/// The app's page in the platform's store.
+pub fn app_store_url() -> String {
+    if cfg!(target_os = "android") {
+        "https://play.google.com/store/apps/details?id=studio.techflow.grkit".into()
+    } else {
+        format!("https://apps.apple.com/app/id{APP_STORE_ID}")
+    }
 }
 
 /// Rate URL for the App Store review prompt.

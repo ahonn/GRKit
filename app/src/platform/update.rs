@@ -165,6 +165,42 @@ pub async fn cancel(boot_id: &str) -> Result<(), UpdateError> {
     Ok(())
 }
 
+/// Free bytes on the card, when the camera reports them.
+pub async fn free_bytes() -> Option<u64> {
+    let props: crate::domain::PropsResponse = decode_json(&read("/v1/props").await.ok()?).ok()?;
+    props.storage?.free_bytes
+}
+
+fn seen_path() -> Option<std::path::PathBuf> {
+    Some(data_dir()?.join("seen_versions.json"))
+}
+
+fn seen_versions() -> std::collections::BTreeMap<String, String> {
+    seen_path()
+        .and_then(|path| fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default()
+}
+
+/// The GRKit version this phone last saw on the camera `camera_id`.
+pub fn seen_version(camera_id: &str) -> Option<String> {
+    seen_versions().remove(camera_id)
+}
+
+pub fn save_seen_version(camera_id: &str, version: &str) {
+    let mut versions = seen_versions();
+    if versions.get(camera_id).map(String::as_str) == Some(version) {
+        return;
+    }
+    versions.insert(camera_id.to_owned(), version.to_owned());
+    if let (Some(path), Ok(bytes)) = (seen_path(), serde_json::to_vec(&versions)) {
+        if let Some(dir) = path.parent() {
+            let _ = fs::create_dir_all(dir);
+        }
+        let _ = fs::write(path, bytes);
+    }
+}
+
 pub fn load_intent() -> Option<UpdateIntent> {
     serde_json::from_slice(&fs::read(data_dir()?.join("pending_update.json")).ok()?).ok()
 }

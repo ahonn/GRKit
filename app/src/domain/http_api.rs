@@ -30,6 +30,9 @@ pub struct PropsGrkit {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct PropsStorage {
     pub state: Option<String>,
+    /// Free bytes on the card, when the service could read them.
+    #[serde(default, rename = "freeBytes")]
+    pub free_bytes: Option<u64>,
 }
 
 /// `/v1/props` body from the camera service.

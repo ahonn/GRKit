@@ -19,12 +19,6 @@ home.add:
 home.footnote:
   en: Needs GRKit 1.7.0 or later on the camera.
   zh-CN: 相机上需要 GRKit 1.7.0 或更高版本。
-error.old_title:
-  en: GRKit Needs an Update
-  zh-CN: 需要更新 GRKit
-error.old_body:
-  en: Install GRKit 1.7.0 or later on the card first.
-  zh-CN: 请先在卡上安装 GRKit 1.7.0 或更高版本。
 
 nearby.title_suffix:
   en: ""
@@ -80,8 +74,8 @@ connecting.bt:
   en: Connect over Bluetooth
   zh-CN: 通过蓝牙连接
 connecting.wifi:
-  en: Join the camera's Wi-Fi
-  zh-CN: 加入相机的 Wi-Fi
+  en: Join the camera's Wi‑Fi
+  zh-CN: 加入相机的 Wi‑Fi
 connecting.wifi_sub:
   en: If iOS asks, allow it.
   zh-CN: 若系统询问，请允许。
@@ -101,18 +95,12 @@ connected.reconnecting:
 connected.whats_new:
   en: What's New
   zh-CN: 新功能
-connected.update:
-  en: Update
-  zh-CN: 更新
 connected.grkit:
   en: GRKit
   zh-CN: GRKit
 connected.firmware:
   en: Firmware
   zh-CN: 固件
-connected.up_to_date:
-  en: GRKit Is Up to Date
-  zh-CN: GRKit 已是最新
 connected.software_update:
   en: Software Update
   zh-CN: 软件更新
@@ -120,78 +108,12 @@ connected.software_update:
 software.title:
   en: Software Update
   zh-CN: 软件更新
-software.installed:
-  en: Installed
-  zh-CN: 已安装
-software.looks_stay:
-  en: Your film looks and settings stay.
-  zh-CN: 你的胶片风格和设置会保留。
-software.update_now:
-  en: Update Now
-  zh-CN: 立即更新
-software.confirm_note:
-  en: Confirm on the camera, then restart it.
-  zh-CN: 请在相机上确认，然后重启相机。
-software.up_to_date:
-  en: GRKit is up to date
-  zh-CN: GRKit 已是最新
-software.learn_more:
-  en: Learn More…
-  zh-CN: 了解更多…
 
-sending.title:
-  en: Updating %{model}
-  zh-CN: 正在更新 %{model}
-sending.progress:
-  en: Sending to your camera…
-  zh-CN: 正在发送到相机…
-sending.step_send:
-  en: Send to camera
-  zh-CN: 发送到相机
-sending.step_confirm:
-  en: Confirm on camera
-  zh-CN: 在相机上确认
-sending.step_restart:
-  en: Restart camera
-  zh-CN: 重启相机
-sending.keep_on:
-  en: Keep the camera on.
-  zh-CN: 请保持相机开机。
-sending.cancel:
-  en: Cancel
-  zh-CN: 取消
 
 confirm.title:
   en: Confirm on the Camera
   zh-CN: 在相机上确认
-confirm.subtitle:
-  en: The update is on the camera and verified.
-  zh-CN: 更新已在相机上并通过校验。
-confirm.step1:
-  en: MENU → About GRKit
-  zh-CN: 菜单 → 关于 GRKit
-confirm.step2:
-  en: Choose Install
-  zh-CN: 选择安装
-confirm.step3:
-  en: Choose Execute
-  zh-CN: 选择执行
-confirm.waiting:
-  en: Waiting for the camera · %{time}
-  zh-CN: 等待相机 · %{time}
 
-restart.title:
-  en: Restart the Camera
-  zh-CN: 重启相机
-restart.subtitle:
-  en: "Turn the camera off and on, then reconnect to verify the installed version."
-  zh-CN: "请将相机关机再开机，然后重新连接以确认已安装的版本。"
-restart.done:
-  en: "Check Installed Version"
-  zh-CN: "检查已安装版本"
-restart.cancel:
-  en: Cancel Update
-  zh-CN: 取消更新
 
 installed.title:
   en: GRKit %{version} Is Installed
@@ -200,45 +122,12 @@ installed.done:
   en: Done
   zh-CN: 完成
 
-error.card_full_title:
-  en: Card Is Full
-  zh-CN: 存储卡已满
-error.card_full_body:
-  en: Free %{size}, then try again.
-  zh-CN: 请先腾出 %{size}，然后重试。
-error.not_confirmed_title:
-  en: Not Confirmed
-  zh-CN: 未确认
-error.not_confirmed_body:
-  en: "Confirmation timed out. Check the camera before trying again."
-  zh-CN: "确认已超时。请先检查相机，再重试。"
 error.refused_title:
-  en: Update Refused
-  zh-CN: 更新被拒绝
-error.refused_body:
-  en: "The camera refused this package. Check that it supports your camera and firmware."
-  zh-CN: "相机拒绝了此更新包。请确认更新包支持你的相机和固件版本。"
+  en: "The Camera Refused the Update"
+  zh-CN: "相机拒绝了这次更新"
 error.lost_title:
   en: Connection Lost
   zh-CN: 连接已断开
-error.lost_body:
-  en: "Reconnect to check the update status. The camera may still have a pending update."
-  zh-CN: "请重新连接以检查更新状态。相机上可能仍有待处理的更新。"
-error.connect_lost_body:
-  en: Keep the camera on and close to your phone, then try again.
-  zh-CN: 请让相机保持开机并靠近手机，然后重试。
-error.pair_title:
-  en: Pairing Needed
-  zh-CN: 需要配对
-error.pair_body:
-  en: Complete pairing on the camera, then try again.
-  zh-CN: 请先在相机上完成配对，然后重试。
-error.wifi_title:
-  en: Could Not Join Wi-Fi
-  zh-CN: 无法加入 Wi-Fi
-error.wifi_body:
-  en: Allow the network prompt, keep the camera nearby, then try again.
-  zh-CN: 请允许系统网络提示，保持相机在附近，然后重试。
 error.card_ready_title:
   en: Camera Not Ready
   zh-CN: 相机未就绪
@@ -293,28 +182,13 @@ connecting.cancel:
   en: Cancel
   zh-CN: 取消
 
-software.unavailable:
-  en: "Update information unavailable"
-  zh-CN: "暂时无法获取更新信息"
 
-sending.preparing:
-  en: "Preparing and sending package…"
-  zh-CN: "正在准备并发送更新包…"
 
-installed.verified:
-  en: "The camera is running this version."
-  zh-CN: "已确认相机正在运行此版本。"
 
 error.service_title:
   en: "Could Not Complete the Request"
   zh-CN: "无法完成请求"
 
-error.download_title:
-  en: "Could Not Prepare the Update"
-  zh-CN: "无法准备更新"
-error.download_body:
-  en: "Could not download the update. Check the internet connection and try again."
-  zh-CN: "无法下载更新。请检查网络连接后重试。"
 
 software.check:
   en: "Check for Updates"
@@ -958,8 +832,8 @@ conn.open_settings:
   en: "Open Settings"
   zh-CN: "打开设置"
 conn.switched_wifi:
-  en: "I've Switched Wi-Fi"
-  zh-CN: "已切换 Wi-Fi"
+  en: "I've Switched Wi‑Fi"
+  zh-CN: "已切换 Wi‑Fi"
 conn.ble_failed.title:
   en: "Bluetooth Connection Failed"
   zh-CN: "蓝牙连接失败"
@@ -991,62 +865,62 @@ conn.ble_timeout.body:
   en: "Turn the camera on and keep it close by, then try again."
   zh-CN: "请打开相机电源并放在附近，然后重试。"
 conn.wifi_denied.title:
-  en: "Wi-Fi Join Canceled"
-  zh-CN: "已取消加入 Wi-Fi"
+  en: "Wi‑Fi Join Canceled"
+  zh-CN: "已取消加入 Wi‑Fi"
 conn.wifi_denied.body:
-  en: "GRKit needs to join your camera's Wi-Fi network to connect. Tap Join on the next system prompt, or join the camera's Wi-Fi manually from the Wi-Fi section of the Settings app."
-  zh-CN: "GRKit 需要加入相机的 Wi-Fi 才能连接。请在下次系统提示中点击「加入」，或前往「设置」App 的「Wi-Fi」页面手动加入相机 Wi-Fi。"
+  en: "GRKit needs to join your camera's Wi‑Fi network to connect. Tap Join on the next system prompt, or join the camera's Wi‑Fi manually from the Wi‑Fi section of the Settings app."
+  zh-CN: "GRKit 需要加入相机的 Wi‑Fi 才能连接。请在下次系统提示中点击「加入」，或前往「设置」App 的「Wi‑Fi」页面手动加入相机 Wi‑Fi。"
 conn.wifi_password.title:
-  en: "Wrong Wi-Fi Password"
-  zh-CN: "Wi-Fi 密码错误"
+  en: "Wrong Wi‑Fi Password"
+  zh-CN: "Wi‑Fi 密码错误"
 conn.wifi_password.body:
-  en: "The camera's Wi-Fi password may have changed. Pair on the camera again, then try again."
-  zh-CN: "相机的 Wi-Fi 密码可能已更改。请在相机上重新配对，然后重试。"
+  en: "The camera's Wi‑Fi password may have changed. Pair on the camera again, then try again."
+  zh-CN: "相机的 Wi‑Fi 密码可能已更改。请在相机上重新配对，然后重试。"
 conn.wifi_ssid.title:
-  en: "Invalid Wi-Fi Name"
-  zh-CN: "Wi-Fi 名称无效"
+  en: "Invalid Wi‑Fi Name"
+  zh-CN: "Wi‑Fi 名称无效"
 conn.wifi_ssid.body:
   en: "Check the camera's SSID."
   zh-CN: "请检查相机的 SSID。"
 conn.wifi_config.title:
-  en: "Wi-Fi Settings Rejected"
-  zh-CN: "Wi-Fi 设置被拒绝"
+  en: "Wi‑Fi Settings Rejected"
+  zh-CN: "Wi‑Fi 设置被拒绝"
 conn.wifi_config.body:
-  en: "iOS couldn't apply these Wi-Fi settings. Try again."
-  zh-CN: "iOS 无法应用此 Wi-Fi 设置，请重试。"
+  en: "iOS couldn't apply these Wi‑Fi settings. Try again."
+  zh-CN: "iOS 无法应用此 Wi‑Fi 设置，请重试。"
 android.conn.wifi_config.body:
-  en: "Android couldn't apply these Wi-Fi settings. Try again."
-  zh-CN: "Android 无法应用此 Wi-Fi 设置，请重试。"
+  en: "Android couldn't apply these Wi‑Fi settings. Try again."
+  zh-CN: "Android 无法应用此 Wi‑Fi 设置，请重试。"
 conn.wifi_failed.title:
-  en: "Camera Wi-Fi Not Ready"
-  zh-CN: "相机 Wi-Fi 尚未就绪"
+  en: "Camera Wi‑Fi Not Ready"
+  zh-CN: "相机 Wi‑Fi 尚未就绪"
 conn.wifi_failed.body:
-  en: "The camera's Wi-Fi hasn't started yet. Keep the camera on for a few seconds, then try again."
-  zh-CN: "相机的 Wi-Fi 还没有启动。请保持相机开机几秒钟，然后重试。"
+  en: "The camera's Wi‑Fi hasn't started yet. Keep the camera on for a few seconds, then try again."
+  zh-CN: "相机的 Wi‑Fi 还没有启动。请保持相机开机几秒钟，然后重试。"
 conn.wifi_timeout.title:
-  en: "Camera Wi-Fi Unreachable"
-  zh-CN: "无法连接相机 Wi-Fi"
+  en: "Camera Wi‑Fi Unreachable"
+  zh-CN: "无法连接相机 Wi‑Fi"
 conn.wifi_timeout.body:
-  en: "Make sure the camera is on and its Wi-Fi is enabled."
-  zh-CN: "请确认相机已开机且 Wi-Fi 已开启。"
+  en: "Make sure the camera is on and its Wi‑Fi is enabled."
+  zh-CN: "请确认相机已开机且 Wi‑Fi 已开启。"
 conn.network_not_ready.title:
-  en: "Still Switching to Camera Wi-Fi"
-  zh-CN: "正在切换到相机 Wi-Fi"
+  en: "Still Switching to Camera Wi‑Fi"
+  zh-CN: "正在切换到相机 Wi‑Fi"
 conn.network_not_ready.body:
-  en: "Your device joined the camera's Wi-Fi but hasn't switched over yet. Wait a moment, then try again."
-  zh-CN: "设备已加入相机 Wi-Fi，但还没有切换过去。请稍等片刻后重试。"
+  en: "Your device joined the camera's Wi‑Fi but hasn't switched over yet. Wait a moment, then try again."
+  zh-CN: "设备已加入相机 Wi‑Fi，但还没有切换过去。请稍等片刻后重试。"
 conn.subnet.title:
-  en: "Wi-Fi Address Conflict"
-  zh-CN: "Wi-Fi 网段与相机冲突"
+  en: "Wi‑Fi Address Conflict"
+  zh-CN: "Wi‑Fi 网段与相机冲突"
 conn.subnet.body:
-  en: "Your Wi-Fi hands out the same addresses as the camera (192.168.0.x), so GRKit keeps reaching your router instead. Turn on Airplane Mode and switch only Wi-Fi back on, or pick the camera's Wi-Fi in the Settings app, then return here."
-  zh-CN: "你的 Wi-Fi 分配的地址和相机在同一网段（192.168.0.x），GRKit 连上的其实是你的路由器。请先打开飞行模式，再单独打开 Wi-Fi；或者在「设置」App 中手动选择相机的 Wi-Fi，然后回到这里。"
+  en: "Your Wi‑Fi hands out the same addresses as the camera (192.168.0.x), so GRKit keeps reaching your router instead. Turn on Airplane Mode and switch only Wi‑Fi back on, or pick the camera's Wi‑Fi in the Settings app, then return here."
+  zh-CN: "你的 Wi‑Fi 分配的地址和相机在同一网段（192.168.0.x），GRKit 连上的其实是你的路由器。请先打开飞行模式，再单独打开 Wi‑Fi；或者在「设置」App 中手动选择相机的 Wi‑Fi，然后回到这里。"
 conn.verify.title:
   en: "Camera Isn't Responding"
   zh-CN: "相机无响应"
 conn.verify.body:
-  en: "Wi-Fi joined but no reply. Restart the camera."
-  zh-CN: "已加入 Wi-Fi 但相机无响应，请重启相机。"
+  en: "Wi‑Fi joined but no reply. Restart the camera."
+  zh-CN: "已加入 Wi‑Fi 但相机无响应，请重启相机。"
 conn.local_network.title:
   en: "Local Network Access Denied"
   zh-CN: "本地网络访问被拒绝"
@@ -1054,20 +928,17 @@ conn.local_network.body:
   en: "GRKit needs Local Network access to talk to your camera. Enable it in Settings → GRKit → Local Network."
   zh-CN: "GRKit 需要本地网络权限才能与相机通信。请前往「设置」→「GRKit」→「本地网络」开启。"
 android.conn.local_network.body:
-  en: "GRKit needs the Nearby devices permission to talk to your camera over Wi-Fi. Tap Open Settings, then allow it in Permissions → Nearby devices."
-  zh-CN: "GRKit 需要“附近的设备”权限才能通过 Wi-Fi 与相机通信。请轻点“打开设置”，然后在“权限”→“附近的设备”中允许。"
+  en: "GRKit needs the Nearby devices permission to talk to your camera over Wi‑Fi. Tap Open Settings, then allow it in Permissions → Nearby devices."
+  zh-CN: "GRKit 需要“附近的设备”权限才能通过 Wi‑Fi 与相机通信。请轻点“打开设置”，然后在“权限”→“附近的设备”中允许。"
 conn.not_gr.title:
   en: "Not a GR Camera"
   zh-CN: "不是 GR 相机"
 conn.not_gr.body:
-  en: "Looks like you're on a different Wi-Fi network. Switch to your camera's Wi-Fi."
-  zh-CN: "看起来你连接到了其他 Wi-Fi，请切换到相机的 Wi-Fi。"
+  en: "Looks like you're on a different Wi‑Fi network. Switch to your camera's Wi‑Fi."
+  zh-CN: "看起来你连接到了其他 Wi‑Fi，请切换到相机的 Wi‑Fi。"
 conn.unsupported.title:
   en: "Unsupported Camera Response"
   zh-CN: "无法识别的相机响应"
-conn.unsupported.body:
-  en: "The camera replied, but GRKit couldn't understand the response. Update GRKit on the camera and try again."
-  zh-CN: "相机有响应，但 GRKit 无法识别。请更新相机上的 GRKit 后重试。"
 conn.unknown.title:
   en: "Couldn't Connect"
   zh-CN: "连接失败"
@@ -1078,7 +949,7 @@ cam.title:
   en: "Camera"
   zh-CN: "相机"
 cam.detect:
-  en: "Joined camera Wi-Fi? Detect now"
+  en: "Joined camera Wi‑Fi? Detect now"
   zh-CN: "已加入相机 Wi‑Fi？立即检测"
 cam.nearby:
   en: "On · Nearby"
@@ -1089,12 +960,6 @@ cam.others:
 cam.lost_title:
   en: "Lost Connection"
   zh-CN: "连接已断开"
-cam.update_sub:
-  en: "New version · %{size}"
-  zh-CN: "有新版本 · %{size}"
-cam.update_sub_plain:
-  en: "New version"
-  zh-CN: "有新版本"
 cam.looks_active:
   en: "%{name} in use · %{count} in menu"
   zh-CN: "%{name} 使用中 · 菜单中 %{count} 个"
@@ -1135,7 +1000,7 @@ cam.disconnect_title:
   en: "Disconnect Camera"
   zh-CN: "断开相机"
 cam.disconnect_body:
-  en: "This disconnects the camera and turns off its Wi-Fi. Your phone returns to its previous network."
+  en: "This disconnects the camera and turns off its Wi‑Fi. Your phone returns to its previous network."
   zh-CN: "将断开与相机的连接，并关闭相机 Wi‑Fi。手机会自动连回原来的网络。"
 cam.disconnect_confirm:
   en: "Disconnect"
@@ -1189,13 +1054,13 @@ cam.step_pair_gr4:
   en: "The camera may ask to confirm pairing. Accept it on the camera."
   zh-CN: "相机可能会弹出配对确认，请在相机上同意。"
 cam.step_wifi:
-  en: "Joining camera Wi-Fi"
+  en: "Joining camera Wi‑Fi"
   zh-CN: "正在加入相机 Wi‑Fi"
 cam.step_wifi_sub:
   en: "If iOS asks, allow GRKit to connect to the camera."
   zh-CN: "若 iOS 弹出提示，请允许 GRKit 连接相机。"
 cam.step_wifi_slow:
-  en: "GR IV takes longer to start its Wi-Fi. Please wait."
+  en: "GR IV takes longer to start its Wi‑Fi. Please wait."
   zh-CN: "GR IV 启动 Wi‑Fi 需要更长时间，请稍候。"
 cam.step_verify:
   en: "Contacting the camera"
@@ -1204,7 +1069,7 @@ cam.step_verify_sub:
   en: "Checking the connection."
   zh-CN: "正在检查连接。"
 cam.gr4_wifi_note:
-  en: "GR IV takes longer to start its Wi-Fi."
+  en: "GR IV takes longer to start its Wi‑Fi."
   zh-CN: "GR IV 启动 Wi‑Fi 需要更长时间。"
 cam.no_grkit_title:
   en: "No GRKit on the Camera"
@@ -1221,3 +1086,259 @@ android.cam.step_wifi_sub:
 android.cam.step_pair_gr3:
   en: "The camera may show a passkey. Enter it when Android asks."
   zh-CN: "相机可能会显示配对码，系统弹窗出现时输入即可。"
+
+update.title:
+  en: "Updating %{model}"
+  zh-CN: "正在更新 %{model}"
+update.step_download:
+  en: "Download update"
+  zh-CN: "下载更新"
+update.step_send:
+  en: "Send to camera"
+  zh-CN: "发送到相机"
+update.step_confirm:
+  en: "Confirm on camera"
+  zh-CN: "在相机上确认"
+update.step_restart:
+  en: "Restart camera"
+  zh-CN: "重启相机"
+update.keep_on:
+  en: "Keep the camera on and stay in the app."
+  zh-CN: "请保持相机开机，不要离开应用。"
+update.download_body:
+  en: "On the camera's Wi‑Fi, the phone downloads updates over cellular data. Check it and try again."
+  zh-CN: "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。"
+update.cancel:
+  en: "Cancel Update"
+  zh-CN: "取消更新"
+update.cancel_title:
+  en: "Cancel the Update?"
+  zh-CN: "取消更新？"
+update.cancel_body_send:
+  en: "What was sent is removed from the camera."
+  zh-CN: "已发送的部分会从相机上删除。"
+update.cancel_body_confirm:
+  en: "The update waiting on the camera is removed."
+  zh-CN: "相机上待确认的更新会被删除。"
+update.cancel_body_restart:
+  en: "The camera won't install this update when it restarts."
+  zh-CN: "相机重启后不会安装这次更新。"
+update.cancel_keep:
+  en: "Keep Updating"
+  zh-CN: "继续更新"
+update.cancel_confirm:
+  en: "Cancel Update"
+  zh-CN: "取消更新"
+update.reconnect:
+  en: "Reconnect"
+  zh-CN: "重新连接"
+update.ok:
+  en: "OK"
+  zh-CN: "好"
+update.menu_settings:
+  en: "GRKit Settings"
+  zh-CN: "GRKit 设置"
+update.menu_about:
+  en: "About GRKit"
+  zh-CN: "关于 GRKit"
+update.menu_value:
+  en: "Update %{version}"
+  zh-CN: "更新 %{version}"
+update.updated_toast:
+  en: "GRKit updated to %{version}"
+  zh-CN: "GRKit 已更新到 %{version}"
+update.failed_title:
+  en: "Update Didn't Finish"
+  zh-CN: "更新没有完成"
+update.failed_sub:
+  en: "The camera started without finishing the install, so GRKit isn't running."
+  zh-CN: "相机开机时没有完成安装，GRKit 没有运行。"
+update.failed_body:
+  en: "Restart the camera once more. If GRKit still doesn't start, put the card in a computer and install GRKit again at grkit.app."
+  zh-CN: "请再重启一次相机。如果还是这样，把存储卡插到电脑上，在 grkit.app 重新安装。"
+update.open_site:
+  en: "Open grkit.app"
+  zh-CN: "打开 grkit.app"
+restart.running_title:
+  en: "Restarting the Camera"
+  zh-CN: "正在重启相机"
+restart.running_body:
+  en: "Don't turn off the camera or leave the app."
+  zh-CN: "请不要关闭相机或离开应用。"
+restart.manual_body:
+  en: "Turn the camera off and on, then reconnect."
+  zh-CN: "请把相机关机再开机，然后点重新连接。"
+restart.auto_body:
+  en: "The app turns the camera off and on, then checks the version."
+  zh-CN: "应用会先关闭相机再打开，然后检查版本。"
+restart.run:
+  en: "Restart Camera"
+  zh-CN: "重启相机"
+restart.manual:
+  en: "Restart Manually"
+  zh-CN: "手动重启"
+restart.step_off:
+  en: "Turning off…"
+  zh-CN: "正在关机…"
+restart.step_off_done:
+  en: "Turned off"
+  zh-CN: "已关机"
+restart.step_on:
+  en: "Turning on…"
+  zh-CN: "正在开机…"
+restart.step_on_done:
+  en: "Turned on"
+  zh-CN: "已开机"
+restart.step_check:
+  en: "Reconnect and check the version"
+  zh-CN: "重新连接并检查版本"
+restart.title:
+  en: "Restart the Camera"
+  zh-CN: "重启相机"
+restart.subtitle:
+  en: "The update is confirmed. It installs when the camera restarts."
+  zh-CN: "更新已确认，重启一次相机就会安装。"
+confirm.subtitle:
+  en: "The update is on the camera and waits for you."
+  zh-CN: "更新已在相机上，等你确认。"
+confirm.step1:
+  en: "Press MENU and choose About GRKit"
+  zh-CN: "按 MENU，选择「关于 GRKit」"
+confirm.step2:
+  en: "Choose Install"
+  zh-CN: "选择「安装」"
+confirm.step3:
+  en: "Choose Execute"
+  zh-CN: "选择「执行」"
+confirm.waiting:
+  en: "Waiting · %{time} left"
+  zh-CN: "等待确认 · 剩余 %{time}"
+installed.verified:
+  en: "The camera is running the new version."
+  zh-CN: "相机正在运行新版本。"
+error.download_title:
+  en: "Couldn't Download the Update"
+  zh-CN: "无法下载更新"
+error.card_full_title:
+  en: "Card Is Full"
+  zh-CN: "存储卡空间不足"
+error.card_full_body:
+  en: "%{size} more is needed. Delete some photos on the camera, then try again."
+  zh-CN: "还需要 %{size}。请在相机上删除一些照片后重试。"
+error.not_confirmed_title:
+  en: "Not Confirmed on the Camera"
+  zh-CN: "未在相机上确认"
+error.not_confirmed_body:
+  en: "No confirmation within 5 minutes, so the camera removed this update."
+  zh-CN: "5 分钟内没有确认，相机已删除这次更新。"
+error.refused_body:
+  en: "This update doesn't fit the firmware of this camera."
+  zh-CN: "这个更新不适用于这台相机的固件。"
+error.lost_body:
+  en: "Reconnect, and the app continues with this update."
+  zh-CN: "重新连接后，应用会接着处理这次更新。"
+software.up_to_date:
+  en: "GRKit is up to date"
+  zh-CN: "GRKit 已是最新"
+software.check_failed:
+  en: "Couldn't check for updates"
+  zh-CN: "无法检查更新"
+software.check_failed_body:
+  en: "On the camera's Wi‑Fi, the phone downloads updates over cellular data. Check it and try again."
+  zh-CN: "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。"
+software.retry:
+  en: "Try Again"
+  zh-CN: "重试"
+software.show_all:
+  en: "Show All"
+  zh-CN: "查看全部"
+software.history:
+  en: "Update History"
+  zh-CN: "更新历史"
+software.history_github:
+  en: "View on GitHub"
+  zh-CN: "在 GitHub 上查看"
+software.firmware_old:
+  en: "Camera firmware needs an update"
+  zh-CN: "需要更新相机固件"
+software.firmware_old_body:
+  en: "GRKit needs %{model} firmware %{firmware}."
+  zh-CN: "GRKit 需要 %{model} 固件 %{firmware}。"
+software.firmware_how:
+  en: "How to Update the Firmware"
+  zh-CN: "了解如何更新固件"
+software.firmware_new:
+  en: "This firmware isn't supported yet"
+  zh-CN: "暂不支持此固件"
+software.firmware_new_body:
+  en: "GRKit doesn't support firmware %{firmware} yet. Wait for a later version."
+  zh-CN: "GRKit 还不支持固件 %{firmware}，请等待后续版本。"
+software.app_old:
+  en: "GRKit app needs an update"
+  zh-CN: "需要更新 GRKit 应用"
+software.app_old_body:
+  en: "Update the app first, then install the new GRKit."
+  zh-CN: "请先更新应用，再安装新的 GRKit。"
+app.store:
+  en: "Go to the App Store"
+  zh-CN: "前往 App Store"
+android.app.store:
+  en: "Go to Google Play"
+  zh-CN: "前往 Google Play"
+cam.update_available:
+  en: "GRKit %{version} Available"
+  zh-CN: "GRKit %{version} 可用"
+cam.update_available_sub:
+  en: "See Update"
+  zh-CN: "查看更新"
+cam.update_waiting:
+  en: "GRKit %{version} to Confirm"
+  zh-CN: "GRKit %{version} 待确认"
+cam.update_waiting_sub:
+  en: "Confirm on the camera · %{time} left"
+  zh-CN: "在相机上确认 · 剩余 %{time}"
+cam.update_ready:
+  en: "GRKit %{version} to Install"
+  zh-CN: "GRKit %{version} 待安装"
+cam.update_ready_sub:
+  en: "Restart the camera to finish"
+  zh-CN: "重启相机以完成更新"
+conn.app_old.title:
+  en: "GRKit App Needs an Update"
+  zh-CN: "需要更新 GRKit 应用"
+conn.app_old.body:
+  en: "The GRKit on the camera is newer than this app. Update the app, then connect again."
+  zh-CN: "相机上的 GRKit 比这个应用新。请先更新应用，再连接。"
+conn.unsupported.body:
+  en: "The camera replied, but GRKit couldn't understand the response. Try again."
+  zh-CN: "相机有响应，但 GRKit 无法识别。请重试。"
+software.current:
+  en: "Current %{version} · %{model}"
+  zh-CN: "当前 %{version} · %{model}"
+software.update:
+  en: "Update"
+  zh-CN: "更新"
+software.latest_sub:
+  en: "Up to Date · %{model}"
+  zh-CN: "已是最新 · %{model}"
+software.whats_new:
+  en: "What's New"
+  zh-CN: "新功能"
+software.whats_new_here:
+  en: "What's New in This Version"
+  zh-CN: "此版本的新功能"
+software.confirm_note:
+  en: "You confirm the update on the camera, then restart it once. Your film looks and settings stay."
+  zh-CN: "更新需要在相机上确认，并重启一次相机。胶片风格和设置会保留。"
+error.module_title:
+  en: "Update with the Memory Card"
+  zh-CN: "需要用存储卡更新"
+error.module_body:
+  en: "This update doesn't have the module %{module} that the camera has. Update GRKit with the memory card."
+  zh-CN: "这次更新没有相机上的模块「%{module}」。请用存储卡更新 GRKit。"
+error.package_title:
+  en: "Can't Prepare the Update"
+  zh-CN: "无法准备更新"
+error.package_body:
+  en: "The files of this update are incomplete. Check for updates again later."
+  zh-CN: "这次更新的文件不完整。请稍后再检查更新。"

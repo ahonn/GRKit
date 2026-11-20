@@ -249,6 +249,10 @@ impl AppState {
                         self.dismiss_nearby();
                         self.connect_started.set(None);
                     }
+                    Err(LinkError::NeedsGrkit) if self.update_confirmed_for(&peripheral_id) => {
+                        self.sheet.set(Some(Sheet::InstallFailed));
+                        self.connect_started.set(None);
+                    }
                     Err(error) => {
                         let retryable = error.is_auto_retryable();
                         self.sheet.set(Some(Sheet::ConnectError(error)));
@@ -323,11 +327,18 @@ impl AppState {
         // A camera just connected to is not offered again.
         self.suppress_nearby(peripheral_id);
         self.reset_looks();
+        let camera_id = peripheral_id.to_owned();
+        let installed = package.installed.clone();
         self.status.set(Some(status));
         self.package.set(Some(package));
-        self.sheet.set(None);
+        // An update's reconnect keeps its sheet.
+        if !self.update_busy.get() {
+            self.sheet.set(None);
+        }
         self.connect_started.set(None);
+        self.auto_suppressed.set(false);
         self.start_link_session();
+        self.note_installed_version(&camera_id, &installed);
         self.refresh_update_info();
         self.resume_update();
         if let Some(tab) = self.return_tab.get() {
@@ -339,6 +350,17 @@ impl AppState {
         }
         // The camera tab shows the Look in use, so the Looks load at once.
         self.refresh_looks();
+    }
+
+    /// The camera an update restarted is back: start its session as any
+    /// connect does.
+    pub(super) fn adopt_update_reconnect(
+        self,
+        peripheral_id: &str,
+        connected: platform::Connected,
+        options: ConnectOptions,
+    ) {
+        self.finish_connect(peripheral_id, Reached::Wake(connected), options);
     }
 
     /// Keep the remembered camera's identity current after a connect that
