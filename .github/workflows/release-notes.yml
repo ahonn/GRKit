@@ -1,0 +1,63 @@
+name: Release Notes
+
+# Writes the notes of the published GitHub releases into the release index on
+# the site, which the app shows on its Software Update page. Release writes them
+# when it builds a release; this workflow brings in later edits of a published
+# release. Only the notes of the index change, so no package changes.
+on:
+  release:
+    types: [edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  notes:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.draft
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    # Deploy and Site also commit the site branch.
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: site
+          path: site
+      - name: Find the release of the site
+        id: site
+        run: |
+          set -euo pipefail
+          if [ ! -f site/release/index.json ]; then
+            echo "::notice::The site has no release index, so there are no notes to update."
+            exit 0
+          fi
+          echo "version=$(jq -r .version site/release/index.json)" >> "$GITHUB_OUTPUT"
+      - if: steps.site.outputs.version != ''
+        run: rustup toolchain install 1.92.0 --profile minimal && rustup default 1.92.0
+      - if: steps.site.outputs.version != ''
+        working-directory: source
+        run: cargo build --release --locked -p grkit-cli
+      - name: Commit the notes to the site branch
+        if: steps.site.outputs.version != ''
+        working-directory: site
+        env:
+          VERSION: ${{ steps.site.outputs.version }}
+        run: |
+          set -euo pipefail
+          sh ../source/.github/scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/notes.json"
+          ../source/target/release/grkit release-notes --index release/index.json \
+            --notes "$RUNNER_TEMP/notes.json" --out "$RUNNER_TEMP/index.json"
+          mkdir "$RUNNER_TEMP/tree"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/tree"
+          cp "$RUNNER_TEMP/index.json" "$RUNNER_TEMP/tree/release/index.json"
+          sh ../source/.github/scripts/commit-site.sh "$RUNNER_TEMP/tree" "update the release notes of $VERSION"
