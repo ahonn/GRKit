@@ -19,6 +19,11 @@
    native Image Control type at +0x79c. Standard is type 11. The shot settings
    hold the type at the same offset as the settings payload. */
 #define SETTINGS_IC_TYPE 0x79c
+/* The state of the Wi-Fi access point of the camera in the same payload:
+   SETTINGS_WLAN_STATION while a phone is connected. */
+#define SETTINGS_WLAN_STATE 0x24a
+/* 1 while the Wi-Fi access point of the camera is on. */
+#define SETTINGS_WLAN_ENABLED 0x7ff
 /* The digital filter values of the shot settings, which the grain stage of
    recorded pictures reads: Shading and Clarity (0 to 8, 4 is neutral), grain
    on (0 is off), and the HDR Tone strength (0 is off). The native parameter

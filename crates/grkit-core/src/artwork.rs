@@ -936,7 +936,9 @@ pub fn strike(rgba: &mut [u8]) {
 /// that came later, such as a later Framing ratio, and the crop badges of
 /// the crops that the camera has too (`CAMERA_CROP_BADGES`). The label of
 /// each ratio is `aspect::label_index` (FRAMING_RATIO_LABELS).
-pub const OVERLAY_LABELS: [&str; 22] = [
+/// The last two are the other texts of the load cue (runtime/core.h:
+/// LABEL_UPDATE_READY, LABEL_UPDATED).
+pub const OVERLAY_LABELS: [&str; 24] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -959,6 +961,8 @@ pub const OVERLAY_LABELS: [&str; 22] = [
     "35mm",
     "50mm",
     "71mm",
+    "GRKit Update Ready",
+    "GRKit Updated",
 ];
 /// The badges of the crops that the camera has too, so that each crop shows
 /// the same badge: 35 and 50 mm of a 28 mm lens, and 50 and 71 mm of GR IIIx
@@ -1033,7 +1037,7 @@ fn overlay_lines(index: usize) -> Vec<(&'static str, usize, f32)> {
         .position(|candidate| *candidate == "DATE")
         .expect("the labels have DATE");
     match label.split_once(' ') {
-        Some((date_line, time)) if index > date => vec![
+        Some((date_line, time)) if index > date && time == "HM" => vec![
             (
                 date_line,
                 OVERLAY_DATE_CAPITAL,
@@ -1096,11 +1100,20 @@ fn overlay_coverage(index: usize) -> (usize, usize, Vec<f32>) {
         .max()
         .unwrap()
         + 2 * OVERLAY_OUTLINE;
+    // A text with a descender, such as the p of "GRKit Updated", has rows
+    // below the baseline for it. The other labels keep their height.
+    let descender = OVERLAY_LABELS[index].contains(['g', 'j', 'p', 'q', 'y']);
+    let below = if descender {
+        let (_, bounds, _) = lines.last().expect("a label has a line");
+        OVERLAY_BELOW + bounds.max.y.max(0.0).ceil() as usize
+    } else {
+        OVERLAY_BELOW
+    };
     let height = 2 * OVERLAY_OUTLINE
         + OVERLAY_ABOVE
         + lines.iter().map(|(_, _, capital)| capital).sum::<usize>()
         + OVERLAY_LINE_GAP * (lines.len() - 1)
-        + OVERLAY_BELOW;
+        + below;
     let mut coverage = vec![0f32; width * height];
     let mut top = OVERLAY_OUTLINE + OVERLAY_ABOVE;
     for (outlines, bounds, capital) in lines {

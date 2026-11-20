@@ -643,9 +643,13 @@ fn built_in_status_row_fits_with_its_widest_labels() {
                         .unwrap()
                         + define("STATUS_LABEL_GAP")
                 }
+                // The Date Imprint formats, up to the crop badges.
                 Some("DATE") if icon.contains_key("setting") => {
-                    widest(date + 1..=artwork::OVERLAY_LABELS.len() - 1)
-                        + define("STATUS_LABEL_GAP")
+                    let badges = artwork::OVERLAY_LABELS
+                        .iter()
+                        .position(|label| *label == "40mm")
+                        .unwrap();
+                    widest(date + 1..=badges - 1) + define("STATUS_LABEL_GAP")
                 }
                 Some(label) => {
                     let index = artwork::OVERLAY_LABELS
@@ -712,11 +716,20 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
         } else {
             artwork::OVERLAY_LABEL_HEIGHT
         };
-        assert_eq!(height, expected, "label {index}");
+        // A text of the load cue with a descender has rows below for it.
+        if artwork::OVERLAY_LABELS[index].contains(['g', 'j', 'p', 'q', 'y']) {
+            assert!(
+                index >= 19 && (expected + 1..=40).contains(&height),
+                "label {index}"
+            );
+        } else {
+            assert_eq!(height, expected, "label {index}");
+        }
         assert!(height <= 40);
         // A status-row label at the left of the row ends before the centered
         // load cue starts.
-        let widest = if index == 0 { 200 } else { 80 };
+        let cue = artwork::OVERLAY_LABELS[index].starts_with("GRKit ");
+        let widest = if cue { 300 } else { 80 };
         assert!(
             (30..=widest).contains(&width),
             "label {index} is {width} wide"
@@ -1121,4 +1134,20 @@ fn a_long_cover_number_takes_a_smaller_size() {
     assert!(
         artwork::render_cine("RICOH", "CINEMA", "123456789", artwork::NEUTRAL_PALETTE).is_err()
     );
+}
+
+#[test]
+fn the_body_hash_ignores_only_the_name_and_the_icon() {
+    let effect = effects::Effect::from_json(&fixture()).unwrap();
+    let hash = effects::body_hash(&effect.encode(&[0; effects::ICON_SIZE]).unwrap()).unwrap();
+    let covered = effect.encode(&artwork::off_pixels()).unwrap();
+    assert_eq!(effects::body_hash(&covered).unwrap(), hash);
+    let mut renamed = effect.clone();
+    renamed.name = "Other".into();
+    let renamed = renamed.encode(&[0; effects::ICON_SIZE]).unwrap();
+    assert_eq!(effects::body_hash(&renamed).unwrap(), hash);
+    let mut recolored = effect.clone();
+    recolored.matrix[0] += 1;
+    let recolored = recolored.encode(&[0; effects::ICON_SIZE]).unwrap();
+    assert_ne!(effects::body_hash(&recolored).unwrap(), hash);
 }

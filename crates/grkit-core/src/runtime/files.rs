@@ -8,7 +8,7 @@ use super::ICON_STRIDE;
 use crate::camera::Camera;
 use crate::card::{
     INSTALL_FILE, LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LOADER_FILE, PACKAGE_FOLDER,
-    RESIDENT_FILE, SCAN_FILE,
+    RESIDENT_FILE, SCAN_FILE, SERVE_FILE,
 };
 use crate::Files;
 
@@ -63,9 +63,28 @@ pub const BOOT_LOG: &str = "BOOT.TXT";
 /// keeps the last three quarters.
 const BOOT_LOG_LINES: u32 = 400;
 /// The core file that installed at the last start, in the data folder.
-const CORE_CHOICE: &str = "CORE.TXT";
+pub const CORE_CHOICE: &str = "CORE.TXT";
 /// The marker in RAM of the first SCAN.SH of a power-on.
 const BOOT_MARK: &str = "/tmp/grkit-boot";
+/// The marker in RAM of the service (`SERVE_FILE`) while SCAN.SH keeps it
+/// running: the process ID of the service. SCAN.SH removes it as it stops
+/// starting the service.
+pub const SERVE_MARK: &str = "/tmp/grkit-serve";
+/// SCAN.SH starts a service that ended without a stop again, after a pause of
+/// 1 s, at most this many times for each start request.
+const SERVE_RESTARTS: u32 = 1;
+/// The argument of the copy of the service that runs from RAM, which a stop
+/// checks, so that a process ID that another program took is left alone.
+pub const SERVE_FROM_RAM: &str = "--from-ram";
+/// The argument with which the service only marks itself as stopped in its
+/// mailbox and ends. A stop runs it when no service runs: a service that
+/// failed leaves its mark, so that the resident loader does not start it
+/// again until the access point goes off.
+pub const SERVE_MARK_STOPPED: &str = "--mark-stopped";
+/// The arguments of SCAN.SH that only start or stop the service, with which
+/// the resident loader follows the Wi-Fi access point (`runtime::loader`).
+pub const SCAN_SERVE_ARGUMENT: &str = "serve";
+pub const SCAN_STOP_ARGUMENT: &str = "stop";
 
 /// The core file of a runtime build: the core of one firmware build and its
 /// installer, which SCAN.SH and INSTALL.SH run.
@@ -83,6 +102,19 @@ pub fn core_path_of(index: usize, count: usize) -> String {
     } else {
         format!("{PACKAGE_FOLDER}/CORE{}.BIN", index + 1)
     }
+}
+
+/// The core file that `scan`, the SCAN.SH of a package, runs to scan: the
+/// first core file of the package (`core_path_of(0, count)`). Another core
+/// file on the card, such as one left from an earlier package, is not one
+/// that the package uses.
+pub fn scanned_core(scan: &[u8]) -> Option<String> {
+    let scan = std::str::from_utf8(scan).ok()?;
+    let prefix = format!("{LINUX_DIRECTORY}/");
+    scan.lines().find_map(|line| {
+        let name = line.strip_prefix(&prefix)?.strip_suffix(" --scan")?;
+        (!name.is_empty() && !name.contains('/')).then(|| format!("{PACKAGE_FOLDER}/{name}"))
+    })
 }
 
 /// The runtime files of a package with the core file of each runtime build of
@@ -125,7 +157,7 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
     let count = binaries.len();
     assert!((1..=MAX_CORE_FILES).contains(&count));
     let target = core_path("LOADER.TTL");
-    let startup = format!("filesearch '{target}'\r\nif result = 0 goto done\r\ninclude '{target}'\r\n:done\r\nend\r\n");
+    let startup = super::update::startup_script(&target);
     let name = |index: usize| {
         core_path_of(index, count)
             .rsplit('/')
@@ -144,11 +176,51 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
         )
         .into_bytes()
     };
-    // The first SCAN.SH of a power-on starts the boot log of the start, with
-    // only the last lines of the earlier starts. A marker in RAM tells the
-    // first run, because the loader repeats SCAN.SH until it finds a plan.
+    // With `SCAN_SERVE_ARGUMENT`, SCAN.SH starts the service (`SERVE_FILE`)
+    // of a runtime that has one, unless it runs; with `SCAN_STOP_ARGUMENT`,
+    // it asks the service to stop, which ends after the request that it
+    // answers. A subshell starts the service again when it ends without a
+    // stop (`SERVE_RESTARTS`); it waits for the service, so it does not wake
+    // while the service runs. When no service runs, a stop clears the mark
+    // of the service (`SERVE_MARK_STOPPED`) and removes `SERVE_MARK`, which
+    // also ends a pause before a restart. A process that is not yet the copy
+    // in RAM is still starting: the loader asks again. The subshell runs apart from the script, with
+    // no input or output, so that `lcmd` does not wait for it. Either way
+    // SCAN.SH ends there: it writes nothing to the card, because the camera
+    // may then be saving pictures.
+    //
+    // The first SCAN.SH of a power-on also starts the boot log of the start,
+    // with only the last lines of the earlier starts. A marker in RAM tells
+    // the first run, because the loader repeats SCAN.SH until it finds a
+    // plan.
     let start = format!(
-        "mkdir -p {LINUX_DATA_DIRECTORY}\n\
+        "case \"$1\" in\n\
+         {SCAN_SERVE_ARGUMENT})\n\
+         \x20 if [ ! -e {SERVE_MARK} ] && [ -e {serve} ]; then\n\
+         \x20   : >{SERVE_MARK}\n\
+         \x20   (n=0\n\
+         \x20   while :; do\n\
+         \x20     (cd / && exec {serve}) &\n\
+         \x20     echo $! >{SERVE_MARK}\n\
+         \x20     wait $! && break\n\
+         \x20     n=$((n + 1))\n\
+         \x20     [ $n -gt {SERVE_RESTARTS} ] && break\n\
+         \x20     sleep 1\n\
+         \x20     [ -e {SERVE_MARK} ] || break\n\
+         \x20   done\n\
+         \x20   rm -f {SERVE_MARK}) </dev/null >/dev/null 2>&1 &\n\
+         \x20 fi\n\
+         \x20 exit 0 ;;\n\
+         {SCAN_STOP_ARGUMENT})\n\
+         \x20 if [ -e {SERVE_MARK} ] && read pid _ <{SERVE_MARK} && [ -e /proc/$pid ]; then\n\
+         \x20   grep -q -- {SERVE_FROM_RAM} /proc/$pid/cmdline && kill -TERM \"$pid\"\n\
+         \x20 else\n\
+         \x20   rm -f {SERVE_MARK}\n\
+         \x20   [ -e {serve} ] && {serve} {SERVE_MARK_STOPPED}\n\
+         \x20 fi\n\
+         \x20 exit 0 ;;\n\
+         esac\n\
+         mkdir -p {LINUX_DATA_DIRECTORY}\n\
          if [ ! -e {BOOT_MARK} ]; then\n\
          \x20 : >{BOOT_MARK}\n\
          \x20 n=$(grep -c '' {log} 2>/dev/null)\n\
@@ -157,6 +229,7 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
          fi\n",
         lines = BOOT_LOG_LINES,
         keep = BOOT_LOG_LINES * 3 / 4,
+        serve = format_args!("{LINUX_DIRECTORY}/{}", SERVE_FILE.rsplit('/').next().unwrap()),
     );
     let single = |mode: &str| format!("{LINUX_DIRECTORY}/{} --{mode}\nstatus=$?\n", name(0));
     let names = |range: std::ops::Range<usize>| range.map(name).collect::<Vec<_>>().join(" ");
@@ -200,7 +273,7 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
         ),
     };
     let mut files = Files::from([
-        ("SCRIPT/STARTUP.TTL".into(), startup.into_bytes()),
+        (crate::card::STARTUP_FILE.into(), startup.into_bytes()),
         (LOADER_FILE.into(), loader_with(icon_stride, &releases)),
         (RESIDENT_FILE.into(), resident()),
         (SCAN_FILE.into(), wrapper(scan, "scan", &start)),
@@ -215,4 +288,21 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
         files.insert(release.install_path(), install);
     }
     files
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_scan_script_names_the_first_core_file() {
+        let binary: &[u8] = b"core";
+        for count in [1, 2, MAX_CORE_FILES] {
+            let files = package_runtime_files(&vec![binary; count], ICON_STRIDE);
+            let scan = &files[SCAN_FILE];
+            assert_eq!(scanned_core(scan), Some(core_path_of(0, count)));
+        }
+        assert_eq!(scanned_core(b"echo\n"), None);
+        assert_eq!(scanned_core(&[0xff, 0xfe]), None);
+    }
 }

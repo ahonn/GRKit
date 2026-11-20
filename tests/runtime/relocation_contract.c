@@ -225,6 +225,26 @@ int main(void)
     startup(0x54fe0000U);
     assert(!relocation_startup(&tables, &state));
 
+    /* Runtime discovery needs only array/heap metadata. An unrelated
+       installed hook must not invalidate those sources, but a changed
+       requested source must still fail. Full installation keeps all checks. */
+    {
+        u8 required[8]={0};
+        pinned(); hint=0; optional=0;
+        assert(resolve());
+        put(0x5301000cU,0);
+        assert(!resolve());
+        memset(&state,0,sizeof(state));
+        state.read=read_word; state.window_at=window_at; state.symbol_at=symbol_at;
+        required[2]=required[4]=1;
+        state.required=required;
+        assert(relocation_resolve(&tables,&state));
+        assert(symbol_at[2]==0x55000048U && symbol_at[4]==BSS_END);
+        assert(symbol_at[0]==0 && symbol_at[1]==0);
+        put(0x53020040U,0);
+        assert(!relocation_resolve(&tables,&state));
+    }
+
     /* Moving references: a word adds the delta; a branch adds the delta of
        its target minus that of its site, within the ARM branch range. */
     u8 word[4] = {0x08, 0x00, 0x01, 0x53};

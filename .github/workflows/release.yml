@@ -120,7 +120,7 @@ jobs:
             echo "::error::Cargo.toml gives version $version, but the tag is $TAG."
             exit 1
           fi
-      - run: rustup toolchain install 1.92.0 --profile minimal --target wasm32-unknown-unknown
+      - run: rustup toolchain install 1.92.0 --profile minimal --target wasm32-unknown-unknown --target armv7-unknown-linux-musleabi
       - run: rustup default 1.92.0
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
@@ -151,6 +151,12 @@ jobs:
           sudo apt-get install --yes clang-21 lld-21
       - run: cargo build --release --locked -p grkit-cli
       - run: target/release/grkit doctor --clang clang-21 --lld ld.lld-21
+      - name: Build the camera service
+        run: |
+          # One SERVE.BIN for every runtime build of the release.
+          CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABI_LINKER=rust-lld \
+            cargo build --locked -p grkit-serve --target armv7-unknown-linux-musleabi --profile serve
+          cp target/armv7-unknown-linux-musleabi/serve/grkit-serve "$RUNNER_TEMP/SERVE.BIN"
       - name: Build the runtimes and effects from the official firmware
         env:
           FIRMWARE_SOURCE: ${{ inputs.firmware_source }}
@@ -193,7 +199,8 @@ jobs:
             mkdir "$firmware/$target"
             unzip -q "$firmware/$archive" "$file" -d "$firmware/$target"
             target/release/grkit build --target "$target" --firmware "$firmware/$target/$file" \
-              --out "$RUNNER_TEMP/runtime-$target" --clang clang-21 --lld ld.lld-21
+              --out "$RUNNER_TEMP/runtime-$target" --serve "$RUNNER_TEMP/SERVE.BIN" \
+              --clang clang-21 --lld ld.lld-21
             target/release/grkit site --build "$RUNNER_TEMP/runtime-$target" --out site
             target/release/grkit effects publish --source effects --target "$target" \
               --firmware "$firmware/$target/$file" --out "site/effects/$target"
@@ -255,8 +262,12 @@ jobs:
           cp -R web/dist/. site/
       # Release assets are GRKit-<version>-<use>. A camera package holds the
       # published runtime, each effect, and each official module, as the site
-      # does.
+      # does, and the signed statement of its code, which the service on the
+      # camera needs for an update over Wi-Fi. The site publishes each
+      # statement in release/<camera> for the packages that a phone builds.
       - name: Package the published runtime for each camera
+        env:
+          GRKIT_SIGNING_KEY: ${{ secrets.GRKIT_SIGNING_KEY }}
         run: |
           version="${TAG#v}"
           target/release/grkit effects build --source effects --out "$RUNNER_TEMP/effects"
@@ -272,11 +283,25 @@ jobs:
             for target in $targets; do
               builds+=(--build "site/runtime/$target")
             done
+            signed=$(target/release/grkit sign "${builds[@]}" "${modules[@]}" --camera "$camera" --effects "$RUNNER_TEMP/effects" \
+              --source effects --out "site/release/$camera")
+            if [ "$(echo "$signed" | jq -r .official)" != true ]; then
+              echo "::error::GRKIT_SIGNING_KEY is not the official release key."
+              exit 1
+            fi
             target/release/grkit package "${builds[@]}" "${modules[@]}" --camera "$camera" \
               --effects "$RUNNER_TEMP/effects" --guide "site/guides/$camera/en.pdf" \
-              --out "GRKit-$version-$use.zip"
-            target/release/grkit verify "GRKit-$version-$use.zip"
+              --release "site/release/$camera" --out "GRKit-$version-$use.zip"
+            if [ "$(target/release/grkit verify "GRKit-$version-$use.zip" | jq -r .signed)" != official ]; then
+              echo "::error::GRKit-$version-$use.zip has no official signature."
+              exit 1
+            fi
           done 3< "$RUNNER_TEMP/packages.tsv"
+      - name: Write the release index
+        run: |
+          # One index for the phone: every downloadable file of the release, with
+          # its SHA-256, so a package can be built from the site over Wi-Fi.
+          target/release/grkit release-index --site site --out site/release/index.json
       - name: Build the firmware dump tool
         run: target/release/grkit dump --out "GRKit-${TAG#v}-dump.zip" --clang clang-21 --lld ld.lld-21
       - name: Check the version of each runtime

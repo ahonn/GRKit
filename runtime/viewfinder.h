@@ -117,7 +117,7 @@ static GRKIT_ICON_COMPACT void small_text(const Surface *s,const char *text,u32 
    after it. The first still live view after INSTALL therefore shows the
    GRKit label for CUE_SECONDS - 1 to CUE_SECONDS seconds. GRKIT_HOST_LOAD_CUE holds the
    state (runtime/abi.h). */
-#define CUE_PENDING 1U
+#define CUE_PENDING GRKIT_CUE_PENDING
 #define CUE_SECONDS 4U
 #ifndef FRAMING_SECOND
 /* The local second of the day. DateTime: u16 year, then u8 month, day, hour,
@@ -131,6 +131,12 @@ static GRKIT_ICON_COMPACT u32 framing_second(void) {
 #define FRAMING_SECOND() framing_second()
 #endif
 static GRKIT_ICON_COMPACT u32 cue_shown(volatile u32 *h) { return h[GRKIT_HOST_LOAD_CUE/4]>CUE_PENDING; }
+/* The text of the cue (GRKIT_HOST_CUE_LABEL): GRKit Loaded, or the notice of
+   an update over Wi-Fi that waits or that installed. */
+static u32 cue_label(volatile u32 *h) {
+    u32 label=h[GRKIT_HOST_CUE_LABEL/4];
+    return label==GRKIT_CUE_UPDATE_READY ? LABEL_UPDATE_READY : label==GRKIT_CUE_UPDATED ? LABEL_UPDATED : LABEL_GRKIT;
+}
 /* Start the cue in a still live view, and end it after CUE_SECONDS. Returns 1
    when the cue starts or ends, so the canvas needs a redraw. */
 static GRKIT_ICON_COMPACT u32 cue_update(volatile u32 *h,u32 controller) {
@@ -147,6 +153,7 @@ static GRKIT_ICON_COMPACT u32 cue_update(volatile u32 *h,u32 controller) {
     if(now<start) now+=24U*3600U;
     if(now-start<CUE_SECONDS) return 0;
     h[GRKIT_HOST_LOAD_CUE/4]=0;
+    h[GRKIT_HOST_CUE_LABEL/4]=0;
     return 1;
 }
 /* The module layers that INSTALL registered (GRKIT_HOST_MODULE_LAYERS), or 0
@@ -799,7 +806,7 @@ static GRKIT_ICON_COMPACT void paint_canvas(volatile u32 *h,u32 canvas,u32 bitma
     if(cue) {
         /* Centered, on the baseline of the native focus distance. */
         surface.data=cue; surface.stride=HALF(bitmap,0x18); surface.area=area; surface.box=photo_boxes[area];
-        overlay_label(&surface,LABEL_GRKIT,360-label_width(LABEL_GRKIT)/2,LABEL_TOP);
+        overlay_label(&surface,cue_label(h),360-label_width(cue_label(h))/2,LABEL_TOP);
     }
     ++h[GRKIT_HOST_FRAME_DRAWS/4];
 }

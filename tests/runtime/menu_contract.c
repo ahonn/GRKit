@@ -26,6 +26,12 @@ static void record_native_aspect(unsigned id);
 /* The native Image Control type plus 1 (runtime/menu.c). */
 static unsigned native_ic_value;
 #define MENU_NATIVE_IC_TYPE() (native_ic_value)
+/* Whether a phone is connected to the Wi-Fi of the camera (runtime/menu.c). */
+static unsigned wlan_station_value;
+#define MENU_WLAN_STATION() (wlan_station_value)
+/* Whether the Wi-Fi access point of the camera is on (runtime/menu.c). */
+static unsigned wlan_on_value;
+#define MENU_WLAN_ON() (wlan_on_value)
 /* GR IIIx: the lens of 40 mm that the GR III family runtime asks for. */
 #undef CROP_LENS_40MM
 static unsigned test_lens_40mm;
@@ -251,13 +257,13 @@ static void slot_name_set(unsigned slot, unsigned name, unsigned registered)
 #define DIAL_SLOT_ASSIGN(u,slot) (++slot_assigns, slot_assign_saves = slot_saves, slot_of[(u)] = (slot))
 /* A change of the controller, as to the keyboard, which the test records. */
 #undef FW_CHANGE_CONTROLLER
-static unsigned controller_changes, controller_from, controller_to;
+static unsigned controller_changes, controller_from, controller_to, controller_arg;
 static unsigned change_controller(unsigned from, unsigned to, unsigned arg)
 {
-    (void)arg;
     ++controller_changes;
     controller_from = from;
     controller_to = to;
+    controller_arg = arg;
     return 0;
 }
 #define FW_CHANGE_CONTROLLER change_controller
@@ -347,6 +353,7 @@ static unsigned test_shown_number(void)
 #define PLAYBACK_TIMER_START(ms) ((void)(ms), 0x20000U + ++playback_timers)
 #define PLAYBACK_BARRIER() ((void)0)
 #include "menu.c"
+static u32 control_words[GRKIT_CONTROL_PAYLOAD_BYTES / 4];
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 static void native_set_record(const char *const *argv)
 {
@@ -2938,6 +2945,88 @@ static void film_look_lists_the_installed_effects_that_are_on(void)
     assert(!effects_changed(test_header));
 }
 
+/* The Wi-Fi service reads the effect list and sets the choices through the
+   mailbox (runtime/control_looks.h), as the options rows and Order do. */
+static u32 look_command(u32 command, const u32 *words, u32 count, u32 *length)
+{
+    static struct control_request request;
+    request.command = command; request.length = 4 * count;
+    memcpy(request.payload, words, 4 * count);
+    *length = 0;
+    u32 result = control_looks(test_header, &request, length);
+    memcpy(control_words, request.payload, sizeof(control_words));
+    return result;
+}
+static void the_service_reads_and_sets_the_effect_choices(void)
+{
+    reset();
+    install_effect_list();
+    volatile u32 *h = test_header;
+    u32 length, words[4];
+    for (u32 i = 0; i < 3; ++i) settings_memory[2 + (12 + i) * 3] = 0x1000 + i;
+    h[GRKIT_HOST_COUNT / 4] = 2;
+    h[GRKIT_HOST_EFFECTS / 4] = TEST_EFFECTS;
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    /* Without CORE.TONE, the camera has no effects. */
+    h[GRKIT_HOST_CAPABILITIES / 4] &= ~GRKIT_CORE_TONE_BIT;
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == CONTROL_UNSUPPORTED);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
+    /* Velvia 100 is committed. A recipe and a mode-dial set name effects. */
+    setting_store(h, GRKIT_CORE_TONE, 2);
+    h[GRKIT_HOST_RECIPES / 4 + 3 * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_EFFECT | 0x123U << RECIPE_CODE_SHIFT;
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == 0);
+    assert(length == GRKIT_CONTROL_LOOKS_HEADER + 3 * GRKIT_CONTROL_LOOK_ENTRY + 4);
+    assert(control_words[0] == 3 && control_words[1] == 0x1001 && control_words[2] == h[GRKIT_HOST_STATE_CHANGES / 4] && control_words[3] == 1);
+    assert(control_words[4] == 0x1000 && control_words[5] == 0 && control_words[6] == 1);
+    assert(control_words[10] == 0x1002 && control_words[11] == 1 && control_words[12] == 0);
+    assert(control_words[13] == 0x123);
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, words, 1, &length) == CONTROL_BAD_LENGTH);
+    /* Off of the committed effect commits Off, as its checkbox does. */
+    words[0] = 0x1001; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !length);
+    assert(effects_off(h, 1) && !tone_value(h));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 1));
+    words[1] = 2;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_INVALID);
+    words[0] = 0x2000; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 1, &length) == CONTROL_BAD_LENGTH);
+    /* A page that lists the effects is open: nothing changes. */
+    words[0] = 0x1000;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x54000000;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY && !effects_off(h, 0));
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    /* A new order: each effect once. */
+    words[0] = 0x1002; words[1] = 0x1000; words[2] = 0x1001;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == 0);
+    assert(effects_choice(h, 2) == (1U << 1 | 1U) && effects_choice(h, 0) == 2U << 1 && effects_choice(h, 1) == 3U << 1);
+    assert(effects_at(h, 0) == 2 && effects_at(h, 1) == 0 && effects_at(h, 2) == 1);
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    words[2] = 0x1000;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == CONTROL_INVALID);
+    words[2] = 0x2000;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == CONTROL_CHANGED);
+    assert(look_command(99, 0, 0, &length) == CONTROL_UNSUPPORTED);
+    /* Each poll copies the count of setting changes into the mailbox, where
+       the service reads it without a command. */
+    volatile struct control_mailbox *box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
+    static const u32 epoch[4] = {0};
+    control_init(box, epoch);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
+    control_poll(h);
+    assert(box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4]);
+    u32 before = box->state_changes;
+    GRKIT_STATE_CHANGED(h);
+    assert(box->state_changes == before);
+    control_poll(h);
+    assert(box->state_changes == before + 1 && box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4]);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
+}
+
 /* The MENU pages: the settings page of a module in the GRKit section,
    its options page, the GRKit section rows, and About GRKit. The listed
    modules are Film Look, Framing, and Guides, with their pages in slots
@@ -5386,6 +5475,54 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_tabs[MENU_TAB_GRKIT] = TEST_TAB;
     menu_rows_install(h);
     assert(menu_tabs[MENU_TAB_GRKIT] == TEST_TAB && factory_calls == 1);
+    /* An update over Wi-Fi that waits shows Update first in GRKit
+       Settings, and About GRKit reads Update and its version and opens the
+       same page. OK on Install asks in a confirm box; Cancel keeps the update
+       waiting, Execute confirms it and returns, as MENU does, to the page
+       that opened the value page. Then it and About GRKit read Restart to
+       apply. The test cannot show the box, so it calls its return. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    h[GRKIT_HOST_UPDATE_VERSION / 4] = 1U << 16 | 7U << 8 | 12U;
+    assert(same(grkit_value(h), "Update 1.7.12"));
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(settings_rows(h) == 3 && same(core_page_settings[0].label(h), "Update") &&
+           same(core_page_settings[1].label(h), "Mode Dial"));
+    const Setting *update = core_row_setting(h, 0);
+    assert(update == &update_setting && update->flags == SETTING_OWN_PAGE);
+    assert(same(update->title(h), "Update 1.7.12") && update->values(h) == 2 && update->get(h) == 0 &&
+           same(update->value_text(h, 0), "Later") && same(update->value_text(h, 1), "Install"));
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, 0));
+    assert(update->select(h, TEST_OBJECTS + 0x800U, UPDATE_INSTALL));
+    assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Install GRKit 1.7.12?"));
+    volatile u32 *check = services_word(h, SERVICES_CHECK);
+    check[CHECK_SETTING / 4] = 0;
+    check[CHECK_RADIO / 4] = TEST_OBJECTS + 0x800U;
+    check[CHECK_ID / 4] = settings_pages[0];
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
+    controller_changes = 0;
+    update_box_done(0, 0);
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_WAITING && !controller_changes);
+    update_box_done(1, 0);
+    assert(controller_changes == 1 && controller_from == TEST_OBJECTS + 0x800U &&
+           controller_to == MENU_RETURN_CONTROLLER && controller_arg == CONTROLLER_BACK);
+    /* From GRKit Settings, the value page returns there. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
+    update_box_done(1, 0);
+    assert(controller_changes == 2 && controller_to == SETTINGS_SUBMENU);
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = 0;
+    check[CHECK_RADIO / 4] = check[CHECK_ID / 4] = 0;
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && update->get(h) == UPDATE_INSTALL &&
+           same(update->value_text(h, 1), "Restart to apply") && same(grkit_value(h), "Restart to apply"));
+    /* A confirmed update asks nothing more. */
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, UPDATE_INSTALL));
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_READY;
+    assert(same(grkit_value(h), "Restart to apply"));
+    /* Without a version, the texts leave it out. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    h[GRKIT_HOST_UPDATE_VERSION / 4] = 0;
+    assert(same(grkit_value(h), "Update"));
+    h[GRKIT_HOST_UPDATE / 4] = 0;
     /* GRKit Settings has Mode Dial, then ADJ Order, which opens its page;
        MENU there returns to GRKit Settings. */
     assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
@@ -6394,6 +6531,7 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     persist_baseline(h, p);
     h[GRKIT_HOST_CROP / 4] = 3; /* Before resident startup. */
     p[GRKIT_PERSIST_REQUEST / 4] = 1;
+    wlan_station_value = 1;
     menu_viewfinder(VIEWFINDER_READY);
     assert(p[GRKIT_PERSIST_REVISION / 4] == 2 && p[GRKIT_PERSIST_READY / 4] == 1);
     timer = services_word(h, SERVICES_PERSIST_TIMER)[0];
@@ -6408,6 +6546,74 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     assert(p[GRKIT_PERSIST_READY / 4] == 2 && p[GRKIT_PERSIST_REVISION / 4] == 3);
     assert(services_word(h, SERVICES_PERSIST_TIMER)[0] != timer);
     assert(dial_word(h, DIAL_TIMER)[0] == dial_timer_ids);
+    wlan_station_value = 0;
+}
+/* The poll runs only while it has work, in every start: without a phone, a
+   timer dispatch of the App task serves a waiting request of the resident
+   loader or of the Wi-Fi service and starts no timer; a phone keeps the
+   100 ms timer running, and the timer stops at the tick after it leaves.
+   The shooting screen does not start the timer on its own. */
+static void the_poll_runs_only_while_it_has_work(void)
+{
+    volatile u32 *h = test_header, *p, *timer;
+    volatile struct control_mailbox *box;
+    static const u32 epoch[4] = {0};
+    u32 id, starts;
+    dial_reset();
+    p = persist_test_buffer();
+    persist_baseline(h, p);
+    timer = services_word(h, SERVICES_PERSIST_TIMER);
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 1;
+    wlan_station_value = 0;
+    starts = persist_timer_ids;
+    menu_viewfinder(VIEWFINDER_READY);
+    menu_timers_due();
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* A request of the resident loader: the next dispatch answers it. */
+    p[GRKIT_PERSIST_RELEASE / 4] = p[GRKIT_PERSIST_READY / 4];
+    p[GRKIT_PERSIST_REQUEST / 4] = p[GRKIT_PERSIST_READY / 4] + 1;
+    menu_timers_due();
+    assert(p[GRKIT_PERSIST_READY / 4] == p[GRKIT_PERSIST_REQUEST / 4]);
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* A request of the Wi-Fi service: the next dispatch answers it. */
+    box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
+    control_init(box, epoch);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
+    menu_timers_due();
+    assert(!timer[0]);
+    const u8 nonce[16] = {1};
+    assert(control_submit(box, epoch, CONTROL_ATTACH, nonce, 16) == 1);
+    assert(control_pending(h));
+    menu_timers_due();
+    assert(box->ready == 1 && !control_pending(h));
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* Each dispatch copies whether the access point is on, for the resident
+       loader. */
+    wlan_on_value = 1;
+    menu_timers_due();
+    assert(h[GRKIT_HOST_WLAN / 4] == 1);
+    wlan_on_value = 0;
+    menu_timers_due();
+    assert(h[GRKIT_HOST_WLAN / 4] == 0);
+    /* A phone: the 100 ms timer runs and keeps running. */
+    wlan_station_value = 1;
+    menu_timers_due();
+    id = timer[0];
+    assert(id && persist_timer_ms == PERSIST_POLL_MS);
+    menu_timers_due();
+    assert(timer[0] == id);
+    ui_timer_fired(0, id);
+    assert(timer[0] && timer[0] != id);
+    /* The phone leaves: the next tick does not start the timer again. */
+    wlan_station_value = 0;
+    ui_timer_fired(0, timer[0]);
+    assert(!timer[0]);
+    menu_timers_due();
+    assert(!timer[0]);
+    h[GRKIT_HOST_SERVICES / 4] = 0;
+    menu_timers_due();
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
 }
 /* The resident loader exports after a count only. A page sets the module
    of the next ADJ session without a count, so the end of a session counts
@@ -6507,6 +6713,7 @@ int main(void)
     enable_applies_at_once();
     the_switch_stops_each_module_at_once();
     film_look_lists_the_installed_effects_that_are_on();
+    the_service_reads_and_sets_the_effect_choices();
     /* The MENU page blocks after the first continue the screen that the block
        before them leaves. */
     settings_entry_enable_preserves_each_value();
@@ -6569,6 +6776,7 @@ int main(void)
     persistence_freezes_the_complete_file_until_release();
     persistence_ignores_unsaved_values_and_rejects_incomplete_views();
     persistence_timer_runs_in_menus_and_preserves_early_dirty_values();
+    the_poll_runs_only_while_it_has_work();
     the_end_of_a_session_counts_a_module_that_no_export_holds();
     return 0;
 }

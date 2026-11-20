@@ -207,6 +207,75 @@ packed_fields!(PERSIST_FIELDS, PERSIST_SIZE {
 });
 pub const PERSIST_WORDS: usize = PERSIST_SIZE / 4;
 
+/// The mailbox from the Wi-Fi service (Linux) to the App task
+/// (runtime/control_mailbox.h). Offsets are bytes. The runtime owns the
+/// descriptor and the result fields; the service owns the request and the
+/// release. The service installs a nonzero epoch with `CONTROL_ATTACH`, once
+/// for each start of the camera.
+pub const CONTROL_MAGIC_VALUE: u32 = 0x47524331;
+pub const CONTROL_VERSION_VALUE: u32 = 1;
+pub const CONTROL_PAYLOAD_BYTES: usize = 2048;
+pub const CONTROL_SEQUENCE_MAX: u32 = 0x7fff_ffff;
+pub const CONTROL_EMPTY: u32 = 0;
+pub const CONTROL_ACCEPTED: u32 = 1;
+pub const CONTROL_BAD_CONTEXT: u32 = 16;
+pub const CONTROL_BAD_LENGTH: u32 = 17;
+pub const CONTROL_BAD_DIGEST: u32 = 18;
+pub const CONTROL_CHANGED: u32 = 19;
+pub const CONTROL_UNSUPPORTED: u32 = 20;
+pub const CONTROL_INVALID: u32 = 21;
+pub const CONTROL_BUSY: u32 = 22;
+pub const CONTROL_ATTACH: u32 = 1;
+pub const CONTROL_PING: u32 = 2;
+/// The listed effects (runtime/control_looks.h). No payload. The response is
+/// `CONTROL_LOOKS_HEADER` bytes: the number of effects, the key of the
+/// committed effect or 0, the count of state changes (`HOST_STATE_CHANGES`),
+/// and the number of codes in use. Then `CONTROL_LOOK_ENTRY` bytes for each
+/// effect: its key (the state ID of `CORE.EFFECT.<ID>`), its choice (the
+/// position in bits 1 and up, bit 0 set for Off), and 1 if it has a record.
+/// Then one word for each recipe or mode-dial set that names an effect: the
+/// recipe code of that effect.
+pub const CONTROL_LOOKS_READ: u32 = 3;
+/// Turn an effect on or off, as its checkbox in MENU does. The payload is
+/// the key and 1 for Off or 0 for On.
+pub const CONTROL_LOOK_TURN: u32 = 4;
+/// Set the order of the effects, as Order in MENU does. The payload is the
+/// key of each listed effect, in the new order.
+pub const CONTROL_LOOKS_ORDER: u32 = 5;
+pub const CONTROL_LOOKS_HEADER: usize = 16;
+pub const CONTROL_LOOK_ENTRY: usize = 12;
+pub const CONTROL_REQUEST_SIZE: usize = 16 + CONTROL_PAYLOAD_BYTES;
+packed_fields!(CONTROL_FIELDS, CONTROL_SIZE {
+    CONTROL_MAGIC: 4;
+    CONTROL_VERSION: 4;
+    CONTROL_CAPACITY: 4;
+    CONTROL_EPOCH: 16;
+    CONTROL_STATE_CHANGES: 4;
+    CONTROL_DESCRIPTOR_PADDING: 32;
+    CONTROL_REQUEST: 4;
+    CONTROL_RELEASE: 4;
+    CONTROL_REQUEST_EPOCH: 16;
+    CONTROL_COMMAND: 4;
+    CONTROL_LENGTH: 4;
+    CONTROL_CHECKSUM: 4;
+    /// CONTROL_SERVICE_RUNNING while the Wi-Fi service runs: the service
+    /// writes it as it starts and clears it as it stops. The resident loader
+    /// starts and stops the service with it and GRKIT_HOST_WLAN.
+    CONTROL_SERVICE: 4;
+    CONTROL_PRODUCER_PADDING: 24;
+    CONTROL_CLAIMED: 4;
+    CONTROL_READY: 4;
+    CONTROL_RESULT: 4;
+    CONTROL_RESPONSE_LENGTH: 4;
+    CONTROL_RESPONSE_CHECKSUM: 4;
+    CONTROL_CONSUMER_PADDING: 44;
+    CONTROL_PAYLOAD: CONTROL_PAYLOAD_BYTES;
+    CONTROL_RESPONSE: CONTROL_PAYLOAD_BYTES;
+});
+pub const CONTROL_WORDS: usize = CONTROL_SIZE / 4;
+/// CONTROL_SERVICE while the Wi-Fi service runs.
+pub const CONTROL_SERVICE_RUNNING: u32 = 1;
+
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
 packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
@@ -562,6 +631,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
     /// Word index of the PERSIST buffer within modulecode, not a native address.
     HOST_PERSIST_WORD: 4;
+    /// The word index of the mailbox of the Wi-Fi service in the module
+    /// array, or 0 without modules (runtime/control_mailbox.h).
+    HOST_CONTROL_WORD: 4;
     /// The record of the ADJ preview of a recipe whose Fn adjustments the
     /// live view takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the
     /// record, while GRKIT_HOST_PREVIEW is that record; else 0
@@ -582,7 +654,35 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Battery Percentage: the average of the charge and the time of its
     /// last sample (runtime/battery_percent.h).
     HOST_BATTERY_AVERAGE: 4;
+    /// An update over Wi-Fi (grkit_core::runtime::update): UPDATE_WAITING
+    /// while its journal waits for the confirmation on the camera, which the
+    /// resident loader sets; UPDATE_CONFIRMED after the confirmation in GRKit
+    /// Settings (runtime/menu_settings.h); UPDATE_READY after the resident
+    /// loader made the journal run at the next power-on; else 0.
+    HOST_UPDATE: 4;
+    /// The version of that update, from `card::VERSION_FILE`: major << 16,
+    /// minor << 8, and patch, or 0 when the package does not name it.
+    HOST_UPDATE_VERSION: 4;
+    /// The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
+    /// CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATED at
+    /// the first start after one installed. The cue sets it back to 0 when it
+    /// ends (runtime/viewfinder.h).
+    HOST_CUE_LABEL: 4;
+    /// 1 while the Wi-Fi access point of the camera is on, else 0. The App
+    /// task copies it at each timer dispatch (runtime/menu.c); the resident
+    /// loader starts the Wi-Fi service while it is 1 and stops it at 0.
+    HOST_WLAN: 4;
 });
+
+/// The values of GRKIT_HOST_UPDATE.
+pub const UPDATE_WAITING: u32 = 1;
+pub const UPDATE_CONFIRMED: u32 = 2;
+pub const UPDATE_READY: u32 = 3;
+/// GRKIT_HOST_LOAD_CUE for a cue that starts at the next still live view.
+pub const CUE_PENDING: u32 = 1;
+/// The values of GRKIT_HOST_CUE_LABEL.
+pub const CUE_UPDATE_READY: u32 = 1;
+pub const CUE_UPDATED: u32 = 2;
 
 pub const RECORD_SIZE: usize = 0x1100;
 
@@ -826,7 +926,7 @@ pub const CANVAS_ENTRY_SIZE: usize = 80;
 pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
 /// Bytes of the live-view labels and glyphs after the menu text
 /// (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 77824;
+pub const LABELS_SIZE: usize = 86016;
 /// The profile table after the labels (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
@@ -1422,6 +1522,16 @@ pub fn header() -> String {
     .unwrap();
     writeln!(out, "#define GRKIT_HOST_MAGIC_VALUE {HOST_MAGIC_VALUE:#x}").unwrap();
     writeln!(out, "#define GRKIT_HOST_VERSION_VALUE {HOST_VERSION_VALUE}").unwrap();
+    for (name, value) in [
+        ("UPDATE_WAITING", UPDATE_WAITING),
+        ("UPDATE_CONFIRMED", UPDATE_CONFIRMED),
+        ("UPDATE_READY", UPDATE_READY),
+        ("CUE_PENDING", CUE_PENDING),
+        ("CUE_UPDATE_READY", CUE_UPDATE_READY),
+        ("CUE_UPDATED", CUE_UPDATED),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
     table(&mut out, HEADER_FIELDS, false);
     table(&mut out, PERSIST_FIELDS, false);
     for (name, value) in [
@@ -1430,6 +1540,40 @@ pub fn header() -> String {
         ("PERSIST_MODULE_WORDS", PERSIST_MODULE_WORDS),
         ("PERSIST_SIZE", PERSIST_SIZE),
         ("PERSIST_WORDS", PERSIST_WORDS),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
+    out.push('\n');
+
+    table(&mut out, CONTROL_FIELDS, false);
+    for (name, value) in [
+        ("CONTROL_SIZE", CONTROL_SIZE),
+        ("CONTROL_WORDS", CONTROL_WORDS),
+        ("CONTROL_PAYLOAD_BYTES", CONTROL_PAYLOAD_BYTES),
+        ("CONTROL_REQUEST_SIZE", CONTROL_REQUEST_SIZE),
+        ("CONTROL_LOOKS_HEADER", CONTROL_LOOKS_HEADER),
+        ("CONTROL_LOOK_ENTRY", CONTROL_LOOK_ENTRY),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
+    for (name, value) in [
+        ("CONTROL_MAGIC_VALUE", CONTROL_MAGIC_VALUE),
+        ("CONTROL_VERSION_VALUE", CONTROL_VERSION_VALUE),
+        ("CONTROL_SEQUENCE_MAX", CONTROL_SEQUENCE_MAX),
+        ("CONTROL_EMPTY", CONTROL_EMPTY),
+        ("CONTROL_ACCEPTED", CONTROL_ACCEPTED),
+        ("CONTROL_BAD_CONTEXT", CONTROL_BAD_CONTEXT),
+        ("CONTROL_BAD_LENGTH", CONTROL_BAD_LENGTH),
+        ("CONTROL_BAD_DIGEST", CONTROL_BAD_DIGEST),
+        ("CONTROL_CHANGED", CONTROL_CHANGED),
+        ("CONTROL_UNSUPPORTED", CONTROL_UNSUPPORTED),
+        ("CONTROL_INVALID", CONTROL_INVALID),
+        ("CONTROL_BUSY", CONTROL_BUSY),
+        ("CONTROL_ATTACH", CONTROL_ATTACH),
+        ("CONTROL_PING", CONTROL_PING),
+        ("CONTROL_LOOKS_READ", CONTROL_LOOKS_READ),
+        ("CONTROL_LOOK_TURN", CONTROL_LOOK_TURN),
+        ("CONTROL_LOOKS_ORDER", CONTROL_LOOKS_ORDER),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
@@ -1901,6 +2045,7 @@ mod tests {
             .all(|field| field.offset % 4 == 0 && field.size % 4 == 0));
         check(HEADER_FIELDS, HOST_HEADER_SIZE, true);
         check(PERSIST_FIELDS, PERSIST_SIZE, true);
+        check(CONTROL_FIELDS, CONTROL_SIZE, true);
         assert_eq!(PERSIST_CORE_COUNT, capabilities::state_keys().len());
     }
 

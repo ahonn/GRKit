@@ -64,6 +64,9 @@ struct relocation_state {
     /* Optional: the windows that only optional symbols use (nonzero), which
        a hint may give as not found, or 0 when each window is needed. */
     const u32 *optional;
+    /* Read-only discovery can request a symbol subset after unrelated hook
+       windows have changed. NULL retains full installation validation. */
+    const u8 *required;
     u32 searched;
     u32 failures;
     struct relocation_failure failure[RELOCATION_REPORT];
@@ -144,6 +147,17 @@ static int relocation_startup(const struct relocation_tables *t, struct relocati
     return 1;
 }
 
+static int relocation_window_required(const struct relocation_tables *t,const struct relocation_state *s,u32 window)
+{
+    if(!s->required) return 1;
+    for(u32 i=0;i<t->source_count;++i) {
+        const struct relocation_source *source=&t->sources[i];
+        if(s->required[source->symbol] && source->kind!=SOURCE_STARTUP && source->kind!=SOURCE_TAIL &&
+           source->window==window) return 1;
+    }
+    return 0;
+}
+
 /* Whether each searched window lies at the address that `at` gives it: its
    pinned start, or the address that an earlier search of the same build
    found (`hint`). A camera reads the image uncached, so the search of a
@@ -155,7 +169,7 @@ static int relocation_known(const struct relocation_tables *t, struct relocation
     for (u32 w = 0; w < t->window_count; ++w) {
         const struct relocation_window *window = &t->windows[w];
         s->window_at[w] = 0;
-        if (!window->search) continue;
+        if (!window->search || !relocation_window_required(t,s,w)) continue;
         u32 address = at ? at[w] : window->start;
         /* A search of this build did not find an optional window. Its
            symbols do not resolve, as after that search. */
@@ -180,7 +194,7 @@ static void relocation_search(const struct relocation_tables *t, struct relocati
     for (u32 w = 0; w < t->window_count; ++w) {
         const struct relocation_window *window = &t->windows[w];
         s->window_at[w] = 0;
-        if (!window->search) continue;
+        if (!window->search || !relocation_window_required(t,s,w)) continue;
         u32 low, high, matches = 0, first = 0;
         relocation_limits(s, window->region, &low, &high);
         u32 from = window->start - low > t->radius ? window->start - t->radius : low;
@@ -264,6 +278,7 @@ static int relocation_resolve(const struct relocation_tables *t, struct relocati
     u32 tail = RELOCATION_NONE;
     for (u32 i = 0; i < t->source_count; ++i) {
         const struct relocation_source *source = &t->sources[i];
+        if(s->required && !s->required[source->symbol]) continue;
         if (source->kind == SOURCE_TAIL) tail = source->symbol;
         u32 value = relocation_value(t, s, i), *slot = &s->symbol_at[source->symbol];
         if (!value) {
@@ -280,6 +295,7 @@ static int relocation_resolve(const struct relocation_tables *t, struct relocati
         *slot = value;
     }
     for (u32 symbol = 0; symbol < t->symbol_count; ++symbol) {
+        if(s->required && !s->required[symbol]) continue;
         u32 value = s->symbol_at[symbol];
         if (value <= 1) {
             if (!value) relocation_fail(s, RELOCATION_NOT_FOUND, symbol, t->symbols[symbol], 0);

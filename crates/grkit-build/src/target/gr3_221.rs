@@ -125,6 +125,7 @@ const SITES: &[Site] = &[
     ("menu_parameter_row_8", 0x532af54c, "4f760aeb"),
     ("menu_settings_change", 0x5316da14, "0dc0a0e1"),
     ("menu_info_update", 0x531e1b20, "0dc0a0e1"),
+    ("menu_timer_dispatch", 0x5322dc04, "402090e5"),
     ("menu_check_factory", 0x53170474, "413100e3"),
     ("menu_check_lines", 0x531bb610, "8a6e07eb"),
     ("menu_check_dot", 0x531bf188, "f98707eb"),

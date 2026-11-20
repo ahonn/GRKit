@@ -608,7 +608,9 @@ fn warm_cube(path: &Path) {
     fs::write(path, text).unwrap();
 }
 
+/// Imports `cube` into `effects`, and into the import library next to `effects`.
 fn import(cube: &Path, firmware: &Path, id: &str, label: &str, effects: &Path) -> Output {
+    let library = effects.with_file_name("IMPORTS.BIN");
     run(&[
         "effects",
         "import",
@@ -630,6 +632,8 @@ fn import(cube: &Path, firmware: &Path, id: &str, label: &str, effects: &Path) -
         "film",
         "--out",
         text(effects),
+        "--library",
+        text(&library),
     ])
 }
 
@@ -647,6 +651,7 @@ fn cube_import_rejects_invalid_firmware_and_ids_before_output() {
     let failed = import(&cube, &firmware, "../warm", "FV", &effects);
     assert!(String::from_utf8_lossy(&failed.stderr).contains("Invalid effect ID"));
     assert!(!effects.exists());
+    assert!(!tmp.path().join("IMPORTS.BIN").exists());
 }
 
 #[test]
@@ -718,10 +723,12 @@ fn imports_a_cube_into_a_buildable_effect_without_overwriting() {
         summary["post_matrix"] == true
     );
 
+    let library = fs::read(tmp.path().join("IMPORTS.BIN")).unwrap();
     let failed = import(&cube, &firmware, "warm-v1", "FV", &effects);
     assert_eq!(failed.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&failed.stderr).contains("already exists"));
     assert_eq!(fs::read(&path).unwrap(), written);
+    assert_eq!(fs::read(tmp.path().join("IMPORTS.BIN")).unwrap(), library);
     assert!(!import(&cube, &firmware, "bad-v1", "ab", &effects)
         .status
         .success());
@@ -738,8 +745,17 @@ fn imports_a_cube_into_a_buildable_effect_without_overwriting() {
     ]);
     assert_eq!(built["effects"], 1);
     let name = effects::filename("warm-v1").unwrap();
-    let (effect, _) = effects::decode(&fs::read(compiled.join(name)).unwrap()).unwrap();
+    let blob = fs::read(compiled.join(name)).unwrap();
+    let (effect, _) = effects::decode(&blob).unwrap();
     assert_eq!(effect.to_json()["matrix"], definition["matrix"]);
+    // The import library holds the same effect, with its label tile.
+    let library = grkit_core::imports::decode(&library).unwrap();
+    assert_eq!(library.len(), 1);
+    assert_eq!(library[0].effect, blob);
+    assert_eq!(
+        library[0].cover().unwrap().to_json(),
+        json!({"label": "FV", "shape": "film"})
+    );
 }
 
 #[test]
@@ -1007,4 +1023,65 @@ fn firmware_patch_takes_only_an_official_update_file() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("Not an official update file"));
     assert!(!out.exists());
+}
+
+#[test]
+fn sign_records_the_official_looks_with_their_covers() {
+    use grkit_core::{camera, release};
+    let tmp = tempfile::tempdir().unwrap();
+    let (_, compiled) = fixture(tmp.path());
+    let mut args = vec!["sign".to_owned(), "--camera".into(), "gr3".into()];
+    for runtime in testing::release_runtimes(&camera::GR3, "1.7.0") {
+        let build = tmp.path().join(runtime.target());
+        for (name, bytes) in runtime.files() {
+            let path = build.join("sd").join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, bytes).unwrap();
+        }
+        let manifest = testing::manifest(runtime.target(), runtime.files());
+        fs::write(build.join("build.json"), manifest).unwrap();
+        args.extend(["--build".into(), text(&build).into()]);
+    }
+    for module in official_modules() {
+        args.extend(["--module".into(), module]);
+    }
+    let out = tmp.path().join("release");
+    args.extend(
+        [
+            "--effects",
+            text(&compiled),
+            "--source",
+            text(&source()),
+            "--out",
+            text(&out),
+        ]
+        .map(str::to_owned),
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_grkit"))
+        .args(&args)
+        .env("GRKIT_SIGNING_KEY", testing::RELEASE_SEED)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let signed: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        (signed["looks"].as_u64(), signed["covers"].as_u64()),
+        (Some(source_count() as u64), Some(source_count() as u64))
+    );
+    let statement =
+        release::Statement::parse(&fs::read(out.join(release::STATEMENT_ENTRY)).unwrap()).unwrap();
+    let id = "portra-400-endura-v1";
+    let definition =
+        effects::parse_json(&fs::read(source().join(id).join("effect.json")).unwrap()).unwrap();
+    assert_eq!(statement.official_covers[id], definition["icon"]);
+    let blob = fs::read(compiled.join(effects::filename(id).unwrap())).unwrap();
+    assert_eq!(
+        statement.official_look_bodies[id],
+        effects::body_hash(&blob).unwrap()
+    );
+    assert_eq!(statement.official_look_bodies.len(), source_count());
 }

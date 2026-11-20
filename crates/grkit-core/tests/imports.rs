@@ -50,3 +50,46 @@ fn decode_rejects_a_damaged_file() {
     count[8] = 3;
     assert!(decode(&count).is_err());
 }
+
+#[test]
+fn upsert_merges_the_cover_and_keeps_the_other_details() {
+    use grkit_core::{cover::Cover, effects, imports};
+    let cover = |name: &str| Cover::for_name(name);
+    let effect = |id: &str, cover: &Cover| {
+        let (effect, _) = effects::decode(&testing::effect(id)).unwrap();
+        effect.encode(&cover.pixels().unwrap()).unwrap()
+    };
+    let gold = cover("Kodak Gold 200");
+    let mut library = vec![import("lut-a", r#"{"grade":"A","cover":{"label":"X"}}"#)];
+    imports::upsert(&mut library, effect("lut-a", &gold), &gold, false).unwrap();
+    imports::upsert(&mut library, effect("portra-v1", &gold), &gold, true).unwrap();
+    imports::upsert(&mut library, effect("lut-b", &gold), &gold, false).unwrap();
+    let details = |id: &str| -> serde_json::Value {
+        serde_json::from_str(&imports::find(&library, id).unwrap().details).unwrap()
+    };
+    assert_eq!(details("lut-a")["grade"], "A");
+    assert_eq!(details("portra-v1")["kind"], "cover");
+    assert_eq!(details("lut-b").as_object().unwrap().len(), 1);
+    assert_eq!(
+        imports::find(&library, "lut-a").unwrap().cover(),
+        Some(gold.clone())
+    );
+    // A cover that does not draw the icon of the effect.
+    let other = cover("Fuji Velvia 100");
+    assert!(imports::upsert(&mut library, effect("lut-a", &gold), &other, false).is_err());
+    assert_eq!(library.len(), 3);
+    assert_eq!(
+        imports::remove(&mut library, "portra-v1")
+            .unwrap()
+            .id()
+            .unwrap(),
+        "portra-v1"
+    );
+    assert!(imports::remove(&mut library, "portra-v1").is_none());
+    assert_eq!(
+        decode(&imports::library_file(&library).unwrap().unwrap()).unwrap(),
+        library
+    );
+    assert_eq!(imports::library_file(&[]).unwrap(), None);
+    assert_eq!(import("lut-c", r#"{"cover":{"label":"x"}}"#).cover(), None);
+}

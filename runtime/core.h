@@ -194,6 +194,9 @@ GRKIT_MAYBE_UNUSED static u32 native_display(void);
    keeps its index. The label of Framing ratio n is framing_label(n); a
    module names it as LABEL_RATIO_AREA | n (LABEL_RATIO in the SDK). */
 #define LABEL_GRKIT 0U
+/* The other texts of the load cue (grkit_core::artwork::OVERLAY_LABELS). */
+#define LABEL_UPDATE_READY 22U
+#define LABEL_UPDATED 23U
 #define LABEL_RATIO_AREA 0x100U
 #ifdef FRAMING_RATIO_LABELS
 /* The label of a Framing ratio value (FRAMING_RATIO_LABELS), or

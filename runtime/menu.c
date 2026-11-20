@@ -89,18 +89,43 @@ static u32 exit_return(u32 value,u32 in_grkit) {
 static u32 controller_return(u32 value,u32 id,u32 arg) {
     return value==RETURN_POWERON && id==ADJ_CONTROLLER && arg!=CONTROLLER_BACK ? RETURN_GRKIT : value;
 }
-#ifndef MENU_NATIVE_IC_TYPE
-/* The native Image Control type plus 1, or 0 before the settings exist:
+#if !defined(MENU_NATIVE_IC_TYPE) || !defined(MENU_WLAN_STATION) || !defined(MENU_WLAN_ON)
+/* The payload of the native settings, or 0 before the settings exist:
    settings domain +0x518 -> control -> payload (runtime/targets). */
-static u32 native_ic_type(void) {
-    u32 domain=WORD(FW_SETTINGS_DOMAIN,0), control, payload;
+static u32 native_settings(void) {
+    u32 domain=WORD(FW_SETTINGS_DOMAIN,0), control;
     if(!domain) return 0;
     control=WORD(domain,0x518);
-    if(!control) return 0;
-    payload=WORD(control,0);
+    return control ? WORD(control,0) : 0;
+}
+#endif
+#ifndef MENU_NATIVE_IC_TYPE
+/* The native Image Control type plus 1, or 0 before the settings exist. */
+static u32 native_ic_type(void) {
+    u32 payload=native_settings();
     return payload ? BYTE(payload,SETTINGS_IC_TYPE)+1U : 0;
 }
 #define MENU_NATIVE_IC_TYPE() native_ic_type()
+#endif
+/* The state of the Wi-Fi access point of the camera while a phone is
+   connected to it. */
+#define SETTINGS_WLAN_STATION 2U
+#ifndef MENU_WLAN_STATION
+/* Whether a phone is connected to the Wi-Fi of the camera: three loads and
+   a compare, cheap enough for each timer dispatch of the App task. */
+static u32 wlan_station(void) {
+    u32 payload=native_settings();
+    return payload && BYTE(payload,SETTINGS_WLAN_STATE)==SETTINGS_WLAN_STATION;
+}
+#define MENU_WLAN_STATION() wlan_station()
+#endif
+#ifndef MENU_WLAN_ON
+/* Whether the Wi-Fi access point of the camera is on. */
+static u32 wlan_on(void) {
+    u32 payload=native_settings();
+    return payload && BYTE(payload,SETTINGS_WLAN_ENABLED);
+}
+#define MENU_WLAN_ON() wlan_on()
 #endif
 /* Whether a native ADJ exit selects the native Image Control type under the
    cursor. The native slot writes the type under its cursor at each cursor
@@ -933,9 +958,13 @@ static u32 develop_list_next(volatile u32 *h,u32 controller,u32 id);
 #endif
 #include "menu_settings.h"
 #include "mode_dial.h"
+static void control_poll(volatile u32 *h);
+static u32 control_pending(volatile u32 *h);
 #include "persist.h"
 #include "menu_dial.h"
 #include "menu_recipes.h"
+#include "control_mailbox.h"
+#include "control_looks.h"
 #include "menu_section.h"
 #include "menu_about.h"
 #include "distance.h"
@@ -956,6 +985,20 @@ A32_ENTRY void menu_viewfinder(u32 event) {
         dial_ready(h);
         goodbye_ready(h);
     }
+}
+/* The App task dispatches its expired timers (menu.S: menu_timer_dispatch)
+   in each start: on the shooting screen, in playback, and in the standby of
+   a Bluetooth start, where no shooting screen shows. A dispatch starts the
+   poll of the saved state and of the mailbox of the Wi-Fi service
+   (runtime/persist.h) only when it has work; the poll then runs on its own
+   timer while the work lasts. It also copies whether the Wi-Fi access point
+   is on (GRKIT_HOST_WLAN), with which the resident loader starts and stops
+   the service. */
+A32_ENTRY void menu_timers_due(void) {
+    volatile u32 *h=menu_header();
+    u32 wlan=MENU_WLAN_ON() ? 1U : 0U;
+    if(h[GRKIT_HOST_WLAN/4]!=wlan) h[GRKIT_HOST_WLAN/4]=wlan;
+    if(h[GRKIT_HOST_SERVICES/4]) persist_due(h);
 }
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.
    Bit 0 selects the font of the menu language. GRKit gives the texts of one

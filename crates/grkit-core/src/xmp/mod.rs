@@ -9,7 +9,7 @@ mod parse;
 pub mod table;
 mod tone_data;
 mod transform;
-mod xml;
+pub(crate) mod xml;
 
 use anyhow::{ensure, Result};
 
