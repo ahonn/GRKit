@@ -32,7 +32,7 @@ static u32 control_looks_idle(volatile u32 *h) {
            !(h[GRKIT_HOST_PARAMETERS/4]&~1U) && (!current || current==SHOOTING_CONTROLLER);
 }
 static u32 control_looks_read(volatile u32 *h,u8 *out,u32 *length) {
-    u32 n=effects_count(h), i, at=GRKIT_CONTROL_LOOKS_HEADER, selected=0, codes=0;
+    u32 n=effects_count(h), i, at=GRKIT_CONTROL_LOOKS_HEADER, selected=0, codes=0, names;
     u32 active=h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT ? h[GRKIT_HOST_ACTIVE/4] : 0;
     if(n>EFFECTS_LISTED) return CONTROL_INVALID;
     for(i=0;i<n;++i,at+=GRKIT_CONTROL_LOOK_ENTRY) {
@@ -42,15 +42,33 @@ static u32 control_looks_read(volatile u32 *h,u8 *out,u32 *length) {
         control_looks_put(out+at+4,effects_choice(h,i));
         control_looks_put(out+at+8,record!=EFFECTS_NO_RECORD);
     }
+    /* One word for each recipe and dial set that names an effect, and the
+       name words of a recipe while the payload has room for them after the
+       words of the uses still to come. */
     for(i=0;i<GRKIT_RECIPE_SLOTS;++i) {
         u32 word=h[GRKIT_HOST_RECIPES/4+i*GRKIT_RECIPE_WORDS];
-        if((word&RECIPE_USED) && RECIPE_LOOK(word)==RECIPE_LOOK_EFFECT) {
-            control_looks_put(out+at,RECIPE_CODE(word)); at+=4; ++codes;
+        if((word&RECIPE_USED) && RECIPE_LOOK(word)==RECIPE_LOOK_EFFECT) ++codes;
+    }
+    for(i=1;i<=GRKIT_DIAL_USER_MODES;++i)
+        if(dial_has_set(h,i) && dial_set(h,i)[GRKIT_DIAL_SET_CORE+CORE_SETTING(GRKIT_CORE_TONE)]&GRKIT_DIAL_SET_EFFECT) ++codes;
+    names=CONTROL_PAYLOAD_BYTES-at-4*codes;
+    for(i=0;i<GRKIT_RECIPE_SLOTS;++i) {
+        u32 word=h[GRKIT_HOST_RECIPES/4+i*GRKIT_RECIPE_WORDS], use, w;
+        if(!(word&RECIPE_USED) || RECIPE_LOOK(word)!=RECIPE_LOOK_EFFECT) continue;
+        use=RECIPE_CODE(word)|(i+1U)<<GRKIT_CONTROL_USE_ORIGIN_SHIFT|RECIPE_NUMBER(word)<<GRKIT_CONTROL_USE_NUMBER_SHIFT;
+        if(names>=4U*GRKIT_RECIPE_NAME_WORDS) use|=GRKIT_CONTROL_USE_NAMED;
+        control_looks_put(out+at,use); at+=4;
+        if(use&GRKIT_CONTROL_USE_NAMED) {
+            for(w=0;w<GRKIT_RECIPE_NAME_WORDS;++w,at+=4) control_looks_put(out+at,recipe_name_at(h,i)[w]);
+            names-=4U*GRKIT_RECIPE_NAME_WORDS;
         }
     }
     for(i=1;i<=GRKIT_DIAL_USER_MODES;++i) {
         u32 effect=dial_has_set(h,i) ? dial_set(h,i)[GRKIT_DIAL_SET_CORE+CORE_SETTING(GRKIT_CORE_TONE)] : 0;
-        if(effect&GRKIT_DIAL_SET_EFFECT) { control_looks_put(out+at,effect&~GRKIT_DIAL_SET_EFFECT); at+=4; ++codes; }
+        if(effect&GRKIT_DIAL_SET_EFFECT) {
+            control_looks_put(out+at,(effect&~GRKIT_DIAL_SET_EFFECT)|i<<GRKIT_CONTROL_USE_ORIGIN_SHIFT|GRKIT_CONTROL_USE_DIAL);
+            at+=4;
+        }
     }
     control_looks_put(out,n);
     control_looks_put(out+4,selected);

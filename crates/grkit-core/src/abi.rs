@@ -224,8 +224,19 @@ pub const CONTROL_PING: u32 = 2;
 /// effect: its key (the state ID of `CORE.EFFECT.<ID>`), its choice (the
 /// position in bits 1 and up, bit 0 set for Off), and 1 if it has a record.
 /// Then one word for each recipe or mode-dial set that names an effect: the
-/// recipe code of that effect.
+/// recipe code of that effect in the low 15 bits, where it is from
+/// (`CONTROL_USE_ORIGIN_SHIFT`: the recipe slot + 1, or with
+/// `CONTROL_USE_DIAL` the user mode of the dial), the number of the recipe
+/// (`CONTROL_USE_NUMBER_SHIFT`), and with `CONTROL_USE_NAMED` the
+/// `RECIPE_NAME_WORDS` name words of the recipe after it, while the payload
+/// has room for them.
 pub const CONTROL_LOOKS_READ: u32 = 3;
+pub const CONTROL_USE_ORIGIN_SHIFT: u32 = 16;
+pub const CONTROL_USE_ORIGIN_MASK: u32 = 0x7f;
+pub const CONTROL_USE_DIAL: u32 = 1 << 23;
+pub const CONTROL_USE_NUMBER_SHIFT: u32 = 24;
+pub const CONTROL_USE_NUMBER_MASK: u32 = 0xf;
+pub const CONTROL_USE_NAMED: u32 = 1 << 31;
 /// Turn an effect on or off, as its checkbox in MENU does. The payload is
 /// the key and 1 for Off or 0 for On.
 pub const CONTROL_LOOK_TURN: u32 = 4;
@@ -1520,6 +1531,16 @@ pub fn header() -> String {
         ("CONTROL_REQUEST_SIZE", CONTROL_REQUEST_SIZE),
         ("CONTROL_LOOKS_HEADER", CONTROL_LOOKS_HEADER),
         ("CONTROL_LOOK_ENTRY", CONTROL_LOOK_ENTRY),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
+    for (name, value) in [
+        ("CONTROL_USE_ORIGIN_SHIFT", CONTROL_USE_ORIGIN_SHIFT),
+        ("CONTROL_USE_ORIGIN_MASK", CONTROL_USE_ORIGIN_MASK),
+        ("CONTROL_USE_DIAL", CONTROL_USE_DIAL),
+        ("CONTROL_USE_NUMBER_SHIFT", CONTROL_USE_NUMBER_SHIFT),
+        ("CONTROL_USE_NUMBER_MASK", CONTROL_USE_NUMBER_MASK),
+        ("CONTROL_USE_NAMED", CONTROL_USE_NAMED),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
