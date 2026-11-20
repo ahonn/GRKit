@@ -42,6 +42,62 @@ pub struct CameraRelease {
     pub guides: BTreeMap<String, String>,
 }
 
+/// The release notes of one version: plain-text items, in English.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VersionNotes {
+    pub version: String,
+    pub items: Vec<String>,
+}
+
+/// The most versions an index gives notes for.
+pub const NOTES_VERSIONS: usize = 10;
+/// The most items of one version.
+pub const NOTES_ITEMS: usize = 30;
+/// The longest item, in characters.
+pub const NOTE_CHARS: usize = 500;
+
+/// A recipe preset of the site, as the phone adds it: its recipe for each
+/// camera family, the official effect it needs, its author, and a short
+/// description by language code.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexPreset {
+    pub id: String,
+    pub effect: Option<String>,
+    pub author: Option<String>,
+    pub text: BTreeMap<String, String>,
+    pub recipes: Vec<crate::recipes::Recipe>,
+}
+
+/// The most presets an index gives.
+pub const PRESETS_MAX: usize = 64;
+/// The longest description of a preset, in characters.
+pub const PRESET_TEXT_CHARS: usize = 300;
+
+impl IndexPreset {
+    /// The presets of `grkit_core::recipes`, with the descriptions of
+    /// `text`: language code, then preset ID, then the text.
+    pub fn all(text: &BTreeMap<String, BTreeMap<String, String>>) -> Vec<IndexPreset> {
+        crate::recipes::presets()
+            .into_iter()
+            .map(|preset| IndexPreset {
+                text: text
+                    .iter()
+                    .filter_map(|(language, texts)| {
+                        texts
+                            .get(preset.id)
+                            .filter(|t| plain(t) && t.chars().count() <= PRESET_TEXT_CHARS)
+                            .map(|t| (language.clone(), t.clone()))
+                    })
+                    .collect(),
+                id: preset.id.to_owned(),
+                effect: preset.effect.map(str::to_owned),
+                author: preset.author.map(str::to_owned),
+                recipes: preset.recipes,
+            })
+            .collect()
+    }
+}
+
 /// The release that a site holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Index {
@@ -50,6 +106,12 @@ pub struct Index {
     pub cameras: BTreeMap<String, CameraRelease>,
     /// Every downloadable file, by its path from the site root.
     pub files: BTreeMap<String, FileInfo>,
+    /// The release notes of recent versions, newest first. They are for
+    /// display only: no signature covers them.
+    pub notes: Vec<VersionNotes>,
+    /// The recipe presets of the site, for the phone to add. Display and
+    /// settings only: the camera checks a recipe like any other.
+    pub presets: Vec<IndexPreset>,
 }
 
 /// The files of a site that the index covers. The CLI fills this from disk.
@@ -219,6 +281,8 @@ impl Index {
             version: version.expect("checked non-empty releases"),
             cameras,
             files,
+            notes: Vec::new(),
+            presets: Vec::new(),
         })
     }
 
@@ -249,12 +313,27 @@ impl Index {
                 )
             })
             .collect();
-        packaging::json_bytes(&json!({
+        let mut index = json!({
             "format": FORMAT,
             "version": self.version,
             "cameras": cameras,
             "files": files,
-        }))
+        });
+        if !self.notes.is_empty() {
+            index["notes"] = self
+                .notes
+                .iter()
+                .map(|notes| json!({"version": notes.version, "items": notes.items}))
+                .collect();
+        }
+        if !self.presets.is_empty() {
+            index["presets"] = self
+                .presets
+                .iter()
+                .map(|p| json!({"id": p.id, "effect": p.effect, "author": p.author, "text": p.text, "recipes": p.recipes}))
+                .collect();
+        }
+        packaging::json_bytes(&index)
     }
 
     /// Reads an index. It does not check the files on a site.
@@ -339,8 +418,180 @@ impl Index {
             version,
             cameras,
             files,
+            notes: read_notes(&value["notes"]),
+            presets: read_presets(&value["presets"]),
         })
     }
+}
+
+/// The notes of an index as a reader takes them: entries that do not fit
+/// are left out, so notes never stop an update.
+fn read_notes(value: &Value) -> Vec<VersionNotes> {
+    let Some(entries) = value.as_array() else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let version = entry["version"].as_str().filter(|v| semver(v).is_some())?;
+            let items: Vec<String> = entry["items"]
+                .as_array()?
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|item| plain(item) && item.chars().count() <= NOTE_CHARS)
+                .take(NOTES_ITEMS)
+                .map(str::to_owned)
+                .collect();
+            (!items.is_empty()).then(|| VersionNotes {
+                version: version.to_owned(),
+                items,
+            })
+        })
+        .take(NOTES_VERSIONS)
+        .collect()
+}
+
+/// The presets of an index as a reader takes them: a preset whose recipes
+/// do not pass the checks of the camera is left out.
+fn read_presets(value: &Value) -> Vec<IndexPreset> {
+    let Some(entries) = value.as_array() else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| {
+            let id = entry["id"]
+                .as_str()
+                .filter(|id| !id.is_empty() && id.len() <= 64)?;
+            let recipes: Vec<crate::recipes::Recipe> =
+                serde_json::from_value(entry["recipes"].clone()).ok()?;
+            if recipes.is_empty() || recipes.iter().any(|r| r.check().is_err()) {
+                return None;
+            }
+            let text = entry["text"]
+                .as_object()
+                .map(|texts| {
+                    texts
+                        .iter()
+                        .filter_map(|(language, t)| {
+                            let t = t
+                                .as_str()
+                                .filter(|t| plain(t) && t.chars().count() <= PRESET_TEXT_CHARS)?;
+                            Some((language.clone(), t.to_owned()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            Some(IndexPreset {
+                id: id.to_owned(),
+                effect: entry["effect"].as_str().map(str::to_owned),
+                author: entry["author"].as_str().map(str::to_owned),
+                text,
+                recipes,
+            })
+        })
+        .take(PRESETS_MAX)
+        .collect()
+}
+
+/// The parts of a version `x.y.z`.
+pub fn semver(version: &str) -> Option<(u64, u64, u64)> {
+    let mut parts = version.split('.');
+    let mut next = || {
+        parts
+            .next()
+            .filter(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|p| p.parse().ok())
+    };
+    let version = (next()?, next()?, next()?);
+    parts.next().is_none().then_some(version)
+}
+
+fn plain(item: &str) -> bool {
+    !item.trim().is_empty() && !item.chars().any(char::is_control)
+}
+
+/// The release notes for an index from release bodies in Markdown, by
+/// version: the bullet items of each body as plain text, newest version
+/// first. Headings and other lines are left out.
+pub fn notes_from_markdown(releases: &[(String, String)]) -> Result<Vec<VersionNotes>> {
+    let mut notes: Vec<VersionNotes> = Vec::new();
+    for (version, body) in releases {
+        let version = version.strip_prefix('v').unwrap_or(version);
+        ensure!(
+            semver(version).is_some(),
+            "Release notes name a bad version: {version}"
+        );
+        ensure!(
+            notes.iter().all(|n| n.version != version),
+            "Release notes name version {version} twice"
+        );
+        let items: Vec<String> = body.lines().filter_map(plain_item).collect();
+        ensure!(
+            items.len() <= NOTES_ITEMS,
+            "The notes of {version} have more than {NOTES_ITEMS} items"
+        );
+        if let Some(long) = items.iter().find(|i| i.chars().count() > NOTE_CHARS) {
+            anyhow::bail!("A note of {version} is longer than {NOTE_CHARS} characters: {long}");
+        }
+        if !items.is_empty() {
+            notes.push(VersionNotes {
+                version: version.to_owned(),
+                items,
+            });
+        }
+    }
+    notes.sort_by_key(|n| std::cmp::Reverse(semver(&n.version)));
+    notes.truncate(NOTES_VERSIONS);
+    Ok(notes)
+}
+
+/// One Markdown bullet line as plain text: emphasis, code marks, and links
+/// become their text, images and generated author credits go.
+fn plain_item(line: &str) -> Option<String> {
+    let line = line.trim();
+    let text = ["- ", "* ", "+ "]
+        .iter()
+        .find_map(|marker| line.strip_prefix(marker))?;
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(start) = rest.find(['[', '!']) {
+        let image = rest[start..].starts_with("![");
+        let open = if image { start + 1 } else { start };
+        if !rest[open..].starts_with('[') {
+            out.push_str(&rest[..=start]);
+            rest = &rest[start + 1..];
+            continue;
+        }
+        let Some(close) = rest[open..].find("](").map(|i| open + i) else {
+            out.push_str(&rest[..=start]);
+            rest = &rest[start + 1..];
+            continue;
+        };
+        let Some(end) = rest[close..].find(')').map(|i| close + i) else {
+            break;
+        };
+        out.push_str(&rest[..start]);
+        if !image {
+            out.push_str(&rest[open + 1..close]);
+        }
+        rest = &rest[end + 1..];
+    }
+    out.push_str(rest);
+    // A generated note ends with " by @someone in https://...".
+    if let Some(at) = out.find(" by @") {
+        if out[at..].contains(" in http") {
+            out.truncate(at);
+        }
+    }
+    let out: String = out
+        .replace("**", "")
+        .replace("__", "")
+        .chars()
+        .filter(|c| !matches!(c, '`' | '*') && !c.is_control())
+        .collect();
+    let out = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!out.is_empty()).then_some(out)
 }
 
 fn insert_file(files: &mut BTreeMap<String, FileInfo>, path: &str, bytes: &[u8]) -> Result<()> {
@@ -494,6 +745,26 @@ mod tests {
     }
 
     #[test]
+    fn the_presets_round_trip_and_a_bad_one_is_left_out() {
+        let (site, _, _) = signed_site(&camera::GR3, "1.7.0");
+        let mut index = Index::of_site(&site).unwrap();
+        let text = BTreeMap::from([(
+            "en".to_owned(),
+            BTreeMap::from([("bennet-800".to_owned(), "Warm negative.".to_owned())]),
+        )]);
+        index.presets = IndexPreset::all(&text);
+        assert!(!index.presets.is_empty());
+        let bennet = index.presets.iter().find(|p| p.id == "bennet-800").unwrap();
+        assert_eq!(bennet.text["en"], "Warm negative.");
+        let bytes = index.to_bytes().unwrap();
+        assert_eq!(Index::parse(&bytes).unwrap(), index);
+        let mut value: Value = serde_json::from_slice(&bytes).unwrap();
+        value["presets"][0]["recipes"] = json!([{"family": "gr3"}]);
+        let read = Index::parse(&packaging::json_bytes(&value).unwrap()).unwrap();
+        assert_eq!(read.presets.len(), index.presets.len() - 1);
+    }
+
+    #[test]
     fn the_index_requires_its_fields() {
         let (site, _, _) = signed_site(&camera::GR3, "1.7.0");
         let bytes = Index::of_site(&site).unwrap().to_bytes().unwrap();
@@ -623,5 +894,80 @@ mod tests {
                 .unwrap()
                 .version
         );
+    }
+
+    #[test]
+    fn release_bodies_become_plain_notes_newest_first() {
+        let notes = notes_from_markdown(&[
+            (
+                "v1.6.3".into(),
+                "### Fixes\n\n- **Color covers** show the `box` colors.\n- See [the guide](https://x).\n\nOther text".into(),
+            ),
+            (
+                "1.7.0".into(),
+                "* Wi-Fi updates by @someone in https://github.com/x/pull/1\n![shot](a.png)".into(),
+            ),
+            ("1.6.2".into(), "## Nothing to list".into()),
+        ])
+        .unwrap();
+        assert_eq!(
+            notes,
+            vec![
+                VersionNotes {
+                    version: "1.7.0".into(),
+                    items: vec!["Wi-Fi updates".into()],
+                },
+                VersionNotes {
+                    version: "1.6.3".into(),
+                    items: vec![
+                        "Color covers show the box colors.".into(),
+                        "See the guide.".into()
+                    ],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn release_notes_reject_bad_input() {
+        let long = format!("- {}", "a".repeat(NOTE_CHARS + 1));
+        assert!(notes_from_markdown(&[("1.7".into(), "- a".into())]).is_err());
+        assert!(notes_from_markdown(&[("1.7.0".into(), long)]).is_err());
+        let many = "- a\n".repeat(NOTES_ITEMS + 1);
+        assert!(notes_from_markdown(&[("1.7.0".into(), many)]).is_err());
+        let versions: Vec<_> = (0..12)
+            .map(|minor| (format!("1.{minor}.0"), "- a".to_owned()))
+            .collect();
+        let notes = notes_from_markdown(&versions).unwrap();
+        assert_eq!(notes.len(), NOTES_VERSIONS);
+        assert_eq!(notes[0].version, "1.11.0");
+    }
+
+    #[test]
+    fn notes_round_trip_and_bad_entries_are_left_out() {
+        let (site, _, _) = signed_site(&camera::GR3, "1.7.0");
+        let mut index = Index::of_site(&site).unwrap();
+        index.notes = notes_from_markdown(&[("1.7.0".into(), "- New".into())]).unwrap();
+        assert_eq!(Index::parse(&index.to_bytes().unwrap()).unwrap(), index);
+
+        let mut value: Value = serde_json::from_slice(&index.to_bytes().unwrap()).unwrap();
+        value["notes"] = json!([
+            {"version": "1.7.0", "items": ["Ok", "bad\u{7}", 3]},
+            {"version": "next", "items": ["x"]},
+            {"version": "1.6.0", "items": []},
+        ]);
+        let read = Index::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(
+            read.notes,
+            vec![VersionNotes {
+                version: "1.7.0".into(),
+                items: vec!["Ok".into()]
+            }]
+        );
+        value["notes"] = json!("nonsense");
+        assert!(Index::parse(&serde_json::to_vec(&value).unwrap())
+            .unwrap()
+            .notes
+            .is_empty());
     }
 }

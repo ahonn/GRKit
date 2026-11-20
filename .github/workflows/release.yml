@@ -298,10 +298,22 @@ jobs:
             fi
           done 3< "$RUNNER_TEMP/packages.tsv"
       - name: Write the release index
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          set -euo pipefail
           # One index for the phone: every downloadable file of the release, with
-          # its SHA-256, so a package can be built from the site over Wi-Fi.
-          target/release/grkit release-index --site site --out site/release/index.json
+          # its SHA-256, so a package can be built from the site over Wi-Fi. It
+          # also gives the notes of recent releases for the app's Software Update
+          # page: the published GitHub releases, and the CHANGELOG.md section of
+          # this one, which is not published yet. Release Notes updates them when
+          # a published release is edited. The recipe presets of the site go in
+          # too, with their descriptions, for the app to add.
+          sh .github/scripts/release-notes.sh "${TAG#v}" > "$RUNNER_TEMP/notes.json"
+          python3 .github/scripts/preset-text.py web/src/recipeStrings.ts > "$RUNNER_TEMP/preset-text.json"
+          target/release/grkit release-index --site site --out site/release/index.json \
+            --notes "$RUNNER_TEMP/notes.json" --preset-text "$RUNNER_TEMP/preset-text.json"
       - name: Build the firmware dump tool
         run: target/release/grkit dump --out "GRKit-${TAG#v}-dump.zip" --clang clang-21 --lld ld.lld-21
       - name: Check the version of each runtime
