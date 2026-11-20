@@ -12,8 +12,8 @@ use crate::store::{AppState, CatalogItem, Sheet};
 use crate::strings::tr;
 use crate::ui::{footnote, grouped_card, segmented, token};
 
-const PLUS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
-const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
+const PLUS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
+const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
 
 pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     nav_page()
@@ -51,10 +51,12 @@ fn add_content(app: AppState) -> impl IntoElement {
         })
         .collect(),
     );
-    let mut column = view()
+    let snapshot = app.looks_snapshot();
+    let full = snapshot.as_ref().is_some_and(|s| s.card_full());
+    let column = view()
         .gap(px(super::looks::ROW_GAP))
-        .child(chips)
-        .child(footnote(tr("looks.add_note", &[])));
+        .child(import_row(app, full))
+        .child(chips);
     let Some(items) = app.catalog_items() else {
         let message = app
             .catalog_error()
@@ -68,7 +70,6 @@ fn add_content(app: AppState) -> impl IntoElement {
             ),
         ));
     };
-    let snapshot = app.looks_snapshot();
     // A Look added here stays, marked, until the page closes.
     let items: Vec<(CatalogItem, bool)> = items
         .into_iter()
@@ -84,29 +85,19 @@ fn add_content(app: AppState) -> impl IntoElement {
         .as_ref()
         .map(|s| s.official_covers)
         .unwrap_or_default();
-    let groups: Vec<(Option<&str>, bool)> = match filter {
-        LookFilter::All => vec![
-            (Some("looks.filter.color"), false),
-            (Some("looks.filter.mono"), true),
-        ],
-        LookFilter::Color => vec![(None, false)],
-        LookFilter::Mono => vec![(None, true)],
-    };
-    for (title, mono) in groups {
-        let mut tiles: Vec<AnyElement> = items
-            .iter()
-            .filter(|(item, _)| item.group.monochrome() == mono)
-            .map(|(item, added)| catalog_tile(app, item.clone(), *added, scheme).into_element())
-            .collect();
-        tiles.push(import_tile(app).into_element());
-        column = column.child(
-            view()
-                .gap_3()
-                .child(title.map(|key| crate::ui::section_title(tr(key, &[]))))
-                .child(grid(tiles)),
-        );
-    }
+    // One grid: the filter picks color, B&W, or both.
+    let tiles: Vec<AnyElement> = items
+        .iter()
+        .filter(|(item, _)| match filter {
+            LookFilter::All => true,
+            LookFilter::Color => !item.group.monochrome(),
+            LookFilter::Mono => item.group.monochrome(),
+        })
+        .map(|(item, added)| catalog_tile(app, item.clone(), *added, scheme, full).into_element())
+        .collect();
     column
+        .child(grid(tiles))
+        .child(footnote(tr("looks.add_note", &[])))
 }
 
 /// The cover that a catalog Look gets on this card: the scheme's.
@@ -118,11 +109,19 @@ fn scheme_cover(item: &CatalogItem, scheme: Scheme) -> Cover {
 }
 
 /// An official Look: the corner adds it, or takes back the one just added.
-fn catalog_tile(app: AppState, item: CatalogItem, added: bool, scheme: Scheme) -> impl IntoElement {
+fn catalog_tile(
+    app: AppState,
+    item: CatalogItem,
+    added: bool,
+    scheme: Scheme,
+    full: bool,
+) -> impl IntoElement {
     let id = item.look.id.clone();
     let name = item.look.name.clone();
     let adding = app.catalog_adding(&id);
     let enabled = app.looks_blocked().is_none() && app.look_busy().is_none() && !adding;
+    // A full card greys the adds; pressing one says why.
+    let dimmed = full && !added;
     let status = if adding {
         Some((tr("looks.adding", &[]), false))
     } else {
@@ -148,16 +147,13 @@ fn catalog_tile(app: AppState, item: CatalogItem, added: bool, scheme: Scheme) -
         None,
         corner_button(
             true,
-            Some(if added {
-                token("tint")
-            } else {
-                token("button")
-            }),
+            Some(token("button")),
             corner_icon(if added { CHECK } else { PLUS }),
             corner_label,
             AccessibilityRole::Checkbox,
             Some(added),
             enabled,
+            dimmed,
             move || {
                 if added {
                     app.take_back_look(id.clone())
@@ -169,40 +165,63 @@ fn catalog_tile(app: AppState, item: CatalogItem, added: bool, scheme: Scheme) -
     )
 }
 
-/// The dashed tile that imports a file as a new Look.
-fn import_tile(app: AppState) -> impl IntoElement {
+/// The row at the top that imports a file as a new Look.
+fn import_row(app: AppState, full: bool) -> impl IntoElement {
     let enabled = app.looks_blocked().is_none() && app.look_busy().is_none();
-    view()
-        .items_center()
-        .gap(px(6.0))
-        .role(AccessibilityRole::Button)
-        .label(tr("looks.import_action", &[]))
-        .opacity(if enabled { 1.0 } else { 0.4 })
-        .when(enabled, |v| {
-            v.on_press(move || app.set_sheet(Some(Sheet::ImportLook)))
+    grouped_card(
+        view()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .min_h(px(64.0))
+            .px_4()
+            .role(AccessibilityRole::Button)
+            .label(tr("looks.import_row", &[]))
+            .opacity(if enabled && !full { 1.0 } else { 0.4 })
+            .when(enabled, |v| {
+                v.on_press(move || {
+                    if full {
+                        app.alert_look_error(crate::domain::LookError::CardFull)
+                    } else {
+                        app.set_sheet(Some(Sheet::ImportLook))
+                    }
+                })
                 .active(|s| s.opacity(0.72))
-        })
-        .child(
-            view()
-                .size(px(TILE_COVER))
-                .rounded(px(6.0))
-                .border(px(1.5))
-                .border_dashed()
-                .border_color(move || theme().border)
-                .items_center()
-                .justify_center()
-                .child(
-                    text("+")
-                        .text_size(px(28.0))
-                        .text_color(move || token("link")),
-                ),
-        )
-        .child(
-            text(tr("looks.import_action", &[]))
-                .text_size(px(13.0))
-                .line_height(px(17.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_center()
-                .text_color(move || token("link")),
-        )
+            })
+            .child(
+                view()
+                    .size(px(44.0))
+                    .rounded(px(6.0))
+                    .border(px(1.5))
+                    .border_dashed()
+                    .border_color(move || theme().border)
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        text("+")
+                            .text_size(px(24.0))
+                            .text_color(move || token("link")),
+                    ),
+            )
+            .child(
+                view()
+                    .flex_1()
+                    .gap(px(2.0))
+                    .child(
+                        text(tr("looks.import_row", &[]))
+                            .text_size(px(17.0))
+                            .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .child(
+                        text(tr("looks.import_row_sub", &[]))
+                            .text_size(px(13.0))
+                            .text_color(move || theme().muted_foreground),
+                    ),
+            )
+            .child(
+                text("›")
+                    .text_size(px(22.0))
+                    .text_color(move || theme().muted_foreground),
+            ),
+    )
 }

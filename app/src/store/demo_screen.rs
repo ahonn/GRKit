@@ -76,6 +76,18 @@ pub enum DemoScreen {
     L12,
     /// L13 — the cover editor of an official Look.
     L13,
+    /// L14 — changes wait for a restart of the camera.
+    L14,
+    /// L15 — the menu of a held Look.
+    L15,
+    /// L16 — Cover Colors.
+    L16,
+    /// L17 — rename a Look.
+    L17,
+    /// L18 — the card holds as many Looks as it can (alert).
+    L18,
+    /// L19 — the connection was lost during a change.
+    L19,
     /// A8 — saved cameras, none connected.
     A8,
     /// A9 — the connection was lost.
@@ -157,6 +169,12 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("L11", DemoScreen::L11),
     ("L12", DemoScreen::L12),
     ("L13", DemoScreen::L13),
+    ("L14", DemoScreen::L14),
+    ("L15", DemoScreen::L15),
+    ("L16", DemoScreen::L16),
+    ("L17", DemoScreen::L17),
+    ("L18", DemoScreen::L18),
+    ("L19", DemoScreen::L19),
     ("A8", DemoScreen::A8),
     ("A9", DemoScreen::A9),
     ("A10", DemoScreen::A10),
@@ -534,7 +552,7 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             app.finish_import();
         }
         DemoScreen::L5 => {
-            app.with_fake_looks(|f| f.set_used_by(PORTRA, 0));
+            app.with_fake_looks(|f| f.set_uses(PORTRA, Vec::new()));
             seed_looks(app);
             app.push(Route::LookDetail(PORTRA.into()));
             ask_delete(app);
@@ -582,6 +600,44 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             app.push(Route::LookDetail(PORTRA.into()));
             app.push(Route::LookCover(PORTRA.into()));
         }
+        DemoScreen::L14 => {
+            app.with_fake_looks(|f| f.set_pending(DEMO_CUSTOM_ID));
+            seed_looks(app);
+        }
+        DemoScreen::L15 => {
+            seed_looks(app);
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                if let Some(look) = app.look(PORTRA) {
+                    crate::pages::look_menu(app, look);
+                }
+            });
+        }
+        DemoScreen::L16 => {
+            seed_looks(app);
+            app.push(Route::LookScheme);
+        }
+        DemoScreen::L17 => {
+            seed_looks(app);
+            app.push(Route::LookDetail(PORTRA.into()));
+            app.set_sheet(Some(Sheet::RenameLook(PORTRA.into())));
+        }
+        DemoScreen::L18 => {
+            app.with_fake_looks(|f| f.max_listed = f.snapshot().looks.len());
+            seed_looks(app);
+            app.open_add();
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                app.alert_look_error(crate::domain::LookError::CardFull);
+            });
+        }
+        DemoScreen::L19 => {
+            seed_looks(app);
+            app.status.set(None);
+            app.alert_look_error(crate::domain::LookError::ConnectionLost);
+        }
     }
 }
 
@@ -610,7 +666,12 @@ fn ask_delete(app: AppState) {
 pub fn shows_alert(screen: DemoScreen) -> bool {
     matches!(
         screen,
-        DemoScreen::L5 | DemoScreen::L6 | DemoScreen::L12 | DemoScreen::U10
+        DemoScreen::L5
+            | DemoScreen::L6
+            | DemoScreen::L12
+            | DemoScreen::L15
+            | DemoScreen::L18
+            | DemoScreen::U10
     )
 }
 
@@ -742,18 +803,24 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::C4 => "Card Is Full",
         DemoScreen::C5 => "Not Confirmed on the Camera",
         DemoScreen::L1 => "Camera Menu",
-        DemoScreen::L2 => "Menu Order",
+        DemoScreen::L2 => "Show in Camera Menu",
         DemoScreen::L3 => "Replace with Another File",
         DemoScreen::L4 => "Put on Camera",
         DemoScreen::L5 => "Delete Portra 400?",
         DemoScreen::L6 => "Can’t Delete Portra 400",
-        DemoScreen::L7 => "Import LUT",
+        DemoScreen::L7 => "Import a File",
         DemoScreen::L8 => "Lightroom Preset",
         DemoScreen::L9 => "LUT Input",
         DemoScreen::L10 => "No Camera Connected",
         DemoScreen::L11 => "An update is waiting on the camera",
-        DemoScreen::L12 => "No Room on the Camera",
+        DemoScreen::L12 => "Camera Menu Is Full",
         DemoScreen::L13 => "Film name",
+        DemoScreen::L14 => "1 change applies after a restart",
+        DemoScreen::L15 => "Portra 400",
+        DemoScreen::L16 => "Every built-in film look has a gray cover",
+        DemoScreen::L17 => "Rename",
+        DemoScreen::L18 => "No Room on the Card",
+        DemoScreen::L19 => "Disconnected. This change wasn't saved.",
         DemoScreen::A8 => "Other Cameras",
         DemoScreen::A9 => "Lost Connection",
         DemoScreen::A10 => "First time with this camera? On the camera, choose",

@@ -7,7 +7,7 @@ use nsh_core::prelude::*;
 use grkit_core::{color::Encoding, cover::Cover, fit::Grade};
 
 use crate::domain::{Look, LookSource, looks::NAME_MAX};
-use crate::store::{AppState, ImportDraft, Route, Tab};
+use crate::store::{AppState, ImportDraft, Route, Sheet};
 use crate::strings::tr;
 use crate::ui::{
     action_row, badge, control_row, cover_view, footnote, grouped_card, primary_button,
@@ -73,28 +73,20 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
     let blocked = app.looks_blocked().is_some();
     let editable = !busy && !blocked;
     let kind = crate::pages::looks::look_kind(&look);
-    let status = if look.pending.is_some() {
-        tr("looks.after_restart", &[])
-    } else if look.selected {
-        tr("looks.in_use", &[])
-    } else if !look.enabled {
-        tr("looks.off", &[])
-    } else if look.loaded {
-        tr("looks.loaded", &[])
-    } else {
-        tr("looks.not_loaded", &[])
-    };
     let source = match look.source {
         LookSource::Official => tr("looks.official", &[]),
         LookSource::Custom => tr("looks.imported", &[]),
         LookSource::Native => tr("looks.native", &[]),
         LookSource::Unknown => tr("looks.unknown", &[]),
     };
-    let used_by = match look.used_by {
-        0 => tr("looks.none", &[]),
-        1 => tr("looks.recipes_one", &[]),
-        n => tr("looks.recipes_many", &[("count", &n.to_string())]),
+    // Where it is from, its film group, and a change that waits.
+    let mut subtitle = match look.source {
+        LookSource::Official => format!("{source} · {kind}"),
+        _ => source,
     };
+    if look.pending.is_some() {
+        subtitle = format!("{subtitle} · {}", tr("looks.after_restart", &[]));
+    }
 
     let mut settings = view().child(control_row(
         tr("looks.show_in_menu", &[]),
@@ -121,7 +113,7 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
                 .into_element(),
             editable,
             false,
-            move || app.push(Route::LookRename(id.clone())),
+            move || app.set_sheet(Some(Sheet::RenameLook(id.clone()))),
         ));
     }
     if look.editable() {
@@ -131,42 +123,10 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
             tr("looks.cover", &[]),
             cover_view(&look.shown_cover(), SMALL_COVER, false),
             editable,
-            false,
+            true,
             move || app.push(Route::LookCover(id.clone())),
         ));
     }
-    // The place of a shown Look among the shown ones, as the grid shows it.
-    let place = look.enabled.then(|| {
-        app.looks_snapshot().map_or(0, |snapshot| {
-            snapshot
-                .looks
-                .iter()
-                .filter(|other| other.enabled && other.position < look.position)
-                .count()
-        }) + 1
-    });
-    settings = settings.child(control_row(
-        tr("looks.used_by", &[]),
-        text(used_by)
-            .text_size(px(17.0))
-            .text_color(move || theme().muted_foreground),
-        place.is_none(),
-    ));
-    if let Some(place) = place {
-        let value = tr("looks.menu_place", &[("place", &place.to_string())]);
-        settings = settings.child(link_row(
-            tr("looks.menu_order", &[]),
-            format!("{}, {value}", tr("looks.menu_order", &[])),
-            text(value)
-                .text_size(px(17.0))
-                .text_color(move || theme().muted_foreground)
-                .into_element(),
-            true,
-            true,
-            move || app.pop_to(Tab::Looks, 0),
-        ));
-    }
-
     let official = matches!(look.source, LookSource::Official | LookSource::Native);
     let replace = look.replaceable().then(|| {
         let id = look.id.clone();
@@ -197,31 +157,26 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
                 .child(page_cover(Some(look.shown_cover())))
                 .child(
                     view()
-                        .flex_row()
-                        .items_start()
-                        .justify_between()
-                        .gap_3()
+                        .items_center()
+                        .gap(px(4.0))
                         .child(
                             view()
-                                .flex_1()
-                                .gap(px(2.0))
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
                                 .child(
                                     text(look.name.clone())
                                         .text_size(px(24.0))
                                         .font_weight(FontWeight::BOLD),
                                 )
-                                .child(
-                                    // The group of an official Look.
-                                    text(if look.source == LookSource::Official {
-                                        format!("{source} · {kind} · {status}")
-                                    } else {
-                                        format!("{source} · {status}")
-                                    })
-                                    .text_size(px(15.0))
-                                    .text_color(move || theme().muted_foreground),
-                                ),
+                                .child(look.selected.then(|| badge(tr("looks.in_use", &[])))),
                         )
-                        .child(look.selected.then(|| badge(tr("looks.in_use", &[])))),
+                        .child(
+                            text(subtitle)
+                                .text_size(px(15.0))
+                                .text_center()
+                                .text_color(move || theme().muted_foreground),
+                        ),
                 )
                 .child(
                     view()
@@ -246,7 +201,7 @@ pub fn confirm_delete(app: AppState, look: Look) {
         if look.used_by != 0 {
             let _ = alert_dialog()
                 .title(tr("looks.cannot_delete_title", &[("name", &look.name)]))
-                .description(tr("looks.cannot_delete_body", &[]))
+                .description(delete_blocked_body(&look))
                 .cancel("ok", tr("looks.ok", &[]))
                 .show()
                 .await;
@@ -270,37 +225,94 @@ pub fn confirm_delete(app: AppState, look: Look) {
     });
 }
 
+/// Why `look` cannot go: the recipes and dial modes that use it, by name,
+/// when the camera names them.
+pub fn delete_blocked_body(look: &Look) -> String {
+    let (names, more) = crate::domain::looks::use_labels(
+        look,
+        |name| tr("looks.use_recipe", &[("name", name)]),
+        |mode| tr("looks.use_dial", &[("mode", &mode.to_string())]),
+    );
+    if names.is_empty() {
+        return tr("looks.cannot_delete_body", &[]);
+    }
+    let mut list = names.join(&tr("looks.use_separator", &[]));
+    if more > 0 {
+        let total = (names.len() + more).to_string();
+        list += &tr(
+            "looks.use_more",
+            &[("more", &more.to_string()), ("total", &total)],
+        );
+    }
+    capitalized(tr("looks.cannot_delete_names", &[("names", &list)]))
+}
+
+/// The text with its first letter in upper case (no effect on Chinese).
+fn capitalized(text: String) -> String {
+    let mut chars = text.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().chain(chars).collect(),
+        None => text,
+    }
+}
+
 // --- Rename -----------------------------------------------------------------
 
-pub fn rename_page(app: AppState, id: String, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
+/// Rename a Look: a short native sheet with the name and Save, as close as
+/// the platform comes to a text alert.
+pub fn rename_sheet(app: AppState, id: String) -> impl IntoElement {
     let name = signal(app.look(&id).map(|l| l.name).unwrap_or_default());
     let save = {
         let id = id.clone();
-        move || app.rename_look(id.clone(), name.get())
+        move || {
+            // Read the name before the sheet, which owns it, closes.
+            let value = name.get();
+            app.set_sheet(None);
+            app.rename_look(id.clone(), value);
+        }
     };
-    nav_page()
-        .title(tr("looks.rename_title", &[]))
-        .on_dismiss(on_dismiss)
-        .header_right(header_text_button(tr("looks.save", &[]), save.clone()))
-        .child(
-            view()
-                .flex_1()
-                .bg(move || token("grouped"))
-                .px_6()
-                .pt_4()
-                .gap_2()
-                .child(name_field(
-                    tr("looks.name", &[]),
-                    name,
-                    move |value| name.set(value),
-                    save,
-                ))
-                .child(footnote(tr("looks.name_note", &[]))),
-        )
+    crate::ui::sheet_shell(
+        tr("looks.rename_title", &[]),
+        Some(tr("looks.name_note", &[])),
+        None,
+        true,
+        move || app.set_sheet(None),
+        view()
+            .gap_4()
+            .child(name_input(name, save.clone()))
+            .child(crate::ui::sheet_primary_button(tr("looks.save", &[]), save)),
+    )
 }
 
-fn header_text_button(title: String, on_press: impl Fn() + 'static) -> impl IntoElement {
-    header_button(title, true, on_press)
+/// The name field of the rename sheet, focused when it opens.
+fn name_input(name: Signal<String>, on_submit: impl Fn() + 'static) -> impl IntoElement {
+    view()
+        .flex_row()
+        .items_center()
+        .h(px(50.0))
+        .px_4()
+        .gap_2()
+        .rounded(px(10.0))
+        .border_1()
+        .border_color(move || theme().border)
+        .bg(move || theme().card)
+        .child(
+            input()
+                .flex_1()
+                .value(move || name.get())
+                .max_length(NAME_MAX as u32)
+                .auto_correct(false)
+                .auto_focus(true)
+                .label(tr("looks.name", &[]))
+                .text_size(px(17.0))
+                .on_change(move |value: &str| name.set(value.to_owned()))
+                .on_submit(move |_: &str| on_submit()),
+        )
+        .child(
+            text(move || format!("{}/{NAME_MAX}", name.get().len()))
+                .text_size(px(15.0))
+                .text_color(move || theme().muted_foreground),
+        )
 }
 
 /// A text button in the navigation bar, dimmed and inert when disabled.

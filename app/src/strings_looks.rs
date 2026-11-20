@@ -4,9 +4,7 @@ pub fn en(key: &str) -> Option<&'static str> {
     Some(match key {
         "tab.looks" => "Film Looks",
         "looks.title" => "Film Looks",
-        "looks.menu_order" => "Menu Order",
         "looks.in_use" => "In Use",
-        "looks.off" => "Off",
         "looks.not_loaded" => "Not loaded",
         "looks.official" => "Official",
         "looks.imported" => "Imported",
@@ -21,7 +19,6 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.filter.mono" => "B&W",
         "looks.add_named" => "Add %{name}",
         "looks.adding" => "Adding",
-        "looks.import_action" => "Import LUT",
         "looks.loading" => "Reading the film looks…",
         "looks.catalog_loading" => "Loading the film looks…",
         "looks.catalog_offline" => {
@@ -36,22 +33,16 @@ pub fn en(key: &str) -> Option<&'static str> {
             "Install or cancel it on the camera. Then you can change film looks."
         }
         "looks.restart_body" => {
-            "Turn the camera off and on. New and changed film looks then show in the menu."
+            "Film looks you added, renamed, or gave a new cover show in the menu after a restart."
         }
         "looks.after_restart" => "After restart",
         "looks.read_failed" => "Could not read the film looks on the camera.",
         "looks.retry" => "Try Again",
         "looks.show_in_menu" => "Show in Camera Menu",
         "looks.show_note" => "Off hides it in the menu only. The file stays on the card.",
-        "looks.used_by" => "Used By",
-        "looks.recipes_one" => "1 recipe",
-        "looks.recipes_many" => "%{count} recipes",
-        "looks.none" => "None",
         "looks.delete" => "Delete Film Look",
         "looks.name" => "Name",
         "looks.cover" => "Cover",
-        "looks.cover_on_camera" => "On the camera",
-        "looks.cover_random" => "Random",
         "looks.cover_default" => "Use the Default Cover",
         "looks.cover_brand" => "Brand",
         "looks.cover_film" => "Film name",
@@ -69,8 +60,6 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.layout.stack" => "Bottom brand",
         "looks.cover_colors" => "Colors",
         "looks.native" => "GR IV film look",
-        "looks.covers" => "Covers",
-        "looks.covers_film_box" => "Film box colors",
         "looks.covers_scheme.gray" => "Off",
         "looks.covers_scheme.colorFilmBox" => "Color",
         "looks.covers_scheme.filmBox" => "All",
@@ -114,7 +103,6 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.source" => "Source",
         "looks.source_file" => "File",
         "looks.replace" => "Replace with Another File",
-        "looks.loaded" => "Loaded",
         "looks.delete_title" => "Delete %{name}?",
         "looks.delete_body" => "It is removed from the card.",
         "looks.delete_active_body" => "It is the film look in use. The camera switches to Off.",
@@ -157,10 +145,8 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.error.official_body" => {
             "Official film looks keep their colors. Only the name and cover can change."
         }
-        "looks.error.full_title" => "No Room on the Camera",
-        "looks.error.full_body" => {
-            "The camera has loaded all the film looks it can. Turn one off first."
-        }
+        "looks.error.full_title" => "Camera Menu Is Full",
+        "looks.error.full_body" => "The menu shows up to %{max} film looks. Turn one off first.",
         "looks.error.pending_title" => "An Update Is Waiting",
         "looks.error.pending_body" => {
             "Install or cancel it on the camera. Then you can change film looks."
@@ -198,13 +184,11 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.error.service_body" => "The camera refused the change.",
         "looks.add_title" => "Add Film Looks",
         "looks.add_note" => {
-            "These film looks are not on the camera. An added film look goes to the card and shows in the camera menu after a restart."
+            "Official film looks the camera doesn't have. Added ones go on the card and show in the menu after a restart."
         }
         "looks.added_named" => "Take back %{name}",
         "looks.menu" => "Camera Menu",
-        "looks.menu_note" => {
-            "Same order as ADJ on the camera. Touch and hold a film look, then drag it to move it."
-        }
+        "looks.menu_note" => "Same order as ADJ on the camera. Touch and hold to drag.",
         "looks.off_section" => "Off",
         "looks.off_note" => {
             "Film looks that are off stay on the card. The camera menu does not show them."
@@ -214,9 +198,8 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.restart_one" => "1 change applies after a restart",
         "looks.restart_many" => "%{count} changes apply after a restart",
         "looks.covers_note" => {
-            "Official film looks and Cinema looks without a cover of their own use these colors. Color gives colors to color film looks only, and B&W film looks stay gray. Changes apply after a restart."
+            "Applies to official film looks and Cinema without a cover of their own. Changes apply after a restart."
         }
-        "looks.menu_place" => "No. %{place}",
         "looks.official_note" => {
             "Official film looks keep their colors. Their name and cover can change."
         }
@@ -250,6 +233,26 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.cover_default_note" => {
             "The default cover follows Film box colors. The camera shows this cover in ADJ, and the film look stays the same. Cover changes apply after a restart."
         }
+        "looks.covers_row" => "Cover Colors",
+        "looks.covers_desc.gray" => "Every built-in film look has a gray cover",
+        "looks.covers_desc.colorFilmBox" => "Color film looks get film box colors; B&W stays gray",
+        "looks.covers_desc.filmBox" => "Every built-in film look gets film box colors",
+        "looks.covers_custom" => "Covers You Changed",
+        "looks.covers_custom_note" => "Reset covers follow the colors above.",
+        "looks.menu_hide" => "Turn Off in Menu",
+        "looks.menu_show" => "Show in Menu",
+        "looks.menu_cover" => "Edit Cover",
+        "looks.cannot_delete_names" => "Used by %{names}. Stop using it there first.",
+        "looks.use_recipe" => "recipe %{name}",
+        "looks.use_dial" => "mode dial U%{mode}",
+        "looks.use_more" => " and %{more} more",
+        "looks.use_separator" => ", ",
+        "looks.error.card_full_title" => "No Room on the Card",
+        "looks.error.card_full_body" => "The card holds up to %{max} film looks. Delete one first.",
+        "looks.lost_toast" => "Disconnected. This change wasn't saved.",
+        "looks.import_row" => "Import a File",
+        "looks.import_row_sub" => ".cube, LUT image, or Lightroom .xmp preset",
+        "looks.cover_preview" => "The cover shown in ADJ",
         _ => return None,
     })
 }
@@ -258,9 +261,7 @@ pub fn zh(key: &str) -> Option<&'static str> {
     Some(match key {
         "tab.looks" => "胶片风格",
         "looks.title" => "胶片风格",
-        "looks.menu_order" => "菜单顺序",
         "looks.in_use" => "使用中",
-        "looks.off" => "已关闭",
         "looks.not_loaded" => "未载入",
         "looks.official" => "官方",
         "looks.imported" => "导入",
@@ -275,7 +276,6 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.filter.mono" => "黑白",
         "looks.add_named" => "添加 %{name}",
         "looks.adding" => "正在添加",
-        "looks.import_action" => "导入 LUT",
         "looks.loading" => "正在读取胶片风格…",
         "looks.catalog_loading" => "正在加载胶片风格…",
         "looks.catalog_offline" => "需要联网一次来下载官方胶片风格。",
@@ -285,21 +285,15 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.connect" => "连接",
         "looks.pending_title" => "相机上有等待中的更新",
         "looks.pending_body" => "在相机上安装或取消它后，才能修改胶片风格。",
-        "looks.restart_body" => "关闭相机再打开后，新加和改过的胶片风格出现在菜单中。",
+        "looks.restart_body" => "新加、改名和改封面的胶片风格，重启后出现在菜单中。",
         "looks.after_restart" => "重启后生效",
         "looks.read_failed" => "无法读取相机上的胶片风格。",
         "looks.retry" => "重试",
         "looks.show_in_menu" => "在相机菜单中显示",
         "looks.show_note" => "关闭后只在菜单中隐藏，文件仍在卡上。",
-        "looks.used_by" => "被使用",
-        "looks.recipes_one" => "1 个配方",
-        "looks.recipes_many" => "%{count} 个配方",
-        "looks.none" => "无",
         "looks.delete" => "删除胶片风格",
         "looks.name" => "名称",
         "looks.cover" => "封面",
-        "looks.cover_on_camera" => "相机上显示",
-        "looks.cover_random" => "随机",
         "looks.cover_default" => "使用默认封面",
         "looks.cover_brand" => "品牌",
         "looks.cover_film" => "胶片名",
@@ -315,8 +309,6 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.layout.stack" => "底品牌带",
         "looks.cover_colors" => "配色",
         "looks.native" => "GR IV 色彩",
-        "looks.covers" => "封面",
-        "looks.covers_film_box" => "胶片盒配色",
         "looks.covers_scheme.gray" => "关闭",
         "looks.covers_scheme.colorFilmBox" => "彩色",
         "looks.covers_scheme.filmBox" => "全部",
@@ -360,7 +352,6 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.source" => "来源",
         "looks.source_file" => "文件",
         "looks.replace" => "换用其他文件",
-        "looks.loaded" => "已载入",
         "looks.delete_title" => "删除 %{name}？",
         "looks.delete_body" => "它会从存储卡上删除。",
         "looks.delete_active_body" => "这是正在使用的胶片风格，相机会切换为关闭。",
@@ -397,8 +388,8 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.error.active_body" => "再次删除会让相机切换为关闭。",
         "looks.error.official_title" => "官方胶片风格",
         "looks.error.official_body" => "官方胶片风格不能修改颜色，只能修改名称和封面。",
-        "looks.error.full_title" => "相机没有空间",
-        "looks.error.full_body" => "相机能载入的胶片风格已满，请先关闭一个胶片风格。",
+        "looks.error.full_title" => "相机菜单已满",
+        "looks.error.full_body" => "最多显示 %{max} 个。请先关闭一个，再开启这个。",
         "looks.error.pending_title" => "有等待中的更新",
         "looks.error.pending_body" => "在相机上安装或取消它后，才能修改胶片风格。",
         "looks.error.off_title" => "手机修改已关闭",
@@ -424,11 +415,11 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.error.service_body" => "相机拒绝了这次修改。",
         "looks.add_title" => "添加胶片风格",
         "looks.add_note" => {
-            "这里是还不在相机上的胶片风格。添加的会写到卡上，相机重启后出现在菜单中。"
+            "这里是相机上还没有的官方胶片风格。添加后写到卡上，相机重启后出现在菜单中。"
         }
         "looks.added_named" => "撤回 %{name}",
         "looks.menu" => "相机菜单",
-        "looks.menu_note" => "和相机 ADJ 中的顺序相同。长按胶片风格拖动，调整顺序。",
+        "looks.menu_note" => "和相机 ADJ 中的顺序相同。长按可以拖动排序。",
         "looks.off_section" => "已关闭",
         "looks.off_note" => "关闭的胶片风格仍在卡上，不在相机菜单中显示。",
         "looks.hide_named" => "在菜单中关闭 %{name}",
@@ -436,9 +427,8 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.restart_one" => "1 项改动在相机重启后生效",
         "looks.restart_many" => "%{count} 项改动在相机重启后生效",
         "looks.covers_note" => {
-            "没有单独改过封面的官方胶片风格和 Cinema 用这里的配色：彩色只给彩色胶片风格配色，黑白保持灰色。改动在相机重启后生效。"
+            "只影响没有单独改过封面的官方胶片风格和 Cinema。改动在相机重启后生效。"
         }
-        "looks.menu_place" => "第 %{place} 个",
         "looks.official_note" => "官方胶片风格的色彩不能修改，名称和封面可以修改。",
         "looks.import_again" => "再导入",
         "looks.change_file" => "更换",
@@ -470,6 +460,26 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.cover_default_note" => {
             "默认封面跟随“胶片盒配色”的设置。相机在 ADJ 中显示这个封面，胶片风格本身不变。封面改动在相机重启后生效。"
         }
+        "looks.covers_row" => "封面配色",
+        "looks.covers_desc.gray" => "所有内置胶片风格用灰色封面",
+        "looks.covers_desc.colorFilmBox" => "彩色胶片风格用胶片盒配色，黑白保持灰色",
+        "looks.covers_desc.filmBox" => "所有内置胶片风格用胶片盒配色",
+        "looks.covers_custom" => "单独改过的封面",
+        "looks.covers_custom_note" => "重置后，这些封面跟随上面的配色。",
+        "looks.menu_hide" => "在菜单中关闭",
+        "looks.menu_show" => "在菜单中显示",
+        "looks.menu_cover" => "编辑封面",
+        "looks.cannot_delete_names" => "%{names} 正在使用它，请先修改。",
+        "looks.use_recipe" => "配方 %{name}",
+        "looks.use_dial" => "模式拨盘 U%{mode}",
+        "looks.use_more" => " 等 %{total} 个",
+        "looks.use_separator" => "、",
+        "looks.error.card_full_title" => "胶片风格已满",
+        "looks.error.card_full_body" => "存储卡上最多 %{max} 个。请先删除一个。",
+        "looks.lost_toast" => "连接已断开，这次修改没有保存",
+        "looks.import_row" => "导入文件",
+        "looks.import_row_sub" => ".cube、LUT 图片或 Lightroom .xmp 预设",
+        "looks.cover_preview" => "相机 ADJ 中显示的封面",
         _ => return None,
     })
 }

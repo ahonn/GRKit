@@ -363,10 +363,25 @@ impl AppState {
 
     /// Present a failed change as an alert.
     pub fn alert_look_error(self, error: LookError) {
+        // A change that the lost link cut off: a notice, and the tab shows
+        // the camera as not connected once the link reports it.
+        if error == LookError::ConnectionLost {
+            self.show_toast(tr("looks.lost_toast", &[]));
+            self.pop_to(crate::store::Tab::Looks, 0);
+            return;
+        }
         let (title, body) = error.keys();
+        let limits = self.looks.snapshot.get();
+        let max = match &error {
+            LookError::NoRoom => limits.map(|s| s.max_loaded),
+            LookError::CardFull => limits.map(|s| s.max_listed),
+            _ => None,
+        }
+        .unwrap_or_default()
+        .to_string();
         let body = match &error {
             LookError::Service(detail) => format!("{} {detail}", tr(body, &[])),
-            _ => tr(body, &[]),
+            _ => tr(body, &[("max", &max)]),
         };
         if matches!(error, LookError::UpdatePending | LookError::ChangesOff) {
             self.looks.blocked.set(Some(error.clone()));
@@ -466,7 +481,7 @@ impl AppState {
             return;
         };
         if look.shown_cover() == cover {
-            self.pop_to(Tab::Looks, 1);
+            self.close_cover(&id);
             return;
         }
         if self.looks.busy.get().is_some() || !cover.fits() {
@@ -488,20 +503,32 @@ impl AppState {
                 let demo_grf = grf.clone();
                 let demo_cover = cover.clone();
                 let look_id = id.clone();
+                let page_id = id.clone();
                 self.change(
                     id,
                     move |fake| fake.put(&demo_grf, false, Some(demo_cover)),
                     move |context| async move {
                         remote::put_content(&context, &look_id, grf, Some(&cover)).await
                     },
-                    |app, ok| {
+                    move |app, ok| {
                         if ok {
-                            app.pop_to(Tab::Looks, 1);
+                            app.close_cover(&page_id);
                         }
                     },
                 );
             });
         });
+    }
+
+    /// Close the cover page of a Look. The page opens from the Look's page
+    /// or from the list, so its depth differs.
+    fn close_cover(self, id: &str) {
+        let page = Some(Route::LookCover(id.to_owned()));
+        if let Some(depth) =
+            (0..super::MAX_DEPTH).find(|depth| self.route_at(Tab::Looks, *depth) == page)
+        {
+            self.pop_to(Tab::Looks, depth);
+        }
     }
 
     /// Give the built-in Looks without an individual cover the covers of
@@ -598,9 +625,10 @@ impl AppState {
             .looks
             .snapshot
             .get()
-            .is_some_and(|snapshot| !snapshot.has_room())
+            .and_then(|snapshot| snapshot.room_problem())
+            .map(|problem| self.alert_look_error(problem))
+            .is_some()
         {
-            self.alert_look_error(LookError::NoRoom);
             return;
         }
         let Some(item) = self
@@ -903,9 +931,10 @@ impl AppState {
                 .looks
                 .snapshot
                 .get()
-                .is_some_and(|snapshot| !snapshot.has_room())
+                .and_then(|snapshot| snapshot.room_problem())
+                .map(|problem| self.alert_look_error(problem))
+                .is_some()
         {
-            self.alert_look_error(LookError::NoRoom);
             return;
         }
         let Some(cover) = self.import_cover() else {

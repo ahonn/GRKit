@@ -226,15 +226,9 @@ tab.looks:
 looks.title:
   en: Film Looks
   zh-CN: 胶片风格
-looks.menu_order:
-  en: "Menu Order"
-  zh-CN: "菜单顺序"
 looks.in_use:
   en: In Use
   zh-CN: 使用中
-looks.off:
-  en: Off
-  zh-CN: 已关闭
 looks.not_loaded:
   en: Not loaded
   zh-CN: 未载入
@@ -277,9 +271,6 @@ looks.add_named:
 looks.adding:
   en: Adding
   zh-CN: 正在添加
-looks.import_action:
-  en: "Import LUT"
-  zh-CN: "导入 LUT"
 looks.loading:
   en: Reading the film looks…
   zh-CN: 正在读取胶片风格…
@@ -307,9 +298,6 @@ looks.pending_title:
 looks.pending_body:
   en: Install or cancel it on the camera. Then you can change film looks.
   zh-CN: 在相机上安装或取消它后，才能修改胶片风格。
-looks.restart_body:
-  en: "Turn the camera off and on. New and changed film looks then show in the menu."
-  zh-CN: "关闭相机再打开后，新加和改过的胶片风格出现在菜单中。"
 looks.after_restart:
   en: After restart
   zh-CN: 重启后生效
@@ -325,18 +313,6 @@ looks.show_in_menu:
 looks.show_note:
   en: "Off hides it in the menu only. The file stays on the card."
   zh-CN: "关闭后只在菜单中隐藏，文件仍在卡上。"
-looks.used_by:
-  en: Used By
-  zh-CN: 被使用
-looks.recipes_one:
-  en: 1 recipe
-  zh-CN: 1 个配方
-looks.recipes_many:
-  en: "%{count} recipes"
-  zh-CN: "%{count} 个配方"
-looks.none:
-  en: None
-  zh-CN: 无
 looks.delete:
   en: Delete Film Look
   zh-CN: 删除胶片风格
@@ -346,12 +322,6 @@ looks.name:
 looks.cover:
   en: Cover
   zh-CN: 封面
-looks.cover_on_camera:
-  en: On the camera
-  zh-CN: 相机上显示
-looks.cover_random:
-  en: Random
-  zh-CN: 随机
 looks.cover_default:
   en: Use the Default Cover
   zh-CN: 使用默认封面
@@ -397,12 +367,6 @@ looks.cover_colors:
 looks.native:
   en: GR IV film look
   zh-CN: GR IV 色彩
-looks.covers:
-  en: Covers
-  zh-CN: 封面
-looks.covers_film_box:
-  en: Film box colors
-  zh-CN: 胶片盒配色
 looks.covers_scheme.gray:
   en: Off
   zh-CN: 关闭
@@ -532,9 +496,6 @@ looks.source_file:
 looks.replace:
   en: Replace with Another File
   zh-CN: 换用其他文件
-looks.loaded:
-  en: Loaded
-  zh-CN: 已载入
 looks.delete_title:
   en: "Delete %{name}?"
   zh-CN: "删除 %{name}？"
@@ -643,12 +604,6 @@ looks.error.official_title:
 looks.error.official_body:
   en: Official film looks keep their colors. Only the name and cover can change.
   zh-CN: 官方胶片风格不能修改颜色，只能修改名称和封面。
-looks.error.full_title:
-  en: No Room on the Camera
-  zh-CN: 相机没有空间
-looks.error.full_body:
-  en: The camera has loaded all the film looks it can. Turn one off first.
-  zh-CN: 相机能载入的胶片风格已满，请先关闭一个胶片风格。
 looks.error.pending_title:
   en: An Update Is Waiting
   zh-CN: 有等待中的更新
@@ -721,18 +676,12 @@ looks.error.service_body:
 looks.add_title:
   en: "Add Film Looks"
   zh-CN: "添加胶片风格"
-looks.add_note:
-  en: "These film looks are not on the camera. An added film look goes to the card and shows in the camera menu after a restart."
-  zh-CN: "这里是还不在相机上的胶片风格。添加的会写到卡上，相机重启后出现在菜单中。"
 looks.added_named:
   en: "Take back %{name}"
   zh-CN: "撤回 %{name}"
 looks.menu:
   en: "Camera Menu"
   zh-CN: "相机菜单"
-looks.menu_note:
-  en: "Same order as ADJ on the camera. Touch and hold a film look, then drag it to move it."
-  zh-CN: "和相机 ADJ 中的顺序相同。长按胶片风格拖动，调整顺序。"
 looks.off_section:
   en: "Off"
   zh-CN: "已关闭"
@@ -751,12 +700,6 @@ looks.restart_one:
 looks.restart_many:
   en: "%{count} changes apply after a restart"
   zh-CN: "%{count} 项改动在相机重启后生效"
-looks.covers_note:
-  en: "Official film looks and Cinema looks without a cover of their own use these colors. Color gives colors to color film looks only, and B&W film looks stay gray. Changes apply after a restart."
-  zh-CN: "没有单独改过封面的官方胶片风格和 Cinema 用这里的配色：彩色只给彩色胶片风格配色，黑白保持灰色。改动在相机重启后生效。"
-looks.menu_place:
-  en: "No. %{place}"
-  zh-CN: "第 %{place} 个"
 looks.official_note:
   en: "Official film looks keep their colors. Their name and cover can change."
   zh-CN: "官方胶片风格的色彩不能修改，名称和封面可以修改。"
@@ -1342,3 +1285,81 @@ error.package_title:
 error.package_body:
   en: "The files of this update are incomplete. Check for updates again later."
   zh-CN: "这次更新的文件不完整。请稍后再检查更新。"
+looks.restart_body:
+  en: "Film looks you added, renamed, or gave a new cover show in the menu after a restart."
+  zh-CN: "新加、改名和改封面的胶片风格，重启后出现在菜单中。"
+looks.menu_note:
+  en: "Same order as ADJ on the camera. Touch and hold to drag."
+  zh-CN: "和相机 ADJ 中的顺序相同。长按可以拖动排序。"
+looks.covers_row:
+  en: "Cover Colors"
+  zh-CN: "封面配色"
+looks.covers_desc.gray:
+  en: "Every built-in film look has a gray cover"
+  zh-CN: "所有内置胶片风格用灰色封面"
+looks.covers_desc.colorFilmBox:
+  en: "Color film looks get film box colors; B&W stays gray"
+  zh-CN: "彩色胶片风格用胶片盒配色，黑白保持灰色"
+looks.covers_desc.filmBox:
+  en: "Every built-in film look gets film box colors"
+  zh-CN: "所有内置胶片风格用胶片盒配色"
+looks.covers_note:
+  en: "Applies to official film looks and Cinema without a cover of their own. Changes apply after a restart."
+  zh-CN: "只影响没有单独改过封面的官方胶片风格和 Cinema。改动在相机重启后生效。"
+looks.covers_custom:
+  en: "Covers You Changed"
+  zh-CN: "单独改过的封面"
+looks.covers_custom_note:
+  en: "Reset covers follow the colors above."
+  zh-CN: "重置后，这些封面跟随上面的配色。"
+looks.menu_hide:
+  en: "Turn Off in Menu"
+  zh-CN: "在菜单中关闭"
+looks.menu_show:
+  en: "Show in Menu"
+  zh-CN: "在菜单中显示"
+looks.menu_cover:
+  en: "Edit Cover"
+  zh-CN: "编辑封面"
+looks.cannot_delete_names:
+  en: "%{names} use it. Change them first."
+  zh-CN: "%{names}在用它。请先修改它们。"
+looks.use_recipe:
+  en: "recipe %{name}"
+  zh-CN: "配方 %{name}"
+looks.use_dial:
+  en: "mode dial U%{mode}"
+  zh-CN: "模式拨盘 U%{mode}"
+looks.use_separator:
+  en: ", "
+  zh-CN: "、"
+looks.error.card_full_title:
+  en: "No Room on the Card"
+  zh-CN: "胶片风格已满"
+looks.error.card_full_body:
+  en: "The card holds up to %{max} film looks. Delete one first."
+  zh-CN: "存储卡上最多 %{max} 个。请先删除一个。"
+looks.error.full_title:
+  en: "Camera Menu Is Full"
+  zh-CN: "相机菜单已满"
+looks.error.full_body:
+  en: "The menu shows up to %{max} film looks. Turn one off first."
+  zh-CN: "最多显示 %{max} 个。请先关闭一个，再开启这个。"
+looks.lost_toast:
+  en: "Disconnected. This change wasn't saved."
+  zh-CN: "连接已断开，这次修改没有保存"
+looks.import_row:
+  en: "Import a File"
+  zh-CN: "导入文件"
+looks.import_row_sub:
+  en: ".cube, LUT image, or Lightroom .xmp preset"
+  zh-CN: ".cube、LUT 图片或 Lightroom .xmp 预设"
+looks.add_note:
+  en: "Official film looks the camera doesn't have. Added ones go on the card and show in the menu after a restart."
+  zh-CN: "这里是相机上还没有的官方胶片风格。添加后写到卡上，相机重启后出现在菜单中。"
+looks.cover_preview:
+  en: "The cover shown in ADJ"
+  zh-CN: "相机 ADJ 中显示的封面"
+looks.use_more:
+  en: " and %{more} more"
+  zh-CN: " 等 %{total} 个"

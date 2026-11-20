@@ -6,7 +6,6 @@ use nsh_core::prelude::*;
 use grkit_core::cover::Cover;
 
 use crate::domain::CameraModel;
-use crate::domain::look_media::{ICON_SIDE, enlarge_icon};
 use crate::strings::tr;
 
 const ART_GR3: ImageAsset = asset!("art-gr3.png");
@@ -446,26 +445,6 @@ pub fn connection_icon(path: &'static str) -> impl IntoElement {
     ))).size(px(20.0))
 }
 
-/// Large page title with the brand bar, and an optional trailing control.
-pub fn page_title(title: impl Into<String>, trailing: Option<AnyElement>) -> impl IntoElement {
-    let title = title.into();
-    view()
-        .flex_row()
-        .items_end()
-        .justify_between()
-        .child(
-            view()
-                .gap_2()
-                .child(view().w(px(28.0)).h(px(3.0)).bg(move || token("tint")))
-                .child(
-                    text(title)
-                        .text_size(px(28.0))
-                        .font_weight(FontWeight::BOLD),
-                ),
-        )
-        .child(trailing)
-}
-
 /// Round button with a stroked icon, for page actions such as Add.
 pub fn circle_button(
     path: &'static str,
@@ -555,7 +534,7 @@ pub fn toggle(
         .flex_row()
         .justify_start()
         .when(on, |v| v.justify_end())
-        .bg(move || if on { token("tint") } else { theme().border })
+        .bg(move || if on { token("button") } else { theme().border })
         .opacity(if enabled { 1.0 } else { 0.4 })
         .role(AccessibilityRole::Switch)
         .label(label)
@@ -573,7 +552,15 @@ pub fn toggle(
             view()
                 .size(px(27.0))
                 .rounded_full()
-                .bg(rgb(0xFFFFFF))
+                // White on the light track; on the dark theme's light track,
+                // the dark of text on a button.
+                .bg(move || {
+                    if on {
+                        token("button-foreground")
+                    } else {
+                        rgb(0xFFFFFF).into()
+                    }
+                })
                 .shadow([BoxShadow {
                     offset_x: Points(0.0),
                     offset_y: Points(2.0),
@@ -585,20 +572,20 @@ pub fn toggle(
         )
 }
 
-/// Small label in the accent tint, such as In Use.
+/// Small gray chip, such as In Use.
 pub fn badge(title: String) -> impl IntoElement {
     view()
-        .h(px(24.0))
+        .h(px(22.0))
         .px_2()
-        .rounded(px(6.0))
+        .rounded_full()
         .items_center()
         .justify_center()
-        .bg(move || theme().accent)
+        .bg(move || theme().muted)
         .child(
             text(title)
-                .text_size(px(13.0))
+                .text_size(px(12.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("tint")),
+                .text_color(move || theme().foreground),
         )
 }
 
@@ -611,31 +598,6 @@ pub fn cover_view(cover: &Cover, size: f32, faded: bool) -> AnyElement {
         .object_fit(ResizeMode::Contain)
         .opacity(if faded { 0.45 } else { 1.0 })
         .into_element()
-}
-
-/// The 40 x 40 pixels the camera shows for `cover`, about `size` points
-/// square. Each pixel is a block of whole screen pixels, so the image is
-/// never smoothed.
-pub fn camera_icon(cover: &Cover, size: f32) -> AnyElement {
-    let ratio = pixel_ratio().max(1.0);
-    let factor = ((size * ratio) / ICON_SIDE as f32).round().max(1.0) as usize;
-    let shown = (ICON_SIDE * factor) as f32 / ratio;
-    match cover.pixels() {
-        Ok(icon) => {
-            let side = (ICON_SIDE * factor) as u32;
-            let pixels: std::sync::Arc<[u8]> = enlarge_icon(&icon, factor).into();
-            image(nsh_core::element::ImageSrc::rgba(side, side, pixels))
-                .w(px(shown))
-                .h(px(shown))
-                .into_element()
-        }
-        Err(_) => view()
-            .w(px(shown))
-            .h(px(shown))
-            .rounded(px(4.0))
-            .bg(move || theme().muted)
-            .into_element(),
-    }
 }
 
 /// A row with a title and a trailing control or value.

@@ -2,8 +2,6 @@
 //! shows the cover as a vector drawing and, beside it, the pixels that the
 //! camera shows. A label tile opens as the default film cover of the name.
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use grkit_core::cover::{self, Cover, EDITOR_LOOKS, Film, Layout, TEXT_MAX};
 use nsh_base::{input, nav_page, theme};
 use nsh_core::element::ImageSrc;
@@ -12,15 +10,11 @@ use nsh_core::prelude::*;
 use super::look_pages::{TAB_BAR_CLEARANCE, header_button};
 use crate::store::AppState;
 use crate::strings::tr;
-use crate::ui::{
-    action_row, camera_icon, cover_view, footnote, grouped_card, section_title, token,
-};
+use crate::ui::{action_row, cover_view, footnote, grouped_card, section_title, token};
 
-const PREVIEW: f32 = 200.0;
-const CAMERA_ICON: f32 = 80.0;
+const PREVIEW: f32 = 150.0;
 const LAYOUT_TILE: f32 = 56.0;
 const SWATCH_WIDTH: f32 = 40.0;
-const SWATCH_COLUMNS: usize = 5;
 
 /// The name under a layout or color set, stronger when it is selected.
 fn swatch_label(name: String, selected: bool) -> impl IntoElement {
@@ -165,10 +159,10 @@ pub fn cover_page(
                             .pt_4()
                             .pb(px(TAB_BAR_CLEARANCE))
                             .gap_5()
-                            .child(previews(draft))
-                            .child(texts(draft))
+                            .child(preview(draft))
                             .child(layouts(draft))
                             .child(colors(draft))
+                            .child(texts(draft))
                             .child(default_cover(app, default_target.clone())),
                     )
                 })),
@@ -209,66 +203,28 @@ fn edit(draft: Signal<Option<Film>>, change: impl FnOnce(&mut Film)) {
     });
 }
 
-/// The vector cover, the camera pixels, and the random action.
-fn previews(draft: Signal<Option<Film>>) -> impl IntoElement {
+/// The cover large on a gray card, as ADJ shows it.
+fn preview(draft: Signal<Option<Film>>) -> impl IntoElement {
     view()
-        .flex_row()
         .items_center()
-        .justify_center()
-        .gap_4()
+        .gap(px(10.0))
+        .pt(px(24.0))
+        .pb(px(16.0))
+        .rounded(px(16.0))
+        .bg(move || theme().muted)
         .child(dynamic(move || {
             let cover = Cover::Film(draft.get()?);
             Some(
                 view()
                     .role(AccessibilityRole::Image)
-                    .label(tr("looks.cover", &[]))
+                    .label(tr("looks.cover_preview", &[]))
                     .child(cover_view(&cover, PREVIEW, false)),
             )
         }))
         .child(
-            view()
-                .items_center()
-                .gap_2()
-                .child(dynamic(move || {
-                    let cover = Cover::Film(draft.get()?);
-                    Some(
-                        view()
-                            .role(AccessibilityRole::Image)
-                            .label(tr("looks.cover_on_camera", &[]))
-                            .child(camera_icon(&cover, CAMERA_ICON)),
-                    )
-                }))
-                .child(
-                    text(tr("looks.cover_on_camera", &[]))
-                        .text_size(px(13.0))
-                        .text_center()
-                        .text_color(move || theme().muted_foreground),
-                )
-                .child(
-                    view()
-                        .mt_2()
-                        .h(px(32.0))
-                        .px(px(14.0))
-                        .rounded_full()
-                        .items_center()
-                        .justify_center()
-                        .bg(move || theme().muted)
-                        .role(AccessibilityRole::Button)
-                        .label(tr("looks.cover_random", &[]))
-                        .on_press(move || {
-                            let seed = SystemTime::now()
-                                .duration_since(UNIX_EPOCH)
-                                .map_or(0, |time| time.as_nanos() as u64);
-                            edit(draft, |film| film.shuffle(seed));
-                        })
-                        .active(|s| s.opacity(0.72))
-                        .child(
-                            text(tr("looks.cover_random", &[]))
-                                .text_size(px(15.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(move || token("link")),
-                        ),
-                ),
+            text(tr("looks.cover_preview", &[]))
+                .text_size(px(13.0))
+                .text_color(move || theme().muted_foreground),
         )
 }
 
@@ -389,7 +345,7 @@ fn layouts(draft: Signal<Option<Film>>) -> impl IntoElement {
                                 .border_2()
                                 .border_color(move || {
                                     if selected {
-                                        token("tint")
+                                        theme().foreground
                                     } else {
                                         theme().border
                                     }
@@ -449,86 +405,103 @@ fn swatch_svg(layout: Layout, colors: &cover::Colors) -> String {
 }
 
 /// The color sets of the site editor, and the set of the cover when it is
-/// another one, each drawn for the layout of the draft.
+/// another one, each drawn for the layout of the draft, in one row that
+/// scrolls sideways. The header names the current set.
 fn colors(draft: Signal<Option<Film>>) -> impl IntoElement {
-    view()
-        .gap_2()
-        .child(section_title(tr("looks.cover_colors", &[])))
-        .child(dynamic(move || {
-            let film = draft.get()?;
-            let current = film.colors();
-            let mut looks: Vec<&'static cover::Look> = EDITOR_LOOKS
-                .iter()
-                .filter_map(|id| cover::find_look(id))
-                .collect();
-            if let Some(own) = cover::look_of(&current)
-                && !looks.iter().any(|look| look.colors() == current)
-            {
-                looks.insert(0, own);
-            }
-            let mut cells = Vec::new();
-            for look in looks {
-                let colors = look.colors();
-                let selected = colors == current;
-                let name = tr(&format!("looks.cover_look.{}", look.id), &[]);
-                cells.push(
-                    view()
-                        .items_center()
-                        .gap(px(5.0))
-                        .child(
-                            view()
-                                .p(px(3.0))
-                                .rounded(px(9.0))
-                                .border_2()
-                                .border_color(move || {
-                                    if selected {
-                                        theme().foreground
-                                    } else {
-                                        token("grouped")
+    dynamic(move || {
+        let film = draft.get()?;
+        let current = film.colors();
+        let mut looks: Vec<&'static cover::Look> = EDITOR_LOOKS
+            .iter()
+            .filter_map(|id| cover::find_look(id))
+            .collect();
+        if let Some(own) = cover::look_of(&current)
+            && !looks.iter().any(|look| look.colors() == current)
+        {
+            looks.insert(0, own);
+        }
+        let current_name = looks
+            .iter()
+            .find(|look| look.colors() == current)
+            .map(|look| tr(&format!("looks.cover_look.{}", look.id), &[]))
+            .unwrap_or_default();
+        let mut row = view().flex_row().gap(px(12.0)).px_6().py(px(6.0));
+        for look in looks {
+            let colors = look.colors();
+            let selected = colors == current;
+            let name = tr(&format!("looks.cover_look.{}", look.id), &[]);
+            row = row.child(
+                view()
+                    .w(px(SWATCH_WIDTH + 16.0))
+                    .items_center()
+                    .gap(px(5.0))
+                    .child(
+                        view()
+                            .p(px(3.0))
+                            .rounded(px(9.0))
+                            .border_2()
+                            .border_color(move || {
+                                if selected {
+                                    theme().foreground
+                                } else {
+                                    token("grouped")
+                                }
+                            })
+                            .role(AccessibilityRole::Radio)
+                            .label(name.clone())
+                            .accessibility_state(move || AccessibilityState {
+                                selected,
+                                ..AccessibilityState::default()
+                            })
+                            .on_press(move || {
+                                edit(draft, |film| {
+                                    if film.colors() != colors {
+                                        film.colors = Some(colors);
                                     }
                                 })
-                                .role(AccessibilityRole::Radio)
-                                .label(name.clone())
-                                .accessibility_state(move || AccessibilityState {
-                                    selected,
-                                    ..AccessibilityState::default()
-                                })
-                                .on_press(move || {
-                                    edit(draft, |film| {
-                                        if film.colors() != colors {
-                                            film.colors = Some(colors);
-                                        }
-                                    })
-                                })
-                                .child(
-                                    view()
-                                        .rounded(px(4.0))
-                                        .overflow_hidden()
-                                        .border_1()
-                                        .border_color(move || theme().border)
-                                        .child(
-                                            image(ImageSrc::svg_markup(&swatch_svg(
-                                                film.layout,
-                                                &colors,
-                                            )))
-                                            .w(px(SWATCH_WIDTH))
-                                            .h(px(SWATCH_WIDTH * 34.0 / 40.0)),
-                                        ),
-                                ),
-                        )
-                        .child(swatch_label(name, selected))
-                        .into_element(),
-                );
-            }
-            let mut grid = view().gap_3();
-            let mut cells = cells.into_iter().peekable();
-            while cells.peek().is_some() {
-                let mut row = view().flex_row().gap(px(6.0));
-                for _ in 0..SWATCH_COLUMNS {
-                    row = row.child(view().flex_1().child(cells.next()));
-                }
-                grid = grid.child(row);
-            }
-            Some(grid)
-        }))
+                            })
+                            .child(
+                                view()
+                                    .rounded(px(4.0))
+                                    .overflow_hidden()
+                                    .border_1()
+                                    .border_color(move || theme().border)
+                                    .child(
+                                        image(ImageSrc::svg_markup(&swatch_svg(
+                                            film.layout,
+                                            &colors,
+                                        )))
+                                        .w(px(SWATCH_WIDTH))
+                                        .h(px(SWATCH_WIDTH * 34.0 / 40.0)),
+                                    ),
+                            ),
+                    )
+                    .child(swatch_label(name, selected)),
+            );
+        }
+        Some(
+            view()
+                .gap_2()
+                .child(
+                    view()
+                        .flex_row()
+                        .justify_between()
+                        .child(section_title(tr("looks.cover_colors", &[])))
+                        .child(
+                            text(current_name)
+                                .text_size(px(15.0))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(move || theme().muted_foreground),
+                        ),
+                )
+                // The row runs to the edges of the page.
+                .child(
+                    scroll()
+                        .horizontal()
+                        .scrollbar(false)
+                        .mx(px(-24.0))
+                        .child(row),
+                ),
+        )
+    })
 }

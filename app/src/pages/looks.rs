@@ -1,19 +1,20 @@
 //! Looks tab: the camera's Looks in camera menu order, and the covers of the
 //! built-in Looks. The cover grid parts serve the Add page.
 
-use nsh_base::{nav_page, theme};
+use nsh_base::{alert_dialog, nav_page, theme};
 use nsh_core::AccessibilityActionDef;
 use nsh_core::element::ImageSrc;
+use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
 use grkit_core::cover::Scheme;
 
-use crate::domain::{CameraModel, CoverGroup, Look, LookSource, LooksSnapshot, group_of};
-use crate::store::{AppState, Route, Tab};
+use crate::domain::{CameraModel, CoverGroup, Look, LookSource, group_of};
+use crate::store::{AppState, Route, Sheet, Tab};
 use crate::strings::tr;
 use crate::ui::{
-    action_row, camera_art, circle_button, control_row, cover_view, footnote, grouped_card,
-    page_title, primary_button, secondary_button, segmented, token,
+    action_row, badge, camera_art, circle_button, control_row, cover_view, footnote, grouped_card,
+    primary_button, secondary_button, token,
 };
 
 const PLUS: &str = "M12 5v14M5 12h14";
@@ -23,35 +24,54 @@ pub const TILE_COVER: f32 = 92.0;
 pub const COLUMNS: usize = 3;
 pub const COLUMN_GAP: f32 = 12.0;
 pub const ROW_GAP: f32 = 18.0;
-const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
+const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
 
 pub fn looks_root(app: AppState) -> impl IntoElement {
     nav_page()
-        .header_visible(false)
-        .child(dynamic(move || looks_content(app)))
+        .title(move || tr("looks.title", &[]))
+        .header_large_title(!cfg!(target_os = "android"))
+        .header_right_items(move || native_add(app))
+        .header_right(dynamic(move || {
+            can_add(app).then(|| {
+                circle_button(PLUS, tr("looks.add_title", &[]), true, move || {
+                    app.open_add()
+                })
+            })
+        }))
+        .child(looks_content(app))
 }
 
+/// Add opens with a camera whose Looks the phone read.
+fn can_add(app: AppState) -> bool {
+    app.camera_online() && app.looks_blocked().is_none() && app.looks_snapshot().is_some()
+}
+
+/// Add in the system bar (iOS).
+fn native_add(app: AppState) -> Vec<HeaderItem> {
+    if !can_add(app) {
+        return Vec::new();
+    }
+    vec![
+        HeaderItem::symbol("plus")
+            .key("add")
+            .label(tr("looks.add_title", &[]))
+            .on_press(move || app.open_add()),
+    ]
+}
+
+/// The scroll view stays while the Looks change: only its content follows
+/// them, so a change does not move the list back to the top.
 fn looks_content(app: AppState) -> impl IntoElement {
-    let connected = app.camera_online();
-    let can_add = connected && app.looks_blocked().is_none() && app.looks_snapshot().is_some();
-    let plus = circle_button(PLUS, tr("looks.add_title", &[]), can_add, move || {
-        app.open_add()
-    })
-    .into_element();
     crate::ui::page_scroll()
         .flex_1()
         .bg(move || token("grouped"))
         .child(
             view()
                 .px_6()
-                .pt(px(72.0))
+                .pt_4()
                 .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                 .gap(px(ROW_GAP))
-                .child(page_title(
-                    tr("looks.title", &[]),
-                    connected.then_some(plus),
-                ))
-                .child(on_camera(app)),
+                .child(dynamic(move || on_camera(app))),
         )
 }
 
@@ -98,7 +118,7 @@ fn on_camera(app: AppState) -> AnyElement {
         .child((pending > 0).then(|| restart_banner(pending)))
         .child(section(
             tr("looks.menu", &[]),
-            format!("{} / {}", shown.len(), snapshot.max_listed),
+            format!("{} / {}", shown.len(), snapshot.max_loaded),
             menu_list(app, shown, !blocked),
             tr("looks.menu_note", &[]),
         ))
@@ -109,7 +129,8 @@ fn on_camera(app: AppState) -> AnyElement {
                 .into_iter()
                 .enumerate()
                 .map(|(index, look)| {
-                    look_row(app, look, !blocked, index == last, None).into_element()
+                    let gestures = RowGestures::menu(app, &look, !blocked);
+                    look_row(app, look, !blocked, index == last, Some(gestures)).into_element()
                 })
                 .collect();
             section(
@@ -119,11 +140,7 @@ fn on_camera(app: AppState) -> AnyElement {
                 tr("looks.off_note", &[]),
             )
         }))
-        .child(
-            snapshot
-                .has_built_in()
-                .then(|| covers(app, &snapshot, !blocked)),
-        )
+        .child(snapshot.has_built_in().then(|| covers_row(app)))
         .into_element()
 }
 
@@ -196,6 +213,9 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
     // dragged; the row being dragged, and how far.
     let armed = signal(None::<usize>);
     let dragging = signal(None::<usize>);
+    // Whether the held row moved since it was lifted: then letting go drops
+    // it instead of opening its menu.
+    let dragged = signal(false);
     let offset = signal(0.0f32);
     let target = move || {
         dragging.get().map(|from| {
@@ -250,6 +270,7 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                     }))
                     .keep_touches(true)
                     .on_responder_grant(move |_: &ResponderEvent| {
+                        dragged.set(true);
                         dragging.set(Some(index));
                         offset.set(0.0);
                     })
@@ -279,24 +300,41 @@ fn menu_list(app: AppState, looks: Vec<Look>, editable: bool) -> impl IntoElemen
                         }])
                         .opacity(move || if lifted() || held() { 1.0_f32 } else { 0.0_f32 }),
                 )
-                .child(look_row(
-                    app,
-                    look,
-                    editable,
-                    index + 1 == count,
-                    movable.then(|| Box::new(move || armed.set(Some(index))) as Box<dyn Fn()>),
-                ))
+                .child({
+                    let menu_look = look.clone();
+                    let gestures = if movable {
+                        RowGestures {
+                            long_press: Box::new(move || {
+                                dragged.set(false);
+                                armed.set(Some(index))
+                            }),
+                            // Let go without a drag: the menu of the row. The
+                            // row stays lifted, and can still be dragged, until
+                            // the menu closes.
+                            release: Some(Box::new(move || {
+                                if armed.get() == Some(index) && !dragged.get() {
+                                    look_menu_then(app, menu_look.clone(), move || {
+                                        if dragging.get().is_none() {
+                                            armed.set(None)
+                                        }
+                                    });
+                                }
+                            })),
+                        }
+                    } else {
+                        RowGestures::menu(app, &look, editable)
+                    };
+                    look_row(app, look, editable, index + 1 == count, Some(gestures))
+                })
                 .into_element()
         })
         .collect();
     list(rows)
 }
 
-/// What a row says under the name, and whether it is in the tint.
+/// What a row says under the name. The Look in use has a chip instead.
 fn look_status(look: &Look) -> Option<(String, bool)> {
-    if look.selected && look.enabled {
-        Some((tr("looks.in_use", &[]), true))
-    } else if look.pending.is_some() {
+    if look.pending.is_some() {
         Some((tr("looks.after_restart", &[]), false))
     } else if look.enabled && !look.loaded {
         Some((tr("looks.not_loaded", &[]), false))
@@ -307,20 +345,96 @@ fn look_status(look: &Look) -> Option<(String, bool)> {
 
 /// A Look on the camera: its cover, name and state, which opens the Look,
 /// and the check that shows or hides it in the camera menu.
+/// What a held row does: lift it for a drag, or open its menu, and what
+/// letting go does.
+struct RowGestures {
+    long_press: Box<dyn Fn()>,
+    release: Option<Box<dyn Fn()>>,
+}
+
+impl RowGestures {
+    /// A row that does not move: holding it opens its menu.
+    fn menu(app: AppState, look: &Look, editable: bool) -> Self {
+        let look = look.clone();
+        RowGestures {
+            long_press: Box::new(move || {
+                if editable {
+                    look_menu(app, look.clone())
+                }
+            }),
+            release: None,
+        }
+    }
+}
+
+/// The menu of a held row: show or hide it, rename, cover, delete.
+pub fn look_menu(app: AppState, look: Look) {
+    look_menu_then(app, look, || {});
+}
+
+/// The menu of a held row, and `closed` once it closes.
+fn look_menu_then(app: AppState, look: Look, closed: impl FnOnce() + 'static) {
+    if app.look_busy().is_some() || app.looks_blocked().is_some() {
+        closed();
+        return;
+    }
+    spawn(async move {
+        let mut sheet = alert_dialog().title(look.name.clone()).action_sheet();
+        if look.listed() {
+            sheet = sheet.action(
+                "toggle",
+                tr(
+                    if look.enabled {
+                        "looks.menu_hide"
+                    } else {
+                        "looks.menu_show"
+                    },
+                    &[],
+                ),
+            );
+        }
+        if look.editable() {
+            sheet = sheet
+                .action("rename", tr("looks.rename_title", &[]))
+                .action("cover", tr("looks.menu_cover", &[]));
+        }
+        let answer = sheet
+            .destructive("delete", tr("looks.delete", &[]))
+            .cancel("cancel", tr("looks.cancel", &[]))
+            .show()
+            .await;
+        closed();
+        match answer.ok().and_then(|a| a.action).as_deref() {
+            Some("toggle") => app.set_look_enabled(look.id.clone(), !look.enabled),
+            Some("rename") => app.set_sheet(Some(Sheet::RenameLook(look.id.clone()))),
+            Some("cover") => app.push(Route::LookCover(look.id.clone())),
+            Some("delete") => crate::pages::look_pages::confirm_delete(app, look.clone()),
+            _ => {}
+        }
+    });
+}
+
 fn look_row(
     app: AppState,
     look: Look,
     editable: bool,
     last: bool,
-    on_long_press: Option<Box<dyn Fn()>>,
+    gestures: Option<RowGestures>,
 ) -> impl IntoElement {
     let id = look.id.clone();
     let off = !look.enabled;
+    let in_use = look.selected && look.enabled;
     let (status, emphasized) = look_status(&look).unwrap_or_default();
-    let label = match status.is_empty() {
-        true => look.name.clone(),
-        false => format!("{}, {status}", look.name),
-    };
+    let mut label = look.name.clone();
+    for part in [
+        in_use.then(|| tr("looks.in_use", &[])),
+        (!status.is_empty()).then(|| status.clone()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        label = format!("{label}, {part}");
+    }
     // The camera shows or hides only a Look that it lists.
     let toggleable = editable && look.listed() && app.look_busy().is_none();
     let toggle_label = tr(
@@ -352,8 +466,12 @@ fn look_row(
                 .role(AccessibilityRole::Button)
                 .label(label)
                 .on_press(move || app.push(Route::LookDetail(id.clone())))
-                .when_some(on_long_press, |v, on_long_press| {
-                    v.on_long_press(on_long_press)
+                .when_some(gestures, |v, gestures| {
+                    let v = v.on_long_press(gestures.long_press);
+                    match gestures.release {
+                        Some(release) => v.on_press_up(move |_: &PressEvent| release()),
+                        None => v,
+                    }
                 })
                 .active(|s| s.opacity(0.72))
                 .child(cover_view(&look.shown_cover(), ROW_COVER, off))
@@ -362,16 +480,25 @@ fn look_row(
                         .flex_1()
                         .gap(px(2.0))
                         .child(
-                            text(look.name.clone())
-                                .text_size(px(17.0))
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(move || {
-                                    if off {
-                                        theme().muted_foreground
-                                    } else {
-                                        theme().foreground
-                                    }
-                                }),
+                            view()
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
+                                .child(
+                                    text(look.name.clone())
+                                        .flex_shrink(1.0)
+                                        .number_of_lines(1)
+                                        .text_size(px(17.0))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(move || {
+                                            if off {
+                                                theme().muted_foreground
+                                            } else {
+                                                theme().foreground
+                                            }
+                                        }),
+                                )
+                                .child(in_use.then(|| badge(tr("looks.in_use", &[])))),
                         )
                         .child((!status.is_empty()).then(|| {
                             text(status).text_size(px(15.0)).text_color(move || {
@@ -455,6 +582,7 @@ pub fn corner_button(
     role: AccessibilityRole,
     checked: Option<bool>,
     enabled: bool,
+    dimmed: bool,
     on_press: impl Fn() + 'static,
 ) -> impl IntoElement {
     view()
@@ -481,7 +609,7 @@ pub fn corner_button(
             disabled: !enabled,
             ..AccessibilityState::default()
         })
-        .opacity(if enabled { 1.0 } else { 0.4 })
+        .opacity(if enabled && !dimmed { 1.0 } else { 0.4 })
         .when(enabled, |v| v.on_press(on_press))
         .child(
             view()
@@ -508,10 +636,11 @@ pub fn corner_button(
         )
 }
 
-/// A white stroke icon for a corner button.
-pub fn corner_icon(svg: &str) -> AnyElement {
-    image(ImageSrc::svg_markup(svg))
-        .size(px(13.0))
+/// A stroke icon for a corner button, in the color of text on a button.
+pub fn corner_icon(markup: &str) -> AnyElement {
+    view()
+        .text_color(move || token("button-foreground"))
+        .child(svg(ImageSrc::svg_markup(markup)).size(px(13.0)))
         .into_element()
 }
 
@@ -529,73 +658,159 @@ fn round_check(
     };
     corner_button(
         false,
-        on.then(|| token("tint")),
+        on.then(|| token("button")),
         icon,
         label,
         AccessibilityRole::Checkbox,
         Some(on),
         enabled,
+        false,
         on_press,
     )
 }
 
-/// The covers of the built-in Looks: the scheme of the Looks without an
-/// individual cover, and a reset of the individual covers of each group.
-fn covers(app: AppState, snapshot: &LooksSnapshot, writable: bool) -> impl IntoElement {
-    let enabled = writable && app.look_busy().is_none();
-    let current = snapshot.official_covers;
-    let schemes = [Scheme::Gray, Scheme::ColorFilmBox, Scheme::FilmBox]
-        .into_iter()
-        .map(|scheme| -> crate::ui::Segment {
-            (
-                tr(&format!("looks.covers_scheme.{}", scheme.id()), &[]),
-                scheme == current,
-                Box::new(move || {
-                    if enabled {
-                        app.set_cover_scheme(scheme)
-                    }
-                }),
-            )
-        })
-        .collect();
-    let resets: Vec<(CoverGroup, &str)> = [
-        (CoverGroup::Color, "looks.covers_reset_color"),
-        (CoverGroup::Mono, "looks.covers_reset_mono"),
-    ]
-    .into_iter()
-    .filter(|(group, _)| snapshot.has_individual_covers(*group))
-    .collect();
-    let count = resets.len();
-    let mut rows = view().child(control_row(
-        tr("looks.covers_film_box", &[]),
+/// The row that opens the cover colors of the built-in Looks.
+fn covers_row(app: AppState) -> impl IntoElement {
+    let title = tr("looks.covers_row", &[]);
+    grouped_card(
         view()
-            .w(px(180.0))
-            .opacity(if enabled { 1.0 } else { 0.4 })
-            .child(segmented(schemes)),
-        count == 0,
-    ));
-    for (index, (group, key)) in resets.into_iter().enumerate() {
-        rows = rows.child(
-            view()
-                .opacity(if enabled { 1.0 } else { 0.4 })
-                .child(action_row(
-                    tr(key, &[]),
-                    false,
-                    index + 1 == count,
-                    move || {
-                        if enabled {
-                            app.reset_covers(group)
-                        }
-                    },
-                )),
-        );
-    }
-    view()
-        .gap_2()
-        .child(crate::ui::section_title(tr("looks.covers", &[])))
-        .child(grouped_card(rows))
-        .child(footnote(tr("looks.covers_note", &[])))
+            .role(AccessibilityRole::Button)
+            .label(title.clone())
+            .on_press(move || app.push(Route::LookScheme))
+            .active(|s| s.opacity(0.72))
+            .child(control_row(
+                title,
+                text("›")
+                    .text_size(px(22.0))
+                    .text_color(move || theme().muted_foreground),
+                true,
+            )),
+    )
 }
+
+/// Cover Colors (push): the scheme of the built-in Looks without a cover of
+/// their own, and a reset of the covers people changed, by group.
+pub fn scheme_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
+    nav_page()
+        .title(move || tr("looks.covers_row", &[]))
+        .on_dismiss(on_dismiss)
+        .child(dynamic(move || {
+            let Some(snapshot) = app.looks_snapshot() else {
+                return view().flex_1().bg(move || token("grouped")).into_element();
+            };
+            let enabled = app.look_busy().is_none() && app.looks_blocked().is_none();
+            let current = snapshot.official_covers;
+            let schemes = [Scheme::Gray, Scheme::ColorFilmBox, Scheme::FilmBox];
+            let count = schemes.len();
+            let options = view().children(schemes.into_iter().enumerate().map(|(i, scheme)| {
+                scheme_option(app, scheme, scheme == current, enabled, i + 1 == count)
+                    .into_element()
+            }));
+            let resets: Vec<(CoverGroup, &str)> = [
+                (CoverGroup::Color, "looks.covers_reset_color"),
+                (CoverGroup::Mono, "looks.covers_reset_mono"),
+            ]
+            .into_iter()
+            .filter(|(group, _)| snapshot.has_individual_covers(*group))
+            .collect();
+            let reset_count = resets.len();
+            view()
+                .flex_1()
+                .bg(move || token("grouped"))
+                .child(
+                    crate::ui::page_scroll().flex_1().child(
+                        view()
+                            .px_6()
+                            .pt_4()
+                            .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                            .gap_5()
+                            .child(
+                                view()
+                                    .gap_2()
+                                    .child(grouped_card(options))
+                                    .child(footnote(tr("looks.covers_note", &[]))),
+                            )
+                            .child((reset_count > 0).then(|| {
+                                view()
+                                    .gap_2()
+                                    .child(crate::ui::section_title(tr("looks.covers_custom", &[])))
+                                    .child(grouped_card(view().children(
+                                        resets.into_iter().enumerate().map(|(i, (group, key))| {
+                                            view()
+                                                .opacity(if enabled { 1.0 } else { 0.4 })
+                                                .child(action_row(
+                                                    tr(key, &[]),
+                                                    false,
+                                                    i + 1 == reset_count,
+                                                    move || {
+                                                        if enabled {
+                                                            app.reset_covers(group)
+                                                        }
+                                                    },
+                                                ))
+                                                .into_element()
+                                        }),
+                                    )))
+                                    .child(footnote(tr("looks.covers_custom_note", &[])))
+                            })),
+                    ),
+                )
+                .into_element()
+        }))
+}
+
+/// One scheme: its name, what it does, and a check when it is the card's.
+fn scheme_option(
+    app: AppState,
+    scheme: Scheme,
+    selected: bool,
+    enabled: bool,
+    last: bool,
+) -> impl IntoElement {
+    let title = tr(&format!("looks.covers_scheme.{}", scheme.id()), &[]);
+    let detail = tr(&format!("looks.covers_desc.{}", scheme.id()), &[]);
+    view()
+        .flex_row()
+        .items_center()
+        .gap_3()
+        .min_h(px(64.0))
+        .px_4()
+        .py_2()
+        .style_when(!last, |st| {
+            st.border_b_1().border_b_color(move || theme().border)
+        })
+        .role(AccessibilityRole::Radio)
+        .label(format!("{title}, {detail}"))
+        .accessibility_state(move || AccessibilityState {
+            selected,
+            disabled: !enabled,
+            ..AccessibilityState::default()
+        })
+        .opacity(if enabled { 1.0 } else { 0.4 })
+        .when(enabled && !selected, |v| {
+            v.on_press(move || app.set_cover_scheme(scheme))
+                .active(|s| s.opacity(0.72))
+        })
+        .child(
+            view()
+                .flex_1()
+                .gap(px(2.0))
+                .child(text(title).text_size(px(17.0)))
+                .child(
+                    text(detail)
+                        .text_size(px(13.0))
+                        .line_height(px(18.0))
+                        .text_color(move || theme().muted_foreground),
+                ),
+        )
+        .child(selected.then(|| {
+            view()
+                .text_color(move || theme().foreground)
+                .child(svg(ImageSrc::svg_markup(SCHEME_CHECK)).size(px(18.0)))
+        }))
+}
+
+const SCHEME_CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
 
 /// New and changed Looks wait: the camera reads its Look files when it
 /// starts.
@@ -612,19 +827,19 @@ fn banner(title: String, body: &'static str) -> impl IntoElement {
         .rounded(px(10.0))
         .p_3()
         .gap(px(2.0))
-        .bg(move || token("warning-soft"))
+        .bg(move || theme().muted)
         .role(AccessibilityRole::Text)
         .child(
             text(title)
                 .text_size(px(15.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("warning")),
+                .text_color(move || theme().foreground),
         )
         .child(
             text(tr(body, &[]))
                 .text_size(px(13.0))
                 .line_height(px(18.0))
-                .text_color(move || token("warning")),
+                .text_color(move || theme().muted_foreground),
         )
 }
 

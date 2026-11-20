@@ -9,7 +9,7 @@ use nsh_core::{
 
 use crate::pages::{
     CoverTarget, add_page, camera_root, cover_page, import_page, look_page, looks_root,
-    release_history_page, rename_page, saved_cameras_page, settings_root, software_page,
+    release_history_page, saved_cameras_page, scheme_page, settings_root, software_page,
 };
 use crate::store::{AppState, Route, Tab};
 use crate::strings::tr;
@@ -91,12 +91,12 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::SoftwareUpdate => software_page(app, back).into_element(),
         Route::ReleaseHistory => release_history_page(app, back).into_element(),
         Route::LookDetail(id) => look_page(app, id, back).into_element(),
-        Route::LookRename(id) => rename_page(app, id, back).into_element(),
         Route::LookCover(id) => cover_page(app, CoverTarget::Look(id), back).into_element(),
         Route::LookAdd => add_page(app, back).into_element(),
         Route::LookImport => import_page(app, back).into_element(),
         Route::LookImportCover => cover_page(app, CoverTarget::Import, back).into_element(),
         Route::SavedCameras => saved_cameras_page(app, back).into_element(),
+        Route::LookScheme => scheme_page(app, back).into_element(),
     }
 }
 

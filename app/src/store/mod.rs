@@ -65,8 +65,6 @@ pub enum Route {
     ReleaseHistory,
     /// One Look on the camera, by ID.
     LookDetail(String),
-    /// Rename an imported Look.
-    LookRename(String),
     /// Edit the cover of a Look.
     LookCover(String),
     /// Official Looks that the camera does not have, and the import.
@@ -77,6 +75,8 @@ pub enum Route {
     LookImportCover,
     /// The saved cameras, from Settings.
     SavedCameras,
+    /// The cover colors of the built-in Looks, from the Looks list.
+    LookScheme,
 }
 
 /// Modal sheets over the camera tab.
@@ -101,6 +101,8 @@ pub enum Sheet {
     InstallFailed,
     /// Choose what kind of file becomes a new Look.
     ImportLook,
+    /// Rename the Look with this ID.
+    RenameLook(String),
 }
 
 /// The package assembled for a target version: (version, zip bytes).

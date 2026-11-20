@@ -10,7 +10,8 @@ use grkit_core::{
 
 use super::look_media;
 use super::looks::{
-    CatalogLook, CoverGroup, Look, LookError, LookSource, LooksSnapshot, PendingChange, valid_name,
+    CatalogLook, CoverGroup, Look, LookError, LookSource, LookUse, LooksSnapshot, PendingChange,
+    valid_name,
 };
 
 const PORTRA: &str = include_str!("../../../effects/portra-400-endura-v1/effect.json");
@@ -38,7 +39,7 @@ struct Entry {
     source: LookSource,
     grf: Vec<u8>,
     /// The number of recipes and mode-dial sets that use the Look.
-    used_by: usize,
+    uses: Vec<LookUse>,
     /// The file change that waits for the next start, as on a camera.
     pending: Option<PendingChange>,
     /// The cover that draws the icon, when the camera knows it.
@@ -116,7 +117,7 @@ fn entry(definition: &str, enabled: bool) -> Entry {
         enabled,
         source: LookSource::Official,
         grf,
-        used_by: 0,
+        uses: Vec::new(),
         pending: None,
         base: cover.clone(),
         cover,
@@ -150,7 +151,13 @@ impl FakeLooks {
     /// Velvia 100 turned off.
     pub fn demo() -> Self {
         let mut portra = entry(PORTRA, true);
-        portra.used_by = 2;
+        portra.uses = vec![
+            LookUse::Recipe {
+                name: Some("Street".into()),
+                number: 0,
+            },
+            LookUse::Dial { mode: 1 },
+        ];
         let gold = entry(GOLD, true);
         let cover = Cover::for_name("My LUT");
         let custom = Entry {
@@ -159,7 +166,7 @@ impl FakeLooks {
             enabled: true,
             source: LookSource::Custom,
             grf: look_media::relabel(&gold.grf, DEMO_CUSTOM_ID, "My LUT", &cover).expect("copy"),
-            used_by: 0,
+            uses: Vec::new(),
             pending: None,
             cover: Some(cover),
             base: None,
@@ -244,7 +251,8 @@ impl FakeLooks {
                     source: e.source,
                     loaded: is_loaded,
                     selected: self.selected.as_deref() == Some(&e.id),
-                    used_by: e.used_by,
+                    used_by: e.uses.len(),
+                    uses: e.uses.clone(),
                     pending: e.pending,
                     cover: e.cover.clone(),
                     default_cover: e.base.as_ref().map(|base| scheme.cover(base, e.monochrome)),
@@ -262,10 +270,17 @@ impl FakeLooks {
         }
     }
 
-    /// Set the number of recipes and mode-dial sets that use a Look.
-    pub fn set_used_by(&mut self, id: &str, used_by: usize) {
+    /// Mark a Look as changed until the next start.
+    pub fn set_pending(&mut self, id: &str) {
         if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
-            entry.used_by = used_by;
+            entry.pending = Some(PendingChange::Update);
+        }
+    }
+
+    /// Set the recipes and mode-dial sets that use a Look.
+    pub fn set_uses(&mut self, id: &str, uses: Vec<LookUse>) {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
+            entry.uses = uses;
         }
     }
 
@@ -345,7 +360,7 @@ impl FakeLooks {
         self.writable()?;
         let selected = self.selected.as_deref() == Some(id);
         let entry = self.find(id)?;
-        if entry.used_by != 0 {
+        if !entry.uses.is_empty() {
             return Err(LookError::InUse);
         }
         if selected && !active_off {
@@ -410,7 +425,10 @@ impl FakeLooks {
             existing.pending.get_or_insert(PendingChange::Update);
             return Ok(());
         }
-        if self.entries.len() >= self.max_listed || self.enabled_count() >= self.max_loaded {
+        if self.entries.len() >= self.max_listed {
+            return Err(LookError::CardFull);
+        }
+        if self.enabled_count() >= self.max_loaded {
             return Err(LookError::NoRoom);
         }
         let monochrome = official && effect.monochrome();
@@ -426,7 +444,7 @@ impl FakeLooks {
                 LookSource::Custom
             },
             grf: grf.to_vec(),
-            used_by: 0,
+            uses: Vec::new(),
             pending: Some(PendingChange::Add),
             cover,
         });
@@ -498,7 +516,7 @@ mod tests {
     #[test]
     fn deleting_the_look_in_use_needs_off() {
         let mut looks = FakeLooks::demo();
-        looks.entries[0].used_by = 0;
+        looks.entries[0].uses.clear();
         assert_eq!(
             looks.delete("portra-400-endura-v1", false),
             Err(LookError::ActiveLook)

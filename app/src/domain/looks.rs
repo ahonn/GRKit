@@ -144,12 +144,61 @@ pub struct Look {
     pub selected: bool,
     /// The number of recipes and mode-dial sets that use the Look.
     pub used_by: usize,
+    /// Where the first of them are, as the camera names them.
+    pub uses: Vec<LookUse>,
     /// The change that waits for the next start of the camera.
     pub pending: Option<PendingChange>,
     /// The cover that draws the icon of the file, when the camera knows it.
     pub cover: Option<Cover>,
     /// For a built-in Look, the cover that the scheme of the card gives it.
     pub default_cover: Option<Cover>,
+}
+
+/// A recipe or a mode-dial set that uses a Look.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum LookUse {
+    /// A recipe: the name that the person gave it, or none for the automatic
+    /// name (the Look's name and the number).
+    Recipe {
+        #[serde(default)]
+        name: Option<String>,
+        #[serde(default)]
+        number: u32,
+    },
+    /// A user mode of the mode dial: U1 is 1.
+    Dial { mode: u32 },
+    #[serde(other)]
+    Unknown,
+}
+
+/// How many uses the message that blocks a delete names.
+pub const USES_NAMED: usize = 3;
+
+/// What blocks the delete of `look`: the names of its uses, at most
+/// `USES_NAMED`, and how many more there are. `recipe` and `dial` turn a
+/// recipe name or a dial mode into its label.
+pub fn use_labels(
+    look: &Look,
+    recipe: impl Fn(&str) -> String,
+    dial: impl Fn(u32) -> String,
+) -> (Vec<String>, usize) {
+    let named: Vec<String> = look
+        .uses
+        .iter()
+        .filter_map(|use_| match use_ {
+            LookUse::Recipe { name, number } => Some(recipe(&match name {
+                Some(name) => name.clone(),
+                None if *number > 0 => format!("{} {number}", look.name),
+                None => look.name.clone(),
+            })),
+            LookUse::Dial { mode } => Some(dial(*mode)),
+            LookUse::Unknown => None,
+        })
+        .take(USES_NAMED)
+        .collect();
+    let more = look.used_by.saturating_sub(named.len());
+    (named, more)
 }
 
 /// A group of built-in Looks whose covers reset together.
@@ -266,7 +315,24 @@ impl LooksSnapshot {
 
     /// Room for one more enabled Look.
     pub fn has_room(&self) -> bool {
-        self.looks.len() < self.max_listed && self.loaded < self.max_loaded
+        self.room_problem().is_none()
+    }
+
+    /// Why one more Look does not fit: the card holds `max_listed` Looks,
+    /// the camera menu shows `max_loaded`.
+    pub fn room_problem(&self) -> Option<LookError> {
+        if self.card_full() {
+            Some(LookError::CardFull)
+        } else if self.loaded >= self.max_loaded {
+            Some(LookError::NoRoom)
+        } else {
+            None
+        }
+    }
+
+    /// The card holds as many Looks as the camera lists.
+    pub fn card_full(&self) -> bool {
+        self.looks.len() >= self.max_listed
     }
 }
 
@@ -318,6 +384,8 @@ struct WireRuntime {
     #[serde(default)]
     used_by: usize,
     #[serde(default)]
+    uses: Vec<LookUse>,
+    #[serde(default)]
     pending: Option<PendingChange>,
 }
 
@@ -337,6 +405,7 @@ pub fn parse_looks(body: &[u8]) -> Result<LooksSnapshot, String> {
             loaded: look.runtime.loaded,
             selected: look.runtime.selected,
             used_by: look.runtime.used_by,
+            uses: look.runtime.uses,
             pending: look.runtime.pending,
             // A cover this app cannot read shows as the default one.
             cover: look.cover.and_then(|cover| Cover::from_json(&cover).ok()),
@@ -380,8 +449,10 @@ pub enum LookError {
     ActiveLook,
     /// Official Looks keep their content.
     OfficialReadOnly,
-    /// The camera cannot load or list another Look.
+    /// The camera menu shows as many Looks as it can.
     NoRoom,
+    /// The card holds as many Looks as the camera lists.
+    CardFull,
     /// A software update waits on the camera.
     UpdatePending,
     /// Phone changes are off on the camera.
@@ -416,6 +487,7 @@ impl LookError {
                 ("looks.error.official_title", "looks.error.official_body")
             }
             LookError::NoRoom => ("looks.error.full_title", "looks.error.full_body"),
+            LookError::CardFull => ("looks.error.card_full_title", "looks.error.card_full_body"),
             LookError::UpdatePending => ("looks.error.pending_title", "looks.error.pending_body"),
             LookError::ChangesOff => ("looks.error.off_title", "looks.error.off_body"),
             LookError::Busy => ("looks.error.busy_title", "looks.error.busy_body"),
@@ -714,6 +786,33 @@ mod tests {
         assert_eq!((snapshot.loaded, snapshot.max_loaded), (2, 40));
         assert_eq!(snapshot.boot_id, "boot");
         assert!(snapshot.has_room());
+    }
+
+    #[test]
+    fn uses_name_recipes_and_dial_modes_and_count_the_rest() {
+        let list = LIST.replace(
+            r#""usedBy":1,"#,
+            r#""usedBy":5,"uses":[{"kind":"recipe","name":"Street","number":0},
+                {"kind":"recipe","name":null,"number":2},{"kind":"dial","mode":1},
+                {"kind":"recipe","name":"Night","number":0}],"#,
+        );
+        let snapshot = parse_looks(list.as_bytes()).unwrap();
+        let portra = snapshot.get("portra-400-endura-v1").unwrap();
+        let (names, more) = use_labels(portra, |n| format!("R:{n}"), |m| format!("U{m}"));
+        // The automatic name of a recipe is the Look's name and its number.
+        assert_eq!(names, ["R:Street", "R:Portra 400 2", "U1"]);
+        assert_eq!(more, 2);
+    }
+
+    #[test]
+    fn a_full_card_and_a_full_menu_are_told_apart() {
+        let mut snapshot = parse_looks(LIST.as_bytes()).unwrap();
+        assert_eq!(snapshot.room_problem(), None);
+        snapshot.max_loaded = 2;
+        assert_eq!(snapshot.room_problem(), Some(LookError::NoRoom));
+        snapshot.max_listed = 2;
+        assert_eq!(snapshot.room_problem(), Some(LookError::CardFull));
+        assert!(snapshot.card_full());
     }
 
     #[test]

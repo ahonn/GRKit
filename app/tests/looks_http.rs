@@ -428,6 +428,14 @@ fn open_looks(app: &mut Headless) {
     app.wait_for_within("Camera Menu", WAIT).unwrap();
 }
 
+/// Open Cover Colors from the Looks list.
+fn open_cover_colors(app: &mut Headless) {
+    app.wait_for_within("Cover Colors", WAIT).unwrap();
+    app.press("text:Cover Colors").unwrap();
+    app.wait_for_within("Every built-in film look has a gray cover", WAIT)
+        .unwrap();
+}
+
 /// Let the app run until `done` holds, at most `WAIT`.
 fn until(app: &mut Headless, mut done: impl FnMut() -> bool) {
     for _ in 0..100 {
@@ -471,7 +479,8 @@ fn turning_a_look_off_patches_it_at_once() {
     app.wait_for_within("Show in Camera Menu", WAIT).unwrap();
     app.press("role:switch[Show in Camera Menu]").unwrap();
     until(&mut app, || !camera.lock().unwrap().looks[1].enabled);
-    app.wait_for_within("Official · B&W · Off", WAIT).unwrap();
+    app.wait_for_within("role:switch[Show in Camera Menu]", WAIT)
+        .unwrap();
     assert_eq!(count(&network, "PATCH", "/v1/looks/trix-400-mono-v1"), 1);
     // A change needs no read of its own before it.
     assert!(
@@ -762,8 +771,16 @@ fn dragging_a_look_saves_the_complete_order() {
     let environment = TestEnvironment::new();
     let (mut app, camera, _network) = start_phone(&environment, Camera::new());
     open_looks(&mut app);
-    // Night, the third row, held and then dragged up two rows.
+    // Night, the third row, held: it lifts and its menu opens; dragged up
+    // two rows before the menu answers, it moves instead.
+    app.answer_dialogs_myself();
     app.long_press("label:Night").unwrap();
+    assert_eq!(
+        app.pending_dialog()
+            .and_then(|d| d.title.clone())
+            .as_deref(),
+        Some("Night")
+    );
     app.drag(
         "label:Night",
         Point {
@@ -802,13 +819,13 @@ fn the_film_box_colors_set_the_scheme_of_the_camera() {
     let gray = Cover::from_json(&definition(TRIX)["icon"]).unwrap();
     let (mut app, camera, network) = start_phone(&environment, built_in_camera(&gray));
     open_looks(&mut app);
-    app.wait_for_within("Film box colors", WAIT).unwrap();
+    open_cover_colors(&mut app);
     // No individual cover: no reset.
     assert!(
         app.wait_for_within("Reset B&W covers", Duration::from_millis(300))
             .is_err()
     );
-    app.press("role:tab[All]").unwrap();
+    app.press("text:All").unwrap();
     until(&mut app, || {
         camera.lock().unwrap().official_covers == "filmBox"
     });
@@ -825,6 +842,7 @@ fn a_reset_puts_the_individual_covers_of_a_group_back() {
     let (mut app, camera, network) =
         start_phone(&environment, built_in_camera(&Cover::for_name("Mine")));
     open_looks(&mut app);
+    open_cover_colors(&mut app);
     app.wait_for_within("Reset B&W covers", WAIT).unwrap();
     assert!(
         app.wait_for_within("Reset color covers", Duration::from_millis(300))
