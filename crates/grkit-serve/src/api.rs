@@ -146,7 +146,12 @@ impl Service {
             return Reply::json(200, json!({"protocol":1,"bootId":self.boot_id}));
         }
         let route = request.path.strip_prefix("/v1/").unwrap_or("");
-        if route == "looks" || route.starts_with("looks/") || route.starts_with("params/looks/") {
+        if route == "looks"
+            || route.starts_with("looks/")
+            || route.starts_with("params/looks/")
+            || route == "recipes"
+            || route.starts_with("recipes/")
+        {
             let card_id = self.current_card_id(env.card.root()).ok();
             let pending = env.card.state().map_or(true, |state| state != "none")
                 || env.card.software_request().map_or(true, |request| {
@@ -158,7 +163,16 @@ impl Service {
                 software_pending: pending,
                 root: env.card.root(),
                 release_keys: &self.release_keys,
+                family: (env.device)()
+                    .ok()
+                    .and_then(|device| crate::update::recipe_family(&device.model)),
             };
+            if let Some(reply) = self
+                .looks
+                .handle_recipes(request, body, &context, &self.changes)
+            {
+                return reply;
+            }
             if let Some(reply) = self.looks.handle(request, body, &context, &self.changes) {
                 return reply;
             }
@@ -210,7 +224,7 @@ impl Service {
                 "storage":{"state":if readable {"ready"} else {"unavailable"},"writable":writable,"freeBytes":camera.as_ref().and_then(|c| c.free_bytes)},
                 "runtime":runtime,
                 "writeAccess":{"allowed":writable,"reason":if writable {None} else {Some("identity_unavailable")}},
-                "capabilities":{"looks":looks_capabilities,"recipes":{"read":false,"write":false},"moduleSettings":{"read":false,"write":false}},
+                "capabilities":{"looks":looks_capabilities,"recipes":{"read":true,"write":true},"moduleSettings":{"read":false,"write":false}},
                 "limits":{"loadedLooks":40,"listedLooks":64,"lookNameAsciiCharacters":16,"maxLookBytes":8704,"maxPackageBytes":crate::update::MAX_PACKAGE},
                 "activeRequests":active.into_iter().collect::<Vec<_>>()
             }),

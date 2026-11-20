@@ -23,13 +23,18 @@ static u32 control_looks_effect(volatile u32 *h,u32 key) {
     for(i=0;key && i<n;++i) if(control_looks_key(h,i)==key) return i;
     return EFFECTS_LISTED;
 }
-/* A page that lists the effects keeps its rows while it shows, so the
-   choices change only on the shooting screen without the GRKit pages, a
-   preview, the adjustments of an effect, or a development. */
+/* A page of GRKit that lists the effects or the recipes keeps its rows
+   while it shows, so they change while none shows: not the GRKit menu of
+   ADJ, a preview, the adjustments of an effect, or a development, nor in
+   MENU a page of GRKit (the settings submenu and its value pages,
+   settings_shows) or the camera information page with a GRKit view. The
+   shooting screen, playback, and the other pages of MENU take changes:
+   each GRKit row of MENU reads its value when it draws. */
 static u32 control_looks_idle(volatile u32 *h) {
     u32 current=services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0];
     return !h[GRKIT_HOST_MENU_CONTROLLER/4] && !h[GRKIT_HOST_PREVIEW/4] && !h[GRKIT_HOST_DEVELOP/4] &&
-           !(h[GRKIT_HOST_PARAMETERS/4]&~1U) && (!current || current==SHOOTING_CONTROLLER);
+           !(h[GRKIT_HOST_PARAMETERS/4]&~1U) && !settings_shows(current) &&
+           !(current==INFO_CONTROLLER && services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]);
 }
 static u32 control_looks_read(volatile u32 *h,u8 *out,u32 *length) {
     u32 n=effects_count(h), i, at=GRKIT_CONTROL_LOOKS_HEADER, selected=0, codes=0, names;
@@ -107,8 +112,11 @@ static u32 control_looks_order(volatile u32 *h,const u8 *payload,u32 length) {
     }
     return 0;
 }
+#include "control_recipes.h"
 static u32 control_looks(void *context,struct control_request *request,u32 *length) {
     volatile u32 *h=(volatile u32 *)context;
+    if(request->command>=GRKIT_CONTROL_RECIPES_READ)
+        return h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_RECIPE_BIT ? control_recipes(h,request,length) : CONTROL_UNSUPPORTED;
     if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return CONTROL_UNSUPPORTED;
     if(request->command==GRKIT_CONTROL_LOOKS_READ)
         return request->length ? CONTROL_BAD_LENGTH : control_looks_read(h,request->payload,length);

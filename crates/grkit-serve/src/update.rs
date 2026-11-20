@@ -218,6 +218,19 @@ fn camera_of(model: &str) -> Option<&'static Camera> {
         .find(|camera| camera.name == name || camera.hdf == name)
 }
 
+/// The recipe family of a camera model of the camera's HTTP API.
+pub fn recipe_family(model: &str) -> Option<grkit_core::recipes::Family> {
+    use grkit_core::recipes::Family;
+    if model.contains("Monochrome") {
+        return Some(Family::Gr4Monochrome);
+    }
+    match camera_of(model)?.id {
+        "gr3" | "gr3x" => Some(Family::Gr3),
+        "gr4" => Some(Family::Gr4),
+        _ => None,
+    }
+}
+
 /// The error of a card whose package folder cannot be read yet, as soon
 /// after power-on. It is not the same as a card without an update; the
 /// client can try again.
