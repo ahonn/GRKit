@@ -1,5 +1,5 @@
 use super::*;
-use crate::runtime_backend::{RuntimeLook, RuntimeLooks};
+use crate::runtime_backend::{LookUse, RuntimeLook, RuntimeLooks};
 use grkit_core::{camera, card, imports::Import, packaging, release, testing};
 use std::sync::Arc;
 
@@ -261,7 +261,21 @@ fn the_list_joins_the_files_of_the_card_with_the_choices_of_the_camera() {
         camera.looks.looks[0].enabled = false;
         camera.looks.looks[0].loaded = false;
         camera.looks.selected = Some(look_key("beta"));
-        camera.looks.used_codes = vec![u32::from(recipes::effect_code("beta")); 2];
+        let code = u32::from(recipes::effect_code("beta"));
+        camera.looks.uses = vec![
+            LookUse {
+                code,
+                origin: UseOrigin::Recipe {
+                    slot: 3,
+                    number: 2,
+                    name: Some("Street".into()),
+                },
+            },
+            LookUse {
+                code,
+                origin: UseOrigin::Dial { mode: 1 },
+            },
+        ];
     }
     let list = fixture.list();
     let ids: Vec<_> = list["looks"]
@@ -289,11 +303,12 @@ fn the_list_joins_the_files_of_the_card_with_the_choices_of_the_camera() {
     );
     assert_eq!(
         beta["runtime"],
-        json!({"id":"beta","source":"custom","loaded":true,"selected":true,"usedBy":2,"pending":null})
+        json!({"id":"beta","source":"custom","loaded":true,"selected":true,"usedBy":2,
+            "uses":[{"kind":"recipe","slot":3,"number":2,"name":"Street"},{"kind":"dial","mode":1}],"pending":null})
     );
     assert_eq!(
         list["looks"][1]["runtime"],
-        json!({"id":"alpha","source":"official","loaded":false,"selected":false,"usedBy":0,"pending":null})
+        json!({"id":"alpha","source":"official","loaded":false,"selected":false,"usedBy":0,"uses":[],"pending":null})
     );
     assert_eq!(list["looks"][1]["enabled"], false);
     assert_eq!(list["looks"][2]["runtime"]["pending"], "add");
@@ -596,7 +611,10 @@ fn a_removed_look_turns_off_at_once_and_its_file_goes() {
     {
         let mut camera = fixture.camera.lock().unwrap();
         camera.looks.selected = Some(alpha);
-        camera.looks.used_codes = vec![u32::from(recipes::effect_code("beta"))];
+        camera.looks.uses = vec![LookUse {
+            code: u32::from(recipes::effect_code("beta")),
+            origin: UseOrigin::Unknown,
+        }];
     }
     // A recipe or a mode-dial set names the Look.
     let reply = fixture.change("DELETE", "/v1/looks/beta", b"");
