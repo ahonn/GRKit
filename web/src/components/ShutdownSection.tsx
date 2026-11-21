@@ -44,7 +44,7 @@ function dataUrl(bytes: Uint8Array): string {
 }
 
 /**
- * The picture that the camera shows when it turns off (Custom Shutdown Screen): the user selects
+ * The picture that the camera shows when it turns off (Shutdown Screen): the user selects
  * a picture, and the page shows the file that the camera will show.
  */
 export function ShutdownSection({ strings, toCard, onCard, choice, onChoice, firmware }: Props) {

@@ -1,4 +1,4 @@
-//! The picture of Custom Shutdown Screen: `GRKIT/GOODBYE.JPG` on the card,
+//! The picture of Shutdown Screen: `GRKIT/GOODBYE.JPG` on the card,
 //! which the camera shows when it turns off, in place of the picture of the
 //! firmware (`runtime/goodbye.h`). The firmware decodes the file as its own
 //! picture, so the file has the frame of those pictures: a baseline JPEG of

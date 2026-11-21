@@ -469,7 +469,7 @@ menu_battery_mode:
 #endif
 
 #ifdef HOOK_MENU_GOODBYE
-/* Custom Shutdown Screen (runtime/goodbye.h). */
+/* Custom Picture of Shutdown Screen (runtime/goodbye.h). */
 .global menu_goodbye
 .type menu_goodbye, %function
 menu_goodbye:
@@ -505,7 +505,7 @@ menu_goodbye:
 #endif
 
 #ifdef HOOK_MENU_GOODBYE_TEXT_0
-/* Shutdown Screen Text (runtime/goodbye.h). Each hook replaces the first
+/* Show Text of Shutdown Screen (runtime/goodbye.h). Each hook replaces the first
    instruction, `mov r12, sp`, of a function of the GoodBye controller, r0,
    that shows the text over the picture of the power-off: the shots of
    today, or those with the total and the firmware version. */

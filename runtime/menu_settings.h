@@ -64,8 +64,8 @@ static volatile u32 *settings_block(volatile u32 *h) { return SETTINGS_MAP(GRKIT
 #define SETTINGS_FN 0x20000U
 /* A child opened from a module in MENU returns to that module page. */
 #define SETTINGS_PARENT 0x40000U
-/* A page that GRKit Settings opens, Display Settings or ADJ Order, returns
-   to GRKit Settings. */
+/* A page that GRKit Settings opens, a group or ADJ Order, returns to GRKit
+   Settings. */
 #define SETTINGS_IN_CORE 0x80000U
 #define SETTINGS_PARENTS (SETTINGS_PARENT|SETTINGS_IN_CORE)
 #define MENU_GROUP_TARGET 0x2000f60U
@@ -96,30 +96,30 @@ static u32 menu_return(volatile u32 *h) {
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
-   page. Its rows: Enable at Start while the switch shows, Display Settings,
-   Uncropped RAW (runtime/manage.h: core_settings), Mode Dial
-   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module.
-   Display Settings and ADJ Order open their pages (MENU_DISPLAY_TARGET,
-   MENU_ADJ_TARGET, runtime/menu_section.h), whose MENU returns here. The
-   rows are the rows of the page as it opened (MENU_ROWS_CORE_KINDS), as a
-   text hook must not read the module pages.
-   A group of settings of the core gets a page, such as Display Settings,
-   once it has two settings or more. Each page keeps to SETTINGS_BORROWED
-   rows, so that each row has its own value page and the five row views of
-   a submenu that the firmware built before INSTALL show each row. */
+   page. Its rows: Enable at Start while the switch shows, the groups of
+   the settings of the core that have a setting (core_groups), Mode Dial
+   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module. A group and ADJ Order open their pages
+   (MENU_GROUP_PAGE_TARGET, MENU_ADJ_TARGET, runtime/menu_section.h), whose
+   MENU returns here. The rows are the rows of the page as it opened
+   (MENU_ROWS_CORE_KINDS), as a text hook must not read the module pages.
+   A group page holds settings only, no page. It can have more rows than
+   SETTINGS_BORROWED: a later row opens the value page of SETTINGS_ALIAS. A
+   submenu that the firmware built before INSTALL shows only its first
+   rows until the next start. */
 #define CORE_PAGE (LISTED_PAGE+1U)
-/* The page of Display Settings: the settings of the core that change what
-   the camera shows, Distance Unit, Battery in Simple Display, Custom
-   Shutdown Screen, Shutdown Screen Text, and GRKit Info in Playback
-   (runtime/manage.h: core_settings), each while the module list has it. */
-#define DISPLAY_PAGE (CORE_PAGE+1U)
-#define CORE_ROW_START 0U
-#define CORE_ROW_DISPLAY 1U
-#define CORE_ROW_DIAL 2U
-#define CORE_ROW_ADJ 3U
-#define CORE_ROW_RAW 4U
+/* The groups, in the order of GRKit Settings, and the page of group g. */
+#define CORE_GROUP_SHOOTING 0U
+#define CORE_GROUP_DISPLAY 1U
+#define CORE_GROUP_SHUTDOWN 2U
+#define CORE_GROUPS 3U
+#define GROUP_PAGE(g) (CORE_PAGE+1U+(g))
+#define CORE_ROW_DIAL 0U
+#define CORE_ROW_ADJ 1U
+#define CORE_ROW_START 2U
+/* Group g is the row kind CORE_ROW_GROUP + g. */
+#define CORE_ROW_GROUP 3U
 #define MENU_ADJ_TARGET 0x2000fa0U
-#define MENU_DISPLAY_TARGET 0x2000fc0U
+#define MENU_GROUP_PAGE_TARGET 0x2000fc0U
 static const Setting *dial_menu_setting(void);
 static void dial_page_opens(volatile u32 *h);
 static const u16 *adj_order_label(volatile u32 *h) { return text(h,TEXT_ADJ); }
@@ -130,48 +130,81 @@ static u32 adj_order_select(volatile u32 *h,u32 controller,u32 value) {
 }
 static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text,no_value,no_set,adj_order_select,
     SETTING_ACTION};
-/* The rows of Display Settings, in order: Distance Unit, Battery in Simple
-   Display, Custom Shutdown Screen, Shutdown Screen Text, then GRKit Info in
-   Playback, each while the module list has it. */
-static u32 display_rows(volatile u32 *h) {
-    return (unit_handle(h)!=0)+(battery_handle(h)!=0)+(goodbye_handle(h)!=0)+(goodbye_text_handle(h)!=0)+
-           (playback_info_handle(h)!=0);
+/* The settings of each group, as indexes of core_settings
+   (runtime/manage.h), in the order of its page. */
+#define CORE_GROUP_MAX 4U
+static const u8 core_groups[CORE_GROUPS][CORE_GROUP_MAX]={
+    /* Shooting Settings: Uncropped RAW. */
+    {2U,0xffU,0xffU,0xffU},
+    /* Display Settings: Distance Unit, Battery in Simple Display, GRKit Info
+       in Playback. */
+    {1U,3U,6U,0xffU},
+    /* Shutdown Screen: Custom Picture, Show Text. */
+    {4U,5U,0xffU,0xffU},
+};
+/* Whether setting `index` of core_settings shows: the module list has it,
+   and Enable at Start shows with the switch. Enable at Start is a row of
+   GRKit Settings, not of a group. */
+static u32 core_setting_shown(volatile u32 *h,u32 index) {
+    switch(index) {
+    case 0U: return manage_switch_shown(h) && start_handle(h);
+    case 1U: return unit_handle(h)!=0;
+    case 2U: return raw_handle(h)!=0;
+    case 3U: return battery_handle(h)!=0;
+    case 4U: return goodbye_handle(h)!=0;
+    case 5U: return goodbye_text_handle(h)!=0;
+    case 6U: return playback_info_handle(h)!=0;
+    default: return 0;
+    }
 }
-_Static_assert(5U<=SETTINGS_BORROWED,"Each row of Display Settings has its value page");
-/* The setting of row `row` of Display Settings, or 0. */
-static const Setting *display_row_setting(volatile u32 *h,u32 row) {
-    if(unit_handle(h)) {
-        if(!row) return core_settings+1;
+/* The setting of row `row` of group g, or 0 past its rows. */
+static const Setting *core_group_row(volatile u32 *h,u32 g,u32 row) {
+    u32 i, index;
+    if(g>=CORE_GROUPS) return 0;
+    for(i=0;i<CORE_GROUP_MAX;++i) {
+        index=core_groups[g][i];
+        if(index==0xffU || !core_setting_shown(h,index)) continue;
+        if(!row) return core_settings+index;
         --row;
     }
-    if(battery_handle(h)) {
-        if(!row) return core_settings+3;
-        --row;
-    }
-    if(goodbye_handle(h)) {
-        if(!row) return core_settings+4;
-        --row;
-    }
-    if(goodbye_text_handle(h)) {
-        if(!row) return core_settings+5;
-        --row;
-    }
-    return playback_info_handle(h) && !row ? core_settings+6 : 0;
+    return 0;
 }
-static const u16 *display_label(volatile u32 *h) { return text(h,TEXT_DISPLAY); }
-static u32 display_select(volatile u32 *h,u32 controller,u32 value) {
-    (void)h; (void)controller; (void)value;
-    return MENU_DISPLAY_TARGET;
+static u32 core_group_rows(volatile u32 *h,u32 g) {
+    u32 n=0;
+    while(core_group_row(h,g,n)) ++n;
+    return n;
 }
-static const Setting display_setting={display_label,one_value,adj_order_text,no_value,no_set,display_select,
-    SETTING_ACTION};
+_Static_assert(CORE_GROUP_MAX<=SETTING_ROWS,"A group page has a row for each setting");
+/* The name of group g: TEXT_DISPLAY holds Display Settings, then Shooting
+   Settings and Shutdown Screen. */
+static const u16 *core_group_label(volatile u32 *h,u32 g) {
+    static const u8 names[CORE_GROUPS]={1U,0U,2U};
+    return text(h,TEXT_DISPLAY+names[g<CORE_GROUPS ? g : 0U]);
+}
+/* The group whose page is open, or CORE_GROUPS. */
+static u32 core_group_open(volatile u32 *h) {
+    u32 page=(h[GRKIT_HOST_SETTINGS/4]&0xffffU)-1U;
+    return page>=GROUP_PAGE(0) && page<GROUP_PAGE(CORE_GROUPS) ? page-GROUP_PAGE(0) : CORE_GROUPS;
+}
+#define CORE_GROUP_SETTING(g) \
+    static const u16 *core_group_label_##g(volatile u32 *h) { return core_group_label(h,g); } \
+    static u32 core_group_select_##g(volatile u32 *h,u32 controller,u32 value) { \
+        (void)h; (void)controller; (void)value; return MENU_GROUP_PAGE_TARGET+(g); }
+CORE_GROUP_SETTING(0) CORE_GROUP_SETTING(1) CORE_GROUP_SETTING(2)
+_Static_assert(CORE_GROUPS==3U,"A setting for each group");
+static const Setting core_group_settings[CORE_GROUPS]={
+    {core_group_label_0,one_value,adj_order_text,no_value,no_set,core_group_select_0,SETTING_ACTION},
+    {core_group_label_1,one_value,adj_order_text,no_value,no_set,core_group_select_1,SETTING_ACTION},
+    {core_group_label_2,one_value,adj_order_text,no_value,no_set,core_group_select_2,SETTING_ACTION},
+};
+_Static_assert(CORE_GROUPS+3U<=SETTING_ROWS,
+    "GRKit Settings has a row for Enable at Start, each group, Mode Dial, and ADJ Order");
 static volatile u32 *core_kinds(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_CORE_KINDS); }
 static void core_refresh(volatile u32 *h) {
-    u32 kinds=0, n=0;
+    u32 kinds=0, n=0, g;
     manage_adj_refresh(h);
-    if(manage_switch_shown(h) && start_handle(h)) kinds|=CORE_ROW_START<<(4U*n++);
-    if(display_rows(h)) kinds|=CORE_ROW_DISPLAY<<(4U*n++);
-    if(raw_handle(h)) kinds|=CORE_ROW_RAW<<(4U*n++);
+    if(core_setting_shown(h,0U)) kinds|=CORE_ROW_START<<(4U*n++);
+    for(g=0;g<CORE_GROUPS;++g) if(core_group_rows(h,g)) kinds|=(CORE_ROW_GROUP+g)<<(4U*n++);
     kinds|=CORE_ROW_DIAL<<(4U*n++);
     if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
     core_kinds(h)[0]=kinds|n<<24;
@@ -182,8 +215,9 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     u32 kind;
     if(row>=core_rows(h)) return 0;
     kind=core_kinds(h)[0]>>(4U*row)&15U;
-    return kind==CORE_ROW_START ? core_settings : kind==CORE_ROW_DISPLAY ? &display_setting :
-           kind==CORE_ROW_RAW ? core_settings+2 : kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
+    if(kind>=CORE_ROW_GROUP) return core_group_settings+kind-CORE_ROW_GROUP;
+    if(kind==CORE_ROW_START) return core_settings;
+    return kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
 }
 #define CORE_ROW(n) \
     static const u16 *core_label_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
@@ -201,28 +235,31 @@ static const Setting core_page_settings[SETTING_ROWS]={
     {core_label_4,core_values_4,core_text_4,core_get_4,core_set_4},
     {core_label_5,core_values_5,core_text_5,core_get_5,core_set_5},
 };
-#define DISPLAY_ROW(n) \
-    static const u16 *display_label_##n(volatile u32 *h) { \
-        const Setting *s=display_row_setting(h,n); return s ? s->label(h) : no_value_text; } \
-    static u32 display_values_##n(volatile u32 *h) { const Setting *s=display_row_setting(h,n); return s ? s->values(h) : 0; } \
-    static const u16 *display_text_##n(volatile u32 *h,u32 value) { \
-        const Setting *s=display_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
-    static u32 display_get_##n(volatile u32 *h) { const Setting *s=display_row_setting(h,n); return s ? s->get(h) : 0; } \
-    static void display_set_##n(volatile u32 *h,u32 value) { const Setting *s=display_row_setting(h,n); if(s) s->set(h,value); }
-DISPLAY_ROW(0) DISPLAY_ROW(1) DISPLAY_ROW(2) DISPLAY_ROW(3) DISPLAY_ROW(4)
-static const Setting display_page_settings[]={
-    {display_label_0,display_values_0,display_text_0,display_get_0,display_set_0},
-    {display_label_1,display_values_1,display_text_1,display_get_1,display_set_1},
-    {display_label_2,display_values_2,display_text_2,display_get_2,display_set_2},
-    {display_label_3,display_values_3,display_text_3,display_get_3,display_set_3},
-    {display_label_4,display_values_4,display_text_4,display_get_4,display_set_4},
+/* The rows of the page of the open group (core_group_open). */
+#define CORE_GROUP_ROW(n) \
+    static const u16 *core_group_row_label_##n(volatile u32 *h) { \
+        const Setting *s=core_group_row(h,core_group_open(h),n); return s ? s->label(h) : no_value_text; } \
+    static u32 core_group_row_values_##n(volatile u32 *h) { \
+        const Setting *s=core_group_row(h,core_group_open(h),n); return s ? s->values(h) : 0; } \
+    static const u16 *core_group_row_text_##n(volatile u32 *h,u32 value) { \
+        const Setting *s=core_group_row(h,core_group_open(h),n); return s ? s->value_text(h,value) : no_value_text; } \
+    static u32 core_group_row_get_##n(volatile u32 *h) { \
+        const Setting *s=core_group_row(h,core_group_open(h),n); return s ? s->get(h) : 0; } \
+    static void core_group_row_set_##n(volatile u32 *h,u32 value) { \
+        const Setting *s=core_group_row(h,core_group_open(h),n); if(s) s->set(h,value); }
+CORE_GROUP_ROW(0) CORE_GROUP_ROW(1) CORE_GROUP_ROW(2) CORE_GROUP_ROW(3)
+static const Setting core_group_page_settings[CORE_GROUP_MAX]={
+    {core_group_row_label_0,core_group_row_values_0,core_group_row_text_0,core_group_row_get_0,core_group_row_set_0},
+    {core_group_row_label_1,core_group_row_values_1,core_group_row_text_1,core_group_row_get_1,core_group_row_set_1},
+    {core_group_row_label_2,core_group_row_values_2,core_group_row_text_2,core_group_row_get_2,core_group_row_set_2},
+    {core_group_row_label_3,core_group_row_values_3,core_group_row_text_3,core_group_row_get_3,core_group_row_set_3},
 };
 /* The settings of page `module`, or 0. */
 static const Setting *settings_of(volatile u32 *h,u32 module,u32 one) {
     if(module==LISTED_PAGE) return listed_settings;
     if(module==SWITCH_MODULE) return switch_settings;
     if(module==CORE_PAGE) return core_page_settings;
-    if(module==DISPLAY_PAGE) return display_page_settings;
+    if(module>=GROUP_PAGE(0) && module<GROUP_PAGE(CORE_GROUPS)) return core_group_page_settings;
     if(module>=MODULE_TOTAL) return 0;
     if(one) { menu_page(h,module); return choice_one; }
     return menu_page(h,module)->settings;
@@ -266,7 +303,7 @@ static const Setting *settings_row_setting(volatile u32 *h,const Setting *page,u
     if(!page) return 0;
     if(page==listed_settings) return listed_setting(h,setting);
     if(page==core_page_settings) return core_row_setting(h,setting);
-    if(page==display_page_settings) return display_row_setting(h,setting);
+    if(page==core_group_page_settings) return core_group_row(h,core_group_open(h),setting);
     return page+setting;
 }
 static u32 settings_flags(volatile u32 *h,const Setting *page,u32 setting) {
@@ -962,7 +999,7 @@ static u32 settings_count(volatile u32 *h,const Setting *page) {
     else if(page==manage_settings) n=manage_adj_count(h);
     else if(page==listed_settings) n=listed_rows(h);
     else if(page==core_page_settings) n=core_rows(h);
-    else if(page==display_page_settings) n=display_rows(h);
+    else if(page==core_group_page_settings) n=core_group_rows(h,core_group_open(h));
     else while(n<SETTING_ROWS && page[n].label) ++n;
     return n<SUBMENU_ROWS ? n : SUBMENU_ROWS;
 }
@@ -981,6 +1018,8 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
        the rows that it has now. */
     if(module==MANAGE_MODULE) manage_adj_refresh(h);
     if(module==CORE_PAGE) core_refresh(h);
+    /* The rows of a group page read the open group (core_group_open). */
+    if(module>=GROUP_PAGE(0) && module<GROUP_PAGE(CORE_GROUPS)) h[GRKIT_HOST_SETTINGS/4]=module+1;
     page=settings_of(h,module,one);
     rows=page ? settings_count(h,page) : 0;
     for(i=0;i<SUBMENU_KIND_SIZE/4;++i) block[i]=MENU_OBJECT_WORD(stock,i*4);
@@ -1010,7 +1049,8 @@ static void settings_open(volatile u32 *h,u32 module,u32 one) {
                    manage_name(h,listed(h)));
     else
     descriptor(block+SETTINGS_LABELS/4,module==MANAGE_MODULE ? manage_title(h) :
-               module==CORE_PAGE ? core_settings_title(h) : module==DISPLAY_PAGE ? display_label(h) :
+               module==CORE_PAGE ? core_settings_title(h) :
+               module>=GROUP_PAGE(0) && module<GROUP_PAGE(CORE_GROUPS) ? core_group_label(h,module-GROUP_PAGE(0)) :
                module==SWITCH_MODULE ? grkit_title : menu_page(h,module)->title(h));
     for(i=0;i<SETTINGS_VIEW_SLOTS*3;++i) block[SETTINGS_VIEWS/4+i]=0;
     h[GRKIT_HOST_SETTINGS/4]=(module+1)|(one ? SETTINGS_ONE : 0);

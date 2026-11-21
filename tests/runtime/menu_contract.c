@@ -5425,27 +5425,31 @@ static void the_section_starts_with_the_switch(void)
     switch_settings[0].set(h, 1);
     assert(switch_settings[0].get(h) == 1 && settings_memory[2 + 12 * 3 + 1] == 1);
     switch_settings[0].set(h, 0);
-    /* GRKit Settings opens its page, titled GRKit Settings, with four rows. */
+    /* GRKit Settings opens its page, titled GRKit Settings, with four rows:
+       Enable at Start, the groups that have a setting, Mode Dial, and ADJ
+       Order. */
     assert(same(core_settings_title(h), "GRKit Settings"));
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU);
     assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1 && settings_page(h) == core_page_settings);
     assert(settings_rows(h) == 4 && same(core_page_settings[0].label(h), "Enable at Start") &&
            same(core_page_settings[1].label(h), "Display Settings") && same(core_page_settings[2].label(h), "Mode Dial") &&
            same(core_page_settings[3].label(h), "ADJ Order"));
-    assert(core_row_setting(h, 0) == core_settings && core_row_setting(h, 1) == &display_setting &&
+    assert(core_row_setting(h, 0) == core_settings &&
+           core_row_setting(h, 1) == core_group_settings + CORE_GROUP_DISPLAY &&
            core_row_setting(h, 2) == dial_menu_setting() && core_row_setting(h, 3) == &adj_order_setting);
-    /* Display Settings is a row of an action, which opens its page, titled
-       Display Settings, with Distance Unit. MENU there returns to GRKit
-       Settings with the cursor on Display Settings, row 1. */
+    /* A group is a row of an action, which opens its page, titled with the
+       group: Display Settings with Distance Unit. MENU there returns to
+       GRKit Settings with the cursor on the group, row 1. */
     assert(settings_flags(h, core_page_settings, 1) == SETTING_ACTION);
-    assert(core_row_setting(h, 1)->select(h, 0, 0) == MENU_DISPLAY_TARGET);
+    assert(core_row_setting(h, 1)->select(h, 0, 0) == MENU_GROUP_PAGE_TARGET + CORE_GROUP_DISPLAY);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
-    assert(menu_rows_controller(h, MENU_DISPLAY_TARGET) == SETTINGS_SUBMENU);
-    assert(h[GRKIT_HOST_SETTINGS / 4] == (DISPLAY_PAGE + 1 | SETTINGS_IN_CORE) &&
-           settings_page(h) == display_page_settings);
-    assert(same(display_label(h), "Display Settings"));
-    assert(settings_rows(h) == 1 && same(display_page_settings[0].label(h), "Distance Unit") &&
-           display_row_setting(h, 0) == core_settings + 1 && settings_flags(h, display_page_settings, 0) == 0);
+    assert(menu_rows_controller(h, MENU_GROUP_PAGE_TARGET + CORE_GROUP_DISPLAY) == SETTINGS_SUBMENU);
+    assert(h[GRKIT_HOST_SETTINGS / 4] == (GROUP_PAGE(CORE_GROUP_DISPLAY) + 1 | SETTINGS_IN_CORE) &&
+           settings_page(h) == core_group_page_settings);
+    assert(same(core_group_label(h, CORE_GROUP_DISPLAY), "Display Settings"));
+    assert(settings_rows(h) == 1 && same(core_group_page_settings[0].label(h), "Distance Unit") &&
+           core_group_row(h, CORE_GROUP_DISPLAY, 0) == core_settings + 1 &&
+           settings_flags(h, core_group_page_settings, 0) == 0);
     assert(menu_rows_controller(h, SETTINGS_SUBMENU) == SETTINGS_SUBMENU);
     assert(h[GRKIT_HOST_SETTINGS / 4] == CORE_PAGE + 1);
     assert(services_word(h, SERVICES_MENU + MENU_ROWS_BACK_ROW)[0] == 2);
@@ -5500,8 +5504,8 @@ static void the_section_starts_with_the_switch(void)
 }
 /* Battery in Simple Display is a row of Display Settings after Distance
    Unit: Off, as the camera, then On. A change saves, also in the copy of the
-   file of the user modes. GRKit Settings has Display Settings after Enable
-   at Start, then Uncropped RAW. */
+   file of the user modes. GRKit Settings has Enable at Start, Shooting
+   Settings with Uncropped RAW, then Display Settings. */
 static void battery_shows_in_the_simple_display(void)
 {
     volatile u32 *h = test_header;
@@ -5525,37 +5529,42 @@ static void battery_shows_in_the_simple_display(void)
     manage_memory[MANAGE_RAW / 4] = 16 + 1;
     menu_rows_install(h);
     assert(menu_rows_controller(h, MENU_ROW_TARGET + 1) == SETTINGS_SUBMENU && settings_page(h) == core_page_settings);
-    assert(settings_rows(h) == 5 && same(core_page_settings[1].label(h), "Display Settings") &&
-           same(core_page_settings[2].label(h), "Uncropped RAW") && same(core_page_settings[3].label(h), "Mode Dial") &&
+    assert(settings_rows(h) == 5 && same(core_page_settings[0].label(h), "Enable at Start") &&
+           same(core_page_settings[1].label(h), "Shooting Settings") &&
+           same(core_page_settings[2].label(h), "Display Settings") && same(core_page_settings[3].label(h), "Mode Dial") &&
            same(core_page_settings[4].label(h), "ADJ Order"));
+    assert(core_group_rows(h, CORE_GROUP_SHOOTING) == 1 && core_group_row(h, CORE_GROUP_SHOOTING, 0) == core_settings + 2);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
-    assert(menu_rows_controller(h, MENU_DISPLAY_TARGET) == SETTINGS_SUBMENU && settings_page(h) == display_page_settings);
-    assert(settings_rows(h) == 2 && same(display_page_settings[0].label(h), "Distance Unit") &&
-           same(display_page_settings[1].label(h), "Battery in Simple Display"));
-    assert(display_row_setting(h, 1) == core_settings + 3);
-    assert(display_page_settings[1].values(h) == 2 && same(display_page_settings[1].value_text(h, 0), "Off") &&
-           same(display_page_settings[1].value_text(h, 1), "On"));
-    assert(display_page_settings[1].get(h) == 0 && !battery_simple(h));
+    assert(menu_rows_controller(h, MENU_GROUP_PAGE_TARGET + CORE_GROUP_DISPLAY) == SETTINGS_SUBMENU &&
+           settings_page(h) == core_group_page_settings);
+    assert(settings_rows(h) == 2 && same(core_group_page_settings[0].label(h), "Distance Unit") &&
+           same(core_group_page_settings[1].label(h), "Battery in Simple Display"));
+    assert(core_group_row(h, CORE_GROUP_DISPLAY, 1) == core_settings + 3);
+    assert(core_group_page_settings[1].values(h) == 2 && same(core_group_page_settings[1].value_text(h, 0), "Off") &&
+           same(core_group_page_settings[1].value_text(h, 1), "On"));
+    assert(core_group_page_settings[1].get(h) == 0 && !battery_simple(h));
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    display_page_settings[1].set(h, 1);
+    core_group_page_settings[1].set(h, 1);
     assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
     assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
     /* A value out of range changes nothing. */
-    display_page_settings[1].set(h, 2);
+    core_group_page_settings[1].set(h, 2);
     assert(battery_simple(h));
-    display_page_settings[1].set(h, 0);
+    core_group_page_settings[1].set(h, 0);
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
     /* Without Distance Unit, Display Settings has Battery in Simple Display
        only. */
     manage_memory[MANAGE_UNIT / 4] = 0;
-    assert(display_rows(h) == 1 && display_row_setting(h, 0) == core_settings + 3 && !display_row_setting(h, 1));
+    assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 1 && core_group_row(h, CORE_GROUP_DISPLAY, 0) == core_settings + 3 &&
+           !core_group_row(h, CORE_GROUP_DISPLAY, 1));
     /* Without either, GRKit Settings has no Display Settings row. */
     manage_memory[MANAGE_BATTERY / 4] = 0;
-    assert(display_rows(h) == 0);
+    assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 0);
     core_refresh(h);
-    for (u32 row = 0; row < core_rows(h); ++row) assert(core_row_setting(h, row) != &display_setting);
+    for (u32 row = 0; row < core_rows(h); ++row)
+        assert(core_row_setting(h, row) != core_group_settings + CORE_GROUP_DISPLAY);
     manage_memory[MANAGE_RAW / 4] = 0;
     /* Without the setting in the module list, the icon stays as the camera
        shows it. */
@@ -5563,7 +5572,7 @@ static void battery_shows_in_the_simple_display(void)
     assert(!battery_simple(h));
     settings_memory[2 + 15 * 3 + 1] = 0;
 }
-/* Custom Shutdown Screen is the last row of Display Settings: Off, the
+/* Custom Picture is a row of Shutdown Screen: Off, the
    picture of the firmware, then On. A change saves, also in the copy of the
    file of the user modes. */
 static void the_shutdown_screen_has_its_row(void)
@@ -5576,23 +5585,22 @@ static void the_shutdown_screen_has_its_row(void)
     settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
     manage_memory[MANAGE_UNIT / 4] = 14 + 1;
     manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
-    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 4);
-    assert(same(display_page_settings[1].label(h), "Custom Shutdown Screen") &&
-           same(display_page_settings[1].value_text(h, 0), "Off") &&
-           same(display_page_settings[1].value_text(h, 1), "On"));
+    const Setting *row = core_group_row(h, CORE_GROUP_SHUTDOWN, 0);
+    assert(core_group_rows(h, CORE_GROUP_SHUTDOWN) == 1 && row == core_settings + 4);
+    assert(same(row->label(h), "Custom Picture") && same(row->value_text(h, 0), "Off") &&
+           same(row->value_text(h, 1), "On"));
     assert(goodbye_custom(h));
-    display_page_settings[1].set(h, MANAGE_GOODBYE_OFF);
+    row->set(h, MANAGE_GOODBYE_OFF);
     assert(!goodbye_custom(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE] == 0 + 1);
     /* Without the setting in the module list, the camera shows its picture. */
     settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
     manage_memory[MANAGE_GOODBYE / 4] = 0;
-    assert(!goodbye_custom(h) && display_rows(h) == 1);
+    assert(!goodbye_custom(h) && !core_group_rows(h, CORE_GROUP_SHUTDOWN));
     manage_memory[MANAGE_UNIT / 4] = 0;
     settings_memory[2 + 15 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
-/* GRKit Info in Playback is the row after Shutdown Screen Text, On by
-   default. A change saves, also in the copy of the file of the user modes. */
+/* GRKit Info in Playback is a row of Display Settings, On by default. A change saves, also in the copy of the file of the user modes. */
 static void the_playback_info_has_its_row(void)
 {
     volatile u32 *h = test_header;
@@ -5602,11 +5610,11 @@ static void the_playback_info_has_its_row(void)
     settings_memory[2 + 17 * 3 + 2] = MANAGE_PLAYBACK_INFO_VALUES;
     manage_memory[MANAGE_GOODBYE_TEXT / 4] = 16 + 1;
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 17 + 1;
-    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 6);
-    assert(same(display_page_settings[1].label(h), "GRKit Info in Playback") &&
-           same(display_page_settings[1].value_text(h, 0), "Off") &&
-           same(display_page_settings[1].value_text(h, 1), "On") && display_page_settings[1].get(h));
-    display_page_settings[1].set(h, MANAGE_PLAYBACK_INFO_OFF);
+    const Setting *row = core_group_row(h, CORE_GROUP_DISPLAY, 0);
+    assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 1 && row == core_settings + 6);
+    assert(same(row->label(h), "GRKit Info in Playback") && same(row->value_text(h, 0), "Off") &&
+           same(row->value_text(h, 1), "On") && row->get(h));
+    row->set(h, MANAGE_PLAYBACK_INFO_OFF);
     assert(!playback_info_on(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_PLAYBACK_INFO] == 0 + 1);
     manage_memory[MANAGE_GOODBYE_TEXT / 4] = 0;
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 0;
@@ -5759,7 +5767,7 @@ static void the_shutdown_screen_takes_a_usable_file(void)
     manage_memory[MANAGE_GOODBYE / 4] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
-/* Shutdown Screen Text is the row after Custom Shutdown Screen. Off hides
+/* Show Text is the row after Custom Picture. Off hides
    the six views over the picture of the GoodBye controller, in
    place of the function of the firmware that shows them; On, the default,
    and a camera without the setting leave them to the firmware. */
@@ -5775,11 +5783,12 @@ static void the_shutdown_text_hides_its_views(void)
     manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
     manage_memory[MANAGE_GOODBYE_TEXT / 4] = 16 + 1;
     for (i = 0; i < 6; ++i) *object_at(controller + GOODBYE_VIEWS + 4 * i) = TEST_OBJECTS + 0x800 + 0x40 * i;
-    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 5 &&
-           same(display_page_settings[1].label(h), "Shutdown Screen Text") && display_page_settings[1].get(h) == 1);
+    const Setting *row = core_group_row(h, CORE_GROUP_SHUTDOWN, 1);
+    assert(core_group_rows(h, CORE_GROUP_SHUTDOWN) == 2 && row == core_settings + 5 &&
+           same(row->label(h), "Show Text") && row->get(h) == 1);
     view_calls = 0;
     assert(!menu_goodbye_text_hide(controller) && view_calls == 0);
-    display_page_settings[1].set(h, MANAGE_GOODBYE_TEXT_OFF);
+    row->set(h, MANAGE_GOODBYE_TEXT_OFF);
     assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE_TEXT] == 0 + 1);
     assert(menu_goodbye_text_hide(controller) && view_calls == 6);
     for (i = 0; i < 6; ++i)

@@ -410,7 +410,7 @@ pub fn effect_preview(blob: &[u8], base_gamma: &[u16], tone: &[u16]) -> Result<V
     site::native_preview_lut(&base_gamma, &effect, curves.as_ref())
 }
 
-/// The file of Custom Shutdown Screen (`grkit_core::goodbye`) from `rgba`, the
+/// The file of Shutdown Screen (`grkit_core::goodbye`) from `rgba`, the
 /// RGBA pixels of a canvas of `goodbye::WIDTH` by `goodbye::HEIGHT`. The file
 /// has no transparency: a pixel shows over black by its alpha.
 pub fn shutdown_picture(rgba: &[u8]) -> Result<Vec<u8>> {
@@ -629,14 +629,14 @@ pub fn package_files_js(bytes: &[u8]) -> Result<Vec<CardFile>, JsError> {
         .map_err(js_error)
 }
 
-/// Returns the file of Custom Shutdown Screen, `GRKIT/GOODBYE.JPG` on the card, from the RGBA
+/// Returns the file of Shutdown Screen, `GRKIT/GOODBYE.JPG` on the card, from the RGBA
 /// pixels of a canvas of 720 by 480 pixels.
 #[wasm_bindgen(js_name = shutdownPicture)]
 pub fn shutdown_picture_js(rgba: &[u8]) -> Result<Vec<u8>, JsError> {
     shutdown_picture(rgba).map_err(js_error)
 }
 
-/// Whether the camera shows `bytes` as the file of Custom Shutdown Screen.
+/// Whether the camera shows `bytes` as the file of Shutdown Screen.
 #[wasm_bindgen(js_name = shutdownPictureUsable)]
 pub fn shutdown_picture_usable_js(bytes: &[u8]) -> bool {
     goodbye::usable(bytes)

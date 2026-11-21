@@ -760,7 +760,7 @@ static void install_writes_the_settings_and_the_contexts(void)
     assert(install() == 0);
     /* The settings of the modules, the choices of the GRKit section, the
        switch, Enable at Start, Distance Unit, Uncropped RAW, Battery in
-       Simple Display, Custom Shutdown Screen, Shutdown Screen Text, and GRKit Info in Playback, the order of the values
+       Simple Display, Custom Picture, Show Text, and GRKit Info in Playback, the order of the values
        of each module, then the saved values that no setting takes: CORE.GRAIN, which no module uses, and unknown keys,
        including a value 0. The saved unit is a setting, not a kept value:
        apply_state restores it. */

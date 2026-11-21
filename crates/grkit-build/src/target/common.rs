@@ -338,13 +338,13 @@ pub const DNG_XMP: &[HookSpec] = &[
 /// (`runtime/menu.S: menu_battery_mode`).
 pub const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];
 
-/// Custom Shutdown Screen (`runtime/goodbye.h`): where playback takes the
+/// Shutdown Screen (`runtime/goodbye.h`): where playback takes the
 /// picture that the GoodBye controller shows at the power-off. In a build
 /// with a JPEG table, the load of the record of a picture from that table.
 /// In a build with the ending screen service, the BL of the GoodBye
 /// controller to that service (`runtime/menu.S: menu_goodbye`).
 ///
-/// Shutdown Screen Text: the entries of the two functions of the GoodBye
+/// Show Text of Shutdown Screen: the entries of the two functions of the GoodBye
 /// controller that show its text over that picture
 /// (`runtime/menu.S: menu_goodbye_text_*`).
 pub const GOODBYE: &[HookSpec] = &[

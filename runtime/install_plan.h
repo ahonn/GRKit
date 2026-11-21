@@ -83,7 +83,7 @@ static u32 module_list, effect_list, services_block;
 /* The entries of the settings table after the module settings: the
    choices of each module, the choices of `effects` effects, the switch,
    Enable at Start, Distance Unit, Uncropped RAW, Battery in Simple Display,
-   Custom Shutdown Screen, Shutdown Screen Text, and GRKit Info in Playback,
+   Custom Picture, Show Text, and GRKit Info in Playback,
    then the order of the values of each module. */
 #define CHOICE_ENTRIES(modules, effects) ((MANAGE_PER_MODULE + MANAGE_ORDER_WORDS) * (modules) + 8U + (effects))
 /* A set of a user mode of the mode dial (runtime/mode_dial.h) holds the
@@ -112,7 +112,7 @@ static u32 profile_mode;
 static u32 capabilities_used;
 static void read_state(void);
 /* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Shutdown Screen, Shutdown Screen Text,
+   Battery in Simple Display, Custom Picture, Show Text,
    and GRKit Info in Playback, after read_state
    (runtime/install_recipes.h). */
 static void read_manage_copy(void);

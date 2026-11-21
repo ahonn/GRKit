@@ -1,7 +1,7 @@
 import type { CardChanges } from './card';
 import { loadWasm } from './package';
 
-/** The size of the picture of Custom Shutdown Screen (`grkit_core::goodbye`). */
+/** The size of the picture of Shutdown Screen (`grkit_core::goodbye`). */
 export const PICTURE_WIDTH = 720;
 export const PICTURE_HEIGHT = 480;
 /** The name of the file in the `GRKIT` folder of the card. */

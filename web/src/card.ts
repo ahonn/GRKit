@@ -61,7 +61,7 @@ export const RECIPE_FILE = 'GRKIT/RECIPES.TXT';
  * the recipes of this file to `RECIPE_FILE` once. A card write has no use for it and deletes it.
  */
 export const RECIPES_PACKAGE = 'SCRIPT/GRKIT/RECIPES.BIN';
-/** The picture of Custom Shutdown Screen (`grkit_core::goodbye`), which the site reads and writes. */
+/** The picture of Shutdown Screen (`grkit_core::goodbye`), which the site reads and writes. */
 export const SHUTDOWN_PICTURE = 'GRKIT/GOODBYE.JPG';
 
 /**

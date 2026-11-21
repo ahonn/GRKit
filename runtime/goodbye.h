@@ -1,6 +1,6 @@
 #ifndef GRKIT_GOODBYE_H
 #define GRKIT_GOODBYE_H
-/* Custom Shutdown Screen (runtime/manage.h: CORE.GOODBYE). When the camera
+/* Custom Picture of Shutdown Screen (runtime/manage.h: CORE.GOODBYE). When the camera
    turns off, the GoodBye controller asks playback for a JPEG of the firmware
    and shows it for a second. While the setting is on and the card has a
    usable GRKIT/GOODBYE.JPG, a hook gives playback the path of that file
@@ -105,7 +105,7 @@ A32_ENTRY u32 menu_goodbye_select(u8 *path,u32 *width,u32 *height) {
 }
 #endif
 
-/* Shutdown Screen Text (runtime/manage.h: CORE.BYETEXT). The GoodBye
+/* Show Text of Shutdown Screen (runtime/manage.h: CORE.BYETEXT). The GoodBye
    controller has six views over the picture, a word each from
    GOODBYE_VIEWS: the bar and the text of the shots of today, the bar and the
    text of those with the total, the firmware version, and the text of an

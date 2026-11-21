@@ -130,8 +130,8 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
     u32 self_back=id==SETTINGS_SUBMENU && services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]==SETTINGS_SUBMENU;
     /* Only a return to a parent page keeps a row for the cursor. */
     services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=0;
-    /* A child returns to its group, and Display Settings and ADJ Order to
-       GRKit Settings, with the cursor on the row that opened it
+    /* A child returns to its group, and a group of the core and ADJ Order
+       to GRKit Settings, with the cursor on the row that opened it
        (menu_settings_transition). */
     if((id==menu_return(h) || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_PARENT)) {
         u32 child=(h[GRKIT_HOST_SETTINGS/4]&0xffffU)-1U, row;
@@ -141,15 +141,17 @@ static u32 menu_rows_controller(volatile u32 *h,u32 id) {
         return SETTINGS_SUBMENU;
     }
     if((id==menu_return(h) || self_back) && (h[GRKIT_HOST_SETTINGS/4]&SETTINGS_IN_CORE)) {
-        const Setting *from=(h[GRKIT_HOST_SETTINGS/4]&0xffffU)==DISPLAY_PAGE+1U ? &display_setting : &adj_order_setting;
+        u32 g=core_group_open(h);
+        const Setting *from=g<CORE_GROUPS ? core_group_settings+g : &adj_order_setting;
         u32 row;
         settings_start(h,CORE_PAGE);
         for(row=0;row<core_rows(h) && core_row_setting(h,row)!=from;++row) {}
         if(row<core_rows(h)) services_word(h,SERVICES_MENU+MENU_ROWS_BACK_ROW)[0]=row+1U;
         return SETTINGS_SUBMENU;
     }
-    if((id==MENU_ADJ_TARGET || id==MENU_DISPLAY_TARGET) && settings_page(h)==core_page_settings) {
-        settings_start(h,id==MENU_ADJ_TARGET ? MANAGE_MODULE : DISPLAY_PAGE);
+    if((id==MENU_ADJ_TARGET || (id>=MENU_GROUP_PAGE_TARGET && id<MENU_GROUP_PAGE_TARGET+CORE_GROUPS)) &&
+       settings_page(h)==core_page_settings) {
+        settings_start(h,id==MENU_ADJ_TARGET ? MANAGE_MODULE : GROUP_PAGE(id-MENU_GROUP_PAGE_TARGET));
         h[GRKIT_HOST_SETTINGS/4]|=SETTINGS_IN_CORE;
         return SETTINGS_SUBMENU;
     }

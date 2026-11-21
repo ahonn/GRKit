@@ -31,20 +31,23 @@
    switch Off does (manage_grkit_off). The Enable row of ADJ shows whether
    GRKit runs; the MENU row shows the switch.
 
-   Enable at Start, the row after the switch in the GRKit section (no ADJ
-   row), decides the switch at each start: On, Off, or Keep Last, which
+   GRKit Settings has Enable at Start and groups the other settings of the
+   core in pages (runtime/menu_settings.h: core_groups): Shooting Settings,
+   Display Settings, and Shutdown Screen.
+
+   Enable at Start, a row of GRKit Settings (no ADJ row), decides the switch at each start: On, Off, or Keep Last, which
    keeps the value of the last session. Its setting, CORE.START, follows
    the switch in the table. INSTALL applies it before it selects the modules
    (runtime/install_plan.h: start_switch), so a start with Off loads each
    module stopped. A change of the switch during a session applies at once,
    and On or Off overrides it at the next start.
 
-   Distance Unit, a row of Display Settings in GRKit Settings, shows the
+   Distance Unit, a row of Display Settings, shows the
    focus distances of the camera in meters or in feet: the Snap focus
    distances (runtime/distance.h). Its setting, CORE.UNIT, follows Enable at
    Start in the table, and a change applies at once.
 
-   Uncropped RAW, a row of GRKit Settings, keeps the whole 3:2 picture of the
+   Uncropped RAW, a row of Shooting Settings, keeps the whole 3:2 picture of the
    sensor in each DNG, with the crop of the shot as Camera Raw settings
    (runtime/picture.c: picture_dng_crop). Its setting, CORE.RAW, follows
    Distance Unit in the table. The picture code reads it from the copy.
@@ -56,22 +59,22 @@
    applies at the next update of the live view, which the return from MENU
    makes.
 
-   Custom Shutdown Screen, a row of Display Settings, shows the picture
+   Custom Picture, a row of Shutdown Screen, shows the picture
    GRKIT/GOODBYE.JPG of the card when the camera turns off, in place of the
    picture of the firmware (runtime/goodbye.h). Its setting, CORE.GOODBYE,
    follows Battery in Simple Display in the table. On is the default, so the
    file alone gives the picture. A change applies at the next power-off.
 
-   Shutdown Screen Text, the row after it, shows or hides the text that the
+   Show Text, the row after it, shows or hides the text that the
    camera draws over the picture of the power-off, the shot counts and the
    firmware version, over the picture of the firmware too (runtime/goodbye.h).
-   Its setting, CORE.BYETEXT, follows Custom Shutdown Screen in the table. On,
+   Its setting, CORE.BYETEXT, follows Custom Picture in the table. On,
    as the camera, is the default.
 
-   GRKit Info in Playback, the last row of Display Settings, lists the GRKit
+   GRKit Info in Playback, a row of Display Settings, lists the GRKit
    settings of the photo that playback shows on the second page of its
    detailed information (runtime/playback_info.h). Its setting, CORE.PBINFO,
-   follows Shutdown Screen Text in the table. On is the default; Off reads
+   follows Show Text in the table. On is the default; Off reads
    no file and draws nothing.
 
    The header keeps a copy of these eight settings (GRKIT_HOST_MANAGE_COPY,
@@ -106,10 +109,10 @@
 /* The handle + 1 of CORE.BATTERY, Battery in Simple Display, or 0 without
    it. */
 #define MANAGE_BATTERY 32U
-/* The handle + 1 of CORE.GOODBYE, Custom Shutdown Screen, or 0 without
+/* The handle + 1 of CORE.GOODBYE, Custom Picture, or 0 without
    it. */
 #define MANAGE_GOODBYE 36U
-/* The handle + 1 of CORE.BYETEXT, Shutdown Screen Text, or 0 without it. */
+/* The handle + 1 of CORE.BYETEXT, Show Text, or 0 without it. */
 #define MANAGE_GOODBYE_TEXT 40U
 /* The handle + 1 of CORE.PBINFO, GRKit Info in Playback, or 0 without it. */
 #define MANAGE_PLAYBACK_INFO 44U
@@ -194,13 +197,13 @@
 /* The setting of Battery in Simple Display: 0 Off, as the camera, 1 On. */
 #define MANAGE_BATTERY_KEY "CORE.BATTERY"
 #define MANAGE_BATTERY_VALUES 2U
-/* The setting of Custom Shutdown Screen: 0 Off, the picture of the firmware,
+/* The setting of Custom Picture: 0 Off, the picture of the firmware,
    1 On, the default. */
 #define MANAGE_GOODBYE_KEY "CORE.GOODBYE"
 #define MANAGE_GOODBYE_OFF 0U
 #define MANAGE_GOODBYE_ON 1U
 #define MANAGE_GOODBYE_VALUES 2U
-/* The setting of Shutdown Screen Text: 0 Off, no text, 1 On, as the camera,
+/* The setting of Show Text: 0 Off, no text, 1 On, as the camera,
    the default. */
 #define MANAGE_GOODBYE_TEXT_KEY "CORE.BYETEXT"
 #define MANAGE_GOODBYE_TEXT_OFF 0U
@@ -356,7 +359,7 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
 /* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, Battery
-   in Simple Display, Custom Shutdown Screen, Shutdown Screen Text, and GRKit
+   in Simple Display, Custom Picture, Show Text, and GRKit
    Info in Playback in their copy, each as its value + 1, after a change of one of them. A copy
    that changes
    counts as a change of the file of the user modes, which the loader saves
@@ -593,8 +596,8 @@ static const Setting switch_settings[SETTING_ROWS]={
 };
 
 /* The GRKit Settings row of MENU opens a settings page of the core, titled
-   GRKit Settings (runtime/menu_settings.h: CORE_PAGE), and its Display
-   Settings row a page of the display settings of the core (DISPLAY_PAGE).
+   GRKit Settings (runtime/menu_settings.h: CORE_PAGE), and its group rows
+   the pages of the groups (GROUP_PAGE).
    Enable at Start: On, Off, then Keep Last. On and Off are the texts of the
    switch. A choice applies at the next start; the switch keeps its value in
    this session. Distance Unit: Meters, then Feet, at once. */
