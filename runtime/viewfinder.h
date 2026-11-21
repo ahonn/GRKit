@@ -519,16 +519,16 @@ static GRKIT_ICON_COMPACT u32 playback_canvas(volatile u32 *h,u32 canvas) {
     u32 c=h[GRKIT_HOST_SERVICES/4] && canvas ? services_word(h,SERVICES_PLAYBACK+PLAYBACK_CONTROLLER)[0] : 0;
     return c && WORD(c,ADJ_CANVAS)==canvas ? c : 0;
 }
-static GRKIT_ICON_COMPACT u32 playback_second_page(u32 c) {
+static GRKIT_ICON_COMPACT u32 playback_info_page(u32 c) {
     return WORD(c,CONTROLLER_ID)==PLAYBACK_SINGLE && BYTE(c,PLAYBACK_DISPLAY)==PLAYBACK_DETAIL &&
-           BYTE(c,PLAYBACK_DISPLAY+1)==PLAYBACK_SECOND_PAGE;
+           BYTE(c,PLAYBACK_DISPLAY+1)==PLAYBACK_INFO_PAGE;
 }
-/* The canvas of playback draws in full on the second page of its detailed
-   information, and in the draw after the list showed, so that the list
+/* The canvas of playback draws in full on the first page of its detailed
+   information, and in the draw after the icons showed, so that the icons
    (playback_paint) does not stay on another photo or page. */
 static GRKIT_ICON_COMPACT u32 playback_clears(volatile u32 *h,u32 canvas) {
     u32 c=playback_canvas(h,canvas);
-    return c && (services_word(h,SERVICES_PLAYBACK+PLAYBACK_PAINTED)[0] || playback_second_page(c));
+    return c && (services_word(h,SERVICES_PLAYBACK+PLAYBACK_PAINTED)[0] || playback_info_page(c));
 }
 static GRKIT_ICON_COMPACT void prepare_canvas(volatile u32 *h,u32 canvas) {
     /* Canvas::Draw clears the full native bitmap before drawing its children.
@@ -705,13 +705,13 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
     number[0]=(u16)('1'+page); number[1]='/'; number[2]=(u16)('0'+pages); number[3]=0;
     overlay_text(s,number,4,VIEW_PAGE_RIGHT-overlay_text_width(number,4),VIEW_PAGE_TOP,VIEW_PAGE_RIGHT);
 }
-/* GRKit Info in Playback (runtime/playback_info.h): on the second page of
-   the detailed information of the playback of one photo, the items of the
-   photo as the View paints its items, down each column of
-   PLAYBACK_INFO_COLUMNS (build header), in the part of the page that the
+/* GRKit Info in Playback (runtime/playback_info.h): on the first page of
+   the detailed information of the playback of one photo, the icon of each
+   item of the photo, in a row that ends at PLAYBACK_INFO_ROW_RIGHT, at
+   PLAYBACK_INFO_ROW_TOP (build header), in the part of the page that the
    camera leaves free. Only while the items belong to the photo that
    playback opened: the poll reads a new photo after the camera shows it. */
-static const u16 playback_columns[][4]={PLAYBACK_INFO_COLUMNS};
+#define PLAYBACK_INFO_PITCH 48U
 /* Whether the items belong to the photo that playback opened: the path of
    the items has the drive of the card first, the path of the playback none. */
 static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
@@ -726,15 +726,18 @@ static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
 }
 static GRKIT_ICON_COMPACT u32 playback_paint(volatile u32 *h,u32 c,u32 canvas,u32 bitmap) {
     volatile u32 *base=services_word(h,SERVICES_PLAYBACK+PLAYBACK_DETAILS);
-    u32 n=base[DETAIL_COUNT/4], i, k, row, data;
+    u32 n=base[DETAIL_COUNT/4], i, x=PLAYBACK_INFO_ROW_RIGHT-PANEL_ICON, data, pixels;
     Surface surface;
-    if(!n || !playback_second_page(c) || !playback_photo(h) || !(data=canvas_bitmap(canvas,bitmap))) return 0;
+    if(!n || !playback_info_page(c) || !playback_photo(h) || !(data=canvas_bitmap(canvas,bitmap))) return 0;
     surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
-    for(i=0,k=0,row=0;i<n && k<sizeof(playback_columns)/sizeof(playback_columns[0]);++i) {
-        const u16 *at=playback_columns[k];
-        view_item_paint(h,&surface,DETAIL_ITEM_AT(base,i),at[0],at[1]+row*VIEW_PITCH,at[0]+at[3]-8U);
-        if(++row==at[2]) { row=0; ++k; }
-    }
+    for(i=0;i<n;++i)
+        if(detail_pixels(h,DETAIL_ITEM_AT(base,i)[DETAIL_ITEM_ICON/4])) x-=PLAYBACK_INFO_PITCH;
+    x+=PLAYBACK_INFO_PITCH;
+    for(i=0;i<n;++i)
+        if((pixels=detail_pixels(h,DETAIL_ITEM_AT(base,i)[DETAIL_ITEM_ICON/4]))!=0) {
+            panel_icon_paint(&surface,pixels,x,PLAYBACK_INFO_ROW_TOP);
+            x+=PLAYBACK_INFO_PITCH;
+        }
     return 1;
 }
 static GRKIT_ICON_COMPACT void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {

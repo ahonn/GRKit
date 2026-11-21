@@ -1,26 +1,23 @@
 #ifndef GRKIT_PLAYBACK_INFO_H
 #define GRKIT_PLAYBACK_INFO_H
 /* GRKit Info in Playback (runtime/manage.h: CORE.PBINFO). The detailed
-   information of the playback of one photo has two pages; the second one
-   lists the GRKit settings of the photo in its free part. Each setting is
-   an item of runtime/recipe_details.h, which the live view paints as the
-   View of a recipe paints its items (runtime/viewfinder.h: playback_paint):
-   - the look: the effect of the GRKit code of the photo, from its maker note,
-     else from the playback metadata, as the first page shows its icon
-     (menu_playback_private), with its icon and its name; for an effect
-     that is not installed, the name that the XMP packet of the photo
-     records (grkit:FilmLook);
-   - each setting of GRKIT_PHOTO_XMP_SETTINGS that grkit:State of the packet
-     holds with a value other than 0, with the English text of its property:
-     Grain with its size, Bloom, Halation with its color, Border with its
-     color, Framing, Crop, and Date Imprint. Framing and Crop that only showed
-     a frame have no property, as they did not crop the photo.
-   A photo of a GRKit before the state shows only its look, and a photo
-   without GRKit nothing.
+   information of the playback of one photo has two pages; the first one
+   shows the icon of each GRKit setting of the photo in a row, in the free
+   part of the row of the drive mode, which each Image Control leaves free,
+   against its right end, as the camera adds its icons from the left; the
+   camera already shows the icon of the film look of the photo in the place
+   of its Image Control (menu_playback_private). The settings are those
+   of GRKIT_PHOTO_XMP_SETTINGS that grkit:State of the XMP packet of the photo
+   holds with a value other than 0, and whose property the packet has: Grain,
+   Bloom, Halation, Border, Framing, Crop, and Date Imprint. Framing and Crop
+   that only showed a frame have no property, as they did not crop the photo.
+   Each is an item of runtime/recipe_details.h with the icon of the setting
+   (playback_icon_of, runtime/viewfinder.h: playback_paint). A photo without the state shows
+   nothing.
 
    A poll in the App task reads the photo, every PLAYBACK_POLL_MS while
    playback shows and the setting is On. It reads the file only when the
-   second page shows a photo that the items do not belong to: the start of
+   first page shows a photo that the items do not belong to: the start of
    the file, then for a JPEG the segment after its Exif segment, where the
    packet is, or for a DNG its packet; DEVELOP_RECORD_SIZE bytes each, into
    the buffer of the record of a RAW development (SERVICES_DEVELOP), which
@@ -29,8 +26,8 @@
    Off, the poll stops, and nothing reads or draws.
 
    The includer defines the helpers of runtime/menu.c: the services, the
-   settings, the module icons (detail_module_icon), the recipe details,
-   playback_icon, and ui_timer_start. */
+   settings, the module icons (detail_module_icon), the recipe details, and
+   ui_timer_start. */
 #include "xmp.h"
 #include "photo_xmp_read.h"
 #define PLAYBACK_POLL_MS 100U
@@ -41,10 +38,6 @@
    keeps. A host test maps it. */
 #ifndef PLAYBACK_CONTROLLER_OF
 #define PLAYBACK_CONTROLLER_OF() WORD(((u32 (*)(void))FW_CONTROLLER_FACTORY)(),PLAYBACK_FACTORY_SLOT)
-#endif
-/* The Image Control tag of the photo in the playback metadata. */
-#ifndef PLAYBACK_TONE
-#define PLAYBACK_TONE() WORD(CALL0(FW_PLAYBACK_METADATA)(),METADATA_TONE)
 #endif
 #ifndef PLAYBACK_INVALIDATE
 #define PLAYBACK_INVALIDATE(view) CALL1(FW_VIEW_INVALIDATE)(view)
@@ -80,19 +73,13 @@ static u32 playback_path_shown(u8 *path) {
 static volatile u32 *playback_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_PLAYBACK+offset); }
 
 /* The packet of the photo at `path` in `buf` of DEVELOP_RECORD_SIZE bytes:
-   its first byte, with its length in *n, or 0. The ImageTone code of the
-   maker note, when the first read holds it, goes into *tone in the form of
-   the playback metadata. A JPEG walks its segments
+   its first byte, with its length in *n, or 0. A JPEG walks its segments
    from the start, which the first read holds; the second read starts at the
    first segment that the first one does not hold whole, which is the packet
    after a long Exif segment. */
-static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *tone) {
-    u32 len=PLAYBACK_FILE(path,0,buf,DEVELOP_RECORD_SIZE), at=2, base=0, size, reads=1, off, xmp, code;
-    /* The TIFF block of a DNG starts the file, that of a JPEG follows the
-       name of its Exif segment. */
-    if(len>=8 && buf[0]=='I' && buf[1]=='I' ? xmp_tone_code(buf,len,&code) :
-       len>12U && xmp_tone_code(buf+12,len-12U,&code))
-        *tone=0x10000U|((code-0x100U)&0xffffU);
+static const char *playback_packet(const u8 *path,u8 *buf,u32 *n) {
+    u32 len=PLAYBACK_FILE(path,0,buf,DEVELOP_RECORD_SIZE), at=2, base=0, size, reads=1, off, xmp;
+    /* A DNG starts with its TIFF block. */
     if(len>=8 && buf[0]=='I' && buf[1]=='I') {
         if(!(off=photo_xmp_tiff(buf,len,n))) return 0;
         if(off<=len && *n<=len-off) return (const char *)buf+off;
@@ -121,31 +108,6 @@ static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *tone) {
         at+=2U+size;
     }
 }
-/* Add the value of property `name` of the packet to the item: ASCII, with
-   the escapes of runtime/xmp.h, and a question mark for each other
-   character. 0 without the property. */
-static u32 playback_text(DetailItem *item,const char *xmp,u32 len,const char *name) {
-    static const struct { char c; char escape[6]; } escapes[]={{'&',"&amp;"},{'<',"&lt;"},{'>',"&gt;"},{'"',"&quot;"}};
-    u32 n, i, k, m;
-    const char *s=xmp ? photo_xmp_find(xmp,len,name,&n) : 0;
-    char one[2]={0,0};
-    if(!s || !n) return 0;
-    for(i=0;i<n;++i) {
-        one[0]=s[i];
-        if(s[i]=='&')
-            for(k=0;k<sizeof(escapes)/sizeof(escapes[0]);++k) {
-                for(m=0;escapes[k].escape[m] && i+m<n && s[i+m]==escapes[k].escape[m];++m) {}
-                if(!escapes[k].escape[m]) { one[0]=escapes[k].c; i+=m-1U; break; }
-            }
-        /* The first byte of a UTF-8 sequence is one character. */
-        if((u8)s[i]>=0x80) {
-            if(((u8)s[i]&0xc0)==0x80) continue;
-            one[0]='?';
-        }
-        detail_add(item,one);
-    }
-    return 1;
-}
 /* The value of state file ID `id` in grkit:State of the packet, or 0. */
 static u32 playback_state(const char *xmp,u32 len,u32 id) {
     u32 n, at, key, value;
@@ -165,14 +127,28 @@ static u32 playback_handle(volatile u32 *h,const PhotoXmpSetting *s) {
     return PLAYBACK_NO_SETTING;
 }
 /* The items of the settings of the packet, in their order: the property of
-   each, and of the second part that follows its value, such as the size of
-   Grain, with the text between them. */
-static const struct { const char *property, *more, *join; u8 name; } playback_settings[]={
-    {"Grain","GrainSize",", size ",DETAIL_NAME_GRAIN},{"Bloom",0,0,DETAIL_NAME_BLOOM},
-    {"Halation","HalationColor",", ",DETAIL_NAME_HALATION},{"Border","BorderColor",", ",DETAIL_NAME_BORDER},
-    {"Framing",0,0,DETAIL_NAME_FRAMING},{"Crop",0,0,DETAIL_NAME_CROP},{"DateImprint",0,0,DETAIL_NAME_DATE}};
-_Static_assert(1U+sizeof(playback_settings)/sizeof(playback_settings[0])<=PLAYBACK_ITEMS_MAX,
-               "The block holds the look and each setting");
+   each. */
+static const struct { const char *property; u8 name; } playback_settings[]={
+    {"Grain",DETAIL_NAME_GRAIN},{"Bloom",DETAIL_NAME_BLOOM},{"Halation",DETAIL_NAME_HALATION},
+    {"Border",DETAIL_NAME_BORDER},{"Framing",DETAIL_NAME_FRAMING},{"Crop",DETAIL_NAME_CROP},
+    {"DateImprint",DETAIL_NAME_DATE}};
+_Static_assert(sizeof(playback_settings)/sizeof(playback_settings[0])<=PLAYBACK_ITEMS_MAX,
+               "The block holds each setting");
+/* The icon of setting `handle` at `value`: the status icon of its module, as
+   the live view shows it, else the tile of the value in ADJ, for a setting
+   whose status icon is a text label (Framing, Date Imprint) or that has none
+   (Crop); 0 without either. */
+static u32 playback_icon_of(volatile u32 *h,u32 handle,u32 value) {
+    u32 icon=detail_module_icon(h,handle,value), i, tile;
+    if(icon && (icon<GRKIT_ICON_CORE_LABEL(0) || icon>=GRKIT_ICON_EFFECT(0))) return icon;
+    for(i=0;i<module_pages(h);++i) {
+        tile=h[GRKIT_HOST_MODULE_PAGES/4+i*3+2];
+        if(h[GRKIT_HOST_MODULE_PAGES/4+i*3+1]!=handle || tile==MANAGE_NO_TILE) continue;
+        value=crop_tile(handle,value);
+        return tile<GRKIT_MODULE_TILES_MAX && value<GRKIT_MODULE_TILES_MAX-tile ? GRKIT_ICON_MODULE_TILE(tile+value) : 0;
+    }
+    return 0;
+}
 /* The name of property `property` of the namespace of GRKit in `name`. */
 #define PLAYBACK_NAME_BYTES 24U
 static const char *playback_name(char *name,const char *property) {
@@ -191,42 +167,25 @@ static const PhotoXmpSetting *playback_setting(const char *property) {
     }
     return 0;
 }
-/* Write the items of the photo at `path`, whose Image Control tag the
-   playback metadata gives as `tone`, into the block of the playback
-   (PLAYBACK_DETAILS), and give their number. The code of the file comes
-   first: the metadata can still be that of the last photo while the camera
-   changes photos.
-   It keeps its item off the stack frame of the poll, which holds the path. */
-static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u8 *path,u32 tone) {
+/* Write the items of the photo at `path` into the block of the playback
+   (PLAYBACK_DETAILS), and give their number. It keeps its item off the stack
+   frame of the poll, which holds the path. */
+static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u8 *path) {
     DetailList list;
     DetailItem item;
     const PhotoXmpSetting *s;
     const char *xmp;
     u8 *buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
-    u32 n=0, i, value, handle, icon, record, unit;
+    u32 n=0, i, value, handle, len;
     char name[PLAYBACK_NAME_BYTES];
     list.base=playback_word(h,PLAYBACK_DETAILS); list.n=0; list.max=PLAYBACK_ITEMS_MAX;
-    xmp=playback_packet(path,buf,&n,&tone);
-    icon=playback_icon(h,tone);
-    if(icon || (tone>>16==1U && ((tone+0x100U)&0x8000U))) {
-        detail_start(&item,DETAIL_GROUP_LOOK,DETAIL_NAME_FILM_LOOK,icon);
-        if(icon) {
-            record=tone_record(h,icon-0x8000U+1U);
-            for(i=0;i+1U<DETAIL_VALUE_UNITS && (unit=HALF(record,GRKIT_RECORD_NAME+2U*i));++i) item.value[item.n++]=(u16)unit;
-        }
-        if(icon || playback_text(&item,xmp,n,"grkit:FilmLook")) detail_put(&list,&item);
-    }
+    xmp=playback_packet(path,buf,&n);
     for(i=0;xmp && i<sizeof(playback_settings)/sizeof(playback_settings[0]);++i) {
-        if(!(s=playback_setting(playback_settings[i].property)) || !(value=playback_state(xmp,n,s->id))) continue;
+        if(!(s=playback_setting(playback_settings[i].property)) || !(value=playback_state(xmp,n,s->id)) ||
+           !photo_xmp_find(xmp,n,playback_name(name,playback_settings[i].property),&len) || !len) continue;
         detail_start(&item,DETAIL_GROUP_MODULES,playback_settings[i].name,0);
-        if(!playback_text(&item,xmp,n,playback_name(name,playback_settings[i].property))) continue;
-        if(playback_settings[i].more) {
-            u32 before=item.n;
-            detail_add(&item,playback_settings[i].join);
-            if(!playback_text(&item,xmp,n,playback_name(name,playback_settings[i].more))) item.n=before;
-        }
         handle=playback_handle(h,s);
-        if(handle!=PLAYBACK_NO_SETTING) item.icon=detail_module_icon(h,handle,value);
+        if(handle!=PLAYBACK_NO_SETTING) item.icon=playback_icon_of(h,handle,value);
         detail_put(&list,&item);
     }
     list.base[DETAIL_COUNT/4]=list.n;
@@ -234,7 +193,7 @@ static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u
 }
 
 /* The poll: while playback shows, publish its controller for the live view
-   (PLAYBACK_CONTROLLER), and on the second page of the detailed information
+   (PLAYBACK_CONTROLLER), and on the first page of the detailed information
    give the items of the photo that shows. A path that differs from that of
    the items reads the photo; the empty path marks the items as changing, so
    that the live view does not paint them meanwhile. Returns whether the
@@ -254,12 +213,12 @@ static u32 playback_info_poll(volatile u32 *h) {
     c=PLAYBACK_CONTROLLER_OF();
     p[PLAYBACK_CONTROLLER/4]=c;
     if(!c || WORD(c,CONTROLLER_ID)!=PLAYBACK_SINGLE || BYTE(c,PLAYBACK_DISPLAY)!=PLAYBACK_DETAIL ||
-       BYTE(c,PLAYBACK_DISPLAY+1)!=PLAYBACK_SECOND_PAGE || !PLAYBACK_PATH_SHOWN(path)) return 1;
+       BYTE(c,PLAYBACK_DISPLAY+1)!=PLAYBACK_INFO_PAGE || !PLAYBACK_PATH_SHOWN(path)) return 1;
     for(i=0;i<PLAYBACK_PATH_BYTES && kept[i]==path[i] && path[i];++i) {}
     if(i<PLAYBACK_PATH_BYTES && kept[i]==path[i]) return 1;
     kept[0]=0;
     PLAYBACK_BARRIER();
-    playback_info_build(h,path,PLAYBACK_TONE());
+    playback_info_build(h,path);
     PLAYBACK_BARRIER();
     for(i=PLAYBACK_PATH_BYTES;i--;) kept[i]=path[i];
     PLAYBACK_INVALIDATE(WORD(c,ADJ_CANVAS));

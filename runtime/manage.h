@@ -71,9 +71,9 @@
    Its setting, CORE.BYETEXT, follows Custom Picture in the table. On,
    as the camera, is the default.
 
-   GRKit Info in Playback, a row of Display Settings, lists the GRKit
-   settings of the photo that playback shows on the second page of its
-   detailed information (runtime/playback_info.h). Its setting, CORE.PBINFO,
+   GRKit Info in Playback, a row of Display Settings, shows the icons of
+   the GRKit settings of the photo that playback shows on the first page of
+   its detailed information (runtime/playback_info.h). Its setting, CORE.PBINFO,
    follows Show Text in the table. On is the default; Off reads
    no file and draws nothing.
 

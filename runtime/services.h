@@ -398,7 +398,7 @@
 /* GRKit Info in Playback (runtime/playback_info.h): the firmware timer of
    its poll in the App task, 0 when none runs; the playback controller while
    playback shows and the setting is On, else 0, which the live view reads;
-   whether the live view painted the list in the last draw of the canvas of
+   whether the live view painted the icons in the last draw of the canvas of
    playback; the path of the photo whose items follow, NUL-terminated, or
    an empty path; then the items of that photo, as the details block holds
    them: their number, then PLAYBACK_ITEMS_MAX items. */

@@ -228,17 +228,20 @@
    the slot of the controller in the controller factory
    (FW_CONTROLLER_FACTORY), which keeps it after playback ends, and its
    display, which DISP turns: PLAYBACK_DETAIL shows the detailed information,
-   whose page, 0 or PLAYBACK_SECOND_PAGE, follows in the next byte. Its
+   whose page, PLAYBACK_INFO_PAGE for the first one, follows in the next byte. Its
    canvas is the word at ADJ_CANVAS of the controller. */
 #define PLAYBACK_SINGLE 0x4000001U
 #define PLAYBACK_FACTORY_SLOT 0xc
 #define PLAYBACK_DISPLAY 0x306
 #define PLAYBACK_DETAIL 2U
-#define PLAYBACK_SECOND_PAGE 1U
-/* The list of GRKit Info in Playback on the second page (runtime/viewfinder.h:
-   playback_paint): its columns, first right of the thumbnail and below the copyright information, then below the thumbnail, each as its left, its top, its
-   rows, and its width. */
-#define PLAYBACK_INFO_COLUMNS {236,132,6,464},{16,224,4,212}
+#define PLAYBACK_INFO_PAGE 0U
+/* The row of icons of GRKit Info in Playback on the first page
+   (runtime/viewfinder.h: playback_paint), in the row of the drive mode, which
+   stays free with each Image Control: the right of its last icon, and the
+   top of the row. The camera adds its icons, such as the self-timer, from
+   the left. */
+#define PLAYBACK_INFO_ROW_RIGHT 700U
+#define PLAYBACK_INFO_ROW_TOP 120U
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */
