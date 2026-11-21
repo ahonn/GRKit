@@ -5620,17 +5620,31 @@ static void the_playback_info_has_its_row(void)
     settings_memory[2 + 17 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
-/* A JPEG of `exif` bytes of Exif segment, then the XMP segment of `packet`,
-   or a quantization table without one, as the playback test file. */
-static void playback_test_jpeg(unsigned exif, const char *packet)
+static void playback_put(unsigned at, unsigned value, unsigned bytes)
+{
+    for (unsigned i = 0; i < bytes; ++i) playback_test_file[at + i] = (unsigned char)(value >> 8 * i);
+}
+/* A JPEG of `exif` bytes of Exif segment, whose maker note has the drive
+   mode `drive`, then the XMP segment of `packet`, or a quantization table
+   without one, as the playback test file. */
+static void playback_test_jpeg(unsigned exif, const char *packet, unsigned drive)
 {
     static const char namespace[] = "http://ns.adobe.com/xap/1.0/";
-    unsigned at = 2 + 2 + exif, n = packet ? (unsigned)strlen(packet) : 0;
+    unsigned at = 2 + 2 + exif, n = packet ? (unsigned)strlen(packet) : 0, t = 12;
     memset(playback_test_file, 0, sizeof playback_test_file);
     memcpy(playback_test_file, "\xff\xd8\xff\xe1", 4);
     playback_test_file[4] = (unsigned char)(exif >> 8);
     playback_test_file[5] = (unsigned char)exif;
     memcpy(playback_test_file + 6, "Exif", 4);
+    /* The TIFF block: IFD0 with the Exif IFD, which has the maker note. */
+    memcpy(playback_test_file + t, "II*\0", 4); playback_put(t + 4, 8, 4);
+    playback_put(t + 8, 1, 2); playback_put(t + 10, XMP_EXIF_IFD_TAG, 2); playback_put(t + 12, 4, 2);
+    playback_put(t + 14, 1, 4); playback_put(t + 18, 26, 4);
+    playback_put(t + 26, 1, 2); playback_put(t + 28, XMP_MAKERNOTE_TAG, 2); playback_put(t + 30, 7, 2);
+    playback_put(t + 32, 22, 4); playback_put(t + 36, 44, 4);
+    memcpy(playback_test_file + t + 44, "RICOH\0II", 8);
+    playback_put(t + 52, 1, 2); playback_put(t + 54, XMP_DRIVE_TAG, 2); playback_put(t + 56, 1, 2);
+    playback_put(t + 58, 4, 4); playback_put(t + 62, drive, 4);
     playback_test_file[at] = 0xff;
     playback_test_file[at + 1] = packet ? 0xe1 : 0xdb;
     playback_test_file[at + 2] = (unsigned char)((2 + sizeof namespace + n) >> 8);
@@ -5651,10 +5665,11 @@ static int playback_item(u32 i, u32 name)
    an older GRKit or without GRKit gives nothing. Off reads nothing. */
 static void playback_lists_the_grkit_settings_of_a_photo(void)
 {
-    volatile u32 *h = test_header, *count;
+    volatile u32 *h = test_header, *count, *row;
     u32 c = TEST_OBJECTS + 8 * GRKIT_RECORD_SIZE, i;
     install_stock_tab(10, 3);
     count = services_word(h, SERVICES_PLAYBACK + PLAYBACK_DETAILS);
+    row = services_word(h, SERVICES_PLAYBACK + PLAYBACK_ROW_RIGHT);
     settings_memory[0] = 18;
     settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_ON;
     settings_memory[2 + 17 * 3 + 2] = MANAGE_PLAYBACK_INFO_VALUES;
@@ -5671,15 +5686,25 @@ static void playback_lists_the_grkit_settings_of_a_photo(void)
     playback_test_jpeg(5000, "<x:xmpmeta><rdf:Description grkit:FilmLook=\"Portra\" grkit:Grain=\"Medium\" "
                              "grkit:GrainSize=\"Auto\" grkit:Border=\"Thin\" grkit:BorderColor=\"White\" "
                              "grkit:Crop=\"35mm\" grkit:State=\"790270076=2,977751003=0,862826181=1,360900158=0,"
-                             "660632122=0\"/></x:xmpmeta>");
+                             "660632122=0\"/></x:xmpmeta>", 0);
     playback_info_controller(h, PLAYBACK_SINGLE);
     assert(playback_timers == 1 && playback_reads == 2 && playback_redraws == 1 && count[0] == 2);
     assert(playback_item(0, DETAIL_NAME_GRAIN) && playback_item(1, DETAIL_NAME_BORDER));
+    assert(*row == PLAYBACK_INFO_ROW_RIGHT);
     assert(services_word(h, SERVICES_PLAYBACK + PLAYBACK_CONTROLLER)[0] == c);
     assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_reads == 2);
+    /* Interval shooting: the row ends before the shot number. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000003.JPG";
+    playback_test_jpeg(100, "<x:xmpmeta><rdf:Description grkit:Grain=\"Medium\" grkit:State=\"790270076=2\"/></x:xmpmeta>",
+                       XMP_DRIVE_INTERVAL);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 1 && *row == PLAYBACK_INFO_INTERVAL_RIGHT);
+    /* Interval composite: the row ends before its time as well. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000005.JPG";
+    playback_test_jpeg(100, 0, XMP_DRIVE_INTERVAL | 0x01000000U);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && *row == PLAYBACK_INFO_COMPOSITE_RIGHT);
     /* A photo of an older GRKit or without GRKit: no packet. */
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000002.JPG";
-    playback_test_jpeg(100, 0);
+    playback_test_jpeg(100, 0, 0);
     assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 0);
     /* Off: no read, and the live view gets no controller. */
     settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_OFF;

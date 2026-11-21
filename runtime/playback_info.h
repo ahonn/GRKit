@@ -4,9 +4,12 @@
    information of the playback of one photo has two pages; the first one
    shows the icon of each GRKit setting of the photo in a row, in the free
    part of the row of the drive mode, which each Image Control leaves free,
-   against its right end, as the camera adds its icons from the left; the
-   camera already shows the icon of the film look of the photo in the place
-   of its Image Control (menu_playback_private). The settings are those
+   against its right end, as the camera adds its icons from the left. For a
+   photo of interval shooting the row ends before the shot number, which the
+   camera shows at the right, and for interval composite before its time as
+   well, and holds fewer icons. The camera already shows
+   the icon of the film look of the photo in the place of its Image Control
+   (menu_playback_private). The settings are those
    of GRKIT_PHOTO_XMP_SETTINGS that grkit:State of the XMP packet of the photo
    holds with a value other than 0, and whose property the packet has: Grain,
    Bloom, Halation, Border, Framing, Crop, and Date Imprint. Framing and Crop
@@ -73,12 +76,17 @@ static u32 playback_path_shown(u8 *path) {
 static volatile u32 *playback_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_PLAYBACK+offset); }
 
 /* The packet of the photo at `path` in `buf` of DEVELOP_RECORD_SIZE bytes:
-   its first byte, with its length in *n, or 0. A JPEG walks its segments
-   from the start, which the first read holds; the second read starts at the
-   first segment that the first one does not hold whole, which is the packet
-   after a long Exif segment. */
-static const char *playback_packet(const u8 *path,u8 *buf,u32 *n) {
+   its first byte, with its length in *n, or 0. The drive mode of the maker
+   note, when the first read holds it, goes into *drive (XMP_DRIVE_TAG). A
+   JPEG walks its segments from the start, which the first read holds; the
+   second read starts at the first segment that the first one does not hold
+   whole, which is the packet after a long Exif segment. */
+static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *drive) {
     u32 len=PLAYBACK_FILE(path,0,buf,DEVELOP_RECORD_SIZE), at=2, base=0, size, reads=1, off, xmp;
+    /* A DNG is a TIFF block; a JPEG has one after the SOI marker and the
+       head and name of its Exif segment. */
+    if(!(len>=8 && buf[0]=='I' && buf[1]=='I' ? xmp_maker_value(buf,len,XMP_DRIVE_TAG,drive) :
+         len>12U && xmp_maker_value(buf+12,len-12U,XMP_DRIVE_TAG,drive))) *drive=0;
     /* A DNG starts with its TIFF block. */
     if(len>=8 && buf[0]=='I' && buf[1]=='I') {
         if(!(off=photo_xmp_tiff(buf,len,n))) return 0;
@@ -168,18 +176,21 @@ static const PhotoXmpSetting *playback_setting(const char *property) {
     return 0;
 }
 /* Write the items of the photo at `path` into the block of the playback
-   (PLAYBACK_DETAILS), and give their number. It keeps its item off the stack
-   frame of the poll, which holds the path. */
+   (PLAYBACK_DETAILS), with the right end of their row, and give their
+   number. It keeps its item off the stack frame of the poll, which holds the
+   path. */
 static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u8 *path) {
     DetailList list;
     DetailItem item;
     const PhotoXmpSetting *s;
     const char *xmp;
     u8 *buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
-    u32 n=0, i, value, handle, len;
+    u32 n=0, i, value, handle, len, drive;
     char name[PLAYBACK_NAME_BYTES];
     list.base=playback_word(h,PLAYBACK_DETAILS); list.n=0; list.max=PLAYBACK_ITEMS_MAX;
-    xmp=playback_packet(path,buf,&n);
+    xmp=playback_packet(path,buf,&n,&drive);
+    playback_word(h,PLAYBACK_ROW_RIGHT)[0]=!(drive&XMP_DRIVE_INTERVAL) ? PLAYBACK_INFO_ROW_RIGHT :
+                                           drive&XMP_DRIVE_MULTI ? PLAYBACK_INFO_COMPOSITE_RIGHT : PLAYBACK_INFO_INTERVAL_RIGHT;
     for(i=0;xmp && i<sizeof(playback_settings)/sizeof(playback_settings[0]);++i) {
         if(!(s=playback_setting(playback_settings[i].property)) || !(value=playback_state(xmp,n,s->id)) ||
            !photo_xmp_find(xmp,n,playback_name(name,playback_settings[i].property),&len) || !len) continue;

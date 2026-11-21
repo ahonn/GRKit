@@ -707,9 +707,9 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
 }
 /* GRKit Info in Playback (runtime/playback_info.h): on the first page of
    the detailed information of the playback of one photo, the icon of each
-   item of the photo, in a row that ends at PLAYBACK_INFO_ROW_RIGHT, at
-   PLAYBACK_INFO_ROW_TOP (build header), in the part of the page that the
-   camera leaves free. Only while the items belong to the photo that
+   item of the photo, in a row that ends at PLAYBACK_ROW_RIGHT of the photo
+   and starts at PLAYBACK_INFO_ROW_LEFT at the most, at PLAYBACK_INFO_ROW_TOP
+   (build header), in the part of the page that the camera leaves free. Only while the items belong to the photo that
    playback opened: the poll reads a new photo after the camera shows it. */
 #define PLAYBACK_INFO_PITCH 48U
 /* Whether the items belong to the photo that playback opened: the path of
@@ -726,17 +726,21 @@ static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
 }
 static GRKIT_ICON_COMPACT u32 playback_paint(volatile u32 *h,u32 c,u32 canvas,u32 bitmap) {
     volatile u32 *base=services_word(h,SERVICES_PLAYBACK+PLAYBACK_DETAILS);
-    u32 n=base[DETAIL_COUNT/4], i, x=PLAYBACK_INFO_ROW_RIGHT-PANEL_ICON, data, pixels;
+    u32 n=base[DETAIL_COUNT/4], i, x, data, pixels, shown=0;
     Surface surface;
     if(!n || !playback_info_page(c) || !playback_photo(h) || !(data=canvas_bitmap(canvas,bitmap))) return 0;
     surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
+    /* The first icons that fit between PLAYBACK_INFO_ROW_LEFT and the right
+       end of the row of the photo. */
+    x=services_word(h,SERVICES_PLAYBACK+PLAYBACK_ROW_RIGHT)[0]-PANEL_ICON;
     for(i=0;i<n;++i)
-        if(detail_pixels(h,DETAIL_ITEM_AT(base,i)[DETAIL_ITEM_ICON/4])) x-=PLAYBACK_INFO_PITCH;
-    x+=PLAYBACK_INFO_PITCH;
-    for(i=0;i<n;++i)
+        if(detail_pixels(h,DETAIL_ITEM_AT(base,i)[DETAIL_ITEM_ICON/4]) &&
+           (!shown || x>=PLAYBACK_INFO_ROW_LEFT+PLAYBACK_INFO_PITCH) && shown++) x-=PLAYBACK_INFO_PITCH;
+    for(i=0;i<n && shown;++i)
         if((pixels=detail_pixels(h,DETAIL_ITEM_AT(base,i)[DETAIL_ITEM_ICON/4]))!=0) {
             panel_icon_paint(&surface,pixels,x,PLAYBACK_INFO_ROW_TOP);
             x+=PLAYBACK_INFO_PITCH;
+            --shown;
         }
     return 1;
 }

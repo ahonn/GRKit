@@ -22,6 +22,12 @@
 #define XMP_MAKERNOTE_TAG 0x927cU
 #define XMP_EXIF_IFD_TAG 0x8769U
 #define XMP_TONE_TAG 0x4fU
+/* The drive mode: four bytes, whose last one has XMP_DRIVE_INTERVAL for
+   interval shooting, and with a bit of XMP_DRIVE_MULTI as well for interval
+   composite. */
+#define XMP_DRIVE_TAG 0x34U
+#define XMP_DRIVE_INTERVAL 0x08000000U
+#define XMP_DRIVE_MULTI 0x07000000U
 
 static const char xmp_namespace[] = "http://ns.adobe.com/xap/1.0/";
 static const char xmp_end[] = "<?xpacket end=\"w\"?>";
@@ -50,10 +56,10 @@ static __attribute__((unused)) u32 xmp_ifd_value(const volatile u8 *tiff, u32 si
     }
     return 0;
 }
-/* The ImageTone code in the maker note of the TIFF block at `tiff`, which
-   ends before `size`: 1 with the code in `code`, or 0 without a Ricoh maker
-   note or the tag. */
-static __attribute__((unused)) u32 xmp_tone_code(const volatile u8 *tiff, u32 size, u32 *code) {
+/* The value of `tag` in the maker note of the TIFF block at `tiff`, which
+   ends before `size`: 1 with the value field in `out`, as xmp_ifd_value
+   gives it, or 0 without a Ricoh maker note or the tag. */
+static __attribute__((unused)) u32 xmp_maker_value(const volatile u8 *tiff, u32 size, u32 tag, u32 *out) {
     static const char ricoh[8] = {'R', 'I', 'C', 'O', 'H', 0, 'I', 'I'};
     u32 little, exif, note, i;
     if (size < 8) return 0;
@@ -65,7 +71,12 @@ static __attribute__((unused)) u32 xmp_tone_code(const volatile u8 *tiff, u32 si
     if (note > size - 10) return 0;
     for (i = 0; i < 8; ++i)
         if (tiff[note + i] != (u8)ricoh[i]) return 0;
-    return xmp_ifd_value(tiff, size, note + 8, 1, XMP_TONE_TAG, code);
+    return xmp_ifd_value(tiff, size, note + 8, 1, tag, out);
+}
+/* The ImageTone code in the maker note of the TIFF block at `tiff`: 1 with
+   the code in `code`, or 0. */
+static __attribute__((unused)) u32 xmp_tone_code(const volatile u8 *tiff, u32 size, u32 *code) {
+    return xmp_maker_value(tiff, size, XMP_TONE_TAG, code);
 }
 /* The next code point of a UTF-16 name of at most `max` units, from unit
    `*at`, or 0 at its end. A lone surrogate becomes U+FFFD. */

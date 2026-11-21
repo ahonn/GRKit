@@ -101,10 +101,16 @@
 #define PLAYBACK_INFO_PAGE 0U
 /* The row of icons of GRKit Info in Playback on the first page
    (runtime/viewfinder.h: playback_paint), in the row of the drive mode, which
-   stays free with each Image Control: the right of its last icon, and the
-   top of the row. The camera adds its icons, such as the self-timer, from
-   the left. */
+   stays free with each Image Control: the right of its last icon, the right
+   of its last icon for a photo of interval shooting, whose shot number the
+   camera shows at the right of the row, and of interval composite, whose
+   time the camera shows before that, the left of its first icon, which
+   the camera leaves free after the icons that it adds from the left (the
+   drive mode, the self-timer), and the top of the row. */
 #define PLAYBACK_INFO_ROW_RIGHT 700U
+#define PLAYBACK_INFO_INTERVAL_RIGHT 520U
+#define PLAYBACK_INFO_COMPOSITE_RIGHT 390U
+#define PLAYBACK_INFO_ROW_LEFT 330U
 #define PLAYBACK_INFO_ROW_TOP 110U
 /* RAW development, the Fn adjustments (runtime/develop.h): RawDevelopmentModel
    holds the selected Image Control: the category at DEVELOP_CATEGORY and the
