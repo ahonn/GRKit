@@ -215,7 +215,7 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     u32 kind;
     if(row>=core_rows(h)) return 0;
     kind=core_kinds(h)[0]>>(4U*row)&15U;
-    if(kind>=CORE_ROW_GROUP) return core_group_settings+kind-CORE_ROW_GROUP;
+    if(kind>=CORE_ROW_GROUP) return kind-CORE_ROW_GROUP<CORE_GROUPS ? core_group_settings+(kind-CORE_ROW_GROUP) : 0;
     if(kind==CORE_ROW_START) return core_settings;
     return kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
 }
