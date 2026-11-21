@@ -569,10 +569,12 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
    passes end. The addresses of each module stay the same in each pass.
    The mode dial belongs to the core: its hook and the shooting screen,
    where the dial acts at a start (runtime/mode_dial.h), install with the
-   modules, whatever they use and whatever their Enable is. */
+   modules, whatever they use and whatever their Enable is. So does the XMP
+   packet of pictures, where each module records its settings, also
+   without Film Look. */
 static int install_modules(u32 code, u32 array, u32 pixels, const u32 *icon_bases)
 {
-    u32 points = needed_points | POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY, broken = 0;
+    u32 points = needed_points | POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY | POINT_PICTURE_XMP, broken = 0;
     for (;;) {
         needed_points = points;
         int status = install_pass(code, array, pixels, icon_bases, broken);
