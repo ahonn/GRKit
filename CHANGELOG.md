@@ -1,3 +1,13 @@
+## 1.6.5 (2026-11-21)
+
+### Fixes
+
+- Shutdown Screen in GRKit Settings shows your own picture when the camera turns off, and Show Text Off hides the text over it.
+- GRKit Settings groups its settings in Shooting Settings, Display Settings, and Shutdown Screen, and its switches list On before Off.
+- GRKit Info in Playback in Display Settings shows an icon for each GRKit setting of a photo on the first page of the detailed playback information.
+- Leaving the name keyboard of Save Settings without OK no longer saves a recipe.
+- Photos record their GRKit settings also without Film Look, such as on GR IV Monochrome, so GRKit Info in Playback shows them there too.
+
 ## 1.6.4 (2026-11-19)
 
 ### Fixes
