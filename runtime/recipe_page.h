@@ -213,6 +213,15 @@ static void recipe_keyboard_name(volatile u32 *h,u32 slot) {
     if(!recipe_name_length(h,slot) && ui_keyboard_kept(h,recipe_keyboard_text(h,slot))) return;
     recipe_name_set(h,slot,name);
 }
+/* After the keyboard that names the new recipe `slot`: delete the recipe
+   when the person left the keyboard without OK, and return 1. A keyboard
+   that another use held never showed, and the recipe keeps its automatic
+   name. */
+static u32 recipe_save_left(volatile u32 *h,u32 slot) {
+    if(!ui_keyboard_left(h)) return 0;
+    recipe_delete(h,slot);
+    return 1;
+}
 /* Open the keyboard of the camera with the name of recipe `slot`: 1, or 0
    when it cannot open. Then back(slot) runs on the page. */
 static u32 recipe_keyboard(volatile u32 *h,u32 slot,void (*back)(u32)) {
@@ -223,10 +232,11 @@ static u32 recipe_keyboard(volatile u32 *h,u32 slot,void (*back)(u32)) {
     return opened;
 }
 /* The return from the keyboard after Save: the typed name, if any, then
-   the toast. */
+   the toast. A way out of the keyboard without OK takes the new recipe back,
+   so Save saves only with OK (recipe_save_left). */
 static void recipe_saved_back(u32 slot) {
     volatile u32 *h=menu_header();
-    if(slot>=recipe_entries(h)) return;
+    if(slot>=recipe_entries(h) || recipe_save_left(h,slot)) return;
     recipe_keyboard_name(h,slot);
     recipe_show(h,slot);
     recipe_saved_toast(h,slot);

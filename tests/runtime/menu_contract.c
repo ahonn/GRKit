@@ -1914,11 +1914,12 @@ static void the_keyboard_keeps_an_unchanged_automatic_name(void)
     ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
     recipe_named(1);
     assert(!recipe_name_length(test_header, 1));
-    /* MENU on the keyboard gives no text. */
+    /* A keyboard that another use held gives no text and keeps the new
+       recipe with its automatic name. */
     ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 0;
     strcpy((char *)grkit, "Other");
     recipe_named(1);
-    assert(!recipe_name_length(test_header, 1));
+    assert(recipe_entries(test_header) == 2 && !recipe_name_length(test_header, 1));
     /* A changed text names the recipe; a shorter one too. */
     ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
     recipe_named(1);
@@ -1931,6 +1932,33 @@ static void the_keyboard_keeps_an_unchanged_automatic_name(void)
     ui_word(test_header, UI_KEYBOARD_RESULT)[0] = 1;
     recipe_renamed_back(1);
     assert(same(menu_recipe_name(test_header, 1), "Other") && recipe_name_length(test_header, 1) == 5);
+}
+
+/* Save keeps the new recipe only with OK on its keyboard: MENU there, which
+   changes to another controller while the keyboard shows, takes the recipe
+   back, after Save in ADJ and in MENU. Rename keeps the recipe. */
+static void a_save_left_without_ok_keeps_no_recipe(void)
+{
+    reset();
+    install_page(4, "Recipes", 0, 0, GRKIT_CORE_RECIPE, 19);
+    test_header[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_OFF);
+    header_recipe(1, "", RECIPE_USED | RECIPE_LOOK_OFF | 2U << RECIPE_NUMBER_SHIFT);
+    for (u32 adj = 0; adj < 2; ++adj) {
+        u32 n = recipe_entries(test_header);
+        ui_word(test_header, UI_KEYBOARD)[0] = UI_KEYBOARD_SHOWN;
+        ui_keyboard_change(test_header, KEYBOARD_CONTROLLER + 1U);
+        assert(ui_keyboard_left(test_header) && !ui_keyboard_result(test_header));
+        if (adj) recipe_saved_back(n - 1U);
+        else recipe_named(n - 1U);
+        assert(recipe_entries(test_header) == n - 1U);
+    }
+    header_recipe(0, "", RECIPE_USED | RECIPE_LOOK_OFF);
+    ui_word(test_header, UI_KEYBOARD)[0] = UI_KEYBOARD_SHOWN;
+    ui_keyboard_change(test_header, KEYBOARD_CONTROLLER + 1U);
+    recipe_renamed_back(0);
+    assert(recipe_entries(test_header) == 1);
 }
 
 /* The page lists the recipes that show in ADJ, by their names. OK on one
@@ -6285,6 +6313,7 @@ int main(void)
     recipe_type_writes_are_no_native_choice();
     the_keyboard_serves_the_grkit_text_only_while_borrowed();
     the_keyboard_keeps_an_unchanged_automatic_name();
+    a_save_left_without_ok_keeps_no_recipe();
     the_recipe_page_lists_the_shown_recipes();
     the_recipe_page_marks_a_missing_effect();
     the_recipe_page_shows_recipe_tiles();

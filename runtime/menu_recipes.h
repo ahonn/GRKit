@@ -32,7 +32,8 @@
        the list has the mark. After the last recipe, it returns to the
        Recipes page.
    - Save Settings adds a recipe that is on, then opens the keyboard with
-     its name. Its row shows the number of recipes that are on and the most
+     its name. OK keeps the recipe; MENU on the keyboard takes it back
+     (recipe_save_left). Its row shows the number of recipes that are on and the most
      of them, and while no recipe can be on, OK does nothing.
    - Without a recipe, the page has Enable and Save Settings. The undo
      steps show only in ADJ.
@@ -187,8 +188,11 @@ static const u16 *save_row_text(volatile u32 *h,u32 value) {
     return (const u16 *)to;
 }
 /* The return from the keyboard that names the new recipe e: the text of an
-   OK. MENU keeps the automatic name. */
-static void recipe_named(u32 e) { recipe_keyboard_name(menu_header(),e); }
+   OK. MENU takes the recipe back. */
+static void recipe_named(u32 e) {
+    volatile u32 *h=menu_header();
+    if(e<recipe_entries(h) && !recipe_save_left(h,e)) recipe_keyboard_name(h,e);
+}
 /* OK on Save Settings: the keyboard with the name of the new recipe, which
    returns to the page, or 0 when the page stays: no recipe can be on
    (recipe_save), or another use holds the keyboard. */

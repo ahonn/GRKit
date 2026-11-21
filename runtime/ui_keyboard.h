@@ -26,6 +26,11 @@
    The includer is runtime/menu.c, after runtime/ui.h. */
 #define UI_KEYBOARD_ARMED 1U
 #define UI_KEYBOARD_SHOWN 2U
+/* UI_KEYBOARD_RESULT: 0 before the keyboard ends, or when it never showed;
+   UI_KEYBOARD_OK after OK, with the text; UI_KEYBOARD_LEFT when the person
+   left a keyboard that showed without OK, such as with MENU. */
+#define UI_KEYBOARD_OK 1U
+#define UI_KEYBOARD_LEFT 2U
 /* The text that the keyboard starts with for `text`, in `to`: its
    printable ASCII without the spaces at both ends, at most `limit`
    characters, then a NUL. */
@@ -73,8 +78,13 @@ static u32 ui_keyboard_borrowed(volatile u32 *h) { return ui_word(h,UI_KEYBOARD)
 /* The text of an OK on the keyboard, during the call of back or the return
    to the MENU page, else 0. */
 static const volatile u8 *ui_keyboard_result(volatile u32 *h) {
-    if(!h[GRKIT_HOST_SERVICES/4] || !ui_word(h,UI_KEYBOARD_RESULT)[0]) return 0;
+    if(!h[GRKIT_HOST_SERVICES/4] || ui_word(h,UI_KEYBOARD_RESULT)[0]!=UI_KEYBOARD_OK) return 0;
     return (const volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
+}
+/* Whether the person left the keyboard without OK, during the call of back
+   or done. A keyboard that another use held never showed: not left. */
+static u32 ui_keyboard_left(volatile u32 *h) {
+    return h[GRKIT_HOST_SERVICES/4] && ui_word(h,UI_KEYBOARD_RESULT)[0]==UI_KEYBOARD_LEFT;
 }
 /* Whether OK on the keyboard gave the text that it started with for
    `text`: the person did not change it. */
@@ -107,6 +117,8 @@ static void ui_keyboard_change(volatile u32 *h,u32 id) {
     if(!h[GRKIT_HOST_SERVICES/4] || id==KEYBOARD_CONTROLLER) return;
     state=ui_word(h,UI_KEYBOARD)[0];
     ui_word(h,UI_KEYBOARD)[0]=0;
+    /* OK cleared the state, so a keyboard that still shows was left. */
+    if(state==UI_KEYBOARD_SHOWN) ui_word(h,UI_KEYBOARD_RESULT)[0]=UI_KEYBOARD_LEFT;
     /* The return from a keyboard that a page of MENU opened. */
     done=ui_word(h,UI_KEYBOARD_DONE)[0];
     ui_word(h,UI_KEYBOARD_DONE)[0]=0;
@@ -147,7 +159,7 @@ A32_ENTRY u32 menu_keyboard_text_out(u32 settings,u32 text) {
     to=(volatile u8 *)ui_word(h,UI_KEYBOARD_TEXT);
     for(i=0;i<ui_keyboard_limit(h) && BYTE(text,i);++i) to[i]=BYTE(text,i);
     to[i]=0;
-    ui_word(h,UI_KEYBOARD_RESULT)[0]=1;
+    ui_word(h,UI_KEYBOARD_RESULT)[0]=UI_KEYBOARD_OK;
     ui_word(h,UI_KEYBOARD)[0]=0;
     return 1;
 }
