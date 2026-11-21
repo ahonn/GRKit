@@ -26,7 +26,7 @@ export function HomePage({ initialLanguage }: { initialLanguage: Language }) {
         </main>
         <Footer strings={t} language={language} />
       </div>
-      <AppPromo strings={t} />
+      <AppPromo strings={t} language={language} />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { siteUrl } from '../catalog';
 import { LANGUAGES, type Language, type Strings } from '../i18n';
 import { fastbootPath, installPath, LANGUAGE_PATHS, resourcesPath, type Page } from '../languagePage';
-import { guideUrl, REPOSITORY } from '../links';
+import { grSnapUrl, guideUrl, REPOSITORY } from '../links';
 
 /** The UserJot board for feature ideas and votes. A plain link, so the page loads nothing from UserJot. */
 export const FEATURE_BOARD = 'https://grkit.userjot.com';
@@ -113,6 +113,7 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
         { href: FEATURE_BOARD, label: t.suggestFeature },
         { href: PHOTO_FORM, label: t.sharePhotos },
         { href: DONATE, label: t.donate },
+        { href: grSnapUrl(language, 'footer'), label: 'GR Snap' },
       ],
     },
     {

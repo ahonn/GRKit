@@ -649,6 +649,11 @@ export function isAppleMobileDevice(device: DeviceNavigator): boolean {
   return device.platform === 'MacIntel' && device.maxTouchPoints > 1;
 }
 
+/** Whether the page runs on an Android phone or tablet. */
+export function isAndroidDevice(device: DeviceNavigator): boolean {
+  return /Android/.test(device.userAgent);
+}
+
 /**
  * The hint about writing to a card: on a phone or a tablet, where no browser can, use a
  * computer (`computer`); on a computer whose browser cannot, such as Safari or Firefox, use Chrome

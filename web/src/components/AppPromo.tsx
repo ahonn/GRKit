@@ -1,19 +1,32 @@
 import { useState, useSyncExternalStore } from 'react';
-import { isAppleMobileDevice, type DeviceNavigator } from '../card';
-import type { Strings } from '../i18n';
+import { isAndroidDevice, isAppleMobileDevice, type DeviceNavigator } from '../card';
+import type { Language, Strings } from '../i18n';
 import { LANDING_HERO } from '../landing';
+import { grSnapUrl } from '../links';
 
 /** GR Snap on the App Store. GR Snap is an iOS app by the same author as GRKit. */
 const APP_URL = 'https://apps.apple.com/app/gr-snap-ricoh-gr-wireless/id6768040383';
-const CLOSED_KEY = 'grkit.appPromo';
 
-/** Shown on an iPhone or an iPad until the user closes it. */
-function initiallyShown(): boolean {
-  if (typeof navigator === 'undefined' || !isAppleMobileDevice(navigator as DeviceNavigator)) return false;
+/**
+ * The device the bar is for: an iPhone or an iPad gets the App Store, an Android device the GR Snap
+ * site, where GR Snap looks for Android testers. Each has its own closed state.
+ */
+type Platform = 'ios' | 'android';
+const CLOSED_KEYS: Readonly<Record<Platform, string>> = {
+  ios: 'grkit.appPromo',
+  android: 'grkit.appPromoAndroid',
+};
+
+/** The platform of this device while the user has not closed its bar, or null. */
+function initialPlatform(): Platform | null {
+  if (typeof navigator === 'undefined') return null;
+  const device = navigator as DeviceNavigator;
+  const platform = isAppleMobileDevice(device) ? 'ios' : isAndroidDevice(device) ? 'android' : null;
+  if (!platform) return null;
   try {
-    return localStorage.getItem(CLOSED_KEY) !== 'closed';
+    return localStorage.getItem(CLOSED_KEYS[platform]) === 'closed' ? null : platform;
   } catch {
-    return true;
+    return platform;
   }
 }
 
@@ -37,27 +50,37 @@ function pastHero(): boolean {
 }
 
 /**
- * A bar at the bottom of the screen that links to GR Snap on the App Store, on an iPhone or an iPad
- * until the user closes it.
+ * A bar at the bottom of the screen that links to GR Snap, on an iPhone, an iPad or an Android
+ * device until the user closes it.
  */
-export function AppPromo({ strings }: { strings: Strings }) {
-  const [shown, setShown] = useState(initiallyShown);
-  if (!shown) return null;
-  return <PromoBar strings={strings} onClose={() => setShown(false)} />;
+export function AppPromo({ strings, language }: { strings: Strings; language: Language }) {
+  const [platform, setPlatform] = useState(initialPlatform);
+  if (!platform) return null;
+  return <PromoBar strings={strings} language={language} platform={platform} onClose={() => setPlatform(null)} />;
 }
 
 /**
  * The bar, which waits until the landing hero scrolls away, so it does not compete with the install
  * action or cover the film looks. It follows the scroll only while it can show.
  */
-function PromoBar({ strings, onClose }: { strings: Strings; onClose: () => void }) {
+function PromoBar({
+  strings,
+  language,
+  platform,
+  onClose,
+}: {
+  strings: Strings;
+  language: Language;
+  platform: Platform;
+  onClose: () => void;
+}) {
   const past = useSyncExternalStore(subscribeScroll, pastHero, () => false);
   if (!past) return null;
 
   const close = () => {
     onClose();
     try {
-      localStorage.setItem(CLOSED_KEY, 'closed');
+      localStorage.setItem(CLOSED_KEYS[platform], 'closed');
     } catch {
       // Without storage, the bar comes back on the next visit.
     }
@@ -70,11 +93,14 @@ function PromoBar({ strings, onClose }: { strings: Strings; onClose: () => void 
       <aside className="app-promo" aria-label="GR Snap">
         <img src="/gr-snap.png" alt="" width="40" height="40" />
         <div className="app-promo-text">
-          <strong>GR Snap</strong>
+          <strong>
+            GR Snap
+            {platform === 'android' && <em className="app-promo-tag">{strings.appPromoBeta}</em>}
+          </strong>
           <span>{strings.appPromo}</span>
           <small>{strings.appPromoMaker}</small>
         </div>
-        <a className="button small primary" href={APP_URL}>
+        <a className="button small primary" href={platform === 'ios' ? APP_URL : grSnapUrl(language, 'android-bar')}>
           {strings.appPromoOpen}
         </a>
         <button type="button" className="app-promo-close" aria-label={strings.appPromoClose} onClick={close}>

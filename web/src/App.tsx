@@ -13,6 +13,7 @@ import {
   suggestCardHint,
   cardBuilds,
   cardModules,
+  isMobileDevice,
   pickCard,
   planChanges,
   readFile,
@@ -24,6 +25,7 @@ import {
   writeFiles,
   type CardChanges,
   type CardDirectory,
+  type DeviceNavigator,
 } from './card';
 import { allowCard, forgetLastCard, saveLastCard } from './cardStore';
 import {
@@ -83,9 +85,9 @@ import { ShutdownSection } from './components/ShutdownSection';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { FastbootHint } from './components/FastbootHint';
 import { RichText } from './components/RichText';
-import { DONATE, FEATURE_BOARD, Footer, Masthead, PHOTO_FORM, RELEASE_URL, SUPPORT_FORM } from './components/SiteChrome';
+import { FEATURE_BOARD, Footer, Masthead, RELEASE_URL, SUPPORT_FORM } from './components/SiteChrome';
 import { TermsNote } from './components/TermsNote';
-import { guideUrl } from './links';
+import { grSnapUrl, guideUrl } from './links';
 import { fastbootPath, installPath } from './languagePage';
 import { loadFonts } from './fonts';
 import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails } from './import/library';
@@ -216,6 +218,8 @@ export function InstallPage({
   // Without an app browser, the page tells how to write to the card: on a computer from a phone,
   // or in Chrome or Edge from another computer browser.
   const cardHintKind = suggestCardHint();
+  // GR Snap is a phone app: the page names it on a computer, where the phone is not in use.
+  const onComputer = typeof navigator !== 'undefined' && !isMobileDevice(navigator as DeviceNavigator);
   const camera = CAMERAS.find((item) => item.key === cameraKey) ?? CAMERAS[0]!;
   const support = camera.support;
   const targets = support?.targets;
@@ -946,29 +950,34 @@ export function InstallPage({
   // the fast-boot firmware there.
   const fastbootHint = camera.fastboot ? <FastbootHint text={t.fastbootHint} href={fastbootPath(language)} /> : null;
 
+  // After a download or a card write: the problem report, which the install may need, and feature
+  // ideas, in one row. Photo sharing and the donation wait for the footer.
+  // On a computer, GR Snap follows, as the phone bar shows it.
   const packageLinks = (
-    <ul className="package-links">
-      <li>
-        <a className="button" href={FEATURE_BOARD}>
-          {t.suggestFeature}
+    <>
+      <ul className="package-links">
+        <li>
+          <a className="button small" href={SUPPORT_FORM}>
+            {t.reportProblem}
+          </a>
+        </li>
+        <li>
+          <a className="button small" href={FEATURE_BOARD}>
+            {t.suggestFeature}
+          </a>
+        </li>
+      </ul>
+      {onComputer && (
+        <a className="package-app" href={grSnapUrl(language, 'card-done')}>
+          <img src="/gr-snap.png" alt="" width="32" height="32" />
+          <span>
+            <strong>GR Snap</strong> <small>{t.appPromoMaker}</small>
+            <br />
+            {t.grSnapNote}
+          </span>
         </a>
-      </li>
-      <li>
-        <a className="button" href={SUPPORT_FORM}>
-          {t.reportProblem}
-        </a>
-      </li>
-      <li>
-        <a className="button" href={PHOTO_FORM}>
-          {t.sharePhotos}
-        </a>
-      </li>
-      <li>
-        <a className="button" href={DONATE}>
-          {t.donate}
-        </a>
-      </li>
-    </ul>
+      )}
+    </>
   );
 
   return (
@@ -1289,7 +1298,8 @@ export function InstallPage({
                 >
                   {t.download}
                 </button>
-                <TermsNote text={t.termsNote} href={guideUrl('TERMS', language)} />
+                {/* When the package is ready, the terms line starts with the ready status. */}
+                {build.state !== 'ready' && <TermsNote text={t.termsNote} href={guideUrl('TERMS', language)} />}
                 <div aria-live="polite">
                   {plan.visible.length === 0 && <p className="status error">{t.noModules}</p>}
                   {build.state === 'building' && (
@@ -1301,7 +1311,9 @@ export function InstallPage({
                           : t.building}
                     </p>
                   )}
-                  {build.state === 'ready' && <p className="status">{t.ready}</p>}
+                  {build.state === 'ready' && (
+                    <TermsNote text={t.termsNoteReady} href={guideUrl('TERMS', language)} lead={t.ready} />
+                  )}
                   {build.state === 'failed' && <p className="status error">{t.buildError}</p>}
                 </div>
                 {build.state === 'ready' && packageLinks}

@@ -6,6 +6,7 @@ import {
   cardModules,
   hasChanges,
   cardHint,
+  isAndroidDevice,
   isAppleMobileDevice,
   isMobileDevice,
   parseList,
@@ -581,6 +582,11 @@ describe('isMobileDevice', () => {
     expect(isAppleMobileDevice(device(SAFARI, 'MacIntel', 5))).toBe(true);
     expect(isAppleMobileDevice(device(ANDROID, 'Linux armv8l', 5, true))).toBe(false);
     expect(isAppleMobileDevice(device(SAFARI, 'MacIntel'))).toBe(false);
+  });
+  it('names Android devices apart from iPhones and computers', () => {
+    expect(isAndroidDevice(device(ANDROID, 'Linux armv8l', 5, true))).toBe(true);
+    expect(isAndroidDevice(device(IPHONE, 'iPhone', 5))).toBe(false);
+    expect(isAndroidDevice(device(LINUX, 'Linux x86_64', 0, false))).toBe(false);
   });
 
   it('points a phone or a tablet to a computer, and another computer browser to Chrome or Edge', () => {

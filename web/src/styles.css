@@ -248,7 +248,7 @@ label.download[aria-disabled='true'] {
   cursor: pointer;
 }
 
-/* The GR Snap bar on an iPhone or an iPad. The bar stays above the home indicator, and the
+/* The GR Snap bar on an iPhone, an iPad or an Android device. The bar stays above the home indicator, and the
    space element keeps the end of the page clear of it. The bar is 74px high with three lines of
    text, and the space leaves room for the description to wrap to a second line. */
 .app-promo {
@@ -290,6 +290,17 @@ label.download[aria-disabled='true'] {
 
 .app-promo-text span {
   color: var(--muted);
+}
+
+/* "Android beta" after the GR Snap name. */
+.app-promo-tag {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--ink);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 400;
+  vertical-align: 2px;
 }
 
 .app-promo-text small {
@@ -1801,21 +1812,57 @@ td input[type='checkbox'] {
   gap: 12px;
 }
 
-/* Links under Download, styled as the footer links. */
+/* The community links after a download or a card write: one row of equal buttons, as wide as
+   the download button at most. A long label wraps inside its button. */
 .package-links {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+  max-width: 320px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* The links look like the other buttons of the site. */
 .package-links .button {
-  display: inline-flex;
+  display: flex;
+  justify-content: center;
   align-items: center;
+  height: 100%;
+  padding: 4px 8px;
+  line-height: 1.3;
+  text-align: center;
   text-decoration: none;
+}
+
+/* GR Snap under the community links, on a computer: the icon and two lines, as the phone bar has
+   them. The whole block is the link; only the name is underlined. */
+.package-app {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 320px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+}
+
+.package-app img {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
+}
+
+.package-app strong {
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: underline;
+}
+
+.package-app small {
+  font-size: 12px;
 }
 
 .steps {
