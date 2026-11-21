@@ -224,6 +224,21 @@
    letter, is 0. */
 #define CONTENTS_HANDLE 0x24
 #define CONTENTS_PATH 0x30
+/* Playback of one photo (runtime/playback_info.h): the ID of its controller,
+   the slot of the controller in the controller factory
+   (FW_CONTROLLER_FACTORY), which keeps it after playback ends, and its
+   display, which DISP turns: PLAYBACK_DETAIL shows the detailed information,
+   whose page, 0 or PLAYBACK_SECOND_PAGE, follows in the next byte. Its
+   canvas is the word at ADJ_CANVAS of the controller. */
+#define PLAYBACK_SINGLE 0x4000001U
+#define PLAYBACK_FACTORY_SLOT 0xc
+#define PLAYBACK_DISPLAY 0x306
+#define PLAYBACK_DETAIL 2U
+#define PLAYBACK_SECOND_PAGE 1U
+/* The list of GRKit Info in Playback on the second page (runtime/viewfinder.h:
+   playback_paint): its columns, first right of the thumbnail and below the copyright information, then below the thumbnail, each as its left, its top, its
+   rows, and its width. */
+#define PLAYBACK_INFO_COLUMNS {236,132,6,464},{16,224,4,212}
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */

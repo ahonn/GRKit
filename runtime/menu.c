@@ -1421,7 +1421,7 @@ static u32 playback_icon(volatile u32 *h,u32 value) {
     u32 code=(value+0x100)&0xffff, i;
     if(value>>16!=1 || !(code&0x8000)) return 0;
     for(i=0;i<h[GRKIT_HOST_COUNT/4];++i)
-        if(*(volatile u16 *)(h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE+GRKIT_RECORD_CODE)==code)
+        if(HALF(h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE,GRKIT_RECORD_CODE)==code)
             return 0x8000+i;
     return 0;
 }
@@ -1429,6 +1429,7 @@ static u32 playback_icon(volatile u32 *h,u32 value) {
 u32 menu_playback_private(void) {
     return playback_icon(menu_header(),WORD(CALL0(FW_PLAYBACK_METADATA)(),METADATA_TONE));
 }
+#include "playback_info.h"
 _Static_assert(GRKIT_ICONS_PER_CHUNK==40 && (GRKIT_HOST_ICON_CHUNKS_WORDS*40)*1639U>>16==GRKIT_HOST_ICON_CHUNKS_WORDS*40/40,
                "The module tile chunk uses slot / 40");
 /* IDs stay in transient private widgets and never enter native settings. */

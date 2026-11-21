@@ -39,7 +39,8 @@ static __attribute__((unused)) u32 xmp_ifd_value(const volatile u8 *tiff, u32 si
     u32 count, i, entry, type;
     if (size < 2 || ifd > size - 2) return 0;
     count = xmp_u16(tiff + ifd, little);
-    if (count > (size - ifd - 2) / 12) return 0;
+    /* A product, not a division: the menu code links no division helper. */
+    if (count * 12U > size - ifd - 2) return 0;
     for (i = 0; i < count; ++i) {
         entry = ifd + 2 + i * 12;
         if (xmp_u16(tiff + entry, little) != tag) continue;

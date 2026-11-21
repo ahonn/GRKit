@@ -42,7 +42,8 @@
      (install_dial_sets); a set with more pairs than the header holds is
      damaged and stays out. The file also holds a copy of the switch, Enable
      at Start, Distance Unit, Uncropped RAW, Battery in Simple Display,
-     Custom Shutdown Screen, and Shutdown Screen Text (runtime/manage.h: manage_copy), which
+     Custom Shutdown Screen, Shutdown Screen Text, and GRKit Info in Playback
+     (runtime/manage.h: manage_copy), which
      decides them before the main state file (read_manage_copy). */
 #include "recipe_id.h"
 static const char recipes_state_path[] = RECIPES_STATE_PATH, recipes_state_tmp_path[] = RECIPES_STATE_TMP_PATH;
@@ -314,8 +315,8 @@ static void install_dial_sets(u32 base)
 }
 
 /* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Shutdown Screen, and Shutdown Screen
-   Text in the file
+   Battery in Simple Display, Custom Shutdown Screen, Shutdown Screen Text,
+   and GRKit Info in Playback in the file
    of the user modes decides them instead of the main state file: the core
    writes the copy with each change of them, and the loader never holds that
    file, so the copy is never older. The main state file can be: the core
@@ -329,13 +330,15 @@ static void read_manage_copy(void)
 {
     static const char *const keys[GRKIT_MANAGE_COPY_WORDS] = {MANAGE_SWITCH_KEY, MANAGE_START_KEY, MANAGE_UNIT_KEY,
                                                                MANAGE_RAW_KEY, MANAGE_BATTERY_KEY,
-                                                               MANAGE_GOODBYE_KEY, MANAGE_GOODBYE_TEXT_KEY};
+                                                               MANAGE_GOODBYE_KEY, MANAGE_GOODBYE_TEXT_KEY,
+                                                               MANAGE_PLAYBACK_INFO_KEY};
     static const u32 values[GRKIT_MANAGE_COPY_WORDS] = {2U, MANAGE_START_VALUES, MANAGE_UNIT_VALUES, MANAGE_RAW_VALUES,
                                                         MANAGE_BATTERY_VALUES, MANAGE_GOODBYE_VALUES,
-                                                        MANAGE_GOODBYE_TEXT_VALUES};
+                                                        MANAGE_GOODBYE_TEXT_VALUES, MANAGE_PLAYBACK_INFO_VALUES};
     _Static_assert(GRKIT_MANAGE_COPY_SWITCH == 0U && GRKIT_MANAGE_COPY_START == 1U && GRKIT_MANAGE_COPY_UNIT == 2U &&
                        GRKIT_MANAGE_COPY_RAW == 3U && GRKIT_MANAGE_COPY_BATTERY == 4U &&
-                       GRKIT_MANAGE_COPY_GOODBYE == 5U && GRKIT_MANAGE_COPY_GOODBYE_TEXT == 6U,
+                       GRKIT_MANAGE_COPY_GOODBYE == 5U && GRKIT_MANAGE_COPY_GOODBYE_TEXT == 6U &&
+                       GRKIT_MANAGE_COPY_PLAYBACK_INFO == 7U,
                    "the keys follow the words of the copy");
     long n = read_text(dial_sets_path, recipes_text, sizeof(recipes_text));
     if (n < 0) n = read_text(dial_sets_tmp_path, recipes_text, sizeof(recipes_text));
@@ -347,8 +350,8 @@ static void read_manage_copy(void)
     }
 }
 /* Write the copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Shutdown Screen, and Shutdown Screen
-   Text into the
+   Battery in Simple Display, Custom Shutdown Screen, Shutdown Screen Text,
+   and GRKit Info in Playback into the
    header: the values of this start in `table`, which apply_state restored,
    for the handles of the module list. No count of changes moves, so the
    file of the user modes saves only after a change on the camera. Without a

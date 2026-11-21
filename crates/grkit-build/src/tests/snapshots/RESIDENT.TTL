@@ -5,7 +5,7 @@ if result = 0 foldercreate 'C:\GRKIT'
 foldersearch 'C:\GRKIT'
 if result = 0 stateok = 0
 legacy = 0
-export = registry[1630]
+export = registry[1631]
 if modulewords <> 0 goto resident_export
 if export <> 0 goto resident_export
 legacy = 1
@@ -241,7 +241,7 @@ filecreate sfh 'C:\GRKIT\USERMODE.TMP'
 if sfh < 0 goto save_usermode_end
 rindex = 0
 :set_word
-if rindex >= 617 goto set_word_end
+if rindex >= 618 goto set_word_end
 rvalue = registry[1013 + rindex]
 if rvalue <= 0 goto set_word_next
 if rvalue > 999999999 goto set_word_next
@@ -288,7 +288,7 @@ return
 captured = 0
 if legacy <> 0 goto legacy_capture
 if modulewords < 457 return
-pbase = registry[1630]
+pbase = registry[1631]
 if pbase < 2 return
 pmax = modulewords - 457
 if pbase > pmax return
@@ -343,7 +343,7 @@ rest = offset % 4352
 if rest <> 0 goto legacy_values
 index = offset / 4352
 if index >= pcount goto legacy_values
-value0 = registry[1636 + index * 1088 + 446] and 65535
+value0 = registry[1637 + index * 1088 + 446] and 65535
 :legacy_values
 value1 = registry[52]
 value2 = registry[12]
@@ -357,10 +357,10 @@ value9 = registry[273]
 value10 = registry[274]
 return
 :legacy_parameters
-pcode = registry[1636 + pindex * 1088 + 446] and 32767
-pw0 = registry[1636 + pindex * 1088 + 459]
-pw1 = registry[1636 + pindex * 1088 + 460]
-pw2 = registry[1636 + pindex * 1088 + 461]
+pcode = registry[1637 + pindex * 1088 + 446] and 32767
+pw0 = registry[1637 + pindex * 1088 + 459]
+pw1 = registry[1637 + pindex * 1088 + 460]
+pw2 = registry[1637 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -389,7 +389,7 @@ pvalue = pvalue * 9 + pdigit
 pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
-ptone = (registry[1636 + pindex * 1088 + 463] >> 16) and 255
+ptone = (registry[1637 + pindex * 1088 + 463] >> 16) and 255
 return
 :profile_watch
 ppolls = 0

@@ -79,11 +79,11 @@ typedef struct {
     u16 shorter[DETAIL_SHORT_UNITS];
     u32 m;
 } DetailItem;
-/* The items of a recipe while they are written into `base`, the details
-   block of the services. */
+/* The items while they are written into `base`, a details block of the
+   services, which holds `max` items. */
 typedef struct {
     volatile u32 *base;
-    u32 n;
+    u32 n, max;
 } DetailList;
 
 static void detail_start(DetailItem *item,u32 group,u32 name,u32 icon) {
@@ -125,12 +125,13 @@ static u32 detail_label(char *to,const char *label,u32 off) {
     to[i]=0;
     return 1;
 }
-/* Write the item into the list. Items after DETAIL_ITEMS_MAX are left out. */
+/* Write the item into the list. Items after the most of the list are left
+   out. */
 static void detail_put(DetailList *list,const DetailItem *item) {
     volatile u32 *at;
     volatile u16 *text;
     u32 i;
-    if(list->n>=DETAIL_ITEMS_MAX) return;
+    if(list->n>=list->max) return;
     at=list->base+(DETAIL_ITEMS+list->n*DETAIL_ITEM_SIZE)/4U;
     at[DETAIL_ITEM_ICON/4]=item->icon;
     at[DETAIL_ITEM_META/4]=item->meta;
@@ -364,7 +365,7 @@ static void detail_exposure(DetailList *list,const u32 *w) {
    and give their number. The items of the modules have no icon yet. */
 static u32 recipe_details(volatile u32 *h,const u32 *w,volatile u32 *base) {
     DetailList list;
-    list.base=base; list.n=0;
+    list.base=base; list.n=0; list.max=DETAIL_ITEMS_MAX;
     detail_look(h,&list,w);
     detail_levels_of(h,&list,w);
     detail_native(&list,w);

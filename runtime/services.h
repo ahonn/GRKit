@@ -395,7 +395,23 @@
 #define SERVICES_DNG_CROP (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
 #define DNG_CROP_ENTRY 0U
 #define DNG_CROP_AT 4U
-#define SERVICES_SIZE (SERVICES_DNG_CROP + 8U)
+/* GRKit Info in Playback (runtime/playback_info.h): the firmware timer of
+   its poll in the App task, 0 when none runs; the playback controller while
+   playback shows and the setting is On, else 0, which the live view reads;
+   whether the live view painted the list in the last draw of the canvas of
+   playback; the path of the photo whose items follow, NUL-terminated, or
+   an empty path; then the items of that photo, as the details block holds
+   them: their number, then PLAYBACK_ITEMS_MAX items. */
+#define SERVICES_PLAYBACK (SERVICES_DNG_CROP + 8U)
+#define PLAYBACK_TIMER 0U
+#define PLAYBACK_CONTROLLER 4U
+#define PLAYBACK_PAINTED 8U
+#define PLAYBACK_PATH 12U
+#define PLAYBACK_PATH_BYTES 64U
+#define PLAYBACK_DETAILS (PLAYBACK_PATH + PLAYBACK_PATH_BYTES)
+#define PLAYBACK_ITEMS_MAX 8U
+#define PLAYBACK_SIZE (PLAYBACK_DETAILS + DETAIL_ITEMS + PLAYBACK_ITEMS_MAX * DETAIL_ITEM_SIZE)
+#define SERVICES_SIZE (SERVICES_PLAYBACK + PLAYBACK_SIZE)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

@@ -68,7 +68,13 @@
    Its setting, CORE.BYETEXT, follows Custom Shutdown Screen in the table. On,
    as the camera, is the default.
 
-   The header keeps a copy of these seven settings (GRKIT_HOST_MANAGE_COPY,
+   GRKit Info in Playback, the last row of Display Settings, lists the GRKit
+   settings of the photo that playback shows on the second page of its
+   detailed information (runtime/playback_info.h). Its setting, CORE.PBINFO,
+   follows Shutdown Screen Text in the table. On is the default; Off reads
+   no file and draws nothing.
+
+   The header keeps a copy of these eight settings (GRKIT_HOST_MANAGE_COPY,
    manage_copy), which the resident loader saves in the file of the user
    modes of the mode dial. On a user mode with a snapshot, the core holds
    the main state file (runtime/mode_dial.h), but not that file, so a change
@@ -105,6 +111,8 @@
 #define MANAGE_GOODBYE 36U
 /* The handle + 1 of CORE.BYETEXT, Shutdown Screen Text, or 0 without it. */
 #define MANAGE_GOODBYE_TEXT 40U
+/* The handle + 1 of CORE.PBINFO, GRKit Info in Playback, or 0 without it. */
+#define MANAGE_PLAYBACK_INFO 44U
 /* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
    CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
    The two settings hold the values of the page of the module after its
@@ -116,12 +124,12 @@
    (runtime/modules.h: choice_sequence), so the nibbles order each page with
    options: its MANAGE_OPTION_VALUES - 1 values after the first row but the
    last one, which follows. */
-#define MANAGE_ORDERS 44U
+#define MANAGE_ORDERS 48U
 #define MANAGE_ORDER_WORDS 2U
 #define MANAGE_ORDER_NIBBLES 7U
 #define MANAGE_ORDER_VALUES (MANAGE_ORDER_NIBBLES * MANAGE_ORDER_WORDS)
 #define MANAGE_ORDER_LIMIT (1U << 4U * MANAGE_ORDER_NIBBLES)
-#define MANAGE_HEADER 48U
+#define MANAGE_HEADER 52U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -198,6 +206,11 @@
 #define MANAGE_GOODBYE_TEXT_OFF 0U
 #define MANAGE_GOODBYE_TEXT_ON 1U
 #define MANAGE_GOODBYE_TEXT_VALUES 2U
+/* The setting of GRKit Info in Playback: 0 Off, 1 On, the default. */
+#define MANAGE_PLAYBACK_INFO_KEY "CORE.PBINFO"
+#define MANAGE_PLAYBACK_INFO_OFF 0U
+#define MANAGE_PLAYBACK_INFO_ON 1U
+#define MANAGE_PLAYBACK_INFO_VALUES 2U
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -343,8 +356,8 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
 /* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, Battery
-   in Simple Display, Custom Shutdown Screen, and Shutdown Screen Text in
-   their copy, each as its value + 1, after a change of one of them. A copy
+   in Simple Display, Custom Shutdown Screen, Shutdown Screen Text, and GRKit
+   Info in Playback in their copy, each as its value + 1, after a change of one of them. A copy
    that changes
    counts as a change of the file of the user modes, which the loader saves
    independently of the main state file. Off of the mode dial is not the
@@ -354,8 +367,9 @@ _Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
                MANAGE_RAW==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_RAW &&
                MANAGE_BATTERY==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY &&
                MANAGE_GOODBYE==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE &&
-               MANAGE_GOODBYE_TEXT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE_TEXT && GRKIT_MANAGE_COPY_SWITCH==0U &&
-               GRKIT_MANAGE_COPY_WORDS==7U, "The copy follows the handles of the module list");
+               MANAGE_GOODBYE_TEXT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE_TEXT &&
+               MANAGE_PLAYBACK_INFO==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_PLAYBACK_INFO && GRKIT_MANAGE_COPY_SWITCH==0U &&
+               GRKIT_MANAGE_COPY_WORDS==8U, "The copy follows the handles of the module list");
 static void manage_copy(volatile u32 *h) {
     u32 i, at, value, changed=0;
     if(!h[GRKIT_HOST_MANAGE/4]) return;
@@ -685,13 +699,35 @@ static void goodbye_text_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *goodbye_text_label(volatile u32 *h) { return text(h,TEXT_GOODBYE+1); }
+static u32 playback_info_handle(volatile u32 *h) {
+    return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_PLAYBACK_INFO) : 0;
+}
+/* Whether playback lists the GRKit settings of its photo. */
+static u32 playback_info_on(volatile u32 *h) {
+    u32 at=playback_info_handle(h);
+    return at && setting_value(h,at-1)==MANAGE_PLAYBACK_INFO_ON;
+}
+static void playback_info_set(volatile u32 *h,u32 value) {
+    u32 at=playback_info_handle(h);
+    if(at && value<MANAGE_PLAYBACK_INFO_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
+}
+static const u16 *playback_info_label(volatile u32 *h) { return text(h,TEXT_PLAYBACK_INFO); }
+static u32 playback_info_values(volatile u32 *h) { (void)h; return MANAGE_PLAYBACK_INFO_VALUES; }
+static const u16 *playback_info_value_text(volatile u32 *h,u32 value) {
+    return switch_value_text(h,value!=MANAGE_PLAYBACK_INFO_ON);
+}
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
 #define RAW_SETTING {raw_label,raw_values,raw_value_text,raw_value,raw_set}
 #define BATTERY_SETTING {battery_label,battery_values,battery_value_text,battery_simple,battery_set}
 #define GOODBYE_SETTING {goodbye_label,goodbye_values,goodbye_value_text,goodbye_custom,goodbye_set}
 #define GOODBYE_TEXT_SETTING {goodbye_text_label,goodbye_values,goodbye_value_text,goodbye_text_shown,goodbye_text_set}
-static const Setting core_settings[6]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING,GOODBYE_SETTING,
-    GOODBYE_TEXT_SETTING};
+#define PLAYBACK_INFO_SETTING \
+    {playback_info_label,playback_info_values,playback_info_value_text,playback_info_on,playback_info_set}
+static const Setting core_settings[7]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING,GOODBYE_SETTING,
+    GOODBYE_TEXT_SETTING,PLAYBACK_INFO_SETTING};
 #endif
 #endif

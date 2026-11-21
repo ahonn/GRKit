@@ -159,13 +159,14 @@ pub const DIAL_VALUE_ON: u32 = 0;
 pub const DIAL_VALUE_OFF: u32 = 1;
 pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
-/// A copy of seven settings of the core that no snapshot holds, in the file
+/// A copy of eight settings of the core that no snapshot holds, in the file
 /// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
 /// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
 /// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), Uncropped RAW
 /// (`MANAGE_COPY_RAW`), Battery in Simple Display (`MANAGE_COPY_BATTERY`),
-/// Shutdown Screen (`MANAGE_COPY_GOODBYE`), and Shutdown Screen Text
-/// (`MANAGE_COPY_GOODBYE_TEXT`), each as its value + 1, or 0 without a copy.
+/// Shutdown Screen (`MANAGE_COPY_GOODBYE`), Shutdown Screen Text
+/// (`MANAGE_COPY_GOODBYE_TEXT`), and GRKit Info in Playback
+/// (`MANAGE_COPY_PLAYBACK_INFO`), each as its value + 1, or 0 without a copy.
 pub const MANAGE_COPY_SWITCH: usize = 0;
 pub const MANAGE_COPY_START: usize = 1;
 pub const MANAGE_COPY_UNIT: usize = 2;
@@ -173,7 +174,8 @@ pub const MANAGE_COPY_RAW: usize = 3;
 pub const MANAGE_COPY_BATTERY: usize = 4;
 pub const MANAGE_COPY_GOODBYE: usize = 5;
 pub const MANAGE_COPY_GOODBYE_TEXT: usize = 6;
-pub const MANAGE_COPY_WORDS: usize = 7;
+pub const MANAGE_COPY_PLAYBACK_INFO: usize = 7;
+pub const MANAGE_COPY_WORDS: usize = 8;
 
 /// The immutable main-state export in the module array. Offsets are bytes.
 /// CORE follows state_keys(), which excludes the final CORE.RECIPE handle.
@@ -546,7 +548,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// which no position has, is the older value for each of them off.
     HOST_DIAL_SHARED_OFF: 4;
     /// The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-    /// Battery in Simple Display, Shutdown Screen, and Shutdown Screen Text,
+    /// Battery in Simple Display, Shutdown Screen, Shutdown Screen Text, and
+    /// GRKit Info in Playback,
     /// `MANAGE_COPY_WORDS`
     /// words (runtime/manage.h), right after
     /// HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
@@ -1324,7 +1327,8 @@ pub fn header() -> String {
     comment(
         &mut out,
         "The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, \
-         Battery in Simple Display, Shutdown Screen, and Shutdown Screen Text \
+         Battery in Simple Display, Shutdown Screen, Shutdown Screen Text, and \
+         GRKit Info in Playback \
          (GRKIT_HOST_MANAGE_COPY, \
          runtime/manage.h): each as its value + 1, or \
          0 without a copy. In the file of the sets, word w has the key \
@@ -1338,6 +1342,7 @@ pub fn header() -> String {
         ("BATTERY", MANAGE_COPY_BATTERY as u32),
         ("GOODBYE", MANAGE_COPY_GOODBYE as u32),
         ("GOODBYE_TEXT", MANAGE_COPY_GOODBYE_TEXT as u32),
+        ("PLAYBACK_INFO", MANAGE_COPY_PLAYBACK_INFO as u32),
         ("WORDS", MANAGE_COPY_WORDS as u32),
         ("KEY", crate::runtime::MANAGE_COPY_KEY),
     ] {

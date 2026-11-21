@@ -426,13 +426,28 @@ static u32 module_layers_on(volatile u32 *h) {
 #ifndef MENU_PREVIEW_INVALIDATE
 #define MENU_PREVIEW_INVALIDATE(view) CALL1(FW_VIEW_INVALIDATE)(view)
 #endif
+/* The status icon of the module of setting `setting` for `value`, as the
+   live view shows it, or 0. */
+static u32 detail_module_icon(volatile u32 *h,u32 setting,u32 value) {
+    u32 i, address, icon;
+    for(i=0;i<viewfinder_indicators(h);++i) {
+        address=INDICATOR_ENTRY(h,i)[0];
+        if(!address || services_suspended(h,address) || INDICATOR_WORD(address,0)<24 ||
+           INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
+        icon=INDICATOR_WORD(address,20);
+        if(!icon || MODULE_ICON_WORD(icon,0)<MODULE_ICON_SIZE || MODULE_ICON_WORD(icon,MODULE_ICON_SETTING)!=setting) continue;
+        icon=module_icon_row(h,icon,INDICATOR_ENTRY(h,i)[1],setting,value);
+        return icon!=GRKIT_ICON_OFF ? icon : 0;
+    }
+    return 0;
+}
 /* The settings of recipe e as the items of the details block
    (runtime/recipe_details.h), for the View page of MENU and the panel of
    ADJ (runtime/viewfinder.h). A module item gets the status icon of its
    module for its value, as the live view shows it, or none. */
 static void recipe_details_build(volatile u32 *h,u32 e) {
     volatile u32 *base=services_word(h,SERVICES_DETAILS), *item;
-    u32 w[GRKIT_RECIPE_WORDS], i, k, n, meta, setting, address, icon;
+    u32 w[GRKIT_RECIPE_WORDS], i, k, n, meta, setting, icon;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_words(h,e)[i];
     n=recipe_details(h,w,base);
     for(k=0;k<n;++k) {
@@ -440,16 +455,7 @@ static void recipe_details_build(volatile u32 *h,u32 e) {
         meta=item[DETAIL_ITEM_META/4];
         if(DETAIL_GROUP(meta)!=DETAIL_GROUP_MODULES) continue;
         setting=DETAIL_SETTING(meta)==DETAIL_GRAIN ? GRKIT_CORE_GRAIN : recipe_setting_handle(h,DETAIL_SETTING(meta)-1U);
-        for(i=0;i<viewfinder_indicators(h);++i) {
-            address=INDICATOR_ENTRY(h,i)[0];
-            if(!address || services_suspended(h,address) || INDICATOR_WORD(address,0)<24 ||
-               INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
-            icon=INDICATOR_WORD(address,20);
-            if(!icon || MODULE_ICON_WORD(icon,0)<MODULE_ICON_SIZE || MODULE_ICON_WORD(icon,MODULE_ICON_SETTING)!=setting) continue;
-            icon=module_icon_row(h,icon,INDICATOR_ENTRY(h,i)[1],setting,DETAIL_SETTING_VALUE(meta));
-            if(icon!=GRKIT_ICON_OFF) item[DETAIL_ITEM_ICON/4]=icon;
-            break;
-        }
+        if((icon=detail_module_icon(h,setting,DETAIL_SETTING_VALUE(meta)))!=0) item[DETAIL_ITEM_ICON/4]=icon;
     }
 }
 static void frame_preview_set(volatile u32 *h,u32 controller,u32 movie) {

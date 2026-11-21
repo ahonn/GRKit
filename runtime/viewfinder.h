@@ -514,12 +514,28 @@ static GRKIT_ICON_COMPACT u32 preview_canvas(volatile u32 *h) {
     u32 adj=h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4];
     return adj ? WORD(adj,ADJ_CANVAS) : 0;
 }
+/* The controller of playback whose canvas `canvas` is, or 0. */
+static GRKIT_ICON_COMPACT u32 playback_canvas(volatile u32 *h,u32 canvas) {
+    u32 c=h[GRKIT_HOST_SERVICES/4] && canvas ? services_word(h,SERVICES_PLAYBACK+PLAYBACK_CONTROLLER)[0] : 0;
+    return c && WORD(c,ADJ_CANVAS)==canvas ? c : 0;
+}
+static GRKIT_ICON_COMPACT u32 playback_second_page(u32 c) {
+    return WORD(c,CONTROLLER_ID)==PLAYBACK_SINGLE && BYTE(c,PLAYBACK_DISPLAY)==PLAYBACK_DETAIL &&
+           BYTE(c,PLAYBACK_DISPLAY+1)==PLAYBACK_SECOND_PAGE;
+}
+/* The canvas of playback draws in full on the second page of its detailed
+   information, and in the draw after the list showed, so that the list
+   (playback_paint) does not stay on another photo or page. */
+static GRKIT_ICON_COMPACT u32 playback_clears(volatile u32 *h,u32 canvas) {
+    u32 c=playback_canvas(h,canvas);
+    return c && (services_word(h,SERVICES_PLAYBACK+PLAYBACK_PAINTED)[0] || playback_second_page(c));
+}
 static GRKIT_ICON_COMPACT void prepare_canvas(volatile u32 *h,u32 canvas) {
     /* Canvas::Draw clears the full native bitmap before drawing its children.
        Use this path even for Off to remove the previous drawing on the next draw. */
     if((h[GRKIT_HOST_FRAME_CANVAS/4]==canvas &&
         (overlay_active(h) || h[GRKIT_HOST_FRAME_BITMAP/4])) ||
-       (canvas && preview_canvas(h)==canvas))
+       (canvas && preview_canvas(h)==canvas) || playback_clears(h,canvas))
         BYTE(canvas,0xa0)=1;
 }
 static GRKIT_ICON_COMPACT void viewfinder_prepare(u32 canvas) {
@@ -663,10 +679,18 @@ static GRKIT_ICON_COMPACT void panel_paint(volatile u32 *h,const Surface *s) {
 #define VIEW_PAGE_TOP 436U
 _Static_assert(VIEW_COLUMNS*VIEW_ROWS==DETAIL_PAGE_ITEMS,"a page of the View holds its columns");
 _Static_assert(DETAIL_ITEMS_MAX<=9U*DETAIL_PAGE_ITEMS,"the page number has one digit");
+/* An item of the View from `x`, `y`, until `right`: its icon, its name, and
+   its value below the name. */
+static GRKIT_ICON_COMPACT void view_item_paint(volatile u32 *h,const Surface *s,volatile u32 *item,u32 x,u32 y,u32 right) {
+    u32 pixels=detail_pixels(h,item[DETAIL_ITEM_ICON/4]), name=DETAIL_NAME(item[DETAIL_ITEM_META/4]);
+    if(pixels) panel_icon_paint(s,pixels,x,y+3U);
+    if(name && name<DETAIL_NAMES) small_text(s,detail_names[name],x+VIEW_TEXT,y,right,VIEW_NAME_SHADE);
+    overlay_text(s,detail_text(item,DETAIL_ITEM_VALUE),DETAIL_VALUE_UNITS,x+VIEW_TEXT,y+VIEW_VALUE_TOP,right);
+}
 static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
-    volatile u32 *base=services_word(h,SERVICES_DETAILS), *item;
+    volatile u32 *base=services_word(h,SERVICES_DETAILS);
     u32 n=base[DETAIL_COUNT/4], pages=detail_pages(n), page=base[DETAIL_VIEW_PAGE/4], i, end;
-    u32 x=VIEW_LEFT, y=VIEW_TOP, row=0, name, pixels, right;
+    u32 x=VIEW_LEFT, y=VIEW_TOP, row=0;
     u16 number[6];
     if(page>=pages) page=pages-1U;
     i=page*DETAIL_PAGE_ITEMS;
@@ -674,18 +698,44 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
     for(;i<end;++i,y+=VIEW_PITCH) {
         /* Down each column, then the next column. */
         if(row++==VIEW_ROWS) { row=1; x+=VIEW_COLUMN; y=VIEW_TOP; }
-        item=DETAIL_ITEM_AT(base,i);
-        right=x+VIEW_COLUMN-8U;
-        pixels=detail_pixels(h,item[DETAIL_ITEM_ICON/4]);
-        if(pixels) panel_icon_paint(s,pixels,x,y+3U);
-        name=DETAIL_NAME(item[DETAIL_ITEM_META/4]);
-        if(name && name<DETAIL_NAMES) small_text(s,detail_names[name],x+VIEW_TEXT,y,right,VIEW_NAME_SHADE);
-        overlay_text(s,detail_text(item,DETAIL_ITEM_VALUE),DETAIL_VALUE_UNITS,x+VIEW_TEXT,y+VIEW_VALUE_TOP,right);
+        view_item_paint(h,s,DETAIL_ITEM_AT(base,i),x,y,x+VIEW_COLUMN-8U);
     }
     if(pages<2U) return;
     /* DETAIL_ITEMS_MAX items give fewer than 10 pages. */
     number[0]=(u16)('1'+page); number[1]='/'; number[2]=(u16)('0'+pages); number[3]=0;
     overlay_text(s,number,4,VIEW_PAGE_RIGHT-overlay_text_width(number,4),VIEW_PAGE_TOP,VIEW_PAGE_RIGHT);
+}
+/* GRKit Info in Playback (runtime/playback_info.h): on the second page of
+   the detailed information of the playback of one photo, the items of the
+   photo as the View paints its items, down each column of
+   PLAYBACK_INFO_COLUMNS (build header), in the part of the page that the
+   camera leaves free. Only while the items belong to the photo that
+   playback opened: the poll reads a new photo after the camera shows it. */
+static const u16 playback_columns[][4]={PLAYBACK_INFO_COLUMNS};
+/* Whether the items belong to the photo that playback opened: the path of
+   the items has the drive of the card first, the path of the playback none. */
+static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
+    const volatile u8 *kept=(const volatile u8 *)services_word(h,SERVICES_PLAYBACK+PLAYBACK_PATH);
+    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), i;
+    if(!kept[0] || handle<0x40000000U || handle>0xbfffff00U) return 0;
+    for(i=1;i<PLAYBACK_PATH_BYTES;++i) {
+        if(kept[i]!=BYTE(handle,CONTENTS_PATH+i)) return 0;
+        if(!kept[i]) return 1;
+    }
+    return 0;
+}
+static GRKIT_ICON_COMPACT u32 playback_paint(volatile u32 *h,u32 c,u32 canvas,u32 bitmap) {
+    volatile u32 *base=services_word(h,SERVICES_PLAYBACK+PLAYBACK_DETAILS);
+    u32 n=base[DETAIL_COUNT/4], i, k, row, data;
+    Surface surface;
+    if(!n || !playback_second_page(c) || !playback_photo(h) || !(data=canvas_bitmap(canvas,bitmap))) return 0;
+    surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
+    for(i=0,k=0,row=0;i<n && k<sizeof(playback_columns)/sizeof(playback_columns[0]);++i) {
+        const u16 *at=playback_columns[k];
+        view_item_paint(h,&surface,DETAIL_ITEM_AT(base,i),at[0],at[1]+row*VIEW_PITCH,at[0]+at[3]-8U);
+        if(++row==at[2]) { row=0; ++k; }
+    }
+    return 1;
 }
 static GRKIT_ICON_COMPACT void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {
     u32 preview=h[GRKIT_HOST_FRAME_PREVIEW/4],ratio=FRAME_PREVIEW_RATIO(preview),data,area,composition;
@@ -752,6 +802,10 @@ static GRKIT_ICON_COMPACT void paint_after(volatile u32 *h,u32 canvas,u32 bitmap
         if(!full) return;
         surface.data=full; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
         view_paint(h,&surface);
+        return;
+    }
+    if((view=playback_canvas(h,canvas))!=0) {
+        services_word(h,SERVICES_PLAYBACK+PLAYBACK_PAINTED)[0]=playback_paint(h,view,canvas,bitmap);
         return;
     }
     if(canvas!=h[GRKIT_HOST_FRAME_CANVAS/4] || !owner) return;

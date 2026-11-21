@@ -283,6 +283,29 @@ static unsigned test_goodbye_file(const char *path, unsigned char *head, unsigne
     return goodbye_length;
 }
 #define GOODBYE_FILE(path, head, size, read) test_goodbye_file((path), (head), (size), (read))
+/* The photo that playback shows (runtime/playback_info.h): its path, its
+   file, its Image Control tag, and the controller of playback; the reads of
+   the file, the redraws of the canvas, and the timers of the poll. */
+static const char *playback_test_path;
+static unsigned char playback_test_file[8192];
+static unsigned playback_test_bytes, playback_test_tone, playback_test_controller;
+static unsigned playback_reads, playback_redraws, playback_timers;
+static unsigned test_playback_file(const unsigned char *path, unsigned offset, unsigned char *buf, unsigned size)
+{
+    unsigned n = offset < playback_test_bytes ? playback_test_bytes - offset : 0;
+    assert(!strcmp((const char *)path, playback_test_path));
+    ++playback_reads;
+    if (n > size) n = size;
+    memcpy(buf, playback_test_file + offset, n);
+    return n;
+}
+#define PLAYBACK_FILE(path, offset, buf, size) test_playback_file((path), (offset), (buf), (size))
+#define PLAYBACK_PATH_SHOWN(path) (strcpy((char *)(path), playback_test_path), 1U)
+#define PLAYBACK_TONE() (playback_test_tone)
+#define PLAYBACK_CONTROLLER_OF() (playback_test_controller)
+#define PLAYBACK_INVALIDATE(view) ((void)(view), ++playback_redraws)
+#define PLAYBACK_TIMER_START(ms) ((void)(ms), 0x20000U + ++playback_timers)
+#define PLAYBACK_BARRIER() ((void)0)
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 static void native_set_record(const char *const *argv)
@@ -2336,7 +2359,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 48, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 52, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -5540,6 +5563,111 @@ static void the_shutdown_screen_has_its_row(void)
     settings_memory[2 + 15 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
+/* GRKit Info in Playback is the row after Shutdown Screen Text, On by
+   default. A change saves, also in the copy of the file of the user modes. */
+static void the_playback_info_has_its_row(void)
+{
+    volatile u32 *h = test_header;
+    install_stock_tab(10, 3);
+    settings_memory[0] = 18;
+    settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_ON;
+    settings_memory[2 + 17 * 3 + 2] = MANAGE_PLAYBACK_INFO_VALUES;
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 16 + 1;
+    manage_memory[MANAGE_PLAYBACK_INFO / 4] = 17 + 1;
+    assert(display_rows(h) == 2 && display_row_setting(h, 1) == core_settings + 6);
+    assert(same(display_page_settings[1].label(h), "GRKit Info in Playback") &&
+           same(display_page_settings[1].value_text(h, 0), "Off") &&
+           same(display_page_settings[1].value_text(h, 1), "On") && display_page_settings[1].get(h));
+    display_page_settings[1].set(h, MANAGE_PLAYBACK_INFO_OFF);
+    assert(!playback_info_on(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_PLAYBACK_INFO] == 0 + 1);
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 0;
+    manage_memory[MANAGE_PLAYBACK_INFO / 4] = 0;
+    settings_memory[2 + 17 * 3 + 1] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
+/* A JPEG of `exif` bytes of Exif segment, then the XMP segment of `packet`,
+   or a quantization table without one, as the playback test file. */
+static void playback_test_jpeg(unsigned exif, const char *packet)
+{
+    static const char namespace[] = "http://ns.adobe.com/xap/1.0/";
+    unsigned at = 2 + 2 + exif, n = packet ? (unsigned)strlen(packet) : 0;
+    memset(playback_test_file, 0, sizeof playback_test_file);
+    memcpy(playback_test_file, "\xff\xd8\xff\xe1", 4);
+    playback_test_file[4] = (unsigned char)(exif >> 8);
+    playback_test_file[5] = (unsigned char)exif;
+    memcpy(playback_test_file + 6, "Exif", 4);
+    playback_test_file[at] = 0xff;
+    playback_test_file[at + 1] = packet ? 0xe1 : 0xdb;
+    playback_test_file[at + 2] = (unsigned char)((2 + sizeof namespace + n) >> 8);
+    playback_test_file[at + 3] = (unsigned char)(2 + sizeof namespace + n);
+    memcpy(playback_test_file + at + 4, namespace, sizeof namespace);
+    memcpy(playback_test_file + at + 4 + sizeof namespace, packet ? packet : "", n);
+    playback_test_bytes = at + 4 + sizeof namespace + n;
+}
+/* Item i of the list of playback: its name and its value. */
+static int playback_item(u32 i, u32 name, const char *value)
+{
+    volatile u32 *item = DETAIL_ITEM_AT(services_word(test_header, SERVICES_PLAYBACK + PLAYBACK_DETAILS), i);
+    return DETAIL_NAME(item[DETAIL_ITEM_META / 4]) == name &&
+           same((const u16 *)(item + DETAIL_ITEM_VALUE / 4), value);
+}
+/* The second page of the detailed information of playback lists the GRKit
+   settings of the photo: the look of its GRKit code, then the settings that
+   grkit:State holds on, with the text of their properties. The poll reads
+   each photo once, at most twice, and a photo of an older GRKit gives its
+   look only, a photo without GRKit nothing. Off reads nothing. */
+static void playback_lists_the_grkit_settings_of_a_photo(void)
+{
+    volatile u32 *h = test_header, *count;
+    u32 c = TEST_OBJECTS + 8 * GRKIT_RECORD_SIZE, i;
+    install_stock_tab(10, 3);
+    count = services_word(h, SERVICES_PLAYBACK + PLAYBACK_DETAILS);
+    h[GRKIT_HOST_COUNT / 4] = 2;
+    h[GRKIT_HOST_RECORDS / 4] = TEST_OBJECTS;
+    HALF(TEST_OBJECTS + GRKIT_RECORD_SIZE, GRKIT_RECORD_CODE) = 0x8123;
+    for (i = 0; "Portra"[i]; ++i) HALF(TEST_OBJECTS + GRKIT_RECORD_SIZE, GRKIT_RECORD_NAME + 2 * i) = (u16)"Portra"[i];
+    settings_memory[0] = 18;
+    settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_ON;
+    settings_memory[2 + 17 * 3 + 2] = MANAGE_PLAYBACK_INFO_VALUES;
+    manage_memory[MANAGE_PLAYBACK_INFO / 4] = 17 + 1;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = PLAYBACK_SINGLE;
+    WORD(c, CONTROLLER_ID) = PLAYBACK_SINGLE;
+    WORD(c, ADJ_CANVAS) = TEST_OBJECTS + 9 * GRKIT_RECORD_SIZE;
+    BYTE(c, PLAYBACK_DISPLAY) = PLAYBACK_DETAIL;
+    BYTE(c, PLAYBACK_DISPLAY + 1) = PLAYBACK_SECOND_PAGE;
+    playback_test_controller = c;
+    playback_reads = playback_redraws = 0;
+    /* A photo with the state, whose packet is past the first read. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000001.JPG";
+    playback_test_tone = 0x10000U | (0x8123U - 0x100U);
+    playback_test_jpeg(5000, "<x:xmpmeta><rdf:Description grkit:FilmLook=\"Portra\" grkit:Grain=\"Medium\" "
+                             "grkit:GrainSize=\"Auto\" grkit:Border=\"Thin\" grkit:BorderColor=\"White\" "
+                             "grkit:Crop=\"35mm\" grkit:State=\"790270076=2,977751003=0,862826181=1,360900158=0,"
+                             "660632122=0\"/></x:xmpmeta>");
+    playback_info_controller(h, PLAYBACK_SINGLE);
+    assert(playback_timers == 1 && playback_reads == 2 && playback_redraws == 1 && count[0] == 3);
+    assert(playback_item(0, DETAIL_NAME_FILM_LOOK, "Portra") && playback_item(1, DETAIL_NAME_GRAIN, "Medium, size Auto") &&
+           playback_item(2, DETAIL_NAME_BORDER, "Thin, White"));
+    assert(services_word(h, SERVICES_PLAYBACK + PLAYBACK_CONTROLLER)[0] == c);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_reads == 2);
+    /* A photo of an older GRKit: no packet. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000002.JPG";
+    playback_test_jpeg(100, 0);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 1 &&
+           playback_item(0, DETAIL_NAME_FILM_LOOK, "Portra"));
+    /* A photo without GRKit. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000003.JPG";
+    playback_test_tone = 3;
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 0);
+    /* Off: no read, and the live view gets no controller. */
+    settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_OFF;
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000004.JPG";
+    i = playback_reads;
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_reads == i &&
+           !services_word(h, SERVICES_PLAYBACK + PLAYBACK_CONTROLLER)[0]);
+    manage_memory[MANAGE_PLAYBACK_INFO / 4] = 0;
+    settings_memory[2 + 17 * 3 + 1] = 0;
+}
 /* Whether the hook of the power-off gives the picture of the card: its
    record, or its path and size. */
 static u32 goodbye_given(void)
@@ -6206,6 +6334,8 @@ int main(void)
     the_shutdown_screen_has_its_row();
     the_shutdown_screen_takes_a_usable_file();
     the_shutdown_text_hides_its_views();
+    the_playback_info_has_its_row();
+    playback_lists_the_grkit_settings_of_a_photo();
     snap_distances_show_in_feet();
     a_unit_change_lays_out_the_distances_again();
 #endif

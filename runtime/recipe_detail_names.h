@@ -1,8 +1,9 @@
 #ifndef GRKIT_RECIPE_DETAIL_NAMES_H
 #define GRKIT_RECIPE_DETAIL_NAMES_H
-/* The English names of the settings of a recipe, which the View page writes
-   above their values (runtime/recipe_details.h: the label of an item,
-   runtime/viewfinder.h: view_paint). Name 0 is none. The core and the live
+/* The English names of the settings of a recipe or a photo, which the View
+   page and the list of playback write above their values
+   (runtime/recipe_details.h: the label of an item, runtime/viewfinder.h:
+   view_paint). Name 0 is none. The core and the live
    view each include this table, as both read it. */
 #define DETAIL_NAME_NONE 0U
 #define DETAIL_NAME_FILM_LOOK 1U
@@ -26,7 +27,11 @@
 #define DETAIL_NAME_ISO 27U
 #define DETAIL_NAME_METERING 28U
 #define DETAIL_NAME_ND 29U
-#define DETAIL_NAMES 30U
+/* The settings that only a photo shows (runtime/playback_info.h). */
+#define DETAIL_NAME_FRAMING 30U
+#define DETAIL_NAME_CROP 31U
+#define DETAIL_NAME_DATE 32U
+#define DETAIL_NAMES 33U
 static const char *const detail_names[DETAIL_NAMES]={
     0,"Film Look","Image Control",
     "Saturation","Hue","High/Low Key","Contrast","Contrast (Highlight)","Contrast (Shadow)","Sharpness",
@@ -35,5 +40,6 @@ static const char *const detail_names[DETAIL_NAMES]={
     "Grain","Bloom","Halation","Border",
     "White Balance",
     "Highlight Correction","Shadow Correction","Peripheral Illumination","High-ISO NR",
-    "Exposure Compensation","Auto ISO Upper Limit","Metering","ND Filter"};
+    "Exposure Compensation","Auto ISO Upper Limit","Metering","ND Filter",
+    "Framing","Crop","Date Imprint"};
 #endif

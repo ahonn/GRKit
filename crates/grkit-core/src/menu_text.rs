@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 84;
+pub const STRINGS: usize = 85;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -100,6 +100,10 @@ struct Words {
     /// the firmware version that the camera draws over the picture of the
     /// power-off. Its values are the Off and On of the switch.
     shutdown_text: &'static str,
+    /// The GRKit Info in Playback row of Display Settings: the GRKit settings
+    /// of a photo on the second page of the detailed information of
+    /// playback. Its values are the Off and On of the switch.
+    playback_info: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
@@ -187,6 +191,7 @@ const ENGLISH: Words = Words {
     display_settings: "Display Settings",
     shutdown_screen: "Custom Shutdown Screen",
     shutdown_text: "Shutdown Screen Text",
+    playback_info: "GRKit Info in Playback",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -265,6 +270,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     display_settings: "显示设置",
     shutdown_screen: "自定义关机画面",
     shutdown_text: "关机画面文字",
+    playback_info: "回放显示 GRKit 信息",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -340,6 +346,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     display_settings: "顯示設定",
     shutdown_screen: "自訂關機畫面",
     shutdown_text: "關機畫面文字",
+    playback_info: "播放顯示 GRKit 資訊",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -417,6 +424,7 @@ const JAPANESE: Words = Words {
     display_settings: "表示設定",
     shutdown_screen: "カスタム終了画面",
     shutdown_text: "終了画面の文字",
+    playback_info: "再生時に GRKit 情報を表示",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -495,6 +503,7 @@ const KOREAN: Words = Words {
     display_settings: "표시 설정",
     shutdown_screen: "사용자 지정 종료 화면",
     shutdown_text: "종료 화면 텍스트",
+    playback_info: "재생 시 GRKit 정보 표시",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -706,6 +715,12 @@ pub const RUNS: &[Run] = &[
         "The Custom Shutdown Screen row of Display Settings, then its Shutdown Screen Text \
          row. The values of both are TEXT_OFF and TEXT_ON.",
     ),
+    run(
+        "PLAYBACK_INFO",
+        1,
+        "The GRKit Info in Playback row of Display Settings. Its values are TEXT_OFF and \
+         TEXT_ON.",
+    ),
 ];
 
 /// The first string ID of each run, in table order.
@@ -797,6 +812,7 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "BATTERY" => words(&[w.battery_simple]),
         "DISPLAY" => words(&[w.display_settings]),
         "GOODBYE" => words(&[w.shutdown_screen, w.shutdown_text]),
+        "PLAYBACK_INFO" => words(&[w.playback_info]),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -1005,6 +1021,23 @@ mod tests {
                 assert_eq!(strings(language, VERSION)[id("GOODBYE") + i], text);
                 assert_eq!(language.undrawable(text), None);
             }
+        }
+    }
+
+    /// GRKit Info in Playback is a row of Display Settings, which the camera
+    /// can draw in each language.
+    #[test]
+    fn the_playback_info_has_its_row_in_each_language() {
+        let expected = [
+            (Language::English, "GRKit Info in Playback"),
+            (Language::SimplifiedChinese, "回放显示 GRKit 信息"),
+            (Language::TraditionalChinese, "播放顯示 GRKit 資訊"),
+            (Language::Japanese, "再生時に GRKit 情報を表示"),
+            (Language::Korean, "재생 시 GRKit 정보 표시"),
+        ];
+        for (language, text) in expected {
+            assert_eq!(strings(language, VERSION)[id("PLAYBACK_INFO")], text);
+            assert_eq!(language.undrawable(text), None);
         }
     }
 
