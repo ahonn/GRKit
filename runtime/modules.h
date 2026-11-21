@@ -427,12 +427,14 @@ static u32 module_layers_on(volatile u32 *h) {
 #define MENU_PREVIEW_INVALIDATE(view) CALL1(FW_VIEW_INVALIDATE)(view)
 #endif
 /* The status icon of the module of setting `setting` for `value`, as the
-   live view shows it, or 0. */
+   live view shows it, or 0. Also of a module that Off stopped: the icon
+   describes a recipe or a photo, and its descriptor is data of the module,
+   which no code of it reads. */
 static u32 detail_module_icon(volatile u32 *h,u32 setting,u32 value) {
     u32 i, address, icon;
     for(i=0;i<viewfinder_indicators(h);++i) {
         address=INDICATOR_ENTRY(h,i)[0];
-        if(!address || services_suspended(h,address) || INDICATOR_WORD(address,0)<24 ||
+        if(!address || INDICATOR_WORD(address,0)<24 ||
            INDICATOR_WORD(address,4)!=INDICATOR_STATUS_ROW) continue;
         icon=INDICATOR_WORD(address,20);
         if(!icon || MODULE_ICON_WORD(icon,0)<MODULE_ICON_SIZE || MODULE_ICON_WORD(icon,MODULE_ICON_SETTING)!=setting) continue;

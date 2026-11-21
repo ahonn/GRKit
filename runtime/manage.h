@@ -650,8 +650,6 @@ static void raw_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *raw_label(volatile u32 *h) { return text(h,TEXT_RAW); }
-static u32 raw_values(volatile u32 *h) { (void)h; return MANAGE_RAW_VALUES; }
-static const u16 *raw_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,value!=MANAGE_RAW_ON); }
 static u32 battery_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_BATTERY) : 0; }
 /* Whether the simple information of the live view shows the battery icon. */
 static u32 battery_simple(volatile u32 *h) {
@@ -666,9 +664,6 @@ static void battery_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *battery_label(volatile u32 *h) { return text(h,TEXT_BATTERY); }
-static u32 battery_values(volatile u32 *h) { (void)h; return MANAGE_BATTERY_VALUES; }
-/* Off, then On: the texts of the switch. */
-static const u16 *battery_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,!value); }
 static u32 goodbye_handle(volatile u32 *h) { return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_GOODBYE) : 0; }
 /* Whether the power-off shows the picture of the card. */
 static u32 goodbye_custom(volatile u32 *h) {
@@ -683,8 +678,6 @@ static void goodbye_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *goodbye_label(volatile u32 *h) { return text(h,TEXT_GOODBYE); }
-static u32 goodbye_values(volatile u32 *h) { (void)h; return MANAGE_GOODBYE_VALUES; }
-static const u16 *goodbye_value_text(volatile u32 *h,u32 value) { return switch_value_text(h,value!=MANAGE_GOODBYE_ON); }
 static u32 goodbye_text_handle(volatile u32 *h) {
     return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_GOODBYE_TEXT) : 0;
 }
@@ -718,19 +711,21 @@ static void playback_info_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *playback_info_label(volatile u32 *h) { return text(h,TEXT_PLAYBACK_INFO); }
-static u32 playback_info_values(volatile u32 *h) { (void)h; return MANAGE_PLAYBACK_INFO_VALUES; }
-static const u16 *playback_info_value_text(volatile u32 *h,u32 value) {
-    return switch_value_text(h,value!=MANAGE_PLAYBACK_INFO_ON);
-}
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
-#define RAW_SETTING {raw_label,raw_values,raw_value_text,raw_value,raw_set}
-#define BATTERY_SETTING {battery_label,battery_values,battery_value_text,battery_simple,battery_set}
-#define GOODBYE_SETTING {goodbye_label,goodbye_values,goodbye_value_text,goodbye_custom,goodbye_set}
-#define GOODBYE_TEXT_SETTING {goodbye_text_label,goodbye_values,goodbye_value_text,goodbye_text_shown,goodbye_text_set}
-#define PLAYBACK_INFO_SETTING \
-    {playback_info_label,playback_info_values,playback_info_value_text,playback_info_on,playback_info_set}
-static const Setting core_settings[7]={START_SETTING,UNIT_SETTING,RAW_SETTING,BATTERY_SETTING,GOODBYE_SETTING,
-    GOODBYE_TEXT_SETTING,PLAYBACK_INFO_SETTING};
+/* The value page of an On/Off setting lists On, then Off, as Enable GRKit:
+   row 0 is On. Each stores 1 for On. */
+static u32 onoff_values(volatile u32 *h) { (void)h; return 2; }
+#define ONOFF_ROWS(name,on) \
+    static u32 name##_row(volatile u32 *h) { return !on(h); } \
+    static void name##_choose(volatile u32 *h,u32 row) { if(row<2U) name##_set(h,!row); }
+ONOFF_ROWS(raw,raw_value)
+ONOFF_ROWS(battery,battery_simple)
+ONOFF_ROWS(goodbye,goodbye_custom)
+ONOFF_ROWS(goodbye_text,goodbye_text_shown)
+ONOFF_ROWS(playback_info,playback_info_on)
+#define ONOFF_SETTING(name) {name##_label,onoff_values,switch_value_text,name##_row,name##_choose}
+static const Setting core_settings[7]={START_SETTING,UNIT_SETTING,ONOFF_SETTING(raw),ONOFF_SETTING(battery),
+    ONOFF_SETTING(goodbye),ONOFF_SETTING(goodbye_text),ONOFF_SETTING(playback_info)};
 #endif
 #endif

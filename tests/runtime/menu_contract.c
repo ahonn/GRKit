@@ -5539,17 +5539,18 @@ static void battery_shows_in_the_simple_display(void)
     assert(settings_rows(h) == 2 && same(core_group_page_settings[0].label(h), "Distance Unit") &&
            same(core_group_page_settings[1].label(h), "Battery in Simple Display"));
     assert(core_group_row(h, CORE_GROUP_DISPLAY, 1) == core_settings + 3);
-    assert(core_group_page_settings[1].values(h) == 2 && same(core_group_page_settings[1].value_text(h, 0), "Off") &&
-           same(core_group_page_settings[1].value_text(h, 1), "On"));
-    assert(core_group_page_settings[1].get(h) == 0 && !battery_simple(h));
+    /* On, then Off, as Enable GRKit. */
+    assert(core_group_page_settings[1].values(h) == 2 && same(core_group_page_settings[1].value_text(h, 0), "On") &&
+           same(core_group_page_settings[1].value_text(h, 1), "Off"));
+    assert(core_group_page_settings[1].get(h) == 1 && !battery_simple(h));
     n = h[GRKIT_HOST_STATE_CHANGES / 4];
-    core_group_page_settings[1].set(h, 1);
+    core_group_page_settings[1].set(h, 0);
     assert(battery_simple(h) && settings_memory[2 + 15 * 3 + 1] == 1 && h[GRKIT_HOST_STATE_CHANGES / 4] == n + 1);
     assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 1 + 1);
     /* A value out of range changes nothing. */
     core_group_page_settings[1].set(h, 2);
     assert(battery_simple(h));
-    core_group_page_settings[1].set(h, 0);
+    core_group_page_settings[1].set(h, 1);
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
@@ -5571,8 +5572,8 @@ static void battery_shows_in_the_simple_display(void)
     assert(!battery_simple(h));
     settings_memory[2 + 15 * 3 + 1] = 0;
 }
-/* Custom Picture is a row of Shutdown Screen: Off, the
-   picture of the firmware, then On. A change saves, also in the copy of the
+/* Custom Picture is a row of Shutdown Screen: On, then Off, the picture of
+   the firmware. A change saves, also in the copy of the
    file of the user modes. */
 static void the_shutdown_screen_has_its_row(void)
 {
@@ -5586,10 +5587,10 @@ static void the_shutdown_screen_has_its_row(void)
     manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
     const Setting *row = core_group_row(h, CORE_GROUP_SHUTDOWN, 0);
     assert(core_group_rows(h, CORE_GROUP_SHUTDOWN) == 1 && row == core_settings + 4);
-    assert(same(row->label(h), "Custom Picture") && same(row->value_text(h, 0), "Off") &&
-           same(row->value_text(h, 1), "On"));
-    assert(goodbye_custom(h));
-    row->set(h, MANAGE_GOODBYE_OFF);
+    assert(same(row->label(h), "Custom Picture") && same(row->value_text(h, 0), "On") &&
+           same(row->value_text(h, 1), "Off"));
+    assert(goodbye_custom(h) && row->get(h) == 0);
+    row->set(h, 1);
     assert(!goodbye_custom(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE] == 0 + 1);
     /* Without the setting in the module list, the camera shows its picture. */
     settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
@@ -5611,9 +5612,9 @@ static void the_playback_info_has_its_row(void)
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 17 + 1;
     const Setting *row = core_group_row(h, CORE_GROUP_DISPLAY, 0);
     assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 1 && row == core_settings + 6);
-    assert(same(row->label(h), "GRKit Info in Playback") && same(row->value_text(h, 0), "Off") &&
-           same(row->value_text(h, 1), "On") && row->get(h));
-    row->set(h, MANAGE_PLAYBACK_INFO_OFF);
+    assert(same(row->label(h), "GRKit Info in Playback") && same(row->value_text(h, 0), "On") &&
+           same(row->value_text(h, 1), "Off") && row->get(h) == 0);
+    row->set(h, 1);
     assert(!playback_info_on(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_PLAYBACK_INFO] == 0 + 1);
     manage_memory[MANAGE_GOODBYE_TEXT / 4] = 0;
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 0;
@@ -5796,10 +5797,10 @@ static void the_shutdown_text_hides_its_views(void)
     for (i = 0; i < 6; ++i) *object_at(controller + GOODBYE_VIEWS + 4 * i) = TEST_OBJECTS + 0x800 + 0x40 * i;
     const Setting *row = core_group_row(h, CORE_GROUP_SHUTDOWN, 1);
     assert(core_group_rows(h, CORE_GROUP_SHUTDOWN) == 2 && row == core_settings + 5 &&
-           same(row->label(h), "Show Text") && row->get(h) == 1);
+           same(row->label(h), "Show Text") && row->get(h) == 0);
     view_calls = 0;
     assert(!menu_goodbye_text_hide(controller) && view_calls == 0);
-    row->set(h, MANAGE_GOODBYE_TEXT_OFF);
+    row->set(h, 1);
     assert(test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_GOODBYE_TEXT] == 0 + 1);
     assert(menu_goodbye_text_hide(controller) && view_calls == 6);
     for (i = 0; i < 6; ++i)
