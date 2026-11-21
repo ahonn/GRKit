@@ -44,10 +44,15 @@ pub enum Point {
     /// The canvas of recorded pictures: a larger developed picture with the
     /// border around the picture at its own size (`runtime/canvas.h`).
     PictureCanvas,
+    /// The XMP packet of recorded pictures, JPEG and DNG, with the look and
+    /// the GRKit settings of the shot (`runtime/photo_xmp.h`). INSTALL
+    /// applies this point whenever it loads a module, so that each module
+    /// records its settings, also without Film Look.
+    PictureXmp,
 }
 
 impl Point {
-    pub const ALL: [Point; 10] = [
+    pub const ALL: [Point; 11] = [
         Point::MenuPage,
         Point::Tuning,
         Point::ViewfinderOverlay,
@@ -58,6 +63,7 @@ impl Point {
         Point::CaptureCrop,
         Point::ModeDial,
         Point::PictureCanvas,
+        Point::PictureXmp,
     ];
 
     pub fn name(self) -> &'static str {
@@ -72,6 +78,7 @@ impl Point {
             Point::CaptureCrop => "capture.crop",
             Point::ModeDial => "mode.dial",
             Point::PictureCanvas => "picture.canvas",
+            Point::PictureXmp => "picture.xmp",
         }
     }
 

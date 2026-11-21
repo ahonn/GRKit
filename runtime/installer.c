@@ -828,7 +828,8 @@ static int write_modules(const struct arrays *a, u32 pixels, u32 code)
     u32 base = a->base;
     int status;
     if ((status = install_modules(code, a->module_array, pixels, a->icon_bases))) return status;
-    needed_points |= POINT_MENU_PAGE;
+    /* Each module records its settings in the XMP packet of a picture. */
+    needed_points |= POINT_MENU_PAGE | POINT_PICTURE_XMP;
     store(base + GRKIT_HOST_MANAGE, module_list);
     store(base + GRKIT_HOST_EFFECTS, effect_list);
     store(base + GRKIT_HOST_SERVICES, services_block);

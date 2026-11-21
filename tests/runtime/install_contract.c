@@ -50,6 +50,7 @@ typedef unsigned int u32;
 #define POINT_MENU_PAGE 0x1U
 #define POINT_PICTURE_ENCODE 0x10U
 #define POINT_MODE_DIAL 0x100U
+#define POINT_PICTURE_XMP 0x400U
 static const char *const core_setting_names[] = {
     "CORE.TONE", "CORE.ASPECT", "CORE.GRAIN", "CORE.GRAIN_SIZE", "CORE.ASPECT_MODE", "CORE.ADJ",
     "CORE.ADJ_MODULE", "CORE.CROP", "CORE.CROP_MODE", "CORE.BORDER", "CORE.BORDER_COLOR", "CORE.RECIPE"};
@@ -1051,7 +1052,8 @@ static void the_switch_stops_each_module(void)
 /* The mode dial belongs to the core: its hook and the shooting screen
    install with any listed module, also one that loads stopped, by its own
    Enable or by the switch, and without a module that uses CORE.RECIPE
-   (runtime/mode_dial.h). INSTALL writes the entry of the menu for
+   (runtime/mode_dial.h). So does the XMP packet of pictures, also without
+   Film Look, as on GR IV Monochrome. INSTALL writes the entry of the menu for
    SYSTEM_READY, where the dial lands at a start. */
 static void the_dial_installs_with_the_core(void)
 {
@@ -1061,7 +1063,8 @@ static void the_dial_installs_with_the_core(void)
     save_state(pairs, 2);
     assert(install() == 0 && all_off && module_status[0] == 0);
     assert(word(services_block + SERVICES_SUSPENDED) == 1);
-    assert((needed_points & (POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY)) == (POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY));
+    assert((needed_points & (POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY | POINT_PICTURE_XMP)) ==
+           (POINT_MODE_DIAL | POINT_VIEWFINDER_OVERLAY | POINT_PICTURE_XMP));
     assert(!core_setting_points[GRKIT_CORE_RECIPE - GRKIT_CORE_SETTING_BASE]);
     assert(word(services_block + SERVICES_CORE_VIEWFINDER) == TAIL + CORE_VIEWFINDER);
 }

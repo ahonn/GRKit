@@ -5,7 +5,9 @@
 use crate::components::{
     b, b_shared, bl, bl_shared, HookSpec,
     Part::{Framing, Menu},
-    Point::{CaptureAspect, CaptureCrop, MenuPage, PictureEncode, Tuning, ViewfinderOverlay},
+    Point::{
+        CaptureAspect, CaptureCrop, MenuPage, PictureEncode, PictureXmp, Tuning, ViewfinderOverlay,
+    },
 };
 
 /// AdjModeController: the touch thunks of the five slots, destroy, refresh,
@@ -252,8 +254,8 @@ pub const PICTURE: &[HookSpec] = &[
     // The JPEG header setup of a write and of an in-camera rewrite: the BL to
     // the APP1 Exif setup, after which the XMP segment with the name of the
     // look goes before APP7.
-    bl("picture_jpeg_header", Framing, Tuning),
-    bl("picture_jpeg_rewrite", Framing, Tuning),
+    bl("picture_jpeg_header", Framing, PictureXmp),
+    bl("picture_jpeg_rewrite", Framing, PictureXmp),
     // RawDevelopmentModel: the BL that gives the initial Image Control of a
     // development, where the development takes the effect of its DNG and
     // develops its native aspect.
@@ -328,8 +330,8 @@ pub const DEVELOP_TOP_KINDS: &[HookSpec] = &[
 /// entry once the writer has the shot, so the packet gets the crop of the
 /// shot there.
 pub const DNG_XMP: &[HookSpec] = &[
-    b("picture_dng_xmp", Framing, Tuning),
-    b("picture_dng_set", Framing, Tuning),
+    b("picture_dng_xmp", Framing, PictureXmp),
+    b("picture_dng_set", Framing, PictureXmp),
 ];
 
 /// Battery in Simple Display (`runtime/manage.h`): the compare of the display
