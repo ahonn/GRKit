@@ -24,7 +24,9 @@
 
    A poll in the App task reads the photo, every PLAYBACK_POLL_MS while
    playback shows and the setting is On. It reads the file only when the
-   first page shows a photo that the items do not belong to: the start of
+   first page shows a photo that the items do not belong to
+   (runtime/playback_photo.h: playback_shown), and again at the next poll
+   while the file cannot be read: the start of
    the file, then for a JPEG the segment after its Exif segment, where the
    packet is, or for a DNG its packet; DEVELOP_RECORD_SIZE bytes each, into
    the buffer of the record of a RAW development (SERVICES_DEVELOP), which
@@ -37,6 +39,7 @@
    ui_timer_start. */
 #include "xmp.h"
 #include "photo_xmp_read.h"
+#include "playback_photo.h"
 #define PLAYBACK_POLL_MS 100U
 #ifndef PLAYBACK_TIMER_START
 #define PLAYBACK_TIMER_START(ms) ui_timer_start(ms)
@@ -64,19 +67,6 @@ static u32 playback_file(const u8 *path,u32 offset,u8 *buf,u32 size) {
 }
 #define PLAYBACK_FILE(path,offset,buf,size) playback_file((path),(offset),(buf),(size))
 #endif
-/* The path of the photo that playback opened, with the drive of the card,
-   into `path` of PLAYBACK_PATH_BYTES: 1, or 0 without one. */
-#ifndef PLAYBACK_PATH_SHOWN
-static u32 playback_path_shown(u8 *path) {
-    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), i;
-    if(handle<0x40000000U || handle>0xbfffff00U) return 0;
-    for(i=1;i<PLAYBACK_PATH_BYTES && (path[i]=BYTE(handle,CONTENTS_PATH+i))!=0;++i) {}
-    if(i<2U || i==PLAYBACK_PATH_BYTES) return 0;
-    path[0]='C';
-    return 1;
-}
-#define PLAYBACK_PATH_SHOWN(path) playback_path_shown(path)
-#endif
 static volatile u32 *playback_word(volatile u32 *h,u32 offset) { return services_word(h,SERVICES_PLAYBACK+offset); }
 
 /* The packet of the photo at `path` in `buf` of DEVELOP_RECORD_SIZE bytes:
@@ -85,8 +75,9 @@ static volatile u32 *playback_word(volatile u32 *h,u32 offset) { return services
    JPEG walks its segments from the start, which the first read holds; the
    second read starts at the first segment that the first one does not hold
    whole, which is the packet after a long Exif segment. */
-static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *drive) {
+static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *drive,u32 *read) {
     u32 len=PLAYBACK_FILE(path,0,buf,DEVELOP_RECORD_SIZE), at=2, base=0, size, reads=1, off, xmp;
+    *read=len;
     /* A DNG is a TIFF block; a JPEG has one after the SOI marker and the
        head and name of its Exif segment. */
     if(!(len>=8 && buf[0]=='I' && buf[1]=='I' ? xmp_maker_value(buf,len,XMP_DRIVE_TAG,drive) :
@@ -188,17 +179,20 @@ static u32 playback_value(const char *xmp,u32 n,const char *property,const Photo
 }
 /* Write the items of the photo at `path` into the block of the playback
    (PLAYBACK_DETAILS), with the right end of their row and its crop, and give
-   their number. It keeps its item off the stack frame of the poll, which
-   holds the path. */
+   their number, or PLAYBACK_UNREAD while the file cannot be read, as before
+   the camera saves a shot that playback shows. It keeps its item off the
+   stack frame of the poll, which holds the path. */
+#define PLAYBACK_UNREAD 0xffffffffU
 static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u8 *path) {
     DetailList list;
     DetailItem item;
     const PhotoXmpSetting *s;
     const char *xmp;
     u8 *buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
-    u32 n=0, i, value, handle, drive;
+    u32 n=0, i, value, handle, drive, read;
     list.base=playback_word(h,PLAYBACK_DETAILS); list.n=0; list.max=PLAYBACK_ITEMS_MAX;
-    xmp=playback_packet(path,buf,&n,&drive);
+    xmp=playback_packet(path,buf,&n,&drive,&read);
+    if(!read) return PLAYBACK_UNREAD;
     playback_word(h,PLAYBACK_ROW_RIGHT)[0]=!(drive&XMP_DRIVE_INTERVAL) ? PLAYBACK_INFO_ROW_RIGHT :
                                            drive&XMP_DRIVE_MULTI ? PLAYBACK_INFO_COMPOSITE_RIGHT : PLAYBACK_INFO_INTERVAL_RIGHT;
     playback_word(h,PLAYBACK_CROP)[0]=xmp ? playback_value(xmp,n,"Crop",&s) : 0;
@@ -237,12 +231,13 @@ static u32 playback_info_poll(volatile u32 *h) {
        change to it, and while a screen of its own, such as the one that
        deletes the photo, shows over it. The photo can change meanwhile. */
     if(!c || !WORD(c,ADJ_CANVAS) || WORD(c,CONTROLLER_ID)!=PLAYBACK_SINGLE || BYTE(c,PLAYBACK_DISPLAY)!=PLAYBACK_DETAIL ||
-       BYTE(c,PLAYBACK_DISPLAY+1)!=PLAYBACK_INFO_PAGE || !PLAYBACK_PATH_SHOWN(path)) return 1;
+       BYTE(c,PLAYBACK_DISPLAY+1)!=PLAYBACK_INFO_PAGE || !playback_shown(path)) return 1;
     for(i=0;i<PLAYBACK_PATH_BYTES && kept[i]==path[i] && path[i];++i) {}
     if(i<PLAYBACK_PATH_BYTES && kept[i]==path[i]) return 1;
     kept[0]=0;
     PLAYBACK_BARRIER();
-    playback_info_build(h,path);
+    /* A file that cannot be read yet is read again at the next poll. */
+    if(playback_info_build(h,path)==PLAYBACK_UNREAD) return 1;
     PLAYBACK_BARRIER();
     for(i=PLAYBACK_PATH_BYTES;i--;) kept[i]=path[i];
     PLAYBACK_INVALIDATE(WORD(c,ADJ_CANVAS));

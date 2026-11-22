@@ -5,6 +5,7 @@
    with framing.c. A module never owns a native canvas reference. */
 #include "viewfinder_indicators.h"
 #include "recipe_detail_names.h"
+#include "playback_photo.h"
 #ifndef LABEL_MAP
 #define LABEL_MAP(address) ((const volatile u8 *)(address))
 #endif
@@ -715,15 +716,16 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
    photo that playback opened: the poll reads a new photo after the camera
    shows it. */
 #define PLAYBACK_INFO_PITCH 48U
-/* Whether the items belong to the photo that playback opened: the path of
-   the items has the drive of the card first, the path of the playback none. */
+/* Whether the items belong to the photo that playback shows
+   (runtime/playback_photo.h). */
 static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
     const volatile u8 *kept=(const volatile u8 *)services_word(h,SERVICES_PLAYBACK+PLAYBACK_PATH);
-    u32 handle=WORD(FW_CONTENTS,CONTENTS_HANDLE), i;
-    if(!kept[0] || handle<0x40000000U || handle>0xbfffff00U) return 0;
-    for(i=1;i<PLAYBACK_PATH_BYTES;++i) {
-        if(kept[i]!=BYTE(handle,CONTENTS_PATH+i)) return 0;
-        if(!kept[i]) return 1;
+    u8 path[PLAYBACK_PATH_BYTES];
+    u32 i;
+    if(!kept[0] || !playback_shown(path)) return 0;
+    for(i=0;i<PLAYBACK_PATH_BYTES;++i) {
+        if(kept[i]!=path[i]) return 0;
+        if(!path[i]) return 1;
     }
     return 0;
 }

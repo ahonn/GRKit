@@ -88,6 +88,13 @@
    letter, is 0. */
 #define CONTENTS_HANDLE 0x38
 #define CONTENTS_PATH 0x30
+/* The playback metadata (FW_PLAYBACK_METADATA) holds the number of the
+   folder and of the file of the photo that playback shows, as the page
+   shows them (100-0001), as u16 values. Playback that opens before the last
+   shot is saved shows that shot, while the contents keep the photo before
+   it until another photo shows. */
+#define METADATA_FOLDER 0xe
+#define METADATA_FILE 0x10
 /* Playback of one photo (runtime/playback_info.h): the ID of its controller,
    the slot of the controller in the controller factory
    (FW_CONTROLLER_FACTORY), which keeps it after playback ends, and its

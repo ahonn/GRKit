@@ -310,10 +310,11 @@ static unsigned goodbye_card_find(unsigned char a, unsigned char b)
     assert(0);
     return 0;
 }
-/* The photo that playback shows (runtime/playback_info.h): its path, its
-   file, and the controller of playback; the reads of
-   the file, the redraws of the canvas, and the timers of the poll. */
-static const char *playback_test_path;
+/* The photo that playback shows (runtime/playback_info.h): its path, the
+   path in the contents of playback when it differs, its file, and the
+   controller of playback; the reads of the file, the redraws of the canvas,
+   and the timers of the poll. */
+static const char *playback_test_path, *playback_test_contents;
 static unsigned char playback_test_file[8192];
 static unsigned playback_test_bytes, playback_test_controller;
 static unsigned playback_reads, playback_redraws, playback_timers;
@@ -327,7 +328,20 @@ static unsigned test_playback_file(const unsigned char *path, unsigned offset, u
     return n;
 }
 #define PLAYBACK_FILE(path, offset, buf, size) test_playback_file((path), (offset), (buf), (size))
-#define PLAYBACK_PATH_SHOWN(path) (strcpy((char *)(path), playback_test_path), 1U)
+#define PLAYBACK_PATH_SHOWN(path) (strcpy((char *)(path), playback_test_contents ? playback_test_contents : playback_test_path), 1U)
+/* The folder and file number of the playback metadata: those of the photo. */
+static unsigned test_digits(const char *text, unsigned count)
+{
+    unsigned value = 0;
+    while (count--) value = value * 10 + (unsigned)(*text++ - '0');
+    return value;
+}
+static unsigned test_shown_number(void)
+{
+    size_t n = strlen(playback_test_path);
+    return test_digits(playback_test_path + 8, 3) << 16 | test_digits(playback_test_path + n - 8, 4);
+}
+#define PLAYBACK_SHOWN_NUMBER() test_shown_number()
 #define PLAYBACK_CONTROLLER_OF() (playback_test_controller)
 #define PLAYBACK_INVALIDATE(view) ((void)(view), ++playback_redraws)
 #define PLAYBACK_TIMER_START(ms) ((void)(ms), 0x20000U + ++playback_timers)
@@ -5736,6 +5750,20 @@ static void playback_lists_the_grkit_settings_of_a_photo(void)
                             "grkit:State=\"790270076=2,660632122=2\"/></x:xmpmeta>", 0);
     assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 1 && playback_item(0, DETAIL_NAME_GRAIN));
     assert(services_word(h, SERVICES_PLAYBACK + PLAYBACK_CROP)[0] == 2);
+    /* Playback that opens before the camera saves the shot shows the shot,
+       while the contents keep the photo before it: the file number of the
+       playback metadata gives the shot, which each poll reads until the
+       camera saves it. */
+    playback_test_contents = "C:\\DCIM\\100RICOH\\R0000007.JPG";
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000008.JPG";
+    playback_test_bytes = 0;
+    i = playback_reads;
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_info_fired(h, 0x20000U + playback_timers) &&
+           playback_reads == i + 2);
+    playback_test_jpeg(100, "<x:xmpmeta><rdf:Description grkit:Grain=\"Medium\" grkit:State=\"790270076=2\"/></x:xmpmeta>", 0);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 1 && playback_item(0, DETAIL_NAME_GRAIN) &&
+           !services_word(h, SERVICES_PLAYBACK + PLAYBACK_CROP)[0]);
+    playback_test_contents = 0;
     /* A photo of an older GRKit or without GRKit: no packet. */
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000002.JPG";
     playback_test_jpeg(100, 0, 0);
