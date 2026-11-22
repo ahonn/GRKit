@@ -362,6 +362,7 @@ picture_capture_tone:
     movs r4, r0
     beq 1f
     ldr r0, [sp]
+    ldr r1, [sp, #4]
     bl picture_jpeg_xmp
 1:  mov r0, r4
     add sp, sp, #8

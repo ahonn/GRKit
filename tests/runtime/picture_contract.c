@@ -826,6 +826,8 @@ static void dng_defaults_follow_the_shot_without_changing_jpeg_geometry(void)
    header buffer holds a TIFF block whose Ricoh maker note gives ImageTone. */
 #define JPEG_WRITER (ARENA + 0x30000)
 #define JPEG_BUFFER (ARENA + 0x40000)
+/* The image information of the header setup, without shot settings. */
+#define JPEG_INFO (ARENA + 0x70000)
 #define JPEG_APP7 0x100U
 static void put16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
 static void put32(uint8_t *p, uint32_t v) { put16(p, v); put16(p + 2, v >> 16); }
@@ -872,7 +874,7 @@ static const char *jpeg_keyword(uint32_t code)
     uint32_t segment;
     const char *text, *start, *end;
     jpeg_header(code, 0x20000);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     if (!(text = jpeg_packet(&segment))) return 0;
     assert(!(segment % XMP_ALIGN) && segment < 0x1000);
     assert(!strstr(text, "dc:description"));
@@ -997,23 +999,23 @@ static void jpeg_xmp_contract(void)
     effect_name(record(2), portra, 11);
     /* The segment leaves room for the largest APP7. */
     jpeg_header(0x9235, 0x20000);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     segment = WORD(JPEG_WRITER, JPEG_WRITER_APP7) - JPEG_APP7;
     jpeg_header(0x9235, JPEG_APP7 + segment + XMP_APP7_RESERVE - 1);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7);
     jpeg_header(0x9235, JPEG_APP7 + segment + XMP_APP7_RESERVE);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7 + segment);
     /* An APP7 offset off 32 bytes is not a firmware header: no segment. */
     jpeg_header(0x9235, 0x20000);
     WORD(JPEG_WRITER, JPEG_WRITER_APP7) = JPEG_APP7 + 4;
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7 + 4);
     /* A header without a Ricoh maker note: the settings without a look. */
     jpeg_header(0x9235, 0x20000);
     memcpy(region(JPEG_BUFFER + JPEG_TIFF + 44, 8), "PENTAX\0\0", 8);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     {
         const char *text = jpeg_packet(&segment);
         assert(text && strstr(text, " grkit:State=\"") && !strstr(text, "FilmLook") && !strstr(text, "dc:subject"));
@@ -1024,7 +1026,7 @@ static void jpeg_xmp_contract(void)
     assert(!strstr(jpeg_packet(&segment), "grkit:State") && !strstr(jpeg_packet(&segment), "grkit:Grain="));
     jpeg_header(0x9235, 0x20000);
     memcpy(region(JPEG_BUFFER + JPEG_TIFF + 44, 8), "PENTAX\0\0", 8);
-    picture_jpeg_xmp(JPEG_WRITER);
+    picture_jpeg_xmp(JPEG_WRITER, JPEG_INFO);
     assert(WORD(JPEG_WRITER, JPEG_WRITER_APP7) == JPEG_APP7);
     ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
     /* A capture: the look, each setting that changes the picture with its
@@ -1051,6 +1053,18 @@ static void jpeg_xmp_contract(void)
     header[core_setting_words[CORE_SETTING(GRKIT_CORE_ASPECT_MODE)] / 4] = 1;
     jpeg_keyword(0x9235);
     assert(!strstr(jpeg_packet(&segment), "grkit:Framing") && strstr(jpeg_packet(&segment), "grkit:Crop="));
+    /* In playback, the JPEG of a shot that the camera writes after playback
+       opened records the settings, as its shot settings are in the shot
+       ring; an edit, whose image information has none, does not. */
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 1;
+    jpeg_keyword(0x9235);
+    assert(!strstr(jpeg_packet(&segment), "grkit:State"));
+    still(record(2));
+    WORD(JPEG_INFO, JPEG_INFO_SHOT) = SHOT;
+    jpeg_keyword(0x9235);
+    assert(strstr(jpeg_packet(&segment), "grkit:State"));
+    WORD(JPEG_INFO, JPEG_INFO_SHOT) = 0;
+    ((volatile u8 *)header)[GRKIT_HOST_FRAME_FILE] = 0;
     /* UTF-16 to UTF-8: a pair, a lone surrogate, a control, and a name without NUL. */
     static const uint16_t pair[] = {0xd83c, 0xdf9e, 0xd800, 'A', 0x0a, 0};
     static const uint16_t full[XMP_NAME_UNITS] = {'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A', 'A',

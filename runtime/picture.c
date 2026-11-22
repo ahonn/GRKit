@@ -853,11 +853,16 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
 /* The JPEG header writer of the firmware: +0x18 the header buffer, +0x1c its
    size, and +0x48 the offset of the APP7 preview segment. The header starts
    with SOI, the APP1 marker and length, and "Exif\0\0", so the TIFF block
-   starts at JPEG_TIFF. GR III and GR IV share the layout. */
+   starts at JPEG_TIFF. GR III and GR IV share the layout, also that of the
+   image information. */
 #define JPEG_WRITER_BUFFER 0x18
 #define JPEG_WRITER_SIZE 0x1c
 #define JPEG_WRITER_APP7 0x48
 #define JPEG_TIFF 12U
+/* The image information of the header setup holds the shot settings
+   pointer of a capture at +0x98, the key of its shot ring entry. Another
+   write, such as an edit in playback, has no entry there. */
+#define JPEG_INFO_SHOT 0x98
 #ifndef PICTURE_JPEG_MAP
 #define PICTURE_JPEG_MAP(address,size) ((volatile u8 *)(address))
 #endif
@@ -937,13 +942,15 @@ void picture_dng_xmp_set(u32 setter,u32 entry) {
    maker-note offset of APP7, and the place of the main image all follow
    +0x48. A capture and a RAW development record their settings. An edit in
    playback, such as Resize, records only the look: the current settings are
-   not those of the photo. No segment is written while no module runs (the
-   GRKit switch is Off, or safe mode), or into a buffer without room for the
-   largest APP7. */
-void picture_jpeg_xmp(u32 writer) {
+   not those of the photo. Playback can open before the JPEG of the last
+   shot is written; that JPEG is still a capture, as its shot settings
+   (`info`, the image information, at JPEG_INFO_SHOT) are in the shot ring.
+   No segment is written while no module runs (the GRKit switch is Off, or
+   safe mode), or into a buffer without room for the largest APP7. */
+void picture_jpeg_xmp(u32 writer,u32 info) {
     volatile u32 *h=framing_header();
     u32 buffer=WORD(writer,JPEG_WRITER_BUFFER), size=WORD(writer,JPEG_WRITER_SIZE), at=WORD(writer,JPEG_WRITER_APP7);
-    u32 code, record, segment, units=XMP_NAME_UNITS, room, length, settings;
+    u32 code, record, segment, units=XMP_NAME_UNITS, room, length, settings, entry;
     u16 name[XMP_NATIVE_UNITS>XMP_NAME_UNITS ? XMP_NATIVE_UNITS : XMP_NAME_UNITS];
     const u16 *look=name;
     volatile u8 *out;
@@ -952,7 +959,8 @@ void picture_jpeg_xmp(u32 writer) {
     else if((record=record_of_code(h,code))) picture_record_name(record,name);
     else if(xmp_native_name(code,name,XMP_NATIVE_UNITS)) units=XMP_NATIVE_UNITS;
     else look=0;
-    settings=!((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE] || PICTURE_DEVELOPING();
+    settings=!((volatile u8 *)h)[GRKIT_HOST_FRAME_FILE] || PICTURE_DEVELOPING() ||
+             (PICTURE_RAM(info) && shot_word(h,WORD(info,JPEG_INFO_SHOT),GRKIT_SHOT_RECORD,&entry));
     /* The packet goes in place: room for it, its end, and the largest APP7. */
     room=size-at;
     if(room<=XMP_APP7_RESERVE+XMP_SEGMENT_HEAD+sizeof(xmp_end)-1) return;
