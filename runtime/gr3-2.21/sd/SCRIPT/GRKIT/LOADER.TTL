@@ -5,27 +5,28 @@ fastreason = 1
 ba[0] = 0
 ba[1] = 0
 sendln 'SYS_buildinfo 0'
-if ba[0] <> 1129202771 goto probed
+if ba[0] <> 1129202771 goto identified
 fastreason = 2
 fastinterface = ba[1]
-if ba[1] <> 1 goto probed
+if ba[1] < 1 goto identified
+if ba[1] > 2 goto identified
 fastreason = 3
 release = ba[2] * 1000 + ba[3]
-if release <> 588221 goto probe1
+if release <> 588221 goto next_release1
 fastreason = 4
 filesearch 'C:\SCRIPT\GRKIT\F588221.BIN'
-if result = 0 goto probe1
+if result = 0 goto next_release1
 filesearch 'C:\SCRIPT\GRKIT\I588221.BIN'
 if result <> 0 fast = 588221
-:probe1
-if release <> 609171 goto probe2
+:next_release1
+if release <> 609171 goto next_release2
 fastreason = 4
 filesearch 'C:\SCRIPT\GRKIT\F609171.BIN'
-if result = 0 goto probe2
+if result = 0 goto next_release2
 filesearch 'C:\SCRIPT\GRKIT\I609171.BIN'
 if result <> 0 fast = 609171
-:probe2
-:probed
+:next_release2
+:identified
 if fast = 0 call fast_log
 attempts = 0
 failure = 60
@@ -80,12 +81,12 @@ moduletiles = value
 fileclose fh
 goto plan_read
 :plan_fast
-planmagic = ba[128]
-count = ba[129]
-words = ba[130]
-chunks = ba[131]
-modulewords = ba[133]
-moduletiles = ba[134]
+planmagic = ba[160]
+count = ba[161]
+words = ba[162]
+chunks = ba[163]
+modulewords = ba[165]
+moduletiles = ba[166]
 :plan_read
 if planmagic != 827150919 goto reject
 if count < 0 goto reject
@@ -94,7 +95,7 @@ if modulewords < 0 goto reject
 if modulewords > 65536 goto reject
 if moduletiles < 0 goto reject
 if moduletiles > 128 goto reject
-expected = 1634 + count * 1088
+expected = 1637 + count * 1088
 if words != expected goto reject
 expectedchunks = (count + moduletiles + 60) / 40
 if chunks != expectedchunks goto reject
