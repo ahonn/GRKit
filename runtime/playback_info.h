@@ -223,7 +223,10 @@ static u32 playback_info_poll(volatile u32 *h) {
     }
     c=PLAYBACK_CONTROLLER_OF();
     p[PLAYBACK_CONTROLLER/4]=c;
-    if(!c || WORD(c,CONTROLLER_ID)!=PLAYBACK_SINGLE || BYTE(c,PLAYBACK_DISPLAY)!=PLAYBACK_DETAIL ||
+    /* The controller has no canvas while it does not show: before the
+       change to it, and while a screen of its own, such as the one that
+       deletes the photo, shows over it. The photo can change meanwhile. */
+    if(!c || !WORD(c,ADJ_CANVAS) || WORD(c,CONTROLLER_ID)!=PLAYBACK_SINGLE || BYTE(c,PLAYBACK_DISPLAY)!=PLAYBACK_DETAIL ||
        BYTE(c,PLAYBACK_DISPLAY+1)!=PLAYBACK_INFO_PAGE || !PLAYBACK_PATH_SHOWN(path)) return 1;
     for(i=0;i<PLAYBACK_PATH_BYTES && kept[i]==path[i] && path[i];++i) {}
     if(i<PLAYBACK_PATH_BYTES && kept[i]==path[i]) return 1;
