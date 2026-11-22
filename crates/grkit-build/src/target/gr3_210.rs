@@ -294,6 +294,22 @@ const SITES: &[Site] = &[
     ("menu_parameter_get_9", 0x532c295c, "0dc0a0e1"),
     ("menu_parameter_set_9", 0x532c0700, "0dc0a0e1"),
     ("menu_parameter_row_9", 0x532ac9a4, "f9750aeb"),
+    // The slider setups of the rows of ImageControlDetailController: the BL
+    // to the native default of the type (Saturation 0x531acfec to Clarity
+    // 0x531ae6d8, Toning 0x531adb2c), the BL of the Toning setup to
+    // FW_SLIDER_INIT, and the tail branch of the Toning row text 0x532ac988.
+    ("menu_parameter_mark_0", 0x531ad020, "305904eb"),
+    ("menu_parameter_mark_1", 0x531ad160, "7b5a04eb"),
+    ("menu_parameter_mark_2", 0x531ad2a0, "c65b04eb"),
+    ("menu_parameter_mark_3", 0x531ad3e0, "595d04eb"),
+    ("menu_parameter_mark_4", 0x531ad520, "ec5e04eb"),
+    ("menu_parameter_mark_5", 0x531ad660, "7f6004eb"),
+    ("menu_parameter_mark_6", 0x531ad7a0, "126204eb"),
+    ("menu_parameter_mark_7", 0x531ae5cc, "806904eb"),
+    ("menu_parameter_mark_8", 0x531ae70c, "136b04eb"),
+    ("menu_parameter_mark_9", 0x531adb60, "b46404eb"),
+    ("menu_parameter_toning_init", 0x531adbac, "78c507eb"),
+    ("menu_parameter_toning_text", 0x532ac9bc, "b8ffffea"),
     // The entry of the apply of a dial position, which each App event of the
     // dial reaches.
     ("menu_dial", 0x532241a8, "0dc0a0e1"),
