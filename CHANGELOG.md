@@ -1,3 +1,14 @@
+## 1.6.6 (2026-11-22)
+
+### Fixes
+
+- Display Settings names its rows Simplified Info. Battery and Effect Icons in Playback.
+- Effect Icons in Playback shows the crop of a photo in the place of the camera's crop badge, and no longer repeats Framing.
+- Deleting a photo in playback while the detailed information shows no longer stops the camera.
+- Effect Icons in Playback shows the settings of a shot that playback opens right after, not those of the photo before it.
+- Custom Picture checks the whole of `GRKIT/GOODBYE.JPG` once after the camera starts, so a damaged or cut-off file no longer keeps the camera from turning off, a power-off without a usable picture no longer reads the card, and a new picture applies at the next start.
+- A photo keeps its GRKit settings in XMP when playback opens before the camera has saved it.
+
 ## 1.6.5 (2026-11-21)
 
 ### Fixes
