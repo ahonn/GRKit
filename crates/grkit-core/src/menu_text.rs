@@ -87,7 +87,7 @@ struct Words {
     /// The Uncropped RAW row of GRKit Settings: a DNG keeps the whole picture
     /// of the sensor. Its values are On and Off.
     uncropped_raw: &'static str,
-    /// The Battery in Simple Display row of Display Settings. Its values are
+    /// The Simplified Info. Battery row of Display Settings. Its values are
     /// the Off and On of the switch.
     battery_simple: &'static str,
     /// The Display Settings row of GRKit Settings and the title of its page,
@@ -104,7 +104,7 @@ struct Words {
     /// the firmware version that the camera draws over the picture of the
     /// power-off. Its values are the Off and On of the switch.
     shutdown_text: &'static str,
-    /// The GRKit Info in Playback row of Display Settings: the GRKit settings
+    /// The Effect Icons in Playback row of Display Settings: the GRKit settings
     /// of a photo as icons on the first page of the detailed information of
     /// playback. Its values are the Off and On of the switch.
     playback_info: &'static str,
@@ -191,13 +191,13 @@ const ENGLISH: Words = Words {
     meters: "Meters",
     feet: "Feet",
     uncropped_raw: "Uncropped RAW",
-    battery_simple: "Battery in Simple Display",
+    battery_simple: "Simplified Info. Battery",
     display_settings: "Display Settings",
     shutdown_settings: "Shutdown Screen",
     shooting_settings: "Shooting Settings",
     shutdown_screen: "Custom Picture",
     shutdown_text: "Show Text",
-    playback_info: "GRKit Info in Playback",
+    playback_info: "Effect Icons in Playback",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -272,13 +272,13 @@ const SIMPLIFIED_CHINESE: Words = Words {
     meters: "米",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
-    battery_simple: "简单信息显示电量",
+    battery_simple: "简单信息电量",
     display_settings: "显示设置",
     shutdown_settings: "关机画面",
     shooting_settings: "拍摄设置",
     shutdown_screen: "自定义图片",
     shutdown_text: "显示文字",
-    playback_info: "回放显示 GRKit 信息",
+    playback_info: "回放效果图标",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -350,13 +350,13 @@ const TRADITIONAL_CHINESE: Words = Words {
     meters: "公尺",
     feet: "英尺",
     uncropped_raw: "RAW 不裁切",
-    battery_simple: "簡單資訊顯示電量",
+    battery_simple: "簡單資訊電量",
     display_settings: "顯示設定",
     shutdown_settings: "關機畫面",
     shooting_settings: "拍攝設定",
     shutdown_screen: "自訂圖片",
     shutdown_text: "顯示文字",
-    playback_info: "播放顯示 GRKit 資訊",
+    playback_info: "播放效果圖示",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -430,13 +430,13 @@ const JAPANESE: Words = Words {
     meters: "メートル",
     feet: "フィート",
     uncropped_raw: "RAW クロップなし",
-    battery_simple: "簡易情報表示で電池表示",
+    battery_simple: "簡易情報の電池",
     display_settings: "表示設定",
     shutdown_settings: "終了画面",
     shooting_settings: "撮影設定",
     shutdown_screen: "カスタム画像",
     shutdown_text: "文字を表示",
-    playback_info: "再生時に GRKit 情報を表示",
+    playback_info: "再生時の効果アイコン",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -511,13 +511,13 @@ const KOREAN: Words = Words {
     meters: "미터",
     feet: "피트",
     uncropped_raw: "RAW 크롭 없음",
-    battery_simple: "간이 정보 표시에 배터리 표시",
+    battery_simple: "간이 정보 배터리",
     display_settings: "표시 설정",
     shutdown_settings: "종료 화면",
     shooting_settings: "촬영 설정",
     shutdown_screen: "사용자 지정 이미지",
     shutdown_text: "텍스트 표시",
-    playback_info: "재생 시 GRKit 정보 표시",
+    playback_info: "재생 효과 아이콘",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -716,7 +716,7 @@ pub const RUNS: &[Run] = &[
     run(
         "BATTERY",
         1,
-        "The Battery in Simple Display row of Display Settings. Its values are TEXT_OFF and TEXT_ON.",
+        "The Simplified Info. Battery row of Display Settings. Its values are TEXT_OFF and TEXT_ON.",
     ),
     run(
         "DISPLAY",
@@ -733,7 +733,7 @@ pub const RUNS: &[Run] = &[
     run(
         "PLAYBACK_INFO",
         1,
-        "The GRKit Info in Playback row of Display Settings. Its values are TEXT_OFF and \
+        "The Effect Icons in Playback row of Display Settings. Its values are TEXT_OFF and \
          TEXT_ON.",
     ),
 ];
@@ -990,17 +990,17 @@ mod tests {
             .all(|text| text.is_ascii()));
     }
 
-    /// Battery in Simple Display is a row of Display Settings, which the camera
+    /// Simplified Info. Battery is a row of Display Settings, which the camera
     /// can draw in each language. The texts follow the native names of the
     /// simple information display.
     #[test]
     fn battery_in_simple_display_has_its_row_in_each_language() {
         let expected = [
-            (Language::English, "Battery in Simple Display"),
-            (Language::SimplifiedChinese, "简单信息显示电量"),
-            (Language::TraditionalChinese, "簡單資訊顯示電量"),
-            (Language::Japanese, "簡易情報表示で電池表示"),
-            (Language::Korean, "간이 정보 표시에 배터리 표시"),
+            (Language::English, "Simplified Info. Battery"),
+            (Language::SimplifiedChinese, "简单信息电量"),
+            (Language::TraditionalChinese, "簡單資訊電量"),
+            (Language::Japanese, "簡易情報の電池"),
+            (Language::Korean, "간이 정보 배터리"),
         ];
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("BATTERY")], text);
@@ -1027,16 +1027,16 @@ mod tests {
         }
     }
 
-    /// GRKit Info in Playback is a row of Display Settings, which the camera
+    /// Effect Icons in Playback is a row of Display Settings, which the camera
     /// can draw in each language.
     #[test]
     fn the_playback_info_has_its_row_in_each_language() {
         let expected = [
-            (Language::English, "GRKit Info in Playback"),
-            (Language::SimplifiedChinese, "回放显示 GRKit 信息"),
-            (Language::TraditionalChinese, "播放顯示 GRKit 資訊"),
-            (Language::Japanese, "再生時に GRKit 情報を表示"),
-            (Language::Korean, "재생 시 GRKit 정보 표시"),
+            (Language::English, "Effect Icons in Playback"),
+            (Language::SimplifiedChinese, "回放效果图标"),
+            (Language::TraditionalChinese, "播放效果圖示"),
+            (Language::Japanese, "再生時の効果アイコン"),
+            (Language::Korean, "재생 효과 아이콘"),
         ];
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("PLAYBACK_INFO")], text);

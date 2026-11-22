@@ -41,8 +41,8 @@
      restores them into the header as the file has them
      (install_dial_sets); a set with more pairs than the header holds is
      damaged and stays out. The file also holds a copy of the switch, Enable
-     at Start, Distance Unit, Uncropped RAW, Battery in Simple Display,
-     Custom Picture, Show Text, and GRKit Info in Playback
+     at Start, Distance Unit, Uncropped RAW, Simplified Info. Battery,
+     Custom Picture, Show Text, and Effect Icons in Playback
      (runtime/manage.h: manage_copy), which
      decides them before the main state file (read_manage_copy). */
 #include "recipe_id.h"
@@ -315,8 +315,8 @@ static void install_dial_sets(u32 base)
 }
 
 /* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Picture, Show Text,
-   and GRKit Info in Playback in the file
+   Simplified Info. Battery, Custom Picture, Show Text,
+   and Effect Icons in Playback in the file
    of the user modes decides them instead of the main state file: the core
    writes the copy with each change of them, and the loader never holds that
    file, so the copy is never older. The main state file can be: the core
@@ -350,8 +350,8 @@ static void read_manage_copy(void)
     }
 }
 /* Write the copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Picture, Show Text,
-   and GRKit Info in Playback into the
+   Simplified Info. Battery, Custom Picture, Show Text,
+   and Effect Icons in Playback into the
    header: the values of this start in `table`, which apply_state restored,
    for the handles of the module list. No count of changes moves, so the
    file of the user modes saves only after a change on the camera. Without a

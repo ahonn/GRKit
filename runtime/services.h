@@ -395,7 +395,7 @@
 #define SERVICES_DNG_CROP (SERVICES_DEVELOP + DEVELOP_COPY_SIZE)
 #define DNG_CROP_ENTRY 0U
 #define DNG_CROP_AT 4U
-/* GRKit Info in Playback (runtime/playback_info.h): the firmware timer of
+/* Effect Icons in Playback (runtime/playback_info.h): the firmware timer of
    its poll in the App task, 0 when none runs; the playback controller while
    playback shows and the setting is On, else 0, which the live view reads;
    whether the live view painted the icons in the last draw of the canvas of

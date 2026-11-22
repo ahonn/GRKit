@@ -136,7 +136,7 @@ static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text
 static const u8 core_groups[CORE_GROUPS][CORE_GROUP_MAX]={
     /* Shooting Settings: Uncropped RAW. */
     {2U,0xffU,0xffU,0xffU},
-    /* Display Settings: Distance Unit, Battery in Simple Display, GRKit Info
+    /* Display Settings: Distance Unit, Simplified Info. Battery, Effect Icons
        in Playback. */
     {1U,3U,6U,0xffU},
     /* Shutdown Screen: Custom Picture, Show Text. */
@@ -571,7 +571,7 @@ A32_ENTRY void menu_check_dot(u32 line,u32 shown) {
 /* A controller change to `id`: returns the controller to change to. A MENU
    row of a module opens its settings page (menu_rows_controller). The page
    ends at any controller outside it. */
-/* Playback starts the poll of GRKit Info in Playback (runtime/playback_info.h). */
+/* Playback starts the poll of Effect Icons in Playback (runtime/playback_info.h). */
 static void playback_info_controller(volatile u32 *h,u32 id);
 A32_ENTRY u32 menu_settings_controller(u32 id) {
     volatile u32 *h=menu_header();

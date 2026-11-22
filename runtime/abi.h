@@ -155,7 +155,7 @@
 #define GRKIT_DIAL_SLOT_WORDS 2U
 #define GRKIT_DIAL_SLOT_KEY_BASE 992003000U
 /* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Picture, Show Text, and GRKit Info in
+   Simplified Info. Battery, Custom Picture, Show Text, and Effect Icons in
    Playback (GRKIT_HOST_MANAGE_COPY, runtime/manage.h): each as its value + 1,
    or 0 without a copy. In the file of the sets, word w has the key
    GRKIT_MANAGE_COPY_KEY + w. */
@@ -547,7 +547,7 @@
    position has, is the older value for each of them off. */
 #define GRKIT_HOST_DIAL_SHARED_OFF 6488
 /* The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-   Battery in Simple Display, Custom Picture, Show Text, and GRKit Info in
+   Simplified Info. Battery, Custom Picture, Show Text, and Effect Icons in
    Playback, `MANAGE_COPY_WORDS` words (runtime/manage.h), right after
    HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
    before the main state file, and writes the values of the start here. */
@@ -1059,7 +1059,7 @@
 /* The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and
    TEXT_OFF. */
 #define TEXT_RAW 79
-/* The Battery in Simple Display row of Display Settings. Its values are
+/* The Simplified Info. Battery row of Display Settings. Its values are
    TEXT_OFF and TEXT_ON. */
 #define TEXT_BATTERY 80
 /* The rows of the groups of GRKit Settings and the titles of their pages:
@@ -1068,8 +1068,8 @@
 /* The Custom Picture row of Shutdown Screen, then its Show Text row. The
    values of both are TEXT_OFF and TEXT_ON. */
 #define TEXT_GOODBYE 84
-/* The GRKit Info in Playback row of Display Settings. Its values are TEXT_OFF
-   and TEXT_ON. */
+/* The Effect Icons in Playback row of Display Settings. Its values are
+   TEXT_OFF and TEXT_ON. */
 #define TEXT_PLAYBACK_INFO 86
 #define GRKIT_TEXT_STRINGS 87
 

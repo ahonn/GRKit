@@ -106,7 +106,7 @@
 #define PLAYBACK_DISPLAY 0x31c
 #define PLAYBACK_DETAIL 2U
 #define PLAYBACK_INFO_PAGE 0U
-/* The row of icons of GRKit Info in Playback on the first page
+/* The row of icons of Effect Icons in Playback on the first page
    (runtime/viewfinder.h: playback_paint), in the row of the drive mode, which
    stays free with each Image Control: the right of its last icon, the right
    of its last icon for a photo of interval shooting, whose shot number the

@@ -163,9 +163,9 @@ const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
 /// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
 /// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
 /// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), Uncropped RAW
-/// (`MANAGE_COPY_RAW`), Battery in Simple Display (`MANAGE_COPY_BATTERY`),
+/// (`MANAGE_COPY_RAW`), Simplified Info. Battery (`MANAGE_COPY_BATTERY`),
 /// Custom Picture (`MANAGE_COPY_GOODBYE`), Show Text
-/// (`MANAGE_COPY_GOODBYE_TEXT`), and GRKit Info in Playback
+/// (`MANAGE_COPY_GOODBYE_TEXT`), and Effect Icons in Playback
 /// (`MANAGE_COPY_PLAYBACK_INFO`), each as its value + 1, or 0 without a copy.
 pub const MANAGE_COPY_SWITCH: usize = 0;
 pub const MANAGE_COPY_START: usize = 1;
@@ -548,8 +548,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// which no position has, is the older value for each of them off.
     HOST_DIAL_SHARED_OFF: 4;
     /// The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW,
-    /// Battery in Simple Display, Custom Picture, Show Text, and
-    /// GRKit Info in Playback,
+    /// Simplified Info. Battery, Custom Picture, Show Text, and
+    /// Effect Icons in Playback,
     /// `MANAGE_COPY_WORDS`
     /// words (runtime/manage.h), right after
     /// HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
@@ -1327,8 +1327,8 @@ pub fn header() -> String {
     comment(
         &mut out,
         "The copy of the switch, Enable at Start, Distance Unit, Uncropped RAW, \
-         Battery in Simple Display, Custom Picture, Show Text, and \
-         GRKit Info in Playback \
+         Simplified Info. Battery, Custom Picture, Show Text, and \
+         Effect Icons in Playback \
          (GRKIT_HOST_MANAGE_COPY, \
          runtime/manage.h): each as its value + 1, or \
          0 without a copy. In the file of the sets, word w has the key \

@@ -446,7 +446,7 @@ menu_string_text_entry:
 #endif
 
 #ifdef HOOK_MENU_BATTERY_MODE
-/* Battery in Simple Display (runtime/manage.h). Replaces `cmp r3, #3` of
+/* Simplified Info. Battery (runtime/manage.h). Replaces `cmp r3, #3` of
    UpdateViewBattery of LiveViewController, where r3 is the display mode that
    DISP selects: 0 full, 1 simple, 2 no information, 3 display off. The jump
    table after it shows the battery icon at each level in mode 0, and only a

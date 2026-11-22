@@ -1,6 +1,6 @@
 #ifndef GRKIT_PLAYBACK_PHOTO_H
 #define GRKIT_PLAYBACK_PHOTO_H
-/* The photo that the playback of one photo shows, for GRKit Info in
+/* The photo that the playback of one photo shows, for Effect Icons in
    Playback: the poll reads it (runtime/playback_info.h), and the draw shows
    its items only while they belong to it (runtime/viewfinder.h). The
    includer defines u8, u32, WORD, BYTE, HALF, the services, and the target. */

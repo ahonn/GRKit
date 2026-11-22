@@ -52,7 +52,7 @@
    (runtime/picture.c: picture_dng_crop). Its setting, CORE.RAW, follows
    Distance Unit in the table. The picture code reads it from the copy.
 
-   Battery in Simple Display, a row of Display Settings, shows the battery
+   Simplified Info. Battery, a row of Display Settings, shows the battery
    icon of the full information also in the simple information of the live view, where the camera shows
    it only for a low battery (runtime/menu.S: menu_battery_mode). Its
    setting, CORE.BATTERY, follows Uncropped RAW in the table. A change
@@ -62,7 +62,7 @@
    Custom Picture, a row of Shutdown Screen, shows the picture
    GRKIT/GOODBYE.JPG of the card when the camera turns off, in place of the
    picture of the firmware (runtime/goodbye.h). Its setting, CORE.GOODBYE,
-   follows Battery in Simple Display in the table. On is the default, so the
+   follows Simplified Info. Battery in the table. On is the default, so the
    file alone gives the picture. A change applies at the next power-off.
 
    Show Text, the row after it, shows or hides the text that the
@@ -71,7 +71,7 @@
    Its setting, CORE.BYETEXT, follows Custom Picture in the table. On,
    as the camera, is the default.
 
-   GRKit Info in Playback, a row of Display Settings, shows the icons of
+   Effect Icons in Playback, a row of Display Settings, shows the icons of
    the GRKit settings of the photo that playback shows on the first page of
    its detailed information (runtime/playback_info.h). Its setting, CORE.PBINFO,
    follows Show Text in the table. On is the default; Off reads
@@ -106,7 +106,7 @@
 #define MANAGE_UNIT 24U
 /* The handle + 1 of CORE.RAW, Uncropped RAW, or 0 without it. */
 #define MANAGE_RAW 28U
-/* The handle + 1 of CORE.BATTERY, Battery in Simple Display, or 0 without
+/* The handle + 1 of CORE.BATTERY, Simplified Info. Battery, or 0 without
    it. */
 #define MANAGE_BATTERY 32U
 /* The handle + 1 of CORE.GOODBYE, Custom Picture, or 0 without
@@ -114,7 +114,7 @@
 #define MANAGE_GOODBYE 36U
 /* The handle + 1 of CORE.BYETEXT, Show Text, or 0 without it. */
 #define MANAGE_GOODBYE_TEXT 40U
-/* The handle + 1 of CORE.PBINFO, GRKit Info in Playback, or 0 without it. */
+/* The handle + 1 of CORE.PBINFO, Effect Icons in Playback, or 0 without it. */
 #define MANAGE_PLAYBACK_INFO 44U
 /* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
    CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
@@ -194,7 +194,7 @@
 #define MANAGE_RAW_OFF 0U
 #define MANAGE_RAW_ON 1U
 #define MANAGE_RAW_VALUES 2U
-/* The setting of Battery in Simple Display: 0 Off, as the camera, 1 On. */
+/* The setting of Simplified Info. Battery: 0 Off, as the camera, 1 On. */
 #define MANAGE_BATTERY_KEY "CORE.BATTERY"
 #define MANAGE_BATTERY_VALUES 2U
 /* The setting of Custom Picture: 0 Off, the picture of the firmware,
@@ -209,7 +209,7 @@
 #define MANAGE_GOODBYE_TEXT_OFF 0U
 #define MANAGE_GOODBYE_TEXT_ON 1U
 #define MANAGE_GOODBYE_TEXT_VALUES 2U
-/* The setting of GRKit Info in Playback: 0 Off, 1 On, the default. */
+/* The setting of Effect Icons in Playback: 0 Off, 1 On, the default. */
 #define MANAGE_PLAYBACK_INFO_KEY "CORE.PBINFO"
 #define MANAGE_PLAYBACK_INFO_OFF 0U
 #define MANAGE_PLAYBACK_INFO_ON 1U
@@ -358,9 +358,9 @@ static void manage_off_changed(volatile u32 *h) {
     if(changed&(GRKIT_CORE_ASPECT_BIT|GRKIT_CORE_ASPECT_MODE_BIT)) aspect_refresh(h);
     if(changed&GRKIT_CORE_TONE_BIT) tone_stored(h);
 }
-/* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, Battery
-   in Simple Display, Custom Picture, Show Text, and GRKit
-   Info in Playback in their copy, each as its value + 1, after a change of one of them. A copy
+/* Keep the switch, Enable at Start, Distance Unit, Uncropped RAW, Simplified
+   Info. Battery, Custom Picture, Show Text, and Effect
+   Icons in Playback in their copy, each as its value + 1, after a change of one of them. A copy
    that changes
    counts as a change of the file of the user modes, which the loader saves
    independently of the main state file. Off of the mode dial is not the

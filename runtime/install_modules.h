@@ -146,8 +146,8 @@ static int install_pass(u32 code, u32 array, u32 pixels, const u32 *icon_bases, 
         store(entry + 8, EFFECT_CHOICE_VALUES);
     }
     /* The GRKit switch, Enable at Start, Distance Unit, Uncropped RAW,
-       Battery in Simple Display, Custom Picture, Show Text,
-       and GRKit Info in Playback follow the choices of the effects. apply_state restores the saved values. The order of the
+       Simplified Info. Battery, Custom Picture, Show Text,
+       and Effect Icons in Playback follow the choices of the effects. apply_state restores the saved values. The order of the
        values of each module follows them. */
     u32 switch_handle = setting_total + MANAGE_PER_MODULE * module_count + listed_count;
     u32 start_handle = switch_handle + 1, unit_handle = start_handle + 1, raw_handle = unit_handle + 1;

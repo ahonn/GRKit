@@ -249,7 +249,7 @@ static void ui_native_open(volatile u32 *h);
 /* The timer of the mode dial (runtime/mode_dial.h). */
 static u32 dial_fired(volatile u32 *h,u32 id);
 static u32 persist_fired(volatile u32 *h,u32 id);
-/* The poll of GRKit Info in Playback (runtime/playback_info.h). */
+/* The poll of Effect Icons in Playback (runtime/playback_info.h). */
 static u32 playback_info_fired(volatile u32 *h,u32 id);
 A32_ENTRY void ui_timer_fired(u32 handler,u32 id) {
     volatile u32 *h=menu_header();

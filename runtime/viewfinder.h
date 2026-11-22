@@ -706,7 +706,7 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
     number[0]=(u16)('1'+page); number[1]='/'; number[2]=(u16)('0'+pages); number[3]=0;
     overlay_text(s,number,4,VIEW_PAGE_RIGHT-overlay_text_width(number,4),VIEW_PAGE_TOP,VIEW_PAGE_RIGHT);
 }
-/* GRKit Info in Playback (runtime/playback_info.h): on the first page of
+/* Effect Icons in Playback (runtime/playback_info.h): on the first page of
    the detailed information of the playback of one photo, the icon of each
    item of the photo, in a row that ends at PLAYBACK_ROW_RIGHT of the photo
    and starts at PLAYBACK_INFO_ROW_LEFT at the most, at PLAYBACK_INFO_ROW_TOP

@@ -5542,7 +5542,7 @@ static void the_section_starts_with_the_switch(void)
     menu_rows_install(h);
     assert(menu[MENU_ROWS_COUNT / 4] == 6 && menu_row(h, 1)[MENU_ROW_KIND / 4] == MENU_ROW_CORE);
 }
-/* Battery in Simple Display is a row of Display Settings after Distance
+/* Simplified Info. Battery is a row of Display Settings after Distance
    Unit: Off, as the camera, then On. A change saves, also in the copy of the
    file of the user modes. GRKit Settings has Enable at Start, Shooting
    Settings with Uncropped RAW, then Display Settings. */
@@ -5551,7 +5551,7 @@ static void battery_shows_in_the_simple_display(void)
     volatile u32 *h = test_header;
     u32 n;
     /* The switch is setting 12, Enable at Start setting 13, Distance Unit
-       setting 14, Battery in Simple Display setting 15, and Uncropped RAW
+       setting 14, Simplified Info. Battery setting 15, and Uncropped RAW
        setting 16. */
     install_stock_tab(10, 3);
     settings_memory[0] = 17;
@@ -5578,7 +5578,7 @@ static void battery_shows_in_the_simple_display(void)
     assert(menu_rows_controller(h, MENU_GROUP_PAGE_TARGET + CORE_GROUP_DISPLAY) == SETTINGS_SUBMENU &&
            settings_page(h) == core_group_page_settings);
     assert(settings_rows(h) == 2 && same(core_group_page_settings[0].label(h), "Distance Unit") &&
-           same(core_group_page_settings[1].label(h), "Battery in Simple Display"));
+           same(core_group_page_settings[1].label(h), "Simplified Info. Battery"));
     assert(core_group_row(h, CORE_GROUP_DISPLAY, 1) == core_settings + 3);
     /* On, then Off, as Enable GRKit. */
     assert(core_group_page_settings[1].values(h) == 2 && same(core_group_page_settings[1].value_text(h, 0), "On") &&
@@ -5595,7 +5595,7 @@ static void battery_shows_in_the_simple_display(void)
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
-    /* Without Distance Unit, Display Settings has Battery in Simple Display
+    /* Without Distance Unit, Display Settings has Simplified Info. Battery
        only. */
     manage_memory[MANAGE_UNIT / 4] = 0;
     assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 1 && core_group_row(h, CORE_GROUP_DISPLAY, 0) == core_settings + 3 &&
@@ -5641,7 +5641,7 @@ static void the_shutdown_screen_has_its_row(void)
     settings_memory[2 + 15 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
-/* GRKit Info in Playback is a row of Display Settings, On by default. A change saves, also in the copy of the file of the user modes. */
+/* Effect Icons in Playback is a row of Display Settings, On by default. A change saves, also in the copy of the file of the user modes. */
 static void the_playback_info_has_its_row(void)
 {
     volatile u32 *h = test_header;
@@ -5653,7 +5653,7 @@ static void the_playback_info_has_its_row(void)
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 17 + 1;
     const Setting *row = core_group_row(h, CORE_GROUP_DISPLAY, 0);
     assert(core_group_rows(h, CORE_GROUP_DISPLAY) == 1 && row == core_settings + 6);
-    assert(same(row->label(h), "GRKit Info in Playback") && same(row->value_text(h, 0), "On") &&
+    assert(same(row->label(h), "Effect Icons in Playback") && same(row->value_text(h, 0), "On") &&
            same(row->value_text(h, 1), "Off") && row->get(h) == 0);
     row->set(h, 1);
     assert(!playback_info_on(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_PLAYBACK_INFO] == 0 + 1);
