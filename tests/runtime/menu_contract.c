@@ -999,8 +999,10 @@ static void fn_values_add_the_defaults_of_a_native_look(void)
 }
 
 /* Toning (runtime/toning.h): adjustment 9 of a native look with its own red and
-   blue curves in a tail slot. A change makes the record curves from the slot,
-   green + (own - green) x (2 + t) / 2, and clears the gamma key. */
+   blue curves in a tail slot. The page shows the three GR IV levels as values
+   0 to 2, the look's own toning in the middle. A change makes the record
+   curves from the slot, green + (own - green) x (2 + t) / 2, and clears the
+   gamma key. */
 static void toning_moves_red_and_blue_from_green(void)
 {
 #ifdef PARAMETER_TONING_BASE
@@ -1020,21 +1022,19 @@ static void toning_moves_red_and_blue_from_green(void)
         HALF(slot, 512 + i * 2) = (u16)(green - 200);
     }
     test_header[GRKIT_HOST_PARAMETERS / 4] = record;
-    /* Its own toning reads as the neutral native value. */
-    assert(menu_parameter_get(PARAMETER_TONING) == 4 + 1);
-    const struct { u32 native; u8 stored; int red, blue; } steps[] = {
-        {5, 1, 150, -300},  /* +1, the GR IV level 3 */
-        {3, 8, 50, -100},   /* -1, the GR IV level 1 */
-        {2, 7, 0, 0},       /* -2, gray */
-        {0, 5, -100, 200},  /* -4, the other way */
-        {8, 4, 300, -600},  /* +4 */
-        {4, 0, 100, -200},  /* its own toning again */
+    /* Its own toning reads as the middle level. */
+    assert(menu_parameter_get(PARAMETER_TONING) == 1 + 1);
+    const struct { u32 value; u8 stored; u32 shown; int red, blue; } steps[] = {
+        {2, 1, 2, 150, -300}, /* +1, the GR IV level 3 */
+        {0, 8, 0, 50, -100},  /* -1, the GR IV level 1 */
+        {5, 1, 2, 150, -300}, /* beyond the levels: the last one */
+        {1, 0, 1, 100, -200}, /* its own toning again */
     };
     for (u32 s = 0; s < sizeof(steps) / sizeof(steps[0]); ++s) {
         test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
-        assert(menu_parameter_set(PARAMETER_TONING, steps[s].native));
+        assert(menu_parameter_set(PARAMETER_TONING, steps[s].value));
         assert(BYTE(record, GRKIT_RECORD_TONING) == steps[s].stored);
-        assert(menu_parameter_get(PARAMETER_TONING) == steps[s].native + 1);
+        assert(menu_parameter_get(PARAMETER_TONING) == steps[s].shown + 1);
         assert(test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
         for (u32 i = 0; i < 256; i += 51) {
             int green = 1000 + (int)i * 40;
@@ -1043,17 +1043,45 @@ static void toning_moves_red_and_blue_from_green(void)
             assert(HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) == green);
         }
     }
+    /* A value that an earlier GRKit stored beyond the levels takes the nearest one. */
+    BYTE(record, GRKIT_RECORD_TONING) = 4;
+    assert(menu_parameter_get(PARAMETER_TONING) == 2 + 1);
+    BYTE(record, GRKIT_RECORD_TONING) = 5;
+    assert(menu_parameter_get(PARAMETER_TONING) == 0 + 1);
+    /* The row text gives the level as GR IV shows it. */
+    const u32 text = TEST_OBJECTS + 0x3900U;
+    WORD(text, 0) = 0xffffffffU;
+    BYTE(record, GRKIT_RECORD_TONING) = 8;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '1' && !BYTE(text, 1));
+    BYTE(record, GRKIT_RECORD_TONING) = 0;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '2');
+    BYTE(record, GRKIT_RECORD_TONING) = 1;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '3');
+    /* The marker of each slider shows the default: the middle level of Toning,
+       and the Fn default of an adjustment as a native value. */
+    assert(menu_parameter_mark(PARAMETER_TONING) == 1 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 3) = 1;     /* Contrast +1 */
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 5) = 9 - 3; /* Shadow -3 */
+    assert(menu_parameter_mark(3) == 5 + 1);
+    assert(menu_parameter_mark(5) == 1 + 1);
+    assert(menu_parameter_mark(0) == 4 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 3) = 0;
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 5) = 0;
     /* The snapshot holds Toning in its row kind. */
     const u32 model = TEST_OBJECTS + 0x3800U;
     BYTE(record, GRKIT_RECORD_TONING) = 1;
     menu_parameter_page_snapshot(model);
-    assert(BYTE(model, MODEL_SNAPSHOT + PARAMETER_TONING_KIND) == 5);
-    /* Without a slot, the native getter and setter run. */
+    assert(BYTE(model, MODEL_SNAPSHOT + PARAMETER_TONING_KIND) == 2);
+    /* Without a slot, the native getter, setter, marker, and text run. */
     BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
     assert(menu_parameter_get(PARAMETER_TONING) == 0);
-    assert(!menu_parameter_set(PARAMETER_TONING, 6));
+    assert(!menu_parameter_set(PARAMETER_TONING, 2));
     assert(BYTE(record, GRKIT_RECORD_TONING) == 1);
+    assert(menu_parameter_mark(PARAMETER_TONING) == 0);
+    assert(menu_parameter_toning_label(text) == 0);
+    /* Without a session, every marker is native. */
     test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
+    assert(menu_parameter_mark(3) == 0);
 #endif
 }
 
