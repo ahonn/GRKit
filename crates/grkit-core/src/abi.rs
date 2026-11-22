@@ -1130,6 +1130,25 @@ fn hue_tables(out: &mut String) {
         effects::FN_DEFAULTS_END
     )
     .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_FEATURE_TONING_COLORS {}U",
+        effects::FEATURE_TONING_COLORS
+    )
+    .unwrap();
+    define(
+        out,
+        "The Toning track of feature 128: the RGB of its left end, then of its right \
+         end, in a file of GRKIT_GRF_MAX_SIZE bytes.",
+        "GRF_TONING_COLORS",
+        format!("{}U", effects::TONING_COLORS),
+    );
+    writeln!(
+        out,
+        "#define GRKIT_GRF_TONING_COLORS_SIZE {}U",
+        effects::TONING_COLORS_END - effects::TONING_COLORS
+    )
+    .unwrap();
     writeln!(out, "#define GRKIT_HUE_SIZE {}U", hue::SIZE).unwrap();
     writeln!(out, "#define GRKIT_HUE_MATRICES {}U", hue::SECTORS * 6).unwrap();
     define(

@@ -787,6 +787,11 @@
    GRKIT_RECORD_PARAMETERS, in a file of GRKIT_GRF_MAX_SIZE bytes. */
 #define GRKIT_GRF_FN_DEFAULTS 8624U
 #define GRKIT_GRF_FN_DEFAULTS_END 8633U
+#define GRKIT_FEATURE_TONING_COLORS 128U
+/* The Toning track of feature 128: the RGB of its left end, then of its right
+   end, in a file of GRKIT_GRF_MAX_SIZE bytes. */
+#define GRKIT_GRF_TONING_COLORS 8633U
+#define GRKIT_GRF_TONING_COLORS_SIZE 6U
 #define GRKIT_HUE_SIZE 88U
 #define GRKIT_HUE_MATRICES 66U
 /* Hue levels of feature 16: the sectors of levels 1 to 3 after the first

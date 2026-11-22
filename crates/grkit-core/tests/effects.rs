@@ -1102,6 +1102,56 @@ fn fn_defaults_go_with_any_effect() {
     assert_eq!(decoded.fn_defaults, Some([-2, 0, 0, 1, 0, -3, -3, 0, 0]));
 }
 
+/// Feature 128: the Toning colors of a native look follow the Fn defaults, round trip, and
+/// need the native look.
+#[test]
+fn toning_colors_follow_the_fn_defaults() {
+    let icon = vec![0; effects::ICON_SIZE];
+    let mut effect = fixture();
+    effect["native_look"] = native_look().to_json();
+    effect["fn_defaults"] = fn_defaults();
+    effect["toning_colors"] = json!([[154, 167, 157], [103, 165, 116]]);
+    let bytes = effects::encode(&effect, &icon).unwrap();
+    assert_eq!(bytes.len(), effects::SIZE_WITH_LEVELS);
+    assert_eq!(
+        u32::from_le_bytes(bytes[84..88].try_into().unwrap()),
+        32 | 64 | 128
+    );
+    assert_eq!(effects::TONING_COLORS, 8633);
+    assert_eq!(&bytes[8633..8639], &[154, 167, 157, 103, 165, 116]);
+    assert!(bytes[8639..].iter().all(|v| *v == 0));
+    let (decoded, _) = effects::decode(&bytes).unwrap();
+    assert_eq!(
+        decoded.toning_colors,
+        Some([[154, 167, 157], [103, 165, 116]])
+    );
+    assert_eq!(decoded.to_json(), effect);
+    assert_eq!(decoded.encode(&icon).unwrap(), bytes);
+    // Without the Fn defaults, the colors keep their place.
+    let mut alone = effect.clone();
+    alone.as_object_mut().unwrap().remove("fn_defaults");
+    let bytes = effects::encode(&alone, &icon).unwrap();
+    assert!(bytes[8624..8633].iter().all(|v| *v == 0));
+    assert_eq!(&bytes[8633..8639], &[154, 167, 157, 103, 165, 116]);
+    assert_eq!(effects::decode(&bytes).unwrap().0.to_json(), alone);
+    // A byte after the colors, or colors without the feature bit, fail.
+    let mut extra = bytes.clone();
+    extra[8639] = 1;
+    assert!(effects::decode(&extra).is_err());
+    let mut missing = bytes.clone();
+    missing[84] &= !128;
+    assert!(effects::decode(&missing).is_err());
+    // An effect without a native look, or a color out of range, fails.
+    let mut plain = fixture();
+    plain["toning_colors"] = json!([[0, 0, 0], [255, 255, 255]]);
+    assert!(effects::encode(&plain, &icon).is_err());
+    let mut bad = effect.clone();
+    bad["toning_colors"] = json!([[0, 0, 0], [256, 0, 0]]);
+    assert!(effects::encode(&bad, &icon).is_err());
+    bad["toning_colors"] = json!([[0, 0, 0]]);
+    assert!(effects::encode(&bad, &icon).is_err());
+}
+
 #[test]
 fn a_long_cover_number_takes_a_smaller_size() {
     // YELLOW is too wide at the full size; GREEN keeps it.
