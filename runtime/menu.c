@@ -946,13 +946,15 @@ A32_ENTRY u32 menu_battery_simple(void) { return battery_simple(menu_header()); 
 /* The shooting screen: the framing component calls this entry, whose
    address INSTALL writes (SERVICES_CORE_VIEWFINDER), in the App task with
    an event (runtime/services.h): the first shooting screen after INSTALL,
-   where the mode dial starts (runtime/mode_dial.h). */
+   where the mode dial starts (runtime/mode_dial.h) and the shutdown
+   picture is checked (runtime/goodbye.h). */
 A32_ENTRY void menu_viewfinder(u32 event) {
     volatile u32 *h=menu_header();
     if(!h[GRKIT_HOST_SERVICES/4]) return;
     if(event==VIEWFINDER_READY) {
         persist_ready(h);
         dial_ready(h);
+        goodbye_ready(h);
     }
 }
 /* The text descriptor for `view` and text ID `id`, or 0 for the native text.

@@ -664,6 +664,20 @@ fn native_menu_contract_preserves_events_icons_and_empty_catalog() {
         ),
     )
     .unwrap();
+    // A picture of the site, which the card of the shutdown screen holds.
+    let rgb: Vec<u8> = (0..grkit_core::goodbye::WIDTH * grkit_core::goodbye::HEIGHT * 3)
+        .map(|i| (i * 7 % 251) as u8 ^ (i / 2160) as u8)
+        .collect();
+    let picture = grkit_core::goodbye::encode(&rgb).unwrap();
+    let bytes: Vec<String> = picture.iter().map(u8::to_string).collect();
+    fs::write(
+        temporary.path().join("goodbye_picture.h"),
+        format!(
+            "static const unsigned char test_goodbye_picture[] = {{{}}};\n",
+            bytes.join(",")
+        ),
+    )
+    .unwrap();
     // The harness gives the behavior of each target where it differs.
     for (index, target) in targets().iter().enumerate() {
         let executable = temporary.path().join(format!("menu_contract_{index}"));

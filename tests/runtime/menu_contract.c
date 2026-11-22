@@ -271,18 +271,45 @@ static uintptr_t test_select_method(uintptr_t address);
 #define CALL3(a) ((unsigned (*)(unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #define CALL4(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
 #define CALL5(a) ((unsigned (*)(unsigned,unsigned,unsigned,unsigned,unsigned))test_select_method((uintptr_t)(a)))
-/* The file of the shutdown picture on the test card: its length and the
-   bytes of its start. */
-static unsigned goodbye_length, goodbye_head_bytes;
-static unsigned char goodbye_head[200];
-static unsigned test_goodbye_file(const char *path, unsigned char *head, unsigned size, unsigned *read)
+/* The file of the shutdown picture on the test card: its bytes, its length
+   (0 without the file), the place of the next read, and the number of
+   checks of the file. goodbye_picture.h, which the harness writes, holds a
+   picture of the site (grkit_core::goodbye::encode). */
+#include "goodbye_picture.h"
+static unsigned char goodbye_card[sizeof test_goodbye_picture + 64];
+static unsigned goodbye_length, goodbye_at, goodbye_reads;
+static unsigned test_goodbye_size(const char *path)
 {
     assert(!strcmp(path, "C:\\GRKIT\\GOODBYE.JPG"));
-    *read = goodbye_head_bytes < size ? goodbye_head_bytes : size;
-    memcpy(head, goodbye_head, *read);
+    ++goodbye_reads;
     return goodbye_length;
 }
-#define GOODBYE_FILE(path, head, size, read) test_goodbye_file((path), (head), (size), (read))
+static int test_goodbye_read(unsigned file, unsigned char *buf, unsigned size, unsigned *len)
+{
+    assert(file == 7);
+    *len = goodbye_length - goodbye_at < size ? goodbye_length - goodbye_at : size;
+    memcpy(buf, goodbye_card + goodbye_at, *len);
+    goodbye_at += *len;
+    return 0;
+}
+#define GOODBYE_FILE_SIZE(path) test_goodbye_size(path)
+#define GOODBYE_FILE_OPEN(path) (goodbye_at = 0, 7)
+#define GOODBYE_FILE_READ(file, buf, size, len) test_goodbye_read((file), (buf), (size), (len))
+#define GOODBYE_FILE_CLOSE(file) ((void)(file))
+/* The picture of the site on the card, `length` bytes of it. */
+static void goodbye_card_picture(unsigned length)
+{
+    memcpy(goodbye_card, test_goodbye_picture, sizeof test_goodbye_picture);
+    goodbye_length = length;
+}
+/* The place of the bytes `marker` in the picture of the card. */
+static unsigned goodbye_card_find(unsigned char a, unsigned char b)
+{
+    for (unsigned i = 0; i + 1 < goodbye_length; ++i)
+        if (goodbye_card[i] == a && goodbye_card[i + 1] == b) return i;
+    assert(0);
+    return 0;
+}
 /* The photo that playback shows (runtime/playback_info.h): its path, its
    file, and the controller of playback; the reads of
    the file, the redraws of the canvas, and the timers of the poll. */
@@ -5707,6 +5734,14 @@ static void playback_lists_the_grkit_settings_of_a_photo(void)
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000002.JPG";
     playback_test_jpeg(100, 0, 0);
     assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 0);
+    /* Without its canvas, as under the screen that deletes the photo, the
+       next photo waits for the canvas: no read, no redraw. */
+    WORD(c, ADJ_CANVAS) = 0;
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000006.JPG";
+    i = playback_redraws;
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_redraws == i);
+    WORD(c, ADJ_CANVAS) = TEST_OBJECTS + 9 * GRKIT_RECORD_SIZE;
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && playback_redraws == i + 1);
     /* Off: no read, and the live view gets no controller. */
     settings_memory[2 + 17 * 3 + 1] = MANAGE_PLAYBACK_INFO_OFF;
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000004.JPG";
@@ -5718,7 +5753,7 @@ static void playback_lists_the_grkit_settings_of_a_photo(void)
 }
 /* Whether the hook of the power-off gives the picture of the card: its
    record, or its path and size. */
-static u32 goodbye_given(void)
+static u32 goodbye_shown(void)
 {
 #if FW_GOODBYE_INDEXES
     /* Index 2 is the picture of the power-off of each build with the table,
@@ -5736,48 +5771,90 @@ static u32 goodbye_given(void)
 #endif
     return 1;
 }
+/* The same at a power-off without a check of the file since the start. */
+static u32 goodbye_given(void)
+{
+    services_word(test_header, SERVICES_GOODBYE)[0] = GOODBYE_UNCHECKED;
+    return goodbye_shown();
+}
 /* The power-off shows the picture of the card while the setting is on and
-   the file is one that the camera can show. */
+   the decoder of the camera reads the whole file to its end: a file that
+   ends early or does not decode stops the decoder, and the camera does not
+   turn off. */
 static void the_shutdown_screen_takes_a_usable_file(void)
 {
-    /* The start of a picture of the site: SOI, the JFIF segment, two
-       quantization tables, then the frame. */
-    static const unsigned char frame[] = {0xff, 0xc0, 0, 17, 8, 0x01, 0xe0, 0x02, 0xd0, 3,
-                                          1,    0x22, 0, 2,  0x11, 1, 3, 0x11, 1};
     volatile u32 *h = test_header;
+    unsigned whole = sizeof test_goodbye_picture, at;
     install_stock_tab(10, 3);
     settings_memory[0] = 16;
     settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
     settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
     manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
-    memset(goodbye_head, 0, sizeof goodbye_head);
-    memcpy(goodbye_head, "\xff\xd8\xff\xe0\x00\x10", 6);
-    memcpy(goodbye_head + 20, "\xff\xdb\x00\x43", 4);
-    memcpy(goodbye_head + 89, "\xff\xdb\x00\x43", 4);
-    memcpy(goodbye_head + 158, frame, sizeof frame);
-    goodbye_head_bytes = sizeof goodbye_head;
-    goodbye_length = GOODBYE_BYTES_MAX;
+    goodbye_card_picture(whole);
     assert(goodbye_given());
-    /* A file that is longer than the buffer of the firmware, no file, a
-       frame of another size, and a progressive frame. */
-    goodbye_length = GOODBYE_BYTES_MAX + 1;
-    assert(!goodbye_given());
+    /* No file, a file longer than the buffer of the firmware, and files
+       that end early: in the scan, and before its end marker. */
     goodbye_length = 0;
     assert(!goodbye_given());
-    goodbye_length = 40000;
-    goodbye_head[158 + 8] = 0xd1;
+    goodbye_length = GOODBYE_BYTES_MAX + 1;
     assert(!goodbye_given());
-    goodbye_head[158 + 8] = 0xd0;
-    goodbye_head[158 + 1] = 0xc2;
+    goodbye_card_picture(whole * 6 / 10);
     assert(!goodbye_given());
-    goodbye_head[158 + 1] = 0xc0;
-    assert(goodbye_given());
+    goodbye_card_picture(whole - 2);
+    assert(!goodbye_given());
+    /* A marker in the middle of the scan, a frame of another size, and a
+       progressive frame. */
+    goodbye_card_picture(whole);
+    goodbye_card[whole / 2] = 0xff;
+    goodbye_card[whole / 2 + 1] = 0xd0;
+    assert(!goodbye_given());
+    goodbye_card_picture(whole);
+    at = goodbye_card_find(0xff, 0xc0);
+    goodbye_card[at + 6] = 0xd1;
+    assert(!goodbye_given());
+    goodbye_card_picture(whole);
+    goodbye_card[at + 1] = 0xc2;
+    assert(!goodbye_given());
+    /* A comment segment after SOI: pictures padded with comments have
+       stopped the power-off of a camera. */
+    goodbye_card_picture(whole + 6);
+    memmove(goodbye_card + 8, goodbye_card + 2, whole - 2);
+    memcpy(goodbye_card + 2, "\xff\xfe\x00\x04hi", 6);
+    assert(!goodbye_given());
     /* Off shows the picture of the firmware. */
+    goodbye_card_picture(whole);
     settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_OFF;
     assert(!goodbye_given());
     settings_memory[2 + 15 * 3 + 1] = 0;
     manage_memory[MANAGE_GOODBYE / 4] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
+/* The first shooting screen checks the file once, while the setting is on,
+   so a power-off reads the card only for a usable file, through the
+   firmware. A power-off before a check checks the file then. */
+static void the_shutdown_screen_checks_its_file_at_the_start(void)
+{
+    install_stock_tab(10, 3);
+    settings_memory[0] = 16;
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    goodbye_length = goodbye_reads = 0;
+    menu_viewfinder(VIEWFINDER_READY);
+    assert(goodbye_reads == 1 && !goodbye_shown() && goodbye_reads == 1);
+    /* With the setting off at the start, the power-off checks the file. */
+    install_stock_tab(10, 3);
+    settings_memory[0] = 16;
+    settings_memory[2 + 15 * 3 + 2] = MANAGE_GOODBYE_VALUES;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    goodbye_reads = 0;
+    menu_viewfinder(VIEWFINDER_READY);
+    assert(goodbye_reads == 0);
+    settings_memory[2 + 15 * 3 + 1] = MANAGE_GOODBYE_ON;
+    assert(!goodbye_shown() && goodbye_reads == 1 && !goodbye_shown() && goodbye_reads == 1);
+    settings_memory[2 + 15 * 3 + 1] = 0;
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    test_header[GRKIT_HOST_SETTINGS / 4] = 0;
 }
 /* Show Text is the row after Custom Picture. Off hides
    the six views over the picture of the GoodBye controller, in
@@ -6383,6 +6460,7 @@ int main(void)
     battery_shows_in_the_simple_display();
     the_shutdown_screen_has_its_row();
     the_shutdown_screen_takes_a_usable_file();
+    the_shutdown_screen_checks_its_file_at_the_start();
     the_shutdown_text_hides_its_views();
     the_playback_info_has_its_row();
     playback_lists_the_grkit_settings_of_a_photo();

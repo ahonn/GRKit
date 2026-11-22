@@ -168,7 +168,7 @@ static uint32_t level_updates, level_updated;
    component for the shooting screen: their count and the last event. */
 #define TEST_SERVICES 0x58000000U
 #define TEST_CORE_ENTRY 0x57000001U
-static uint32_t services_memory[0x2000];
+static uint32_t services_memory[0x4000];
 static volatile uint32_t *mapped_services(uint32_t address)
 {
     assert(address >= TEST_SERVICES && address < TEST_SERVICES + sizeof(services_memory) && (address & 3) == 0);
