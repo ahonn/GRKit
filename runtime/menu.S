@@ -617,6 +617,61 @@ PARAMETER_ROW 9, HOOK_MENU_PARAMETER_ROW_9_TARGET
 #endif
 .ltorg
 
+#ifdef HOOK_MENU_PARAMETER_MARK_0
+/* Replace the BL of the slider setup of a row to the native default of the
+   type, which places the marker of the slider. The read keeps its arguments,
+   so a native read is a tail call. */
+.macro PARAMETER_MARK index, target
+.global menu_parameter_mark_\index
+.type menu_parameter_mark_\index, %function
+menu_parameter_mark_\index:
+    push {r0-r4, lr}
+    mov r0, #\index
+    bl menu_parameter_mark
+    subs r4, r0, #1
+    movge r0, r4
+    addge sp, sp, #4
+    popge {r1-r4, pc}
+    pop {r0-r4, lr}
+    ldr r12, =\target
+    bx r12
+.endm
+PARAMETER_MARK 0, HOOK_MENU_PARAMETER_MARK_0_TARGET
+PARAMETER_MARK 1, HOOK_MENU_PARAMETER_MARK_1_TARGET
+PARAMETER_MARK 2, HOOK_MENU_PARAMETER_MARK_2_TARGET
+PARAMETER_MARK 3, HOOK_MENU_PARAMETER_MARK_3_TARGET
+PARAMETER_MARK 4, HOOK_MENU_PARAMETER_MARK_4_TARGET
+PARAMETER_MARK 5, HOOK_MENU_PARAMETER_MARK_5_TARGET
+PARAMETER_MARK 6, HOOK_MENU_PARAMETER_MARK_6_TARGET
+PARAMETER_MARK 7, HOOK_MENU_PARAMETER_MARK_7_TARGET
+PARAMETER_MARK 8, HOOK_MENU_PARAMETER_MARK_8_TARGET
+.ltorg
+#endif
+#ifdef HOOK_MENU_PARAMETER_MARK_9
+PARAMETER_MARK 9, HOOK_MENU_PARAMETER_MARK_9_TARGET
+/* The BL of the Toning row to the slider setup: the arguments go on to
+   menu_parameter_toning_slider (menu.c), which calls the setup. */
+.global menu_parameter_toning_init
+.type menu_parameter_toning_init, %function
+menu_parameter_toning_init:
+    b menu_parameter_toning_slider
+/* The tail branch of the Toning row text to the native text of a value. r1 =
+   the text. The row text returns the length of the text. */
+.global menu_parameter_toning_text
+.type menu_parameter_toning_text, %function
+menu_parameter_toning_text:
+    push {r0-r3, r12, lr}
+    mov r0, r1
+    bl menu_parameter_toning_label
+    cmp r0, #0
+    strne r0, [sp]
+    pop {r0-r3, r12, lr}
+    bxne lr
+    ldr r12, =HOOK_MENU_PARAMETER_TONING_TEXT_TARGET
+    bx r12
+.ltorg
+#endif
+
 /* The page start method. r0 = the page. */
 .global menu_parameter_start
 .type menu_parameter_start, %function

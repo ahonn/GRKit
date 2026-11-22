@@ -104,11 +104,28 @@ const GRAIN: &[HookSpec] = &[
 
 /// Toning of a native look on the parameter page (`runtime/toning.h`): the
 /// Image Control model getter and setter of the Retro Toning row (kind 9), and
-/// the BL to its settings getter in the row text.
+/// the BL to its settings getter in the row text. Then, in the slider setup
+/// of each row of the page, the BL to the native default of the type, which
+/// places the marker of the slider (`menu_parameter_mark`): the nine
+/// adjustments in the order of `GRKIT_RECORD_PARAMETERS`, then Toning. Last,
+/// the BL of the Toning slider setup to `FW_SLIDER_INIT`, and the tail branch
+/// of the Toning row text to the native text of a value.
 const TONING: &[HookSpec] = &[
     b("menu_parameter_get_9", Menu, Tuning),
     b("menu_parameter_set_9", Menu, Tuning),
     bl("menu_parameter_row_9", Menu, Tuning),
+    bl("menu_parameter_mark_0", Menu, Tuning),
+    bl("menu_parameter_mark_1", Menu, Tuning),
+    bl("menu_parameter_mark_2", Menu, Tuning),
+    bl("menu_parameter_mark_3", Menu, Tuning),
+    bl("menu_parameter_mark_4", Menu, Tuning),
+    bl("menu_parameter_mark_5", Menu, Tuning),
+    bl("menu_parameter_mark_6", Menu, Tuning),
+    bl("menu_parameter_mark_7", Menu, Tuning),
+    bl("menu_parameter_mark_8", Menu, Tuning),
+    bl("menu_parameter_mark_9", Menu, Tuning),
+    bl("menu_parameter_toning_init", Menu, Tuning),
+    b("menu_parameter_toning_text", Menu, Tuning),
 ];
 
 /// The mode dial (`runtime/mode_dial.h`): the entry of the apply of a dial

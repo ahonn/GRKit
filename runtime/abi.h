@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6548
+#define GRKIT_HOST_HEADER_SIZE 6552
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -569,6 +569,10 @@
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
 #define GRKIT_HOST_RECIPE_PREVIEW 6544
+/* The Toning track that the parameter page shows for a native look with Toning
+   colors (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the
+   pixels, in a firmware block that the core makes at its first use; else 0. */
+#define GRKIT_HOST_TONING_TRACK 6548
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -696,6 +700,10 @@
    fields at +0x6c, 60 3x3 i32 Q10 matrices at +0x98, the highlight-correction
    set at +0x908, and its control fields at +0x920. Zero without hue sectors. */
 #define GRKIT_RECORD_MULTIAXIAL 0x740
+/* The Toning track of a native look with Toning (RECORD_TONE_SLOT): the RGB of
+   its left end, then of its right end, from the effect (feature 128). Zero
+   without them: the page shows the native track. */
+#define GRKIT_RECORD_TONING_COLORS 0x10c0
 /* The R, G, and B tone curves in the coefficients: 256 14-bit samples each,
    GRKIT_RECORD_CURVE_SIZE bytes apart. */
 #define GRKIT_RECORD_CURVES 0x68
