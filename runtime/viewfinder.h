@@ -709,8 +709,11 @@ static GRKIT_ICON_COMPACT void view_paint(volatile u32 *h,const Surface *s) {
    the detailed information of the playback of one photo, the icon of each
    item of the photo, in a row that ends at PLAYBACK_ROW_RIGHT of the photo
    and starts at PLAYBACK_INFO_ROW_LEFT at the most, at PLAYBACK_INFO_ROW_TOP
-   (build header), in the part of the page that the camera leaves free. Only while the items belong to the photo that
-   playback opened: the poll reads a new photo after the camera shows it. */
+   (build header), in the part of the page that the camera leaves free, and
+   the crop badge of the photo at PLAYBACK_CROP_LEFT and PLAYBACK_CROP_TOP,
+   over the place of the camera's own. Only while the items belong to the
+   photo that playback opened: the poll reads a new photo after the camera
+   shows it. */
 #define PLAYBACK_INFO_PITCH 48U
 /* Whether the items belong to the photo that playback opened: the path of
    the items has the drive of the card first, the path of the playback none. */
@@ -727,8 +730,10 @@ static GRKIT_ICON_COMPACT u32 playback_photo(volatile u32 *h) {
 static GRKIT_ICON_COMPACT u32 playback_paint(volatile u32 *h,u32 c,u32 canvas,u32 bitmap) {
     volatile u32 *base=services_word(h,SERVICES_PLAYBACK+PLAYBACK_DETAILS);
     u32 n=base[DETAIL_COUNT/4], i, x, data, pixels, shown=0;
+    u32 crop=crop_value_label(services_word(h,SERVICES_PLAYBACK+PLAYBACK_CROP)[0]);
     Surface surface;
-    if(!n || !playback_info_page(c) || !playback_photo(h) || !(data=canvas_bitmap(canvas,bitmap))) return 0;
+    if((!n && crop>=GRKIT_LABEL_COUNT) || !playback_info_page(c) || !playback_photo(h) ||
+       !(data=canvas_bitmap(canvas,bitmap))) return 0;
     surface.data=data; surface.stride=HALF(bitmap,0x18); surface.area=0; surface.box=photo_boxes[0];
     /* The first icons that fit between PLAYBACK_INFO_ROW_LEFT and the right
        end of the row of the photo. */
@@ -742,6 +747,7 @@ static GRKIT_ICON_COMPACT u32 playback_paint(volatile u32 *h,u32 c,u32 canvas,u3
             x+=PLAYBACK_INFO_PITCH;
             --shown;
         }
+    if(crop<GRKIT_LABEL_COUNT) overlay_label(&surface,crop,PLAYBACK_CROP_LEFT,PLAYBACK_CROP_TOP);
     return 1;
 }
 static GRKIT_ICON_COMPACT void preview_paint(volatile u32 *h,u32 canvas,u32 bitmap) {

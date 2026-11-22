@@ -112,6 +112,10 @@
 #define PLAYBACK_INFO_COMPOSITE_RIGHT 390U
 #define PLAYBACK_INFO_ROW_LEFT 330U
 #define PLAYBACK_INFO_ROW_TOP 110U
+/* The crop badge of the photo on that page: the place of the camera's own,
+   right of the focal length. */
+#define PLAYBACK_CROP_LEFT 642U
+#define PLAYBACK_CROP_TOP 160U
 /* RAW development, the Fn adjustments (runtime/develop.h): RawDevelopmentModel
    holds the selected Image Control: the category at DEVELOP_CATEGORY and the
    value of each category from DEVELOP_VALUES. The build header gives the

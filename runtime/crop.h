@@ -174,13 +174,16 @@ static __attribute__((unused)) u32 crop_scale(u32 crop,u32 native) {
 #define LABEL_CROP_CAMERA GRKIT_LABEL_CROP_CAMERA
 #define CROP_BADGE_LEFT 662U
 #define CROP_BADGE_TOP 80U
-static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h) {
+/* The badge of CORE.CROP value `value`. Playback shows it for the crop of a
+   photo too (runtime/viewfinder.h: playback_paint). */
+static __attribute__((unused)) u32 crop_value_label(u32 value) {
     static const u8 badges[2][GRKIT_CORE_CROP_VALUES]={
         {GRKIT_LABEL_COUNT,LABEL_CROP_CAMERA,LABEL_CROP,LABEL_CROP_CAMERA+1U,LABEL_CROP+1U},
         {GRKIT_LABEL_COUNT,LABEL_CROP_CAMERA+1U,LABEL_CROP+2U,LABEL_CROP_CAMERA+2U,LABEL_CROP+3U},
     };
-    return badges[CROP_LENS_40MM() ? 1 : 0][crop_capture(h)];
+    return value<GRKIT_CORE_CROP_VALUES ? badges[CROP_LENS_40MM() ? 1 : 0][value] : GRKIT_LABEL_COUNT;
 }
+static __attribute__((unused)) u32 crop_badge_label(volatile u32 *h) { return crop_value_label(crop_capture(h)); }
 _Static_assert(LABEL_CROP+4U<=GRKIT_LABEL_COUNT && LABEL_CROP_CAMERA+3U<=GRKIT_LABEL_COUNT,
                "The labels hold each crop badge");
 

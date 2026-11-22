@@ -400,15 +400,16 @@
    playback shows and the setting is On, else 0, which the live view reads;
    whether the live view painted the icons in the last draw of the canvas of
    playback; the right end of the row of icons of the photo whose items
-   follow; the path of that photo, NUL-terminated, or an empty path; then
-   its items, as the details block holds them: their number, then
-   PLAYBACK_ITEMS_MAX items. */
+   follow; the CORE.CROP value of that photo, 0 without a crop; the path of
+   that photo, NUL-terminated, or an empty path; then its items, as the
+   details block holds them: their number, then PLAYBACK_ITEMS_MAX items. */
 #define SERVICES_PLAYBACK (SERVICES_DNG_CROP + 8U)
 #define PLAYBACK_TIMER 0U
 #define PLAYBACK_CONTROLLER 4U
 #define PLAYBACK_PAINTED 8U
 #define PLAYBACK_ROW_RIGHT 12U
-#define PLAYBACK_PATH 16U
+#define PLAYBACK_CROP 16U
+#define PLAYBACK_PATH 20U
 #define PLAYBACK_PATH_BYTES 64U
 #define PLAYBACK_DETAILS (PLAYBACK_PATH + PLAYBACK_PATH_BYTES)
 #define PLAYBACK_ITEMS_MAX 8U

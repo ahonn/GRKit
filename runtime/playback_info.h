@@ -12,11 +12,15 @@
    (menu_playback_private). The settings are those
    of GRKIT_PHOTO_XMP_SETTINGS that grkit:State of the XMP packet of the photo
    holds with a value other than 0, and whose property the packet has: Grain,
-   Bloom, Halation, Border, Framing, Crop, and Date Imprint. Framing and Crop
-   that only showed a frame have no property, as they did not crop the photo.
-   Each is an item of runtime/recipe_details.h with the icon of the setting
-   (playback_icon_of, runtime/viewfinder.h: playback_paint). A photo without the state shows
-   nothing.
+   Bloom, Halation, Border, and Date Imprint. Each is an item of
+   runtime/recipe_details.h with the icon of the setting (playback_icon_of,
+   runtime/viewfinder.h: playback_paint). The page shows the crop of the
+   photo in the place of the camera's own crop badge, right of the focal
+   length, with the badge of the live view (runtime/crop.h), which covers
+   the camera's badge of 35 and 50 mm; Crop that only showed a frame has no
+   property, as it did not crop the photo. Framing needs nothing: the size
+   and the thumbnail of the photo already show its ratio. A photo without
+   the state shows nothing.
 
    A poll in the App task reads the photo, every PLAYBACK_POLL_MS while
    playback shows and the setting is On. It reads the file only when the
@@ -138,21 +142,18 @@ static u32 playback_handle(volatile u32 *h,const PhotoXmpSetting *s) {
    each. */
 static const struct { const char *property; u8 name; } playback_settings[]={
     {"Grain",DETAIL_NAME_GRAIN},{"Bloom",DETAIL_NAME_BLOOM},{"Halation",DETAIL_NAME_HALATION},
-    {"Border",DETAIL_NAME_BORDER},{"Framing",DETAIL_NAME_FRAMING},{"Crop",DETAIL_NAME_CROP},
-    {"DateImprint",DETAIL_NAME_DATE}};
+    {"Border",DETAIL_NAME_BORDER},{"DateImprint",DETAIL_NAME_DATE}};
 _Static_assert(sizeof(playback_settings)/sizeof(playback_settings[0])<=PLAYBACK_ITEMS_MAX,
                "The block holds each setting");
 /* The icon of setting `handle` at `value`: the status icon of its module, as
    the live view shows it, else the tile of the value in ADJ, for a setting
-   whose status icon is a text label (Framing, Date Imprint) or that has none
-   (Crop); 0 without either. */
+   whose status icon is a text label (Date Imprint); 0 without either. */
 static u32 playback_icon_of(volatile u32 *h,u32 handle,u32 value) {
     u32 icon=detail_module_icon(h,handle,value), i, tile;
     if(icon && (icon<GRKIT_ICON_CORE_LABEL(0) || icon>=GRKIT_ICON_EFFECT(0))) return icon;
     for(i=0;i<module_pages(h);++i) {
         tile=h[GRKIT_HOST_MODULE_PAGES/4+i*3+2];
         if(h[GRKIT_HOST_MODULE_PAGES/4+i*3+1]!=handle || tile==MANAGE_NO_TILE) continue;
-        value=crop_tile(handle,value);
         return tile<GRKIT_MODULE_TILES_MAX && value<GRKIT_MODULE_TILES_MAX-tile ? GRKIT_ICON_MODULE_TILE(tile+value) : 0;
     }
     return 0;
@@ -175,25 +176,34 @@ static const PhotoXmpSetting *playback_setting(const char *property) {
     }
     return 0;
 }
+/* The value of the setting with property `property` that grkit:State of the
+   packet holds, with the setting in *s: 0 also without the property, which
+   a setting that did not change the photo leaves out. */
+static u32 playback_value(const char *xmp,u32 n,const char *property,const PhotoXmpSetting **s) {
+    char name[PLAYBACK_NAME_BYTES];
+    u32 value, len;
+    if(!(*s=playback_setting(property)) || !(value=playback_state(xmp,n,(*s)->id)) ||
+       !photo_xmp_find(xmp,n,playback_name(name,property),&len) || !len) return 0;
+    return value;
+}
 /* Write the items of the photo at `path` into the block of the playback
-   (PLAYBACK_DETAILS), with the right end of their row, and give their
-   number. It keeps its item off the stack frame of the poll, which holds the
-   path. */
+   (PLAYBACK_DETAILS), with the right end of their row and its crop, and give
+   their number. It keeps its item off the stack frame of the poll, which
+   holds the path. */
 static __attribute__((noinline)) u32 playback_info_build(volatile u32 *h,const u8 *path) {
     DetailList list;
     DetailItem item;
     const PhotoXmpSetting *s;
     const char *xmp;
     u8 *buf=(u8 *)(services_word(h,SERVICES_DEVELOP)+DEVELOP_COPY_RECORD/4);
-    u32 n=0, i, value, handle, len, drive;
-    char name[PLAYBACK_NAME_BYTES];
+    u32 n=0, i, value, handle, drive;
     list.base=playback_word(h,PLAYBACK_DETAILS); list.n=0; list.max=PLAYBACK_ITEMS_MAX;
     xmp=playback_packet(path,buf,&n,&drive);
     playback_word(h,PLAYBACK_ROW_RIGHT)[0]=!(drive&XMP_DRIVE_INTERVAL) ? PLAYBACK_INFO_ROW_RIGHT :
                                            drive&XMP_DRIVE_MULTI ? PLAYBACK_INFO_COMPOSITE_RIGHT : PLAYBACK_INFO_INTERVAL_RIGHT;
+    playback_word(h,PLAYBACK_CROP)[0]=xmp ? playback_value(xmp,n,"Crop",&s) : 0;
     for(i=0;xmp && i<sizeof(playback_settings)/sizeof(playback_settings[0]);++i) {
-        if(!(s=playback_setting(playback_settings[i].property)) || !(value=playback_state(xmp,n,s->id)) ||
-           !photo_xmp_find(xmp,n,playback_name(name,playback_settings[i].property),&len) || !len) continue;
+        if(!(value=playback_value(xmp,n,playback_settings[i].property,&s))) continue;
         detail_start(&item,DETAIL_GROUP_MODULES,playback_settings[i].name,0);
         handle=playback_handle(h,s);
         if(handle!=PLAYBACK_NO_SETTING) item.icon=playback_icon_of(h,handle,value);

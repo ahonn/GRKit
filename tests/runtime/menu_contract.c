@@ -5730,10 +5730,17 @@ static void playback_lists_the_grkit_settings_of_a_photo(void)
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000005.JPG";
     playback_test_jpeg(100, 0, XMP_DRIVE_INTERVAL | 0x01000000U);
     assert(playback_info_fired(h, 0x20000U + playback_timers) && *row == PLAYBACK_INFO_COMPOSITE_RIGHT);
+    /* A crop goes to the place of the camera's crop badge, not into the row. */
+    playback_test_path = "C:\\DCIM\\100RICOH\\R0000007.JPG";
+    playback_test_jpeg(100, "<x:xmpmeta><rdf:Description grkit:Grain=\"Medium\" grkit:Crop=\"40mm\" "
+                            "grkit:State=\"790270076=2,660632122=2\"/></x:xmpmeta>", 0);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 1 && playback_item(0, DETAIL_NAME_GRAIN));
+    assert(services_word(h, SERVICES_PLAYBACK + PLAYBACK_CROP)[0] == 2);
     /* A photo of an older GRKit or without GRKit: no packet. */
     playback_test_path = "C:\\DCIM\\100RICOH\\R0000002.JPG";
     playback_test_jpeg(100, 0, 0);
-    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 0);
+    assert(playback_info_fired(h, 0x20000U + playback_timers) && count[0] == 0 &&
+           !services_word(h, SERVICES_PLAYBACK + PLAYBACK_CROP)[0]);
     /* Without its canvas, as under the screen that deletes the photo, the
        next photo waits for the canvas: no read, no redraw. */
     WORD(c, ADJ_CANVAS) = 0;

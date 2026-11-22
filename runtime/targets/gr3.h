@@ -248,6 +248,10 @@
 #define PLAYBACK_INFO_COMPOSITE_RIGHT 390U
 #define PLAYBACK_INFO_ROW_LEFT 330U
 #define PLAYBACK_INFO_ROW_TOP 120U
+/* The crop badge of the photo on that page: the place of the camera's own,
+   right of the focal length. */
+#define PLAYBACK_CROP_LEFT 642U
+#define PLAYBACK_CROP_TOP 180U
 /* The time of the photo in the playback metadata. */
 #define METADATA_TIME 0x3c0
 /* The EXIF Orientation of the photo in the playback metadata. */
