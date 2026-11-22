@@ -78,7 +78,7 @@ A package holds only `SCRIPT`. `GRKIT` at the card root is the data folder: no p
 | `GRKIT/STATE.TXT` | the saved settings |
 | `GRKIT/RECIPES.TXT` | the recipes |
 | `GRKIT/GOODBYE.JPG` | the picture of Shutdown Screen |
-| `GRKIT/USERMODE.TXT` | the settings of the mode dial: the snapshot and the value of each user mode, and the P/Av/Tv/M row; a copy of Enable GRKit, Enable at Start, Distance Unit, Uncropped RAW, Simplified Info. Battery, Custom Custom Picture, Show Text, and Effect Icons in Playback |
+| `GRKIT/USERMODE.TXT` | the settings of the mode dial: the snapshot and the value of each user mode, and the P/Av/Tv/M row; a copy of Enable GRKit, Enable at Start, Distance Unit, Uncropped RAW, Simplified Info. Battery, Custom Picture, Show Text, and Effect Icons in Playback |
 | `GRKIT/REPORT.TXT`, `GRKIT/BOOT.TXT` | the result and the boot log of the last starts |
 | `GRKIT/SAFE` | starts the safe mode |
 
@@ -170,7 +170,7 @@ The mode dial belongs to the core (`runtime/mode_dial.h`). Its hooks (point `mod
 - **Start.** The firmware sends no dial event at power-on, so at a start the core acts once the shooting screen shows.
 - **Let go.** A snapshot holds until the next save of its slot, and while the slot is registered and has the name that the core gave it. A hook at the save of the firmware sees each save, also a native save that keeps the name, which the name cannot show. A rename or clear of the slot, or a lost slot, breaks the name: the firmware keeps the slots only at a normal power-off. Then the core forgets the snapshot, and a user mode with the snapshot as its value goes back to On. The core checks the names at each start, when the Mode Dial page opens, and when the dial lands on a user mode. It never writes, clears, or restores a slot by itself. On GR III, two user modes can use one box. A save for one of them makes the other lose its snapshot.
 - **Store.** The header holds the snapshots, the value of each user mode with a fingerprint of the name of its slot, and the positions that are Off. The resident loader saves them in `GRKIT/USERMODE.TXT` after they change, with their own change count, and INSTALL restores them. Only the camera writes that file. The recipe file holds no value of the dial.
-- **Core settings on a snapshot.** On a user mode with a snapshot, `GRKIT/STATE.TXT` does not save. `GRKIT/USERMODE.TXT` also keeps a copy of Enable GRKit, Enable at Start, Distance Unit, Uncropped RAW, Simplified Info. Battery, Custom Custom Picture, Show Text, and Effect Icons in Playback, and the core updates it with each change of them, so these changes save on any position. When the copy is present, INSTALL uses it instead of `GRKIT/STATE.TXT` for these eight settings. Other changes on that user mode, such as the ADJ order, save only after the dial goes to another position.
+- **Core settings on a snapshot.** On a user mode with a snapshot, `GRKIT/STATE.TXT` does not save. `GRKIT/USERMODE.TXT` also keeps a copy of Enable GRKit, Enable at Start, Distance Unit, Uncropped RAW, Simplified Info. Battery, Custom Picture, Show Text, and Effect Icons in Playback, and the core updates it with each change of them, so these changes save on any position. When the copy is present, INSTALL uses it instead of `GRKIT/STATE.TXT` for these eight settings. Other changes on that user mode, such as the ADJ order, save only after the dial goes to another position.
 
 ## Shutdown screen
 
