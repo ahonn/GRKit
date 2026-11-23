@@ -284,6 +284,70 @@ pub const CONTROL_RECIPE_UNDO: u32 = 12;
 /// words. It is on after the others that are on while fewer than
 /// `RECIPE_ON_MAX` are on, else off. The response is its ID.
 pub const CONTROL_RECIPE_ADD: u32 = 13;
+/// The state of the listed modules (runtime/control_modules.h), in the order
+/// of ADJ Order: toolbar, root, hidden, then modules that ADJ cannot show.
+/// The payload is the first row. The response is `CONTROL_MODULES_HEADER`
+/// bytes: the number of modules, the count of state changes, 1 while GRKit
+/// runs, the first row, the number of entries, and the capabilities that
+/// run (`GRKIT_HOST_CAPABILITIES`). Then, for each module that the camera
+/// can use:
+/// its index with `CONTROL_MODULE_*` fields, its name in 8 ASCII bytes, the
+/// mask of the values that are off in ADJ, the number of settings and in
+/// bits 8 and up the number of values in its ADJ order, a key and a value
+/// for each setting, then the ADJ order, a byte each, padded to a word.
+pub const CONTROL_MODULES_READ: u32 = 14;
+/// The texts of a module in one language, as many records as fit. The
+/// payload is the module, the language (`Language::ALL`), and the cursor.
+/// The response is the next cursor or `CONTROL_MODULE_TEXTS_END`, and the
+/// number of records. A record is a word with its kind and in bits 8 and up
+/// its number of UTF-16 units, two argument words, and the units padded to
+/// a word. The module record comes first; a group record precedes the
+/// settings of a child page; a value record follows its setting.
+pub const CONTROL_MODULE_TEXTS: u32 = 15;
+/// Bytes of tile 0 of a module: the module and a word-aligned offset below
+/// `effects::ICON_SIZE`. The response is the next bytes of its RGBA pixels.
+pub const CONTROL_MODULE_TILE: u32 = 16;
+/// Change a module in one step, after the check of each field: the module,
+/// the `CONTROL_MODULE_SET_*` fields, 1 for Off, the mask of hidden values,
+/// the number of settings, the number of values in the ADJ order, a key and
+/// a value for each setting, then each value of the ADJ order as a word.
+pub const CONTROL_MODULE_SET: u32 = 17;
+/// The new order of the modules of the ADJ root: the index of each, once.
+pub const CONTROL_MODULES_ORDER: u32 = 18;
+pub const CONTROL_MODULES_HEADER: usize = 24;
+pub const CONTROL_MODULE_ENTRY: usize = 20;
+pub const CONTROL_MODULE_TEXTS_HEADER: usize = 8;
+pub const CONTROL_MODULE_TEXTS_END: u32 = u32::MAX;
+/// The longest text of a record, in UTF-16 units.
+pub const CONTROL_MODULE_TEXT_UNITS: u32 = 120;
+pub const CONTROL_MODULE_RECORD_MODULE: u32 = 0;
+pub const CONTROL_MODULE_RECORD_GROUP: u32 = 1;
+pub const CONTROL_MODULE_RECORD_SETTING: u32 = 2;
+pub const CONTROL_MODULE_RECORD_VALUE: u32 = 3;
+/// The first argument of a module record: 1 for Looks or 2 for Recipes, and
+/// these bits. The second argument is the key of the page setting.
+pub const CONTROL_MODULE_HAS_OPTIONS: u32 = 1 << 8;
+pub const CONTROL_MODULE_ORDERED: u32 = 1 << 9;
+/// The key of a setting without a state ID: this bit and its handle. A
+/// state ID is below 10^9, so the two ranges do not meet.
+pub const CONTROL_MODULE_KEY_HANDLE: u32 = 0x4000_0000;
+/// The first word of a module entry: the index in the low byte, then these.
+pub const CONTROL_MODULE_STATUS_SHIFT: u32 = 8;
+pub const CONTROL_MODULE_STATUS_MASK: u32 = 3;
+pub const CONTROL_MODULE_RUNNING: u32 = 0;
+pub const CONTROL_MODULE_STOPPED: u32 = 1;
+pub const CONTROL_MODULE_SAFE: u32 = 2;
+pub const CONTROL_MODULE_FAILED: u32 = 3;
+pub const CONTROL_MODULE_PLACE_SHIFT: u32 = 10;
+pub const CONTROL_MODULE_PLACE_MASK: u32 = 3;
+pub const CONTROL_MODULE_TOOLBAR: u32 = 0;
+pub const CONTROL_MODULE_ROOT: u32 = 1;
+pub const CONTROL_MODULE_HIDDEN: u32 = 2;
+pub const CONTROL_MODULE_ORDERABLE: u32 = 1 << 12;
+pub const CONTROL_MODULE_ENABLED: u32 = 1 << 13;
+pub const CONTROL_MODULE_SET_ENABLED: u32 = 1;
+pub const CONTROL_MODULE_SET_HIDDEN: u32 = 2;
+pub const CONTROL_MODULE_SET_ORDER: u32 = 4;
 pub const CONTROL_RECIPES_HEADER: usize = 28;
 pub const CONTROL_RECIPE_ENTRY: usize = 4 * (1 + RECIPE_WORDS + RECIPE_NAME_WORDS);
 pub const CONTROL_RECIPES_PAGE: usize = 32;
@@ -1621,6 +1685,9 @@ pub fn header() -> String {
         ("CONTROL_RECIPES_HEADER", CONTROL_RECIPES_HEADER),
         ("CONTROL_RECIPE_ENTRY", CONTROL_RECIPE_ENTRY),
         ("CONTROL_RECIPES_PAGE", CONTROL_RECIPES_PAGE),
+        ("CONTROL_MODULES_HEADER", CONTROL_MODULES_HEADER),
+        ("CONTROL_MODULE_ENTRY", CONTROL_MODULE_ENTRY),
+        ("CONTROL_MODULE_TEXTS_HEADER", CONTROL_MODULE_TEXTS_HEADER),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
@@ -1661,6 +1728,39 @@ pub fn header() -> String {
         ("CONTROL_RECIPE_UNDO", CONTROL_RECIPE_UNDO),
         ("CONTROL_RECIPE_ADD", CONTROL_RECIPE_ADD),
         ("CONTROL_RECIPE_NONE", CONTROL_RECIPE_NONE),
+        ("CONTROL_MODULES_READ", CONTROL_MODULES_READ),
+        ("CONTROL_MODULE_TEXTS", CONTROL_MODULE_TEXTS),
+        ("CONTROL_MODULE_TILE", CONTROL_MODULE_TILE),
+        ("CONTROL_MODULE_SET", CONTROL_MODULE_SET),
+        ("CONTROL_MODULES_ORDER", CONTROL_MODULES_ORDER),
+        ("CONTROL_MODULE_TEXTS_END", CONTROL_MODULE_TEXTS_END),
+        ("CONTROL_MODULE_TEXT_UNITS", CONTROL_MODULE_TEXT_UNITS),
+        ("CONTROL_MODULE_RECORD_MODULE", CONTROL_MODULE_RECORD_MODULE),
+        ("CONTROL_MODULE_RECORD_GROUP", CONTROL_MODULE_RECORD_GROUP),
+        (
+            "CONTROL_MODULE_RECORD_SETTING",
+            CONTROL_MODULE_RECORD_SETTING,
+        ),
+        ("CONTROL_MODULE_RECORD_VALUE", CONTROL_MODULE_RECORD_VALUE),
+        ("CONTROL_MODULE_HAS_OPTIONS", CONTROL_MODULE_HAS_OPTIONS),
+        ("CONTROL_MODULE_ORDERED", CONTROL_MODULE_ORDERED),
+        ("CONTROL_MODULE_KEY_HANDLE", CONTROL_MODULE_KEY_HANDLE),
+        ("CONTROL_MODULE_STATUS_SHIFT", CONTROL_MODULE_STATUS_SHIFT),
+        ("CONTROL_MODULE_STATUS_MASK", CONTROL_MODULE_STATUS_MASK),
+        ("CONTROL_MODULE_RUNNING", CONTROL_MODULE_RUNNING),
+        ("CONTROL_MODULE_STOPPED", CONTROL_MODULE_STOPPED),
+        ("CONTROL_MODULE_SAFE", CONTROL_MODULE_SAFE),
+        ("CONTROL_MODULE_FAILED", CONTROL_MODULE_FAILED),
+        ("CONTROL_MODULE_PLACE_SHIFT", CONTROL_MODULE_PLACE_SHIFT),
+        ("CONTROL_MODULE_PLACE_MASK", CONTROL_MODULE_PLACE_MASK),
+        ("CONTROL_MODULE_TOOLBAR", CONTROL_MODULE_TOOLBAR),
+        ("CONTROL_MODULE_ROOT", CONTROL_MODULE_ROOT),
+        ("CONTROL_MODULE_HIDDEN", CONTROL_MODULE_HIDDEN),
+        ("CONTROL_MODULE_ORDERABLE", CONTROL_MODULE_ORDERABLE),
+        ("CONTROL_MODULE_ENABLED", CONTROL_MODULE_ENABLED),
+        ("CONTROL_MODULE_SET_ENABLED", CONTROL_MODULE_SET_ENABLED),
+        ("CONTROL_MODULE_SET_HIDDEN", CONTROL_MODULE_SET_HIDDEN),
+        ("CONTROL_MODULE_SET_ORDER", CONTROL_MODULE_SET_ORDER),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }

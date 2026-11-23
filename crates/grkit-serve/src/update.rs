@@ -1249,6 +1249,41 @@ mod tests {
     }
 
     #[test]
+    fn an_update_of_the_same_version_removes_a_module() {
+        let (_dir, card) = card_with(&testing::signed_package(&camera::GR3, "1.7.0", &["first"]));
+        let runtimes = testing::release_runtimes(&camera::GR3, "1.7.0");
+        let modules = testing::official_modules();
+        let statement = release::Statement::of_release(&runtimes, &modules, &camera::GR3)
+            .unwrap()
+            .to_bytes()
+            .unwrap();
+        let signature = release::SigningKey::from_hex(testing::RELEASE_SEED)
+            .unwrap()
+            .sign(&statement);
+        let kept = modules
+            .into_iter()
+            .map(|bytes| {
+                let id = grkit_core::grm::Module::decode(&bytes).unwrap().id;
+                (format!("{id}.GRM"), bytes)
+            })
+            .filter(|(name, _)| name != "GLOW.GRM")
+            .collect();
+        let runtime = release::package_runtime_files(&runtimes, &camera::GR3).unwrap();
+        let zip = release::assemble_update(&statement, &signature, &runtime, &kept).unwrap();
+        stage_request(&card, &zip, &gr3(), &keys(), &request_context()).unwrap();
+        fs::rename(card.path(REQUEST_FILE), card.path(JOURNAL_FILE)).unwrap();
+        fs::rename(card.path(JOURNAL_FILE), card.path(REQUEST_FILE)).unwrap();
+        run_journal(&card);
+        assert_eq!(
+            card.software_request().unwrap().unwrap().status,
+            SoftwareStatus::Succeeded
+        );
+        let files = card.live_files().unwrap();
+        assert!(!files.keys().any(|path| path.ends_with("/GLOW.GRM")));
+        assert!(files.keys().any(|path| path.ends_with("/GRAIN.GRM")));
+    }
+
+    #[test]
     fn a_request_whose_journal_was_not_written_fails_as_unstaged() {
         let (_dir, card) = card_with(&package(&["first"]));
         let request = stage_request(

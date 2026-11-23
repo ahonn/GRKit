@@ -22,6 +22,15 @@ use crate::{
 /// The version of the release index format.
 pub const FORMAT: u64 = 1;
 
+/// The release contract that this build reads. Raise it only for a release
+/// that an older app cannot install: an index names it as `minAppProtocol`.
+pub const APP_PROTOCOL: u64 = 1;
+
+/// The path on the site of a file of the package runtime of a camera.
+pub fn package_path(camera: &str, path: &str) -> String {
+    format!("release/{camera}/{}/{path}", release::PACKAGE_FOLDER)
+}
+
 /// One file that the app may download from the site.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileInfo {
@@ -98,11 +107,23 @@ impl IndexPreset {
     }
 }
 
+/// What a phone shows of an official module that a camera does not have.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModuleInfo {
+    /// The title by language code.
+    pub titles: BTreeMap<String, String>,
+    pub color_only: bool,
+}
+
 /// The release that a site holds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Index {
     /// The GRKit version, which every signed statement must name.
     pub version: String,
+    /// The oldest `APP_PROTOCOL` that can install this release.
+    pub min_app_protocol: u64,
+    /// The official modules of the release, by ID.
+    pub modules: BTreeMap<String, ModuleInfo>,
     pub cameras: BTreeMap<String, CameraRelease>,
     /// Every downloadable file, by its path from the site root.
     pub files: BTreeMap<String, FileInfo>,
@@ -119,6 +140,8 @@ pub struct Index {
 pub struct SiteContents {
     /// `release/<camera>/`: statement and signature bytes, by camera id.
     pub releases: BTreeMap<String, (Vec<u8>, Vec<u8>)>,
+    /// `release/<camera>/sd/`: the package runtime, by camera id.
+    pub packages: BTreeMap<String, Files>,
     /// `runtime/<target>/build.json`.
     pub manifests: BTreeMap<String, Vec<u8>>,
     /// `runtime/<target>/`: verified runtime of each build.
@@ -210,6 +233,21 @@ impl Index {
             let signature_path = format!("release/{}/{}", camera.id, release::SIGNATURE_ENTRY);
             insert_file(&mut files, &statement_path, statement_bytes)?;
             insert_file(&mut files, &signature_path, signature_bytes)?;
+            let package = site
+                .packages
+                .get(camera_id)
+                .with_context(|| format!("The site has no package runtime for {}", camera.name))?;
+            ensure!(
+                package.len() == statement.runtime.len()
+                    && statement.runtime.iter().all(|(path, hash)| package
+                        .get(path)
+                        .is_some_and(|bytes| packaging::sha256(bytes) == *hash)),
+                "The package runtime of {} on the site does not match its statement",
+                camera.name
+            );
+            for (path, bytes) in package {
+                insert_file(&mut files, &package_path(camera.id, path), bytes)?;
+            }
 
             let mut guide_paths = BTreeMap::new();
             let guides = site.guides.get(camera_id).with_context(|| {
@@ -273,12 +311,23 @@ impl Index {
             }
         }
 
+        let mut module_info = BTreeMap::new();
         for (name, bytes) in &site.modules {
             insert_file(&mut files, &format!("modules/{name}"), bytes)?;
+            let module = crate::grm::Module::decode(bytes)?;
+            module_info.insert(
+                module.id.clone(),
+                ModuleInfo {
+                    titles: BTreeMap::new(),
+                    color_only: module.color_only()?,
+                },
+            );
         }
 
         Ok(Index {
             version: version.expect("checked non-empty releases"),
+            min_app_protocol: APP_PROTOCOL,
+            modules: module_info,
             cameras,
             files,
             notes: Vec::new(),
@@ -316,9 +365,23 @@ impl Index {
         let mut index = json!({
             "format": FORMAT,
             "version": self.version,
+            "minAppProtocol": self.min_app_protocol,
             "cameras": cameras,
             "files": files,
         });
+        if !self.modules.is_empty() {
+            index["modules"] = self
+                .modules
+                .iter()
+                .map(|(id, info)| {
+                    (
+                        id.clone(),
+                        json!({"titles": info.titles, "colorOnly": info.color_only}),
+                    )
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into();
+        }
         if !self.notes.is_empty() {
             index["notes"] = self
                 .notes
@@ -336,7 +399,22 @@ impl Index {
         packaging::json_bytes(&index)
     }
 
-    /// Reads an index. It does not check the files on a site.
+    /// The release is for a later app than this build. A file that does not
+    /// parse says nothing about the app.
+    pub fn needs_newer_app(bytes: &[u8]) -> bool {
+        let Ok(value) = serde_json::from_slice::<Value>(bytes) else {
+            return false;
+        };
+        value["format"]
+            .as_u64()
+            .is_some_and(|format| format > FORMAT)
+            || value["minAppProtocol"]
+                .as_u64()
+                .is_some_and(|protocol| protocol > APP_PROTOCOL)
+    }
+
+    /// Reads an index. It leaves out the cameras that this build does not
+    /// know, and does not check the files on a site.
     pub fn parse(bytes: &[u8]) -> Result<Index> {
         let value: Value = serde_json::from_slice(bytes).context("Read the release index")?;
         ensure!(
@@ -351,8 +429,8 @@ impl Index {
             .as_object()
             .context("The release index has no cameras")?
             .iter()
+            .filter(|(id, _)| camera::find(id).is_ok())
             .map(|(id, entry)| {
-                camera::find(id)?;
                 let targets = entry["targets"]
                     .as_array()
                     .context("A camera release has no targets")?
@@ -416,12 +494,41 @@ impl Index {
             .collect::<Result<BTreeMap<_, _>>>()?;
         Ok(Index {
             version,
+            min_app_protocol: value["minAppProtocol"].as_u64().unwrap_or(APP_PROTOCOL),
+            modules: read_modules(&value["modules"]),
             cameras,
             files,
             notes: read_notes(&value["notes"]),
             presets: read_presets(&value["presets"]),
         })
     }
+}
+
+/// The modules of an index as a reader takes them: a field that does not
+/// fit is left out, so they never stop an update.
+fn read_modules(value: &Value) -> BTreeMap<String, ModuleInfo> {
+    value
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(id, entry)| {
+            let titles = entry["titles"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter_map(|(language, title)| {
+                    Some((language.clone(), title.as_str()?.to_owned()))
+                })
+                .collect();
+            (
+                id.clone(),
+                ModuleInfo {
+                    titles,
+                    color_only: entry["colorOnly"].as_bool().unwrap_or(false),
+                },
+            )
+        })
+        .collect()
 }
 
 /// The notes of an index as a reader takes them: entries that do not fit
@@ -695,6 +802,10 @@ mod tests {
         let mut site = SiteContents::default();
         site.releases
             .insert(camera.id.to_owned(), (statement.clone(), signature.clone()));
+        site.packages.insert(
+            camera.id.to_owned(),
+            release::package_runtime_files(&runtimes, camera).unwrap(),
+        );
         for runtime in runtimes {
             let target = runtime.target().to_owned();
             let manifest = packaging::json_bytes(&Value::Object(packaging::manifest(
@@ -742,6 +853,32 @@ mod tests {
         assert!(index.files.keys().any(|path| path.starts_with("modules/")));
         let bytes = index.to_bytes().unwrap();
         assert_eq!(Index::parse(&bytes).unwrap(), index);
+    }
+
+    #[test]
+    fn an_older_reader_skips_a_new_camera_and_obeys_the_app_protocol() {
+        let (site, _, _) = signed_site(&camera::GR3, "1.7.0");
+        let mut value: Value =
+            serde_json::from_slice(&Index::of_site(&site).unwrap().to_bytes().unwrap()).unwrap();
+        value["cameras"]["gr9"] = json!({"future": true});
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert!(!Index::needs_newer_app(&bytes));
+        assert_eq!(Index::parse(&bytes).unwrap().cameras.len(), 1);
+        value["minAppProtocol"] = json!(APP_PROTOCOL + 1);
+        assert!(Index::needs_newer_app(&serde_json::to_vec(&value).unwrap()));
+        assert!(!Index::needs_newer_app(b"not json"));
+    }
+
+    #[test]
+    fn an_update_of_signed_files_verifies_and_a_changed_file_does_not() {
+        let (site, statement, signature) = signed_site(&camera::GR3, "1.7.0");
+        let mut runtime = site.packages["gr3"].clone();
+        let zip =
+            release::assemble_update(&statement, &signature, &runtime, &site.modules).unwrap();
+        let (update, _) = release::verify_update(&zip, &[testing::release_key()]).unwrap();
+        assert_eq!(update.modules.len(), site.modules.len());
+        runtime.values_mut().next().unwrap().push(0);
+        assert!(release::assemble_update(&statement, &signature, &runtime, &site.modules).is_err());
     }
 
     #[test]

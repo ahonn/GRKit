@@ -9,7 +9,7 @@
 //! service checks the scripts of a later release by their hashes, not by its
 //! own templates.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{bail, ensure, Context, Result};
 use ed25519_compact::{KeyPair, PublicKey, Seed, Signature};
@@ -30,6 +30,8 @@ pub const STATEMENT_ENTRY: &str = "RELEASE.JSON";
 pub const SIGNATURE_ENTRY: &str = "RELEASE.SIG";
 pub const CARD_STATEMENT: &str = "SCRIPT/GRKIT/RELEASE.JSN";
 pub const CARD_SIGNATURE: &str = "SCRIPT/GRKIT/RELEASE.SIG";
+/// The folder of the package runtime next to a statement on the site.
+pub const PACKAGE_FOLDER: &str = "sd";
 
 /// Card-side evidence must be an exact copy of the signed ZIP evidence.
 /// It does not itself authorize any additional executable file.
@@ -64,6 +66,9 @@ pub struct Statement {
     /// The GRKit version, such as `1.7.0`.
     pub version: String,
     pub camera: &'static Camera,
+    /// The firmware versions that the release runs on, oldest first. A
+    /// phone reads them here, so a new firmware needs no new app.
+    pub firmware: Vec<String>,
     /// The SHA-256 of each runtime file, by its path on the card. A package
     /// has each of them.
     pub runtime: BTreeMap<String, String>,
@@ -117,6 +122,7 @@ impl Statement {
         Ok(Statement {
             version,
             camera,
+            firmware: camera.versions().into_iter().map(str::to_owned).collect(),
             runtime: runtime
                 .iter()
                 .map(|(path, bytes)| (path.clone(), packaging::sha256(bytes)))
@@ -157,6 +163,7 @@ impl Statement {
             "format": FORMAT,
             "version": self.version,
             "camera": self.camera.id,
+            "firmware": self.firmware,
             "runtime": self.runtime,
             "modules": self.modules,
             "officialLooks": self.official_looks,
@@ -238,6 +245,18 @@ impl Statement {
                     .as_str()
                     .context("The release statement has no camera")?,
             )?,
+            firmware: value["firmware"]
+                .as_array()
+                .filter(|versions| !versions.is_empty())
+                .context("The release statement has no firmware list")?
+                .iter()
+                .map(|version| {
+                    version
+                        .as_str()
+                        .map(str::to_owned)
+                        .context("The release statement has a bad firmware version")
+                })
+                .collect::<Result<_>>()?,
             runtime: hashes("runtime")?,
             modules: hashes("modules")?,
             official_looks,
@@ -349,6 +368,63 @@ pub fn check_files(entries: &Files, statement: &Statement) -> Result<Update> {
     })
 }
 
+/// The package runtime of `camera`, which a release publishes next to its
+/// statement, so that a phone needs no knowledge of how it is built.
+pub fn package_runtime_files(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<Files> {
+    packaging::package_runtime(runtimes, camera, false)
+}
+
+/// The ZIP of an update from the files that a statement signs: its runtime
+/// files and `modules`, by file name. It reads no file format, so an older
+/// app can carry the files of a later release. The camera checks the
+/// signature and the files (`verify_update`).
+pub fn assemble_update(
+    statement_bytes: &[u8],
+    signature: &[u8],
+    runtime: &Files,
+    modules: &BTreeMap<String, Vec<u8>>,
+) -> Result<Vec<u8>> {
+    let statement = Statement::parse(statement_bytes)?;
+    ensure!(
+        runtime.len() == statement.runtime.len()
+            && statement.runtime.iter().all(|(path, hash)| runtime
+                .get(path)
+                .is_some_and(|bytes| packaging::sha256(bytes) == *hash)),
+        "The runtime files are not the files that the release signed"
+    );
+    ensure!(
+        modules.iter().all(|(name, bytes)| statement
+            .modules
+            .get(name)
+            .is_some_and(|hash| packaging::sha256(bytes) == *hash)),
+        "A module is not a file that the release signed"
+    );
+    let mut contents: Files = runtime
+        .iter()
+        .map(|(path, bytes)| (format!("SD_ROOT/{path}"), bytes.clone()))
+        .collect();
+    for (name, bytes) in modules {
+        contents.insert(
+            format!("SD_ROOT/{}/{name}", crate::grm::FOLDER),
+            bytes.clone(),
+        );
+    }
+    contents.insert(
+        format!("SD_ROOT/{}", card::PACKAGE_LIST),
+        packaging::package_list(modules.keys(), &BTreeSet::new()),
+    );
+    for (name, bytes) in [
+        (STATEMENT_ENTRY.to_owned(), statement_bytes),
+        (format!("SD_ROOT/{CARD_STATEMENT}"), statement_bytes),
+        (SIGNATURE_ENTRY.to_owned(), signature),
+        (format!("SD_ROOT/{CARD_SIGNATURE}"), signature),
+    ] {
+        contents.insert(name, bytes.to_vec());
+    }
+    contents.insert("SHA256SUMS".into(), packaging::checksum_list(&contents));
+    packaging::write_zip(contents)
+}
+
 /// Checks a package ZIP for an update over Wi-Fi: its entries and
 /// `SHA256SUMS`, the signature of one of `keys`, and its files
 /// (`check_files`). Returns what it holds, and the files of the update at
@@ -389,6 +465,7 @@ mod tests {
         let statement = Statement {
             version: "1.7.0".into(),
             camera: camera::find("gr3").unwrap(),
+            firmware: vec!["2.21".into()],
             runtime: BTreeMap::from([(card::CORE_FILE.to_owned(), "ab".repeat(32))]),
             modules: BTreeMap::new(),
             official_looks: BTreeMap::new(),

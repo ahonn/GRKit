@@ -576,7 +576,7 @@ impl EffectSet {
 
 /// The contents of `PACKAGE_LIST`: the file names in name order, one on
 /// each line, then each left-out effect after `-`.
-fn package_list<'a>(
+pub(crate) fn package_list<'a>(
     names: impl IntoIterator<Item = &'a String>,
     left_out: &BTreeSet<String>,
 ) -> Vec<u8> {
@@ -1161,7 +1161,7 @@ fn entry_time(blob: &[u8]) -> DateTime {
 
 /// A deterministic ZIP of `contents`, with stored entries and the time of
 /// each entry from its bytes (`entry_time`).
-fn write_zip(contents: Files) -> Result<Vec<u8>> {
+pub(crate) fn write_zip(contents: Files) -> Result<Vec<u8>> {
     let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
     for (name, blob) in contents {
         let mode = if name.ends_with(".BIN") || name.ends_with(".SH") {

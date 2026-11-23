@@ -149,13 +149,24 @@ static u32 order_count(volatile u32 *h) {
     else n=choice_orders(h) && manage_word(h,MANAGE_ORDERS) ? choice_setting_rows(h)-1 : 0;
     return n>=2 && n<=MENU_VALUES_MAX ? n : 0;
 }
+/* Give the `n` options of a module setting their places: the nibbles of
+   CORE.ORDER of the module (runtime/manage.h). The last of the most options
+   has no nibble: it follows the others. */
+static void option_store_order(volatile u32 *h,u32 module,const u8 *items,u32 n) {
+    u32 words[MANAGE_ORDER_WORDS], i;
+    for(i=0;i<MANAGE_ORDER_WORDS;++i) words[i]=0;
+    for(i=0;i<n && i<MANAGE_ORDER_VALUES;++i) {
+        u32 word=i>=MANAGE_ORDER_NIBBLES;
+        words[word]|=(u32)items[i]<<(4U*(i-MANAGE_ORDER_NIBBLES*word));
+    }
+    for(i=0;i<MANAGE_ORDER_WORDS;++i) setting_store(h,manage_order_handle(h,module,i)-1U,words[i]);
+}
 /* Move option `from` to the place of option `to`: the options between them
-   move by one place. The options of a module setting get their places as
-   the nibbles of CORE.ORDER of the module (runtime/manage.h). */
+   move by one place. */
 static void option_move(volatile u32 *h,u32 from,u32 to) {
     const MenuListing *menu=listed_menu(h);
     u8 items[MANAGE_ORDER_VALUES+1U];
-    u32 n=order_count(h), words[MANAGE_ORDER_WORDS], i, item;
+    u32 n=order_count(h), i, item;
     if(from>=n || to>=n || from==to) return;
     if(menu && menu->options) { menu->option_move(h,from,to); return; }
     if(n>MANAGE_ORDER_VALUES+1U) return;
@@ -168,13 +179,7 @@ static void option_move(volatile u32 *h,u32 from,u32 to) {
     for(i=from;i<to;++i) items[i]=items[i+1];
     for(i=from;i>to;--i) items[i]=items[i-1];
     items[to]=(u8)item;
-    for(i=0;i<MANAGE_ORDER_WORDS;++i) words[i]=0;
-    /* The last of the most options has no nibble: it follows the others. */
-    for(i=0;i<n && i<MANAGE_ORDER_VALUES;++i) {
-        u32 word=i>=MANAGE_ORDER_NIBBLES;
-        words[word]|=(u32)items[i]<<(4U*(i-MANAGE_ORDER_NIBBLES*word));
-    }
-    for(i=0;i<MANAGE_ORDER_WORDS;++i) setting_store(h,manage_order_handle(h,listed(h),i)-1U,words[i]);
+    option_store_order(h,listed(h),items,n);
 }
 /* The rows of the page of the listed module: Enable, then Options for a page
    with options, then Order for a page that orders them, then the settings

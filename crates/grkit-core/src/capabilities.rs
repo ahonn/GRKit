@@ -275,6 +275,14 @@ impl StateFile {
     }
 }
 
+/// The bit of the capability `key` in `GRKIT_HOST_CAPABILITIES`.
+pub fn bit_of(key: &str) -> u32 {
+    CAPABILITIES
+        .iter()
+        .position(|capability| capability.key == key)
+        .map_or(0, |index| 1 << index)
+}
+
 /// A state key of a capability.
 pub struct StateEntry {
     /// `CORE.<KEY>`.
