@@ -808,13 +808,13 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
        Modules tile, the Modules tile of Enable GRKit Off, the Fn hint of a
        row where Fn turns a setting, the "ft" and "16" labels of the manual
        focus scale (SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT), then the tile of
-       a recipe without its caption and the slots of the tiles of recipes,
-       which start as that tile (runtime/recipe_card.h), then the two pictures
-       of Battery Percentage, which the core writes. */
+       a recipe without its caption, the slots of the tiles of recipes, which
+       start as that tile (runtime/recipe_card.h), the Update tile, then the
+       two pictures of Battery Percentage, which the core writes. */
 #define HOST_ARTWORK 9
-    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS + GRKIT_BATTERY_ICON_SLOTS,
+    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS + 1U + GRKIT_BATTERY_ICON_SLOTS,
                    "The host icons are Off, GRKit, Version, Modules, Modules Off, Rotate, two scale labels, the "
-                   "recipe tile, the slots of the recipe tiles, and the pictures of Battery Percentage");
+                   "recipe tile, the slots of the recipe tiles, Update, and the pictures of Battery Percentage");
     for (u32 i = 0; i < HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS; ++i) {
         u32 icon = a->icon_bases[0] + i * ICON_STRIDE, label = i == 6 || i == 7;
         static const u8 *const artwork[HOST_ARTWORK] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
@@ -822,7 +822,7 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
                                                          scale_sixteen_pixels, recipe_card_pixels};
         if (label) icon_sized(icon, pixels, SCALE_LABEL_WIDTH, SCALE_LABEL_HEIGHT);
         else icon_header(icon, pixels);
-        copy(at(icon + ICON_PIXELS), artwork[i < HOST_ARTWORK ? i : HOST_ARTWORK - 1],
+        copy(at(icon + ICON_PIXELS), i == HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS - 1U ? update_pixels : artwork[i < HOST_ARTWORK ? i : HOST_ARTWORK - 1],
              label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
         /* The menu derives the icons after the GRKit icon from its
            address. */

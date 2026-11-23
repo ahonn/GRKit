@@ -1317,7 +1317,9 @@ static void module_tiles_follow_the_effect_icons(void)
     assert(menu_icon(GRKIT_ICON_SCALE_FEET) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 5 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 6 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_BATTERY(1)) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + (BATTERY_ICON_BASE + 2U) * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_BATTERY(0) - 1) == 0);
+    assert(menu_icon(GRKIT_ICON_UPDATE) ==
+           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS - 2) * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_UPDATE - 1) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -2828,6 +2830,23 @@ static void the_switch_stops_each_module_at_once(void)
     assert(same(MODULE(SWITCH_MODULE).label(h, 0), "Off") && same(MODULE(SWITCH_MODULE).label(h, 1), "On"));
     assert(!MODULE(SWITCH_MODULE).checked(h, 0) && MODULE(SWITCH_MODULE).checked(h, 1));
     assert(MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_OFF && MODULE(SWITCH_MODULE).icon(h, 1) == GRKIT_ICON_MODULES);
+    /* An update that waits adds its row, which asks on OK and changes
+       nothing else. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    assert(count(h) == 3 && MODULE(SWITCH_MODULE).icon(h, SWITCH_ROW_UPDATE) == GRKIT_ICON_UPDATE &&
+           !MODULE(SWITCH_MODULE).checked(h, SWITCH_ROW_UPDATE));
+    h[GRKIT_HOST_MENU_CURSOR / 4] = SWITCH_ROW_UPDATE;
+    assert(update_row(h));
+    MODULE(SWITCH_MODULE).apply(h, SWITCH_ROW_UPDATE);
+    assert(!manage_all_off(h));
+    /* Execute confirms it and asks for the cue of the live view. */
+    update_adj_done(1, 0);
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && count(h) == 2 && !update_row(h) &&
+           h[GRKIT_HOST_MENU_CURSOR / 4] == 1 && h[GRKIT_HOST_CUE_LABEL / 4] == GRKIT_CUE_UPDATE_RESTART &&
+           h[GRKIT_HOST_LOAD_CUE / 4] == GRKIT_CUE_PENDING);
+    h[GRKIT_HOST_CUE_LABEL / 4] = h[GRKIT_HOST_LOAD_CUE / 4] = 0;
+    h[GRKIT_HOST_UPDATE / 4] = 0;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
     /* An ADJ exit on the page, such as a half-press with Off highlighted,
        keeps the switch On. */
     h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
@@ -5696,8 +5715,8 @@ static void the_section_rows_follow_the_listed_modules(void)
     assert(menu_tabs[MENU_TAB_GRKIT] == TEST_TAB && factory_calls == 1);
     /* An update over Wi-Fi that waits shows Update first in GRKit
        Settings, and About GRKit reads Update and its version and opens the
-       same page. OK on Install asks in a confirm box; Cancel keeps the update
-       waiting, Execute confirms it and returns, as MENU does, to the page
+       same page, whose confirm box opens with it. Cancel keeps the update
+       waiting, Execute confirms it, and both return, as MENU does, to the page
        that opened the value page. Then it and About GRKit read Restart to
        apply. The test cannot show the box, so it calls its return. */
     h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
@@ -5708,10 +5727,10 @@ static void the_section_rows_follow_the_listed_modules(void)
            same(core_page_settings[1].label(h), "Mode Dial"));
     const Setting *update = core_row_setting(h, 0);
     assert(update == &update_setting && update->flags == SETTING_OWN_PAGE);
-    assert(same(update->title(h), "Update 1.7.12") && update->values(h) == 2 && update->get(h) == 0 &&
-           same(update->value_text(h, 0), "Later") && same(update->value_text(h, 1), "Install"));
-    assert(!update->select(h, TEST_OBJECTS + 0x800U, 0));
-    assert(update->select(h, TEST_OBJECTS + 0x800U, UPDATE_INSTALL));
+    assert(same(update->title(h), "Update 1.7.12") && update->values(h) == 1 && update->get(h) == 0 &&
+           same(update->value_text(h, 0), "Install"));
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, SETTING_BACK));
+    assert(update->select(h, TEST_OBJECTS + 0x800U, 0));
     assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Install GRKit 1.7.12?"));
     volatile u32 *check = services_word(h, SERVICES_CHECK);
     check[CHECK_SETTING / 4] = 0;
@@ -5720,21 +5739,22 @@ static void the_section_rows_follow_the_listed_modules(void)
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
     controller_changes = 0;
     update_box_done(0, 0);
-    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_WAITING && !controller_changes);
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_WAITING && controller_changes == 1 &&
+           controller_to == MENU_RETURN_CONTROLLER);
     update_box_done(1, 0);
-    assert(controller_changes == 1 && controller_from == TEST_OBJECTS + 0x800U &&
+    assert(controller_changes == 2 && controller_from == TEST_OBJECTS + 0x800U &&
            controller_to == MENU_RETURN_CONTROLLER && controller_arg == CONTROLLER_BACK);
     /* From GRKit Settings, the value page returns there. */
     h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
     update_box_done(1, 0);
-    assert(controller_changes == 2 && controller_to == SETTINGS_SUBMENU);
+    assert(controller_changes == 3 && controller_to == SETTINGS_SUBMENU);
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = 0;
     check[CHECK_RADIO / 4] = check[CHECK_ID / 4] = 0;
-    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && update->get(h) == UPDATE_INSTALL &&
-           same(update->value_text(h, 1), "Restart to apply") && same(grkit_value(h), "Restart to apply"));
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && update->get(h) == 0 &&
+           same(update->value_text(h, 0), "Restart to apply") && same(grkit_value(h), "Restart to apply"));
     /* A confirmed update asks nothing more. */
-    assert(!update->select(h, TEST_OBJECTS + 0x800U, UPDATE_INSTALL));
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, 0));
     h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_READY;
     assert(same(grkit_value(h), "Restart to apply"));
     /* Without a version, the texts leave it out. */
@@ -5955,6 +5975,17 @@ static void battery_shows_in_the_simple_display(void)
     core_group_page_settings[1].set(h, 1);
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
+    /* With each row, an update that waits keeps ADJ Order as the seventh. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    settings_start(h, CORE_PAGE);
+    assert(settings_rows(h) == CORE_ROWS && core_row_setting(h, 0) == &update_setting &&
+           core_row_setting(h, 5) == dial_menu_setting() && core_row_setting(h, 6) == &adj_order_setting &&
+           same(core_page_settings[6].label(h), "ADJ Order"));
+    assert(menu_settings_row_controller(0, 6) == MENU_ACTION_TARGET + 6);
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    h[GRKIT_HOST_UPDATE / 4] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
     /* Without Distance Unit, Display Settings has Simplified Info. Battery
        only. */

@@ -8,8 +8,8 @@ use anyhow::{bail, ensure, Context, Result};
 use grkit_core::{
     artwork::{
         grkit_pixels, modules_off_pixels, modules_pixels, off_pixels, recipe_card_pixels,
-        rotate_pixels, scale_feet_pixels, scale_sixteen_pixels, version_pixels, SCALE_LABEL_HEIGHT,
-        SCALE_LABEL_WIDTH,
+        rotate_pixels, scale_feet_pixels, scale_sixteen_pixels, update_pixels, version_pixels,
+        SCALE_LABEL_HEIGHT, SCALE_LABEL_WIDTH,
     },
     card::{LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LINUX_LEGACY_DIRECTORY, LINUX_RAM_PLAN},
     runtime::{icon_stride, HOST_ICON_COUNT, ICONS_PER_CHUNK, MAX_CHUNKS, MAX_COUNT},
@@ -353,6 +353,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         true,
     );
     array(&mut result, "rotate_pixels", &rotate_pixels(), true);
+    array(&mut result, "update_pixels", &update_pixels(), true);
     // The labels of the manual focus scale in feet (runtime/distance.h).
     writeln!(result, "#define SCALE_LABEL_WIDTH {}U", SCALE_LABEL_WIDTH)?;
     writeln!(result, "#define SCALE_LABEL_HEIGHT {}U", SCALE_LABEL_HEIGHT)?;

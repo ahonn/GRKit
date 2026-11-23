@@ -18,7 +18,6 @@ filesearch 'C:\SCRIPT\GRKIT\COMMIT.VER'
 if result = 0 goto resident_updated
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.REQ'
 if result <> 0 goto resident_updated
-registry[1645] = 2
 filedelete 'C:\SCRIPT\GRKIT\COMMIT.VER'
 :resident_updated
 legacy = 0

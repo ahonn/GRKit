@@ -71,12 +71,12 @@ pub const MODULE_TILES_MAX: usize = 128;
 /// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
 /// "16" of the manual focus scale in feet (`runtime/distance.h`), the tile of
 /// a recipe without its caption, the slots of the tiles of recipes that
-/// the core writes (`runtime/recipe_card.h`), and the two pictures of Battery
-/// Percentage, of two slots each (`runtime/battery_percent.h`). The menu
-/// addresses the icons after Off by their offset from the GRKit icon, so the
-/// host icons come first in chunk 0, and they must fit in it. The effect
-/// icons follow them.
-pub const HOST_ICON_COUNT: usize = 25;
+/// the core writes (`runtime/recipe_card.h`), the Update tile, and the two
+/// pictures of Battery Percentage, of two slots each
+/// (`runtime/battery_percent.h`). The menu addresses the icons after Off by
+/// their offset from the GRKit icon, so the host icons come first in chunk 0,
+/// and they must fit in it. The effect icons follow them.
+pub const HOST_ICON_COUNT: usize = 26;
 /// The host icon slots of the pictures of Battery Percentage, the last ones.
 pub const BATTERY_ICON_SLOTS: usize = 4;
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
@@ -718,9 +718,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// minor << 8, and patch, or 0 when the package does not name it.
     HOST_UPDATE_VERSION: 4;
     /// The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
-    /// CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATED at
-    /// the first start after one installed. The cue sets it back to 0 when it
-    /// ends (runtime/viewfinder.h).
+    /// CUE_UPDATE_READY while an update over Wi-Fi waits, or
+    /// CUE_UPDATE_RESTART after its confirmation in ADJ. The cue sets it back
+    /// to 0 when it ends (runtime/viewfinder.h).
     HOST_CUE_LABEL: 4;
     /// 1 while the Wi-Fi access point of the camera is on, else 0. The App
     /// task copies it at each timer dispatch (runtime/menu.c); the resident
@@ -736,7 +736,7 @@ pub const UPDATE_READY: u32 = 3;
 pub const CUE_PENDING: u32 = 1;
 /// The values of GRKIT_HOST_CUE_LABEL.
 pub const CUE_UPDATE_READY: u32 = 1;
-pub const CUE_UPDATED: u32 = 2;
+pub const CUE_UPDATE_RESTART: u32 = 2;
 
 pub const RECORD_SIZE: usize = 0x1100;
 
@@ -1593,7 +1593,7 @@ pub fn header() -> String {
         ("UPDATE_READY", UPDATE_READY),
         ("CUE_PENDING", CUE_PENDING),
         ("CUE_UPDATE_READY", CUE_UPDATE_READY),
-        ("CUE_UPDATED", CUE_UPDATED),
+        ("CUE_UPDATE_RESTART", CUE_UPDATE_RESTART),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }

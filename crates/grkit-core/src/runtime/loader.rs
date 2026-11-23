@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::abi::{
-    CONTROL_SERVICE, CONTROL_WORDS, CUE_PENDING, CUE_UPDATED, CUE_UPDATE_READY, DIAL_SET_WORDS,
+    CONTROL_SERVICE, CONTROL_WORDS, CUE_PENDING, CUE_UPDATE_READY, DIAL_SET_WORDS,
     HOST_CONTROL_WORD, HOST_CUE_LABEL, HOST_DIAL_SETS, HOST_DIAL_SET_CHANGES, HOST_LOAD_CUE,
     HOST_PERSIST_WORD, HOST_PROCESSING_CALLS, HOST_PROFILE, HOST_RECIPE_CHANGES, HOST_UPDATE,
     HOST_UPDATE_VERSION, HOST_WLAN, PERSIST_CORE, PERSIST_EFFECTS, PERSIST_EFFECT_COUNT,
@@ -679,7 +679,7 @@ fn state_script() -> Vec<String> {
         ":resident_serve".into(),
         "updatepolls = 0".into(),
         // The version file of an update that installed at this start, with no
-        // update that waits: the load cue reads GRKit Updated.
+        // update that waits, has done its work.
         format!(
             "filesearch '{}'",
             core_path(file_name(crate::card::VERSION_FILE))
@@ -690,7 +690,6 @@ fn state_script() -> Vec<String> {
             core_path(file_name(crate::card::REQUEST_FILE))
         ),
         "if result <> 0 goto resident_updated".into(),
-        format!("{} = {CUE_UPDATED}", word(HOST_CUE_LABEL)),
         format!(
             "filedelete '{}'",
             core_path(file_name(crate::card::VERSION_FILE))
@@ -1626,18 +1625,16 @@ mod tests {
                 "return".into(),
             ]
         );
-        // At the start after an update installed, the cue reads GRKit
-        // Updated, and the version file goes.
+        // At the start after an update installed, the version file goes.
         let updated = at(&script, ":resident_updated");
         assert!(updated < watch);
         assert_eq!(
-            script[updated - 6..updated],
+            script[updated - 5..updated],
             [
                 "filesearch 'C:\\SCRIPT\\GRKIT\\COMMIT.VER'".to_owned(),
                 "if result = 0 goto resident_updated".into(),
                 "filesearch 'C:\\SCRIPT\\GRKIT\\COMMIT.REQ'".into(),
                 "if result <> 0 goto resident_updated".into(),
-                format!("registry[{}] = {CUE_UPDATED}", HOST_CUE_LABEL / 4),
                 "filedelete 'C:\\SCRIPT\\GRKIT\\COMMIT.VER'".into(),
             ]
         );

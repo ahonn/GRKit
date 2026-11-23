@@ -51,6 +51,9 @@ typedef short s16;
 /* The Toning track of the parameter page of a native look with Toning
    (runtime/menu.c: toning_track), as large as the native track. */
 #define GRKIT_ICON_TONING_TRACK 0x7ff5U
+/* The Update row of the MOD page in ADJ. The installer puts it before the
+   pictures of Battery Percentage. */
+#define GRKIT_ICON_UPDATE 0x7ff4U
 
 /* One setting of a native settings page: its row label, its values, the
    text of a value, and the stored value. A native value page has
@@ -199,7 +202,7 @@ GRKIT_MAYBE_UNUSED static u32 native_display(void);
 #define LABEL_GRKIT 0U
 /* The other texts of the load cue (grkit_core::artwork::OVERLAY_LABELS). */
 #define LABEL_UPDATE_READY 22U
-#define LABEL_UPDATED 23U
+#define LABEL_UPDATE_RESTART 23U
 #define LABEL_RATIO_AREA 0x100U
 #ifdef FRAMING_RATIO_LABELS
 /* The label of a Framing ratio value (FRAMING_RATIO_LABELS), or

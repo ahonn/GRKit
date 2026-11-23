@@ -42,8 +42,8 @@ pub const BACKUP_RECORD: &str = concat!(package_folder!("/"), "OLD/RECORD.JSN");
 pub const REQUEST_FILE: &str = concat!(package_folder!("/"), "/COMMIT.REQ");
 /// The version of the package of an update, as six digits: two each for the
 /// major, minor, and patch numbers, such as `010700` for 1.7.0. The service
-/// writes it before `REQUEST_FILE`. It stays after the install, so the next
-/// start tells that an update installed, and the resident loader deletes it.
+/// writes it before `REQUEST_FILE`. It stays after the install, and the
+/// resident loader deletes it at the next start.
 pub const VERSION_FILE: &str = concat!(package_folder!("/"), "/COMMIT.VER");
 /// The journal while the service writes it. The service renames it to
 /// `REQUEST_FILE` after it wrote all of it.
