@@ -105,6 +105,8 @@ static const char *playback_packet(const u8 *path,u8 *buf,u32 *n,u32 *drive,u32 
         /* The image data starts after the segments of the header. */
         if(buf[at]!=0xff || buf[at+1]<0xe0 || buf[at+1]>0xef || size<2U) return 0;
         if(xmp) {
+            /* A segment too short for its own head holds no packet. */
+            if(size<XMP_SEGMENT_HEAD-2U) return 0;
             *n=(at+2U+size<len ? at+2U+size : len)-(at+XMP_SEGMENT_HEAD);
             return (const char *)buf+at+XMP_SEGMENT_HEAD;
         }
