@@ -90,4 +90,724 @@
     <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/install/"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/install/"/>
   </url>
+  <url>
+    <loc>https://grkit.app/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/install/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/install/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/install/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/install/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/install/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/install/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/install/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/install/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/install/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/install/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/install/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/update/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/update/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/update/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/update/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/update/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/update/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/update/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/update/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/update/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/update/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/update/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/grk-not-showing/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/grk-not-showing/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/grk-not-showing/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/grk-not-showing/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/grk-not-showing/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/grk-not-showing/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/grk-not-showing/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/grk-not-showing/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/grk-not-showing/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/grk-not-showing/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/grk-not-showing/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/recovery/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recovery/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/recovery/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recovery/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/recovery/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recovery/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/recovery/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recovery/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/recovery/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recovery/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recovery/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/faq/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/faq/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/faq/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/faq/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/faq/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/faq/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/faq/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/faq/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/faq/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/faq/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/faq/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/cameras/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/cameras/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/cameras/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/cameras/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/cameras/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/cameras/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/cameras/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/cameras/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/cameras/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/cameras/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/cameras/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/fast-start/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/fast-start/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/fast-start/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/fast-start/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/fast-start/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/fast-start/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/fast-start/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/fast-start/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/fast-start/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/fast-start/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/fast-start/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/firmware-dump/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/firmware-dump/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/firmware-dump/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/firmware-dump/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/firmware-dump/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/firmware-dump/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/firmware-dump/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/firmware-dump/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/firmware-dump/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/firmware-dump/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/firmware-dump/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/film-look/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/film-look/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/film-look/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/film-look/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/film-look/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/film-look/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/film-look/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/film-look/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/film-look/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/film-look/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/film-look/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/composition/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/composition/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/composition/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/composition/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/composition/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/composition/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/composition/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/composition/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/composition/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/composition/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/composition/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/effects/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/effects/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/effects/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/effects/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/effects/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/effects/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/effects/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/effects/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/effects/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/effects/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/effects/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/recipes/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recipes/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/recipes/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recipes/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/recipes/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recipes/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/recipes/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recipes/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/recipes/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/recipes/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/recipes/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/mode-dial/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/mode-dial/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/mode-dial/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/mode-dial/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/mode-dial/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/mode-dial/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/mode-dial/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/mode-dial/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/mode-dial/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/mode-dial/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/mode-dial/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/raw/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/raw/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/raw/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/raw/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/raw/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/raw/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/raw/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/raw/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/raw/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/raw/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/raw/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/docs/settings/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/settings/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hans/docs/settings/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/settings/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/zh-hant/docs/settings/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/settings/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ja/docs/settings/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/settings/"/>
+  </url>
+  <url>
+    <loc>https://grkit.app/ko/docs/settings/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://grkit.app/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hans" href="https://grkit.app/zh-hans/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="zh-Hant" href="https://grkit.app/zh-hant/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ja" href="https://grkit.app/ja/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="ko" href="https://grkit.app/ko/docs/settings/"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://grkit.app/docs/settings/"/>
+  </url>
 </urlset>

@@ -1,3 +1,66 @@
+var DOCS_SITE_PAGES = ["docs", ...[
+	{
+		slug: "install",
+		group: "start"
+	},
+	{
+		slug: "update",
+		group: "start"
+	},
+	{
+		slug: "grk-not-showing",
+		group: "fix"
+	},
+	{
+		slug: "recovery",
+		group: "fix"
+	},
+	{
+		slug: "faq",
+		group: "fix"
+	},
+	{
+		slug: "cameras",
+		group: "cameras"
+	},
+	{
+		slug: "fast-start",
+		group: "cameras"
+	},
+	{
+		slug: "firmware-dump",
+		group: "cameras"
+	},
+	{
+		slug: "film-look",
+		group: "features"
+	},
+	{
+		slug: "composition",
+		group: "features"
+	},
+	{
+		slug: "effects",
+		group: "features"
+	},
+	{
+		slug: "recipes",
+		group: "features"
+	},
+	{
+		slug: "mode-dial",
+		group: "features"
+	},
+	{
+		slug: "raw",
+		group: "features"
+	},
+	{
+		slug: "settings",
+		group: "features"
+	}
+].map((page) => `docs/${page.slug}`)];
+//#endregion
 //#region src/languagePage.ts
 /** The address of each language page. English is the root page, which other visitors also get. */
 var LANGUAGE_PATHS = {
@@ -13,6 +76,7 @@ var CODES = Object.keys(LANGUAGE_PATHS);
 function isLanguage(value) {
 	return CODES.some((code) => code === value);
 }
+[...DOCS_SITE_PAGES];
 /** Countries where Traditional Chinese is the usual script. */
 var TRADITIONAL = /* @__PURE__ */ new Set([
 	"TW",
@@ -104,7 +168,7 @@ var edge_default = { async fetch(request, env) {
 	const asset = await env.ASSETS.fetch(request);
 	const response = new Response(asset.body, asset);
 	for (const [name, value] of Object.entries({
-		"Content-Security-Policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://plausible.techflow.studio 'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='; style-src 'self' 'unsafe-hashes' 'sha256-NamvEQbYOZLzIpvbEHTXsTsIEFfHGOX+IkN82LVT1A4=' 'sha256-ZnrWpQYDFI/TmwMC1PkPM0pRo2op5vmZPUnbCzBEXD0=' 'sha256-tPlu9AUDHlHy+I+j2qOHmW810JQa5vHdQap4rO0I59k=' 'sha256-2iC95E8wv/B7hf3E+gbxGBwTBo83Rwmt8s/y1Pulcnw=' 'sha256-VL7z6fdRNANnD+G6b64pPfmMjjGi2NCfDrG4zBPiy7Y=' 'sha256-lJxWhGoILzz/6e3wBSUELVQP325OD8VPBzJ8Bhfw9M0=' 'sha256-TqiaSclY5fZtAPCH8eES4vFc20E9a6VZ3SkKB3xlYk0=' 'sha256-ZPHQZ0i1zFXIZnZ4coyednH35d3rskV/n+C5TZ7wKzY=' 'sha256-vo8361nuOl48rs065DnLkKoPz37YSlP/GcusHtuGGPc=' 'sha256-yr0/IQmNLUSp+AWFXCgMHOxbnQ4Z72ThGNasJm81g3k=' 'sha256-Qs5gmTPtJViW9Bmq4RB4AU/jKCGGmFkna2A/kkC0/JE=' 'sha256-e+asQ9hujND2SutjeuMFYaiQA8/9siO6/BfQb0Qu/wo=' 'sha256-vpCwT/2DchmpARhQZRaiOxKh0gKarLiUXAqnPk9QWt0='; font-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://plausible.techflow.studio; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+		"Content-Security-Policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://plausible.techflow.studio 'sha256-/6SBPqW+GW+//4nlXX6Y1nR9dWlh0gsQJ6KK71djH6A='; style-src 'self' 'unsafe-hashes' 'sha256-NamvEQbYOZLzIpvbEHTXsTsIEFfHGOX+IkN82LVT1A4=' 'sha256-ZnrWpQYDFI/TmwMC1PkPM0pRo2op5vmZPUnbCzBEXD0=' 'sha256-tPlu9AUDHlHy+I+j2qOHmW810JQa5vHdQap4rO0I59k=' 'sha256-2iC95E8wv/B7hf3E+gbxGBwTBo83Rwmt8s/y1Pulcnw=' 'sha256-VL7z6fdRNANnD+G6b64pPfmMjjGi2NCfDrG4zBPiy7Y=' 'sha256-lJxWhGoILzz/6e3wBSUELVQP325OD8VPBzJ8Bhfw9M0=' 'sha256-TqiaSclY5fZtAPCH8eES4vFc20E9a6VZ3SkKB3xlYk0=' 'sha256-ZPHQZ0i1zFXIZnZ4coyednH35d3rskV/n+C5TZ7wKzY=' 'sha256-vo8361nuOl48rs065DnLkKoPz37YSlP/GcusHtuGGPc=' 'sha256-yr0/IQmNLUSp+AWFXCgMHOxbnQ4Z72ThGNasJm81g3k=' 'sha256-Qs5gmTPtJViW9Bmq4RB4AU/jKCGGmFkna2A/kkC0/JE=' 'sha256-e+asQ9hujND2SutjeuMFYaiQA8/9siO6/BfQb0Qu/wo=' 'sha256-be+4cjCjYuZdbd2D+fmAqHn7Sc/wz7eDg4GbiTEH3Yk=' 'sha256-vpCwT/2DchmpARhQZRaiOxKh0gKarLiUXAqnPk9QWt0='; font-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://plausible.techflow.studio; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
 		"X-Content-Type-Options": "nosniff",
 		"Referrer-Policy": "strict-origin-when-cross-origin",
 		"Permissions-Policy": "camera=(), microphone=(), geolocation=()"
