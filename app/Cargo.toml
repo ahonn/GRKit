@@ -1,0 +1,88 @@
+[package]
+name = "grkit-app"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+nsh-core = { version = "0.6.0", features = ["svg"] }
+nsh-base = "0.6.0"
+env_logger = "0.11"
+log = "0.4"
+# Official release verification and package assembly.
+grkit-core = { path = "../crates/grkit-core" }
+anyhow = "1"
+# getifaddrs: the Wi-Fi address the connect flow classifies routes by.
+libc = "0.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+async-channel = "2"
+futures-channel = "0.3"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+nsh-platform-macos = { version = "0.6.0", default-features = false }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+base64 = "0.22"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+nsh-platform-ios = { version = "0.6.0", default-features = false }
+objc2 = "0.6.5"
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "NSArray",
+  "NSBundle",
+  "NSData",
+  "NSDictionary",
+  "NSEnumerator",
+  "NSError",
+  "NSObject",
+  "NSProcessInfo",
+  "NSString",
+  "NSUUID",
+  "NSURL",
+  "NSValue",
+] }
+objc2-core-bluetooth = "0.3.2"
+objc2-network-extension = { version = "0.3.2", features = ["objc2-accessory-setup-kit"] }
+objc2-accessory-setup-kit = { version = "0.3.2", features = [
+  "block2",
+  "objc2-ui-kit",
+  "ASPickerDisplayItem",
+  "ASDiscoveryDescriptor",
+  "ASAccessory",
+  "ASAccessoryEvent",
+  "ASAccessorySession",
+] }
+objc2-ui-kit = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "block2",
+  "UIActivityIndicatorView",
+  "UIAlertController",
+  "UIApplication",
+  "UIControl",
+  "UITextField",
+  "UITextInputTraits",
+  "UIViewController",
+  "UIWindow",
+  "UIImage",
+  "UIColor",
+  "UIInterface",
+  "UIResponder",
+  "UITraitCollection",
+  "UIView",
+] }
+block2 = "0.6.2"
+dispatch2 = "0.3.1"
+
+# Optimize the LUT fit in debug builds and tests too.
+[profile.dev.package.grkit-core]
+opt-level = 3
+
+[dev-dependencies]
+nsh-engine = "0.6.0"
+nsh-testing = "0.6.0"
