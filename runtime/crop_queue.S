@@ -12,9 +12,16 @@
    check of the back end when the camera would skip it, and crop_queue_post
    lets one completion through for that shot. The header words
    GRKIT_HOST_CROP_QUEUE_OWNER and GRKIT_HOST_CROP_QUEUE_FLAGS hold the
-   state of the last shot. */
+   state of the last shot.
+
+   Only a shot that starts with a crop factor that the core set
+   (GRKIT_HOST_CROP_NATIVE) is a crop shot: crop_queue_start notes it as
+   CROP_QUEUE_ARMED, and crop_queue_release checks that mark, not the
+   setting of the moment, so that a crop that changes while the camera
+   makes the shot neither arms nor disarms the check of that shot. */
 #define CROP_QUEUE_POSTED 1
 #define CROP_QUEUE_RECOVERED 2
+#define CROP_QUEUE_ARMED 4
 /* rd = rn + a header offset. An ARM immediate holds one byte, rotated, so
    add the two bytes of the offset apart. */
 .macro add_header rd, rn, offset
@@ -33,7 +40,8 @@
 .arm
 /* Replaces `strb r3, [r5, #CROP_BACKEND_RELEASED]` (r3 is 0) at the
    release start of the back end (r5): a new shot, whose events go to the
-   owner of the back end. */
+   owner of the back end, and a crop shot when the core owns the camera's
+   crop factor now (CROP_QUEUE_ARMED). */
 .global crop_queue_start
 .type crop_queue_start, %function
 crop_queue_start:
@@ -41,7 +49,9 @@ crop_queue_start:
     ldr r0, =GRKIT_HEADER_REFERENCE
     ldr r1, [r5, #CROP_BACKEND_OWNER]
     str r1, [r0, #GRKIT_HOST_CROP_QUEUE_OWNER]
-    mov r1, #0
+    ldr r1, [r0, #GRKIT_HOST_CROP_NATIVE]
+    cmp r1, #0
+    movne r1, #CROP_QUEUE_ARMED
     str r1, [r0, #GRKIT_HOST_CROP_QUEUE_FLAGS]
     dmb ish
     pop {r0,r1}
@@ -82,11 +92,12 @@ crop_queue_post:
 
 /* Replaces `mov r0, r4` after the drive-mode check of the release stop of
    the back end (r4), where the camera does not check the completion; r0 is
-   the drive mode. For a Single shot of a GRKit crop whose completion is not
-   posted, check the completion as the continuous drive does, when the queue
-   has reached the completion of the shot: no recipe in state 1 or 2, and
-   no recipe in state 3, or one that is at or after the completion step of
-   its table. CROP_QUEUE_RECOVERED marks the check, at most once a shot. */
+   the drive mode. For a Single shot of a GRKit crop (CROP_QUEUE_ARMED at its
+   start) whose completion is not posted, check the completion as the
+   continuous drive does, when the queue has reached the completion of the
+   shot: no recipe in state 1 or 2, and no recipe in state 3, or one that
+   is at or after the completion step of its table. CROP_QUEUE_RECOVERED
+   marks the check, at most once a shot. */
 .global crop_queue_release
 .type crop_queue_release, %function
 crop_queue_release:
@@ -94,8 +105,8 @@ crop_queue_release:
     cmp r0, #0
     bne 9f
     ldr r5, =GRKIT_HEADER_REFERENCE
-    ldr r0, [r5, #GRKIT_HOST_CROP_NATIVE]
-    cmp r0, #0
+    ldr r0, [r5, #GRKIT_HOST_CROP_QUEUE_FLAGS]
+    tst r0, #CROP_QUEUE_ARMED
     beq 9f
     ldrb r0, [r4, #CROP_BACKEND_RELEASED]
     cmp r0, #1
