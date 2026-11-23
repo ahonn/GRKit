@@ -179,7 +179,9 @@ fn runtime_target(runtime: &Files, camera: &Camera) -> Result<&'static str> {
 fn package_targets(runtime: &Files, camera: &Camera) -> Result<Vec<&'static str>> {
     let fast = camera_fast_files(runtime, camera)?;
     let targets = camera.targets();
-    if targets.len() == 1 {
+    // A camera with one build, or a single-build package of a camera with
+    // more (`Extras::single_build`): one core file, CORE.BIN.
+    if targets.len() == 1 || runtime.contains_key(card::CORE_FILE) {
         return Ok(vec![runtime_target(runtime, camera)?]);
     }
     let binaries: Vec<&[u8]> = (0..targets.len())
@@ -231,10 +233,11 @@ fn check_installer(binary: &[u8]) -> Result<()> {
 
 /// The runtime files of a package with each runtime of `camera`, in release
 /// order (`runtime::package_runtime_files`).
-fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<Files> {
+fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera, single_build: bool) -> Result<Files> {
     let targets: Vec<&str> = runtimes.iter().map(VerifiedRuntime::target).collect();
     ensure!(
-        targets == camera.targets(),
+        targets == camera.targets()
+            || (single_build && targets.len() == 1 && camera.runs(targets[0])),
         "A package for {} needs the runtime of each of its builds in release order: {}",
         camera.name,
         camera.targets().join(", ")
@@ -568,7 +571,13 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         bail!("Package must have the ModeSet file of exactly one camera");
     };
     let activation = runtime::activation_files(camera);
-    let cores = camera.targets().len();
+    // One core file, CORE.BIN, for a camera with one build or a single-build
+    // package (`Extras::single_build`).
+    let cores = if contents.contains_key(&format!("SD_ROOT/{}", card::CORE_FILE)) {
+        1
+    } else {
+        camera.targets().len()
+    };
     // The fast-boot files and their install files, which package_targets
     // checks.
     let fast_paths: Vec<String> = contents
@@ -797,6 +806,11 @@ pub struct Package {
 /// The optional library files of a package.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Extras<'a> {
+    /// A package with the runtime of one build of a camera that runs more, as
+    /// a local build for one firmware. Its core file is CORE.BIN, which
+    /// INSTALL.SH runs with `--install`, so the camera must run that build.
+    /// Release packages have every build.
+    pub single_build: bool,
     /// The import library of the site (`card::IMPORTS_FILE`, `crate::imports`), which the
     /// camera does not read.
     pub imports: Option<&'a [u8]>,
@@ -827,7 +841,7 @@ pub fn assemble_with(
     guide: &Guide,
     extras: Extras,
 ) -> Result<Package> {
-    let mut contents: Files = package_runtime(runtimes, camera)?
+    let mut contents: Files = package_runtime(runtimes, camera, extras.single_build)?
         .iter()
         .map(|(name, blob)| (format!("SD_ROOT/{name}"), blob.clone()))
         .collect();

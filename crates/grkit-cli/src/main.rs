@@ -111,6 +111,11 @@ enum Command {
         /// `--language`. `grkit guides` writes its source.
         #[arg(long)]
         guide: PathBuf,
+        /// Package one `--build` for a camera that runs more builds, as a
+        /// local build for one firmware. The package installs only on that
+        /// firmware.
+        #[arg(long)]
+        single_build: bool,
         #[arg(long)]
         out: PathBuf,
     },
@@ -606,6 +611,7 @@ fn run(command: Command) -> Result<Value> {
             camera,
             language,
             guide,
+            single_build,
             out,
         } => {
             let runtimes = build
@@ -623,7 +629,7 @@ fn run(command: Command) -> Result<Value> {
                 .iter()
                 .map(|path| storage::read_bounded(path, packaging::MAX_FILE_SIZE))
                 .collect::<Result<Vec<_>>>()?;
-            let package = packaging::assemble(
+            let package = packaging::assemble_with(
                 &runtimes,
                 &effects,
                 &modules,
@@ -631,6 +637,10 @@ fn run(command: Command) -> Result<Value> {
                 &packaging::Guide {
                     language,
                     pdf: &pdf,
+                },
+                packaging::Extras {
+                    single_build,
+                    ..Default::default()
                 },
             )?;
             storage::write_new(&out, &package.bytes)?;
