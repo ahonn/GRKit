@@ -902,8 +902,8 @@ static void mask_add(const Stamp *st,int cx,int cy,u32 *core,u32 *halo) {
 static void sample_products(const Plane *src,const Stamp *st,u32 turns,u32 rf,long long px,long long py,long long *pu,long long *pv) {
     long long u, v, scale=(long long)(st->ss*rf);
     upright(src,turns,px,py,&u,&v);
-    *pu=(u-((long long)st->ox<<16))*scale;
-    *pv=(v-((long long)st->oy<<16))*scale;
+    *pu=(u-(long long)st->ox*65536)*scale;
+    *pv=(v-(long long)st->oy*65536)*scale;
 }
 /* The stamp of the main picture `src` on the picture `dst`: each pixel of
    dst samples the mask at four points, so the stamp keeps the same place and
