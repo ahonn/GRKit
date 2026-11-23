@@ -35,6 +35,15 @@ grkit-firmware = { path = "crates/grkit-firmware" }
 lto = "thin"
 strip = "debuginfo"
 
+# Full debug info about doubles the size of target/. Line tables keep file and line numbers
+# in backtraces; a debugger cannot show variables.
+[profile.dev]
+debug = "line-tables-only"
+
+# Dependencies are not debugged here, so they carry no debug info.
+[profile.dev.package."*"]
+debug = false
+
 # The LUT fit renders hundreds of thousands of colors per import, and its tests run about
 # five times slower without optimization.
 [profile.dev.package.grkit-core]
