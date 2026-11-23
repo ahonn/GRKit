@@ -309,6 +309,7 @@ const SITES: &[Site] = &[
     ("canvas_filter_0", 0x535033e8, "73f605eb"),
     ("canvas_filter_1", 0x53503ab4, "c0f405eb"),
     ("menu_battery_mode", 0x5317202c, "030053e3"),
+    ("menu_battery_icon", 0x532abce0, "010051e3"),
     ("menu_goodbye", 0x5322e4c8, "01119ce7"),
     ("menu_goodbye_text_0", 0x5319ee58, "0dc0a0e1"),
     ("menu_goodbye_text_1", 0x5319ef2c, "0dc0a0e1"),
