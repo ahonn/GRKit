@@ -79,6 +79,7 @@ struct Session {
 pub struct LookApi {
     backend: Mutex<Box<dyn RuntimeBackend>>,
     session: Mutex<Option<Session>>,
+    modules: Mutex<module_api::ModuleCache>,
 }
 
 /// The uses of a Look that its info names; `usedBy` counts them all.
@@ -180,6 +181,7 @@ impl LookApi {
         Self {
             backend: Mutex::new(backend),
             session: Mutex::new(None),
+            modules: Mutex::default(),
         }
     }
 
@@ -1170,6 +1172,7 @@ fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
 }
 
 mod covers;
+mod module_api;
 mod recipe_api;
 #[cfg(test)]
 mod tests;

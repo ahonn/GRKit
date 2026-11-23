@@ -295,16 +295,17 @@ Recipe parameters are read-only. The camera makes recipes with Save Current Sett
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/modules` | Installed modules and runtime availability |
-| GET | `/modules/{id}` | Module metadata and setting definitions |
-| GET, PATCH | `/params/modules/{id}` | Read or change module values |
-| GET, PATCH | `/params/camera` | Read or change the active Look and its adjustments |
+| GET | `/modules/catalog?language=` | Modules, settings, values, and labels in one language. `ETag` and `If-None-Match` apply |
+| GET | `/modules/{id}/icon` | Tile 0 of the module as a 40 x 40 PNG. `ETag` and `If-None-Match` apply |
+| GET | `/params/modules` | Enable, status, ADJ place, values, hidden values, and value order of each module, in ADJ Order |
+| PATCH | `/params/modules/{id}` | Change `enabled`, `values`, `hiddenValues`, or `valueOrder` |
+| PUT | `/params/modules/order` | Set the order of the modules in the ADJ root |
 
-Definitions include key, type, allowed values, range, step, unit, dependencies, read-only reason, and application mode. Values use stable symbolic setting names.
+The phone has no built-in list of modules. The camera sends each module, setting, value, and label, so a later GRKit with new modules works with an older app. The service keeps each catalog and icon for the life of the camera start.
 
-PATCH groups related values into one request. The service validates the final combination. Unsupported or read-only values reject the entire request.
+A managed module (`looks` or `recipes`) has no settings in the catalog: the phone manages those rows in its own tabs. Sliders, module installation, and toolbar or hidden places are not part of these resources.
 
-A parameter request succeeds only after runtime acknowledgement and persistence. The implementation can coalesce slider input in the phone. It must not claim persistence before the durable state exists.
+The runtime checks a whole PATCH before its first change, so an invalid request changes nothing. A change uses the store path of the MENU rows, so it saves and applies as a MENU change does. While a GRKit page shows, a change returns `camera_busy`. The change stream announces a change through the count of setting changes.
 
 Installing executable modules remains part of signed software installation. These endpoints cannot upload code, write arbitrary paths, or execute commands.
 

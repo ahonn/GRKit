@@ -24,6 +24,8 @@ pub enum LookSource {
     /// A native look of GR IV (Cinema Yellow, Cinema Green) that the site
     /// added: its cover follows the scheme as an official Look's does.
     Native,
+    /// Also a source that a later GRKit reports.
+    #[serde(other)]
     Unknown,
 }
 
@@ -380,8 +382,17 @@ struct WireRuntime {
     used_by: usize,
     #[serde(default)]
     uses: Vec<LookUse>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "known_pending")]
     pending: Option<PendingChange>,
+}
+
+/// A change that a later GRKit reports says nothing about a restart here.
+fn known_pending<'de, D>(deserializer: D) -> Result<Option<PendingChange>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
 }
 
 /// Parse a `GET /v1/looks` body.
@@ -800,6 +811,16 @@ mod tests {
          "runtime":{"id":"portra-400-endura-v1","source":"official","loaded":true,"selected":true,"usedBy":1,"pending":null},"cover":null}],
         "counts":{"listed":2,"loaded":2},"limits":{"listedLooks":64,"loadedLooks":40},
         "bootId":"boot","cardId":"card"}"#;
+
+    #[test]
+    fn a_look_of_a_later_grkit_stays_listed() {
+        let body = LIST
+            .replacen("\"source\":\"official\"", "\"source\":\"later\"", 1)
+            .replacen("\"pending\":\"update\"", "\"pending\":\"later\"", 1);
+        let snapshot = parse_looks(body.as_bytes()).unwrap();
+        let look = snapshot.get("trix-400-mono-v1").unwrap();
+        assert_eq!((look.source, look.pending), (LookSource::Unknown, None));
+    }
 
     #[test]
     fn parses_the_service_list_in_menu_order() {

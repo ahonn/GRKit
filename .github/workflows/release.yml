@@ -313,7 +313,8 @@ jobs:
           sh .github/scripts/release-notes.sh "${TAG#v}" > "$RUNNER_TEMP/notes.json"
           python3 .github/scripts/preset-text.py web/src/recipeStrings.ts > "$RUNNER_TEMP/preset-text.json"
           target/release/grkit release-index --site site --out site/release/index.json \
-            --notes "$RUNNER_TEMP/notes.json" --preset-text "$RUNNER_TEMP/preset-text.json"
+            --notes "$RUNNER_TEMP/notes.json" --preset-text "$RUNNER_TEMP/preset-text.json" \
+            --module-text modules
       - name: Build the firmware dump tool
         run: target/release/grkit dump --out "GRKit-${TAG#v}-dump.zip" --clang clang-21 --lld ld.lld-21
       - name: Check the version of each runtime

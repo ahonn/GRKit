@@ -68,7 +68,7 @@ pub enum DemoScreen {
     L8,
     /// L9 — a new Look: file, name, LUT input and cover.
     L9,
-    /// L10 — Looks without a camera.
+    /// L10 — The Looks tab without a camera: the home page shows.
     L10,
     /// L11 — an update waits on the camera (read only).
     L11,
@@ -88,6 +88,14 @@ pub enum DemoScreen {
     L18,
     /// L19 — the connection was lost during a change.
     L19,
+    /// L20 — a restart for changed Looks, on the Looks tab.
+    L20,
+    /// L21 — the connect that ends the restart.
+    L21,
+    /// L22 — that connect failed.
+    L22,
+    /// L23 — the camera has no standby: restart it by hand (alert).
+    L23,
     /// A8 — saved cameras, none connected.
     A8,
     /// A9 — the connection was lost.
@@ -160,8 +168,40 @@ pub enum DemoScreen {
     R10,
     /// R11 — No recipes.
     R11,
-    /// R12 — Recipes without a camera.
+    /// R12 — The Recipes tab without a camera: the home page shows.
     R12,
+    /// M1 — Modules list.
+    M1,
+    /// M2 — Edit the module order.
+    M2,
+    /// M3 — A module with values only.
+    M3,
+    /// M4 — A module with options and order.
+    M4,
+    /// M5 — Options and order.
+    M5,
+    /// M6 — Choose a value (menu).
+    M6,
+    /// M7 — A module with groups.
+    M7,
+    /// M8 — A module managed by another tab.
+    M8,
+    /// M9 — Modules turned off.
+    M9,
+    /// M10 — The Modules tab without a camera: the home page shows.
+    M10,
+    /// M11 — The camera is busy (alert).
+    M11,
+    /// M12 — A value being saved.
+    M12,
+    /// M13 — GRKit too old for module settings.
+    M13,
+    /// M14 — A catalog newer than the app.
+    M14,
+    /// M15 — Modules being read.
+    M15,
+    /// M16 — The Modules tab with a saved camera, not connected: the home page shows.
+    M16,
 }
 
 /// Every id string the env / CLI accept, in design order.
@@ -199,6 +239,10 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("L17", DemoScreen::L17),
     ("L18", DemoScreen::L18),
     ("L19", DemoScreen::L19),
+    ("L20", DemoScreen::L20),
+    ("L21", DemoScreen::L21),
+    ("L22", DemoScreen::L22),
+    ("L23", DemoScreen::L23),
     ("A8", DemoScreen::A8),
     ("A9", DemoScreen::A9),
     ("A10", DemoScreen::A10),
@@ -236,6 +280,22 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("R10", DemoScreen::R10),
     ("R11", DemoScreen::R11),
     ("R12", DemoScreen::R12),
+    ("M1", DemoScreen::M1),
+    ("M2", DemoScreen::M2),
+    ("M3", DemoScreen::M3),
+    ("M4", DemoScreen::M4),
+    ("M5", DemoScreen::M5),
+    ("M6", DemoScreen::M6),
+    ("M7", DemoScreen::M7),
+    ("M8", DemoScreen::M8),
+    ("M9", DemoScreen::M9),
+    ("M10", DemoScreen::M10),
+    ("M11", DemoScreen::M11),
+    ("M12", DemoScreen::M12),
+    ("M13", DemoScreen::M13),
+    ("M14", DemoScreen::M14),
+    ("M15", DemoScreen::M15),
+    ("M16", DemoScreen::M16),
 ];
 
 /// Parse a design id (`A5`, `a5`, …). Unknown → `None` (normal demo).
@@ -675,6 +735,34 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 app.alert_look_error(crate::domain::LookError::CardFull);
             });
         }
+        DemoScreen::L20 => seed_look_restart(app),
+        DemoScreen::L21 => {
+            seed_look_restart(app);
+            app.camera_restarting.set(false);
+            app.restart_connect.set(true);
+            app.connect_started.set(Some(Instant::now()));
+            app.set_sheet(Some(Sheet::Connecting { step: 1 }));
+        }
+        DemoScreen::L22 => {
+            seed_look_restart(app);
+            app.camera_restarting.set(false);
+            app.restart_connect.set(true);
+            app.set_sheet(Some(Sheet::ConnectError(
+                crate::domain::LinkError::NotNearby,
+            )));
+        }
+        DemoScreen::L23 => {
+            seed_look_restart(app);
+            spawn(async move {
+                next_frame().await;
+                let _ = nsh_base::alert_dialog()
+                    .title(crate::strings::tr("restart.title", &[]))
+                    .description(crate::strings::tr("restart.manual_body", &[]))
+                    .action("ok", crate::strings::tr("update.ok", &[]))
+                    .show()
+                    .await;
+            });
+        }
         DemoScreen::L19 => {
             seed_looks(app);
             app.status.set(None);
@@ -745,7 +833,116 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             app.set_sheet(None);
             app.set_tab(Tab::Recipes);
         }
+        DemoScreen::M1 => seed_modules(app),
+        DemoScreen::M2 => {
+            seed_modules(app);
+            app.modules.editing.set(true);
+        }
+        DemoScreen::M3 => {
+            seed_modules(app);
+            app.push(Route::ModuleDetail("GRAIN".into()));
+        }
+        DemoScreen::M4 => {
+            seed_modules(app);
+            app.push(Route::ModuleDetail("FRAMING".into()));
+        }
+        DemoScreen::M5 => {
+            seed_modules(app);
+            app.push(Route::ModuleDetail("FRAMING".into()));
+            app.push(Route::ModuleOptions("FRAMING".into()));
+        }
+        DemoScreen::M6 => {
+            seed_modules(app);
+            app.push(Route::ModuleDetail("GRAIN".into()));
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                if let Some(row) = app.module_row("GRAIN") {
+                    let setting = row.settings()[0].clone();
+                    let current = row.value_of(&setting);
+                    crate::pages::value_menu(app, "GRAIN".into(), setting, current);
+                }
+            });
+        }
+        DemoScreen::M7 => {
+            seed_modules(app);
+            app.push(Route::ModuleDetail("GLOW".into()));
+        }
+        DemoScreen::M8 => {
+            seed_modules(app);
+            app.refresh_looks();
+            app.push(Route::ModuleDetail("FILM".into()));
+        }
+        DemoScreen::M9 => {
+            seed_connected_up_to_date(app);
+            app.set_sheet(None);
+            app.seed_demo_modules(
+                |state| {
+                    for module in &mut state.modules {
+                        if matches!(module.id.as_str(), "GRAIN" | "BORDER" | "DATE") {
+                            module.enabled = false;
+                            module.status = "stopped".into();
+                        }
+                    }
+                },
+                None,
+            );
+            app.set_tab(Tab::Modules);
+        }
+        DemoScreen::M10 => {
+            app.status.set(None);
+            app.package.set(None);
+            app.set_sheet(None);
+            app.set_tab(Tab::Modules);
+        }
+        DemoScreen::M11 => {
+            seed_modules(app);
+            app.alert_module_error(crate::domain::LookError::CameraBusy);
+        }
+        DemoScreen::M12 => {
+            seed_modules(app);
+            app.seed_demo_module_saving(
+                "GRAIN",
+                crate::store::ModulePart::Setting("grain.level".into()),
+            );
+            app.push(Route::ModuleDetail("GRAIN".into()));
+        }
+        DemoScreen::M13 => {
+            seed_connected_up_to_date(app);
+            app.set_sheet(None);
+            app.seed_demo_modules(|_| {}, Some(crate::store::ModulesBlock::Unsupported));
+            app.set_tab(Tab::Modules);
+        }
+        DemoScreen::M14 => {
+            seed_connected_up_to_date(app);
+            app.set_sheet(None);
+            app.seed_demo_modules(|_| {}, Some(crate::store::ModulesBlock::AppTooOld));
+            app.set_tab(Tab::Modules);
+        }
+        DemoScreen::M15 => {
+            seed_connected_up_to_date(app);
+            app.set_sheet(None);
+            app.tab.set(Tab::Modules);
+            app.seed_demo_modules_loading();
+        }
+        DemoScreen::M16 => {
+            seed_saved(app);
+            app.seed_demo_modules(|_| {}, None);
+            app.status.set(None);
+            app.package.set(None);
+            app.set_sheet(None);
+            app.tab.set(Tab::Modules);
+        }
     }
+}
+
+/// Connected, on the Modules tab, with the demo camera's modules read.
+fn seed_modules(app: AppState) {
+    seed_connected_up_to_date(app);
+    app.set_sheet(None);
+    app.refresh_looks();
+    app.refresh_recipes();
+    app.set_tab(Tab::Modules);
 }
 
 const PORTRA: &str = "portra-400-endura-v1";
@@ -765,6 +962,18 @@ fn seed_recipes(app: AppState) {
     app.set_sheet(None);
     app.refresh_looks();
     app.set_tab(Tab::Recipes);
+}
+
+/// The Looks tab of a camera that a restart for changed Looks took down.
+fn seed_look_restart(app: AppState) {
+    seed_saved(app);
+    seed_looks(app);
+    app.camera_restarting.set(true);
+    app.reset_looks();
+    if let Some(mut status) = app.status.get() {
+        status.camera.connection = crate::domain::ConnectionState::Disconnected;
+        app.status.set(Some(status));
+    }
 }
 
 /// Ask to delete Portra 400 after the page shows.
@@ -787,10 +996,13 @@ pub fn shows_alert(screen: DemoScreen) -> bool {
             | DemoScreen::L12
             | DemoScreen::L15
             | DemoScreen::L18
+            | DemoScreen::L23
             | DemoScreen::U10
             | DemoScreen::R4
             | DemoScreen::R9
             | DemoScreen::R10
+            | DemoScreen::M6
+            | DemoScreen::M11
     )
 }
 
@@ -930,7 +1142,7 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::L7 => "Import a File",
         DemoScreen::L8 => "Lightroom Preset",
         DemoScreen::L9 => "LUT Input",
-        DemoScreen::L10 => "No Camera Connected",
+        DemoScreen::L10 => "Add Your Camera",
         DemoScreen::L11 => "An update is waiting on the camera",
         DemoScreen::L12 => "Camera Menu Is Full",
         DemoScreen::L13 => "Film name",
@@ -940,6 +1152,8 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::L17 => "Name",
         DemoScreen::L18 => "No Room on the Card",
         DemoScreen::L19 => "Disconnected. This change wasn't saved.",
+        DemoScreen::L20 | DemoScreen::L21 | DemoScreen::L22 => "Camera Not Connected",
+        DemoScreen::L23 => "Restart the Camera",
         DemoScreen::A8 => "Other Cameras",
         DemoScreen::A9 => "Lost Connection",
         DemoScreen::A10 => "First time with this camera? On the camera, choose",
@@ -976,6 +1190,22 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::R9 => "Delete Odd Film?",
         DemoScreen::R10 => "Camera Menu Full",
         DemoScreen::R11 => "No Recipes Yet",
-        DemoScreen::R12 => "No Camera Connected",
+        DemoScreen::R12 => "Add Your Camera",
+        DemoScreen::M1 => "Same order as ADJ on the camera. A switch applies at once.",
+        DemoScreen::M2 => "Drag to change the ADJ order. Toolbar and hidden modules stay.",
+        DemoScreen::M3 => "Strength",
+        DemoScreen::M4 => "Options and Order",
+        DemoScreen::M5 => "Shown in ADJ",
+        DemoScreen::M6 => "Strength",
+        DemoScreen::M7 => "Halation",
+        DemoScreen::M8 => "Manage Film Looks",
+        DemoScreen::M9 => "Not Used",
+        DemoScreen::M10 => "Add Your Camera",
+        DemoScreen::M11 => "Camera Busy",
+        DemoScreen::M12 => "Strength",
+        DemoScreen::M13 => "Update GRKit",
+        DemoScreen::M14 => "Update the App",
+        DemoScreen::M15 => "Reading modules…",
+        DemoScreen::M16 => "Other Cameras",
     }
 }

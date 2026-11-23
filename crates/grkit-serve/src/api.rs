@@ -151,6 +151,9 @@ impl Service {
             || route.starts_with("params/looks/")
             || route == "recipes"
             || route.starts_with("recipes/")
+            || route.starts_with("modules/")
+            || route == "params/modules"
+            || route.starts_with("params/modules/")
         {
             let card_id = self.current_card_id(env.card.root()).ok();
             let pending = env.card.state().map_or(true, |state| state != "none")
@@ -167,6 +170,9 @@ impl Service {
                     .ok()
                     .and_then(|device| crate::update::recipe_family(&device.model)),
             };
+            if let Some(reply) = self.looks.handle_modules(request, body, &context) {
+                return reply;
+            }
             if let Some(reply) = self
                 .looks
                 .handle_recipes(request, body, &context, &self.changes)
@@ -215,6 +221,7 @@ impl Service {
             })
             .map(|request| software_summary(&request));
         let writable = readable && card_id.is_some();
+        let module_settings = self.looks.module_settings();
         Reply::json(
             200,
             json!({
@@ -224,7 +231,7 @@ impl Service {
                 "storage":{"state":if readable {"ready"} else {"unavailable"},"writable":writable,"freeBytes":camera.as_ref().and_then(|c| c.free_bytes)},
                 "runtime":runtime,
                 "writeAccess":{"allowed":writable,"reason":if writable {None} else {Some("identity_unavailable")}},
-                "capabilities":{"looks":looks_capabilities,"recipes":{"read":true,"write":true},"moduleSettings":{"read":false,"write":false}},
+                "capabilities":{"looks":looks_capabilities,"recipes":{"read":true,"write":true},"moduleSettings":{"read":module_settings,"write":module_settings}},
                 "limits":{"loadedLooks":40,"listedLooks":64,"lookNameAsciiCharacters":16,"maxLookBytes":8704,"maxPackageBytes":crate::update::MAX_PACKAGE},
                 "activeRequests":active.into_iter().collect::<Vec<_>>()
             }),

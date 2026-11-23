@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, error::Error, fs, path::Path};
 
 use grkit_core::{
     Files, camera, grm, packaging, release,
-    release_index::{Index, SiteContents},
+    release_index::{Index, SiteContents, package_path},
     testing,
 };
 
@@ -54,6 +54,11 @@ fn fixture(source: &Path, camera: &'static camera::Camera) -> Result<(Index, Fil
     );
     site.releases
         .insert(camera.id.to_owned(), (statement, signature));
+    let package = release::package_runtime_files(&runtimes, camera)?;
+    for (path, bytes) in &package {
+        files.insert(package_path(camera.id, path), bytes.clone());
+    }
+    site.packages.insert(camera.id.to_owned(), package);
     for runtime in runtimes {
         let target = runtime.target().to_owned();
         let manifest = testing::manifest(&target, runtime.files());

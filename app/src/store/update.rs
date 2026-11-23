@@ -191,6 +191,7 @@ impl AppState {
                 baseline: package.installed,
                 target: package.available.unwrap_or_default(),
                 confirmed: self.journal.get() == Some(JournalState::Confirmed),
+                modules: Vec::new(),
             };
             if platform::update::save_intent(&intent).is_err() {
                 return;
@@ -232,6 +233,7 @@ impl AppState {
             baseline: package.installed,
             target,
             confirmed: false,
+            modules: self.drafted_modules(),
         };
         self.update_busy.set(true);
         self.update_cancel.set(false);
@@ -267,10 +269,17 @@ impl AppState {
         intent: &UpdateIntent,
         before: &crate::domain::PackageResponse,
     ) -> Result<Option<Vec<u8>>, UpdateError> {
+        // A package holds the modules of this update as well as its version.
+        let staged_key = format!("{}|{}", intent.target, intent.modules.join(","));
+        let mut before = before.clone();
+        if !intent.modules.is_empty() {
+            before.modules = Some(serde_json::json!(intent.modules));
+        }
+        let before = &before;
         if let Some(body) = self.staged.with(|slot| {
             slot.borrow()
                 .as_ref()
-                .filter(|(target, _)| *target == intent.target)
+                .filter(|(key, _)| *key == staged_key)
                 .map(|(_, body)| body.clone())
         }) {
             return Ok(Some(body));
@@ -315,7 +324,7 @@ impl AppState {
                     }
                 })?;
                 self.staged.with(|slot| {
-                    *slot.borrow_mut() = Some((intent.target.clone(), body.clone()));
+                    *slot.borrow_mut() = Some((staged_key.clone(), body.clone()));
                 });
                 Ok(Some(body))
             }
@@ -451,9 +460,11 @@ impl AppState {
                         break;
                     }
                 }
-                self.camera_restarting.set(false);
                 if heard {
+                    self.camera_restarting.set(false);
                     self.connect_camera(&id);
+                    // After the connect began, which ends any earlier hold.
+                    self.restart_connect.set(true);
                     return;
                 }
                 app_info!("look restart: no standby camera; manual restart");
@@ -463,6 +474,7 @@ impl AppState {
                     .action("ok", crate::strings::tr("update.ok", &[]))
                     .show()
                     .await;
+                self.camera_restarting.set(false);
             })
         });
     }
@@ -590,7 +602,12 @@ impl AppState {
                     failures = 0;
                     self.note_journal(state.state);
                     let version = state.package.version.as_deref().unwrap_or_default();
-                    match observe_update(state.state, version, &intent) {
+                    match observe_update(
+                        state.state,
+                        version,
+                        state.package.modules.as_ref(),
+                        &intent,
+                    ) {
                         UpdateObservation::Waiting => {
                             let deadline = self.confirm_deadline.get().unwrap_or_else(|| {
                                 Instant::now() + crate::domain::CONFIRM_DEADLINE
@@ -630,6 +647,9 @@ impl AppState {
                             self.journal.set(None);
                             self.staged.with(|slot| *slot.borrow_mut() = None);
                             platform::update::clear_intent();
+                            if !intent.modules.is_empty() {
+                                self.clear_module_draft();
+                            }
                             platform::update::save_seen_version(&intent.camera_id, &version);
                             if self.update_shown.get() {
                                 haptic(Haptic::Notification(HapticNotification::Success));

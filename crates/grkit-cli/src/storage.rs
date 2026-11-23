@@ -244,6 +244,15 @@ pub fn read_release_site(site: &Path) -> Result<SiteContents> {
         contents
             .releases
             .insert(id.to_owned(), (statement, signature));
+        let package_root = folder.join(release::PACKAGE_FOLDER);
+        let mut names = BTreeSet::new();
+        collect_files(&package_root, Path::new(""), &mut names)?;
+        let mut package = Files::new();
+        for name in names {
+            let bytes = read_regular(&package_root.join(&name))?;
+            package.insert(name, bytes);
+        }
+        contents.packages.insert(id.to_owned(), package);
     }
 
     let camera_ids: Vec<String> = contents.releases.keys().cloned().collect();

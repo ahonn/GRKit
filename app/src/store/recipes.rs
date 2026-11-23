@@ -171,7 +171,12 @@ impl AppState {
 
     /// The name of a recipe as the camera shows it.
     pub fn recipe_name(self, item: &RecipeItem) -> String {
-        item.display_name(native_type_name, &tr("recipes.look_missing", &[]))
+        let missing = if self.looks_available() {
+            "recipes.look_missing"
+        } else {
+            "recipes.needs_look"
+        };
+        item.display_name(native_type_name, &tr(missing, &[]))
     }
 
     fn recipes_connected(self) -> bool {
@@ -193,6 +198,10 @@ impl AppState {
 
     pub fn refresh_recipes(self) {
         if !self.recipes_connected() {
+            return;
+        }
+        if !self.recipes_available() {
+            self.recipes.error.set(None);
             return;
         }
         if self.demo() {
@@ -445,11 +454,22 @@ impl AppState {
             RecipeAction::Apply,
             Change::Apply(id),
             move |app| {
-                app.show_toast_action(
-                    tr("recipes.applied", &[("name", &name)]),
-                    tr("recipes.undo", &[]),
-                    move || app.undo_recipe(),
-                );
+                let skipped: Vec<String> = app
+                    .recipes_snapshot()
+                    .map(|snapshot| snapshot.skipped)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|id| app.module_title(id))
+                    .collect();
+                let message = if skipped.is_empty() {
+                    tr("recipes.applied", &[("name", &name)])
+                } else {
+                    tr(
+                        "recipes.applied_partial",
+                        &[("name", &name), ("modules", &skipped.join("、"))],
+                    )
+                };
+                app.show_toast_action(message, tr("recipes.undo", &[]), move || app.undo_recipe());
             },
         );
     }
@@ -710,5 +730,8 @@ fn demo_recipes() -> RecipesSnapshot {
         max_on: 40,
         max_listed: 64,
         undo: 0,
+        unreadable: 0,
+        unreadable_on: Vec::new(),
+        skipped: Vec::new(),
     }
 }

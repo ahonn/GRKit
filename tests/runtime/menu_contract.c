@@ -3193,6 +3193,107 @@ static void install_menu_pages(void)
     *page_at(guides + PAGE_FLAGS) |= CHOICE_OPTIONS;
 }
 
+/* The Wi-Fi service reads and changes the module settings through the
+   mailbox (runtime/control_modules.h), with the stores of the MENU rows. */
+static void module_set(u32 *words, u32 module, u32 fields, u32 off, u32 hidden, u32 settings, u32 ordered)
+{
+    words[0] = module; words[1] = fields; words[2] = off; words[3] = hidden;
+    words[4] = settings; words[5] = ordered;
+}
+static void the_service_reads_and_sets_module_settings(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    const u32 style_key = 0x1234, guides = 2, off = 2 + (3 + 3 * guides) * 3 + 1,
+              rows = 2 + (3 + 3 * guides + 2) * 3 + 1, order = 2 + (18 + MANAGE_ORDER_WORDS * guides) * 3 + 1;
+    u32 length, words[32], before;
+    settings_memory[0] = 24;
+    for (u32 k = 18; k < 24; ++k) {
+        settings_memory[2 + k * 3 + 1] = 0;
+        settings_memory[2 + k * 3 + 2] = MANAGE_ORDER_LIMIT;
+    }
+    manage_memory[MANAGE_ORDERS / 4] = 18 + 1;
+    settings_memory[2] = style_key;
+    GUIDE_STYLE = 3;
+    /* No Look or Recipe capability, and MENU never opened: the mask is 0. */
+    h[GRKIT_HOST_CAPABILITIES / 4] = 0;
+    h[GRKIT_HOST_ADJ_MODULES / 4] = 0;
+    h[GRKIT_HOST_MODULE_CHOICE / 4] = 1;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(h[GRKIT_HOST_MODULE_CHOICE / 4] == 1 && h[GRKIT_HOST_ADJ_MODULES / 4]);
+    assert(control_words[0] == 3 && control_words[3] == 0 && control_words[4] == 3);
+    u32 at = GRKIT_CONTROL_MODULES_HEADER / 4, found = 0;
+    for (u32 k = 0; k < 3; ++k) {
+        u32 n = control_words[at + 4] & 0xff, m = control_words[at + 4] >> 8;
+        if ((control_words[at] & 0xff) == guides) {
+            found = 1;
+            assert(control_words[at] & GRKIT_CONTROL_MODULE_ENABLED && control_words[at] & GRKIT_CONTROL_MODULE_ORDERABLE);
+            assert(control_words[at + 5] == style_key && control_words[at + 6] == 3 && m == 6);
+        }
+        at += GRKIT_CONTROL_MODULE_ENTRY / 4 + 2 * n + (m + 3) / 4;
+    }
+    assert(found && 4 * at == length);
+    assert(control_words[5] == h[GRKIT_HOST_CAPABILITIES / 4]);
+    /* A color-only module on a monochrome camera is not listed. */
+    u32 color_only = (guides + 1) % 3;
+    volatile u32 *color_status = MANAGE_MAP(manage_entry(h, color_only) + MANAGE_STATUS);
+    u32 color_before = *color_status;
+    *color_status = MANAGE_COLOR_ONLY;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(control_words[0] == 2 && control_words[4] == 2);
+    *color_status = color_before;
+    /* The first record names the module, its options, and the page key. */
+    words[0] = guides; words[1] = 0; words[2] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == 0);
+    assert(control_words[0] == GRKIT_CONTROL_MODULE_TEXTS_END && control_words[1] > 6);
+    assert((control_words[2] & 0xff) == GRKIT_CONTROL_MODULE_RECORD_MODULE);
+    assert(control_words[3] & GRKIT_CONTROL_MODULE_HAS_OPTIONS && control_words[3] & GRKIT_CONTROL_MODULE_ORDERED);
+    assert(control_words[4] == style_key);
+    words[1] = GRKIT_TEXT_LANGUAGES;
+    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == CONTROL_INVALID);
+    /* A bad field changes nothing, also with a good field before it. */
+    before = h[GRKIT_HOST_STATE_CHANGES / 4];
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED | GRKIT_CONTROL_MODULE_SET_HIDDEN, 1, 1U << 0, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_INVALID);
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 1, 0);
+    words[6] = style_key; words[7] = 6;
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 8, &length) == CONTROL_INVALID);
+    /* Each value but the first row cannot go off together. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_HIDDEN, 0, 0x3e, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_INVALID);
+    /* The first row stays first. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ORDER, 0, 0, 0, 6);
+    for (u32 k = 0; k < 6; ++k) words[6 + k] = 5 - k;
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == CONTROL_INVALID);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == before && !settings_memory[off] && GUIDE_STYLE == 3);
+    /* While a GRKit page shows, a valid change waits. */
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_BUSY && !settings_memory[off]);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    /* Off, a new order, and the value that goes off in ADJ, in one step:
+       the setting of the hidden value goes to Off, as in MENU. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED | GRKIT_CONTROL_MODULE_SET_HIDDEN |
+               GRKIT_CONTROL_MODULE_SET_ORDER, 1, 1U << 3, 0, 6);
+    const u32 sequence[6] = {0, 2, 1, 3, 4, 5};
+    memcpy(words + 6, sequence, sizeof sequence);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == 0);
+    assert(settings_memory[off] == 1 && settings_memory[rows] == 1U << 3 && !GUIDE_STYLE);
+    assert(settings_memory[order] == 0x54312U);
+    /* ADJ Order: the root modules in a new order, each once. */
+    words[0] = 2; words[1] = 1; words[2] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == 0);
+    assert(manage_position(h, 2) == 1 && manage_position(h, 1) == 2 && manage_position(h, 0) == 3);
+    words[1] = 2;
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    /* A module without a tile has no icon. */
+    words[0] = guides; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULE_TILE, words, 2, &length) == CONTROL_INVALID);
+}
+
 static void settings_entry_enable_preserves_each_value(void)
 {
     install_menu_pages();
@@ -6908,5 +7009,6 @@ int main(void)
     persistence_timer_runs_in_menus_and_preserves_early_dirty_values();
     the_poll_runs_only_while_it_has_work();
     the_end_of_a_session_counts_a_module_that_no_export_holds();
+    the_service_reads_and_sets_module_settings();
     return 0;
 }

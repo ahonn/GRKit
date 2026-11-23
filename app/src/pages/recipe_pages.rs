@@ -78,7 +78,7 @@ fn hero(tile: AnyElement, name: String, sub: String, current: bool) -> impl Into
 }
 
 /// The look row of a recipe: its Film Look or its Image Control type.
-fn look_row(item_look: &Look, effect: Option<String>) -> (String, String) {
+fn look_row(item_look: &Look, effect: Option<String>, looks_on: bool) -> (String, String) {
     match item_look {
         Look::Native(native) => (
             tr("recipes.image_control", &[]),
@@ -86,7 +86,16 @@ fn look_row(item_look: &Look, effect: Option<String>) -> (String, String) {
         ),
         Look::Effect { .. } => (
             tr("recipes.film_look", &[]),
-            effect.unwrap_or_else(|| tr("recipes.look_missing", &[])),
+            effect.unwrap_or_else(|| {
+                tr(
+                    if looks_on {
+                        "recipes.look_missing"
+                    } else {
+                        "recipes.needs_look"
+                    },
+                    &[],
+                )
+            }),
         ),
         _ => (tr("recipes.film_look", &[]), tr("recipes.keep", &[])),
     }
@@ -145,7 +154,11 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
         .child(edit_steps());
     for group in groups(
         &item.recipe,
-        look_row(&item.recipe.look, item.effect_name.clone()),
+        look_row(
+            &item.recipe.look,
+            item.effect_name.clone(),
+            app.looks_available(),
+        ),
     ) {
         content = content.child(group_view(group));
     }
@@ -365,7 +378,7 @@ fn look_title(id: &str) -> String {
 }
 
 fn preset_text(preset: &PresetItem) -> String {
-    let language = if crate::strings::is_zh() { "zh" } else { "en" };
+    let language = crate::strings::app_language();
     let by = preset
         .author
         .as_ref()
@@ -511,7 +524,10 @@ fn preset_content(app: AppState, preset: PresetItem) -> impl IntoElement {
                         .text_size(px(crate::ui::ty::SUBHEADLINE)),
                 )
         }));
-    for group in groups(&preset.recipe, look_row(&preset.recipe.look, look_name)) {
+    for group in groups(
+        &preset.recipe,
+        look_row(&preset.recipe.look, look_name, true),
+    ) {
         content = content.child(group_view(group));
     }
     content.child(if added {

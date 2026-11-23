@@ -512,7 +512,7 @@ fn turning_a_look_off_patches_it_at_once() {
 }
 
 #[test]
-fn a_disconnected_camera_keeps_both_lists_to_read() {
+fn a_disconnected_camera_shows_only_the_home_page() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let mut state = Camera::new();
@@ -524,10 +524,8 @@ fn a_disconnected_camera_keeps_both_lists_to_read() {
     app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
     app.press("label:More").unwrap();
     app.wait_for_gone("Firmware", WAIT).unwrap();
-    app.press("role:button[Film Looks]").unwrap();
-    app.wait_for_within("Camera Not Connected", WAIT).unwrap();
-    app.wait_for_within("Not in Menu", WAIT).unwrap();
-    app.wait_for_within("text:Tri-X 400", WAIT).unwrap();
+    app.wait_for_within("role:button[Connect]", WAIT).unwrap();
+    app.wait_for_gone("role:button[Film Looks]", WAIT).unwrap();
 }
 
 #[test]
@@ -1025,6 +1023,7 @@ fn software_update_closes_when_the_link_goes_down() {
         .unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Restart".into()));
     app.press("role:button[Restart Camera]").unwrap();
+    // The restart keeps the tab it started on.
     app.wait_for_within("Camera Not Connected", WAIT).unwrap();
     app.press("role:button[Camera]").unwrap();
     app.wait_for_within("role:button[Connect]", WAIT).unwrap();

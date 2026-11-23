@@ -42,6 +42,14 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
             Some((1024, "application/json"))
         }
         ("POST", "/v1/recipes") | ("PUT", "/v1/recipes/order") => Some((4096, "application/json")),
+        ("PUT", "/v1/params/modules/order") => Some((1024, "application/json")),
+        ("PATCH", path)
+            if path
+                .strip_prefix("/v1/params/modules/")
+                .is_some_and(|id| !id.is_empty() && !id.contains('/')) =>
+        {
+            Some((4096, "application/json"))
+        }
         ("PATCH", path)
             if path
                 .strip_prefix("/v1/recipes/")

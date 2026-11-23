@@ -16,6 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher" android:usesCleartextTraffic="true"
         android:allowBackup="false" android:extractNativeLibs="false"
         android:enableOnBackInvokedCallback="true" android:supportsRtl="true"
+        android:localeConfig="@xml/locales_config"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <meta-data android:name="com.longbridge.nsh.RUST" android:value="true" />
         <provider android:name="com.longbridge.nsh.FilesProvider"

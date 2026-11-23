@@ -1084,4 +1084,47 @@ fn sign_records_the_official_looks_with_their_covers() {
         effects::body_hash(&blob).unwrap()
     );
     assert_eq!(statement.official_look_bodies.len(), source_count());
+
+    // The site of the release lists the package runtime that `sign` wrote.
+    let site = tmp.path().join("site");
+    fs::create_dir_all(site.join("release")).unwrap();
+    fs::rename(&out, site.join("release/gr3")).unwrap();
+    fs::create_dir_all(site.join("runtime")).unwrap();
+    for target in camera::GR3.targets() {
+        fs::rename(tmp.path().join(target), site.join("runtime").join(target)).unwrap();
+        let effects = site.join("effects").join(target);
+        fs::create_dir_all(&effects).unwrap();
+        fs::write(effects.join("standard.lut"), [0; 12]).unwrap();
+        let catalog = json!({"schema": grkit_core::site::CATALOG_SCHEMA,
+            "preview": {"baseline": "standard.lut"}, "effects": []});
+        fs::write(effects.join("catalog.json"), catalog.to_string()).unwrap();
+    }
+    fs::create_dir_all(site.join("guides/gr3")).unwrap();
+    fs::write(site.join("guides/gr3/en.pdf"), b"%PDF-1.7\n").unwrap();
+    fs::create_dir_all(site.join("modules")).unwrap();
+    for module in official_modules() {
+        let module = Path::new(&module);
+        fs::copy(
+            module,
+            site.join("modules").join(module.file_name().unwrap()),
+        )
+        .unwrap();
+    }
+    let index_path = site.join("release/index.json");
+    let output = run(&[
+        "release-index",
+        "--site",
+        text(&site),
+        "--out",
+        text(&index_path),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let index = grkit_core::release_index::Index::parse(&fs::read(&index_path).unwrap()).unwrap();
+    assert!(statement.runtime.iter().all(|(path, hash)| {
+        index.files[&grkit_core::release_index::package_path("gr3", path)].sha256 == *hash
+    }));
 }

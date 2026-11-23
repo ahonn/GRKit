@@ -567,6 +567,28 @@ fn registration(point: &str, implementation: &str) -> String {
     format!("{{.point = {point}, .impl = &{implementation}}}")
 }
 
+/// The title of the module in `directory` in each language code, from its
+/// text files.
+pub fn source_titles(directory: &Path) -> Result<std::collections::BTreeMap<String, String>> {
+    grkit_core::language::Language::ALL
+        .iter()
+        .map(|language| {
+            let path = directory
+                .join("text")
+                .join(format!("{}.toml", language.code()));
+            let text = std::fs::read_to_string(&path)
+                .with_context(|| format!("Read {}", path.display()))?;
+            let value: toml::Value =
+                toml::from_str(&text).with_context(|| format!("Read {}", path.display()))?;
+            let title = value
+                .get("title")
+                .and_then(toml::Value::as_str)
+                .with_context(|| format!("{} has no title", path.display()))?;
+            Ok((language.code().to_owned(), title.to_owned()))
+        })
+        .collect()
+}
+
 /// Read `module.toml` in `directory`, check it, and generate the C file of the
 /// descriptor and the header of the setting handles. Return the manifest,
 /// the generated C, and the header.

@@ -54,7 +54,7 @@ fn card_state(app: AppState) -> CardState {
     }
 }
 
-fn open(url: String) {
+pub(crate) fn open(url: String) {
     spawn(async move {
         let _ = open_url(&url).await;
     });
@@ -73,6 +73,20 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
     let model = format!("RICOH {}", app.model_name());
     let state = card_state(app);
     let refresh = move || app.refresh_update_info();
+    let changes = app.module_changes();
+    let on_release = package
+        .as_ref()
+        .is_some_and(|p| p.available.as_deref() == Some(p.installed.as_str()));
+    let blocked = app.module_draft_blocked();
+    let update_button = move || {
+        if blocked {
+            disabled_pill(tr("software.update", &[]))
+        } else {
+            pill_button(tr("software.update", &[]), move || {
+                app.begin_update(UpdateKind::Install)
+            })
+        }
+    };
     // A version the phone knows stays while it checks again or fails to.
     let checking = app.release_checking();
     let failed = app.release_problem().is_some();
@@ -97,9 +111,7 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
                 )
             },
             checking,
-            Some(pill_button(tr("software.update", &[]), move || {
-                app.begin_update(UpdateKind::Install)
-            })),
+            Some(update_button()),
             Some(tr(
                 if failed {
                     "software.check_failed"
@@ -109,6 +121,19 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
                 &[],
             )),
             failed.then(|| secondary_button(tr("software.retry", &[]), refresh).into_element()),
+        ),
+        // The release is the installed version: a change of the modules
+        // never installs an older GRKit.
+        CardState::UpToDate if !changes.is_empty() && on_release => (
+            installed.clone(),
+            tr(
+                "software.module_changes",
+                &[("count", &changes.len().to_string()), ("model", &model)],
+            ),
+            checking,
+            Some(update_button()),
+            Some(tr("software.module_note", &[])),
+            None,
         ),
         CardState::UpToDate => (
             installed.clone(),
@@ -220,6 +245,8 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
                         .line_height(px(18.0))
                         .text_color(move || theme().muted_foreground)
                 }))
+                .child(blocked.then(blocked_notice))
+                .child((!changes.is_empty()).then(|| module_changes_card(app, changes)))
                 // Its own dynamic: "Show All" redraws the notes alone and
                 // keeps the scroll position.
                 .child((!items.is_empty()).then(|| {
@@ -243,6 +270,94 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
                 .child(link),
         ),
     )
+}
+
+fn blocked_notice() -> impl IntoElement {
+    view()
+        .p_4()
+        .rounded(px(10.0))
+        .bg(move || theme().muted)
+        .child(
+            text(tr("modules.film_alone", &[]))
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::SEMIBOLD),
+        )
+}
+
+/// The modules that this update adds and removes.
+fn module_changes_card(app: AppState, changes: Vec<(String, String, bool)>) -> impl IntoElement {
+    let last = changes.len().saturating_sub(1);
+    let rows = changes
+        .into_iter()
+        .enumerate()
+        .map(|(index, (id, title, add))| {
+            view()
+                .flex_row()
+                .items_center()
+                .gap_3()
+                .min_h(px(54.0))
+                .px_3()
+                .when(index != last, |v| {
+                    v.border_b_1().border_b_color(move || theme().border)
+                })
+                .child(crate::pages::modules::module_tile(app, id, 32.0, !add))
+                .child(
+                    text(title)
+                        .flex_1()
+                        .text_size(px(crate::ui::ty::CALLOUT))
+                        .font_weight(FontWeight::MEDIUM),
+                )
+                .child(
+                    text(tr(
+                        if add {
+                            "modules.add"
+                        } else {
+                            "modules.delete_short"
+                        },
+                        &[],
+                    ))
+                    .text_size(px(crate::ui::ty::SUBHEADLINE))
+                    .text_color(move || {
+                        if add {
+                            theme().muted_foreground
+                        } else {
+                            theme().destructive
+                        }
+                    }),
+                )
+        });
+    view()
+        .gap_2()
+        .child(
+            view()
+                .px_1()
+                .child(section_title(tr("software.modules", &[]))),
+        )
+        .child(grouped_card(view().children(rows)))
+}
+
+/// The update button while the module changes cannot install.
+fn disabled_pill(title: String) -> AnyElement {
+    view()
+        .min_h(px(36.0))
+        .px_4()
+        .rounded_full()
+        .items_center()
+        .justify_center()
+        .bg(move || theme().muted)
+        .role(AccessibilityRole::Button)
+        .label(title.clone())
+        .accessibility_state(AccessibilityState {
+            disabled: true,
+            ..Default::default()
+        })
+        .child(
+            text(title)
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(move || theme().muted_foreground),
+        )
+        .into_element()
 }
 
 /// The small filled button at the end of the update row.

@@ -119,6 +119,15 @@ impl AppState {
         if self.recipes_snapshot().is_some() && self.recipe_busy().is_none() {
             self.refresh_recipes();
         }
+        // A module changed in MENU or ADJ. The tabs follow what runs, and
+        // the Modules tab shows the rest.
+        if self.module_busy().is_none() {
+            if self.tab() == super::Tab::Modules {
+                self.refresh_modules();
+            } else {
+                self.refresh_module_state();
+            }
+        }
     }
 
     /// The change stream got a frame lately, so the camera service answers.

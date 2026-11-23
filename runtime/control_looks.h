@@ -113,8 +113,11 @@ static u32 control_looks_order(volatile u32 *h,const u8 *payload,u32 length) {
     return 0;
 }
 #include "control_recipes.h"
+#include "control_modules.h"
 static u32 control_looks(void *context,struct control_request *request,u32 *length) {
     volatile u32 *h=(volatile u32 *)context;
+    /* The modules need no capability of Looks or Recipes. */
+    if(request->command>=GRKIT_CONTROL_MODULES_READ) return control_modules(h,request,length);
     if(request->command>=GRKIT_CONTROL_RECIPES_READ)
         return h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_RECIPE_BIT ? control_recipes(h,request,length) : CONTROL_UNSUPPORTED;
     if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return CONTROL_UNSUPPORTED;

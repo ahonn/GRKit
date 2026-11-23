@@ -239,6 +239,10 @@ enum Command {
         /// holds each preset of the site, with these descriptions.
         #[arg(long)]
         preset_text: Option<PathBuf>,
+        /// The `modules/` source folder, for the titles of the official
+        /// modules, which a phone shows before a camera has them.
+        #[arg(long)]
+        module_text: Option<PathBuf>,
     },
     /// Write a release index with other release notes: the index given, with
     /// the notes of `--notes` (as for `release-index`) in place of its own.
@@ -828,13 +832,15 @@ fn run(command: Command) -> Result<Value> {
             }
             let bytes = statement.to_bytes()?;
             let signature = key.sign(&bytes);
-            storage::write_directory(
-                &out,
-                &Files::from([
-                    (release::STATEMENT_ENTRY.to_owned(), bytes),
-                    (release::SIGNATURE_ENTRY.to_owned(), signature),
-                ]),
-            )?;
+            let mut tree = Files::from([
+                (release::STATEMENT_ENTRY.to_owned(), bytes),
+                (release::SIGNATURE_ENTRY.to_owned(), signature),
+            ]);
+            // The phone builds an update from these files and the statement.
+            for (path, file) in release::package_runtime_files(&runtimes, camera)? {
+                tree.insert(format!("{}/{path}", release::PACKAGE_FOLDER), file);
+            }
+            storage::write_directory(&out, &tree)?;
             Ok(
                 json!({"path": out, "camera": camera.id, "version": statement.version,
                 "runtime": statement.runtime.len(), "modules": statement.modules.len(),
@@ -952,9 +958,18 @@ fn run(command: Command) -> Result<Value> {
             out,
             notes,
             preset_text,
+            module_text,
         } => {
             let contents = storage::read_release_site(&site)?;
             let mut index = release_index::Index::of_site(&contents)?;
+            if let Some(folder) = module_text {
+                for (id, info) in &mut index.modules {
+                    let official = grkit_core::modules::official(id)
+                        .with_context(|| format!("{id} is not an official module"))?;
+                    info.titles =
+                        grkit_build::module::source_titles(&folder.join(official.folder))?;
+                }
+            }
             if let Some(notes) = notes {
                 index.notes = read_release_notes(&notes)?;
             }
