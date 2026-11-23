@@ -7,12 +7,14 @@ mod connect;
 mod demo_screen;
 mod liveness;
 mod looks;
+mod modules;
 mod recipes;
 mod rename;
 mod update;
 mod warmup;
 
 pub use looks::{COVERS_KEY, CatalogItem, ImportDraft, LookAction, LooksStore};
+pub use modules::{ModulePart, ModulesBlock, ModulesStore};
 pub use recipes::{RecipeAction, RecipesStore, native_type_name};
 
 pub use demo_screen::{
@@ -58,6 +60,7 @@ pub enum Tab {
     Camera,
     Looks,
     Recipes,
+    Modules,
 }
 
 /// Pages pushed on a tab's navigation stack.
@@ -88,6 +91,10 @@ pub enum Route {
     RecipePresets,
     /// One preset, by ID.
     RecipePreset(String),
+    /// One module of the camera, by ID.
+    ModuleDetail(String),
+    /// Which values of a module ADJ shows, and their order.
+    ModuleOptions(String),
 }
 
 /// Modal sheets over the camera tab.
@@ -122,9 +129,10 @@ type StagedPackage = (String, Vec<u8>);
 pub struct AppState {
     demo: bool,
     tab: Signal<Tab>,
-    stacks: Signal<[Vec<Route>; 3]>,
+    stacks: Signal<[Vec<Route>; 4]>,
     pub(crate) looks: LooksStore,
     pub(crate) recipes: RecipesStore,
+    pub(crate) modules: ModulesStore,
     sheet: Signal<Option<Sheet>>,
     /// A name that was typed and not saved yet.
     name_draft: Signal<Option<(rename::NameTarget, String)>>,
@@ -184,6 +192,8 @@ pub struct AppState {
     powering_off: Signal<bool>,
     /// The phone restarts the camera so it reads changed Look files.
     camera_restarting: Signal<bool>,
+    /// The connect that ends a restart for changed Looks is running.
+    restart_connect: Signal<bool>,
     release_problem: Signal<Option<crate::domain::ReleaseProblem>>,
     release_notes: Signal<Vec<crate::domain::release_notes::VersionNotes>>,
     release: Stored<RefCell<Option<platform::release::Release>>>,
@@ -227,6 +237,7 @@ impl AppState {
             release_busy: signal(false),
             powering_off: signal(false),
             camera_restarting: signal(false),
+            restart_connect: signal(false),
             release_problem: signal(None),
             release_notes: signal(Vec::new()),
             release: stored(RefCell::new(None)),
@@ -235,9 +246,10 @@ impl AppState {
             journal: signal(None),
             staged: stored(RefCell::new(None)),
             tab: signal(Tab::Camera),
-            stacks: signal([Vec::new(), Vec::new(), Vec::new()]),
+            stacks: signal([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
             looks: LooksStore::new(demo),
             recipes: RecipesStore::new(demo),
+            modules: ModulesStore::new(),
             sheet: signal(None),
             status: signal(None),
             package: signal(None),
@@ -273,6 +285,7 @@ impl AppState {
         match platform::config_value("GRKIT_START_TAB").as_deref() {
             Some("looks") => app.tab.set(Tab::Looks),
             Some("recipes") => app.set_tab(Tab::Recipes),
+            Some("modules") => app.set_tab(Tab::Modules),
             Some("looks-add") => {
                 app.tab.set(Tab::Looks);
                 app.open_add();
@@ -322,17 +335,44 @@ impl AppState {
         self.frozen.get()
     }
 
+    /// The tab on screen. Without a connected camera, only the camera tab
+    /// exists.
     pub fn tab(self) -> Tab {
-        self.tab.get()
+        if self.tabs_shown() {
+            self.tab.get()
+        } else {
+            Tab::Camera
+        }
+    }
+
+    /// The tabs show with a connected camera, and stay through a restart for
+    /// changed Looks and the connect that ends it.
+    pub fn tabs_shown(self) -> bool {
+        self.camera_online()
+            || self.camera_restarting.get()
+            || (self.restart_connect.get()
+                && (self.connect_started.get().is_some()
+                    || matches!(
+                        self.sheet.get(),
+                        Some(Sheet::Connecting { .. } | Sheet::ConnectError(_))
+                    )))
     }
 
     pub fn set_tab(self, tab: Tab) {
+        let tab = if self.tab_available(tab) {
+            tab
+        } else {
+            Tab::Camera
+        };
         self.tab.set(tab);
         if tab == Tab::Looks {
             self.open_looks();
         }
         if tab == Tab::Recipes {
             self.open_recipes();
+        }
+        if tab == Tab::Modules {
+            self.open_modules();
         }
     }
 
@@ -1010,6 +1050,7 @@ fn tab_index(tab: Tab) -> usize {
         Tab::Camera => 0,
         Tab::Looks => 1,
         Tab::Recipes => 2,
+        Tab::Modules => 3,
     }
 }
 

@@ -1,18 +1,16 @@
 //! Fetch an official release and rebuild the camera's selected package contents.
 
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use grkit_core::{
-    Files, camera,
-    language::Language,
-    packaging,
+    Files, camera, packaging,
     release::{self, Statement},
-    release_index::{FileInfo, Index},
+    release_index::{FileInfo, Index, ModuleInfo, package_path},
 };
 use nsh_core::{
     platform::HttpRequest,
@@ -171,6 +169,18 @@ pub struct Release {
     signature: Vec<u8>,
 }
 
+impl Release {
+    /// The official modules that this release signs, by ID.
+    pub fn official_modules(&self) -> Vec<(String, ModuleInfo)> {
+        self.index
+            .modules
+            .iter()
+            .filter(|(id, _)| self.statement.modules.contains_key(&format!("{id}.GRM")))
+            .map(|(id, info)| (id.clone(), info.clone()))
+            .collect()
+    }
+}
+
 fn camera_for(model: CameraModel) -> &'static camera::Camera {
     match model {
         CameraModel::Gr3 => &camera::GR3,
@@ -243,15 +253,22 @@ async fn indexed_file(base: &str, index: &Index, path: &str) -> Result<Vec<u8>, 
 /// go to the log.
 pub async fn latest(model: CameraModel, firmware: &str) -> Result<Release, ReleaseProblem> {
     let camera = camera_for(model);
-    let supported: Vec<&str> = camera.releases.iter().map(|r| r.firmware).collect();
+    let release = latest_for(camera).await.map_err(|(problem, detail)| {
+        log::warn!("Release check failed: {detail}");
+        problem
+    })?;
+    // The signed release names its firmware, so a new one needs no new app.
+    let supported: Vec<&str> = release
+        .statement
+        .firmware
+        .iter()
+        .map(String::as_str)
+        .collect();
     if let Some(problem) = firmware_problem(&supported, firmware) {
         log::warn!("Unsupported {} firmware: {firmware}", camera.name);
         return Err(problem);
     }
-    latest_for(camera).await.map_err(|(problem, detail)| {
-        log::warn!("Release check failed: {detail}");
-        problem
-    })
+    Ok(release)
 }
 
 type Problem = (ReleaseProblem, String);
@@ -299,20 +316,14 @@ async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem>
             }
         }
     };
-    let index = Index::parse(&index_bytes).map_err(|error| newer_app(error.to_string()))?;
-    for path in index.files.keys() {
-        checked_path(path).map_err(newer_app)?;
+    if Index::needs_newer_app(&index_bytes) {
+        return Err(newer_app("The release needs a newer app".into()));
     }
+    let index = Index::parse(&index_bytes).map_err(|error| network(error.to_string()))?;
     let entry = index
         .cameras
         .get(camera.id)
-        .ok_or_else(|| newer_app(format!("No release for {}", camera.name)))?;
-    let expected: Vec<_> = camera.targets().into_iter().map(str::to_owned).collect();
-    if entry.targets != expected {
-        return Err(newer_app(
-            "Release runtime targets do not match this camera".into(),
-        ));
-    }
+        .ok_or_else(|| network(format!("No release for {}", camera.name)))?;
     let statement_bytes = indexed_file(&base, &index, &entry.statement)
         .await
         .map_err(network)?;
@@ -331,20 +342,18 @@ async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem>
     if let Some(dir) = cache {
         cache_write(&dir, &index_name, &index_bytes);
     }
-    let bytes = index
-        .files
-        .iter()
-        .filter(|(path, _)| {
-            entry
-                .targets
-                .iter()
-                .any(|target| path.starts_with(&format!("runtime/{target}/")))
-                || path.starts_with("modules/")
-                || entry.guides.get("en") == Some(path)
-                || **path == entry.statement
-                || **path == entry.signature
-        })
-        .try_fold(0u64, |sum, (_, info)| sum.checked_add(info.size))
+    let bytes = statement
+        .runtime
+        .keys()
+        .map(|path| package_path(camera.id, path))
+        .chain(
+            statement
+                .modules
+                .keys()
+                .map(|name| format!("modules/{name}")),
+        )
+        .filter_map(|path| index.files.get(&path))
+        .try_fold(0u64, |sum, info| sum.checked_add(info.size))
         .ok_or_else(|| network("Release size overflow".to_owned()))?;
     Ok(Release {
         version: index.version.clone(),
@@ -434,35 +443,20 @@ pub async fn download(
     snapshot: &PackageResponse,
     on_progress: impl Fn(f32),
 ) -> Result<Vec<u8>, DownloadError> {
-    let entry = &release.index.cameras[release.camera.id];
     let module_paths = selected_modules(release, snapshot)?;
     let package = DownloadError::Package;
-    let guide_path = entry
-        .guides
-        .get("en")
-        .ok_or_else(|| package("Release has no English guide".to_owned()))?;
-    let mut paths = BTreeSet::new();
-    let mut manifests = Vec::new();
-    for target in &entry.targets {
-        let path = format!("runtime/{target}/build.json");
-        let manifest = indexed_file(&release.base, &release.index, &path)
-            .await
-            .map_err(DownloadError::Network)?;
-        for runtime_path in
-            packaging::manifest_paths(&manifest).map_err(|error| package(error.to_string()))?
-        {
-            checked_path(&runtime_path).map_err(package)?;
-            paths.insert(format!("runtime/{target}/sd/{runtime_path}"));
-        }
-        manifests.push((target, manifest));
-    }
-    paths.extend(module_paths.iter().cloned());
-    paths.insert(guide_path.clone());
+    let runtime_paths: BTreeMap<String, String> = release
+        .statement
+        .runtime
+        .keys()
+        .map(|path| (package_path(release.camera.id, path), path.clone()))
+        .collect();
+    let paths: BTreeSet<&String> = runtime_paths.keys().chain(&module_paths).collect();
     let total = paths.iter().try_fold(0u64, |sum, path| {
         let info = release
             .index
             .files
-            .get(path)
+            .get(*path)
             .ok_or_else(|| package(format!("Release has no file: {path}")))?;
         sum.checked_add(info.size)
             .ok_or_else(|| package("Release size overflow".to_owned()))
@@ -472,60 +466,31 @@ pub async fn download(
     }
     on_progress(0.0);
     let mut received = 0u64;
-    let mut files = Files::new();
+    let mut runtime = Files::new();
+    let mut modules = BTreeMap::new();
     for path in paths {
-        let bytes = indexed_file(&release.base, &release.index, &path)
+        let bytes = indexed_file(&release.base, &release.index, path)
             .await
             .map_err(DownloadError::Network)?;
         received += bytes.len() as u64;
-        files.insert(path, bytes);
+        match runtime_paths.get(path) {
+            Some(card_path) => {
+                runtime.insert(card_path.clone(), bytes);
+            }
+            None => {
+                let name = path.strip_prefix("modules/").unwrap_or(path);
+                modules.insert(name.to_owned(), bytes);
+            }
+        }
         on_progress(received as f32 / total.max(1) as f32);
     }
-    let mut runtimes = Vec::new();
-    for (target, manifest) in manifests {
-        let prefix = format!("runtime/{target}/sd/");
-        let runtime_files = files
-            .iter()
-            .filter_map(|(path, bytes)| {
-                path.strip_prefix(&prefix)
-                    .map(|path| (path.to_owned(), bytes.clone()))
-            })
-            .collect();
-        let runtime = packaging::load_runtime(&manifest, &runtime_files)
-            .map_err(|error| package(error.to_string()))?;
-        if runtime.target() != target {
-            return Err(package(
-                "Runtime manifest target differs from the release index".into(),
-            ));
-        }
-        runtimes.push(runtime);
-    }
-    let modules: Vec<_> = module_paths
-        .iter()
-        .map(|path| files[path].clone())
-        .collect();
-    let effects = packaging::EffectSet::default();
-    let assembled = packaging::assemble_with(
-        &runtimes,
-        &effects,
+    release::assemble_update(
+        &release.statement_bytes,
+        &release.signature,
+        &runtime,
         &modules,
-        release.camera,
-        &packaging::Guide {
-            language: Language::English,
-            pdf: &files[guide_path],
-        },
-        packaging::Extras {
-            release: Some((&release.statement_bytes, &release.signature)),
-            ..Default::default()
-        },
     )
-    .map_err(|error| package(error.to_string()))?;
-    release::verify_update(
-        &assembled.bytes,
-        &trusted_keys(&release.base).map_err(package)?,
-    )
-    .map_err(|error| package(error.to_string()))?;
-    Ok(assembled.bytes)
+    .map_err(|error| package(error.to_string()))
 }
 
 #[cfg(test)]
@@ -635,12 +600,12 @@ mod tests {
             statement: Statement {
                 version: "1.7.0".into(),
                 camera: &camera::GR3,
+                firmware: vec!["2.21".into()],
                 runtime: Default::default(),
                 modules: [("FILMLOOK.GRM".into(), "0".repeat(64))].into(),
                 official_looks: Default::default(),
                 official_look_bodies: Default::default(),
                 official_covers: Default::default(),
-                firmware: vec!["2.21".into()],
             },
             statement_bytes: vec![],
             signature: vec![],

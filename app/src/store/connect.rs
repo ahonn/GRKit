@@ -161,6 +161,7 @@ impl AppState {
     }
 
     fn begin_connect(self, kind: AttemptKind) {
+        self.restart_connect.set(false);
         // An update waits for this connect after a restart the person ran.
         if self.update_busy.get() && !matches!(self.flow_phase(), UpdatePhase::ManualRestart { .. })
         {
@@ -360,6 +361,13 @@ impl AppState {
         // both load at once.
         self.refresh_looks();
         self.refresh_recipes();
+        // The tabs follow what runs. The module catalog loads only where it
+        // shows.
+        if self.tab() == Tab::Modules {
+            self.refresh_modules();
+        } else {
+            self.refresh_module_state();
+        }
     }
 
     /// The camera an update restarted is back: start its session as any

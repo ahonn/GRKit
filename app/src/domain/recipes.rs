@@ -64,6 +64,13 @@ pub struct RecipesSnapshot {
     pub max_listed: usize,
     /// The undo steps of the camera (ADJ and the phone share them).
     pub undo: u32,
+    /// The recipes of a later GRKit that this app cannot read.
+    pub unreadable: usize,
+    /// The place among the recipes that are on, and the ID, of each
+    /// unreadable recipe that is on: an order names each of them.
+    pub unreadable_on: Vec<(usize, u32)>,
+    /// The modules whose settings the last Apply left out.
+    pub skipped: Vec<String>,
 }
 
 impl RecipesSnapshot {
@@ -72,7 +79,7 @@ impl RecipesSnapshot {
     }
 
     pub fn on_count(&self) -> usize {
-        self.recipes.iter().filter(|r| r.enabled).count()
+        self.recipes.iter().filter(|r| r.enabled).count() + self.unreadable_on.len()
     }
 
     /// The IDs of the recipes that are on, with the one at `from` moved to
@@ -87,6 +94,9 @@ impl RecipesSnapshot {
         if from < ids.len() && to < ids.len() {
             let id = ids.remove(from);
             ids.insert(to, id);
+        }
+        for &(at, id) in &self.unreadable_on {
+            ids.insert(at.min(ids.len()), id);
         }
         ids
     }
@@ -114,14 +124,25 @@ fn read_item(value: &Value) -> Option<RecipeItem> {
 /// The answer of `GET /v1/recipes` and of each change.
 pub fn parse_recipes(body: &[u8]) -> Result<RecipesSnapshot, String> {
     let value: Value = serde_json::from_slice(body).map_err(|e| e.to_string())?;
-    let recipes = value["recipes"]
+    let (mut recipes, mut unreadable, mut unreadable_on, mut on) = (Vec::new(), 0, Vec::new(), 0);
+    for item in value["recipes"]
         .as_array()
         .ok_or("The camera sent no recipes.")?
-        .iter()
-        .map(|v| {
-            read_item(v).ok_or_else(|| "The camera sent a recipe the app cannot read.".to_owned())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    {
+        let enabled = item["enabled"].as_bool().unwrap_or(false);
+        match read_item(item) {
+            Some(recipe) => recipes.push(recipe),
+            None => {
+                unreadable += 1;
+                if let Some(id) = item["id"].as_u64().and_then(|id| u32::try_from(id).ok())
+                    && enabled
+                {
+                    unreadable_on.push((on, id));
+                }
+            }
+        }
+        on += usize::from(enabled);
+    }
     let limit = |key: &str, default: usize| {
         value["limits"][key]
             .as_u64()
@@ -133,7 +154,26 @@ pub fn parse_recipes(body: &[u8]) -> Result<RecipesSnapshot, String> {
         max_on: limit("on", 40),
         max_listed: limit("listed", 64),
         undo: value["undo"].as_u64().unwrap_or(0) as u32,
+        unreadable,
+        unreadable_on,
+        skipped: skipped_modules(&value["skipped"]),
     })
+}
+
+/// The modules of the `skipped` answer of an Apply.
+fn skipped_modules(value: &Value) -> Vec<String> {
+    let grain = value["grain"].as_bool().unwrap_or(false);
+    grain
+        .then(|| "GRAIN".to_owned())
+        .into_iter()
+        .chain(
+            value["modules"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|id| id.as_str().map(str::to_owned)),
+        )
+        .collect()
 }
 
 /// The recipe family of a camera model.
@@ -173,7 +213,8 @@ impl PresetItem {
             .collect()
     }
 
-    /// The description in `language` (`zh` or `en`), else in English.
+    /// The description in `language` (a tag of the release index), else in
+    /// English.
     pub fn text_in(&self, language: &str) -> Option<&str> {
         self.text
             .iter()
@@ -253,7 +294,7 @@ pub fn recipe_error(status: u16, body: &str) -> RecipeError {
 mod tests {
     use super::*;
 
-    fn snapshot() -> RecipesSnapshot {
+    fn body() -> Value {
         let presets = grkit_core::recipes::presets();
         let recipe = |id: &str| {
             presets
@@ -286,8 +327,28 @@ mod tests {
             value["current"] = (i == 0).into();
             items.push(value);
         }
-        let body = serde_json::json!({"bootId":"b","undo":1,"limits":{"on":40,"listed":64},"recipes":items});
-        parse_recipes(&serde_json::to_vec(&body).unwrap()).unwrap()
+        serde_json::json!({"bootId":"b","undo":1,"limits":{"on":40,"listed":64},"recipes":items})
+    }
+
+    fn snapshot() -> RecipesSnapshot {
+        parse_recipes(&serde_json::to_vec(&body()).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn a_recipe_of_a_later_grkit_is_left_out_and_keeps_its_place() {
+        let mut value = body();
+        let recipes = value["recipes"].as_array_mut().unwrap();
+        recipes.insert(
+            1,
+            serde_json::json!({"id": 9, "enabled": true, "look": {"kind": "later"}}),
+        );
+        let s = parse_recipes(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!((s.recipes.len(), s.unreadable, s.on_count()), (3, 1, 3));
+        assert_eq!(s.moved(1, 0), vec![2, 9, 1]);
+        assert_eq!(
+            skipped_modules(&serde_json::json!({"grain": true, "modules": ["BORDER"]})),
+            ["GRAIN", "BORDER"]
+        );
     }
 
     #[test]

@@ -5,8 +5,13 @@
 use nsh_core::prelude::*;
 
 /// The largest text size the layouts hold: rows, tiles and bars break into
-/// single-character lines above it.
-const MAX_TEXT_SCALE: f32 = 1.5;
+/// single-character lines above it. Android's toolbar title stops at 1.15
+/// times 20 sp, so body text stops below that size to stay under the title.
+const MAX_TEXT_SCALE: f32 = if cfg!(target_os = "android") {
+    1.3
+} else {
+    1.5
+};
 
 /// Text that follows the person's text size up to [`MAX_TEXT_SCALE`].
 pub fn text(content: impl IntoReactive<SharedString>) -> Text {

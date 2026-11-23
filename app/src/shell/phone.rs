@@ -1,4 +1,7 @@
-//! Three tabs (Camera, Looks, Recipes) with navigation stacks kept mounted.
+//! Up to four tabs (Camera, Modules, Looks, Recipes) with navigation stacks kept
+//! mounted. The Looks and Recipes tabs show while their module runs.
+//! Without a connected camera only the camera tab shows, with no tab bar. A restart
+//! for changed Looks keeps them.
 //! Settings opens from the camera tab.
 
 use nsh_base::{nav_stack, theme};
@@ -12,8 +15,9 @@ use crate::ui::ty::text;
 
 use crate::pages::{
     CoverTarget, add_page, camera_root, cover_page, import_page, look_page, looks_root,
-    preset_page, presets_page, recipe_page, recipes_root, release_history_page, saved_cameras_page,
-    scheme_page, settings_page, software_page,
+    module_options_page, module_page, modules_root, preset_page, presets_page, recipe_page,
+    recipes_root, release_history_page, saved_cameras_page, scheme_page, settings_page,
+    software_page,
 };
 use crate::store::{AppState, Route, Tab};
 use crate::strings::tr;
@@ -32,8 +36,16 @@ const RECIPES_ICON: &str = if cfg!(target_os = "android") {
     "list.bullet.rectangle.portrait"
 };
 
+/// An SF Symbol on iOS; the app's drawable on Android.
+const MODULES_ICON: &str = if cfg!(target_os = "android") {
+    "modules"
+} else {
+    "slider.horizontal.3"
+};
+
 const TABS: &[(Tab, &str, &str)] = &[
     (Tab::Camera, "tab.camera", "camera"),
+    (Tab::Modules, "tab.modules", MODULES_ICON),
     (Tab::Looks, "tab.looks", LOOKS_ICON),
     (Tab::Recipes, "tab.recipes", RECIPES_ICON),
 ];
@@ -43,9 +55,20 @@ pub fn shell(app: AppState) -> impl IntoElement {
         let app = app.clone();
         move || app.tab()
     });
+    let shown = computed({
+        let app = app.clone();
+        move || {
+            TABS.iter()
+                .map(|(t, _, _)| *t)
+                .filter(|t| app.tab_available(*t))
+                .collect::<Vec<_>>()
+        }
+    });
     let selected = move || {
-        TABS.iter()
-            .position(|(t, _, _)| *t == tab.get())
+        shown
+            .get()
+            .iter()
+            .position(|t| *t == tab.get())
             .unwrap_or(0) as u32
     };
     let mut stacks = view().flex_1();
@@ -61,13 +84,27 @@ pub fn shell(app: AppState) -> impl IntoElement {
     let stacks = stacks
         .relative()
         .child(crate::ui::toast_layer(app.toasts()));
+    let online = computed({
+        let app = app.clone();
+        move || app.tabs_shown()
+    });
     view()
         .flex_1()
         .bg(move || theme().background)
         .child(stacks)
-        .child(tabs(selected, {
-            let app = app.clone();
-            move |i| app.set_tab(TABS[i as usize].0)
+        .child(dynamic(move || {
+            let visible = shown.get();
+            online.get().then(|| {
+                let app = app.clone();
+                let items = visible.clone();
+                untracked(|| {
+                    tabs(&visible, selected, move |i| {
+                        if let Some(tab) = items.get(i as usize) {
+                            app.set_tab(*tab);
+                        }
+                    })
+                })
+            })
         }))
 }
 
@@ -92,6 +129,7 @@ fn root(app: AppState, tab: Tab) -> AnyElement {
         Tab::Camera => camera_root(app).into_element(),
         Tab::Looks => looks_root(app).into_element(),
         Tab::Recipes => recipes_root(app).into_element(),
+        Tab::Modules => modules_root(app).into_element(),
     }
 }
 
@@ -114,18 +152,26 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::RecipeDetail(id) => recipe_page(app, id, back).into_element(),
         Route::RecipePresets => presets_page(app, back).into_element(),
         Route::RecipePreset(id) => preset_page(app, id, back).into_element(),
+        Route::ModuleDetail(id) => module_page(app, id, back).into_element(),
+        Route::ModuleOptions(id) => module_options_page(app, id, back).into_element(),
     }
 }
 
 fn tabs(
+    visible: &[Tab],
     selected: impl Fn() -> u32 + Copy + 'static,
     choose: impl Fn(u32) + 'static + Clone,
 ) -> AnyElement {
+    let items: Vec<_> = TABS
+        .iter()
+        .filter(|(t, _, _)| visible.contains(t))
+        .collect();
     if matches!(os(), Os::Ios | Os::Android) {
         let choose = choose.clone();
         return tab_bar()
             .items(
-                TABS.iter()
+                items
+                    .iter()
                     .map(|(_, key, symbol)| TabBarItem::new(tr(key, &[])).icon(*symbol))
                     .collect::<Vec<_>>(),
             )
@@ -139,7 +185,7 @@ fn tabs(
         .border_t_color(move || theme().border)
         .bg(move || theme().card)
         .pb_safe_area();
-    for (i, (_, key, _)) in TABS.iter().enumerate() {
+    for (i, (_, key, _)) in items.iter().enumerate() {
         let i = i as u32;
         let title = tr(key, &[]);
         let choose = choose.clone();

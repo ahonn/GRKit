@@ -255,8 +255,7 @@ pub enum ReleaseProblem {
     FirmwareTooOld { required: String },
     /// The camera firmware is newer than GRKit supports.
     FirmwareTooNew,
-    /// The release is for a newer app: the index or the camera's builds
-    /// changed in a way this app does not read.
+    /// The release index names a newer app contract.
     AppTooOld,
 }
 

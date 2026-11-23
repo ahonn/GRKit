@@ -71,6 +71,7 @@ objc2-ui-kit = { version = "0.3.2", default-features = false, features = [
   "UIWindow",
   "UIImage",
   "UIColor",
+  "UIContentSizeCategory",
   "UIInterface",
   "UIResponder",
   "UITraitCollection",

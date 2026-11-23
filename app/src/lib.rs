@@ -37,6 +37,7 @@ pub mod store;
 mod strings;
 mod strings_connect;
 mod strings_looks;
+mod strings_modules;
 mod strings_recipes;
 mod ui;
 

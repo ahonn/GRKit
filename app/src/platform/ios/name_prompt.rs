@@ -7,13 +7,15 @@ use std::rc::Rc;
 use block2::RcBlock;
 use dispatch2::DispatchQueue;
 use futures_channel::oneshot;
-use objc2::MainThreadMarker;
 use objc2::rc::{Retained, Weak};
-use objc2_foundation::NSString;
+use objc2::runtime::AnyObject;
+use objc2::{MainThreadMarker, msg_send};
+use objc2_foundation::{NSComparisonResult, NSString};
 use objc2_ui_kit::{
     UIAlertAction, UIAlertActionStyle, UIAlertController, UIAlertControllerStyle, UIApplication,
+    UIContentSizeCategoryAccessibilityMedium, UIContentSizeCategoryCompareToCategory,
     UITextAutocorrectionType, UITextField, UITextFieldViewMode, UITextInputTraits,
-    UIViewController,
+    UITraitEnvironment, UIViewController,
 };
 
 use crate::platform::NamePrompt;
@@ -34,6 +36,20 @@ fn top_controller(mtm: MainThreadMarker) -> Option<Retained<UIViewController>> {
         top = next;
     }
     Some(top)
+}
+
+/// The keyboard covers the alert's buttons at the largest text sizes.
+fn limit_text_size(alert: &UIAlertController) {
+    // SAFETY: UIKit's constants and traits, used on the main thread. The app
+    // needs iOS 17, which has `traitOverrides`.
+    unsafe {
+        let limit = UIContentSizeCategoryAccessibilityMedium;
+        let size = alert.traitCollection().preferredContentSizeCategory();
+        if UIContentSizeCategoryCompareToCategory(&size, limit) == NSComparisonResult::Descending {
+            let overrides: *mut AnyObject = msg_send![alert, traitOverrides];
+            let _: () = msg_send![overrides, setPreferredContentSizeCategory: limit];
+        }
+    }
 }
 
 fn present(prompt: NamePrompt, reply: oneshot::Sender<Option<String>>) {
@@ -94,5 +110,6 @@ fn present(prompt: NamePrompt, reply: oneshot::Sender<Option<String>>) {
     );
     alert.addAction(&save);
     alert.setPreferredAction(Some(&save));
+    limit_text_size(&alert);
     top.presentViewController_animated_completion(&alert, true, None);
 }

@@ -45,6 +45,7 @@ pub(crate) mod changes;
 pub(crate) mod http;
 pub(crate) mod link_support;
 pub(crate) mod looks;
+pub(crate) mod modules;
 pub(crate) mod recipes;
 pub(crate) mod release;
 pub(crate) mod update;

@@ -265,28 +265,36 @@ impl AppState {
                 platform::release_link(&remembered.peripheral_id);
             }
         }
+        // A restart for changed Looks keeps the page, and connects when it ends.
+        if self.camera_restarting.get() {
+            self.return_tab.set(None);
+            return;
+        }
         if !reason.unexpected() {
             self.return_tab.set(None);
+            self.leave_camera_pages(false);
             return;
         }
         // The toast is read aloud as it shows.
         self.show_toast(crate::strings::tr("cam.lost_title", &[]));
-        self.leave_camera_pages();
+        self.leave_camera_pages(true);
         if lifecycle() == Lifecycle::Active {
             self.auto_connect(AutoTrigger::UnexpectedDrop);
         }
     }
 
-    /// Close pages that need the camera. The Looks and Recipes tabs go back to the
-    /// camera tab, where the reconnect is, and is restored after it.
-    fn leave_camera_pages(self) {
-        // The Looks tab and every page on it read the camera.
-        if matches!(self.tab(), Tab::Looks | Tab::Recipes) {
-            self.return_tab.set(Some(self.tab()));
+    /// Close pages that need the camera. The Looks, Recipes and Modules tabs go back to the
+    /// camera tab, where the reconnect is. With `restore`, a reconnect opens the tab again.
+    fn leave_camera_pages(self, restore: bool) {
+        // The status already says disconnected, so `tab()` reads Camera here.
+        let tab = self.tab.get();
+        if tab != Tab::Camera {
+            self.return_tab.set(restore.then_some(tab));
             self.set_tab(Tab::Camera);
         }
         self.pop_to(Tab::Looks, 0);
         self.pop_to(Tab::Recipes, 0);
+        self.pop_to(Tab::Modules, 0);
     }
 
     /// Software Update reads the camera: without one, it and the pages above

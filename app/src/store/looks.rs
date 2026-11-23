@@ -294,6 +294,10 @@ impl AppState {
         if !self.connected() {
             return;
         }
+        if !self.looks_available() {
+            self.looks.error.set(None);
+            return;
+        }
         if self.demo() {
             let snapshot = self
                 .looks
@@ -1176,5 +1180,6 @@ impl AppState {
         // A read that the lost link cut off never reports back.
         store.loading.set(false);
         self.reset_recipe_read();
+        self.reset_module_read();
     }
 }

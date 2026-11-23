@@ -437,6 +437,20 @@ fn update_card(app: AppState) -> Option<AnyElement> {
                 Box::new(|| tr("cam.update_available_sub", &[])),
                 false,
             ),
+            _ if !app.module_draft().is_empty()
+                && package
+                    .as_ref()
+                    .is_some_and(|p| p.available.as_deref() == Some(p.installed.as_str())) =>
+            {
+                (
+                    named(
+                        "modules.changes",
+                        &[("count", &app.module_draft().count().to_string())],
+                    ),
+                    Box::new(|| tr("modules.view_update", &[])),
+                    false,
+                )
+            }
             _ => return None,
         };
     // Without a known version, the title names GRKit alone.
@@ -482,10 +496,20 @@ fn update_card(app: AppState) -> Option<AnyElement> {
 /// What the camera uses now: the recipe that matches it and the Film Look in
 /// use. Browsing and switching stay on their tabs, so a row opens the detail.
 fn current_card(app: AppState) -> Option<AnyElement> {
+    if app.grkit_paused() || app.safe_mode() {
+        let (title, body) = if app.safe_mode() {
+            ("modules.safe", "modules.safe_body")
+        } else {
+            ("modules.grkit_off", "modules.grkit_off_body")
+        };
+        return Some(status_notice(tr(title, &[]), tr(body, &[])));
+    }
+    let (recipes_on, looks_on) = (app.recipes_available(), app.looks_available());
     let recipes = app.recipes_snapshot();
     let looks = app.looks_snapshot();
     let mut rows = Vec::new();
     match &recipes {
+        _ if !recipes_on => {}
         Some(snapshot) => {
             if let Some(item) = snapshot.recipes.iter().find(|r| r.current) {
                 let id = item.id;
@@ -508,6 +532,7 @@ fn current_card(app: AppState) -> Option<AnyElement> {
         )),
     }
     match &looks {
+        _ if !looks_on => {}
         Some(snapshot) => {
             if let Some(look) = snapshot.looks.iter().find(|l| l.selected) {
                 let id = look.id.clone();
@@ -529,8 +554,16 @@ fn current_card(app: AppState) -> Option<AnyElement> {
             Tab::Looks,
         )),
     }
+    if !recipes_on && !looks_on {
+        rows.push(current_row(
+            view().size(px(0.0)).into_element(),
+            tr("modules.none_enabled", &[]),
+            tr("modules.manage", &[]),
+            move || app.set_tab(Tab::Modules),
+        ));
+    }
     if rows.is_empty() {
-        if recipes.is_none() || looks.is_none() {
+        if (recipes_on && recipes.is_none()) || (looks_on && looks.is_none()) {
             return None;
         }
         rows.push(
@@ -560,6 +593,26 @@ fn current_card(app: AppState) -> Option<AnyElement> {
             .child(grouped_card(view().children(rows)))
             .into_element(),
     )
+}
+
+/// A state of GRKit that stops every module, in place of the current items.
+fn status_notice(title: String, body: String) -> AnyElement {
+    view()
+        .gap(px(2.0))
+        .p_4()
+        .rounded(px(10.0))
+        .bg(move || theme().muted)
+        .child(
+            text(title)
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::SEMIBOLD),
+        )
+        .child(
+            text(body)
+                .text_size(px(crate::ui::ty::FOOTNOTE))
+                .text_color(move || theme().muted_foreground),
+        )
+        .into_element()
 }
 
 /// Open a detail page on its tab, over the tab's list.

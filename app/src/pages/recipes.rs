@@ -15,7 +15,7 @@ use crate::pages::looks::{
     list_count, loading_card, offline_card, refresh_notice, reorder_list, round_check, section,
 };
 use crate::pages::recipe_text::{glow_level, grain_level};
-use crate::store::{AppState, Route, Tab};
+use crate::store::{AppState, Route, Tab, app_store_url};
 use crate::strings::tr;
 use crate::ui::{
     badge, camera_art, circle_button, cover_view, grouped_card, primary_button, secondary_button,
@@ -100,7 +100,7 @@ fn can_edit(app: AppState) -> bool {
 }
 
 /// A card with art, a title, a note, and one button.
-fn center_card(
+pub(crate) fn center_card(
     art: AnyElement,
     title: String,
     body: String,
@@ -166,7 +166,7 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
         }
         return loading_card(tr("recipes.loading", &[])).into_element();
     };
-    if snapshot.recipes.is_empty() {
+    if snapshot.recipes.is_empty() && snapshot.unreadable == 0 {
         return center_card(
             image(nsh_core::element::ImageSrc::svg_markup(RECIPE_ART))
                 .w(px(150.0))
@@ -219,9 +219,10 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
                 refresh_notice(app.recipes_loading(), move || app.refresh_recipes()).into_element()
             })
         }))
+        .child(look_off_notice(app, &snapshot))
         .child(section(
             tr("recipes.menu", &[]),
-            list_count(count, snapshot.max_on),
+            list_count(snapshot.on_count(), snapshot.max_on),
             move || app.recipes_refreshing(),
             menu_list,
             (mode != RowMode::Edit).then(|| tr("recipes.menu_note", &[])),
@@ -244,7 +245,86 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
                 (mode == RowMode::Edit).then(|| tr("recipes.off_edit_note", &[])),
             )
         }))
+        .child((snapshot.unreadable > 0).then(|| newer_app_row(snapshot.unreadable)))
         .into_element()
+}
+
+/// Film Look is off, and a recipe needs it.
+fn look_off_notice(
+    app: AppState,
+    snapshot: &crate::domain::recipes::RecipesSnapshot,
+) -> Option<AnyElement> {
+    if app.looks_available() || snapshot.recipes.iter().all(|r| r.ready) {
+        return None;
+    }
+    let id = app.film_look_off()?;
+    let action = tr("modules.enable", &[]);
+    Some(
+        grouped_card(
+            view()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .gap_3()
+                .min_h(px(56.0))
+                .px_4()
+                .child(
+                    text(tr("modules.looks_off", &[]))
+                        .flex_1()
+                        .text_size(px(crate::ui::ty::SUBHEADLINE))
+                        .font_weight(FontWeight::SEMIBOLD),
+                )
+                .child(
+                    view()
+                        .role(AccessibilityRole::Button)
+                        .label(action.clone())
+                        .min_h(px(44.0))
+                        .justify_center()
+                        .on_press(move || app.set_module_enabled(&id, true))
+                        .active(|s| s.opacity(0.72))
+                        .child(
+                            text(action)
+                                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                                .font_weight(FontWeight::SEMIBOLD),
+                        ),
+                ),
+        )
+        .into_element(),
+    )
+}
+
+/// The recipes of a later GRKit that this app leaves out.
+fn newer_app_row(count: usize) -> impl IntoElement {
+    let action = tr("recipes.needs_app_action", &[]);
+    grouped_card(
+        view()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .min_h(px(56.0))
+            .px_4()
+            .child(
+                text(tr("recipes.needs_app", &[("count", &count.to_string())]))
+                    .flex_1()
+                    .text_size(px(crate::ui::ty::SUBHEADLINE))
+                    .text_color(move || theme().muted_foreground),
+            )
+            .child(
+                view()
+                    .role(AccessibilityRole::Button)
+                    .label(action.clone())
+                    .min_h(px(44.0))
+                    .justify_center()
+                    .on_press(|| crate::pages::software::open(app_store_url()))
+                    .active(|s| s.opacity(0.72))
+                    .child(
+                        text(action)
+                            .text_size(px(crate::ui::ty::SUBHEADLINE))
+                            .font_weight(FontWeight::SEMIBOLD),
+                    ),
+            ),
+    )
 }
 
 /// The recipes as the phone last read them, while no camera is connected:
@@ -293,8 +373,12 @@ pub fn recipe_tile(app: AppState, item: &RecipeItem, size: f32, faded: bool) -> 
     }
     match &item.recipe.look {
         Look::Native(native) => crate::ui::image_control_tile(native.image_type, size, faded),
+        // The look is off or missing: the tile keeps the recipe's own words.
         _ => native_tile(
-            item.effect_name.clone().unwrap_or_else(|| "?".into()),
+            item.effect_name
+                .clone()
+                .or_else(|| item.name.clone())
+                .unwrap_or_default(),
             size,
             faded,
         ),
@@ -327,7 +411,14 @@ pub fn native_tile(label: String, size: f32, faded: bool) -> AnyElement {
 /// The line under the name: the look, and its grain and glow.
 pub fn recipe_summary(app: AppState, item: &RecipeItem) -> String {
     if !item.ready {
-        return tr("recipes.look_missing", &[]);
+        return tr(
+            if app.looks_available() {
+                "recipes.look_missing"
+            } else {
+                "recipes.needs_look"
+            },
+            &[],
+        );
     }
     let mut parts = vec![match &item.recipe.look {
         Look::Native(native) => crate::store::native_type_name(native.image_type),
