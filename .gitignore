@@ -5,7 +5,12 @@
 /dist/
 /build/
 /target/
+/app/target/
+/app/.nsh/
 *.bin
 *.raw
 *.zip
 .DS_Store
+
+# Xcode per-user state
+xcuserdata/
