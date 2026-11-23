@@ -56,3 +56,38 @@ fn a_gr4_file_gives_its_looks() {
         assert_eq!(effect.native_look.is_some(), !effect.monochrome());
     }
 }
+
+/// A GR II file gives GR II Positive for GR III and for GR IV, without default tone steps. Both
+/// preview the same picture.
+#[test]
+#[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR2"]
+fn a_gr2_file_gives_positive_for_each_camera() {
+    let file = std::fs::read(std::env::var("GRKIT_TEST_FIRMWARE_GR2").unwrap()).unwrap();
+    let looks = native_looks(&file, &base()).unwrap();
+    let ids: Vec<_> = looks
+        .iter()
+        .map(|look| (look.id.as_str(), look.version))
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            ("gr2-positive-film", "3.00"),
+            ("gr2-positive-film-gr4", "3.00")
+        ]
+    );
+    assert!(looks
+        .iter()
+        .all(|look| look.tone.is_empty() && !look.monochrome));
+    let (effect, _) = effects::decode(&looks[0].blob).unwrap();
+    assert_eq!(
+        looks[0].preview,
+        site::linear_preview_lut(&base(), &effect).unwrap()
+    );
+    let differences = looks[0]
+        .preview
+        .iter()
+        .zip(&looks[1].preview)
+        .filter(|(a, b)| a != b)
+        .count();
+    assert!(differences * 100 < looks[0].preview.len(), "{differences}");
+}

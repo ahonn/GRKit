@@ -3,39 +3,56 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ImportedEffect } from '../catalog';
 import { NATIVE_LOOK_IDS } from './names';
-import { hasNativeLooks, importsForCamera, missingNativeLooks, NATIVE_LOOKS, nativeProblem, takesNativeLooks } from './native';
+import { hasNativeLooks, importsForCamera, missingNativeLooks, NATIVE_LOOKS, nativeLooksFor, nativeProblem } from './native';
 
 const effect = (id: string, kind: 'lut' | 'native') => ({ id, imported: { kind } }) as ImportedEffect;
 
 describe('importsForCamera', () => {
-  const imported = [effect('lut-a', 'lut'), effect('gr4-cinema-yellow', 'native'), effect('gr4-cinema-green', 'native')];
+  const imported = [
+    effect('lut-a', 'lut'),
+    effect('gr4-cinema-yellow', 'native'),
+    effect('gr4-cinema-green', 'native'),
+    effect('gr2-positive-film', 'native'),
+    effect('gr2-positive-film-gr4', 'native'),
+  ];
+  const ids = (items: readonly { id: string }[]) => items.map((item) => item.id);
 
-  it('keeps every import on GR III and GR IIIx', () => {
-    expect(importsForCamera(imported, 'gr3')).toEqual(imported);
-    expect(importsForCamera(imported, 'gr3x')).toEqual(imported);
-    expect(takesNativeLooks('gr3x')).toBe(true);
-  });
-
-  it('leaves the native looks out on GR IV and GR IV Monochrome', () => {
-    for (const camera of ['gr4', 'gr4m']) {
-      expect(takesNativeLooks(camera)).toBe(false);
-      expect(importsForCamera(imported, camera).map((item) => item.id)).toEqual(['lut-a']);
+  it('keeps the GR III native looks on GR III and GR IIIx', () => {
+    for (const camera of ['gr3', 'gr3x']) {
+      expect(ids(importsForCamera(imported, camera))).toEqual(ids(imported.slice(0, 4)));
+      expect(ids(nativeLooksFor(camera))).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green', 'gr2-positive-film']);
     }
   });
 
+  it('keeps only the GR IV Positive on GR IV, and no native look on GR IV Monochrome', () => {
+    expect(ids(nativeLooksFor('gr4'))).toEqual(['gr2-positive-film-gr4']);
+    expect(ids(importsForCamera(imported, 'gr4'))).toEqual(['lut-a', 'gr2-positive-film-gr4']);
+    expect(nativeLooksFor('gr4m')).toEqual([]);
+    expect(ids(importsForCamera(imported, 'gr4m'))).toEqual(['lut-a']);
+  });
+
   it('tells which native looks the page lacks', () => {
-    expect(NATIVE_LOOKS.map((look) => look.id)).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green']);
+    expect(NATIVE_LOOKS.map((look) => [look.id, look.firmware])).toEqual([
+      ['gr4-cinema-yellow', 'gr4'],
+      ['gr4-cinema-green', 'gr4'],
+      ['gr2-positive-film', 'gr2'],
+      ['gr2-positive-film-gr4', 'gr2'],
+    ]);
     expect(NATIVE_LOOKS.map((look) => look.id)).toEqual(NATIVE_LOOK_IDS);
     expect(missingNativeLooks(imported.slice(0, 1)).map((look) => look.id)).toEqual(
       NATIVE_LOOKS.map((look) => look.id),
     );
-    expect(hasNativeLooks(imported.slice(0, 2))).toBe(false);
+    expect(hasNativeLooks(imported.slice(0, 4))).toBe(false);
     expect(hasNativeLooks(imported)).toBe(true);
-    expect(missingNativeLooks(imported.slice(2)).map((look) => look.id)).toEqual(['gr4-cinema-yellow']);
+    expect(ids(missingNativeLooks(imported.slice(2, 3), nativeLooksFor('gr3')))).toEqual([
+      'gr4-cinema-yellow',
+      'gr2-positive-film',
+    ]);
+    expect(ids(missingNativeLooks(imported.slice(0, 1), nativeLooksFor('gr4')))).toEqual(['gr2-positive-film-gr4']);
     // A Cinema look already on the card is not offered again as an unlock tile.
     expect(
-      missingNativeLooks([{ id: 'lut-a' }, { id: 'gr4-cinema-yellow' }]).map((look) => look.id),
-    ).toEqual(['gr4-cinema-green']);
+      ids(missingNativeLooks([{ id: 'lut-a' }, { id: 'gr4-cinema-yellow' }], nativeLooksFor('gr3'))),
+    ).toEqual(['gr4-cinema-green', 'gr2-positive-film']);
   });
 });
 
@@ -45,6 +62,7 @@ describe('nativeProblem', () => {
     expect(problem('This is not a supported GR IV firmware file. Supported versions: 1.11, 1.20')).toBe(
       'unsupported',
     );
+    expect(problem('This is not a supported GR II firmware file. Supported versions: 3.00')).toBe('unsupported');
     expect(problem('The ZIP file has no fwdc248b.bin')).toBe('notFirmware');
     expect(problem('Invalid ZIP file: invalid Zip archive')).toBe('notFirmware');
     expect(problem('The file is too large')).toBe('tooLarge');

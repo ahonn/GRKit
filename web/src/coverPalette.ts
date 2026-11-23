@@ -90,6 +90,8 @@ export const COVER_INKS = {
   cineGreenBody: [14, 40, 24],
   cineGreenText: [168, 232, 184],
   cineYellowBody: [40, 28, 8],
+  positiveBody: [12, 28, 52],
+  positiveText: [176, 216, 240],
   greenDark: [28, 64, 28],
   eternaAccent: [120, 140, 120],
 
@@ -153,6 +155,13 @@ export const COVER_LOOKS = {
     text: 'cineGreenText',
     accent: 'cineGreen',
   },
+  gr2Positive: {
+    band: 'ricohRed',
+    brand: 'white',
+    body: 'positiveBody',
+    text: 'positiveText',
+    accent: 'chromeBlue',
+  },
   ricoh: { band: 'ricohRed', brand: 'white', body: 'ink', text: 'white', accent: 'mist' },
   fuji: { band: 'fujiGreen', brand: 'white', body: 'black', text: 'white', accent: 'fujiGreen' },
   ilford: { band: 'ink', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
@@ -200,6 +209,7 @@ export const COVER_LOOK_IDS = [
   'ricoh',
   'cinemaYellow',
   'cinemaGreen',
+  'gr2Positive',
   'cinema',
 ] as const satisfies readonly CoverLookId[];
 
@@ -257,6 +267,7 @@ const STOCK_LOOKS: ReadonlyArray<{ readonly match: RegExp; readonly look: CoverL
   { match: /VISTA/, look: 'vista' },
   { match: /CINEMA YELLOW|YELLOW RICOH/, look: 'cinemaYellow' },
   { match: /CINEMA GREEN|GREEN RICOH/, look: 'cinemaGreen' },
+  { match: /GR II POSITIVE/, look: 'gr2Positive' },
   { match: /CINEMA|RICOH/, look: 'ricoh' },
 ];
 

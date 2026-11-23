@@ -9,6 +9,9 @@ pub const MID_INDEX: f64 = 7.8;
 pub const K: f64 = MID_INDEX / 0.18;
 /// The GR III Standard look matrix: the `standard` input encoding and the Standard comparison.
 pub const STANDARD_LOOK: [i16; 9] = [8116, 743, -667, 15, 8598, -421, -244, 542, 7894];
+/// The GR IV Standard look matrix (GR IV 1.11 to 1.21), for an effect made on GR IV's own
+/// Standard instead of GR III's.
+pub const GR4_STANDARD_LOOK: [i16; 9] = [8736, 32, -576, 224, 8288, -320, -192, 448, 7936];
 pub const IDENTITY: [f64; 9] = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
 
 /// X-Rite ColorChecker Classic, CIE L*a*b* D50 reference values for charts made after
