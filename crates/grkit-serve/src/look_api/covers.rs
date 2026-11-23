@@ -228,7 +228,7 @@ impl Covers {
     pub fn scheme(&self) -> Scheme {
         Scheme::of_or(
             self.resolved.values().filter_map(|entry| entry.vote),
-            self.chosen.unwrap_or_default(),
+            self.chosen.unwrap_or(Scheme::NEW_CARD),
         )
     }
 

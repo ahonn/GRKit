@@ -6,6 +6,7 @@
 //! The site draws the same covers (`web/src/components/EffectIcon.tsx`) and offers the same
 //! colors (`web/src/coverPalette.ts`). A test keeps the tables of this module equal to it.
 
+use crate::cover_font::{ADVANCE, KERNING, OUTLINE};
 use std::fmt::Write;
 
 use anyhow::{bail, ensure, Context, Result};
@@ -317,8 +318,8 @@ impl Cover {
     }
 
     /// A standalone SVG document of the cover, `viewBox="0 0 40 40"`. A film cover draws as
-    /// the site draws it, in IBM Plex Sans Condensed Bold. The site fits a text to its width
-    /// with the browser's measure; this document fits it with the advance widths of the font.
+    /// the site draws it, in IBM Plex Sans Condensed Bold. Its texts are outlines, because
+    /// the app draws an SVG with the fonts of the device, which do not have this font.
     /// A label tile draws its pixels as a grid of rectangles, as the site shows its pixels.
     pub fn svg(&self) -> String {
         match self {
@@ -769,6 +770,10 @@ pub enum Scheme {
 impl Scheme {
     const ALL: [Scheme; 3] = [Scheme::Gray, Scheme::ColorFilmBox, Scheme::FilmBox];
 
+    /// The scheme of a card without a cover that shows one, as the site's default. Covers
+    /// already on the card decide their own group, so a card of gray color Looks stays gray.
+    pub const NEW_CARD: Scheme = Scheme::ColorFilmBox;
+
     /// The id of the API and the site.
     pub fn id(self) -> &'static str {
         match self {
@@ -949,16 +954,6 @@ fn mix(seed: u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// The advance widths of IBM Plex Sans Condensed Bold (Latin subset, version 5.3), in
-/// thousandths of the font size, for the characters ' ' to '~'.
-const ADVANCE: [u16; 95] = [
-    212, 292, 452, 561, 535, 884, 652, 244, 304, 304, 556, 540, 284, 360, 284, 422, 540, 540, 540,
-    540, 540, 540, 540, 540, 540, 540, 304, 304, 540, 540, 540, 452, 814, 618, 602, 589, 630, 549,
-    528, 646, 654, 397, 506, 630, 480, 738, 654, 642, 595, 642, 610, 556, 527, 630, 598, 884, 612,
-    579, 546, 302, 422, 302, 540, 500, 540, 516, 550, 468, 550, 508, 341, 499, 540, 262, 266, 524,
-    277, 808, 540, 508, 550, 550, 367, 455, 342, 540, 490, 756, 501, 496, 466, 338, 370, 338, 540,
-];
-
 /// The size, letter spacing, and width of a cover text (`styles.css`, `EffectIcon.tsx`).
 struct Style {
     size: f32,
@@ -990,14 +985,25 @@ const LARGE_NAME: Style = Style {
 const MIN_LARGE_SIZE: f32 = 5.5;
 const CAP_HEIGHT: f32 = 0.7;
 
-/// The width of `text` as a browser measures it: the advances and the spacing after each
-/// character.
+/// The index of a character in the tables of `cover_font`.
+fn glyph(c: u8) -> usize {
+    usize::from(c.clamp(b' ', b'~') - b' ')
+}
+
+/// The kerning between two characters, in thousandths of the font size.
+fn kerning(left: u8, right: u8) -> i32 {
+    KERNING
+        .binary_search_by_key(&(left, right), |&(a, b, _)| (a, b))
+        .map_or(0, |at| i32::from(KERNING[at].2))
+}
+
+/// The width of `text` as a browser measures it: the advances, the kerning, and the spacing
+/// after each character.
 fn text_width(text: &str, size: f32, spacing: f32) -> f32 {
-    let advances: u32 = text
-        .bytes()
-        .map(|c| u32::from(ADVANCE[usize::from(c.clamp(b' ', b'~') - b' ')]))
-        .sum();
-    advances as f32 * size / 1000.0 + spacing * text.len() as f32
+    let bytes = text.as_bytes();
+    let advances: i32 = bytes.iter().map(|&c| i32::from(ADVANCE[glyph(c)])).sum();
+    let kerned: i32 = bytes.windows(2).map(|p| kerning(p[0], p[1])).sum();
+    (advances + kerned) as f32 * size / 1000.0 + spacing * text.len() as f32
 }
 
 /// A number without trailing zeros.
@@ -1035,39 +1041,84 @@ fn rect(svg: &mut String, y: f32, height: f32, fill: Rgb) {
     );
 }
 
-/// A text centered on x = 20 at `size`. A text wider than the style width compresses to it,
-/// as `fit` of the site does.
+/// A text centered on x = 20 at `size`, as the outlines of the site's font, so that it does
+/// not depend on the fonts of the device. A text wider than the style width compresses to it,
+/// as `fit` of the site does. A character outside the font's table draws as a text.
 fn text(svg: &mut String, content: &str, y: f32, style: &Style, size: f32, fill: Rgb) {
-    let _ = write!(
-        svg,
-        r#"<text x="20" y="{}" font-size="{}" fill="{}""#,
-        number(y),
-        number(size),
-        hex(fill)
-    );
-    if style.spacing != 0.0 {
-        let _ = write!(svg, r#" letter-spacing="{}""#, number(style.spacing));
-    }
-    if text_width(content, size, style.spacing) > style.width {
+    let length = text_width(content, size, style.spacing);
+    let squeeze = if length > style.width {
+        style.width / length
+    } else {
+        1.0
+    };
+    if !content.bytes().all(|c| (b' '..=b'~').contains(&c)) {
         let _ = write!(
             svg,
-            r#" textLength="{}" lengthAdjust="spacingAndGlyphs""#,
-            number(style.width)
+            r#"<text x="20" y="{}" font-size="{}" fill="{}""#,
+            number(y),
+            number(size),
+            hex(fill)
         );
+        if style.spacing != 0.0 {
+            let _ = write!(svg, r#" letter-spacing="{}""#, number(style.spacing));
+        }
+        if squeeze < 1.0 {
+            let _ = write!(
+                svg,
+                r#" textLength="{}" lengthAdjust="spacingAndGlyphs""#,
+                number(style.width)
+            );
+        }
+        let _ = write!(svg, ">{}</text>", escape(content));
+        return;
     }
-    let _ = write!(svg, ">{}</text>", escape(content));
+    let unit = size / 1000.0;
+    let mut pen = 20.0 - length * squeeze / 2.0;
+    let mut path = String::new();
+    let bytes = content.as_bytes();
+    for (at, &c) in bytes.iter().enumerate() {
+        let mut across = true;
+        for token in OUTLINE[glyph(c)].split_ascii_whitespace() {
+            match token.parse::<f32>() {
+                Ok(value) if across => {
+                    let _ = write!(path, "{} ", number(pen + value * unit * squeeze));
+                    across = false;
+                }
+                Ok(value) => {
+                    let _ = write!(path, "{} ", number(y - value * unit));
+                    across = true;
+                }
+                Err(_) => path.push_str(token),
+            }
+        }
+        let kern = bytes.get(at + 1).map_or(0, |&next| kerning(c, next));
+        pen += ((i32::from(ADVANCE[glyph(c)]) + kern) as f32 * unit + style.spacing) * squeeze;
+    }
+    let _ = write!(
+        svg,
+        r#"<path aria-label="{}" fill="{}" d="{}"/>"#,
+        escape(content),
+        hex(fill),
+        path.trim_end()
+    );
+}
+
+/// The size of a large name: smaller until it fits, down to `MIN_LARGE_SIZE`.
+fn large_size(name: &str) -> f32 {
+    let style = &LARGE_NAME;
+    let length = text_width(name, style.size, style.spacing);
+    if length > style.width {
+        (style.size * style.width / length).max(MIN_LARGE_SIZE)
+    } else {
+        style.size
+    }
 }
 
 /// A large name: smaller until it fits, down to `MIN_LARGE_SIZE`, with its capitals centered
 /// on `center`, as `fitLarge` of the site does.
 fn large_name(svg: &mut String, name: &str, center: f32, fill: Rgb) {
     let style = &LARGE_NAME;
-    let length = text_width(name, style.size, style.spacing);
-    let size = if length > style.width {
-        (style.size * style.width / length).max(MIN_LARGE_SIZE)
-    } else {
-        style.size
-    };
+    let size = large_size(name);
     text(
         svg,
         name,
@@ -1227,7 +1278,7 @@ mod tests {
         assert!(!Cover::for_name("Kodak Portra 400").matches(&pixels[1..]));
     }
 
-    /// The text of each `<text>` of an SVG document, which must be well-formed XML.
+    /// The text of each drawn text of an SVG document, which must be well-formed XML.
     fn svg_texts(svg: &str) -> Vec<String> {
         let root = parse_document(svg).unwrap();
         assert_eq!(
@@ -1238,6 +1289,9 @@ mod tests {
             .iter()
             .filter_map(|node| match node {
                 Node::Element(element) if element.name == "text" => Some(element.text_content()),
+                Node::Element(element) if element.name == "path" => {
+                    element.attr("aria-label").map(str::to_owned)
+                }
                 _ => None,
             })
             .collect()
@@ -1264,9 +1318,10 @@ mod tests {
             expected.extend(number);
             assert_eq!(svg_texts(&svg), expected, "{layout:?}");
             assert!(svg.contains(&hex(DEFAULT_COLORS.body)));
-            // A large name this wide gets smaller.
-            assert!(!svg.contains(r#"font-size="12""#));
+            assert!(!svg.contains("<text"));
         }
+        // A large name this wide gets smaller.
+        assert!(large_size("LONGER NAMES") < LARGE_NAME.size);
         let label = Cover::from_json(&json!({"label": "FV", "shape": "filter"})).unwrap();
         let svg = label.svg();
         assert!(svg_texts(&svg).is_empty());
@@ -1540,6 +1595,14 @@ mod tests {
             assert_eq!(Scheme::of(looks.clone()), scheme, "{looks:?}");
         }
         // A group without Looks follows the fallback.
+        assert_eq!(
+            Scheme::of_or(vec![], Scheme::NEW_CARD),
+            Scheme::ColorFilmBox
+        );
+        assert_eq!(
+            Scheme::of_or(vec![(false, Gray)], Scheme::NEW_CARD),
+            Scheme::Gray
+        );
         assert_eq!(
             Scheme::of_or(vec![(true, Box)], Scheme::FilmBox),
             Scheme::FilmBox
