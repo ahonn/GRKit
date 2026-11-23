@@ -12,7 +12,7 @@ The official modules in `modules/` are complete examples:
 | `modules/crop` | a page and mask layer of the capabilities `CORE.CROP` and `CORE.CROP_MODE` |
 | `modules/date` | three settings, a page, a status icon, and a plane filter |
 | `modules/glow` | independent Enable and Strength settings, strength icons shared by ADJ and the viewfinder, and a frame filter |
-| `modules/grain` | a module with only data: a page and status icon of `CORE.GRAIN` |
+| `modules/grain` | a page and status icon of `CORE.GRAIN`, and the plane filter of its Film-like style |
 | `modules/border` | a module with only data: a page of two capabilities, `CORE.BORDER` and `CORE.BORDER_COLOR` |
 | `modules/film-look` | a page of `CORE.TONE` and an indicator in the native Image Control position |
 

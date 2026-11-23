@@ -577,6 +577,17 @@ static void grain_contract(void)
         ref_grain(long_want, pitch[c], rows[c], 3, 0x12345679U);
         assert(!memcmp(plane, long_want, size));
     }
+    /* Film-like (GRAIN.STYLE 1): the native stage blends neutral noise,
+       and the plane filter of the Grain module draws the grain. */
+    header[GRKIT_HOST_GRAIN_SHOT / 4] = 2;
+    settings_memory[8] = GRAIN_STYLE_ID;
+    settings_memory[9] = 1;
+    grain_native_fills = grain_allocations = 0;
+    grain_noise(GRAIN_PLANE, SIZE, PITCH, HEIGHT);
+    plane = region(GRAIN_PLANE, SIZE);
+    assert(!grain_native_fills && !grain_allocations);
+    for (uint32_t i = 0; i < SIZE; ++i) assert(plane[i] == 128);
+    settings_memory[8] = settings_memory[9] = 0;
     /* The profile counts the microseconds of the generic timer: two reads
        24000 ticks apart at 24 MHz are 1000 us. Without the profile, nothing
        is counted. */
@@ -1083,10 +1094,30 @@ static void jpeg_xmp_contract(void)
 #endif
 }
 
+/* GRAIN.STYLE (modules/grain): grain_film_like is 1 in the Film-like
+   style, where the native grain stage runs with no amplitude and the plane
+   filter of the module draws the grain, and 0 in the System style or
+   without the setting. The level of CORE.GRAIN stays as it is, so the
+   native stage runs as in the System style. Handle 2 here has 2 values, as
+   GRAIN.STYLE. */
+static void grain_style_contract(void)
+{
+    reset();
+    header[GRKIT_HOST_GRAIN / 4] = 2;
+    assert(!grain_film_like() && picture_header_word(GRKIT_HOST_GRAIN) == 2);
+    settings_memory[8] = GRAIN_STYLE_ID;
+    settings_memory[9] = 0;
+    assert(!grain_film_like());
+    settings_memory[9] = 1;
+    assert(grain_film_like() && picture_header_word(GRKIT_HOST_GRAIN) == 2);
+    settings_memory[8] = settings_memory[9] = 0;
+}
+
 int main(void)
 {
     capture_tone_contract();
     jpeg_xmp_contract();
+    grain_style_contract();
 #ifdef GRAIN_FILL_PITCH
     grain_contract();
 #endif

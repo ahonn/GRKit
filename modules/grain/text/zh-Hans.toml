@@ -8,6 +8,10 @@ label = "强度"
 label = "大小"
 values = ["自动", "小", "中", "大"]
 
+[settings.STYLE]
+label = "风格"
+values = ["系统", "胶片质感"]
+
 [settings.ICON]
 label = "图标显示"
 values = ["开启", "关闭"]

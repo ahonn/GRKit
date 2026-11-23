@@ -152,6 +152,17 @@ grain_level:
 1:  cmp r3, #3
     bx lr
 
+// The flags ne while the Grain module draws the grain itself (its Film-like
+// style, grain_film_like): the native stage then runs as for the System
+// style, so whatever else it does stays the same, but with no amplitude,
+// and the plane filter of the module adds the grain. Keeps the registers.
+grain_module_draws:
+    push {r0-r3, r12, lr}
+    bl grain_film_like
+    cmp r0, #0
+    pop {r0-r3, r12, lr}
+    bx lr
+
 // Replaces the BL to the stage gate. r0 = plan, r1 = shot settings. The caller
 // reloads r0 and r1 after the call.
 .global grain_gate
@@ -236,7 +247,8 @@ grain_strength:
 // GR IV replaces `mov r0, #0x200` after the load of the luma amplitude r5 of
 // the grain tables (the 3 x 3 tables at 0x53b4bf3c by strength and size).
 // Each table entry is the input plus or minus min(input, 255 - input, r5),
-// so a larger r5 stays inside 0..255. Extra Strong scales r5.
+// so a larger r5 stays inside 0..255. Extra Strong scales r5. In the
+// Film-like style r5 is 0, so each entry is its input.
 .global grain_amplitude
 grain_amplitude:
     push {r3, lr}
@@ -246,7 +258,9 @@ grain_amplitude:
     mov r3, #GRAIN_EXTRA
     mul r5, r3, r5
     lsr r5, r5, #8
-1:  pop {r3, lr}
+1:  bl grain_module_draws
+    movne r5, #0
+    pop {r3, lr}
     mov r0, #0x200
     bx lr
 #endif
@@ -299,7 +313,8 @@ grain_particle:
 #ifdef HOOK_GRAIN_AMPLITUDE
 // GR III replaces `cmp r5, #2`, the first test of the amplitude choice by the
 // Particle r5 (256, 128, or 64), and goes on after it (0x5367ae40) with r6 =
-// the amplitude. Extra Strong takes GRAIN_EXTRA. r3 and lr are free here.
+// the amplitude. Extra Strong takes GRAIN_EXTRA, and the Film-like style 0
+// (the fill is neutral then too, grain_noise). r3 and lr are free here.
 .global grain_amplitude
 grain_amplitude:
     push {r3, lr}
@@ -313,7 +328,9 @@ grain_amplitude:
     cmp r5, #3
     moveq r6, #0x40
     movne r6, #0x100
-1:  pop {r3, lr}
+1:  bl grain_module_draws
+    movne r6, #0
+    pop {r3, lr}
     ldr pc, =FW_GRAIN_AMPLITUDE_DONE
 #endif
 #endif

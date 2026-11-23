@@ -8,6 +8,10 @@ label = "強度"
 label = "大小"
 values = ["自動", "小", "中", "大"]
 
+[settings.STYLE]
+label = "風格"
+values = ["系統", "膠片質感"]
+
 [settings.ICON]
 label = "圖示顯示"
 values = ["開啟", "關閉"]
