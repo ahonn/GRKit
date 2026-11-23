@@ -43,17 +43,15 @@ static int valid_selective(const u8 *p)
 }
 /* Each feature bit owns its field, and an unused field stays zero. An effect
    without features has zeros in the whole extension. A monochrome effect has
-   no features but its Fn defaults (feature 64). The Toning colors (feature
-   128) go with a native look. */
+   no features but its Fn defaults (feature 64). */
 static int valid_extension(const u8 *p)
 {
     u32 features=grf_get32(p+GRKIT_GRF_FEATURES);
-    if ((features & ~(GRKIT_FEATURE_POST|GRKIT_FEATURE_SELECTIVE|GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS|GRKIT_FEATURE_NATIVE_LOOK|GRKIT_FEATURE_FN_DEFAULTS|GRKIT_FEATURE_TONING_COLORS)) ||
+    if ((features & ~(GRKIT_FEATURE_POST|GRKIT_FEATURE_SELECTIVE|GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS|GRKIT_FEATURE_NATIVE_LOOK|GRKIT_FEATURE_FN_DEFAULTS)) ||
         !zeros(p+GRKIT_GRF_RESERVED,GRKIT_GRF_RESERVED_SIZE)) return 0;
     if ((features&GRKIT_FEATURE_HUE_LEVELS) && !(features&GRKIT_FEATURE_HUE)) return 0;
     /* A native look excludes hue sectors. */
     if ((features&GRKIT_FEATURE_NATIVE_LOOK) && (features&(GRKIT_FEATURE_HUE|GRKIT_FEATURE_HUE_LEVELS))) return 0;
-    if ((features&GRKIT_FEATURE_TONING_COLORS) && !(features&GRKIT_FEATURE_NATIVE_LOOK)) return 0;
     if (!(features&GRKIT_FEATURE_POST) && !zeros(p+GRKIT_GRF_POST,GRKIT_GRF_POST_SIZE)) return 0;
     if (!(features&GRKIT_FEATURE_SELECTIVE) && !zeros(p+GRKIT_GRF_SELECTIVE,GRKIT_GRF_SELECTIVE_SIZE)) return 0;
     if ((features&~GRKIT_FEATURE_FN_DEFAULTS) && grf_get32(p+GRKIT_GRF_FLAGS)==1) return 0;
@@ -115,23 +113,17 @@ static int valid_native(const u8 *p)
     return 1;
 }
 /* The Fn defaults of feature 64, -4..4, in a file of GRKIT_GRF_MAX_SIZE bytes,
-   then the six bytes of the Toning colors of feature 128, and zeros after
-   them. Without a feature, its bytes stay zero. */
+   and zeros after them. Without the feature, those bytes stay zero. */
 static int valid_defaults(const u8 *p, u32 size)
 {
-    u32 features=grf_get32(p+GRKIT_GRF_FEATURES);
     if (size!=GRKIT_GRF_MAX_SIZE) return 1;
-    if (!(features&GRKIT_FEATURE_FN_DEFAULTS)) {
-        if (!zeros(p+GRKIT_GRF_FN_DEFAULTS,GRKIT_GRF_FN_DEFAULTS_END-GRKIT_GRF_FN_DEFAULTS)) return 0;
-    }
-    else for (u32 k=GRKIT_GRF_FN_DEFAULTS; k<GRKIT_GRF_FN_DEFAULTS_END; ++k) {
+    if (!(grf_get32(p+GRKIT_GRF_FEATURES)&GRKIT_FEATURE_FN_DEFAULTS))
+        return zeros(p+GRKIT_GRF_FN_DEFAULTS,size-GRKIT_GRF_FN_DEFAULTS);
+    for (u32 k=GRKIT_GRF_FN_DEFAULTS; k<GRKIT_GRF_FN_DEFAULTS_END; ++k) {
         int value=(signed char)p[k];
         if (value<-4 || value>4) return 0;
     }
-    if (!(features&GRKIT_FEATURE_TONING_COLORS) && !zeros(p+GRKIT_GRF_TONING_COLORS,GRKIT_GRF_TONING_COLORS_SIZE))
-        return 0;
-    return zeros(p+GRKIT_GRF_TONING_COLORS+GRKIT_GRF_TONING_COLORS_SIZE,
-                 size-GRKIT_GRF_TONING_COLORS-GRKIT_GRF_TONING_COLORS_SIZE);
+    return zeros(p+GRKIT_GRF_FN_DEFAULTS_END,size-GRKIT_GRF_FN_DEFAULTS_END);
 }
 /* The hue sectors of feature 8 and the levels of feature 16, the set of a
    native look (feature 32), or zeros, up to the Fn defaults. */

@@ -1,8 +1,7 @@
-//! The container of an official firmware file: its framing, its RTOS section, and its icon
-//! section. The
+//! The container of an official firmware file: its framing and its RTOS section. The
 //! CLI reads GR III and GR IV files with it, and the site reads a GR IV file that the user
 //! chose (`gr4_looks`).
-use anyhow::{ensure, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 
 /// Decode the pinned container framing, including overlapping back references.
 pub fn decode(data: &[u8]) -> Result<Vec<u8>> {
@@ -78,34 +77,20 @@ pub fn decode(data: &[u8]) -> Result<Vec<u8>> {
 
 /// The RTOS image of a decoded firmware file.
 pub fn rtos_section(decoded: &[u8]) -> Result<&[u8]> {
-    let (group, body) =
-        section(decoded, b"RTOS\0\0\0\0")?.context("Firmware has no RTOS section")?;
-    ensure!(group == 1, "Unexpected RTOS group");
-    Ok(body)
-}
-
-/// The icon pixels of a decoded firmware file: RGBA8, which the icon table of the RTOS
-/// image finds by offset.
-pub fn icon_section(decoded: &[u8]) -> Result<&[u8]> {
-    Ok(section(decoded, b"ICONBIN\0")?
-        .context("Firmware has no icon section")?
-        .1)
-}
-
-/// The group and the body of the section `name`, or `None`.
-fn section<'a>(decoded: &'a [u8], name: &[u8; 8]) -> Result<Option<(u16, &'a [u8])>> {
     let mut pos = 0;
     while pos + 16 <= decoded.len() {
+        let name = &decoded[pos..pos + 8];
         let group = u16::from_le_bytes(decoded[pos + 10..pos + 12].try_into()?);
         let size = u32::from_le_bytes(decoded[pos + 12..pos + 16].try_into()?) as usize;
         let end = (pos + 16usize)
             .checked_add(size)
             .context("Truncated firmware section")?;
         ensure!(end <= decoded.len(), "Truncated firmware section");
-        if &decoded[pos..pos + 8] == name {
-            return Ok(Some((group, &decoded[pos + 16..end])));
+        if name == b"RTOS\0\0\0\0" {
+            ensure!(group == 1, "Unexpected RTOS group");
+            return Ok(&decoded[pos + 16..end]);
         }
         pos = end;
     }
-    Ok(None)
+    bail!("Firmware has no RTOS section")
 }

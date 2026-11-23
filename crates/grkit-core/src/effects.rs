@@ -9,9 +9,7 @@
 //! (`native_look`), excludes features 8 and 16: its MultiAxial set fills the hue area and
 //! the bytes from `SIZE` of a `SIZE_WITH_LEVELS` file. Feature 64 gives the effect default
 //! Fn adjustments: nine i8 at `FN_DEFAULTS` of a `SIZE_WITH_LEVELS` file, after the data of
-//! features 16 and 32, so it goes with any effect, monochrome ones included. Feature 128,
-//! with a native look, gives the two ends of the look's Toning track: six bytes after the Fn
-//! defaults.
+//! features 16 and 32, so it goes with any effect, monochrome ones included.
 
 use anyhow::{bail, ensure, Context, Result};
 use serde::{
@@ -52,15 +50,12 @@ pub const FEATURE_HUE_LEVELS: u32 = 16;
 pub const FEATURE_NATIVE_LOOK: u32 = 32;
 /// Default Fn adjustments, at `FN_DEFAULTS`.
 pub const FEATURE_FN_DEFAULTS: u32 = 64;
-/// The colors of the Toning track of a native look, at `TONING_COLORS`.
-pub const FEATURE_TONING_COLORS: u32 = 128;
 const FEATURES: u32 = FEATURE_POST
     | FEATURE_SELECTIVE
     | FEATURE_HUE_SECTORS
     | FEATURE_HUE_LEVELS
     | FEATURE_NATIVE_LOOK
-    | FEATURE_FN_DEFAULTS
-    | FEATURE_TONING_COLORS;
+    | FEATURE_FN_DEFAULTS;
 /// The Fn adjustments in the order of the record (`abi::RECORD_PARAMETERS`).
 pub const FN_KEYS: [&str; 9] = [
     "saturation",
@@ -80,23 +75,16 @@ pub const FN_MAX: i8 = 4;
 pub const FN_DEFAULTS: usize = native_look::END;
 pub const FN_DEFAULTS_END: usize = FN_DEFAULTS + FN_KEYS.len();
 const _: () = assert!(SIZE + hue::LEVEL_SIZE <= FN_DEFAULTS && FN_DEFAULTS_END <= SIZE_WITH_LEVELS);
-/// The Toning track of a native look (feature 128): the RGB of its left end, then of its
-/// right end, as the camera that defines the look draws them. The track runs from the
-/// weakest toning to the strongest. The bytes follow the place of the Fn defaults.
-pub const TONING_COLORS: usize = FN_DEFAULTS_END;
-pub const TONING_COLORS_END: usize = TONING_COLORS + 6;
-const _: () = assert!(TONING_COLORS_END <= SIZE_WITH_LEVELS);
 /// The hue sectors use the start of the reserved tail of the file.
 pub const HUE_OFFSET: usize = GRF_HUE;
 /// Optional keys of both a definition and a decoded effect. A definition writes
 /// `selective_color` in degrees; a decoded effect holds its GRF integers.
-const EXTENSION_KEYS: [&str; 6] = [
+const EXTENSION_KEYS: [&str; 5] = [
     "post_matrix",
     "selective_color",
     "hue_sectors",
     "native_look",
     "fn_defaults",
-    "toning_colors",
 ];
 
 struct UniqueValue(Value);
@@ -276,25 +264,6 @@ pub struct Effect {
     pub native_look: Option<NativeLook>,
     /// Feature 64, in the order of `FN_KEYS`.
     pub fn_defaults: Option<[i8; 9]>,
-    /// Feature 128: the RGB of the left end and of the right end of the Toning track.
-    pub toning_colors: Option<[[u8; 3]; 2]>,
-}
-
-/// The `toning_colors` array: two RGB arrays of 0 to 255.
-fn read_toning_colors(value: &Value) -> Result<[[u8; 3]; 2]> {
-    let message = "Expected toning_colors as two RGB arrays of 0 to 255";
-    let ends = value.as_array().filter(|a| a.len() == 2).context(message)?;
-    let mut colors = [[0u8; 3]; 2];
-    for (slot, end) in colors.iter_mut().zip(ends) {
-        let rgb = end.as_array().filter(|a| a.len() == 3).context(message)?;
-        for (channel, v) in slot.iter_mut().zip(rgb) {
-            *channel = v
-                .as_u64()
-                .and_then(|n| u8::try_from(n).ok())
-                .context(message)?;
-        }
-    }
-    Ok(colors)
 }
 
 /// The `fn_defaults` object: each of `FN_KEYS` with -4..=4.
@@ -401,10 +370,6 @@ impl Effect {
                 .map(NativeLook::from_json)
                 .transpose()?,
             fn_defaults: value.get("fn_defaults").map(read_fn_defaults).transpose()?,
-            toning_colors: value
-                .get("toning_colors")
-                .map(read_toning_colors)
-                .transpose()?,
         };
         effect.check()?;
         Ok(effect)
@@ -420,7 +385,7 @@ impl Effect {
                 &["effect_id", "name", "matrix", "curves"],
                 &optional
             ),
-            "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, selective_color, hue_sectors, native_look, fn_defaults, and toning_colors"
+            "Expected effect_id, name, matrix, curves, and optional flags, post_matrix, selective_color, hue_sectors, native_look, and fn_defaults"
         );
         let selective = value
             .get("selective_color")
@@ -449,9 +414,6 @@ impl Effect {
         if let Some(defaults) = &self.fn_defaults {
             value["fn_defaults"] = fn_defaults_json(defaults);
         }
-        if let Some(colors) = &self.toning_colors {
-            value["toning_colors"] = json!(colors);
-        }
         value
     }
 
@@ -479,9 +441,6 @@ impl Effect {
         if self.fn_defaults.is_some() {
             features |= FEATURE_FN_DEFAULTS;
         }
-        if self.toning_colors.is_some() {
-            features |= FEATURE_TONING_COLORS;
-        }
         features
     }
 
@@ -495,10 +454,6 @@ impl Effect {
         if let Some(look) = &self.native_look {
             look.check()?;
         }
-        ensure!(
-            self.toning_colors.is_none() || self.native_look.is_some(),
-            "Toning colors need a native look"
-        );
         if let Some(defaults) = &self.fn_defaults {
             ensure!(
                 defaults.iter().all(|v| (-FN_MAX..=FN_MAX).contains(v)),
@@ -538,17 +493,12 @@ impl Effect {
         self.check()?;
         check_icon(icon)?;
         let features = self.features();
-        let size = if features
-            & (FEATURE_HUE_LEVELS
-                | FEATURE_NATIVE_LOOK
-                | FEATURE_FN_DEFAULTS
-                | FEATURE_TONING_COLORS)
-            != 0
-        {
-            SIZE_WITH_LEVELS
-        } else {
-            SIZE
-        };
+        let size =
+            if features & (FEATURE_HUE_LEVELS | FEATURE_NATIVE_LOOK | FEATURE_FN_DEFAULTS) != 0 {
+                SIZE_WITH_LEVELS
+            } else {
+                SIZE
+            };
         let mut blob = vec![0; size];
         blob[GRF_MAGIC..GRF_MAGIC + 8].copy_from_slice(MAGIC);
         blob[GRF_FEATURES..GRF_FEATURES + 4].copy_from_slice(&features.to_le_bytes());
@@ -572,9 +522,6 @@ impl Effect {
             for (slot, value) in blob[FN_DEFAULTS..FN_DEFAULTS_END].iter_mut().zip(defaults) {
                 *slot = *value as u8;
             }
-        }
-        if let Some(colors) = &self.toning_colors {
-            blob[TONING_COLORS..TONING_COLORS_END].copy_from_slice(colors.as_flattened());
         }
         blob[GRF_BYTES..GRF_BYTES + 4].copy_from_slice(&(size as u32).to_le_bytes());
         blob[GRF_FLAGS..GRF_FLAGS + 4].copy_from_slice(&self.flags.to_le_bytes());
@@ -684,9 +631,8 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
     let levels = features & FEATURE_HUE_LEVELS != 0;
     let native = features & FEATURE_NATIVE_LOOK != 0;
     let defaults = features & FEATURE_FN_DEFAULTS != 0;
-    let toning = features & FEATURE_TONING_COLORS != 0;
     ensure!(
-        (levels || native || defaults || toning) == (blob.len() == SIZE_WITH_LEVELS)
+        (levels || native || defaults) == (blob.len() == SIZE_WITH_LEVELS)
             && (!levels || features & FEATURE_HUE_SECTORS != 0),
         "Hue levels need hue sectors and the larger effect size"
     );
@@ -702,7 +648,7 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
         HUE_OFFSET
     };
     // The bytes from `SIZE` that the features use: the hue levels or the native set,
-    // then the Fn defaults and the Toning colors.
+    // then the Fn defaults.
     let tail = if native {
         native_look::END
     } else if levels {
@@ -710,26 +656,21 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
     } else {
         blob.len().min(SIZE)
     };
-    // The bytes that no feature of the effect uses stay zero.
-    let mut zeros = vec![
-        (GRF_RESERVED, GRF_MATRIX),
-        (GRF_PADDING, GRF_CURVES),
-        (hue_end, SIZE),
-    ];
-    if blob.len() == SIZE_WITH_LEVELS {
-        zeros.push((tail, FN_DEFAULTS));
-        if !defaults {
-            zeros.push((FN_DEFAULTS, FN_DEFAULTS_END));
-        }
-        if !toning {
-            zeros.push((TONING_COLORS, TONING_COLORS_END));
-        }
-        zeros.push((TONING_COLORS_END, blob.len()));
-    }
+    let (defaults_start, defaults_end) = if defaults {
+        (FN_DEFAULTS, FN_DEFAULTS_END)
+    } else {
+        (blob.len(), blob.len())
+    };
     ensure!(
-        zeros
-            .iter()
-            .all(|(start, end)| blob[*start..*end].iter().all(|v| *v == 0)),
+        [
+            (GRF_RESERVED, GRF_MATRIX),
+            (GRF_PADDING, GRF_CURVES),
+            (hue_end, SIZE),
+            (tail, defaults_start),
+            (defaults_end, blob.len()),
+        ]
+        .iter()
+        .all(|(start, end)| blob[*start..*end].iter().all(|v| *v == 0)),
         "Unsupported effect flags or reserved bytes"
     );
     let string = |offset| -> Result<&str> {
@@ -783,9 +724,6 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
             .transpose()?,
         native_look: native.then(|| NativeLook::read(blob)).transpose()?,
         fn_defaults: defaults.then(|| std::array::from_fn(|k| blob[FN_DEFAULTS + k] as i8)),
-        toning_colors: toning.then(|| {
-            std::array::from_fn(|end| std::array::from_fn(|c| blob[TONING_COLORS + end * 3 + c]))
-        }),
     };
     let icon = blob[GRF_ICON..GRF_ICON + ICON_SIZE].to_vec();
     effect.check()?;

@@ -570,8 +570,8 @@
    it (runtime/recipes.h). */
 #define GRKIT_HOST_RECIPE_PREVIEW 6544
 /* The Toning track that the parameter page shows for a native look with Toning
-   colors (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the
-   pixels, in a firmware block that the core makes at its first use; else 0. */
+   (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the pixels,
+   in a firmware block that the core makes at its first use; else 0. */
 #define GRKIT_HOST_TONING_TRACK 6548
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
@@ -700,10 +700,6 @@
    fields at +0x6c, 60 3x3 i32 Q10 matrices at +0x98, the highlight-correction
    set at +0x908, and its control fields at +0x920. Zero without hue sectors. */
 #define GRKIT_RECORD_MULTIAXIAL 0x740
-/* The Toning track of a native look with Toning (RECORD_TONE_SLOT): the RGB of
-   its left end, then of its right end, from the effect (feature 128). Zero
-   without them: the page shows the native track. */
-#define GRKIT_RECORD_TONING_COLORS 0x10c0
 /* The R, G, and B tone curves in the coefficients: 256 14-bit samples each,
    GRKIT_RECORD_CURVE_SIZE bytes apart. */
 #define GRKIT_RECORD_CURVES 0x68
@@ -795,11 +791,6 @@
    GRKIT_RECORD_PARAMETERS, in a file of GRKIT_GRF_MAX_SIZE bytes. */
 #define GRKIT_GRF_FN_DEFAULTS 8624U
 #define GRKIT_GRF_FN_DEFAULTS_END 8633U
-#define GRKIT_FEATURE_TONING_COLORS 128U
-/* The Toning track of feature 128: the RGB of its left end, then of its right
-   end, in a file of GRKIT_GRF_MAX_SIZE bytes. */
-#define GRKIT_GRF_TONING_COLORS 8633U
-#define GRKIT_GRF_TONING_COLORS_SIZE 6U
 #define GRKIT_HUE_SIZE 88U
 #define GRKIT_HUE_MATRICES 66U
 /* Hue levels of feature 16: the sectors of levels 1 to 3 after the first

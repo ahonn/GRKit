@@ -571,9 +571,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// native settings from it (runtime/recipes.h).
     HOST_RECIPE_PREVIEW: 4;
     /// The Toning track that the parameter page shows for a native look with
-    /// Toning colors (runtime/menu.c: toning_track): an 8-byte icon
-    /// descriptor, then the pixels, in a firmware block that the core makes
-    /// at its first use; else 0.
+    /// Toning (runtime/menu.c: toning_track): an 8-byte icon descriptor, then
+    /// the pixels, in a firmware block that the core makes at its first use;
+    /// else 0.
     HOST_TONING_TRACK: 4;
 });
 
@@ -626,10 +626,6 @@ fields!(RECORD_FIELDS {
     /// matrices at +0x98, the highlight-correction set at +0x908, and its control fields
     /// at +0x920. Zero without hue sectors.
     RECORD_MULTIAXIAL = 0x740, 0x980;
-    /// The Toning track of a native look with Toning (RECORD_TONE_SLOT): the
-    /// RGB of its left end, then of its right end, from the effect (feature
-    /// 128). Zero without them: the page shows the native track.
-    RECORD_TONING_COLORS = 0x10c0, 6;
 });
 
 /// The R, G, and B tone curves inside `RECORD_COEFFICIENTS`: 256 14-bit samples
@@ -1137,25 +1133,6 @@ fn hue_tables(out: &mut String) {
         out,
         "#define GRKIT_GRF_FN_DEFAULTS_END {}U",
         effects::FN_DEFAULTS_END
-    )
-    .unwrap();
-    writeln!(
-        out,
-        "#define GRKIT_FEATURE_TONING_COLORS {}U",
-        effects::FEATURE_TONING_COLORS
-    )
-    .unwrap();
-    define(
-        out,
-        "The Toning track of feature 128: the RGB of its left end, then of its right \
-         end, in a file of GRKIT_GRF_MAX_SIZE bytes.",
-        "GRF_TONING_COLORS",
-        format!("{}U", effects::TONING_COLORS),
-    );
-    writeln!(
-        out,
-        "#define GRKIT_GRF_TONING_COLORS_SIZE {}U",
-        effects::TONING_COLORS_END - effects::TONING_COLORS
     )
     .unwrap();
     writeln!(out, "#define GRKIT_HUE_SIZE {}U", hue::SIZE).unwrap();

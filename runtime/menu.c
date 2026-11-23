@@ -834,21 +834,56 @@ A32_ENTRY u32 menu_parameter_mark(u32 index) {
     return record ? mod9(BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index)+4U)+1U : 0;
 }
 #ifdef PARAMETER_TONING_STEP
+/* The Toning track runs from a near gray to the tint of the look. The tint is
+   the strongest difference of the look's own red and blue curves from green
+   up to mid-gray (TONING_TINT_SAMPLES): a Cinema look can turn the other way
+   in its highlights. The colors are an approximation of the GR IV tracks. */
+#define TONING_TINT_SAMPLES 128U
+#define TONING_TRACK_GRAY 195U
+#define TONING_TRACK_START 19U
+#define TONING_TRACK_END 115U
+/* The channel of a track end: `amount` toward the sign of `delta`, at the
+   share delta / peak. */
+static u32 toning_track_channel(int delta,u32 peak,u32 amount) {
+    u32 size=ui_divide((u32)(delta<0 ? -delta : delta)*amount,peak);
+    if(delta<0) return TONING_TRACK_GRAY-size;
+    return TONING_TRACK_GRAY+size>255U ? 255U : TONING_TRACK_GRAY+size;
+}
+/* The RGB of the left end, then of the right end, of the track of a look:
+   `curves` are the record curves and `own` the look's own red and blue curves
+   (runtime/toning.h). 0 for a look without a tint up to mid-gray. */
+static u32 toning_track_colors(u32 curves,u32 own,u32 *colors) {
+    int red=0, blue=0;
+    u32 peak=0, i;
+    for(i=0;i<TONING_TINT_SAMPLES;++i) {
+        int green=HALF(curves,512U+i*2U), r=(int)HALF(own,i*2U)-green, b=(int)HALF(own,512U+i*2U)-green;
+        u32 size=(u32)(r<0 ? -r : r), other=(u32)(b<0 ? -b : b);
+        if(other>size) size=other;
+        if(size>peak) { peak=size; red=r; blue=b; }
+    }
+    if(!peak) return 0;
+    colors[0]=toning_track_channel(red,peak,TONING_TRACK_START);
+    colors[1]=TONING_TRACK_GRAY;
+    colors[2]=toning_track_channel(blue,peak,TONING_TRACK_START);
+    colors[3]=toning_track_channel(red,peak,TONING_TRACK_END);
+    colors[4]=TONING_TRACK_GRAY;
+    colors[5]=toning_track_channel(blue,peak,TONING_TRACK_END);
+    return 1;
+}
 /* The track of the Toning slider of `record`, as GR IV draws the track of a
    Cinema look: the native track of the Retro row (TONING_TRACK_ICON) with a
-   gradient from the first color of GRKIT_RECORD_TONING_COLORS to the second.
-   The core copies the native track once into a firmware block after an icon
-   descriptor (GRKIT_HOST_TONING_TRACK), and paints the gradient of the look
-   for each page. The descriptor gives the pixels as an offset in words from
-   the base of the icon drawer, which the descriptor of the GRKit icon shows
-   (runtime/viewfinder.h: native_icon). The icon ID, or 0 for a record without
-   colors or a native track of another size: the page keeps the native one. */
+   gradient between the colors of toning_track_colors. The core copies the
+   native track once into a firmware block after an icon descriptor
+   (GRKIT_HOST_TONING_TRACK), and paints the gradient of the look for each
+   page. The descriptor gives the pixels as an offset in words from the base
+   of the icon drawer, which the descriptor of the GRKit icon shows
+   (runtime/viewfinder.h: native_icon). The icon ID, or 0 for a look without a
+   tint or a native track of another size: the page keeps the native one. */
 static u32 toning_track(volatile u32 *h,u32 record) {
     const u32 size=TONING_TRACK_WIDTH*TONING_TRACK_HEIGHT*4U, span=TONING_TRACK_RIGHT-TONING_TRACK_LEFT;
-    u32 track=h[GRKIT_HOST_TONING_TRACK/4], own=h[GRKIT_HOST_GRKIT_ICON/4], base, d, x, y, c, i;
-    u32 colors=record+GRKIT_RECORD_TONING_COLORS;
-    for(c=0;c<GRKIT_GRF_TONING_COLORS_SIZE && !BYTE(colors,c);++c);
-    if(c==GRKIT_GRF_TONING_COLORS_SIZE || !own) return 0;
+    u32 track=h[GRKIT_HOST_TONING_TRACK/4], own=h[GRKIT_HOST_GRKIT_ICON/4], base, d, x, y, c, i, colors[6];
+    u32 slot=h[GRKIT_HOST_TAIL/4]+GRKIT_TONE_CURVES+(BYTE(record,GRKIT_RECORD_TONE_SLOT)-1U)*GRKIT_TONE_SLOT_SIZE;
+    if(!own || !toning_track_colors(record+GRKIT_RECORD_CURVES,slot,colors)) return 0;
     base=own+8U-WORD(own,4)*4U;
     if(!track) {
         d=WORD(FW_ICON_TABLE,TONING_TRACK_ICON*4U);
@@ -864,7 +899,7 @@ static u32 toning_track(volatile u32 *h,u32 record) {
         u32 t=x-TONING_TRACK_LEFT, pixel=0xff000000U;
         if(x-TONING_TRACK_MARK_LEFT<=TONING_TRACK_MARK_RIGHT-TONING_TRACK_MARK_LEFT) continue;
         for(c=0;c<3;++c)
-            pixel|=ui_divide(BYTE(colors,c)*(span-t)+BYTE(colors,3U+c)*t+span/2U,span)<<(8U*c);
+            pixel|=ui_divide(colors[c]*(span-t)+colors[3U+c]*t+span/2U,span)<<(8U*c);
         for(y=TONING_TRACK_TOP;y<=TONING_TRACK_BOTTOM;++y) WORD(track,8U+(y*TONING_TRACK_WIDTH+x)*4U)=pixel;
     }
     return GRKIT_ICON_TONING_TRACK;

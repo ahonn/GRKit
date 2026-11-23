@@ -6,8 +6,7 @@
 //! A source is one official build: the SHA-256 of its firmware file, the copy of its data
 //! section, and the addresses of the tables that `native_tone` and `native_look` need. A
 //! color look keeps the type's look matrix (relative to Standard), its curve set, its
-//! MultiAxial set, the default Fn adjustments that the GR IV parameter page shows, and the
-//! two ends of the Toning track that the page draws for it (`track_colors`). A
+//! MultiAxial set, and the default Fn adjustments that the GR IV parameter page shows. A
 //! monochrome look keeps its curve set and its defaults; GR III makes the gray from its
 //! Standard colors (`MONO_MATRIX`), because GR IV Monochrome has a sensor without color
 //! filters and its firmware holds no color response.
@@ -54,10 +53,6 @@ pub struct Source {
     /// The type table of curve sets: three blocks of `curve_set_entries` pointers.
     curve_sets: u32,
     curve_set_entries: u32,
-    /// The icon table: a pointer to a 12-byte descriptor for each icon ID (the width in
-    /// the high half of word 0, the height in word 1, and the offset of the pixels in the
-    /// icon section, in pixels, in word 2).
-    icon_table: u32,
 }
 
 /// The builds that Ricoh publishes for GR IV and GR IV HDF. The CLI's targets of the same
@@ -77,7 +72,6 @@ pub const SOURCES: [Source; 3] = [
         unit: 0x5407_e710,
         curve_sets: 0x5505_3138,
         curve_set_entries: 34,
-        icon_table: 0x5501_3410,
     },
     // 1.20 holds 0x26 entries for each model variant in its type tables.
     Source {
@@ -94,7 +88,6 @@ pub const SOURCES: [Source; 3] = [
         unit: 0x540b_59e4,
         curve_sets: 0x5505_4158,
         curve_set_entries: 38,
-        icon_table: 0x5501_4280,
     },
     // 1.21 has the data section and the tables of 1.20, and other code addresses.
     Source {
@@ -111,7 +104,6 @@ pub const SOURCES: [Source; 3] = [
         unit: 0x540b_71d4,
         curve_sets: 0x5505_4158,
         curve_set_entries: 38,
-        icon_table: 0x5501_4280,
     },
 ];
 
@@ -151,10 +143,6 @@ pub struct Look {
     pub defaults: [i8; 9],
     /// False for a look that GRKit holds back: `Image::effects` and the site leave it out.
     pub offered: bool,
-    /// The icon of the Toning track that the GR IV parameter page draws for the look, or
-    /// `None` for a look without Toning. GR IV 1.21 picks it by the look in the slider
-    /// setup of its Toning row.
-    pub toning_icon: Option<u32>,
 }
 
 /// The looks, in the order of the camera lists. A monochrome look whose curve set the file
@@ -168,7 +156,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("cine", "CINEMA", "YELLOW"),
         defaults: [0, 0, -1, 3, 0, -2, -3, 0, 0],
         offered: true,
-        toning_icon: Some(0x263),
     },
     Look {
         image_type: 19,
@@ -178,7 +165,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("cine", "CINEMA", "GREEN"),
         defaults: [-2, 0, 0, 1, 0, -3, -3, 0, 0],
         offered: true,
-        toning_icon: Some(0x264),
     },
     // GR IV Monochrome: its tone curves follow its defaults and curve sets exactly
     // (live view of GR IV Monochrome 1.10). Grain stays with the Grain module. Held back
@@ -191,7 +177,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("box", "MONO", "STD"),
         defaults: [0; 9],
         offered: false,
-        toning_icon: None,
     },
     Look {
         image_type: 32,
@@ -201,7 +186,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("box", "MONO", "SOLID"),
         defaults: [0; 9],
         offered: false,
-        toning_icon: None,
     },
     Look {
         image_type: 26,
@@ -211,7 +195,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("box", "MONO", "SOFT"),
         defaults: [0, 0, 1, -2, 0, 0, -1, 0, 0],
         offered: false,
-        toning_icon: None,
     },
     Look {
         image_type: 30,
@@ -221,7 +204,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("box", "MONO", "HI"),
         defaults: [0, 0, 0, 0, 0, 0, 1, 0, 0],
         offered: false,
-        toning_icon: None,
     },
     Look {
         image_type: 31,
@@ -231,7 +213,6 @@ pub const LOOKS: [Look; 7] = [
         cover: ("box", "MONO", "GRAINY"),
         defaults: [0; 9],
         offered: false,
-        toning_icon: None,
     },
 ];
 
@@ -249,77 +230,10 @@ pub fn mono_matrix() -> [i16; 9] {
     std::array::from_fn(|k| row[k % 3])
 }
 
-/// The size of a Toning track icon of GR IV, which is also that of GR III.
-const TRACK_SIZE: (usize, usize) = (400, 60);
-/// The gradient of a Toning track: rows 10 to 13 from column 20 to column 379, black rows
-/// above and below it, and a white mark in columns 198 to 201 with a black column on each
-/// side.
-const TRACK_ROWS: std::ops::RangeInclusive<usize> = 10..=13;
-const TRACK_COLUMNS: std::ops::RangeInclusive<usize> = 20..=379;
-const TRACK_MARK: std::ops::RangeInclusive<usize> = 197..=202;
-/// The largest difference of a gradient pixel from the line between the ends. GR IV
-/// dithers its gradients by less than two levels.
-const TRACK_TOLERANCE: f64 = 4.0;
-
-/// The two ends of the gradient of a Toning track (RGBA8 pixels of `TRACK_SIZE`), or
-/// `None` for an icon of another shape or a gradient that is not a line between two colors.
-pub fn track_colors(pixels: &[u8]) -> Option<[[u8; 3]; 2]> {
-    let (width, height) = TRACK_SIZE;
-    if pixels.len() != width * height * 4 {
-        return None;
-    }
-    let at = |x: usize, y: usize| -> [u8; 4] {
-        let i = (y * width + x) * 4;
-        [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
-    };
-    let edges = [TRACK_ROWS.start() - 1, TRACK_ROWS.end() + 1];
-    let mark = [*TRACK_MARK.start(), *TRACK_MARK.end()];
-    let shaped = TRACK_COLUMNS.clone().all(|x| {
-        edges.iter().all(|y| at(x, *y) == [0, 0, 0, 255])
-            && TRACK_ROWS.clone().all(|y| match at(x, y) {
-                p if mark.contains(&x) => p == [0, 0, 0, 255],
-                p if TRACK_MARK.contains(&x) => p == [255; 4],
-                p => p[3] == 255,
-            })
-    });
-    if !shaped {
-        return None;
-    }
-    let end = |x: usize| -> [f64; 3] {
-        std::array::from_fn(|c| {
-            TRACK_ROWS
-                .clone()
-                .map(|y| f64::from(at(x, y)[c]))
-                .sum::<f64>()
-                / TRACK_ROWS.clone().count() as f64
-        })
-    };
-    let (left, right) = (end(*TRACK_COLUMNS.start()), end(*TRACK_COLUMNS.end()));
-    let span = (TRACK_COLUMNS.end() - TRACK_COLUMNS.start()) as f64;
-    let linear = TRACK_COLUMNS
-        .clone()
-        .filter(|x| !TRACK_MARK.contains(x))
-        .all(|x| {
-            let t = (x - TRACK_COLUMNS.start()) as f64 / span;
-            TRACK_ROWS.clone().all(|y| {
-                (0..3).all(|c| {
-                    let line = left[c] + (right[c] - left[c]) * t;
-                    (f64::from(at(x, y)[c]) - line).abs() <= TRACK_TOLERANCE
-                })
-            })
-        });
-    let round = |rgb: [f64; 3]| rgb.map(|v| v.round() as u8);
-    linear.then(|| [round(left), round(right)])
-}
-
-/// The RTOS image of a GR IV firmware file, and the Toning tracks of `LOOKS` that its icons
-/// hold.
+/// The RTOS image of a GR IV firmware file.
 pub struct Image {
     pub source: &'static Source,
     body: Vec<u8>,
-    /// The icon ID and the ends of each Toning track (`track_colors`) of `LOOKS`. A track
-    /// whose icon has another shape is left out, and its look has no Toning colors.
-    tracks: Vec<(u32, [[u8; 3]; 2])>,
 }
 
 fn sha256(bytes: &[u8]) -> String {
@@ -367,46 +281,7 @@ impl Image {
         };
         let decoded = firmware::decode(&file)?;
         let body = firmware::rtos_section(&decoded)?.to_vec();
-        let mut image = Self {
-            source,
-            body,
-            tracks: Vec::new(),
-        };
-        let icons = firmware::icon_section(&decoded)?;
-        image.tracks = LOOKS
-            .iter()
-            .filter_map(|look| look.toning_icon)
-            .filter_map(|id| Some((id, track_colors(image.icon(icons, id)?)?)))
-            .collect();
-        Ok(image)
-    }
-
-    /// The RGBA8 pixels of icon `id` if it has `TRACK_SIZE`, from the icon section.
-    fn icon<'a>(&self, icons: &'a [u8], id: u32) -> Option<&'a [u8]> {
-        let descriptor = self
-            .word(self.source.icon_table.checked_add(id.checked_mul(4)?)?)
-            .ok()?;
-        let width = self.word(descriptor).ok()? >> 16;
-        let height = self.word(descriptor.checked_add(4)?).ok()?;
-        let offset = self.word(descriptor.checked_add(8)?).ok()? as usize;
-        if (width as usize, height as usize) != TRACK_SIZE {
-            return None;
-        }
-        let start = offset.checked_mul(4)?;
-        icons.get(start..start.checked_add(TRACK_SIZE.0 * TRACK_SIZE.1 * 4)?)
-    }
-
-    /// The ends of the Toning track of the look of Image Control type `image_type`, if the
-    /// file holds it.
-    pub fn toning_colors(&self, image_type: u32) -> Option<[[u8; 3]; 2]> {
-        let id = LOOKS
-            .iter()
-            .find(|look| look.image_type == image_type)?
-            .toning_icon?;
-        self.tracks
-            .iter()
-            .find(|(icon, _)| *icon == id)
-            .map(|(_, colors)| *colors)
+        Ok(Self { source, body })
     }
 
     /// RTOS memory. The data section reads from its copy in the image.
@@ -596,7 +471,6 @@ impl Image {
             hue_sectors: None,
             native_look: Some(self.multiaxial(image_type)?),
             fn_defaults: Some(defaults),
-            toning_colors: self.toning_colors(image_type),
         })
     }
 
@@ -633,7 +507,6 @@ impl Image {
                 .iter()
                 .any(|v| *v != 0)
                 .then_some(look.defaults),
-            toning_colors: None,
         }))
     }
 
@@ -731,60 +604,5 @@ mod tests {
         let bytes = zip.finish().unwrap().into_inner();
         let error = Image::read(&bytes).err().unwrap().to_string();
         assert!(error.contains(FIRMWARE_FILE), "{error}");
-    }
-
-    /// A track of `TRACK_SIZE` with the gradient of `color` at each column, the borders,
-    /// and the mark.
-    fn track(color: impl Fn(usize) -> [u8; 3]) -> Vec<u8> {
-        let (width, height) = TRACK_SIZE;
-        let mut pixels = vec![0; width * height * 4];
-        let mut put = |x: usize, y: usize, p: [u8; 4]| {
-            let i = (y * width + x) * 4;
-            pixels[i..i + 4].copy_from_slice(&p);
-        };
-        for x in TRACK_COLUMNS {
-            put(x, 9, [0, 0, 0, 255]);
-            put(x, 14, [0, 0, 0, 255]);
-            for y in TRACK_ROWS {
-                let [r, g, b] = color(x);
-                put(x, y, [r, g, b, 255]);
-                if TRACK_MARK.contains(&x) {
-                    let edge = x == *TRACK_MARK.start() || x == *TRACK_MARK.end();
-                    put(x, y, if edge { [0, 0, 0, 255] } else { [255; 4] });
-                }
-            }
-        }
-        pixels
-    }
-
-    #[test]
-    fn a_track_gives_the_ends_of_its_gradient() {
-        let lerp = |a: u8, b: u8, x: usize| {
-            let t = (x - 20) as f64 / 359.0;
-            (f64::from(a) + (f64::from(b) - f64::from(a)) * t).round() as u8
-        };
-        let green = |x| [lerp(154, 103, x), lerp(167, 165, x), lerp(157, 116, x)];
-        assert_eq!(
-            track_colors(&track(green)),
-            Some([[154, 167, 157], [103, 165, 116]])
-        );
-        // A dither of two levels keeps the ends.
-        let dithered = |x: usize| green(x).map(|v| v.saturating_add((x % 3) as u8));
-        assert!(track_colors(&track(dithered)).is_some());
-        // A gradient through a third color, an icon without the mark, or of another size
-        // gives none.
-        let bent = |x: usize| {
-            if x < 200 {
-                [76, 121, 255]
-            } else {
-                [153, 102, 0]
-            }
-        };
-        assert_eq!(track_colors(&track(bent)), None);
-        let mut plain = track(green);
-        let i = (11 * TRACK_SIZE.0 + 199) * 4;
-        plain[i..i + 4].copy_from_slice(&[154, 167, 157, 255]);
-        assert_eq!(track_colors(&plain), None);
-        assert_eq!(track_colors(&plain[4..]), None);
     }
 }

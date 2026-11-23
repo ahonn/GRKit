@@ -1024,6 +1024,13 @@ static void toning_moves_red_and_blue_from_green(void)
     test_header[GRKIT_HOST_PARAMETERS / 4] = record;
     /* Its own toning reads as the middle level. */
     assert(menu_parameter_get(PARAMETER_TONING) == 1 + 1);
+    /* The track follows the strongest tint up to mid-gray, not a highlight. */
+    u32 colors[6];
+    HALF(slot, 200 * 2) = (u16)(1000 + 200 * 40 - 4000);
+    assert(toning_track_colors(record + GRKIT_RECORD_CURVES, slot, colors));
+    const u32 track_colors[6] = {204, 195, 176, 252, 195, 80};
+    assert(!memcmp(colors, track_colors, sizeof(colors)));
+    HALF(slot, 200 * 2) = (u16)(1000 + 200 * 40 + 100);
     const struct { u32 value; u8 stored; u32 shown; int red, blue; } steps[] = {
         {2, 1, 2, 150, -300}, /* +1, the GR IV level 3 */
         {0, 8, 0, 50, -100},  /* -1, the GR IV level 1 */

@@ -73,7 +73,7 @@
    TONING_TRACK_LEFT to TONING_TRACK_RIGHT, but for the white mark and its
    black edges in columns TONING_TRACK_MARK_LEFT to TONING_TRACK_MARK_RIGHT.
    GR IV draws the track of a Cinema look the same way, with a gradient
-   between two colors (grkit_core::gr4_looks::track_colors). */
+   between two colors. */
 #define PARAMETER_TONING_LEVELS 3U
 #define PARAMETER_TONING_STEP 180U
 #define TONING_TRACK_ICON 0x232U

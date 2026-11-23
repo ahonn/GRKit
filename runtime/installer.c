@@ -760,11 +760,6 @@ static void write_records(const struct arrays *a, u32 pixels)
             copy(at(slot + 512), profile + GRKIT_GRF_CURVES + 1024, 512);
             at(record + GRKIT_RECORD_TONE_SLOT)[0] = (u8)++tone_slots;
         }
-        /* The track of its Toning slider (runtime/toning.h: toning_track): the
-           colors of feature 128, else zeros for the native track. */
-        zero(at(record + GRKIT_RECORD_TONING_COLORS), GRKIT_GRF_TONING_COLORS_SIZE);
-        if ((get32(profile + GRKIT_GRF_FEATURES) & GRKIT_FEATURE_TONING_COLORS) && at(record + GRKIT_RECORD_TONE_SLOT)[0])
-            copy(at(record + GRKIT_RECORD_TONING_COLORS), profile + GRKIT_GRF_TONING_COLORS, GRKIT_GRF_TONING_COLORS_SIZE);
         u32 n = length((const char *)profile + CATALOG_EFFECT_NAME);
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[CATALOG_EFFECT_NAME + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + GRKIT_GRF_FLAGS));
