@@ -1,5 +1,6 @@
 // The language pages of the site. The edge worker (edge.ts) and the page share this module, so
 // it must not touch the DOM at import time.
+import { DOCS_SITE_PAGES, type DocsSitePage } from './docs/pages';
 import type { Language } from './i18n';
 
 /** The address of each language page. English is the root page, which other visitors also get. */
@@ -22,19 +23,14 @@ export function isLanguage(value: unknown): value is Language {
 
 /**
  * The pages of each language: the home page with what GRKit does, the installer, the
- * fast-boot firmware page, and the resources page. The other pages sit under the language page.
+ * fast-boot firmware page, the resources page, and the docs. The other pages sit under the
+ * language page, at their own name.
  */
-export type Page = 'home' | 'install' | 'fastboot' | 'resources';
-
-const SUBPAGES: Readonly<Record<Exclude<Page, 'home'>, string>> = {
-  install: 'install/',
-  fastboot: 'fastboot/',
-  resources: 'resources/',
-};
+export type Page = 'home' | 'install' | 'fastboot' | 'resources' | DocsSitePage;
 
 /** The address of `page` in `language`. */
 export function pagePath(language: Language, page: Page): string {
-  return page === 'home' ? LANGUAGE_PATHS[language] : `${LANGUAGE_PATHS[language]}${SUBPAGES[page]}`;
+  return page === 'home' ? LANGUAGE_PATHS[language] : `${LANGUAGE_PATHS[language]}${page}/`;
 }
 
 /** The address of the installer in `language`. */
@@ -47,6 +43,11 @@ export function fastbootPath(language: Language): string {
   return pagePath(language, 'fastboot');
 }
 
+/** The address of the docs home in `language`. */
+export function docsPath(language: Language): string {
+  return pagePath(language, 'docs');
+}
+
 /** The address of the resources page in `language`. */
 export function resourcesPath(language: Language): string {
   return pagePath(language, 'resources');
@@ -55,7 +56,7 @@ export function resourcesPath(language: Language): string {
 /** The path of `pathname` with one trailing slash, in lower case. */
 const normalized = (pathname: string) => pathname.toLowerCase().replace(/\/?$/, '/');
 
-const PAGES: readonly Page[] = ['home', 'install', 'fastboot', 'resources'];
+const PAGES: readonly Page[] = ['home', 'install', 'fastboot', 'resources', ...DOCS_SITE_PAGES];
 
 /** The language and the page at `pathname`. Any other path is the English home page. */
 export function pathPage(pathname: string): { language: Language; page: Page } {

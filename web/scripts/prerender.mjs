@@ -4,7 +4,7 @@
 // browser, so this script renders the first screen of each page of each language into its own
 // file: the home page (dist/index.html for English, dist/<language>/index.html), the installer
 // (install/index.html under each), the fast-boot firmware page (fastboot/index.html under each),
-// and the resources page (resources/index.html under each). Each page names its other languages
+// the resources page (resources/index.html under each), and the docs (docs/ under each). Each page names its other languages
 // with hreflang links. The edge worker sends a visitor of the root page to the home page of their
 // language.
 import { createHash } from 'node:crypto';
@@ -83,16 +83,17 @@ async function edgeWorker(headers) {
 }
 
 const template = readFileSync(join(dist, 'index.html'), 'utf8');
-const { render, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION, pageText } = await renderer();
+const { render, DOCS_SITE_PAGES, LANGUAGES, LANGUAGE_PATHS, STRINGS, VERSION, pageText } = await renderer();
 const codes = LANGUAGES.map((language) => language.code);
 const pageUrl = (code, page = 'home') => `${SITE}${pageText(code, page).path}`;
 
-/** The pages of each language. Search engines index the home page and the installer. */
+/** The pages of each language. Search engines index the home page, the installer, and the docs. */
 const PAGES = [
   { page: 'home', index: true },
   { page: 'install', index: true },
   { page: 'fastboot', index: false },
   { page: 'resources', index: false },
+  ...DOCS_SITE_PAGES.map((page) => ({ page, index: true })),
 ];
 
 function structuredData(code) {

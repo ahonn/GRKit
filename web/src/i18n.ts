@@ -504,6 +504,8 @@ const en = {
     videoHint: ['', 'Install and Fast start walkthrough', ' by '] as readonly [string, string, string],
   },
   fastbootLink: 'Fast start',
+  /** The docs in the masthead and the footer. */
+  docsLink: 'Docs',
   /** The line after the step that turns the camera on: the text before the link to the fast-boot page, the link, and the text after it. */
   fastbootHint: ['To load GRKit sooner, try ', 'Fast start', '.'] as readonly [string, string, string],
   /** The resources page in the footer. */
@@ -1140,6 +1142,7 @@ const zhHans: Strings = {
     videoHint: ['', '安装与快速启动完整视频', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速启动',
+  docsLink: '文档',
   fastbootHint: ['想更快加载 GRKit？试试', '快速启动', '。'],
   resourcesLink: '更多资源',
   resources: {
@@ -1750,6 +1753,7 @@ const zhHant: Strings = {
     videoHint: ['', '安裝與快速啟動完整影片', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速啟動',
+  docsLink: '文件',
   fastbootHint: ['想更快載入 GRKit？試試', '快速啟動', '。'],
   resourcesLink: '更多資源',
   resources: {
@@ -2364,6 +2368,7 @@ const ja: Strings = {
     videoHint: ['', 'インストールと高速起動の動画', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '高速起動',
+  docsLink: 'ドキュメント',
   fastbootHint: ['GRKit をもっと早く読み込むには、', '高速起動', 'をお試しください。'],
   resourcesLink: 'その他の資料',
   resources: {
@@ -2993,6 +2998,7 @@ const ko: Strings = {
     videoHint: ['', '설치와 빠른 시작 영상', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '빠른 시작',
+  docsLink: '문서',
   fastbootHint: ['GRKit을 더 빨리 불러오려면 ', '빠른 시작', '을 써 보세요.'],
   resourcesLink: '더 많은 자료',
   resources: {
@@ -3253,12 +3259,19 @@ export function pageText(language: Language, page: Page): { title: string; descr
       return { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path };
     case 'resources':
       return { title: `${strings.resources.title} · GRKit`, description: strings.resources.lead, path };
+    // The text of a doc loads with the docs (`docPageText`), which then replaces this.
+    default:
+      return { title: `${strings.docsLink} · GRKit`, description: strings.description, path };
   }
 }
 
 /** Sets the language, the title, and the description of the document. */
 export function showLanguage(language: Language, current: Page): void {
-  const page = pageText(language, current);
+  showPageText(language, pageText(language, current));
+}
+
+/** Sets the language, the title, the description, and the canonical address of the document. */
+export function showPageText(language: Language, page: { title: string; description: string; path: string }): void {
   document.documentElement.lang = language;
   document.title = page.title;
   document.querySelector('meta[name="description"]')?.setAttribute('content', page.description);
