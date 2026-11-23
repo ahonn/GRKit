@@ -92,7 +92,7 @@ import { fastbootPath, installPath } from './languagePage';
 import { loadFonts } from './fonts';
 import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails } from './import/library';
 import { restoreImports } from './import/lut';
-import { importsForCamera, NATIVE_LOOKS, takesNativeLooks } from './import/native';
+import { importsForCamera, NATIVE_LOOKS, nativeLooksFor } from './import/native';
 import { isLutImportId } from './import/names';
 import { deleteImport, saveImport, updateImport } from './import/store';
 import { applyLanguage, sentences, STRINGS, type Language, type Strings } from './i18n';
@@ -1144,7 +1144,7 @@ export function InstallPage({
                   onImport={addImported}
                   onRemove={removeImported}
                   onEdit={editImported}
-                  nativeLooks={takesNativeLooks(camera.key)}
+                  nativeLooks={nativeLooksFor(camera.key)}
                   cardEffects={active ? cardExtra : []}
                   onCard={active && active.state.install !== 'none' ? new Set(active.effects.keys()) : null}
                   changedOnCard={active ? cardUpdates : undefined}

@@ -1,7 +1,7 @@
 import type { Grade } from './catalog';
 import { FRAMING_RATIOS } from './generated/framing';
 import { MODULE_TITLES } from './generated/moduleTitles';
-import type { NativeProblem } from './import/native';
+import type { NativeFirmware, NativeProblem } from './import/native';
 import { cookieValue, isLanguage, LANGUAGE_COOKIE, pagePath, pathLanguage, type Page } from './languagePage';
 
 export const LANGUAGES = [
@@ -225,6 +225,7 @@ const en = {
     ricoh: 'Ricoh',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: 'Cinema',
   },
   importButton: 'Import',
@@ -311,6 +312,24 @@ const en = {
   nativeFrom: (version: string) => `From the GR IV ${version} firmware`,
   nativePrivacy: 'The file stays in this browser and is never uploaded.',
   nativeLicense: "Use of the firmware is subject to Ricoh's software license.",
+  /** The camera-specific texts of the GR II Positive unlock (`nativeText`). */
+  nativeGr2: {
+    needs: 'Needs your GR II firmware',
+    title: 'Unlock the GR II look',
+    intro:
+      'GR II Positive is the Positive Film look built into GR II. GRKit builds it from the GR II firmware as a film look for GR III, GR IIIx, and GR IV.',
+    stepDownload: 'Download the GR II firmware from Ricoh: version 3.00.',
+    stepRead: 'GRKit reads the look from it in this browser. This takes a few seconds.',
+    fileType: 'GR II firmware',
+    done: (version: string) => `Found GR II ${version}. The look is added to your film looks.`,
+    from: (version: string) => `From the GR II ${version} firmware`,
+    errors: {
+      unsupported: 'This file does not work. Choose the GR II firmware 3.00.',
+      notFirmware: "This is not the GR II firmware ZIP. Choose the ZIP file from Ricoh's GR II page.",
+      tooLarge: 'This file is too large to be the GR II firmware.',
+      failed: 'The look cannot be read from this file. Try again.',
+    } as Readonly<Record<NativeProblem, string>>,
+  },
   printFilm: (code: string) => `${code} print`,
   effectCount: 'Film Looks',
   loading: 'Loading film looks…',
@@ -732,6 +751,22 @@ const en = {
 
 export type Strings = typeof en;
 
+/** The camera-specific texts of a native look unlock: the GR IV texts, or `nativeGr2`. */
+export function nativeText(t: Strings, firmware: NativeFirmware) {
+  if (firmware === 'gr2') return t.nativeGr2;
+  return {
+    needs: t.nativeNeeds,
+    title: t.nativeTitle,
+    intro: t.nativeIntro,
+    stepDownload: t.nativeStepDownload,
+    stepRead: t.nativeStepRead,
+    fileType: t.nativeFileType,
+    done: t.nativeDone,
+    from: t.nativeFrom,
+    errors: t.nativeErrors,
+  };
+}
+
 /** Sentences as one text: a space after a Latin full stop, none after a CJK one. */
 export const sentences = (...texts: string[]): string =>
   texts.reduce((text, next) => (/[。！？]$/.test(text) ? text + next : `${text} ${next}`));
@@ -919,6 +954,7 @@ const zhHans: Strings = {
     ricoh: '理光',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '电影',
   },
   importButton: '导入',
@@ -993,6 +1029,22 @@ const zhHans: Strings = {
   nativeFrom: (version) => `取自 GR IV ${version} 固件`,
   nativePrivacy: '文件只在本浏览器中处理，不会上传。',
   nativeLicense: '固件的使用受理光软件许可协议约束。',
+  nativeGr2: {
+    needs: '需要 GR II 固件',
+    title: '解锁 GR II 色彩',
+    intro: 'GR II Positive 是 GR II 内置的正片色彩。GRKit 从 GR II 固件中取出它，做成 GR III、GR IIIx 和 GR IV 可用的胶片风格。',
+    stepDownload: '从理光官网下载 GR II 固件（3.00 版）。',
+    stepRead: 'GRKit 在本浏览器中取出这款色彩，需要几秒钟。',
+    fileType: 'GR II 固件',
+    done: (version) => `找到 GR II ${version}，这款色彩已加入胶片风格列表。`,
+    from: (version) => `取自 GR II ${version} 固件`,
+    errors: {
+      unsupported: '这个文件用不了。请选择 GR II 3.00 版固件。',
+      notFirmware: '这不是 GR II 固件的 ZIP 文件。请选择从理光 GR II 页面下载的 ZIP。',
+      tooLarge: '这个文件太大，不是 GR II 固件。',
+      failed: '无法从这个文件读取色彩，请重试。',
+    },
+  },
   printFilm: (code) => `${code} 拷贝片`,
   effectCount: '胶片风格数量',
   loading: '正在加载胶片风格…',
@@ -1530,6 +1582,7 @@ const zhHant: Strings = {
     ricoh: '理光',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '電影',
   },
   importButton: '匯入',
@@ -1604,6 +1657,22 @@ const zhHant: Strings = {
   nativeFrom: (version) => `取自 GR IV ${version} 韌體`,
   nativePrivacy: '檔案只在本瀏覽器中處理，不會上傳。',
   nativeLicense: '韌體的使用須遵守理光的軟體授權條款。',
+  nativeGr2: {
+    needs: '需要 GR II 韌體',
+    title: '解鎖 GR II 色彩',
+    intro: 'GR II Positive 是 GR II 內建的正片色彩。GRKit 從 GR II 韌體中取出它，做成 GR III、GR IIIx 與 GR IV 可用的底片風格。',
+    stepDownload: '從理光網站下載 GR II 韌體（3.00 版）。',
+    stepRead: 'GRKit 在本瀏覽器中取出這款色彩，需要幾秒鐘。',
+    fileType: 'GR II 韌體',
+    done: (version) => `找到 GR II ${version}，色彩已加入底片風格清單。`,
+    from: (version) => `取自 GR II ${version} 韌體`,
+    errors: {
+      unsupported: '無法使用這個檔案。請選擇 GR II 3.00 版韌體。',
+      notFirmware: '這不是 GR II 韌體的 ZIP 檔案。請選擇從理光 GR II 頁面下載的 ZIP。',
+      tooLarge: '檔案太大，不是 GR II 韌體。',
+      failed: '無法從這個檔案讀取色彩，請再試一次。',
+    },
+  },
   printFilm: (code) => `${code} 拷貝片`,
   effectCount: '底片風格數量',
   loading: '正在載入底片風格…',
@@ -2141,6 +2210,7 @@ const ja: Strings = {
     ricoh: 'リコー',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: 'シネマ',
   },
   importButton: '読み込む',
@@ -2218,6 +2288,24 @@ const ja: Strings = {
   nativeFrom: (version) => `GR IV ${version} のファームウェアから`,
   nativePrivacy: 'ファイルはこのブラウザー内で処理され、アップロードされることはありません。',
   nativeLicense: 'ファームウェアの利用には、リコーのソフトウェア使用許諾が適用されます。',
+  nativeGr2: {
+    needs: 'GR II のファームウェアが必要',
+    title: 'GR II の色を使う',
+    intro:
+      'GR II Positive は、GR II に搭載されている「ポジフィルム調」です。GRKit は GR II のファームウェアからこれを取り出し、GR III・GR IIIx・GR IV 用のフィルムルックにします。',
+    stepDownload: 'リコーのサイトから GR II のファームウェア（バージョン 3.00）をダウンロードします。',
+    stepRead: 'GRKit がこのブラウザー内で色を読み出します。数秒かかります。',
+    fileType: 'GR II ファームウェア',
+    done: (version) => `GR II ${version} が見つかりました。フィルムルックの一覧に追加しました。`,
+    from: (version) => `GR II ${version} のファームウェアから`,
+    errors: {
+      unsupported: 'このファイルは使えません。GR II 3.00 のファームウェアを選んでください。',
+      notFirmware:
+        'GR II のファームウェアの ZIP ファイルではありません。リコーの GR II のページからダウンロードした ZIP を選択してください。',
+      tooLarge: 'ファイルが大きすぎます。GR II のファームウェアではありません。',
+      failed: 'このファイルから色を読み出せませんでした。もう一度お試しください。',
+    },
+  },
   printFilm: (code) => `${code} プリント`,
   effectCount: 'フィルムルック数',
   loading: 'フィルムルックを読み込み中…',
@@ -2756,6 +2844,7 @@ const ko: Strings = {
     ricoh: '리코',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '시네마',
   },
   importButton: '가져오기',
@@ -2831,6 +2920,23 @@ const ko: Strings = {
   nativeFrom: (version) => `GR IV ${version} 펌웨어에서 가져옴`,
   nativePrivacy: '파일은 이 브라우저 안에서만 처리되며 업로드되지 않습니다.',
   nativeLicense: '펌웨어 사용에는 리코의 소프트웨어 사용권 계약이 적용됩니다.',
+  nativeGr2: {
+    needs: 'GR II 펌웨어 필요',
+    title: 'GR II 색감 잠금 해제',
+    intro:
+      'GR II Positive는 GR II에 들어 있는 포지티브 필름 색감입니다. GRKit은 GR II 펌웨어에서 이 색감을 꺼내 GR III, GR IIIx, GR IV용 효과로 만듭니다.',
+    stepDownload: '리코 사이트에서 GR II 펌웨어(3.00)를 다운로드합니다.',
+    stepRead: 'GRKit이 이 브라우저 안에서 색감을 읽어 옵니다. 몇 초 걸립니다.',
+    fileType: 'GR II 펌웨어',
+    done: (version) => `GR II ${version}을 찾았습니다. 색감을 효과에 추가했습니다.`,
+    from: (version) => `GR II ${version} 펌웨어에서 가져옴`,
+    errors: {
+      unsupported: '이 파일은 사용할 수 없습니다. GR II 3.00 펌웨어를 선택하세요.',
+      notFirmware: 'GR II 펌웨어 ZIP 파일이 아닙니다. 리코 GR II 페이지에서 받은 ZIP을 선택하세요.',
+      tooLarge: '파일이 너무 큽니다. GR II 펌웨어가 아닙니다.',
+      failed: '이 파일에서 색감을 읽을 수 없습니다. 다시 시도하세요.',
+    },
+  },
   printFilm: (code) => `${code} 프린트`,
   effectCount: '필름 룩 수',
   loading: '필름 룩을 불러오는 중…',

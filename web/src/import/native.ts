@@ -3,46 +3,51 @@ import { provideTable } from '../preview/render';
 import type { NativeRequest, NativeResponse } from './native.worker';
 import { base64 } from './names';
 
-/** grkit-core `gr4_looks::MAX_FILE_SIZE`. An official ZIP has about 35 MB. */
+/** grkit-core `gr4_looks::MAX_FILE_SIZE`. An official GR IV ZIP has about 35 MB, a GR II ZIP less. */
 export const MAX_FIRMWARE_BYTES = 96 * 1024 * 1024;
 /** The read of an official ZIP takes a few seconds. */
 const READ_TIMEOUT = 60_000;
 /** Makes each preview table key new, so a later unlock with the same ID gets no cached preview. */
 let tableCount = 0;
 
-/** Ricoh's GR IV support page, which shows the firmware with its license. */
-export const FIRMWARE_PAGE = 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html';
+import { NATIVE_LOOKS, type NativeFirmware } from '../packageCovers';
 
-import { NATIVE_LOOKS } from '../packageCovers';
+export { NATIVE_LOOKS, type NativeFirmware };
 
-export { NATIVE_LOOKS };
+type Look = (typeof NATIVE_LOOKS)[number];
+
+/** Ricoh's support page of each camera, which shows the firmware with its license. */
+export const FIRMWARE_PAGES: Readonly<Record<NativeFirmware, string>> = {
+  gr4: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr4_s.html',
+  gr2: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr2_s.html',
+};
+
+/** The native looks that the camera entry `camera` (`Camera.key`) can use. */
+export const nativeLooksFor = (camera: string) =>
+  NATIVE_LOOKS.filter((look) => look.cameras.includes(camera));
 
 /**
- * The cameras whose Standard the native looks follow. GR IV has the looks built in, and on it
- * these converted copies would show wrong colors.
- */
-const NATIVE_LOOK_CAMERAS: ReadonlySet<string> = new Set(['gr3', 'gr3x']);
-
-/** True when the camera entry `camera` (`Camera.key`) can use native looks. */
-export const takesNativeLooks = (camera: string): boolean => NATIVE_LOOK_CAMERAS.has(camera);
-
-/**
- * The imports that the camera entry `camera` can use: every import on GR III and GR IIIx, and
- * no native look on the others. The page keeps the others for a later change of camera.
+ * The imports that the camera entry `camera` can use: each LUT import, and the native looks of
+ * `nativeLooksFor`. The page keeps the others for a later change of camera.
  */
 export function importsForCamera<T extends ImportedEffect>(
   imported: readonly T[],
   camera: string,
 ): readonly T[] {
-  return takesNativeLooks(camera) ? imported : imported.filter((effect) => effect.imported.kind !== 'native');
+  const looks = nativeLooksFor(camera);
+  return imported.filter(
+    (effect) => effect.imported.kind !== 'native' || looks.some((look) => look.id === effect.id),
+  );
 }
 
 /**
- * The native looks that the page lacks, which the list offers to unlock. `owned` is imports and
- * card-only effects: a Cinema look already on the SD card must not also show as an unlock tile.
+ * The looks of `looks` that the page lacks, which the list offers to unlock. `owned` is imports
+ * and card-only effects: a native look already on the SD card must not also show as an unlock tile.
  */
-export const missingNativeLooks = (owned: readonly { readonly id: string }[]) =>
-  NATIVE_LOOKS.filter((look) => !owned.some((effect) => effect.id === look.id));
+export const missingNativeLooks = (
+  owned: readonly { readonly id: string }[],
+  looks: readonly Look[] = NATIVE_LOOKS,
+) => looks.filter((look) => !owned.some((effect) => effect.id === look.id));
 
 /** True when `imported` has each native look. */
 export const hasNativeLooks = (imported: readonly ImportedEffect[]): boolean =>
@@ -54,7 +59,7 @@ export type NativeProblem = 'unsupported' | 'notFirmware' | 'tooLarge' | 'failed
 /** The problem of an error of `unlockNativeLooks`, from the English messages of grkit-core. */
 export function nativeProblem(error: unknown): NativeProblem {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes('not a supported GR IV firmware file')) return 'unsupported';
+  if (/not a supported GR (II|IV) firmware file/.test(message)) return 'unsupported';
   if (message.includes('The ZIP file has no') || message.includes('Invalid ZIP file')) return 'notFirmware';
   if (message.includes('too large')) return 'tooLarge';
   return 'failed';
@@ -86,9 +91,9 @@ function run(request: NativeRequest, signal: AbortSignal): Promise<NativeRespons
 }
 
 /**
- * Reads Cinema Yellow and Cinema Green from an official GR IV ZIP or its firmware file, in a
- * worker, and returns them as effects of the page. The file stays in the browser. `baseGamma` is
- * the catalog's, for the previews.
+ * Reads the native looks of an official firmware ZIP or its firmware file (GR IV: Cinema Yellow
+ * and Cinema Green; GR II: GR II Positive), in a worker, and returns them as effects of the page.
+ * The file stays in the browser. `baseGamma` is the catalog's, for the previews.
  */
 export async function unlockNativeLooks(
   file: File,

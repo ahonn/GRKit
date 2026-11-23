@@ -108,13 +108,42 @@ const cinema = (number: string, look: 'cinemaYellow' | 'cinemaGreen'): Cover => 
   colors: colorsFromLook(look),
 });
 
+/** The camera whose firmware file holds a native look. */
+export type NativeFirmware = 'gr4' | 'gr2';
+
+const GR3_CAMERAS = ['gr3', 'gr3x'] as const;
+
+const gr2Positive = (id: string, cameras: readonly string[]) => ({
+  id,
+  name: 'GR II Positive',
+  firmware: 'gr2' as const,
+  cameras,
+  cover: {
+    template: 'cine' as const,
+    brand: 'RICOH',
+    name: 'GR II',
+    number: 'POSITIVE',
+    colors: colorsFromLook('gr2Positive'),
+  },
+});
+
 /**
  * The native looks that `nativeLooks` reads (the offered looks of grkit-core
- * `gr4_looks::LOOKS`), in its order.
+ * `gr4_looks::LOOKS` and `gr2_looks::TARGETS`), in its order for each firmware. `cameras` are the
+ * camera entries (`Camera.key`) that take the look. GR IV has the Cinema looks built in, and GR II
+ * Positive has an effect for GR III's Standard and one for GR IV's.
  */
-export const NATIVE_LOOKS: readonly { id: string; name: string; cover: Cover }[] = [
-  { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', cover: cinema('YELLOW', 'cinemaYellow') },
-  { id: 'gr4-cinema-green', name: 'Cinema Green', cover: cinema('GREEN', 'cinemaGreen') },
+export const NATIVE_LOOKS: readonly {
+  id: string;
+  name: string;
+  firmware: NativeFirmware;
+  cameras: readonly string[];
+  cover: Cover;
+}[] = [
+  { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', firmware: 'gr4', cameras: GR3_CAMERAS, cover: cinema('YELLOW', 'cinemaYellow') },
+  { id: 'gr4-cinema-green', name: 'Cinema Green', firmware: 'gr4', cameras: GR3_CAMERAS, cover: cinema('GREEN', 'cinemaGreen') },
+  gr2Positive('gr2-positive-film', GR3_CAMERAS),
+  gr2Positive('gr2-positive-film-gr4', ['gr4']),
 ];
 
 /** The native look `id`, or undefined for another effect. */
