@@ -8,6 +8,7 @@ pub mod capabilities;
 pub mod card;
 pub mod color;
 pub mod cover;
+mod cover_font;
 pub mod cube;
 pub mod effects;
 pub mod firmware;
