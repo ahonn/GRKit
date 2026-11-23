@@ -12,6 +12,15 @@
    that the effect keeps for shooting do not change. When a native row is
    chosen, or a development starts, the set gets its own values back.
 
+   Toning of a native look (runtime/toning.h) goes the same way: the set
+   keeps it in its byte of PARAMETER_TONING_KIND as a page value of the
+   GR IV levels, 0 to 2, and GRKIT_HOST_DEVELOP_NATIVE and _CHANGES keep it
+   after the nine adjustments. The Toning that the effect keeps for shooting
+   does not change either: the builds of the development take curves that
+   the core makes for the Toning of the set (runtime/menu.c:
+   develop_toning_curves). A record without Toning leaves the byte at its own
+   value.
+
    The includer defines u32, u8, BYTE, the header fields, and
    record_parameter (runtime/tone.h). A target without DEVELOP_PARAMETERS has
    no Fn in the development: its builds read the record. */
@@ -22,8 +31,18 @@
 #define DEVELOP_SET(kind) BYTE(FW_DEVELOP_MODEL,DEVELOP_PARAMETERS+(kind))
 #endif
 static const u8 develop_kinds[]=PARAMETER_KINDS;
-_Static_assert(sizeof(develop_kinds)==9 && GRKIT_HOST_DEVELOP_NATIVE_WORDS*4>=9,
-               "GRKIT_RECORD_PARAMETERS holds nine adjustments");
+_Static_assert(sizeof(develop_kinds)==9 && GRKIT_HOST_DEVELOP_NATIVE_WORDS*4>=10,
+               "GRKIT_RECORD_PARAMETERS holds nine adjustments, and Toning follows them");
+#ifdef PARAMETER_TONING_KIND
+#include "toning.h"
+/* The place of Toning in GRKIT_HOST_DEVELOP_NATIVE and _CHANGES. */
+#define DEVELOP_TONING 9U
+/* The page value of the Toning of `record`, or 0x100 for a record without
+   Toning, whose set keeps its own byte. */
+static __attribute__((unused)) u32 develop_toning(u32 record) {
+    return BYTE(record,GRKIT_RECORD_TONE_SLOT) ? (u32)(toning_value(BYTE(record,GRKIT_RECORD_TONING))+1) : 0x100U;
+}
+#endif
 /* Fn adjustment `index` (0..8, 4 neutral) of `record` in a build: from the
    Standard set while a development runs (`running`) and the set holds the
    adjustments of the record, else from the record. */
@@ -52,13 +71,24 @@ static __attribute__((unused)) void develop_hold(volatile u32 *h,u32 record) {
         if(!filled) native[i]=(u8)value;
         else if(value!=record_parameter(filled,i)) changed=1;
     }
+#ifdef PARAMETER_TONING_KIND
+    if(!filled) native[DEVELOP_TONING]=DEVELOP_SET(PARAMETER_TONING_KIND);
+    else if(develop_toning(filled)<0x100U && DEVELOP_SET(PARAMETER_TONING_KIND)!=develop_toning(filled)) changed=1;
+#endif
     if(changed) {
         for(i=0;i<sizeof(develop_kinds);++i) changes[i]=DEVELOP_SET(develop_kinds[i]);
+#ifdef PARAMETER_TONING_KIND
+        changes[DEVELOP_TONING]=DEVELOP_SET(PARAMETER_TONING_KIND);
+#endif
         h[GRKIT_HOST_DEVELOP_CHANGED/4]=filled;
     }
     for(i=0;i<sizeof(develop_kinds);++i)
         DEVELOP_SET(develop_kinds[i])=(u8)(!record ? native[i] :
             h[GRKIT_HOST_DEVELOP_CHANGED/4]==record ? changes[i] : record_parameter(record,i));
+#ifdef PARAMETER_TONING_KIND
+    DEVELOP_SET(PARAMETER_TONING_KIND)=(u8)(!record || develop_toning(record)>=0x100U ? native[DEVELOP_TONING] :
+        h[GRKIT_HOST_DEVELOP_CHANGED/4]==record ? changes[DEVELOP_TONING] : develop_toning(record));
+#endif
     h[GRKIT_HOST_DEVELOP_FILLED/4]=record;
 }
 #else

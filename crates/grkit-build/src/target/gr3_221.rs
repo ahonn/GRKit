@@ -310,6 +310,26 @@ const SITES: &[Site] = &[
     ("menu_parameter_mark_9", 0x531aeb90, "906a04eb"),
     ("menu_parameter_toning_init", 0x531aebdc, "fbcb07eb"),
     ("menu_parameter_toning_text", 0x532af164, "b8ffffea"),
+    // The parameter page of a RAW development: the BL of its kinds method
+    // 0x5318ed84 to the base kind of a type, the BLs to the native default
+    // in the slider setups of its rows (Saturation 0x5318f418 to Clarity
+    // 0x53190b28, Toning 0x5318ff58), the BL of the Toning setup to
+    // FW_SLIDER_INIT, the entry of the model setter of Toning, and the BL of
+    // the Toning row text 0x53191a40 to the native text of a value.
+    ("menu_develop_kinds", 0x5318edd4, "b1ffffeb"),
+    ("menu_develop_mark_0", 0x5318f44c, "34df03eb"),
+    ("menu_develop_mark_1", 0x5318f58c, "eede03eb"),
+    ("menu_develop_mark_2", 0x5318f6cc, "a8de03eb"),
+    ("menu_develop_mark_3", 0x5318f80c, "62de03eb"),
+    ("menu_develop_mark_4", 0x5318f94c, "1cde03eb"),
+    ("menu_develop_mark_5", 0x5318fa8c, "d6dd03eb"),
+    ("menu_develop_mark_6", 0x5318fbcc, "90dd03eb"),
+    ("menu_develop_mark_7", 0x53190a1c, "77da03eb"),
+    ("menu_develop_mark_8", 0x53190b5c, "31da03eb"),
+    ("menu_develop_mark_9", 0x5318ff8c, "bedc03eb"),
+    ("menu_develop_toning_init", 0x5318ffd8, "fc4608eb"),
+    ("menu_develop_toning_set", 0x5328a108, "04e02de5"),
+    ("menu_develop_toning_text", 0x53191a8c, "6e7504eb"),
     // The entry of the apply of a dial position, which each App event of the
     // dial reaches.
     ("menu_dial", 0x53226898, "0dc0a0e1"),

@@ -246,9 +246,11 @@ static void native_ic_selected(volatile u32 *h) {
     level_reapply(h);
 }
 #include "tone.h"
-#include "develop.h"
+/* Before runtime/develop.h, which includes toning.h for Toning in a
+   development. */
 #define TONING_HALF(address) HALF(address,0)
 #include "toning.h"
+#include "develop.h"
 #ifndef MENU_FRAMING_REQUEST
 /* The family header sends the native aspect request again after a Framing
    change, so the capture hook maps it to the new ratio. */
@@ -828,10 +830,12 @@ A32_ENTRY u32 menu_parameter_set(u32 index,u32 value) {
    it from the native defaults of its type, which is Standard for a record:
    give the default of the record as a native value plus 1, or 0 for the
    native marker. The default of Toning is its middle level. */
-A32_ENTRY u32 menu_parameter_mark(u32 index) {
-    u32 record=menu_parameter_session();
+static u32 parameter_mark(u32 record,u32 index) {
     if(index==PARAMETER_TONING) return toning_record(record) ? 1U+1U : 0;
     return record ? mod9(BYTE(record,GRKIT_RECORD_FN_DEFAULTS+index)+4U)+1U : 0;
+}
+A32_ENTRY u32 menu_parameter_mark(u32 index) {
+    return parameter_mark(menu_parameter_session(),index);
 }
 #ifdef PARAMETER_TONING_STEP
 /* The Toning track runs from a near gray to the tint of the look. The tint is
@@ -904,29 +908,37 @@ static u32 toning_track(volatile u32 *h,u32 record) {
     }
     return GRKIT_ICON_TONING_TRACK;
 }
-/* The setup of the Toning slider (FW_SLIDER_INIT): for a record, the three
-   levels of GR IV, PARAMETER_TONING_STEP pixels apart, on the track of the
-   look. The arguments are those of the setup. */
-A32_ENTRY void menu_parameter_toning_slider(u32 config,u32 low,u32 high,u32 step,u32 base,u32 a,u32 b,u32 c,
-                                            u32 track,u32 knob,u32 held) {
-    volatile u32 *h=menu_header();
-    u32 record=toning_record(menu_parameter_session()), own;
+/* The setup of the Toning slider (FW_SLIDER_INIT) of a page: for `record`, a
+   look with Toning, the three levels of GR IV, PARAMETER_TONING_STEP pixels
+   apart, on the track of the look; for 0, the native slider. The other
+   arguments are those of the setup. */
+static void toning_slider(u32 record,u32 config,u32 low,u32 high,u32 step,u32 base,u32 a,u32 b,u32 c,
+                          u32 track,u32 knob,u32 held) {
+    u32 own;
     if(record) {
         high=PARAMETER_TONING_LEVELS-1U;
         step=PARAMETER_TONING_STEP;
-        own=toning_track(h,record);
+        own=toning_track(menu_header(),record);
         if(own) track=own;
     }
     ((void (*)(u32,u32,u32,u32,u32,u32,u32,u32,u32,u32,u32))FW_SLIDER_INIT)(config,low,high,step,base,a,b,c,track,knob,held);
 }
-/* The text of the Toning row of a record, at `text` (3 bytes): its level 1, 2,
-   or 3, as GR IV shows it. The length, or 0 for the native text. */
-A32_ENTRY u32 menu_parameter_toning_label(u32 text) {
-    u32 record=toning_record(menu_parameter_session());
-    if(!record) return 0;
-    BYTE(text,0)=(u8)('2'+toning_value(BYTE(record,GRKIT_RECORD_TONING)));
+A32_ENTRY void menu_parameter_toning_slider(u32 config,u32 low,u32 high,u32 step,u32 base,u32 a,u32 b,u32 c,
+                                            u32 track,u32 knob,u32 held) {
+    toning_slider(toning_record(menu_parameter_session()),config,low,high,step,base,a,b,c,track,knob,held);
+}
+/* Write level 1, 2, or 3 of page value `value` (0..2) at `text` (3 bytes), as
+   GR IV shows Toning. The length. */
+static u32 toning_label(u32 text,u32 value) {
+    BYTE(text,0)=(u8)('1'+(value>2U ? 2U : value));
     BYTE(text,1)=0;
     return 1;
+}
+/* The text of the Toning row of a record. The length, or 0 for the native
+   text. */
+A32_ENTRY u32 menu_parameter_toning_label(u32 text) {
+    u32 record=toning_record(menu_parameter_session());
+    return record ? toning_label(text,(u32)(toning_value(BYTE(record,GRKIT_RECORD_TONING))+1)) : 0;
 }
 #endif
 /* A page that GRKit opened starts its session. A start while the session
@@ -1949,13 +1961,73 @@ A32_ENTRY u32 menu_develop_current_answer(u32 controller,u32 row) {
 }
 /* Fill the Standard set of the model for the effect of the development, or
    give it its own values back for native processing (runtime/develop.h). */
+#if defined(DEVELOP_PARAMETERS) && defined(PARAMETER_TONING_STEP)
+/* The record of the development whose Toning the parameter page of the
+   development edits: the effect whose adjustments the Standard set holds,
+   if it has Toning, else 0. */
+static u32 develop_toning_record(volatile u32 *h) {
+    u32 record=h[GRKIT_HOST_DEVELOP_FILLED/4];
+    return record>1U && BYTE(record,GRKIT_RECORD_TONE_SLOT) ? record : 0;
+}
+/* The builds of a development take the curves of the Toning of the set
+   (runtime/develop.h): when it differs from the Toning of the record, the
+   curves of the record with its own red and blue curves toned to the level
+   of the set, at GRKIT_DEVELOP_CURVES of the tail, which
+   GRKIT_HOST_DEVELOP_TONED gives to the builds (runtime/processing.S:
+   module_gamma_curves). The next build composes them again: a cleared key
+   never matches. */
+static void develop_toning_curves(volatile u32 *h) {
+    u32 record=develop_toning_record(h), curves=h[GRKIT_HOST_TAIL/4]+GRKIT_DEVELOP_CURVES, value, slot, i;
+    int level;
+    h[GRKIT_HOST_DEVELOP_TONED/4]=0;
+    h[GRKIT_HOST_GAMMA_KEY/4]=0;
+    if(!record) return;
+    value=DEVELOP_SET(PARAMETER_TONING_KIND);
+    level=value>=2U ? 1 : (int)value-1;
+    if(level==toning_value(BYTE(record,GRKIT_RECORD_TONING))) return;
+    slot=h[GRKIT_HOST_TAIL/4]+GRKIT_TONE_CURVES+(BYTE(record,GRKIT_RECORD_TONE_SLOT)-1U)*GRKIT_TONE_SLOT_SIZE;
+    for(i=0;i<GRKIT_DEVELOP_CURVES_SIZE;i+=4) WORD(curves,i)=WORD(record+GRKIT_RECORD_CURVES,i);
+    toning_curves(curves,slot,level);
+    h[GRKIT_HOST_DEVELOP_TONED/4]=record;
+}
+#endif
 static void develop_set(volatile u32 *h) {
 #ifdef DEVELOP_PARAMETERS
     develop_hold(h,h[GRKIT_HOST_DEVELOP/4]);
+#ifdef PARAMETER_TONING_STEP
+    develop_toning_curves(h);
+#endif
 #else
     (void)h;
 #endif
 }
+#if defined(DEVELOP_PARAMETERS) && defined(PARAMETER_TONING_STEP)
+/* The parameter page of the development (RawDevelopmentImageControlDetail-
+   SetController) shows native Standard for an effect, and edits the
+   Standard set. For an effect with Toning, it shows the rows with Toning
+   (PARAMETER_TONING_BASE) as the page of a record does, with the GR IV
+   slider and levels; each slider marks the default of the effect. */
+A32_ENTRY u32 menu_develop_toning_base(u32 base) {
+    return !base && develop_toning_record(menu_header()) ? PARAMETER_TONING_BASE : base;
+}
+A32_ENTRY u32 menu_develop_mark(u32 index) {
+    u32 record=menu_header()[GRKIT_HOST_DEVELOP_FILLED/4];
+    return parameter_mark(record>1U ? record : 0,index);
+}
+A32_ENTRY void menu_develop_toning_slider(u32 config,u32 low,u32 high,u32 step,u32 base,u32 a,u32 b,u32 c,
+                                          u32 track,u32 knob,u32 held) {
+    toning_slider(develop_toning_record(menu_header()),config,low,high,step,base,a,b,c,track,knob,held);
+}
+/* After the model setter of Toning: a change, or the restore of a cancel. */
+A32_ENTRY void menu_develop_toning_changed(void) {
+    develop_toning_curves(menu_header());
+}
+/* The text of the Toning row of the development for set value `value`. The
+   length, or 0 for the native text. */
+A32_ENTRY u32 menu_develop_toning_label(u32 text,u32 value) {
+    return develop_toning_record(menu_header()) ? toning_label(text,value) : 0;
+}
+#endif
 /* The choice of a row, also of each highlighted row for the preview. It runs
    before the native choice, which passes the parameter set of the row on. */
 A32_ENTRY void menu_develop_choose(u32 controller,u32 row) {

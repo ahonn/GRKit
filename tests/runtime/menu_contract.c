@@ -346,6 +346,10 @@ static unsigned test_shown_number(void)
 #define PLAYBACK_INVALIDATE(view) ((void)(view), ++playback_redraws)
 #define PLAYBACK_TIMER_START(ms) ((void)(ms), 0x20000U + ++playback_timers)
 #define PLAYBACK_BARRIER() ((void)0)
+/* The Standard parameter set of the development model (runtime/develop.h),
+   one byte for each parameter kind. */
+static uint8_t develop_model_set[17];
+#define DEVELOP_SET(kind) develop_model_set[(kind)]
 #include "menu.c"
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 static void native_set_record(const char *const *argv)
@@ -1089,6 +1093,74 @@ static void toning_moves_red_and_blue_from_green(void)
     /* Without a session, every marker is native. */
     test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
     assert(menu_parameter_mark(3) == 0);
+#endif
+}
+
+/* The parameter page of a RAW development, while the Standard set holds an
+   effect with Toning (runtime/develop.h): the rows with Toning, the markers
+   of the effect, the levels 1 to 3, and curves of the development that
+   follow the Toning of the set, while the record keeps its own. */
+static void develop_toning_follows_the_set(void)
+{
+#if defined(DEVELOP_PARAMETERS) && defined(PARAMETER_TONING_STEP)
+    const u32 record = TEST_OBJECTS + 0x2000U, slot = TEST_OBJECTS + 0x3400U;
+    const u32 curves = slot - GRKIT_TONE_CURVES + GRKIT_DEVELOP_CURVES;
+    reset();
+    for (u32 k = 0; k < 9; ++k) BYTE(record, GRKIT_RECORD_FN_DEFAULTS + k) = 0;
+    test_header[GRKIT_HOST_TAIL / 4] = slot - GRKIT_TONE_CURVES;
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 1;
+    BYTE(record, GRKIT_RECORD_TONING) = 0;
+    for (u32 i = 0; i < 256; ++i) {
+        u32 green = 1000 + i * 40;
+        HALF(record, GRKIT_RECORD_CURVES + i * 2) = (u16)(green + 100);
+        HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) = (u16)green;
+        HALF(record, GRKIT_RECORD_CURVES + 1024 + i * 2) = (u16)(green - 200);
+        HALF(slot, i * 2) = (u16)(green + 100);
+        HALF(slot, 512 + i * 2) = (u16)(green - 200);
+    }
+    test_header[GRKIT_HOST_DEVELOP_FILLED / 4] = record;
+    /* The rows with Toning replace the Standard rows only. */
+    assert(menu_develop_toning_base(0) == PARAMETER_TONING_BASE);
+    assert(menu_develop_toning_base(3) == 3);
+    /* The markers of the effect. */
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 6) = 9 - 3; /* Sharpness -3 */
+    assert(menu_develop_mark(6) == 1 + 1 && menu_develop_mark(0) == 4 + 1);
+    assert(menu_develop_mark(PARAMETER_TONING) == 1 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 6) = 0;
+    /* The text of a set value. */
+    const u32 text = TEST_OBJECTS + 0x3900U;
+    assert(menu_develop_toning_label(text, 2) == 1 && BYTE(text, 0) == '3' && !BYTE(text, 1));
+    assert(menu_develop_toning_label(text, 0) == 1 && BYTE(text, 0) == '1');
+    /* The own level of the record needs no curves of the development. */
+    develop_model_set[PARAMETER_TONING_KIND] = 1;
+    test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
+    menu_develop_toning_changed();
+    assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == 0 && test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
+    /* Levels 3 and 1: the curves of the development tone red and blue, and
+       the record keeps its own curves. */
+    const struct { u8 value; int red, blue; } levels[] = {{2, 150, -300}, {0, 50, -100}};
+    for (u32 l = 0; l < 2; ++l) {
+        develop_model_set[PARAMETER_TONING_KIND] = levels[l].value;
+        test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
+        menu_develop_toning_changed();
+        assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == record && test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
+        for (u32 i = 0; i < 256; i += 51) {
+            int green = 1000 + (int)i * 40;
+            assert(HALF(curves, i * 2) == green + levels[l].red);
+            assert(HALF(curves, 512 + i * 2) == green);
+            assert(HALF(curves, 1024 + i * 2) == green + levels[l].blue);
+            assert(HALF(record, GRKIT_RECORD_CURVES + i * 2) == green + 100);
+        }
+    }
+    assert(BYTE(record, GRKIT_RECORD_TONING) == 0);
+    /* Without Toning, or without an effect in the set, the page is native. */
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
+    assert(menu_develop_toning_base(0) == 0 && menu_develop_toning_label(text, 2) == 0);
+    menu_develop_toning_changed();
+    assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == 0);
+    assert(menu_develop_mark(0) == 4 + 1);
+    test_header[GRKIT_HOST_DEVELOP_FILLED / 4] = 0;
+    assert(menu_develop_mark(0) == 0 && menu_develop_toning_base(0) == 0);
 #endif
 }
 
@@ -6466,6 +6538,7 @@ int main(void)
     a_half_press_keeps_the_parameter_session();
     fn_values_add_the_defaults_of_a_native_look();
     toning_moves_red_and_blue_from_green();
+    develop_toning_follows_the_set();
     the_root_lists_the_official_modules();
     module_tiles_follow_the_effect_icons();
     the_framing_page_sets_the_ratios_of_the_target();

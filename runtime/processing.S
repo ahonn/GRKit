@@ -113,12 +113,35 @@ module_gamma_curves:
     .word 0xeb000000 | (((.Lowned_record - . - 8) >> 2) & 0x00ffffff)
     bne curves_stock
     add r5, r0, #GRKIT_RECORD_CURVES
+#if defined(FW_DEVELOP_MODEL) && defined(PARAMETER_TONING_STEP)
+    // A running RAW development with its own Toning of this record takes
+    // the curves that the core made for it (runtime/develop.h).
+    ldr r12, =GRKIT_HEADER_REFERENCE
+    ldr lr, =GRKIT_HOST_DEVELOP_TONED
+    ldr lr, [r12, lr]
+    cmp lr, r0
+    bne curves_own
+    ldr lr, =FW_DEVELOP_GUARD
+    ldr lr, [lr]
+    tst lr, #1
+    beq curves_own
+    ldr lr, =FW_DEVELOP_MODEL
+    ldrb lr, [lr, #DEVELOP_STATE]
+    cmp lr, #0
+    beq curves_own
+    ldr r5, [r12, #GRKIT_HOST_TAIL]
+    ldr lr, =GRKIT_DEVELOP_CURVES
+    add r5, r5, lr
+curves_own:
+#endif
+    // The key of the composition takes the curves, so the curves of a
+    // development and those of the record never share it.
     str r5, [r1]
-    add r5, r5, #GRKIT_RECORD_CURVE_SIZE
-    str r5, [r2]
-    add r5, r5, #GRKIT_RECORD_CURVE_SIZE
-    str r5, [r3]
-    mov r1, r0
+    add r12, r5, #GRKIT_RECORD_CURVE_SIZE
+    str r12, [r2]
+    add r12, r12, #GRKIT_RECORD_CURVE_SIZE
+    str r12, [r3]
+    mov r1, r5
     ldr r0, [fp, #-0x44]
     mov r2, r4
     .word 0xeb000000 | (((.Lgamma_cached - . - 8) >> 2) & 0x00ffffff)

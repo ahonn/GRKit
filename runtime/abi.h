@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6552
+#define GRKIT_HOST_HEADER_SIZE 6556
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -573,6 +573,10 @@
    (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the pixels,
    in a firmware block that the core makes at its first use; else 0. */
 #define GRKIT_HOST_TONING_TRACK 6548
+/* The record whose Toning in the RAW development differs from its own
+   (runtime/develop.h): while a development runs, its builds take the curves at
+   GRKIT_DEVELOP_CURVES of the tail for it; else 0. */
+#define GRKIT_HOST_DEVELOP_TONED 6552
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -962,12 +966,16 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 248956
+#define GRKIT_TAIL_SIZE 250492
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
 #define GRKIT_TONE_CURVES 244860
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
+/* The red, green, and blue curves of a RAW development with its own Toning
+   (GRKIT_HOST_DEVELOP_TONED), 256 u16 samples each. */
+#define GRKIT_DEVELOP_CURVES 248956
+#define GRKIT_DEVELOP_CURVES_SIZE 1536
 #define GRKIT_TEXT_SUMMARY 8192
 /* The parameter page title of a GRKit session, after the summaries: the page,
    its vtable, and the descriptor of the effect name. */
