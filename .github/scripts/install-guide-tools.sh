@@ -17,6 +17,10 @@ case "$(uname -s)-$(uname -m)" in
     typst=typst-x86_64-unknown-linux-musl
     typst_sha256=a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
     ;;
+  Linux-aarch64)
+    typst=typst-aarch64-unknown-linux-musl
+    typst_sha256=5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee
+    ;;
   Darwin-arm64)
     typst=typst-aarch64-apple-darwin
     typst_sha256=48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a
