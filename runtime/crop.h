@@ -124,10 +124,14 @@ static __attribute__((unused)) u32 crop_selection(volatile u32 *h) {
     if(!CAPABILITY_USED(h,GRKIT_CORE_CROP)) return 0;
     return value<GRKIT_CORE_CROP_VALUES ? value : 0;
 }
-/* The crop that the live view shows: the highlighted value while ADJ
-   previews the page of CORE.CROP (runtime/modules.h: frame_preview_set),
-   else the selection. ADJ keeps the highlighted value when it closes, and
-   a move to another entry ends the preview. */
+/* The crop whose frame the live view paints: the highlighted value while
+   ADJ previews the page of CORE.CROP (runtime/modules.h: frame_preview_set),
+   else the selection. Only the layers follow it (runtime/viewfinder.h:
+   crop_painted): the camera's factor and the shot keep the selection
+   (crop_capture), so that a highlight does not change the factor of the
+   capture while the camera may still be making the last photo. ADJ keeps
+   the highlighted value when it closes, and the next bind of the live view
+   applies it (runtime/framing.c: bind_canvas). */
 static __attribute__((unused)) u32 crop_shown(volatile u32 *h) {
     u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value;
     if(!h[GRKIT_HOST_FRAME_PREVIEW/4] || !handle || handle-1U!=GRKIT_CORE_CROP || !CAPABILITY_USED(h,GRKIT_CORE_CROP))
@@ -139,10 +143,10 @@ static __attribute__((unused)) u32 crop_shown(volatile u32 *h) {
 static __attribute__((unused)) u32 crop_frame_only(volatile u32 *h) {
     return CAPABILITY_USED(h,GRKIT_CORE_CROP_MODE) && h[GRKIT_HOST_CROP_MODE/4]==1;
 }
-/* The crop that the camera applies, or 0: the shown crop (crop_shown) in
-   Crop mode, in each native aspect and with each Framing ratio. */
+/* The crop that the camera applies, or 0: the selected crop in Crop mode,
+   in each native aspect and with each Framing ratio. */
 static __attribute__((unused)) u32 crop_capture(volatile u32 *h) {
-    u32 crop=crop_shown(h);
+    u32 crop=crop_selection(h);
     if(!crop || crop_frame_only(h)) return 0;
     return crop;
 }

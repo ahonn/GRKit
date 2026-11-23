@@ -1125,34 +1125,47 @@ static void crop_frames_the_layers(void)
     assert_frame(crop_box_seen, 0, 0, 720, 480, 4, 65536);
     assert_frame(guides_box_seen, 0, 0, 720, 480, 4, 65536);
 }
-/* While ADJ previews the crop page, the bind takes the highlighted crop:
-   the camera's factor and the shot follow it, and the end of the preview
-   returns them to the selection. The preview of another page does not. */
-static void crop_follows_the_adj_preview(void)
+/* While ADJ previews the crop page, only the layers paint the highlighted
+   crop: the bind keeps the camera's factor and the factor of the next shot
+   of the selection, so that a highlight never changes the capture while
+   the camera may still be making the last photo. The bind after ADJ keeps
+   a value applies it, and the next shot takes it. */
+static void crop_keeps_the_selection_in_the_adj_preview(void)
 {
     reset();
     header[GRKIT_HOST_FRAME_RATIO/4] = 0;
     add_crop_layer();
     native_crop_bits = 0x3f800000U;
+    native_crop_sets = 0;
     header[GRKIT_HOST_CROP/4] = 0;
     header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
     header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
     header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 3;
     framing_bind(TEST_OWNER);
-    assert(native_crop_bits == crop_factors[3] && !header[GRKIT_HOST_CROP_SHOT/4]);
+    assert(native_crop_bits == 0x3f800000U && native_crop_sets == 0);
+    assert(!header[GRKIT_HOST_CROP_SHOT/4] && !header[GRKIT_HOST_CROP_NATIVE/4]);
     header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 4;
     framing_bind(TEST_OWNER);
-    assert(native_crop_bits == crop_factors[3] && header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[4]);
-    assert(!header[GRKIT_HOST_CROP_LIVE/4]);
-    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP_MODE + 1;
-    framing_bind(TEST_OWNER);
-    assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_SHOT/4]);
-    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
-    framing_bind(TEST_OWNER);
-    assert(native_crop_bits == crop_factors[3]);
+    assert(native_crop_bits == 0x3f800000U && native_crop_sets == 0);
+    assert(!header[GRKIT_HOST_CROP_SHOT/4] && !header[GRKIT_HOST_CROP_NATIVE/4]);
+    /* The badge stays that of the selection, as the camera's factor. */
+    assert(crop_badge_label(header) == GRKIT_LABEL_COUNT);
+    /* ADJ keeps 70 mm: the next bind sets the camera's 50 mm and arms the
+       factor of the shot. */
+    header[GRKIT_HOST_CROP/4] = 4;
     header[GRKIT_HOST_FRAME_PREVIEW/4] = 0;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = 0;
     framing_bind(TEST_OWNER);
-    assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_NATIVE/4]);
+    assert(native_crop_bits == crop_factors[3] && header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[4]);
+    assert(header[GRKIT_HOST_CROP_NATIVE/4] == crop_factors[3]);
+    /* A highlight of Off over the kept 70 mm changes nothing either. */
+    native_crop_sets = 0;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 0;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_sets == 0 && native_crop_bits == crop_factors[3]);
+    assert(header[GRKIT_HOST_CROP_SHOT/4] == crop_factors[4]);
 }
 /* The camera's grid guide hides while the still live view shows a frame:
    the area of a Framing ratio, also of a composition frame, or the frame of
@@ -1566,7 +1579,7 @@ int main(void)
     crop_frames_the_layers();
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
-    crop_follows_the_adj_preview();
+    crop_keeps_the_selection_in_the_adj_preview();
     the_camera_grid_hides_behind_layers();
 #if CROP_LIVE_FACTOR
     crop_zooms_the_live_view();

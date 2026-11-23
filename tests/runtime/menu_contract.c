@@ -1317,6 +1317,29 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
     frame_preview(test_header, ADJ_A, 1);
     assert(test_header[GRKIT_HOST_FRAME_PREVIEW / 4] == 0);
     assert(preview_invalidations == 3);
+    /* A highlight on a page of CORE.CROP is a preview of the layers only:
+       the camera's crop factor stays that of the selection until ADJ keeps
+       a value and the live view binds again (runtime/crop.h: crop_shown). */
+    {
+        u32 entry = test_header[GRKIT_HOST_MODULE_PAGES / 4 + test_header[GRKIT_HOST_MODULE_CHOICE / 4] * 3 + 1];
+        u32 capabilities = test_header[GRKIT_HOST_CAPABILITIES / 4];
+        unsigned sets = test_crop_sets, bits = test_crop_bits;
+        test_header[GRKIT_HOST_MODULE_PAGES / 4 + test_header[GRKIT_HOST_MODULE_CHOICE / 4] * 3 + 1] = GRKIT_CORE_CROP;
+        test_header[GRKIT_HOST_CAPABILITIES / 4] |= 1U << (GRKIT_CORE_CROP - GRKIT_CORE_SETTING_BASE);
+        for (u32 row = 1; row <= 2; ++row) {
+            test_header[GRKIT_HOST_MENU_CURSOR / 4] = row;
+            frame_preview(test_header, ADJ_A, 0);
+            assert(test_header[GRKIT_HOST_MODULE_PREVIEW / 4] == GRKIT_CORE_CROP + 1);
+            assert(test_header[GRKIT_HOST_MODULE_PREVIEW / 4 + 1] != 0);
+            assert(test_crop_sets == sets && test_crop_bits == bits);
+        }
+        test_header[GRKIT_HOST_MENU_CURSOR / 4] = 0;
+        frame_preview(test_header, ADJ_A, 0);
+        assert(test_crop_sets == sets && test_crop_bits == bits);
+        test_header[GRKIT_HOST_MODULE_PAGES / 4 + test_header[GRKIT_HOST_MODULE_CHOICE / 4] * 3 + 1] = entry;
+        test_header[GRKIT_HOST_CAPABILITIES / 4] = capabilities;
+        frame_preview(test_header, ADJ_A, 1);
+    }
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = CROP_ROW;
     assert(menu_back(test_header));
     assert(test_header[GRKIT_HOST_MENU_LEVEL / 4] == MENU_ROOT && test_header[GRKIT_HOST_MENU_CURSOR / 4] == FRAMING_ROW);
