@@ -184,7 +184,7 @@
 /* Icon slots: the host icons, then the effect icons, then the module tiles, in
    chunks of GRKIT_ICONS_PER_CHUNK (GRKIT_HOST_ICON_CHUNKS).
    GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n. */
-#define GRKIT_HOST_ICON_COUNT 25
+#define GRKIT_HOST_ICON_COUNT 26
 #define GRKIT_BATTERY_ICON_SLOTS 4U
 #define GRKIT_ICONS_PER_CHUNK 40
 #define GRKIT_MODULE_TILES_MAX 128
@@ -198,7 +198,7 @@
 #define GRKIT_UPDATE_READY 3U
 #define GRKIT_CUE_PENDING 1U
 #define GRKIT_CUE_UPDATE_READY 1U
-#define GRKIT_CUE_UPDATED 2U
+#define GRKIT_CUE_UPDATE_RESTART 2U
 /* Number of Image Control records. */
 #define GRKIT_HOST_COUNT 0
 /* Address of record 0. The records follow the header without gaps. */
@@ -597,8 +597,8 @@
    8, and patch, or 0 when the package does not name it. */
 #define GRKIT_HOST_UPDATE_VERSION 6568
 /* The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
-   CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATED at the
-   first start after one installed. The cue sets it back to 0 when it ends
+   CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATE_RESTART
+   after its confirmation in ADJ. The cue sets it back to 0 when it ends
    (runtime/viewfinder.h). */
 #define GRKIT_HOST_CUE_LABEL 6572
 /* 1 while the Wi-Fi access point of the camera is on, else 0. The App task
@@ -1039,7 +1039,7 @@
    glyphs from GRKIT_GLYPH_FIRST. For entry n, a u16 width, a u16 height, and
    the u32 offset of its pixels from the table start at 8 n. Each pixel is one
    byte of text coverage, row by row. */
-#define GRKIT_LABELS_SIZE 86016
+#define GRKIT_LABELS_SIZE 90112
 /* The profile table after the labels (runtime/profile.h). For each of the
    first GRKIT_PROFILE_MODULES listed modules, at GRKIT_PROFILE_MODULE_SIZE n:
    its code start, its code end, and GRKIT_PROFILE_NAME_BYTES ASCII bytes of
@@ -1047,7 +1047,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 252552
+#define GRKIT_PROFILE 256648
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -1068,10 +1068,10 @@
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
 /* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 257148
+#define GRKIT_TAIL_SIZE 261244
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 253052
+#define GRKIT_TONE_CURVES 257148
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 #define GRKIT_TEXT_SUMMARY 8192
@@ -1187,9 +1187,9 @@
    TEXT_ON. */
 #define TEXT_BATTERY_PERCENT 87
 /* The GRKit Settings row of an update over Wi-Fi that waits for its
-   confirmation, then its values Later and Install, then the text of its
-   confirm before and after the version. */
+   confirmation, then its value Install, then the text of its confirm before
+   and after the version. */
 #define TEXT_UPDATE 88
-#define GRKIT_TEXT_STRINGS 93
+#define GRKIT_TEXT_STRINGS 92
 
 #endif

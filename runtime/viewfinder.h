@@ -132,10 +132,11 @@ static GRKIT_ICON_COMPACT u32 framing_second(void) {
 #endif
 static GRKIT_ICON_COMPACT u32 cue_shown(volatile u32 *h) { return h[GRKIT_HOST_LOAD_CUE/4]>CUE_PENDING; }
 /* The text of the cue (GRKIT_HOST_CUE_LABEL): GRKit Loaded, or the notice of
-   an update over Wi-Fi that waits or that installed. */
+   an update over Wi-Fi that waits or that ADJ confirmed. */
 static u32 cue_label(volatile u32 *h) {
     u32 label=h[GRKIT_HOST_CUE_LABEL/4];
-    return label==GRKIT_CUE_UPDATE_READY ? LABEL_UPDATE_READY : label==GRKIT_CUE_UPDATED ? LABEL_UPDATED : LABEL_GRKIT;
+    return label==GRKIT_CUE_UPDATE_READY ? LABEL_UPDATE_READY :
+           label==GRKIT_CUE_UPDATE_RESTART ? LABEL_UPDATE_RESTART : LABEL_GRKIT;
 }
 /* Start the cue in a still live view, and end it after CUE_SECONDS. Returns 1
    when the cue starts or ends, so the canvas needs a redraw. */

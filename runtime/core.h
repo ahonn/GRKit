@@ -48,6 +48,9 @@ typedef short s16;
    Fn hint. */
 #define GRKIT_ICON_SCALE_FEET 0x7ff9U
 #define GRKIT_ICON_SCALE_SIXTEEN 0x7ff8U
+/* The Update row of the MOD page in ADJ. The installer puts it before the
+   pictures of Battery Percentage. */
+#define GRKIT_ICON_UPDATE 0x7ff5U
 
 /* One setting of a native settings page: its row label, its values, the
    text of a value, and the stored value. A native value page has
@@ -196,7 +199,7 @@ GRKIT_MAYBE_UNUSED static u32 native_display(void);
 #define LABEL_GRKIT 0U
 /* The other texts of the load cue (grkit_core::artwork::OVERLAY_LABELS). */
 #define LABEL_UPDATE_READY 22U
-#define LABEL_UPDATED 23U
+#define LABEL_UPDATE_RESTART 23U
 #define LABEL_RATIO_AREA 0x100U
 #ifdef FRAMING_RATIO_LABELS
 /* The label of a Framing ratio value (FRAMING_RATIO_LABELS), or

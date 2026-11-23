@@ -728,7 +728,8 @@ fn overlay_labels_fit_their_area_and_outline_their_text() {
         assert!(height <= 40);
         // A status-row label at the left of the row ends before the centered
         // load cue starts.
-        let cue = artwork::OVERLAY_LABELS[index].starts_with("GRKit ");
+        let cue = artwork::OVERLAY_LABELS[index].starts_with("GRKit ")
+            || artwork::OVERLAY_LABELS[index] == "Restart Camera";
         let widest = if cue { 300 } else { 80 };
         assert!(
             (30..=widest).contains(&width),

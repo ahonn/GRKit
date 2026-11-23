@@ -133,7 +133,7 @@
 #define MENU_ROWS_PAGE_TITLE (MENU_ROWS_PAGE_TEXTS + 3U * 8U)
 #define MENU_ROWS_FIRST (MENU_ROWS_PAGE_TITLE + 2U * MENU_PAGE_TITLE_UNITS)
 /* The rows of GRKit Settings as its page opened (runtime/menu_settings.h:
-   core_refresh): the kind of row i in bits 4i to 4i + 3, and the number of
+   core_refresh): the kind of row i in bits 3i to 3i + 2, and the number of
    rows in bits 24 to 31. */
 #define MENU_ROWS_CORE_KINDS (MENU_ROWS_FIRST + MENU_ROWS_SLOTS * MENU_ROW_SIZE)
 /* The row + 1 of a page that a child returns to, where the cursor goes
