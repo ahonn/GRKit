@@ -271,9 +271,10 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Read Cinema (Yellow) and Cinema (Green) from your GR IV firmware into new effect
-    /// definitions at OUT/ID/effect.json. FIRMWARE is an official GR IV zip or its
-    /// fwdc248b.bin, version 1.11, 1.20, or 1.21. GRKit ships none of this data.
+    /// Read native looks from your camera firmware into new effect definitions at
+    /// OUT/ID/effect.json: Cinema (Yellow) and Cinema (Green) from an official GR IV zip or its
+    /// fwdc248b.bin (1.11, 1.20, or 1.21), or GR II Positive (for GR III and for GR IV) from the official GR II zip or its
+    /// rg2_v003.frm (3.00). GRKit ships none of this data.
     Native {
         #[arg(long)]
         firmware: PathBuf,
@@ -511,8 +512,13 @@ fn run(command: Command) -> Result<Value> {
             command: EffectsCommand::Native { firmware, out },
         } => {
             let bytes = storage::read_bounded(&firmware, grkit_core::gr4_looks::MAX_FILE_SIZE)?;
-            let image = grkit_core::gr4_looks::Image::read(&bytes)?;
-            let definitions = image.definitions()?;
+            let (version, definitions) = if grkit_core::gr2_looks::detect(&bytes) {
+                let image = grkit_core::gr2_looks::Image::read(&bytes)?;
+                (image.version(), image.definitions()?)
+            } else {
+                let image = grkit_core::gr4_looks::Image::read(&bytes)?;
+                (image.source.version, image.definitions()?)
+            };
             let ids: Vec<String> = definitions
                 .iter()
                 .map(|d| d["effect_id"].as_str().unwrap_or_default().to_owned())
@@ -528,7 +534,7 @@ fn run(command: Command) -> Result<Value> {
                     &Files::from([("effect.json".to_owned(), text.into_bytes())]),
                 )?;
             }
-            Ok(json!({"output": out, "version": image.source.version, "effects": ids}))
+            Ok(json!({"output": out, "version": version, "effects": ids}))
         }
         Command::Effects {
             command:
