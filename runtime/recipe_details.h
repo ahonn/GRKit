@@ -30,10 +30,6 @@
    The includer defines u8, u16, u32, BYTE, HALF, and WORD, and includes
    runtime/services.h, runtime/native_look.h, and runtime/recipes.h. */
 #include "recipe_detail_names.h"
-/* The icon ID of effect record n, as runtime/core.h has it. */
-#ifndef GRKIT_ICON_EFFECT
-#define GRKIT_ICON_EFFECT(n) (0x8000U+(n))
-#endif
 
 #if !defined(NATIVE_DETAIL_MODE_ICONS) || !defined(NATIVE_DETAIL_PARAMETER_ICONS) || \
     !defined(NATIVE_DETAIL_CORRECTION_ICONS) || !defined(NATIVE_DETAIL_METERING_ICONS) || \

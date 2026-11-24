@@ -29,6 +29,8 @@ struct Cached {
 pub(super) struct ModuleCache {
     /// The answer of the runtime to the first module command.
     supported: Option<bool>,
+    /// The answer of the runtime to the first `CONTROL_SETTINGS_READ`.
+    pub(super) settings: Option<bool>,
     catalogs: BTreeMap<usize, Arc<Cached>>,
     icons: BTreeMap<String, Arc<Cached>>,
 }
@@ -217,7 +219,8 @@ fn state_json(state: &State, view: &ModuleView) -> Value {
         .is_some_and(|package| !package.contains(&state.id));
     json!({"id":state.id,"enabled":state.word & CONTROL_MODULE_ENABLED != 0,"status":status,"place":place,
         "custom":custom,
-        "orderable":state.word & CONTROL_MODULE_ORDERABLE != 0,"values":values,
+        "orderable":state.word & CONTROL_MODULE_ORDERABLE != 0,
+        "placeable":state.word & CONTROL_MODULE_PLACEABLE != 0,"values":values,
         "hiddenValues":bits(state.hidden),"valueOrder":state.order})
 }
 fn states_json(states: &States, view: &ModuleView) -> Value {
@@ -228,7 +231,8 @@ fn states_json(states: &States, view: &ModuleView) -> Value {
         .collect();
     let runs = |key: &str| states.capabilities & capabilities::bit_of(key) != 0;
     json!({"revision":states.revision,"grkitEnabled":states.running,"monochrome":view.monochrome,
-        "features":{"looks":runs("TONE"),"recipes":runs("RECIPE")},"modules":modules})
+        "features":{"looks":runs("TONE"),"recipes":runs("RECIPE")},"toolbarMax":capabilities::ADJ_ENTRIES,
+        "modules":modules})
 }
 
 /// The records of a module in one language, across as many commands as they
@@ -462,8 +466,8 @@ impl LookApi {
     }
 
     /// `/v1/modules/catalog`, `/v1/modules/{id}/icon`, `/v1/params/modules`,
-    /// `/v1/params/modules/order`, `/v1/params/modules/{id}`. None for
-    /// another path.
+    /// `/v1/params/modules/order`, `/v1/params/modules/layout`,
+    /// `/v1/params/modules/{id}`. None for another path.
     pub fn handle_modules(
         &self,
         request: &Request,
@@ -481,6 +485,9 @@ impl LookApi {
             ["params", "modules"] => Err(not_allowed()),
             ["params", "modules", "order"] if request.method == "PUT" => {
                 self.put_order(request, body, context)
+            }
+            ["params", "modules", "layout"] if request.method == "PUT" => {
+                self.put_layout(request, body, context)
             }
             ["params", "modules", id] if request.method == "PATCH" => {
                 self.patch_module(request, id, body, context)
@@ -572,29 +579,15 @@ impl LookApi {
         Ok(cached_reply(request, &cached, "image/png"))
     }
 
-    /// The checks that each change shares, as for the recipes.
-    fn admit(&self, request: &Request, body: &[u8], context: &RequestContext<'_>) -> Result<Value> {
-        if header(request, "x-grkit-boot-id")? != context.boot_id {
-            return Err(problem(
-                409,
-                "context_changed",
-                "The camera started again. Read the modules before changing them.",
-            ));
-        }
-        if context.software_pending {
-            return Err(problem(
-                409,
-                "software_pending",
-                "Finish or cancel the pending software operation before changing modules.",
-            ));
-        }
-        if request.query.is_some() {
-            return Err(problem(
-                422,
-                "invalid_query",
-                "This mutation query is not supported.",
-            ));
-        }
+    /// The checks that each change shares, as for the recipes, and its JSON
+    /// body.
+    pub(super) fn admit(
+        &self,
+        request: &Request,
+        body: &[u8],
+        context: &RequestContext<'_>,
+    ) -> Result<Value> {
+        admit_change(request, context)?;
         serde_json::from_slice(body)
             .map_err(|_| problem(400, "invalid_json", "The body is not valid JSON."))
     }
@@ -672,6 +665,119 @@ impl LookApi {
     }
 }
 
+/// The checks of a change of the camera or the card that need no body: the
+/// start that the phone read, no software operation that waits, no query.
+pub(super) fn admit_change(request: &Request, context: &RequestContext<'_>) -> Result<()> {
+    if header(request, "x-grkit-boot-id")? != context.boot_id {
+        return Err(problem(
+            409,
+            "context_changed",
+            "The camera started again. Read its state before changing it.",
+        ));
+    }
+    if context.software_pending {
+        return Err(problem(
+            409,
+            "software_pending",
+            "Finish or cancel the pending software operation first.",
+        ));
+    }
+    if request.query.is_some() {
+        return Err(problem(
+            422,
+            "invalid_query",
+            "This mutation query is not supported.",
+        ));
+    }
+    Ok(())
+}
+
+fn invalid_layout() -> Problem {
+    problem(
+        400,
+        "invalid_layout",
+        "Send toolbar, root, and hidden: arrays of module IDs, each once, at most toolbarMax in the toolbar.",
+    )
+}
+fn layout_changed() -> Problem {
+    problem(
+        409,
+        "layout_changed",
+        "The modules that ADJ can show differ. Read the modules again.",
+    )
+}
+
+/// The module IDs of each place of a layout body, in order: toolbar, root,
+/// hidden.
+fn layout_places(value: &Value) -> Result<[Vec<&str>; 3]> {
+    let object = value
+        .as_object()
+        .filter(|object| object.len() == 3)
+        .ok_or_else(invalid_layout)?;
+    let place = |key: &str| -> Result<Vec<&str>> {
+        object
+            .get(key)
+            .and_then(Value::as_array)
+            .and_then(|ids| ids.iter().map(Value::as_str).collect())
+            .ok_or_else(invalid_layout)
+    };
+    let places = [place("toolbar")?, place("root")?, place("hidden")?];
+    let ids: Vec<&str> = places.iter().flatten().copied().collect();
+    if places[0].len() > capabilities::ADJ_ENTRIES as usize
+        || ids.iter().collect::<BTreeSet<_>>().len() != ids.len()
+    {
+        return Err(invalid_layout());
+    }
+    Ok(places)
+}
+
+impl LookApi {
+    /// Place each module that ADJ can show, as MENU > ADJ Order does.
+    fn put_layout(
+        &self,
+        request: &Request,
+        body: &[u8],
+        context: &RequestContext<'_>,
+    ) -> Result<Reply> {
+        let value = self.admit(request, body, context)?;
+        let places = layout_places(&value)?;
+        let mut backend = try_lock(&self.backend)?;
+        let states = read_states(backend.as_mut())?;
+        let placeable: BTreeSet<&str> = states
+            .modules
+            .iter()
+            .filter(|state| state.word & CONTROL_MODULE_PLACEABLE != 0)
+            .map(|state| state.id.as_str())
+            .collect();
+        let sent: BTreeSet<&str> = places.iter().flatten().copied().collect();
+        if sent != placeable {
+            return Err(layout_changed());
+        }
+        let mut payload = Vec::with_capacity(4 * sent.len());
+        for (ids, place) in places.iter().zip([
+            CONTROL_MODULE_TOOLBAR,
+            CONTROL_MODULE_ROOT,
+            CONTROL_MODULE_HIDDEN,
+        ]) {
+            for id in ids {
+                let state = states.modules.iter().find(|state| state.id == *id);
+                let index = state.ok_or_else(layout_changed)?.index;
+                payload.extend((index | place << CONTROL_MODULE_PLACE_SHIFT).to_le_bytes());
+            }
+        }
+        let (result, bytes) = backend.exchange(CONTROL_MODULES_LAYOUT, &payload)?;
+        match result {
+            CONTROL_CHANGED => return Err(layout_changed()),
+            CONTROL_INVALID => return Err(invalid_layout()),
+            _ => checked(result, bytes)?,
+        };
+        Ok(Reply::json(
+            200,
+            states_json(&read_states(backend.as_mut())?, &ModuleView::of(context)),
+        ))
+    }
+}
+
 fn not_allowed() -> Problem {
     problem(
         405,
@@ -708,6 +814,7 @@ mod tests {
                 CONTROL_MODULES_READ => {
                     let flags = CONTROL_MODULE_ENABLED
                         | CONTROL_MODULE_ORDERABLE
+                        | CONTROL_MODULE_PLACEABLE
                         | CONTROL_MODULE_ROOT << CONTROL_MODULE_PLACE_SHIFT;
                     let name = u32::from_le_bytes(*b"GUID");
                     let rest = u32::from_le_bytes(*b"ES\0\0");
@@ -747,6 +854,18 @@ mod tests {
                     0,
                     vec![9; 2048.min(ICON_SIZE - word(payload, 4).unwrap() as usize)],
                 ),
+                // The layout of the test: GUIDES hidden.
+                CONTROL_MODULES_LAYOUT if self.answer == 0 => {
+                    let hidden = words(&[CONTROL_MODULE_HIDDEN << CONTROL_MODULE_PLACE_SHIFT]);
+                    (
+                        if payload == hidden {
+                            0
+                        } else {
+                            CONTROL_INVALID
+                        },
+                        Vec::new(),
+                    )
+                }
                 _ => (self.answer, Vec::new()),
             })
         }
@@ -922,6 +1041,66 @@ mod tests {
                 "invalid_request",
                 "{bad}"
             );
+        }
+    }
+
+    #[test]
+    fn a_layout_places_each_module_once() {
+        let layout = |answer| {
+            LookApi::new(Box::new(Fake {
+                sent: Vec::new(),
+                value: 2,
+                answer,
+            }))
+        };
+        let api = layout(0);
+        let read = call(&api, "GET /v1/params/modules", b"", false);
+        let value: Value = serde_json::from_slice(&read.body).unwrap();
+        assert_eq!(value["toolbarMax"], 4);
+        assert_eq!(value["modules"][0]["placeable"], true);
+        let hidden = br#"{"toolbar":[],"root":[],"hidden":["GUIDES"]}"#;
+        let put = change(&api, "PUT /v1/params/modules/layout", hidden, false);
+        assert_eq!(put.status, 200);
+        let value: Value = serde_json::from_slice(&put.body).unwrap();
+        assert_eq!(value["toolbarMax"], 4);
+        assert_eq!(value["modules"][0]["placeable"], true);
+        for (body, status, error) in [
+            (
+                &br#"{"toolbar":["GUIDES"],"root":["GUIDES"],"hidden":[]}"#[..],
+                400,
+                "invalid_layout",
+            ),
+            (
+                br#"{"toolbar":["A","B","C","D","GUIDES"],"root":[],"hidden":[]}"#,
+                400,
+                "invalid_layout",
+            ),
+            (br#"{"root":["GUIDES"]}"#, 400, "invalid_layout"),
+            (
+                br#"{"toolbar":[],"root":[],"hidden":[]}"#,
+                409,
+                "layout_changed",
+            ),
+            (
+                br#"{"toolbar":[],"root":["GUIDES","OTHER"],"hidden":[]}"#,
+                409,
+                "layout_changed",
+            ),
+        ] {
+            let reply = change(&api, "PUT /v1/params/modules/layout", body, false);
+            assert_eq!((reply.status, code(&reply)), (status, error.to_owned()));
+        }
+        for (answer, error) in [
+            (CONTROL_BUSY, "camera_busy"),
+            (CONTROL_CHANGED, "layout_changed"),
+        ] {
+            let reply = change(
+                &layout(answer),
+                "PUT /v1/params/modules/layout",
+                hidden,
+                false,
+            );
+            assert_eq!(code(&reply), error);
         }
     }
 }

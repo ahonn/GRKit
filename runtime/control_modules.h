@@ -5,6 +5,7 @@
    (runtime/control_looks.h). They read the texts and values of the module
    pages, and change Enable, the values, Options, Order, and ADJ Order with
    the code of those MENU rows, so a change saves and applies as in MENU.
+   Two more read and set the rows of GRKit Settings in the same way.
 
    Each command selects pages through GRKIT_HOST_MODULE_CHOICE, the page of
    the generic callbacks, and puts the selection back. A change checks each
@@ -104,8 +105,9 @@ static u32 control_page_orders(volatile u32 *h,const u8 *values,u32 n) {
     return 1;
 }
 
-/* The entry of a module at `at`, or 0 when it does not fit: the new `at`. */
-static CONTROL_FRAME u32 control_module_entry(volatile u32 *h,u32 module,u32 place,u32 orderable,u8 *out,u32 at) {
+/* The entry of a module at `at`, or 0 when it does not fit: the new `at`.
+   `flags` has GRKIT_CONTROL_MODULE_ORDERABLE and GRKIT_CONTROL_MODULE_PLACEABLE. */
+static CONTROL_FRAME u32 control_module_entry(volatile u32 *h,u32 module,u32 place,u32 flags,u8 *out,u32 at) {
     ControlModuleRow rows[CONTROL_MODULE_ROWS];
     u8 values[CHOICE_SEQUENCE];
     u32 managed, settings=control_module_rows(h,module,rows,&managed);
@@ -117,7 +119,7 @@ static CONTROL_FRAME u32 control_module_entry(volatile u32 *h,u32 module,u32 pla
     word|=(status==MANAGE_LOADED ? (manage_halted(h,module) ? GRKIT_CONTROL_MODULE_STOPPED : GRKIT_CONTROL_MODULE_RUNNING) :
            status==MANAGE_SAFE ? GRKIT_CONTROL_MODULE_SAFE : GRKIT_CONTROL_MODULE_FAILED)<<GRKIT_CONTROL_MODULE_STATUS_SHIFT;
     if(!manage_off(h,module)) word|=GRKIT_CONTROL_MODULE_ENABLED;
-    if(orderable) word|=GRKIT_CONTROL_MODULE_ORDERABLE;
+    word|=flags;
     control_looks_put(out+at,word);
     /* The file name, without the error status after it. */
     for(s=0,name=1;s<8U;++s) {
@@ -140,7 +142,7 @@ static CONTROL_FRAME u32 control_module_entry(volatile u32 *h,u32 module,u32 pla
 static CONTROL_FRAME u32 control_modules_read(volatile u32 *h,const u8 *payload,u32 length,u8 *out,u32 *size) {
     ManagePlaces p;
     u8 list[MANAGE_MODULES], places[MANAGE_MODULES];
-    u32 count=manage_count(h), first, n=0, seen=0, roots=0, i, k=0, at=GRKIT_CONTROL_MODULES_HEADER, next;
+    u32 count=manage_count(h), first, n=0, seen=0, roots=0, placed, i, k=0, at=GRKIT_CONTROL_MODULES_HEADER, next;
     if(length!=4) return CONTROL_BAD_LENGTH;
     first=control_looks_word(payload);
     manage_places(h,&p);
@@ -148,6 +150,7 @@ static CONTROL_FRAME u32 control_modules_read(volatile u32 *h,const u8 *payload,
     for(i=0;i<p.roots;++i) { roots|=1U<<p.root[i]; places[n]=GRKIT_CONTROL_MODULE_ROOT; list[n++]=(u8)p.root[i]; }
     for(i=0;i<p.hiddens;++i) { places[n]=GRKIT_CONTROL_MODULE_HIDDEN; list[n++]=(u8)p.hidden[i]; }
     for(i=0;i<n;++i) seen|=1U<<list[i];
+    placed=seen;
     /* A module that ADJ cannot show keeps the place of its CORE.POS. */
     for(i=0;i<count;++i) {
         u32 place;
@@ -165,7 +168,8 @@ static CONTROL_FRAME u32 control_modules_read(volatile u32 *h,const u8 *payload,
     n=next;
     if(first>n) return CONTROL_INVALID;
     for(i=first;i<n;++i,++k) {
-        next=control_module_entry(h,list[i],places[i],roots>>list[i]&1U,out,at);
+        next=control_module_entry(h,list[i],places[i],(roots>>list[i]&1U ? GRKIT_CONTROL_MODULE_ORDERABLE : 0)|
+                                  (placed>>list[i]&1U ? GRKIT_CONTROL_MODULE_PLACEABLE : 0),out,at);
         if(!next) break;
         at=next;
     }
@@ -399,6 +403,82 @@ static CONTROL_FRAME u32 control_modules_order(volatile u32 *h,const u8 *payload
     for(i=0;i<p.roots;++i) setting_store(h,manage_off_handle(h,control_looks_word(payload+4U*i))+1U,i+1U);
     return 0;
 }
+/* The places of each module that ADJ can show, as MENU > ADJ Order sets
+   them: the toolbar in its order, the root in its order, then the hidden
+   modules, each once. Each module of the page gets its place as CORE.POS
+   (runtime/manage.h: manage_place_set), so ADJ shows the change at once. The
+   toolbar keeps no empty entry between its modules. */
+static CONTROL_FRAME u32 control_modules_layout(volatile u32 *h,const u8 *payload,u32 length) {
+    ManagePlaces p;
+    u32 i, j, n, seen=0, last=GRKIT_CONTROL_MODULE_TOOLBAR, pins=0, roots=0, placeable=0;
+    manage_places(h,&p);
+    for(i=0;i<MANAGE_PINS;++i) if(p.pins[i]<MANAGE_MODULES) { placeable|=1U<<p.pins[i]; ++pins; }
+    for(i=0;i<p.roots;++i) placeable|=1U<<p.root[i];
+    for(i=0;i<p.hiddens;++i) placeable|=1U<<p.hidden[i];
+    n=pins+p.roots+p.hiddens;
+    if(length&3U || length>4U*MANAGE_MODULES) return CONTROL_BAD_LENGTH;
+    if(length!=4U*n) return CONTROL_CHANGED;
+    for(i=0,pins=0;i<n;++i) {
+        u32 word=control_looks_word(payload+4U*i), module=word&0xffU;
+        u32 place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT;
+        if(word&~(0xffU|GRKIT_CONTROL_MODULE_PLACE_MASK<<GRKIT_CONTROL_MODULE_PLACE_SHIFT) || place>GRKIT_CONTROL_MODULE_HIDDEN ||
+           place<last) return CONTROL_INVALID;
+        last=place;
+        if(place==GRKIT_CONTROL_MODULE_TOOLBAR && ++pins>MANAGE_PINS) return CONTROL_INVALID;
+        if(module>=MANAGE_MODULES || !(placeable>>module&1U)) return CONTROL_CHANGED;
+        if(seen>>module&1U) return CONTROL_INVALID;
+        seen|=1U<<module;
+    }
+    if(!control_looks_idle(h)) return CONTROL_BUSY;
+    for(i=0,j=0;i<n;++i) {
+        u32 word=control_looks_word(payload+4U*i), module=word&0xffU, place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT, position;
+        if(place==GRKIT_CONTROL_MODULE_TOOLBAR) position=MANAGE_POS_PIN+j++;
+        else if(place==GRKIT_CONTROL_MODULE_ROOT) position=++roots;
+        else position=MANAGE_POS_HIDDEN;
+        setting_store(h,manage_off_handle(h,module)+1U,position);
+    }
+    return 0;
+}
+
+/* The GRKit settings of the phone, in the order of the GRKIT_CONTROL_SETTING_*
+   indexes: the handle + 1 of each (0 without it), its value, its store, and
+   its number of values. The getters and stores are those of the MENU rows
+   (runtime/manage.h), so a change saves and keeps its copy as there. */
+typedef struct {
+    u32 (*handle)(volatile u32 *h);
+    u32 (*value)(volatile u32 *h);
+    void (*set)(volatile u32 *h,u32 value);
+    u32 values;
+} ControlSetting;
+static const ControlSetting control_settings[GRKIT_CONTROL_SETTINGS]={
+    {start_handle,start_value,start_set,MANAGE_START_VALUES},
+    {raw_handle,raw_value,raw_set,MANAGE_RAW_VALUES},
+    {unit_handle,unit_value,unit_set,MANAGE_UNIT_VALUES},
+    {battery_handle,battery_simple,battery_set,MANAGE_BATTERY_VALUES},
+    {battery_percent_handle,battery_percent_on,battery_percent_set,MANAGE_BATTERY_PERCENT_VALUES},
+    {playback_info_handle,playback_info_on,playback_info_set,MANAGE_PLAYBACK_INFO_VALUES},
+    {goodbye_handle,goodbye_custom,goodbye_set,MANAGE_GOODBYE_VALUES},
+    {goodbye_text_handle,goodbye_text_shown,goodbye_text_set,MANAGE_GOODBYE_TEXT_VALUES},
+};
+static CONTROL_FRAME u32 control_settings_read(volatile u32 *h,u32 length,u8 *out,u32 *size) {
+    u32 i;
+    if(length) return CONTROL_BAD_LENGTH;
+    for(i=0;i<GRKIT_CONTROL_SETTINGS;++i)
+        control_looks_put(out+4U*i,control_settings[i].handle(h) ? control_settings[i].value(h) : GRKIT_CONTROL_SETTING_NONE);
+    *size=4U*GRKIT_CONTROL_SETTINGS;
+    return 0;
+}
+static CONTROL_FRAME u32 control_settings_set(volatile u32 *h,const u8 *payload,u32 length) {
+    u32 index, value;
+    if(length!=8) return CONTROL_BAD_LENGTH;
+    index=control_looks_word(payload);
+    value=control_looks_word(payload+4);
+    if(index>=GRKIT_CONTROL_SETTINGS || !control_settings[index].handle(h) || value>=control_settings[index].values)
+        return CONTROL_INVALID;
+    if(!control_looks_idle(h)) return CONTROL_BUSY;
+    control_settings[index].set(h,value);
+    return 0;
+}
 static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request *request,u32 *size) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], result;
     /* ADJ Order reads a mask that only the menu refreshes, so it can be
@@ -411,6 +491,9 @@ static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request 
     case GRKIT_CONTROL_MODULE_TILE: result=control_module_tile(h,request->payload,request->length,request->payload,size); break;
     case GRKIT_CONTROL_MODULE_SET: result=control_module_set(h,request->payload,request->length); break;
     case GRKIT_CONTROL_MODULES_ORDER: result=control_modules_order(h,request->payload,request->length); break;
+    case GRKIT_CONTROL_MODULES_LAYOUT: result=control_modules_layout(h,request->payload,request->length); break;
+    case GRKIT_CONTROL_SETTINGS_READ: result=control_settings_read(h,request->length,request->payload,size); break;
+    case GRKIT_CONTROL_SETTINGS_SET: result=control_settings_set(h,request->payload,request->length); break;
     default: result=CONTROL_UNSUPPORTED; break;
     }
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;

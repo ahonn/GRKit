@@ -31,6 +31,14 @@ impl Reply {
             ],
         }
     }
+    /// A reply without a body, such as 204.
+    pub fn empty(status: u16) -> Self {
+        Self {
+            status,
+            body: Vec::new(),
+            headers: vec![("Cache-Control".into(), "no-store".into())],
+        }
+    }
     pub fn binary(status: u16, body: Vec<u8>, content_type: &str) -> Self {
         Self {
             status,
@@ -154,6 +162,8 @@ impl Service {
             || route.starts_with("modules/")
             || route == "params/modules"
             || route.starts_with("params/modules/")
+            || route == "params/settings"
+            || route == "shutdown-picture"
         {
             let card_id = self.current_card_id(env.card.root()).ok();
             let pending = env.card.state().map_or(true, |state| state != "none")
@@ -171,6 +181,9 @@ impl Service {
                     .and_then(|device| crate::update::recipe_family(&device.model)),
             };
             if let Some(reply) = self.looks.handle_modules(request, body, &context) {
+                return reply;
+            }
+            if let Some(reply) = self.looks.handle_settings(request, body, &context) {
                 return reply;
             }
             if let Some(reply) = self
@@ -222,6 +235,9 @@ impl Service {
             .map(|request| software_summary(&request));
         let writable = readable && card_id.is_some();
         let module_settings = self.looks.module_settings();
+        // The runtime that answers CONTROL_SETTINGS_READ also answers
+        // CONTROL_MODULES_LAYOUT: the two commands came together.
+        let camera_settings = self.looks.camera_settings();
         Reply::json(
             200,
             json!({
@@ -231,7 +247,10 @@ impl Service {
                 "storage":{"state":if readable {"ready"} else {"unavailable"},"writable":writable,"freeBytes":camera.as_ref().and_then(|c| c.free_bytes)},
                 "runtime":runtime,
                 "writeAccess":{"allowed":writable,"reason":if writable {None} else {Some("identity_unavailable")}},
-                "capabilities":{"looks":looks_capabilities,"recipes":{"read":true,"write":true},"moduleSettings":{"read":module_settings,"write":module_settings}},
+                "capabilities":{"looks":looks_capabilities,"recipes":{"read":true,"write":true},"moduleSettings":{"read":module_settings,"write":module_settings},
+                    "cameraSettings":{"read":camera_settings,"write":camera_settings},
+                    "moduleLayout":{"write":module_settings && camera_settings},
+                    "shutdownPicture":{"read":writable,"write":writable}},
                 "limits":{"loadedLooks":40,"listedLooks":64,"lookNameAsciiCharacters":16,"maxLookBytes":8704,"maxPackageBytes":crate::update::MAX_PACKAGE},
                 "activeRequests":active.into_iter().collect::<Vec<_>>()
             }),
@@ -625,6 +644,25 @@ mod tests {
         assert_eq!(value["camera"]["model"], "RICOH GR III");
         assert_eq!(value["grkit"]["version"], "1.6.2");
         assert_eq!(value["writeAccess"]["allowed"], true);
+        // A camera without a runtime session has no settings commands; the
+        // card takes the shutdown picture.
+        assert_eq!(
+            value["capabilities"]["cameraSettings"],
+            json!({"read":false,"write":false})
+        );
+        assert_eq!(
+            value["capabilities"]["moduleLayout"],
+            json!({"write":false})
+        );
+        assert_eq!(
+            value["capabilities"]["shutdownPicture"],
+            json!({"read":true,"write":true})
+        );
+        let picture = call(&service, &card, "GET", "/v1/shutdown-picture", b"");
+        assert_eq!(
+            (picture.status, body(&picture)["code"].clone()),
+            (404, json!("not_found"))
+        );
         let missing = call(&service, &card, "GET", "/v1/other", b"");
         assert_eq!(missing.status, 404);
         assert_eq!(

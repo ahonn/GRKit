@@ -553,11 +553,15 @@ fn remove_file(root: &Path, name: &str) -> Result<()> {
             "The Look could not be removed from the card.",
         )
     })?;
+    look_up_unused(&directory);
+    Ok(())
+}
+/// Look up one name that no file of `directory` has, after a delete there.
+fn look_up_unused(directory: &Path) {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |time| time.subsec_nanos() ^ time.as_secs() as u32);
     let _ = fs::metadata(directory.join(format!("{stamp:08X}.TMP")));
-    Ok(())
 }
 
 fn decode(id: &str, bytes: &[u8]) -> Result<(effects::Effect, Vec<u8>)> {
@@ -1174,5 +1178,6 @@ fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
 mod covers;
 mod module_api;
 mod recipe_api;
+mod settings_api;
 #[cfg(test)]
 mod tests;

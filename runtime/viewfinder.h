@@ -473,8 +473,8 @@ static GRKIT_ICON_COMPACT void viewfinder_status_paint(volatile u32 *h,const Sur
             gap=STATUS_LABEL_GAP;
         } else {
             if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
-            else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
-                icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
+            else if(id-GRKIT_ICON_EFFECT(0)<h[GRKIT_HOST_COUNT/4])
+                icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-GRKIT_ICON_EFFECT(0))*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
             if(!icon) continue;
         }
         if(next+w>STATUS_RIGHT-STATUS_LEFT) break;
@@ -587,8 +587,8 @@ static GRKIT_ICON_COMPACT void viewfinder_prepare(u32 canvas) {
 static GRKIT_ICON_COMPACT u32 panel_icon(volatile u32 *h,u32 id) {
     u32 icon=0;
     if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) icon=module_tile_address(h,id);
-    else if(id-0x8000U<h[GRKIT_HOST_COUNT/4])
-        icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-0x8000U)*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
+    else if(id-GRKIT_ICON_EFFECT(0)<h[GRKIT_HOST_COUNT/4])
+        icon=WORD(h[GRKIT_HOST_RECORDS/4]+(id-GRKIT_ICON_EFFECT(0))*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
     return icon ? icon+GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE : 0;
 }
 /* The pixels of the camera's own icon `id` of the firmware icon table: its
