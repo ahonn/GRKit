@@ -1,7 +1,7 @@
 #ifndef GRKIT_BATTERY_PERCENT_H
 #define GRKIT_BATTERY_PERCENT_H
 /* Battery Percentage, a row of Display Settings: the battery icon shows the
-   charge as a number in steps of 10 %. The native bars stay full for most of
+   charge as a number in steps of 2 %. The native bars stay full for most of
    the charge.
 
    The sub-CPU report holds the source, the voltage, the native level, and the
@@ -45,7 +45,7 @@ _Static_assert(BATTERY_DIGIT_TOP+GRKIT_BATTERY_DIGIT_HEIGHT<=BATTERY_ICON_HEIGHT
 #define BATTERY_FILL (0xff000000U|GRKIT_TILE_FILL*0x010101U)
 #define BATTERY_FILL_LOW 0xff20b0d6U
 /* A shown value changes only when the charge is this far from it. */
-#define BATTERY_PERCENT_HOLD 7U
+#define BATTERY_PERCENT_HOLD 3U
 /* GRKIT_HOST_BATTERY_ICON: the shown value, and the picture that has it. */
 #define BATTERY_SHOWN_MASK 0xffU
 #define BATTERY_FRONT 0x100U
@@ -76,7 +76,7 @@ static u32 battery_charge(u32 report,u32 level) {
    it, so that it does not move between two values. */
 static u32 battery_step(u32 charge,u32 shown) {
     if(shown && charge+BATTERY_PERCENT_HOLD>shown && charge<shown+BATTERY_PERCENT_HOLD) return shown;
-    return BATTERY_TENS(charge+5U)*10U;
+    return (charge+1U)&~1U;
 }
 /* The outline of the battery, as the camera draws it, around `fill`. */
 static u32 battery_frame(u32 x,u32 y,u32 fill) {
@@ -116,9 +116,10 @@ static void battery_write(volatile u32 *h,volatile u32 *to,u32 value) {
     const volatile u8 *table=(const volatile u8 *)GRKIT_LABELS(h);
     u32 digits[3], n=0, width=BATTERY_DIGIT_OUTLINES, tens=BATTERY_TENS(value), x, y, i;
     u32 fill=value<=BATTERY_PERCENT_LOW ? BATTERY_FILL_LOW : BATTERY_FILL;
+    u32 ones=value-tens*10U;
     if(tens==10U) { digits[n++]=1U; tens=0; }
     digits[n++]=tens;
-    digits[n++]=0U;
+    digits[n++]=ones;
     for(y=0;y<BATTERY_ICON_HEIGHT;++y)
         for(x=0;x<BATTERY_ICON_WIDTH;++x) to[y*BATTERY_ICON_WIDTH+x]=battery_frame(x,y,fill);
     for(i=0;i<n;++i) width+=card_field(table,(GRKIT_BATTERY_DIGIT_FIRST+digits[i])*8U,2)-BATTERY_DIGIT_OUTLINES;

@@ -5689,8 +5689,8 @@ static void battery_percent_reads_the_power_report(void)
     power_guard = power_service = 0;
     assert(battery_charge(0x4f042811U, 4) == 79);
     assert(!battery_charge(0x4f042812U, 4) && !battery_charge(0x65042811U, 4) && !battery_charge(0x4f022811U, 4));
-    assert(battery_step(79, 0) == 80 && battery_step(74, 80) == 80 && battery_step(73, 80) == 70);
-    assert(battery_step(86, 80) == 80 && battery_step(87, 80) == 90 && battery_step(100, 90) == 100);
+    assert(battery_step(79, 0) == 80 && battery_step(78, 80) == 80 && battery_step(77, 80) == 78);
+    assert(battery_step(82, 80) == 80 && battery_step(83, 80) == 84 && battery_step(100, 96) == 100);
     assert(battery_frame(0, 0, BATTERY_FILL) >> 24 == 0 && battery_frame(9, 10, BATTERY_FILL) == 0xfffefefeU &&
            battery_frame(30, 20, BATTERY_FILL_LOW) == BATTERY_FILL_LOW && battery_frame(7, 20, BATTERY_FILL_LOW) == BATTERY_FILL && battery_frame(4, 20, BATTERY_FILL) == 0xfe000000U);
 }
