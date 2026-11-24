@@ -22,7 +22,7 @@
    gives the same picture after any other recipe. Those are the look of
    CORE.TONE (Off, or an effect and its Fn adjustments), the grain of
    CORE.GRAIN and CORE.GRAIN_SIZE, the settings of modules that are part
-   of the look (GRKIT_RECIPE_SETTING_LOOK: Glow), and the native settings
+   of the look (GRKIT_RECIPE_SETTING_LOOK: Glow and the Grain style), and the native settings
    (runtime/native_look.h): the native type of the active set, its
    parameters, and its native grain while no effect is active, the white
    balance, and the correction and noise reduction settings. A recipe with

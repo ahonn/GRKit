@@ -75,6 +75,8 @@ export interface Recipe {
   family: Family;
   look: Look;
   grain: Grain | null;
+  /** The style of Grain: 0 System, 1 Film-like, or null in a recipe without the Grain module. */
+  grainStyle?: number | null;
   glow: Glow | null;
   border: Border | null;
   whiteBalance: WhiteBalance | null;

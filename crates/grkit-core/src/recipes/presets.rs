@@ -120,6 +120,7 @@ impl Native {
             grain: Some(GRAIN_OFF),
             glow: Some(GLOW_OFF),
             // A preset keeps the border of the camera.
+            grain_style: None,
             border: None,
             white_balance: Some(WhiteBalance {
                 mode,
@@ -173,6 +174,7 @@ pub fn presets() -> Vec<Preset> {
             halation_color: Some(0),
         }),
         // A preset keeps the border of the camera.
+        grain_style: None,
         border: None,
         white_balance: Some(WhiteBalance {
             shift_ba: CINESTILL_SHIFT_BA,

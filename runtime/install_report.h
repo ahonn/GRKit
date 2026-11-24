@@ -76,7 +76,8 @@ static void say_recipes(void)
         say(p->problem == RECIPE_PROBLEM_EFFECT ? ": its effect is not installed, or Film Look does not run\r\n" :
             p->problem == RECIPE_PROBLEM_GRAIN ? ": its Grain needs the Grain module\r\n" :
             p->problem == RECIPE_PROBLEM_MODULE(0) ? ": its Glow needs the Glow module\r\n" :
-            ": its Border needs the Border module\r\n");
+            p->problem == RECIPE_PROBLEM_MODULE(1) ? ": its Border needs the Border module\r\n" :
+            ": its Grain style needs the Grain module\r\n");
     }
     if (recipe_problems_more) { say("and "); say_number(recipe_problems_more); say(" more\r\n"); }
 }

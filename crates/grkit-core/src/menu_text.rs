@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 87;
+pub const STRINGS: usize = 88;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -160,7 +160,7 @@ struct Words {
     /// The message after an apply that left out a setting of a module that
     /// is not loaded, for each module of `recipes::setting_modules`: Glow,
     /// then Border.
-    recipe_no_module: [&'static str; 2],
+    recipe_no_module: [&'static str; 3],
     /// The mark after the name of a recipe whose effect is not installed.
     recipe_missing_mark: &'static str,
     /// The names of the native Image Control types in the order of
@@ -224,6 +224,7 @@ const ENGLISH: Words = Words {
     recipe_no_module: [
         "Glow needs the Glow module",
         "Border needs the Border module",
+        "Grain needs the Grain module",
     ],
     recipe_missing_mark: "effect missing",
     native_types: [
@@ -302,7 +303,11 @@ const SIMPLIFIED_CHINESE: Words = Words {
     recipe_actions: ["重命名", "删除"],
     recipe_apply: "应用",
     recipe_view: "查看",
-    recipe_no_module: ["光晕需要光晕模块", "边框需要边框模块"],
+    recipe_no_module: [
+        "光晕需要光晕模块",
+        "边框需要边框模块",
+        "颗粒感需要颗粒感模块",
+    ],
     recipe_missing_mark: "缺少效果",
     native_types: [
         "标准",
@@ -380,7 +385,11 @@ const TRADITIONAL_CHINESE: Words = Words {
     recipe_actions: ["重命名", "刪除"],
     recipe_apply: "套用",
     recipe_view: "檢視",
-    recipe_no_module: ["光暈需要光暈模組", "邊框需要邊框模組"],
+    recipe_no_module: [
+        "光暈需要光暈模組",
+        "邊框需要邊框模組",
+        "粒紋感需要粒紋感模組",
+    ],
     recipe_missing_mark: "缺少效果",
     native_types: [
         "標準",
@@ -463,6 +472,7 @@ const JAPANESE: Words = Words {
     recipe_no_module: [
         "グローにはグローモジュールが必要",
         "ボーダーにはボーダーモジュールが必要",
+        "粒状感には粒状感モジュールが必要",
     ],
     recipe_missing_mark: "エフェクトなし",
     native_types: [
@@ -544,6 +554,7 @@ const KOREAN: Words = Words {
     recipe_no_module: [
         "글로우에는 글로우 모듈이 필요함",
         "테두리에는 테두리 모듈이 필요함",
+        "입자감에는 입자감 모듈이 필요함",
     ],
     recipe_missing_mark: "효과 없음",
     native_types: [
@@ -668,7 +679,7 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "RECIPE",
-        17,
+        18,
         "The page of recipes: the Undo and Save rows, the text before a saved name, \
          the text before and after the name to delete, the message when the recipes are \
          full, the text of a missing effect, the name of a recipe without a look, the \

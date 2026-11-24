@@ -32,7 +32,7 @@ uses = ["CORE.GRAIN", "CORE.GRAIN_SIZE"]
 [[settings]]
 key = "STYLE"
 values = 2
-default = 1
+default = 0
 saved = true
 public = true
 
