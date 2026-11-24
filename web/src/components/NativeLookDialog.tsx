@@ -54,10 +54,10 @@ interface PickerHost {
 const ACCEPT = '.zip,.bin,.frm';
 
 /**
- * The dialog that unlocks the native looks of one camera's firmware (GR IV Cinema looks, GR II
- * Positive Film): a link to Ricoh's firmware page, a file choice or a drop of the downloaded ZIP,
- * then the read in a worker. The file stays in the browser. A file of the other camera gives that
- * camera's looks, and the done text names the camera of the file.
+ * The dialog that unlocks the native looks of one camera's firmware (GR IV Cinema and Monochrome
+ * looks, GR II Positive Film): a link to Ricoh's firmware page, a file choice or a drop of the
+ * downloaded ZIP, then the read in a worker. The file stays in the browser. A file of the other
+ * camera gives that camera's looks, and the done text names the camera of the file.
  */
 export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props) {
   const ids = useId();

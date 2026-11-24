@@ -26,6 +26,9 @@
 #define SETTINGS_SHADING 0x7b3
 #define SETTINGS_CLARITY 0x7b4
 #define SETTINGS_GRAIN 0x7b5
+/* The firmware has the Rough grain of Grainy (type 28), which a GRKit look can take
+   (grain_type in runtime/picture.S). */
+#define GRKIT_ROUGH_GRAIN 1
 #define SETTINGS_HDR 0x7b8
 /* The ImageTone code of the first look of GR IV Monochrome. Its looks record
    0x8100 and up, in the order Standard, Solid, Soft, Hi-Contrast, Grainy,

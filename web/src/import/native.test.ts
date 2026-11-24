@@ -18,52 +18,61 @@ describe('importsForCamera', () => {
     effect('gr2-positive-film', 'native'),
     effect('gr2-positive-film-gr4', 'native'),
   ];
+  const solid = effect('gr4-mono-solid', 'native');
   const ids = (items: readonly { id: string }[]) => items.map((item) => item.id);
 
   it('keeps the GR III native looks on GR III and GR IIIx', () => {
     for (const camera of ['gr3', 'gr3x']) {
       expect(ids(importsForCamera(imported, camera, RELEASED))).toEqual(ids(imported.slice(0, 4)));
-      expect(ids(nativeLooksFor(camera, RELEASED))).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green', 'gr2-positive-film']);
+      expect(ids(nativeLooksFor(camera, RELEASED))).toEqual(NATIVE_LOOK_IDS.filter((id) => id !== 'gr2-positive-film-gr4'));
     }
   });
 
-  it('keeps only the GR IV Positive on GR IV, and no native look on GR IV Monochrome', () => {
-    expect(ids(nativeLooksFor('gr4', RELEASED))).toEqual(['gr2-positive-film-gr4']);
-    expect(ids(importsForCamera(imported, 'gr4', RELEASED))).toEqual(['lut-a', 'gr2-positive-film-gr4']);
+  it('gives GR IV the monochrome looks and its Positive, and GR IV Monochrome no native look', () => {
+    expect(ids(nativeLooksFor('gr4', RELEASED))).toEqual(
+      NATIVE_LOOK_IDS.filter((id) => id.startsWith('gr4-mono-') || id === 'gr2-positive-film-gr4'),
+    );
+    expect(ids(importsForCamera([...imported, solid], 'gr4', RELEASED))).toEqual([
+      'lut-a',
+      'gr2-positive-film-gr4',
+      'gr4-mono-solid',
+    ]);
     expect(nativeLooksFor('gr4m', RELEASED)).toEqual([]);
-    expect(ids(importsForCamera(imported, 'gr4m', RELEASED))).toEqual(['lut-a']);
+    expect(ids(importsForCamera([...imported, solid], 'gr4m', RELEASED))).toEqual(['lut-a']);
   });
 
-  it('hides GR II Positive before its release', () => {
+  it('hides GR II Positive and the monochrome looks before their release', () => {
     expect(ids(nativeLooksFor('gr3', '1.6.6'))).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green']);
     expect(nativeLooksFor('gr4', '1.6.6')).toEqual([]);
-    expect(ids(importsForCamera(imported, 'gr4', '1.6.6'))).toEqual(['lut-a']);
+    expect(ids(importsForCamera([...imported, solid], 'gr4', '1.6.6'))).toEqual(['lut-a']);
     expect(offeredCoverLooks('1.6.6')).not.toContain('gr2Positive');
     expect(offeredCoverLooks(RELEASED)).toContain('gr2Positive');
   });
 
   it('tells which native looks the page lacks', () => {
-    expect(NATIVE_LOOKS.map((look) => [look.id, look.firmware])).toEqual([
-      ['gr4-cinema-yellow', 'gr4'],
-      ['gr4-cinema-green', 'gr4'],
-      ['gr2-positive-film', 'gr2'],
-      ['gr2-positive-film-gr4', 'gr2'],
+    expect(NATIVE_LOOKS.filter((look) => look.firmware === 'gr2').map((look) => look.id)).toEqual([
+      'gr2-positive-film',
+      'gr2-positive-film-gr4',
     ]);
+    const cinema = NATIVE_LOOKS.slice(0, 2);
+    expect(cinema.map((look) => look.id)).toEqual(['gr4-cinema-yellow', 'gr4-cinema-green']);
     expect(NATIVE_LOOKS.map((look) => look.id)).toEqual(NATIVE_LOOK_IDS);
-    expect(missingNativeLooks(imported.slice(0, 1)).map((look) => look.id)).toEqual(
-      NATIVE_LOOKS.map((look) => look.id),
+    expect(missingNativeLooks(imported.slice(0, 1), cinema).map((look) => look.id)).toEqual(
+      cinema.map((look) => look.id),
     );
     expect(hasNativeLooks(imported.slice(0, 4))).toBe(false);
-    expect(hasNativeLooks(imported)).toBe(true);
-    expect(ids(missingNativeLooks(imported.slice(2, 3), nativeLooksFor('gr3', RELEASED)))).toEqual([
+    expect(hasNativeLooks(NATIVE_LOOKS.map((look) => effect(look.id, 'native')))).toBe(true);
+    const color = (camera: string) => nativeLooksFor(camera, RELEASED).filter((look) => !look.monochrome);
+    expect(ids(missingNativeLooks(imported.slice(2, 3), color('gr3')))).toEqual([
       'gr4-cinema-yellow',
       'gr2-positive-film',
     ]);
-    expect(ids(missingNativeLooks(imported.slice(0, 1), nativeLooksFor('gr4', RELEASED)))).toEqual(['gr2-positive-film-gr4']);
+    expect(ids(missingNativeLooks(imported.slice(0, 1), color('gr4')))).toEqual(['gr2-positive-film-gr4']);
     // A Cinema look already on the card is not offered again as an unlock tile.
-    expect(
-      ids(missingNativeLooks([{ id: 'lut-a' }, { id: 'gr4-cinema-yellow' }], nativeLooksFor('gr3', RELEASED))),
-    ).toEqual(['gr4-cinema-green', 'gr2-positive-film']);
+    expect(ids(missingNativeLooks([{ id: 'lut-a' }, { id: 'gr4-cinema-yellow' }], color('gr3')))).toEqual([
+      'gr4-cinema-green',
+      'gr2-positive-film',
+    ]);
   });
 });
 

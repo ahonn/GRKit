@@ -131,25 +131,17 @@ dirty_resume:
 #endif
 #if defined(HOOK_GRAIN_ENABLE) || defined(HOOK_GRAIN_PARTICLE)
 // r3 = the level minus 1: 0 to 3 for Weak to Extra Strong, or a value above 3
-// for Off. The flags are those of `cmp r3, #3`. Without a module that uses
-// CORE.GRAIN, as after a soft Off of Grain (runtime/manage.h), the level is
-// Off.
-// A RAW development reads the level of its own settings
-// (picture_header_word).
+// for Off. The flags are those of `cmp r3, #3`. picture_grain_level gives the
+// level of the Grain module, or the grain of the look while the module is Off.
+// A RAW development reads the level of its own settings.
 grain_level:
-    ldr r3, =GRKIT_HEADER_REFERENCE
-    ldr r3, [r3, #GRKIT_HOST_CAPABILITIES]
-    tst r3, #GRKIT_CORE_GRAIN_BIT
-    mvneq r3, #0
-    beq 1f
     push {r0-r2, r12, lr}
     sub sp, sp, #4
-    mov r0, #GRKIT_HOST_GRAIN
-    bl picture_header_word
+    bl picture_grain_level
     sub r3, r0, #1
     add sp, sp, #4
     pop {r0-r2, r12, lr}
-1:  cmp r3, #3
+    cmp r3, #3
     bx lr
 
 // The flags ne while the Grain module draws the grain itself (its Film-like
@@ -188,14 +180,12 @@ grain_gate:
 // Auto (0) follows the ISO: small to ISO 400, medium to ISO 800, large above.
 // The native ISO index is round((Sv - 1) * 3), so ISO 400 ends at Sv 43/6 and
 // ISO 800 at Sv 49/6. For a positive float, the bit patterns compare as the
-// values. A negative value, an infinity, or a NaN gives small grain. A patch of
-// PipelineGrainSize applies only with a module that uses CORE.GRAIN_SIZE, so
-// the header word is set. Changes r1 and the flags.
+// values. A negative value, an infinity, or a NaN gives small grain. Changes r1
+// and the flags.
 grain_size_of:
     push {r0, r2, r3, r12, lr}
     sub sp, sp, #4
-    mov r0, #GRKIT_HOST_GRAIN_SIZE
-    bl picture_header_word
+    bl picture_grain_size
     mov r1, r0
     add sp, sp, #4
     pop {r0, r2, r3, r12, lr}
@@ -218,12 +208,44 @@ grain_size_of:
     bx lr
 #endif
 
+#ifdef GRKIT_ROUGH_GRAIN
+// Sets the flags from picture_rough: NE when the look of this shot takes the
+// Rough grain of the firmware. Keeps r0 to r2. Changes r3.
+grain_rough:
+    push {r0-r2, r12, lr}
+    sub sp, sp, #4
+    bl picture_rough
+    mov r3, r0
+    add sp, sp, #4
+    pop {r0-r2, r12, lr}
+    cmp r3, #0
+    bx lr
+
+// GR IV replaces `ldrb r3, [r4, #0x79c]`, the type test of SetEffectParameter
+// (`cmp r3, #0x1c`), which selects Rough for type 28, Grainy. The other uses of
+// the type keep the native value.
+.global grain_type
+grain_type:
+    push {lr}
+    bl grain_rough
+    pop {lr}
+    movne r3, #0x1c
+    ldrbeq r3, [r4, #0x79c]
+    bx lr
+#endif
+
 #ifdef HOOK_GRAIN_ENABLE
 // GR IV replaces `ldrb r3, [r4, #0x7b5]` (grain on). A cmp of r3 follows each
-// replaced load, so the hooks may change the flags.
+// replaced load, so the hooks may change the flags. Rough takes the defaults
+// of Grainy: grain on, strength 1, size 1.
 .global grain_enable
 grain_enable:
     push {lr}
+#ifdef GRKIT_ROUGH_GRAIN
+    bl grain_rough
+    movne r3, #1
+    popne {pc}
+#endif
     bl grain_level
     pop {lr}
     movls r3, #1
@@ -235,6 +257,11 @@ grain_enable:
 .global grain_strength
 grain_strength:
     push {lr}
+#ifdef GRKIT_ROUGH_GRAIN
+    bl grain_rough
+    movne r3, #1
+    popne {pc}
+#endif
     bl grain_level
     pop {lr}
     ldrbhi r3, [r4, #0x7b7]
@@ -247,10 +274,20 @@ grain_strength:
 // GR IV replaces `mov r0, #0x200` after the load of the luma amplitude r5 of
 // the grain tables (the 3 x 3 tables at 0x53b4bf3c by strength and size).
 // Each table entry is the input plus or minus min(input, 255 - input, r5),
-// so a larger r5 stays inside 0..255. Extra Strong scales r5. In the
-// Film-like style r5 is 0, so each entry is its input.
+// so a larger r5 stays inside 0..255. Extra Strong scales r5. The default grain
+// of a Monochrome look takes the amplitude that GR IV Monochrome reads for a
+// full picture at strength 2 and size 1: 80, where a color camera reads 40. A
+// small picture reads 13 on both. In the Film-like style r5 is 0, so each
+// entry is its input.
 .global grain_amplitude
 grain_amplitude:
+    push {r0-r3, r12, lr}
+    bl picture_look_grain_on
+    cmp r0, #0
+    beq 2f
+    cmp r5, #40
+    moveq r5, #80
+2:  pop {r0-r3, r12, lr}
     push {r3, lr}
     bl grain_level
     cmp r3, #3
@@ -273,6 +310,11 @@ grain_amplitude:
 .global grain_size
 grain_size:
     push {r0, r1, lr}
+#ifdef GRKIT_ROUGH_GRAIN
+    bl grain_rough
+    movne r3, #1
+    popne {r0, r1, pc}
+#endif
     bl grain_level
     ldrbhi r3, [r4, #0x7b6]
     bhi 1f

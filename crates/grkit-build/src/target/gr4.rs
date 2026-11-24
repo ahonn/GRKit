@@ -117,12 +117,14 @@ const LIVE_VIEW: &[HookSpec] = &[
 /// The grain tables: the `mov r0, #0x200` after the load of their luma
 /// amplitude, which gives Extra Strong.
 const GRAIN: &[HookSpec] = &[
-    bl("grain_enable", Framing, PipelineGrain),
-    bl("grain_strength", Framing, PipelineGrain),
-    bl("grain_size", Framing, PipelineGrainSize),
+    // Film Look needs these loads for the grain of its Grainy and Hi-Contrast looks.
+    bl_shared("grain_enable", Framing, PipelineGrain, &[Tuning]),
+    bl_shared("grain_type", Framing, PipelineGrain, &[Tuning]),
+    bl_shared("grain_strength", Framing, PipelineGrain, &[Tuning]),
+    bl_shared("grain_size", Framing, PipelineGrainSize, &[Tuning]),
     // Film Look needs the gate for the Shading and Clarity of its effects.
     bl_shared("grain_gate", Framing, PipelineGrain, &[Tuning]),
-    bl("grain_amplitude", Framing, PipelineGrain),
+    bl_shared("grain_amplitude", Framing, PipelineGrain, &[Tuning]),
 ];
 
 /// The mode dial (`runtime/mode_dial.h`): the BL to the setter of the user

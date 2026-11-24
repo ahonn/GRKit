@@ -651,12 +651,19 @@ static u32 grain_style_film(volatile u32 *h) {
         if(t[SETTINGS_ENTRY(i)]==GRAIN_STYLE_ID) return setting_value(h,i)==1U;
     return 0;
 }
+/* Whether the Grain module draws the grain of this shot: Film-like, and a
+   level other than Off. While the module is Off, the native stage keeps the
+   default grain of a look (picture_grain_level). */
+static u32 grain_module_film(volatile u32 *h) {
+    return (h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_GRAIN_BIT) && picture_header_word(GRKIT_HOST_GRAIN) &&
+        grain_style_film(h);
+}
 /* For grain_module_draws (runtime/picture.S): in the Film-like style the
    native grain stage runs as in the System style, with no amplitude, so
    that everything else that stage of the firmware does stays the same
    (such as the brightness that Glow's highlights depend on), and the plane
    filter of the Grain module adds the grain. */
-u32 grain_film_like(void) { return grain_style_film(framing_header()); }
+u32 grain_film_like(void) { return grain_module_film(framing_header()); }
 /* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
@@ -707,10 +714,55 @@ void picture_record_parameters(u32 entry,u32 shot) {
    not neutral. The record is the one that the build takes (module_parameters
    in runtime/processing.h): the effect of a RAW development, or the
    committed effect. Native processing keeps `flag`, the native result. */
+/* The grain that the look of this shot has by itself (GRKIT_RECORD_LOOK_GRAIN). */
+static u32 look_grain(volatile u32 *h) {
+    u32 record;
+    if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return 0;
+    record=PICTURE_DEVELOPING() ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
+    return owned(h,record) ? BYTE(record,GRKIT_RECORD_LOOK_GRAIN) : 0;
+}
+/* The level of CORE.GRAIN, 0 without a module that uses it. */
+static u32 grain_setting(volatile u32 *h) {
+    return h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_GRAIN_BIT ? picture_header_word(GRKIT_HOST_GRAIN) : 0;
+}
+/* 1 while the Grain module is Off and this shot takes the default grain of its
+   look: Hi-Contrast, and Grainy on a camera without the Rough grain. */
+static u32 look_default_grain(volatile u32 *h) {
+    u32 grain=look_grain(h);
+#ifdef GRKIT_ROUGH_GRAIN
+    if(grain==1) return 0;
+#endif
+    return grain && !grain_setting(h);
+}
+/* For runtime/picture.S: the grain level of this shot, 0 Off to 4 Extra Strong.
+   The Grain module wins. While it is Off, the default grain of a look is strong,
+   the native default of Hi-Contrast on GR IV Monochrome. */
+u32 picture_grain_level(void) {
+    volatile u32 *h=framing_header();
+    return look_default_grain(h) ? 3 : grain_setting(h);
+}
+/* For runtime/picture.S: 1 while this shot has the default grain of its look. */
+u32 picture_look_grain_on(void) {
+    return look_default_grain(framing_header());
+}
+/* For runtime/picture.S: the value of CORE.GRAIN_SIZE for this shot. The grain
+   of a look has medium size. */
+u32 picture_grain_size(void) {
+    return look_default_grain(framing_header()) ? 2 : picture_header_word(GRKIT_HOST_GRAIN_SIZE);
+}
+#ifdef GRKIT_ROUGH_GRAIN
+/* Whether this shot takes the Rough grain of the firmware: its look is Grainy. */
+u32 picture_rough(void) {
+    return look_grain(framing_header())==1;
+}
+#endif
 u32 picture_gate_flag(u32 flag) {
     volatile u32 *h=framing_header();
     u32 record, running;
     if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return flag;
+#ifdef GRKIT_ROUGH_GRAIN
+    if(picture_rough()) return 1;
+#endif
     running=PICTURE_DEVELOPING();
     record=running ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
     if(!owned(h,record)) return flag;
@@ -864,7 +916,7 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
     }
     /* Film-like: the Grain module draws the grain, and the native stage
        blends neutral noise (with no amplitude, grain_amplitude). */
-    if(grain_style_film(h)) {
+    if(grain_module_film(h)) {
         u8 *plane=GRAIN_MAP(buffer);
         u32 i;
         for(i=0;i<size;++i) plane[i]=128;
