@@ -111,6 +111,11 @@ enum Command {
         /// `--language`. `grkit guides` writes its source.
         #[arg(long)]
         guide: PathBuf,
+        /// Package one `--build` for a camera that runs more builds, as a
+        /// local build for one firmware. The package installs only on that
+        /// firmware.
+        #[arg(long)]
+        single_build: bool,
         #[arg(long)]
         out: PathBuf,
     },
@@ -131,7 +136,13 @@ enum Command {
         decode: bool,
     },
     /// Check package layout, profiles and checksums.
-    Verify { archive: PathBuf },
+    Verify {
+        archive: PathBuf,
+        /// Accept a package from `grkit package --single-build`. Without this
+        /// option, a package must hold each build of its camera.
+        #[arg(long)]
+        single_build: bool,
+    },
     /// List the cameras, the firmware releases that each runs, and the runtime
     /// build for each release.
     Cameras,
@@ -271,9 +282,10 @@ enum EffectsCommand {
         #[arg(long)]
         out: PathBuf,
     },
-    /// Read Cinema (Yellow) and Cinema (Green) from your GR IV firmware into new effect
-    /// definitions at OUT/ID/effect.json. FIRMWARE is an official GR IV zip or its
-    /// fwdc248b.bin, version 1.11, 1.20, or 1.21. GRKit ships none of this data.
+    /// Read native looks from your camera firmware into new effect definitions at
+    /// OUT/ID/effect.json: Cinema (Yellow) and Cinema (Green) from an official GR IV zip or its
+    /// fwdc248b.bin (1.11, 1.20, or 1.21), or GR II Positive (for GR III and for GR IV) from the official GR II zip or its
+    /// rg2_v003.frm (3.00). GRKit ships none of this data.
     Native {
         #[arg(long)]
         firmware: PathBuf,
@@ -511,8 +523,13 @@ fn run(command: Command) -> Result<Value> {
             command: EffectsCommand::Native { firmware, out },
         } => {
             let bytes = storage::read_bounded(&firmware, grkit_core::gr4_looks::MAX_FILE_SIZE)?;
-            let image = grkit_core::gr4_looks::Image::read(&bytes)?;
-            let definitions = image.definitions()?;
+            let (version, definitions) = if grkit_core::gr2_looks::detect(&bytes) {
+                let image = grkit_core::gr2_looks::Image::read(&bytes)?;
+                (image.version(), image.definitions()?)
+            } else {
+                let image = grkit_core::gr4_looks::Image::read(&bytes)?;
+                (image.source.version, image.definitions()?)
+            };
             let ids: Vec<String> = definitions
                 .iter()
                 .map(|d| d["effect_id"].as_str().unwrap_or_default().to_owned())
@@ -528,7 +545,7 @@ fn run(command: Command) -> Result<Value> {
                     &Files::from([("effect.json".to_owned(), text.into_bytes())]),
                 )?;
             }
-            Ok(json!({"output": out, "version": image.source.version, "effects": ids}))
+            Ok(json!({"output": out, "version": version, "effects": ids}))
         }
         Command::Effects {
             command:
@@ -606,6 +623,7 @@ fn run(command: Command) -> Result<Value> {
             camera,
             language,
             guide,
+            single_build,
             out,
         } => {
             let runtimes = build
@@ -623,7 +641,7 @@ fn run(command: Command) -> Result<Value> {
                 .iter()
                 .map(|path| storage::read_bounded(path, packaging::MAX_FILE_SIZE))
                 .collect::<Result<Vec<_>>>()?;
-            let package = packaging::assemble(
+            let package = packaging::assemble_with(
                 &runtimes,
                 &effects,
                 &modules,
@@ -631,6 +649,10 @@ fn run(command: Command) -> Result<Value> {
                 &packaging::Guide {
                     language,
                     pdf: &pdf,
+                },
+                packaging::Extras {
+                    single_build,
+                    ..Default::default()
                 },
             )?;
             storage::write_new(&out, &package.bytes)?;
@@ -696,10 +718,17 @@ fn run(command: Command) -> Result<Value> {
                 .with_context(|| format!("Could not write {}", out.display()))?;
             Ok(json!({"output": out, "recipes": library.len(), "bytes": file.len()}))
         }
-        Command::Verify { archive } => {
+        Command::Verify {
+            archive,
+            single_build,
+        } => {
             // Include room for ZIP metadata while bounding the archive read itself.
             let bytes = storage::read_bounded(&archive, 64 * 1024 * 1024)?;
-            let contents = packaging::verify_package(&bytes)?;
+            let contents = if single_build {
+                packaging::verify_single_build_package(&bytes)?
+            } else {
+                packaging::verify_package(&bytes)?
+            };
             Ok(
                 json!({"valid": true, "camera": contents.camera.id, "targets": contents.targets,
                 "effects": contents.effect_ids.len(),

@@ -175,11 +175,23 @@ fn runtime_target(runtime: &Files, camera: &Camera) -> Result<&'static str> {
 /// The runtime builds of a package for `camera`, from its core files
 /// (`runtime::package_runtime_files`): one for each build of the camera, in
 /// release order, each named by its marker. A camera with one build has one
-/// core file.
-fn package_targets(runtime: &Files, camera: &Camera) -> Result<Vec<&'static str>> {
+/// core file. With `single_build`, a camera with more builds can also have one
+/// core file, which must name its build.
+fn package_targets(
+    runtime: &Files,
+    camera: &Camera,
+    single_build: bool,
+) -> Result<Vec<&'static str>> {
     let fast = camera_fast_files(runtime, camera)?;
     let targets = camera.targets();
     if targets.len() == 1 {
+        return Ok(vec![runtime_target(runtime, camera)?]);
+    }
+    if let Some(binary) = runtime.get(card::CORE_FILE).filter(|_| single_build) {
+        ensure!(
+            marked_target(binary).is_some(),
+            "Expected an installer that names its runtime build"
+        );
         return Ok(vec![runtime_target(runtime, camera)?]);
     }
     let binaries: Vec<&[u8]> = (0..targets.len())
@@ -231,10 +243,15 @@ fn check_installer(binary: &[u8]) -> Result<()> {
 
 /// The runtime files of a package with each runtime of `camera`, in release
 /// order (`runtime::package_runtime_files`).
-fn package_runtime(runtimes: &[VerifiedRuntime], camera: &Camera) -> Result<Files> {
+fn package_runtime(
+    runtimes: &[VerifiedRuntime],
+    camera: &Camera,
+    single_build: bool,
+) -> Result<Files> {
     let targets: Vec<&str> = runtimes.iter().map(VerifiedRuntime::target).collect();
     ensure!(
-        targets == camera.targets(),
+        targets == camera.targets()
+            || (single_build && targets.len() == 1 && camera.runs(targets[0])),
         "A package for {} needs the runtime of each of its builds in release order: {}",
         camera.name,
         camera.targets().join(", ")
@@ -540,8 +557,14 @@ pub const RECIPES_PATH: &str = "GRKIT/RECIPES.BIN";
 /// its new recipes to the recipe file (runtime/install_recipes.h).
 pub const RECIPES_PACKAGE_PATH: &str = crate::card::RECIPES_PACKAGE_FILE;
 
-/// Checks the package entries.
+/// Checks the package entries of a package with each build of its camera.
 pub fn validate_contents(contents: &Files) -> Result<Contents> {
+    validate_package(contents, false)
+}
+
+/// `validate_contents`. With `single_build`, the package can hold one build of
+/// a camera with more (`Extras::single_build`).
+fn validate_package(contents: &Files, single_build: bool) -> Result<Contents> {
     ensure!(contents.len() <= MAX_ENTRIES, "Too many package entries");
     let mut paths = BTreeSet::new();
     let mut total = 0usize;
@@ -568,7 +591,11 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         bail!("Package must have the ModeSet file of exactly one camera");
     };
     let activation = runtime::activation_files(camera);
-    let cores = camera.targets().len();
+    let cores = if single_build && contents.contains_key(&format!("SD_ROOT/{}", card::CORE_FILE)) {
+        1
+    } else {
+        camera.targets().len()
+    };
     // The fast-boot files and their install files, which package_targets
     // checks.
     let fast_paths: Vec<String> = contents
@@ -608,7 +635,7 @@ pub fn validate_contents(contents: &Files) -> Result<Contents> {
         .iter()
         .map(|name| (name.clone(), contents[&format!("SD_ROOT/{name}")].clone()))
         .collect();
-    let targets = package_targets(&runtime, camera)?;
+    let targets = package_targets(&runtime, camera, single_build)?;
     let mut ids = BTreeSet::new();
     let mut module_ids = BTreeSet::new();
     let mut native_slots = BTreeMap::new();
@@ -797,6 +824,11 @@ pub struct Package {
 /// The optional library files of a package.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Extras<'a> {
+    /// A package with the runtime of one build of a camera that runs more, as
+    /// a local build for one firmware. Its core file is CORE.BIN, which
+    /// INSTALL.SH runs with `--install`, so the camera must run that build.
+    /// Release packages have every build.
+    pub single_build: bool,
     /// The import library of the site (`card::IMPORTS_FILE`, `crate::imports`), which the
     /// camera does not read.
     pub imports: Option<&'a [u8]>,
@@ -827,7 +859,7 @@ pub fn assemble_with(
     guide: &Guide,
     extras: Extras,
 ) -> Result<Package> {
-    let mut contents: Files = package_runtime(runtimes, camera)?
+    let mut contents: Files = package_runtime(runtimes, camera, extras.single_build)?
         .iter()
         .map(|(name, blob)| (format!("SD_ROOT/{name}"), blob.clone()))
         .collect();
@@ -869,10 +901,10 @@ pub fn assemble_with(
     }
     contents.insert("LICENSES.md".into(), LICENSES.as_bytes().to_vec());
     contents.insert("SHA256SUMS".into(), checksum_list(&contents));
-    validate_contents(&contents)?;
+    validate_package(&contents, extras.single_build)?;
     let bytes = write_zip(contents)?;
     // Read the ZIP back as `grkit verify` does, so the writer cannot drift from the checks.
-    let contents = verify_package(&bytes)?;
+    let contents = read_package(&bytes, extras.single_build)?.0;
     Ok(Package { bytes, contents })
 }
 
@@ -954,14 +986,20 @@ fn write_zip(contents: Files) -> Result<Vec<u8>> {
 
 /// Checks a package ZIP: its entries, its contents (`validate_contents`), and `SHA256SUMS`.
 pub fn verify_package(bytes: &[u8]) -> Result<Contents> {
-    Ok(read_package(bytes)?.0)
+    Ok(read_package(bytes, false)?.0)
+}
+
+/// `verify_package`, for a package that can hold one build of a camera with
+/// more (`Extras::single_build`).
+pub fn verify_single_build_package(bytes: &[u8]) -> Result<Contents> {
+    Ok(read_package(bytes, true)?.0)
 }
 
 /// The files that a package puts on the card: its `SD_ROOT` entries, at their
 /// paths from the card root. The page writes them to a card as a merge copy of
 /// `SD_ROOT` does. The ZIP is checked as `verify_package` checks it.
 pub fn card_files(bytes: &[u8]) -> Result<Files> {
-    Ok(read_package(bytes)?
+    Ok(read_package(bytes, false)?
         .1
         .into_iter()
         .filter_map(|(name, blob)| {
@@ -986,9 +1024,9 @@ pub fn package_files(bytes: &[u8]) -> Result<Files> {
 }
 
 /// Reads and checks a package ZIP, and returns what it holds and its entries.
-fn read_package(bytes: &[u8]) -> Result<(Contents, Files)> {
+fn read_package(bytes: &[u8], single_build: bool) -> Result<(Contents, Files)> {
     let contents = read_entries(bytes)?;
-    let result = validate_contents(&contents)?;
+    let result = validate_package(&contents, single_build)?;
     ensure!(
         contents["SHA256SUMS"] == checksum_list(&contents),
         "SHA256SUMS differs from package"

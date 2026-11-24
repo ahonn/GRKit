@@ -12,6 +12,7 @@ pub mod effects;
 pub mod firmware;
 pub mod fit;
 pub mod goodbye;
+pub mod gr2_looks;
 pub mod gr4_looks;
 pub mod grm;
 pub mod guide;

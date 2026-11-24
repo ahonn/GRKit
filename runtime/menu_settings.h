@@ -136,9 +136,9 @@ static const Setting adj_order_setting={adj_order_label,one_value,adj_order_text
 static const u8 core_groups[CORE_GROUPS][CORE_GROUP_MAX]={
     /* Shooting Settings: Uncropped RAW. */
     {2U,0xffU,0xffU,0xffU},
-    /* Display Settings: Distance Unit, Simplified Info. Battery, Effect Icons
-       in Playback. */
-    {1U,3U,6U,0xffU},
+    /* Display Settings: Distance Unit, Simplified Info. Battery, Battery
+       Percentage, Effect Icons in Playback. */
+    {1U,3U,7U,6U},
     /* Shutdown Screen: Custom Picture, Show Text. */
     {4U,5U,0xffU,0xffU},
 };
@@ -154,6 +154,7 @@ static u32 core_setting_shown(volatile u32 *h,u32 index) {
     case 4U: return goodbye_handle(h)!=0;
     case 5U: return goodbye_text_handle(h)!=0;
     case 6U: return playback_info_handle(h)!=0;
+    case 7U: return battery_percent_handle(h)!=0;
     default: return 0;
     }
 }

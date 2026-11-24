@@ -108,12 +108,12 @@ export interface LutImport extends ImportData {
 }
 
 /**
- * A look that GR IV has built in, which `nativeLooks` reads from the firmware file of the user.
- * Its data follows the Standard of GR III, so only GR III and GR IIIx packages take it.
+ * A look that another camera has built in, which `nativeLooks` reads from the firmware file of
+ * the user. Its data follows the Standard of GR III; `importsForCamera` tells which packages take it.
  */
 export interface NativeImport extends ImportData {
   kind: 'native';
-  /** The GR IV version of the firmware file, such as `1.20`. */
+  /** The version of the firmware file, such as `1.20`. */
   version: string;
   /** The firmware file name. */
   source: string;

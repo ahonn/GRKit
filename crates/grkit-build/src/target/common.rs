@@ -337,8 +337,12 @@ pub const DNG_XMP: &[HookSpec] = &[
 /// Battery in Simple Display (`runtime/manage.h`): the compare of the display
 /// mode in UpdateViewBattery of LiveViewController, before the jump table
 /// that shows the battery icon at each level only with the full information
-/// (`runtime/menu.S: menu_battery_mode`).
-pub const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];
+/// (`runtime/menu.S: menu_battery_mode`); and the entry of GetBatteryIcon, for
+/// Battery Percentage (`runtime/battery_percent.h`).
+pub const BATTERY: &[HookSpec] = &[
+    b("menu_battery_mode", Menu, MenuPage),
+    b("menu_battery_icon", Menu, MenuPage),
+];
 
 /// Shutdown Screen (`runtime/goodbye.h`): where playback takes the
 /// picture that the GoodBye controller shows at the power-off. In a build

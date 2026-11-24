@@ -427,14 +427,14 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [21 * 1602]})
+        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [25 * 1602]})
     );
     assert_eq!(
         runtime::layout(40).unwrap(),
         json!({
             "words": (runtime::HEADER_SIZE + 40 * 0x1100) / 4,
             "tail_words": runtime::TAIL_WORDS,
-            "icon_words": [64080, 21 * 1602]
+            "icon_words": [64080, 25 * 1602]
         })
     );
     assert!(runtime::layout(41).is_err());
@@ -1630,4 +1630,52 @@ fn a_package_holds_the_recipe_library_of_its_camera() {
     .unwrap_err();
     assert!(format!("{error:#}").contains("another camera"), "{error:#}");
     assert_eq!(verify_package(&package()).unwrap().recipes, 0);
+}
+
+/// A single-build package: the runtime of one GR III build as CORE.BIN, which
+/// verifies, and only when the package asks for it and the camera runs that
+/// build.
+#[test]
+fn a_single_build_package_has_one_core_file() {
+    let single = |runtimes: &[VerifiedRuntime], camera: &camera::Camera, single_build: bool| {
+        assemble_with(
+            runtimes,
+            &testing::effect_set(&["test-effect"]),
+            &testing::official_modules(),
+            camera,
+            &english(),
+            Extras {
+                single_build,
+                ..Extras::default()
+            },
+        )
+    };
+    let runtimes = gr3_runtimes();
+    // Without the flag, a GR III package needs each build.
+    assert!(format!(
+        "{:#}",
+        single(&runtimes[1..], &camera::GR3, false).unwrap_err()
+    )
+    .contains("in release order"));
+    // With each build, the option changes nothing.
+    let full = single(&runtimes, &camera::GR3, true).unwrap();
+    assert_eq!(verify_package(&full.bytes).unwrap().targets.len(), 2);
+    let package = single(&runtimes[1..], &camera::GR3, true).unwrap();
+    let files = unpack(&package.bytes);
+    assert_eq!(
+        files["SD_ROOT/SCRIPT/GRKIT/CORE.BIN"],
+        testing::marked_installer("gr3-2.21")
+    );
+    assert!(!files.contains_key("SD_ROOT/SCRIPT/GRKIT/CORE1.BIN"));
+    assert_eq!(
+        grkit_core::packaging::verify_single_build_package(&package.bytes)
+            .unwrap()
+            .targets,
+        ["gr3-2.21"]
+    );
+    // The default check, which the release runs, needs each build.
+    assert!(verify_package(&package.bytes).is_err());
+    assert!(grkit_core::packaging::card_files(&package.bytes).is_err());
+    // A build that the camera does not run.
+    assert!(single(&runtimes[1..], &camera::GR4, true).is_err());
 }
