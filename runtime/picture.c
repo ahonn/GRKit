@@ -805,9 +805,14 @@ static void encode_shot(volatile u32 *h,u32 message,const u32 *canvas) {
     selective=selective_wanted(&set);
     any=selective;
     /* The value of each filter. A filter does not run at 0, or while a soft
-       Off stops its module. */
+       Off stops its module. The Rough grain of a look replaces the grain of
+       CORE.GRAIN, as in the native stage. */
     for(i=0;i<filters;++i) {
-        values[i]=services_suspended(h,MODULE_FILTER(h,i)[0]) ? 0 : setting_value(h,MODULE_FILTER(h,i)[1]&0xffffU);
+        u32 setting=MODULE_FILTER(h,i)[1]&0xffffU;
+        values[i]=services_suspended(h,MODULE_FILTER(h,i)[0]) ? 0 : setting_value(h,setting);
+#ifdef GRKIT_ROUGH_GRAIN
+        if(setting==GRKIT_CORE_GRAIN && picture_rough()) values[i]=0;
+#endif
         any|=values[i];
     }
     if(!any) return;
