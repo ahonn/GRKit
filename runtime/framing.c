@@ -219,10 +219,12 @@ u32 framing_capture_request(u32 request) {
     return request ? request : framing_capture_id(framing_header());
 }
 /* The live view keeps 3:2. Resend the native 3:2 request when the capture
-   aspect differs from the Framing ratio, for example after a menu change. */
+   aspect differs from the Framing ratio, for example after a menu change.
+   As a crop change, the request waits while the back end makes a shot
+   (runtime/crop.h: crop_busy). */
 static void capture_sync(u32 controller) {
     volatile u32 *h=framing_header();
-    if(CAPABILITY_USED(h,GRKIT_CORE_ASPECT) && BYTE(controller,LIVEVIEW_MOVIE)==0 &&
+    if(CAPABILITY_USED(h,GRKIT_CORE_ASPECT) && BYTE(controller,LIVEVIEW_MOVIE)==0 && !crop_busy(h) &&
        FRAMING_NATIVE_ASPECT()==0 && FRAMING_CAPTURE_ASPECT()!=framing_capture_id(h))
         FRAMING_REQUEST_ASPECT();
 }
@@ -399,7 +401,7 @@ static void bind_canvas(volatile u32 *h,u32 controller) {
 #ifdef CROP_NATIVE_BITS
     if(BYTE(controller,LIVEVIEW_MOVIE)==0) crop_sync(h);
 #if CROP_LIVE_FACTOR
-    if(crop_live_due(h,BYTE(controller,LIVEVIEW_MOVIE)!=0)) crop_live_try(h,FRAMING_SECOND());
+    if(crop_live_due(h,BYTE(controller,LIVEVIEW_MOVIE)!=0) && !crop_busy(h)) crop_live_try(h,FRAMING_SECOND());
 #endif
 #endif
     viewfinder_bind(h,controller);

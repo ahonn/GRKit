@@ -18,10 +18,12 @@
    (GRKIT_HOST_CROP_NATIVE) is a crop shot: crop_queue_start notes it as
    CROP_QUEUE_ARMED, and crop_queue_release checks that mark, not the
    setting of the moment, so that a crop that changes while the camera
-   makes the shot neither arms nor disarms the check of that shot. */
-#define CROP_QUEUE_POSTED 1
-#define CROP_QUEUE_RECOVERED 2
-#define CROP_QUEUE_ARMED 4
+   makes the shot neither arms nor disarms the check of that shot.
+
+   crop_queue_start also notes the start and its time (CROP_QUEUE_STARTED),
+   so that the core changes the camera's crop factor only after the
+   completion of the shot (runtime/crop.h: crop_busy). */
+#include "crop_queue.h"
 /* rd = rn + a header offset. An ARM immediate holds one byte, rotated, so
    add the two bytes of the offset apart. */
 .macro add_header rd, rn, offset
@@ -41,20 +43,26 @@
 /* Replaces `strb r3, [r5, #CROP_BACKEND_RELEASED]` (r3 is 0) at the
    release start of the back end (r5): a new shot, whose events go to the
    owner of the back end, and a crop shot when the core owns the camera's
-   crop factor now (CROP_QUEUE_ARMED). */
+   crop factor now (CROP_QUEUE_ARMED). The flags note the start and its
+   time on the generic timer (CROP_QUEUE_STARTED, CROP_QUEUE_TIME_SHIFT). */
 .global crop_queue_start
 .type crop_queue_start, %function
 crop_queue_start:
-    push {r0,r1}
+    push {r0-r2}
     ldr r0, =GRKIT_HEADER_REFERENCE
     ldr r1, [r5, #CROP_BACKEND_OWNER]
     str r1, [r0, #GRKIT_HOST_CROP_QUEUE_OWNER]
-    ldr r1, [r0, #GRKIT_HOST_CROP_NATIVE]
-    cmp r1, #0
-    movne r1, #CROP_QUEUE_ARMED
+    mrrc p15, 0, r1, r2, c14
+    lsr r1, r1, #25
+    orr r1, r1, r2, lsl #7
+    lsl r1, r1, #CROP_QUEUE_TIME_SHIFT
+    orr r1, r1, #CROP_QUEUE_STARTED
+    ldr r2, [r0, #GRKIT_HOST_CROP_NATIVE]
+    cmp r2, #0
+    orrne r1, r1, #CROP_QUEUE_ARMED
     str r1, [r0, #GRKIT_HOST_CROP_QUEUE_FLAGS]
     dmb ish
-    pop {r0,r1}
+    pop {r0-r2}
     strb r3, [r5, #CROP_BACKEND_RELEASED]
     ldr pc, =HOOK_CROP_QUEUE_START_RESUME
 .ltorg
