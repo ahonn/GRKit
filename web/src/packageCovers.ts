@@ -1,5 +1,6 @@
 import type { Cover, CatalogEffect, PackageEffect } from './catalog';
 import { colorsFromLook, NEUTRAL_COLORS, resolveColors, type CoverColors } from './coverPalette';
+import { GR2_POSITIVE_SINCE } from './release';
 import { groupOf } from './effectGroups';
 
 /** Film cover layouts that a custom cover can replace. */
@@ -118,6 +119,7 @@ const gr2Positive = (id: string, cameras: readonly string[]) => ({
   name: 'GR II Positive',
   firmware: 'gr2' as const,
   cameras,
+  since: GR2_POSITIVE_SINCE,
   cover: {
     template: 'cine' as const,
     brand: 'RICOH',
@@ -138,6 +140,8 @@ export const NATIVE_LOOKS: readonly {
   name: string;
   firmware: NativeFirmware;
   cameras: readonly string[];
+  /** The first release whose packager reads the look. The page hides it before that release. */
+  since?: string;
   cover: Cover;
 }[] = [
   { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', firmware: 'gr4', cameras: GR3_CAMERAS, cover: cinema('YELLOW', 'cinemaYellow') },

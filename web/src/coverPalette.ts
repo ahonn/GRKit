@@ -1,3 +1,5 @@
+import { GR2_POSITIVE_SINCE, isReleased } from './release';
+
 /** Cover layout templates. Keep in sync with `artwork.rs`. */
 export const COVER_TEMPLATES = ['box', 'cine', 'stack'] as const;
 export type CoverTemplate = (typeof COVER_TEMPLATES)[number];
@@ -215,6 +217,12 @@ export const COVER_LOOK_IDS = [
 
 export type CoverEditorLookId = (typeof COVER_LOOK_IDS)[number];
 
+/** The looks that the cover editor lists in release `version`. */
+export const offeredCoverLooks = (version: string = __GRKIT_VERSION__): readonly CoverEditorLookId[] =>
+  isReleased(GR2_POSITIVE_SINCE, version)
+    ? COVER_LOOK_IDS
+    : COVER_LOOK_IDS.filter((look) => look !== 'gr2Positive');
+
 export function isCoverLookId(value: unknown): value is CoverLookId {
   return typeof value === 'string' && value in COVER_LOOKS;
 }
@@ -360,7 +368,7 @@ function pickRandom<T>(items: readonly T[], except?: unknown): T {
 
 /** A random editor look, preferring one other than `except` when there is a choice. */
 export function randomCoverLook(except?: CoverLookId): CoverEditorLookId {
-  return pickRandom(COVER_LOOK_IDS, except);
+  return pickRandom(offeredCoverLooks(), except);
 }
 
 /** A random cover layout (including box with band), preferring one other than `except`. */
