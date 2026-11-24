@@ -50,7 +50,7 @@ typedef short s16;
 #define GRKIT_ICON_SCALE_SIXTEEN 0x7ff8U
 /* The Toning track of the parameter page of a native look with Toning
    (runtime/menu.c: toning_track), as large as the native track. */
-#define GRKIT_ICON_TONING_TRACK 0x7ff7U
+#define GRKIT_ICON_TONING_TRACK 0x7ff5U
 
 /* One setting of a native settings page: its row label, its values, the
    text of a value, and the stored value. A native value page has

@@ -1,3 +1,5 @@
+import { GR2_POSITIVE_SINCE, isReleased } from './release';
+
 /** Cover layout templates. Keep in sync with `artwork.rs`. */
 export const COVER_TEMPLATES = ['box', 'cine', 'stack'] as const;
 export type CoverTemplate = (typeof COVER_TEMPLATES)[number];
@@ -90,6 +92,8 @@ export const COVER_INKS = {
   cineGreenBody: [14, 40, 24],
   cineGreenText: [168, 232, 184],
   cineYellowBody: [40, 28, 8],
+  positiveBody: [12, 28, 52],
+  positiveText: [176, 216, 240],
   greenDark: [28, 64, 28],
   eternaAccent: [120, 140, 120],
 
@@ -153,6 +157,13 @@ export const COVER_LOOKS = {
     text: 'cineGreenText',
     accent: 'cineGreen',
   },
+  gr2Positive: {
+    band: 'ricohRed',
+    brand: 'white',
+    body: 'positiveBody',
+    text: 'positiveText',
+    accent: 'chromeBlue',
+  },
   ricoh: { band: 'ricohRed', brand: 'white', body: 'ink', text: 'white', accent: 'mist' },
   fuji: { band: 'fujiGreen', brand: 'white', body: 'black', text: 'white', accent: 'fujiGreen' },
   ilford: { band: 'ink', brand: 'white', body: 'black', text: 'white', accent: 'kodakYellow' },
@@ -200,10 +211,17 @@ export const COVER_LOOK_IDS = [
   'ricoh',
   'cinemaYellow',
   'cinemaGreen',
+  'gr2Positive',
   'cinema',
 ] as const satisfies readonly CoverLookId[];
 
 export type CoverEditorLookId = (typeof COVER_LOOK_IDS)[number];
+
+/** The looks that the cover editor lists in release `version`. */
+export const offeredCoverLooks = (version: string = __GRKIT_VERSION__): readonly CoverEditorLookId[] =>
+  isReleased(GR2_POSITIVE_SINCE, version)
+    ? COVER_LOOK_IDS
+    : COVER_LOOK_IDS.filter((look) => look !== 'gr2Positive');
 
 export function isCoverLookId(value: unknown): value is CoverLookId {
   return typeof value === 'string' && value in COVER_LOOKS;
@@ -257,6 +275,7 @@ const STOCK_LOOKS: ReadonlyArray<{ readonly match: RegExp; readonly look: CoverL
   { match: /VISTA/, look: 'vista' },
   { match: /CINEMA YELLOW|YELLOW RICOH/, look: 'cinemaYellow' },
   { match: /CINEMA GREEN|GREEN RICOH/, look: 'cinemaGreen' },
+  { match: /GR II POSITIVE/, look: 'gr2Positive' },
   { match: /CINEMA|RICOH/, look: 'ricoh' },
 ];
 
@@ -349,7 +368,7 @@ function pickRandom<T>(items: readonly T[], except?: unknown): T {
 
 /** A random editor look, preferring one other than `except` when there is a choice. */
 export function randomCoverLook(except?: CoverLookId): CoverEditorLookId {
-  return pickRandom(COVER_LOOK_IDS, except);
+  return pickRandom(offeredCoverLooks(), except);
 }
 
 /** A random cover layout (including box with band), preferring one other than `except`. */

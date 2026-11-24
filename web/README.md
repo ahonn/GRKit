@@ -6,7 +6,7 @@ The site serves these files:
 
 | Path | Source |
 |---|---|
-| `index.html`, `zh-hans/`, `zh-hant/`, `ja/`, `ko/`, the `fastboot/` and `resources/` pages of each, `404.html`, `sitemap.xml`, `robots.txt`, `_worker.js`, `_routes.json`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
+| `index.html`, `zh-hans/`, `zh-hant/`, `ja/`, `ko/`, the `fastboot/`, `resources/`, and `docs/` pages of each, `404.html`, `sitemap.xml`, `robots.txt`, `_worker.js`, `_routes.json`, `assets/`, `_headers`, `THIRD_PARTY_LICENSES.txt` | `pnpm build` in this directory |
 | `runtime/<target>/` | `grkit site`, for each runtime build of `grkit release-plan` |
 | `effects/<target>/` | `grkit effects publish`, for each runtime build of `grkit release-plan` |
 

@@ -22,12 +22,12 @@ import {
   type Effect,
   type ImportedEffect,
 } from '../catalog';
-import { type Language, type Strings } from '../i18n';
+import { nativeText, type Language, type Strings } from '../i18n';
 import { forget, prefetchTable, preview, type PreviewEffect, type Source } from '../preview/render';
 import { DEFAULT_SAMPLE } from '../preview/samples';
 import { PhotoLoader } from '../preview/raw';
 import { editable } from '../import/edit';
-import { missingNativeLooks, NATIVE_LOOKS } from '../import/native';
+import { missingNativeLooks, NATIVE_LOOKS, type NativeFirmware } from '../import/native';
 import { importFit, resolveSelection, selectImport, type Selection } from '../selection';
 import type { Family, Recipe } from '../recipes';
 import { STOCKS } from '../stocks';
@@ -39,6 +39,7 @@ import {
   isFilmCover,
   isMonoLook,
   nativeCover,
+  nativeLook,
   schemeCover,
   shownCover,
   effectiveCover,
@@ -251,8 +252,8 @@ interface Props {
   imported: readonly ImportedEffect[];
   /** Adds imports, each in place of an earlier one with the same ID. */
   onImport: (effects: readonly ImportedEffect[]) => void;
-  /** The selected camera can use the native looks of GR IV, so the list offers to unlock them. */
-  nativeLooks: boolean;
+  /** The native looks that the selected camera can use, which the list offers to unlock. */
+  nativeLooks: readonly NativeLook[];
   onRemove: (effect: ImportedEffect) => void;
   /** Keeps an import with a new name or icon in its place. */
   onEdit: (effect: ImportedEffect) => void;
@@ -441,16 +442,15 @@ export function EffectsSection({
   const look = !requested
     ? ''
     : requested.imported?.kind === 'native'
-      ? t.nativeFrom(requested.imported.version)
+      ? nativeText(t, nativeLook(requested.id)?.firmware ?? 'gr4').from(requested.imported.version)
       : requested.imported?.kind === 'restored'
         ? t.restoredFrom(requested.imported.source)
         : requested.imported
           ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
           : (t.looks[requested.id] ?? requested.look);
-  // Locked GR IV looks wait as Color tiles until the user unlocks them from firmware, or until
+  // Locked native looks wait as Color tiles until the user unlocks them from firmware, or until
   // the connected card already has that effect file.
-  const locked =
-    nativeLooks && catalog.baseGamma ? missingNativeLooks([...imported, ...cardEffects]) : [];
+  const locked = catalog.baseGamma ? missingNativeLooks([...imported, ...cardEffects], nativeLooks) : [];
   const [filter, setFilter] = useState<EffectFilter>('all');
   // What the frame waits for: a new photo, or the preview of the selected effect.
   const waiting = decoding ? t.decodingPhoto : isPending ? t.previewRendering(name) : null;
@@ -517,8 +517,8 @@ export function EffectsSection({
    * Adds the imports of a GRKit.zip. The ones that the ZIP installs are checked again while the
    * package has room, and the others wait for the user.
    */
-  function openUnlock() {
-    unlocker.current?.open();
+  function openUnlock(firmware: NativeFirmware) {
+    unlocker.current?.open(firmware);
   }
 
   function showSample() {
@@ -890,12 +890,12 @@ export function EffectsSection({
                   type="button"
                   className="shelf-tile action-tile native-tile"
                   aria-label={t.nativeUnlockOf(look.name)}
-                  onClick={openUnlock}
+                  onClick={() => openUnlock(look.firmware)}
                 >
                   <span className="tile-body">
                     <CoverIcon cover={shownCover(look.cover, 'site', schemeCover(look.cover, scheme))!} />
                     <span className="tile-name">{look.name}</span>
-                    <span className="tile-meta">{t.nativeNeeds}</span>
+                    <span className="tile-meta">{nativeText(t, look.firmware).needs}</span>
                   </span>
                 </button>
               );
@@ -991,7 +991,7 @@ export function EffectsSection({
           />
         )}
         <EditDialog ref={editor} strings={t} onSave={onEdit} onSaveSite={onCustomize} />
-        {nativeLooks && catalog.baseGamma && (
+        {nativeLooks.length > 0 && catalog.baseGamma && (
           <NativeLookDialog
             ref={unlocker}
             strings={t}

@@ -9,12 +9,14 @@ import {
   type Ref,
 } from 'react';
 import { MAX_EFFECTS, type ImportedEffect, type NativeImport } from '../catalog';
-import type { Strings } from '../i18n';
+import { nativeText, type Strings } from '../i18n';
 import { trackNativeLooks } from '../analytics';
 import {
-  FIRMWARE_PAGE,
+  FIRMWARE_PAGES,
+  NATIVE_LOOKS,
   nativeProblem,
   unlockNativeLooks,
+  type NativeFirmware,
   type NativeProblem,
 } from '../import/native';
 import { TaskSlot } from '../import/task';
@@ -29,9 +31,9 @@ interface Props {
   ref?: Ref<NativeLookDialogHandle>;
 }
 
-/** Opens the dialog from a button elsewhere on the page. */
+/** Opens the dialog from a button elsewhere on the page, for the firmware of one camera. */
 export interface NativeLookDialogHandle {
-  open: () => void;
+  open: (firmware: NativeFirmware) => void;
 }
 
 type Status =
@@ -49,17 +51,21 @@ interface PickerHost {
   }) => Promise<{ getFile(): Promise<File> }[]>;
 }
 
-const ACCEPT = '.zip,.bin';
+const ACCEPT = '.zip,.bin,.frm';
 
 /**
- * The dialog that unlocks the GR IV Cinema looks: a link to Ricoh's firmware page, a file choice
- * or a drop of the downloaded ZIP, then the read in a worker. The file stays in the browser.
+ * The dialog that unlocks the native looks of one camera's firmware (GR IV Cinema looks, GR II
+ * Positive Film): a link to Ricoh's firmware page, a file choice or a drop of the downloaded ZIP,
+ * then the read in a worker. The file stays in the browser. A file of the other camera gives that
+ * camera's looks, and the done text names the camera of the file.
  */
 export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props) {
   const ids = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>({ state: 'idle' });
+  const [firmware, setFirmware] = useState<NativeFirmware>('gr4');
+  const text = nativeText(t, firmware);
   const [dragging, setDragging] = useState(false);
   // A new key empties the file input, so the same file can be chosen again.
   const [fileKey, setFileKey] = useState(0);
@@ -79,8 +85,10 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
 
   const reading = status.state === 'reading';
 
-  function open() {
-    if (status.state !== 'reading') setStatus({ state: 'idle' });
+  function open(next: NativeFirmware) {
+    if (status.state === 'reading' && next !== firmware) task.cancel();
+    if (status.state !== 'reading' || next !== firmware) setStatus({ state: 'idle' });
+    setFirmware(next);
     dialog.current?.showModal();
   }
 
@@ -128,8 +136,8 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
         startIn: 'downloads',
         types: [
           {
-            description: t.nativeFileType,
-            accept: { 'application/zip': ['.zip'], 'application/octet-stream': ['.bin'] },
+            description: text.fileType,
+            accept: { 'application/zip': ['.zip'], 'application/octet-stream': ['.bin', '.frm'] },
           },
         ],
       });
@@ -190,7 +198,7 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
     >
       <div className="dialog-head">
         <h3 id={`${ids}-title`} className="dialog-title">
-          {t.nativeTitle}
+          {text.title}
         </h3>
         <button type="button" className="button small" onClick={close}>
           {t.close}
@@ -198,12 +206,12 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
       </div>
 
       <div className="dialog-body">
-        <p className="note">{t.nativeIntro}</p>
+        <p className="note">{text.intro}</p>
 
         <ol className="native-steps">
           <li>
-            <p className="status">{t.nativeStepDownload}</p>
-            <a className="button small" href={FIRMWARE_PAGE} target="_blank" rel="noreferrer">
+            <p className="status">{text.stepDownload}</p>
+            <a className="button small" href={FIRMWARE_PAGES[firmware]} target="_blank" rel="noreferrer">
               {t.nativeOpenRicoh}
             </a>
           </li>
@@ -222,7 +230,7 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
             />
           </li>
           <li>
-            <p className="status">{t.nativeStepRead}</p>
+            <p className="status">{text.stepRead}</p>
             <div className="native-status" aria-live="polite">
               {reading && (
                 <div className="native-reading">
@@ -234,19 +242,22 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
                 </div>
               )}
               {status.state === 'failed' && (
-                <p className="status error">{t.nativeErrors[status.problem]}</p>
+                <p className="status error">{text.errors[status.problem]}</p>
               )}
               {done && (
                 <>
                   <ul className="native-done">
-                    {done.effects.map((effect) => (
-                      <li key={effect.id}>
-                        <CoverIcon cover={effect.cover} />
-                        <span className="import-done-name">{effect.name}</span>
-                      </li>
-                    ))}
+                    {/* GR II Positive comes as one effect for each camera family. */}
+                    {done.effects
+                      .filter((effect, i, all) => all.findIndex((e) => e.name === effect.name) === i)
+                      .map((effect) => (
+                        <li key={effect.id}>
+                          <CoverIcon cover={effect.cover} />
+                          <span className="import-done-name">{effect.name}</span>
+                        </li>
+                      ))}
                   </ul>
-                  <p className="status">{t.nativeDone(done.effects[0]?.imported.version ?? '')}</p>
+                  <p className="status">{foundText(t, done.effects)}</p>
                   {done.full && <p className="status">{t.nativeUnchecked(MAX_EFFECTS)}</p>}
                 </>
               )}
@@ -269,4 +280,11 @@ export function NativeLookDialog({ strings: t, baseGamma, onImport, ref }: Props
       </div>
     </dialog>
   );
+}
+
+/** The done text, for the camera whose firmware the found looks came from. */
+function foundText(t: Strings, effects: readonly ImportedEffect<NativeImport>[]): string {
+  const first = effects[0];
+  const firmware = NATIVE_LOOKS.find((look) => look.id === first?.id)?.firmware ?? 'gr4';
+  return nativeText(t, firmware).done(first?.imported.version ?? '');
 }

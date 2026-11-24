@@ -8,8 +8,12 @@ import { migrateCoverScheme } from './customCovers';
 import { PREVIEW_TARGET } from './generated/site';
 import { loadImports } from './import/store';
 import { loadFonts } from './fonts';
-import { showLanguage, takeLegacyLanguage } from './i18n';
+import { docPageText } from './docs/meta';
+import { loadDocsContent } from './docs/load';
+import type { DocsSitePage } from './docs/pages';
+import { showLanguage, showPageText, takeLegacyLanguage } from './i18n';
 import { installPath, isInstallAnchor, pagePath, pathPage } from './languagePage';
+import { DocsPage } from './components/DocsPage';
 import { FastbootPage } from './components/FastbootPage';
 import { HomePage } from './components/HomePage';
 import { ResourcesPage } from './components/ResourcesPage';
@@ -52,12 +56,21 @@ const soon = <T,>(task: Promise<T>, fallback: T) =>
 if (target !== null) {
   location.replace(`${target}${location.search}${location.hash}`);
 } else {
-  showLanguage(language, page);
+  if (page !== 'docs' && !page.startsWith('docs/')) showLanguage(language, page);
   loadFonts(language);
   // The build fills the root with the page of this language for search engines. The first render
   // replaces it.
   const root = createRoot(document.getElementById('root')!);
-  if (page === 'fastboot') {
+  if (page === 'docs' || page.startsWith('docs/')) {
+    const docsPage = page as DocsSitePage;
+    const content = await loadDocsContent(language);
+    showPageText(language, docPageText(language, docsPage, content));
+    root.render(
+      <StrictMode>
+        <DocsPage language={language} page={docsPage} content={content} />
+      </StrictMode>,
+    );
+  } else if (page === 'fastboot') {
     // The fast-boot firmware page needs no imports and no card.
     root.render(
       <StrictMode>

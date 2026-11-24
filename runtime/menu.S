@@ -468,6 +468,27 @@ menu_battery_mode:
 .ltorg
 #endif
 
+#ifdef HOOK_MENU_BATTERY_ICON
+/* Battery Percentage (runtime/battery_percent.h). Replaces `cmp r1, #1` at the
+   entry of GetBatteryIcon, where r1 is the source of the power, 1 for the
+   battery, and r2 is the native level. A private icon ID returns at once. */
+.global menu_battery_icon
+.type menu_battery_icon, %function
+menu_battery_icon:
+    cmp r1, #1
+    bne 1f
+    push {r0-r3, r12, lr}
+    mov r0, r2
+    bl menu_battery_percent_icon
+    cmp r0, #0
+    addne sp, sp, #4
+    popne {r1-r3, r12, pc}
+    pop {r0-r3, r12, lr}
+    cmp r1, #1
+1:  ldr pc, =HOOK_MENU_BATTERY_ICON_RESUME
+.ltorg
+#endif
+
 #ifdef HOOK_MENU_GOODBYE
 /* Custom Picture of Shutdown Screen (runtime/goodbye.h). */
 .global menu_goodbye

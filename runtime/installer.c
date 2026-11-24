@@ -801,12 +801,13 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
        row where Fn turns a setting, the "ft" and "16" labels of the manual
        focus scale (SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT), then the tile of
        a recipe without its caption and the slots of the tiles of recipes,
-       which start as that tile (runtime/recipe_card.h). */
+       which start as that tile (runtime/recipe_card.h), then the two pictures
+       of Battery Percentage, which the core writes. */
 #define HOST_ARTWORK 9
-    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS,
+    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS + GRKIT_BATTERY_ICON_SLOTS,
                    "The host icons are Off, GRKit, Version, Modules, Modules Off, Rotate, two scale labels, the "
-                   "recipe tile, and the slots of the recipe tiles");
-    for (u32 i = 0; i < HOST_ICON_COUNT; ++i) {
+                   "recipe tile, the slots of the recipe tiles, and the pictures of Battery Percentage");
+    for (u32 i = 0; i < HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS; ++i) {
         u32 icon = a->icon_bases[0] + i * ICON_STRIDE, label = i == 6 || i == 7;
         static const u8 *const artwork[HOST_ARTWORK] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
                                                          modules_off_pixels, rotate_pixels, scale_feet_pixels,
@@ -819,6 +820,8 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
            address. */
         if (i < 2) store(base + (i ? GRKIT_HOST_GRKIT_ICON : GRKIT_HOST_OFF_ICON), icon);
     }
+    for (u32 i = HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS; i < HOST_ICON_COUNT; i += 2)
+        icon_sized(a->icon_bases[0] + i * ICON_STRIDE, pixels, 60, 40);
 #undef HOST_ARTWORK
 }
 

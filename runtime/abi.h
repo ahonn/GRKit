@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6556
+#define GRKIT_HOST_HEADER_SIZE 6568
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -167,7 +167,8 @@
 #define GRKIT_MANAGE_COPY_GOODBYE 5U
 #define GRKIT_MANAGE_COPY_GOODBYE_TEXT 6U
 #define GRKIT_MANAGE_COPY_PLAYBACK_INFO 7U
-#define GRKIT_MANAGE_COPY_WORDS 8U
+#define GRKIT_MANAGE_COPY_BATTERY_PERCENT 8U
+#define GRKIT_MANAGE_COPY_WORDS 9U
 #define GRKIT_MANAGE_COPY_KEY 992003007U
 #define GRKIT_DIAL_VALUE_ON 0U
 #define GRKIT_DIAL_VALUE_OFF 1U
@@ -183,7 +184,8 @@
 /* Icon slots: the host icons, then the effect icons, then the module tiles, in
    chunks of GRKIT_ICONS_PER_CHUNK (GRKIT_HOST_ICON_CHUNKS).
    GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n. */
-#define GRKIT_HOST_ICON_COUNT 21
+#define GRKIT_HOST_ICON_COUNT 25
+#define GRKIT_BATTERY_ICON_SLOTS 4U
 #define GRKIT_ICONS_PER_CHUNK 40
 #define GRKIT_MODULE_TILES_MAX 128
 #define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))
@@ -552,31 +554,38 @@
    HOST_DIAL_SHARED_OFF, in the same file. INSTALL takes them from the copy
    before the main state file, and writes the values of the start here. */
 #define GRKIT_HOST_MANAGE_COPY 6492
-#define GRKIT_HOST_MANAGE_COPY_WORDS 8
+#define GRKIT_HOST_MANAGE_COPY_WORDS 9
 /* Word index of the PERSIST buffer within modulecode, not a native address. */
-#define GRKIT_HOST_PERSIST_WORD 6524
+#define GRKIT_HOST_PERSIST_WORD 6528
 /* The record of the ADJ preview of a recipe whose Fn adjustments the live view
    takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the record, while
    GRKIT_HOST_PREVIEW is that record; else 0 (runtime/recipe_preview.h,
    runtime/processing.h). */
-#define GRKIT_HOST_PREVIEW_FN 6528
+#define GRKIT_HOST_PREVIEW_FN 6532
 /* Those adjustments: one stored byte each, in the order of RECORD_PARAMETERS.
    It follows GRKIT_HOST_PREVIEW_FN. */
-#define GRKIT_HOST_PREVIEW_FN_BYTES 6532
+#define GRKIT_HOST_PREVIEW_FN_BYTES 6536
 #define GRKIT_HOST_PREVIEW_FN_BYTES_WORDS 3
 /* The copy of the native settings record from the start of the ADJ preview of
    a recipe, in the services block, or 0 while no preview writes native
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
-#define GRKIT_HOST_RECIPE_PREVIEW 6544
+#define GRKIT_HOST_RECIPE_PREVIEW 6548
+/* Battery Percentage: the value that the icon shows, 0 for the native icon,
+   the picture that has it, and the time of its last change
+   (runtime/battery_percent.h). */
+#define GRKIT_HOST_BATTERY_ICON 6552
+/* Battery Percentage: the average of the charge and the time of its last
+   sample (runtime/battery_percent.h). */
+#define GRKIT_HOST_BATTERY_AVERAGE 6556
 /* The Toning track that the parameter page shows for a native look with Toning
    (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the pixels,
    in a firmware block that the core makes at its first use; else 0. */
-#define GRKIT_HOST_TONING_TRACK 6548
+#define GRKIT_HOST_TONING_TRACK 6560
 /* The record whose Toning in the RAW development differs from its own
    (runtime/develop.h): while a development runs, its builds take the curves at
    GRKIT_DEVELOP_CURVES of the tail for it; else 0. */
-#define GRKIT_HOST_DEVELOP_TONED 6552
+#define GRKIT_HOST_DEVELOP_TONED 6564
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -1003,6 +1012,8 @@
 #define GRKIT_SMALL_GLYPH_HEIGHT 20
 #define GRKIT_CAPTION_FIRST 212
 #define GRKIT_CAPTION_CHARACTERS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+#define GRKIT_BATTERY_DIGIT_FIRST 248
+#define GRKIT_BATTERY_DIGIT_HEIGHT 18
 #define GRKIT_CAPTION_TOP 22
 #define GRKIT_CAPTION_INK 255
 #define GRKIT_TILE_FILL 51
@@ -1083,6 +1094,9 @@
 /* The Effect Icons in Playback row of Display Settings. Its values are
    TEXT_OFF and TEXT_ON. */
 #define TEXT_PLAYBACK_INFO 86
-#define GRKIT_TEXT_STRINGS 87
+/* The Battery Percentage row of Display Settings. Its values are TEXT_OFF and
+   TEXT_ON. */
+#define TEXT_BATTERY_PERCENT 87
+#define GRKIT_TEXT_STRINGS 88
 
 #endif

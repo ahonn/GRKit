@@ -167,6 +167,10 @@
 /* Playback metadata singleton and the maker-note IFD entry setter: (entry, 0,
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5324129c)
+/* The power report of the sub-CPU (runtime/battery_percent.h): the guard and
+   the holder of its service. */
+#define FW_POWER_GUARD FIRMWARE(0x5537efbc)
+#define FW_POWER_HOLDER FIRMWARE(0x5537ee98)
 #define FW_IFD_SET_SHORT FIRMWARE(0x5380dd48)
 /* The TIFF writer: append an entry to an IFD, and copy the data of an
    entry (runtime/picture.c: picture_dng_xmp_add). */

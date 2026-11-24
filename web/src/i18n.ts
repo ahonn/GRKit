@@ -1,7 +1,7 @@
 import type { Grade } from './catalog';
 import { FRAMING_RATIOS } from './generated/framing';
 import { MODULE_TITLES } from './generated/moduleTitles';
-import type { NativeProblem } from './import/native';
+import type { NativeFirmware, NativeProblem } from './import/native';
 import { cookieValue, isLanguage, LANGUAGE_COOKIE, pagePath, pathLanguage, type Page } from './languagePage';
 
 export const LANGUAGES = [
@@ -225,6 +225,7 @@ const en = {
     ricoh: 'Ricoh',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: 'Cinema',
   },
   importButton: 'Import',
@@ -311,6 +312,24 @@ const en = {
   nativeFrom: (version: string) => `From the GR IV ${version} firmware`,
   nativePrivacy: 'The file stays in this browser and is never uploaded.',
   nativeLicense: "Use of the firmware is subject to Ricoh's software license.",
+  /** The camera-specific texts of the GR II Positive unlock (`nativeText`). */
+  nativeGr2: {
+    needs: 'Needs your GR II firmware',
+    title: 'Unlock the GR II look',
+    intro:
+      'GR II Positive is the Positive Film look built into GR II. GRKit builds it from the GR II firmware as a film look for GR III, GR IIIx, and GR IV.',
+    stepDownload: 'Download the GR II firmware from Ricoh: version 3.00.',
+    stepRead: 'GRKit reads the look from it in this browser. This takes a few seconds.',
+    fileType: 'GR II firmware',
+    done: (version: string) => `Found GR II ${version}. The look is added to your film looks.`,
+    from: (version: string) => `From the GR II ${version} firmware`,
+    errors: {
+      unsupported: 'This file does not work. Choose the GR II firmware 3.00.',
+      notFirmware: "This is not the GR II firmware ZIP. Choose the ZIP file from Ricoh's GR II page.",
+      tooLarge: 'This file is too large to be the GR II firmware.',
+      failed: 'The look cannot be read from this file. Try again.',
+    } as Readonly<Record<NativeProblem, string>>,
+  },
   printFilm: (code: string) => `${code} print`,
   effectCount: 'Film Looks',
   loading: 'Loading film looks…',
@@ -504,6 +523,8 @@ const en = {
     videoHint: ['', 'Install and Fast start walkthrough', ' by '] as readonly [string, string, string],
   },
   fastbootLink: 'Fast start',
+  /** The docs in the masthead and the footer. */
+  docsLink: 'Docs',
   /** The line after the step that turns the camera on: the text before the link to the fast-boot page, the link, and the text after it. */
   fastbootHint: ['To load GRKit sooner, try ', 'Fast start', '.'] as readonly [string, string, string],
   /** The resources page in the footer. */
@@ -730,6 +751,22 @@ const en = {
 
 export type Strings = typeof en;
 
+/** The camera-specific texts of a native look unlock: the GR IV texts, or `nativeGr2`. */
+export function nativeText(t: Strings, firmware: NativeFirmware) {
+  if (firmware === 'gr2') return t.nativeGr2;
+  return {
+    needs: t.nativeNeeds,
+    title: t.nativeTitle,
+    intro: t.nativeIntro,
+    stepDownload: t.nativeStepDownload,
+    stepRead: t.nativeStepRead,
+    fileType: t.nativeFileType,
+    done: t.nativeDone,
+    from: t.nativeFrom,
+    errors: t.nativeErrors,
+  };
+}
+
 /** Sentences as one text: a space after a Latin full stop, none after a CJK one. */
 export const sentences = (...texts: string[]): string =>
   texts.reduce((text, next) => (/[。！？]$/.test(text) ? text + next : `${text} ${next}`));
@@ -917,6 +954,7 @@ const zhHans: Strings = {
     ricoh: '理光',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '电影',
   },
   importButton: '导入',
@@ -991,6 +1029,22 @@ const zhHans: Strings = {
   nativeFrom: (version) => `取自 GR IV ${version} 固件`,
   nativePrivacy: '文件只在本浏览器中处理，不会上传。',
   nativeLicense: '固件的使用受理光软件许可协议约束。',
+  nativeGr2: {
+    needs: '需要 GR II 固件',
+    title: '解锁 GR II 色彩',
+    intro: 'GR II Positive 是 GR II 内置的正片色彩。GRKit 从 GR II 固件中取出它，做成 GR III、GR IIIx 和 GR IV 可用的胶片风格。',
+    stepDownload: '从理光官网下载 GR II 固件（3.00 版）。',
+    stepRead: 'GRKit 在本浏览器中取出这款色彩，需要几秒钟。',
+    fileType: 'GR II 固件',
+    done: (version) => `找到 GR II ${version}，这款色彩已加入胶片风格列表。`,
+    from: (version) => `取自 GR II ${version} 固件`,
+    errors: {
+      unsupported: '这个文件用不了。请选择 GR II 3.00 版固件。',
+      notFirmware: '这不是 GR II 固件的 ZIP 文件。请选择从理光 GR II 页面下载的 ZIP。',
+      tooLarge: '这个文件太大，不是 GR II 固件。',
+      failed: '无法从这个文件读取色彩，请重试。',
+    },
+  },
   printFilm: (code) => `${code} 拷贝片`,
   effectCount: '胶片风格数量',
   loading: '正在加载胶片风格…',
@@ -1140,6 +1194,7 @@ const zhHans: Strings = {
     videoHint: ['', '安装与快速启动完整视频', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速启动',
+  docsLink: '文档',
   fastbootHint: ['想更快加载 GRKit？试试', '快速启动', '。'],
   resourcesLink: '更多资源',
   resources: {
@@ -1527,6 +1582,7 @@ const zhHant: Strings = {
     ricoh: '理光',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '電影',
   },
   importButton: '匯入',
@@ -1601,6 +1657,22 @@ const zhHant: Strings = {
   nativeFrom: (version) => `取自 GR IV ${version} 韌體`,
   nativePrivacy: '檔案只在本瀏覽器中處理，不會上傳。',
   nativeLicense: '韌體的使用須遵守理光的軟體授權條款。',
+  nativeGr2: {
+    needs: '需要 GR II 韌體',
+    title: '解鎖 GR II 色彩',
+    intro: 'GR II Positive 是 GR II 內建的正片色彩。GRKit 從 GR II 韌體中取出它，做成 GR III、GR IIIx 與 GR IV 可用的底片風格。',
+    stepDownload: '從理光網站下載 GR II 韌體（3.00 版）。',
+    stepRead: 'GRKit 在本瀏覽器中取出這款色彩，需要幾秒鐘。',
+    fileType: 'GR II 韌體',
+    done: (version) => `找到 GR II ${version}，色彩已加入底片風格清單。`,
+    from: (version) => `取自 GR II ${version} 韌體`,
+    errors: {
+      unsupported: '無法使用這個檔案。請選擇 GR II 3.00 版韌體。',
+      notFirmware: '這不是 GR II 韌體的 ZIP 檔案。請選擇從理光 GR II 頁面下載的 ZIP。',
+      tooLarge: '檔案太大，不是 GR II 韌體。',
+      failed: '無法從這個檔案讀取色彩，請再試一次。',
+    },
+  },
   printFilm: (code) => `${code} 拷貝片`,
   effectCount: '底片風格數量',
   loading: '正在載入底片風格…',
@@ -1750,6 +1822,7 @@ const zhHant: Strings = {
     videoHint: ['', '安裝與快速啟動完整影片', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '快速啟動',
+  docsLink: '文件',
   fastbootHint: ['想更快載入 GRKit？試試', '快速啟動', '。'],
   resourcesLink: '更多資源',
   resources: {
@@ -1958,7 +2031,7 @@ const ja: Strings = {
   language: '言語',
   title: 'GRKit：RICOH GR III / IIIx / IV にフィルム風の色味と XPan を',
   description:
-    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色味、XPan などのアスペクト比、日付写し込み、グロー、粒状感を追加します。フィルムシミュレーションのレシピも、自分の LUT も使えます。ファームウェアの書き換えは不要です。',
+    'RICOH GR III・GR IIIx・GR IV に、フィルム風の色味、XPan などのアスペクト比、日付入れ撮影、グロー、粒状感を追加します。フィルムシミュレーションのレシピも、自分の LUT も使えます。ファームウェアの書き換えは不要です。',
   lead: ['RICOH GR にフィルム風の色味と XPan を。', 'ファームウェアの書き換えは不要です。'],
   landing: {
     install: 'インストール',
@@ -1987,7 +2060,7 @@ const ja: Strings = {
     inCamera: 'カメラでの操作',
     adjCaption: 'ADJ を押して GRK を選びます。',
     menuCaption: 'すべての設定は MENU の GRKit にあります。',
-    safe: '安心して試せます',
+    safe: 'カメラへの影響',
     fastFact: ['任意の高速起動', '電源オンから 1〜2 秒で読み込みます。', '高速起動について'],
     lut: ['LUT を読み込む', '手持ちの .cube LUT や Lightroom プリセットをフィルムルックとして使えます。', 'インストールページで読み込む'],
     facts: [
@@ -1997,12 +2070,12 @@ const ja: Strings = {
     faqTitle: 'インストールの前に',
     faq: [
       { q: '無料ですか？', a: ['はい。GRKit は MIT ライセンスのオープンソースで、無料です。ソースコードは ', '[GitHub', ' で公開しています。アカウントも要りません。'] },
-      { q: 'カメラが壊れる心配はありませんか？', a: ['GRKit はファームウェアを変更しません。変更するのは、任意の高速起動ファームウェアを自分で入れた場合だけです。GRKit に保証はありません。'] },
+      { q: 'カメラが壊れる心配はありませんか？', a: ['GRKit はファームウェアを変更しません。変更するのは、任意の高速起動ファームウェアを自分で入れた場合だけです。GRKit はリコーの公式ツールではなく、動作の保証もありません。ご自身の判断でお使いください。'] },
       { q: 'どのカメラに対応していますか？', a: ['GR III、GR IIIx、GR IV に対応しています。対応ファームウェアはインストールページで確認できます。それより前の GR には対応していません。'] },
-      { q: '何が必要ですか？', a: ['SD カードとカードリーダーです。パソコンの Chrome か Edge なら、GRKit をカードに直接書き込めます。ほかのブラウザでは GRKit.zip をダウンロードしてカードにコピーします。'] },
-      { q: 'RAW ファイルは変わりますか？', a: ['いいえ。GRKit が変えるのは JPEG だけです。RAW（DNG）ファイルにはカメラの RAW データがそのまま残ります。'] },
+      { q: '何が必要ですか？', a: ['SD カードとカードリーダーです。パソコンの Chrome か Edge なら、GRKit をカードに直接書き込めます。ほかのブラウザーでは GRKit.zip をダウンロードしてカードにコピーします。'] },
+      { q: 'RAW ファイルは変わりますか？', a: ['いいえ。GRKit が変えるのは JPEG だけです。RAW（DNG）ファイルにはカメラの RAW 画像がそのまま残ります。'] },
       { q: 'カメラの動作は遅くなりますか？', a: ['GRKit は電源を入れてから約 8〜10 秒で読み込まれます。それまではカメラ本来の設定で撮影されます。任意の高速起動ファームウェアを使うと、1〜2 秒で読み込まれます。'] },
-      { q: '削除するには？', a: ['インストールページからアンインストールするか、カードの GRKIT フォルダと SCRIPT フォルダを削除してください。写真は消えません。'] },
+      { q: '削除するには？', a: ['インストールページからアンインストールするか、カードの GRKIT フォルダーと SCRIPT フォルダーを削除してください。写真は消えません。'] },
     ],
   },
   camera: 'カメラ',
@@ -2052,7 +2125,7 @@ const ja: Strings = {
   filterMono: 'モノクロ',
   filterYours: '自分の',
   groupNegative: 'カラーネガ',
-  groupSlide: 'スライド',
+  groupSlide: 'ポジフィルム',
   groupCinema: 'シネマ',
   groupInstant: 'インスタント',
   groupMono: 'モノクロ',
@@ -2073,7 +2146,7 @@ const ja: Strings = {
   importFile: '.cube・PNG・TIFF・.xmp ファイルを選択',
   importPresetNote:
     'Lightroom プリセット：GRKit は色の設定を読み取ります。写真ごとに変わる設定は近似です。',
-  importPresetRecipe: 'プリセットの露出・粒状・ホワイトバランスのレシピも追加する',
+  importPresetRecipe: 'プリセットの露出・粒状感・ホワイトバランスのレシピも追加する',
   importRecipeAdded: (name) => `レシピ「${name}」を追加しました。`,
   importRecipeFull: 'レシピライブラリがいっぱいのため、レシピは追加されませんでした。',
   importName: 'フィルムルック名',
@@ -2137,6 +2210,7 @@ const ja: Strings = {
     ricoh: 'リコー',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: 'シネマ',
   },
   importButton: '読み込む',
@@ -2214,12 +2288,30 @@ const ja: Strings = {
   nativeFrom: (version) => `GR IV ${version} のファームウェアから`,
   nativePrivacy: 'ファイルはこのブラウザー内で処理され、アップロードされることはありません。',
   nativeLicense: 'ファームウェアの利用には、リコーのソフトウェア使用許諾が適用されます。',
+  nativeGr2: {
+    needs: 'GR II のファームウェアが必要',
+    title: 'GR II の色を使う',
+    intro:
+      'GR II Positive は、GR II に搭載されている「ポジフィルム調」です。GRKit は GR II のファームウェアからこれを取り出し、GR III・GR IIIx・GR IV 用のフィルムルックにします。',
+    stepDownload: 'リコーのサイトから GR II のファームウェア（バージョン 3.00）をダウンロードします。',
+    stepRead: 'GRKit がこのブラウザー内で色を読み出します。数秒かかります。',
+    fileType: 'GR II ファームウェア',
+    done: (version) => `GR II ${version} が見つかりました。フィルムルックの一覧に追加しました。`,
+    from: (version) => `GR II ${version} のファームウェアから`,
+    errors: {
+      unsupported: 'このファイルは使えません。GR II 3.00 のファームウェアを選んでください。',
+      notFirmware:
+        'GR II のファームウェアの ZIP ファイルではありません。リコーの GR II のページからダウンロードした ZIP を選択してください。',
+      tooLarge: 'ファイルが大きすぎます。GR II のファームウェアではありません。',
+      failed: 'このファイルから色を読み出せませんでした。もう一度お試しください。',
+    },
+  },
   printFilm: (code) => `${code} プリント`,
   effectCount: 'フィルムルック数',
   loading: 'フィルムルックを読み込み中…',
   loadError: 'フィルムルックを読み込めません。',
   retryLoad: '再試行',
-  firmwareNote: 'カメラのメニューでファームウェアのバージョンを確認してください。古いバージョンの場合は、先に Ricoh のサイトから更新してください。',
+  firmwareNote: 'カメラのメニューでファームウェアのバージョンを確認してください。古いバージョンの場合は、先に Ricoh のサイトからアップデートしてください。',
   download: 'GRKit.zip をダウンロード',
   building: 'GRKit.zip を準備中…',
   downloading: (received) => `GRKit.zip をダウンロード中：${received} MB…`,
@@ -2250,7 +2342,7 @@ const ja: Strings = {
     framing: `${framingRatios('、', '、')} の写真。範囲外は暗く表示します。`,
     crop: '写真を 35、40、50、70mm にクロップします。GR IIIx では 50〜100mm です。',
     guides: '9分割、画面中央、黄金比、対角線、黄金螺旋、ダイナミックシンメトリー。',
-    dateStamp: '写真の右下に日付を入れます。書体はクラシック、GR1s、GR II。',
+    dateStamp: '写真の右下に日付を写し込みます。書体はクラシック、GR1s、GR II。',
     glow: '光の周りのブルームとハレーション。ライブビューには反映されません。',
     border: '写真に白または黒のボーダーを付けます。写真は縮小も切り取りもしません。',
     grain: '4 段階のフィルム粒状感。静止画のみ。',
@@ -2259,7 +2351,7 @@ const ja: Strings = {
   steps: [
     ['カメラの電源を切ります。'],
     ['GRKit.zip を開きます（ブラウザーによっては自動で展開されます）。', '`SD_ROOT', ' フォルダーそのものではなく、その中身をカードのルートにコピーします。コピー後、カードのルートに ', '`SCRIPT', ' フォルダーがあれば OK です。'],
-    ['カードを入れます。初回のみ：MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。この手順で ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を使います。'],
+    ['カードをセットします。初回のみ：MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。この手順で ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を使います。'],
     ['電源を入れます。GRKit は電源を入れてから約 8〜10 秒で読み込まれます。その後、撮影画面で ADJ を押し、6 番目の項目「GRK」を選びます。'],
     ['任意：カードのルートから ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を削除します。アップデートでは使いません。'],
   ],
@@ -2268,7 +2360,7 @@ const ja: Strings = {
     ['カメラの電源を切ります。'],
     ['カードから ', '`SCRIPT', ' フォルダーを削除します。'],
     ['新しい GRKit.zip を開き、', '`SD_ROOT', ' の ', '`SCRIPT', ' フォルダーだけをカードのルートにコピーします。'],
-    ['カードを入れて、電源を入れます。MENU ボタンを押しながら電源を入れる必要はありません。'],
+    ['カードをセットして、電源を入れます。MENU ボタンを押しながら電源を入れる必要はありません。'],
     ['カードにあるフィルムルックはそのまま残ります。不要なものは、MENU の GRKit にあるフィルムルックの「オプション」で非表示にできます。'],
   ],
   faqTitle: 'よくある質問',
@@ -2279,7 +2371,7 @@ const ja: Strings = {
     },
     {
       q: 'GRKit はカメラのファームウェアを変更しますか？',
-      a: ['いいえ。変更するのは、オプションの高速起動ファームウェアをインストールした場合だけです。SD スクリプトの設定（カメラがカードの GRKit を実行するための設定）は、オフにするまでオンのままです。'],
+      a: ['いいえ。変更するのは、任意の高速起動ファームウェアをインストールした場合だけです。SD スクリプトの設定（カメラがカードの GRKit を実行するための設定）は、オフにするまでオンのままです。'],
     },
     {
       q: 'フィルムルックでイメージコントロールの設定は変わりますか？',
@@ -2309,13 +2401,13 @@ const ja: Strings = {
   fastboot: {
     title: '高速起動',
     lead: '電源を入れて 1〜2 秒で GRKit が読み込まれます。',
-    compareHead: ['公式ファームウェア', '高速起動ファームウェア'],
+    compareHead: ['通常版', '高速起動版'],
     compare: [
       ['GRKit の読み込み', '電源を入れてから約 8〜10 秒', '電源を入れて 1〜2 秒'],
-      ['インストール', 'カードにコピー', '一度ファームウェアを更新してから、カードにコピー'],
+      ['インストール', 'カードにコピー', '一度ファームウェアをアップデートしてから、カードにコピー'],
       ['対応バージョン', 'GRKit が対応するすべてのバージョン', '下のリンクを参照'],
-      ['リスク', 'ファームウェアを変更しない', '更新が止まるとカメラが起動しなくなるおそれがあります。Ricoh の修理を受けられない場合があります。'],
-      ['公式アップデート', 'いつもどおり更新', '公式ファームウェアに置き換わる'],
+      ['リスク', 'ファームウェアを変更しない', 'アップデートが止まるとカメラが起動しなくなるおそれがあります。Ricoh の修理を受けられない場合があります。'],
+      ['公式アップデート', 'いつもどおりアップデート', '公式ファームウェアに置き換わる'],
     ],
     make: 'ファームウェアを作る',
     makeSteps: [
@@ -2335,47 +2427,48 @@ const ja: Strings = {
     unknown: '対応するカメラとバージョンの公式ファームウェアではありません。Ricoh からダウンロードし直してください。',
     error: '高速起動ファームウェアを作成できませんでした。もう一度お試しください。',
     install: 'ファームウェアをインストール',
-    warning: 'インストールにはファームウェア更新が必要です。更新が止まると、カメラが起動しなくなるおそれがあります。',
+    warning: 'インストールにはファームウェアのアップデートが必要です。アップデートが止まると、カメラが起動しなくなるおそれがあります。',
     installSteps: [
       'バッテリーを満充電し、カードの写真をバックアップします。',
       '高速起動ファームウェアを、フォルダーではなくカードのルートにコピーします。ルートにあるほかのファームウェアのファイルは削除します。',
-      '電源を切ります。MENU を押したまま電源ボタンを押し、更新画面が出るまで MENU を押し続けます。',
+      '電源を切ります。MENU を押したまま電源ボタンを押し、アップデート画面が出るまで MENU を押し続けます。',
       '［実行］を選び、OK を押します。',
-      '更新が始まります。更新が終わるまで、電源を切ったりバッテリーカバーを開けたりしないでください。',
-      '更新が終わったら、電源を切ります。',
+      'アップデートが始まります。アップデートが終わるまで、電源を切ったりバッテリーカバーを開けたりしないでください。',
+      'アップデートが終わったら、電源を切ります。',
       '電源を入れ、撮影と再生ができることを確かめます。そのあとカードのファームウェアのファイルを削除します。カードに GRKit がない場合は、いつもどおりインストールします。',
     ],
     fileNames: 'ファイル名が完全に一致しないと、カメラはファイルを見つけられません。',
     renamed: 'ダウンロードフォルダーに同じ名前のファイルがあると、ブラウザーは fwdc239b (1).bin のように番号を付けます。カードのファイル名を元に戻してください。',
     extensions: 'Windows では、名前を変える前にエクスプローラーで「ファイル名拡張子」をオンにします。そうしないと fwdc239b.bin.bin になることがあります。',
     screens: {
-      confirm: 'ファームウェア更新画面',
-      updating: '更新中',
-      done: '更新完了',
+      confirm: 'ファームウェアのアップデート画面',
+      updating: 'アップデート中',
+      done: 'アップデート完了',
     },
     installDone: 'これで、電源を入れてすぐ ADJ に GRK が表示されます。メニューのファームウェアのバージョン表示は変わりません。',
-    help: '更新画面が出ない？',
+    help: 'アップデート画面が出ない？',
     helpItems: [
       'カメラがいつもどおり起動したら、ファイルが見つかっていません。ファイル名と、ファイルがカードのルートにあることを確かめて、やり直します。',
-      '更新ファイルに問題があると表示されたら、最新の公式ファイルから高速起動ファームウェアを作り直します。',
+      'アップデートファイルに問題があると表示されたら、最新の公式ファイルから高速起動ファームウェアを作り直します。',
     ],
     restore: '公式ファームウェアに戻す',
-    restoreText: '同じバージョンの公式 ZIP を展開し、中のファームウェアのファイルで同じ手順で更新します。今後の公式アップデートでも、高速起動ファームウェアは置き換わります。',
+    restoreText: '同じバージョンの公式 ZIP を展開し、中のファームウェアのファイルで同じ手順でアップデートします。今後の公式アップデートでも、高速起動ファームウェアは置き換わります。',
     videoHint: ['', 'インストールと高速起動の動画', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '高速起動',
+  docsLink: 'ドキュメント',
   fastbootHint: ['GRKit をもっと早く読み込むには、', '高速起動', 'をお試しください。'],
   resourcesLink: 'その他の資料',
   resources: {
     title: '資料',
-    lead: 'GRKit についての動画と記事です。著者とは関係ありません。',
+    lead: 'GRKit についての動画と記事です。GRKit の開発者によるものではありません。',
     videos: '動画',
     articles: '記事',
     notes: {
       'drnick-full': 'GR IV でのインストール、高速起動、ブルーム、ハレーション、クロップ、レシピ、ボーダー。',
-      'drnick-intro': 'フィルムルック、フレーミング、日付印字、粒状の紹介。',
+      'drnick-intro': 'フィルムルック、フレーミング、日付入れ撮影、粒状感の紹介。',
       'pentax-rumors': 'Ricoh / Pentax 向けの概要と紹介動画。',
-      'diy-photography': 'フィルムルック、XPan、グロー、粒状、インストールの説明。',
+      'diy-photography': 'フィルムルック、XPan、グロー、粒状感、インストールの説明。',
       '852-camera': '広東語でのフィルムルック、XPan、カードからのインストール紹介。',
       abduzeedo: '各モジュールと任意の高速起動についての長い記事。',
     },
@@ -2384,7 +2477,7 @@ const ja: Strings = {
   removeSteps: [
     ['カメラの電源を切ります。カードから ', '`SCRIPT', ' フォルダーと ', '`GRKIT', ' フォルダーを削除します。', '`GRKIT', ' には GRKit の設定が入っています。'],
     ['SD スクリプトもオフにする場合は、下のファイルをダウンロードし、', '`SD_ROOT', ' の中身をカードのルートにコピーします。'],
-    ['カードを入れます。MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。'],
+    ['カードをセットします。MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。'],
     ['カードのルートから ', '`{modeset}', ' と ', '`DEVELOP.MOD', ' を削除します。'],
   ],
   scriptsOff: 'SD スクリプトをオフにするファイルをダウンロード',
@@ -2394,15 +2487,15 @@ const ja: Strings = {
   uninstallData: '設定とフィルムルックも削除',
   uninstallButton: 'GRKit をアンインストール',
   uninstallScriptsOff: 'SD スクリプトもオフにする',
-  scriptsOffNext: '続けて、カードを入れて MENU を押したまま電源を入れ、電源が切れるまで待ちます。',
+  scriptsOffNext: '続けて、カードをセットして MENU を押したまま電源を入れ、電源が切れるまで待ちます。',
   uninstallConfirm: 'このカードから GRKit をアンインストールしますか？写真はそのままで、いつでもインストールし直せます。',
   uninstallConfirmButton: 'アンインストール',
   cancel: 'キャンセル',
-  uninstallDone: 'GRKit をアンインストールしました。カードを取り出してから抜いてください。',
+  uninstallDone: 'GRKit をアンインストールしました。パソコンで取り外しの操作をしてから、カードを抜いてください。',
   scriptsOffTitle: 'SD スクリプトをオフにする',
-  scriptsOffText: 'GRKit を使わなくなるときだけ必要です。書き込んだら、カードを入れて MENU を押したまま電源を入れ、電源が切れるまで待ちます。',
+  scriptsOffText: 'GRKit を使わなくなるときだけ必要です。書き込んだら、カードをセットして MENU を押したまま電源を入れ、電源が切れるまで待ちます。',
   scriptsOffWrite: 'SD スクリプトをオフにする',
-  scriptsOffDone: '完了しました。カードを取り出して、カメラで操作してください。',
+  scriptsOffDone: '完了しました。パソコンで取り外しの操作をしてからカードを抜き、カメラで操作してください。',
   modesetClean: 'カメラがスクリプトをオフにしたら、これらのファイルを削除できます。',
   modesetCleanButton: 'ファイルを削除',
   modesetCleaned: '削除しました。',
@@ -2410,7 +2503,7 @@ const ja: Strings = {
   modeCardText: 'カードリーダーでカードをつなぎ、このページで GRKit をインストール・更新します。',
   modeZip: 'GRKit.zip をダウンロード',
   modeZipText: 'ファイルを自分でカードにコピーします。どのブラウザーでも使えます。',
-  cardBrowser: 'Chrome または Edge でこのページを開いて SD カードを挿すと、GRKit を自動でインストール・アップデートできます。',
+  cardBrowser: 'Chrome または Edge でこのページを開いて SD カードをカードリーダーに入れると、GRKit を自動でインストール・アップデートできます。',
   cardComputer: 'パソコンの Chrome または Edge なら、SD カードに直接インストールできます。',
   copyLink: 'リンクをコピー',
   linkCopied: 'コピーしました',
@@ -2422,7 +2515,7 @@ const ja: Strings = {
   grSnapNote: 'スマートフォンで GR の写真を取り込み、リモート撮影。',
   appBrowser: 'アプリ内のブラウザーでは GRKit.zip を保存できないことがあります。アプリのメニュー（多くは右上）からブラウザーで開くか、パソコンで grkit.app を開いてください。',
   recommended: 'おすすめ',
-  cardStepInsert: 'カードをカメラに入れます。',
+  cardStepInsert: 'カードをカメラにセットします。',
   cardReader: 'カードリーダーを使ってください。カメラの USB 接続は使えません。',
   cardConnect: 'SD カードを接続',
   cardConnectOther: 'カードを切り替え',
@@ -2464,8 +2557,8 @@ const ja: Strings = {
     remove: '削除',
     undo: '元に戻す',
     download: 'GOODBYE.JPG をダウンロード',
-    downloadNote: 'ファイルを SD カードの GRKIT フォルダにコピーしてください。',
-    failed: 'この画像はブラウザで読み込めません。',
+    downloadNote: 'ファイルを SD カードの GRKIT フォルダーにコピーしてください。',
+    failed: 'この画像はブラウザーで読み込めません。',
     alt: '終了画面のプレビュー',
     textNote: 'カメラは画像の上に撮影枚数とファームウェアのバージョンを表示します。位置は図のとおりです。カメラの GRKit 設定 > 終了画面 > 文字を表示 で非表示にできます。',
     changeWrite: '画像を書き込む',
@@ -2488,7 +2581,7 @@ const ja: Strings = {
   cardWriting: (written, total) => `書き込み中 ${written}/${total}…`,
   cardFinishing: 'カードを確認中…',
   cardDoneTitle: 'GRKit をカードに書き込みました。',
-  cardDone: 'カードを取り出してから抜いてください。',
+  cardDone: 'パソコンで取り外しの操作をしてから、カードを抜いてください。',
   cardDoneFirst: '初回のみ：MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。',
   cardWriteError: '書き込めませんでした。',
   cardPartial: '途中までしか書き込まれていない可能性があります。まだカメラで使わず、接続し直してもう一度書き込んでください。',
@@ -2499,8 +2592,8 @@ const ja: Strings = {
   cardConnectAnother: '別のカードを接続',
   cardPermission: 'カードを編集する許可がありません。接続し直して、編集を許可してください。',
   cardReconnect: (name: string) => `${name} に再接続`,
-  cardReconnectNote: '前回使ったカードです。先に挿入してください。',
-  cardNotInserted: 'そのカードが見つかりません。挿入するか、別のカードを接続してください。',
+  cardReconnectNote: '前回使ったカードです。先にカードリーダーに入れてください。',
+  cardNotInserted: 'そのカードが見つかりません。カードリーダーに入れるか、別のカードを接続してください。',
   cardEnable: 'MENU ボタンを押したまま電源を入れ、電源が自動で切れるまで待ちます。',
   looks: {
     'portra-400-endura-v1': 'Kodak Portra 400、Portra Endura 印画紙',
@@ -2511,60 +2604,60 @@ const ja: Strings = {
     'vision3-250d-2383-v1': 'Kodak Vision3 250D 5207、Vision 2383 プリントフィルム',
     'vision3-500t-supra-v1': 'Kodak Vision3 500T 5219（CineStill 800T の元のフィルム）を Supra Endura 印画紙にプリントしてスキャン',
     'portra-800-push2-v1': 'Kodak Portra 800 を EI 3200 まで 2 段増感、Portra Endura 印画紙',
-    'kodachrome-64-v1': 'リバーサルフィルム Kodak Kodachrome 64 をスキャン',
-    'velvia-100-v1': 'リバーサルフィルム Fujifilm Velvia 100 をスキャン',
+    'kodachrome-64-v1': 'ポジフィルム Kodak Kodachrome 64 をスキャン',
+    'velvia-100-v1': 'ポジフィルム Fujifilm Velvia 100 をスキャン',
     'trix-400-mono-v1': 'Kodak Tri-X 400、Polymax Fine-Art 印画紙',
     'red-filter-mono-v1': 'Wratten 25 赤フィルターを付けた Kodak Tri-X 400',
     'aerocolor-iv-v1': 'Kodak Aerocolor IV 航空用ネガフィルム、Portra Endura 印画紙',
-    'ektachrome-e100-v1': 'リバーサルフィルム Kodak Ektachrome E100 をスキャン',
+    'ektachrome-e100-v1': 'ポジフィルム Kodak Ektachrome E100 をスキャン',
     'eterna-500t-3523xd-v1': 'Fujifilm Eterna 500T 8573、Eterna-CP 3523XD プリントフィルム',
     'instax-v1': 'Fujifilm Instax カラーインスタントフィルム',
     'double-x-5222-mono-v1': 'Kodak Double-X 5222、Polymax Fine-Art 印画紙',
     'hp5-plus-400-mono-v1': 'Ilford HP5 Plus 400、t3mujinpack の darktable スタイルによる',
     'c200-premier-v1': 'Fujicolor C200、Endura Premier 印画紙',
     'ultramax-400-ultra-v1': 'Kodak UltraMax 400、Ultra Endura 印画紙',
-    'provia-100f-v1': 'リバーサルフィルム Fujifilm Provia 100F をスキャン',
+    'provia-100f-v1': 'ポジフィルム Fujifilm Provia 100F をスキャン',
     'neopan-acros-100-v1': 'Fujifilm Neopan Acros 100',
     't-max-400-v1': 'Kodak T-Max 400',
     'delta-100-v1': 'Ilford Delta 100',
     'xp2-super-v1': 'Ilford XP2 Super 400',
-    'astia-100f-v1': 'リバーサルフィルム Fujifilm Astia 100F をスキャン',
-    'precisa-100-v1': 'リバーサルフィルム Agfa Precisa 100 をスキャン',
+    'astia-100f-v1': 'ポジフィルム Fujifilm Astia 100F をスキャン',
+    'precisa-100-v1': 'ポジフィルム Agfa Precisa 100 をスキャン',
     'portra-160-vc-v1': 'Kodak Portra 160 VC',
     'fuji-160c-v1': 'Fujifilm 160C',
     'vista-200-v1': 'Agfa Vista 200',
   },
   lookHints: {
     'portra-400-endura-v1': '自然な肌色と細かい粒子。混光でも安定しやすい、コダック定番の ISO 400 ポートレートネガ。',
-    'gold-200-premier-v1': 'あたたかく鮮やかな日常の色味。粒子が細く、露出が少しずれても比較的寛容。',
-    'ektar-100-edge-v1': 'とても鮮やかな色と極細の粒子。風景、旅行、屋外のディテール向け。',
-    'pro-400h-crystal-v1': 'ハイライトからシャドウまで肌がなめらか。混光でもニュートラルを保ちやすい。',
-    'xtra-400-crystal-v1': '日常使いの ISO 400。自然な肌色で、感度のわりに粒子も細かい。',
-    'vision3-250d-2383-v1': 'デイライトのシネマカラー。明るい部分を残しやすく、シャドウの粒子も抑えめ。',
-    'vision3-500t-supra-v1': 'タングステンのシネマ感。自然な肌色とハイライトの余裕。CineStill 800T の元フィルム。',
-    'portra-800-push2-v1': 'Portra の低照度での肌色を、ここでは 2 段プッシュして再現。暗い場面向け。',
-    'kodachrome-64-v1': 'クラシックな Kodachrome のスライド感。極細粒子でディテールがシャープ。',
-    'velvia-100-v1': '富士でいちばん鮮やかな部類のスライド。風景や自然がよく映える。',
+    'gold-200-premier-v1': 'あたたかく鮮やかな日常の色味。粒子が細く、露出が多少ずれても破綻しにくい。',
+    'ektar-100-edge-v1': 'とても鮮やかな発色と極細の粒子。風景、旅行、屋外の細部描写に向く。',
+    'pro-400h-crystal-v1': 'ハイライトからシャドーまで肌の階調がなめらか。混光でもニュートラルを保ちやすい。',
+    'xtra-400-crystal-v1': '日常使いの ISO 400。肌色が自然で、感度のわりに粒子も細かい。',
+    'vision3-250d-2383-v1': '昼光向けの映画用フィルムの色調。明るい部分を残しやすく、シャドーの粒子も控えめ。',
+    'vision3-500t-supra-v1': '白熱灯向けの映画用フィルムの色調。肌色が自然で、ハイライトに余裕がある。CineStill 800T の元フィルム。',
+    'portra-800-push2-v1': 'Portra 800 を 2 段増感した色調。肌色を保ちやすく、暗い場面に向く。',
+    'kodachrome-64-v1': 'クラシックな Kodachrome のポジフィルムの色調。極細粒子で細部もシャープ。',
+    'velvia-100-v1': '富士フイルムのポジフィルムの中でも特に鮮やかな発色。風景や自然がよく映える。',
     'trix-400-mono-v1': '定番の高感度モノクロ。暗い場所や動きに強く、階調も豊か。',
     'red-filter-mono-v1': 'Tri-X に赤フィルター。青空が沈み、コントラストが強まる。',
     'aerocolor-iv-v1': '航空測量向けのカラーネガ。粒子が細く、露出の幅も広い。',
-    'ektachrome-e100-v1': '白がきれいで明るく、色はほどよく強調。ニュートラルで使いやすいスライド。',
-    'eterna-500t-3523xd-v1': 'タングステンのシネマカラー。とても細かい粒子、自然な肌色、広い露出幅。',
-    'instax-v1': '富士 Instax プリントの色味。鮮やかで、肌色も自然。',
+    'ektachrome-e100-v1': '白がきれいで明るく、色はほどよく鮮やか。ニュートラルで使いやすいポジフィルム。',
+    'eterna-500t-3523xd-v1': '白熱灯向けの映画用フィルムの色調。粒子がとても細かく、肌色が自然で、露出の幅も広い。',
+    'instax-v1': '富士フイルム Instax プリントの色味。鮮やかで、肌色も自然。',
     'double-x-5222-mono-v1': 'クラシックな映画用モノクロ。Eastman Double-X の粒子とコントラスト。',
     'hp5-plus-400-mono-v1': '中コントラストのモノクロ。ストリート、動き、現場光に向く。',
-    'c200-premier-v1': 'シンプルなデイライトカラー。粒子が細く、肌色も自然。',
+    'c200-premier-v1': '昼光向けのシンプルな色調。粒子が細く、肌色も自然。',
     'ultramax-400-ultra-v1': '明るく鮮やかな日常の色。低照度やフラッシュでも使いやすい。',
-    'provia-100f-v1': 'バランスのよい万能スライド。細粒子でシャープ、色も忠実。',
+    'provia-100f-v1': 'バランスのよい万能ポジフィルム。細粒子でシャープ、色再現も忠実。',
     'neopan-acros-100-v1': 'とても細かい粒子のモノクロ。階調がなめらかで豊か。',
     't-max-400-v1': 'シャープで極細粒子のモノクロ。現場光や動きに向く。',
     'delta-100-v1': 'きわめて細かい粒子。細部をきれいに残したいときに。',
     'xp2-super-v1': '細粒子のモノクロ。露出の幅が広く、ハイライトもはっきり。',
-    'astia-100f-v1': 'やわらかく自然な肌色と穏やかな色。富士のポートレート向けスライド。',
-    'precisa-100-v1': 'クラシックな Agfa のデイライト・スライド。',
-    'portra-160-vc-v1': '普通の Portra より少し鮮やかでコントラスト高め。肌にはやさしいまま。',
-    'fuji-160c-v1': 'やわらかい富士のポートレートよりメリハリ強め。ファッションやコマーシャル向け。',
-    'vista-200-v1': '日常のデイライトカラー。ふつうの光で色がより正確になるよう設計。',
+    'astia-100f-v1': 'やわらかく自然な肌色と穏やかな発色。富士フイルムのポートレート向けポジフィルム。',
+    'precisa-100-v1': 'クラシックな Agfa の昼光用ポジフィルム。',
+    'portra-160-vc-v1': '標準の Portra より少し鮮やかでコントラストも高め。肌色はやわらかいまま。',
+    'fuji-160c-v1': '富士フイルムのやわらかいポートレート系よりメリハリが強い。ファッションやコマーシャル向け。',
+    'vista-200-v1': '昼光向けの日常的な色調。普段の光で色をより正確に再現するよう設計。',
   },
 };
 
@@ -2751,6 +2844,7 @@ const ko: Strings = {
     ricoh: '리코',
     cinemaYellow: 'Cinema Yellow',
     cinemaGreen: 'Cinema Green',
+    gr2Positive: 'GR II Positive',
     cinema: '시네마',
   },
   importButton: '가져오기',
@@ -2826,6 +2920,23 @@ const ko: Strings = {
   nativeFrom: (version) => `GR IV ${version} 펌웨어에서 가져옴`,
   nativePrivacy: '파일은 이 브라우저 안에서만 처리되며 업로드되지 않습니다.',
   nativeLicense: '펌웨어 사용에는 리코의 소프트웨어 사용권 계약이 적용됩니다.',
+  nativeGr2: {
+    needs: 'GR II 펌웨어 필요',
+    title: 'GR II 색감 잠금 해제',
+    intro:
+      'GR II Positive는 GR II에 들어 있는 포지티브 필름 색감입니다. GRKit은 GR II 펌웨어에서 이 색감을 꺼내 GR III, GR IIIx, GR IV용 효과로 만듭니다.',
+    stepDownload: '리코 사이트에서 GR II 펌웨어(3.00)를 다운로드합니다.',
+    stepRead: 'GRKit이 이 브라우저 안에서 색감을 읽어 옵니다. 몇 초 걸립니다.',
+    fileType: 'GR II 펌웨어',
+    done: (version) => `GR II ${version}을 찾았습니다. 색감을 효과에 추가했습니다.`,
+    from: (version) => `GR II ${version} 펌웨어에서 가져옴`,
+    errors: {
+      unsupported: '이 파일은 사용할 수 없습니다. GR II 3.00 펌웨어를 선택하세요.',
+      notFirmware: 'GR II 펌웨어 ZIP 파일이 아닙니다. 리코 GR II 페이지에서 받은 ZIP을 선택하세요.',
+      tooLarge: '파일이 너무 큽니다. GR II 펌웨어가 아닙니다.',
+      failed: '이 파일에서 색감을 읽을 수 없습니다. 다시 시도하세요.',
+    },
+  },
   printFilm: (code) => `${code} 프린트`,
   effectCount: '필름 룩 수',
   loading: '필름 룩을 불러오는 중…',
@@ -2993,6 +3104,7 @@ const ko: Strings = {
     videoHint: ['', '설치와 빠른 시작 영상', ' by '] as readonly [string, string, string],
   },
   fastbootLink: '빠른 시작',
+  docsLink: '문서',
   fastbootHint: ['GRKit을 더 빨리 불러오려면 ', '빠른 시작', '을 써 보세요.'],
   resourcesLink: '더 많은 자료',
   resources: {
@@ -3253,12 +3365,19 @@ export function pageText(language: Language, page: Page): { title: string; descr
       return { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path };
     case 'resources':
       return { title: `${strings.resources.title} · GRKit`, description: strings.resources.lead, path };
+    // The text of a doc loads with the docs (`docPageText`), which then replaces this.
+    default:
+      return { title: `${strings.docsLink} · GRKit`, description: strings.description, path };
   }
 }
 
 /** Sets the language, the title, and the description of the document. */
 export function showLanguage(language: Language, current: Page): void {
-  const page = pageText(language, current);
+  showPageText(language, pageText(language, current));
+}
+
+/** Sets the language, the title, the description, and the canonical address of the document. */
+export function showPageText(language: Language, page: { title: string; description: string; path: string }): void {
   document.documentElement.lang = language;
   document.title = page.title;
   document.querySelector('meta[name="description"]')?.setAttribute('content', page.description);

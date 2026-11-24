@@ -122,9 +122,9 @@ pub fn import_lut_with_progress(
     })
 }
 
-/// A look that `native_looks` read from a GR IV firmware file of the user.
+/// A look that `native_looks` read from a firmware file of the user.
 pub struct NativeEffect {
-    /// The GR IV version of the file.
+    /// The camera's version of the file.
     pub version: &'static str,
     pub id: String,
     pub name: String,
@@ -142,33 +142,57 @@ pub struct NativeEffect {
     pub monochrome: bool,
 }
 
-/// Reads the GR IV looks (`gr4_looks::LOOKS`) from an official GR IV zip or its firmware
-/// file. The page keeps the file in the browser. `base_gamma` is the table of the
-/// site catalog, for the previews.
+/// Reads the native looks of an official firmware zip or its firmware file: the GR IV looks
+/// (`gr4_looks::LOOKS`) or the GR II Positive effects (`gr2_looks::TARGETS`). The page keeps the file in
+/// the browser. `base_gamma` is the table of the site catalog, for the previews.
 pub fn native_looks(bytes: &[u8], base_gamma: &[u16]) -> Result<Vec<NativeEffect>> {
     let base_gamma = site::base_gamma(base_gamma)?;
+    if grkit_core::gr2_looks::detect(bytes) {
+        let image = grkit_core::gr2_looks::Image::read(bytes)?;
+        return image
+            .definitions()?
+            .into_iter()
+            .map(|definition| native_effect(definition, image.version(), &base_gamma, None))
+            .collect();
+    }
     let image = grkit_core::gr4_looks::Image::read(bytes)?;
     let tables = image.tone_tables()?;
     image
         .definitions()?
         .into_iter()
         .map(|definition| {
-            let blob = effects::compile_definition(&definition)?;
-            let (effect, icon) = effects::decode(&blob)?;
-            let curves = site::native_tone_curves(&effect, &tables);
-            Ok(NativeEffect {
-                version: image.source.version,
-                preview: site::native_preview_lut(&base_gamma, &effect, curves.as_ref())?,
-                tone: curves.map(|curves| curves.to_values()).unwrap_or_default(),
-                monochrome: effect.monochrome(),
-                id: effect.id,
-                name: effect.name,
-                definition: serde_json::to_string_pretty(&definition)?,
-                blob,
-                icon,
-            })
+            native_effect(definition, image.source.version, &base_gamma, Some(&tables))
         })
         .collect()
+}
+
+/// One look of `native_looks`. `tables` are the tone tables of the firmware, for the default
+/// tone steps of a look; a look without them has none.
+fn native_effect(
+    definition: Value,
+    version: &'static str,
+    base_gamma: &[u16; 256],
+    tables: Option<&grkit_core::native_tone::ToneTables>,
+) -> Result<NativeEffect> {
+    let blob = effects::compile_definition(&definition)?;
+    let (effect, icon) = effects::decode(&blob)?;
+    let curves = tables.and_then(|tables| site::native_tone_curves(&effect, tables));
+    ensure!(
+        curves.is_some() || effect.fn_defaults.is_none(),
+        "A look with default adjustments needs the tone tables of its firmware"
+    );
+    let preview = grkit_core::gr2_looks::for_preview(effect.clone())?;
+    Ok(NativeEffect {
+        version,
+        preview: site::native_preview_lut(base_gamma, &preview, curves.as_ref())?,
+        tone: curves.map(|curves| curves.to_values()).unwrap_or_default(),
+        monochrome: effect.monochrome(),
+        id: effect.id,
+        name: effect.name,
+        definition: serde_json::to_string_pretty(&definition)?,
+        blob,
+        icon,
+    })
 }
 
 /// The input that a LUT most likely expects, from its data alone: see `fit::guess_input`.
@@ -349,6 +373,7 @@ impl Builder {
             packaging::Extras {
                 imports: self.imports.as_deref(),
                 recipes: self.recipes.as_deref(),
+                ..Default::default()
             },
         )?;
         Ok(package.bytes)
@@ -407,6 +432,7 @@ pub fn effect_preview(blob: &[u8], base_gamma: &[u16], tone: &[u16]) -> Result<V
         [] => None,
         values => Some(site::ToneCurves::from_values(values)?),
     };
+    let effect = grkit_core::gr2_looks::for_preview(effect)?;
     site::native_preview_lut(&base_gamma, &effect, curves.as_ref())
 }
 

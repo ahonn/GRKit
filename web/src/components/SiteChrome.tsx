@@ -1,6 +1,7 @@
+import type { ReactNode } from 'react';
 import { siteUrl } from '../catalog';
 import { LANGUAGES, type Language, type Strings } from '../i18n';
-import { fastbootPath, installPath, LANGUAGE_PATHS, resourcesPath, type Page } from '../languagePage';
+import { docsPath, fastbootPath, installPath, LANGUAGE_PATHS, pagePath, resourcesPath, type Page } from '../languagePage';
 import { grSnapUrl, guideUrl, REPOSITORY } from '../links';
 
 /** The UserJot board for feature ideas and votes. A plain link, so the page loads nothing from UserJot. */
@@ -18,13 +19,15 @@ interface MastheadProps {
   language: Language;
   page: Page;
   onLanguage: (language: Language) => void;
+  /** The search of the docs pages, before the language menu. */
+  search?: ReactNode;
 }
 
 /**
  * The top of every page, in one row: the name with the version on the left, then the links to
  * the film looks, the installer, and the fast-boot firmware page, GitHub, and the language.
  */
-export function Masthead({ strings: t, language, page, onLanguage }: MastheadProps) {
+export function Masthead({ strings: t, language, page, onLanguage, search }: MastheadProps) {
   const install = installPath(language);
   return (
     <header className="masthead">
@@ -48,7 +51,11 @@ export function Masthead({ strings: t, language, page, onLanguage }: MastheadPro
             <a href={fastbootPath(language)} aria-current={page === 'fastboot' ? 'page' : undefined}>
               {t.fastbootLink}
             </a>
+            <a href={docsPath(language)} aria-current={page === 'docs' || page.startsWith('docs/') ? 'page' : undefined}>
+              {t.docsLink}
+            </a>
           </nav>
+          {search}
           <a className="github" href={REPOSITORY} aria-label="GitHub" title="GitHub">
             <svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true" focusable="false">
               <path
@@ -100,10 +107,11 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
     {
       title: t.footerHelp,
       links: [
+        { href: docsPath(language), label: t.docsLink },
         { href: `${install}#faq-label`, label: t.faqTitle },
         { href: resourcesPath(language), label: t.resourcesLink },
-        { href: guideUrl('RECOVERY', language), label: t.recovery },
-        { href: guideUrl('DUMP', language), label: t.firmwareDump },
+        { href: pagePath(language, 'docs/recovery'), label: t.recovery },
+        { href: pagePath(language, 'docs/firmware-dump'), label: t.firmwareDump },
       ],
     },
     {

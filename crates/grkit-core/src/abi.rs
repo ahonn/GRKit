@@ -70,12 +70,15 @@ pub const MODULE_TILES_MAX: usize = 128;
 /// Off, GRKit, Version, Modules, Modules with a line through it (Enable
 /// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
 /// "16" of the manual focus scale in feet (`runtime/distance.h`), the tile of
-/// a recipe without its caption, and the slots of the tiles of recipes that
-/// the core writes (`runtime/recipe_card.h`). The menu
+/// a recipe without its caption, the slots of the tiles of recipes that
+/// the core writes (`runtime/recipe_card.h`), and the two pictures of Battery
+/// Percentage, of two slots each (`runtime/battery_percent.h`). The menu
 /// addresses the icons after Off by their offset from the GRKit icon, so the
 /// host icons come first in chunk 0, and they must fit in it. The effect
 /// icons follow them.
-pub const HOST_ICON_COUNT: usize = 21;
+pub const HOST_ICON_COUNT: usize = 25;
+/// The host icon slots of the pictures of Battery Percentage, the last ones.
+pub const BATTERY_ICON_SLOTS: usize = 4;
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script
@@ -159,14 +162,15 @@ pub const DIAL_VALUE_ON: u32 = 0;
 pub const DIAL_VALUE_OFF: u32 = 1;
 pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
-/// A copy of eight settings of the core that no snapshot holds, in the file
+/// A copy of nine settings of the core that no snapshot holds, in the file
 /// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
 /// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
 /// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), Uncropped RAW
 /// (`MANAGE_COPY_RAW`), Simplified Info. Battery (`MANAGE_COPY_BATTERY`),
 /// Custom Picture (`MANAGE_COPY_GOODBYE`), Show Text
-/// (`MANAGE_COPY_GOODBYE_TEXT`), and Effect Icons in Playback
-/// (`MANAGE_COPY_PLAYBACK_INFO`), each as its value + 1, or 0 without a copy.
+/// (`MANAGE_COPY_GOODBYE_TEXT`), Effect Icons in Playback
+/// (`MANAGE_COPY_PLAYBACK_INFO`), and Battery Percentage
+/// (`MANAGE_COPY_BATTERY_PERCENT`), each as its value + 1, or 0 without a copy.
 pub const MANAGE_COPY_SWITCH: usize = 0;
 pub const MANAGE_COPY_START: usize = 1;
 pub const MANAGE_COPY_UNIT: usize = 2;
@@ -175,7 +179,8 @@ pub const MANAGE_COPY_BATTERY: usize = 4;
 pub const MANAGE_COPY_GOODBYE: usize = 5;
 pub const MANAGE_COPY_GOODBYE_TEXT: usize = 6;
 pub const MANAGE_COPY_PLAYBACK_INFO: usize = 7;
-pub const MANAGE_COPY_WORDS: usize = 8;
+pub const MANAGE_COPY_BATTERY_PERCENT: usize = 8;
+pub const MANAGE_COPY_WORDS: usize = 9;
 
 /// The immutable main-state export in the module array. Offsets are bytes.
 /// CORE follows state_keys(), which excludes the final CORE.RECIPE handle.
@@ -570,6 +575,13 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// writes native settings. A capture of the current settings reads the
     /// native settings from it (runtime/recipes.h).
     HOST_RECIPE_PREVIEW: 4;
+    /// Battery Percentage: the value that the icon shows, 0 for the native
+    /// icon, the picture that has it, and the time of its last change
+    /// (runtime/battery_percent.h).
+    HOST_BATTERY_ICON: 4;
+    /// Battery Percentage: the average of the charge and the time of its
+    /// last sample (runtime/battery_percent.h).
+    HOST_BATTERY_AVERAGE: 4;
     /// The Toning track that the parameter page shows for a native look with
     /// Toning (runtime/menu.c: toning_track): an 8-byte icon descriptor, then
     /// the pixels, in a firmware block that the core makes at its first use;
@@ -1358,6 +1370,7 @@ pub fn header() -> String {
         ("GOODBYE", MANAGE_COPY_GOODBYE as u32),
         ("GOODBYE_TEXT", MANAGE_COPY_GOODBYE_TEXT as u32),
         ("PLAYBACK_INFO", MANAGE_COPY_PLAYBACK_INFO as u32),
+        ("BATTERY_PERCENT", MANAGE_COPY_BATTERY_PERCENT as u32),
         ("WORDS", MANAGE_COPY_WORDS as u32),
         ("KEY", crate::runtime::MANAGE_COPY_KEY),
     ] {
@@ -1401,6 +1414,12 @@ pub fn header() -> String {
          GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n.",
     );
     writeln!(out, "#define GRKIT_HOST_ICON_COUNT {}", HOST_ICON_COUNT).unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_BATTERY_ICON_SLOTS {}U",
+        BATTERY_ICON_SLOTS
+    )
+    .unwrap();
     writeln!(out, "#define GRKIT_ICONS_PER_CHUNK {}", ICONS_PER_CHUNK).unwrap();
     writeln!(out, "#define GRKIT_MODULE_TILES_MAX {}", MODULE_TILES_MAX).unwrap();
     writeln!(out, "#define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))").unwrap();
@@ -1830,6 +1849,20 @@ pub fn header() -> String {
         out,
         "#define GRKIT_CAPTION_CHARACTERS \"{}\"",
         std::str::from_utf8(crate::artwork::CAPTION_CHARACTERS).unwrap()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_BATTERY_DIGIT_FIRST {}",
+        crate::artwork::OVERLAY_LABELS.len()
+            + 2 * crate::artwork::OVERLAY_GLYPH_COUNT
+            + crate::artwork::CAPTION_CHARACTERS.len()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_BATTERY_DIGIT_HEIGHT {}",
+        crate::artwork::BATTERY_DIGIT_HEIGHT
     )
     .unwrap();
     writeln!(
