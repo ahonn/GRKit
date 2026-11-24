@@ -538,8 +538,9 @@ fn synthetic_grain_film_neon_parity() -> Result<()> {
     // The setting handles of modules/grain, as `grkit module build` declares them.
     fs::write(
         directory.path().join("grkit_module.h"),
-        "#define SETTING_STYLE GRKIT_SETTING(0)\n#define SETTING_ICON GRKIT_SETTING(1)\n\
-         #define USED_CORE_GRAIN GRKIT_USED(0)\n#define USED_CORE_GRAIN_SIZE GRKIT_USED(1)\n",
+        "#include \"grkit.h\"\n#define SETTING_STYLE GRKIT_SETTING(0)\n\
+         #define SETTING_ICON GRKIT_SETTING(1)\n#define USED_CORE_GRAIN GRKIT_USED(0)\n\
+         #define USED_CORE_GRAIN_SIZE GRKIT_USED(1)\n",
     )?;
     let compile = |source: &str, object: &str, mode: &str, extra: &[String]| -> Result<()> {
         toolchain::run(
