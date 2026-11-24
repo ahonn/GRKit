@@ -5688,9 +5688,20 @@ static void battery_percent_reads_the_power_report(void)
     assert(battery_report() == 0x53042811U);
     power_guard = power_service = 0;
     assert(battery_charge(0x4f042811U, 4) == 79);
+    assert(battery_charge(0x4f842811U, 4) == 79);
     assert(!battery_charge(0x4f042812U, 4) && !battery_charge(0x65042811U, 4) && !battery_charge(0x4f022811U, 4));
-    assert(battery_step(79, 0) == 80 && battery_step(78, 80) == 80 && battery_step(77, 80) == 78);
-    assert(battery_step(82, 80) == 80 && battery_step(83, 80) == 84 && battery_step(100, 96) == 100);
+    unsigned average = battery_average(0, 80, 100, 1);
+    assert(battery_points(average) == 80);
+    /* A moment of load moves the average by a fraction of the sample. */
+    assert(battery_points(battery_average(average, 64, 101, 0)) == 79);
+    assert(battery_points(battery_average(average, 64, 100 + BATTERY_AVERAGE_GAP, 0)) == 64);
+    assert(battery_next(BATTERY_FRONT, 79, 5) == (BATTERY_FRONT | 80 | 5U << BATTERY_CHANGE_SHIFT));
+    unsigned shown = 80 | 100U << BATTERY_CHANGE_SHIFT;
+    assert(battery_next(shown, 70, 100 + BATTERY_FALL_WAIT - 1) == shown);
+    assert((battery_next(shown, 70, 100 + BATTERY_FALL_WAIT) & BATTERY_SHOWN_MASK) == 78);
+    assert(battery_next(shown, 85, 100 + BATTERY_RISE_WAIT) == shown);
+    assert(battery_next(shown, 86, 100 + BATTERY_RISE_WAIT - 1) == shown);
+    assert((battery_next(shown, 87, 100 + BATTERY_RISE_WAIT) & BATTERY_SHOWN_MASK) == 88);
     assert(battery_frame(0, 0, BATTERY_FILL) >> 24 == 0 && battery_frame(9, 10, BATTERY_FILL) == 0xfffefefeU &&
            battery_frame(30, 20, BATTERY_FILL_LOW) == BATTERY_FILL_LOW && battery_frame(7, 20, BATTERY_FILL_LOW) == BATTERY_FILL && battery_frame(4, 20, BATTERY_FILL) == 0xfe000000U);
 }

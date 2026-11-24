@@ -343,7 +343,7 @@ rest = offset % 4352
 if rest <> 0 goto legacy_values
 index = offset / 4352
 if index >= pcount goto legacy_values
-value0 = registry[1639 + index * 1088 + 446] and 65535
+value0 = registry[1640 + index * 1088 + 446] and 65535
 :legacy_values
 value1 = registry[52]
 value2 = registry[12]
@@ -357,10 +357,10 @@ value9 = registry[273]
 value10 = registry[274]
 return
 :legacy_parameters
-pcode = registry[1639 + pindex * 1088 + 446] and 32767
-pw0 = registry[1639 + pindex * 1088 + 459]
-pw1 = registry[1639 + pindex * 1088 + 460]
-pw2 = registry[1639 + pindex * 1088 + 461]
+pcode = registry[1640 + pindex * 1088 + 446] and 32767
+pw0 = registry[1640 + pindex * 1088 + 459]
+pw1 = registry[1640 + pindex * 1088 + 460]
+pw2 = registry[1640 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -389,7 +389,7 @@ pvalue = pvalue * 9 + pdigit
 pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
-ptone = (registry[1639 + pindex * 1088 + 463] >> 16) and 255
+ptone = (registry[1640 + pindex * 1088 + 463] >> 16) and 255
 return
 :profile_watch
 ppolls = 0

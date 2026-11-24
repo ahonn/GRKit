@@ -576,8 +576,12 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// native settings from it (runtime/recipes.h).
     HOST_RECIPE_PREVIEW: 4;
     /// Battery Percentage: the value that the icon shows, 0 for the native
-    /// icon, and the picture that has it (runtime/battery_percent.h).
+    /// icon, the picture that has it, and the time of its last change
+    /// (runtime/battery_percent.h).
     HOST_BATTERY_ICON: 4;
+    /// Battery Percentage: the average of the charge and the time of its
+    /// last sample (runtime/battery_percent.h).
+    HOST_BATTERY_AVERAGE: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
