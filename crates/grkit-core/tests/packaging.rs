@@ -1651,10 +1651,14 @@ fn a_single_build_package_has_one_core_file() {
     };
     let runtimes = gr3_runtimes();
     // Without the flag, a GR III package needs each build.
-    assert!(format!("{:#}", single(&runtimes[1..], &camera::GR3, false).unwrap_err())
-        .contains("in release order"));
-    // Two builds are not a single build.
-    assert!(single(&runtimes, &camera::GR3, true).is_ok());
+    assert!(format!(
+        "{:#}",
+        single(&runtimes[1..], &camera::GR3, false).unwrap_err()
+    )
+    .contains("in release order"));
+    // With each build, the option changes nothing.
+    let full = single(&runtimes, &camera::GR3, true).unwrap();
+    assert_eq!(verify_package(&full.bytes).unwrap().targets.len(), 2);
     let package = single(&runtimes[1..], &camera::GR3, true).unwrap();
     let files = unpack(&package.bytes);
     assert_eq!(
@@ -1662,7 +1666,15 @@ fn a_single_build_package_has_one_core_file() {
         testing::marked_installer("gr3-2.21")
     );
     assert!(!files.contains_key("SD_ROOT/SCRIPT/GRKIT/CORE1.BIN"));
-    assert_eq!(verify_package(&package.bytes).unwrap().targets, ["gr3-2.21"]);
+    assert_eq!(
+        grkit_core::packaging::verify_single_build_package(&package.bytes)
+            .unwrap()
+            .targets,
+        ["gr3-2.21"]
+    );
+    // The default check, which the release runs, needs each build.
+    assert!(verify_package(&package.bytes).is_err());
+    assert!(grkit_core::packaging::card_files(&package.bytes).is_err());
     // A build that the camera does not run.
     assert!(single(&runtimes[1..], &camera::GR4, true).is_err());
 }

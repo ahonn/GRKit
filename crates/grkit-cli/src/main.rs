@@ -136,7 +136,13 @@ enum Command {
         decode: bool,
     },
     /// Check package layout, profiles and checksums.
-    Verify { archive: PathBuf },
+    Verify {
+        archive: PathBuf,
+        /// Accept a package from `grkit package --single-build`. Without this
+        /// option, a package must hold each build of its camera.
+        #[arg(long)]
+        single_build: bool,
+    },
     /// List the cameras, the firmware releases that each runs, and the runtime
     /// build for each release.
     Cameras,
@@ -706,10 +712,17 @@ fn run(command: Command) -> Result<Value> {
                 .with_context(|| format!("Could not write {}", out.display()))?;
             Ok(json!({"output": out, "recipes": library.len(), "bytes": file.len()}))
         }
-        Command::Verify { archive } => {
+        Command::Verify {
+            archive,
+            single_build,
+        } => {
             // Include room for ZIP metadata while bounding the archive read itself.
             let bytes = storage::read_bounded(&archive, 64 * 1024 * 1024)?;
-            let contents = packaging::verify_package(&bytes)?;
+            let contents = if single_build {
+                packaging::verify_single_build_package(&bytes)?
+            } else {
+                packaging::verify_package(&bytes)?
+            };
             Ok(
                 json!({"valid": true, "camera": contents.camera.id, "targets": contents.targets,
                 "effects": contents.effect_ids.len(),
