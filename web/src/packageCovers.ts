@@ -192,9 +192,9 @@ export const NATIVE_LOOKS: readonly NativeLookInfo[] = [
   monoLook('gr4-mono-soft', 'Mono Soft', 'MONO', 'SOFT'),
   monoLook('gr4-mono-high-contrast', 'Mono Hi-Contrast', 'MONO', 'HI'),
   monoLook('gr4-mono-grainy', 'Mono Grainy', 'MONO', 'GRAINY'),
-  monoLook('gr4-mono-solarized-1', 'Solarized 1', 'SOLAR', '1'),
-  monoLook('gr4-mono-solarized-2', 'Solarized 2', 'SOLAR', '2'),
-  monoLook('gr4-mono-solarized-3', 'Solarized 3', 'SOLAR', '3'),
+  monoLook('gr4-mono-solarized-1', 'Solarized 1', 'MONO', 'SOLAR 1'),
+  monoLook('gr4-mono-solarized-2', 'Solarized 2', 'MONO', 'SOLAR 2'),
+  monoLook('gr4-mono-solarized-3', 'Solarized 3', 'MONO', 'SOLAR 3'),
   gr2Positive('gr2-positive-film', CINEMA_CAMERAS),
   gr2Positive('gr2-positive-film-gr4', ['gr4']),
 ];

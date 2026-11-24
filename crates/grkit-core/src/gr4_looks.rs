@@ -217,7 +217,7 @@ pub const LOOKS: [Look; 10] = [
         kind: Kind::Solarized(35),
         effect_id: "gr4-mono-solarized-1",
         name: "Solarized 1",
-        cover: ("box", "SOLAR", "1"),
+        cover: ("box", "MONO", "SOLAR 1"),
         defaults: [0; 9],
     },
     Look {
@@ -225,7 +225,7 @@ pub const LOOKS: [Look; 10] = [
         kind: Kind::Solarized(36),
         effect_id: "gr4-mono-solarized-2",
         name: "Solarized 2",
-        cover: ("box", "SOLAR", "2"),
+        cover: ("box", "MONO", "SOLAR 2"),
         defaults: [0; 9],
     },
     Look {
@@ -233,7 +233,7 @@ pub const LOOKS: [Look; 10] = [
         kind: Kind::Solarized(37),
         effect_id: "gr4-mono-solarized-3",
         name: "Solarized 3",
-        cover: ("box", "SOLAR", "3"),
+        cover: ("box", "MONO", "SOLAR 3"),
         defaults: [0; 9],
     },
 ];
