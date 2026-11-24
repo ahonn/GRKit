@@ -9,13 +9,13 @@ use std::collections::BTreeMap;
 use nsh_base::alert_dialog;
 use nsh_core::prelude::*;
 
-use super::{AppState, Tab};
+use super::{AppState, MAX_DEPTH, Route, Tab};
 use crate::domain::{
     LookError,
     fake_modules::{self, FakeChange},
     modules::{
-        CatalogAnswer, Managed, ModuleCatalog, ModuleDraft, ModuleRow, ModulesState, module_rows,
-        package_can_install, png_data_uri, settle,
+        CatalogAnswer, Managed, ModuleCatalog, ModuleDraft, ModuleLayout, ModulePlace, ModuleRow,
+        ModulesState, module_rows, package_can_install, png_data_uri, settle,
     },
 };
 use crate::platform::modules::{self as remote, CachedIcon, ModuleCache};
@@ -101,6 +101,7 @@ impl Default for ModulesStore {
 enum Change {
     Patch(String, serde_json::Value, FakeChange),
     Order(Vec<String>),
+    Layout(ModuleLayout),
 }
 
 impl AppState {
@@ -202,7 +203,32 @@ impl AppState {
         }
     }
 
-    /// The Modules tab became visible.
+    /// Open the Modules page over the camera tab.
+    pub fn open_modules_page(self) {
+        self.set_tab(Tab::Camera);
+        if !self.modules_page_open() {
+            self.push(Route::Modules);
+        }
+        self.open_modules();
+    }
+
+    /// Where the Modules page is on the camera tab's stack, when it is open.
+    fn modules_page_depth(self) -> Option<usize> {
+        (0..MAX_DEPTH).find(|depth| self.route_at(Tab::Camera, *depth) == Some(Route::Modules))
+    }
+
+    pub(super) fn modules_page_open(self) -> bool {
+        self.modules_page_depth().is_some()
+    }
+
+    /// Close the Modules page and the pages above it.
+    pub(super) fn close_modules_page(self) {
+        if let Some(depth) = self.modules_page_depth() {
+            self.pop_to(Tab::Camera, depth);
+        }
+    }
+
+    /// The Modules page became visible.
     pub fn open_modules(self) {
         if self.demo() {
             self.refresh_modules();
@@ -222,6 +248,9 @@ impl AppState {
     }
 
     pub fn refresh_modules(self) {
+        // The GRKit settings come and go with the modules: on a connect, a
+        // change on the camera, and a pull.
+        self.refresh_camera_settings();
         if self.demo() {
             self.refresh_demo_modules();
             return;
@@ -237,10 +266,13 @@ impl AppState {
         self.root.run(|| {
             spawn(async move {
                 let result = read_modules(language, cache.clone()).await;
+                self.modules.loading.set(false);
                 if self.connect_generation.get() != generation {
+                    // A refresh for the new connection returned while this
+                    // one loaded.
+                    self.refresh_modules();
                     return;
                 }
-                self.modules.loading.set(false);
                 match result {
                     Ok(ModulesRead::Blocked(block)) => {
                         self.modules.block.set(Some(block));
@@ -281,13 +313,15 @@ impl AppState {
         });
     }
 
-    /// Fetch the icons the cache does not know, one at a time.
+    /// Fetch the icons the cache does not hold, one at a time. A module the
+    /// camera had no icon for is asked again: a camera can answer so while
+    /// its runtime still starts.
     async fn fetch_module_icons(self, cache: &ModuleCache, generation: u64) {
         let Some(catalog) = self.modules.catalog.get() else {
             return;
         };
         for module in &catalog.modules {
-            if cache.icon(&module.id).is_some() {
+            if matches!(cache.icon(&module.id), Some(CachedIcon::Image(_))) {
                 continue;
             }
             let icon = match remote::icon(&module.id).await {
@@ -330,6 +364,7 @@ impl AppState {
     /// A read that a lost link cut off never reports back. The catalog and
     /// the state stay, for the page without a camera.
     pub(super) fn reset_module_read(self) {
+        self.reset_camera_settings();
         self.modules.loading.set(false);
         self.modules.error.set(None);
         self.modules.busy.set(None);
@@ -348,7 +383,9 @@ impl AppState {
     pub fn alert_module_error(self, error: LookError) {
         if error == LookError::ConnectionLost {
             self.show_toast(tr("looks.lost_toast", &[]));
-            self.pop_to(Tab::Modules, 0);
+            if let Some(depth) = self.modules_page_depth() {
+                self.pop_to(Tab::Camera, depth + 1);
+            }
             return;
         }
         let (title, body) = error.keys();
@@ -387,6 +424,7 @@ impl AppState {
             let fake = match &change {
                 Change::Patch(_, _, fake) => fake.clone(),
                 Change::Order(ids) => FakeChange::Order(ids.clone()),
+                Change::Layout(layout) => FakeChange::Layout(layout.clone()),
             };
             let answer = fake_modules::apply(&mut next, &fake).map(|()| next);
             self.finish_module_change(before, answer);
@@ -401,6 +439,7 @@ impl AppState {
                         .await
                         .map(|(module, revision)| before.with_module(module, revision)),
                     Change::Order(ids) => remote::put_order(&boot_id, &ids).await,
+                    Change::Layout(layout) => remote::put_layout(&boot_id, &layout).await,
                 };
                 if self.connect_generation.get() != generation {
                     return;
@@ -450,11 +489,16 @@ impl AppState {
             .is_none_or(|features| features.recipes)
     }
 
+    /// The boot that the module reads came from, for a change to name.
+    pub(super) fn modules_boot_id(self) -> String {
+        self.modules.boot_id.get().unwrap_or_default()
+    }
+
     pub fn tab_available(self, tab: Tab) -> bool {
         match tab {
-            Tab::Looks => self.looks_available(),
-            Tab::Recipes => self.recipes_available(),
-            Tab::Camera | Tab::Modules => true,
+            Tab::Camera | Tab::Settings => true,
+            Tab::Looks => self.tabs_shown() && self.looks_available(),
+            Tab::Recipes => self.tabs_shown() && self.recipes_available(),
         }
     }
 
@@ -511,6 +555,9 @@ impl AppState {
     /// Read what runs on the camera, without its catalog: the tabs follow it
     /// from the first screen on.
     pub(super) fn refresh_module_state(self) {
+        // The Settings tab shows the GRKit settings whatever tab is open at a
+        // connect.
+        self.refresh_camera_settings();
         if self.demo() || !self.camera_online() || self.modules.loading.get() {
             return;
         }
@@ -519,23 +566,28 @@ impl AppState {
         let changes = self.modules.changes.with(|count| *count);
         self.root.run(|| {
             spawn(async move {
+                // A failed read says so on the home row instead of reading
+                // on there.
+                let failed = move || {
+                    if self.connect_generation.get() == generation {
+                        self.modules.error.set(Some(LookError::ConnectionLost));
+                    }
+                };
                 let Ok(access) = remote::access().await else {
-                    return;
+                    return failed();
                 };
                 if !access.read {
                     return;
                 }
                 let Ok(state) = remote::state().await else {
-                    return;
+                    return failed();
                 };
                 if self.connect_generation.get() != generation {
                     return;
                 }
+                self.modules.error.set(None);
                 self.modules.boot_id.set(Some(access.boot_id));
                 self.modules.writable.set(access.write);
-                let stopped = state
-                    .features
-                    .is_some_and(|features| !features.looks || !features.recipes);
                 if self.modules.changes.with(|count| *count) == changes
                     && self.modules.busy.with(Option::is_none)
                 {
@@ -544,8 +596,9 @@ impl AppState {
                     }
                     self.set_module_state(state);
                 }
-                // The way to turn a feature on names the module.
-                if stopped && self.modules.catalog.with(Option::is_none) {
+                // The home row and the way to turn a feature on name the
+                // modules, so a camera without a cached catalog reads it.
+                if self.modules.catalog.with(Option::is_none) {
                     self.refresh_modules();
                 }
             });
@@ -790,6 +843,46 @@ impl AppState {
         self.send_module_change(
             (String::new(), ModulePart::Order),
             Change::Order(ids),
+            Some(shown),
+        );
+    }
+
+    /// The layout of ADJ, from a GRKit that takes a whole layout.
+    pub fn module_layout(self) -> Option<ModuleLayout> {
+        self.modules
+            .state
+            .with(|s| s.as_ref().and_then(|s| s.layout()))
+    }
+
+    pub fn toolbar_max(self) -> usize {
+        self.modules
+            .state
+            .with(|s| s.as_ref().and_then(|s| s.toolbar_max))
+            .unwrap_or(0)
+    }
+
+    /// Move a module within its place of ADJ.
+    pub fn move_in_place(self, place: ModulePlace, from: usize, to: usize) {
+        if let Some(layout) = self.module_layout().filter(|_| from != to) {
+            self.save_layout(layout.moved(place, from, to));
+        }
+    }
+
+    /// Move a module to the end of another place of ADJ.
+    pub fn move_to_place(self, id: &str, place: ModulePlace) {
+        if let Some(layout) = self.module_layout() {
+            self.save_layout(layout.placed(id, place));
+        }
+    }
+
+    fn save_layout(self, layout: ModuleLayout) {
+        let Some(state) = self.modules.state.get() else {
+            return;
+        };
+        let shown = state.with_layout(&layout);
+        self.send_module_change(
+            (String::new(), ModulePart::Order),
+            Change::Layout(layout),
             Some(shown),
         );
     }

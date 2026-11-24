@@ -146,12 +146,12 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
             sub,
             item.current,
         ))
-        .child(item.ready.then(|| {
+        .child((item.ready && (!item.current || applying)).then(|| {
             primary_button_loading(tr("recipes.apply", &[]), applying, move || {
                 app.apply_recipe(id)
             })
         }))
-        .child(edit_steps());
+        .child(edit_steps(item.current));
     for group in groups(
         &item.recipe,
         look_row(
@@ -206,8 +206,14 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
 }
 
 /// How to change a recipe's settings: the camera saves recipes, so the
-/// phone shows the steps.
-fn edit_steps() -> impl IntoElement {
+/// phone shows the steps. The current recipe's settings are already on the
+/// camera, so its steps start at the camera.
+fn edit_steps(current: bool) -> impl IntoElement {
+    let keys: &[&'static str] = if current {
+        &["recipes.step2", "recipes.step3"]
+    } else {
+        &["recipes.step1", "recipes.step2", "recipes.step3"]
+    };
     let step = |n: u8, key: &'static str| {
         view()
             .flex_row()
@@ -242,20 +248,23 @@ fn edit_steps() -> impl IntoElement {
         .bg(move || theme().muted)
         .role(AccessibilityRole::Text)
         .label(format!(
-            "{}: {}, {}, {}",
+            "{}: {}",
             tr("recipes.steps_title", &[]),
-            tr("recipes.step1", &[]),
-            tr("recipes.step2", &[]),
-            tr("recipes.step3", &[])
+            keys.iter()
+                .map(|k| tr(k, &[]))
+                .collect::<Vec<_>>()
+                .join(", ")
         ))
         .child(
             text(tr("recipes.steps_title", &[]))
                 .text_size(px(crate::ui::ty::SUBHEADLINE))
                 .font_weight(FontWeight::SEMIBOLD),
         )
-        .child(step(1, "recipes.step1"))
-        .child(step(2, "recipes.step2"))
-        .child(step(3, "recipes.step3"))
+        .children(
+            keys.iter()
+                .enumerate()
+                .map(|(i, key)| step(i as u8 + 1, key).into_element()),
+        )
 }
 
 /// Which presets show.

@@ -161,6 +161,9 @@ pub struct Release {
     pub presets: Vec<grkit_core::release_index::IndexPreset>,
     /// Upper estimate of the release files, before applying camera selections.
     pub bytes: u64,
+    /// Read from the cache because the site did not answer: an update it
+    /// offers is real, but it cannot say that none is newer.
+    pub offline: bool,
     base: String,
     index: Index,
     camera: &'static camera::Camera,
@@ -301,6 +304,7 @@ async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem>
     )
     .await
     .unwrap_or_else(|| Err("Release index request timed out".into()));
+    let offline = online.is_err();
     let index_bytes = match online {
         Ok(bytes) => bytes,
         Err(error) => {
@@ -360,6 +364,7 @@ async fn latest_for(camera: &'static camera::Camera) -> Result<Release, Problem>
         notes: index.notes.clone(),
         presets: index.presets.clone(),
         bytes,
+        offline,
         base,
         index,
         camera,
@@ -594,6 +599,7 @@ mod tests {
             notes: Vec::new(),
             presets: Vec::new(),
             bytes: 2,
+            offline: false,
             base: "https://example.test".into(),
             index,
             camera: &camera::GR3,

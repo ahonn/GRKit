@@ -1,37 +1,45 @@
 //! Camera tab: the first camera to add, the saved cameras, and the
-//! connected camera with its update, Looks and recipes. Settings opens
-//! from the top right.
+//! connected camera with its update, modules, Looks and recipes.
 
 use nsh_base::{alert_dialog, theme};
 use nsh_core::element::ImageSrc;
+use nsh_core::element::desktop::MenuItem;
+use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
+use crate::pages::look_pages::TAB_BAR_CLEARANCE;
 use crate::ui::ty::text;
 
 use crate::domain::{CameraModel, RememberedCamera};
 use crate::store::{AppState, Route, Tab, is_up_to_date};
 use crate::strings::tr;
 use crate::ui::{
-    busy_state, camera_art, chevron, circle_button, connection_button, cover_view, gr_mark,
-    grouped_card, loading_content, quiet_spinner, secondary_button, section_title, token,
-    touch_target, wordmark,
+    camera_art, chevron, connection_button, cover_view, grouped_card, header_busy, header_buttons,
+    header_icon, quiet_spinner, secondary_button, section_title, token, wordmark,
 };
 
-/// The height of the wordmark at the top of the disconnected camera tab.
+/// The height of the wordmark at the start of the camera tab's header.
 const WORDMARK_HEIGHT: f32 = 26.0;
-/// A gear: Settings.
-const SETTINGS_ICON: &str = "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM15 12a3 3 0 1 1-6 0a3 3 0 0 1 6 0";
-/// Three dots: more actions.
-const MORE_ICON: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg>"##;
+/// Three dots: More.
+const MORE_PATH: &str = "M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0";
 
 pub fn camera_root(app: AppState) -> impl IntoElement {
-    // The tab draws the wordmark itself, connected or not.
-    crate::ui::app_page()
+    // The header of the other tabs, with the wordmark in place of the title.
+    let page = crate::ui::app_page()
         .title(move || tr("cam.title", &[]))
-        .header_visible(false)
+        .header_title(view());
+    // iOS 26 draws a bar item on glass, as a button: there the wordmark
+    // heads the page instead, where the other tabs show their large title.
+    let page = if cfg!(target_os = "ios") {
+        page
+    } else {
+        page.header_left(wordmark(WORDMARK_HEIGHT))
+    };
+    page.header_right_items(move || native_header(app))
+        .header_right(dynamic(move || header_actions(app)))
         .child(dynamic(move || {
             if app.initial_connect() {
-                return connecting_home(app).into_element();
+                return connecting_home().into_element();
             }
             if app.camera_online()
                 && let Some(status) = app.status()
@@ -45,34 +53,23 @@ pub fn camera_root(app: AppState) -> impl IntoElement {
         }))
 }
 
-/// The wordmark row at the top of the camera tab, with Settings at its
-/// end. A spacer of the button's width keeps the wordmark centered.
-fn brand_header(app: AppState) -> impl IntoElement {
-    view()
-        .flex_row()
-        .min_h(px(44.0))
-        .items_center()
-        .justify_between()
-        .child(view().size(px(touch_target())))
-        .child(wordmark(WORDMARK_HEIGHT))
-        .child(circle_button(
-            SETTINGS_ICON,
-            tr("settings.title", &[]),
-            true,
-            move || app.push(Route::Settings),
-        ))
+/// The wordmark at the head of the camera tab on iOS, in the place and at
+/// the margin of a large title.
+fn home_wordmark() -> Option<impl IntoElement> {
+    cfg!(target_os = "ios").then(|| view().px_4().pt_2().child(wordmark(WORDMARK_HEIGHT)))
 }
 
-fn connecting_home(app: AppState) -> impl IntoElement {
+fn connecting_home() -> impl IntoElement {
     crate::ui::page_scroll()
+        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .flex_1()
         .bg(move || token("grouped"))
+        .child(home_wordmark())
         .child(
             view()
                 .px_6()
-                .pt(px(72.0))
+                .pt_4()
                 .gap_4()
-                .child(brand_header(app))
                 .child(crate::ui::camera_skeleton()),
         )
 }
@@ -116,15 +113,16 @@ fn camera_card(
 
 fn empty_home(app: AppState) -> impl IntoElement {
     crate::ui::page_scroll()
+        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .flex_1()
         .bg(move || token("connection-background"))
+        .child(home_wordmark())
         .child(
             view()
                 .px_6()
-                .pt(px(72.0))
-                .pb_10()
+                .pt_4()
+                .pb(px(TAB_BAR_CLEARANCE))
                 .gap_6()
-                .child(brand_header(app))
                 .child(camera_card(
                     CameraModel::Gr3,
                     tr("home.title", &[]),
@@ -192,22 +190,23 @@ fn saved_home(app: AppState, camera: RememberedCamera) -> impl IntoElement {
     let others: Vec<RememberedCamera> = app.saved_cameras().into_iter().skip(1).collect();
     let menu_camera = camera.clone();
     crate::ui::page_scroll()
+        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .flex_1()
         .bg(move || token("connection-background"))
+        .child(home_wordmark())
         .child(
             view()
                 .px_6()
-                .pt(px(72.0))
-                .pb_10()
+                .pt_4()
+                .pb(px(TAB_BAR_CLEARANCE))
                 .gap_6()
-                .child(brand_header(app))
                 .child(camera_card(
                     camera.model,
                     format!("RICOH {}", camera.model.display_name()),
                     presence_line(app, camera.clone()).into_element(),
                     view()
                         .w_full()
-                        .gap_1()
+                        .gap_3()
                         .child(connection_button(tr("nearby.connect", &[]), move || {
                             app.connect_saved()
                         }))
@@ -344,47 +343,45 @@ async fn confirm_remove(app: AppState, camera: RememberedCamera, name: String) {
 
 fn connected(app: AppState, model: CameraModel) -> impl IntoElement {
     crate::ui::page_scroll()
+        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
+        .refresh(Some(crate::store::page_refresh::CAMERA.to_owned()))
         .flex_1()
         .bg(move || token("grouped"))
+        .child(home_wordmark())
         .child(
             view()
                 .gap_4()
-                .pt(px(72.0))
+                .pt_4()
                 .px_6()
-                .pb_10()
-                .child(brand_header(app))
+                .pb(px(TAB_BAR_CLEARANCE))
                 .child(grouped_card(
-                    view()
-                        .p_4()
-                        .gap_4()
-                        .child(
-                            view()
-                                .flex_row()
-                                .items_center()
-                                .gap_4()
-                                .child(camera_art(model, 80.0, false))
-                                .child(
-                                    view()
-                                        .flex_1()
-                                        .gap(px(4.0))
-                                        .child(
-                                            text(format!("RICOH {}", model.display_name()))
-                                                .text_size(px(crate::ui::ty::TITLE3))
-                                                .font_weight(FontWeight::SEMIBOLD),
-                                        )
-                                        .child(
-                                            text(move || {
-                                                app.remembered()
-                                                    .map(|r| r.last_ssid)
-                                                    .unwrap_or_else(|| tr("connected.status", &[]))
-                                            })
+                    view().p_4().gap_4().child(
+                        view()
+                            .flex_row()
+                            .items_center()
+                            .gap_4()
+                            .child(camera_art(model, 80.0, false))
+                            .child(
+                                view()
+                                    .flex_1()
+                                    .gap(px(4.0))
+                                    .child(
+                                        text(format!("RICOH {}", model.display_name()))
+                                            .text_size(px(crate::ui::ty::TITLE3))
+                                            .font_weight(FontWeight::SEMIBOLD),
+                                    )
+                                    .child(
+                                        text(tr("connected.status", &[]))
                                             .text_size(px(crate::ui::ty::SUBHEADLINE))
                                             .text_color(move || theme().muted_foreground),
-                                        ),
-                                )
-                                .child(dynamic(move || more_button(app))),
-                        )
-                        .child(dynamic(move || version_card(app))),
+                                    )
+                                    .child(
+                                        text(move || version_line(app))
+                                            .text_size(px(crate::ui::ty::FOOTNOTE))
+                                            .text_color(move || theme().muted_foreground),
+                                    ),
+                            ),
+                    ),
                 ))
                 // Rows come and go, so each brings its own gap. Each has its
                 // own dynamic: a list that finishes loading must not redraw
@@ -393,6 +390,7 @@ fn connected(app: AppState, model: CameraModel) -> impl IntoElement {
                     view()
                         .mt(px(-16.0))
                         .child(spaced_row(move || update_card(app)))
+                        .child(spaced_row(move || modules_card(app)))
                         .child(spaced_row(move || current_card(app))),
                 ),
         )
@@ -403,9 +401,12 @@ fn spaced_row(row: impl Fn() -> Option<AnyElement> + 'static) -> impl IntoElemen
     dynamic(move || row().map(|row| view().mt_4().child(row)))
 }
 
+/// A line of text that follows the state it reads.
+type Line = Box<dyn Fn() -> String>;
+
 /// One row about an update: one the phone can install, or one that waits
-/// on the camera for its confirmation or a restart. Nothing when GRKit is
-/// up to date or the check has no answer.
+/// on the camera for its confirmation or a restart. Up to date, it still
+/// opens Software Update; nothing before the camera's package is read.
 fn update_card(app: AppState) -> Option<AnyElement> {
     use crate::domain::JournalState;
     let package = app.package();
@@ -415,44 +416,47 @@ fn update_card(app: AppState) -> Option<AnyElement> {
         None => available.clone().unwrap_or_default(),
     };
     let named = |key: &str, args: &[(&str, &str)]| tr(key, args);
-    let (title, subtitle, pending): (String, Box<dyn Fn() -> String>, bool) =
-        match app.camera_journal() {
-            Some(JournalState::Waiting) => (
-                named("cam.update_waiting", &[("version", &version)]),
-                Box::new(move || {
-                    tr(
-                        "cam.update_waiting_sub",
-                        &[("time", &app.confirm_deadline_label())],
-                    )
-                }),
-                true,
-            ),
-            Some(JournalState::Confirmed) => (
-                named("cam.update_ready", &[("version", &version)]),
-                Box::new(|| tr("cam.update_ready_sub", &[])),
-                true,
-            ),
-            _ if available.is_some() && !package.as_ref().is_some_and(is_up_to_date) => (
-                named("cam.update_available", &[("version", &version)]),
-                Box::new(|| tr("cam.update_available_sub", &[])),
+    let (title, subtitle, pending): (String, Option<Line>, bool) = match app.camera_journal() {
+        Some(JournalState::Waiting) => (
+            named("cam.update_waiting", &[("version", &version)]),
+            Some(Box::new(|| tr("cam.update_waiting_sub", &[]))),
+            true,
+        ),
+        Some(JournalState::Confirmed) => (
+            named("cam.update_ready", &[("version", &version)]),
+            Some(Box::new(|| tr("cam.update_ready_sub", &[]))),
+            true,
+        ),
+        _ if available.is_some() && !package.as_ref().is_some_and(is_up_to_date) => (
+            named("cam.update_available", &[("version", &version)]),
+            Some(Box::new(|| tr("cam.update_available_sub", &[]))),
+            false,
+        ),
+        _ if !app.module_draft().is_empty()
+            && package
+                .as_ref()
+                .is_some_and(|p| p.available.as_deref() == Some(p.installed.as_str())) =>
+        {
+            (
+                named(
+                    "modules.changes",
+                    &[("count", &app.module_draft().count().to_string())],
+                ),
+                Some(Box::new(|| tr("modules.view_update", &[]))),
                 false,
-            ),
-            _ if !app.module_draft().is_empty()
-                && package
-                    .as_ref()
-                    .is_some_and(|p| p.available.as_deref() == Some(p.installed.as_str())) =>
-            {
-                (
-                    named(
-                        "modules.changes",
-                        &[("count", &app.module_draft().count().to_string())],
-                    ),
-                    Box::new(|| tr("modules.view_update", &[])),
-                    false,
-                )
-            }
-            _ => return None,
-        };
+            )
+        }
+        // Up to date, or no answer from the release check yet: the row
+        // still opens Software Update, and says only what is known.
+        _ if package.is_some() => {
+            let known =
+                package.as_ref().is_some_and(is_up_to_date) && app.release_problem().is_none();
+            let subtitle: Option<Line> =
+                known.then(|| Box::new(|| tr("software.up_to_date", &[])) as Line);
+            (tr("software.title", &[]), subtitle, false)
+        }
+        _ => return None,
+    };
     // Without a known version, the title names GRKit alone.
     let title = title.replace("GRKit  ", "GRKit ");
     let card = grouped_card(
@@ -472,7 +476,6 @@ fn update_card(app: AppState) -> Option<AnyElement> {
                 }
             })
             .active(|s| s.opacity(0.72).bg(move || theme().accent))
-            .child(gr_mark(44.0))
             .child(
                 view()
                     .flex_1()
@@ -482,12 +485,17 @@ fn update_card(app: AppState) -> Option<AnyElement> {
                             .text_size(px(crate::ui::ty::HEADLINE))
                             .font_weight(FontWeight::SEMIBOLD),
                     )
-                    .child(
+                    .child(subtitle.map(|subtitle| {
                         text(subtitle)
                             .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .text_color(move || theme().muted_foreground),
-                    ),
+                            .text_color(move || theme().muted_foreground)
+                    })),
             )
+            // Its own dynamic: a check that ends must not redraw the row
+            // under a finger.
+            .child(dynamic(move || {
+                app.release_checking().then(|| quiet_spinner(14.0))
+            }))
             .child(chevron()),
     );
     Some(card.into_element())
@@ -507,6 +515,9 @@ fn current_card(app: AppState) -> Option<AnyElement> {
     let (recipes_on, looks_on) = (app.recipes_available(), app.looks_available());
     let recipes = app.recipes_snapshot();
     let looks = app.looks_snapshot();
+    if !recipes_on && !looks_on {
+        return None;
+    }
     let mut rows = Vec::new();
     match &recipes {
         _ if !recipes_on => {}
@@ -554,14 +565,6 @@ fn current_card(app: AppState) -> Option<AnyElement> {
             Tab::Looks,
         )),
     }
-    if !recipes_on && !looks_on {
-        rows.push(current_row(
-            view().size(px(0.0)).into_element(),
-            tr("modules.none_enabled", &[]),
-            tr("modules.manage", &[]),
-            move || app.set_tab(Tab::Modules),
-        ));
-    }
     if rows.is_empty() {
         if (recipes_on && recipes.is_none()) || (looks_on && looks.is_none()) {
             return None;
@@ -589,10 +592,109 @@ fn current_card(app: AppState) -> Option<AnyElement> {
     Some(
         view()
             .gap_2()
-            .child(section_title(tr("cam.current", &[])))
             .child(grouped_card(view().children(rows)))
             .into_element(),
     )
+}
+
+/// The Modules row in a card of its own: the way to the Modules page. GRKit
+/// off and safe mode stop every module, and the current card says so.
+fn modules_card(app: AppState) -> Option<AnyElement> {
+    if app.grkit_paused() || app.safe_mode() {
+        return None;
+    }
+    modules_row(app).map(|row| grouped_card(row).into_element())
+}
+
+/// The modules that run, with their values. It opens the Modules page.
+fn modules_row(app: AppState) -> Option<AnyElement> {
+    let Some(rows) = app.module_rows() else {
+        return Some(unread_modules_row(app));
+    };
+    let on: Vec<_> = rows
+        .iter()
+        .filter(|row| {
+            row.state.enabled
+                && row.managed().is_none()
+                && !row.failed()
+                && !matches!(row.summary(), crate::domain::modules::Summary::NotUsed)
+        })
+        .collect();
+    // The count of the modules in use, and their names on one line.
+    let (title, subtitle) = if on.is_empty() {
+        let count = rows.iter().filter(|row| row.state.enabled).count();
+        (
+            tr("modules.title", &[]),
+            tr("modules.on_count", &[("count", &count.to_string())]),
+        )
+    } else {
+        (
+            tr("modules.in_use_count", &[("count", &on.len().to_string())]),
+            on.iter()
+                .map(|row| row.title())
+                .collect::<Vec<_>>()
+                .join(" · "),
+        )
+    };
+    Some(current_row_lines(
+        modules_tile(),
+        title,
+        subtitle,
+        1,
+        move || app.open_modules_page(),
+    ))
+}
+
+/// The Modules row before the phone has the modules. It is the only way to
+/// the Modules page, so it shows while they are read, after a failed read,
+/// and when the camera cannot serve them.
+fn unread_modules_row(app: AppState) -> AnyElement {
+    use crate::store::ModulesBlock;
+    let (loading, subtitle) = match app.modules_block() {
+        Some(ModulesBlock::Unsupported) => (false, "modules.unsupported_title"),
+        Some(ModulesBlock::AppTooOld) => (false, "modules.app_old_title"),
+        None if app.modules_error().is_some() => (false, "modules.read_failed"),
+        None => (true, ""),
+    };
+    let tile = if loading {
+        view()
+            .size(px(44.0))
+            .items_center()
+            .justify_center()
+            .child(quiet_spinner(20.0))
+            .into_element()
+    } else {
+        modules_tile()
+    };
+    // While loading, the spinner tile is the only sign; a screen reader
+    // hears that the modules load.
+    let subtitle = if loading {
+        String::new()
+    } else {
+        tr(subtitle, &[])
+    };
+    let title = tr("modules.title", &[]);
+    let label = if loading {
+        format!("{}, {title}", tr("modules.loading", &[]))
+    } else {
+        format!("{subtitle}, {title}")
+    };
+    current_row_labeled(tile, title, subtitle, 2, label, move || {
+        app.open_modules_page()
+    })
+}
+
+/// The Modules page's sliders on the dark tile of a module.
+fn modules_tile() -> AnyElement {
+    const SLIDERS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>"##;
+    view()
+        .size(px(44.0))
+        .rounded(px(44.0 * 0.22))
+        .bg(rgb(0x353536))
+        .items_center()
+        .justify_center()
+        .child(svg(ImageSrc::svg_markup(SLIDERS)).size(px(26.0)))
+        .into_element()
 }
 
 /// A state of GRKit that stops every module, in place of the current items.
@@ -658,6 +760,31 @@ fn current_row(
     subtitle: String,
     on_press: impl Fn() + 'static,
 ) -> AnyElement {
+    current_row_lines(tile, title, subtitle, 2, on_press)
+}
+
+/// A row of the current items whose subtitle takes at most `lines` lines.
+fn current_row_lines(
+    tile: AnyElement,
+    title: String,
+    subtitle: String,
+    lines: u32,
+    on_press: impl Fn() + 'static,
+) -> AnyElement {
+    let label = format!("{subtitle}, {title}");
+    current_row_labeled(tile, title, subtitle, lines, label, on_press)
+}
+
+/// A current-items row with its own screen reader label. An empty subtitle
+/// shows no line.
+fn current_row_labeled(
+    tile: AnyElement,
+    title: String,
+    subtitle: String,
+    lines: u32,
+    label: String,
+    on_press: impl Fn() + 'static,
+) -> AnyElement {
     view()
         .flex_row()
         .items_center()
@@ -666,7 +793,7 @@ fn current_row(
         .px_4()
         .py_2()
         .role(AccessibilityRole::Button)
-        .label(format!("{subtitle}, {title}"))
+        .label(label)
         .on_press(on_press)
         .active(|s| s.opacity(0.72).bg(move || theme().accent))
         .child(tile)
@@ -679,107 +806,73 @@ fn current_row(
                         .text_size(px(crate::ui::ty::HEADLINE))
                         .font_weight(FontWeight::SEMIBOLD),
                 )
-                .child(
+                .child((!subtitle.is_empty()).then(|| {
                     text(subtitle)
-                        .number_of_lines(2)
+                        .number_of_lines(lines)
                         .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .text_color(move || theme().muted_foreground),
-                ),
+                        .text_color(move || theme().muted_foreground)
+                })),
         )
         .child(chevron())
         .into_element()
 }
 
-fn version_card(app: AppState) -> impl IntoElement {
-    let package = app.package();
-    let grkit = package
-        .as_ref()
-        .map(|p| p.installed.clone())
-        .unwrap_or_default();
-    let firmware = package
-        .as_ref()
-        .map(|p| p.firmware.clone())
-        .unwrap_or_default();
-    let grkit_label = tr("connected.grkit", &[]);
-    // The GRKit tile opens Software Update and says so with a chevron.
-    view()
-        .flex_row()
-        .gap_2()
-        .child(
-            version_tile(grkit.clone(), grkit_label.clone())
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .role(AccessibilityRole::Button)
-                .label(format!("{grkit_label} {grkit}"))
-                .on_press(move || app.open_software_update())
-                .active(|s| s.opacity(0.72))
-                .child(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        // Its own dynamic: a check that ends must not redraw
-                        // the tile under a finger.
-                        .child(dynamic(move || {
-                            app.release_checking().then(|| quiet_spinner(14.0))
-                        }))
-                        .child(chevron()),
-                ),
-        )
-        .child(version_tile(firmware, tr("connected.firmware", &[])))
+/// The versions on the camera, as text: Software Update opens from the
+/// update row.
+fn version_line(app: AppState) -> String {
+    let Some(package) = app.package() else {
+        return String::new();
+    };
+    format!(
+        "{} {} · {} {}",
+        tr("connected.grkit", &[]),
+        package.installed,
+        tr("connected.firmware", &[]),
+        package.firmware
+    )
 }
 
-/// A version and what it is the version of.
-fn version_tile(value: String, label: String) -> View {
-    view()
-        .flex_1()
-        .p_3()
-        .rounded(px(8.0))
-        .border_1()
-        .border_color(move || theme().border)
-        .child(
-            view()
-                .gap(px(4.0))
-                .child(
-                    text(value)
-                        .text_size(px(crate::ui::ty::TITLE3))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(
-                    text(label)
-                        .text_size(px(crate::ui::ty::FOOTNOTE))
-                        .text_color(move || theme().muted_foreground),
-                ),
-        )
+/// More in the header (iOS): a native menu with Disconnect and Turn Off,
+/// each after a confirm. It stays in place, disabled, while the camera
+/// turns off.
+fn native_header(app: AppState) -> Vec<HeaderItem> {
+    if !app.camera_online() {
+        return Vec::new();
+    }
+    vec![
+        HeaderItem::symbol("ellipsis.circle")
+            .key("more")
+            .label(tr("cam.more", &[]))
+            .disabled(app.powering_off())
+            .menu([
+                MenuItem::new(tr("cam.disconnect", &[]))
+                    .symbol("wifi.slash")
+                    .on_select(move || crate::pages::confirm_disconnect(app)),
+                MenuItem::new(tr("cam.power", &[]))
+                    .symbol("power")
+                    .destructive(true)
+                    .on_select(move || crate::pages::confirm_power_off(app)),
+            ]),
+    ]
 }
 
-/// The connected camera's other actions, in the system menu. It works in
-/// place while the camera turns off.
-fn more_button(app: AppState) -> impl IntoElement {
-    let working = app.powering_off();
-    view()
-        .size(px(touch_target()))
-        .items_center()
-        .justify_center()
-        .role(AccessibilityRole::Button)
-        .label(tr("cam.more", &[]))
-        .accessibility_state(busy_state(working))
-        .when(!working, |v| {
-            v.on_press(move || connected_menu(app))
-                .active(|s| s.opacity(0.6))
+/// More in the header (Android): Disconnect and Turn Off in a sheet. A
+/// spinner takes its place while the camera turns off.
+fn header_actions(app: AppState) -> Option<AnyElement> {
+    if !app.camera_online() {
+        return None;
+    }
+    let more = if app.powering_off() {
+        header_busy(tr("cam.more", &[]))
+    } else {
+        header_icon(MORE_PATH, tr("cam.more", &[]), true, move || {
+            connected_menu(app)
         })
-        .child(loading_content(
-            working,
-            20.0,
-            theme().foreground,
-            view()
-                .text_color(move || theme().foreground)
-                .child(svg(ImageSrc::svg_markup(MORE_ICON)).size(px(22.0))),
-        ))
+    };
+    Some(header_buttons([more]).into_element())
 }
 
-/// Disconnect and turn off the connected camera, both after a confirm.
+/// Disconnect and Turn Off, both after a confirm.
 fn connected_menu(app: AppState) {
     let name = format!("RICOH {}", app.model_name());
     spawn(async move {

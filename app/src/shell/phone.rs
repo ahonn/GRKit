@@ -1,8 +1,7 @@
-//! Up to four tabs (Camera, Modules, Looks, Recipes) with navigation stacks kept
-//! mounted. The Looks and Recipes tabs show while their module runs.
-//! Without a connected camera only the camera tab shows, with no tab bar. A restart
-//! for changed Looks keeps them.
-//! Settings opens from the camera tab.
+//! Up to five tabs (Camera, Modules, Looks, Recipes, Settings) with navigation
+//! stacks kept mounted. The Looks and Recipes tabs show while their module
+//! runs. Without a connected camera only Camera and Settings show. A restart
+//! for changed Looks keeps the tabs of the camera.
 
 use nsh_base::{nav_stack, theme};
 use nsh_core::{
@@ -13,10 +12,11 @@ use nsh_core::{
 
 use crate::ui::ty::text;
 
+use crate::pages::grkit_settings;
 use crate::pages::{
     CoverTarget, add_page, camera_root, cover_page, import_page, look_page, looks_root,
-    module_options_page, module_page, modules_root, preset_page, presets_page, recipe_page,
-    recipes_root, release_history_page, saved_cameras_page, scheme_page, settings_page,
+    module_options_page, module_page, modules_page, preset_page, presets_page, recipe_page,
+    recipes_root, release_history_page, saved_cameras_page, scheme_page, settings_root,
     software_page,
 };
 use crate::store::{AppState, Route, Tab};
@@ -36,18 +36,11 @@ const RECIPES_ICON: &str = if cfg!(target_os = "android") {
     "list.bullet.rectangle.portrait"
 };
 
-/// An SF Symbol on iOS; the app's drawable on Android.
-const MODULES_ICON: &str = if cfg!(target_os = "android") {
-    "modules"
-} else {
-    "slider.horizontal.3"
-};
-
 const TABS: &[(Tab, &str, &str)] = &[
     (Tab::Camera, "tab.camera", "camera"),
-    (Tab::Modules, "tab.modules", MODULES_ICON),
     (Tab::Looks, "tab.looks", LOOKS_ICON),
     (Tab::Recipes, "tab.recipes", RECIPES_ICON),
+    (Tab::Settings, "tab.settings", "gearshape"),
 ];
 
 pub fn shell(app: AppState) -> impl IntoElement {
@@ -81,31 +74,44 @@ pub fn shell(app: AppState) -> impl IntoElement {
                 .child(tab_stack(app.clone(), t)),
         );
     }
+    // iOS 26 floats its tab bar over the content, which scrolls on under
+    // it; Android's bar takes its own row below the content.
+    let overlay = cfg!(target_os = "ios");
+    let bar_height = signal(0.0f32);
+    let lift = move || if overlay { bar_height.get() } else { 0.0 };
     let stacks = stacks
         .relative()
-        .child(crate::ui::toast_layer(app.toasts()));
-    let online = computed({
+        .child(crate::ui::toast_layer(app.toasts(), lift));
+    let bar = dynamic(move || {
+        let visible = shown.get();
         let app = app.clone();
-        move || app.tabs_shown()
-    });
-    view()
-        .flex_1()
-        .bg(move || theme().background)
-        .child(stacks)
-        .child(dynamic(move || {
-            let visible = shown.get();
-            online.get().then(|| {
-                let app = app.clone();
-                let items = visible.clone();
-                untracked(|| {
-                    tabs(&visible, selected, move |i| {
-                        if let Some(tab) = items.get(i as usize) {
-                            app.set_tab(*tab);
-                        }
-                    })
-                })
+        let items = visible.clone();
+        untracked(|| {
+            tabs(&visible, selected, move |i| {
+                if let Some(tab) = items.get(i as usize) {
+                    if *tab == app.tab() {
+                        app.reselect_tab(*tab);
+                    } else {
+                        app.set_tab(*tab);
+                    }
+                }
             })
-        }))
+        })
+    });
+    let root = view().flex_1().bg(move || theme().background).child(stacks);
+    if overlay {
+        root.relative().child(
+            view()
+                .absolute()
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .on_layout(move |bounds: &Bounds<Points>| bar_height.set(bounds.size.height.0))
+                .child(bar),
+        )
+    } else {
+        root.child(bar)
+    }
 }
 
 fn tab_stack(app: AppState, tab: Tab) -> AnyElement {
@@ -129,7 +135,7 @@ fn root(app: AppState, tab: Tab) -> AnyElement {
         Tab::Camera => camera_root(app).into_element(),
         Tab::Looks => looks_root(app).into_element(),
         Tab::Recipes => recipes_root(app).into_element(),
-        Tab::Modules => modules_root(app).into_element(),
+        Tab::Settings => settings_root(app).into_element(),
     }
 }
 
@@ -139,8 +145,8 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         move || app.pop_to(tab, depth)
     };
     match route {
-        Route::Settings => settings_page(app, back).into_element(),
         Route::SoftwareUpdate => software_page(app, back).into_element(),
+        Route::Modules => modules_page(app, back).into_element(),
         Route::ReleaseHistory => release_history_page(app, back).into_element(),
         Route::LookDetail(id) => look_page(app, id, back).into_element(),
         Route::LookCover(id) => cover_page(app, CoverTarget::Look(id), back).into_element(),
@@ -154,6 +160,11 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::RecipePreset(id) => preset_page(app, id, back).into_element(),
         Route::ModuleDetail(id) => module_page(app, id, back).into_element(),
         Route::ModuleOptions(id) => module_options_page(app, id, back).into_element(),
+        Route::ShootingSettings => grkit_settings::shooting_page(app, back).into_element(),
+        Route::DisplaySettings => grkit_settings::display_page(app, back).into_element(),
+        Route::ShutdownScreen => grkit_settings::shutdown_page(app, back).into_element(),
+        Route::ShutdownCrop => grkit_settings::crop_page(app, back).into_element(),
+        Route::LookUnlock => crate::pages::unlock_page(app, back).into_element(),
     }
 }
 

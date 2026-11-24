@@ -245,12 +245,6 @@ error.try_again:
   zh-TW: "重試"
   ja: "再試行"
   ko: "다시 시도"
-error.send_again:
-  en: Send Again
-  zh-CN: 重新发送
-  zh-TW: "重新傳送"
-  ja: "もう一度送信"
-  ko: "다시 전송"
 error.close:
   en: Close
   zh-CN: 关闭
@@ -306,12 +300,6 @@ settings.gr_snap_desc:
   zh-TW: "RICOH GR 的無線傳輸與遙控"
   ja: "RICOH GR のワイヤレス転送とリモート撮影"
   ko: "RICOH GR 무선 전송과 원격 촬영"
-settings.view:
-  en: View
-  zh-CN: 查看
-  zh-TW: "查看"
-  ja: "見る"
-  ko: "보기"
 
 connecting.cancel:
   en: Cancel
@@ -1707,12 +1695,6 @@ cam.lost_title:
   zh-TW: "連線已中斷"
   ja: "接続が切れました"
   ko: "연결이 끊김"
-cam.current:
-  en: "On the Camera"
-  zh-CN: "相机当前"
-  zh-TW: "相機目前"
-  ja: "カメラの現在の設定"
-  ko: "카메라 현재 설정"
 cam.current_none:
   en: "No recipe or Film Look in use"
   zh-CN: "未使用配方或胶片风格"
@@ -1779,6 +1761,12 @@ cam.disconnect:
   zh-TW: "中斷連線"
   ja: "接続を解除"
   ko: "연결 해제"
+cam.more:
+  en: "More"
+  zh-CN: "更多"
+  zh-TW: "更多"
+  ja: "その他"
+  ko: "더 보기"
 cam.disconnect_title:
   en: "Disconnect Camera"
   zh-CN: "断开相机"
@@ -2116,6 +2104,12 @@ restart.run:
   zh-TW: "重新啟動相機"
   ja: "カメラを再起動"
   ko: "카메라 재시작"
+restart.manual:
+  en: "Restart Manually"
+  zh-CN: "手动重启"
+  zh-TW: "手動重新啟動"
+  ja: "手動で再起動"
+  ko: "직접 재시작"
 restart.title:
   en: "Restart the Camera"
   zh-CN: "重启相机"
@@ -2152,12 +2146,6 @@ confirm.step3:
   zh-TW: "選擇「執行」"
   ja: "「実行」を選択"
   ko: "「실행」 선택"
-confirm.waiting:
-  en: "Waiting · %{time} left"
-  zh-CN: "等待确认 · 剩余 %{time}"
-  zh-TW: "等待確認 · 剩餘 %{time}"
-  ja: "確認待ち · 残り %{time}"
-  ko: "확인 대기 · %{time} 남음"
 installed.verified:
   en: "The camera is running the new version."
   zh-CN: "相机正在运行新版本。"
@@ -2182,18 +2170,6 @@ error.card_full_body:
   zh-TW: "還需要 %{size}。請在相機上刪除一些照片後重試。"
   ja: "あと %{size} 必要です。カメラで写真を削除してから、もう一度お試しください。"
   ko: "%{size}이(가) 더 필요합니다. 카메라에서 사진을 삭제한 후 다시 시도하세요."
-error.not_confirmed_title:
-  en: "Not Confirmed on the Camera"
-  zh-CN: "未在相机上确认"
-  zh-TW: "未在相機上確認"
-  ja: "カメラで確認されませんでした"
-  ko: "카메라에서 확인되지 않음"
-error.not_confirmed_body:
-  en: "No confirmation within 5 minutes, so the camera removed this update."
-  zh-CN: "5 分钟内没有确认，相机已删除这次更新。"
-  zh-TW: "5 分鐘內沒有確認，相機已刪除這次更新。"
-  ja: "5 分以内に確認がなかったため、カメラはこのアップデートを削除しました。"
-  ko: "5분 안에 확인되지 않아 카메라가 이 업데이트를 삭제했습니다."
 error.refused_body:
   en: "This update doesn't fit the firmware of this camera."
   zh-CN: "这个更新不适用于这台相机的固件。"
@@ -2218,6 +2194,12 @@ software.check_failed:
   zh-TW: "無法檢查更新"
   ja: "アップデートを確認できません"
   ko: "업데이트를 확인할 수 없음"
+software.restart_manual:
+  en: "Turn the camera off and on. It reconnects when it starts."
+  zh-CN: "请把相机关机再开机，开机后会自动连接。"
+  zh-TW: "請把相機關機再開機，開機後會自動連線。"
+  ja: "カメラの電源を入れ直してください。起動すると自動で接続します。"
+  ko: "카메라를 껐다 켜 주세요. 켜지면 자동으로 연결됩니다."
 software.check_failed_body:
   en: "On the camera's Wi‑Fi, the phone downloads updates over cellular data. Check it and try again."
   zh-CN: "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。"
@@ -2321,11 +2303,11 @@ cam.update_waiting:
   ja: "GRKit %{version} 確認待ち"
   ko: "GRKit %{version} 확인 대기"
 cam.update_waiting_sub:
-  en: "Confirm on the camera · %{time} left"
-  zh-CN: "在相机上确认 · 剩余 %{time}"
-  zh-TW: "在相機上確認 · 剩餘 %{time}"
-  ja: "カメラで確認 · 残り %{time}"
-  ko: "카메라에서 확인 · %{time} 남음"
+  en: "Confirm on the camera"
+  zh-CN: "在相机上确认"
+  zh-TW: "在相機上確認"
+  ja: "カメラで確認"
+  ko: "카메라에서 확인"
 cam.update_ready:
   en: "GRKit %{version} to Install"
   zh-CN: "GRKit %{version} 待安装"
@@ -3552,12 +3534,6 @@ recipes.undoing:
   zh-TW: "正在復原…"
   ja: "元に戻しています…"
   ko: "실행 취소 중…"
-cam.more:
-  en: More
-  zh-CN: 更多
-  zh-TW: "更多"
-  ja: "その他"
-  ko: "더 보기"
 
 # Modules
 tab.modules:
@@ -3788,18 +3764,6 @@ modules.turn_on:
   zh-TW: "開啟模組"
   ja: "オンにする"
   ko: "모듈 켜기"
-modules.manage:
-  en: "Manage Modules"
-  zh-CN: "管理模块"
-  zh-TW: "管理模組"
-  ja: "モジュールを管理"
-  ko: "모듈 관리"
-modules.none_enabled:
-  en: "Film Looks and Recipes Off"
-  zh-CN: "未启用胶片风格和配方"
-  zh-TW: "未啟用膠片風格和配方"
-  ja: "フィルムルックとレシピはオフです"
-  ko: "필름 룩과 레시피 꺼짐"
 modules.film_alone:
   en: "Film Looks can't be installed alone"
   zh-CN: "胶片风格不能单独安装"
@@ -4052,3 +4016,237 @@ recipes.step3:
   zh-TW: "按 MENU，選擇「配方」→「儲存設定」"
   ja: "MENU を押し、「レシピ」→「設定を保存」を選択"
   ko: "MENU를 누르고 「레시피」 → 「설정 저장」 선택"
+modules.on_count:
+  en: "Modules · %{count} on"
+  zh-CN: "模块 · %{count} 个开启"
+  zh-TW: "模組 · %{count} 個開啟"
+  ja: "モジュール · %{count} 個オン"
+  ko: "모듈 · %{count}개 켜짐"
+modules.in_use_count:
+  en: "Modules · %{count} in use"
+  zh-CN: "模块 · %{count} 个在用"
+  zh-TW: "模組 · %{count} 個使用中"
+  ja: "モジュール · %{count} 個使用中"
+  ko: "모듈 · %{count}개 사용 중"
+grkit.title:
+  en: "GRKit Settings"
+  zh-CN: "GRKit 设置"
+  zh-TW: "GRKit 設定"
+  ja: "GRKit 設定"
+  ko: "GRKit 설정"
+grkit.start:
+  en: "Enable at Start"
+  zh-CN: "开机启用"
+  zh-TW: "開機啟用"
+  ja: "起動時に有効"
+  ko: "시작 시 사용"
+grkit.shooting:
+  en: "Shooting Settings"
+  zh-CN: "拍摄设置"
+  zh-TW: "拍攝設定"
+  ja: "撮影設定"
+  ko: "촬영 설정"
+grkit.display:
+  en: "Display Settings"
+  zh-CN: "显示设置"
+  zh-TW: "顯示設定"
+  ja: "表示設定"
+  ko: "표시 설정"
+grkit.shutdown:
+  en: "Shutdown Screen"
+  zh-CN: "关机画面"
+  zh-TW: "關機畫面"
+  ja: "終了画面"
+  ko: "종료 화면"
+grkit.raw:
+  en: "Uncropped RAW"
+  zh-CN: "RAW 不裁切"
+  zh-TW: "RAW 不裁切"
+  ja: "RAW クロップなし"
+  ko: "RAW 크롭 없음"
+grkit.unit:
+  en: "Distance Unit"
+  zh-CN: "距离单位"
+  zh-TW: "距離單位"
+  ja: "距離の単位"
+  ko: "거리 단위"
+grkit.battery:
+  en: "Simplified Info. Battery"
+  zh-CN: "简单信息电量"
+  zh-TW: "簡單資訊電量"
+  ja: "簡易情報の電池"
+  ko: "간이 정보 배터리"
+grkit.battery_percent:
+  en: "Battery Percentage"
+  zh-CN: "电量百分比"
+  zh-TW: "電量百分比"
+  ja: "バッテリー残量の%表示"
+  ko: "배터리 잔량 % 표시"
+grkit.playback_icons:
+  en: "Effect Icons in Playback"
+  zh-CN: "回放效果图标"
+  zh-TW: "播放效果圖示"
+  ja: "再生時の効果アイコン"
+  ko: "재생 효과 아이콘"
+grkit.custom_picture:
+  en: "Custom Picture"
+  zh-CN: "自定义图片"
+  zh-TW: "自訂圖片"
+  ja: "カスタム画像"
+  ko: "사용자 지정 이미지"
+grkit.default_picture:
+  en: "Camera Default"
+  zh-CN: "相机自带画面"
+  zh-TW: "相機內建畫面"
+  ja: "カメラ標準の画面"
+  ko: "카메라 기본 화면"
+grkit.show_text:
+  en: "Show Text"
+  zh-CN: "显示文字"
+  zh-TW: "顯示文字"
+  ja: "文字を表示"
+  ko: "텍스트 표시"
+grkit.on:
+  en: "On"
+  zh-CN: "开启"
+  zh-TW: "開啟"
+  ja: "オン"
+  ko: "켜짐"
+grkit.off:
+  en: "Off"
+  zh-CN: "关闭"
+  zh-TW: "關閉"
+  ja: "オフ"
+  ko: "꺼짐"
+grkit.keep_last:
+  en: "Keep Last"
+  zh-CN: "保持上次"
+  zh-TW: "保持上次"
+  ja: "前回のまま"
+  ko: "이전 상태"
+grkit.meters:
+  en: "Meters"
+  zh-CN: "米"
+  zh-TW: "公尺"
+  ja: "メートル"
+  ko: "미터"
+grkit.feet:
+  en: "Feet"
+  zh-CN: "英尺"
+  zh-TW: "英尺"
+  ja: "フィート"
+  ko: "피트"
+grkit.save_failed:
+  en: "Couldn’t change the setting"
+  zh-CN: "无法修改设置"
+  zh-TW: "無法修改設定"
+  ja: "設定を変更できませんでした"
+  ko: "설정을 변경할 수 없습니다"
+modules.group_toolbar:
+  en: "Top Row · %{count}/%{max}"
+  zh-CN: "顶栏 · %{count}/%{max}"
+  zh-TW: "頂欄 · %{count}/%{max}"
+  ja: "上段 · %{count}/%{max}"
+  ko: "상단 · %{count}/%{max}"
+modules.group_root:
+  en: "GRK Tab"
+  zh-CN: "GRK 页"
+  zh-TW: "GRK 頁"
+  ja: "GRK タブ"
+  ko: "GRK 탭"
+modules.layout_note:
+  en: "Checked modules show in ADJ. Tap a module to move it between the top row and the GRK tab."
+  zh-CN: "勾选的模块显示在 ADJ。点一行可在顶栏和 GRK 页之间移动。"
+  zh-TW: "勾選的模組顯示在 ADJ。點一列可在頂欄和 GRK 頁之間移動。"
+  ja: "チェックしたモジュールが ADJ に表示されます。行をタップすると上段と GRK タブの間で移動できます。"
+  ko: "체크한 모듈이 ADJ에 표시됩니다. 행을 탭하면 상단과 GRK 탭 사이에서 이동합니다."
+modules.group_hidden:
+  en: "Hidden"
+  zh-CN: "隐藏"
+  zh-TW: "隱藏"
+  ja: "非表示"
+  ko: "숨김"
+modules.move_toolbar:
+  en: "Move to Top"
+  zh-CN: "移到顶栏"
+  zh-TW: "移到頂欄"
+  ja: "上段へ移動"
+  ko: "상단으로 이동"
+modules.move_root:
+  en: "Move to GRK"
+  zh-CN: "移到 GRK"
+  zh-TW: "移到 GRK"
+  ja: "GRK へ移動"
+  ko: "GRK로 이동"
+modules.move_hidden:
+  en: "Hide"
+  zh-CN: "隐藏"
+  zh-TW: "隱藏"
+  ja: "非表示にする"
+  ko: "숨기기"
+grkit.change_photo:
+  en: "Change Photo"
+  zh-CN: "更换照片"
+  zh-TW: "更換照片"
+  ja: "写真を変更"
+  ko: "사진 변경"
+grkit.choose_photo:
+  en: "Choose Photo"
+  zh-CN: "选择照片"
+  zh-TW: "選擇照片"
+  ja: "写真を選ぶ"
+  ko: "사진 선택"
+grkit.restore_picture:
+  en: "Use the Camera’s Picture"
+  zh-CN: "恢复相机自带画面"
+  zh-TW: "恢復相機內建畫面"
+  ja: "カメラの画像に戻す"
+  ko: "카메라 기본 이미지로 복원"
+grkit.crop:
+  en: "Crop"
+  zh-CN: "裁剪"
+  zh-TW: "裁切"
+  ja: "切り抜き"
+  ko: "자르기"
+grkit.picture_sent:
+  en: "On the camera. Shows after the next start."
+  zh-CN: "已放到相机，下次开机后显示"
+  zh-TW: "已放到相機，下次開機後顯示"
+  ja: "カメラに保存しました。次の起動後に表示されます"
+  ko: "카메라에 저장했습니다. 다음 시작 후 표시됩니다"
+grkit.picture_failed:
+  en: "Couldn’t use this photo"
+  zh-CN: "无法使用这张照片"
+  zh-TW: "無法使用這張照片"
+  ja: "この写真は使えません"
+  ko: "이 사진을 사용할 수 없습니다"
+looks.unlock_section:
+  en: "Unlock from Ricoh Firmware"
+  zh-CN: "从理光固件解锁"
+  zh-TW: "從理光韌體解鎖"
+  ja: "リコーのファームウェアから解除"
+  ko: "리코 펌웨어에서 잠금 해제"
+looks.unlock_title:
+  en: "Unlock GR IV Film Looks"
+  zh-CN: "解锁 GR IV 胶片风格"
+  zh-TW: "解鎖 GR IV 膠片風格"
+  ja: "GR IV のフィルムルックを解除"
+  ko: "GR IV 필름 룩 잠금 해제"
+looks.choose_firmware:
+  en: "Choose Firmware File"
+  zh-CN: "选择固件文件"
+  zh-TW: "選擇韌體檔案"
+  ja: "ファームウェアファイルを選択"
+  ko: "펌웨어 파일 선택"
+looks.open_ricoh:
+  en: "Open Ricoh Download Page"
+  zh-CN: "打开理光下载页"
+  zh-TW: "打開理光下載頁"
+  ja: "リコーのダウンロードページを開く"
+  ko: "리코 다운로드 페이지 열기"
+looks.firmware_wrong:
+  en: "This isn’t a GR IV firmware file"
+  zh-CN: "这不是 GR IV 固件"
+  zh-TW: "這不是 GR IV 韌體"
+  ja: "GR IV のファームウェアではありません"
+  ko: "GR IV 펌웨어가 아닙니다"

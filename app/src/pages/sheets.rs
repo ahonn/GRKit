@@ -22,14 +22,15 @@ fn dismissible(app: AppState) -> bool {
 }
 
 /// An update under way asks before a swipe stops it, so the sheet only
-/// reports the swipe.
+/// reports the swipe. One that waits on the camera only closes.
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 fn swipe_closes(app: AppState) -> bool {
     dismissible(app)
-        && !matches!(
-            app.sheet(),
-            Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart)
-        )
+        && (app.update_waits_on_camera()
+            || !matches!(
+                app.sheet(),
+                Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart)
+            ))
 }
 
 /// The user swiped a sheet away: what its own way out does (close, Not
@@ -40,9 +41,12 @@ fn dismiss(app: AppState) {
         Some(Sheet::Scan | Sheet::ImportLook) => app.set_sheet(None),
         Some(Sheet::Connecting { .. }) => app.cancel_connect(),
         Some(Sheet::ConnectError(_)) => app.dismiss_connect_error(),
-        // An update under way asks first; a restart cannot be stopped.
+        // An update that waits on the camera stays there; one under way
+        // asks first; a restart cannot be stopped.
         Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => {
-            if !app.update_restarting() {
+            if app.update_waits_on_camera() {
+                app.hide_update_sheet()
+            } else if !app.update_restarting() {
                 app.ask_cancel_update()
             }
         }
@@ -95,8 +99,26 @@ fn sheet_buttons(app: AppState) -> (Option<Action>, Option<Action>) {
         }
         Some(Sheet::Error(_)) => (None, close(Box::new(move || app.dismiss_error()))),
         Some(Sheet::InstallFailed) => (None, close(Box::new(move || app.dismiss_install_failed()))),
+        Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) if app.update_waits_on_camera() => {
+            (None, close(Box::new(move || app.hide_update_sheet())))
+        }
         _ => (None, None),
     }
+}
+
+/// The update sheet in any of its states.
+#[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+fn update_sheet_open(app: AppState) -> bool {
+    matches!(
+        app.sheet(),
+        Some(
+            Sheet::Sending
+                | Sheet::Confirm
+                | Sheet::Restart
+                | Sheet::Installed { .. }
+                | Sheet::Error(_)
+        )
+    )
 }
 
 /// Whether Add Camera shows its one camera as a card.
@@ -113,8 +135,20 @@ pub fn overlay(app: AppState) -> impl IntoElement {
     use nsh_core::{HeaderSystemItem, ModalPresentation, SheetDetent};
 
     let height = signal(Points(420.0));
+    // The tallest step of the update sheet so far: its steps advance in
+    // place, so the sheet keeps that height instead of jumping.
+    let peak = signal(Points(0.0));
+    // Only opening and closing present the native sheet: a new step of the
+    // same sheet changes its body in place, without a second presentation.
+    let open = computed(move || app.sheet().is_some());
+    // The same for the page inside: it changes only when its back button
+    // comes or goes.
+    let back = computed(move || sheet_buttons(app).0.is_some());
     dynamic(move || {
-        app.sheet().is_some().then(|| {
+        if !open.get() {
+            untracked(move || peak.set(Points(0.0)));
+        }
+        open.get().then(|| {
             untracked(move || {
                 dialog()
                     .presentation(ModalPresentation::PageSheet)
@@ -131,10 +165,14 @@ pub fn overlay(app: AppState) -> impl IntoElement {
                             .bg(sheet_surface)
                             .child(dynamic(move || {
                                 // A back button comes and goes with the page.
-                                let back = sheet_buttons(app).0.is_some();
+                                let back = back.get();
                                 untracked(move || {
+                                    // A new page for the back button replaces the
+                                    // old one in place: the sheet's steps do not
+                                    // slide like a push.
                                     let page = nav_page()
                                         .key(if back { "back" } else { "plain" })
+                                        .animation(nsh_core::ScreenAnimation::None)
                                         .header_transparent(true)
                                         .header_right_items(move || {
                                             sheet_buttons(app)
@@ -167,9 +205,23 @@ pub fn overlay(app: AppState) -> impl IntoElement {
                                             view()
                                                 .flex_shrink_0()
                                                 .on_layout(move |b: &Bounds<Points>| {
-                                                    if b.size.height.0 > 0.0 {
-                                                        height.set(b.size.height);
+                                                    if b.size.height.0 <= 0.0 {
+                                                        return;
                                                     }
+                                                    // UIKit adds the bottom safe area to a
+                                                    // custom detent; the body ends at its own
+                                                    // padding, the same as its top.
+                                                    let mut h = Points(
+                                                        (b.size.height.0 - safe_area().bottom.0)
+                                                            .max(0.0),
+                                                    );
+                                                    if update_sheet_open(app) {
+                                                        h = Points(h.0.max(peak.get().0));
+                                                        peak.set(h);
+                                                    } else {
+                                                        peak.set(Points(0.0));
+                                                    }
+                                                    height.set(h);
                                                 })
                                                 .child(dynamic(move || sheet_body(app))),
                                         ),
@@ -280,8 +332,9 @@ fn connection_shell_with_back(
         .gap_5()
         .px(px(24.0))
         .pt(px(if NATIVE_SHEET { 24.0 } else { 6.0 }))
-        // A native sheet adds the bottom safe area to its height itself.
-        .when(NATIVE_SHEET, |v| v.pb(px(16.0)))
+        // The native sheet's height leaves out the bottom safe area, so the
+        // body's own padding is the gap under its last button, as at its top.
+        .when(NATIVE_SHEET, |v| v.pb(px(24.0)))
         .when(!NATIVE_SHEET, |v| v.pb_safe_area_plus(px(8.0)))
         .child((!NATIVE_SHEET).then(|| {
             view()
@@ -483,7 +536,7 @@ fn nearby(app: AppState) -> impl IntoElement {
             .child(
                 view()
                     .w_full()
-                    .gap_1()
+                    .gap_3()
                     .child(connection_button(tr("nearby.connect", &[]), {
                         let app = app.clone();
                         move || app.connect_nearby()
@@ -632,16 +685,9 @@ fn scan(app: AppState) -> impl IntoElement {
                             .items_center()
                             .min_h(px(64.0))
                             .justify_center()
-                            .gap_2()
                             .px_4()
-                            .child(activity_indicator(16.0))
-                            .child(
-                                text(move || tr("scan.looking", &[]))
-                                    .flex_shrink(1.0)
-                                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                    .line_height(px(22.0))
-                                    .text_color(move || theme().muted_foreground),
-                            ),
+                            .label(tr("scan.looking", &[]))
+                            .child(activity_indicator(16.0)),
                     ),
             )
             .child(pairing_hint("cam.first_time", "cam.path_common", false)),
@@ -814,7 +860,7 @@ fn connect_error_sheet(app: AppState, error: LinkError) -> impl IntoElement {
             .child(
                 view()
                     .w_full()
-                    .gap_1()
+                    .gap_3()
                     .child(if app_old {
                         sheet_primary_button(tr("app.store", &[]), || {
                             spawn(async {
@@ -877,7 +923,8 @@ fn update_sheet(
     };
     let version = installed
         .clone()
-        .or_else(|| app.package().and_then(|p| p.available))
+        // The version that this update sends, or that waits on the camera.
+        .or_else(|| app.pending_version())
         .unwrap_or_default();
     let model = format!("RICOH {}", app.model_name());
     let (title, subtitle) = update_copy(&phase, error.as_ref(), installed.as_deref(), &model);
@@ -908,19 +955,22 @@ fn update_sheet(
             // The restart shows as one step: its row and the sheet title say it all.
             let detailed =
                 !failed && index == step && !matches!(phase, UpdatePhase::Restarting { .. });
-            let extra = detailed.then(|| step_detail(app, &phase, &version));
+            let extra = detailed.then(|| step_detail(&phase, &version));
             update_step_row(&titles[index], state, index + 1 == shown, extra).into_element()
         }))
     });
+    let waits = !failed && !done && app.update_waits_on_camera();
     connection_shell(
         title,
         Some(subtitle),
-        failed || done,
+        failed || done || waits,
         move || {
             if done {
                 app.dismiss_installed()
-            } else {
+            } else if failed {
                 app.dismiss_error()
+            } else {
+                app.hide_update_sheet()
             }
         },
         view().w_full().gap_4().child(steps).child(update_buttons(
@@ -965,7 +1015,7 @@ fn update_copy(
     }
 }
 
-fn update_error_copy(error: &UpdateError) -> (String, String) {
+pub(crate) fn update_error_copy(error: &UpdateError) -> (String, String) {
     match error {
         UpdateError::Service(message) => (tr("error.service_title", &[]), message.clone()),
         UpdateError::Download(_) => (
@@ -987,10 +1037,6 @@ fn update_error_copy(error: &UpdateError) -> (String, String) {
                 &[("size", &format_bytes(*bytes_needed))],
             ),
         ),
-        UpdateError::NotConfirmed => (
-            tr("error.not_confirmed_title", &[]),
-            tr("error.not_confirmed_body", &[]),
-        ),
         UpdateError::Refused => (
             tr("error.refused_title", &[]),
             tr("error.refused_body", &[]),
@@ -1000,7 +1046,7 @@ fn update_error_copy(error: &UpdateError) -> (String, String) {
 }
 
 /// What the step under way shows below its name.
-fn step_detail(app: AppState, phase: &UpdatePhase, version: &str) -> AnyElement {
+fn step_detail(phase: &UpdatePhase, version: &str) -> AnyElement {
     let note = |key: &'static str| {
         text(tr(key, &[]))
             .text_size(px(crate::ui::ty::FOOTNOTE))
@@ -1014,7 +1060,7 @@ fn step_detail(app: AppState, phase: &UpdatePhase, version: &str) -> AnyElement 
             .gap_2()
             .child((*progress >= 0.0).then(|| progress_bar(*progress)))
             .into_element(),
-        UpdatePhase::WaitingConfirm { .. } => confirm_detail(app, version).into_element(),
+        UpdatePhase::WaitingConfirm { .. } => confirm_detail(version).into_element(),
         UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => note("restart.auto_body"),
         _ => view().into_element(),
     }
@@ -1048,9 +1094,17 @@ fn progress_bar(value: f32) -> impl IntoElement {
         )
 }
 
-/// The confirm step: the steps on the camera and the time left.
-fn confirm_detail(app: AppState, version: &str) -> impl IntoElement {
-    let value = tr("update.menu_value", &[("version", version)]);
+/// The camera's menu value for an update. An update another phone sent has
+/// no version here; the camera shows it.
+fn camera_menu_value(version: &str) -> String {
+    tr("update.menu_value", &[("version", version)])
+        .trim()
+        .to_owned()
+}
+
+/// The confirm step: the steps on the camera.
+pub(crate) fn confirm_detail(version: &str) -> impl IntoElement {
+    let value = camera_menu_value(version);
     let number = |n: u8, copy: String| {
         view()
             .flex_row()
@@ -1083,17 +1137,6 @@ fn confirm_detail(app: AppState, version: &str) -> impl IntoElement {
         .child(number(1, tr("confirm.step1", &[])))
         .child(number(2, tr("confirm.step2", &[("update", &value)])))
         .child(number(3, tr("confirm.step3", &[])))
-        .child(
-            text(move || {
-                tr(
-                    "confirm.waiting",
-                    &[("time", &app.confirm_deadline_label())],
-                )
-            })
-            .text_size(px(crate::ui::ty::SUBHEADLINE))
-            .line_height(px(20.0))
-            .text_color(move || theme().muted_foreground),
-        )
 }
 
 /// One step of the update sheet: the connect step's look, with room for
@@ -1147,7 +1190,7 @@ fn update_buttons(
     error: Option<UpdateError>,
     installed: bool,
 ) -> AnyElement {
-    let buttons = view().w_full().gap_1();
+    let buttons = view().w_full().gap_3();
     if app.update_cancelling() && !installed {
         return buttons.child(cancelling_row()).into_element();
     }
@@ -1166,10 +1209,6 @@ fn update_buttons(
             UpdateError::ConnectionLost => (
                 Some(Box::new(move || app.retry_update())),
                 "update.reconnect",
-            ),
-            UpdateError::NotConfirmed => (
-                Some(Box::new(move || app.retry_update())),
-                "error.send_again",
             ),
             _ => (
                 Some(Box::new(move || app.retry_update())),
@@ -1196,8 +1235,8 @@ fn update_buttons(
             .child(sheet_primary_button(tr("restart.run", &[]), move || {
                 app.restart_for_update()
             }))
-            .child(secondary_button(tr("update.cancel", &[]), move || {
-                app.ask_cancel_update()
+            .child(secondary_button(tr("restart.manual", &[]), move || {
+                app.restart_manually()
             }))
             .into_element(),
         UpdatePhase::ManualRestart { .. } => buttons

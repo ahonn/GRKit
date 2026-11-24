@@ -120,9 +120,9 @@ impl AppState {
             self.refresh_recipes();
         }
         // A module changed in MENU or ADJ. The tabs follow what runs, and
-        // the Modules tab shows the rest.
+        // the Modules page shows the rest.
         if self.module_busy().is_none() {
-            if self.tab() == super::Tab::Modules {
+            if self.modules_page_open() {
                 self.refresh_modules();
             } else {
                 self.refresh_module_state();

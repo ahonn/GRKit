@@ -1516,6 +1516,7 @@ dependencies = [
  "objc2-ui-kit",
  "serde",
  "serde_json",
+ "zune-jpeg",
 ]
 
 [[package]]

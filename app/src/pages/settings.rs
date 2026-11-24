@@ -1,4 +1,5 @@
-//! Settings page: the cameras, About, and More from the Maker (GR Snap).
+//! The Settings tab: the cameras, GRKit Settings of the connected camera,
+//! About, and More from the Maker (GR Snap).
 
 use nsh_base::{alert_dialog, theme};
 use nsh_core::prelude::*;
@@ -10,18 +11,18 @@ use crate::store::{
     APP_BUILD, APP_VERSION, AppState, GR_SNAP_URL, HELP_URL, PRIVACY_URL, Route, rate_url,
 };
 use crate::strings::tr;
-use crate::ui::{
-    camera_art, footnote, gr_snap_icon, grouped_card, section_title, token, touch_target,
-};
+use crate::ui::{camera_art, footnote, gr_snap_icon, grouped_card, section_title, token};
 
-/// Settings (push, from the camera tab): the cameras, About, and More
-/// from the Maker. Disconnect and turn off are on the camera card.
-pub fn settings_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
+/// The Settings tab: the cameras, About, and More from the Maker.
+/// Disconnect and turn off are on the camera card.
+pub fn settings_root(app: AppState) -> impl IntoElement {
     crate::ui::app_page()
         .title(move || tr("settings.title", &[]))
-        .on_dismiss(on_dismiss)
+        .header_large_title(!cfg!(target_os = "android"))
         .child(
             crate::ui::page_scroll()
+                .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
+                .top_of(Some(crate::store::Tab::Settings.key().to_owned()))
                 .flex_1()
                 .bg(move || token("grouped"))
                 .child(
@@ -29,8 +30,9 @@ pub fn settings_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                         .gap_8()
                         .pt_4()
                         .px_6()
-                        .pb_12()
+                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || camera_section(app)))
+                        .child(dynamic(move || super::grkit_settings::grkit_section(app)))
                         .child(
                             view()
                                 .gap_2()
@@ -66,12 +68,12 @@ pub fn settings_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                                         )),
                                 )),
                         )
-                        .child((!cfg!(target_os = "android")).then(|| {
+                        .child(
                             view()
                                 .gap_2()
                                 .child(section_title(tr("settings.more_maker", &[])))
-                                .child(grouped_card(gr_snap_row()))
-                        })),
+                                .child(grouped_card(gr_snap_row())),
+                        ),
                 ),
         )
 }
@@ -192,7 +194,7 @@ pub fn saved_cameras_page(app: AppState, on_dismiss: impl Fn() + 'static) -> imp
                         .gap_2()
                         .pt_4()
                         .px_6()
-                        .pb_12()
+                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             let cameras = app.saved_cameras();
                             let count = cameras.len();
@@ -262,13 +264,27 @@ fn link_row(
         }))
 }
 
+/// GR Snap: the row opens its page.
 fn gr_snap_row() -> impl IntoElement {
+    let label = format!(
+        "{}, {}",
+        tr("settings.gr_snap_name", &[]),
+        tr("settings.gr_snap_desc", &[])
+    );
     view()
         .flex_row()
         .items_center()
         .gap_3()
         .p_4()
         .min_h(px(72.0))
+        .role(AccessibilityRole::Button)
+        .label(label)
+        .on_press(|| {
+            spawn(async move {
+                let _ = open_url(GR_SNAP_URL).await;
+            });
+        })
+        .active(|st| st.bg(move || theme().accent))
         .child(
             image(gr_snap_icon())
                 .size(px(56.0))
@@ -292,26 +308,8 @@ fn gr_snap_row() -> impl IntoElement {
                 ),
         )
         .child(
-            view()
-                .min_h(px(touch_target()))
-                .px_3()
-                .rounded(px(8.0))
-                .items_center()
-                .justify_center()
-                .bg(move || theme().muted)
-                .role(AccessibilityRole::Button)
-                .label(tr("settings.view", &[]))
-                .active(|s| s.opacity(0.72))
-                .on_press(|| {
-                    spawn(async move {
-                        let _ = open_url(GR_SNAP_URL).await;
-                    });
-                })
-                .child(
-                    text(move || tr("settings.view", &[]))
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(move || token("link")),
-                ),
+            text("↗")
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .text_color(move || theme().muted_foreground),
         )
 }

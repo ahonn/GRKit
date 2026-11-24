@@ -2,8 +2,12 @@ package studio.techflow.grkit;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
+import android.text.Editable;
 import android.text.InputFilter;
+import android.text.TextWatcher;
+import android.widget.Button;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.WindowManager;
@@ -55,6 +59,41 @@ final class NamePrompt {
             dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         }
         dialog.show();
+        // The app's colors, not the device theme's accent; Save is off while
+        // the name is invalid or unchanged.
+        int foreground = night ? 0xFFF4F4F4 : 0xFF0B0B0B;
+        int disabled = night ? 0xFF6B6B6B : 0xFFA3A3A3;
+        ColorStateList colors = new ColorStateList(
+                new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
+                new int[] {disabled, foreground});
+        Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(colors);
+        save.setTextColor(colors);
+        field.setBackgroundTintList(ColorStateList.valueOf(foreground));
+        field.setHighlightColor(night ? 0x55F4F4F4 : 0x330B0B0B);
+        String original = args.optString("value").trim();
+        boolean allowEmpty = args.optBoolean("allowEmpty", false);
+        int max = args.optInt("max", 16);
+        Runnable check = () -> save.setEnabled(
+                valid(field.getText().toString().trim(), max, allowEmpty)
+                        && !field.getText().toString().trim().equals(original));
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            @Override public void afterTextChanged(Editable s) { check.run(); }
+        });
+        check.run();
         field.requestFocus();
+    }
+
+    /** The camera menu shows printable ASCII only (`valid_name` in Rust). */
+    static boolean valid(String name, int max, boolean allowEmpty) {
+        if (name.isEmpty()) return allowEmpty;
+        if (name.length() > max) return false;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c < 0x20 || c > 0x7e) return false;
+        }
+        return true;
     }
 }

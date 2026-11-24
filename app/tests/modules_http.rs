@@ -112,6 +112,10 @@ fn answer(camera: &mut Camera, request: &HttpRequest) -> StubResponse {
             icon.body = PNG.to_vec();
             icon
         }
+        // A GRKit from before the phone could change its GRKit Settings.
+        ("GET", "/v1/params/settings") => {
+            response(404, json!({"status": 404, "code": "not_found"}))
+        }
         ("GET", "/v1/params/modules") => response(
             200,
             json!({"revision": 1, "grkitEnabled": true, "modules": [camera.module()]}),
@@ -180,8 +184,12 @@ impl Phone {
         config.data_dir = Some(self.directory.clone());
         config.network = Some(network.clone());
         let mut app = Headless::start(config).unwrap();
-        app.wait_for_within("Firmware", WAIT).unwrap();
-        app.press("role:button[Modules]").unwrap();
+        app.wait_for_within("Connected", WAIT).unwrap();
+        // The Modules page opens from its row on the camera tab.
+        // The camera tab draws its rows again once the Looks read ends.
+        app.wait_for_within("Could not read the film looks on the camera.", WAIT)
+            .unwrap();
+        app.press(r"label:/Modules/").unwrap();
         (app, network)
     }
 }
@@ -211,7 +219,17 @@ fn a_value_waits_for_the_camera_and_the_catalog_comes_from_the_cache() {
     let camera = Arc::new(Mutex::new(Camera::new()));
     let (mut app, network) = phone.start(&camera);
     app.wait_for_within("text:Grain", WAIT).unwrap();
-    assert_eq!(count(&network, "GET", "/v1/modules/catalog?language=en"), 1);
+    // The camera tab reads the catalog at the connect; the page asks again
+    // only with the cached version.
+    let full_reads = network
+        .requests()
+        .iter()
+        .filter(|r| {
+            r.url.ends_with("/v1/modules/catalog?language=en")
+                && header(r, "If-None-Match").is_none()
+        })
+        .count();
+    assert_eq!(full_reads, 1);
 
     app.press("text:Grain").unwrap();
     app.wait_for_within("role:button[Level, Low]", WAIT)

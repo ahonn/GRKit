@@ -226,9 +226,22 @@ impl AppState {
     /// way the person's own power off does, without a notice.
     pub(super) async fn power_off_for_update(self, peripheral_id: &str) {
         self.auto_suppressed.set(true);
-        let mut finished = platform::http::camera_finish(true).await;
+        // Neither way may hold the restart step: a camera that does not
+        // answer, or a phone without Bluetooth, falls back to a restart by
+        // hand.
+        let mut finished = platform::with_timeout(
+            platform::http::camera_finish(true),
+            std::time::Duration::from_secs(8),
+        )
+        .await
+        .unwrap_or(false);
         if !finished {
-            finished = platform::end_session_over_bluetooth(peripheral_id, true).await;
+            finished = platform::with_timeout(
+                platform::end_session_over_bluetooth(peripheral_id, true),
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .unwrap_or(false);
         }
         app_info!("update restart: power off finished={finished}");
         if self.link_connected() {
@@ -258,16 +271,30 @@ impl AppState {
             self.status.set(Some(status));
         }
         self.reset_looks();
-        self.close_software_pages();
+        // The phone's own restart for an update keeps Software Update, which
+        // shows its steps; the person's own restart goes to the camera tab.
+        let phone_restart = matches!(self.flow_phase(), UpdatePhase::Restarting { .. });
+        if !phone_restart {
+            self.close_software_pages();
+        }
         if let Some(remembered) = self.remembered() {
             self.suppress_nearby(&remembered.peripheral_id);
             if self.connect_started.get().is_none() {
                 platform::release_link(&remembered.peripheral_id);
             }
         }
-        // A restart for changed Looks keeps the page, and connects when it ends.
-        if self.camera_restarting.get() {
+        // A restart for changed Looks or by the phone for an update keeps
+        // the page, and connects when it ends.
+        if self.camera_restarting.get() || phone_restart {
             self.return_tab.set(None);
+            return;
+        }
+        // The person restarts the camera for an update: back to the camera
+        // tab, without the loss toast; the update reconnects when the camera
+        // is back.
+        if self.update_restart_pending() {
+            self.return_tab.set(None);
+            self.leave_camera_pages(false);
             return;
         }
         if !reason.unexpected() {
@@ -283,8 +310,8 @@ impl AppState {
         }
     }
 
-    /// Close pages that need the camera. The Looks, Recipes and Modules tabs go back to the
-    /// camera tab, where the reconnect is. With `restore`, a reconnect opens the tab again.
+    /// Close pages that need the camera. The Looks and Recipes tabs go back to the
+    /// camera tab, where the reconnect is, and the Modules page closes. With `restore`, a reconnect opens the tab again.
     fn leave_camera_pages(self, restore: bool) {
         // The status already says disconnected, so `tab()` reads Camera here.
         let tab = self.tab.get();
@@ -294,7 +321,7 @@ impl AppState {
         }
         self.pop_to(Tab::Looks, 0);
         self.pop_to(Tab::Recipes, 0);
-        self.pop_to(Tab::Modules, 0);
+        self.close_modules_page();
     }
 
     /// Software Update reads the camera: without one, it and the pages above

@@ -2,17 +2,21 @@
 //!
 //! Reactive fields use NSH `Signal`s so the UI updates when they change.
 
+mod camera_settings;
 mod changes;
 mod connect;
 mod demo_screen;
 mod liveness;
 mod looks;
 mod modules;
+pub mod native_looks;
+pub mod page_refresh;
 mod recipes;
 mod rename;
 mod update;
 mod warmup;
 
+pub use camera_settings::{PictureRead, SettingsRead};
 pub use looks::{COVERS_KEY, CatalogItem, ImportDraft, LookAction, LooksStore};
 pub use modules::{ModulePart, ModulesBlock, ModulesStore};
 pub use recipes::{RecipeAction, RecipesStore, native_type_name};
@@ -46,7 +50,12 @@ pub const PRIVACY_URL: &str = "https://grkit.app/privacy";
 pub const INSTALL_URL: &str = "https://grkit.app/";
 /// The public feedback board.
 pub const HELP_URL: &str = "https://grkit.userjot.com";
-pub const GR_SNAP_URL: &str = "https://apps.apple.com/app/gr-snap-ricoh-gr-wireless/id6768040383";
+/// GR Snap: its App Store page on iOS, its site elsewhere.
+pub const GR_SNAP_URL: &str = if cfg!(target_os = "android") {
+    "https://grsnap.app"
+} else {
+    "https://apps.apple.com/app/gr-snap-ricoh-gr-wireless/id6768040383"
+};
 /// Every GRKit release.
 pub const RELEASES_URL: &str = "https://github.com/ahonn/GRKit/releases";
 pub const APP_VERSION: &str = "1.0.0";
@@ -60,14 +69,12 @@ pub enum Tab {
     Camera,
     Looks,
     Recipes,
-    Modules,
+    Settings,
 }
 
 /// Pages pushed on a tab's navigation stack.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Route {
-    /// The app's settings and the saved cameras, from the camera tab.
-    Settings,
     SoftwareUpdate,
     /// The notes of earlier GRKit versions, from Software Update.
     ReleaseHistory,
@@ -91,10 +98,20 @@ pub enum Route {
     RecipePresets,
     /// One preset, by ID.
     RecipePreset(String),
+    /// The modules of the camera, from the camera tab.
+    Modules,
     /// One module of the camera, by ID.
     ModuleDetail(String),
     /// Which values of a module ADJ shows, and their order.
     ModuleOptions(String),
+    /// GRKit Settings pages of the Settings tab, as the camera's MENU has them.
+    ShootingSettings,
+    DisplaySettings,
+    ShutdownScreen,
+    /// The picture made from a picked photo, before it goes to the camera.
+    ShutdownCrop,
+    /// The GR IV film looks, made from a firmware file.
+    LookUnlock,
 }
 
 /// Modal sheets over the camera tab.
@@ -129,18 +146,21 @@ type StagedPackage = (String, Vec<u8>);
 pub struct AppState {
     demo: bool,
     tab: Signal<Tab>,
+    /// The last request to scroll a tab's root page to its top, with a
+    /// count that makes each request new.
+    scroll_top: Signal<Option<(Tab, u64)>>,
     stacks: Signal<[Vec<Route>; 4]>,
     pub(crate) looks: LooksStore,
     pub(crate) recipes: RecipesStore,
     pub(crate) modules: ModulesStore,
+    camera_settings: camera_settings::CameraSettingsStore,
+    native_looks: native_looks::NativeLooksStore,
     sheet: Signal<Option<Sheet>>,
     /// A name that was typed and not saved yet.
     name_draft: Signal<Option<(rename::NameTarget, String)>>,
     pub(crate) status: Signal<Option<CameraStatus>>,
     pub(crate) package: Signal<Option<PackageInfo>>,
     pub(crate) phase: Signal<UpdatePhase>,
-    pub(crate) confirm_deadline: Signal<Option<Instant>>,
-    confirm_tick: Signal<u64>,
     connect_started: Signal<Option<Instant>>,
     initial_connect: Signal<bool>,
     /// When true, the ticker does not advance connecting / update sheets.
@@ -201,6 +221,9 @@ pub struct AppState {
     restart_request: Signal<bool>,
     /// The person opened the update: its steps show in the sheet.
     update_shown: Signal<bool>,
+    /// Why an update stopped after its send, for Software Update to say:
+    /// the sheet closes once the camera has the update.
+    update_notice: Signal<Option<UpdateError>>,
     /// The update journal of the connected camera, when one waits.
     journal: Signal<Option<crate::domain::JournalState>>,
     /// The package assembled for the update target, kept for a send again.
@@ -243,19 +266,21 @@ impl AppState {
             release: stored(RefCell::new(None)),
             restart_request: signal(false),
             update_shown: signal(false),
+            update_notice: signal(None),
             journal: signal(None),
             staged: stored(RefCell::new(None)),
             tab: signal(Tab::Camera),
+            scroll_top: signal(None),
             stacks: signal([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
             looks: LooksStore::new(demo),
             recipes: RecipesStore::new(demo),
             modules: ModulesStore::new(),
+            camera_settings: camera_settings::CameraSettingsStore::new(),
+            native_looks: native_looks::NativeLooksStore::default(),
             sheet: signal(None),
             status: signal(None),
             package: signal(None),
             phase: signal(UpdatePhase::Idle),
-            confirm_deadline: signal(None),
-            confirm_tick: signal(0),
             connect_started: signal(None),
             initial_connect: signal(!demo && platform::has_dev_camera_url()),
             frozen: signal(false),
@@ -285,7 +310,7 @@ impl AppState {
         match platform::config_value("GRKIT_START_TAB").as_deref() {
             Some("looks") => app.tab.set(Tab::Looks),
             Some("recipes") => app.set_tab(Tab::Recipes),
-            Some("modules") => app.set_tab(Tab::Modules),
+            Some("modules") => app.open_modules_page(),
             Some("looks-add") => {
                 app.tab.set(Tab::Looks);
                 app.open_add();
@@ -337,16 +362,19 @@ impl AppState {
 
     /// The tab on screen. Without a connected camera, only the camera tab
     /// exists.
+    /// The chosen tab, or Camera while that tab is not available.
     pub fn tab(self) -> Tab {
-        if self.tabs_shown() {
-            self.tab.get()
+        let tab = self.tab.get();
+        if self.tab_available(tab) {
+            tab
         } else {
             Tab::Camera
         }
     }
 
-    /// The tabs show with a connected camera, and stay through a restart for
-    /// changed Looks and the connect that ends it.
+    /// The tabs of the camera show with a connected camera, and stay through
+    /// a restart for changed Looks and the connect that ends it. Camera and
+    /// Settings always show.
     pub fn tabs_shown(self) -> bool {
         self.camera_online()
             || self.camera_restarting.get()
@@ -371,9 +399,22 @@ impl AppState {
         if tab == Tab::Recipes {
             self.open_recipes();
         }
-        if tab == Tab::Modules {
-            self.open_modules();
+    }
+
+    /// The person chose the tab that shows, as the system's tab bars do:
+    /// back to its root page, or at the root, to the top of it.
+    pub fn reselect_tab(self, tab: Tab) {
+        if self.route_at(tab, 0).is_some() {
+            self.pop_to(tab, 0);
+        } else {
+            let count = self.scroll_top.get().map_or(0, |(_, count)| count + 1);
+            self.scroll_top.set(Some((tab, count)));
         }
+    }
+
+    /// The last request to scroll a root page to its top.
+    pub fn scroll_top_request(self) -> Option<(Tab, u64)> {
+        self.scroll_top.get()
     }
 
     pub fn route_at(self, tab: Tab, depth: usize) -> Option<Route> {
@@ -609,6 +650,17 @@ impl AppState {
         if self.sheet().is_some() || connected || self.connect_in_flight() {
             return;
         }
+        // The camera restarted for an update: the update joins it again
+        // without a prompt.
+        if self.update_restart_pending() {
+            let back = self
+                .remembered()
+                .is_some_and(|r| self.advertised_powered_on(&r.peripheral_id));
+            if back {
+                self.reconnect_for_update();
+            }
+            return;
+        }
         let remembered = self.remembered().map(|r| r.peripheral_id);
         let candidate = self
             .nearby_watch
@@ -762,7 +814,6 @@ impl AppState {
             progress: 0.0,
             kind,
         });
-        self.confirm_deadline.set(None);
         self.sheet.set(Some(Sheet::Sending));
     }
 
@@ -803,11 +854,6 @@ impl AppState {
             return;
         };
 
-        let previous = flow
-            .baseline_version()
-            .map(str::to_owned)
-            .or_else(|| self.baseline.get())
-            .unwrap_or_else(|| "1.6.1".into());
         let restarting = matches!(flow.phase(), UpdatePhase::Restart { .. });
         // The phone's own restart steps stand over the camera's phase.
         let own_restart = matches!(
@@ -827,34 +873,50 @@ impl AppState {
         match poll {
             UpdatePoll::Sending { .. } => self.sheet.set(Some(Sheet::Sending)),
             UpdatePoll::WaitingConfirm => {
-                if self.confirm_deadline.get().is_none() {
-                    self.confirm_deadline
-                        .set(Some(Instant::now() + Duration::from_secs(5 * 60)));
-                }
-                self.sheet.set(Some(Sheet::Confirm));
+                self.journal.set(Some(crate::domain::JournalState::Waiting));
             }
             UpdatePoll::Confirmed => {
-                self.sheet.set(Some(if restarting {
-                    Sheet::Restart
-                } else {
-                    Sheet::Confirm
-                }));
+                self.journal
+                    .set(Some(crate::domain::JournalState::Confirmed));
             }
             UpdatePoll::Installed { version } => {
-                if !matches!(self.sheet.get(), Some(Sheet::Installed { .. })) {
-                    haptic(Haptic::Notification(HapticNotification::Success));
+                haptic(Haptic::Notification(HapticNotification::Success));
+                if self.update_shown.get() {
+                    // As a real update: the open sheet says it.
+                    self.sheet.set(Some(Sheet::Installed {
+                        previous: self.baseline.get().unwrap_or_default(),
+                        version,
+                    }));
+                } else {
+                    // Software Update says it, with a toast.
+                    self.dismiss_demo_update();
+                    self.show_toast(crate::strings::tr(
+                        "update.updated_toast",
+                        &[("version", &version)],
+                    ));
                 }
-                self.sheet.set(Some(Sheet::Installed { version, previous }));
             }
-            UpdatePoll::Failed(error) => self.sheet.set(Some(Sheet::Error(error))),
+            UpdatePoll::Failed(error) => {
+                if matches!(self.sheet.get(), Some(Sheet::Sending)) {
+                    self.sheet.set(Some(Sheet::Error(error)));
+                } else {
+                    self.update_notice.set(Some(error));
+                }
+            }
         }
     }
 
-    pub fn confirm_remaining(self) -> Duration {
-        self.confirm_deadline
-            .get()
-            .map(|d| d.saturating_duration_since(Instant::now()))
-            .unwrap_or(Duration::from_secs(5 * 60))
+    /// The demo update ended: the flow is idle and the page reads the new
+    /// version.
+    fn dismiss_demo_update(self) {
+        self.camera.with(|slot| {
+            if let Some(cam) = slot.borrow_mut().as_mut() {
+                let _ = block_on_ready(cam.cancel());
+                self.package.set(block_on_ready(cam.read_package()).ok());
+            }
+        });
+        self.phase.set(UpdatePhase::Idle);
+        self.journal.set(None);
     }
 
     /// The restart step's main action: the phone turns the camera off and on
@@ -892,16 +954,9 @@ impl AppState {
             self.demo_camera_restarted();
             return;
         }
-        let intent = platform::update::load_intent();
-        let Some(intent) = intent.filter(|_| !platform::has_dev_camera_url()) else {
-            self.update_reconnect.set(true);
-            self.resume_update();
-            return;
-        };
-        self.set_tab(Tab::Camera);
-        self.stacks
-            .update(|stacks| stacks[tab_index(Tab::Camera)].clear());
-        self.connect_camera(&intent.camera_id);
+        // The update's own reconnect: no connect sheet over Software Update.
+        self.update_reconnect.set(true);
+        self.resume_update();
     }
 
     fn demo_camera_restarted(self) {
@@ -944,6 +999,20 @@ impl AppState {
         matches!(self.flow_phase(), UpdatePhase::Restarting { .. })
     }
 
+    /// The user restarts the camera by hand: the sheet closes and the update
+    /// waits on the camera, where the camera tab offers it again.
+    pub fn restart_manually(self) {
+        self.sheet.set(None);
+        self.update_shown.set(false);
+        // The connect after the restart must be allowed, and the update must
+        // wait as long as the person needs.
+        if !self.demo() && self.update_busy.get() {
+            self.phase.set(UpdatePhase::ManualRestart {
+                kind: self.update_kind.get(),
+            });
+        }
+    }
+
     pub fn dismiss_install_failed(self) {
         self.sheet.set(None);
         self.update_shown.set(false);
@@ -968,7 +1037,6 @@ impl AppState {
         self.sheet.set(None);
         self.update_shown.set(false);
         self.journal.set(None);
-        self.confirm_deadline.set(None);
         self.stacks
             .update(|stacks| stacks[tab_index(Tab::Camera)].clear());
     }
@@ -982,7 +1050,6 @@ impl AppState {
         self.phase.set(UpdatePhase::Idle);
         self.sheet.set(None);
         self.update_shown.set(false);
-        self.confirm_deadline.set(None);
     }
 
     pub fn cancel_update(self) {
@@ -999,7 +1066,6 @@ impl AppState {
         self.sheet.set(None);
         self.update_shown.set(false);
         self.journal.set(None);
-        self.confirm_deadline.set(None);
     }
 
     pub fn retry_update(self) {
@@ -1012,13 +1078,6 @@ impl AppState {
         }
     }
 
-    pub fn confirm_deadline_label(self) -> String {
-        let _ = self.confirm_tick.get();
-        let rem = self.confirm_remaining();
-        let total = rem.as_secs();
-        format!("{}:{:02}", total / 60, total % 60)
-    }
-
     /// Spawn a light poll loop while connecting or updating.
     pub fn ensure_ticker(self) {
         spawn(async move {
@@ -1027,14 +1086,12 @@ impl AppState {
                 if self.frozen() {
                     continue;
                 }
-                if self.sheet() == Some(Sheet::Confirm)
-                    || self.journal.get() == Some(crate::domain::JournalState::Waiting)
-                {
-                    self.confirm_tick.set(self.confirm_remaining().as_secs());
-                }
                 match self.sheet() {
                     Some(Sheet::Connecting { .. }) => self.tick_connecting(),
                     Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => self.tick_update(),
+                    // After the send the demo update goes on without a sheet,
+                    // as a real one does on the camera.
+                    None if self.demo() && self.journal.get().is_some() => self.tick_update(),
                     Some(Sheet::Scan) if !self.demo() && platform::bluetooth_unavailable() => {
                         self.set_sheet(Some(Sheet::ConnectError(LinkError::BluetoothUnavailable)));
                     }
@@ -1045,12 +1102,25 @@ impl AppState {
     }
 }
 
+impl Tab {
+    /// A stable name of the tab, as a page names its tab
+    /// (`ui::page_scroll`'s `top_of`).
+    pub fn key(self) -> &'static str {
+        match self {
+            Tab::Camera => "camera",
+            Tab::Looks => "looks",
+            Tab::Recipes => "recipes",
+            Tab::Settings => "settings",
+        }
+    }
+}
+
 fn tab_index(tab: Tab) -> usize {
     match tab {
         Tab::Camera => 0,
         Tab::Looks => 1,
         Tab::Recipes => 2,
-        Tab::Modules => 3,
+        Tab::Settings => 3,
     }
 }
 
@@ -1082,7 +1152,6 @@ fn demo_fail_from_env() -> DemoFail {
     match env::var("GRKIT_DEMO_FAIL").as_deref() {
         Ok("card_full") => DemoFail::CardFull,
         Ok("refused") => DemoFail::Refused,
-        Ok("not_confirmed") => DemoFail::NotConfirmed,
         Ok("connection_lost") => DemoFail::ConnectionLost,
         _ => DemoFail::None,
     }
@@ -1095,12 +1164,12 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
-/// Connected and up to date?
+/// Connected and up to date? Only a release check that answered says so.
 pub fn is_up_to_date(package: &PackageInfo) -> bool {
     package
         .available
         .as_ref()
-        .is_none_or(|available| crate::domain::version_at_least(&package.installed, available))
+        .is_some_and(|available| crate::domain::version_at_least(&package.installed, available))
 }
 
 /// The app's page in the platform's store.

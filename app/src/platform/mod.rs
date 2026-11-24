@@ -20,6 +20,9 @@ pub(crate) struct NamePrompt {
     pub message: String,
     pub value: String,
     pub max: usize,
+    /// An empty name is a valid answer (a recipe then takes its automatic
+    /// name).
+    pub allow_empty: bool,
     pub save: String,
     pub cancel: String,
 }
@@ -360,7 +363,59 @@ pub(crate) fn config_value(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
+/// The camera service takes at most four connections at once and closes
+/// any more without an answer (grkit-serve `MAX_CONNECTIONS`). The change
+/// feed holds one and the link check ([`camera_request_now`]) one, so the
+/// other requests to the service take turns in the rest.
+const SERVICE_SLOTS: usize = 2;
+static SERVICE_IN_FLIGHT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A turn at the camera service, given back when dropped.
+struct ServiceTurn;
+
+impl ServiceTurn {
+    async fn take() -> Self {
+        use std::sync::atomic::Ordering;
+        loop {
+            let current = SERVICE_IN_FLIGHT.load(Ordering::Acquire);
+            if current < SERVICE_SLOTS
+                && SERVICE_IN_FLIGHT
+                    .compare_exchange(current, current + 1, Ordering::AcqRel, Ordering::Acquire)
+                    .is_ok()
+            {
+                return Self;
+            }
+            nsh_core::prelude::timer(std::time::Duration::from_millis(10)).await;
+        }
+    }
+}
+
+impl Drop for ServiceTurn {
+    fn drop(&mut self) {
+        SERVICE_IN_FLIGHT.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
+
+/// A request to the camera. One to the GRKit service waits for its turn
+/// first; `budget` counts from the send.
 pub(crate) async fn camera_request(
+    method: &str,
+    url: String,
+    body: Vec<u8>,
+    budget: std::time::Duration,
+    headers: &[(&str, String)],
+) -> Result<nsh_core::element::HttpResponse, String> {
+    let _turn = if url.starts_with(&camera_http_base()) {
+        Some(ServiceTurn::take().await)
+    } else {
+        None
+    };
+    camera_request_now(method, url, body, budget, headers).await
+}
+
+/// A request to the camera without waiting for a turn: the link check,
+/// which must not wait behind a slow read.
+pub(crate) async fn camera_request_now(
     method: &str,
     url: String,
     body: Vec<u8>,

@@ -37,6 +37,7 @@ impl AppState {
     }
 
     fn ask_name(self, target: NameTarget, title: String, message: String, current: String) {
+        let allow_empty = matches!(target, NameTarget::Recipe(_));
         let value = self
             .name_draft
             .get()
@@ -47,6 +48,7 @@ impl AppState {
             message,
             value,
             max: NAME_MAX,
+            allow_empty,
             save: tr("looks.save", &[]),
             cancel: tr("looks.cancel", &[]),
         };
@@ -56,6 +58,9 @@ impl AppState {
                     self.name_draft.set(None);
                     return;
                 };
+                // The alert keeps Save off for an invalid name; spaces at
+                // either end are not part of it.
+                let name = name.trim().to_owned();
                 self.name_draft.set(Some((target.clone(), name.clone())));
                 match target {
                     NameTarget::Look(id) => self.rename_look(id, name),

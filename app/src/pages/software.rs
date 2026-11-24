@@ -11,7 +11,7 @@ use crate::domain::{ReleaseProblem, UpdateKind, version_at_least};
 use crate::store::{AppState, RELEASES_URL, Route, app_store_url};
 use crate::strings::tr;
 use crate::ui::{
-    gr_mark, grouped_card, info_row, quiet_spinner, secondary_button, secondary_button_loading,
+    chevron_row, grouped_card, info_row, quiet_spinner, secondary_button, secondary_button_loading,
     section_title, token,
 };
 
@@ -100,16 +100,13 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
         Option<String>,
         Option<AnyElement>,
     ) = match &state {
+        // A check under way shows its spinner, not a line of its own (R5).
         CardState::Available(version) => (
             version.clone(),
-            if checking {
-                tr("software.checking", &[])
-            } else {
-                tr(
-                    "software.current",
-                    &[("version", &installed), ("model", &model)],
-                )
-            },
+            tr(
+                "software.current",
+                &[("version", &installed), ("model", &model)],
+            ),
             checking,
             Some(update_button()),
             Some(tr(
@@ -138,7 +135,10 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
         CardState::UpToDate => (
             installed.clone(),
             if checking {
-                tr("software.checking", &[])
+                tr(
+                    "software.current",
+                    &[("version", &installed), ("model", &model)],
+                )
             } else if failed {
                 tr("software.check_failed", &[])
             } else {
@@ -165,7 +165,10 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
         ),
         CardState::Checking => (
             installed.clone(),
-            tr("software.checking", &[]),
+            tr(
+                "software.current",
+                &[("version", &installed), ("model", &model)],
+            ),
             true,
             None,
             None,
@@ -229,46 +232,58 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
     let has_history = !history(&notes).is_empty();
 
     view().flex_1().bg(move || token("grouped")).child(
-        crate::ui::page_scroll().flex_1().child(
-            view()
-                .gap_5()
-                .px_6()
-                .pt_4()
-                // The end clears the floating tab bar of iOS.
-                .pb_safe_area_plus(px(if cfg!(target_os = "ios") { 96.0 } else { 32.0 }))
-                .child(update_row(version, subtitle, spinner, pill))
-                .child(caption.map(|copy| {
-                    text(copy)
-                        .mt(px(-8.0))
-                        .px_1()
-                        .text_size(px(crate::ui::ty::FOOTNOTE))
-                        .line_height(px(18.0))
-                        .text_color(move || theme().muted_foreground)
-                }))
-                .child(blocked.then(blocked_notice))
-                .child((!changes.is_empty()).then(|| module_changes_card(app, changes)))
-                // Its own dynamic: "Show All" redraws the notes alone and
-                // keeps the scroll position.
-                .child((!items.is_empty()).then(|| {
-                    view()
-                        .gap_2()
-                        .child(view().px_1().child(section_title(notes_title)))
-                        .child(dynamic(move || notes_card(items.clone(), expanded)))
-                }))
-                .child(grouped_card(
-                    view()
-                        .child(info_row(
-                            tr("connected.firmware", &[]),
-                            firmware,
-                            !has_history,
-                        ))
-                        .child(
-                            has_history
-                                .then(|| history_row(move || app.push(Route::ReleaseHistory))),
-                        ),
-                ))
-                .child(link),
-        ),
+        crate::ui::page_scroll()
+            .refresh(Some(crate::store::page_refresh::SOFTWARE.to_owned()))
+            .flex_1()
+            .child(
+                view()
+                    .gap_5()
+                    .px_6()
+                    .pt_4()
+                    // The end clears the floating tab bar of iOS.
+                    .pb_safe_area_plus(px(if cfg!(target_os = "ios") { 96.0 } else { 32.0 }))
+                    .child(match pending_state(app) {
+                        // An update on the camera: where it is and the one
+                        // step the person takes next.
+                        Some(pending) => pending_card(app, pending).into_element(),
+                        None => view()
+                            .gap_5()
+                            .child(app.update_notice().map(notice_card))
+                            .child(update_row(version, subtitle, spinner, pill))
+                            .child(caption.map(|copy| {
+                                text(copy)
+                                    .mt(px(-8.0))
+                                    .px_1()
+                                    .text_size(px(crate::ui::ty::FOOTNOTE))
+                                    .line_height(px(18.0))
+                                    .text_color(move || theme().muted_foreground)
+                            }))
+                            .into_element(),
+                    })
+                    .child(blocked.then(blocked_notice))
+                    .child((!changes.is_empty()).then(|| module_changes_card(app, changes)))
+                    // Its own dynamic: "Show All" redraws the notes alone and
+                    // keeps the scroll position.
+                    .child((!items.is_empty()).then(|| {
+                        view()
+                            .gap_2()
+                            .child(view().px_1().child(section_title(notes_title)))
+                            .child(dynamic(move || notes_card(items.clone(), expanded)))
+                    }))
+                    .child(grouped_card(
+                        view()
+                            .child(info_row(
+                                tr("connected.firmware", &[]),
+                                firmware,
+                                !has_history,
+                            ))
+                            .child(
+                                has_history
+                                    .then(|| history_row(move || app.push(Route::ReleaseHistory))),
+                            ),
+                    ))
+                    .child(link),
+            ),
     )
 }
 
@@ -397,20 +412,13 @@ fn notes_card(items: Vec<String>, expanded: Signal<bool>) -> impl IntoElement {
             .gap_2()
             .child(bullets(shown.to_vec()))
             .child(more.then(|| {
-                view()
-                    .flex_row()
-                    .min_h(px(44.0))
-                    .items_center()
-                    .role(AccessibilityRole::Button)
-                    .label(tr("software.show_all", &[]))
-                    .on_press(move || expanded.set(true))
-                    .active(|s| s.opacity(0.6))
-                    .child(
-                        text(tr("software.show_all", &[]))
-                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(move || token("link")),
-                    )
+                view().flex_row().child(crate::ui::pill_button_loading(
+                    tr("software.show_all", &[]),
+                    tr("software.show_all", &[]),
+                    true,
+                    false,
+                    move || expanded.set(true),
+                ))
             })),
     )
 }
@@ -481,29 +489,9 @@ pub fn release_history_page(app: AppState, on_dismiss: impl Fn() + 'static) -> i
                                     .child(bullets(section.items)),
                             )
                         }))
-                        .child(
-                            view()
-                                .flex_row()
-                                .justify_center()
-                                .items_center()
-                                .gap(px(6.0))
-                                .min_h(px(44.0))
-                                .role(AccessibilityRole::Link)
-                                .label(tr("software.history_github", &[]))
-                                .on_press(|| open(RELEASES_URL.to_owned()))
-                                .active(|s| s.opacity(0.6))
-                                .child(
-                                    text(tr("software.history_github", &[]))
-                                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(move || token("link")),
-                                )
-                                .child(
-                                    text("↗")
-                                        .text_size(px(crate::ui::ty::FOOTNOTE))
-                                        .text_color(move || token("link")),
-                                ),
-                        ),
+                        .child(secondary_button(tr("software.history_github", &[]), || {
+                            open(RELEASES_URL.to_owned())
+                        })),
                 ),
             )
         }))
@@ -522,7 +510,6 @@ fn update_row(
             .gap_3()
             .px_4()
             .py_3()
-            .child(gr_mark(52.0))
             .child(
                 view()
                     .flex_1()
@@ -552,4 +539,85 @@ fn update_row(
             )
             .child(pill),
     )
+}
+
+/// Where an update on the camera is, after its send.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pending {
+    /// It waits for its confirmation on the camera.
+    Waiting,
+    /// Confirmed: the next start of the camera installs it.
+    Ready,
+    /// The phone is turning the camera off and on.
+    Restarting,
+    /// The phone could not restart the camera: the person does.
+    Manual,
+}
+
+fn pending_state(app: AppState) -> Option<Pending> {
+    use crate::domain::{JournalState, UpdatePhase};
+    match app.flow_phase() {
+        UpdatePhase::Restarting { .. } => return Some(Pending::Restarting),
+        UpdatePhase::ManualRestart { .. } => return Some(Pending::Manual),
+        UpdatePhase::WaitingConfirm { .. } => return Some(Pending::Waiting),
+        UpdatePhase::Confirmed { .. } | UpdatePhase::Restart { .. } => {
+            return Some(Pending::Ready);
+        }
+        // The send has its own sheet.
+        UpdatePhase::Downloading { .. } | UpdatePhase::Sending { .. } => return None,
+        _ => {}
+    }
+    match app.camera_journal() {
+        Some(JournalState::Waiting) => Some(Pending::Waiting),
+        Some(JournalState::Confirmed) => Some(Pending::Ready),
+        _ => None,
+    }
+}
+
+/// The update on the camera: where it is. The sheet has its steps and
+/// buttons, so the row opens it.
+fn pending_card(app: AppState, pending: Pending) -> impl IntoElement {
+    let version = app.pending_version().unwrap_or_default();
+    let title = tr(
+        if pending == Pending::Waiting {
+            "cam.update_waiting"
+        } else {
+            "cam.update_ready"
+        },
+        &[("version", &version)],
+    )
+    .replace("GRKit  ", "GRKit ");
+    let subtitle = tr(
+        match pending {
+            Pending::Waiting => "cam.update_waiting_sub",
+            Pending::Ready => "cam.update_ready_sub",
+            Pending::Restarting => "restart.running_title",
+            Pending::Manual => "software.restart_manual",
+        },
+        &[],
+    );
+    grouped_card(chevron_row(title, Some(subtitle), move || {
+        app.open_pending_update()
+    }))
+}
+
+/// Why the last update stopped after its send.
+fn notice_card(error: crate::domain::UpdateError) -> impl IntoElement {
+    let (title, body) = super::sheets::update_error_copy(&error);
+    view()
+        .gap_1()
+        .p_4()
+        .rounded(px(10.0))
+        .bg(move || theme().muted)
+        .child(
+            text(title)
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::SEMIBOLD),
+        )
+        .child(
+            text(body)
+                .text_size(px(crate::ui::ty::FOOTNOTE))
+                .line_height(px(18.0))
+                .text_color(move || theme().muted_foreground),
+        )
 }

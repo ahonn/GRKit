@@ -88,7 +88,6 @@ fn en(key: &str) -> &'static str {
         }
         "update.cancel" => "Cancel Update",
         "update.cancelling" => "Cancelling…",
-        "cam.more" => "More",
         "cam.auto_connecting" => "Looking for your camera…",
         "update.cancel_title" => "Cancel the Update?",
         "update.cancel_body_send" => "What was sent is removed from the camera.",
@@ -113,13 +112,13 @@ fn en(key: &str) -> &'static str {
         "restart.manual_body" => "Turn the camera off and on, then tap Reconnect.",
         "restart.auto_body" => "The app turns the camera off and on, then checks the version.",
         "restart.run" => "Restart Camera",
+        "restart.manual" => "Restart Manually",
         "restart.title" => "Restart the Camera",
         "restart.subtitle" => "The update is confirmed. It installs when the camera restarts.",
         "confirm.subtitle" => "The update is on the camera and waits for you.",
         "confirm.step1" => "Press ADJ and move to GRK",
         "confirm.step2" => "Choose MOD, then %{update}",
         "confirm.step3" => "Choose Execute",
-        "confirm.waiting" => "Waiting · %{time} left",
         "installed.verified" => "The camera is running the new version.",
         "error.download_title" => "Couldn't Download the Update",
         "error.module_title" => "Update with the Memory Card",
@@ -134,10 +133,6 @@ fn en(key: &str) -> &'static str {
         "error.card_full_body" => {
             "%{size} more is needed. Delete some photos on the camera, then try again."
         }
-        "error.not_confirmed_title" => "Not Confirmed on the Camera",
-        "error.not_confirmed_body" => {
-            "No confirmation within 5 minutes, so the camera removed this update."
-        }
         "error.refused_body" => "This update doesn't fit the firmware of this camera.",
         "error.lost_body" => "Reconnect, and the app continues with this update.",
         "software.confirm_note" => {
@@ -145,6 +140,7 @@ fn en(key: &str) -> &'static str {
         }
         "software.up_to_date" => "GRKit is up to date",
         "software.check_failed" => "Couldn't check for updates",
+        "software.restart_manual" => "Turn the camera off and on. It reconnects when it starts.",
         "software.check_failed_body" => {
             "On the camera's Wi‑Fi, the phone downloads updates over cellular data. Check it and try again."
         }
@@ -171,7 +167,7 @@ fn en(key: &str) -> &'static str {
         "cam.update_available" => "GRKit %{version} Available",
         "cam.update_available_sub" => "See Update",
         "cam.update_waiting" => "GRKit %{version} to Confirm",
-        "cam.update_waiting_sub" => "Confirm on the camera · %{time} left",
+        "cam.update_waiting_sub" => "Confirm on the camera",
         "cam.update_ready" => "GRKit %{version} to Install",
         "cam.update_ready_sub" => "Restart the camera to finish",
         "android.connecting.wifi_sub" => {
@@ -231,9 +227,8 @@ fn en(key: &str) -> &'static str {
         "error.bt_title" => "Bluetooth Unavailable",
         "error.bt_body" => "Turn on Bluetooth and allow access for GRKit.",
         "error.try_again" => "Try Again",
-        "error.send_again" => "Send Again",
         "error.close" => "Close",
-        "settings.title" => "Settings",
+        "tab.settings" | "settings.title" => "Settings",
         "settings.about" => "About",
         "settings.version" => "Version",
         "settings.rate" => "Rate GRKit",
@@ -241,7 +236,6 @@ fn en(key: &str) -> &'static str {
         "settings.more_maker" => "More from the Maker",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "Wireless transfer and remote for RICOH GR",
-        "settings.view" => "View",
         _ => crate::strings_looks::en(key)
             .or_else(|| crate::strings_recipes::en(key))
             .or_else(|| crate::strings_connect::en(key))
@@ -261,7 +255,6 @@ fn zh(key: &str) -> Option<&'static str> {
         "update.download_body" => "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。",
         "update.cancel" => "取消更新",
         "update.cancelling" => "正在取消…",
-        "cam.more" => "更多",
         "cam.auto_connecting" => "正在查找相机…",
         "update.cancel_title" => "取消更新？",
         "update.cancel_body_send" => "已发送的部分会从相机上删除。",
@@ -284,13 +277,13 @@ fn zh(key: &str) -> Option<&'static str> {
         "restart.manual_body" => "请把相机关机再开机，然后点按「重新连接」。",
         "restart.auto_body" => "应用会先关闭相机再打开，然后检查版本。",
         "restart.run" => "重启相机",
+        "restart.manual" => "手动重启",
         "restart.title" => "重启相机",
         "restart.subtitle" => "更新已确认，重启一次相机就会安装。",
         "confirm.subtitle" => "更新已在相机上，等你确认。",
         "confirm.step1" => "按 ADJ，移到「GRK」",
         "confirm.step2" => "选择「MOD」，再选择「%{update}」",
         "confirm.step3" => "选择「执行」",
-        "confirm.waiting" => "等待确认 · 剩余 %{time}",
         "installed.verified" => "相机正在运行新版本。",
         "error.download_title" => "无法下载更新",
         "error.module_title" => "需要用存储卡更新",
@@ -299,13 +292,12 @@ fn zh(key: &str) -> Option<&'static str> {
         "error.package_body" => "这次更新的文件不完整。请稍后再检查更新。",
         "error.card_full_title" => "存储卡空间不足",
         "error.card_full_body" => "还需要 %{size}。请在相机上删除一些照片后重试。",
-        "error.not_confirmed_title" => "未在相机上确认",
-        "error.not_confirmed_body" => "5 分钟内没有确认，相机已删除这次更新。",
         "error.refused_body" => "这个更新不适用于这台相机的固件。",
         "error.lost_body" => "重新连接后，应用会接着处理这次更新。",
         "software.confirm_note" => "更新需要在相机上确认，并重启一次相机。胶片风格和设置会保留。",
         "software.up_to_date" => "GRKit 已是最新",
         "software.check_failed" => "无法检查更新",
+        "software.restart_manual" => "请把相机关机再开机，开机后会自动连接。",
         "software.check_failed_body" => "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。",
         "software.retry" => "重试",
         "software.current" => "当前 %{version} · %{model}",
@@ -328,7 +320,7 @@ fn zh(key: &str) -> Option<&'static str> {
         "cam.update_available" => "GRKit %{version} 可用",
         "cam.update_available_sub" => "查看更新",
         "cam.update_waiting" => "GRKit %{version} 待确认",
-        "cam.update_waiting_sub" => "在相机上确认 · 剩余 %{time}",
+        "cam.update_waiting_sub" => "在相机上确认",
         "cam.update_ready" => "GRKit %{version} 待安装",
         "cam.update_ready_sub" => "重启相机以完成更新",
         "android.connecting.wifi_sub" => {
@@ -384,9 +376,8 @@ fn zh(key: &str) -> Option<&'static str> {
         "error.bt_title" => "蓝牙不可用",
         "error.bt_body" => "请打开蓝牙并允许 GRKit 使用。",
         "error.try_again" => "重试",
-        "error.send_again" => "重新发送",
         "error.close" => "关闭",
-        "settings.title" => "设置",
+        "tab.settings" | "settings.title" => "设置",
         "settings.about" => "关于",
         "settings.version" => "版本",
         "settings.rate" => "为 GRKit 评分",
@@ -394,7 +385,6 @@ fn zh(key: &str) -> Option<&'static str> {
         "settings.more_maker" => "来自同一作者",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 的无线传输与遥控",
-        "settings.view" => "查看",
         _ => {
             return crate::strings_looks::zh(key)
                 .or_else(|| crate::strings_recipes::zh(key))
@@ -415,7 +405,6 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "update.download_body" => "連線相機 Wi‑Fi 時，需要用行動數據下載更新。請檢查後重試。",
         "update.cancel" => "取消更新",
         "update.cancelling" => "正在取消…",
-        "cam.more" => "更多",
         "cam.auto_connecting" => "正在尋找相機…",
         "update.cancel_title" => "取消更新？",
         "update.cancel_body_send" => "已傳送的部分會從相機上刪除。",
@@ -438,13 +427,13 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "restart.manual_body" => "請將相機關機再開機，然後點一下「重新連線」。",
         "restart.auto_body" => "App 會先關閉相機再開啟，然後檢查版本。",
         "restart.run" => "重新啟動相機",
+        "restart.manual" => "手動重新啟動",
         "restart.title" => "重新啟動相機",
         "restart.subtitle" => "更新已確認，重新啟動一次相機就會安裝。",
         "confirm.subtitle" => "更新已在相機上，等你確認。",
         "confirm.step1" => "按 ADJ，移到「GRK」",
         "confirm.step2" => "選擇「MOD」，再選擇「%{update}」",
         "confirm.step3" => "選擇「執行」",
-        "confirm.waiting" => "等待確認 · 剩餘 %{time}",
         "installed.verified" => "相機正在執行新版本。",
         "error.download_title" => "無法下載更新",
         "error.module_title" => "需要用記憶卡更新",
@@ -453,8 +442,6 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "error.package_body" => "這次更新的檔案不完整。請稍後再檢查更新。",
         "error.card_full_title" => "記憶卡空間不足",
         "error.card_full_body" => "還需要 %{size}。請在相機上刪除一些照片後重試。",
-        "error.not_confirmed_title" => "未在相機上確認",
-        "error.not_confirmed_body" => "5 分鐘內沒有確認，相機已刪除這次更新。",
         "error.refused_body" => "這個更新不適用於這台相機的韌體。",
         "error.lost_body" => "重新連線後，App 會接著處理這次更新。",
         "software.confirm_note" => {
@@ -462,6 +449,7 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         }
         "software.up_to_date" => "GRKit 已是最新版本",
         "software.check_failed" => "無法檢查更新",
+        "software.restart_manual" => "請把相機關機再開機，開機後會自動連線。",
         "software.check_failed_body" => "連線相機 Wi‑Fi 時，需要用行動數據下載更新。請檢查後重試。",
         "software.retry" => "重試",
         "software.current" => "目前 %{version} · %{model}",
@@ -484,7 +472,7 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "cam.update_available" => "GRKit %{version} 可用",
         "cam.update_available_sub" => "查看更新",
         "cam.update_waiting" => "GRKit %{version} 待確認",
-        "cam.update_waiting_sub" => "在相機上確認 · 剩餘 %{time}",
+        "cam.update_waiting_sub" => "在相機上確認",
         "cam.update_ready" => "GRKit %{version} 待安裝",
         "cam.update_ready_sub" => "重新啟動相機以完成更新",
         "android.connecting.wifi_sub" => {
@@ -541,9 +529,8 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "error.bt_title" => "無法使用藍牙",
         "error.bt_body" => "請開啟藍牙並允許 GRKit 使用。",
         "error.try_again" => "重試",
-        "error.send_again" => "重新傳送",
         "error.close" => "關閉",
-        "settings.title" => "設定",
+        "tab.settings" | "settings.title" => "設定",
         "settings.about" => "關於",
         "settings.version" => "版本",
         "settings.rate" => "為 GRKit 評分",
@@ -551,7 +538,6 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "settings.more_maker" => "來自同一作者",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 的無線傳輸與遙控",
-        "settings.view" => "查看",
         _ => {
             return crate::strings_looks::zh_hant(key)
                 .or_else(|| crate::strings_recipes::zh_hant(key))
@@ -574,7 +560,6 @@ fn ja(key: &str) -> Option<&'static str> {
         }
         "update.cancel" => "アップデートをキャンセル",
         "update.cancelling" => "キャンセル中…",
-        "cam.more" => "その他",
         "cam.auto_connecting" => "カメラを探しています…",
         "update.cancel_title" => "アップデートをキャンセルしますか？",
         "update.cancel_body_send" => "送信済みのデータはカメラから削除されます。",
@@ -601,6 +586,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "restart.manual_body" => "カメラの電源を入れ直してから、「再接続」をタップしてください。",
         "restart.auto_body" => "アプリがカメラの電源を入れ直し、バージョンを確認します。",
         "restart.run" => "カメラを再起動",
+        "restart.manual" => "手動で再起動",
         "restart.title" => "カメラを再起動",
         "restart.subtitle" => {
             "アップデートを確認しました。カメラを再起動するとインストールされます。"
@@ -609,7 +595,6 @@ fn ja(key: &str) -> Option<&'static str> {
         "confirm.step1" => "ADJ を押して「GRK」に移動",
         "confirm.step2" => "「MOD」を選び、「%{update}」を選択",
         "confirm.step3" => "「実行」を選択",
-        "confirm.waiting" => "確認待ち · 残り %{time}",
         "installed.verified" => "カメラは新しいバージョンで動作しています。",
         "error.download_title" => "アップデートをダウンロードできません",
         "error.module_title" => "メモリーカードでアップデート",
@@ -624,10 +609,6 @@ fn ja(key: &str) -> Option<&'static str> {
         "error.card_full_body" => {
             "あと %{size} 必要です。カメラで写真を削除してから、もう一度お試しください。"
         }
-        "error.not_confirmed_title" => "カメラで確認されませんでした",
-        "error.not_confirmed_body" => {
-            "5 分以内に確認がなかったため、カメラはこのアップデートを削除しました。"
-        }
         "error.refused_body" => {
             "このアップデートは、このカメラのファームウェアに対応していません。"
         }
@@ -637,6 +618,9 @@ fn ja(key: &str) -> Option<&'static str> {
         }
         "software.up_to_date" => "GRKit は最新です",
         "software.check_failed" => "アップデートを確認できません",
+        "software.restart_manual" => {
+            "カメラの電源を入れ直してください。起動すると自動で接続します。"
+        }
         "software.check_failed_body" => {
             "カメラの Wi‑Fi に接続中は、モバイルデータ通信でアップデートをダウンロードします。確認してもう一度お試しください。"
         }
@@ -667,7 +651,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "cam.update_available" => "GRKit %{version} が利用可能",
         "cam.update_available_sub" => "アップデートを見る",
         "cam.update_waiting" => "GRKit %{version} 確認待ち",
-        "cam.update_waiting_sub" => "カメラで確認 · 残り %{time}",
+        "cam.update_waiting_sub" => "カメラで確認",
         "cam.update_ready" => "GRKit %{version} インストール待ち",
         "cam.update_ready_sub" => "カメラを再起動して完了",
         "android.connecting.wifi_sub" => {
@@ -728,9 +712,8 @@ fn ja(key: &str) -> Option<&'static str> {
         "error.bt_title" => "Bluetooth を使用できません",
         "error.bt_body" => "Bluetooth をオンにして、GRKit に許可してください。",
         "error.try_again" => "再試行",
-        "error.send_again" => "もう一度送信",
         "error.close" => "閉じる",
-        "settings.title" => "設定",
+        "tab.settings" | "settings.title" => "設定",
         "settings.about" => "このアプリについて",
         "settings.version" => "バージョン",
         "settings.rate" => "GRKit を評価",
@@ -738,7 +721,6 @@ fn ja(key: &str) -> Option<&'static str> {
         "settings.more_maker" => "同じ開発者のアプリ",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR のワイヤレス転送とリモート撮影",
-        "settings.view" => "見る",
         _ => {
             return crate::strings_looks::ja(key)
                 .or_else(|| crate::strings_recipes::ja(key))
@@ -761,7 +743,6 @@ fn ko(key: &str) -> Option<&'static str> {
         }
         "update.cancel" => "업데이트 취소",
         "update.cancelling" => "취소하는 중…",
-        "cam.more" => "더 보기",
         "cam.auto_connecting" => "카메라를 찾는 중…",
         "update.cancel_title" => "업데이트를 취소할까요?",
         "update.cancel_body_send" => "전송된 데이터는 카메라에서 삭제됩니다.",
@@ -784,13 +765,13 @@ fn ko(key: &str) -> Option<&'static str> {
         "restart.manual_body" => "카메라를 껐다 켠 후 「다시 연결」을 탭하세요.",
         "restart.auto_body" => "앱이 카메라를 껐다 켠 후 버전을 확인합니다.",
         "restart.run" => "카메라 재시작",
+        "restart.manual" => "직접 재시작",
         "restart.title" => "카메라 재시작",
         "restart.subtitle" => "업데이트가 확인되었습니다. 카메라를 재시작하면 설치됩니다.",
         "confirm.subtitle" => "업데이트가 카메라에 있습니다. 확인해 주세요.",
         "confirm.step1" => "ADJ를 누르고 「GRK」로 이동",
         "confirm.step2" => "「MOD」를 선택한 뒤 「%{update}」 선택",
         "confirm.step3" => "「실행」 선택",
-        "confirm.waiting" => "확인 대기 · %{time} 남음",
         "installed.verified" => "카메라가 새 버전으로 실행 중입니다.",
         "error.download_title" => "업데이트를 다운로드할 수 없음",
         "error.module_title" => "메모리 카드로 업데이트",
@@ -805,8 +786,6 @@ fn ko(key: &str) -> Option<&'static str> {
         "error.card_full_body" => {
             "%{size}이(가) 더 필요합니다. 카메라에서 사진을 삭제한 후 다시 시도하세요."
         }
-        "error.not_confirmed_title" => "카메라에서 확인되지 않음",
-        "error.not_confirmed_body" => "5분 안에 확인되지 않아 카메라가 이 업데이트를 삭제했습니다.",
         "error.refused_body" => "이 업데이트는 이 카메라의 펌웨어에 맞지 않습니다.",
         "error.lost_body" => "다시 연결하면 앱이 이 업데이트를 이어서 진행합니다.",
         "software.confirm_note" => {
@@ -814,6 +793,7 @@ fn ko(key: &str) -> Option<&'static str> {
         }
         "software.up_to_date" => "GRKit이 최신 버전입니다",
         "software.check_failed" => "업데이트를 확인할 수 없음",
+        "software.restart_manual" => "카메라를 껐다 켜 주세요. 켜지면 자동으로 연결됩니다.",
         "software.check_failed_body" => {
             "카메라 Wi‑Fi에 연결된 동안에는 모바일 데이터로 업데이트를 다운로드합니다. 확인한 후 다시 시도하세요."
         }
@@ -842,7 +822,7 @@ fn ko(key: &str) -> Option<&'static str> {
         "cam.update_available" => "GRKit %{version} 사용 가능",
         "cam.update_available_sub" => "업데이트 보기",
         "cam.update_waiting" => "GRKit %{version} 확인 대기",
-        "cam.update_waiting_sub" => "카메라에서 확인 · %{time} 남음",
+        "cam.update_waiting_sub" => "카메라에서 확인",
         "cam.update_ready" => "GRKit %{version} 설치 대기",
         "cam.update_ready_sub" => "카메라를 재시작해 완료",
         "android.connecting.wifi_sub" => {
@@ -901,9 +881,8 @@ fn ko(key: &str) -> Option<&'static str> {
         "error.bt_title" => "Bluetooth를 사용할 수 없음",
         "error.bt_body" => "Bluetooth를 켜고 GRKit에 권한을 허용하세요.",
         "error.try_again" => "다시 시도",
-        "error.send_again" => "다시 전송",
         "error.close" => "닫기",
-        "settings.title" => "설정",
+        "tab.settings" | "settings.title" => "설정",
         "settings.about" => "정보",
         "settings.version" => "버전",
         "settings.rate" => "GRKit 평가하기",
@@ -911,7 +890,6 @@ fn ko(key: &str) -> Option<&'static str> {
         "settings.more_maker" => "같은 개발자의 앱",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 무선 전송과 원격 촬영",
-        "settings.view" => "보기",
         _ => {
             return crate::strings_looks::ko(key)
                 .or_else(|| crate::strings_recipes::ko(key))
@@ -948,11 +926,7 @@ mod tests {
         ("ko", "ko"),
     ];
     /// Keys in the file that no screen reads.
-    const FILE_ONLY: [&str; 3] = [
-        "nearby.title_suffix",
-        "recipes.read_only_note",
-        "tab.settings",
-    ];
+    const FILE_ONLY: [&str; 2] = ["nearby.title_suffix", "recipes.read_only_note"];
     /// No Simplified Chinese text yet: this key shows in English there.
     const NO_ZH_HANS: &str = "error.download_body";
     /// The Simplified Chinese text counts the total, the English the rest.

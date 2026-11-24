@@ -149,14 +149,6 @@ pub fn touch_target() -> f32 {
     }
 }
 
-fn action_radius() -> f32 {
-    if cfg!(target_os = "android") {
-        25.0
-    } else {
-        8.0
-    }
-}
-
 pub fn gr_snap_icon() -> ImageAsset {
     GR_SNAP
 }
@@ -235,7 +227,7 @@ pub fn primary_button_loading(
         .min_h(px(50.0))
         .py_3()
         .px_8()
-        .rounded(px(action_radius()))
+        .rounded_full()
         .items_center()
         .justify_center()
         .bg(move || token("button"))
@@ -276,7 +268,7 @@ pub fn sheet_primary_button_loading(
         .w_full()
         .min_h(px(50.0))
         .py_3()
-        .rounded(px(action_radius()))
+        .rounded_full()
         .items_center()
         .justify_center()
         .bg(move || token("button"))
@@ -312,26 +304,31 @@ pub fn secondary_button_loading(
     on_press: impl Fn() + 'static,
 ) -> impl IntoElement {
     let title = title.into();
+    // The quiet twin of the primary button: the same capsule in a gray fill
+    // that stays visible on pages and on sheets. The app has no bare text
+    // buttons.
     view()
         .w_full()
-        .min_h(px(touch_target()))
+        .min_h(px(50.0))
+        .py_3()
+        .rounded_full()
         .items_center()
         .justify_center()
+        .bg(move || token("button-secondary"))
         .role(AccessibilityRole::Button)
         .label(title.clone())
         .accessibility_state(busy_state(loading))
         .when(!loading, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.72))
+            v.on_press(on_press).active(|s| s.opacity(0.7))
         })
         .child(loading_content(
             loading,
-            18.0,
-            token("tint"),
+            20.0,
+            theme().foreground,
             text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .line_height(px(22.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(move || token("link")),
+                .text_size(px(crate::ui::ty::BUTTON))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(move || theme().foreground),
         ))
 }
 
@@ -353,11 +350,12 @@ pub fn close_chip(on_press: impl Fn() + 'static) -> impl IntoElement {
         )
 }
 
+/// The header of a group of rows, as iOS draws a grouped list's: lighter
+/// than the rows under it.
 pub fn section_title(title: impl Into<String>) -> impl IntoElement {
     text(title.into())
-        .text_size(px(crate::ui::ty::SUBHEADLINE))
-        .line_height(px(22.0))
-        .font_weight(FontWeight::SEMIBOLD)
+        .text_size(px(crate::ui::ty::FOOTNOTE))
+        .line_height(px(18.0))
         .text_color(move || theme().muted_foreground)
 }
 
@@ -513,33 +511,6 @@ pub fn sheet_shell(
         .child(body)
 }
 
-/// The GRKit tile: GR and Kit in its red box on black.
-pub fn gr_mark(size: f32) -> impl IntoElement {
-    view()
-        .size(px(size))
-        .rounded(px(size * 0.23))
-        .flex_row()
-        .items_center()
-        .justify_center()
-        .bg(rgb(0x0B0B0B))
-        .child(
-            text("GR")
-                .allow_font_scaling(false)
-                .text_size(px(size * 0.29))
-                .font_weight(FontWeight::BOLD)
-                .text_color(rgb(0xFFFFFF)),
-        )
-        .child(
-            view().ml(px(2.0)).px(px(3.0)).bg(rgb(0xCF142B)).child(
-                text("Kit")
-                    .allow_font_scaling(false)
-                    .text_size(px(size * 0.21))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(0xFFFFFF)),
-            ),
-        )
-}
-
 /// The GRKit wordmark: GR and Kit in a red box. `height` sets its size.
 pub fn wordmark(height: f32) -> impl IntoElement {
     const LIGHT: &str = include_str!("../../../resources/brand/logo/wordmark.svg");
@@ -582,7 +553,7 @@ pub fn connection_button(title: String, on_press: impl Fn() + 'static) -> impl I
         .w_full()
         .min_h(px(50.0))
         .py_3()
-        .rounded(px(action_radius()))
+        .rounded_full()
         .items_center()
         .justify_center()
         .bg(move || token("connection-accent"))
@@ -604,28 +575,84 @@ pub fn connection_icon(path: &'static str) -> impl IntoElement {
     ))).size(px(20.0))
 }
 
-/// Round button with a stroked icon, for page actions such as Add.
-pub fn circle_button(
+/// The buttons at the end of a page header (Android), as a toolbar's
+/// actions: no container, and the system ripple on press. iOS shows its
+/// native bar buttons instead.
+pub fn header_buttons(buttons: impl IntoIterator<Item = AnyElement>) -> impl IntoElement {
+    let mut row = view().flex_row().items_center();
+    for button in buttons {
+        row = row.child(button);
+    }
+    row
+}
+
+/// The press ripple of a header button: a 40-point circle for an icon,
+/// which stays in its touch target and so in the header; the button's
+/// bounds for a title.
+fn header_ripple(borderless: bool) -> nsh_core::Ripple {
+    nsh_core::Ripple {
+        borderless,
+        radius: borderless.then_some(nsh_core::Points(20.0)),
+        ..nsh_core::Ripple::default()
+    }
+}
+
+/// A 24-point stroked icon in a header, in a touch target of its own.
+pub fn header_icon(
     path: &'static str,
     label: String,
     enabled: bool,
     on_press: impl Fn() + 'static,
-) -> impl IntoElement {
+) -> AnyElement {
     view()
         .size(px(touch_target()))
+        .items_center()
+        .justify_center()
+        .role(AccessibilityRole::Button)
+        .label(label)
+        .opacity(if enabled { 1.0 } else { 0.38 })
+        .when(enabled, |v| {
+            v.on_press(on_press).ripple(header_ripple(true))
+        })
+        .text_color(move || theme().foreground)
+        .child(svg(nsh_core::element::ImageSrc::svg_markup(&format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{path}"/></svg>"#
+        )))
+        .size(px(24.0)))
+        .into_element()
+}
+
+/// A title in a header, such as Edit.
+pub fn header_text(title: String, on_press: impl Fn() + 'static) -> AnyElement {
+    view()
+        .min_h(px(touch_target()))
+        .px_3()
         .rounded_full()
         .items_center()
         .justify_center()
-        .border_1()
-        .border_color(control_border)
-        .bg(move || theme().card)
         .role(AccessibilityRole::Button)
+        .label(title.clone())
+        .on_press(on_press)
+        .ripple(header_ripple(false))
+        .child(
+            text(title)
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(move || theme().foreground),
+        )
+        .into_element()
+}
+
+/// A header button that works: a spinner in its place.
+pub fn header_busy(label: String) -> AnyElement {
+    view()
+        .size(px(touch_target()))
+        .items_center()
+        .justify_center()
         .label(label)
-        .opacity(if enabled { 1.0 } else { 0.4 })
-        .when(enabled, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.72))
-        })
-        .child(connection_icon(path))
+        .accessibility_state(busy_state(true))
+        .child(quiet_spinner(20.0))
+        .into_element()
 }
 
 /// One segment: its title, whether it is selected, and its action.

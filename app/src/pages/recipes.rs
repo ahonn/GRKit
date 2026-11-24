@@ -11,18 +11,15 @@ use grkit_core::recipes::Look;
 
 use crate::domain::recipes::RecipeItem;
 use crate::pages::looks::{
-    ROW_COVER, ROW_GAP, ROW_HEIGHT, RowGestures, RowMode, drag_handle, edit_button, list,
-    list_count, loading_card, offline_card, refresh_notice, reorder_list, round_check, section,
+    ROW_COVER, ROW_GAP, ROW_HEIGHT, RowGestures, RowMode, drag_handle, list, list_count,
+    loading_card, offline_card, refresh_notice, reorder_list, round_check, section,
 };
 use crate::pages::recipe_text::{glow_level, grain_level};
 use crate::store::{AppState, Route, Tab, app_store_url};
 use crate::strings::tr;
 use crate::ui::{
-    badge, camera_art, circle_button, cover_view, grouped_card, primary_button, secondary_button,
-    token,
+    badge, camera_art, cover_view, grouped_card, primary_button, secondary_button, token,
 };
-
-const PLUS: &str = "M12 5v14M5 12h14";
 
 pub fn recipes_root(app: AppState) -> impl IntoElement {
     // Edit shows the checks and the handles; Browse opens and applies.
@@ -58,22 +55,20 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
         })
         .header_right(dynamic(move || {
             can_add(app).then(|| {
-                view()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(can_edit(app).then(|| edit_button(editing)))
-                    .child((!editing.get()).then(|| {
-                        circle_button(PLUS, tr("recipes.add_title", &[]), true, move || {
-                            app.open_recipe_presets()
-                        })
-                    }))
+                crate::pages::looks::edit_add_buttons(
+                    editing,
+                    can_edit(app),
+                    tr("recipes.add_title", &[]),
+                    move || app.open_recipe_presets(),
+                )
             })
         }))
         // The scroll view stays while the recipes change: only its content
         // follows them, so a change does not move the list back to the top.
         .child(
             crate::ui::page_scroll()
+                .refresh(Some(crate::store::page_refresh::RECIPES.to_owned()))
+                .top_of(Some(crate::store::Tab::Recipes.key().to_owned()))
                 .flex_1()
                 .bg(move || token("grouped"))
                 .child(
@@ -456,19 +451,6 @@ fn recipe_row(
     let off = !item.enabled;
     let (id, enabled, current, ready) = (item.id, item.enabled, item.current, item.ready);
     let working = app.recipe_row_busy(id);
-    // In Browse, holding the row opens its menu; in Edit the handle moves it.
-    let row_gestures = (mode == RowMode::Browse).then(|| {
-        let menu_item = item.clone();
-        RowGestures {
-            long_press: Box::new(move || {
-                if editable {
-                    recipe_menu(app, menu_item.clone(), Box::new(|| {}))
-                }
-            }),
-            release: None,
-            handle: None,
-        }
-    });
     let mut label = format!("{name}, {summary}");
     if current {
         label = format!("{label}, {}", tr("recipes.current", &[]));
@@ -512,12 +494,7 @@ fn recipe_row(
                     v.on_press(move || app.push(Route::RecipeDetail(id)))
                         .active(|s| s.opacity(0.72))
                 });
-            match row_gestures {
-                Some(g) => v.on_long_press(g.long_press),
-                None => v,
-            }
-            .child(recipe_tile(app, &item, ROW_COVER, off))
-            .child(
+            v.child(recipe_tile(app, &item, ROW_COVER, off)).child(
                 view()
                     .flex_1()
                     .gap(px(2.0))
@@ -543,13 +520,16 @@ fn recipe_row(
                     )
                     .child(
                         text(summary)
-                            .number_of_lines(2)
+                            .number_of_lines(1)
                             .text_size(px(crate::ui::ty::FOOTNOTE))
                             .text_color(move || theme().muted_foreground),
                     ),
             )
         })
         .child(match mode {
+            // The camera already has the current recipe's settings: its
+            // badge says so, and there is nothing to apply.
+            RowMode::Browse if current && !working => view().into_element(),
             RowMode::Browse => crate::ui::pill_button_loading(
                 tr("recipes.apply_short", &[]),
                 apply_label,
@@ -563,46 +543,6 @@ fn recipe_row(
             }
             _ => view().into_element(),
         })
-}
-
-/// The menu of a held row: apply, turn on or off, rename, delete.
-pub fn recipe_menu(app: AppState, item: RecipeItem, closed: Box<dyn FnOnce()>) {
-    if app.recipe_busy().is_some() {
-        closed();
-        return;
-    }
-    let name = app.recipe_name(&item);
-    spawn(async move {
-        let mut sheet = crate::ui::held_menu(name.clone());
-        if item.ready {
-            sheet = sheet.action("apply", tr("recipes.apply", &[]));
-        }
-        let answer = sheet
-            .action(
-                "toggle",
-                tr(
-                    if item.enabled {
-                        "recipes.menu_hide"
-                    } else {
-                        "recipes.menu_show"
-                    },
-                    &[],
-                ),
-            )
-            .action("rename", tr("recipes.rename", &[]))
-            .destructive("delete", tr("recipes.delete", &[]))
-            .cancel("cancel", tr("looks.cancel", &[]))
-            .show()
-            .await;
-        closed();
-        match answer.ok().and_then(|a| a.action).as_deref() {
-            Some("apply") => app.apply_recipe(item.id),
-            Some("toggle") => app.set_recipe_enabled(item.id, !item.enabled),
-            Some("rename") => app.ask_rename_recipe(item.id),
-            Some("delete") => confirm_delete_recipe(app, item.id, name),
-            _ => {}
-        }
-    });
 }
 
 pub fn confirm_delete_recipe(app: AppState, id: u32, name: String) {

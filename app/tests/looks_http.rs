@@ -408,6 +408,9 @@ fn start_phone_with(
                     finish()
                 }
             },
+            ("GET", ["", "v1", "params", "settings"]) => {
+                response(404, json!({"status": 404, "code": "not_found"}))
+            }
             _ => panic!(
                 "unexpected camera request: {} {}",
                 request.method, request.url
@@ -444,7 +447,7 @@ fn start_phone_with(
 
 fn open_looks(app: &mut Headless) {
     // The camera card shows the versions once connected.
-    app.wait_for_within("Firmware", WAIT).unwrap();
+    app.wait_for_within("Connected", WAIT).unwrap();
     app.press("role:button[Film Looks]").unwrap();
     app.wait_for_within("In Camera Menu", WAIT).unwrap();
 }
@@ -523,7 +526,7 @@ fn a_disconnected_camera_shows_only_the_home_page() {
     app.press("role:button[Camera]").unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
     app.press("label:More").unwrap();
-    app.wait_for_gone("Firmware", WAIT).unwrap();
+    app.wait_for_gone("Connected", WAIT).unwrap();
     app.wait_for_within("role:button[Connect]", WAIT).unwrap();
     app.wait_for_gone("role:button[Film Looks]", WAIT).unwrap();
 }
@@ -1013,8 +1016,8 @@ fn software_update_closes_when_the_link_goes_down() {
     let mut state = Camera::new();
     state.looks[2].pending = Some("add");
     let (mut app, _camera, _network) = start_phone(&environment, state);
-    app.wait_for_within("Firmware", WAIT).unwrap();
-    app.press("role:button[GRKit 1.7.0]").unwrap();
+    app.wait_for_within("Connected", WAIT).unwrap();
+    app.press("role:button[Software Update]").unwrap();
     app.wait_for_within("Couldn't check for updates", WAIT)
         .unwrap();
     // The Looks tab restarts the camera, which ends the link as expected.
@@ -1032,16 +1035,15 @@ fn software_update_closes_when_the_link_goes_down() {
 }
 
 #[test]
-fn the_camera_menu_turns_the_camera_off_after_a_confirm() {
+fn the_more_menu_turns_the_camera_off_after_a_confirm() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let mut state = Camera::new();
     state.write_delay = Duration::from_millis(800);
     let (mut app, _camera, network) = start_phone(&environment, state);
-    app.wait_for_within("Firmware", WAIT).unwrap();
-    assert!(!app.screen().shows("Turn Off Camera"));
-    let menus = Arc::new(Mutex::new(Vec::new()));
-    let seen = menus.clone();
+    app.wait_for_within("Connected", WAIT).unwrap();
+    let dialogs = Arc::new(Mutex::new(Vec::new()));
+    let seen = dialogs.clone();
     app.on_dialog(move |dialog| {
         let title = dialog.title.clone().unwrap_or_default();
         let menu = title == "RICOH GR III";
@@ -1063,8 +1065,12 @@ fn the_camera_menu_turns_the_camera_off_after_a_confirm() {
     assert!(busy, "More reports busy while the camera turns off");
     // It takes no press meanwhile.
     let _ = app.press("label:More");
-    assert_eq!(menus.lock().unwrap().len(), 2, "the menu, then its confirm");
-    app.wait_for_gone("Firmware", WAIT).unwrap();
+    assert_eq!(
+        dialogs.lock().unwrap().len(),
+        2,
+        "the menu, then its confirm"
+    );
+    app.wait_for_gone("Connected", WAIT).unwrap();
     assert_eq!(count(&network, "POST", "/v1/device/finish"), 1);
 }
 

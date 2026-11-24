@@ -44,18 +44,17 @@ fn the_camera_card_opens_the_look_in_use_on_its_tab() {
         env::set_var("GRKIT_DEMO_SCREEN", "A5");
     }
     let mut app = start_phone();
-    let shown = app.wait_for_within("On the Camera", WAIT);
+    let shown = app.wait_for_within("Film Looks, Portra 400", WAIT);
     unsafe {
         env::remove_var("GRKIT_DEMO_SCREEN");
     }
     shown.unwrap();
-    app.wait_for_within("Film Looks, Portra 400", WAIT).unwrap();
     app.press("Film Looks, Portra 400").unwrap();
     app.wait_for_within("Enabled", WAIT).unwrap();
 }
 
 #[test]
-fn demo_add_camera_update_confirm_restart_installed() {
+fn demo_update_sheet_stays_open_and_closes_without_cancelling() {
     let _guard = lock_demo();
     set_demo(None);
     let mut app = start_phone();
@@ -68,14 +67,19 @@ fn demo_add_camera_update_confirm_restart_installed() {
     app.press("GRKit 1.7.0 Available").unwrap();
     app.press("Update").unwrap();
 
+    // The sheet stays open through the steps on the camera and ends with
+    // the installed version.
     app.wait_for_within("Updating RICOH GR III", WAIT).unwrap();
     app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
+    app.wait_for_within("Restart the Camera", WAIT).unwrap();
+    // Closed, the update stays on the camera; its row opens the sheet again.
+    app.press("Close").unwrap();
+    app.wait_for_gone("Restart the Camera", WAIT).unwrap();
+    app.press("GRKit 1.7.0 to Install").unwrap();
     app.wait_for_within("Restart the Camera", WAIT).unwrap();
     app.press("Restart Camera").unwrap();
     app.wait_for_within("GRKit 1.7.0 Is Installed", WAIT)
         .unwrap();
-    app.press("Done").unwrap();
-    app.wait_for_gone("GRKit 1.7.0 Available", WAIT).unwrap();
 }
 
 #[test]
