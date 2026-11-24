@@ -117,12 +117,14 @@ impl Toasts {
 }
 
 /// The notices at the bottom of the content, clear of the page header.
-pub fn toast_layer(toasts: Toasts) -> impl IntoElement {
+/// `lift`: the height of a tab bar that floats over the content's bottom.
+pub fn toast_layer(toasts: Toasts, lift: impl Fn() -> f32 + 'static) -> impl IntoElement {
     dynamic(move || {
+        let bottom = 12.0 + lift();
         toasts.shown.with(|s| !s.is_empty()).then(|| {
             view()
                 .absolute()
-                .bottom(px(12.0))
+                .bottom(px(bottom))
                 .left_0()
                 .right_0()
                 .px_4()

@@ -688,7 +688,7 @@ static void the_root_reads_off_without_a_committed_effect(void)
     reset();
     descriptor(slot, grkit_title);
     assert(slot[0] == 0x106);
-    assert(selected_icon(test_header) == 0x7fff);
+    assert(selected_icon(test_header) == GRKIT_ICON_OFF);
     descriptor(slot, MODULE(0).summary(test_header));
     assert(same(MODULE(0).summary(test_header), "Film Look: Off") && slot[0] == 0x10f);
     assert(same(MODULE(0).title(test_header), "Film Look"));
@@ -914,14 +914,14 @@ static void icons_toolbar_and_edges_map_their_ids(void)
     assert(!native_action_release(10, 0));
     assert(!native_action_release(0, 1));
     assert(native_action_release(10, 1));
-    assert(menu_icon(0x7ffe) == 0x59003000);
+    assert(menu_icon(GRKIT_ICON_GRKIT) == 0x59003000);
     /* The Version icon follows the GRKit icon in chunk 0. */
     assert(menu_icon(GRKIT_ICON_VERSION) == 0x59003000 + GRKIT_ICON_STRIDE);
     assert(toolbar_x(0, 0) == 415 && toolbar_x(0, 5) == 665);
     /* Two entries of modules move the native cells left by two cells: the
        entries take x 565 and 615, and GRKit stays at the right edge. */
     assert(toolbar_x(2, 0) == 315 && toolbar_x(2, 5) == 565 && toolbar_x(2, 6) == 615 && toolbar_x(2, 7) == 665);
-    assert(menu_icon(0x7fff) == 0x59001000);
+    assert(menu_icon(GRKIT_ICON_OFF) == 0x59001000);
     assert(menu_icon(0x166) == 0);
     assert(menu_icon(0x8005) == 0);
     assert(menu_icon(0xffff) == 0);
@@ -1195,10 +1195,12 @@ static void module_tiles_follow_the_effect_icons(void)
     /* The labels of the manual focus scale in feet follow the Fn hint. */
     assert(menu_icon(GRKIT_ICON_SCALE_FEET) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 5 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 6 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_BATTERY(1)) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + (BATTERY_ICON_BASE + 2U) * GRKIT_ICON_STRIDE);
+    /* Each host slot has its own ID, from the table of abi.h. */
+    assert(menu_icon(BATTERY_ICON(1)) ==
+           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_ICON_SLOT_BATTERY + 1U) * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_UPDATE) ==
-           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS - 2) * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_UPDATE - 1) == 0);
+           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_ICON_SLOT_UPDATE - 1U) * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_HOST_ICON_TOP - GRKIT_HOST_ICON_COUNT) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -1265,7 +1267,7 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
         assert(current_module(test_header)->checked(test_header, row));
         assert(!current_module(test_header)->checked(test_header, (row + 1) % ROW_COUNT));
         assert(same(current_module(test_header)->label(test_header, row), ratio_names[value]));
-        assert(CURRENT_ICON(row) == (row ? FRAMING_TILE(value) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? FRAMING_TILE(value) : GRKIT_ICON_OFF));
         assert(same(current_module(test_header)->summary(test_header), ratio_summaries[value]));
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
@@ -1475,7 +1477,7 @@ static void the_guides_page_commits_only_its_style(void)
             assert(current_module(test_header)->checked(test_header, row));
             assert(!current_module(test_header)->checked(test_header, (row + 1) % 6));
             assert(same(current_module(test_header)->label(test_header, row), guide_names[row]));
-            assert(CURRENT_ICON(row) == (row ? GUIDE_TILE(row) : 0x7fff));
+            assert(CURRENT_ICON(row) == (row ? GUIDE_TILE(row) : GRKIT_ICON_OFF));
             assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO);
             assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
         }
@@ -1548,7 +1550,7 @@ static void the_date_imprint_page_lists_its_styles(void)
         assert(DATE_STYLE == row);
         assert(current_module(test_header)->checked(test_header, row));
         assert(same(current_module(test_header)->label(test_header, row), stamp_names[row]));
-        assert(CURRENT_ICON(row) == (row ? DATE_TILE(row) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? DATE_TILE(row) : GRKIT_ICON_OFF));
         assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO && GUIDE_STYLE == 0 && DATE_LOOK == 0);
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
@@ -1585,7 +1587,7 @@ static void the_grain_page_changes_only_the_grain_word(void)
         assert(test_header[GRKIT_HOST_GRAIN / 4] == row);
         assert(current_module(test_header)->checked(test_header, row));
         assert(same(current_module(test_header)->label(test_header, row), grain_names[row]));
-        assert(CURRENT_ICON(row) == (row ? GRAIN_TILE(row) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? GRAIN_TILE(row) : GRKIT_ICON_OFF));
         assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO && DATE_STYLE == 0);
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
         assert(GUIDE_STYLE == guide_style && settings_memory[1] == module_changes);
@@ -2098,7 +2100,7 @@ static void the_recipe_page_shows_recipe_tiles(void)
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
     menu_confirm(test_header);
     assert(count(test_header) == 4);
-    assert(icons[0] && icons[0] < 0x7000U);
+    assert(icons[0] && icons[0] < GRKIT_ICON_FIRST);
     assert(CURRENT_ICON(0) == GRKIT_ICON_RECIPE(0));
     assert(CURRENT_ICON(1) == GRKIT_ICON_RECIPE(1));
     assert(CURRENT_ICON(2) == GRKIT_ICON_RECIPE(2));
@@ -2751,7 +2753,7 @@ static void the_switch_stops_each_module_at_once(void)
     /* Film Look keeps its effect, and the viewfinder shows the native
        icon. */
     h[GRKIT_HOST_ACTIVE / 4] = 0x59005000;
-    assert(selected_icon(h) == 0x7fff);
+    assert(selected_icon(h) == GRKIT_ICON_OFF);
     /* On starts the modules whose Enable is On: Date Imprint stays Off. */
     settings_memory[2 + 6 * 3 + 1] = 1;
     manage_set_all_off(h, 0);
@@ -3292,6 +3294,101 @@ static void the_service_reads_and_sets_module_settings(void)
     /* A module without a tile has no icon. */
     words[0] = guides; words[1] = 0;
     assert(look_command(GRKIT_CONTROL_MODULE_TILE, words, 2, &length) == CONTROL_INVALID);
+}
+
+/* The service places the modules of ADJ Order in one step, as the ADJ
+   Order page does: the toolbar, the root, and the hidden modules. */
+static void the_service_places_the_modules(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    const u32 pin = GRKIT_CONTROL_MODULE_TOOLBAR << GRKIT_CONTROL_MODULE_PLACE_SHIFT,
+              root = GRKIT_CONTROL_MODULE_ROOT << GRKIT_CONTROL_MODULE_PLACE_SHIFT,
+              hidden = GRKIT_CONTROL_MODULE_HIDDEN << GRKIT_CONTROL_MODULE_PLACE_SHIFT;
+    u32 length, words[4];
+    ManagePlaces p;
+    h[GRKIT_HOST_CAPABILITIES / 4] = 0;
+    h[GRKIT_HOST_ADJ_MODULES / 4] = 0;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(manage_adj_count(h) == 3);
+    assert(control_words[GRKIT_CONTROL_MODULES_HEADER / 4] & GRKIT_CONTROL_MODULE_PLACEABLE);
+    /* A module twice, the groups out of order, or a module that ADJ does
+       not show changes nothing. */
+    words[0] = 2 | pin; words[1] = 2 | root; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_INVALID);
+    words[0] = 0 | root; words[1] = 2 | pin; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_INVALID);
+    words[0] = 7 | pin; words[1] = 0 | root; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 2, &length) == CONTROL_CHANGED);
+    words[0] = 2 | pin;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_BUSY);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    assert(!manage_position(h, 0) && !manage_position(h, 1) && !manage_position(h, 2));
+    /* Guides goes to the toolbar, Film Look stays in the root, and Framing
+       leaves ADJ: CORE.POS of each, which ADJ reads at once. */
+    u32 before_changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == 0 && !length);
+    assert(manage_position(h, 2) == MANAGE_POS_PIN && manage_position(h, 0) == 1 &&
+           manage_position(h, 1) == MANAGE_POS_HIDDEN && h[GRKIT_HOST_STATE_CHANGES / 4] != before_changes);
+    manage_places(h, &p);
+    assert(p.pins[0] == 2 && p.roots == 1 && p.root[0] == 0 && p.hiddens == 1 && p.hidden[0] == 1);
+}
+
+/* The service reads and sets the rows of GRKit Settings with their MENU
+   stores. This camera has Enable at Start (setting 18), Distance Unit (19),
+   and Show Text (20), and no other row. */
+static void the_service_reads_and_sets_grkit_settings(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    u32 length, words[2];
+    const u32 handles[8] = {MANAGE_START, MANAGE_RAW, MANAGE_UNIT, MANAGE_BATTERY, MANAGE_BATTERY_PERCENT,
+                            MANAGE_PLAYBACK_INFO, MANAGE_GOODBYE, MANAGE_GOODBYE_TEXT};
+    for (u32 i = 0; i < 8; ++i) manage_memory[handles[i] / 4] = 0;
+    settings_memory[0] = 21;
+    settings_memory[2 + 18 * 3 + 1] = MANAGE_START_KEEP;
+    settings_memory[2 + 18 * 3 + 2] = MANAGE_START_VALUES;
+    settings_memory[2 + 19 * 3 + 1] = MANAGE_UNIT_METERS;
+    settings_memory[2 + 19 * 3 + 2] = MANAGE_UNIT_VALUES;
+    settings_memory[2 + 20 * 3 + 1] = MANAGE_GOODBYE_TEXT_ON;
+    settings_memory[2 + 20 * 3 + 2] = MANAGE_GOODBYE_TEXT_VALUES;
+    manage_memory[MANAGE_START / 4] = 18 + 1;
+    manage_memory[MANAGE_UNIT / 4] = 19 + 1;
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 20 + 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, 0, 0, &length) == 0 && length == 4 * GRKIT_CONTROL_SETTINGS);
+    const u32 read[8] = {MANAGE_START_KEEP, GRKIT_CONTROL_SETTING_NONE, MANAGE_UNIT_METERS, GRKIT_CONTROL_SETTING_NONE,
+                         GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, 1};
+    for (u32 i = 0; i < 8; ++i) assert(control_words[i] == read[i]);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, words, 1, &length) == CONTROL_BAD_LENGTH);
+    /* A setting that the camera does not have, a value or an index out of
+       range, or a page of GRKit on the screen changes nothing. */
+    words[0] = GRKIT_CONTROL_SETTING_RAW; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
+    words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_VALUES;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
+    words[0] = GRKIT_CONTROL_SETTINGS; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 1, &length) == CONTROL_BAD_LENGTH);
+    words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_FEET;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_BUSY);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    assert(settings_memory[2 + 19 * 3 + 1] == MANAGE_UNIT_METERS);
+    /* The store of the MENU row: the value, its copy, and a change count. */
+    u32 before_changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0 && !length);
+    assert(unit_feet(h) && h[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_UNIT] == MANAGE_UNIT_FEET + 1 &&
+           h[GRKIT_HOST_STATE_CHANGES / 4] != before_changes);
+    words[0] = GRKIT_CONTROL_SETTING_START; words[1] = MANAGE_START_OFF;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0);
+    words[0] = GRKIT_CONTROL_SETTING_GOODBYE_TEXT; words[1] = MANAGE_GOODBYE_TEXT_OFF;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, 0, 0, &length) == 0);
+    assert(control_words[0] == MANAGE_START_OFF && control_words[2] == MANAGE_UNIT_FEET && control_words[7] == 0);
 }
 
 static void settings_entry_enable_preserves_each_value(void)
@@ -7010,5 +7107,7 @@ int main(void)
     the_poll_runs_only_while_it_has_work();
     the_end_of_a_session_counts_a_module_that_no_export_holds();
     the_service_reads_and_sets_module_settings();
+    the_service_places_the_modules();
+    the_service_reads_and_sets_grkit_settings();
     return 0;
 }

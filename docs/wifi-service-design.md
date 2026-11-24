@@ -139,7 +139,10 @@ Example `/props` response, with illustrative values:
   "capabilities": {
     "looks": {"read": true, "write": true, "appliesAtRestart": ["content", "name", "delete", "covers"]},
     "recipes": {"read": true, "write": true},
-    "moduleSettings": {"read": false, "write": false}
+    "moduleSettings": {"read": false, "write": false},
+    "cameraSettings": {"read": false, "write": false},
+    "moduleLayout": {"write": false},
+    "shutdownPicture": {"read": true, "write": true}
   },
   "limits": {
     "loadedLooks": 40,
@@ -297,15 +300,34 @@ Recipe parameters are read-only. The camera makes recipes with Save Current Sett
 | --- | --- | --- |
 | GET | `/modules/catalog?language=` | Modules, settings, values, and labels in one language. `ETag` and `If-None-Match` apply |
 | GET | `/modules/{id}/icon` | Tile 0 of the module as a 40 x 40 PNG. `ETag` and `If-None-Match` apply |
-| GET | `/params/modules` | Enable, status, ADJ place, values, hidden values, and value order of each module, in ADJ Order |
+| GET | `/params/modules` | Enable, status, ADJ place, values, hidden values, and value order of each module, in ADJ Order, and `toolbarMax` |
 | PATCH | `/params/modules/{id}` | Change `enabled`, `values`, `hiddenValues`, or `valueOrder` |
 | PUT | `/params/modules/order` | Set the order of the modules in the ADJ root |
+| PUT | `/params/modules/layout` | Set the toolbar, root, and hidden modules of ADJ Order: `{"toolbar": [ids], "root": [ids], "hidden": [ids]}` |
 
 The phone has no built-in list of modules. The camera sends each module, setting, value, and label, so a later GRKit with new modules works with an older app. The service keeps each catalog and icon for the life of the camera start.
 
-A managed module (`looks` or `recipes`) has no settings in the catalog: the phone manages those rows in its own tabs. Sliders, module installation, and toolbar or hidden places are not part of these resources.
+A managed module (`looks` or `recipes`) has no settings in the catalog: the phone manages those rows in its own tabs. Sliders and module installation are not part of these resources.
+
+A layout lists each module with `"placeable": true` once: the modules that ADJ can show. The toolbar takes at most `toolbarMax` modules, in toolbar order. The runtime writes the place of each module as MENU > ADJ Order does, so ADJ shows the change at once. A body that lists a module twice or too many toolbar modules returns 400 `invalid_layout`. A set of modules that differs from the camera's returns 409 `layout_changed`. The answer is the body of `GET /params/modules`.
 
 The runtime checks a whole PATCH before its first change, so an invalid request changes nothing. A change uses the store path of the MENU rows, so it saves and applies as a MENU change does. While a GRKit page shows, a change returns `camera_busy`. The change stream announces a change through the count of setting changes.
+
+### GRKit settings and shutdown picture
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/params/settings` | The rows of MENU > GRKit Settings |
+| PATCH | `/params/settings` | Change any of those rows |
+| GET | `/shutdown-picture` | `GRKIT/GOODBYE.JPG` as `image/jpeg`, or 404 `not_found` |
+| PUT | `/shutdown-picture` | Write `GRKIT/GOODBYE.JPG` from an `image/jpeg` body. 204 |
+| DELETE | `/shutdown-picture` | Remove `GRKIT/GOODBYE.JPG`. 204, also without a file |
+
+The settings body is `{"settings": {...}}` with `start` (`"on"`, `"off"`, `"last"`), `uncroppedRaw`, `distanceUnit` (`"meters"`, `"feet"`), `simpleBattery`, `batteryPercent`, `playbackIcons`, `customPicture`, and `showText` (booleans). A key is left out when the camera does not have that setting. A PATCH body has any subset of these keys. The service checks the whole body and the presence of each setting, then applies the settings in the order above with the stores of the MENU rows, and answers as GET. An unknown key or value returns 400 `invalid_setting`; a setting that the camera does not have returns 409 `setting_unavailable`. `cameraSettings` in `/props` tells whether the runtime has these commands.
+
+The service writes the picture through Linux as a Look file: it overwrites the file in place, and it deletes the file only after it has looked up each file of the folder. A body that the camera cannot show (`grkit_core::goodbye::usable`: a baseline JPEG of 720 x 480 pixels with 4:2:0 chroma) returns 400 `invalid_picture`; a larger body than the camera reads returns 413. The camera checks the file at its first shooting screen after a start, so a new file applies at the next start. `shutdownPicture` in `/props` follows the write access of the card.
+
+Each change here and in the module resources is a change of a GRKit setting or a card file. A setting change reaches the change stream as `settings` through the count of setting changes. While a GRKit page shows, a setting or layout change returns `camera_busy`.
 
 Installing executable modules remains part of signed software installation. These endpoints cannot upload code, write arbitrary paths, or execute commands.
 

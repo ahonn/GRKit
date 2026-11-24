@@ -197,6 +197,87 @@ pub struct ModulesState {
     pub features: Option<ModuleFeatures>,
     #[serde(deserialize_with = "readable_items")]
     pub modules: Vec<ModuleState>,
+    /// The most modules in the ADJ toolbar, from a GRKit that takes a
+    /// whole layout.
+    #[serde(rename = "toolbarMax")]
+    pub toolbar_max: Option<usize>,
+}
+
+/// Where ADJ shows a module: in its toolbar, in the GRK root, or not.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModulePlace {
+    Toolbar,
+    Root,
+    Hidden,
+}
+
+impl ModulePlace {
+    pub const ALL: [ModulePlace; 3] =
+        [ModulePlace::Toolbar, ModulePlace::Root, ModulePlace::Hidden];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            ModulePlace::Toolbar => "toolbar",
+            ModulePlace::Root => "root",
+            ModulePlace::Hidden => "hidden",
+        }
+    }
+
+    fn of(key: &str) -> Option<ModulePlace> {
+        Self::ALL.into_iter().find(|place| place.key() == key)
+    }
+}
+
+/// The placeable modules by place, each in ADJ order
+/// (`PUT /v1/params/modules/layout`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ModuleLayout {
+    pub toolbar: Vec<String>,
+    pub root: Vec<String>,
+    pub hidden: Vec<String>,
+}
+
+impl ModuleLayout {
+    pub fn ids(&self, place: ModulePlace) -> &Vec<String> {
+        match place {
+            ModulePlace::Toolbar => &self.toolbar,
+            ModulePlace::Root => &self.root,
+            ModulePlace::Hidden => &self.hidden,
+        }
+    }
+
+    fn ids_mut(&mut self, place: ModulePlace) -> &mut Vec<String> {
+        match place {
+            ModulePlace::Toolbar => &mut self.toolbar,
+            ModulePlace::Root => &mut self.root,
+            ModulePlace::Hidden => &mut self.hidden,
+        }
+    }
+
+    /// The module at `from` of `place` moved to `to` of the same place.
+    pub fn moved(&self, place: ModulePlace, from: usize, to: usize) -> ModuleLayout {
+        let mut next = self.clone();
+        let ids = next.ids_mut(place);
+        if from < ids.len() && to < ids.len() {
+            let id = ids.remove(from);
+            ids.insert(to, id);
+        }
+        next
+    }
+
+    /// `id` at the end of `place`.
+    pub fn placed(&self, id: &str, place: ModulePlace) -> ModuleLayout {
+        let mut next = self.clone();
+        for from in ModulePlace::ALL {
+            next.ids_mut(from).retain(|other| other != id);
+        }
+        next.ids_mut(place).push(id.to_owned());
+        next
+    }
+
+    pub fn body(&self) -> Value {
+        serde_json::json!({"toolbar": self.toolbar, "root": self.root, "hidden": self.hidden})
+    }
 }
 
 fn running() -> bool {
@@ -270,6 +351,8 @@ pub struct ModuleState {
     pub custom: bool,
     pub place: String,
     pub orderable: bool,
+    /// MENU > ADJ Order lists it: the layout of ADJ places it.
+    pub placeable: bool,
     #[serde(deserialize_with = "number_entries")]
     pub values: BTreeMap<String, i64>,
     #[serde(deserialize_with = "readable_items")]
@@ -303,6 +386,44 @@ impl ModulesState {
         if let Some(slot) = next.modules.iter_mut().find(|m| m.id == module.id) {
             *slot = module;
         }
+        next
+    }
+
+    /// The layout of ADJ, from a GRKit that takes a whole layout.
+    pub fn layout(&self) -> Option<ModuleLayout> {
+        self.toolbar_max?;
+        let mut layout = ModuleLayout::default();
+        for module in self.modules.iter().filter(|m| m.placeable) {
+            let place = ModulePlace::of(&module.place).unwrap_or(ModulePlace::Root);
+            layout.ids_mut(place).push(module.id.clone());
+        }
+        let placed = ModulePlace::ALL
+            .into_iter()
+            .any(|place| !layout.ids(place).is_empty());
+        placed.then_some(layout)
+    }
+
+    /// This state with `layout`: the placeable modules in its order, then
+    /// the others as they were.
+    pub fn with_layout(&self, layout: &ModuleLayout) -> Self {
+        let mut next = self.clone();
+        let mut placed = Vec::new();
+        for place in ModulePlace::ALL {
+            for id in layout.ids(place) {
+                if let Some(module) = self.modules.iter().find(|m| &m.id == id) {
+                    let mut module = module.clone();
+                    module.place = place.key().to_owned();
+                    placed.push(module);
+                }
+            }
+        }
+        let others: Vec<_> = self
+            .modules
+            .iter()
+            .filter(|m| !placed.iter().any(|p| p.id == m.id))
+            .cloned()
+            .collect();
+        next.modules = placed.into_iter().chain(others).collect();
         next
     }
 
@@ -646,13 +767,24 @@ pub fn module_error(status: u16, body: &str) -> LookError {
 
 /// A PNG as a `data:` URI for an image view. `None` for other bytes.
 pub fn png_data_uri(bytes: &[u8]) -> Option<String> {
-    const SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
+    bytes
+        .starts_with(b"\x89PNG\r\n\x1a\n")
+        .then(|| data_uri("image/png", bytes))
+}
+
+/// A JPEG as a `data:` URI for an image view. `None` for other bytes.
+pub fn jpeg_data_uri(bytes: &[u8]) -> Option<String> {
+    bytes
+        .starts_with(&[0xFF, 0xD8])
+        .then(|| data_uri("image/jpeg", bytes))
+}
+
+fn data_uri(mime: &str, bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    if !bytes.starts_with(SIGNATURE) {
-        return None;
-    }
-    let mut uri = String::with_capacity(22 + bytes.len().div_ceil(3) * 4);
-    uri.push_str("data:image/png;base64,");
+    let mut uri = String::with_capacity(mime.len() + 13 + bytes.len().div_ceil(3) * 4);
+    uri.push_str("data:");
+    uri.push_str(mime);
+    uri.push_str(";base64,");
     for chunk in bytes.chunks(3) {
         let at = |i: usize| chunk.get(i).copied().unwrap_or(0) as u32;
         let word = at(0) << 16 | at(1) << 8 | at(2);
@@ -664,7 +796,7 @@ pub fn png_data_uri(bytes: &[u8]) -> Option<String> {
             }
         }
     }
-    Some(uri)
+    uri
 }
 
 #[cfg(test)]

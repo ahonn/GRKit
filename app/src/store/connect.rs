@@ -361,9 +361,9 @@ impl AppState {
         // both load at once.
         self.refresh_looks();
         self.refresh_recipes();
-        // The tabs follow what runs. The module catalog loads only where it
-        // shows.
-        if self.tab() == Tab::Modules {
+        // The tabs follow what runs. The module catalog loads with the
+        // Modules page, or once when the cache has none for the home row.
+        if self.modules_page_open() {
             self.refresh_modules();
         } else {
             self.refresh_module_state();

@@ -1,7 +1,5 @@
 //! Scripted camera used by demo mode and tests.
 
-use std::time::{Duration, Instant};
-
 use crate::domain::{
     Camera, CameraLink, CameraModel, CameraStatus, ConnectionState, LinkError, PackageInfo,
     UpdateError, UpdateFlow, UpdateKind, UpdatePhase, UpdatePoll,
@@ -14,7 +12,6 @@ pub enum DemoFail {
     None,
     CardFull,
     Refused,
-    NotConfirmed,
     ConnectionLost,
 }
 
@@ -33,8 +30,6 @@ pub struct FakeConfig {
     pub send_ticks: u32,
     /// How many ticks after waiting before the camera confirms.
     pub confirm_ticks: u32,
-    /// Confirm deadline used when failing with [`DemoFail::NotConfirmed`].
-    pub confirm_deadline: Duration,
 }
 
 impl Default for FakeConfig {
@@ -50,7 +45,6 @@ impl Default for FakeConfig {
             card_full_bytes: 12 * 1024 * 1024,
             send_ticks: 5,
             confirm_ticks: 3,
-            confirm_deadline: Duration::from_secs(5 * 60),
         }
     }
 }
@@ -67,7 +61,6 @@ pub struct FakeCamera {
     wait_tick: u32,
     /// Version after a successful install; unchanged on errors.
     live_version: String,
-    started_at: Instant,
 }
 
 impl FakeCamera {
@@ -95,7 +88,6 @@ impl FakeCamera {
             send_tick: 0,
             wait_tick: 0,
             live_version,
-            started_at: Instant::now(),
         }
     }
 
@@ -104,20 +96,10 @@ impl FakeCamera {
     }
 
     pub fn with_fail(fail: DemoFail) -> Self {
-        let config = if fail == DemoFail::NotConfirmed {
-            FakeConfig {
-                fail,
-                confirm_deadline: Duration::from_millis(50),
-                confirm_ticks: 100,
-                ..FakeConfig::default()
-            }
-        } else {
-            FakeConfig {
-                fail,
-                ..FakeConfig::default()
-            }
-        };
-        Self::new(config)
+        Self::new(FakeConfig {
+            fail,
+            ..FakeConfig::default()
+        })
     }
 
     pub fn flow(&self) -> &UpdateFlow {
@@ -138,7 +120,8 @@ impl FakeCamera {
         self.camera.installed_version = version.to_owned();
         self.camera.connection = ConnectionState::Connected;
         self.package.installed = version.to_owned();
-        self.package.available = None;
+        // The release check answered with the installed version.
+        self.package.available = Some(version.to_owned());
         self.flow.reset();
     }
 
@@ -155,7 +138,7 @@ impl FakeCamera {
     /// Demo screenshot: waiting for confirmation on the camera.
     pub fn seed_waiting(&mut self, kind: UpdateKind) {
         self.seed_sending(kind, 1.0);
-        self.flow.mark_waiting(Instant::now());
+        self.flow.mark_waiting();
         self.wait_tick = 0;
     }
 
@@ -190,18 +173,11 @@ impl FakeCamera {
                     (self.send_tick as f32 / self.config.send_ticks.max(1) as f32).min(1.0);
                 self.flow.set_progress(progress);
                 if self.send_tick >= self.config.send_ticks {
-                    self.flow.mark_waiting(self.started_at);
+                    self.flow.mark_waiting();
                 }
                 let _ = kind;
             }
             UpdatePhase::WaitingConfirm { .. } => {
-                if self.config.fail == DemoFail::NotConfirmed {
-                    self.wait_tick += 1;
-                    if self.wait_tick >= 2 {
-                        self.flow.fail(UpdateError::NotConfirmed);
-                    }
-                    return;
-                }
                 if self.config.fail == DemoFail::ConnectionLost {
                     self.flow.fail(UpdateError::ConnectionLost);
                     self.camera.connection = ConnectionState::Disconnected;
@@ -425,23 +401,6 @@ mod tests {
             }
         }
         assert_eq!(err, Some(UpdateError::Refused));
-        assert_eq!(cam.live_version(), before);
-    }
-
-    #[test]
-    fn not_confirmed_leaves_package_unchanged() {
-        let mut cam = FakeCamera::with_fail(DemoFail::NotConfirmed);
-        block_on_ready(cam.connect()).unwrap();
-        let before = cam.live_version().to_owned();
-        block_on_ready(cam.send_update(UpdateKind::Install)).unwrap();
-        let mut err = None;
-        for _ in 0..20 {
-            if let UpdatePoll::Failed(e) = block_on_ready(cam.poll_update()).unwrap() {
-                err = Some(e);
-                break;
-            }
-        }
-        assert_eq!(err, Some(UpdateError::NotConfirmed));
         assert_eq!(cam.live_version(), before);
     }
 

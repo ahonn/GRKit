@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::LookError;
 use super::modules::{
-    CatalogRead, ModuleCatalog, ModuleState, ModulesState, parse_module_catalog,
+    CatalogRead, ModuleCatalog, ModuleLayout, ModuleState, ModulesState, parse_module_catalog,
     parse_modules_state,
 };
 
@@ -16,6 +16,7 @@ pub enum FakeChange {
     Value(String, String, i64),
     Options(String, Vec<i64>, Option<Vec<i64>>),
     Order(Vec<String>),
+    Layout(ModuleLayout),
 }
 
 fn values(labels: &[&str]) -> serde_json::Value {
@@ -177,15 +178,18 @@ fn entry(
     order: &[i64],
 ) -> serde_json::Value {
     json!({"id": id, "enabled": true, "status": "running", "place": place,
-           "orderable": orderable, "values": values, "hiddenValues": hidden, "valueOrder": order})
+           "orderable": orderable, "placeable": true, "values": values, "hiddenValues": hidden,
+           "valueOrder": order})
 }
 
 pub fn demo_state() -> ModulesState {
     let mut failed = entry("BROKEN.GRF", "hidden", false, json!({}), &[], &[]);
     failed["status"] = json!("failed");
+    failed["placeable"] = json!(false);
     failed["enabled"] = json!(false);
     let body = json!({
         "revision": 1,
+        "toolbarMax": 4,
         "grkitEnabled": true,
         "features": {"looks": true, "recipes": true},
         "modules": [
@@ -248,6 +252,7 @@ pub fn apply(state: &mut ModulesState, change: &FakeChange) -> Result<(), LookEr
             }
         }
         FakeChange::Order(ids) => *state = state.with_order(ids),
+        FakeChange::Layout(layout) => *state = state.with_layout(layout),
     }
     state.revision += 1;
     Ok(())

@@ -98,7 +98,7 @@ fn non_camera_answer(status: u16, body: &str) -> bool {
 /// answer with its properties.
 pub async fn read_props(timeout: Duration) -> Option<crate::domain::PropsResponse> {
     let url = format!("{}/v1/props", super::camera_http_base());
-    let response = super::camera_request("GET", url, Vec::new(), timeout, &[])
+    let response = super::camera_request_now("GET", url, Vec::new(), timeout, &[])
         .await
         .ok()?;
     if !response.ok() {
@@ -110,7 +110,7 @@ pub async fn read_props(timeout: Duration) -> Option<crate::domain::PropsRespons
 /// One `GET /v1/props` within `timeout`.
 pub async fn probe_props(timeout: Duration) -> Probe {
     let url = format!("{}/v1/props", super::camera_http_base());
-    let response = match super::camera_request("GET", url, Vec::new(), timeout, &[]).await {
+    let response = match super::camera_request_now("GET", url, Vec::new(), timeout, &[]).await {
         Ok(response) => response,
         Err(error) => {
             app_info!("probe /v1/props failed: {error}");

@@ -617,8 +617,12 @@ fn import_result(app: AppState, draft: ImportDraft) -> impl IntoElement {
 /// A scrolled page body on the grouped background.
 fn base_scroll(content: impl IntoElement) -> impl IntoElement {
     view().flex_1().bg(move || token("grouped")).child(
-        crate::ui::page_scroll()
-            .flex_1()
-            .child(view().px_6().pt_4().pb_8().child(content)),
+        crate::ui::page_scroll().flex_1().child(
+            view()
+                .px_6()
+                .pt_4()
+                .pb(px(TAB_BAR_CLEARANCE))
+                .child(content),
+        ),
     )
 }

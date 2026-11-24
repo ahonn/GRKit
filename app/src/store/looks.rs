@@ -143,7 +143,9 @@ impl LooksStore {
 }
 
 /// Run `work` on a worker thread and await its result.
-async fn off_thread<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+pub(super) async fn off_thread<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Option<T> {
     let (tx, rx) = async_channel::bounded(1);
     std::thread::spawn(move || {
         let _ = tx.send_blocking(work());
@@ -470,7 +472,7 @@ impl AppState {
     /// Apply one change: on the demo camera directly, on a real camera over
     /// HTTP. Reads the Looks again either way. While another change runs,
     /// this one is refused and `settle` hears so.
-    fn change<F, Fut>(
+    pub(super) fn change<F, Fut>(
         self,
         key: String,
         action: LookAction,

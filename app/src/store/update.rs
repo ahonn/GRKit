@@ -105,6 +105,11 @@ impl AppState {
                             });
                             self.release_notes.set(release.notes.clone());
                             self.recipes.presets.set(release.presets.clone());
+                            // The cached release still offers its update, but
+                            // the check itself failed.
+                            if release.offline {
+                                self.release_problem.set(Some(ReleaseProblem::Network));
+                            }
                             self.release.with(|slot| *slot.borrow_mut() = Some(release));
                         }
                         Err(problem) => self.release_problem.set(Some(problem)),
@@ -134,10 +139,6 @@ impl AppState {
     }
 
     fn note_journal(self, state: JournalState) {
-        if state == JournalState::Waiting && self.confirm_deadline.get().is_none() {
-            self.confirm_deadline
-                .set(Some(Instant::now() + crate::domain::CONFIRM_DEADLINE));
-        }
         self.journal
             .set((state != JournalState::None).then_some(state));
     }
@@ -160,21 +161,48 @@ impl AppState {
     }
 
     fn fail_update(self, error: UpdateError) {
-        self.phase.set(UpdatePhase::Failed(error.clone()));
         if self.update_shown.get() {
+            self.phase.set(UpdatePhase::Failed(error.clone()));
             self.sheet.set(Some(Sheet::Error(error)));
+        } else {
+            // After the send the update shows on Software Update, which says
+            // why it stopped; the link watch and auto connect wait for an
+            // idle phase.
+            app_info!("update stopped after its send: {error:?}");
+            self.phase.set(UpdatePhase::Idle);
+            self.update_notice.set(Some(error));
         }
     }
 
-    /// Open the update that waits on the camera from the camera tab: the
-    /// sheet continues at its step. Another phone or the website may have
-    /// sent it; then its version is unknown.
+    /// Why the last update stopped after its send, if it did.
+    pub fn update_notice(self) -> Option<UpdateError> {
+        self.update_notice.get()
+    }
+
+    /// The update waits on the camera for a restart: the camera going away
+    /// is the restart, not a lost connection.
+    pub(super) fn update_restart_pending(self) -> bool {
+        self.has_pending_update()
+            && (self.journal.get() == Some(JournalState::Confirmed)
+                || matches!(
+                    self.flow_phase(),
+                    UpdatePhase::Restart { .. }
+                        | UpdatePhase::Restarting { .. }
+                        | UpdatePhase::ManualRestart { .. }
+                ))
+    }
+
+    /// Open the update that waits on the camera: the sheet continues at
+    /// its step. Another phone or the website may have sent it; then its
+    /// version is unknown.
     pub fn open_pending_update(self) {
+        let confirmed = self.journal.get() == Some(JournalState::Confirmed);
         if self.demo() {
             self.update_shown.set(true);
-            self.sheet.set(Some(match self.journal.get() {
-                Some(JournalState::Confirmed) => Sheet::Restart,
-                _ => Sheet::Confirm,
+            self.sheet.set(Some(if confirmed {
+                Sheet::Restart
+            } else {
+                Sheet::Confirm
             }));
             return;
         }
@@ -197,8 +225,41 @@ impl AppState {
                 return;
             }
         }
+        // The sheet shows the camera's step until the monitor reads it; a
+        // restart under way keeps its own.
+        if !self.update_busy.get() {
+            let kind = UpdateKind::Install;
+            self.phase.set(if confirmed {
+                UpdatePhase::Restart { kind }
+            } else {
+                UpdatePhase::WaitingConfirm { kind }
+            });
+        }
         self.update_shown.set(true);
+        self.sheet.set(Some(if confirmed {
+            Sheet::Restart
+        } else {
+            Sheet::Confirm
+        }));
         self.resume_update();
+    }
+
+    /// The update waits on the camera for the person: its sheet can close,
+    /// and the update stays there.
+    pub fn update_waits_on_camera(self) -> bool {
+        matches!(
+            self.flow_phase(),
+            UpdatePhase::WaitingConfirm { .. }
+                | UpdatePhase::Confirmed { .. }
+                | UpdatePhase::Restart { .. }
+        )
+    }
+
+    /// Close the update sheet and keep the update on the camera: the camera
+    /// tab and Software Update show where it is, and open the sheet again.
+    pub fn hide_update_sheet(self) {
+        self.sheet.set(None);
+        self.update_shown.set(false);
     }
 
     pub(super) fn begin_real_update(self, kind: UpdateKind) {
@@ -216,6 +277,7 @@ impl AppState {
             return;
         }
         self.update_shown.set(true);
+        self.update_notice.set(None);
         if platform::update::load_intent().is_some() {
             self.fail_update(UpdateError::Service("A previous update needs to be checked before starting another one. Reconnect to that camera first.".into()));
             return;
@@ -552,13 +614,16 @@ impl AppState {
         if platform::update::load_intent().is_none() {
             return;
         }
-        let started = Instant::now();
+        // The time limit counts from the last answer of the camera, so an
+        // update that waits for the person on the camera never runs out.
+        let mut started = Instant::now();
         let mut failures = 0;
         loop {
             if self.update_cancel.get() {
                 match self.cancel_staged().await {
                     Ok(()) => {
                         platform::update::clear_intent();
+                        self.journal.set(None);
                         self.dismiss_error();
                         self.refresh_camera_package().await;
                     }
@@ -590,7 +655,9 @@ impl AppState {
             }
             let waiting_for_person = matches!(
                 self.flow_phase(),
-                UpdatePhase::ManualRestart { .. } | UpdatePhase::Restarting { .. }
+                UpdatePhase::Restart { .. }
+                    | UpdatePhase::ManualRestart { .. }
+                    | UpdatePhase::Restarting { .. }
             );
             // The camera tab's connect owns the sheet until it ends.
             if waiting_for_person && (!self.link_connected() || self.connect_in_flight()) {
@@ -609,15 +676,9 @@ impl AppState {
                         &intent,
                     ) {
                         UpdateObservation::Waiting => {
-                            let deadline = self.confirm_deadline.get().unwrap_or_else(|| {
-                                Instant::now() + crate::domain::CONFIRM_DEADLINE
-                            });
-                            self.confirm_deadline.set(Some(deadline));
-                            self.phase.set(UpdatePhase::WaitingConfirm {
-                                kind: intent.kind,
-                                deadline,
-                            });
-                            self.show_update_sheet(Sheet::Confirm);
+                            started = Instant::now();
+                            self.phase
+                                .set(UpdatePhase::WaitingConfirm { kind: intent.kind });
                         }
                         UpdateObservation::Restart => {
                             if !intent.confirmed {
@@ -630,7 +691,6 @@ impl AppState {
                             ) {
                                 self.phase.set(UpdatePhase::Restart { kind: intent.kind });
                             }
-                            self.show_update_sheet(Sheet::Restart);
                         }
                         UpdateObservation::Installed => {
                             self.refresh_camera_package().await;
@@ -643,7 +703,6 @@ impl AppState {
                                 kind: intent.kind,
                                 version: version.clone(),
                             });
-                            self.confirm_deadline.set(None);
                             self.journal.set(None);
                             self.staged.with(|slot| *slot.borrow_mut() = None);
                             platform::update::clear_intent();
@@ -658,17 +717,26 @@ impl AppState {
                                     previous: intent.baseline.clone(),
                                 }));
                             } else {
+                                // Software Update reads the new version; a
+                                // toast says it once, and the flow is idle.
                                 self.show_toast(crate::strings::tr(
                                     "update.updated_toast",
                                     &[("version", &version)],
                                 ));
+                                self.phase.set(UpdatePhase::Idle);
                             }
                             return;
                         }
                         UpdateObservation::Stopped => {
+                            // The update left the camera without an
+                            // install, as when another phone cancelled it:
+                            // the pages show the camera as it is.
                             platform::update::clear_intent();
                             self.journal.set(None);
-                            self.fail_update(UpdateError::NotConfirmed);
+                            self.phase.set(UpdatePhase::Idle);
+                            self.sheet.set(None);
+                            self.update_shown.set(false);
+                            self.refresh_camera_package().await;
                             return;
                         }
                     }
@@ -689,7 +757,10 @@ impl AppState {
             }
             // Leave the intent for a later reconnect; never infer success or
             // delete on timeout. A restart the person runs may take longer.
-            let manual = matches!(self.flow_phase(), UpdatePhase::ManualRestart { .. });
+            let manual = matches!(
+                self.flow_phase(),
+                UpdatePhase::Restart { .. } | UpdatePhase::ManualRestart { .. }
+            );
             if !manual && started.elapsed() > Duration::from_secs(600) {
                 self.fail_update(UpdateError::ConnectionLost);
                 return;
@@ -698,15 +769,7 @@ impl AppState {
         }
     }
 
-    /// Show an update step, unless the person has not opened the update
-    /// (an update found on the camera shows on the camera tab first).
-    fn show_update_sheet(self, sheet: Sheet) {
-        if self.update_shown.get() {
-            self.sheet.set(Some(sheet));
-        }
-    }
-
-    async fn refresh_camera_package(self) {
+    pub(super) async fn refresh_camera_package(self) {
         let model = self
             .status
             .get()
@@ -774,5 +837,13 @@ impl AppState {
     pub(super) fn request_restart(self) {
         self.restart_request.set(true);
         self.resume_update();
+        // The step answers the tap at once; the running update turns the
+        // camera off on its next pass.
+        if self.update_busy.get() {
+            self.phase.set(UpdatePhase::Restarting {
+                kind: self.update_kind.get(),
+                step: RestartStep::PoweringOff,
+            });
+        }
     }
 }

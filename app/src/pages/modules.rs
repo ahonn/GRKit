@@ -1,30 +1,35 @@
-//! Modules tab: the camera's modules in ADJ order. Every title, value and
+//! Modules page: the camera's modules in ADJ order. Every title, value and
 //! icon comes from the camera. Edit moves the modules that ADJ can order.
 
 use nsh_base::theme;
 use nsh_core::element::{ImageSrc, header::HeaderItem};
 use nsh_core::prelude::*;
 
-use crate::domain::modules::{Managed, ModuleRow, Summary, split_for_edit};
+use crate::domain::modules::{
+    Managed, ModuleLayout, ModulePlace, ModuleRow, Summary, split_for_edit,
+};
 use crate::pages::looks::{
-    ROW_GAP, RowGestures, drag_handle, edit_button, list, loading_card, offline_card,
-    refresh_notice, reorder_list,
+    ROW_GAP, RowGestures, drag_handle, list, loading_card, offline_card, refresh_notice,
+    reorder_list,
 };
 use crate::pages::recipes::center_card;
 use crate::store::{AppState, ModulePart, ModulesBlock, Route, Tab};
 use crate::strings::tr;
 use crate::ui::ty::text;
-use crate::ui::{camera_art, footnote, grouped_card, secondary_button, toggle_loading, token};
+use crate::ui::{
+    camera_art, footnote, grouped_card, header_buttons, header_text, secondary_button,
+    section_title, toggle_loading, token,
+};
 
 /// The least height of a module row; rows grow with their text.
 const ROW_HEIGHT: f32 = 60.0;
 const ROW_TILE: f32 = 32.0;
 
-pub fn modules_root(app: AppState) -> impl IntoElement {
+pub fn modules_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     let editing = app.modules.editing;
     crate::ui::app_page()
         .title(move || tr("modules.title", &[]))
-        .header_large_title(!cfg!(target_os = "android"))
+        .on_dismiss(on_dismiss)
         .header_right_items(move || {
             if !can_edit(app) {
                 return Vec::new();
@@ -40,9 +45,16 @@ pub fn modules_root(app: AppState) -> impl IntoElement {
                     .on_press(move || editing.set(!editing.get())),
             ]
         })
-        .header_right(dynamic(move || can_edit(app).then(|| edit_button(editing))))
+        .header_right(dynamic(move || {
+            can_edit(app).then(|| {
+                let on = editing.get();
+                let title = tr(if on { "recipes.done" } else { "recipes.edit" }, &[]);
+                header_buttons([header_text(title, move || editing.set(!on))])
+            })
+        }))
         .child(
             crate::ui::page_scroll()
+                .refresh(Some(crate::store::page_refresh::MODULES.to_owned()))
                 .flex_1()
                 .bg(move || token("grouped"))
                 .child(
@@ -264,22 +276,9 @@ fn draft_notice(app: AppState) -> Option<AnyElement> {
     )
 }
 
+/// A small action on a row: the muted pill of Apply, not bare text.
 fn small_action(title: String, on_press: impl Fn() + 'static) -> AnyElement {
-    view()
-        .min_h(px(44.0))
-        .px_3()
-        .items_center()
-        .justify_center()
-        .role(AccessibilityRole::Button)
-        .label(title.clone())
-        .on_press(on_press)
-        .active(|s| s.opacity(0.72))
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD),
-        )
-        .into_element()
+    crate::ui::pill_button_loading(title.clone(), title, true, false, on_press).into_element()
 }
 
 fn tag(title: String) -> AnyElement {
@@ -419,8 +418,12 @@ fn browse_list(app: AppState, rows: Vec<ModuleRow>, live: bool) -> AnyElement {
     .into_element()
 }
 
-/// Edit: the orderable modules move; the others show their place.
+/// Edit: the orderable modules move; the others show their place. A GRKit
+/// that takes a whole layout edits the places of ADJ instead.
 fn edit_list(app: AppState, rows: Vec<ModuleRow>) -> AnyElement {
+    if let Some(layout) = app.module_layout() {
+        return layout_edit(app, rows, layout);
+    }
     let (before, movable, after) = split_for_edit(rows);
     let fixed = |rows: Vec<ModuleRow>| {
         (!rows.is_empty()).then(|| {
@@ -465,6 +468,120 @@ fn edit_list(app: AppState, rows: Vec<ModuleRow>) -> AnyElement {
         .child(fixed(after))
         .child(footnote(tr("modules.edit_note", &[])))
         .into_element()
+}
+
+/// The places of ADJ, as MENU > ADJ Order has them: the toolbar, the GRK
+/// root, and the hidden modules. A module moves within its place by its
+/// handle, and to another place from its menu.
+fn layout_edit(app: AppState, rows: Vec<ModuleRow>, layout: ModuleLayout) -> AnyElement {
+    let max = app.toolbar_max();
+    let full = layout.toolbar.len() >= max;
+    let mut content = view().gap_5();
+    for place in ModulePlace::ALL {
+        let group: Vec<ModuleRow> = layout
+            .ids(place)
+            .iter()
+            .filter_map(|id| rows.iter().find(|row| row.id() == id).cloned())
+            .collect();
+        if group.is_empty() {
+            continue;
+        }
+        let count = group.len();
+        let title = match place {
+            ModulePlace::Toolbar => tr(
+                "modules.group_toolbar",
+                &[("count", &count.to_string()), ("max", &max.to_string())],
+            ),
+            ModulePlace::Root => tr("modules.group_root", &[]),
+            ModulePlace::Hidden => tr("modules.group_hidden", &[]),
+        };
+        let cells = std::cell::RefCell::new(group.into_iter().map(Some).collect::<Vec<_>>());
+        let moving = reorder_list(
+            count,
+            app.modules_editable() && count > 1,
+            move |from, to| app.move_in_place(place, from, to),
+            move |index, gestures: Option<RowGestures>| {
+                let row = cells.borrow_mut()[index].take().expect("each row once");
+                let id = row.id().to_owned();
+                let name = row.title().to_owned();
+                let handle = drag_handle(name.clone(), gestures).into_element();
+                // As Film Looks' Edit: the check shows or hides the module,
+                // the row moves it between the top row and the GRK tab.
+                let shown = place != ModulePlace::Hidden;
+                let check_id = id.clone();
+                let check = crate::pages::looks::round_check(
+                    shown,
+                    tr(
+                        if shown {
+                            "modules.move_hidden"
+                        } else {
+                            "modules.move_root"
+                        },
+                        &[],
+                    ),
+                    app.modules_editable(),
+                    false,
+                    move || {
+                        let to = if shown {
+                            ModulePlace::Hidden
+                        } else {
+                            ModulePlace::Root
+                        };
+                        app.move_to_place(&check_id, to);
+                    },
+                );
+                view()
+                    .flex_row()
+                    .items_center()
+                    .bg(move || theme().card)
+                    .child(check)
+                    .child(
+                        view()
+                            .flex_1()
+                            .on_press(move || {
+                                place_menu(app, id.clone(), name.clone(), place, full)
+                            })
+                            .child(module_row(app, row, handle, index + 1 == count, false)),
+                    )
+                    .into_element()
+            },
+        );
+        content = content.child(
+            view()
+                .gap_2()
+                .child(view().px(px(2.0)).child(section_title(title)))
+                .child(moving),
+        );
+    }
+    content
+        .child(footnote(tr("modules.layout_note", &[])))
+        .into_element()
+}
+
+/// Move a shown module between the top row and the GRK tab; the check hides
+/// it. The toolbar takes no more than its most.
+fn place_menu(app: AppState, id: String, title: String, place: ModulePlace, full: bool) {
+    if !app.modules_editable() {
+        return;
+    }
+    spawn(async move {
+        let mut menu = crate::ui::held_menu(title);
+        if place != ModulePlace::Toolbar && !full {
+            menu = menu.action("toolbar", tr("modules.move_toolbar", &[]));
+        }
+        if place != ModulePlace::Root {
+            menu = menu.action("root", tr("modules.move_root", &[]));
+        }
+        let answer = menu.cancel("cancel", tr("looks.cancel", &[])).show().await;
+        let chosen = match answer.ok().and_then(|a| a.action).as_deref() {
+            Some("toolbar") => Some(ModulePlace::Toolbar),
+            Some("root") => Some(ModulePlace::Root),
+            _ => None,
+        };
+        if let Some(to) = chosen {
+            app.move_to_place(&id, to);
+        }
+    });
 }
 
 fn place_label(row: &ModuleRow) -> String {

@@ -15,9 +15,10 @@ use nsh_core::{element::HttpResponse, prelude::data_dir};
 use super::camera_http_base;
 use crate::domain::{
     LookError,
+    camera_settings::{CameraSettings, SettingChange, parse_camera_settings},
     modules::{
-        CatalogAnswer, CatalogRead, ModuleCatalog, ModuleDraft, ModuleState, ModulesState,
-        catalog_answer, module_error, parse_module_catalog, parse_module_patch,
+        CatalogAnswer, CatalogRead, ModuleCatalog, ModuleDraft, ModuleLayout, ModuleState,
+        ModulesState, catalog_answer, module_error, parse_module_catalog, parse_module_patch,
         parse_modules_state,
     },
 };
@@ -153,6 +154,109 @@ pub async fn put_order(boot_id: &str, ids: &[String]) -> Result<ModulesState, Lo
         return Err(failure(&response));
     }
     parse_modules_state(&response.body).map_err(LookError::Service)
+}
+
+/// The GRKit settings of the camera's MENU, or `None` for a GRKit from
+/// before the phone could change them.
+pub async fn camera_settings() -> Result<Option<CameraSettings>, LookError> {
+    let response = request("GET", "/v1/params/settings", None, &[]).await?;
+    if matches!(response.status(), 404 | 405) {
+        return Ok(None);
+    }
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    parse_camera_settings(&response.body)
+        .map(Some)
+        .map_err(LookError::Service)
+}
+
+/// Change one GRKit setting. The answer is every setting as the camera has
+/// them.
+pub async fn patch_camera_setting(
+    boot_id: &str,
+    change: SettingChange,
+) -> Result<CameraSettings, LookError> {
+    let headers = [("X-GRKit-Boot-Id", boot_id.to_owned())];
+    let response = request(
+        "PATCH",
+        "/v1/params/settings",
+        Some(change.body()),
+        &headers,
+    )
+    .await?;
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    parse_camera_settings(&response.body).map_err(LookError::Service)
+}
+
+/// Replace the layout of ADJ: the toolbar, the GRK root, and the hidden
+/// modules.
+pub async fn put_layout(boot_id: &str, layout: &ModuleLayout) -> Result<ModulesState, LookError> {
+    let headers = [("X-GRKit-Boot-Id", boot_id.to_owned())];
+    let response = request(
+        "PUT",
+        "/v1/params/modules/layout",
+        Some(layout.body()),
+        &headers,
+    )
+    .await?;
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    parse_modules_state(&response.body).map_err(LookError::Service)
+}
+
+/// Whether this GRKit takes a picture of Shutdown Screen from the phone.
+pub async fn shutdown_picture_writable() -> Result<bool, LookError> {
+    let response = request("GET", "/v1/props", None, &[]).await?;
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(&response.body).map_err(|e| LookError::Service(e.to_string()))?;
+    Ok(value["capabilities"]["shutdownPicture"]["write"]
+        .as_bool()
+        .unwrap_or(false))
+}
+
+/// The picture of Shutdown Screen on the card, or `None` without one.
+pub async fn shutdown_picture() -> Result<Option<Vec<u8>>, LookError> {
+    let response = request("GET", "/v1/shutdown-picture", None, &[]).await?;
+    if response.status() == 404 {
+        return Ok(None);
+    }
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    Ok(Some(response.body))
+}
+
+/// Put `jpeg` on the card as the picture of Shutdown Screen, or remove it
+/// (`None`). The camera shows it after its next start.
+pub async fn put_shutdown_picture(boot_id: &str, jpeg: Option<Vec<u8>>) -> Result<(), LookError> {
+    let mut headers = vec![("X-GRKit-Boot-Id", boot_id.to_owned())];
+    let (method, body) = match jpeg {
+        Some(bytes) => {
+            headers.push(("Content-Type", "image/jpeg".to_owned()));
+            ("PUT", bytes)
+        }
+        None => ("DELETE", Vec::new()),
+    };
+    let response = super::camera_request(
+        method,
+        format!("{}/v1/shutdown-picture", camera_http_base()),
+        body,
+        TIMEOUT,
+        &headers,
+    )
+    .await
+    .map_err(|_| LookError::ConnectionLost)?;
+    if !response.ok() {
+        return Err(failure(&response));
+    }
+    Ok(())
 }
 
 /// A name safe for one path component, and distinct for distinct input.

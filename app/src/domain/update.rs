@@ -1,10 +1,6 @@
 //! Update state machine that mirrors the camera service.
 
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, Instant};
-
-/// How long the phone waits for the confirmation on the camera.
-pub const CONFIRM_DEADLINE: Duration = Duration::from_secs(5 * 60);
 
 /// What a software request does: install a newer package.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,21 +24,18 @@ pub enum UpdateError {
     PackageInvalid,
     /// The camera refused the package.
     Refused,
-    /// The user did not confirm within [`CONFIRM_DEADLINE`].
-    NotConfirmed,
     /// The link dropped; reconnect and inspect the camera before retrying.
     ConnectionLost,
 }
 
 impl UpdateError {
     /// The step of the update sheet that this error stops at: 0 download,
-    /// 1 send, 2 confirm on the camera.
+    /// 1 send.
     pub fn failed_step(&self) -> usize {
         match self {
             UpdateError::Download(_)
             | UpdateError::ModuleNotKept(_)
             | UpdateError::PackageInvalid => 0,
-            UpdateError::NotConfirmed => 2,
             UpdateError::CardFull { .. }
             | UpdateError::Service(_)
             | UpdateError::Refused
@@ -77,7 +70,6 @@ pub enum UpdatePhase {
     },
     WaitingConfirm {
         kind: UpdateKind,
-        deadline: Instant,
     },
     Confirmed {
         kind: UpdateKind,
@@ -144,15 +136,12 @@ impl UpdateFlow {
     }
 
     /// The package is on the camera and waits for confirmation.
-    pub fn mark_waiting(&mut self, now: Instant) {
+    pub fn mark_waiting(&mut self) {
         let kind = match &self.phase {
             UpdatePhase::Sending { kind, .. } => *kind,
             _ => return,
         };
-        self.phase = UpdatePhase::WaitingConfirm {
-            kind,
-            deadline: now + CONFIRM_DEADLINE,
-        };
+        self.phase = UpdatePhase::WaitingConfirm { kind };
     }
 
     /// The camera confirmed; next the user restarts it.
@@ -193,15 +182,6 @@ impl UpdateFlow {
         match &self.phase {
             UpdatePhase::Idle | UpdatePhase::Installed { .. } | UpdatePhase::Failed(_) => {}
             _ => self.phase = UpdatePhase::Failed(error),
-        }
-    }
-
-    /// Expire waiting confirmation when `now` is past the deadline.
-    pub fn tick_deadline(&mut self, now: Instant) {
-        if let UpdatePhase::WaitingConfirm { deadline, .. } = &self.phase
-            && now >= *deadline
-        {
-            self.fail(UpdateError::NotConfirmed);
         }
     }
 
@@ -315,7 +295,6 @@ mod tests {
     #[test]
     fn install_walks_idle_to_installed() {
         let mut flow = UpdateFlow::new();
-        let t0 = Instant::now();
         flow.begin_sending(UpdateKind::Install, "1.6.1");
         flow.set_progress(0.5);
         assert!(matches!(
@@ -325,7 +304,7 @@ mod tests {
                 kind: UpdateKind::Install
             } if (*progress - 0.5).abs() < f32::EPSILON
         ));
-        flow.mark_waiting(t0);
+        flow.mark_waiting();
         flow.mark_confirmed();
         flow.mark_restart();
         flow.mark_installed("1.7.0");
@@ -340,20 +319,6 @@ mod tests {
     }
 
     #[test]
-    fn not_confirmed_in_time_leaves_baseline() {
-        let mut flow = UpdateFlow::new();
-        let t0 = Instant::now();
-        flow.begin_sending(UpdateKind::Install, "1.6.1");
-        flow.mark_waiting(t0);
-        flow.tick_deadline(t0 + CONFIRM_DEADLINE);
-        assert_eq!(
-            flow.phase(),
-            &UpdatePhase::Failed(UpdateError::NotConfirmed)
-        );
-        assert_eq!(flow.baseline_version(), Some("1.6.1"));
-    }
-
-    #[test]
     fn each_error_can_be_set_from_sending_or_waiting() {
         for error in [
             UpdateError::CardFull {
@@ -361,7 +326,6 @@ mod tests {
             },
             UpdateError::Refused,
             UpdateError::ConnectionLost,
-            UpdateError::NotConfirmed,
         ] {
             let mut flow = UpdateFlow::new();
             flow.begin_sending(UpdateKind::Install, "1.6.1");
@@ -371,7 +335,7 @@ mod tests {
 
             let mut flow = UpdateFlow::new();
             flow.begin_sending(UpdateKind::Install, "1.6.1");
-            flow.mark_waiting(Instant::now());
+            flow.mark_waiting();
             flow.fail(error.clone());
             assert_eq!(flow.phase(), &UpdatePhase::Failed(error));
         }
@@ -402,10 +366,7 @@ mod tests {
             3
         );
         assert_eq!(update_step(&UpdatePhase::ManualRestart { kind }), 3);
-        assert_eq!(
-            update_step(&UpdatePhase::Failed(UpdateError::NotConfirmed)),
-            2
-        );
+        assert_eq!(update_step(&UpdatePhase::Failed(UpdateError::Refused)), 1);
         assert_eq!(
             update_step(&UpdatePhase::Failed(UpdateError::Download(String::new()))),
             0

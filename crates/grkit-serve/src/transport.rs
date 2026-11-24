@@ -42,7 +42,9 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
             Some((1024, "application/json"))
         }
         ("POST", "/v1/recipes") | ("PUT", "/v1/recipes/order") => Some((4096, "application/json")),
-        ("PUT", "/v1/params/modules/order") => Some((1024, "application/json")),
+        ("PUT", "/v1/params/modules/order" | "/v1/params/modules/layout")
+        | ("PATCH", "/v1/params/settings") => Some((1024, "application/json")),
+        ("PUT", "/v1/shutdown-picture") => Some((grkit_core::goodbye::MAX_BYTES, "image/jpeg")),
         ("PATCH", path)
             if path
                 .strip_prefix("/v1/params/modules/")
@@ -221,10 +223,12 @@ mod tests {
         assert!(!accepted("", "GET"));
     }
     #[test]
-    fn the_cover_routes_take_a_json_body() {
+    fn the_cover_settings_and_layout_routes_take_a_json_body() {
         for (method, path) in [
             ("PUT", "/v1/looks/covers/scheme"),
             ("POST", "/v1/looks/covers/reset"),
+            ("PATCH", "/v1/params/settings"),
+            ("PUT", "/v1/params/modules/layout"),
         ] {
             let request = parse(
                 format!(

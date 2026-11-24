@@ -67,18 +67,101 @@ pub const MODULE_SETTINGS_MAX: usize = 160;
 /// The most artwork tiles of all modules. The installer puts them in the
 /// icon chunks after the effect icons.
 pub const MODULE_TILES_MAX: usize = 128;
-/// Off, GRKit, Version, Modules, Modules with a line through it (Enable
-/// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
-/// "16" of the manual focus scale in feet (`runtime/distance.h`), the tile of
-/// a recipe without its caption, the slots of the tiles of recipes that
-/// the core writes (`runtime/recipe_card.h`), the Update tile, and the two
-/// pictures of Battery Percentage, of two slots each
-/// (`runtime/battery_percent.h`). The menu addresses the icons after Off by
-/// their offset from the GRKit icon, so the host icons come first in chunk 0,
-/// and they must fit in it. The effect icons follow them.
-pub const HOST_ICON_COUNT: usize = 26;
-/// The host icon slots of the pictures of Battery Percentage, the last ones.
+/// A host icon: artwork in chunk 0 before the effect icons (`HOST_ICONS`).
+pub struct HostIcon {
+    /// The C name after `GRKIT_ICON_`.
+    pub name: &'static str,
+    /// Its icon slots. An icon that is wider than a slot takes more, and a
+    /// set of icons takes one slot each.
+    pub slots: usize,
+}
+
+const fn host_icon(name: &'static str, slots: usize) -> HostIcon {
+    HostIcon { name, slots }
+}
+
+/// The slots of the tiles of recipes that the core writes
+/// (`runtime/recipe_card.h`).
+pub const RECIPE_CARD_SLOTS: usize = 12;
+/// The slots of the two pictures of Battery Percentage, of two slots each
+/// (`runtime/battery_percent.h`).
 pub const BATTERY_ICON_SLOTS: usize = 4;
+
+/// The host icons in the order of their slots, each with its slots: Off,
+/// GRKit, Version, Modules, Modules with a line through it (Enable GRKit Off),
+/// the Fn hint of a row where Fn turns a setting, "ft" and "16" of the manual
+/// focus scale in feet (`runtime/distance.h`), the tile of a recipe without
+/// its caption, the tiles of recipes, the Update tile, and the pictures of
+/// Battery Percentage. Slot `s` has the icon ID `HOST_ICON_TOP - s`, so the
+/// menu finds a slot from an ID by one subtraction, and a new icon is one more
+/// entry. The installer writes the artwork of each slot
+/// (`runtime/installer.c`).
+pub const HOST_ICONS: [HostIcon; 12] = [
+    host_icon("OFF", 1),
+    host_icon("GRKIT", 1),
+    host_icon("VERSION", 1),
+    host_icon("MODULES", 1),
+    host_icon("MODULES_OFF", 1),
+    host_icon("ROTATE", 1),
+    host_icon("SCALE_FEET", 1),
+    host_icon("SCALE_SIXTEEN", 1),
+    host_icon("RECIPE_TILE", 1),
+    host_icon("RECIPE_CARDS", RECIPE_CARD_SLOTS),
+    host_icon("UPDATE", 1),
+    host_icon("BATTERY", BATTERY_ICON_SLOTS),
+];
+
+/// The slots of all host icons. They fit chunk 0, so the menu addresses each
+/// one from the GRKit icon.
+pub const HOST_ICON_COUNT: usize = {
+    let mut total = 0;
+    let mut i = 0;
+    while i < HOST_ICONS.len() {
+        total += HOST_ICONS[i].slots;
+        i += 1;
+    }
+    total
+};
+
+/// The icon IDs of GRKit start here; the camera's own icons are below.
+pub const ICON_FIRST: u32 = 0x7000;
+/// The icon ID of host slot 0, Off. The IDs of the slots go down from it.
+pub const HOST_ICON_TOP: u32 = 0x7fff;
+/// A run of icon IDs from `ICON_FIRST` up (`ICON_RANGES`), each as
+/// `GRKIT_ICON_<name>(n)`.
+pub struct IconRange {
+    pub name: &'static str,
+    pub size: usize,
+}
+
+/// The icon ID runs, in order from `ICON_FIRST`: the module tiles, the tiles
+/// of recipes by recipe slot (`runtime/recipe_card.h`), and the core
+/// live-view labels. The effect icons follow the host icons, from
+/// `HOST_ICON_TOP + 1`, as `GRKIT_ICON_EFFECT(n)` of record n.
+pub const ICON_RANGES: [IconRange; 3] = [
+    IconRange {
+        name: "MODULE_TILE",
+        size: MODULE_TILES_MAX,
+    },
+    IconRange {
+        name: "RECIPE",
+        size: RECIPE_SLOTS,
+    },
+    IconRange {
+        name: "CORE_LABEL",
+        size: crate::artwork::OVERLAY_LABELS.len(),
+    },
+];
+
+const _: () = {
+    let mut end = ICON_FIRST as usize;
+    let mut i = 0;
+    while i < ICON_RANGES.len() {
+        end += ICON_RANGES[i].size;
+        i += 1;
+    }
+    assert!(end + HOST_ICON_COUNT <= HOST_ICON_TOP as usize + 1);
+};
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script
@@ -314,6 +397,31 @@ pub const CONTROL_MODULE_TILE: u32 = 16;
 pub const CONTROL_MODULE_SET: u32 = 17;
 /// The new order of the modules of the ADJ root: the index of each, once.
 pub const CONTROL_MODULES_ORDER: u32 = 18;
+/// The GRKit settings of MENU > GRKit Settings (runtime/manage.h), no
+/// payload. The response is a word for each `CONTROL_SETTING_*` in order:
+/// `CONTROL_SETTING_NONE` when the camera does not have the setting, else
+/// its value (Enable at Start: `MANAGE_START_*`; Distance Unit: 0 meters, 1
+/// feet; the others: 0 Off, 1 On).
+pub const CONTROL_SETTINGS_READ: u32 = 19;
+/// Set one GRKit setting as its MENU row does: the `CONTROL_SETTING_*` and
+/// the value, as `CONTROL_SETTINGS_READ` gives them.
+pub const CONTROL_SETTINGS_SET: u32 = 20;
+/// Place the modules of MENU > ADJ Order in one step: a word for each module
+/// that ADJ can show, each once, with its index in the low byte and its
+/// place at `CONTROL_MODULE_PLACE_SHIFT`: first the toolbar in its order (at
+/// most `capabilities::ADJ_ENTRIES`), then the root in its order, then the
+/// hidden modules.
+pub const CONTROL_MODULES_LAYOUT: u32 = 21;
+pub const CONTROL_SETTING_START: u32 = 0;
+pub const CONTROL_SETTING_RAW: u32 = 1;
+pub const CONTROL_SETTING_UNIT: u32 = 2;
+pub const CONTROL_SETTING_BATTERY: u32 = 3;
+pub const CONTROL_SETTING_BATTERY_PERCENT: u32 = 4;
+pub const CONTROL_SETTING_PLAYBACK_INFO: u32 = 5;
+pub const CONTROL_SETTING_GOODBYE: u32 = 6;
+pub const CONTROL_SETTING_GOODBYE_TEXT: u32 = 7;
+pub const CONTROL_SETTINGS: u32 = 8;
+pub const CONTROL_SETTING_NONE: u32 = u32::MAX;
 pub const CONTROL_MODULES_HEADER: usize = 24;
 pub const CONTROL_MODULE_ENTRY: usize = 20;
 pub const CONTROL_MODULE_TEXTS_HEADER: usize = 8;
@@ -345,6 +453,8 @@ pub const CONTROL_MODULE_ROOT: u32 = 1;
 pub const CONTROL_MODULE_HIDDEN: u32 = 2;
 pub const CONTROL_MODULE_ORDERABLE: u32 = 1 << 12;
 pub const CONTROL_MODULE_ENABLED: u32 = 1 << 13;
+/// ADJ can show the module, so `CONTROL_MODULES_LAYOUT` places it.
+pub const CONTROL_MODULE_PLACEABLE: u32 = 1 << 14;
 pub const CONTROL_MODULE_SET_ENABLED: u32 = 1;
 pub const CONTROL_MODULE_SET_HIDDEN: u32 = 2;
 pub const CONTROL_MODULE_SET_ORDER: u32 = 4;
@@ -1410,6 +1520,44 @@ fn hue_tables(out: &mut String) {
     }
 }
 
+/// The icon IDs and host icon slots (`HOST_ICONS`, `ICON_RANGES`). The IDs
+/// are plain numbers, so the ARM assembly can load them too.
+fn icon_ids(out: &mut String) {
+    comment(
+        out,
+        "Icon IDs: the camera's own icons are below GRKIT_ICON_FIRST. Host slot \
+         s has the ID GRKIT_HOST_ICON_TOP - s; GRKIT_ICON_SLOT_<name> is the \
+         first slot of a host icon and GRKIT_ICON_SLOTS_<name> its slots. IDs \
+         only reach transient menu widgets, so they can change between \
+         releases.",
+    );
+    writeln!(out, "#define GRKIT_ICON_FIRST {ICON_FIRST:#x}").unwrap();
+    writeln!(out, "#define GRKIT_HOST_ICON_TOP {HOST_ICON_TOP:#x}").unwrap();
+    let mut slot = 0;
+    for icon in &HOST_ICONS {
+        let id = HOST_ICON_TOP as usize - slot;
+        writeln!(out, "#define GRKIT_ICON_SLOT_{} {slot}", icon.name).unwrap();
+        writeln!(out, "#define GRKIT_ICON_SLOTS_{} {}", icon.name, icon.slots).unwrap();
+        if icon.slots == 1 {
+            writeln!(out, "#define GRKIT_ICON_{} {id:#x}", icon.name).unwrap();
+        } else {
+            writeln!(out, "#define GRKIT_ICON_{}(n) ({id:#x}-(n))", icon.name).unwrap();
+        }
+        slot += icon.slots;
+    }
+    let mut first = ICON_FIRST as usize;
+    for range in &ICON_RANGES {
+        writeln!(out, "#define GRKIT_ICON_{}(n) ({first:#x}+(n))", range.name).unwrap();
+        first += range.size;
+    }
+    writeln!(
+        out,
+        "#define GRKIT_ICON_EFFECT(n) ({:#x}+(n))",
+        HOST_ICON_TOP + 1
+    )
+    .unwrap();
+}
+
 /// The contents of `runtime/abi.h`.
 pub fn header() -> String {
     let mut out = String::new();
@@ -1608,15 +1756,9 @@ pub fn header() -> String {
          GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n.",
     );
     writeln!(out, "#define GRKIT_HOST_ICON_COUNT {}", HOST_ICON_COUNT).unwrap();
-    writeln!(
-        out,
-        "#define GRKIT_BATTERY_ICON_SLOTS {}U",
-        BATTERY_ICON_SLOTS
-    )
-    .unwrap();
     writeln!(out, "#define GRKIT_ICONS_PER_CHUNK {}", ICONS_PER_CHUNK).unwrap();
     writeln!(out, "#define GRKIT_MODULE_TILES_MAX {}", MODULE_TILES_MAX).unwrap();
-    writeln!(out, "#define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))").unwrap();
+    icon_ids(&mut out);
     // A change of a saved selection: the loader saves after the count changes.
     writeln!(
         out,
@@ -1713,6 +1855,26 @@ pub fn header() -> String {
         ("CONTROL_MODULE_TILE", CONTROL_MODULE_TILE),
         ("CONTROL_MODULE_SET", CONTROL_MODULE_SET),
         ("CONTROL_MODULES_ORDER", CONTROL_MODULES_ORDER),
+        ("CONTROL_SETTINGS_READ", CONTROL_SETTINGS_READ),
+        ("CONTROL_SETTINGS_SET", CONTROL_SETTINGS_SET),
+        ("CONTROL_MODULES_LAYOUT", CONTROL_MODULES_LAYOUT),
+        ("CONTROL_SETTING_START", CONTROL_SETTING_START),
+        ("CONTROL_SETTING_RAW", CONTROL_SETTING_RAW),
+        ("CONTROL_SETTING_UNIT", CONTROL_SETTING_UNIT),
+        ("CONTROL_SETTING_BATTERY", CONTROL_SETTING_BATTERY),
+        (
+            "CONTROL_SETTING_BATTERY_PERCENT",
+            CONTROL_SETTING_BATTERY_PERCENT,
+        ),
+        (
+            "CONTROL_SETTING_PLAYBACK_INFO",
+            CONTROL_SETTING_PLAYBACK_INFO,
+        ),
+        ("CONTROL_SETTING_GOODBYE", CONTROL_SETTING_GOODBYE),
+        ("CONTROL_SETTING_GOODBYE_TEXT", CONTROL_SETTING_GOODBYE_TEXT),
+        ("CONTROL_SETTINGS", CONTROL_SETTINGS),
+        ("CONTROL_SETTING_NONE", CONTROL_SETTING_NONE),
+        ("CONTROL_MODULE_PLACEABLE", CONTROL_MODULE_PLACEABLE),
         ("CONTROL_MODULE_TEXTS_END", CONTROL_MODULE_TEXTS_END),
         ("CONTROL_MODULE_TEXT_UNITS", CONTROL_MODULE_TEXT_UNITS),
         ("CONTROL_MODULE_RECORD_MODULE", CONTROL_MODULE_RECORD_MODULE),

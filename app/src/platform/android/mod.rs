@@ -153,6 +153,7 @@ pub async fn ask_name(prompt: super::NamePrompt) -> Option<String> {
         "message": prompt.message,
         "value": prompt.value,
         "max": prompt.max,
+        "allowEmpty": prompt.allow_empty,
         "save": prompt.save,
         "cancel": prompt.cancel,
     });

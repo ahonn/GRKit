@@ -10,11 +10,14 @@ use grkit_core::cover::{Cover, Scheme, Variant};
 
 use super::looks::{TILE_COVER, corner_button, corner_icon, grid, tile};
 use crate::domain::{LookFilter, PendingChange};
+use crate::store::Route;
+use crate::store::native_looks::{GR4_FIRMWARE_PAGE, gr4_looks};
 use crate::store::{AppState, CatalogItem, LookAction, Sheet};
 use crate::strings::tr;
-use crate::ui::{grouped_card, segmented, token};
+use crate::ui::{grouped_card, section_title, segmented, token};
 
 const PLUS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
+const LOCK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>"##;
 const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
 
 pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
@@ -27,7 +30,7 @@ pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElem
                     view()
                         .px_6()
                         .pt_4()
-                        .pb_8()
+                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .gap(px(super::looks::ROW_GAP))
                         .child(dynamic(move || add_content(app))),
                 ),
@@ -58,11 +61,12 @@ fn add_content(app: AppState) -> impl IntoElement {
     let column = view()
         .gap(px(super::looks::ROW_GAP))
         .child(import_row(app, full))
+        .child(unlock_section(app))
         .child(chips);
     let Some(items) = app.catalog_items() else {
-        let message = app
-            .catalog_error()
-            .unwrap_or_else(|| tr("looks.catalog_loading", &[]));
+        let Some(message) = app.catalog_error() else {
+            return column.child(super::looks::loading_card(tr("looks.catalog_loading", &[])));
+        };
         return column.child(grouped_card(
             view().p_4().child(
                 text(message)
@@ -169,6 +173,135 @@ fn catalog_tile(
             toggle,
         ),
     )
+}
+
+/// The GR IV looks that a firmware file unlocks, while the camera lacks
+/// one of them.
+fn unlock_section(app: AppState) -> Option<AnyElement> {
+    if !app.gr4_looks_offered() {
+        return None;
+    }
+    let snapshot = app.looks_snapshot()?;
+    let looks: Vec<_> = gr4_looks()
+        .into_iter()
+        .filter(|(id, _, _)| snapshot.get(id).is_none())
+        .collect();
+    if looks.is_empty() {
+        return None;
+    }
+    let tiles = looks
+        .into_iter()
+        .map(|(_, name, cover)| {
+            let open = move || app.push(Route::LookUnlock);
+            tile(
+                crate::ui::cover_view(&cover, TILE_COVER, false),
+                name.to_owned(),
+                None,
+                name.to_owned(),
+                Some(Box::new(open)),
+                corner_button(
+                    true,
+                    Some(token("button")),
+                    corner_icon(LOCK),
+                    tr("looks.unlock_title", &[]),
+                    AccessibilityRole::Button,
+                    None,
+                    true,
+                    false,
+                    false,
+                    open,
+                ),
+            )
+            .into_element()
+        })
+        .collect();
+    Some(
+        view()
+            .gap_2()
+            .child(
+                view()
+                    .px(px(2.0))
+                    .child(section_title(tr("looks.unlock_section", &[]))),
+            )
+            .child(grid(tiles))
+            .into_element(),
+    )
+}
+
+/// Unlock the GR IV looks: choose the firmware file, then put them on the
+/// camera.
+pub fn unlock_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
+    crate::ui::app_page()
+        .title(tr("looks.unlock_title", &[]))
+        .on_dismiss(move || {
+            app.discard_native_looks();
+            on_dismiss()
+        })
+        .child(
+            view().flex_1().bg(move || token("grouped")).child(
+                crate::ui::page_scroll().flex_1().child(
+                    view()
+                        .px_6()
+                        .pt_4()
+                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .gap_6()
+                        .child(dynamic(move || unlock_content(app))),
+                ),
+            ),
+        )
+}
+
+fn unlock_content(app: AppState) -> impl IntoElement {
+    let found = app.native_looks_found();
+    let covers: Vec<(String, Cover)> = match &found {
+        Some((_, looks)) => looks
+            .iter()
+            .map(|l| (l.name.clone(), l.cover.clone()))
+            .collect(),
+        None => gr4_looks()
+            .into_iter()
+            .map(|(_, name, cover)| (name.to_owned(), cover))
+            .collect(),
+    };
+    let row = view()
+        .flex_row()
+        .justify_center()
+        .gap_6()
+        .children(covers.into_iter().map(|(name, cover)| {
+            view()
+                .items_center()
+                .gap_2()
+                .child(crate::ui::cover_view(&cover, 120.0, false))
+                .child(
+                    text(name)
+                        .text_size(px(crate::ui::ty::SUBHEADLINE))
+                        .font_weight(FontWeight::SEMIBOLD),
+                )
+        }));
+    let buttons = if found.is_some() {
+        view().gap_3().child(crate::ui::primary_button_loading(
+            tr("looks.send", &[]),
+            app.native_looks_sending(),
+            move || app.send_native_looks(),
+        ))
+    } else {
+        view()
+            .gap_3()
+            .child(crate::ui::primary_button_loading(
+                tr("looks.choose_firmware", &[]),
+                app.native_looks_reading(),
+                move || app.choose_gr4_firmware(),
+            ))
+            .child(crate::ui::secondary_button(
+                tr("looks.open_ricoh", &[]),
+                || {
+                    spawn(async move {
+                        let _ = open_url(GR4_FIRMWARE_PAGE).await;
+                    });
+                },
+            ))
+    };
+    view().gap_8().child(row).child(buttons)
 }
 
 /// The row at the top that imports a file as a new Look.

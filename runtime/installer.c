@@ -798,33 +798,40 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
 {
     u32 base = a->base;
     /* Host artwork does not consume an effect record or a native settings ID.
-       It comes first in chunk 0: Off, the GRKit tile, the Version tile, the
-       Modules tile, the Modules tile of Enable GRKit Off, the Fn hint of a
-       row where Fn turns a setting, the "ft" and "16" labels of the manual
-       focus scale (SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT), then the tile of
-       a recipe without its caption, the slots of the tiles of recipes, which
-       start as that tile (runtime/recipe_card.h), the Update tile, then the
-       two pictures of Battery Percentage, which the core writes. */
-#define HOST_ARTWORK 9
-    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS + 1U + GRKIT_BATTERY_ICON_SLOTS,
-                   "The host icons are Off, GRKit, Version, Modules, Modules Off, Rotate, two scale labels, the "
-                   "recipe tile, the slots of the recipe tiles, Update, and the pictures of Battery Percentage");
-    for (u32 i = 0; i < HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS; ++i) {
-        u32 icon = a->icon_bases[0] + i * ICON_STRIDE, label = i == 6 || i == 7;
-        static const u8 *const artwork[HOST_ARTWORK] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
-                                                         modules_off_pixels, rotate_pixels, scale_feet_pixels,
-                                                         scale_sixteen_pixels, recipe_card_pixels};
+       It comes first in chunk 0, in the slots of grkit_core::abi::HOST_ICONS
+       (GRKIT_ICON_SLOT_*). The "ft" and "16" labels of the manual focus scale
+       are SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT. */
+    _Static_assert(HOST_ICON_COUNT == GRKIT_HOST_ICON_COUNT, "The loader and abi.h count the same host icons");
+    for (u32 i = 0; i < GRKIT_ICON_SLOT_BATTERY; ++i) {
+        u32 icon = a->icon_bases[0] + i * ICON_STRIDE;
+        u32 label = i == GRKIT_ICON_SLOT_SCALE_FEET || i == GRKIT_ICON_SLOT_SCALE_SIXTEEN;
+        /* The tiles of recipes start as the tile without a caption. */
+        static const u8 *const artwork[GRKIT_ICON_SLOT_BATTERY] = {
+            [GRKIT_ICON_SLOT_OFF] = off_pixels,
+            [GRKIT_ICON_SLOT_GRKIT] = grkit_pixels,
+            [GRKIT_ICON_SLOT_VERSION] = version_pixels,
+            [GRKIT_ICON_SLOT_MODULES] = modules_pixels,
+            [GRKIT_ICON_SLOT_MODULES_OFF] = modules_off_pixels,
+            [GRKIT_ICON_SLOT_ROTATE] = rotate_pixels,
+            [GRKIT_ICON_SLOT_SCALE_FEET] = scale_feet_pixels,
+            [GRKIT_ICON_SLOT_SCALE_SIXTEEN] = scale_sixteen_pixels,
+            [GRKIT_ICON_SLOT_RECIPE_TILE ... GRKIT_ICON_SLOT_RECIPE_CARDS + GRKIT_ICON_SLOTS_RECIPE_CARDS - 1] =
+                recipe_card_pixels,
+            [GRKIT_ICON_SLOT_UPDATE] = update_pixels,
+        };
         if (label) icon_sized(icon, pixels, SCALE_LABEL_WIDTH, SCALE_LABEL_HEIGHT);
         else icon_header(icon, pixels);
-        copy(at(icon + ICON_PIXELS), i == HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS - 1U ? update_pixels : artwork[i < HOST_ARTWORK ? i : HOST_ARTWORK - 1],
-             label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
+        copy(at(icon + ICON_PIXELS), artwork[i], label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
         /* The menu derives the icons after the GRKit icon from its
            address. */
-        if (i < 2) store(base + (i ? GRKIT_HOST_GRKIT_ICON : GRKIT_HOST_OFF_ICON), icon);
+        if (i == GRKIT_ICON_SLOT_OFF) store(base + GRKIT_HOST_OFF_ICON, icon);
+        if (i == GRKIT_ICON_SLOT_GRKIT) store(base + GRKIT_HOST_GRKIT_ICON, icon);
     }
-    for (u32 i = HOST_ICON_COUNT - GRKIT_BATTERY_ICON_SLOTS; i < HOST_ICON_COUNT; i += 2)
+    _Static_assert(GRKIT_ICON_SLOT_BATTERY + GRKIT_ICON_SLOTS_BATTERY == GRKIT_HOST_ICON_COUNT,
+                   "The core writes the pictures of Battery Percentage in the last host slots");
+    /* The core writes the pixels of the two pictures of Battery Percentage. */
+    for (u32 i = GRKIT_ICON_SLOT_BATTERY; i < GRKIT_HOST_ICON_COUNT; i += 2)
         icon_sized(a->icon_bases[0] + i * ICON_STRIDE, pixels, 60, 40);
-#undef HOST_ARTWORK
 }
 
 /* Link the modules and register them in the header. */

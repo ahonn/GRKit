@@ -5,6 +5,7 @@
 mod advertisement;
 pub mod auto_connect;
 mod camera;
+pub mod camera_settings;
 pub mod changes;
 mod connect_flow;
 pub mod connect_policy;
@@ -23,6 +24,7 @@ pub mod recipes;
 pub mod release_notes;
 mod remembered;
 pub mod saved_connect;
+pub mod shutdown_picture;
 mod update;
 mod update_api;
 pub use update_api::{
@@ -59,8 +61,8 @@ pub use remembered::{
     remove as remove_saved, upsert as upsert_saved,
 };
 pub use update::{
-    CARD_SPARE_BYTES, CONFIRM_DEADLINE, ReleaseProblem, RestartStep, SERVICE_PROTOCOL, UpdateError,
-    UpdateFlow, UpdateKind, UpdatePhase, cancel_body_key, card_shortfall, firmware_problem,
-    needs_newer_app, update_step,
+    CARD_SPARE_BYTES, ReleaseProblem, RestartStep, SERVICE_PROTOCOL, UpdateError, UpdateFlow,
+    UpdateKind, UpdatePhase, cancel_body_key, card_shortfall, firmware_problem, needs_newer_app,
+    update_step,
 };
 pub use wifi_cred::decode_cred;

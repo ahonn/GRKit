@@ -205,6 +205,13 @@ fn start_phone_with_delays(
     let handler_camera = camera.clone();
     let handler = StubRoute::Handler(Arc::new(move |request, reply| {
         let mut camera = handler_camera.lock().unwrap();
+        // A camera without GRKit settings, as the app reads them at a connect.
+        if request.url == "http://camera.test/v1/params/settings" {
+            let mut missing = json_response(json!({"status": 404, "code": "not_found"}));
+            missing.status = 404;
+            reply.send(missing);
+            return;
+        }
         let body = match (request.method.as_str(), request.url.as_str()) {
             ("GET", "http://camera.test/v1/props") => json!({
                 "bootId": "boot-test",
@@ -303,30 +310,28 @@ fn an_update_whose_answer_was_lost_is_found_on_the_camera_and_completes() {
     // The update found on the camera shows on the camera tab first.
     app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
     app.press("GRKit 1.8.0 to Confirm").unwrap();
-    app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
+    // The update sheet opens at its step: what to do on the camera.
+    app.wait_for_within("Choose MOD, then Update 1.8.0", WAIT)
+        .unwrap();
     camera.lock().unwrap().journal = "confirmed";
-    app.wait_for_within("Restart the Camera", WAIT).unwrap();
+    app.wait_for_within("GRKit 1.8.0 to Install", WAIT).unwrap();
     {
         let mut camera = camera.lock().unwrap();
         camera.journal = "none";
         camera.version = "1.8.0";
         camera.request_id = None;
     }
-    // No camera answers in standby, so the person restarts it and reconnects.
+    // No camera answers in standby, so the person restarts it.
     app.press("Restart Camera").unwrap();
-    // The sheet only says what to do: no steps and no progress.
     app.wait_for_within(
         "Turn the camera off and on, then tap Reconnect.",
         MANUAL_RESTART_WAIT,
     )
     .unwrap();
-    app.wait_for_gone("Restart Camera", WAIT).unwrap();
-    app.wait_for_gone("Download update", WAIT).unwrap();
     app.press("Reconnect").unwrap();
+    // The open sheet ends with the new version.
     app.wait_for_within("GRKit 1.8.0 Is Installed", WAIT)
         .unwrap();
-    app.press("Done").unwrap();
-    app.wait_for_gone("GRKit 1.8.0 Is Installed", WAIT).unwrap();
     // The phone read the update resource instead of sending again.
     assert_eq!(sent_packages(&network), 0);
 }
@@ -339,10 +344,12 @@ fn cancelling_an_update_posts_cancel_and_verifies_the_camera_journal() {
     // The update found on the camera shows on the camera tab first.
     app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
     app.press("GRKit 1.8.0 to Confirm").unwrap();
-    app.wait_for_within("Confirm on the Camera", WAIT).unwrap();
+    app.wait_for_within("Choose Execute", WAIT).unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Cancel Update".into()));
-    app.press("Cancel Update").unwrap();
-    app.wait_for_gone("Confirm on the Camera", WAIT).unwrap();
+    app.press("role:button[Cancel Update]").unwrap();
+    app.wait_for_gone("Choose Execute", WAIT).unwrap();
+    // The camera tab no longer offers the cancelled update.
+    app.wait_for_gone("GRKit 1.8.0 to Confirm", WAIT).unwrap();
     let requests = network.requests();
     let cancellation = requests
         .iter()
@@ -368,7 +375,7 @@ fn automatic_connection_starts_with_a_local_placeholder() {
     app.wait_for_gone("Add Your Camera", WAIT).unwrap();
     app.wait_for_gone("Connecting to RICOH GR III", WAIT)
         .unwrap();
-    app.wait_for_within("Firmware", WAIT).unwrap();
+    app.wait_for_within("Connected", WAIT).unwrap();
     app.wait_for_gone("Connecting to your camera…", WAIT)
         .unwrap();
 }
@@ -383,12 +390,12 @@ fn a_check_that_a_reconnect_overtakes_runs_again() {
         Duration::ZERO,
         Duration::from_millis(1500),
     );
-    app.wait_for_within("Firmware", WAIT).unwrap();
+    app.wait_for_within("Connected", WAIT).unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
     app.press("label:More").unwrap();
-    app.wait_for_gone("Firmware", WAIT).unwrap();
+    app.wait_for_gone("Connected", WAIT).unwrap();
     app.press("role:button[Connect]").unwrap();
-    app.wait_for_within("Firmware", WAIT).unwrap();
+    app.wait_for_within("Connected", WAIT).unwrap();
     for _ in 0..100 {
         if index_reads(&network) >= 2 {
             break;
@@ -396,7 +403,9 @@ fn a_check_that_a_reconnect_overtakes_runs_again() {
         app.wait(Duration::from_millis(100)).unwrap();
     }
     assert_eq!(index_reads(&network), 2);
-    app.press("role:button[GRKit 1.7.0]").unwrap();
+    // A failed check does not make the camera tab say it is up to date.
+    app.wait_for_gone("GRKit is up to date", WAIT).unwrap();
+    app.press("role:button[Software Update]").unwrap();
     // The page ends in a state with a way forward, not in a spinner.
     app.wait_for_within("Couldn't check for updates", WAIT)
         .unwrap();

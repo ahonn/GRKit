@@ -15,9 +15,9 @@ use crate::domain::{CameraModel, CoverGroup, Look, LookSource, group_of};
 use crate::store::{AppState, LookAction, Route, Tab};
 use crate::strings::tr;
 use crate::ui::{
-    action_row_loading, badge, camera_art, circle_button, control_row, cover_view, footnote,
-    grouped_card, loading_content, pill_button_loading, primary_button, quiet_spinner,
-    secondary_button, token,
+    action_row_loading, badge, camera_art, control_row, cover_view, footnote, grouped_card,
+    header_buttons, header_icon, header_text, loading_content, pill_button_loading, primary_button,
+    quiet_spinner, secondary_button, token,
 };
 
 const PLUS: &str = "M12 5v14M5 12h14";
@@ -38,16 +38,12 @@ pub fn looks_root(app: AppState) -> impl IntoElement {
         .header_right_items(move || native_header(app, editing))
         .header_right(dynamic(move || {
             can_add(app).then(|| {
-                view()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(can_edit(app).then(|| edit_button(editing)))
-                    .child((!editing.get()).then(|| {
-                        circle_button(PLUS, tr("looks.add_title", &[]), true, move || {
-                            app.open_add()
-                        })
-                    }))
+                edit_add_buttons(
+                    editing,
+                    can_edit(app),
+                    tr("looks.add_title", &[]),
+                    move || app.open_add(),
+                )
             })
         }))
         .child(looks_content(app, editing))
@@ -92,38 +88,32 @@ fn native_header(app: AppState, editing: Signal<bool>) -> Vec<HeaderItem> {
     items
 }
 
-/// Edit or Done in the header (Android). It has the fill and outline of
-/// the Add button.
-pub(crate) fn edit_button(editing: Signal<bool>) -> impl IntoElement {
-    dynamic(move || {
-        let on = editing.get();
+/// Edit or Done and Add in the header (Android). Add leaves while
+/// the list is edited.
+pub(crate) fn edit_add_buttons(
+    editing: Signal<bool>,
+    editable: bool,
+    add_label: String,
+    on_add: impl Fn() + 'static,
+) -> AnyElement {
+    let on = editing.get();
+    let mut buttons = Vec::new();
+    if editable {
         let title = tr(if on { "recipes.done" } else { "recipes.edit" }, &[]);
-        view()
-            .min_h(px(crate::ui::touch_target()))
-            .px_4()
-            .rounded_full()
-            .items_center()
-            .justify_center()
-            .border_1()
-            .border_color(crate::ui::control_border)
-            .bg(move || theme().card)
-            .role(AccessibilityRole::Button)
-            .label(title.clone())
-            .on_press(move || editing.set(!on))
-            .active(|s| s.opacity(0.72))
-            .child(
-                text(title)
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(move || theme().foreground),
-            )
-    })
+        buttons.push(header_text(title, move || editing.set(!on)));
+    }
+    if !on {
+        buttons.push(header_icon(PLUS, add_label, true, on_add));
+    }
+    header_buttons(buttons).into_element()
 }
 
 /// The scroll view stays while the Looks change: only its content follows
 /// them, so a change does not move the list back to the top.
 fn looks_content(app: AppState, editing: Signal<bool>) -> impl IntoElement {
     crate::ui::page_scroll()
+        .refresh(Some(crate::store::page_refresh::LOOKS.to_owned()))
+        .top_of(Some(crate::store::Tab::Looks.key().to_owned()))
         .flex_1()
         .bg(move || token("grouped"))
         .child(
@@ -198,10 +188,7 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
             let rows = hidden
                 .into_iter()
                 .enumerate()
-                .map(|(index, look)| {
-                    let gestures = (mode == RowMode::Browse).then(|| RowGestures::menu(app, &look));
-                    look_row(app, look, mode, index == last, gestures).into_element()
-                })
+                .map(|(index, look)| look_row(app, look, mode, index == last, None).into_element())
                 .collect();
             section(
                 tr("looks.off_section", &[]),
@@ -300,21 +287,18 @@ pub(crate) fn offline_card(app: AppState) -> impl IntoElement {
         }))
 }
 
-/// A list that is being read for the first time.
+/// A list that is being read for the first time: a placeholder row with a
+/// spinner and no copy. `message` is what a screen reader says.
 pub(crate) fn loading_card(message: String) -> impl IntoElement {
     grouped_card(
         view()
             .flex_row()
             .items_center()
-            .gap_2()
+            .justify_center()
+            .min_h(px(52.0))
             .p_4()
-            .child(quiet_spinner(16.0))
-            .child(
-                text(message)
-                    .flex_1()
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .text_color(move || theme().muted_foreground),
-            ),
+            .label(message)
+            .child(quiet_spinner(16.0)),
     )
 }
 
@@ -381,7 +365,7 @@ pub(crate) fn section(
                         .child(dynamic(move || working().then(|| quiet_spinner(14.0))))
                         .child(
                             text(count)
-                                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                                .text_size(px(crate::ui::ty::FOOTNOTE))
                                 .text_color(move || theme().muted_foreground),
                         ),
                 ),
@@ -434,10 +418,7 @@ fn menu_list(app: AppState, looks: Vec<Look>, mode: RowMode) -> AnyElement {
         let rows = looks
             .into_iter()
             .enumerate()
-            .map(|(index, look)| {
-                let gestures = RowGestures::menu(app, &look);
-                look_row(app, look, mode, index == last, Some(gestures)).into_element()
-            })
+            .map(|(index, look)| look_row(app, look, mode, index == last, None).into_element())
             .collect();
         return list(rows).into_element();
     }
@@ -589,65 +570,6 @@ pub(crate) struct HandleDrag {
     pub moved: Box<dyn Fn(f32)>,
     pub release: Box<dyn Fn()>,
     pub terminate: Box<dyn Fn()>,
-}
-
-impl RowGestures {
-    /// A row that does not move: holding it opens its menu.
-    fn menu(app: AppState, look: &Look) -> Self {
-        let look = look.clone();
-        RowGestures {
-            long_press: Box::new(move || look_menu(app, look.clone())),
-            release: None,
-            handle: None,
-        }
-    }
-}
-
-/// The menu of a held row: show or hide it, rename, cover, delete.
-pub fn look_menu(app: AppState, look: Look) {
-    look_menu_then(app, look, || {});
-}
-
-/// The menu of a held row, and `closed` once it closes.
-fn look_menu_then(app: AppState, look: Look, closed: impl FnOnce() + 'static) {
-    if app.look_busy().is_some() || app.looks_blocked().is_some() {
-        closed();
-        return;
-    }
-    spawn(async move {
-        let mut sheet = crate::ui::held_menu(look.name.clone());
-        if look.listed() {
-            sheet = sheet.action(
-                "toggle",
-                tr(
-                    if look.enabled {
-                        "looks.menu_hide"
-                    } else {
-                        "looks.menu_show"
-                    },
-                    &[],
-                ),
-            );
-        }
-        if look.editable() {
-            sheet = sheet
-                .action("rename", tr("looks.rename_title", &[]))
-                .action("cover", tr("looks.menu_cover", &[]));
-        }
-        let answer = sheet
-            .destructive("delete", tr("looks.delete", &[]))
-            .cancel("cancel", tr("looks.cancel", &[]))
-            .show()
-            .await;
-        closed();
-        match answer.ok().and_then(|a| a.action).as_deref() {
-            Some("toggle") => app.set_look_enabled(look.id.clone(), !look.enabled),
-            Some("rename") => app.ask_rename_look(look.id.clone()),
-            Some("cover") => app.push(Route::LookCover(look.id.clone())),
-            Some("delete") => crate::pages::look_pages::confirm_delete(app, look.clone()),
-            _ => {}
-        }
-    });
 }
 
 fn look_row(

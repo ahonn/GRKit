@@ -304,7 +304,8 @@
 #define DETAIL_PAGE_ITEMS 14U
 /* Item i of the details block `base`, a word pointer. */
 #define DETAIL_ITEM_AT(base, i) ((base) + (DETAIL_ITEMS + (i) * DETAIL_ITEM_SIZE) / 4U)
-/* The native icon IDs are below this; GRKit icon IDs start at 0x7000. */
+/* The native icon IDs are below this; GRKit icon IDs start at
+   GRKIT_ICON_FIRST. */
 #define DETAIL_NATIVE_ICONS 0x1000U
 /* The meta word: the group in bits 0 to 7, the name
    (runtime/recipe_detail_names.h) in bits 8 to 15, and for a setting of a
@@ -325,7 +326,7 @@
    each of the RECIPE_CARD_SLOTS composed tiles shows, four ASCII bytes, 0
    while the slot is free, then the slot that the next new tile takes. */
 #define SERVICES_CARDS (SERVICES_DETAILS + DETAILS_SIZE)
-#define RECIPE_CARD_SLOTS 12U
+#define RECIPE_CARD_SLOTS GRKIT_ICON_SLOTS_RECIPE_CARDS
 #define CARD_KEYS 0U
 #define CARD_NEXT (4U * RECIPE_CARD_SLOTS)
 #define CARDS_SIZE (CARD_NEXT + 4U)

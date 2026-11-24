@@ -1500,7 +1500,7 @@ static u32 playback_icon(volatile u32 *h,u32 value) {
     if(value>>16!=1 || !(code&0x8000)) return 0;
     for(i=0;i<h[GRKIT_HOST_COUNT/4];++i)
         if(HALF(h[GRKIT_HOST_RECORDS/4]+i*GRKIT_RECORD_SIZE,GRKIT_RECORD_CODE)==code)
-            return 0x8000+i;
+            return GRKIT_ICON_EFFECT(i);
     return 0;
 }
 /* The playback metadata singleton holds key 0x25 at METADATA_TONE. */
@@ -1513,26 +1513,16 @@ _Static_assert(GRKIT_ICONS_PER_CHUNK==40 && (GRKIT_HOST_ICON_CHUNKS_WORDS*40)*16
                "The module tile chunk uses slot / 40");
 /* IDs stay in transient private widgets and never enter native settings. */
 static u32 icon_address(volatile u32 *h,u32 id) {
-    u32 index=id-0x8000;
+    u32 index=id-GRKIT_ICON_EFFECT(0), slot=GRKIT_HOST_ICON_TOP-id;
     /* Module tiles follow the effect icons in the chunks. slot * 1639 >> 16
        is slot / 40 for each slot of the chunks. */
     if(id-GRKIT_ICON_MODULE_TILE(0)<GRKIT_MODULE_TILES_MAX) {
         return module_tile_address(h,id);
     }
     if(id-GRKIT_ICON_RECIPE(0)<GRKIT_RECIPE_SLOTS) return recipe_card_address(h,id-GRKIT_ICON_RECIPE(0));
-    if(id==GRKIT_ICON_GRKIT) return h[GRKIT_HOST_GRKIT_ICON/4];
-    /* The installer puts the Version icon after the GRKit icon. */
-    if(id==GRKIT_ICON_VERSION) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+GRKIT_ICON_STRIDE : 0;
-    /* The Modules icon follows the Version icon. */
-    if(id==GRKIT_ICON_MODULES) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+2*GRKIT_ICON_STRIDE : 0;
-    if(id==GRKIT_ICON_MODULES_OFF) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+3*GRKIT_ICON_STRIDE : 0;
-    if(id==GRKIT_ICON_ROTATE) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+4*GRKIT_ICON_STRIDE : 0;
-    if(id==GRKIT_ICON_SCALE_FEET) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+5*GRKIT_ICON_STRIDE : 0;
-    if(id==GRKIT_ICON_SCALE_SIXTEEN) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+6*GRKIT_ICON_STRIDE : 0;
-    if(id-GRKIT_ICON_BATTERY(0)<2U) return battery_icon_address(h,id);
-    /* The Update tile comes before the pictures of Battery Percentage. */
-    if(id==GRKIT_ICON_UPDATE) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+(GRKIT_HOST_ICON_COUNT-GRKIT_BATTERY_ICON_SLOTS-2U)*GRKIT_ICON_STRIDE : 0;
-    if(id==0x7fff) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : NATIVE_OFF_ICON();
+    if(id==GRKIT_ICON_OFF) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : NATIVE_OFF_ICON();
+    /* Host slot s has the ID GRKIT_HOST_ICON_TOP - s. */
+    if(slot<GRKIT_HOST_ICON_COUNT) return GRKIT_HOST_ICON(h,slot);
     if(index>=h[GRKIT_HOST_COUNT/4]) return 0;
     return WORD(h[GRKIT_HOST_RECORDS/4]+index*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);
 }
@@ -1898,7 +1888,7 @@ A32_ENTRY u32 menu_develop_row_answer(u32 controller,u32 view,u32 row) {
 #endif
     if(develop_grkit(h,controller)) return develop_fill(view,develop_list_icon(h,row));
     if(!develop_list(controller) || (i=develop_row(h,row))==DEVELOP_NONE) return DEVELOP_NONE;
-    return develop_fill(view,0x8000+i);
+    return develop_fill(view,GRKIT_ICON_EFFECT(i));
 }
 /* The current row: the row of the effect of the development, else the
    native row of the native value. */
@@ -2003,7 +1993,7 @@ A32_ENTRY u32 menu_develop_label(u32 model,u32 category,u32 value,u32 view) {
 /* The icon of an Image Control in the rows of the development. */
 A32_ENTRY u32 menu_develop_top_icon(u32 model,u32 category,u32 value) {
     u32 i=develop_index(menu_header());
-    if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) return 0x8000+i;
+    if(i!=DEVELOP_NONE && !category && value==DEVELOP_STANDARD) return GRKIT_ICON_EFFECT(i);
     return CALL3(FW_DEVELOP_TONE_ICON)(model,category,value);
 }
 #ifdef DEVELOP_ASPECT_LIST
