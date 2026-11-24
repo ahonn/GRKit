@@ -40,7 +40,7 @@
      particles developed at the middle of the paper curve. The grain is
      strongest in the middle tones and none at paper white or in black.
    - The grain is density: it darkens, so a value moves by its grain times
-     its tone, in each of R, G, and B. The filter writes the change of Y,
+     the tone of Y, in each of R, G, and B. The filter writes the change of Y,
      Cb, and Cr, so a picture without grain stays exact.
 
    The model leaves out what this pixel size does not show: its lognormal
@@ -168,7 +168,8 @@ static const u8 sublayer_scale[SUBLAYERS] = {20, 10, 5};
 
 typedef struct {
     u8 tiles[TEXTURES][TILE_H * TILE_STRIDE];
-    u8 line[TILE];
+    /* One row or column of a tile, with 3 wrapped samples on each side. */
+    u8 line[TILE + 6U];
     /* The grain of each layer for one cell of up to two luma rows, around
        128 (grain_noise), and the row below or above a row near the top or
        the bottom edge of its cell. */
@@ -228,13 +229,15 @@ static void blur(u8 *tile, u32 w, u32 h, u8 *line, u32 sigma)
         for (u32 i = 0; i < (pass ? w : h); ++i) {
             u32 step = pass ? w : 1U, n = pass ? h : w;
             u8 *at = tile + (pass ? i : i * w);
-            for (u32 j = 0; j < n; ++j) line[j] = at[j * step];
-            for (u32 j = 0; j < n; ++j) {
-                u32 sum = k[0] * line[j] + 2048U;
-                for (u32 d = 1; d <= 3U; ++d) {
-                    u32 before = j >= d ? j - d : j + n - d, after = j + d < n ? j + d : j + d - n;
-                    sum += k[d] * ((u32)line[before] + line[after]);
-                }
+            for (u32 j = 0; j < n; ++j) line[j + 3U] = at[j * step];
+            for (u32 j = 0; j < 3U; ++j) {
+                line[j] = line[n + j];
+                line[n + 3U + j] = line[3U + j];
+            }
+            const u8 *l = line;
+            for (u32 j = 0; j < n; ++j, ++l) {
+                u32 sum = k[0] * l[3] + k[1] * ((u32)l[2] + l[4]) + k[2] * ((u32)l[1] + l[5]) +
+                          k[3] * ((u32)l[0] + l[6]) + 2048U;
                 at[j * step] = (u8)(sum >> 12);
             }
         }
@@ -393,7 +396,7 @@ static void cell_hashes(Scratch *s, u32 seed, u32 cy, u32 first, u32 layers)
 }
 
 /* The hash of a cell, from those that cell_hashes keeps where it can. */
-static u32 cell_of(const Scratch *s, u32 seed, u32 cx, u32 cy, u32 layer)
+static inline __attribute__((always_inline)) u32 cell_of(const Scratch *s, u32 seed, u32 cx, u32 cy, u32 layer)
 {
     u32 row = cy - s->cell_row + 1U, column = cx + 1U;
     if (row < 3U && column < CELL_COLUMNS) return s->cells[layer][row][column];
@@ -445,28 +448,33 @@ void grain_chroma_blocks(const GrainChroma *b);
 #define GRAIN_NEON 0
 #endif
 
-/* The offsets of R, G, and B from Y for the CbCr sample c: Cr x 1.402,
-   -(Cb x 0.344 + Cr x 0.714), and Cb x 1.772 (JPEG, BT.601 full range). */
-static void film_offsets(const u8 *c, int *offset)
-{
-    int cb = (int)c[0] - 128, cr = (int)c[1] - 128;
-    offset[0] = cr + qrdmulh(cr, 13173);
-    offset[1] = qrdmulh(cb, -11277) + qrdmulh(cr, -23401);
-    offset[2] = cb + qrdmulh(cb, 25297);
-}
-
 /* The weights of R, G, and B in Y, in 1/32768. */
 static const short film_luma[LAYERS] = {9798, 19235, 3736};
 
-/* The grain of one luma sample *y with the offsets of its pair and the
-   grain z of each layer around 128, at the scale of the plane: each layer's
-   grain in density, in 1/64 levels, with the tone of its own value, added
-   to the sums of the pair; Y loses their weighted sum. */
-static void film_pixel(u8 *y, const int *offset, const u8 *z, short *sum, int scale)
+/* A saturated color has a channel near black or white, where a print shows
+   less grain. The tone of Y does not see that, so the tone of a pair loses
+   TONE_CHROMA_STEP / 32768 for each level of its chroma |Cb| + |Cr| above
+   TONE_CHROMA. A neutral color keeps its exact tone. The result is in Q15. */
+#define TONE_CHROMA 64
+#define TONE_CHROMA_STEP 180
+static int film_loss(const u8 *c)
 {
-    int v = *y, dy = 0;
+    int cb = (int)c[0] - 128, cr = (int)c[1] - 128;
+    int over = (cb < 0 ? -cb : cb) + (cr < 0 ? -cr : cr) - TONE_CHROMA;
+    int loss = over > 0 ? over * TONE_CHROMA_STEP : 0;
+    return loss > 32767 ? 32767 : loss;
+}
+
+/* The grain of one luma sample *y with the grain z of each layer around 128,
+   at the scale of the plane: each layer's grain in density, in 1/64 levels,
+   with the tone of Y less the chroma loss of its pair, added to the sums of
+   the pair; Y loses their weighted sum. */
+static void film_pixel(u8 *y, int loss, const u8 *z, short *sum, int scale)
+{
+    int v = *y, dy = 0, tone = grain_tone(v);
+    tone -= qdmulh(tone, loss);
     for (u32 l = 0; l < LAYERS; ++l) {
-        int d = qdmulh(((int)z[l] - 128) * grain_tone(clamp(v + offset[l])), scale);
+        int d = qdmulh(((int)z[l] - 128) * tone, scale);
         dy = (short)(dy + qdmulh(d, film_luma[l]));
         sum[l] = (short)(sum[l] + d);
     }
@@ -494,46 +502,47 @@ static void mono_pixel(u8 *y, int z, int scale)
 }
 
 #if GRAIN_NEON
-/* Registers of grain_luma_blocks: d0 the offset weights, d1 the scale and
-   the weights of R, G, and B in Y (s16 scalars), d5 `keep`, q4 TONE_LEFT, q5
-   TONE_RIGHT, q6 255 (s16), d14 128 and d15 TONE_PEAK (u8), d16 Y, d17
-   CbCr, d18 to d20 the grain, d2 to d4 R, G, B, q3 the change of Y.
-   FILM_LAYER: one layer \v with grain \z, weight \k, and sums at \sum. */
+/* Registers of grain_luma_blocks: d0 the chroma loss constants, d1 the scale
+   and the weights of R, G, and B in Y (s16 scalars), d5 `keep`, q4 TONE_LEFT,
+   q5 TONE_RIGHT, q6 255 (s16), d14 128 and d15 TONE_PEAK (u8), d16 Y, d17
+   CbCr, d18 to d20 the grain, q11 the tone, q3 the change of Y. FILM_LAYER: one layer with grain \z, weight
+   \k, and sums at \sum. */
 __asm__(
     ".pushsection .text.grain_neon,\"ax\",%progbits\n"
     ".syntax unified\n"
     ".fpu neon\n"
     ".thumb\n"
-    ".macro FILM_EXPAND src, out\n"
-    "    vmov d22, \\src\n"
-    "    vmov d23, \\src\n"
-    "    vzip.16 d22, d23\n"
-    "    vaddw.u8 q11, q11, d16\n"
-    "    vqmovun.s16 \\out, q11\n"
+    /* FILM_TONE: the tone of the 8 luma samples d16 into q11, less the loss
+       of the chroma d17 of each pair (film_loss): d28 TONE_CHROMA, d29 32767,
+       d0[1] TONE_CHROMA_STEP. */
+    ".macro FILM_TONE\n"
+    "    vsubl.u8 q12, d16, d15\n"
+    "    vmul.i16 q11, q12, q12\n"
+    "    vclt.s16 q13, q12, #0\n"
+    "    vbsl q13, q4, q5\n"
+    "    vqdmulh.s16 q11, q11, q13\n"
+    "    vqsub.u16 q11, q6, q11\n"
+    "    vabd.u8 d26, d17, d14\n"
+    "    vpaddl.u8 d26, d26\n"
+    "    vqsub.u16 d26, d26, d28\n"
+    "    vmul.i16 d26, d26, d0[1]\n"
+    "    vmin.u16 d26, d26, d29\n"
+    "    vmov d27, d26\n"
+    "    vzip.16 d26, d27\n"
+    "    vqdmulh.s16 q12, q11, q13\n"
+    "    vsub.i16 q11, q11, q12\n"
     ".endm\n"
-    ".macro FILM_LAYER_F v, z, k, out\n"
-    "    vsubl.u8 q12, \\v, d15\n"
-    "    vmul.i16 q13, q12, q12\n"
-    "    vclt.s16 q14, q12, #0\n"
-    "    vbsl q14, q4, q5\n"
-    "    vqdmulh.s16 q13, q13, q14\n"
-    "    vqsub.u16 q13, q6, q13\n"
+    ".macro FILM_LAYER_F z, k, out\n"
     "    vsubl.u8 q12, \\z, d14\n"
-    "    vmul.i16 q12, q12, q13\n"
+    "    vmul.i16 q12, q12, q11\n"
     "    vqdmulh.s16 q12, q12, d1[0]\n"
     "    vqdmulh.s16 q13, q12, \\k\n"
     "    vadd.i16 q3, q3, q13\n"
     "    vpadd.i16 \\out, d24, d25\n"
     ".endm\n"
-    ".macro FILM_LAYER v, z, k, sum\n"
-    "    vsubl.u8 q12, \\v, d15\n"
-    "    vmul.i16 q13, q12, q12\n"
-    "    vclt.s16 q14, q12, #0\n"
-    "    vbsl q14, q4, q5\n"
-    "    vqdmulh.s16 q13, q13, q14\n"
-    "    vqsub.u16 q13, q6, q13\n"
+    ".macro FILM_LAYER z, k, sum\n"
     "    vsubl.u8 q12, \\z, d14\n"
-    "    vmul.i16 q12, q12, q13\n"
+    "    vmul.i16 q12, q12, q11\n"
     "    vqdmulh.s16 q12, q12, d1[0]\n"
     "    vqdmulh.s16 q13, q12, \\k\n"
     "    vadd.i16 q3, q3, q13\n"
@@ -580,6 +589,8 @@ __asm__(
     "    ldr r8, [r0, #28]\n"
     "    ldr r11, [r0, #36]\n"
     "    vld1.16 {d0-d1}, [r11]\n"
+    "    vdup.16 d28, d0[0]\n"
+    "    vdup.16 d29, d0[2]\n"
     "    ldr r10, [r0, #40]\n"
     "    vdup.32 d5, r10\n"
     "    movw r10, #" GRAIN_STR(TONE_LEFT) "\n"
@@ -594,22 +605,11 @@ __asm__(
     "    vld1.8 {d18}, [r3]!\n"
     "    vld1.8 {d19}, [r4]!\n"
     "    vld1.8 {d20}, [r5]!\n"
-    "    vsubl.u8 q12, d17, d14\n"
-    "    vuzp.16 d24, d25\n"
-    "    vqrdmulh.s16 d26, d25, d0[0]\n"
-    "    vadd.i16 d26, d26, d25\n"
-    "    vqrdmulh.s16 d27, d24, d0[1]\n"
-    "    vqrdmulh.s16 d28, d25, d0[2]\n"
-    "    vadd.i16 d27, d27, d28\n"
-    "    vqrdmulh.s16 d28, d24, d0[3]\n"
-    "    vadd.i16 d28, d28, d24\n"
-    "    FILM_EXPAND d26, d2\n"
-    "    FILM_EXPAND d27, d3\n"
-    "    FILM_EXPAND d28, d4\n"
+    "    FILM_TONE\n"
     "    vmov.i16 q3, #0\n"
-    "    FILM_LAYER d2, d18, d1[1], r6\n"
-    "    FILM_LAYER d3, d19, d1[2], r7\n"
-    "    FILM_LAYER d4, d20, d1[3], r8\n"
+    "    FILM_LAYER d18, d1[1], r6\n"
+    "    FILM_LAYER d19, d1[2], r7\n"
+    "    FILM_LAYER d20, d1[3], r8\n"
     "    vrshr.s16 q3, q3, #6\n"
     "    vmovl.u8 q12, d16\n"
     "    vsub.i16 q12, q12, q3\n"
@@ -622,7 +622,7 @@ __asm__(
     ".size grain_luma_blocks, .-grain_luma_blocks\n"
     /* grain_film_blocks: as grain_luma_blocks, with the sums of each pair
        in d30, d31, d21 for R, G, B, and then its change of Cb and Cr: d2,
-       d3[0] their weights (reloaded from r10 after R, G, B are done), d5
+       d3[0] their weights, d5
        the rounding shift of a pair of 2 samples (-7). */
     ".p2align 2\n"
     ".global grain_film_blocks\n"
@@ -641,6 +641,8 @@ __asm__(
     "    ldr r5, [r0, #16]\n"
     "    ldr r11, [r0, #36]\n"
     "    vld1.16 {d0-d1}, [r11]!\n"
+    "    vdup.16 d28, d0[0]\n"
+    "    vdup.16 d29, d0[2]\n"
     "    mov r10, r11\n"
     "    vld1.16 {d2-d3}, [r10]\n"
     "    vdup.16 d5, d3[1]\n"
@@ -657,28 +659,16 @@ __asm__(
     "    vld1.8 {d18}, [r3]!\n"
     "    vld1.8 {d19}, [r4]!\n"
     "    vld1.8 {d20}, [r5]!\n"
-    "    vsubl.u8 q12, d17, d14\n"
-    "    vuzp.16 d24, d25\n"
-    "    vqrdmulh.s16 d26, d25, d0[0]\n"
-    "    vadd.i16 d26, d26, d25\n"
-    "    vqrdmulh.s16 d27, d24, d0[1]\n"
-    "    vqrdmulh.s16 d28, d25, d0[2]\n"
-    "    vadd.i16 d27, d27, d28\n"
-    "    vqrdmulh.s16 d28, d24, d0[3]\n"
-    "    vadd.i16 d28, d28, d24\n"
-    "    FILM_EXPAND d26, d2\n"
-    "    FILM_EXPAND d27, d3\n"
-    "    FILM_EXPAND d28, d4\n"
+    "    FILM_TONE\n"
     "    vmov.i16 q3, #0\n"
-    "    FILM_LAYER_F d2, d18, d1[1], d30\n"
-    "    FILM_LAYER_F d3, d19, d1[2], d31\n"
-    "    FILM_LAYER_F d4, d20, d1[3], d21\n"
+    "    FILM_LAYER_F d18, d1[1], d30\n"
+    "    FILM_LAYER_F d19, d1[2], d31\n"
+    "    FILM_LAYER_F d20, d1[3], d21\n"
     "    vrshr.s16 q3, q3, #6\n"
     "    vmovl.u8 q12, d16\n"
     "    vsub.i16 q12, q12, q3\n"
     "    vqmovun.s16 d24, q12\n"
     "    vst1.8 {d24}, [r1]!\n"
-    "    vld1.16 {d2-d3}, [r10]\n"
     "    vqdmulh.s16 d22, d30, d2[0]\n"
     "    vqdmulh.s16 d23, d31, d2[1]\n"
     "    vadd.i16 d22, d22, d23\n"
@@ -860,7 +850,7 @@ __asm__(
     "    FILM_HBLEND r0\n"
     "    pop {r4, pc}\n"
     ".size grain_hblend, .-grain_hblend\n"
-    ".purgem FILM_EXPAND\n"
+    ".purgem FILM_TONE\n"
     ".purgem FILM_HBLEND\n"
     ".purgem FILM_LAYER_F\n"
     ".purgem FILM_LAYER\n"
@@ -880,13 +870,12 @@ void grain_mono_blocks(const GrainBlocks *b)
 void grain_film_blocks(const GrainBlocks *b)
 {
     for (u32 j = 0; j < b->groups * 4U; ++j) {
-        int offset[LAYERS];
         short sum[LAYERS] = {0, 0, 0};
-        film_offsets(b->c + 2U * j, offset);
+        int loss = film_loss(b->c + 2U * j);
         for (u32 i = 0; i < 2U; ++i) {
             u32 x = 2U * j + i;
             u8 z[LAYERS] = {b->z[0][x], b->z[1][x], b->z[2][x]};
-            film_pixel(b->y + x, offset, z, sum, b->constants[4]);
+            film_pixel(b->y + x, loss, z, sum, b->constants[4]);
         }
         film_chroma((u8 *)b->c + 2U * j, sum, 2);
     }
@@ -899,14 +888,13 @@ void grain_vblend(u8 *out, const u8 *a, const u8 *b, u32 n, u32 weights)
 void grain_luma_blocks(const GrainBlocks *b)
 {
     for (u32 j = 0; j < b->groups * 4U; ++j) {
-        int offset[LAYERS];
         short sum[LAYERS];
-        film_offsets(b->c + 2U * j, offset);
+        int loss = film_loss(b->c + 2U * j);
         for (u32 l = 0; l < LAYERS; ++l) sum[l] = b->keep ? b->sum[l][j] : 0;
         for (u32 i = 0; i < 2U; ++i) {
             u32 x = 2U * j + i;
             u8 z[LAYERS] = {b->z[0][x], b->z[1][x], b->z[2][x]};
-            film_pixel(b->y + x, offset, z, sum, b->constants[4]);
+            film_pixel(b->y + x, loss, z, sum, b->constants[4]);
         }
         for (u32 l = 0; l < LAYERS; ++l) b->sum[l][j] = sum[l];
     }
@@ -926,10 +914,10 @@ void grain_chroma_blocks(const GrainChroma *b)
 static void grain_constants(Scratch *s, u32 scale)
 {
     short *k = s->constants;
-    k[0] = 13173;
-    k[1] = -11277;
-    k[2] = -23401;
-    k[3] = 25297;
+    k[0] = TONE_CHROMA;
+    k[1] = TONE_CHROMA_STEP;
+    k[2] = 32767;
+    k[3] = 0;
     k[4] = (short)scale;
     k[5] = film_luma[0];
     k[6] = film_luma[1];
@@ -1080,16 +1068,15 @@ static void grain_mono(const Plane *p, Scratch *s, u32 seed, int scale)
 static void film_pairs_c(Scratch *s, u8 *row, const u8 *c, const NoiseRow *z, u32 cell, u32 a, u32 b, u32 first, int scale)
 {
     for (u32 j = a >> 1; j < (b + 1U) >> 1; ++j) {
-        int offset[LAYERS];
         short sum[LAYERS];
         u32 pair = j - (cell >> 1);
-        film_offsets(c + (j << 1), offset);
+        int loss = film_loss(c + (j << 1));
         for (u32 l = 0; l < LAYERS; ++l) sum[l] = first ? 0 : s->pairs[l][pair];
         for (u32 x = j << 1; x < (j << 1) + 2U; ++x) {
             if (x < a || x >= b) continue;
             u32 t = x - cell, part = part_of(t);
             u8 zs[LAYERS] = {z[0].part[part][t], z[1].part[part][t], z[2].part[part][t]};
-            film_pixel(row + x, offset, zs, sum, scale);
+            film_pixel(row + x, loss, zs, sum, scale);
         }
         for (u32 l = 0; l < LAYERS; ++l) s->pairs[l][pair] = sum[l];
     }
@@ -1110,7 +1097,7 @@ static void film_chroma_c(Scratch *s, u8 *c, u32 cell, u32 a, u32 b, u32 rows)
 /* The grain of a color picture works on the pairs of luma samples that
    share a CbCr sample (one pair in each luma row, two rows with `half`):
    each luma sample gets the grain of R, G, and B in density with the tone
-   of its own R, G, and B, and its change of Y (film_pixel); the grain of
+   of its Y, and its change of Y (film_pixel); the grain of
    each layer is summed over the samples of the pair, and the pair gets the
    mean change of Cb and Cr (film_chroma). NEON does the blocks of 4 pairs
    (8 samples) of a cell that the visible area holds whole (cell_span):

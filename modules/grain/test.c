@@ -223,8 +223,8 @@ int main(void)
     cb = stats(&s.planes[0], 1);
     assert(st.sd > 3 && cb.sd == 0 && cb.mean == 128);
 
-    /* A color picture: the grain of each layer follows its own value. A
-       saturated red has its R near white and its B in the shadows. */
+    /* A saturated color keeps grain: its tone comes from Y, not from its
+       R, G, and B. */
     s = set_of_color(100, 90, 200, 1, 0);
     grain_draw(&s, 2, 2);
     st = stats(&s.planes[0], 0);
