@@ -764,6 +764,12 @@ static void write_records(const struct arrays *a, u32 pixels)
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[CATALOG_EFFECT_NAME + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + GRKIT_GRF_FLAGS));
         copy(at(record + GRKIT_RECORD_ID), profile + GRKIT_GRF_ID, GRKIT_GRF_ID_SIZE);
+        /* The grain of a look of GR IV Monochrome (runtime/picture.c): Grainy
+           takes the Rough grain of GR IV firmware, and Hi-Contrast has the
+           native default grain, which Grainy also takes without Rough. */
+        at(record + GRKIT_RECORD_LOOK_GRAIN)[0] =
+            grf_equal(profile + GRKIT_GRF_ID, (const u8 *)"gr4-mono-grainy", sizeof("gr4-mono-grainy")) ? 1 :
+            grf_equal(profile + GRKIT_GRF_ID, (const u8 *)"gr4-mono-high-contrast", sizeof("gr4-mono-high-contrast")) ? 2 : 0;
         /* The Image Control summary in each language: the prefix, then the name. */
         for (u32 language = 0; language < GRKIT_TEXT_LANGUAGES; ++language) {
             volatile u16 *summary = (volatile u16 *)at(text + GRKIT_TEXT_SUMMARY +

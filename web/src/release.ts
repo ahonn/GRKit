@@ -4,6 +4,9 @@
  */
 export const GR2_POSITIVE_SINCE = '1.7.0';
 
+/** The first release with the GR IV Monochrome looks, for the same reason. */
+export const GR4_MONO_SINCE = '1.7.0';
+
 /** True when the release `version` is `since` or later. */
 export function isReleased(since: string, version: string = __GRKIT_VERSION__): boolean {
   const parts = (value: string) => value.split('.').map(Number);

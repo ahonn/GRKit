@@ -1,6 +1,6 @@
 import type { Cover, CatalogEffect, PackageEffect } from './catalog';
 import { colorsFromLook, NEUTRAL_COLORS, resolveColors, type CoverColors } from './coverPalette';
-import { GR2_POSITIVE_SINCE } from './release';
+import { GR2_POSITIVE_SINCE, GR4_MONO_SINCE } from './release';
 import { groupOf } from './effectGroups';
 
 /** Film cover layouts that a custom cover can replace. */
@@ -112,16 +112,39 @@ const cinema = (number: string, look: 'cinemaYellow' | 'cinemaGreen'): Cover => 
 /** The camera whose firmware file holds a native look. */
 export type NativeFirmware = 'gr4' | 'gr2';
 
-const GR3_CAMERAS = ['gr3', 'gr3x'] as const;
+/** A cover of a look of GR IV Monochrome. */
+const monoCover = (name: string, number: string): Cover => ({
+  template: 'box',
+  brand: 'RICOH',
+  name,
+  number,
+  band: false,
+});
 
-const gr2Positive = (id: string, cameras: readonly string[]) => ({
+/** GR IV has the Cinema looks built in, and on it these converted copies would show wrong colors. */
+const CINEMA_CAMERAS: readonly string[] = ['gr3', 'gr3x'];
+/** GR IV Monochrome has its own looks built in. */
+const MONO_CAMERAS: readonly string[] = ['gr3', 'gr3x', 'gr4'];
+
+const monoLook = (id: string, name: string, line: string, number: string): NativeLookInfo => ({
+  id,
+  name,
+  firmware: 'gr4',
+  cover: monoCover(line, number),
+  monochrome: true,
+  cameras: MONO_CAMERAS,
+  since: GR4_MONO_SINCE,
+});
+
+const gr2Positive = (id: string, cameras: readonly string[]): NativeLookInfo => ({
   id,
   name: 'GR II Positive',
-  firmware: 'gr2' as const,
+  firmware: 'gr2',
+  monochrome: false,
   cameras,
   since: GR2_POSITIVE_SINCE,
   cover: {
-    template: 'cine' as const,
+    template: 'cine',
     brand: 'RICOH',
     name: 'GR II',
     number: 'POSITIVE',
@@ -129,24 +152,50 @@ const gr2Positive = (id: string, cameras: readonly string[]) => ({
   },
 });
 
-/**
- * The native looks that `nativeLooks` reads (the offered looks of grkit-core
- * `gr4_looks::LOOKS` and `gr2_looks::TARGETS`), in its order for each firmware. `cameras` are the
- * camera entries (`Camera.key`) that take the look. GR IV has the Cinema looks built in, and GR II
- * Positive has an effect for GR III's Standard and one for GR IV's.
- */
-export const NATIVE_LOOKS: readonly {
+/** A look that `nativeLooks` reads from a camera firmware file. */
+export interface NativeLookInfo {
   id: string;
   name: string;
   firmware: NativeFirmware;
+  cover: Cover;
+  monochrome: boolean;
+  /** The camera entries (`Camera.key`) that can use the look. */
   cameras: readonly string[];
   /** The first release whose packager reads the look. The page hides it before that release. */
   since?: string;
-  cover: Cover;
-}[] = [
-  { id: 'gr4-cinema-yellow', name: 'Cinema Yellow', firmware: 'gr4', cameras: GR3_CAMERAS, cover: cinema('YELLOW', 'cinemaYellow') },
-  { id: 'gr4-cinema-green', name: 'Cinema Green', firmware: 'gr4', cameras: GR3_CAMERAS, cover: cinema('GREEN', 'cinemaGreen') },
-  gr2Positive('gr2-positive-film', GR3_CAMERAS),
+}
+
+/**
+ * The native looks that `nativeLooks` reads (grkit-core `gr4_looks::LOOKS` and
+ * `gr2_looks::TARGETS`), in its order for each firmware. GR II Positive has an effect for GR III's
+ * Standard and one for GR IV's.
+ */
+export const NATIVE_LOOKS: readonly NativeLookInfo[] = [
+  {
+    id: 'gr4-cinema-yellow',
+    name: 'Cinema Yellow',
+    firmware: 'gr4',
+    cover: cinema('YELLOW', 'cinemaYellow'),
+    monochrome: false,
+    cameras: CINEMA_CAMERAS,
+  },
+  {
+    id: 'gr4-cinema-green',
+    name: 'Cinema Green',
+    firmware: 'gr4',
+    cover: cinema('GREEN', 'cinemaGreen'),
+    monochrome: false,
+    cameras: CINEMA_CAMERAS,
+  },
+  monoLook('gr4-mono-standard', 'Mono Standard', 'MONO', 'STD'),
+  monoLook('gr4-mono-solid', 'Mono Solid', 'MONO', 'SOLID'),
+  monoLook('gr4-mono-soft', 'Mono Soft', 'MONO', 'SOFT'),
+  monoLook('gr4-mono-high-contrast', 'Mono Hi-Contrast', 'MONO', 'HI'),
+  monoLook('gr4-mono-grainy', 'Mono Grainy', 'MONO', 'GRAINY'),
+  monoLook('gr4-mono-solarized-1', 'Solarized 1', 'MONO', 'SOLAR 1'),
+  monoLook('gr4-mono-solarized-2', 'Solarized 2', 'MONO', 'SOLAR 2'),
+  monoLook('gr4-mono-solarized-3', 'Solarized 3', 'MONO', 'SOLAR 3'),
+  gr2Positive('gr2-positive-film', CINEMA_CAMERAS),
   gr2Positive('gr2-positive-film-gr4', ['gr4']),
 ];
 
@@ -159,8 +208,9 @@ export const nativeLook = (id: string) => NATIVE_LOOKS.find((look) => look.id ==
  * is also the answer for another effect.
  */
 export function nativeCover(id: string, recorded: Cover | undefined, scheme: CoverScheme): Cover | undefined {
-  const base = nativeLook(id)?.cover;
-  return individualCover(base, recorded) ?? schemeCover(base, scheme);
+  const look = nativeLook(id);
+  const base = look?.cover;
+  return individualCover(base, recorded) ?? schemeCover(base, scheme, look?.monochrome ?? false);
 }
 
 /**

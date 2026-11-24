@@ -283,7 +283,7 @@ enum EffectsCommand {
         out: PathBuf,
     },
     /// Read native looks from your camera firmware into new effect definitions at
-    /// OUT/ID/effect.json: Cinema (Yellow) and Cinema (Green) from an official GR IV zip or its
+    /// OUT/ID/effect.json: the Cinema and Monochrome looks from an official GR IV zip or its
     /// fwdc248b.bin (1.11, 1.20, or 1.21), or GR II Positive (for GR III and for GR IV) from the official GR II zip or its
     /// rg2_v003.frm (3.00). GRKit ships none of this data.
     Native {

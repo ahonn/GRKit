@@ -95,8 +95,8 @@ function run(request: NativeRequest, signal: AbortSignal): Promise<NativeRespons
 }
 
 /**
- * Reads the native looks of an official firmware ZIP or its firmware file (GR IV: Cinema Yellow
- * and Cinema Green; GR II: GR II Positive), in a worker, and returns them as effects of the page.
+ * Reads the native looks of an official firmware ZIP or its firmware file (GR IV: the Cinema and
+ * Monochrome looks; GR II: GR II Positive), in a worker, and returns them as effects of the page.
  * The file stays in the browser. `baseGamma` is the catalog's, for the previews.
  */
 export async function unlockNativeLooks(

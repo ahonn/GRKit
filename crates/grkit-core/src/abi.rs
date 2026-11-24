@@ -615,9 +615,14 @@ fields!(RECORD_FIELDS {
     RECORD_POST = 0x704, 18;
     /// Selective color for recorded pictures: i16 cos and sin of the target hue
     /// (Q12), u16 inner and outer tangents toward smaller hue angles, then toward
-    /// larger ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72b are
+    /// larger ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72a are
     /// reserved and zero.
-    RECORD_SELECTIVE = 0x716, 0x72c - 0x716;
+    RECORD_SELECTIVE = 0x716, 0x72b - 0x716;
+    /// The grain that this effect has by itself: 0 none, 1 the Rough grain of GR IV
+    /// firmware (other cameras give 2), or 2 strong grain of medium size while the
+    /// Grain module is Off. INSTALL sets it from the effect ID. It is the last reserved
+    /// byte of a GRF.
+    RECORD_LOOK_GRAIN = 0x72b, 1;
     /// Fn adjustments of the effect: saturation, hue, high/low key, contrast,
     /// highlight contrast, shadow contrast, sharpness, shading, clarity. Each
     /// byte is (native value - 4) mod 9, so zero is neutral. A native value is

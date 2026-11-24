@@ -95,10 +95,11 @@ const ICONS: &[HookSpec] = &[
 /// CORE.GRAIN_SIZE, and the first test of its amplitude choice, which gives
 /// Extra Strong.
 const GRAIN: &[HookSpec] = &[
-    bl("grain_particle", Framing, PipelineGrain),
-    // Film Look needs the gate for the Shading and Clarity of its effects.
+    // Film Look needs these for the grain of its Hi-Contrast look, and the gate
+    // for the Shading and Clarity of its effects.
+    bl_shared("grain_particle", Framing, PipelineGrain, &[Tuning]),
     bl_shared("grain_gate", Framing, PipelineGrain, &[Tuning]),
-    bl("grain_fill", Framing, PipelineGrainSize),
+    bl_shared("grain_fill", Framing, PipelineGrainSize, &[Tuning]),
     b("grain_amplitude", Framing, PipelineGrain),
 ];
 

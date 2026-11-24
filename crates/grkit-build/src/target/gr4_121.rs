@@ -283,6 +283,7 @@ const SITES: &[Site] = &[
     // DigitalFilterProcess SetEffectParameter (0x53726fe4), and its stage
     // gate (0x5373a4ac, plan +0x25).
     ("grain_enable", 0x537271c0, "b537d4e5"),
+    ("grain_type", 0x537271cc, "9c37d4e5"),
     ("grain_strength", 0x537271e0, "b737d4e5"),
     ("grain_size", 0x53727204, "b637d4e5"),
     ("grain_gate", 0x5373a990, "c5feffeb"),
