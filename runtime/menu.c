@@ -1432,6 +1432,7 @@ u32 menu_playback_private(void) {
     return playback_icon(menu_header(),WORD(CALL0(FW_PLAYBACK_METADATA)(),METADATA_TONE));
 }
 #include "playback_info.h"
+#include "battery_percent.h"
 _Static_assert(GRKIT_ICONS_PER_CHUNK==40 && (GRKIT_HOST_ICON_CHUNKS_WORDS*40)*1639U>>16==GRKIT_HOST_ICON_CHUNKS_WORDS*40/40,
                "The module tile chunk uses slot / 40");
 /* IDs stay in transient private widgets and never enter native settings. */
@@ -1452,6 +1453,7 @@ static u32 icon_address(volatile u32 *h,u32 id) {
     if(id==GRKIT_ICON_ROTATE) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+4*GRKIT_ICON_STRIDE : 0;
     if(id==GRKIT_ICON_SCALE_FEET) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+5*GRKIT_ICON_STRIDE : 0;
     if(id==GRKIT_ICON_SCALE_SIXTEEN) return h[GRKIT_HOST_GRKIT_ICON/4] ? h[GRKIT_HOST_GRKIT_ICON/4]+6*GRKIT_ICON_STRIDE : 0;
+    if(id-GRKIT_ICON_BATTERY(0)<2U) return battery_icon_address(h,id);
     if(id==0x7fff) return h[GRKIT_HOST_OFF_ICON/4] ? h[GRKIT_HOST_OFF_ICON/4] : NATIVE_OFF_ICON();
     if(index>=h[GRKIT_HOST_COUNT/4]) return 0;
     return WORD(h[GRKIT_HOST_RECORDS/4]+index*GRKIT_RECORD_SIZE,GRKIT_RECORD_ICON);

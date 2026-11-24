@@ -131,6 +131,10 @@
 
 /* Playback metadata singleton (gr3.h: METADATA_*) and the native icon table. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5320b97c)
+/* The power report of the sub-CPU (runtime/battery_percent.h): the guard and
+   the holder of its service. */
+#define FW_POWER_GUARD FIRMWARE(0x55349090)
+#define FW_POWER_HOLDER FIRMWARE(0x55348f6c)
 #define FW_ICON_TABLE FIRMWARE(0x550020fc)
 /* RawDevelopmentModel: the guard of its static instance, and the instance.
    The family header gives its state (DEVELOP_STATE). */

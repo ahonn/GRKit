@@ -411,8 +411,12 @@ static unsigned view_call(unsigned fn, unsigned a, unsigned b, unsigned c, unsig
 /* The flag word of a running RAW development (runtime/menu.c:
    develop_running): no development runs. */
 static unsigned develop_guard;
+/* The guard and the service of the power report (runtime/battery_percent.h). */
+static unsigned power_guard, power_service;
 static unsigned *object_at(unsigned address)
 {
+    if (address == (FW_POWER_GUARD & ~3U)) return &power_guard;
+    if (address == FW_POWER_HOLDER + POWER_SERVICE) return &power_service;
 #ifdef FW_DEVELOP_GUARD
     if (address == (FW_DEVELOP_GUARD & ~3U)) return &develop_guard;
 #endif
@@ -1184,7 +1188,8 @@ static void module_tiles_follow_the_effect_icons(void)
     /* The labels of the manual focus scale in feet follow the Fn hint. */
     assert(menu_icon(GRKIT_ICON_SCALE_FEET) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 5 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 6 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN - 1) == 0);
+    assert(menu_icon(GRKIT_ICON_BATTERY(1)) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + (BATTERY_ICON_BASE + 2U) * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_BATTERY(0) - 1) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -2427,7 +2432,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 52, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 56, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -5662,6 +5667,44 @@ static void the_playback_info_has_its_row(void)
     settings_memory[2 + 17 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
 }
+/* The report word of the buffer that the writer has finished, the checks of
+   the charge, and a shown value that does not move near a step. */
+static void battery_percent_reads_the_power_report(void)
+{
+    unsigned service = TEST_OBJECTS + 0x4000U;
+    assert(!battery_report());
+    power_guard = 1;
+    power_service = service;
+    WORD(service, POWER_BUFFERS) = service + 0x40U;
+    WORD(service, POWER_BUFFERS + 4U) = service + 0x60U;
+    WORD(service + 0x40U, POWER_REPORT) = 0x4f042811U;
+    WORD(service + 0x60U, POWER_REPORT) = 0x53042811U;
+    WORD(service, POWER_INDEX) = 0;
+    assert(battery_report() == 0x4f042811U);
+    /* While the writer fills buffer 1, buffer 0 is the finished one. */
+    WORD(service, POWER_INDEX) = 1U | POWER_INDEX_BUSY;
+    assert(battery_report() == 0x4f042811U);
+    WORD(service, POWER_INDEX) = 1;
+    assert(battery_report() == 0x53042811U);
+    power_guard = power_service = 0;
+    assert(battery_charge(0x4f042811U, 4) == 79);
+    assert(battery_charge(0x4f842811U, 4) == 79);
+    assert(!battery_charge(0x4f042812U, 4) && !battery_charge(0x65042811U, 4) && !battery_charge(0x4f022811U, 4));
+    unsigned average = battery_average(0, 80, 100, 1);
+    assert(battery_points(average) == 80);
+    /* A moment of load moves the average by a fraction of the sample. */
+    assert(battery_points(battery_average(average, 64, 101, 0)) == 79);
+    assert(battery_points(battery_average(average, 64, 100 + BATTERY_AVERAGE_GAP, 0)) == 64);
+    assert(battery_next(BATTERY_FRONT, 79, 5) == (BATTERY_FRONT | 80 | 5U << BATTERY_CHANGE_SHIFT));
+    unsigned shown = 80 | 100U << BATTERY_CHANGE_SHIFT;
+    assert(battery_next(shown, 70, 100 + BATTERY_FALL_WAIT - 1) == shown);
+    assert((battery_next(shown, 70, 100 + BATTERY_FALL_WAIT) & BATTERY_SHOWN_MASK) == 78);
+    assert(battery_next(shown, 85, 100 + BATTERY_RISE_WAIT) == shown);
+    assert(battery_next(shown, 86, 100 + BATTERY_RISE_WAIT - 1) == shown);
+    assert((battery_next(shown, 87, 100 + BATTERY_RISE_WAIT) & BATTERY_SHOWN_MASK) == 88);
+    assert(battery_frame(0, 0, BATTERY_FILL) >> 24 == 0 && battery_frame(9, 10, BATTERY_FILL) == 0xfffefefeU &&
+           battery_frame(30, 20, BATTERY_FILL_LOW) == BATTERY_FILL_LOW && battery_frame(7, 20, BATTERY_FILL_LOW) == BATTERY_FILL && battery_frame(4, 20, BATTERY_FILL) == 0xfe000000U);
+}
 static void playback_put(unsigned at, unsigned value, unsigned bytes)
 {
     for (unsigned i = 0; i < bytes; ++i) playback_test_file[at + i] = (unsigned char)(value >> 8 * i);
@@ -6498,6 +6541,7 @@ int main(void)
     the_shutdown_screen_checks_its_file_at_the_start();
     the_shutdown_text_hides_its_views();
     the_playback_info_has_its_row();
+    battery_percent_reads_the_power_report();
     playback_lists_the_grkit_settings_of_a_photo();
     snap_distances_show_in_feet();
     a_unit_change_lays_out_the_distances_again();

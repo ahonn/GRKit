@@ -1293,6 +1293,37 @@ fn caption_glyph(character: u8) -> (usize, usize, Vec<u8>) {
     (width, height, coverage)
 }
 
+/// The digits of Battery Percentage after the caption glyphs, in the bold text
+/// with the outline of the live-view text (`runtime/battery_percent.h`).
+pub const BATTERY_DIGITS: usize = 10;
+const BATTERY_DIGIT_SIZE: f32 = 21.0;
+/// The height of each digit, and the row of its baseline.
+pub const BATTERY_DIGIT_HEIGHT: usize = 18;
+const BATTERY_DIGIT_BASELINE: usize = 16;
+
+fn battery_digit(digit: u8) -> (usize, usize, Vec<u8>) {
+    let font = FontRef::try_from_slice(FONT).expect("embedded font is valid");
+    let scaled = font.as_scaled(PxScale::from(BATTERY_DIGIT_SIZE));
+    let id = scaled.glyph_id(char::from(b'0' + digit));
+    let width = scaled.h_advance(id).round() as usize + 2 * OVERLAY_OUTLINE;
+    let height = BATTERY_DIGIT_HEIGHT;
+    let mut coverage = vec![0f32; width * height];
+    if let Some(outline) = font.outline_glyph(id.with_scale_and_position(
+        scaled.scale(),
+        point(OVERLAY_OUTLINE as f32, BATTERY_DIGIT_BASELINE as f32),
+    )) {
+        let origin = outline.px_bounds().min;
+        outline.draw(|x, y, value| {
+            let (x, y) = (origin.x as i32 + x as i32, origin.y as i32 + y as i32);
+            if (0..width as i32).contains(&x) && (0..height as i32).contains(&y) {
+                let cell = &mut coverage[y as usize * width + x as usize];
+                *cell = (*cell + value).min(1.0);
+            }
+        });
+    }
+    (width, height, outlined_text(width, height, coverage))
+}
+
 /// The tile of a recipe in the lists of ADJ, before its caption: the list
 /// frame and the stacked cards of the Recipes module, small, above the place
 /// of the caption. The core writes the abbreviation of the name of the
@@ -1412,8 +1443,8 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 
 /// The label table that the installer copies after the menu text
 /// (`GRKIT_LABELS` in `runtime/abi.h`): the labels, then the glyphs of
-/// `OVERLAY_GLYPHS`, the small glyphs of the same characters, and the
-/// caption glyphs of `CAPTION_CHARACTERS`. For entry n, a u16 width, a u16 height, and the u32
+/// `OVERLAY_GLYPHS`, the small glyphs of the same characters, the caption
+/// glyphs of `CAPTION_CHARACTERS`, and the digits of Battery Percentage. For entry n, a u16 width, a u16 height, and the u32
 /// offset of its rows at 8 n, then the rows of each entry (`overlay_label`,
 /// `overlay_glyph`). Each row holds only its drawn pixels: a u8 span
 /// count, then for each span a u16 first column, a u16 length, and its
@@ -1423,10 +1454,13 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 pub fn overlay_labels() -> Vec<u8> {
     let small = OVERLAY_LABELS.len() + OVERLAY_GLYPH_COUNT;
     let captions = small + OVERLAY_GLYPH_COUNT;
-    let entries = captions + CAPTION_CHARACTERS.len();
+    let digits = captions + CAPTION_CHARACTERS.len();
+    let entries = digits + BATTERY_DIGITS;
     let mut table = vec![0; entries * 8];
     for index in 0..entries {
-        let (width, height, pixels) = if let Some(caption) = index.checked_sub(captions) {
+        let (width, height, pixels) = if let Some(digit) = index.checked_sub(digits) {
+            battery_digit(digit as u8)
+        } else if let Some(caption) = index.checked_sub(captions) {
             caption_glyph(CAPTION_CHARACTERS[caption])
         } else if let Some(glyph) = index.checked_sub(small) {
             overlay_glyph(
