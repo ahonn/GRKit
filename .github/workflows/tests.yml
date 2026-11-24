@@ -65,10 +65,11 @@ jobs:
           GRKIT_CLANG: clang-21
           GRKIT_LLD: ld.lld-21
         run: |
-          test_name=tests::modules::date_blur_stays_within_stack_budget
-          cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name" --list \
-            | grep -Fx "$test_name: test"
-          cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name"
+          for test_name in tests::modules::date_blur_stays_within_stack_budget tests::modules::date_chain_stays_within_stack_budget; do
+            cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name" --list \
+              | grep -Fx "$test_name: test"
+            cargo test -p grkit-build --locked --lib -- --ignored --exact "$test_name"
+          done
       - if: runner.os == 'Linux'
         name: Check native memory safety
         env:
