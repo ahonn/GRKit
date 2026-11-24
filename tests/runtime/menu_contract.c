@@ -5823,6 +5823,12 @@ static void battery_percent_reads_the_power_report(void)
     assert(battery_next(shown, 85, 100 + BATTERY_RISE_WAIT) == shown);
     assert(battery_next(shown, 86, 100 + BATTERY_RISE_WAIT - 1) == shown);
     assert((battery_next(shown, 87, 100 + BATTERY_RISE_WAIT) & BATTERY_SHOWN_MASK) == 88);
+    unsigned digits[3];
+    assert(battery_digits(8, digits) == 1 && digits[0] == 8);
+    assert(battery_digits(100, digits) == 3 && digits[0] == 1 && !digits[1] && !digits[2]);
+    /* A shown value falls below 10, and the lowest step shows at once. */
+    assert((battery_next(10 | 100U << BATTERY_CHANGE_SHIFT, 2, 100 + BATTERY_FALL_WAIT) & BATTERY_SHOWN_MASK) == 8);
+    assert(battery_next(BATTERY_FRONT, BATTERY_PERCENT_MIN, 5) == (BATTERY_FRONT | 2 | 5U << BATTERY_CHANGE_SHIFT));
     assert(battery_frame(0, 0, BATTERY_FILL) >> 24 == 0 && battery_frame(9, 10, BATTERY_FILL) == 0xfffefefeU &&
            battery_frame(30, 20, BATTERY_FILL_LOW) == BATTERY_FILL_LOW && battery_frame(7, 20, BATTERY_FILL_LOW) == BATTERY_FILL && battery_frame(4, 20, BATTERY_FILL) == 0xfe000000U);
 }

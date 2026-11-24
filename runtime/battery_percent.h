@@ -39,7 +39,9 @@ _Static_assert(BATTERY_DIGIT_TOP+GRKIT_BATTERY_DIGIT_HEIGHT<=BATTERY_ICON_HEIGHT
 /* The native levels below this one show a warning icon. */
 #define BATTERY_LEVEL_LOW 2U
 #define BATTERY_LEVEL_MAX 4U
-#define BATTERY_PERCENT_MIN 10U
+/* The least value that shows: the lowest step. A lower charge keeps the
+   native icon. */
+#define BATTERY_PERCENT_MIN BATTERY_PERCENT_STEP
 /* A shown value up to this one has a yellow inside, #D6B020. */
 #define BATTERY_PERCENT_LOW 20U
 #define BATTERY_FILL (0xff000000U|GRKIT_TILE_FILL*0x010101U)
@@ -154,15 +156,19 @@ static u32 battery_digit(const volatile u8 *table,volatile u32 *to,u32 left,u32 
     }
     return width-BATTERY_DIGIT_OUTLINES;
 }
-/* Write the picture of `value`, 10 to 100: the number over the battery. */
+/* The digits of `value`, 0 to 100, without a leading zero. Returns their count. */
+static u32 battery_digits(u32 value,u32 digits[3]) {
+    u32 n=0, tens=BATTERY_TENS(value);
+    if(tens==10U) { digits[n++]=1U; digits[n++]=0U; }
+    else if(tens) digits[n++]=tens;
+    digits[n++]=value-tens*10U;
+    return n;
+}
+/* Write the picture of `value`, BATTERY_PERCENT_MIN to 100: the number over the battery. */
 static void battery_write(volatile u32 *h,volatile u32 *to,u32 value) {
     const volatile u8 *table=(const volatile u8 *)GRKIT_LABELS(h);
-    u32 digits[3], n=0, width=BATTERY_DIGIT_OUTLINES, tens=BATTERY_TENS(value), x, y, i;
+    u32 digits[3], n=battery_digits(value,digits), width=BATTERY_DIGIT_OUTLINES, x, y, i;
     u32 fill=value<=BATTERY_PERCENT_LOW ? BATTERY_FILL_LOW : BATTERY_FILL;
-    u32 ones=value-tens*10U;
-    if(tens==10U) { digits[n++]=1U; tens=0; }
-    digits[n++]=tens;
-    digits[n++]=ones;
     for(y=0;y<BATTERY_ICON_HEIGHT;++y)
         for(x=0;x<BATTERY_ICON_WIDTH;++x) to[y*BATTERY_ICON_WIDTH+x]=battery_frame(x,y,fill);
     for(i=0;i<n;++i) width+=card_field(table,(GRKIT_BATTERY_DIGIT_FIRST+digits[i])*8U,2)-BATTERY_DIGIT_OUTLINES;
