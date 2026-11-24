@@ -142,6 +142,8 @@
    The family header gives its state (DEVELOP_STATE). */
 #define FW_DEVELOP_GUARD FIRMWARE(0x550665a0)
 #define FW_DEVELOP_MODEL FIRMWARE(0x550669b0)
+/* The update of the development model after a store of Toning. */
+#define FW_DEVELOP_TONING_UPDATE FIRMWARE(0x5328a05c)
 /* RAW development, the Image Control list (runtime/menu.c): the label and
    the icon of an Image Control (model, category, value). */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x5328b97c)

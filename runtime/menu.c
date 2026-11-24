@@ -1982,15 +1982,18 @@ static void develop_toning_curves(volatile u32 *h) {
     u32 record=develop_toning_record(h), curves=h[GRKIT_HOST_TAIL/4]+GRKIT_DEVELOP_CURVES, value, slot, i;
     int level;
     h[GRKIT_HOST_DEVELOP_TONED/4]=0;
+    if(record) {
+        value=DEVELOP_SET(PARAMETER_TONING_KIND);
+        level=value>=2U ? 1 : (int)value-1;
+        if(level!=toning_value(BYTE(record,GRKIT_RECORD_TONING))) {
+            slot=h[GRKIT_HOST_TAIL/4]+GRKIT_TONE_CURVES+(BYTE(record,GRKIT_RECORD_TONE_SLOT)-1U)*GRKIT_TONE_SLOT_SIZE;
+            for(i=0;i<GRKIT_DEVELOP_CURVES_SIZE;i+=4) WORD(curves,i)=WORD(record+GRKIT_RECORD_CURVES,i);
+            toning_curves(curves,slot,level);
+            h[GRKIT_HOST_DEVELOP_TONED/4]=record;
+        }
+    }
+    /* Last: a build during the change cannot keep a key of older curves. */
     h[GRKIT_HOST_GAMMA_KEY/4]=0;
-    if(!record) return;
-    value=DEVELOP_SET(PARAMETER_TONING_KIND);
-    level=value>=2U ? 1 : (int)value-1;
-    if(level==toning_value(BYTE(record,GRKIT_RECORD_TONING))) return;
-    slot=h[GRKIT_HOST_TAIL/4]+GRKIT_TONE_CURVES+(BYTE(record,GRKIT_RECORD_TONE_SLOT)-1U)*GRKIT_TONE_SLOT_SIZE;
-    for(i=0;i<GRKIT_DEVELOP_CURVES_SIZE;i+=4) WORD(curves,i)=WORD(record+GRKIT_RECORD_CURVES,i);
-    toning_curves(curves,slot,level);
-    h[GRKIT_HOST_DEVELOP_TONED/4]=record;
 }
 #endif
 static void develop_set(volatile u32 *h) {
@@ -2019,6 +2022,15 @@ A32_ENTRY u32 menu_develop_mark(u32 index) {
 A32_ENTRY void menu_develop_toning_slider(u32 config,u32 low,u32 high,u32 step,u32 base,u32 a,u32 b,u32 c,
                                           u32 track,u32 knob,u32 held) {
     toning_slider(develop_toning_record(menu_header()),config,low,high,step,base,a,b,c,track,knob,held);
+}
+/* The model setter of Toning refuses Standard. While Standard is selected
+   for an effect with Toning, store `value` in the set: 1, or 0 for the
+   native setter. */
+A32_ENTRY u32 menu_develop_toning_store(u32 model,u32 value) {
+    if(!develop_toning_record(menu_header()) || BYTE(model,DEVELOP_CATEGORY) ||
+       BYTE(model,DEVELOP_VALUES)!=DEVELOP_STANDARD) return 0;
+    DEVELOP_SET(PARAMETER_TONING_KIND)=(u8)value;
+    return 1;
 }
 /* After the model setter of Toning: a change, or the restore of a cancel. */
 A32_ENTRY void menu_develop_toning_changed(void) {

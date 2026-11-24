@@ -639,7 +639,7 @@ PARAMETER_ROW 9, HOOK_MENU_PARAMETER_ROW_9_TARGET
 .ltorg
 
 #ifdef HOOK_MENU_PARAMETER_MARK_0
-/* Replace the BL of the slider setup of a row to the native default of the
+/* Replace the call of the slider setup of a row to the native default of the
    type, which places the marker of the slider. The read keeps its arguments,
    so a native read is a tail call. */
 .macro PARAMETER_MARK index, target
@@ -670,13 +670,13 @@ PARAMETER_MARK 8, HOOK_MENU_PARAMETER_MARK_8_TARGET
 #endif
 #ifdef HOOK_MENU_PARAMETER_MARK_9
 PARAMETER_MARK 9, HOOK_MENU_PARAMETER_MARK_9_TARGET
-/* The BL of the Toning row to the slider setup: the arguments go on to
+/* The call of the Toning row to the slider setup: the arguments go on to
    menu_parameter_toning_slider (menu.c), which calls the setup. */
 .global menu_parameter_toning_init
 .type menu_parameter_toning_init, %function
 menu_parameter_toning_init:
     b menu_parameter_toning_slider
-/* The tail branch of the Toning row text to the native text of a value. r1 =
+/* The end of the Toning row text, which asks for the native text of a value. r1 =
    the text. The row text returns the length of the text. */
 .global menu_parameter_toning_text
 .type menu_parameter_toning_text, %function
@@ -695,7 +695,7 @@ menu_parameter_toning_text:
 
 #ifdef HOOK_MENU_DEVELOP_KINDS
 /* The parameter page of the development (menu.c: menu_develop_toning_base).
-   The BL of the page to the base kind of its type: r0 = the page, r1 = the
+   The call of the page to the base kind of its type: r0 = the page, r1 = the
    type; the base kind goes on to menu_develop_toning_base. */
 .global menu_develop_kinds
 .type menu_develop_kinds, %function
@@ -705,7 +705,7 @@ menu_develop_kinds:
     blx r12
     bl menu_develop_toning_base
     pop {r4, pc}
-/* The BL of the slider setup of a row to the native default of the type, as
+/* The call of the slider setup of a row to the native default of the type, as
    on the page of a record (PARAMETER_MARK). */
 .macro DEVELOP_MARK index, target
 .global menu_develop_mark_\index
@@ -733,25 +733,36 @@ DEVELOP_MARK 7, HOOK_MENU_DEVELOP_MARK_7_TARGET
 DEVELOP_MARK 8, HOOK_MENU_DEVELOP_MARK_8_TARGET
 DEVELOP_MARK 9, HOOK_MENU_DEVELOP_MARK_9_TARGET
 .ltorg
-/* The BL of the Toning row of the development to the slider setup. */
+/* The call of the Toning row of the development to the slider setup. */
 .global menu_develop_toning_init
 .type menu_develop_toning_init, %function
 menu_develop_toning_init:
     b menu_develop_toning_slider
 /* The entry of the model setter of Toning in the development (r0 = the
-   model, r1 = the value): the setter runs, then the curves of the
+   model, r1 = the value). The native setter refuses Standard, so the core
+   stores the value of an effect with Toning and the model updates as after
+   a native store (menu.c: menu_develop_toning_store). Then the curves of the
    development follow the set (menu.c: menu_develop_toning_changed). */
 .global menu_develop_toning_set
 .type menu_develop_toning_set, %function
 menu_develop_toning_set:
-    push {r4, lr}
+    push {r0, r1, r4, lr}
+    bl menu_develop_toning_store
+    cmp r0, #0
+    pop {r0, r1}
+    beq 2f
+    ldr r12, =FW_DEVELOP_TONING_UPDATE
+    blx r12
+    b 3f
+2:
     bl 1f
+3:
     bl menu_develop_toning_changed
     pop {r4, pc}
 1:
     .inst HOOK_MENU_DEVELOP_TONING_SET_STOCK
     ldr pc, =HOOK_MENU_DEVELOP_TONING_SET_RESUME
-/* The BL of the Toning row text of the development to the native text of a
+/* The call of the Toning row text of the development to the native text of a
    value: r1 = the text, r2 = the value. */
 .global menu_develop_toning_text
 .type menu_develop_toning_text, %function

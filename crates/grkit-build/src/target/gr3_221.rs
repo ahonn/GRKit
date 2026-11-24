@@ -294,10 +294,10 @@ const SITES: &[Site] = &[
     ("menu_parameter_get_9", 0x532c50fc, "0dc0a0e1"),
     ("menu_parameter_set_9", 0x532c2ea0, "0dc0a0e1"),
     ("menu_parameter_row_9", 0x532af14c, "e9760aeb"),
-    // The slider setups of the rows of ImageControlDetailController: the BL
+    // The slider setups of the rows of ImageControlDetailController: the call
     // to the native default of the type (Saturation 0x531ae01c to Clarity
-    // 0x531af708, Toning 0x531aeb5c), the BL of the Toning setup to
-    // FW_SLIDER_INIT, and the tail branch of the Toning row text 0x532af130.
+    // 0x531af708, Toning 0x531aeb5c), the call of the Toning setup to
+    // FW_SLIDER_INIT, and the end of the Toning row text 0x532af130.
     ("menu_parameter_mark_0", 0x531ae050, "0c5f04eb"),
     ("menu_parameter_mark_1", 0x531ae190, "576004eb"),
     ("menu_parameter_mark_2", 0x531ae2d0, "a26104eb"),
@@ -310,12 +310,12 @@ const SITES: &[Site] = &[
     ("menu_parameter_mark_9", 0x531aeb90, "906a04eb"),
     ("menu_parameter_toning_init", 0x531aebdc, "fbcb07eb"),
     ("menu_parameter_toning_text", 0x532af164, "b8ffffea"),
-    // The parameter page of a RAW development: the BL of its kinds method
-    // 0x5318ed84 to the base kind of a type, the BLs to the native default
+    // The parameter page of a RAW development: the call of its kinds method
+    // 0x5318ed84 to the base kind of a type, the calls to the native default
     // in the slider setups of its rows (Saturation 0x5318f418 to Clarity
-    // 0x53190b28, Toning 0x5318ff58), the BL of the Toning setup to
-    // FW_SLIDER_INIT, the entry of the model setter of Toning, and the BL of
-    // the Toning row text 0x53191a40 to the native text of a value.
+    // 0x53190b28, Toning 0x5318ff58), the call of the Toning setup to
+    // FW_SLIDER_INIT, the entry of the model setter of Toning, and the call
+    // of the Toning row text 0x53191a40 to the native text of a value.
     ("menu_develop_kinds", 0x5318edd4, "b1ffffeb"),
     ("menu_develop_mark_0", 0x5318f44c, "34df03eb"),
     ("menu_develop_mark_1", 0x5318f58c, "eede03eb"),

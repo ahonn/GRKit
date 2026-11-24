@@ -1891,8 +1891,10 @@ int main(void)
            the crop of its DNG. */
         develop_hold(header, record(2));
         develop_crops = 0;
+        header[GRKIT_HOST_DEVELOP_TONED / 4] = record(2);
         picture_develop_start();
         assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
+        assert(header[GRKIT_HOST_DEVELOP_TONED / 4] == 0);
         assert(develop_crops == 1);
         /* The development starts from the settings that its DNG records
            (runtime/photo_xmp.h: grkit:State), not from the current ones,

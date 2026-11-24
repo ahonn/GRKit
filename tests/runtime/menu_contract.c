@@ -1157,8 +1157,22 @@ static void develop_toning_follows_the_set(void)
         }
     }
     assert(BYTE(record, GRKIT_RECORD_TONING) == 0);
+    /* The core stores Toning for Standard only, which the native setter
+       refuses. */
+    const u32 model = TEST_OBJECTS + 0x3a00U;
+    BYTE(model, DEVELOP_CATEGORY) = 0;
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD;
+    develop_model_set[PARAMETER_TONING_KIND] = 1;
+    assert(menu_develop_toning_store(model, 2) == 1 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD + 1;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD;
+    BYTE(model, DEVELOP_CATEGORY) = 1;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_CATEGORY) = 0;
     /* Without Toning, or without an effect in the set, the page is native. */
     BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
     assert(menu_develop_toning_base(0) == 0 && menu_develop_toning_label(text, 2) == 0);
     menu_develop_toning_changed();
     assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == 0);

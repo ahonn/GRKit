@@ -104,19 +104,19 @@ const GRAIN: &[HookSpec] = &[
 
 /// Toning of a native look on the parameter page (`runtime/toning.h`): the
 /// Image Control model getter and setter of the Retro Toning row (kind 9), and
-/// the BL to its settings getter in the row text. Then, in the slider setup
-/// of each row of the page, the BL to the native default of the type, which
+/// the call to its settings getter in the row text. Then, in the slider setup
+/// of each row of the page, the call to the native default of the type, which
 /// places the marker of the slider (`menu_parameter_mark`): the nine
 /// adjustments in the order of `GRKIT_RECORD_PARAMETERS`, then Toning. Last,
-/// the BL of the Toning slider setup to `FW_SLIDER_INIT`, and the tail branch
-/// of the Toning row text to the native text of a value.
+/// the call of the Toning slider setup to `FW_SLIDER_INIT`, and the end of the
+/// Toning row text, which asks for the native text of a value.
 /// The parameter page of a RAW development
 /// (RawDevelopmentImageControlDetailSetController) gets the same, for the
 /// effect whose adjustments the Standard set of the development holds
-/// (`runtime/develop.h`): the BL to the base kind of its type, the BLs to the
-/// native defaults, the BL of the Toning setup to `FW_SLIDER_INIT`, the entry
-/// of the model setter of Toning in the development, and the BL of the
-/// Toning row text to the native text of a value.
+/// (`runtime/develop.h`): the call to the base kind of its type, the calls to
+/// the native defaults, the call of the Toning setup to `FW_SLIDER_INIT`, the
+/// entry of the model setter of Toning in the development, and the call of
+/// the Toning row text to the native text of a value.
 const TONING: &[HookSpec] = &[
     b("menu_parameter_get_9", Menu, Tuning),
     b("menu_parameter_set_9", Menu, Tuning),

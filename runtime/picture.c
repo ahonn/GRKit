@@ -624,6 +624,7 @@ void picture_develop_start(void) {
        ones (runtime/develop.h). */
     h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
     h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
+    h[GRKIT_HOST_DEVELOP_TONED/4]=0;
     develop_copy_start(h,settings_table(h));
     picture_develop_record(h);
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
