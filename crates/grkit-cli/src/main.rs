@@ -111,6 +111,11 @@ enum Command {
         /// `--language`. `grkit guides` writes its source.
         #[arg(long)]
         guide: PathBuf,
+        /// Package one `--build` for a camera that runs more builds, as a
+        /// local build for one firmware. The package installs only on that
+        /// firmware.
+        #[arg(long)]
+        single_build: bool,
         #[arg(long)]
         out: PathBuf,
     },
@@ -131,7 +136,13 @@ enum Command {
         decode: bool,
     },
     /// Check package layout, profiles and checksums.
-    Verify { archive: PathBuf },
+    Verify {
+        archive: PathBuf,
+        /// Accept a package from `grkit package --single-build`. Without this
+        /// option, a package must hold each build of its camera.
+        #[arg(long)]
+        single_build: bool,
+    },
     /// List the cameras, the firmware releases that each runs, and the runtime
     /// build for each release.
     Cameras,
@@ -612,6 +623,7 @@ fn run(command: Command) -> Result<Value> {
             camera,
             language,
             guide,
+            single_build,
             out,
         } => {
             let runtimes = build
@@ -629,7 +641,7 @@ fn run(command: Command) -> Result<Value> {
                 .iter()
                 .map(|path| storage::read_bounded(path, packaging::MAX_FILE_SIZE))
                 .collect::<Result<Vec<_>>>()?;
-            let package = packaging::assemble(
+            let package = packaging::assemble_with(
                 &runtimes,
                 &effects,
                 &modules,
@@ -637,6 +649,10 @@ fn run(command: Command) -> Result<Value> {
                 &packaging::Guide {
                     language,
                     pdf: &pdf,
+                },
+                packaging::Extras {
+                    single_build,
+                    ..Default::default()
                 },
             )?;
             storage::write_new(&out, &package.bytes)?;
@@ -702,10 +718,17 @@ fn run(command: Command) -> Result<Value> {
                 .with_context(|| format!("Could not write {}", out.display()))?;
             Ok(json!({"output": out, "recipes": library.len(), "bytes": file.len()}))
         }
-        Command::Verify { archive } => {
+        Command::Verify {
+            archive,
+            single_build,
+        } => {
             // Include room for ZIP metadata while bounding the archive read itself.
             let bytes = storage::read_bounded(&archive, 64 * 1024 * 1024)?;
-            let contents = packaging::verify_package(&bytes)?;
+            let contents = if single_build {
+                packaging::verify_single_build_package(&bytes)?
+            } else {
+                packaging::verify_package(&bytes)?
+            };
             Ok(
                 json!({"valid": true, "camera": contents.camera.id, "targets": contents.targets,
                 "effects": contents.effect_ids.len(),
