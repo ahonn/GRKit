@@ -58,7 +58,7 @@ owned_done:
 // record (only the installer writes its curves), the bypass byte of the packet
 // (+0x89), and the base curve. GRKIT_HOST_GAMMA_KEY keeps a hash of these
 // inputs for the last composition of a private record.
-// r0 = gamma object, r1 = record, r2 = packet. Return Z=1 when the object
+// r0 = gamma object, r1 = the curves, r2 = packet. Return Z=1 when the object
 // still holds the composition of these inputs: the key matches and the native
 // path has not rebuilt the object since (GAMMA_BUILT is 0). Else store the key
 // of these inputs. Preserve all registers.

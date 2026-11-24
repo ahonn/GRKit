@@ -582,6 +582,15 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Battery Percentage: the average of the charge and the time of its
     /// last sample (runtime/battery_percent.h).
     HOST_BATTERY_AVERAGE: 4;
+    /// The Toning track that the parameter page shows for a native look with
+    /// Toning (runtime/menu.c: toning_track): an 8-byte icon descriptor, then
+    /// the pixels, in a firmware block that the core makes at its first use;
+    /// else 0.
+    HOST_TONING_TRACK: 4;
+    /// The record whose Toning in the RAW development differs from its own
+    /// (runtime/develop.h): while a development runs, its builds take the
+    /// curves at GRKIT_DEVELOP_CURVES of the tail for it; else 0.
+    HOST_DEVELOP_TONED: 4;
 });
 
 pub const RECORD_SIZE: usize = 0x1100;
@@ -864,9 +873,15 @@ pub const PROFILE_SIZE: usize = PROFILE_SLOTS + PROFILE_SLOT_COUNT * PROFILE_SLO
 pub const TONE_CURVES: usize = PROFILE + PROFILE_SIZE;
 pub const TONE_SLOTS: usize = 4;
 pub const TONE_SLOT_SIZE: usize = 2 * 512;
+/// The curves of a RAW development with its own Toning of a native look
+/// (`HOST_DEVELOP_TONED`): the red, green, and blue curves of 256 u16 samples
+/// each, as the record holds them.
+pub const DEVELOP_CURVES: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
+pub const DEVELOP_CURVES_SIZE: usize = 3 * 512;
 /// Everything after the records: the picture scratch, the menu text, the
-/// live-view labels, the profile table, then the Toning curves.
-pub const TAIL_SIZE: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
+/// live-view labels, the profile table, the Toning curves, then the curves
+/// of a development.
+pub const TAIL_SIZE: usize = DEVELOP_CURVES + DEVELOP_CURVES_SIZE;
 // The summaries of every record in every menu language end before the
 // value of a group page.
 const _: () = assert!(
@@ -1716,6 +1731,18 @@ pub fn header() -> String {
     );
     writeln!(out, "#define GRKIT_TONE_SLOTS {TONE_SLOTS}").unwrap();
     writeln!(out, "#define GRKIT_TONE_SLOT_SIZE {TONE_SLOT_SIZE}").unwrap();
+    define(
+        &mut out,
+        "The red, green, and blue curves of a RAW development with its own Toning \
+         (GRKIT_HOST_DEVELOP_TONED), 256 u16 samples each.",
+        "DEVELOP_CURVES",
+        DEVELOP_CURVES,
+    );
+    writeln!(
+        out,
+        "#define GRKIT_DEVELOP_CURVES_SIZE {DEVELOP_CURVES_SIZE}"
+    )
+    .unwrap();
     writeln!(
         out,
         "#define GRKIT_TEXT_SUMMARY {}",

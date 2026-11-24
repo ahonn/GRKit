@@ -104,11 +104,49 @@ const GRAIN: &[HookSpec] = &[
 
 /// Toning of a native look on the parameter page (`runtime/toning.h`): the
 /// Image Control model getter and setter of the Retro Toning row (kind 9), and
-/// the BL to its settings getter in the row text.
+/// the call to its settings getter in the row text. Then, in the slider setup
+/// of each row of the page, the call to the native default of the type, which
+/// places the marker of the slider (`menu_parameter_mark`): the nine
+/// adjustments in the order of `GRKIT_RECORD_PARAMETERS`, then Toning. Last,
+/// the call of the Toning slider setup to `FW_SLIDER_INIT`, and the end of the
+/// Toning row text, which asks for the native text of a value.
+/// The parameter page of a RAW development
+/// (RawDevelopmentImageControlDetailSetController) gets the same, for the
+/// effect whose adjustments the Standard set of the development holds
+/// (`runtime/develop.h`): the call to the base kind of its type, the calls to
+/// the native defaults, the call of the Toning setup to `FW_SLIDER_INIT`, the
+/// entry of the model setter of Toning in the development, and the call of
+/// the Toning row text to the native text of a value.
 const TONING: &[HookSpec] = &[
     b("menu_parameter_get_9", Menu, Tuning),
     b("menu_parameter_set_9", Menu, Tuning),
     bl("menu_parameter_row_9", Menu, Tuning),
+    bl("menu_parameter_mark_0", Menu, Tuning),
+    bl("menu_parameter_mark_1", Menu, Tuning),
+    bl("menu_parameter_mark_2", Menu, Tuning),
+    bl("menu_parameter_mark_3", Menu, Tuning),
+    bl("menu_parameter_mark_4", Menu, Tuning),
+    bl("menu_parameter_mark_5", Menu, Tuning),
+    bl("menu_parameter_mark_6", Menu, Tuning),
+    bl("menu_parameter_mark_7", Menu, Tuning),
+    bl("menu_parameter_mark_8", Menu, Tuning),
+    bl("menu_parameter_mark_9", Menu, Tuning),
+    bl("menu_parameter_toning_init", Menu, Tuning),
+    b("menu_parameter_toning_text", Menu, Tuning),
+    bl("menu_develop_kinds", Menu, Tuning),
+    bl("menu_develop_mark_0", Menu, Tuning),
+    bl("menu_develop_mark_1", Menu, Tuning),
+    bl("menu_develop_mark_2", Menu, Tuning),
+    bl("menu_develop_mark_3", Menu, Tuning),
+    bl("menu_develop_mark_4", Menu, Tuning),
+    bl("menu_develop_mark_5", Menu, Tuning),
+    bl("menu_develop_mark_6", Menu, Tuning),
+    bl("menu_develop_mark_7", Menu, Tuning),
+    bl("menu_develop_mark_8", Menu, Tuning),
+    bl("menu_develop_mark_9", Menu, Tuning),
+    bl("menu_develop_toning_init", Menu, Tuning),
+    b("menu_develop_toning_set", Menu, Tuning),
+    bl("menu_develop_toning_text", Menu, Tuning),
 ];
 
 /// The mode dial (`runtime/mode_dial.h`): the entry of the apply of a dial

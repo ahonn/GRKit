@@ -65,6 +65,26 @@
    the Retro type also sets its own Shading. */
 #define PARAMETER_TONING_BASE 9
 #define PARAMETER_TONING_KIND 9
+/* The slider of that Toning row for a native look: the three levels of the
+   GR IV Cinema slider, 180 pixels apart, which spans the track as the nine
+   native values 45 pixels apart do. The track of the Retro row, icon
+   TONING_TRACK_ICON of TONING_TRACK_WIDTH x TONING_TRACK_HEIGHT pixels, has
+   its gradient in rows TONING_TRACK_TOP to TONING_TRACK_BOTTOM from column
+   TONING_TRACK_LEFT to TONING_TRACK_RIGHT, but for the white mark and its
+   black edges in columns TONING_TRACK_MARK_LEFT to TONING_TRACK_MARK_RIGHT.
+   GR IV draws the track of a Cinema look the same way, with a gradient
+   between two colors. */
+#define PARAMETER_TONING_LEVELS 3U
+#define PARAMETER_TONING_STEP 180U
+#define TONING_TRACK_ICON 0x232U
+#define TONING_TRACK_WIDTH 400U
+#define TONING_TRACK_HEIGHT 60U
+#define TONING_TRACK_TOP 10U
+#define TONING_TRACK_BOTTOM 13U
+#define TONING_TRACK_LEFT 20U
+#define TONING_TRACK_RIGHT 379U
+#define TONING_TRACK_MARK_LEFT 197U
+#define TONING_TRACK_MARK_RIGHT 202U
 /* The page event that opens another controller (0x2000015) from the page. */
 #define DETAIL_EV_SUBPAGE 0x88
 

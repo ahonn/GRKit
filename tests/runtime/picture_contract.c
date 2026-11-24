@@ -1891,8 +1891,10 @@ int main(void)
            the crop of its DNG. */
         develop_hold(header, record(2));
         develop_crops = 0;
+        header[GRKIT_HOST_DEVELOP_TONED / 4] = record(2);
         picture_develop_start();
         assert(header[GRKIT_HOST_DEVELOP_FILLED / 4] == 0 && header[GRKIT_HOST_DEVELOP_CHANGED / 4] == 0);
+        assert(header[GRKIT_HOST_DEVELOP_TONED / 4] == 0);
         assert(develop_crops == 1);
         /* The development starts from the settings that its DNG records
            (runtime/photo_xmp.h: grkit:State), not from the current ones,
@@ -1993,6 +1995,38 @@ int main(void)
         BYTE(record(2), GRKIT_RECORD_PARAMETERS + 0) = 0;
         BYTE(record(2), GRKIT_RECORD_FN_DEFAULTS + 8) = 0;
     }
+#ifdef PARAMETER_TONING_KIND
+    /* Toning in a RAW development: the Standard set keeps the page value of
+       the Toning of the effect, a change stays with the effect as the Fn
+       adjustments do, and a native row gets the own byte back. The Toning of
+       the record does not change, and a record without Toning leaves the
+       byte as it is. */
+    {
+        reset();
+        memset(develop_set, 3, sizeof(develop_set));
+        BYTE(record(2), GRKIT_RECORD_TONE_SLOT) = 1;
+        BYTE(record(2), GRKIT_RECORD_TONING) = 1;
+        develop_hold(header, record(2));
+        assert(develop_set[PARAMETER_TONING_KIND] == 2);
+        develop_set[PARAMETER_TONING_KIND] = 0;
+        develop_hold(header, record(1));
+        assert(develop_set[PARAMETER_TONING_KIND] == 3);
+        assert(header[GRKIT_HOST_DEVELOP_CHANGED / 4] == record(2));
+        develop_hold(header, record(2));
+        assert(develop_set[PARAMETER_TONING_KIND] == 0);
+        assert(BYTE(record(2), GRKIT_RECORD_TONING) == 1);
+        develop_hold(header, 1);
+        assert(develop_set[PARAMETER_TONING_KIND] == 3);
+        /* An older value beyond the GR IV levels gives the nearest one. */
+        BYTE(record(2), GRKIT_RECORD_TONING) = 7;
+        header[GRKIT_HOST_DEVELOP_CHANGED / 4] = 0;
+        develop_hold(header, record(2));
+        assert(develop_set[PARAMETER_TONING_KIND] == 0);
+        develop_hold(header, 0);
+        BYTE(record(2), GRKIT_RECORD_TONE_SLOT) = 0;
+        BYTE(record(2), GRKIT_RECORD_TONING) = 0;
+    }
+#endif
 #endif
     /* The stage gate of the grain stage reads the shot settings before the
        parameter build of the shot. A GRKit effect gets the rule of Standard
