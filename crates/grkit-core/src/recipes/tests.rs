@@ -24,6 +24,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
                 halation: 3,
                 halation_color: Some(2),
             }),
+            grain_style: Some(1),
             border: Some(Border {
                 style: 2,
                 color: Some(1),
@@ -61,6 +62,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
             }),
             grain: None,
             glow: None,
+            grain_style: None,
             border: Some(Border {
                 style: 0,
                 color: None,
@@ -97,6 +99,7 @@ pub(crate) fn sample() -> Vec<Recipe> {
                 halation: 2,
                 halation_color: None,
             }),
+            grain_style: None,
             border: None,
             white_balance: None,
             corrections: [Some(0), Some(4), Some(0), Some(5)],
@@ -149,9 +152,11 @@ fn the_words_follow_the_camera_layout() {
     assert_eq!(words[MODULE_WORD], 0);
     // Without a color, the camera keeps its own.
     assert_eq!(sample()[2].words().unwrap()[MODULE_WORD], 0b101_001);
-    // The border follows in the next word: Wide, then black.
+    // The border follows in the next word: Wide, then black, then the Grain
+    // style Film-like.
     assert_eq!(SETTING_PLACES[3], (SETTINGS_WORD, 0));
-    assert_eq!(effect[SETTINGS_WORD], 0b11_0101);
+    assert_eq!(SETTING_PLACES[5], (SETTINGS_WORD, 6));
+    assert_eq!(effect[SETTINGS_WORD], 0b1111_0101);
     // Border Off holds no color.
     assert_eq!(words[SETTINGS_WORD], 0b0001);
     assert_eq!(sample()[2].words().unwrap()[SETTINGS_WORD], 0);

@@ -8,6 +8,10 @@ label = "Strength"
 label = "Size"
 values = ["Auto", "Small", "Medium", "Large"]
 
+[settings.STYLE]
+label = "Style"
+values = ["System", "Film-like"]
+
 [settings.ICON]
 label = "Show Icon"
 values = ["On", "Off"]

@@ -97,25 +97,25 @@
 #define GRKIT_RECIPE_OFF 0x10000000U
 /* The settings of modules that a recipe holds (grkit_core::recipes::SETTINGS):
    GLOW.BLOOM, GLOW.HALATION, GLOW.HALATION_COLOR, CORE.BORDER,
-   CORE.BORDER_COLOR. GRKIT_RECIPE_SETTING_IDS gives the handle of a capability
-   (bit i of GRKIT_RECIPE_SETTING_CORE), else the state file ID, which finds
-   the setting in the settings table. Its bits are at _SHIFTS in word _WORDS:
-   one bit holds it, then its value, at most _MASKS. Bit i of _COLOR_ONLY: GR
-   IV Monochrome does not hold it. Of _LOOK: it is part of the whole look. Of
-   _WITH_PREVIOUS: a save holds it only while setting i - 1 is not 0. _MODULES
-   gives the module of each, by its position in GRKIT_RECIPE_MODULES: GLOW,
-   BORDER. */
-#define GRKIT_RECIPE_SETTINGS 5U
-#define GRKIT_RECIPE_SETTING_IDS 73603892U, 979977653U, 208924775U, 265U, 266U
+   CORE.BORDER_COLOR, GRAIN.STYLE. GRKIT_RECIPE_SETTING_IDS gives the handle of
+   a capability (bit i of GRKIT_RECIPE_SETTING_CORE), else the state file ID,
+   which finds the setting in the settings table. Its bits are at _SHIFTS in
+   word _WORDS: one bit holds it, then its value, at most _MASKS. Bit i of
+   _COLOR_ONLY: GR IV Monochrome does not hold it. Of _LOOK: it is part of the
+   whole look. Of _WITH_PREVIOUS: a save holds it only while setting i - 1 is
+   not 0. _MODULES gives the module of each, by its position in
+   GRKIT_RECIPE_MODULES: GLOW, BORDER, GRAIN. */
+#define GRKIT_RECIPE_SETTINGS 6U
+#define GRKIT_RECIPE_SETTING_IDS 73603892U, 979977653U, 208924775U, 265U, 266U, 252484306U
 #define GRKIT_RECIPE_SETTING_CORE 24U
-#define GRKIT_RECIPE_SETTING_WORDS 4U, 4U, 4U, 5U, 5U
-#define GRKIT_RECIPE_SETTING_SHIFTS 0U, 3U, 6U, 0U, 4U
-#define GRKIT_RECIPE_SETTING_MASKS 3U, 3U, 3U, 7U, 1U
+#define GRKIT_RECIPE_SETTING_WORDS 4U, 4U, 4U, 5U, 5U, 5U
+#define GRKIT_RECIPE_SETTING_SHIFTS 0U, 3U, 6U, 0U, 4U, 6U
+#define GRKIT_RECIPE_SETTING_MASKS 3U, 3U, 3U, 7U, 1U, 1U
 #define GRKIT_RECIPE_SETTING_COLOR_ONLY 4U
-#define GRKIT_RECIPE_SETTING_LOOK 7U
+#define GRKIT_RECIPE_SETTING_LOOK 39U
 #define GRKIT_RECIPE_SETTING_WITH_PREVIOUS 16U
-#define GRKIT_RECIPE_SETTING_MODULES 0U, 0U, 0U, 1U, 1U
-#define GRKIT_RECIPE_MODULES 2U
+#define GRKIT_RECIPE_SETTING_MODULES 0U, 0U, 0U, 1U, 1U, 2U
+#define GRKIT_RECIPE_MODULES 3U
 #define GRKIT_RECIPE_KEY_BASE 991000000U
 #define GRKIT_RECIPE_KEY_STRIDE 100U
 #define GRKIT_RECIPE_NAME_KEY_BASE 991005000U
@@ -1066,37 +1066,37 @@
 #define TEXT_RECIPE 30
 /* The names of the native Image Control types, in the order of
    runtime/native.h. */
-#define TEXT_NATIVE_TYPE 47
+#define TEXT_NATIVE_TYPE 48
 /* Enable at Start, which decides the switch at each start: its MENU row, then
    its Keep Last value. Its On and Off are TEXT_ON and TEXT_OFF. */
-#define TEXT_START 68
+#define TEXT_START 69
 /* The Mode Dial row of GRKit Settings in MENU, then Save Current Settings, the
    action of a user mode, then the text before and after the name of a user
    mode in the confirm before Save Current Settings overwrites its native slot. */
-#define TEXT_DIAL 70
+#define TEXT_DIAL 71
 /* GRKit Settings, the MENU row and the title of the settings page of the core,
    then its Distance Unit row and the values Meters and Feet. */
-#define TEXT_UNIT 74
+#define TEXT_UNIT 75
 /* The settings row that orders the options of a module page. */
-#define TEXT_ORDER 78
+#define TEXT_ORDER 79
 /* The Uncropped RAW row of GRKit Settings. Its On and Off are TEXT_ON and
    TEXT_OFF. */
-#define TEXT_RAW 79
+#define TEXT_RAW 80
 /* The Simplified Info. Battery row of Display Settings. Its values are
    TEXT_OFF and TEXT_ON. */
-#define TEXT_BATTERY 80
+#define TEXT_BATTERY 81
 /* The rows of the groups of GRKit Settings and the titles of their pages:
    Display Settings, Shooting Settings, then Shutdown Screen. */
-#define TEXT_DISPLAY 81
+#define TEXT_DISPLAY 82
 /* The Custom Picture row of Shutdown Screen, then its Show Text row. The
    values of both are TEXT_OFF and TEXT_ON. */
-#define TEXT_GOODBYE 84
+#define TEXT_GOODBYE 85
 /* The Effect Icons in Playback row of Display Settings. Its values are
    TEXT_OFF and TEXT_ON. */
-#define TEXT_PLAYBACK_INFO 86
+#define TEXT_PLAYBACK_INFO 87
 /* The Battery Percentage row of Display Settings. Its values are TEXT_OFF and
    TEXT_ON. */
-#define TEXT_BATTERY_PERCENT 87
-#define GRKIT_TEXT_STRINGS 88
+#define TEXT_BATTERY_PERCENT 88
+#define GRKIT_TEXT_STRINGS 89
 
 #endif

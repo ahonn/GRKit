@@ -60,6 +60,7 @@ export GRKIT_SANITIZER_CC=clang
 export GRKIT_REQUIRE_NATIVE_TESTS=1
 cargo run --locked -p grkit-cli -- module test --dir modules/glow --cc "$GRKIT_HOST_CC"
 cargo run --locked -p grkit-cli -- module test --dir modules/date --cc "$GRKIT_HOST_CC"
+cargo run --locked -p grkit-cli -- module test --dir modules/grain --cc "$GRKIT_HOST_CC"
 cargo test --locked -p grkit-core --test native_contracts
 unset GRKIT_HOST_CC GRKIT_SANITIZER_CC GRKIT_REQUIRE_NATIVE_TESTS
 ```

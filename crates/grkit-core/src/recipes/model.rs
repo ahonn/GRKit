@@ -158,10 +158,10 @@ impl Setting {
 }
 
 /// The settings of modules that a recipe holds, in the order of their bits
-/// (`layout::SETTING_PLACES`): Glow (`modules/glow`) and Border
-/// (`modules/border`). A new setting comes last, so the bits of the others
-/// stay.
-pub const SETTINGS: [Setting; 5] = [
+/// (`layout::SETTING_PLACES`): Glow (`modules/glow`), Border
+/// (`modules/border`), and the style of Grain (`modules/grain`). A new
+/// setting comes last, so the bits of the others stay.
+pub const SETTINGS: [Setting; 6] = [
     Setting {
         module: "GLOW",
         key: "BLOOM",
@@ -207,6 +207,17 @@ pub const SETTINGS: [Setting; 5] = [
         color_only: false,
         look: false,
         with_previous: true,
+    },
+    // 0 System, the grain of the camera; 1 Film-like. A recipe from before
+    // the style holds 0, as a save without the module does.
+    Setting {
+        module: "GRAIN",
+        key: "STYLE",
+        values: 2,
+        bits: 1,
+        color_only: false,
+        look: true,
+        with_previous: false,
     },
 ];
 
@@ -256,12 +267,19 @@ impl Recipe {
         let border = self
             .border
             .map_or([None; 2], |border| [Some(border.style), border.color]);
-        [glow[0], glow[1], glow[2], border[0], border[1]]
+        [
+            glow[0],
+            glow[1],
+            glow[2],
+            border[0],
+            border[1],
+            self.grain_style,
+        ]
     }
 
-    /// Set Glow and Border from the value of each of `SETTINGS`. Bloom and
-    /// Halation are held together, and the Halation color only with them; a
-    /// border color only with a style.
+    /// Set Glow, Border, and the Grain style from the value of each of
+    /// `SETTINGS`. Bloom and Halation are held together, and the Halation
+    /// color only with them; a border color only with a style.
     pub(super) fn set_setting_values(
         &mut self,
         values: [Option<u8>; SETTINGS.len()],
@@ -280,6 +298,7 @@ impl Recipe {
             [Some(style), color] => Some(Border { style, color }),
             _ => bail!("A recipe holds a border color only with a border"),
         };
+        self.grain_style = values[5];
         Ok(())
     }
 }
@@ -338,6 +357,10 @@ pub struct Recipe {
     pub family: Family,
     pub look: Look,
     pub grain: Option<Grain>,
+    /// The style of Grain (`GRAIN.STYLE`): 0 System, 1 Film-like. The JSON of
+    /// a recipe without it has no key, as before the style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grain_style: Option<u8>,
     #[serde(default)]
     pub glow: Option<Glow>,
     #[serde(default)]

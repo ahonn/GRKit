@@ -637,6 +637,26 @@ u32 picture_header_word(u32 offset) {
     volatile u32 *h=framing_header(), *copy=develop_copy_header(h,offset);
     return copy ? *copy : h[offset/4];
 }
+/* The state file ID of GRAIN.STYLE (grkit_core::runtime::state_key_id), the
+   setting of modules/grain: 0 System, 1 Film-like. */
+#define GRAIN_STYLE_ID 252484306U
+/* Whether the Grain module draws the grain itself (Film-like, the plane
+   filter of modules/grain/grain.c). Without the setting, as with an older
+   Grain module, the grain is System. A RAW development reads the value of
+   its copy (setting_value). */
+static u32 grain_style_film(volatile u32 *h) {
+    volatile u32 *t=settings_table(h);
+    u32 i;
+    for(i=0;t && i<t[0];++i)
+        if(t[SETTINGS_ENTRY(i)]==GRAIN_STYLE_ID) return setting_value(h,i)==1U;
+    return 0;
+}
+/* For grain_module_draws (runtime/picture.S): in the Film-like style the
+   native grain stage runs as in the System style, with no amplitude, so
+   that everything else that stage of the firmware does stays the same
+   (such as the brightness that Glow's highlights depend on), and the plane
+   filter of the Grain module adds the grain. */
+u32 grain_film_like(void) { return grain_style_film(framing_header()); }
 /* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
@@ -840,6 +860,14 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
     u32 shot=h[GRKIT_HOST_GRAIN_SHOT/4],table=h[GRKIT_HOST_PROFILE/4],high,low,block;
     if(!shot || shot>3 || !pitch || pitch%16 || pitch>GRAIN_ROW_MAX || pitch*height!=size || height<1) {
         GRAIN_NATIVE_FILL(buffer,size);
+        return;
+    }
+    /* Film-like: the Grain module draws the grain, and the native stage
+       blends neutral noise (with no amplitude, grain_amplitude). */
+    if(grain_style_film(h)) {
+        u8 *plane=GRAIN_MAP(buffer);
+        u32 i;
+        for(i=0;i<size;++i) plane[i]=128;
         return;
     }
     low=GRAIN_COUNTER(&high);

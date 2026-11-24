@@ -8,6 +8,10 @@ label = "강도"
 label = "크기"
 values = ["자동", "소", "중", "대"]
 
+[settings.STYLE]
+label = "스타일"
+values = ["시스템", "필름 느낌"]
+
 [settings.ICON]
 label = "아이콘 표시"
 values = ["켜짐", "꺼짐"]
