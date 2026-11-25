@@ -1,7 +1,8 @@
 use super::*;
-use crate::runtime_backend::{LookUse, RuntimeLook, RuntimeLooks};
+use crate::camera_looks::{LookUse, RuntimeLook, RuntimeLooks};
+use grkit_core::abi::*;
 use grkit_core::{camera, card, imports::Import, packaging, release, testing};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const BOOT: &str = "boot-test";
 const CARD: &str = "card-test";
@@ -16,49 +17,49 @@ struct Camera {
 }
 struct Backend(Arc<Mutex<Camera>>);
 impl RuntimeBackend for Backend {
-    fn looks(&mut self) -> Result<RuntimeLooks> {
-        Ok(self.0.lock().unwrap().looks.clone())
-    }
-    fn turn(&mut self, key: u32, off: bool) -> Result<()> {
+    fn exchange(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
         let mut camera = self.0.lock().unwrap();
-        if camera.busy {
-            return Err(problem(503, "camera_busy", "Busy."));
-        }
-        camera.commands.push(format!("turn {key} {off}"));
-        let look = camera
-            .looks
-            .looks
-            .iter_mut()
-            .find(|look| look.key == key)
-            .ok_or_else(|| problem(409, "runtime_changed", "No such effect."))?;
-        look.enabled = !off;
-        if off && camera.looks.selected == Some(key) {
-            camera.looks.selected = None;
-        }
-        Ok(())
-    }
-    fn order(&mut self, keys: &[u32]) -> Result<()> {
-        let mut camera = self.0.lock().unwrap();
-        camera.commands.push(format!("order {keys:?}"));
-        for (index, key) in keys.iter().enumerate() {
-            let look = camera
-                .looks
-                .looks
-                .iter_mut()
-                .find(|look| look.key == *key)
-                .unwrap();
-            look.position = index as u32 + 1;
-        }
-        Ok(())
+        let words: Vec<u32> = payload
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        Ok(match (command, words.as_slice()) {
+            (CONTROL_LOOKS_READ, []) => (0, camera.looks.encode()),
+            (CONTROL_LOOK_TURN, _) if camera.busy => (CONTROL_BUSY, Vec::new()),
+            (CONTROL_LOOK_TURN, [key, off]) => {
+                camera.commands.push(format!("turn {key} {}", *off == 1));
+                let Some(look) = camera.looks.looks.iter_mut().find(|look| look.key == *key) else {
+                    return Ok((CONTROL_CHANGED, Vec::new()));
+                };
+                look.enabled = *off == 0;
+                if *off == 1 && camera.looks.selected == Some(*key) {
+                    camera.looks.selected = None;
+                }
+                (0, Vec::new())
+            }
+            (CONTROL_LOOKS_ORDER, keys) => {
+                camera.commands.push(format!("order {keys:?}"));
+                for (index, key) in keys.iter().enumerate() {
+                    let look = camera
+                        .looks
+                        .looks
+                        .iter_mut()
+                        .find(|look| look.key == *key)
+                        .unwrap();
+                    look.position = index as u32 + 1;
+                }
+                (0, Vec::new())
+            }
+            _ => (CONTROL_UNSUPPORTED, Vec::new()),
+        })
     }
 }
 
 struct Fixture {
     root: tempfile::TempDir,
     camera: Arc<Mutex<Camera>>,
-    api: LookApi,
+    api: Resources,
     changes: Changes,
-    pending: bool,
 }
 impl Fixture {
     /// A card with the files of `ids`, and a camera that lists `listed` in
@@ -87,10 +88,9 @@ impl Fixture {
         }));
         Self {
             root,
-            api: LookApi::new(Box::new(Backend(Arc::clone(&camera)))),
+            api: Resources::new(Box::new(Backend(Arc::clone(&camera)))),
             camera,
             changes: Changes::default(),
-            pending: false,
         }
     }
     fn call(&self, method: &str, path: &str, body: &[u8], headers: &[(&str, &str)]) -> Reply {
@@ -119,15 +119,17 @@ impl Fixture {
         let keys = [testing::release_key()];
         let context = RequestContext {
             boot_id: BOOT,
-            card_id: CARD.into(),
-            software_pending: self.pending,
+            card_id: Some(CARD.into()),
             root: self.root.path(),
             release_keys: &keys,
             family: Some(grkit_core::recipes::Family::Gr3),
         };
+        let Some(crate::route::Route::Looks(route)) = crate::route::Route::parse(&request.path)
+        else {
+            panic!("not a Looks route: {}", request.path);
+        };
         self.api
-            .handle(&request, body, &context, &self.changes)
-            .expect("a Looks route")
+            .handle(&route, &request, body, &context, &self.changes)
     }
     fn list(&self) -> Value {
         let reply = self.call("GET", "/v1/looks", b"", &[]);
@@ -157,7 +159,7 @@ impl Fixture {
     /// The service of another start over the same card.
     fn restart(self) -> Self {
         Self {
-            api: LookApi::new(Box::new(Backend(Arc::clone(&self.camera)))),
+            api: Resources::new(Box::new(Backend(Arc::clone(&self.camera)))),
             ..self
         }
     }
@@ -166,10 +168,10 @@ fn file(root: &Path, id: &str) -> std::path::PathBuf {
     looks::library(root).join(effects::filename(id).unwrap())
 }
 fn json(reply: &Reply) -> Value {
-    serde_json::from_slice(&reply.body).unwrap()
+    reply.value()
 }
 fn code(reply: &Reply) -> String {
-    json(reply)["code"].as_str().unwrap_or("").to_owned()
+    reply.code()
 }
 /// `id` with the name `name`.
 fn named(id: &str, name: &str) -> Vec<u8> {
@@ -528,7 +530,7 @@ fn a_new_look_is_a_file_that_the_camera_lists_after_a_start() {
     let reply = fixture.call("PUT", "/v1/looks/other/content", &bytes, &create);
     assert_eq!((reply.status, code(&reply).as_str()), (422, "id_mismatch"));
     let reply = fixture.call("PUT", "/v1/looks/fresh/content", &bytes[..100], &create);
-    assert_eq!(reply.status, 413);
+    assert_eq!((reply.status, code(&reply).as_str()), (422, "invalid_grf"));
     assert!(!file(fixture.root.path(), "other").exists());
 }
 
@@ -706,48 +708,6 @@ fn the_order_goes_to_the_camera_for_the_looks_that_it_lists() {
         );
     }
     assert!(fixture.commands().is_empty());
-}
-
-#[test]
-fn a_change_names_the_start_that_the_phone_read() {
-    let mut fixture = Fixture::new(&["alpha"], &["alpha"]);
-    let body = br#"{"enabled":false}"#;
-    let reply = fixture.call(
-        "PATCH",
-        "/v1/looks/alpha",
-        body,
-        &[("x-grkit-boot-id", "another")],
-    );
-    assert_eq!(
-        (reply.status, code(&reply).as_str()),
-        (409, "context_changed")
-    );
-    let reply = fixture.call(
-        "PATCH",
-        "/v1/looks/alpha",
-        body,
-        &[("content-type", "text/plain")],
-    );
-    assert_eq!(reply.status, 415);
-    let reply = fixture.call("PATCH", "/v1/looks/alpha?force=1", body, &[]);
-    assert_eq!(
-        (reply.status, code(&reply).as_str()),
-        (422, "invalid_query")
-    );
-    fixture.pending = true;
-    let reply = fixture.call("PATCH", "/v1/looks/alpha", body, &[]);
-    assert_eq!(
-        (reply.status, code(&reply).as_str()),
-        (409, "software_pending")
-    );
-    let before = fixture.changes.counts();
-    assert!(fixture.commands().is_empty());
-    assert_eq!(fixture.look("alpha")["enabled"], true);
-    assert_eq!(
-        fixture.changes.counts(),
-        before,
-        "a read and a refusal are no change"
-    );
 }
 
 #[test]

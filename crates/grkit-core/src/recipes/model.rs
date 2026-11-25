@@ -34,6 +34,19 @@ pub enum Family {
 }
 
 impl Family {
+    /// The family of a camera model of the camera's own HTTP API
+    /// (`camera::of_api_model`).
+    pub fn of_api_model(model: &str) -> Option<Family> {
+        if model.contains("Monochrome") {
+            return Some(Family::Gr4Monochrome);
+        }
+        match crate::camera::of_api_model(model)?.id {
+            "gr3" | "gr3x" => Some(Family::Gr3),
+            "gr4" => Some(Family::Gr4),
+            _ => None,
+        }
+    }
+
     /// The value of the family byte of a record.
     pub fn code(self) -> u8 {
         match self {

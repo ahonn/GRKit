@@ -9,11 +9,7 @@ use grkit_core::{
     packaging, Files,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::BTreeMap,
-    fs,
-    io::{Read, Write},
-};
+use std::{collections::BTreeMap, fs, io::Write};
 
 const MAX_RECORD_BYTES: usize = 1024 * 1024;
 const MAX_CHECKPOINTS: usize = 16;
@@ -236,14 +232,9 @@ impl Card {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error).context("Read the software transaction record"),
         };
-        let mut bytes = Vec::new();
-        file.take(MAX_RECORD_BYTES as u64 + 1)
-            .read_to_end(&mut bytes)?;
-        ensure!(
-            bytes.len() <= MAX_RECORD_BYTES,
-            "The software transaction record exceeds its size limit"
-        );
-        Ok(Some(bytes))
+        grkit_core::bounded::read_to_limit(file, MAX_RECORD_BYTES)
+            .map(Some)
+            .context("The software transaction record exceeds its size limit")
     }
 
     /// The record, or None without one. A record that does not parse while

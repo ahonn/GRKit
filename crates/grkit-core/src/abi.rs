@@ -174,6 +174,9 @@ const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// memory. The registry holds only the header and the records, and they fit
 /// one array of 65536 words. The tail is an array of its own.
 pub const MAX_COUNT: usize = 40;
+/// The most effect files that GRKit lists, those with the smallest IDs
+/// (runtime/effects.h).
+pub const EFFECTS_LISTED: usize = 64;
 /// The chunk addresses that the header holds (`GRKIT_HOST_ICON_CHUNKS`).
 pub const ICON_CHUNK_SLOTS: usize = 5;
 
@@ -330,6 +333,8 @@ pub const CONTROL_PING: u32 = 2;
 /// `RECIPE_NAME_WORDS` name words of the recipe after it, while the payload
 /// has room for them.
 pub const CONTROL_LOOKS_READ: u32 = 3;
+/// The recipe code of a use word: its low 15 bits.
+pub const CONTROL_USE_CODE_MASK: u32 = 0x7fff;
 pub const CONTROL_USE_ORIGIN_SHIFT: u32 = 16;
 pub const CONTROL_USE_ORIGIN_MASK: u32 = 0x7f;
 pub const CONTROL_USE_DIAL: u32 = 1 << 23;
@@ -448,8 +453,13 @@ pub const CONTROL_MODULE_RECORD_MODULE: u32 = 0;
 pub const CONTROL_MODULE_RECORD_GROUP: u32 = 1;
 pub const CONTROL_MODULE_RECORD_SETTING: u32 = 2;
 pub const CONTROL_MODULE_RECORD_VALUE: u32 = 3;
-/// The first argument of a module record: 1 for Looks or 2 for Recipes, and
-/// these bits. The second argument is the key of the page setting.
+/// The first argument of a module record: in its low byte
+/// (`CONTROL_MODULE_MANAGED_MASK`) the page that the phone manages in a tab of
+/// its own, or 0, and these bits. The second argument is the key of the page
+/// setting.
+pub const CONTROL_MODULE_MANAGED_MASK: u32 = 0xff;
+pub const CONTROL_MODULE_MANAGED_LOOKS: u32 = 1;
+pub const CONTROL_MODULE_MANAGED_RECIPES: u32 = 2;
 pub const CONTROL_MODULE_HAS_OPTIONS: u32 = 1 << 8;
 pub const CONTROL_MODULE_ORDERED: u32 = 1 << 9;
 /// The key of a setting without a state ID: this bit and its handle. A
@@ -1799,6 +1809,7 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_HOST_ICON_COUNT {}", HOST_ICON_COUNT).unwrap();
     writeln!(out, "#define GRKIT_ICONS_PER_CHUNK {}", ICONS_PER_CHUNK).unwrap();
     writeln!(out, "#define GRKIT_MODULE_TILES_MAX {}", MODULE_TILES_MAX).unwrap();
+    writeln!(out, "#define GRKIT_EFFECTS_LISTED {}U", EFFECTS_LISTED).unwrap();
     icon_ids(&mut out);
     // A change of a saved selection: the loader saves after the count changes.
     writeln!(
@@ -1859,6 +1870,7 @@ pub fn header() -> String {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
     for (name, value) in [
+        ("CONTROL_USE_CODE_MASK", CONTROL_USE_CODE_MASK),
         ("CONTROL_USE_ORIGIN_SHIFT", CONTROL_USE_ORIGIN_SHIFT),
         ("CONTROL_USE_ORIGIN_MASK", CONTROL_USE_ORIGIN_MASK),
         ("CONTROL_USE_DIAL", CONTROL_USE_DIAL),
@@ -1929,6 +1941,12 @@ pub fn header() -> String {
             CONTROL_MODULE_RECORD_SETTING,
         ),
         ("CONTROL_MODULE_RECORD_VALUE", CONTROL_MODULE_RECORD_VALUE),
+        ("CONTROL_MODULE_MANAGED_MASK", CONTROL_MODULE_MANAGED_MASK),
+        ("CONTROL_MODULE_MANAGED_LOOKS", CONTROL_MODULE_MANAGED_LOOKS),
+        (
+            "CONTROL_MODULE_MANAGED_RECIPES",
+            CONTROL_MODULE_MANAGED_RECIPES,
+        ),
         ("CONTROL_MODULE_HAS_OPTIONS", CONTROL_MODULE_HAS_OPTIONS),
         ("CONTROL_MODULE_ORDERED", CONTROL_MODULE_ORDERED),
         ("CONTROL_MODULE_KEY_HANDLE", CONTROL_MODULE_KEY_HANDLE),

@@ -7,7 +7,7 @@ use grkit_core::{camera, effects, imports, release, Files};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const MAX_FILE_SIZE: usize = 16 * 1024 * 1024;
@@ -25,16 +25,8 @@ pub fn read_bounded(path: &Path, limit: usize) -> Result<Vec<u8>> {
         "File exceeds size limit: {}",
         path.display()
     );
-    let mut bytes = Vec::new();
-    File::open(path)?
-        .take(limit as u64 + 1)
-        .read_to_end(&mut bytes)?;
-    ensure!(
-        bytes.len() <= limit,
-        "File exceeds size limit: {}",
-        path.display()
-    );
-    Ok(bytes)
+    grkit_core::bounded::read_to_limit(File::open(path)?, limit)
+        .with_context(|| format!("File exceeds size limit: {}", path.display()))
 }
 
 fn read_regular(path: &Path) -> Result<Vec<u8>> {

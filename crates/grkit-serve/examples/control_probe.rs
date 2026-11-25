@@ -2,8 +2,9 @@
 //! card: find the mailbox, then read the effect list or set a choice.
 use anyhow::{anyhow, ensure, Result};
 use grkit_serve::{
+    camera_looks::{self, look_key},
     control,
-    runtime_backend::{look_key, ControlBackend, RuntimeBackend},
+    runtime_backend::ControlBackend,
 };
 use std::{io::Read, path::Path};
 
@@ -34,12 +35,12 @@ fn main() -> Result<()> {
     let problem =
         |problem: grkit_serve::protocol::Problem| anyhow!("{}: {}", problem.code, problem.detail);
     if let Some((id, off)) = turn {
-        backend.turn(look_key(&id), off).map_err(problem)?;
+        camera_looks::turn(&mut backend, look_key(&id), off).map_err(problem)?;
     }
     if let Some(ids) = order {
         let keys: Vec<u32> = ids.split(',').map(look_key).collect();
-        backend.order(&keys).map_err(problem)?;
+        camera_looks::order(&mut backend, &keys).map_err(problem)?;
     }
-    println!("{:#?}", backend.looks().map_err(problem)?);
+    println!("{:#?}", camera_looks::read(&mut backend).map_err(problem)?);
     Ok(())
 }

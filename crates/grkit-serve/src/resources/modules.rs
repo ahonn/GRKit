@@ -3,11 +3,11 @@
 //! that MENU can make. The phone has no list of modules of its own. A module
 //! list is fixed for a start of the camera, so the service keeps each
 //! catalog and icon that it read until the service ends.
-use super::{
-    codec::{word, Codes, Page},
-    header, lock, problem, try_lock, LookApi, RequestContext, Result,
+use super::{lock, problem, try_lock, RequestContext, Resources, Result};
+use crate::codec::{word, Codes, Page};
+use crate::{
+    api::Reply, protocol::Problem, route::ModuleRoute, runtime_backend::RuntimeBackend, Request,
 };
-use crate::{api::Reply, protocol::Problem, runtime_backend::RuntimeBackend, Request};
 use grkit_core::{
     abi::*, capabilities, card, effects::ICON_SIZE, language::Language, packaging::sha256,
 };
@@ -277,56 +277,14 @@ fn module_catalog(
         cursor = next;
     }
     let (flags, key, title) = module.ok_or_else(malformed)?;
-    let managed = match flags & 0xff {
-        1 => json!("looks"),
-        2 => json!("recipes"),
+    let managed = match flags & CONTROL_MODULE_MANAGED_MASK {
+        CONTROL_MODULE_MANAGED_LOOKS => json!("looks"),
+        CONTROL_MODULE_MANAGED_RECIPES => json!("recipes"),
         _ => Value::Null,
     };
     let options = (flags & CONTROL_MODULE_HAS_OPTIONS != 0)
         .then(|| json!({"setting":key_text(key),"ordered":flags & CONTROL_MODULE_ORDERED != 0}));
     Ok(json!({"id":state.id,"title":title,"managed":managed,"settings":settings,"options":options}))
-}
-
-/// A 40 x 40 RGBA PNG with one stored deflate block. An icon is small, and
-/// the service runs in the RAM of the camera, so it links no PNG encoder.
-fn icon_png(pixels: &[u8]) -> Vec<u8> {
-    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
-        let mut crc = !0u32;
-        for byte in kind.iter().chain(data) {
-            crc ^= u32::from(*byte);
-            for _ in 0..8 {
-                crc = crc >> 1 ^ (0xedb8_8320 & (crc & 1).wrapping_neg());
-            }
-        }
-        out.extend((data.len() as u32).to_be_bytes());
-        out.extend(kind);
-        out.extend(data);
-        out.extend((!crc).to_be_bytes());
-    }
-    let raw: Vec<u8> = pixels
-        .chunks_exact(160)
-        .flat_map(|row| std::iter::once(0).chain(row.iter().copied()))
-        .collect();
-    let (mut a, mut b) = (1u32, 0u32);
-    for byte in &raw {
-        a = (a + u32::from(*byte)) % 65521;
-        b = (b + a) % 65521;
-    }
-    let size = raw.len() as u16;
-    let mut data = vec![0x78, 0x01, 1];
-    data.extend(size.to_le_bytes());
-    data.extend((!size).to_le_bytes());
-    data.extend(&raw);
-    data.extend((b << 16 | a).to_be_bytes());
-    let mut out = b"\x89PNG\r\n\x1a\n".to_vec();
-    let mut head = Vec::with_capacity(13);
-    head.extend(40u32.to_be_bytes());
-    head.extend(40u32.to_be_bytes());
-    head.extend([8, 6, 0, 0, 0]);
-    chunk(&mut out, b"IHDR", &head);
-    chunk(&mut out, b"IDAT", &data);
-    chunk(&mut out, b"IEND", &[]);
-    out
 }
 
 /// The value of an `If-None-Match` header names this entity tag.
@@ -425,7 +383,7 @@ fn patch_payload(index: u32, value: &Value) -> Result<Vec<u8>> {
     Ok(words.iter().flat_map(|w| w.to_le_bytes()).collect())
 }
 
-impl LookApi {
+impl Resources {
     /// Whether the runtime answers the module commands. It asks once: a
     /// camera that does not answer yet is asked again at the next read.
     pub fn module_settings(&self) -> bool {
@@ -444,37 +402,26 @@ impl LookApi {
         answer.unwrap_or(false)
     }
 
-    /// `/v1/modules/catalog`, `/v1/modules/{id}/icon`, `/v1/params/modules`,
-    /// `/v1/params/modules/order`, `/v1/params/modules/layout`,
-    /// `/v1/params/modules/{id}`. None for another path.
+    /// A request of the modules, with a method of its route that the
+    /// service admitted (`api::Service`).
     pub fn handle_modules(
         &self,
+        route: &ModuleRoute,
         request: &Request,
         body: &[u8],
         context: &RequestContext<'_>,
-    ) -> Option<Reply> {
-        let parts: Vec<&str> = request.path.split('/').skip(2).collect();
-        let result = match parts.as_slice() {
-            ["modules", "catalog"] if request.method == "GET" => self.catalog(request),
-            ["modules", id, "icon"] if request.method == "GET" => self.icon(request, id),
-            ["modules", "catalog"] | ["modules", _, "icon"] => Err(not_allowed()),
-            ["params", "modules"] if request.method == "GET" => try_lock(&self.backend)
+    ) -> Reply {
+        let result = match route {
+            ModuleRoute::Catalog => self.catalog(request),
+            ModuleRoute::Icon(id) => self.icon(request, id),
+            ModuleRoute::Params => try_lock(&self.backend)
                 .and_then(|mut backend| read_states(backend.as_mut()))
                 .map(|states| Reply::json(200, states_json(&states, &ModuleView::of(context)))),
-            ["params", "modules"] => Err(not_allowed()),
-            ["params", "modules", "order"] if request.method == "PUT" => {
-                self.put_order(request, body, context)
-            }
-            ["params", "modules", "layout"] if request.method == "PUT" => {
-                self.put_layout(request, body, context)
-            }
-            ["params", "modules", id] if request.method == "PATCH" => {
-                self.patch_module(request, id, body, context)
-            }
-            ["params", "modules", ..] => Err(not_allowed()),
-            _ => return None,
+            ModuleRoute::Order => self.put_order(body, context),
+            ModuleRoute::Layout => self.put_layout(body, context),
+            ModuleRoute::Module(id) => self.patch_module(id, body, context),
         };
-        Some(result.unwrap_or_else(Reply::problem))
+        result.unwrap_or_else(Reply::problem)
     }
 
     fn catalog(&self, request: &Request) -> Result<Reply> {
@@ -544,7 +491,8 @@ impl LookApi {
                     }
                     pixels.extend_from_slice(&bytes);
                 }
-                let png = icon_png(&pixels);
+                let png =
+                    grkit_core::png::encode_rgba8(40, 40, &pixels).map_err(|_| malformed())?;
                 let cached = Arc::new(Cached {
                     tag: format!("\"{}\"", &sha256(&png)[..16]),
                     body: png,
@@ -558,27 +506,14 @@ impl LookApi {
         Ok(cached_reply(request, &cached, "image/png"))
     }
 
-    /// The checks that each change shares, as for the recipes, and its JSON
-    /// body.
-    pub(super) fn admit(
-        &self,
-        request: &Request,
-        body: &[u8],
-        context: &RequestContext<'_>,
-    ) -> Result<Value> {
-        admit_change(request, context)?;
+    /// The JSON body of a change.
+    pub(super) fn json_body(body: &[u8]) -> Result<Value> {
         serde_json::from_slice(body)
             .map_err(|_| problem(400, "invalid_json", "The body is not valid JSON."))
     }
 
-    fn patch_module(
-        &self,
-        request: &Request,
-        id: &str,
-        body: &[u8],
-        context: &RequestContext<'_>,
-    ) -> Result<Reply> {
-        let value = self.admit(request, body, context)?;
+    fn patch_module(&self, id: &str, body: &[u8], context: &RequestContext<'_>) -> Result<Reply> {
+        let value = Self::json_body(body)?;
         let mut backend = try_lock(&self.backend)?;
         let states = read_states(backend.as_mut())?;
         let state = states
@@ -604,13 +539,8 @@ impl LookApi {
         Ok(Reply::json(200, body))
     }
 
-    fn put_order(
-        &self,
-        request: &Request,
-        body: &[u8],
-        context: &RequestContext<'_>,
-    ) -> Result<Reply> {
-        let value = self.admit(request, body, context)?;
+    fn put_order(&self, body: &[u8], context: &RequestContext<'_>) -> Result<Reply> {
+        let value = Self::json_body(body)?;
         let ids: Vec<&str> = value
             .as_object()
             .filter(|object| object.len() == 1)
@@ -642,33 +572,6 @@ impl LookApi {
             states_json(&read_states(backend.as_mut())?, &ModuleView::of(context)),
         ))
     }
-}
-
-/// The checks of a change of the camera or the card that need no body: the
-/// start that the phone read, no software operation that waits, no query.
-pub(super) fn admit_change(request: &Request, context: &RequestContext<'_>) -> Result<()> {
-    if header(request, "x-grkit-boot-id")? != context.boot_id {
-        return Err(problem(
-            409,
-            "context_changed",
-            "The camera started again. Read its state before changing it.",
-        ));
-    }
-    if context.software_pending {
-        return Err(problem(
-            409,
-            "software_pending",
-            "Finish or cancel the pending software operation first.",
-        ));
-    }
-    if request.query.is_some() {
-        return Err(problem(
-            422,
-            "invalid_query",
-            "This mutation query is not supported.",
-        ));
-    }
-    Ok(())
 }
 
 fn invalid_layout() -> Problem {
@@ -710,15 +613,10 @@ fn layout_places(value: &Value) -> Result<[Vec<&str>; 3]> {
     Ok(places)
 }
 
-impl LookApi {
+impl Resources {
     /// Place each module that ADJ can show, as MENU > ADJ Order does.
-    fn put_layout(
-        &self,
-        request: &Request,
-        body: &[u8],
-        context: &RequestContext<'_>,
-    ) -> Result<Reply> {
-        let value = self.admit(request, body, context)?;
+    fn put_layout(&self, body: &[u8], context: &RequestContext<'_>) -> Result<Reply> {
+        let value = Self::json_body(body)?;
         let places = layout_places(&value)?;
         let mut backend = try_lock(&self.backend)?;
         let states = read_states(backend.as_mut())?;
@@ -755,14 +653,6 @@ impl LookApi {
             states_json(&read_states(backend.as_mut())?, &ModuleView::of(context)),
         ))
     }
-}
-
-fn not_allowed() -> Problem {
-    problem(
-        405,
-        "method_not_allowed",
-        "This method is not supported for the resource.",
-    )
 }
 
 #[cfg(test)]
@@ -886,32 +776,34 @@ mod tests {
             self.0.exchange(command, payload)
         }
     }
-    fn call(api: &LookApi, head: &str, body: &[u8], pending: bool) -> Reply {
+    fn call(api: &Resources, head: &str, body: &[u8]) -> Reply {
         let text = format!("{head} HTTP/1.1\r\nContent-Length: {}\r\n\r\n", body.len());
         let request = crate::parse(text.as_bytes()).unwrap();
-        call_with(api, request, body, pending)
+        call_with(api, request, body)
     }
-    fn call_with(api: &LookApi, request: Request, body: &[u8], pending: bool) -> Reply {
+    fn call_with(api: &Resources, request: Request, body: &[u8]) -> Reply {
         let context = RequestContext {
             boot_id: "boot",
-            card_id: "card".into(),
-            software_pending: pending,
+            card_id: Some("card".into()),
             root: std::path::Path::new("/"),
             release_keys: &[],
             family: None,
         };
-        api.handle_modules(&request, body, &context).unwrap()
+        let Some(crate::route::Route::Modules(route)) = crate::route::Route::parse(&request.path)
+        else {
+            panic!("not a module route: {}", request.path);
+        };
+        api.handle_modules(&route, &request, body, &context)
     }
-    fn change(api: &LookApi, head: &str, body: &[u8], pending: bool) -> Reply {
+    fn change(api: &Resources, head: &str, body: &[u8]) -> Reply {
         let text = format!(
             "{head} HTTP/1.1\r\nContent-Length: {}\r\nX-GRKit-Boot-Id: boot\r\n\r\n",
             body.len()
         );
-        call_with(api, crate::parse(text.as_bytes()).unwrap(), body, pending)
+        call_with(api, crate::parse(text.as_bytes()).unwrap(), body)
     }
     fn code(reply: &Reply) -> String {
-        let value: Value = serde_json::from_slice(&reply.body).unwrap();
-        value["code"].as_str().unwrap().to_owned()
+        reply.code()
     }
 
     #[test]
@@ -922,8 +814,8 @@ mod tests {
             value: 2,
             answer: CONTROL_BUSY,
         };
-        let api = LookApi::new(Box::new(Counted(camera, commands.clone())));
-        let first = call(&api, "GET /v1/modules/catalog?language=ja", b"", false);
+        let api = Resources::new(Box::new(Counted(camera, commands.clone())));
+        let first = call(&api, "GET /v1/modules/catalog?language=ja", b"");
         assert_eq!(first.status, 200);
         let value: Value = serde_json::from_slice(&first.body).unwrap();
         assert_eq!(
@@ -937,50 +829,18 @@ mod tests {
         let read = commands.load(std::sync::atomic::Ordering::SeqCst);
         let text =
             format!("GET /v1/modules/catalog?language=ja HTTP/1.1\r\nIf-None-Match: {tag}\r\n\r\n");
-        let again = call_with(&api, crate::parse(text.as_bytes()).unwrap(), b"", false);
+        let again = call_with(&api, crate::parse(text.as_bytes()).unwrap(), b"");
         assert!(again.status == 304 && again.body.is_empty());
         assert_eq!(commands.load(std::sync::atomic::Ordering::SeqCst), read);
 
         let patch = br#"{"enabled":false}"#;
         assert_eq!(
-            code(&call(&api, "PATCH /v1/params/modules/GUIDES", patch, false)),
-            "missing_header"
-        );
-        assert_eq!(
-            code(&change(
-                &api,
-                "PATCH /v1/params/modules/GUIDES",
-                patch,
-                true
-            )),
-            "software_pending"
-        );
-        assert_eq!(
-            code(&change(
-                &api,
-                "PATCH /v1/params/modules/OTHER",
-                patch,
-                false
-            )),
+            code(&change(&api, "PATCH /v1/params/modules/OTHER", patch)),
             "module_not_found"
         );
         assert_eq!(
-            code(&change(
-                &api,
-                "PATCH /v1/params/modules/GUIDES",
-                patch,
-                false
-            )),
+            code(&change(&api, "PATCH /v1/params/modules/GUIDES", patch)),
             "camera_busy"
-        );
-    }
-
-    #[test]
-    fn the_icon_is_a_png_of_the_tile() {
-        let pixels: Vec<u8> = (0..ICON_SIZE).map(|i| (i * 7 % 251) as u8).collect();
-        assert_eq!(
-            grkit_core::png::decode_rgba8(&icon_png(&pixels)).unwrap(),
-            (40, 40, pixels)
         );
     }
 
@@ -1026,19 +886,19 @@ mod tests {
     #[test]
     fn a_layout_places_each_module_once() {
         let layout = |answer| {
-            LookApi::new(Box::new(Fake {
+            Resources::new(Box::new(Fake {
                 sent: Vec::new(),
                 value: 2,
                 answer,
             }))
         };
         let api = layout(0);
-        let read = call(&api, "GET /v1/params/modules", b"", false);
+        let read = call(&api, "GET /v1/params/modules", b"");
         let value: Value = serde_json::from_slice(&read.body).unwrap();
         assert_eq!(value["toolbarMax"], 4);
         assert_eq!(value["modules"][0]["placeable"], true);
         let hidden = br#"{"toolbar":[],"root":[],"hidden":["GUIDES"]}"#;
-        let put = change(&api, "PUT /v1/params/modules/layout", hidden, false);
+        let put = change(&api, "PUT /v1/params/modules/layout", hidden);
         assert_eq!(put.status, 200);
         let value: Value = serde_json::from_slice(&put.body).unwrap();
         assert_eq!(value["toolbarMax"], 4);
@@ -1066,19 +926,14 @@ mod tests {
                 "layout_changed",
             ),
         ] {
-            let reply = change(&api, "PUT /v1/params/modules/layout", body, false);
+            let reply = change(&api, "PUT /v1/params/modules/layout", body);
             assert_eq!((reply.status, code(&reply)), (status, error.to_owned()));
         }
         for (answer, error) in [
             (CONTROL_BUSY, "camera_busy"),
             (CONTROL_CHANGED, "layout_changed"),
         ] {
-            let reply = change(
-                &layout(answer),
-                "PUT /v1/params/modules/layout",
-                hidden,
-                false,
-            );
+            let reply = change(&layout(answer), "PUT /v1/params/modules/layout", hidden);
             assert_eq!(code(&reply), error);
         }
     }

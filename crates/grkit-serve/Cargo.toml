@@ -13,7 +13,7 @@ grkit-core.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 crc32fast.workspace = true
-tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
+tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -2,19 +2,19 @@
 //! recipes live in the App task, so each change applies at once, and the
 //! camera saves the recipe file as after a change in MENU. A recipe is
 //! found by its ID, which stays with it when it moves.
-use super::{
-    codec::{word, Codes, Page},
-    header, problem, try_lock, LookApi, RequestContext, Result,
-};
+use super::{problem, try_lock, RequestContext, Resources, Result};
+use crate::codec::{word, Codes, Page};
 use crate::{
     api::Reply,
+    camera_looks::recipe_name,
     changes::{Changed, Changes},
     protocol::Problem,
-    runtime_backend::{recipe_name, RuntimeBackend},
+    route::RecipeRoute,
+    runtime_backend::RuntimeBackend,
     Request,
 };
 use grkit_core::abi::*;
-use grkit_core::recipes::{self, Family, Look, Recipe};
+use grkit_core::recipes::{self, name_words, Family, Look, Recipe};
 use serde_json::{json, Value};
 
 /// A recipe of the camera as its words give it.
@@ -91,30 +91,17 @@ fn read_list(backend: &mut dyn RuntimeBackend) -> Result<List> {
     })
 }
 
-/// The 7-bit name words of `name`, which `check_name` accepted.
-fn name_words(name: &str) -> [u32; RECIPE_NAME_WORDS] {
-    let mut words = [0; RECIPE_NAME_WORDS];
-    for (i, c) in name.bytes().take(RECIPE_NAME_CHARS).enumerate() {
-        words[i / 4] |= u32::from(c & 0x7f) << (7 * (i % 4));
-    }
-    words
-}
-
-impl LookApi {
-    /// `/v1/recipes`, `/v1/recipes/order`, `/v1/recipes/undo`,
-    /// `/v1/recipes/{id}`, `/v1/recipes/{id}/apply`. None for another path.
+impl Resources {
+    /// A request of the recipes, with a method of its route that the
+    /// service admitted (`api::Service`).
     pub fn handle_recipes(
         &self,
+        route: &RecipeRoute,
         request: &Request,
         body: &[u8],
         context: &RequestContext<'_>,
         changes: &Changes,
-    ) -> Option<Reply> {
-        let route = request.path.strip_prefix("/v1/recipes")?;
-        let parts: Vec<&str> = route.split('/').filter(|p| !p.is_empty()).collect();
-        if !route.is_empty() && !route.starts_with('/') {
-            return None;
-        }
+    ) -> Reply {
         let result = (|| -> Result<Reply> {
             let family = context.family.ok_or_else(|| {
                 problem(
@@ -126,26 +113,9 @@ impl LookApi {
             let mut backend = try_lock(&self.backend)?;
             let names = self.effect_names(backend.as_mut(), context);
             if request.method == "GET" {
-                return match parts.as_slice() {
-                    [] => Ok(Reply::json(
-                        200,
-                        list_json(&read_list(backend.as_mut())?, family, &names, context),
-                    )),
-                    _ => Err(not_found()),
-                };
-            }
-            if header(request, "x-grkit-boot-id")? != context.boot_id {
-                return Err(problem(
-                    409,
-                    "context_changed",
-                    "The camera started again. Read the recipes before changing them.",
-                ));
-            }
-            if context.software_pending {
-                return Err(problem(
-                    409,
-                    "software_pending",
-                    "Finish or cancel the pending software operation before changing recipes.",
+                return Ok(Reply::json(
+                    200,
+                    list_json(&read_list(backend.as_mut())?, family, &names, context),
                 ));
             }
             let value: Value = if body.is_empty() {
@@ -154,18 +124,16 @@ impl LookApi {
                 serde_json::from_slice(body)
                     .map_err(|_| problem(400, "invalid_json", "The body is not valid JSON."))?
             };
-            let id_of = |text: &str| text.parse::<u32>().map_err(|_| not_found());
             let b = backend.as_mut();
             let mut extra = json!({});
-            match (request.method.as_str(), parts.as_slice()) {
-                ("PATCH", [id]) => patch(b, id_of(id)?, &value)?,
-                ("DELETE", [id]) => {
-                    let (result, bytes) =
-                        b.exchange(CONTROL_RECIPE_DELETE, &id_of(id)?.to_le_bytes())?;
+            match (request.method.as_str(), route) {
+                ("PATCH", RecipeRoute::Recipe(id)) => patch(b, *id, &value)?,
+                ("DELETE", RecipeRoute::Recipe(id)) => {
+                    let (result, bytes) = b.exchange(CONTROL_RECIPE_DELETE, &id.to_le_bytes())?;
                     checked(result, bytes)?;
                 }
-                ("PUT", ["order"]) => order(b, &value)?,
-                ("POST", ["undo"]) => {
+                (_, RecipeRoute::Order) => order(b, &value)?,
+                (_, RecipeRoute::Undo) => {
                     let (result, bytes) = b.exchange(CONTROL_RECIPE_UNDO, &[])?;
                     if result == CONTROL_INVALID {
                         return Err(problem(
@@ -177,15 +145,9 @@ impl LookApi {
                     let bytes = checked(result, bytes)?;
                     extra = json!({"undo": word(&bytes, 0).ok_or_else(malformed)?});
                 }
-                ("POST", [id, "apply"]) => extra = apply(b, id_of(id)?)?,
-                ("POST", []) => extra = add(b, family, &value)?,
-                _ => {
-                    return Err(problem(
-                        405,
-                        "method_not_allowed",
-                        "This method is not supported for the resource.",
-                    ))
-                }
+                (_, RecipeRoute::Apply(id)) => extra = apply(b, *id)?,
+                (_, RecipeRoute::Collection) => extra = add(b, family, &value)?,
+                (_, RecipeRoute::Recipe(_)) => unreachable!("the route takes PATCH and DELETE"),
             }
             changes.note(Changed::Looks);
             let mut body = list_json(&read_list(b)?, family, &names, context);
@@ -194,7 +156,7 @@ impl LookApi {
             }
             Ok(Reply::json(200, body))
         })();
-        Some(result.unwrap_or_else(Reply::problem))
+        result.unwrap_or_else(Reply::problem)
     }
 
     /// The ID and name of each Look on the card, by the recipe code of its
@@ -205,28 +167,9 @@ impl LookApi {
         context: &RequestContext<'_>,
     ) -> Vec<(u16, String, String)> {
         self.view(backend, context)
-            .map(|view| {
-                view.looks
-                    .iter()
-                    .map(|look| {
-                        (
-                            recipes::effect_code(&look.file.id),
-                            look.file.id.clone(),
-                            look.file.name.clone(),
-                        )
-                    })
-                    .collect()
-            })
+            .map(|view| view.effect_names())
             .unwrap_or_default()
     }
-}
-
-fn not_found() -> Problem {
-    problem(
-        404,
-        "recipe_not_found",
-        "The camera has no recipe with this ID.",
-    )
 }
 
 fn list_json(
@@ -275,10 +218,12 @@ fn patch(backend: &mut dyn RuntimeBackend, id: u32, value: &Value) -> Result<()>
         let payload = [id.to_le_bytes(), u32::from(!enabled).to_le_bytes()].concat();
         let (result, bytes) = backend.exchange(CONTROL_RECIPE_TURN, &payload)?;
         if result == CONTROL_INVALID {
-            return Err(problem(
+            return Err(Problem::new(
                 409,
                 "menu_full",
-                "The camera menu shows at most 40 recipes. Turn one off first.",
+                format!(
+                    "The camera menu shows at most {RECIPE_ON_MAX} recipes. Turn one off first."
+                ),
             ));
         }
         return checked(result, bytes).map(drop);
@@ -289,10 +234,10 @@ fn patch(backend: &mut dyn RuntimeBackend, id: u32, value: &Value) -> Result<()>
         Some(Value::String(name)) => {
             let name = name.trim().to_owned();
             recipes::check_name(&name).map_err(|_| {
-                problem(
+                Problem::new(
                     422,
                     "invalid_name",
-                    "Use 1 to 16 letters, digits, spaces, or symbols.",
+                    format!("Use 1 to {RECIPE_NAME_CHARS} letters, digits, spaces, or symbols."),
                 )
             })?;
             name
@@ -401,10 +346,10 @@ fn add(backend: &mut dyn RuntimeBackend, family: Family, value: &Value) -> Resul
     let list = read_list(backend)?;
     let (result, bytes) = backend.exchange(CONTROL_RECIPE_ADD, &payload)?;
     if result == CONTROL_INVALID && list.entries.len() >= RECIPE_SLOTS {
-        return Err(problem(
+        return Err(Problem::new(
             409,
             "card_full",
-            "The card holds at most 64 recipes. Delete one first.",
+            format!("The card holds at most {RECIPE_SLOTS} recipes. Delete one first."),
         ));
     }
     let bytes = checked(result, bytes)?;
@@ -492,8 +437,7 @@ mod tests {
         let boot = "b";
         let context = RequestContext {
             boot_id: boot,
-            card_id: "c".into(),
-            software_pending: false,
+            card_id: Some("c".into()),
             root: std::path::Path::new("/"),
             release_keys: &[],
             family: Some(Family::Gr3),

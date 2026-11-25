@@ -459,12 +459,8 @@ mod platform {
                 file.metadata()?.is_file(),
                 "Control installer is not a regular file"
             );
-            let mut bytes = Vec::new();
-            file.take(MAX_BINARY + 1).read_to_end(&mut bytes)?;
-            ensure!(
-                bytes.len() as u64 <= MAX_BINARY,
-                "Control installer is oversized"
-            );
+            let bytes = grkit_core::bounded::read_to_limit(file, MAX_BINARY as usize)
+                .context("Control installer is oversized")?;
             match run_installer(&bytes) {
                 Ok(descriptor) => {
                     return Client::new(MappedMailbox::map(&descriptor, lock)?);

@@ -35,69 +35,21 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Reply> {
     if request.headers.contains_key("origin") {
         return Err(Reply::error(403, "Browser requests are not allowed"));
     }
-    let body_type = match (request.method.as_str(), request.path.as_str()) {
-        ("PUT", "/v1/update") => Some((crate::update::MAX_PACKAGE, "application/zip")),
-        ("PUT", "/v1/params/looks/order") => Some((4096, "application/json")),
-        ("PUT", "/v1/looks/covers/scheme") | ("POST", "/v1/looks/covers/reset") => {
-            Some((1024, "application/json"))
+    // The body that the route takes with the method (`route::Route::body`).
+    match crate::route::Route::parse(&request.path).and_then(|route| route.body(&request.method)) {
+        Some(body) => body
+            .check(
+                request.length,
+                request.headers.get("content-type").map(String::as_str),
+            )
+            .map_err(Reply::problem)?,
+        None if request.length > 0 => {
+            return Err(Reply::error(
+                400,
+                "This endpoint does not accept a request body",
+            ))
         }
-        ("POST", "/v1/recipes") | ("PUT", "/v1/recipes/order") => Some((4096, "application/json")),
-        ("PUT", "/v1/params/modules/order" | "/v1/params/modules/layout")
-        | ("PATCH", "/v1/params/settings") => Some((1024, "application/json")),
-        ("PUT", "/v1/shutdown-picture") => Some((grkit_core::goodbye::MAX_BYTES, "image/jpeg")),
-        ("PATCH", path)
-            if path
-                .strip_prefix("/v1/params/modules/")
-                .is_some_and(|id| !id.is_empty() && !id.contains('/')) =>
-        {
-            Some((4096, "application/json"))
-        }
-        ("PATCH", path)
-            if path
-                .strip_prefix("/v1/recipes/")
-                .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit())) =>
-        {
-            Some((1024, "application/json"))
-        }
-        ("PUT", path)
-            if path
-                .strip_prefix("/v1/looks/")
-                .and_then(|path| path.strip_suffix("/content"))
-                .is_some_and(grkit_core::effects::valid_id) =>
-        {
-            if !request.headers.contains_key("content-length") {
-                return Err(Reply::error(400, "Content-Length is required"));
-            }
-            if !matches!(request.length, 8192 | 8704) {
-                return Err(Reply::error(422, "Unsupported GRF length"));
-            }
-            Some((8704, "application/octet-stream"))
-        }
-        ("PATCH", path)
-            if path
-                .strip_prefix("/v1/looks/")
-                .is_some_and(grkit_core::effects::valid_id) =>
-        {
-            Some((1024, "application/json"))
-        }
-        _ => None,
-    };
-    if let Some((limit, content_type)) = body_type {
-        if request.length > limit {
-            return Err(Reply::error(413, "The body exceeds this resource's limit"));
-        }
-        let supplied = request
-            .headers
-            .get("content-type")
-            .map(|value| value.split(';').next().unwrap_or("").trim());
-        if supplied != Some(content_type) {
-            return Err(Reply::error(415, "Unsupported request media type"));
-        }
-    } else if request.length > 0 {
-        return Err(Reply::error(
-            400,
-            "This endpoint does not accept a request body",
-        ));
+        None => {}
     }
     // The service answers `100-continue` (or a final status) before it
     // reads a body; it supports no other expectation.

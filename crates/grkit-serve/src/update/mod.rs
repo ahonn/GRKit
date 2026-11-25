@@ -36,4 +36,4 @@ pub use record::{
     SoftwareContext, SoftwareIdentity, SoftwarePhase, SoftwareRequest, SoftwareStatus,
     REQUEST_REMOVED, SOFTWARE_REPLACED, STAGING_FAILED,
 };
-pub use stage::{recipe_family, stage, stage_request, Device, MAX_PACKAGE};
+pub use stage::{stage, stage_request, Device, MAX_PACKAGE};

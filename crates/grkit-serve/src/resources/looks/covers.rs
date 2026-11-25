@@ -20,7 +20,7 @@ use grkit_core::{
     packaging,
     release::Statement,
 };
-use std::{collections::BTreeMap, fs, io::Read, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 /// The largest library: each import at its largest, with its two lengths.
 const MAX_LIBRARY: usize = imports::MAGIC.len()
@@ -413,16 +413,13 @@ fn read(root: &Path) -> Library {
         if !file.metadata()?.is_file() {
             return Err(std::io::ErrorKind::InvalidData.into());
         }
-        let mut bytes = Vec::new();
-        file.take(MAX_LIBRARY as u64 + 1).read_to_end(&mut bytes)?;
-        Ok(Some(bytes))
+        grkit_core::bounded::read_to_limit(file, MAX_LIBRARY).map(Some)
     };
     match read() {
         Ok(None) => Library::Ready(Loaded::new(Vec::new())),
-        Ok(Some(bytes)) if bytes.len() <= MAX_LIBRARY => imports::decode(&bytes)
-            .map_or(Library::Unusable, |imports| {
-                Library::Ready(Loaded::new(imports))
-            }),
+        Ok(Some(bytes)) => imports::decode(&bytes).map_or(Library::Unusable, |imports| {
+            Library::Ready(Loaded::new(imports))
+        }),
         _ => Library::Unusable,
     }
 }

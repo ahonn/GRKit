@@ -1,21 +1,26 @@
-//! The answers of the runtime to the mailbox commands of the recipes, the
-//! modules, and the settings: little-endian words, a result code that each
-//! command shares, and lists that come a page at a time.
+//! The answers of the runtime to the mailbox commands: little-endian words,
+//! a result code that each command shares, and lists that come a page at a
+//! time.
 
-use super::{problem, Result};
 use crate::{
     protocol::Problem,
     runtime_backend::{camera_busy, RuntimeBackend},
 };
 use grkit_core::abi::{CONTROL_BUSY, CONTROL_CHANGED, CONTROL_INVALID, CONTROL_UNSUPPORTED};
 
+type Result<T> = std::result::Result<T, Problem>;
+
+fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
+    Problem::new(status, code, detail)
+}
+
 /// The word at the byte `at` of `bytes`.
-pub(super) fn word(bytes: &[u8], at: usize) -> Option<u32> {
+pub(crate) fn word(bytes: &[u8], at: usize) -> Option<u32> {
     Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
 }
 
 /// The problems of the result codes of one resource.
-pub(super) struct Codes {
+pub(crate) struct Codes {
     /// What the camera lists, as in "The recipe list of the camera".
     pub list: &'static str,
     /// The detail of `CONTROL_CHANGED`.
@@ -28,7 +33,7 @@ pub(super) struct Codes {
 
 impl Codes {
     /// An answer that does not have the form of the command.
-    pub(super) fn malformed(&self) -> Problem {
+    pub(crate) fn malformed(&self) -> Problem {
         Problem::new(
             503,
             "runtime_invalid",
@@ -37,7 +42,7 @@ impl Codes {
     }
 
     /// The answer `bytes` of a command whose result is `result`.
-    pub(super) fn checked(&self, (result, bytes): (u32, Vec<u8>)) -> Result<Vec<u8>> {
+    pub(crate) fn checked(&self, (result, bytes): (u32, Vec<u8>)) -> Result<Vec<u8>> {
         match result {
             0 => Ok(bytes),
             CONTROL_BUSY => Err(camera_busy()),
@@ -57,7 +62,7 @@ impl Codes {
     /// entries and gives the number of rows, the first row of the page, and
     /// the number of its entries. Returns the last answer, for the words of
     /// its header.
-    pub(super) fn read_pages(
+    pub(crate) fn read_pages(
         &self,
         backend: &mut dyn RuntimeBackend,
         command: u32,
@@ -86,7 +91,7 @@ fn rejected() -> Problem {
 }
 
 /// What a page of a list gives.
-pub(super) struct Page {
+pub(crate) struct Page {
     /// The number of rows of the list.
     pub count: u32,
     /// The first row of the page.

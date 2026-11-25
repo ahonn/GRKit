@@ -7,14 +7,14 @@ use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Read,
     path::Path,
 };
 
 /// Bound directory work, including unrelated entries, before returning a complete inventory.
 pub const MAX_ENTRIES: usize = 256;
-/// The camera can list 64 Looks; excess files remain visible in this inspection.
-pub const MAX_LISTED: usize = 64;
+/// The camera lists this many Looks; excess files remain visible in this
+/// inspection.
+pub const MAX_LISTED: usize = grkit_core::abi::EFFECTS_LISTED;
 
 /// One valid effect file of the library.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -80,10 +80,10 @@ pub fn scan(root: &Path) -> Result<Scan> {
                 length == effects::SIZE as u64 || length == effects::SIZE_WITH_LEVELS as u64,
                 "Invalid GRF length"
             );
-            let mut bytes = Vec::with_capacity(length as usize);
-            file.take(effects::SIZE_WITH_LEVELS as u64 + 1)
-                .read_to_end(&mut bytes)?;
-            Ok(bytes)
+            Ok(grkit_core::bounded::read_to_limit(
+                file,
+                effects::SIZE_WITH_LEVELS,
+            )?)
         };
         let bytes = match read() {
             Ok(bytes) => bytes,

@@ -22,12 +22,15 @@
 //! without an individual cover follow one scheme (`cover::Scheme`): one
 //! request rewrites their files for another scheme, and one puts the
 //! individual covers of a group back to it.
+use super::{lock, problem, try_lock, write_checked, RequestContext, Resources, Result};
 use crate::{
     api::Reply,
+    camera_looks::{self, look_key, RuntimeLooks, UseOrigin},
     changes::{Changed, Changes},
     looks::{self, LookFile, MAX_LISTED},
     protocol::Problem,
-    runtime_backend::{look_key, RuntimeBackend, RuntimeLooks, UseOrigin},
+    route::LookRoute,
+    runtime_backend::RuntimeBackend,
     Request,
 };
 use covers::{built_in, Covers, Official};
@@ -40,31 +43,16 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
-    sync::{Mutex, MutexGuard, TryLockError},
 };
 
-type Result<T> = std::result::Result<T, Problem>;
-
 /// The camera loads at most this many Looks that are On.
-pub const MAX_LOADED: usize = 40;
+pub const MAX_LOADED: usize = grkit_core::abi::MAX_COUNT;
 /// The longest `X-GRKit-Cover` value. A cover is less than 512 bytes of JSON.
 const MAX_COVER: usize = 1024;
 
-pub struct RequestContext<'a> {
-    pub boot_id: &'a str,
-    pub card_id: String,
-    pub software_pending: bool,
-    /// The mounted card.
-    pub root: &'a Path,
-    /// The keys that sign the release whose official Looks the card names.
-    pub release_keys: &'a [[u8; 32]],
-    /// The recipe family of the camera, when its model is known.
-    pub family: Option<grkit_core::recipes::Family>,
-}
-
 /// What the service keeps about one card while the camera stays on.
 #[derive(Default)]
-struct Session {
+pub(super) struct Session {
     card_id: String,
     /// The content hash of each Look when the service first read the card:
     /// the content that the running camera loaded.
@@ -73,12 +61,6 @@ struct Session {
     covers: Covers,
     /// The runtime answered a Looks read.
     verified: bool,
-}
-
-pub struct LookApi {
-    backend: Mutex<Box<dyn RuntimeBackend>>,
-    session: Mutex<Option<Session>>,
-    modules: Mutex<module_api::ModuleCache>,
 }
 
 /// The uses of a Look that its info names; `usedBy` counts them all.
@@ -97,7 +79,7 @@ fn use_json(origin: &UseOrigin) -> Value {
 }
 
 /// One Look of the list.
-struct Look {
+pub(super) struct Look {
     file: LookFile,
     source: &'static str,
     enabled: bool,
@@ -131,7 +113,7 @@ impl Look {
 
 /// The Looks in the order of the camera menu, then the Looks that wait for
 /// the next start.
-struct View {
+pub(super) struct View {
     looks: Vec<Look>,
     /// Files that share an ID with an earlier file: the camera lists one.
     duplicates: BTreeSet<String>,
@@ -149,6 +131,19 @@ impl View {
             .iter()
             .find(|look| look.file.id == id)
             .ok_or_else(|| problem(404, "look_not_found", "The card has no Look with this ID."))
+    }
+    /// The recipe code, ID, and name of each Look.
+    pub(super) fn effect_names(&self) -> Vec<(u16, String, String)> {
+        self.looks
+            .iter()
+            .map(|look| {
+                (
+                    recipes::effect_code(&look.file.id),
+                    look.file.id.clone(),
+                    look.file.name.clone(),
+                )
+            })
+            .collect()
     }
     fn ids(&self) -> Vec<&str> {
         self.looks
@@ -175,27 +170,7 @@ impl View {
     }
 }
 
-impl LookApi {
-    pub fn new(backend: Box<dyn RuntimeBackend>) -> Self {
-        Self {
-            backend: Mutex::new(backend),
-            session: Mutex::new(None),
-            modules: Mutex::default(),
-        }
-    }
-
-    /// The count of setting changes of the running camera, when the service
-    /// has a session with it and no request holds it. Sends no command.
-    pub fn state_changes(&self) -> Option<u32> {
-        try_lock(&self.backend).ok()?.state_changes()
-    }
-
-    /// Mark the service as running or stopped for the camera. True when the
-    /// mark is in place.
-    pub fn announce(&self, running: bool) -> bool {
-        lock(&self.backend).announce(running).is_ok()
-    }
-
+impl Resources {
     /// The Looks state for /props, without a runtime command.
     pub fn runtime_properties(&self, card_id: &str) -> Value {
         let verified = lock(&self.session)
@@ -205,37 +180,37 @@ impl LookApi {
             "capabilities":{"read":true,"write":true,"appliesAtRestart":["content","name","delete","covers"]}})
     }
 
-    /// None means this path belongs to another router.
+    /// A request of the Looks, with a method of its route that the service
+    /// admitted (`api::Service`).
     pub fn handle(
         &self,
+        route: &LookRoute,
         request: &Request,
         body: &[u8],
         context: &RequestContext<'_>,
         changes: &Changes,
-    ) -> Option<Reply> {
-        let route = Route::parse(&request.path)?;
+    ) -> Reply {
         let result = match request.method.as_str() {
-            "GET" => self.read(&route, context),
-            method if route.accepts(method) => self.mutate(&route, request, body, context, changes),
-            _ => Err(problem(
-                405,
-                "method_not_allowed",
-                "This method is not supported for the resource.",
-            )),
+            "GET" => self.read(route, context),
+            _ => self.mutate(route, request, body, context, changes),
         };
-        Some(result.unwrap_or_else(Reply::problem))
+        result.unwrap_or_else(Reply::problem)
     }
 
     /// The files of the card joined with the choices of the camera.
-    fn view(&self, backend: &mut dyn RuntimeBackend, context: &RequestContext<'_>) -> Result<View> {
-        if context.card_id == "unavailable" {
+    pub(super) fn view(
+        &self,
+        backend: &mut dyn RuntimeBackend,
+        context: &RequestContext<'_>,
+    ) -> Result<View> {
+        let Some(card_id) = context.card_id.as_deref() else {
             return Err(problem(
                 503,
                 "card_identity_unavailable",
                 "The card identity is not available yet.",
             ));
-        }
-        let runtime = backend.looks()?;
+        };
+        let runtime = camera_looks::read(backend)?;
         let scan = looks::scan(context.root).map_err(|_| {
             problem(
                 503,
@@ -246,10 +221,10 @@ impl LookApi {
         let mut guard = lock(&self.session);
         if guard
             .as_ref()
-            .is_none_or(|session| session.card_id != context.card_id)
+            .is_none_or(|session| session.card_id != card_id)
         {
             *guard = Some(Session {
-                card_id: context.card_id.to_owned(),
+                card_id: card_id.to_owned(),
                 started: scan
                     .files
                     .iter()
@@ -274,26 +249,26 @@ impl LookApi {
         ))
     }
 
-    fn read(&self, route: &Route, context: &RequestContext<'_>) -> Result<Reply> {
+    fn read(&self, route: &LookRoute, context: &RequestContext<'_>) -> Result<Reply> {
         let mut backend = try_lock(&self.backend)?;
         let view = self.view(backend.as_mut(), context)?;
         Ok(match route {
-            Route::Collection => {
+            LookRoute::Collection => {
                 let mut body = view.value();
                 body["bootId"] = json!(context.boot_id);
                 body["cardId"] = json!(context.card_id);
                 Reply::json(200, body)
             }
-            Route::Configuration(id) => Reply::json(200, view.get(id)?.configuration()),
-            Route::Info(id) => Reply::json(200, view.get(id)?.info()),
-            Route::Content(id) => {
+            LookRoute::Configuration(id) => Reply::json(200, view.get(id)?.configuration()),
+            LookRoute::Info(id) => Reply::json(200, view.get(id)?.info()),
+            LookRoute::Content(id) => {
                 let look = view.get(id)?;
                 Reply::binary(200, look.file.bytes.clone(), "application/octet-stream")
                     .header("X-GRKit-Content-SHA256", look.file.content_hash.clone())
             }
-            Route::Order => Reply::json(200, json!({"ids": view.ids()})),
-            Route::Scheme => Reply::json(200, json!({"scheme": view.scheme.id()})),
-            Route::Reset => {
+            LookRoute::Order => Reply::json(200, json!({"ids": view.ids()})),
+            LookRoute::Scheme => Reply::json(200, json!({"scheme": view.scheme.id()})),
+            LookRoute::Reset => {
                 return Err(problem(
                     405,
                     "method_not_allowed",
@@ -305,34 +280,21 @@ impl LookApi {
 
     fn mutate(
         &self,
-        route: &Route,
+        route: &LookRoute,
         request: &Request,
         body: &[u8],
         context: &RequestContext<'_>,
         changes: &Changes,
     ) -> Result<Reply> {
-        validate_body(route, request, body)?;
-        if header(request, "x-grkit-boot-id")? != context.boot_id {
-            return Err(problem(
-                409,
-                "context_changed",
-                "The camera started again. Read the Looks before changing them.",
-            ));
-        }
-        if context.software_pending {
-            return Err(problem(
-                409,
-                "software_pending",
-                "Finish or cancel the pending software operation before changing Looks.",
-            ));
-        }
-        if request.query.is_some()
-            && !(request.method == "DELETE" && request.query.as_deref() == Some("active=off"))
+        if request
+            .headers
+            .get("x-grkit-cover")
+            .is_some_and(|cover| cover.len() > MAX_COVER)
         {
             return Err(problem(
-                422,
-                "invalid_query",
-                "This mutation query is not supported.",
+                413,
+                "cover_too_large",
+                "The cover exceeds its size limit.",
             ));
         }
         let mut backend = try_lock(&self.backend)?;
@@ -345,7 +307,7 @@ impl LookApi {
             let mut guard = lock(&self.session);
             let session = guard.as_mut().ok_or_else(coordinator)?;
             match route {
-                Route::Content(id) => {
+                LookRoute::Content(id) => {
                     let created = view.get(id).is_err();
                     late = put_content(context.root, &view, session, id, request, body)?;
                     // The camera still lists a Look that was removed in this
@@ -354,13 +316,13 @@ impl LookApi {
                     let key = look_key(id);
                     let on = view.looks.iter().filter(|look| look.enabled).count();
                     if created && view.off.contains(&key) && on < MAX_LOADED {
-                        if let Err(problem) = backend.turn(key, false) {
+                        if let Err(problem) = camera_looks::turn(backend.as_mut(), key, false) {
                             late.get_or_insert(problem);
                         }
                     }
                     (if created { 201 } else { 200 }, Some(id))
                 }
-                Route::Configuration(id) => {
+                LookRoute::Configuration(id) => {
                     let look = view.get(id)?;
                     if request.method == "PATCH" {
                         patch(context.root, backend.as_mut(), &view, session, look, body)?;
@@ -375,18 +337,18 @@ impl LookApi {
                     }
                     (200, Some(id))
                 }
-                Route::Order => {
+                LookRoute::Order => {
                     order(backend.as_mut(), &view, body)?;
                     (200, None)
                 }
-                Route::Scheme | Route::Reset => {
+                LookRoute::Scheme | LookRoute::Reset => {
                     let (scheme, reset) = covers_request(route, body, view.scheme)?;
                     (rewritten, late) =
                         rewrite_covers(context.root, &view, session, scheme, reset)?;
                     session.covers.chosen = Some(scheme);
                     (200, None)
                 }
-                Route::Collection | Route::Info(_) => {
+                LookRoute::Collection | LookRoute::Info(_) => {
                     return Err(problem(
                         405,
                         "method_not_allowed",
@@ -403,7 +365,7 @@ impl LookApi {
             return Err(problem);
         }
         let result = match (route, id) {
-            (Route::Scheme | Route::Reset, _) => {
+            (LookRoute::Scheme | LookRoute::Reset, _) => {
                 json!({"officialCovers":view.scheme.id(),"changed":rewritten})
             }
             (_, Some(id)) => view
@@ -516,12 +478,6 @@ fn write_file(root: &Path, name: &str, bytes: &[u8]) -> Result<()> {
         "card_write_failed",
         "The Look could not be written to the card.",
     ))
-}
-
-/// Write the whole file in place and read it back (`update::write_checked`).
-/// True when the card holds `bytes`.
-fn write_checked(path: &Path, bytes: &[u8]) -> bool {
-    crate::update::write_checked(path, bytes).is_ok()
 }
 
 /// Remove an effect file. On the camera, the lookup of the next new name in
@@ -677,11 +633,15 @@ fn put_content(
 }
 
 /// The scheme and the group to reset (true for B&W) of a covers request:
-/// `{"scheme": id}` for `Route::Scheme`, `{"group": "color" | "mono"}` for
-/// `Route::Reset`, which keeps the scheme of the card.
-fn covers_request(route: &Route, body: &[u8], current: Scheme) -> Result<(Scheme, Option<bool>)> {
+/// `{"scheme": id}` for `LookRoute::Scheme`, `{"group": "color" | "mono"}` for
+/// `LookRoute::Reset`, which keeps the scheme of the card.
+fn covers_request(
+    route: &LookRoute,
+    body: &[u8],
+    current: Scheme,
+) -> Result<(Scheme, Option<bool>)> {
     let (key, detail) = match route {
-        Route::Scheme => (
+        LookRoute::Scheme => (
             "scheme",
             "Supply only a scheme: gray, colorFilmBox, or filmBox.",
         ),
@@ -695,7 +655,7 @@ fn covers_request(route: &Route, body: &[u8], current: Scheme) -> Result<(Scheme
         .and_then(|object| object.get(key)?.as_str())
         .ok_or_else(invalid)?;
     match route {
-        Route::Scheme => Ok((Scheme::parse(text).ok_or_else(invalid)?, None)),
+        LookRoute::Scheme => Ok((Scheme::parse(text).ok_or_else(invalid)?, None)),
         _ => match text {
             "color" => Ok((current, Some(false))),
             "mono" => Ok((current, Some(true))),
@@ -812,10 +772,10 @@ fn patch(
         if !(1..=effects::NAME_MAX).contains(&name.len())
             || !name.bytes().all(|b| (32..=126).contains(&b))
         {
-            return Err(problem(
+            return Err(Problem::new(
                 422,
                 "invalid_name",
-                "Use 1 to 16 printable ASCII characters.",
+                format!("Use 1 to {} printable ASCII characters.", effects::NAME_MAX),
             ));
         }
     }
@@ -828,7 +788,7 @@ fn patch(
             return Err(capacity());
         }
         if enabled != look.enabled {
-            backend.turn(key, !enabled)?;
+            camera_looks::turn(backend, key, !enabled)?;
         }
     }
     if let Some(name) = name.filter(|name| *name != look.file.name) {
@@ -909,7 +869,7 @@ fn delete(
     // Off first: the camera menu hides the Look at once, and a camera that
     // is busy keeps the file.
     if let Some(key) = look.key.filter(|_| look.enabled) {
-        backend.turn(key, true)?;
+        camera_looks::turn(backend, key, true)?;
     }
     remove_file(root, &look.file.file)?;
     session.covers.removed(root, &look.file.id);
@@ -937,172 +897,9 @@ fn order(backend: &mut dyn RuntimeBackend, view: &View, body: &[u8]) -> Result<(
         .iter()
         .filter_map(|id| view.get(id).ok().and_then(|look| look.key))
         .collect();
-    backend.order(&keys)
+    camera_looks::order(backend, &keys)
 }
 
-enum Route {
-    Collection,
-    Configuration(String),
-    Info(String),
-    Content(String),
-    Order,
-    /// The scheme of the built-in covers.
-    Scheme,
-    /// The individual covers of a group back to the scheme.
-    Reset,
-}
-impl Route {
-    fn parse(path: &str) -> Option<Self> {
-        let parts: Vec<_> = path.split('/').collect();
-        match parts.as_slice() {
-            ["", "v1", "looks"] => Some(Self::Collection),
-            ["", "v1", "looks", "covers", "scheme"] => Some(Self::Scheme),
-            ["", "v1", "looks", "covers", "reset"] => Some(Self::Reset),
-            ["", "v1", "looks", id] if effects::valid_id(id) => {
-                Some(Self::Configuration((*id).into()))
-            }
-            ["", "v1", "looks", id, "info"] if effects::valid_id(id) => {
-                Some(Self::Info((*id).into()))
-            }
-            ["", "v1", "looks", id, "content"] if effects::valid_id(id) => {
-                Some(Self::Content((*id).into()))
-            }
-            ["", "v1", "params", "looks", "order"] => Some(Self::Order),
-            _ => None,
-        }
-    }
-    fn accepts(&self, method: &str) -> bool {
-        matches!(
-            (self, method),
-            (Self::Content(_), "PUT")
-                | (Self::Configuration(_), "PATCH" | "DELETE")
-                | (Self::Order, "PUT")
-                | (Self::Scheme, "PUT")
-                | (Self::Reset, "POST")
-        )
-    }
-}
-
-fn validate_body(route: &Route, request: &Request, body: &[u8]) -> Result<()> {
-    if request.length != body.len() {
-        return Err(problem(
-            400,
-            "incomplete_body",
-            "The complete request body is required.",
-        ));
-    }
-    let expected_type = match route {
-        Route::Content(_) => Some("application/octet-stream"),
-        Route::Order | Route::Scheme | Route::Reset => Some("application/json"),
-        Route::Configuration(_) if request.method == "PATCH" => Some("application/json"),
-        _ => None,
-    };
-    if let Some(expected) = expected_type {
-        if request
-            .headers
-            .get("content-type")
-            .is_none_or(|value| value.split(';').next().unwrap_or("").trim() != expected)
-        {
-            return Err(problem(
-                415,
-                "unsupported_media_type",
-                "The request content type is not supported.",
-            ));
-        }
-    }
-    match route {
-        Route::Content(_) => {
-            if !matches!(body.len(), effects::SIZE | effects::SIZE_WITH_LEVELS) {
-                return Err(problem(
-                    413,
-                    "invalid_content_length",
-                    "A GRF must contain 8192 or 8704 bytes.",
-                ));
-            }
-            if request
-                .headers
-                .get("x-grkit-cover")
-                .is_some_and(|cover| cover.len() > MAX_COVER)
-            {
-                return Err(problem(
-                    413,
-                    "cover_too_large",
-                    "The cover exceeds its size limit.",
-                ));
-            }
-        }
-        Route::Order if body.len() > 4096 => {
-            return Err(problem(
-                413,
-                "order_too_large",
-                "The order body exceeds its size limit.",
-            ));
-        }
-        Route::Scheme | Route::Reset if body.len() > 1024 => {
-            return Err(problem(
-                413,
-                "covers_too_large",
-                "The covers body exceeds its size limit.",
-            ));
-        }
-        Route::Configuration(_) if request.method == "PATCH" && body.len() > 1024 => {
-            return Err(problem(
-                413,
-                "patch_too_large",
-                "The Look patch exceeds its size limit.",
-            ));
-        }
-        _ if expected_type.is_none() && !body.is_empty() => {
-            return Err(problem(
-                400,
-                "unexpected_body",
-                "This mutation does not accept a body.",
-            ));
-        }
-        _ => {}
-    }
-    Ok(())
-}
-
-fn header<'a>(request: &'a Request, name: &str) -> Result<&'a str> {
-    request
-        .headers
-        .get(name)
-        .map(String::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            problem(
-                400,
-                "missing_header",
-                "A required request header is missing.",
-            )
-        })
-}
-/// A request that panics ends alone (the service unwinds), and the requests
-/// after it take the state that it left.
-fn lock<T: ?Sized>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| {
-        mutex.clear_poison();
-        poisoned.into_inner()
-    })
-}
-fn try_lock<T: ?Sized>(mutex: &Mutex<T>) -> Result<MutexGuard<'_, T>> {
-    match mutex.try_lock() {
-        Ok(guard) => Ok(guard),
-        Err(TryLockError::WouldBlock) => Err(busy()),
-        Err(TryLockError::Poisoned(poisoned)) => {
-            mutex.clear_poison();
-            Ok(poisoned.into_inner())
-        }
-    }
-}
-fn busy() -> Problem {
-    problem(
-        503,
-        "runtime_busy",
-        "The camera is answering another request.",
-    )
-}
 fn coordinator() -> Problem {
     problem(
         503,
@@ -1148,14 +945,7 @@ fn ambiguous() -> Problem {
 fn invalid_id() -> Problem {
     problem(422, "invalid_id", "The Look ID is invalid.")
 }
-fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
-    Problem::new(status, code, detail)
-}
 
-mod codec;
 mod covers;
-mod module_api;
-mod recipe_api;
-mod settings_api;
 #[cfg(test)]
 mod tests;

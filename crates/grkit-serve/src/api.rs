@@ -1,12 +1,12 @@
 //! The v1 resources: the reply of a request, and the service that answers
-//! each resource (`route::Resource`).
+//! each route (`route::Route`).
 use crate::update::{
     JournalState, SoftwareContext, SoftwarePhase, SoftwareRequest, SoftwareStatus,
 };
 use crate::{
     changes::{Changed, Changes},
     protocol::Problem,
-    route::Resource,
+    route::Route,
     Env, Request,
 };
 use serde_json::{json, Value};
@@ -59,6 +59,16 @@ impl Reply {
             .find(|(key, _)| key.eq_ignore_ascii_case(name))
             .map(|(_, value)| value.as_str())
     }
+    /// The JSON body of the reply.
+    #[cfg(test)]
+    pub(crate) fn value(&self) -> Value {
+        serde_json::from_slice(&self.body).expect("a JSON body")
+    }
+    /// The code of a problem reply, or an empty text.
+    #[cfg(test)]
+    pub(crate) fn code(&self) -> String {
+        self.value()["code"].as_str().unwrap_or("").to_owned()
+    }
     pub fn header(mut self, name: &str, value: String) -> Self {
         if name.is_empty()
             || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -107,7 +117,7 @@ pub struct Service {
     pub boot_id: String,
     card_identity: fn(&std::path::Path) -> anyhow::Result<String>,
     request_id: fn() -> anyhow::Result<String>,
-    looks: crate::look_api::LookApi,
+    looks: crate::resources::Resources,
     /// The recipe family of the camera, once its API answered: the model
     /// does not change while the service runs.
     family: std::sync::OnceLock<Option<grkit_core::recipes::Family>>,
@@ -127,7 +137,7 @@ impl Service {
             changes: Changes::default(),
             card_identity: crate::identity::session_card_id,
             request_id: crate::identity::request_id,
-            looks: crate::look_api::LookApi::new(backend),
+            looks: crate::resources::Resources::new(backend),
             family: std::sync::OnceLock::new(),
             boot_id,
         }
@@ -158,53 +168,88 @@ impl Service {
     }
     fn answer(&self, request: &Request, body: &[u8], env: &Env<'_>) -> Reply {
         let method = request.method.as_str();
-        let reply = match Resource::of(&request.path) {
-            Some(Resource::Ping) if method == "GET" => Some(Reply::json(
+        let Some(route) = Route::parse(&request.path) else {
+            return not_found();
+        };
+        if !route.methods().contains(&method) {
+            return Reply::problem(Problem::new(
+                405,
+                "method_not_allowed",
+                "This method is not supported for the resource.",
+            ));
+        }
+        if method != "GET" {
+            if let Err(reply) = self.admit(&route, request, env) {
+                return reply;
+            }
+        }
+        match &route {
+            Route::Ping => Reply::json(
                 200,
                 json!({"protocol":crate::PROTOCOL,"bootId":self.boot_id}),
-            )),
-            Some(Resource::Props) if method == "GET" => Some(self.props(env)),
-            Some(Resource::Diagnostics) if method == "GET" => Some(crate::diagnostics(env)),
-            Some(Resource::Update) if method == "GET" => Some(self.software(env)),
-            Some(Resource::Update) if method == "PUT" => {
-                Some(self.mutate_software(request, body, env))
+            ),
+            // The transport keeps this connection open (`changes`).
+            Route::Changes => not_found(),
+            Route::Props => self.props(env),
+            Route::Diagnostics => crate::diagnostics(env),
+            Route::Update if method == "GET" => self.software(env),
+            Route::Update | Route::UpdateCancel => {
+                self.mutate_software(route == Route::UpdateCancel, request, body, env)
             }
-            Some(Resource::UpdateCancel) if method == "POST" => {
-                Some(self.mutate_software(request, body, env))
-            }
-            Some(Resource::Looks) => {
+            Route::Looks(looks) => {
                 self.looks
-                    .handle(request, body, &self.look_context(env), &self.changes)
+                    .handle(looks, request, body, &self.look_context(env), &self.changes)
             }
-            Some(Resource::Recipes) => {
+            Route::Recipes(recipes) => self.looks.handle_recipes(
+                recipes,
+                request,
+                body,
+                &self.look_context(env),
+                &self.changes,
+            ),
+            Route::Modules(modules) => {
                 self.looks
-                    .handle_recipes(request, body, &self.look_context(env), &self.changes)
+                    .handle_modules(modules, request, body, &self.look_context(env))
             }
-            Some(Resource::Modules) => {
+            Route::Settings(settings) => {
                 self.looks
-                    .handle_modules(request, body, &self.look_context(env))
+                    .handle_settings(settings, request, body, &self.look_context(env))
             }
-            Some(Resource::Settings) => {
-                self.looks
-                    .handle_settings(request, body, &self.look_context(env))
+        }
+    }
+    /// The checks that each change shares: it names the start of the camera
+    /// that the phone read, it has no query but the one of its route, and no
+    /// software request waits, except for the cancel of that request.
+    fn admit(&self, route: &Route, request: &Request, env: &Env<'_>) -> Result<(), Reply> {
+        if request.headers.get("x-grkit-boot-id") != Some(&self.boot_id) {
+            return Err(Reply::problem(Problem::new(
+                409,
+                "context_changed",
+                "The camera started again. Read its state before changing it.",
+            )));
+        }
+        if request.query.is_some()
+            && request.query.as_deref() != route.change_query(&request.method)
+        {
+            return Err(Reply::problem(Problem::new(
+                400,
+                "invalid_query",
+                "This request accepts no such query.",
+            )));
+        }
+        if *route != Route::UpdateCancel {
+            if let Some(reply) = software_pending(env.card) {
+                return Err(reply);
             }
-            _ => None,
-        };
-        reply.unwrap_or_else(|| {
-            Reply::problem(Problem::new(
-                404,
-                "not_found",
-                "The resource does not exist.",
-            ))
-        })
+        }
+        Ok(())
     }
     /// What the Looks, recipes, modules, and settings of a request read.
-    fn look_context<'a>(&'a self, env: &'a Env<'_>) -> crate::look_api::RequestContext<'a> {
+    fn look_context<'a>(&'a self, env: &'a Env<'_>) -> crate::resources::RequestContext<'a> {
         let card_id = self.current_card_id(env.card.root()).ok();
-        crate::look_api::RequestContext {
+        crate::resources::RequestContext {
             boot_id: &self.boot_id,
-            card_id: card_id.unwrap_or_else(|| "unavailable".into()),
-            software_pending: software_pending(env.card).is_some(),
+            card_id,
             root: env.card.root(),
             release_keys: env.card.release_keys(),
             family: self.family(env),
@@ -219,7 +264,7 @@ impl Service {
         let device = (env.device)().ok()?;
         *self
             .family
-            .get_or_init(|| crate::update::recipe_family(&device.model))
+            .get_or_init(|| grkit_core::recipes::Family::of_api_model(&device.model))
     }
     fn props(&self, env: &Env<'_>) -> Reply {
         let card_id = self.current_card_id(env.card.root()).ok();
@@ -261,7 +306,9 @@ impl Service {
                     "cameraSettings":{"read":camera_settings,"write":camera_settings},
                     "moduleLayout":{"write":module_settings && camera_settings},
                     "shutdownPicture":{"read":writable,"write":writable}},
-                "limits":{"loadedLooks":40,"listedLooks":64,"lookNameAsciiCharacters":16,"maxLookBytes":8704,"maxPackageBytes":crate::update::MAX_PACKAGE},
+                "limits":{"loadedLooks":crate::resources::MAX_LOADED,"listedLooks":crate::looks::MAX_LISTED,
+                    "lookNameAsciiCharacters":grkit_core::effects::NAME_MAX,"maxLookBytes":grkit_core::effects::SIZE_WITH_LEVELS,
+                    "maxPackageBytes":crate::update::MAX_PACKAGE},
                 "activeRequests":active.into_iter().collect::<Vec<_>>()
             }),
         )
@@ -286,51 +333,37 @@ impl Service {
     /// before it receives a package of several megabytes, and answers at once
     /// when one fails. The request repeats them after the body.
     pub fn precheck(&self, request: &Request, env: &Env<'_>) -> Option<Reply> {
-        if (request.method.as_str(), request.path.as_str()) != ("PUT", "/v1/update") {
+        if request.method != "PUT" || Route::parse(&request.path) != Some(Route::Update) {
             return None;
         }
-        self.admit_software(request, env).err()
+        self.admit(&Route::Update, request, env)
+            .and_then(|()| self.software_card_id(env).map(drop))
+            .err()
     }
-    /// A software change names the start of the camera that the phone read,
-    /// and no other request waits.
-    fn admit_software(&self, request: &Request, env: &Env<'_>) -> Result<String, Reply> {
-        if request.headers.get("x-grkit-boot-id") != Some(&self.boot_id) {
-            return Err(Reply::problem(Problem::new(
-                409,
-                "context_changed",
-                "The camera started again. Read its state before changing it.",
-            )));
-        }
-        if request.query.is_some() {
-            return Err(Reply::problem(Problem::new(
-                400,
-                "invalid_query",
-                "This request accepts no query.",
-            )));
-        }
-        let card_id = self.current_card_id(env.card.root()).map_err(|_| {
+    /// The card identity that a software request names.
+    fn software_card_id(&self, env: &Env<'_>) -> Result<String, Reply> {
+        self.current_card_id(env.card.root()).map_err(|_| {
             unavailable(
                 "card_identity_unavailable",
                 "The card identity is unavailable.",
             )
-        })?;
-        if !request.path.ends_with("/cancel") {
-            if let Some(reply) = software_pending(env.card) {
-                return Err(reply);
-            }
-        }
-        Ok(card_id)
+        })
     }
     /// Stage an update, or cancel the one that waits. Each answers when it
     /// ends. A package that the phone sends again after an unknown result
     /// meets the request that waits (`software_pending`): the phone then reads
     /// the resource.
-    fn mutate_software(&self, request: &Request, body: &[u8], env: &Env<'_>) -> Reply {
-        let card_id = match self.admit_software(request, env) {
+    fn mutate_software(
+        &self,
+        cancel: bool,
+        request: &Request,
+        body: &[u8],
+        env: &Env<'_>,
+    ) -> Reply {
+        let card_id = match self.software_card_id(env) {
             Ok(card_id) => card_id,
             Err(reply) => return reply,
         };
-        let cancel = request.path.ends_with("/cancel");
         let rejected = |error: anyhow::Error| {
             Reply::problem(Problem::new(
                 if request.method == "PUT" { 422 } else { 409 },
@@ -470,6 +503,14 @@ fn software_pending(card: &crate::update::Card) -> Option<Reply> {
     }
 }
 
+fn not_found() -> Reply {
+    Reply::problem(Problem::new(
+        404,
+        "not_found",
+        "The resource does not exist.",
+    ))
+}
+
 fn unavailable(code: &'static str, detail: &str) -> Reply {
     Reply::problem(Problem::new(503, code, detail))
 }
@@ -533,7 +574,7 @@ mod tests {
         with_env(card, |env| service.handle(&request, body, env))
     }
     fn body(reply: &Reply) -> Value {
-        serde_json::from_slice(&reply.body).unwrap()
+        reply.value()
     }
     fn update() -> Vec<u8> {
         testing::signed_package(&camera::GR3, "1.7.0", &["second"])
@@ -635,6 +676,40 @@ mod tests {
         let query = call(&service, &card, "POST", "/v1/update/cancel?force=1", b"");
         assert_eq!(body(&query)["code"], "invalid_query");
         assert_eq!(card.state().unwrap(), JournalState::None);
+    }
+
+    #[test]
+    fn each_change_is_admitted_once_for_its_route() {
+        let (_root, card) = card();
+        let service = service("boot-test");
+        let mut request = request(&service, "PATCH", "/v1/looks/alpha", 0);
+        request
+            .headers
+            .insert("x-grkit-boot-id".into(), "boot-before".into());
+        let reply = with_env(&card, |env| service.handle(&request, b"", env));
+        assert_eq!(body(&reply)["code"], "context_changed");
+        let query = call(&service, &card, "PATCH", "/v1/looks/alpha?force=1", b"");
+        assert_eq!(body(&query)["code"], "invalid_query");
+        let off = call(&service, &card, "DELETE", "/v1/looks/alpha?active=off", b"");
+        assert_ne!(body(&off)["code"], "invalid_query");
+        assert_eq!(
+            call(&service, &card, "DELETE", "/v1/recipes/order", b"").status,
+            405
+        );
+        // A request that waits blocks each change but its cancel.
+        assert_eq!(
+            call(&service, &card, "PUT", "/v1/update", &update()).status,
+            202
+        );
+        for (method, path) in [
+            ("PATCH", "/v1/looks/alpha"),
+            ("POST", "/v1/recipes/undo"),
+            ("PUT", "/v1/params/modules/order"),
+            ("DELETE", "/v1/shutdown-picture"),
+        ] {
+            let reply = call(&service, &card, method, path, b"");
+            assert_eq!(body(&reply)["code"], "software_pending", "{method} {path}");
+        }
     }
 
     #[test]

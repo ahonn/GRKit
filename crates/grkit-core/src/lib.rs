@@ -3,6 +3,7 @@
 pub mod abi;
 pub mod artwork;
 pub mod aspect;
+pub mod bounded;
 pub mod camera;
 pub mod capabilities;
 pub mod card;

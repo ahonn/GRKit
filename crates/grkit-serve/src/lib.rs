@@ -6,22 +6,28 @@
 //! The service answers one request on each connection and then closes it. It
 //! admits a bounded number of connections and waits in `accept` between
 //! them. Every path starts with `/v<PROTOCOL>/`. The port has no other
-//! service, so the paths do not name GRKit. `route` maps each path to its
-//! resource, `api` answers the resources, and `changes` has the one
-//! connection that stays open.
+//! service, so the paths do not name GRKit. `connection` answers one
+//! connection, `route` maps each path to its route, `api` admits and answers
+//! the requests, `resources` has the Looks, recipes, modules, and settings,
+//! and `changes` has the one connection that stays open.
 //!
 //! Soon after power-on the card may not be readable yet. Then a resource
 //! that reads the card answers 503 and the client can retry.
 
 pub mod api;
+pub mod camera_api;
+pub mod camera_looks;
 pub mod changes;
+pub(crate) mod codec;
+pub mod connection;
 pub mod control;
 pub mod identity;
-pub mod look_api;
 pub mod looks;
 pub mod protocol;
+pub mod resources;
 pub mod route;
 pub mod runtime_backend;
+pub mod sync;
 pub mod transport;
 pub mod trust;
 pub mod update;

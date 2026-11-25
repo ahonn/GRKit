@@ -1,28 +1,23 @@
 //! Verify the release evidence of the card: it names the official Looks.
 use anyhow::{ensure, Context, Result};
 use grkit_core::release::{self, Statement};
-use std::{fs, io::Read, path::Path};
+use std::{fs, path::Path};
 
 pub fn installed_release(root: &Path, keys: &[[u8; 32]]) -> Result<Statement> {
-    let read = |path: &str, limit: u64| -> Result<Vec<u8>> {
+    let read = |path: &str, limit: usize| -> Result<Vec<u8>> {
         let path = root.join(path);
         ensure!(
             fs::symlink_metadata(&path)?.file_type().is_file(),
             "Release evidence must be a regular file"
         );
-        let mut bytes = Vec::new();
-        fs::File::open(&path)?
-            .take(limit + 1)
-            .read_to_end(&mut bytes)?;
-        ensure!(
-            bytes.len() as u64 <= limit,
-            "Release evidence exceeds its size limit"
-        );
-        Ok(bytes)
+        Ok(grkit_core::bounded::read_to_limit(
+            fs::File::open(&path)?,
+            limit,
+        )?)
     };
-    let statement = read(release::CARD_STATEMENT, release::MAX_STATEMENT_BYTES as u64)
+    let statement = read(release::CARD_STATEMENT, release::MAX_STATEMENT_BYTES)
         .context("Read the installed release statement")?;
-    let signature = read(release::CARD_SIGNATURE, release::MAX_SIGNATURE_BYTES as u64)
+    let signature = read(release::CARD_SIGNATURE, release::MAX_SIGNATURE_BYTES)
         .context("Read the installed release signature")?;
     release::verify(&statement, &signature, keys)
 }

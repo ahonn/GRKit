@@ -1,11 +1,11 @@
 //! The rows of MENU > GRKit Settings (`runtime/manage.h`), read and set
 //! through the mailbox (`CONTROL_SETTINGS_READ`, `CONTROL_SETTINGS_SET`),
 //! and the picture of Shutdown Screen on the card (`grkit_core::goodbye`).
-use super::{
-    codec::Codes, lock, module_api::admit_change, problem, try_lock, write_checked, LookApi,
-    RequestContext, Result,
+use super::{lock, problem, try_lock, write_checked, RequestContext, Resources, Result};
+use crate::codec::Codes;
+use crate::{
+    api::Reply, protocol::Problem, route::SettingsRoute, runtime_backend::RuntimeBackend, Request,
 };
-use crate::{api::Reply, protocol::Problem, runtime_backend::RuntimeBackend, Request};
 use grkit_core::{abi::*, goodbye};
 use serde_json::{json, Map, Value};
 use std::{fs, path::Path};
@@ -107,7 +107,7 @@ fn changes(body: &Value) -> Result<Vec<(u32, u32)>> {
     Ok(out)
 }
 
-impl LookApi {
+impl Resources {
     /// Whether the runtime answers `CONTROL_SETTINGS_READ`. It asks once: a
     /// camera that does not answer yet is asked again at the next read.
     pub fn camera_settings(&self) -> bool {
@@ -126,45 +126,32 @@ impl LookApi {
         answer.unwrap_or(false)
     }
 
-    /// `/v1/params/settings` and `/v1/shutdown-picture`. None for another
-    /// path.
+    /// A request of the GRKit settings or the shutdown picture, with a method
+    /// of its route that the service admitted (`api::Service`).
     pub fn handle_settings(
         &self,
+        route: &SettingsRoute,
         request: &Request,
         body: &[u8],
         context: &RequestContext<'_>,
-    ) -> Option<Reply> {
-        let result = match (request.method.as_str(), request.path.as_str()) {
-            ("GET", "/v1/params/settings") => try_lock(&self.backend)
+    ) -> Reply {
+        let root = context.root;
+        let result = match (route, request.method.as_str()) {
+            (SettingsRoute::Settings, "GET") => try_lock(&self.backend)
                 .and_then(|mut backend| settings_json(&read_settings(backend.as_mut())?))
                 .map(|value| Reply::json(200, value)),
-            ("PATCH", "/v1/params/settings") => self.patch_settings(request, body, context),
-            ("GET", "/v1/shutdown-picture") => read_picture(context.root),
-            ("PUT", "/v1/shutdown-picture") => {
-                admit_change(request, context).and_then(|()| write_picture(context.root, body))
-            }
-            ("DELETE", "/v1/shutdown-picture") => {
-                admit_change(request, context).and_then(|()| remove_picture(context.root))
-            }
-            (_, "/v1/params/settings" | "/v1/shutdown-picture") => Err(problem(
-                405,
-                "method_not_allowed",
-                "This method is not supported for the resource.",
-            )),
-            _ => return None,
+            (SettingsRoute::Settings, _) => self.patch_settings(body),
+            (SettingsRoute::ShutdownPicture, "GET") => read_picture(root),
+            (SettingsRoute::ShutdownPicture, "PUT") => write_picture(root, body),
+            (SettingsRoute::ShutdownPicture, _) => remove_picture(root),
         };
-        Some(result.unwrap_or_else(Reply::problem))
+        result.unwrap_or_else(Reply::problem)
     }
 
     /// Check the whole body and that the camera has each setting, then set
     /// each one in the order of `SETTINGS`.
-    fn patch_settings(
-        &self,
-        request: &Request,
-        body: &[u8],
-        context: &RequestContext<'_>,
-    ) -> Result<Reply> {
-        let changes = changes(&self.admit(request, body, context)?)?;
+    fn patch_settings(&self, body: &[u8]) -> Result<Reply> {
+        let changes = changes(&Resources::json_body(body)?)?;
         let mut backend = try_lock(&self.backend)?;
         let current = read_settings(backend.as_mut())?;
         if changes
@@ -281,16 +268,16 @@ mod tests {
             })
         }
     }
-    fn api(answer: u32) -> (LookApi, Arc<Mutex<[u32; 8]>>) {
+    fn api(answer: u32) -> (Resources, Arc<Mutex<[u32; 8]>>) {
         let none = CONTROL_SETTING_NONE;
         let values = Arc::new(Mutex::new([2, none, 0, none, none, none, none, 1]));
         let fake = Fake {
             values: values.clone(),
             answer,
         };
-        (LookApi::new(Box::new(fake)), values)
+        (Resources::new(Box::new(fake)), values)
     }
-    fn call(api: &LookApi, root: &Path, head: &str, body: &[u8]) -> Reply {
+    fn call(api: &Resources, root: &Path, head: &str, body: &[u8]) -> Reply {
         let text = format!(
             "{head} HTTP/1.1\r\nContent-Length: {}\r\nX-GRKit-Boot-Id: boot\r\n\r\n",
             body.len()
@@ -298,16 +285,19 @@ mod tests {
         let request = crate::parse(text.as_bytes()).unwrap();
         let context = RequestContext {
             boot_id: "boot",
-            card_id: "card".into(),
-            software_pending: false,
+            card_id: Some("card".into()),
             root,
             release_keys: &[],
             family: None,
         };
-        api.handle_settings(&request, body, &context).unwrap()
+        let Some(crate::route::Route::Settings(route)) = crate::route::Route::parse(&request.path)
+        else {
+            panic!("not a settings route: {}", request.path);
+        };
+        api.handle_settings(&route, &request, body, &context)
     }
     fn json_of(reply: &Reply) -> Value {
-        serde_json::from_slice(&reply.body).unwrap()
+        reply.value()
     }
 
     #[test]

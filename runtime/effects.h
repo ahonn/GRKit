@@ -20,7 +20,7 @@
    then EFFECTS_STRIDE bytes for each listed effect, in the order of the last
    start. The includer defines u16, u32, and the header fields. */
 /* The most effect files that GRKit lists, those with the smallest IDs. */
-#define EFFECTS_LISTED 64U
+#define EFFECTS_LISTED GRKIT_EFFECTS_LISTED
 #define EFFECTS_COUNT 0U
 /* The handle of the choice of effect 0. Effect i has handle base + i. */
 #define EFFECTS_SETTINGS 4U

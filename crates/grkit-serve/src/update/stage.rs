@@ -12,7 +12,6 @@ use super::{
 };
 use anyhow::{bail, ensure, Context, Result};
 use grkit_core::{
-    camera::{Camera, CAMERAS},
     card::{
         BACKUP_FOLDER, BACKUP_RECORD, DRAFT_FILE, PACKAGE_FOLDER, PACKAGE_LIST, REQUEST_FILE,
         STARTUP_FILE, UPDATE_FOLDER, VERSION_FILE,
@@ -39,28 +38,6 @@ pub struct Device {
     pub firmware: String,
     pub free_bytes: Option<u64>,
     pub serial_number: Option<String>,
-}
-
-/// The camera of `model`, a model name of the camera's HTTP API such as
-/// `RICOH GR III`. An HDF model has the package of its camera.
-fn camera_of(model: &str) -> Option<&'static Camera> {
-    let name = model.strip_prefix("RICOH ").unwrap_or(model);
-    CAMERAS
-        .into_iter()
-        .find(|camera| camera.name == name || camera.hdf == name)
-}
-
-/// The recipe family of a camera model of the camera's HTTP API.
-pub fn recipe_family(model: &str) -> Option<grkit_core::recipes::Family> {
-    use grkit_core::recipes::Family;
-    if model.contains("Monochrome") {
-        return Some(Family::Gr4Monochrome);
-    }
-    match camera_of(model)?.id {
-        "gr3" | "gr3x" => Some(Family::Gr3),
-        "gr4" => Some(Family::Gr4),
-        _ => None,
-    }
 }
 
 /// Checks the package `zip` for `device`, writes its changes to the update
@@ -253,7 +230,7 @@ fn stage_inner(
 /// that it signs the firmware of the camera: the runtime of the release
 /// does not load on another firmware.
 fn check_camera(statement: &release::Statement, device: &Device) -> Result<()> {
-    let Some(camera) = camera_of(&device.model) else {
+    let Some(camera) = grkit_core::camera::of_api_model(&device.model) else {
         bail!("GRKit does not support the {}", device.model);
     };
     ensure!(

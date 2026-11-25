@@ -43,19 +43,6 @@ static u32 control_recipes_read(volatile u32 *h,const u8 *payload,u32 length,u8 
     *size=at;
     return 0;
 }
-/* Move slot `from` to slot `to` with its name and ID; the slots between
-   them move by one. */
-static void control_recipe_shift(volatile u32 *h,u32 from,u32 to) {
-    u32 w[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS], id, i;
-    for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,from)[i];
-    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) name[i]=recipe_name_at(h,from)[i];
-    id=*recipe_id_at(h,from);
-    for(i=from;i<to;++i) recipe_slot_move(h,i,i+1U);
-    for(i=from;i>to;--i) recipe_slot_move(h,i,i-1U);
-    for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,to)[i]=w[i];
-    for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,to)[i]=name[i];
-    *recipe_id_at(h,to)=id;
-}
 /* A recipe that turns off goes before the others that are off; one that
    turns on, after the others that are on, while fewer than
    GRKIT_RECIPE_ON_MAX are on. */
@@ -69,11 +56,11 @@ static u32 control_recipe_turn(volatile u32 *h,const u8 *payload,u32 length) {
     if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
     e=recipe_entries(h);
     if(off && slot<e) {
-        control_recipe_shift(h,slot,e-1U);
+        recipe_shift(h,slot,e-1U);
         recipe_at(h,e-1U)[RECIPE_MODULE_WORD]|=RECIPE_OFF;
     } else if(!off && slot>=e) {
         if(e>=GRKIT_RECIPE_ON_MAX) return GRKIT_CONTROL_INVALID;
-        control_recipe_shift(h,slot,e);
+        recipe_shift(h,slot,e);
         recipe_at(h,e)[RECIPE_MODULE_WORD]&=~RECIPE_OFF;
     } else return 0;
     GRKIT_RECIPES_CHANGED(h);
@@ -118,8 +105,7 @@ static u32 control_recipe_delete(volatile u32 *h,const u8 *payload,u32 length) {
     slot=control_recipe_slot(h,control_word(payload));
     if(slot==RECIPE_NONE) return GRKIT_CONTROL_CHANGED;
     if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
-    recipe_close_gap(h,slot,recipe_count(h));
-    GRKIT_RECIPES_CHANGED(h);
+    recipe_remove(h,slot);
     return 0;
 }
 /* Apply as OK in ADJ does: the settings before it become an undo step. A

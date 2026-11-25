@@ -129,7 +129,7 @@ impl Subscription {
         }
         let request = crate::parse(&prefix).context("Invalid WebSocket request")?;
         if request.method != "GET"
-            || crate::route::Resource::of(&request.path) != Some(crate::route::Resource::Changes)
+            || crate::route::Route::parse(&request.path) != Some(crate::route::Route::Changes)
             || request.length != 0
         {
             bail!("Invalid change subscription endpoint");

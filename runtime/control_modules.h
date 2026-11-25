@@ -45,16 +45,17 @@ static u32 control_page_rows(volatile u32 *h,u32 slot,ControlModuleRow *rows,u32
     }
     return n;
 }
-/* The settings of a listed module and their number. *managed is 1 for the
-   page of CORE.TONE and 2 for that of CORE.RECIPE, whose rows the phone
-   manages in its own tabs: they have no settings here. */
+/* The settings of a listed module and their number. *managed is
+   GRKIT_CONTROL_MODULE_MANAGED_LOOKS for the page of CORE.TONE and
+   GRKIT_CONTROL_MODULE_MANAGED_RECIPES for that of CORE.RECIPE, whose rows the
+   phone manages in its own tabs: they have no settings here. */
 static u32 control_module_rows(volatile u32 *h,u32 module,ControlModuleRow *rows,u32 *managed) {
     u32 slot=listed_page(h,module), n=0, r, children, child;
     *managed=0;
     if(slot>=module_pages(h)) return 0;
     menu_page(h,slot);
-    if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) *managed=1;
-    else if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_RECIPE) *managed=2;
+    if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_TONE) *managed=GRKIT_CONTROL_MODULE_MANAGED_LOOKS;
+    else if(CHOICE_ENTRY(h)[1]==GRKIT_CORE_RECIPE) *managed=GRKIT_CONTROL_MODULE_MANAGED_RECIPES;
     if(*managed) return 0;
     if(!choice_group(h)) return control_page_rows(h,slot,rows,0);
     children=group_rows(h);
