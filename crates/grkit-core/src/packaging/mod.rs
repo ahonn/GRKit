@@ -15,6 +15,17 @@ use crate::{
     modules, recipes, runtime, Files,
 };
 
+mod archive;
+mod check;
+mod list;
+
+pub(crate) use archive::{checksum_list, read_entries, read_entry, write_zip};
+use check::check_guide;
+pub(crate) use check::DataCheck;
+pub(crate) use list::package_list;
+use list::{effect_file_name, is_effect_path};
+pub use list::{in_effect_inbox, package_owned, PackageList};
+
 pub const RUNTIME_PATHS: [&str; 6] = [
     "SCRIPT/STARTUP.TTL",
     card::LOADER_FILE,
@@ -574,127 +585,6 @@ impl EffectSet {
     }
 }
 
-/// The contents of `PACKAGE_LIST`: the file names in name order, one on
-/// each line, then each left-out effect after `-`.
-pub(crate) fn package_list<'a>(
-    names: impl IntoIterator<Item = &'a String>,
-    left_out: &BTreeSet<String>,
-) -> Vec<u8> {
-    let mut names: Vec<&String> = names.into_iter().collect();
-    names.sort();
-    names
-        .into_iter()
-        .map(|name| format!("{name}\n"))
-        .chain(left_out.iter().map(|name| format!("-{name}\n")))
-        .collect::<String>()
-        .into_bytes()
-}
-
-/// `PACKAGE_LIST` as the runtime reads it (`runtime/install_library.h`): names separated
-/// by ASCII whitespace, and each left-out effect after `-`. The runtime compares names
-/// without case, so the names here are upper case.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PackageList {
-    /// The module and effect files of the package.
-    pub names: BTreeSet<String>,
-    /// The effect files that the person did not choose (`EffectSet`).
-    pub left_out: BTreeSet<String>,
-}
-
-impl PackageList {
-    pub fn parse(bytes: &[u8]) -> Self {
-        let mut list = Self::default();
-        for word in String::from_utf8_lossy(bytes).split_ascii_whitespace() {
-            let word = word.to_ascii_uppercase();
-            match word.strip_prefix('-') {
-                Some(name) if !name.is_empty() => {
-                    list.left_out.insert(name.to_owned());
-                }
-                Some(_) => {}
-                None => {
-                    list.names.insert(word);
-                }
-            }
-        }
-        list
-    }
-
-    /// The bytes that a package writes (`package_list`).
-    pub fn to_bytes(&self) -> Vec<u8> {
-        package_list(&self.names, &self.left_out)
-    }
-
-    /// The module IDs that the list names.
-    pub fn modules(&self) -> impl Iterator<Item = &str> {
-        self.names
-            .iter()
-            .filter_map(|name| name.strip_suffix(".GRM"))
-    }
-
-    /// The effect files that the list names.
-    pub fn effects(&self) -> impl Iterator<Item = &str> {
-        self.names
-            .iter()
-            .filter(|name| name.ends_with(".GRF"))
-            .map(String::as_str)
-    }
-
-    /// This list with the Looks of `card`, the listed and the left-out ones, in place of
-    /// its own: an update keeps the Looks of the card.
-    pub fn with_looks_of(mut self, card: &PackageList) -> Self {
-        self.names.retain(|name| !name.ends_with(".GRF"));
-        self.names.extend(card.effects().map(str::to_owned));
-        self.left_out = card.left_out.clone();
-        self
-    }
-}
-
-/// Whether the camera puts the card file `path` there with each package: the list, the
-/// release evidence, the runtime files, the modules, and the package effects. An update
-/// removes only these when the new package does not have them; other files of the package
-/// folder, such as the import library, stay.
-pub fn package_owned(path: &str) -> bool {
-    if path == PACKAGE_LIST
-        || path == crate::release::CARD_STATEMENT
-        || path == crate::release::CARD_SIGNATURE
-        || is_runtime_path(path)
-    {
-        return true;
-    }
-    let in_folder = |folder: &str, extension: &str| {
-        path.strip_prefix(folder)
-            .and_then(|name| name.strip_prefix('/'))
-            .is_some_and(|name| !name.contains('/') && name.ends_with(extension))
-    };
-    let core = path
-        .strip_prefix(card::PACKAGE_FOLDER)
-        .and_then(|rest| rest.strip_prefix("/CORE"))
-        .is_some_and(|rest| rest.ends_with(".BIN") && !rest.contains('/'));
-    in_folder(card::MODULES_FOLDER, ".GRM") || in_effect_inbox(path) || core
-}
-
-/// Whether `path` is a Look file in the inbox of the package effects (`EFFECTS_FOLDER`).
-pub fn in_effect_inbox(path: &str) -> bool {
-    path.strip_prefix(EFFECTS_FOLDER)
-        .and_then(|name| name.strip_prefix('/'))
-        .is_some_and(|name| !name.contains('/') && name.ends_with(".GRF"))
-}
-
-/// A package filename of an effect: 1 to 8 uppercase letters, digits, or `_`, then `.GRF`.
-fn effect_file_name(name: &str) -> bool {
-    name.strip_suffix(".GRF").is_some_and(|stem| {
-        (1..=8).contains(&stem.len())
-            && stem
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
-    })
-}
-
-fn is_effect_path(name: &str) -> bool {
-    name.strip_prefix("SD_ROOT/SCRIPT/GRKIT/EFFECTS/")
-        .is_some_and(effect_file_name)
-}
-
 /// What a valid package holds besides the runtime.
 #[derive(Debug)]
 pub struct Contents {
@@ -863,205 +753,19 @@ fn validate_package(contents: &Files, single_build: bool) -> Result<Contents> {
     })
 }
 
-/// The checks of the package files that are data or modules, which a package
-/// built on a phone or a page can hold: effects, modules, the recipe and
-/// import libraries, and the package list. The runtime has its own checks.
-pub(crate) struct DataCheck {
-    camera: &'static Camera,
-    ids: BTreeSet<String>,
-    module_ids: BTreeSet<String>,
-    native_slots: BTreeMap<u32, String>,
-    status_icons: usize,
-    listed: Vec<String>,
-    imports: usize,
-    recipes: usize,
-}
-
-/// What `DataCheck` found.
-pub(crate) struct Data {
-    pub effect_ids: Vec<String>,
-    pub modules: Vec<String>,
-    pub imports: usize,
-    pub recipes: usize,
-}
-
-impl DataCheck {
-    pub(crate) fn new(camera: &'static Camera) -> Self {
-        DataCheck {
-            camera,
-            ids: BTreeSet::new(),
-            module_ids: BTreeSet::new(),
-            native_slots: BTreeMap::new(),
-            status_icons: 0,
-            listed: Vec::new(),
-            imports: 0,
-            recipes: 0,
-        }
-    }
-
-    /// Checks the package entry `name`: true for a file of the data, false
-    /// for another file.
-    pub(crate) fn check(&mut self, name: &str, blob: &[u8]) -> Result<bool> {
-        let camera = self.camera;
-        ensure!(
-            !name.starts_with(&format!("SD_ROOT/{}/", crate::card::DATA_FOLDER_PATH)),
-            "A package holds no file of the data folder: {name}"
-        );
-        if name == format!("SD_ROOT/{RECIPES_PACKAGE_PATH}") {
-            let library = recipes::decode(blob).context("Read the recipe library")?;
-            ensure!(
-                library.iter().all(|recipe| camera
-                    .targets()
-                    .iter()
-                    .all(|target| target.starts_with(recipe.family.native().key()))),
-                "The recipe library has a recipe of another camera"
-            );
-            self.recipes = library.len();
-        } else if is_effect_path(name) {
-            let id = effects::decode(blob)?.0.id;
-            ensure!(
-                name.rsplit('/').next() == Some(effects::filename(&id)?.as_str()),
-                "Profile filename does not match its stable ID"
-            );
-            ensure!(self.ids.insert(id), "Duplicate effect ID");
-            self.listed
-                .push(name.rsplit('/').next().unwrap_or_default().to_owned());
-        } else if let Some(file) = name
-            .strip_prefix("SD_ROOT/")
-            .and_then(|path| path.strip_prefix(crate::grm::FOLDER))
-            .and_then(|path| path.strip_prefix('/'))
-        {
-            let module = crate::grm::Module::decode(blob)
-                .with_context(|| format!("Read the module {file}"))?;
-            ensure!(
-                file == format!("{}.GRM", module.id),
-                "The module file {file} is not named by its ID {}",
-                module.id
-            );
-            for placement in module
-                .indicator_placements()
-                .with_context(|| format!("Read the viewfinder indicators of {}", module.id))?
-            {
-                match placement {
-                    crate::grm::IndicatorPlacement::NativeSlot(slot) => {
-                        if let Some(owner) = self.native_slots.insert(slot, module.id.clone()) {
-                            bail!("Viewfinder slot image_control is registered by both {owner} and {}", module.id);
-                        }
-                    }
-                    crate::grm::IndicatorPlacement::StatusRow => {
-                        self.status_icons += 1;
-                        ensure!(
-                            self.status_icons <= crate::abi::STATUS_ICONS_MAX,
-                            "The package exceeds the viewfinder status-row capacity of {} icons at module {}",
-                            crate::abi::STATUS_ICONS_MAX,
-                            module.id
-                        );
-                    }
-                }
-            }
-            self.listed.push(file.to_owned());
-            self.module_ids.insert(module.id);
-        } else if name == format!("SD_ROOT/{}", card::IMPORTS_FILE) {
-            self.imports = imports::decode(blob)
-                .context("Read the import library")?
-                .len();
-        } else {
-            return Ok(false);
-        }
-        Ok(true)
-    }
-
-    /// Checks the package list `list` against the files, and the capacity.
-    pub(crate) fn finish(self, list: &[u8]) -> Result<Data> {
-        let DataCheck {
-            camera,
-            ids,
-            module_ids,
-            listed,
-            imports,
-            recipes,
-            ..
-        } = self;
-        // The effects that the list leaves out are effects that the package does not hold.
-        let left_out: BTreeSet<String> = std::str::from_utf8(list)
-            .context("Read the package list")?
-            .lines()
-            .filter_map(|line| line.strip_prefix('-'))
-            .map(str::to_owned)
-            .collect();
-        ensure!(
-            left_out
-                .iter()
-                .all(|name| effect_file_name(name) && !listed.contains(name)),
-            "{PACKAGE_LIST} leaves out an effect that is not valid or that the package holds"
-        );
-        ensure!(
-            *list == package_list(listed.iter(), &left_out),
-            "{PACKAGE_LIST} must list the effect and module files of the package"
-        );
-        ensure!(
-            ids.len() <= runtime::MAX_COUNT,
-            "Target effect capacity exceeded"
-        );
-        ensure!(
-            camera.effects || ids.is_empty(),
-            "{} has no Image Control yet, so a package for it cannot have effects",
-            camera.name
-        );
-        // The effects show only on the page of Image Control, which shows only
-        // with effects.
-        let needs_effects =
-            |id: &String| modules::official(id).is_some_and(|module| module.needs_effects);
-        ensure!(
-            ids.is_empty() || module_ids.iter().any(needs_effects),
-            "The effects need the Image Control module"
-        );
-        ensure!(
-            module_ids
-                .iter()
-                .any(|id| !needs_effects(id) || !ids.is_empty()),
-            "The package shows nothing: add a module other than Image Control, or add effects"
-        );
-        Ok(Data {
-            effect_ids: ids.into_iter().collect(),
-            modules: module_ids.into_iter().collect(),
-            imports,
-            recipes,
-        })
-    }
-}
-
-/// Checks that `pdf` is a PDF document. The release builds the guides.
-fn check_guide(pdf: &[u8]) -> Result<()> {
-    ensure!(
-        pdf.starts_with(b"%PDF-"),
-        "The installation guide is not a PDF document"
-    );
-    Ok(())
-}
-
-pub(crate) fn checksum_list(contents: &Files) -> Vec<u8> {
-    contents
-        .iter()
-        .filter(|(name, _)| name.as_str() != "SHA256SUMS")
-        .map(|(name, blob)| format!("{}  {name}\n", sha256(blob)))
-        .collect::<String>()
-        .into_bytes()
-}
-
 /// The license notice of every package. CC BY-SA 4.0 and the MIT License
 /// require the attribution and the notices in each copy of an effect, so the
 /// package carries them with the effects.
 pub const LICENSES: &str = concat!(
-    include_str!("../../../resources/LICENSES.md"),
+    include_str!("../../../../resources/LICENSES.md"),
     "\n## Changes to the LUTs\n\n```text\n",
-    include_str!("../../../effects/sources/CHANGELOG.txt"),
+    include_str!("../../../../effects/sources/CHANGELOG.txt"),
     "```\n\n## GRKit license\n\n```text\n",
-    include_str!("../../../LICENSE"),
+    include_str!("../../../../LICENSE"),
     "```\n\n## Spectral Film LUT license\n\n```text\n",
-    include_str!("../../../effects/sources/SPECTRAL_FILM_LUT_LICENSE.txt"),
+    include_str!("../../../../effects/sources/SPECTRAL_FILM_LUT_LICENSE.txt"),
     "```\n\n## t3mujinpack license\n\n```text\n",
-    include_str!("../../../effects/sources/T3MUJINPACK_LICENSE.txt"),
+    include_str!("../../../../effects/sources/T3MUJINPACK_LICENSE.txt"),
     "```\n",
 );
 
@@ -1227,48 +931,6 @@ pub fn assemble_dump(mut contents: Files) -> Result<Vec<u8>> {
     write_zip(contents)
 }
 
-/// The time of a ZIP entry with `blob`: a time in 2026 or 2027 that follows from
-/// the bytes, so the ZIP stays deterministic and a file whose bytes change
-/// gets another time. A copy of the ZIP keeps the times, and the camera takes a
-/// file with the size and the time that it recorded as unchanged
-/// (`runtime/install_library.h`, `runtime/fastboot/backend.c`). Months have 28
-/// days, so each date is valid, and seconds are even, as FAT keeps them.
-fn entry_time(blob: &[u8]) -> DateTime {
-    let digest = Sha256::digest(blob);
-    let hash = u64::from_le_bytes(digest[..8].try_into().expect("8 bytes"));
-    let day = (hash % (2 * 12 * 28)) as u16;
-    let seconds = ((hash / (2 * 12 * 28)) % (24 * 60 * 30)) as u32 * 2;
-    DateTime::from_date_and_time(
-        2026 + day / (12 * 28),
-        (day % (12 * 28) / 28 + 1) as u8,
-        (day % 28 + 1) as u8,
-        (seconds / 3600) as u8,
-        (seconds / 60 % 60) as u8,
-        (seconds % 60) as u8,
-    )
-    .expect("a valid time")
-}
-
-/// A deterministic ZIP of `contents`, with stored entries and the time of
-/// each entry from its bytes (`entry_time`).
-pub(crate) fn write_zip(contents: Files) -> Result<Vec<u8>> {
-    let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
-    for (name, blob) in contents {
-        let mode = if name.ends_with(".BIN") || name.ends_with(".SH") {
-            0o755
-        } else {
-            0o644
-        };
-        let options = SimpleFileOptions::default()
-            .compression_method(CompressionMethod::Stored)
-            .last_modified_time(entry_time(&blob))
-            .unix_permissions(mode);
-        archive.start_file(name, options)?;
-        archive.write_all(&blob)?;
-    }
-    Ok(archive.finish()?.into_inner())
-}
-
 /// Checks a package ZIP: its entries, its contents (`validate_contents`), and `SHA256SUMS`.
 pub fn verify_package(bytes: &[u8]) -> Result<Contents> {
     Ok(read_package(bytes, false)?.0)
@@ -1330,160 +992,4 @@ fn read_package(bytes: &[u8], single_build: bool) -> Result<(Contents, Files)> {
         "SHA256SUMS differs from package"
     );
     Ok((result, contents))
-}
-
-/// The entries of a ZIP within the package limits: safe, unique names, no links, and bounded
-/// sizes.
-pub(crate) fn read_entries(bytes: &[u8]) -> Result<Files> {
-    let declared_entries = declared_entry_count(bytes)?;
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).context("Invalid ZIP archive")?;
-    // zip indexes names in a map. Check the raw count so duplicate names cannot disappear.
-    ensure!(
-        archive.len() == declared_entries,
-        "Duplicate or inconsistent archive entries"
-    );
-    let mut contents = Files::new();
-    let mut total = 0u64;
-    for index in 0..archive.len() {
-        let mut entry = archive.by_index(index)?;
-        let raw_name = entry.name().context("Invalid archive entry name")?;
-        let name = safe_path(&raw_name)?.to_owned();
-        ensure!(
-            !contents.contains_key(&name)
-                && !entry.is_dir()
-                && !entry.encrypted()
-                && entry.unix_mode().unwrap_or(0) & 0o170000 != 0o120000,
-            "Invalid archive entry"
-        );
-        ensure!(
-            entry.size() <= MAX_FILE_SIZE as u64,
-            "Archive entry exceeds size limit"
-        );
-        total = total
-            .checked_add(entry.size())
-            .context("Archive size overflow")?;
-        ensure!(
-            total <= MAX_TOTAL_SIZE as u64,
-            "Archive exceeds total size limit"
-        );
-        // Bound actual decompression as well as the untrusted central-directory size.
-        let expected_size = entry.size();
-        let mut blob = Vec::with_capacity(expected_size as usize);
-        (&mut entry)
-            .take(MAX_FILE_SIZE as u64 + 1)
-            .read_to_end(&mut blob)?;
-        ensure!(
-            blob.len() as u64 == expected_size,
-            "Archive entry size mismatch"
-        );
-        contents.insert(name, blob);
-    }
-    Ok(contents)
-}
-
-/// The entry `name` of a ZIP, at most `limit` bytes, without reading the other entries.
-/// `None` when the ZIP has no such entry.
-pub(crate) fn read_entry(bytes: &[u8], name: &str, limit: usize) -> Result<Option<Vec<u8>>> {
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).context("Invalid ZIP archive")?;
-    let mut entry = match archive.by_name(name) {
-        Ok(entry) => entry,
-        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
-        Err(error) => return Err(error).context("Invalid ZIP archive"),
-    };
-    ensure!(
-        entry.size() <= limit as u64 && !entry.encrypted(),
-        "Invalid archive entry {name}"
-    );
-    let mut blob = Vec::new();
-    (&mut entry).take(limit as u64 + 1).read_to_end(&mut blob)?;
-    ensure!(
-        blob.len() as u64 == entry.size(),
-        "Archive entry size mismatch"
-    );
-    Ok(Some(blob))
-}
-
-fn declared_entry_count(bytes: &[u8]) -> Result<usize> {
-    ensure!(bytes.len() >= 22, "Truncated ZIP archive");
-    let start = bytes.len().saturating_sub(22 + u16::MAX as usize);
-    let end = (start..=bytes.len() - 22)
-        .rev()
-        .find(|&position| {
-            bytes[position..position + 4] == *b"PK\x05\x06"
-                && position
-                    + 22
-                    + u16::from_le_bytes(bytes[position + 20..position + 22].try_into().unwrap())
-                        as usize
-                    == bytes.len()
-        })
-        .context("Invalid ZIP end record")?;
-    let count = u16::from_le_bytes(bytes[end + 10..end + 12].try_into().unwrap());
-    let count = if count == u16::MAX {
-        ensure!(
-            end >= 20 && bytes[end - 20..end - 16] == *b"PK\x06\x07",
-            "Missing ZIP64 locator"
-        );
-        let offset = u64::from_le_bytes(bytes[end - 12..end - 4].try_into().unwrap());
-        let position = usize::try_from(offset).context("ZIP64 offset exceeds platform limit")?;
-        ensure!(
-            position <= bytes.len().saturating_sub(56)
-                && bytes[position..position + 4] == *b"PK\x06\x06",
-            "Invalid ZIP64 end record"
-        );
-        u64::from_le_bytes(bytes[position + 32..position + 40].try_into().unwrap())
-    } else {
-        u64::from(count)
-    };
-    ensure!(count <= MAX_ENTRIES as u64, "Archive exceeds entry limit");
-    Ok(count as usize)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A copied file keeps its ZIP time, and the camera takes a file with the
-    /// size and the time that it recorded as unchanged, so files with other
-    /// bytes get other times, and the same bytes the same time.
-    #[test]
-    fn zip_entries_with_other_bytes_get_other_times() {
-        let mut times = std::collections::BTreeSet::new();
-        for i in 0..400u32 {
-            let mut blob = vec![0u8; 8704];
-            blob[..4].copy_from_slice(&i.to_le_bytes());
-            let t = entry_time(&blob);
-            assert!((2026..=2027).contains(&t.year()));
-            assert!((1..=12).contains(&t.month()) && (1..=28).contains(&t.day()));
-            assert_eq!(t.second() % 2, 0);
-            times.insert((
-                t.year(),
-                t.month(),
-                t.day(),
-                t.hour(),
-                t.minute(),
-                t.second(),
-            ));
-        }
-        assert_eq!(times.len(), 400);
-        let blob = vec![7u8; 100];
-        let (a, b) = (entry_time(&blob), entry_time(&blob));
-        assert_eq!(
-            (
-                a.year(),
-                a.month(),
-                a.day(),
-                a.hour(),
-                a.minute(),
-                a.second()
-            ),
-            (
-                b.year(),
-                b.month(),
-                b.day(),
-                b.hour(),
-                b.minute(),
-                b.second()
-            )
-        );
-    }
 }

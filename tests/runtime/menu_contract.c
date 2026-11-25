@@ -3093,7 +3093,7 @@ static u32 look_command(u32 command, const u32 *words, u32 count, u32 *length)
 {
     static struct control_request request;
     request.command = command; request.length = 4 * count;
-    memcpy(request.payload, words, 4 * count);
+    if (count) memcpy(request.payload, words, 4 * count);
     *length = 0;
     u32 result = control_dispatch((void *)test_header, &request, length);
     memcpy(control_words, request.payload, sizeof(control_words));

@@ -428,53 +428,67 @@ impl Index {
     }
 }
 
-/// The modules of an index as a reader takes them: a field that does not
-/// fit is left out, so they never stop an update.
+/// Each entry of `value` that reads as a `T`; the others are left out, so
+/// that a later or damaged entry never stops an update.
+fn entries<T: serde::de::DeserializeOwned>(value: &Value) -> impl Iterator<Item = T> + '_ {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| serde_json::from_value(entry.clone()).ok())
+}
+
+/// The modules of an index as a reader takes them: a title that is not a
+/// text is left out.
 fn read_modules(value: &Value) -> BTreeMap<String, ModuleInfo> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Entry {
+        #[serde(default)]
+        titles: BTreeMap<String, Value>,
+        #[serde(default)]
+        color_only: Option<bool>,
+    }
     value
         .as_object()
         .into_iter()
         .flatten()
         .map(|(id, entry)| {
-            let titles = entry["titles"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .filter_map(|(language, title)| {
-                    Some((language.clone(), title.as_str()?.to_owned()))
-                })
-                .collect();
-            (
-                id.clone(),
-                ModuleInfo {
-                    titles,
-                    color_only: entry["colorOnly"].as_bool().unwrap_or(false),
-                },
-            )
+            let entry: Option<Entry> = serde_json::from_value(entry.clone()).ok();
+            let info = entry.map_or_else(ModuleInfo::default, |entry| ModuleInfo {
+                titles: entry
+                    .titles
+                    .into_iter()
+                    .filter_map(|(language, title)| Some((language, title.as_str()?.to_owned())))
+                    .collect(),
+                color_only: entry.color_only.unwrap_or(false),
+            });
+            (id.clone(), info)
         })
         .collect()
 }
 
-/// The notes of an index as a reader takes them: entries that do not fit
-/// are left out, so notes never stop an update.
+/// The notes of an index as a reader takes them: the versions and items
+/// that do not fit are left out.
 fn read_notes(value: &Value) -> Vec<VersionNotes> {
-    let Some(entries) = value.as_array() else {
-        return Vec::new();
-    };
-    entries
-        .iter()
+    #[derive(Deserialize)]
+    struct Entry {
+        version: String,
+        items: Vec<Value>,
+    }
+    entries::<Entry>(value)
+        .filter(|entry| semver(&entry.version).is_some())
         .filter_map(|entry| {
-            let version = entry["version"].as_str().filter(|v| semver(v).is_some())?;
-            let items: Vec<String> = entry["items"]
-                .as_array()?
+            let items: Vec<String> = entry
+                .items
                 .iter()
                 .filter_map(Value::as_str)
                 .filter(|item| plain(item) && item.chars().count() <= NOTE_CHARS)
                 .take(NOTES_ITEMS)
                 .map(str::to_owned)
                 .collect();
-            (!items.is_empty()).then(|| VersionNotes {
-                version: version.to_owned(),
+            (!items.is_empty()).then_some(VersionNotes {
+                version: entry.version,
                 items,
             })
         })
@@ -483,43 +497,41 @@ fn read_notes(value: &Value) -> Vec<VersionNotes> {
 }
 
 /// The presets of an index as a reader takes them: a preset whose recipes
-/// do not pass the checks of the camera is left out.
+/// do not pass the checks of the camera is left out, and so is a text that
+/// does not fit.
 fn read_presets(value: &Value) -> Vec<IndexPreset> {
-    let Some(entries) = value.as_array() else {
-        return Vec::new();
-    };
-    entries
-        .iter()
-        .filter_map(|entry| {
-            let id = entry["id"]
-                .as_str()
-                .filter(|id| !id.is_empty() && id.len() <= 64)?;
-            let recipes: Vec<crate::recipes::Recipe> =
-                serde_json::from_value(entry["recipes"].clone()).ok()?;
-            if recipes.is_empty() || recipes.iter().any(|r| r.check().is_err()) {
-                return None;
-            }
-            let text = entry["text"]
-                .as_object()
-                .map(|texts| {
-                    texts
-                        .iter()
-                        .filter_map(|(language, t)| {
-                            let t = t
-                                .as_str()
-                                .filter(|t| plain(t) && t.chars().count() <= PRESET_TEXT_CHARS)?;
-                            Some((language.clone(), t.to_owned()))
-                        })
-                        .collect()
+    #[derive(Deserialize)]
+    struct Entry {
+        id: String,
+        #[serde(default)]
+        effect: Option<String>,
+        #[serde(default)]
+        author: Option<String>,
+        #[serde(default)]
+        text: BTreeMap<String, Value>,
+        recipes: Vec<crate::recipes::Recipe>,
+    }
+    entries::<Entry>(value)
+        .filter(|entry| {
+            !entry.id.is_empty()
+                && entry.id.len() <= 64
+                && !entry.recipes.is_empty()
+                && entry.recipes.iter().all(|recipe| recipe.check().is_ok())
+        })
+        .map(|entry| IndexPreset {
+            id: entry.id,
+            effect: entry.effect,
+            author: entry.author,
+            text: entry
+                .text
+                .into_iter()
+                .filter_map(|(language, text)| {
+                    let text = text.as_str()?;
+                    (plain(text) && text.chars().count() <= PRESET_TEXT_CHARS)
+                        .then(|| (language, text.to_owned()))
                 })
-                .unwrap_or_default();
-            Some(IndexPreset {
-                id: id.to_owned(),
-                effect: entry["effect"].as_str().map(str::to_owned),
-                author: entry["author"].as_str().map(str::to_owned),
-                text,
-                recipes,
-            })
+                .collect(),
+            recipes: entry.recipes,
         })
         .take(PRESETS_MAX)
         .collect()

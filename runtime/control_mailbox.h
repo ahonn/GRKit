@@ -10,7 +10,12 @@
 static u32 control_word(const u8 *p) { return (u32)p[0]|((u32)p[1]<<8)|((u32)p[2]<<16)|((u32)p[3]<<24); }
 static void control_put(u8 *p,u32 value) { p[0]=(u8)value; p[1]=(u8)(value>>8); p[2]=(u8)(value>>16); p[3]=(u8)(value>>24); }
 #ifndef CONTROL_BARRIER
+#if defined(__arm__) || defined(__aarch64__)
 #define CONTROL_BARRIER() __asm__ volatile("dmb ish" ::: "memory")
+#else
+/* The host builds of the contract tests. */
+#define CONTROL_BARRIER() __sync_synchronize()
+#endif
 #endif
 
 /* ARMv7 PoC maintenance is restricted to cache lines owned by one side.
