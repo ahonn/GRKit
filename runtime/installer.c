@@ -589,12 +589,13 @@ static void apply_state(u32 base, u32 table)
     }
 }
 /* The script arrays that the loader allocated (grkit_core::runtime::loader):
-   the registry, the icon chunks, the module array, then the tail. */
-struct arrays { u32 base, tail, module_array, icon_bases[MAX_CHUNKS]; };
+   the registry, the icon chunks, the module array, the tail, then the text
+   area. */
+struct arrays { u32 base, tail, text, module_array, icon_bases[MAX_CHUNKS]; };
 /* Check that each array has its planned size and that no two overlap. */
 static int check_arrays(struct arrays *a)
 {
-    if (*(volatile u16 *)at(ARRAY_COUNT) != ARRAY_LEAD + 2 + icon_chunks + (module_words != 0) || word(ARRAYS) != size / 4) return STATUS_ARRAYS;
+    if (*(volatile u16 *)at(ARRAY_COUNT) != ARRAY_LEAD + 3 + icon_chunks + (module_words != 0) || word(ARRAYS) != size / 4) return STATUS_ARRAYS;
     u32 base = a->base = word(ARRAYS + 4), *icon_bases = a->icon_bases;
     if (!heap(base, size)) return STATUS_ARRAY_MEMORY;
     for (u32 i = 0; i < icon_chunks; ++i) {
@@ -623,6 +624,15 @@ static int check_arrays(struct arrays *a)
         (module_array && tail < module_array + module_words * 4 && module_array < tail + GRKIT_TAIL_SIZE)) return STATUS_ARRAY_MEMORY;
     for (u32 j = 0; j < icon_chunks; ++j)
         if (tail < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < tail + GRKIT_TAIL_SIZE) return STATUS_ARRAY_MEMORY;
+    /* The text area follows the tail and overlaps no other array. */
+    u32 entry = ARRAYS + (2 + icon_chunks + (module_words != 0)) * 8;
+    u32 text = a->text = word(entry + 4);
+    if (word(entry) != GRKIT_TEXT_AREA_SIZE / 4 || !heap(text, GRKIT_TEXT_AREA_SIZE) ||
+        (text < base + size && base < text + GRKIT_TEXT_AREA_SIZE) ||
+        (text < tail + GRKIT_TAIL_SIZE && tail < text + GRKIT_TEXT_AREA_SIZE) ||
+        (module_array && text < module_array + module_words * 4 && module_array < text + GRKIT_TEXT_AREA_SIZE)) return STATUS_ARRAY_MEMORY;
+    for (u32 j = 0; j < icon_chunks; ++j)
+        if (text < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < text + GRKIT_TEXT_AREA_SIZE) return STATUS_ARRAY_MEMORY;
     return 0;
 }
 
@@ -700,6 +710,7 @@ static void write_header(const struct arrays *a)
     zero(at(base), size);
     store(base + GRKIT_HOST_COUNT, count); store(base + GRKIT_HOST_RECORDS, base + GRKIT_HOST_HEADER_SIZE);
     store(base + GRKIT_HOST_TAIL, tail);
+    store(base + GRKIT_HOST_TEXT_AREA, a->text);
     store(base + GRKIT_HOST_MAGIC, GRKIT_HOST_MAGIC_VALUE); store(base + GRKIT_HOST_VERSION, GRKIT_HOST_VERSION_VALUE);
     /* The next still live view shows that GRKit has loaded (runtime/framing.c). */
     store(base + GRKIT_HOST_LOAD_CUE, 1);
@@ -712,10 +723,10 @@ static void write_header(const struct arrays *a)
         zero(at(a->icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, a->icon_bases[i]);
     }
-    /* Menu text after the picture scratch (runtime/abi.h). */
+    /* The menu text, then the labels, in the text area (runtime/abi.h). */
     _Static_assert(MAX_COUNT <= GRKIT_TEXT_RECORDS, "Menu text has no summary slot for each record");
     _Static_assert(MENU_TEXT_BYTES <= GRKIT_TEXT_SUMMARY, "Menu text table overlaps the summaries");
-    u32 text = tail + GRKIT_PICTURE_SCRATCH;
+    u32 text = a->text;
     copy(at(text), menu_text, MENU_TEXT_BYTES);
     _Static_assert(LABELS_BYTES <= GRKIT_LABELS_SIZE, "Live-view labels exceed their area");
     copy(at(text + GRKIT_TEXT_SIZE), overlay_labels, LABELS_BYTES);
@@ -726,7 +737,7 @@ static void write_header(const struct arrays *a)
 static void write_records(const struct arrays *a, u32 pixels)
 {
     u32 tone_slots = 0;
-    u32 base = a->base, text = a->tail + GRKIT_PICTURE_SCRATCH;
+    u32 base = a->base, text = a->text;
     const u32 *icon_bases = a->icon_bases;
     for (u32 i = 0; i < count; ++i) {
         u32 record = base + GRKIT_HOST_HEADER_SIZE + i * GRKIT_RECORD_SIZE;
@@ -998,7 +1009,7 @@ static int control_info(void)
     relocation.required=required;
     if(!relocation_resolve(&relocation_tables,&relocation)) return STATUS_RELOCATION;
     u32 n=*(volatile u16 *)at(ARRAY_COUNT), i, module_words_live=0;
-    if(n<ARRAY_LEAD+3 || n>ARRAY_LEAD+3+MAX_CHUNKS) return STATUS_NO_HEADER;
+    if(n<ARRAY_LEAD+4 || n>ARRAY_LEAD+4+MAX_CHUNKS) return STATUS_NO_HEADER;
     u32 base=word(ARRAYS+4);
     if(!heap(base,GRKIT_HOST_HEADER_SIZE) || word(base+GRKIT_HOST_MAGIC)!=GRKIT_HOST_MAGIC_VALUE ||
        word(base+GRKIT_HOST_VERSION)!=GRKIT_HOST_VERSION_VALUE) return STATUS_NO_HEADER;

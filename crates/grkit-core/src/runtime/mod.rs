@@ -62,13 +62,21 @@ pub const NATIVE_SETTING_VALUES: usize = 64;
 /// (`SETTING_ROWS` in `runtime/core.h`): in MENU, the Enable row of the
 /// module comes first.
 pub const NATIVE_SETTING_ROWS: usize = 5;
-/// The words of the tail array: the picture scratch, the menu text, and the
-/// live-view labels (`abi::TAIL_SIZE`).
+/// The words of the tail array: the picture scratch, the profile table, and
+/// the curves (`abi::TAIL_SIZE`).
 pub const TAIL_WORDS: usize = crate::abi::TAIL_SIZE / 4;
+/// The words of the text area array: the menu text and the live-view labels
+/// (`abi::TEXT_AREA_SIZE`).
+pub const TEXT_WORDS: usize = crate::abi::TEXT_AREA_SIZE / 4;
 // One script array holds the header, every record, the scratch, and the text: at most 65536 words.
 const _: () = assert!(HEADER_SIZE + MAX_COUNT * RECORD_SIZE <= 65536 * 4);
 const _: () = assert!(TAIL_SIZE <= 65536 * 4);
-const _: () = assert!(PICTURE_SCRATCH.is_multiple_of(4) && TAIL_SIZE.is_multiple_of(4));
+const _: () = assert!(crate::abi::TEXT_AREA_SIZE <= 65536 * 4);
+const _: () = assert!(
+    PICTURE_SCRATCH.is_multiple_of(4)
+        && TAIL_SIZE.is_multiple_of(4)
+        && crate::abi::TEXT_AREA_SIZE.is_multiple_of(4)
+);
 /// One script array holds one icon chunk: 40 slots of at most 6412 bytes stay
 /// below 65536 words.
 pub const MAX_CHUNKS: usize =
@@ -83,7 +91,7 @@ pub fn layout(count: usize) -> Result<Value> {
         .map(|start| ICONS_PER_CHUNK.min(count + HOST_ICON_COUNT - start) * ICON_STRIDE / 4)
         .collect();
     Ok(
-        json!({"words": (HEADER_SIZE + count * RECORD_SIZE) / 4, "tail_words": TAIL_WORDS, "icon_words": icon_words}),
+        json!({"words": (HEADER_SIZE + count * RECORD_SIZE) / 4, "tail_words": TAIL_WORDS, "text_words": TEXT_WORDS, "icon_words": icon_words}),
     )
 }
 

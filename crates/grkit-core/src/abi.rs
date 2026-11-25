@@ -529,7 +529,7 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Highlighted row of the private menu.
     HOST_MENU_CURSOR: 4;
     /// Address of the tail, an array of its own: the picture scratch, the
-    /// menu text, then the live-view labels. INSTALL writes it.
+    /// profile table, and the curves (`TAIL_SIZE`). INSTALL writes it.
     HOST_TAIL: 4;
     /// Grain level, the capability CORE.GRAIN: 0 Off, 1 weak, 2 medium, 3
     /// strong. The native grain stage of recorded pictures uses it instead of
@@ -906,6 +906,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// task copies it at each timer dispatch (runtime/menu.c); the resident
     /// loader starts the Wi-Fi service while it is 1 and stops it at 0.
     HOST_WLAN: 4;
+    /// Address of the text area, an array of its own: the menu text, then
+    /// the live-view labels (`TEXT_AREA_SIZE`). INSTALL writes it.
+    HOST_TEXT_AREA: 4;
 });
 
 /// The values of GRKIT_HOST_UPDATE.
@@ -1166,12 +1169,15 @@ pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_
 /// Bytes of the live-view labels and glyphs after the menu text
 /// (`artwork::overlay_labels`).
 pub const LABELS_SIZE: usize = 88576;
-/// The profile table after the labels (runtime/profile.h): for each of the
+/// The text area, a script array of its own (`HOST_TEXT_AREA`): the menu
+/// text, then the live-view labels.
+pub const TEXT_AREA_SIZE: usize = menu_text::TEXT_SIZE + LABELS_SIZE;
+/// The profile table after the picture scratch (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
 /// counter slot of calls, cycles, and the largest call for each core point
 /// and for each module and kind.
-pub const PROFILE: usize = PICTURE_SCRATCH + menu_text::TEXT_SIZE + LABELS_SIZE;
+pub const PROFILE: usize = PICTURE_SCRATCH;
 pub const PROFILE_MODULE_SIZE: usize = 16;
 pub const PROFILE_NAME_BYTES: usize = 8;
 /// The modules that the profile counts. The loader writes the lines of each
@@ -1208,9 +1214,8 @@ pub const TONE_SLOT_SIZE: usize = 2 * 512;
 /// each, as the record holds them.
 pub const DEVELOP_CURVES: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
 pub const DEVELOP_CURVES_SIZE: usize = 3 * 512;
-/// Everything after the records: the picture scratch, the menu text, the
-/// live-view labels, the profile table, the Toning curves, then the curves
-/// of a development.
+/// The tail, a script array of its own (`HOST_TAIL`): the picture scratch,
+/// the profile table, the Toning curves, then the curves of a development.
 pub const TAIL_SIZE: usize = DEVELOP_CURVES + DEVELOP_CURVES_SIZE;
 // The summaries of every record in every menu language end before the
 // value of a group page.
@@ -2202,9 +2207,15 @@ pub fn header() -> String {
     }
     define(
         &mut out,
-        "Everything after the records: the script array must hold it.",
+        "The tail array: the picture scratch, the profile table, and the curves.",
         "TAIL_SIZE",
         TAIL_SIZE,
+    );
+    define(
+        &mut out,
+        "The text area array: the menu text, then the live-view labels.",
+        "TEXT_AREA_SIZE",
+        TEXT_AREA_SIZE,
     );
     define(
         &mut out,
@@ -2269,7 +2280,7 @@ pub fn header() -> String {
     )
     .unwrap();
     writeln!(out, "#define GRKIT_TEXT_RECORDS {}", MAX_COUNT).unwrap();
-    out.push_str("#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)\n");
+    out.push_str("#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TEXT_AREA/4])\n");
     out.push_str("#define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)\n");
     writeln!(
         out,

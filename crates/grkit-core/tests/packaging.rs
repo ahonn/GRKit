@@ -427,13 +427,14 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [26 * 1602]})
+        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "text_words": runtime::TEXT_WORDS, "icon_words": [26 * 1602]})
     );
     assert_eq!(
         runtime::layout(40).unwrap(),
         json!({
             "words": (runtime::HEADER_SIZE + 40 * 0x1100) / 4,
             "tail_words": runtime::TAIL_WORDS,
+            "text_words": runtime::TEXT_WORDS,
             "icon_words": [64080, 26 * 1602]
         })
     );
@@ -452,8 +453,8 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
             .map(|v| v.as_u64().unwrap() as usize)
             .collect();
         // The registry holds the header and the records. The tail holds the
-        // picture scratch, the menu text, the live-view labels, the profile
-        // table, and the Toning curves (abi::TAIL_SIZE).
+        // picture scratch, the profile table, and the curves (abi::TAIL_SIZE);
+        // the text area the menu text and the live-view labels.
         assert_eq!(
             words * 4,
             runtime::HEADER_SIZE + count * 0x1100,
@@ -463,6 +464,9 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
         let tail = layout["tail_words"].as_u64().unwrap() as usize;
         assert_eq!(tail * 4, grkit_core::abi::TAIL_SIZE);
         assert!(tail <= grkit_core::abi::MODULE_ARRAY_WORDS);
+        let text = layout["text_words"].as_u64().unwrap() as usize;
+        assert_eq!(text * 4, grkit_core::abi::TEXT_AREA_SIZE);
+        assert!(text <= grkit_core::abi::MODULE_ARRAY_WORDS);
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
             (count + runtime::HOST_ICON_COUNT) * 6408,

@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6588
+#define GRKIT_HOST_HEADER_SIZE 6592
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -268,8 +268,8 @@
 #define GRKIT_HOST_MENU_LEVEL 36
 /* Highlighted row of the private menu. */
 #define GRKIT_HOST_MENU_CURSOR 40
-/* Address of the tail, an array of its own: the picture scratch, the menu
-   text, then the live-view labels. INSTALL writes it. */
+/* Address of the tail, an array of its own: the picture scratch, the profile
+   table, and the curves (`TAIL_SIZE`). INSTALL writes it. */
 #define GRKIT_HOST_TAIL 44
 /* Grain level, the capability CORE.GRAIN: 0 Off, 1 weak, 2 medium, 3 strong.
    The native grain stage of recorded pictures uses it instead of the native
@@ -658,6 +658,9 @@
    copies it at each timer dispatch (runtime/menu.c); the resident loader
    starts the Wi-Fi service while it is 1 and stops it at 0. */
 #define GRKIT_HOST_WLAN 6584
+/* Address of the text area, an array of its own: the menu text, then the
+   live-view labels (`TEXT_AREA_SIZE`). INSTALL writes it. */
+#define GRKIT_HOST_TEXT_AREA 6588
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -1152,7 +1155,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 255112
+#define GRKIT_PROFILE 141960
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -1172,16 +1175,18 @@
 #define GRKIT_PROFILE_PAINT 0
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
-/* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 261244
+/* The tail array: the picture scratch, the profile table, and the curves. */
+#define GRKIT_TAIL_SIZE 148092
+/* The text area array: the menu text, then the live-view labels. */
+#define GRKIT_TEXT_AREA_SIZE 113152
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 255612
+#define GRKIT_TONE_CURVES 142460
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 /* The red, green, and blue curves of a RAW development with its own Toning
    (GRKIT_HOST_DEVELOP_TONED), 256 u16 samples each. */
-#define GRKIT_DEVELOP_CURVES 259708
+#define GRKIT_DEVELOP_CURVES 146556
 #define GRKIT_DEVELOP_CURVES_SIZE 1536
 #define GRKIT_TEXT_SUMMARY 8192
 /* The parameter page title of a GRKit session, after the summaries: the page,
@@ -1198,7 +1203,7 @@
 #define GRKIT_TEXT_GROUP_UNITS 256
 #define GRKIT_TEXT_LANGUAGES 5
 #define GRKIT_TEXT_RECORDS 40
-#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)
+#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TEXT_AREA/4])
 #define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)
 #define GRKIT_LABEL_COUNT 24
 #define GRKIT_LABEL_CROP_CAMERA 19

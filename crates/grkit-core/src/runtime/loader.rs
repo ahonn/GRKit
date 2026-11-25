@@ -301,8 +301,10 @@ pub fn loader_with(icon_stride: usize, fast: &[FastRelease]) -> Vec<u8> {
         "if modulewords <= 0 goto modules_ready".into(),
         "intdim modulecode modulewords".into(),
         ":modules_ready".into(),
-        // The tail: the picture scratch, the menu text, and the labels.
+        // The tail: the picture scratch, the profile table, and the curves.
         format!("intdim tailarea {TAIL_WORDS}"),
+        // The text area: the menu text and the labels.
+        format!("intdim textarea {TEXT_WORDS}"),
     ]);
     if !fast.is_empty() {
         lines.extend([
@@ -2229,6 +2231,8 @@ mod tests {
         let check = at("if allocated <> 0 goto check_arrays");
         assert_eq!(lines[check + 1], "intdim registry words");
         let tail = at(&format!("intdim tailarea {TAIL_WORDS}"));
+        assert_eq!(lines[tail + 1], format!("intdim textarea {TEXT_WORDS}"));
+        let tail = tail + 1;
         assert_eq!(
             lines[tail + 1..tail + 20],
             [
