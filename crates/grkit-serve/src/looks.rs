@@ -118,13 +118,9 @@ pub fn scan(root: &Path) -> Result<Scan> {
 /// installer does not list these files of the library
 /// (runtime/install_library.h).
 pub fn left_out(root: &Path) -> BTreeSet<String> {
-    let Ok(list) = fs::read_to_string(root.join(grkit_core::card::PACKAGE_LIST)) else {
-        return BTreeSet::new();
-    };
-    list.split_ascii_whitespace()
-        .filter_map(|name| name.strip_prefix('-'))
-        .map(str::to_ascii_uppercase)
-        .collect()
+    fs::read(root.join(grkit_core::card::PACKAGE_LIST))
+        .map(|list| packaging::PackageList::parse(&list).left_out)
+        .unwrap_or_default()
 }
 
 /// Inspect actual GRFs for diagnostics. `official_hashes` must come from a

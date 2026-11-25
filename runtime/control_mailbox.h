@@ -6,21 +6,9 @@
    no request waits for the card or for another task.
    Map this buffer coherently before use: a CPU barrier does not flush aliases. */
 #include "abi.h"
-#define CONTROL_MAGIC GRKIT_CONTROL_MAGIC_VALUE
-#define CONTROL_VERSION GRKIT_CONTROL_VERSION_VALUE
-#define CONTROL_PAYLOAD_BYTES GRKIT_CONTROL_PAYLOAD_BYTES
-#define CONTROL_EMPTY GRKIT_CONTROL_EMPTY
-#define CONTROL_ACCEPTED GRKIT_CONTROL_ACCEPTED
-#define CONTROL_BAD_CONTEXT GRKIT_CONTROL_BAD_CONTEXT
-#define CONTROL_BAD_LENGTH GRKIT_CONTROL_BAD_LENGTH
-#define CONTROL_BAD_DIGEST GRKIT_CONTROL_BAD_DIGEST
-#define CONTROL_CHANGED GRKIT_CONTROL_CHANGED
-#define CONTROL_UNSUPPORTED GRKIT_CONTROL_UNSUPPORTED
-#define CONTROL_INVALID GRKIT_CONTROL_INVALID
-#define CONTROL_BUSY GRKIT_CONTROL_BUSY
-#define CONTROL_ATTACH GRKIT_CONTROL_ATTACH
-#define CONTROL_PING GRKIT_CONTROL_PING
-#define CONTROL_SEQUENCE_MAX GRKIT_CONTROL_SEQUENCE_MAX
+/* The little-endian words of a request or an answer. */
+static u32 control_word(const u8 *p) { return (u32)p[0]|((u32)p[1]<<8)|((u32)p[2]<<16)|((u32)p[3]<<24); }
+static void control_put(u8 *p,u32 value) { p[0]=(u8)value; p[1]=(u8)(value>>8); p[2]=(u8)(value>>16); p[3]=(u8)(value>>24); }
 #ifndef CONTROL_BARRIER
 #define CONTROL_BARRIER() __asm__ volatile("dmb ish" ::: "memory")
 #endif
@@ -69,9 +57,9 @@ struct control_mailbox {
     u32 producer_padding[6];
     /* Consumer-owned result. READY publishes all these result fields. */
     u32 claimed, ready, result, response_length, response_checksum, consumer_padding[11];
-    u8 payload[CONTROL_PAYLOAD_BYTES];
+    u8 payload[GRKIT_CONTROL_PAYLOAD_BYTES];
     /* Consumer-owned bytes, immutable until producer RELEASE. */
-    u8 response[CONTROL_PAYLOAD_BYTES];
+    u8 response[GRKIT_CONTROL_PAYLOAD_BYTES];
 };
 /* Validate the native layout against the generated Rust/Linux ABI. */
 _Static_assert(__builtin_offsetof(struct control_mailbox,magic)==GRKIT_CONTROL_MAGIC,"control magic offset");
@@ -96,7 +84,7 @@ _Static_assert(__builtin_offsetof(struct control_mailbox,response)==GRKIT_CONTRO
 _Static_assert(sizeof(struct control_mailbox)==GRKIT_CONTROL_SIZE,"control size");
 struct control_request {
     u32 sequence, command, length, reserved;
-    u8 payload[CONTROL_PAYLOAD_BYTES];
+    u8 payload[GRKIT_CONTROL_PAYLOAD_BYTES];
 };
 
 _Static_assert(sizeof(struct control_request)==GRKIT_CONTROL_REQUEST_SIZE,"control request size");
@@ -113,17 +101,17 @@ static void control_init(volatile struct control_mailbox *box,const u32 epoch[4]
     volatile u8 *bytes=(volatile u8 *)box;
     u32 i;
     for(i=0;i<sizeof(*box);++i) bytes[i]=0;
-    box->version=CONTROL_VERSION;
-    box->capacity=CONTROL_PAYLOAD_BYTES;
+    box->version=GRKIT_CONTROL_VERSION_VALUE;
+    box->capacity=GRKIT_CONTROL_PAYLOAD_BYTES;
     for(i=0;i<4;++i) box->epoch[i]=epoch[i];
     CONTROL_BARRIER();
-    box->magic=CONTROL_MAGIC;
+    box->magic=GRKIT_CONTROL_MAGIC_VALUE;
 }
 static u32 control_context(volatile struct control_mailbox *box,const u32 epoch[4]) {
     u32 i;
-    if(box->magic!=CONTROL_MAGIC) return 0;
+    if(box->magic!=GRKIT_CONTROL_MAGIC_VALUE) return 0;
     CONTROL_BARRIER();
-    if(box->version!=CONTROL_VERSION || box->capacity!=CONTROL_PAYLOAD_BYTES) return 0;
+    if(box->version!=GRKIT_CONTROL_VERSION_VALUE || box->capacity!=GRKIT_CONTROL_PAYLOAD_BYTES) return 0;
     for(i=0;i<4;++i) if(box->epoch[i]!=epoch[i]) return 0;
     return 1;
 }
@@ -131,9 +119,9 @@ static u32 control_context(volatile struct control_mailbox *box,const u32 epoch[
 static u32 control_submit(volatile struct control_mailbox *box,const u32 epoch[4],
                           u32 command,const u8 *payload,u32 length) {
     u32 sequence, i;
-    if(!control_context(box,epoch) || length>CONTROL_PAYLOAD_BYTES || (!payload && length)) return 0;
+    if(!control_context(box,epoch) || length>GRKIT_CONTROL_PAYLOAD_BYTES || (!payload && length)) return 0;
     sequence=box->request;
-    if(sequence!=box->ready || sequence!=box->release || sequence>=CONTROL_SEQUENCE_MAX) return 0;
+    if(sequence!=box->ready || sequence!=box->release || sequence>=GRKIT_CONTROL_SEQUENCE_MAX) return 0;
     CONTROL_BARRIER();
     for(i=0;i<4;++i) box->request_epoch[i]=epoch[i];
     box->command=command;
@@ -148,38 +136,38 @@ static u32 control_submit(volatile struct control_mailbox *box,const u32 epoch[4
    still needs its command and its content checked.
    For a validation error, complete out->sequence with that error. */
 static u32 control_acquire(volatile struct control_mailbox *box,const u32 epoch[4],struct control_request *out) {
-    u32 sequence, checksum, i, result=CONTROL_ACCEPTED;
+    u32 sequence, checksum, i, result=GRKIT_CONTROL_ACCEPTED;
     CONTROL_INVALIDATE(&box->request,64);
-    if(!control_context(box,epoch)) return CONTROL_EMPTY;
+    if(!control_context(box,epoch)) return GRKIT_CONTROL_EMPTY;
     sequence=box->request;
-    if(!sequence || sequence>CONTROL_SEQUENCE_MAX || sequence==box->ready || sequence==box->claimed) return CONTROL_EMPTY;
+    if(!sequence || sequence>GRKIT_CONTROL_SEQUENCE_MAX || sequence==box->ready || sequence==box->claimed) return GRKIT_CONTROL_EMPTY;
     CONTROL_BARRIER();
-    if(box->ready!=box->release || sequence!=box->ready+1) return CONTROL_EMPTY;
+    if(box->ready!=box->release || sequence!=box->ready+1) return GRKIT_CONTROL_EMPTY;
     box->claimed=sequence;
     out->sequence=sequence;
     out->command=box->command;
     out->length=box->length;
     out->reserved=0;
     checksum=box->checksum;
-    for(i=0;i<4;++i) if(box->request_epoch[i]!=epoch[i]) result=CONTROL_BAD_CONTEXT;
-    if(out->length>CONTROL_PAYLOAD_BYTES) result=CONTROL_BAD_LENGTH;
-    if(result==CONTROL_ACCEPTED) {
-        CONTROL_INVALIDATE(box->payload,CONTROL_PAYLOAD_BYTES);
+    for(i=0;i<4;++i) if(box->request_epoch[i]!=epoch[i]) result=GRKIT_CONTROL_BAD_CONTEXT;
+    if(out->length>GRKIT_CONTROL_PAYLOAD_BYTES) result=GRKIT_CONTROL_BAD_LENGTH;
+    if(result==GRKIT_CONTROL_ACCEPTED) {
+        CONTROL_INVALIDATE(box->payload,GRKIT_CONTROL_PAYLOAD_BYTES);
         for(i=0;i<out->length;++i) out->payload[i]=box->payload[i];
-        if(control_checksum(out->payload,out->length)!=checksum) result=CONTROL_BAD_DIGEST;
+        if(control_checksum(out->payload,out->length)!=checksum) result=GRKIT_CONTROL_BAD_DIGEST;
     }
     CONTROL_BARRIER();
-    if(box->request!=sequence) result=CONTROL_CHANGED;
+    if(box->request!=sequence) result=GRKIT_CONTROL_CHANGED;
     return result;
 }
 /* Publish the result of a claimed request and its response bytes. */
 static u32 control_complete(volatile struct control_mailbox *box,u32 sequence,u32 result,const u8 *bytes,u32 length) {
-    if(length>CONTROL_PAYLOAD_BYTES || (length && !bytes)) return 0;
+    if(length>GRKIT_CONTROL_PAYLOAD_BYTES || (length && !bytes)) return 0;
     if(!sequence || box->request!=sequence || box->claimed!=sequence || box->ready==sequence) return 0;
     for(u32 i=0;i<length;++i) box->response[i]=bytes[i];
     box->response_length=length;
     box->response_checksum=control_checksum(bytes,length);
-    CONTROL_CLEAN(box->response,CONTROL_PAYLOAD_BYTES);
+    CONTROL_CLEAN(box->response,GRKIT_CONTROL_PAYLOAD_BYTES);
     box->result=result;
     CONTROL_CLEAN(&box->claimed,64);
     CONTROL_BARRIER();
@@ -194,7 +182,7 @@ static u32 control_release(volatile struct control_mailbox *box,u32 sequence) {
     return 1;
 }
 /* A command of the includer: answer `request`, whose payload the handler
-   may replace with at most CONTROL_PAYLOAD_BYTES response bytes (*length). */
+   may replace with at most GRKIT_CONTROL_PAYLOAD_BYTES response bytes (*length). */
 typedef u32 (*control_handler)(void *context,struct control_request *request,u32 *length);
 /* Answer one request, if one waits. The first ATTACH installs a nonzero
    nonce. A restarted Linux service reads and reuses this nonce: it must not
@@ -205,28 +193,28 @@ static u32 control_poll_once(volatile struct control_mailbox *box,struct control
     u32 epoch[4], nonce[4], i, any=0, attached=0, result, length=0;
     for(i=0;i<4;++i) { epoch[i]=box->epoch[i]; attached|=epoch[i]; }
     result=control_acquire(box,epoch,candidate);
-    if(result==CONTROL_EMPTY) return 0;
-    if(result==CONTROL_ACCEPTED) {
+    if(result==GRKIT_CONTROL_EMPTY) return 0;
+    if(result==GRKIT_CONTROL_ACCEPTED) {
         result=0;
-        if(candidate->command==CONTROL_ATTACH) {
-            if(candidate->length!=16) result=CONTROL_BAD_LENGTH;
+        if(candidate->command==GRKIT_CONTROL_ATTACH) {
+            if(candidate->length!=16) result=GRKIT_CONTROL_BAD_LENGTH;
             else {
                 for(i=0;i<4;++i) {
                     const u8 *p=candidate->payload+4*i;
                     nonce[i]=(u32)p[0]|((u32)p[1]<<8)|((u32)p[2]<<16)|((u32)p[3]<<24);
                     any|=nonce[i];
-                    if(attached && nonce[i]!=epoch[i]) result=CONTROL_BAD_CONTEXT;
+                    if(attached && nonce[i]!=epoch[i]) result=GRKIT_CONTROL_BAD_CONTEXT;
                 }
-                if(!any) result=CONTROL_INVALID;
+                if(!any) result=GRKIT_CONTROL_INVALID;
                 if(!result) for(i=0;i<4;++i) box->epoch[i]=nonce[i];
             }
-        } else if(!attached) result=CONTROL_BAD_CONTEXT;
-        else if(candidate->command==CONTROL_PING) {
-            if(candidate->length) result=CONTROL_BAD_LENGTH;
+        } else if(!attached) result=GRKIT_CONTROL_BAD_CONTEXT;
+        else if(candidate->command==GRKIT_CONTROL_PING) {
+            if(candidate->length) result=GRKIT_CONTROL_BAD_LENGTH;
         } else if(handler) {
             result=handler(context,candidate,&length);
-            if(result || length>CONTROL_PAYLOAD_BYTES) length=0;
-        } else result=CONTROL_UNSUPPORTED;
+            if(result || length>GRKIT_CONTROL_PAYLOAD_BYTES) length=0;
+        } else result=GRKIT_CONTROL_UNSUPPORTED;
     }
     CONTROL_CLEAN(&box->magic,64);
     return control_complete(box,candidate->sequence,result,candidate->payload,length);

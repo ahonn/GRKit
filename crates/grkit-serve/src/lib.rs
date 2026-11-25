@@ -1,12 +1,14 @@
 //! The GRKit service on the camera's Linux: a small HTTP server that a phone
-//! reaches over the camera's Wi-Fi. `SCAN.SH` starts it once at each
-//! power-on (`grkit_core::runtime::package_runtime_files_with`).
+//! reaches over the camera's Wi-Fi. The resident loader starts it with
+//! `SCAN.SH serve` when the camera's access point comes up, and stops it
+//! when the access point goes down.
 //!
 //! The service answers one request on each connection and then closes it. It
 //! admits a bounded number of connections and waits in `accept` between
 //! them. Every path starts with `/v<PROTOCOL>/`. The port has no other
-//! service, so the paths do not name GRKit. `api` has the resources, and
-//! `changes` the one connection that stays open.
+//! service, so the paths do not name GRKit. `route` maps each path to its
+//! resource, `api` answers the resources, and `changes` has the one
+//! connection that stays open.
 //!
 //! Soon after power-on the card may not be readable yet. Then a resource
 //! that reads the card answers 503 and the client can retry.
@@ -18,6 +20,7 @@ pub mod identity;
 pub mod look_api;
 pub mod looks;
 pub mod protocol;
+pub mod route;
 pub mod runtime_backend;
 pub mod transport;
 pub mod trust;
@@ -57,9 +60,9 @@ pub const DIAG_FILES: [&str; 13] = [
     "/proc/net/arp",
 ];
 
-/// The files that the service reads. The camera reads the real files; the
-/// tests give their own.
-pub trait Files {
+/// The system files that the diagnostics read (`DIAG_FILES`). The camera
+/// reads the real files; the tests give their own.
+pub trait SystemFiles {
     /// The text of the file at `path`, at most `MAX_FILE` bytes, or `None`
     /// if the file cannot be read.
     fn read(&self, path: &str) -> Option<String>;
@@ -68,7 +71,7 @@ pub trait Files {
 /// The files of the running system.
 pub struct System;
 
-impl Files for System {
+impl SystemFiles for System {
     fn read(&self, path: &str) -> Option<String> {
         let file = std::fs::File::open(path).ok()?;
         let mut bytes = Vec::new();
@@ -96,47 +99,11 @@ pub struct Request {
 
 /// What a request can change and read besides the files: the card and the
 /// camera (`update::Device`), which the camera's own HTTP API describes.
-pub struct Env<'a, F: Files> {
-    pub files: &'a F,
+pub struct Env<'a> {
+    pub files: &'a dyn SystemFiles,
     pub connection: &'a Connection,
     pub card: &'a update::Card,
     pub device: &'a dyn Fn() -> anyhow::Result<update::Device>,
-}
-
-/// A response: the status and the JSON body.
-#[derive(Debug, PartialEq)]
-pub struct Response {
-    pub status: u16,
-    pub body: Value,
-}
-
-impl Response {
-    pub fn error(status: u16, message: &str) -> Self {
-        Response {
-            status,
-            body: serde_json::to_value(protocol::Problem::new(status, error_code(status), message))
-                .expect("problem serializes"),
-        }
-    }
-
-    /// The bytes of the response on the connection, which the service closes
-    /// after them.
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let body = self.body.to_string();
-        let reason = reason(self.status);
-        let content_type = if self.status >= 400 {
-            "application/problem+json"
-        } else {
-            "application/json"
-        };
-        format!(
-            "HTTP/1.1 {} {reason}\r\nContent-Type: {content_type}\r\n\
-             Content-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}",
-            self.status,
-            body.len()
-        )
-        .into_bytes()
-    }
 }
 
 pub(crate) fn reason(status: u16) -> &'static str {
@@ -163,7 +130,7 @@ pub(crate) fn reason(status: u16) -> &'static str {
         _ => "Error",
     }
 }
-fn error_code(status: u16) -> &'static str {
+pub(crate) fn error_code(status: u16) -> &'static str {
     match status {
         400 => "invalid_request",
         403 => "access_denied",
@@ -265,7 +232,7 @@ pub fn parse(head: &[u8]) -> Option<Request> {
 /// log lines of this start, the addresses of the connection, the kernel's
 /// network, memory, and process files as text, and the effect files of the
 /// card.
-pub fn diagnostics(env: &Env<impl Files>) -> Response {
+pub fn diagnostics(env: &Env<'_>) -> api::Reply {
     let files = env.files;
     let mut body = diag(files, env.connection);
     body["version"] = json!(env!("CARGO_PKG_VERSION"));
@@ -276,14 +243,14 @@ pub fn diagnostics(env: &Env<impl Files>) -> Response {
         .ok()));
     let log = files.read(&format!("{LINUX_DATA_DIRECTORY}/{BOOT_LOG}"));
     body["boot"] = json!(log.as_deref().map(this_start));
-    let trusted = trust::installed_release(env.card.root(), &grkit_core::release::OFFICIAL_KEYS)
+    let trusted = trust::installed_release(env.card.root(), env.card.release_keys())
         .map(|release| release.official_looks.into_values().collect())
         .unwrap_or_default();
     body["lookLibrary"] = match looks::inventory(env.card.root(), &trusted) {
         Ok(inventory) => inventory,
         Err(error) => json!({"available": false, "detail": format!("{error:#}")}),
     };
-    Response { status: 200, body }
+    api::Reply::json(200, body)
 }
 
 /// The boot log lines of this start: those after the last `load` line, which
@@ -299,7 +266,7 @@ fn this_start(log: &str) -> Vec<&str> {
     start[start.len().saturating_sub(MAX_BOOT_LINES)..].to_vec()
 }
 
-fn diag(files: &impl Files, connection: &Connection) -> Value {
+fn diag(files: &dyn SystemFiles, connection: &Connection) -> Value {
     let texts: Map<String, Value> = DIAG_FILES
         .iter()
         .map(|path| ((*path).to_owned(), json!(files.read(path))))
@@ -317,7 +284,7 @@ mod tests {
 
     struct Fake(BTreeMap<String, String>);
 
-    impl Files for Fake {
+    impl SystemFiles for Fake {
         fn read(&self, path: &str) -> Option<String> {
             self.0.get(path).cloned()
         }
@@ -339,17 +306,19 @@ mod tests {
         }
     }
 
-    /// The diagnostics with `files`, on a card with no package folder and a
-    /// camera that does not answer.
-    fn get(files: &Fake) -> Response {
+    /// The body of the diagnostics with `files`, on a card with no package
+    /// folder and a camera that does not answer.
+    fn get(files: &Fake) -> Value {
         let dir = tempfile::tempdir().unwrap();
         let card = update::Card::new(dir.path());
-        diagnostics(&Env {
+        let reply = diagnostics(&Env {
             files,
             connection: &connection(),
             card: &card,
             device: &|| anyhow::bail!("no camera"),
-        })
+        });
+        assert_eq!(reply.status, 200);
+        serde_json::from_slice(&reply.body).unwrap()
     }
 
     #[test]
@@ -408,17 +377,16 @@ mod tests {
                 "1.0 load\n1.1 scan 0\n2.0 load\n2.1 scan-start\n2.2 scan 0\n",
             ),
         ]);
-        let response = get(&files);
-        assert_eq!(response.status, 200);
-        assert_eq!(response.body["version"], env!("CARGO_PKG_VERSION"));
-        assert_eq!(response.body["uptime"], 12.5);
+        let body = get(&files);
+        assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(body["uptime"], 12.5);
         assert_eq!(
-            response.body["boot"],
+            body["boot"],
             json!(["2.0 load", "2.1 scan-start", "2.2 scan 0"])
         );
         let empty = get(&fake(&[]));
-        assert!(empty.body["uptime"].is_null());
-        assert!(empty.body["boot"].is_null());
+        assert!(empty["uptime"].is_null());
+        assert!(empty["boot"].is_null());
     }
 
     #[test]
@@ -427,7 +395,7 @@ mod tests {
             .chain((1..=80).map(|n| format!("{n}.0 step\n")))
             .collect();
         let files = fake(&[("/media/storage1/GRKIT/BOOT.TXT", &log)]);
-        let boot = get(&files).body["boot"].clone();
+        let boot = get(&files)["boot"].clone();
         let boot = boot.as_array().unwrap();
         assert_eq!(boot.len(), MAX_BOOT_LINES);
         assert_eq!(boot.last().unwrap(), "80.0 step");
@@ -436,10 +404,10 @@ mod tests {
     #[test]
     fn diagnostics_give_the_connection_and_each_file() {
         let files = fake(&[("/proc/net/dev", "lo: 0\n")]);
-        let response = get(&files);
-        assert_eq!(response.body["connection"]["local"], "192.168.0.1:8080");
-        assert_eq!(response.body["connection"]["peer"], "192.168.0.2:50000");
-        let texts = response.body["files"].as_object().unwrap();
+        let body = get(&files);
+        assert_eq!(body["connection"]["local"], "192.168.0.1:8080");
+        assert_eq!(body["connection"]["peer"], "192.168.0.2:50000");
+        let texts = body["files"].as_object().unwrap();
         assert_eq!(texts.len(), DIAG_FILES.len());
         assert_eq!(texts["/proc/net/dev"], "lo: 0\n");
         assert!(texts["/proc/net/arp"].is_null());
@@ -467,7 +435,7 @@ mod tests {
 
     #[test]
     fn a_response_has_its_length_and_closes() {
-        let bytes = Response::error(404, "not found").to_bytes();
+        let bytes = api::Reply::error(404, "not found").to_bytes();
         let text = String::from_utf8(bytes).unwrap();
         let (head, body) = text.split_once("\r\n\r\n").unwrap();
         assert!(head.starts_with("HTTP/1.1 404 Not Found\r\n"));

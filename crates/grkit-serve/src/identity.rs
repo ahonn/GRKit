@@ -65,12 +65,16 @@ pub const MARKER: &str = "GRKIT/CARD.ID";
 
 /// Read the card marker, or create it once with 128 random bits. This is the
 /// only write of identity discovery: one small file in the life of a card.
+/// An empty marker is a create that a power loss cut before its write: the
+/// service writes it again.
 pub fn card_marker(root: &Path) -> Result<String> {
     let path = root.join(MARKER);
-    let read = |path: &Path| -> Result<String> {
+    let read = |path: &Path| -> std::io::Result<String> {
         let mut text = String::new();
         fs::File::open(path)?.take(64).read_to_string(&mut text)?;
-        let marker = text.trim().to_owned();
+        Ok(text.trim().to_owned())
+    };
+    let valid = |marker: String| -> Result<String> {
         if marker.len() != 32
             || !marker
                 .bytes()
@@ -80,28 +84,33 @@ pub fn card_marker(root: &Path) -> Result<String> {
         }
         Ok(marker)
     };
-    match read(&path) {
-        Ok(marker) => return Ok(marker),
-        Err(error)
-            if error
-                .downcast_ref::<std::io::Error>()
-                .is_some_and(|error| error.kind() == std::io::ErrorKind::NotFound) => {}
-        Err(error) => return Err(error),
-    }
+    let empty = match read(&path) {
+        Ok(marker) if !marker.is_empty() => return valid(marker),
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
     let mut bytes = [0u8; 16];
     fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     let marker: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    let mut file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&path)
-        .context("Create the card marker")?;
+    let mut file = if empty {
+        fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(&path)
+    } else {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+    }
+    .context("Create the card marker")?;
     file.write_all(marker.as_bytes())?;
     file.sync_all()?;
     drop(file);
     // Read it back: a card that drops the write must not get a new
     // identity at each start.
-    let stored = read(&path)?;
+    let stored = valid(read(&path)?)?;
     if stored != marker {
         bail!("The card marker did not persist");
     }
@@ -127,5 +136,8 @@ mod tests {
         fs::write(root.path().join(MARKER), "not hex").unwrap();
         assert_eq!(session_card_id(root.path()).unwrap(), formatted);
         assert!(card_id(root.path()).is_err());
+        // A create that a power loss cut leaves an empty marker.
+        fs::write(root.path().join(MARKER), "").unwrap();
+        assert!(card_id(root.path()).unwrap().starts_with("card-"));
     }
 }

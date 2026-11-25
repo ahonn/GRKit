@@ -77,9 +77,10 @@ const SERVE_RESTARTS: u32 = 1;
 /// checks, so that a process ID that another program took is left alone.
 pub const SERVE_FROM_RAM: &str = "--from-ram";
 /// The argument with which the service only marks itself as stopped in its
-/// mailbox and ends. A stop runs it when no service runs: a service that
-/// failed leaves its mark, so that the resident loader does not start it
-/// again until the access point goes off.
+/// mailbox and ends. A stop runs it when no service runs, and SCAN.SH runs it
+/// when the service failed again after its restarts: the resident loader then
+/// starts it again, at most `runtime::SERVE_POLLS` polls in a row, instead of
+/// leaving the access point without a service until it goes off.
 pub const SERVE_MARK_STOPPED: &str = "--mark-stopped";
 /// The arguments of SCAN.SH that only start or stop the service, with which
 /// the resident loader follows the Wi-Fi access point (`runtime::loader`).
@@ -180,8 +181,9 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
     // of a runtime that has one, unless it runs; with `SCAN_STOP_ARGUMENT`,
     // it asks the service to stop, which ends after the request that it
     // answers. A subshell starts the service again when it ends without a
-    // stop (`SERVE_RESTARTS`); it waits for the service, so it does not wake
-    // while the service runs. When no service runs, a stop clears the mark
+    // stop (`SERVE_RESTARTS`), then clears the mark of a service that failed
+    // again; it waits for the service, so it does not wake while the service
+    // runs. When no service runs, a stop clears the mark
     // of the service (`SERVE_MARK_STOPPED`) and removes `SERVE_MARK`, which
     // also ends a pause before a restart. A process that is not yet the copy
     // in RAM is still starting: the loader asks again. The subshell runs apart from the script, with
@@ -204,7 +206,7 @@ pub fn package_runtime_files_with(binaries: &[&[u8]], fast: &Files, icon_stride:
          \x20     echo $! >{SERVE_MARK}\n\
          \x20     wait $! && break\n\
          \x20     n=$((n + 1))\n\
-         \x20     [ $n -gt {SERVE_RESTARTS} ] && break\n\
+         \x20     if [ $n -gt {SERVE_RESTARTS} ]; then {serve} {SERVE_MARK_STOPPED}; break; fi\n\
          \x20     sleep 1\n\
          \x20     [ -e {SERVE_MARK} ] || break\n\
          \x20   done\n\

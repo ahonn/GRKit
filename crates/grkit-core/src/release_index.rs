@@ -10,7 +10,8 @@
 use std::collections::BTreeMap;
 
 use anyhow::{ensure, Context, Result};
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     camera,
@@ -32,14 +33,15 @@ pub fn package_path(camera: &str, path: &str) -> String {
 }
 
 /// One file that the app may download from the site.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FileInfo {
     pub sha256: String,
     pub size: u64,
 }
 
 /// The signed release of one camera on the site.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CameraRelease {
     /// The runtime targets of the camera, in release order.
     pub targets: Vec<String>,
@@ -52,7 +54,7 @@ pub struct CameraRelease {
 }
 
 /// The release notes of one version: plain-text items, in English.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct VersionNotes {
     pub version: String,
     pub items: Vec<String>,
@@ -68,7 +70,7 @@ pub const NOTE_CHARS: usize = 500;
 /// A recipe preset of the site, as the phone adds it: its recipe for each
 /// camera family, the official effect it needs, its author, and a short
 /// description by language code.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct IndexPreset {
     pub id: String,
     pub effect: Option<String>,
@@ -108,31 +110,61 @@ impl IndexPreset {
 }
 
 /// What a phone shows of an official module that a camera does not have.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModuleInfo {
     /// The title by language code.
     pub titles: BTreeMap<String, String>,
     pub color_only: bool,
 }
 
-/// The release that a site holds.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// The release that a site holds. Its JSON has these fields and `format`
+/// (`FORMAT`); a reader leaves out the parts of the optional fields that do
+/// not fit (`Index::parse`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Index {
     /// The GRKit version, which every signed statement must name.
     pub version: String,
     /// The oldest `APP_PROTOCOL` that can install this release.
     pub min_app_protocol: u64,
     /// The official modules of the release, by ID.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub modules: BTreeMap<String, ModuleInfo>,
     pub cameras: BTreeMap<String, CameraRelease>,
     /// Every downloadable file, by its path from the site root.
     pub files: BTreeMap<String, FileInfo>,
     /// The release notes of recent versions, newest first. They are for
     /// display only: no signature covers them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<VersionNotes>,
     /// The recipe presets of the site, for the phone to add. Display and
     /// settings only: the camera checks a recipe like any other.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub presets: Vec<IndexPreset>,
+}
+
+/// The index file as a reader takes it: the optional fields stay JSON, so
+/// that an entry that does not fit is left out instead of failing the index.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IndexFile {
+    format: u64,
+    version: String,
+    #[serde(default = "app_protocol")]
+    min_app_protocol: u64,
+    cameras: BTreeMap<String, Value>,
+    files: BTreeMap<String, FileInfo>,
+    #[serde(default)]
+    modules: Value,
+    #[serde(default)]
+    notes: Value,
+    #[serde(default)]
+    presets: Value,
+}
+
+fn app_protocol() -> u64 {
+    APP_PROTOCOL
 }
 
 /// The files of a site that the index covers. The CLI fills this from disk.
@@ -337,65 +369,8 @@ impl Index {
 
     /// The bytes of the index file.
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        let cameras: BTreeMap<_, _> = self
-            .cameras
-            .iter()
-            .map(|(id, camera)| {
-                (
-                    id.clone(),
-                    json!({
-                        "targets": camera.targets,
-                        "statement": camera.statement,
-                        "signature": camera.signature,
-                        "guides": camera.guides,
-                    }),
-                )
-            })
-            .collect();
-        let files: BTreeMap<_, _> = self
-            .files
-            .iter()
-            .map(|(path, info)| {
-                (
-                    path.clone(),
-                    json!({"sha256": info.sha256, "size": info.size}),
-                )
-            })
-            .collect();
-        let mut index = json!({
-            "format": FORMAT,
-            "version": self.version,
-            "minAppProtocol": self.min_app_protocol,
-            "cameras": cameras,
-            "files": files,
-        });
-        if !self.modules.is_empty() {
-            index["modules"] = self
-                .modules
-                .iter()
-                .map(|(id, info)| {
-                    (
-                        id.clone(),
-                        json!({"titles": info.titles, "colorOnly": info.color_only}),
-                    )
-                })
-                .collect::<serde_json::Map<_, _>>()
-                .into();
-        }
-        if !self.notes.is_empty() {
-            index["notes"] = self
-                .notes
-                .iter()
-                .map(|notes| json!({"version": notes.version, "items": notes.items}))
-                .collect();
-        }
-        if !self.presets.is_empty() {
-            index["presets"] = self
-                .presets
-                .iter()
-                .map(|p| json!({"id": p.id, "effect": p.effect, "author": p.author, "text": p.text, "recipes": p.recipes}))
-                .collect();
-        }
+        let mut index = serde_json::to_value(self)?;
+        index["format"] = FORMAT.into();
         packaging::json_bytes(&index)
     }
 
@@ -416,90 +391,39 @@ impl Index {
     /// Reads an index. It leaves out the cameras that this build does not
     /// know, and does not check the files on a site.
     pub fn parse(bytes: &[u8]) -> Result<Index> {
-        let value: Value = serde_json::from_slice(bytes).context("Read the release index")?;
+        let file: IndexFile = serde_json::from_slice(bytes).context("Read the release index")?;
         ensure!(
-            value["format"] == FORMAT,
+            file.format == FORMAT,
             "The release index has another format"
         );
-        let version = value["version"]
-            .as_str()
-            .context("The release index has no version")?
-            .to_owned();
-        let cameras = value["cameras"]
-            .as_object()
-            .context("The release index has no cameras")?
-            .iter()
+        let cameras = file
+            .cameras
+            .into_iter()
             .filter(|(id, _)| camera::find(id).is_ok())
             .map(|(id, entry)| {
-                let targets = entry["targets"]
-                    .as_array()
-                    .context("A camera release has no targets")?
-                    .iter()
-                    .map(|target| {
-                        target
-                            .as_str()
-                            .context("A camera release has a bad target")
-                            .map(str::to_owned)
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                let guides = entry["guides"]
-                    .as_object()
-                    .context("A camera release has no guides")?
-                    .iter()
-                    .map(|(language, path)| {
-                        let path = path
-                            .as_str()
-                            .context("A camera release has a bad guide path")?
-                            .to_owned();
-                        Ok((language.clone(), path))
-                    })
-                    .collect::<Result<BTreeMap<_, _>>>()?;
-                Ok((
-                    id.clone(),
-                    CameraRelease {
-                        targets,
-                        statement: entry["statement"]
-                            .as_str()
-                            .context("A camera release has no statement path")?
-                            .to_owned(),
-                        signature: entry["signature"]
-                            .as_str()
-                            .context("A camera release has no signature path")?
-                            .to_owned(),
-                        guides,
-                    },
-                ))
+                let release = serde_json::from_value(entry)
+                    .with_context(|| format!("Read the release of the camera {id}"))?;
+                Ok((id, release))
             })
             .collect::<Result<BTreeMap<_, _>>>()?;
-        let files = value["files"]
-            .as_object()
-            .context("The release index has no files")?
-            .iter()
-            .map(|(path, info)| {
-                let sha256 = info["sha256"]
-                    .as_str()
-                    .filter(|hash| {
-                        hash.len() == 64
-                            && hash
-                                .bytes()
-                                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-                    })
-                    .with_context(|| format!("The release index has no SHA-256 for {path}"))?
-                    .to_owned();
-                let size = info["size"]
-                    .as_u64()
-                    .with_context(|| format!("The release index has no size for {path}"))?;
-                Ok((path.clone(), FileInfo { sha256, size }))
-            })
-            .collect::<Result<BTreeMap<_, _>>>()?;
+        if let Some(path) = file.files.iter().find_map(|(path, info)| {
+            let valid = info.sha256.len() == 64
+                && info
+                    .sha256
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+            (!valid).then_some(path)
+        }) {
+            anyhow::bail!("The release index has no SHA-256 for {path}");
+        }
         Ok(Index {
-            version,
-            min_app_protocol: value["minAppProtocol"].as_u64().unwrap_or(APP_PROTOCOL),
-            modules: read_modules(&value["modules"]),
+            version: file.version,
+            min_app_protocol: file.min_app_protocol,
+            modules: read_modules(&file.modules),
             cameras,
-            files,
-            notes: read_notes(&value["notes"]),
-            presets: read_presets(&value["presets"]),
+            files: file.files,
+            notes: read_notes(&file.notes),
+            presets: read_presets(&file.presets),
         })
     }
 }
@@ -752,6 +676,7 @@ mod tests {
     use super::*;
     use crate::camera::Camera;
     use crate::testing::{self, RELEASE_SEED};
+    use serde_json::json;
     use std::collections::BTreeMap;
 
     fn effect_tree(target: &str) -> Files {

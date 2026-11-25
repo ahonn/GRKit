@@ -1761,3 +1761,39 @@ fn a_package_holds_the_service_of_its_runtimes() {
     let files = with_sums(files);
     assert!(verify_package(&repack(&files, CompressionMethod::Deflated)).is_err());
 }
+
+#[test]
+fn the_package_list_reads_as_the_runtime_does_and_keeps_the_looks_of_the_card() {
+    use grkit_core::packaging::PackageList;
+    let new = PackageList::parse(b"A.GRM\nNEW.GRF\nB.GRM\n-GONE.GRF\n");
+    // The runtime separates names by any ASCII whitespace and ignores case.
+    let card = PackageList::parse(b"a.grm OLD.GRF\nmine.grf\t-left.grf\n");
+    assert_eq!(new.modules().collect::<Vec<_>>(), ["A", "B"]);
+    assert_eq!(
+        String::from_utf8(new.with_looks_of(&card).to_bytes()).unwrap(),
+        "A.GRM\nB.GRM\nMINE.GRF\nOLD.GRF\n-LEFT.GRF\n"
+    );
+}
+
+#[test]
+fn the_package_owns_its_runtime_modules_and_effects() {
+    use grkit_core::packaging::package_owned;
+    for path in [
+        "SCRIPT/GRKIT/CORE.BIN",
+        "SCRIPT/GRKIT/CORE3.BIN",
+        "SCRIPT/GRKIT/SERVE.BIN",
+        "SCRIPT/GRKIT/RELEASE.JSN",
+        "SCRIPT/GRKIT/MODULES/GLOW.GRM",
+        "SCRIPT/GRKIT/EFFECTS/1234ABCD.GRF",
+    ] {
+        assert!(package_owned(path), "{path}");
+    }
+    for path in [
+        "SCRIPT/GRKIT/IMPORTS.BIN",
+        "SCRIPT/GRKIT/COMMIT.TTL",
+        "SCRIPT/GRKIT/MODULES/README.TXT",
+        "GRKIT/EFFECTS/1234ABCD.GRF",
+    ] {
+        assert!(!package_owned(path), "{path}");
+    }
+}

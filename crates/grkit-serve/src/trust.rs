@@ -20,10 +20,10 @@ pub fn installed_release(root: &Path, keys: &[[u8; 32]]) -> Result<Statement> {
         );
         Ok(bytes)
     };
-    let statement = read(release::CARD_STATEMENT, 128 * 1024)
+    let statement = read(release::CARD_STATEMENT, release::MAX_STATEMENT_BYTES as u64)
         .context("Read the installed release statement")?;
-    let signature =
-        read(release::CARD_SIGNATURE, 1024).context("Read the installed release signature")?;
+    let signature = read(release::CARD_SIGNATURE, release::MAX_SIGNATURE_BYTES as u64)
+        .context("Read the installed release signature")?;
     release::verify(&statement, &signature, keys)
 }
 

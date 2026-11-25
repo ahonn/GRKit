@@ -128,11 +128,18 @@ impl Subscription {
             bail!("The WebSocket request head is incomplete or oversized");
         }
         let request = crate::parse(&prefix).context("Invalid WebSocket request")?;
-        if request.method != "GET" || request.path != "/v1/changes" || request.length != 0 {
+        if request.method != "GET"
+            || crate::route::Resource::of(&request.path) != Some(crate::route::Resource::Changes)
+            || request.length != 0
+        {
             bail!("Invalid change subscription endpoint");
         }
-        crate::transport::admit(&request, stream.local_addr()?)
-            .map_err(|response| anyhow!("WebSocket admission failed: {}", response.body))?;
+        crate::transport::admit(&request, stream.local_addr()?).map_err(|reply| {
+            anyhow!(
+                "WebSocket admission failed: {}",
+                String::from_utf8_lossy(&reply.body)
+            )
+        })?;
         let config = WebSocketConfig::default()
             .read_buffer_size(2048)
             .write_buffer_size(0)

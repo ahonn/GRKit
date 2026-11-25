@@ -1,9 +1,13 @@
-//! The v1 router.
-use crate::update::{SoftwareContext, SoftwareRequest, SoftwareStatus};
+//! The v1 resources: the reply of a request, and the service that answers
+//! each resource (`route::Resource`).
+use crate::update::{
+    JournalState, SoftwareContext, SoftwarePhase, SoftwareRequest, SoftwareStatus,
+};
 use crate::{
     changes::{Changed, Changes},
     protocol::Problem,
-    Env, Files, Request, Response,
+    route::Resource,
+    Env, Request,
 };
 use serde_json::{json, Value};
 
@@ -71,6 +75,10 @@ impl Reply {
         self.headers.push((name.to_owned(), value));
         self
     }
+    /// A problem with the code of its status (`crate::error_code`).
+    pub fn error(status: u16, detail: &str) -> Self {
+        Self::problem(Problem::new(status, crate::error_code(status), detail))
+    }
     pub fn problem(problem: Problem) -> Self {
         Self::json(
             problem.status,
@@ -93,19 +101,16 @@ impl Reply {
         bytes
     }
 }
-impl From<Response> for Reply {
-    fn from(response: Response) -> Self {
-        Self::json(response.status, response.body)
-    }
-}
 
 pub struct Service {
     pub changes: Changes,
     pub boot_id: String,
     card_identity: fn(&std::path::Path) -> anyhow::Result<String>,
     request_id: fn() -> anyhow::Result<String>,
-    release_keys: Vec<[u8; 32]>,
     looks: crate::look_api::LookApi,
+    /// The recipe family of the camera, once its API answered: the model
+    /// does not change while the service runs.
+    family: std::sync::OnceLock<Option<grkit_core::recipes::Family>>,
 }
 impl Service {
     pub fn new(boot_id: String) -> Self {
@@ -122,8 +127,8 @@ impl Service {
             changes: Changes::default(),
             card_identity: crate::identity::session_card_id,
             request_id: crate::identity::request_id,
-            release_keys: grkit_core::release::OFFICIAL_KEYS.to_vec(),
             looks: crate::look_api::LookApi::new(backend),
+            family: std::sync::OnceLock::new(),
             boot_id,
         }
     }
@@ -141,77 +146,82 @@ impl Service {
     pub fn announce(&self, running: bool) -> bool {
         self.looks.announce(running)
     }
-    pub fn handle(&self, request: &Request, body: &[u8], env: &Env<impl Files>) -> Reply {
+    pub fn handle(&self, request: &Request, body: &[u8], env: &Env<'_>) -> Reply {
         let reply = self.answer(request, body, env);
-        // Only a request that is not a read can change the card.
+        // The card drops its summary after its own writes. The Looks, the
+        // recipes, and the camera's runtime change the card in other ways:
+        // only a request that is not a read can change it.
         if request.method != "GET" {
-            crate::update::forget_summary();
+            env.card.forget_summary();
         }
         reply
     }
-    fn answer(&self, request: &Request, body: &[u8], env: &Env<impl Files>) -> Reply {
-        if request.method == "GET" && request.path == "/v1/ping" {
-            return Reply::json(200, json!({"protocol":1,"bootId":self.boot_id}));
-        }
-        let route = request.path.strip_prefix("/v1/").unwrap_or("");
-        if route == "looks"
-            || route.starts_with("looks/")
-            || route.starts_with("params/looks/")
-            || route == "recipes"
-            || route.starts_with("recipes/")
-            || route.starts_with("modules/")
-            || route == "params/modules"
-            || route.starts_with("params/modules/")
-            || route == "params/settings"
-            || route == "shutdown-picture"
-        {
-            let card_id = self.current_card_id(env.card.root()).ok();
-            let pending = env.card.state().map_or(true, |state| state != "none")
-                || env.card.software_request().map_or(true, |request| {
-                    request.is_some_and(|request| request.status == SoftwareStatus::Running)
-                });
-            let context = crate::look_api::RequestContext {
-                boot_id: &self.boot_id,
-                card_id: card_id.as_deref().unwrap_or("unavailable"),
-                software_pending: pending,
-                root: env.card.root(),
-                release_keys: &self.release_keys,
-                family: (env.device)()
-                    .ok()
-                    .and_then(|device| crate::update::recipe_family(&device.model)),
-            };
-            if let Some(reply) = self.looks.handle_modules(request, body, &context) {
-                return reply;
+    fn answer(&self, request: &Request, body: &[u8], env: &Env<'_>) -> Reply {
+        let method = request.method.as_str();
+        let reply = match Resource::of(&request.path) {
+            Some(Resource::Ping) if method == "GET" => Some(Reply::json(
+                200,
+                json!({"protocol":crate::PROTOCOL,"bootId":self.boot_id}),
+            )),
+            Some(Resource::Props) if method == "GET" => Some(self.props(env)),
+            Some(Resource::Diagnostics) if method == "GET" => Some(crate::diagnostics(env)),
+            Some(Resource::Update) if method == "GET" => Some(self.software(env)),
+            Some(Resource::Update) if method == "PUT" => {
+                Some(self.mutate_software(request, body, env))
             }
-            if let Some(reply) = self.looks.handle_settings(request, body, &context) {
-                return reply;
+            Some(Resource::UpdateCancel) if method == "POST" => {
+                Some(self.mutate_software(request, body, env))
             }
-            if let Some(reply) = self
-                .looks
-                .handle_recipes(request, body, &context, &self.changes)
-            {
-                return reply;
+            Some(Resource::Looks) => {
+                self.looks
+                    .handle(request, body, &self.look_context(env), &self.changes)
             }
-            if let Some(reply) = self.looks.handle(request, body, &context, &self.changes) {
-                return reply;
+            Some(Resource::Recipes) => {
+                self.looks
+                    .handle_recipes(request, body, &self.look_context(env), &self.changes)
             }
-        }
-
-        match (request.method.as_str(), route) {
-            ("GET", "props") => self.props(env),
-            ("GET", "debug/diagnostics") => crate::diagnostics(env).into(),
-            ("GET", "update") => self.software(env),
-            ("PUT", "update") | ("POST", "update/cancel") => {
-                self.mutate_software(request, body, env)
+            Some(Resource::Modules) => {
+                self.looks
+                    .handle_modules(request, body, &self.look_context(env))
             }
-            _ => Reply::problem(Problem::new(
+            Some(Resource::Settings) => {
+                self.looks
+                    .handle_settings(request, body, &self.look_context(env))
+            }
+            _ => None,
+        };
+        reply.unwrap_or_else(|| {
+            Reply::problem(Problem::new(
                 404,
                 "not_found",
                 "The resource does not exist.",
-            )),
+            ))
+        })
+    }
+    /// What the Looks, recipes, modules, and settings of a request read.
+    fn look_context<'a>(&'a self, env: &'a Env<'_>) -> crate::look_api::RequestContext<'a> {
+        let card_id = self.current_card_id(env.card.root()).ok();
+        crate::look_api::RequestContext {
+            boot_id: &self.boot_id,
+            card_id: card_id.unwrap_or_else(|| "unavailable".into()),
+            software_pending: software_pending(env.card).is_some(),
+            root: env.card.root(),
+            release_keys: env.card.release_keys(),
+            family: self.family(env),
         }
     }
-    fn props(&self, env: &Env<impl Files>) -> Reply {
+    /// The recipe family of the camera, from its API at the first request
+    /// that it answers.
+    fn family(&self, env: &Env<'_>) -> Option<grkit_core::recipes::Family> {
+        if let Some(family) = self.family.get() {
+            return *family;
+        }
+        let device = (env.device)().ok()?;
+        *self
+            .family
+            .get_or_init(|| crate::update::recipe_family(&device.model))
+    }
+    fn props(&self, env: &Env<'_>) -> Reply {
         let card_id = self.current_card_id(env.card.root()).ok();
         let readable = env.card.ensure_readable().is_ok();
         let runtime = match card_id.as_deref() {
@@ -258,7 +268,7 @@ impl Service {
     }
     /// The update resource: what the card holds, and the request that waits
     /// or the last one that ended.
-    fn software(&self, env: &Env<impl Files>) -> Reply {
+    fn software(&self, env: &Env<'_>) -> Reply {
         let card_id = self.current_card_id(env.card.root()).ok();
         let request = match env.card.software_request() {
             Ok(value) => value
@@ -275,7 +285,7 @@ impl Service {
     /// The checks of an update that need no body. The transport runs them
     /// before it receives a package of several megabytes, and answers at once
     /// when one fails. The request repeats them after the body.
-    pub fn precheck(&self, request: &Request, env: &Env<impl Files>) -> Option<Reply> {
+    pub fn precheck(&self, request: &Request, env: &Env<'_>) -> Option<Reply> {
         if (request.method.as_str(), request.path.as_str()) != ("PUT", "/v1/update") {
             return None;
         }
@@ -283,7 +293,7 @@ impl Service {
     }
     /// A software change names the start of the camera that the phone read,
     /// and no other request waits.
-    fn admit_software(&self, request: &Request, env: &Env<impl Files>) -> Result<String, Reply> {
+    fn admit_software(&self, request: &Request, env: &Env<'_>) -> Result<String, Reply> {
         if request.headers.get("x-grkit-boot-id") != Some(&self.boot_id) {
             return Err(Reply::problem(Problem::new(
                 409,
@@ -315,7 +325,7 @@ impl Service {
     /// ends. A package that the phone sends again after an unknown result
     /// meets the request that waits (`software_pending`): the phone then reads
     /// the resource.
-    fn mutate_software(&self, request: &Request, body: &[u8], env: &Env<impl Files>) -> Reply {
+    fn mutate_software(&self, request: &Request, body: &[u8], env: &Env<'_>) -> Reply {
         let card_id = match self.admit_software(request, env) {
             Ok(card_id) => card_id,
             Err(reply) => return reply,
@@ -352,13 +362,7 @@ impl Service {
                 Err(error) => return unavailable("coordinator_unavailable", &format!("{error:#}")),
             };
             let staged = match (env.device)() {
-                Ok(device) => crate::update::stage_request(
-                    env.card,
-                    body,
-                    &device,
-                    &self.release_keys,
-                    &context,
-                ),
+                Ok(device) => crate::update::stage_request(env.card, body, &device, &context),
                 Err(error) => return unavailable("camera_unavailable", &format!("{error:#}")),
             };
             // A failed journal publication can follow a durable request
@@ -372,7 +376,8 @@ impl Service {
         let outcome = outcome.or_else(|error| match env.card.software_request() {
             Ok(Some(record))
                 if cancel
-                    && record.status == SoftwareStatus::Cancelled
+                    && (record.status == SoftwareStatus::Cancelled
+                        || record.error.as_deref() == Some(crate::update::SOFTWARE_REPLACED))
                     && record.card_id == card_id =>
             {
                 Ok(record)
@@ -394,16 +399,53 @@ impl Service {
     }
 }
 
+/// The JSON of a software request, as the phone reads it.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SoftwareSummary<'a> {
+    request_id: &'a str,
+    /// The kind of the request: an update is the only one.
+    domain: &'static str,
+    boot_id: &'a str,
+    card_id: &'a str,
+    status: SoftwareStatus,
+    phase: SoftwarePhase,
+    progress: Option<u32>,
+    cancellable: bool,
+    required_action: Option<&'static str>,
+    result: Option<Value>,
+    error: Option<Value>,
+}
+
 fn software_summary(request: &SoftwareRequest) -> Value {
-    use crate::update::SoftwarePhase;
-    json!({"requestId":request.request_id,"domain":request.domain,"bootId":request.boot_id,"cardId":request.card_id,"status":request.status,"phase":request.phase,"progress":null,"cancellable":request.cancellable,
-    "requiredAction":match request.phase {SoftwarePhase::AwaitingConfirmation => Some("confirmOnCamera"),SoftwarePhase::AwaitingRestart => Some("restartCamera"),_=>None},
-    "result":if request.status==SoftwareStatus::Succeeded {json!({"identity":request.expected.digest})} else {Value::Null},
-    "error":request.error.as_deref().map(|code| json!({"code":code,"detail":match code {
+    let detail = |code: &str| match code {
         crate::update::REQUEST_REMOVED => "The request left the card without an install.",
         crate::update::STAGING_FAILED => "The update could not be written to the card.",
+        crate::update::SOFTWARE_REPLACED => "The card holds another signed release.",
         _ => "The request failed.",
-    }}))})
+    };
+    let summary = SoftwareSummary {
+        request_id: &request.request_id,
+        domain: "update",
+        boot_id: &request.boot_id,
+        card_id: &request.card_id,
+        status: request.status,
+        phase: request.phase,
+        progress: None,
+        cancellable: request.cancellable,
+        required_action: match request.phase {
+            SoftwarePhase::AwaitingConfirmation => Some("confirmOnCamera"),
+            SoftwarePhase::AwaitingRestart => Some("restartCamera"),
+            _ => None,
+        },
+        result: (request.status == SoftwareStatus::Succeeded)
+            .then(|| json!({"identity": request.expected.digest})),
+        error: request
+            .error
+            .as_deref()
+            .map(|code| json!({"code": code, "detail": detail(code)})),
+    };
+    serde_json::to_value(summary).expect("the summary serializes")
 }
 
 /// A request that waits on the camera, or an earlier one whose outcome is
@@ -417,7 +459,7 @@ fn software_pending(card: &crate::update::Card) -> Option<Reply> {
         )))
     };
     match card.state() {
-        Ok("none") => {}
+        Ok(JournalState::None) => {}
         Ok(_) => return pending(),
         Err(error) => return Some(unavailable("card_not_ready", &format!("{error:#}"))),
     }
@@ -439,7 +481,6 @@ mod tests {
     fn service(boot: &str) -> Service {
         let mut service = Service::new(boot.into());
         service.card_identity = |_| Ok("card-test".into());
-        service.release_keys = vec![testing::release_key()];
         service
     }
     fn card() -> (tempfile::TempDir, crate::update::Card) {
@@ -450,7 +491,7 @@ mod tests {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, bytes).unwrap();
         }
-        let card = crate::update::Card::new(root.path());
+        let card = crate::update::Card::with_keys(root.path(), vec![testing::release_key()]);
         (root, card)
     }
     fn request(service: &Service, method: &str, path: &str, length: usize) -> Request {
@@ -463,10 +504,7 @@ mod tests {
             .insert("x-grkit-boot-id".into(), service.boot_id.clone());
         request
     }
-    fn with_env<T>(
-        card: &crate::update::Card,
-        run: impl FnOnce(&Env<'_, crate::System>) -> T,
-    ) -> T {
+    fn with_env<T>(card: &crate::update::Card, run: impl FnOnce(&Env<'_>) -> T) -> T {
         run(&Env {
             files: &crate::System,
             connection: &crate::Connection {
@@ -570,7 +608,7 @@ mod tests {
         let cancelled = call(&restarted, &card, "POST", "/v1/update/cancel", b"");
         assert_eq!(cancelled.status, 200, "{}", body(&cancelled));
         assert_eq!(body(&cancelled)["status"], "cancelled");
-        assert_eq!(card.state().unwrap(), "none");
+        assert_eq!(card.state().unwrap(), JournalState::None);
         // A cancel that the phone sends again has the same answer.
         let repeated = call(&restarted, &card, "POST", "/v1/update/cancel", b"");
         assert_eq!(body(&repeated)["status"], "cancelled");
@@ -596,7 +634,7 @@ mod tests {
         }
         let query = call(&service, &card, "POST", "/v1/update/cancel?force=1", b"");
         assert_eq!(body(&query)["code"], "invalid_query");
-        assert_eq!(card.state().unwrap(), "none");
+        assert_eq!(card.state().unwrap(), JournalState::None);
     }
 
     #[test]
@@ -610,7 +648,7 @@ mod tests {
         let invalid = call(&service, &card, "PUT", "/v1/update", b"not a package");
         assert_eq!(invalid.status, 422);
         assert_eq!(body(&invalid)["code"], "software_request_rejected");
-        assert_eq!(card.state().unwrap(), "none");
+        assert_eq!(card.state().unwrap(), JournalState::None);
     }
 
     #[test]
@@ -627,7 +665,7 @@ mod tests {
         assert!(body(&call(&other, &card, "GET", "/v1/update", b""))["request"].is_null());
         let cancel = call(&other, &card, "POST", "/v1/update/cancel", b"");
         assert_eq!(body(&cancel)["code"], "no_software_request");
-        assert_eq!(card.state().unwrap(), "waiting");
+        assert_eq!(card.state().unwrap(), JournalState::Waiting);
     }
 
     #[test]

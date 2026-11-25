@@ -2,7 +2,7 @@
 #define GRKIT_CONTROL_MODULES_H
 /* The commands of the Wi-Fi service for the module settings (grkit_core::abi,
    CONTROL_MODULES_READ and after), answered in the poll of the mailbox
-   (runtime/control_looks.h). They read the texts and values of the module
+   (runtime/control.h). They read the texts and values of the module
    pages, and change Enable, the values, Options, Order, and ADJ Order with
    the code of those MENU rows, so a change saves and applies as in MENU.
    Two more read and set the rows of GRKit Settings in the same way.
@@ -114,25 +114,25 @@ static CONTROL_FRAME u32 control_module_entry(volatile u32 *h,u32 module,u32 pla
     u32 slot=control_options_page(h,module), ordered=slot!=CONTROL_NO_OPTIONS ? control_sequence(h,values) : 0;
     u32 status=manage_status(h,module), word, s, name;
     const volatile u16 *units=(const volatile u16 *)MANAGE_MAP(manage_entry(h,module)+MANAGE_NAME);
-    if(at+GRKIT_CONTROL_MODULE_ENTRY+8U*settings+((ordered+3U)&~3U)>CONTROL_PAYLOAD_BYTES) return 0;
+    if(at+GRKIT_CONTROL_MODULE_ENTRY+8U*settings+((ordered+3U)&~3U)>GRKIT_CONTROL_PAYLOAD_BYTES) return 0;
     word=module|place<<GRKIT_CONTROL_MODULE_PLACE_SHIFT;
     word|=(status==MANAGE_LOADED ? (manage_halted(h,module) ? GRKIT_CONTROL_MODULE_STOPPED : GRKIT_CONTROL_MODULE_RUNNING) :
            status==MANAGE_SAFE ? GRKIT_CONTROL_MODULE_SAFE : GRKIT_CONTROL_MODULE_FAILED)<<GRKIT_CONTROL_MODULE_STATUS_SHIFT;
     if(!manage_off(h,module)) word|=GRKIT_CONTROL_MODULE_ENABLED;
     word|=flags;
-    control_looks_put(out+at,word);
+    control_put(out+at,word);
     /* The file name, without the error status after it. */
-    for(s=0,name=1;s<8U;++s) {
+    for(s=0,name=1;s<GRKIT_CONTROL_MODULE_NAME_BYTES;++s) {
         u32 unit=name ? units[s] : 0;
         if(!unit || unit==' ') { name=0; unit=0; }
-        out[at+4U+s]=(u8)unit;
+        out[at+GRKIT_CONTROL_MODULE_NAME_AT+s]=(u8)unit;
     }
-    control_looks_put(out+at+12,slot!=CONTROL_NO_OPTIONS ? manage_hidden_values(h,module)&~1U : 0);
-    control_looks_put(out+at+16,settings|ordered<<8);
+    control_put(out+at+GRKIT_CONTROL_MODULE_HIDDEN_AT,slot!=CONTROL_NO_OPTIONS ? manage_hidden_values(h,module)&~1U : 0);
+    control_put(out+at+GRKIT_CONTROL_MODULE_SIZES_AT,settings|ordered<<8);
     at+=GRKIT_CONTROL_MODULE_ENTRY;
     for(s=0;s<settings;++s,at+=8) {
-        control_looks_put(out+at,control_module_key(h,rows[s].handle));
-        control_looks_put(out+at+4,setting_value(h,rows[s].handle));
+        control_put(out+at,control_module_key(h,rows[s].handle));
+        control_put(out+at+4,setting_value(h,rows[s].handle));
     }
     for(s=0;s<ordered;++s) out[at+s]=values[s];
     for(;s&3U;++s) out[at+s]=0;
@@ -143,8 +143,8 @@ static CONTROL_FRAME u32 control_modules_read(volatile u32 *h,const u8 *payload,
     ManagePlaces p;
     u8 list[MANAGE_MODULES], places[MANAGE_MODULES];
     u32 count=manage_count(h), first, n=0, seen=0, roots=0, placed, i, k=0, at=GRKIT_CONTROL_MODULES_HEADER, next;
-    if(length!=4) return CONTROL_BAD_LENGTH;
-    first=control_looks_word(payload);
+    if(length!=4) return GRKIT_CONTROL_BAD_LENGTH;
+    first=control_word(payload);
     manage_places(h,&p);
     for(i=0;i<MANAGE_PINS;++i) if(p.pins[i]<MANAGE_MODULES) { places[n]=GRKIT_CONTROL_MODULE_TOOLBAR; list[n++]=(u8)p.pins[i]; }
     for(i=0;i<p.roots;++i) { roots|=1U<<p.root[i]; places[n]=GRKIT_CONTROL_MODULE_ROOT; list[n++]=(u8)p.root[i]; }
@@ -166,19 +166,19 @@ static CONTROL_FRAME u32 control_modules_read(volatile u32 *h,const u8 *payload,
         places[next++]=places[i];
     }
     n=next;
-    if(first>n) return CONTROL_INVALID;
+    if(first>n) return GRKIT_CONTROL_INVALID;
     for(i=first;i<n;++i,++k) {
         next=control_module_entry(h,list[i],places[i],(roots>>list[i]&1U ? GRKIT_CONTROL_MODULE_ORDERABLE : 0)|
                                   (placed>>list[i]&1U ? GRKIT_CONTROL_MODULE_PLACEABLE : 0),out,at);
         if(!next) break;
         at=next;
     }
-    control_looks_put(out,n);
-    control_looks_put(out+4,h[GRKIT_HOST_STATE_CHANGES/4]);
-    control_looks_put(out+8,!manage_grkit_off(h));
-    control_looks_put(out+12,first);
-    control_looks_put(out+16,k);
-    control_looks_put(out+20,h[GRKIT_HOST_CAPABILITIES/4]);
+    control_put(out,n);
+    control_put(out+4,h[GRKIT_HOST_STATE_CHANGES/4]);
+    control_put(out+8,!manage_grkit_off(h));
+    control_put(out+12,first);
+    control_put(out+16,k);
+    control_put(out+20,h[GRKIT_HOST_CAPABILITIES/4]);
     *size=at;
     return 0;
 }
@@ -191,10 +191,10 @@ static void control_text_record(ControlTexts *w,u32 kind,u32 a,u32 b,const u16 *
     if(w->index<w->cursor) { ++w->index; return; }
     while(text && units<GRKIT_CONTROL_MODULE_TEXT_UNITS && text[units]) ++units;
     size=12U+((2U*units+3U)&~3U);
-    if(w->at+size>CONTROL_PAYLOAD_BYTES) { w->full=1; return; }
-    control_looks_put(w->out+w->at,kind|units<<8);
-    control_looks_put(w->out+w->at+4,a);
-    control_looks_put(w->out+w->at+8,b);
+    if(w->at+size>GRKIT_CONTROL_PAYLOAD_BYTES) { w->full=1; return; }
+    control_put(w->out+w->at,kind|units<<8);
+    control_put(w->out+w->at+4,a);
+    control_put(w->out+w->at+8,b);
     for(i=0;i<units;++i) {
         w->out[w->at+12U+2U*i]=(u8)text[i];
         w->out[w->at+13U+2U*i]=(u8)(text[i]>>8);
@@ -251,13 +251,13 @@ static CONTROL_FRAME u32 control_module_texts(volatile u32 *h,const u8 *payload,
     u16 name[MANAGE_NAME_UNITS+1U];
     const u16 *title;
     u32 module, language, n, managed, flags, key, group, slot, i, v, values;
-    if(length!=12) return CONTROL_BAD_LENGTH;
-    module=control_looks_word(payload);
-    language=control_looks_word(payload+4);
+    if(length!=12) return GRKIT_CONTROL_BAD_LENGTH;
+    module=control_word(payload);
+    language=control_word(payload+4);
     w.out=out; w.at=GRKIT_CONTROL_MODULE_TEXTS_HEADER; w.index=0;
-    w.cursor=control_looks_word(payload+8); w.count=0; w.full=0;
-    if(language>=GRKIT_TEXT_LANGUAGES) return CONTROL_INVALID;
-    if(module>=manage_count(h)) return CONTROL_CHANGED;
+    w.cursor=control_word(payload+8); w.count=0; w.full=0;
+    if(language>=GRKIT_TEXT_LANGUAGES) return GRKIT_CONTROL_INVALID;
+    if(module>=manage_count(h)) return GRKIT_CONTROL_CHANGED;
     n=control_module_rows(h,module,rows,&managed);
     flags=managed|control_module_flags(h,module,&key);
     control_module_title(h,module,language,name,&title);
@@ -280,27 +280,27 @@ static CONTROL_FRAME u32 control_module_texts(volatile u32 *h,const u8 *payload,
             control_text_record(&w,GRKIT_CONTROL_MODULE_RECORD_VALUE,value,0,control_value_text(h,&rows[i],value,language));
         }
     }
-    control_looks_put(out,w.full ? w.index : GRKIT_CONTROL_MODULE_TEXTS_END);
-    control_looks_put(out+4,w.count);
+    control_put(out,w.full ? w.index : GRKIT_CONTROL_MODULE_TEXTS_END);
+    control_put(out+4,w.count);
     *size=w.at;
     return 0;
 }
 /* The next bytes of tile 0 of a module. */
 static CONTROL_FRAME u32 control_module_tile(volatile u32 *h,const u8 *payload,u32 length,u8 *out,u32 *size) {
     u32 module, offset, tile, address, n, i;
-    if(length!=8) return CONTROL_BAD_LENGTH;
-    module=control_looks_word(payload);
-    offset=control_looks_word(payload+4);
-    if(module>=manage_count(h)) return CONTROL_CHANGED;
-    if(offset>=GRM_TILE_BYTES || offset&3U) return CONTROL_INVALID;
+    if(length!=8) return GRKIT_CONTROL_BAD_LENGTH;
+    module=control_word(payload);
+    offset=control_word(payload+4);
+    if(module>=manage_count(h)) return GRKIT_CONTROL_CHANGED;
+    if(offset>=GRM_TILE_BYTES || offset&3U) return GRKIT_CONTROL_INVALID;
     tile=MANAGE_MAP(manage_entry(h,module)+MANAGE_TILE)[0];
-    if(tile==MANAGE_NO_TILE) return CONTROL_INVALID;
+    if(tile==MANAGE_NO_TILE) return GRKIT_CONTROL_INVALID;
     address=module_tile_address(h,GRKIT_ICON_MODULE_TILE(tile));
-    if(!address) return CONTROL_INVALID;
+    if(!address) return GRKIT_CONTROL_INVALID;
     address+=GRKIT_ICON_STRIDE-GRM_TILE_BYTES;
     n=GRM_TILE_BYTES-offset;
-    if(n>CONTROL_PAYLOAD_BYTES) n=CONTROL_PAYLOAD_BYTES;
-    for(i=0;i<n;i+=4) control_looks_put(out+i,MODULE_TILE_WORD(address,offset+i));
+    if(n>GRKIT_CONTROL_PAYLOAD_BYTES) n=GRKIT_CONTROL_PAYLOAD_BYTES;
+    for(i=0;i<n;i+=4) control_put(out+i,MODULE_TILE_WORD(address,offset+i));
     *size=n;
     return 0;
 }
@@ -312,29 +312,29 @@ static CONTROL_FRAME u32 control_module_set(volatile u32 *h,const u8 *payload,u3
     u8 target[CONTROL_MODULE_ROWS], current[CHOICE_SEQUENCE];
     u32 module, fields, off, hidden, settings, ordered, n, managed, slot, handle=0, c=0, mask=0, i, j, moved=0;
     const u8 *pairs=payload+24, *list;
-    if(length<24 || length&3U) return CONTROL_BAD_LENGTH;
-    module=control_looks_word(payload);
-    fields=control_looks_word(payload+4);
-    off=control_looks_word(payload+8);
-    hidden=control_looks_word(payload+12);
-    settings=control_looks_word(payload+16);
-    ordered=control_looks_word(payload+20);
-    if(settings>CONTROL_MODULE_ROWS || ordered>CHOICE_SEQUENCE || length!=24U+8U*settings+4U*ordered) return CONTROL_BAD_LENGTH;
+    if(length<24 || length&3U) return GRKIT_CONTROL_BAD_LENGTH;
+    module=control_word(payload);
+    fields=control_word(payload+4);
+    off=control_word(payload+8);
+    hidden=control_word(payload+12);
+    settings=control_word(payload+16);
+    ordered=control_word(payload+20);
+    if(settings>CONTROL_MODULE_ROWS || ordered>CHOICE_SEQUENCE || length!=24U+8U*settings+4U*ordered) return GRKIT_CONTROL_BAD_LENGTH;
     list=pairs+8U*settings;
-    if(module>=manage_count(h)) return CONTROL_CHANGED;
+    if(module>=manage_count(h)) return GRKIT_CONTROL_CHANGED;
     if(fields&~(GRKIT_CONTROL_MODULE_SET_ENABLED|GRKIT_CONTROL_MODULE_SET_HIDDEN|GRKIT_CONTROL_MODULE_SET_ORDER) || off>1U)
-        return CONTROL_INVALID;
+        return GRKIT_CONTROL_INVALID;
     n=control_module_rows(h,module,rows,&managed);
     for(i=0;i<settings;++i) {
-        u32 key=control_looks_word(pairs+8U*i), value=control_looks_word(pairs+8U*i+4U);
+        u32 key=control_word(pairs+8U*i), value=control_word(pairs+8U*i+4U);
         for(j=0;j<n && control_module_key(h,rows[j].handle)!=key;++j) {}
-        if(j>=n || !control_row_offers(h,&rows[j],value)) return CONTROL_INVALID;
+        if(j>=n || !control_row_offers(h,&rows[j],value)) return GRKIT_CONTROL_INVALID;
         target[i]=(u8)j;
-        for(j=0;j<i;++j) if(target[j]==target[i]) return CONTROL_INVALID;
+        for(j=0;j<i;++j) if(target[j]==target[i]) return GRKIT_CONTROL_INVALID;
     }
     slot=control_options_page(h,module);
     if(slot==CONTROL_NO_OPTIONS) {
-        if(fields&(GRKIT_CONTROL_MODULE_SET_HIDDEN|GRKIT_CONTROL_MODULE_SET_ORDER)) return CONTROL_INVALID;
+        if(fields&(GRKIT_CONTROL_MODULE_SET_HIDDEN|GRKIT_CONTROL_MODULE_SET_ORDER)) return GRKIT_CONTROL_INVALID;
     } else {
         u32 allowed=0, left=0;
         handle=CHOICE_ENTRY(h)[1];
@@ -345,37 +345,37 @@ static CONTROL_FRAME u32 control_module_set(volatile u32 *h,const u8 *payload,u3
         }
         mask=manage_hidden_values(h,module)&~1U;
         if(fields&GRKIT_CONTROL_MODULE_SET_HIDDEN) {
-            if(hidden&~allowed || (c>1U && !left && !(allowed&~hidden))) return CONTROL_INVALID;
+            if(hidden&~allowed || (c>1U && !left && !(allowed&~hidden))) return GRKIT_CONTROL_INVALID;
             mask=hidden;
         }
         /* A value that ADJ does not show is not a value to choose. */
         for(i=0;i<settings;++i) {
-            u32 value=control_looks_word(pairs+8U*i+4U);
-            if(rows[target[i]].handle==handle && value<32U && mask>>value&1U) return CONTROL_INVALID;
+            u32 value=control_word(pairs+8U*i+4U);
+            if(rows[target[i]].handle==handle && value<32U && mask>>value&1U) return GRKIT_CONTROL_INVALID;
         }
         if(fields&GRKIT_CONTROL_MODULE_SET_ORDER) {
-            if(ordered!=c) return CONTROL_INVALID;
+            if(ordered!=c) return GRKIT_CONTROL_INVALID;
             for(i=0;i<c;++i) {
-                u32 value=control_looks_word(list+4U*i);
+                u32 value=control_word(list+4U*i);
                 for(j=0;j<c && current[j]!=value;++j) {}
-                if(j>=c) return CONTROL_INVALID;
-                for(j=0;j<i;++j) if(control_looks_word(list+4U*j)==value) return CONTROL_INVALID;
+                if(j>=c) return GRKIT_CONTROL_INVALID;
+                for(j=0;j<i;++j) if(control_word(list+4U*j)==value) return GRKIT_CONTROL_INVALID;
                 moved|=value!=current[i];
             }
             /* The first row stays first. */
-            if(c && control_looks_word(list)!=current[0]) return CONTROL_INVALID;
+            if(c && control_word(list)!=current[0]) return GRKIT_CONTROL_INVALID;
             /* The new order takes the place of the old one. */
-            for(i=0;i<c;++i) current[i]=(u8)control_looks_word(list+4U*i);
+            for(i=0;i<c;++i) current[i]=(u8)control_word(list+4U*i);
             h[GRKIT_HOST_MODULE_CHOICE/4]=slot;
-            if(moved && !control_page_orders(h,current,c)) return CONTROL_INVALID;
+            if(moved && !control_page_orders(h,current,c)) return GRKIT_CONTROL_INVALID;
         }
     }
-    if(!control_looks_idle(h)) return CONTROL_BUSY;
+    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
     if(fields&GRKIT_CONTROL_MODULE_SET_ENABLED) {
         setting_store(h,manage_off_handle(h,module),off);
         manage_off_changed(h);
     }
-    for(i=0;i<settings;++i) setting_store(h,rows[target[i]].handle,control_looks_word(pairs+8U*i+4U));
+    for(i=0;i<settings;++i) setting_store(h,rows[target[i]].handle,control_word(pairs+8U*i+4U));
     if(moved) option_store_order(h,module,current+1,c-1U);
     if(fields&GRKIT_CONTROL_MODULE_SET_HIDDEN) {
         u32 value;
@@ -391,16 +391,16 @@ static CONTROL_FRAME u32 control_modules_order(volatile u32 *h,const u8 *payload
     ManagePlaces p;
     u32 i, j, seen=0;
     manage_places(h,&p);
-    if(length!=4U*p.roots) return CONTROL_CHANGED;
+    if(length!=4U*p.roots) return GRKIT_CONTROL_CHANGED;
     for(i=0;i<p.roots;++i) {
-        u32 module=control_looks_word(payload+4U*i);
+        u32 module=control_word(payload+4U*i);
         for(j=0;j<p.roots && p.root[j]!=module;++j) {}
-        if(j>=p.roots) return CONTROL_CHANGED;
-        if(seen>>module&1U) return CONTROL_INVALID;
+        if(j>=p.roots) return GRKIT_CONTROL_CHANGED;
+        if(seen>>module&1U) return GRKIT_CONTROL_INVALID;
         seen|=1U<<module;
     }
-    if(!control_looks_idle(h)) return CONTROL_BUSY;
-    for(i=0;i<p.roots;++i) setting_store(h,manage_off_handle(h,control_looks_word(payload+4U*i))+1U,i+1U);
+    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    for(i=0;i<p.roots;++i) setting_store(h,manage_off_handle(h,control_word(payload+4U*i))+1U,i+1U);
     return 0;
 }
 /* The places of each module that ADJ can show, as MENU > ADJ Order sets
@@ -416,22 +416,22 @@ static CONTROL_FRAME u32 control_modules_layout(volatile u32 *h,const u8 *payloa
     for(i=0;i<p.roots;++i) placeable|=1U<<p.root[i];
     for(i=0;i<p.hiddens;++i) placeable|=1U<<p.hidden[i];
     n=pins+p.roots+p.hiddens;
-    if(length&3U || length>4U*MANAGE_MODULES) return CONTROL_BAD_LENGTH;
-    if(length!=4U*n) return CONTROL_CHANGED;
+    if(length&3U || length>4U*MANAGE_MODULES) return GRKIT_CONTROL_BAD_LENGTH;
+    if(length!=4U*n) return GRKIT_CONTROL_CHANGED;
     for(i=0,pins=0;i<n;++i) {
-        u32 word=control_looks_word(payload+4U*i), module=word&0xffU;
+        u32 word=control_word(payload+4U*i), module=word&0xffU;
         u32 place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT;
         if(word&~(0xffU|GRKIT_CONTROL_MODULE_PLACE_MASK<<GRKIT_CONTROL_MODULE_PLACE_SHIFT) || place>GRKIT_CONTROL_MODULE_HIDDEN ||
-           place<last) return CONTROL_INVALID;
+           place<last) return GRKIT_CONTROL_INVALID;
         last=place;
-        if(place==GRKIT_CONTROL_MODULE_TOOLBAR && ++pins>MANAGE_PINS) return CONTROL_INVALID;
-        if(module>=MANAGE_MODULES || !(placeable>>module&1U)) return CONTROL_CHANGED;
-        if(seen>>module&1U) return CONTROL_INVALID;
+        if(place==GRKIT_CONTROL_MODULE_TOOLBAR && ++pins>MANAGE_PINS) return GRKIT_CONTROL_INVALID;
+        if(module>=MANAGE_MODULES || !(placeable>>module&1U)) return GRKIT_CONTROL_CHANGED;
+        if(seen>>module&1U) return GRKIT_CONTROL_INVALID;
         seen|=1U<<module;
     }
-    if(!control_looks_idle(h)) return CONTROL_BUSY;
+    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
     for(i=0,j=0;i<n;++i) {
-        u32 word=control_looks_word(payload+4U*i), module=word&0xffU, place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT, position;
+        u32 word=control_word(payload+4U*i), module=word&0xffU, place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT, position;
         if(place==GRKIT_CONTROL_MODULE_TOOLBAR) position=MANAGE_POS_PIN+j++;
         else if(place==GRKIT_CONTROL_MODULE_ROOT) position=++roots;
         else position=MANAGE_POS_HIDDEN;
@@ -462,20 +462,20 @@ static const ControlSetting control_settings[GRKIT_CONTROL_SETTINGS]={
 };
 static CONTROL_FRAME u32 control_settings_read(volatile u32 *h,u32 length,u8 *out,u32 *size) {
     u32 i;
-    if(length) return CONTROL_BAD_LENGTH;
+    if(length) return GRKIT_CONTROL_BAD_LENGTH;
     for(i=0;i<GRKIT_CONTROL_SETTINGS;++i)
-        control_looks_put(out+4U*i,control_settings[i].handle(h) ? control_settings[i].value(h) : GRKIT_CONTROL_SETTING_NONE);
+        control_put(out+4U*i,control_settings[i].handle(h) ? control_settings[i].value(h) : GRKIT_CONTROL_SETTING_NONE);
     *size=4U*GRKIT_CONTROL_SETTINGS;
     return 0;
 }
 static CONTROL_FRAME u32 control_settings_set(volatile u32 *h,const u8 *payload,u32 length) {
     u32 index, value;
-    if(length!=8) return CONTROL_BAD_LENGTH;
-    index=control_looks_word(payload);
-    value=control_looks_word(payload+4);
+    if(length!=8) return GRKIT_CONTROL_BAD_LENGTH;
+    index=control_word(payload);
+    value=control_word(payload+4);
     if(index>=GRKIT_CONTROL_SETTINGS || !control_settings[index].handle(h) || value>=control_settings[index].values)
-        return CONTROL_INVALID;
-    if(!control_looks_idle(h)) return CONTROL_BUSY;
+        return GRKIT_CONTROL_INVALID;
+    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
     control_settings[index].set(h,value);
     return 0;
 }
@@ -484,7 +484,7 @@ static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request 
     /* ADJ Order reads a mask that only the menu refreshes, so it can be
        unset before MENU first opens. While a GRKit page shows, the page keeps
        the mask that it read. */
-    if(control_looks_idle(h)) manage_adj_refresh(h);
+    if(control_idle(h)) manage_adj_refresh(h);
     switch(request->command) {
     case GRKIT_CONTROL_MODULES_READ: result=control_modules_read(h,request->payload,request->length,request->payload,size); break;
     case GRKIT_CONTROL_MODULE_TEXTS: result=control_module_texts(h,request->payload,request->length,request->payload,size); break;
@@ -494,7 +494,7 @@ static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request 
     case GRKIT_CONTROL_MODULES_LAYOUT: result=control_modules_layout(h,request->payload,request->length); break;
     case GRKIT_CONTROL_SETTINGS_READ: result=control_settings_read(h,request->length,request->payload,size); break;
     case GRKIT_CONTROL_SETTINGS_SET: result=control_settings_set(h,request->payload,request->length); break;
-    default: result=CONTROL_UNSUPPORTED; break;
+    default: result=GRKIT_CONTROL_UNSUPPORTED; break;
     }
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
     return result;

@@ -14,6 +14,7 @@ filesearch 'C:\SCRIPT\GRKIT\SERVE.BIN'
 if result <> 0 hasserve = 1
 :resident_serve
 updatepolls = 0
+updlooked = 0
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.VER'
 if result = 0 goto resident_updated
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.REQ'
@@ -430,9 +431,14 @@ return
 :update_poll
 updstate = registry[1643]
 if updstate = 2 goto update_confirmed
+if updlooked = 0 goto update_count
+updwlan = registry[1646] + updstate
+if updwlan = 0 return
+:update_count
 updatepolls = updatepolls + 1
 if updatepolls < 5 return
 updatepolls = 0
+updlooked = 1
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.REQ'
 if result <> 0 goto update_waits
 if updstate = 1 goto update_none

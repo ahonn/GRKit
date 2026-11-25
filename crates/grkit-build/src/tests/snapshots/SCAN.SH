@@ -8,7 +8,7 @@ serve)
       echo $! >/tmp/grkit-serve
       wait $! && break
       n=$((n + 1))
-      [ $n -gt 1 ] && break
+      if [ $n -gt 1 ]; then /media/storage1/SCRIPT/GRKIT/SERVE.BIN --mark-stopped; break; fi
       sleep 1
       [ -e /tmp/grkit-serve ] || break
     done

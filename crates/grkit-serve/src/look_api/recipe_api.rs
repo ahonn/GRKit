@@ -2,12 +2,15 @@
 //! recipes live in the App task, so each change applies at once, and the
 //! camera saves the recipe file as after a change in MENU. A recipe is
 //! found by its ID, which stays with it when it moves.
-use super::{header, problem, try_lock, LookApi, RequestContext, Result};
+use super::{
+    codec::{word, Codes, Page},
+    header, problem, try_lock, LookApi, RequestContext, Result,
+};
 use crate::{
     api::Reply,
     changes::{Changed, Changes},
     protocol::Problem,
-    runtime_backend::{camera_busy, recipe_name, RuntimeBackend},
+    runtime_backend::{recipe_name, RuntimeBackend},
     Request,
 };
 use grkit_core::abi::*;
@@ -28,64 +31,33 @@ struct List {
     undo: u32,
 }
 
-fn word(bytes: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
-}
+const CODES: Codes = Codes {
+    list: "The recipe list",
+    changed: "The camera does not list this recipe. Read the recipes again.",
+    unsupported: "This camera has no recipes to manage.",
+    invalid: None,
+};
 fn malformed() -> Problem {
-    Problem::new(
-        503,
-        "runtime_invalid",
-        "The recipe list of the camera is malformed.",
-    )
+    CODES.malformed()
 }
 /// The result of a recipe command, for the codes every command shares.
 fn checked(result: u32, bytes: Vec<u8>) -> Result<Vec<u8>> {
-    match result {
-        0 => Ok(bytes),
-        CONTROL_BUSY => Err(camera_busy()),
-        CONTROL_CHANGED => Err(problem(
-            409,
-            "runtime_changed",
-            "The camera does not list this recipe. Read the recipes again.",
-        )),
-        CONTROL_UNSUPPORTED => Err(problem(
-            503,
-            "runtime_protocol_unsupported",
-            "This camera has no recipes to manage.",
-        )),
-        _ => Err(Problem::new(
-            503,
-            "runtime_invalid",
-            "The camera rejected the command.",
-        )),
-    }
+    CODES.checked((result, bytes))
 }
 
 fn read_list(backend: &mut dyn RuntimeBackend) -> Result<List> {
     let mut entries = Vec::new();
-    let mut first = 0u32;
-    loop {
-        let (result, bytes) = backend.exchange(CONTROL_RECIPES_READ, &first.to_le_bytes())?;
-        let bytes = checked(result, bytes)?;
-        let header = |i: usize| word(&bytes, 4 * i).ok_or_else(malformed);
-        let (count, on, current, revision, undo, at, k) = (
-            header(0)?,
-            header(1)?,
-            header(2)?,
-            header(3)?,
-            header(4)?,
-            header(5)?,
-            header(6)?,
-        );
-        if at != first
-            || count as usize > RECIPE_SLOTS
+    let last = CODES.read_pages(backend, CONTROL_RECIPES_READ, |bytes| {
+        let header = |i: usize| word(bytes, 4 * i).ok_or_else(malformed);
+        let (count, at, k) = (header(0)?, header(5)?, header(6)?);
+        if count as usize > RECIPE_SLOTS
             || bytes.len() != CONTROL_RECIPES_HEADER + k as usize * CONTROL_RECIPE_ENTRY
         {
             return Err(malformed());
         }
         for i in 0..k as usize {
             let base = CONTROL_RECIPES_HEADER + i * CONTROL_RECIPE_ENTRY;
-            let at = |w: usize| word(&bytes, base + 4 * w).ok_or_else(malformed);
+            let at = |w: usize| word(bytes, base + 4 * w).ok_or_else(malformed);
             let mut words = [0; RECIPE_WORDS];
             for (w, slot) in words.iter_mut().enumerate() {
                 *slot = at(1 + w)?;
@@ -99,23 +71,24 @@ fn read_list(backend: &mut dyn RuntimeBackend) -> Result<List> {
                 name: recipe_name(&name),
             });
         }
-        first += k;
-        if first >= count || k == 0 {
-            if first != count {
-                return Err(malformed());
-            }
-            let current = (current != CONTROL_RECIPE_NONE)
-                .then(|| entries.get(current as usize).map(|e| e.id))
-                .flatten();
-            return Ok(List {
-                entries,
-                on: on as usize,
-                current,
-                revision,
-                undo,
-            });
-        }
-    }
+        Ok(Page {
+            count,
+            at,
+            entries: k,
+        })
+    })?;
+    let header = |i: usize| word(&last, 4 * i).ok_or_else(malformed);
+    let (on, current, revision, undo) = (header(1)?, header(2)?, header(3)?, header(4)?);
+    let current = (current != CONTROL_RECIPE_NONE)
+        .then(|| entries.get(current as usize).map(|e| e.id))
+        .flatten();
+    Ok(List {
+        entries,
+        on: on as usize,
+        current,
+        revision,
+        undo,
+    })
 }
 
 /// The 7-bit name words of `name`, which `check_name` accepted.
@@ -519,7 +492,7 @@ mod tests {
         let boot = "b";
         let context = RequestContext {
             boot_id: boot,
-            card_id: "c",
+            card_id: "c".into(),
             software_pending: false,
             root: std::path::Path::new("/"),
             release_keys: &[],

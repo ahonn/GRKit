@@ -8,9 +8,10 @@
 use grkit_serve::{
     api::{Reply, Service},
     head_end, parse, read_head,
+    route::Resource,
     transport::{admit, drain, ConnectionSlot, DeadlineReader, IDLE_TIMEOUT, TRANSFER_TIMEOUT},
     update::{Card, Device, MAX_PACKAGE},
-    Connection, Env, Response, System, PORT,
+    Connection, Env, System, PORT,
 };
 #[cfg(target_os = "linux")]
 use std::{
@@ -108,6 +109,9 @@ fn main() -> ExitCode {
         nonce,
     );
     let service = Arc::new(Service::with_runtime_backend(boot_id, Box::new(backend)));
+    // One card for the service: it keeps the summary of its files between
+    // requests (`Card::forget_summary`).
+    let card = Arc::new(Card::new(grkit_core::card::LINUX_CARD));
     let card_access = Arc::new(Mutex::new(()));
     // No background work on the card: the card cannot change while the
     // service runs (removing it powers the camera off), so each request reads
@@ -142,13 +146,14 @@ fn main() -> ExitCode {
         match listener.accept() {
             Ok((mut stream, _)) => {
                 let service = Arc::clone(&service);
+                let card = Arc::clone(&card);
                 let card_access = Arc::clone(&card_access);
                 let upload = Arc::clone(&upload);
                 let _ = thread::Builder::new()
                     .name("grkit-http".into())
                     .spawn(move || {
                         let _slot = slot;
-                        let _ = serve(&mut stream, &card_access, &upload, &service);
+                        let _ = serve(&mut stream, &card, &card_access, &upload, &service);
                     });
             }
             Err(_) => thread::sleep(ACCEPT_PAUSE),
@@ -276,6 +281,7 @@ fn run_from_ram() -> io::Result<()> {
 
 fn serve(
     stream: &mut TcpStream,
+    card: &Card,
     card_access: &Mutex<()>,
     upload: &Mutex<()>,
     service: &Arc<Service>,
@@ -290,16 +296,17 @@ fn serve(
     let mut reader = DeadlineReader::new(stream);
     let mut bytes = read_head(&mut reader)?;
     let response: Reply = match parse(&bytes) {
-        None => Response::error(400, "bad request").into(),
+        None => Reply::error(400, "bad request"),
         Some(request) if request.length > MAX_PACKAGE => {
-            Response::error(413, "the package is too large").into()
+            Reply::error(413, "the package is too large")
         }
         Some(request) => {
             if let Err(response) = admit(&request, local) {
                 stream.write_all(&response.to_bytes())?;
                 return stream.shutdown(Shutdown::Both);
             }
-            if request.path == "/v1/changes" && request.method == "GET" {
+            let resource = Resource::of(&request.path);
+            if resource == Some(Resource::Changes) && request.method == "GET" {
                 let subscription = match service.changes.reserve(&service.boot_id) {
                     Ok(subscription) => subscription,
                     Err(problem) => {
@@ -325,7 +332,7 @@ fn serve(
                     Err(std::sync::TryLockError::Poisoned(poisoned)) => Some(poisoned.into_inner()),
                     Err(std::sync::TryLockError::WouldBlock) => {
                         stream.write_all(
-                            &Response::error(409, "An upload is already active").to_bytes(),
+                            &Reply::error(409, "An upload is already active").to_bytes(),
                         )?;
                         return stream.shutdown(Shutdown::Both);
                     }
@@ -337,11 +344,13 @@ fn serve(
             let mut body = bytes.split_off(head_end(&bytes).unwrap_or(bytes.len()));
             body.truncate(request.length);
             let rest = request.length - body.len();
-            let card = Card::new(grkit_core::card::LINUX_CARD);
+            // One allocation of the declared length: growing the buffer
+            // while it reads would take up to twice the package.
+            body.reserve_exact(rest);
             let env = Env {
                 files: &System,
                 connection: &connection,
-                card: &card,
+                card,
                 device: &device,
             };
             // Answer a software request that cannot succeed before its package
@@ -379,7 +388,7 @@ fn serve(
             if body.len() < request.length {
                 return Err(io::ErrorKind::UnexpectedEof.into());
             }
-            if request.path == "/v1/ping" {
+            if resource == Some(Resource::Ping) {
                 service.handle(&request, &body, &env)
             } else {
                 // The existing update journal cannot be read midway through
@@ -482,6 +491,7 @@ mod tests {
             let (mut stream, _) = listener.accept().unwrap();
             serve(
                 &mut stream,
+                &Card::new(grkit_core::card::LINUX_CARD),
                 &Mutex::new(()),
                 &worker_upload,
                 &Arc::new(Service::new("test".into())),
@@ -508,18 +518,19 @@ mod tests {
     fn incomplete_upload_does_not_block_ping() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
-        let card = Arc::new(Mutex::new(()));
+        let card_access = Arc::new(Mutex::new(()));
         let upload = Arc::new(Mutex::new(()));
         let server = thread::spawn(move || {
             let mut workers = Vec::new();
             for _ in 0..2 {
                 let (mut stream, _) = listener.accept().unwrap();
-                let card = Arc::clone(&card);
+                let card_access = Arc::clone(&card_access);
                 let upload = Arc::clone(&upload);
                 workers.push(thread::spawn(move || {
                     serve(
                         &mut stream,
-                        &card,
+                        &Card::new(grkit_core::card::LINUX_CARD),
+                        &card_access,
                         &upload,
                         &Arc::new(Service::new("test".into())),
                     )

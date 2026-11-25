@@ -3,11 +3,11 @@
 //! that MENU can make. The phone has no list of modules of its own. A module
 //! list is fixed for a start of the camera, so the service keeps each
 //! catalog and icon that it read until the service ends.
-use super::{header, lock, problem, try_lock, LookApi, RequestContext, Result};
-use crate::{
-    api::Reply, protocol::Problem, runtime_backend::camera_busy, runtime_backend::RuntimeBackend,
-    Request,
+use super::{
+    codec::{word, Codes, Page},
+    header, lock, problem, try_lock, LookApi, RequestContext, Result,
 };
+use crate::{api::Reply, protocol::Problem, runtime_backend::RuntimeBackend, Request};
 use grkit_core::{
     abi::*, capabilities, card, effects::ICON_SIZE, language::Language, packaging::sha256,
 };
@@ -62,11 +62,12 @@ struct ModuleView {
 
 impl ModuleView {
     fn of(context: &RequestContext<'_>) -> Self {
-        let package = fs::read_to_string(context.root.join(card::PACKAGE_LIST))
+        let package = fs::read(context.root.join(card::PACKAGE_LIST))
             .ok()
             .map(|list| {
-                list.lines()
-                    .filter_map(|line| line.strip_suffix(".GRM").map(str::to_owned))
+                grkit_core::packaging::PackageList::parse(&list)
+                    .modules()
+                    .map(str::to_owned)
                     .collect()
             });
         Self {
@@ -76,15 +77,14 @@ impl ModuleView {
     }
 }
 
-fn word(bytes: &[u8], at: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?))
-}
+const CODES: Codes = Codes {
+    list: "The module list",
+    changed: "The camera does not list this module. Read the modules again.",
+    unsupported: "This camera cannot manage module settings.",
+    invalid: Some(|| invalid("The camera does not offer this change.")),
+};
 fn malformed() -> Problem {
-    problem(
-        503,
-        "runtime_invalid",
-        "The module list of the camera is malformed.",
-    )
+    CODES.malformed()
 }
 fn not_found() -> Problem {
     problem(
@@ -97,26 +97,7 @@ fn invalid(detail: &'static str) -> Problem {
     problem(422, "invalid_request", detail)
 }
 fn checked(result: u32, bytes: Vec<u8>) -> Result<Vec<u8>> {
-    match result {
-        0 => Ok(bytes),
-        CONTROL_BUSY => Err(camera_busy()),
-        CONTROL_CHANGED => Err(problem(
-            409,
-            "runtime_changed",
-            "The camera does not list this module. Read the modules again.",
-        )),
-        CONTROL_INVALID => Err(invalid("The camera does not offer this change.")),
-        CONTROL_UNSUPPORTED => Err(problem(
-            503,
-            "runtime_protocol_unsupported",
-            "This camera cannot manage module settings.",
-        )),
-        _ => Err(problem(
-            503,
-            "runtime_invalid",
-            "The camera rejected the command.",
-        )),
-    }
+    CODES.checked((result, bytes))
 }
 fn key_text(key: u32) -> String {
     format!("{key:08x}")
@@ -131,14 +112,11 @@ fn bits(mask: u32) -> Vec<u32> {
 }
 
 fn read_states(backend: &mut dyn RuntimeBackend) -> Result<States> {
-    let (mut modules, mut first) = (Vec::new(), 0u32);
-    loop {
-        let (result, bytes) = backend.exchange(CONTROL_MODULES_READ, &first.to_le_bytes())?;
-        let bytes = checked(result, bytes)?;
-        let head = |i: usize| word(&bytes, 4 * i).ok_or_else(malformed);
-        let (count, revision, running, at, k) = (head(0)?, head(1)?, head(2)?, head(3)?, head(4)?);
-        let running_capabilities = head(5)?;
-        if at != first || count as usize > MODULES_MAX {
+    let mut modules = Vec::new();
+    let last = CODES.read_pages(backend, CONTROL_MODULES_READ, |bytes| {
+        let head = |i: usize| word(bytes, 4 * i).ok_or_else(malformed);
+        let (count, at, k) = (head(0)?, head(3)?, head(4)?);
+        if count as usize > MODULES_MAX {
             return Err(malformed());
         }
         let mut offset = CONTROL_MODULES_HEADER;
@@ -146,21 +124,22 @@ fn read_states(backend: &mut dyn RuntimeBackend) -> Result<States> {
             let entry = bytes
                 .get(offset..offset + CONTROL_MODULE_ENTRY)
                 .ok_or_else(malformed)?;
-            let value = word(entry, 0).ok_or_else(malformed)?;
-            let id: String = entry[4..12]
+            let field = |at: usize| word(entry, at).ok_or_else(malformed);
+            let value = field(0)?;
+            let id: String = entry[CONTROL_MODULE_NAME_AT..][..CONTROL_MODULE_NAME_BYTES]
                 .iter()
                 .take_while(|byte| **byte != 0)
                 .map(|byte| char::from(*byte))
                 .collect();
-            let hidden = word(entry, 12).ok_or_else(malformed)?;
-            let sizes = word(entry, 16).ok_or_else(malformed)?;
+            let hidden = field(CONTROL_MODULE_HIDDEN_AT)?;
+            let sizes = field(CONTROL_MODULE_SIZES_AT)?;
             let (settings, ordered) = ((sizes & 0xff) as usize, (sizes >> 8) as usize);
             offset += CONTROL_MODULE_ENTRY;
             let mut values = Vec::with_capacity(settings);
             for s in 0..settings {
                 values.push((
-                    word(&bytes, offset + 8 * s).ok_or_else(malformed)?,
-                    word(&bytes, offset + 8 * s + 4).ok_or_else(malformed)?,
+                    word(bytes, offset + 8 * s).ok_or_else(malformed)?,
+                    word(bytes, offset + 8 * s + 4).ok_or_else(malformed)?,
                 ));
             }
             offset += 8 * settings;
@@ -181,19 +160,19 @@ fn read_states(backend: &mut dyn RuntimeBackend) -> Result<States> {
         if offset != bytes.len() {
             return Err(malformed());
         }
-        first += k;
-        if first >= count || k == 0 {
-            if first != count {
-                return Err(malformed());
-            }
-            return Ok(States {
-                modules,
-                revision,
-                running: running != 0,
-                capabilities: running_capabilities,
-            });
-        }
-    }
+        Ok(Page {
+            count,
+            at,
+            entries: k,
+        })
+    })?;
+    let head = |i: usize| word(&last, 4 * i).ok_or_else(malformed);
+    Ok(States {
+        modules,
+        revision: head(1)?,
+        running: head(2)? != 0,
+        capabilities: head(5)?,
+    })
 }
 
 fn state_json(state: &State, view: &ModuleView) -> Value {
@@ -915,7 +894,7 @@ mod tests {
     fn call_with(api: &LookApi, request: Request, body: &[u8], pending: bool) -> Reply {
         let context = RequestContext {
             boot_id: "boot",
-            card_id: "card",
+            card_id: "card".into(),
             software_pending: pending,
             root: std::path::Path::new("/"),
             release_keys: &[],

@@ -33,12 +33,11 @@ pub const STATE_IDLE_POLLS: u32 = 30;
 /// and the card are ready; the script cannot see its result, nor a file on
 /// the card, which the camera may write pictures to at that time.
 pub const SERVE_POLLS: u32 = 30;
-/// The service file in the package folder (`crate::card::SERVE_FILE`).
-const SERVE_NAME: &str = "SERVE.BIN";
 /// The resident loader looks for an update over Wi-Fi that waits for its
 /// confirmation (`crate::card::REQUEST_FILE`) at every this many polls, about
-/// 10 s: the look is a card lookup, while the confirmation is a header word
-/// that it reads at each poll (`update_script`).
+/// 10 s, while the access point is on or an update shows: the look is a card
+/// lookup, while the confirmation is a header word that it reads at each poll
+/// (`update_script`).
 pub const UPDATE_POLLS: u32 = 5;
 /// In the development profile (runtime/profile.h), the resident loader
 /// writes the counts of the core to `PROFILE.LOG` in the data folder after
@@ -676,10 +675,11 @@ fn state_script() -> Vec<String> {
         format!("cword = registry[{}]", HOST_CONTROL_WORD / 4),
         "if cword < 1 goto resident_serve".into(),
         format!("if cword > modulewords - {CONTROL_WORDS} goto resident_serve"),
-        format!("filesearch '{}'", core_path(SERVE_NAME)),
+        format!("filesearch '{}'", core_path(serve_name())),
         "if result <> 0 hasserve = 1".into(),
         ":resident_serve".into(),
         "updatepolls = 0".into(),
+        "updlooked = 0".into(),
         // The version file of an update that installed at this start, with no
         // update that waits, has done its work.
         format!(
@@ -1128,9 +1128,17 @@ fn update_script() -> Vec<String> {
         ":update_poll".into(),
         format!("updstate = {word}"),
         format!("if updstate = {UPDATE_CONFIRMED} goto update_confirmed"),
+        // Only the service writes a request, and it runs only while the
+        // access point is on: the card needs no look while it is off, after
+        // the first look finds a request of an earlier start.
+        "if updlooked = 0 goto update_count".into(),
+        format!("updwlan = registry[{}] + updstate", HOST_WLAN / 4),
+        "if updwlan = 0 return".into(),
+        ":update_count".into(),
         "updatepolls = updatepolls + 1".into(),
         format!("if updatepolls < {UPDATE_POLLS} return"),
         "updatepolls = 0".into(),
+        "updlooked = 1".into(),
         format!("filesearch '{request}'"),
         "if result <> 0 goto update_waits".into(),
         format!("if updstate = {UPDATE_WAITING} goto update_none"),
@@ -1383,6 +1391,14 @@ fn file_name(path: &'static str) -> &'static str {
     path.rsplit('/').next().unwrap()
 }
 
+/// The name of the service file in the package folder (`crate::card::SERVE_FILE`).
+fn serve_name() -> &'static str {
+    crate::card::SERVE_FILE
+        .rsplit('/')
+        .next()
+        .expect("a file name")
+}
+
 /// The loader path of a file of the package folder.
 pub(super) fn core_path(name: &str) -> String {
     format!("{RTOS_PACKAGE_FOLDER}\\{name}")
@@ -1563,7 +1579,6 @@ mod tests {
                 .count()
                 == 2
         );
-        assert!(crate::card::SERVE_FILE.ends_with(&format!("/{SERVE_NAME}")));
         let watch = at(&script, ":watch");
         assert!(checked < watch);
         assert_eq!(script[watch + 2], "if hasserve <> 0 call serve");
@@ -1613,6 +1628,12 @@ mod tests {
         assert!(
             line(&format!("if updatepolls < {UPDATE_POLLS} return"))
                 < line("filesearch 'C:\\SCRIPT\\GRKIT\\COMMIT.REQ'")
+        );
+        // After the first look, the card only while the access point is on
+        // or an update shows.
+        assert!(
+            line(&format!("updwlan = registry[{}] + updstate", HOST_WLAN / 4))
+                < line(&format!("if updatepolls < {UPDATE_POLLS} return"))
         );
         let waits = line(":update_waits");
         assert_eq!(

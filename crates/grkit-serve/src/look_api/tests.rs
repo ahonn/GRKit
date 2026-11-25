@@ -119,7 +119,7 @@ impl Fixture {
         let keys = [testing::release_key()];
         let context = RequestContext {
             boot_id: BOOT,
-            card_id: CARD,
+            card_id: CARD.into(),
             software_pending: self.pending,
             root: self.root.path(),
             release_keys: &keys,

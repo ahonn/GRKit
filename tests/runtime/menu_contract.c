@@ -3088,14 +3088,14 @@ static void film_look_lists_the_installed_effects_that_are_on(void)
 }
 
 /* The Wi-Fi service reads the effect list and sets the choices through the
-   mailbox (runtime/control_looks.h), as the options rows and Order do. */
+   mailbox (runtime/control.h), as the options rows and Order do. */
 static u32 look_command(u32 command, const u32 *words, u32 count, u32 *length)
 {
     static struct control_request request;
     request.command = command; request.length = 4 * count;
     memcpy(request.payload, words, 4 * count);
     *length = 0;
-    u32 result = control_looks(test_header, &request, length);
+    u32 result = control_dispatch((void *)test_header, &request, length);
     memcpy(control_words, request.payload, sizeof(control_words));
     return result;
 }
@@ -3111,7 +3111,7 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
     /* Without CORE.TONE, the camera has no effects. */
     h[GRKIT_HOST_CAPABILITIES / 4] &= ~GRKIT_CORE_TONE_BIT;
-    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == CONTROL_UNSUPPORTED);
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == GRKIT_CONTROL_UNSUPPORTED);
     h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
     /* Velvia 100 is committed. A recipe and a mode-dial set name effects. */
     setting_store(h, GRKIT_CORE_TONE, 2);
@@ -3126,7 +3126,7 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     assert(control_words[10] == 0x1002 && control_words[11] == 1 && control_words[12] == 0);
     assert(control_words[13] == (0x123U | 4U << GRKIT_CONTROL_USE_ORIGIN_SHIFT | 2U << GRKIT_CONTROL_USE_NUMBER_SHIFT | GRKIT_CONTROL_USE_NAMED));
     assert(control_words[14] == ('O' | 'd' << 7 | 'd' << 14) && !control_words[15]);
-    assert(look_command(GRKIT_CONTROL_LOOKS_READ, words, 1, &length) == CONTROL_BAD_LENGTH);
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
     /* Off of the committed effect commits Off, as its checkbox does. */
     words[0] = 0x1001; words[1] = 1;
     assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !length);
@@ -3134,21 +3134,21 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     words[1] = 0;
     assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 1));
     words[1] = 2;
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_INVALID);
     words[0] = 0x2000; words[1] = 1;
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_CHANGED);
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 1, &length) == CONTROL_BAD_LENGTH);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
     /* A page that lists the effects is open: nothing changes. */
     words[0] = 0x1000;
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x54000000;
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY && !effects_off(h, 0));
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY && !effects_off(h, 0));
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY);
     /* The information page shows a GRKit view: nothing changes. */
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = INFO_CONTROLLER;
     services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = MENU_ABOUT_GRKIT;
-    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == CONTROL_BUSY);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY);
     services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = 0;
     /* Playback and the other pages of MENU take a change, as the shooting
        screen does. */
@@ -3162,12 +3162,12 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == 0);
     assert(effects_choice(h, 2) == (1U << 1 | 1U) && effects_choice(h, 0) == 2U << 1 && effects_choice(h, 1) == 3U << 1);
     assert(effects_at(h, 0) == 2 && effects_at(h, 1) == 0 && effects_at(h, 2) == 1);
-    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
     words[2] = 0x1000;
-    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == GRKIT_CONTROL_INVALID);
     words[2] = 0x2000;
-    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == CONTROL_CHANGED);
-    assert(look_command(99, 0, 0, &length) == CONTROL_UNSUPPORTED);
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(99, 0, 0, &length) == GRKIT_CONTROL_UNSUPPORTED);
     /* Each poll copies the count of setting changes into the mailbox, where
        the service reads it without a command. */
     volatile struct control_mailbox *box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
@@ -3201,7 +3201,7 @@ static void the_service_reads_and_changes_the_recipes(void)
     u32 length, words[16];
     h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
-    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == CONTROL_UNSUPPORTED);
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_UNSUPPORTED);
     h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
     /* Two recipes on, one off. */
     put_recipe(h, 0, 11, 0); put_recipe(h, 1, 12, 0); put_recipe(h, 2, 13, 1);
@@ -3211,7 +3211,7 @@ static void the_service_reads_and_changes_the_recipes(void)
     assert(control_words[0] == 3 && control_words[1] == 2 && control_words[5] == 0 && control_words[6] == 3);
     assert(control_words[7] == 11 && control_words[7 + 11] == 12 && control_words[7 + 22] == 13);
     words[0] = 4;
-    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_INVALID);
     /* Off goes before the others that are off; on, after the ones on. */
     words[0] = 11; words[1] = 1;
     assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
@@ -3224,9 +3224,9 @@ static void the_service_reads_and_changes_the_recipes(void)
     assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == 0);
     assert(recipe_id_of(0) == 13 && recipe_id_of(1) == 12);
     words[1] = 13;
-    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == GRKIT_CONTROL_INVALID);
     words[1] = 11;
-    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
     /* A name of printable ASCII; none gives the automatic name. */
     words[0] = 12; memcpy(&words[1], "Odd", 3);
     {
@@ -3234,18 +3234,18 @@ static void the_service_reads_and_changes_the_recipes(void)
         /* NUL-padded to whole words; an odd length is not one. */
         request.command = GRKIT_CONTROL_RECIPE_RENAME; request.length = 7;
         memcpy(request.payload, words, 7);
-        assert(control_looks(h, &request, &length) == CONTROL_BAD_LENGTH);
+        assert(control_dispatch((void *)h, &request, &length) == GRKIT_CONTROL_BAD_LENGTH);
         request.length = 8; request.payload[7] = 0;
-        assert(control_looks(h, &request, &length) == 0);
+        assert(control_dispatch((void *)h, &request, &length) == 0);
     }
     assert(recipe_name_length(h, 1) == 3 && recipe_name_char(h, 1, 0) == 'O');
     /* A page of GRKit is open: nothing changes. */
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
     words[0] = 12;
-    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == CONTROL_BUSY && recipe_count(h) == 3);
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == GRKIT_CONTROL_BUSY && recipe_count(h) == 3);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0x4000000;
     assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == 0 && recipe_count(h) == 2);
-    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == GRKIT_CONTROL_CHANGED);
     /* An apply leaves an undo step, and the undo removes it. */
     words[0] = 13;
     assert(look_command(GRKIT_CONTROL_RECIPE_APPLY, words, 1, &length) == 0 && length == 4 && recipe_undo_count(h) == 1);
@@ -3257,14 +3257,14 @@ static void the_service_reads_and_changes_the_recipes(void)
     words[0] = 13; words[1] = 0;
     assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
     assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == 0 && control_words[0] == 0);
-    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == GRKIT_CONTROL_INVALID);
     /* An added recipe is on after the ones on, with a new ID. */
     for (u32 i = 0; i < GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS; ++i) words[i] = 0;
     words[0] = RECIPE_USED | RECIPE_LOOK_OFF;
     assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == 0);
     assert(recipe_entries(h) == 2 && recipe_count(h) == 3 && recipe_id_of(1) == control_words[0] && control_words[0]);
     words[0] = 0;
-    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == GRKIT_CONTROL_INVALID);
 }
 
 /* The MENU pages: the settings page of a module in the GRKit section,
@@ -3375,26 +3375,26 @@ static void the_service_reads_and_sets_module_settings(void)
     assert(control_words[3] & GRKIT_CONTROL_MODULE_HAS_OPTIONS && control_words[3] & GRKIT_CONTROL_MODULE_ORDERED);
     assert(control_words[4] == style_key);
     words[1] = GRKIT_TEXT_LANGUAGES;
-    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == GRKIT_CONTROL_INVALID);
     /* A bad field changes nothing, also with a good field before it. */
     before = h[GRKIT_HOST_STATE_CHANGES / 4];
     module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED | GRKIT_CONTROL_MODULE_SET_HIDDEN, 1, 1U << 0, 0, 0);
-    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_INVALID);
     module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 1, 0);
     words[6] = style_key; words[7] = 6;
-    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 8, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 8, &length) == GRKIT_CONTROL_INVALID);
     /* Each value but the first row cannot go off together. */
     module_set(words, guides, GRKIT_CONTROL_MODULE_SET_HIDDEN, 0, 0x3e, 0, 0);
-    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_INVALID);
     /* The first row stays first. */
     module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ORDER, 0, 0, 0, 6);
     for (u32 k = 0; k < 6; ++k) words[6 + k] = 5 - k;
-    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == GRKIT_CONTROL_INVALID);
     assert(h[GRKIT_HOST_STATE_CHANGES / 4] == before && !settings_memory[off] && GUIDE_STYLE == 3);
     /* While a GRKit page shows, a valid change waits. */
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
     module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 0, 0);
-    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == CONTROL_BUSY && !settings_memory[off]);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_BUSY && !settings_memory[off]);
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
     /* Off, a new order, and the value that goes off in ADJ, in one step:
        the setting of the hidden value goes to Off, as in MENU. */
@@ -3410,11 +3410,11 @@ static void the_service_reads_and_sets_module_settings(void)
     assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == 0);
     assert(manage_position(h, 2) == 1 && manage_position(h, 1) == 2 && manage_position(h, 0) == 3);
     words[1] = 2;
-    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == CONTROL_INVALID);
-    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 2, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
     /* A module without a tile has no icon. */
     words[0] = guides; words[1] = 0;
-    assert(look_command(GRKIT_CONTROL_MODULE_TILE, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULE_TILE, words, 2, &length) == GRKIT_CONTROL_INVALID);
 }
 
 /* The service places the modules of ADJ Order in one step, as the ADJ
@@ -3437,15 +3437,15 @@ static void the_service_places_the_modules(void)
     /* A module twice, the groups out of order, or a module that ADJ does
        not show changes nothing. */
     words[0] = 2 | pin; words[1] = 2 | root; words[2] = 1 | hidden;
-    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_INVALID);
     words[0] = 0 | root; words[1] = 2 | pin; words[2] = 1 | hidden;
-    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_INVALID);
     words[0] = 7 | pin; words[1] = 0 | root; words[2] = 1 | hidden;
-    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_CHANGED);
-    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 2, &length) == CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 2, &length) == GRKIT_CONTROL_CHANGED);
     words[0] = 2 | pin;
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
-    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == CONTROL_BUSY);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_BUSY);
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
     assert(!manage_position(h, 0) && !manage_position(h, 1) && !manage_position(h, 2));
     /* Guides goes to the toolbar, Film Look stays in the root, and Framing
@@ -3484,19 +3484,19 @@ static void the_service_reads_and_sets_grkit_settings(void)
                          GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, 1};
     for (u32 i = 0; i < 8; ++i) assert(control_words[i] == read[i]);
     words[0] = 0;
-    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, words, 1, &length) == CONTROL_BAD_LENGTH);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
     /* A setting that the camera does not have, a value or an index out of
        range, or a page of GRKit on the screen changes nothing. */
     words[0] = GRKIT_CONTROL_SETTING_RAW; words[1] = 1;
-    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
     words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_VALUES;
-    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
     words[0] = GRKIT_CONTROL_SETTINGS; words[1] = 0;
-    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_INVALID);
-    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 1, &length) == CONTROL_BAD_LENGTH);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
     words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_FEET;
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
-    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == CONTROL_BUSY);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_BUSY);
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
     assert(settings_memory[2 + 19 * 3 + 1] == MANAGE_UNIT_METERS);
     /* The store of the MENU row: the value, its copy, and a change count. */
@@ -7036,7 +7036,7 @@ static void the_poll_runs_only_while_it_has_work(void)
     menu_timers_due();
     assert(!timer[0]);
     const u8 nonce[16] = {1};
-    assert(control_submit(box, epoch, CONTROL_ATTACH, nonce, 16) == 1);
+    assert(control_submit(box, epoch, GRKIT_CONTROL_ATTACH, nonce, 16) == 1);
     assert(control_pending(h));
     menu_timers_due();
     assert(box->ready == 1 && !control_pending(h));

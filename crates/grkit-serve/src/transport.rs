@@ -1,5 +1,5 @@
 //! Bounded HTTP transport admission. This layer never writes camera state.
-use crate::{Request, Response};
+use crate::{api::Reply, Request};
 use std::{
     io::{self, Read},
     net::{IpAddr, SocketAddr, TcpStream},
@@ -16,24 +16,24 @@ pub const IDLE_TIMEOUT: Duration = Duration::from_secs(5);
 // sending one byte before each idle timeout. Measure this on physical Wi-Fi.
 pub const TRANSFER_TIMEOUT: Duration = Duration::from_secs(120);
 
-pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
+pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Reply> {
     let host = request
         .headers
         .get("host")
-        .ok_or_else(|| Response::error(400, "Host is required"))?;
+        .ok_or_else(|| Reply::error(400, "Host is required"))?;
     let address = host.parse::<SocketAddr>().ok().or_else(|| {
         host.parse::<IpAddr>()
             .ok()
             .map(|ip| SocketAddr::new(ip, 80))
     });
     if address != Some(local) {
-        return Err(Response::error(
+        return Err(Reply::error(
             403,
             "Host must match the local IP address and port",
         ));
     }
     if request.headers.contains_key("origin") {
-        return Err(Response::error(403, "Browser requests are not allowed"));
+        return Err(Reply::error(403, "Browser requests are not allowed"));
     }
     let body_type = match (request.method.as_str(), request.path.as_str()) {
         ("PUT", "/v1/update") => Some((crate::update::MAX_PACKAGE, "application/zip")),
@@ -66,10 +66,10 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
                 .is_some_and(grkit_core::effects::valid_id) =>
         {
             if !request.headers.contains_key("content-length") {
-                return Err(Response::error(400, "Content-Length is required"));
+                return Err(Reply::error(400, "Content-Length is required"));
             }
             if !matches!(request.length, 8192 | 8704) {
-                return Err(Response::error(422, "Unsupported GRF length"));
+                return Err(Reply::error(422, "Unsupported GRF length"));
             }
             Some((8704, "application/octet-stream"))
         }
@@ -84,20 +84,17 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
     };
     if let Some((limit, content_type)) = body_type {
         if request.length > limit {
-            return Err(Response::error(
-                413,
-                "The body exceeds this resource's limit",
-            ));
+            return Err(Reply::error(413, "The body exceeds this resource's limit"));
         }
         let supplied = request
             .headers
             .get("content-type")
             .map(|value| value.split(';').next().unwrap_or("").trim());
         if supplied != Some(content_type) {
-            return Err(Response::error(415, "Unsupported request media type"));
+            return Err(Reply::error(415, "Unsupported request media type"));
         }
     } else if request.length > 0 {
-        return Err(Response::error(
+        return Err(Reply::error(
             400,
             "This endpoint does not accept a request body",
         ));
@@ -109,7 +106,7 @@ pub fn admit(request: &Request, local: SocketAddr) -> Result<(), Response> {
         .get("expect")
         .is_some_and(|value| !value.eq_ignore_ascii_case("100-continue"))
     {
-        return Err(Response::error(417, "Expect is not supported"));
+        return Err(Reply::error(417, "Expect is not supported"));
     }
     Ok(())
 }

@@ -430,6 +430,16 @@ pub const CONTROL_SETTINGS: u32 = 8;
 pub const CONTROL_SETTING_NONE: u32 = u32::MAX;
 pub const CONTROL_MODULES_HEADER: usize = 24;
 pub const CONTROL_MODULE_ENTRY: usize = 20;
+/// The byte offsets of the fields of a `CONTROL_MODULES_READ` entry after its
+/// first word: the name, the mask of hidden values, and the sizes.
+pub const CONTROL_MODULE_NAME_AT: usize = 4;
+pub const CONTROL_MODULE_NAME_BYTES: usize = 8;
+pub const CONTROL_MODULE_HIDDEN_AT: usize = 12;
+pub const CONTROL_MODULE_SIZES_AT: usize = 16;
+const _: () = assert!(
+    CONTROL_MODULE_NAME_AT + CONTROL_MODULE_NAME_BYTES == CONTROL_MODULE_HIDDEN_AT
+        && CONTROL_MODULE_SIZES_AT + 4 == CONTROL_MODULE_ENTRY
+);
 pub const CONTROL_MODULE_TEXTS_HEADER: usize = 8;
 pub const CONTROL_MODULE_TEXTS_END: u32 = u32::MAX;
 /// The longest text of a record, in UTF-16 units.
@@ -1840,6 +1850,10 @@ pub fn header() -> String {
         ("CONTROL_RECIPES_PAGE", CONTROL_RECIPES_PAGE),
         ("CONTROL_MODULES_HEADER", CONTROL_MODULES_HEADER),
         ("CONTROL_MODULE_ENTRY", CONTROL_MODULE_ENTRY),
+        ("CONTROL_MODULE_NAME_AT", CONTROL_MODULE_NAME_AT),
+        ("CONTROL_MODULE_NAME_BYTES", CONTROL_MODULE_NAME_BYTES),
+        ("CONTROL_MODULE_HIDDEN_AT", CONTROL_MODULE_HIDDEN_AT),
+        ("CONTROL_MODULE_SIZES_AT", CONTROL_MODULE_SIZES_AT),
         ("CONTROL_MODULE_TEXTS_HEADER", CONTROL_MODULE_TEXTS_HEADER),
     ] {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();

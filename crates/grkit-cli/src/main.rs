@@ -1074,7 +1074,7 @@ fn default_cover(covers: &BTreeMap<String, Value>, blob: Vec<u8>) -> Result<Vec<
 fn signed(package: &[u8]) -> Result<Value> {
     match release::verify_update(package, &release::OFFICIAL_KEYS) {
         Ok(_) => Ok(json!("official")),
-        Err(error) if format!("{error:#}").contains("is not signed") => Ok(json!(false)),
+        Err(error) if error.downcast_ref::<release::Unsigned>().is_some() => Ok(json!(false)),
         Err(error) => Err(error.context("Check the release signature")),
     }
 }

@@ -2,15 +2,10 @@
 //! through the mailbox (`CONTROL_SETTINGS_READ`, `CONTROL_SETTINGS_SET`),
 //! and the picture of Shutdown Screen on the card (`grkit_core::goodbye`).
 use super::{
-    lock, module_api::admit_change, problem, try_lock, write_checked, LookApi, RequestContext,
-    Result,
+    codec::Codes, lock, module_api::admit_change, problem, try_lock, write_checked, LookApi,
+    RequestContext, Result,
 };
-use crate::{
-    api::Reply,
-    protocol::Problem,
-    runtime_backend::{camera_busy, RuntimeBackend},
-    Request,
-};
+use crate::{api::Reply, protocol::Problem, runtime_backend::RuntimeBackend, Request};
 use grkit_core::{abi::*, goodbye};
 use serde_json::{json, Map, Value};
 use std::{fs, path::Path};
@@ -36,12 +31,14 @@ const SETTINGS: [(&str, Kind); CONTROL_SETTINGS as usize] = [
     ("showText", Kind::Switch),
 ];
 
+const CODES: Codes = Codes {
+    list: "The settings",
+    changed: "The settings of the camera changed. Read them again.",
+    unsupported: "This camera cannot manage GRKit settings.",
+    invalid: Some(unavailable),
+};
 fn malformed() -> Problem {
-    problem(
-        503,
-        "runtime_invalid",
-        "The settings of the camera are malformed.",
-    )
+    CODES.malformed()
 }
 fn invalid_setting() -> Problem {
     problem(
@@ -57,22 +54,9 @@ fn unavailable() -> Problem {
         "This camera does not have the setting.",
     )
 }
-fn unsupported() -> Problem {
-    problem(
-        503,
-        "runtime_protocol_unsupported",
-        "This camera cannot manage GRKit settings.",
-    )
-}
-
 /// The value of each setting, or None for one that the camera does not have.
 fn read_settings(backend: &mut dyn RuntimeBackend) -> Result<Vec<Option<u32>>> {
-    let (result, bytes) = backend.exchange(CONTROL_SETTINGS_READ, &[])?;
-    match result {
-        0 => {}
-        CONTROL_UNSUPPORTED => return Err(unsupported()),
-        _ => return Err(malformed()),
-    }
+    let bytes = CODES.checked(backend.exchange(CONTROL_SETTINGS_READ, &[])?)?;
     if bytes.len() != 4 * SETTINGS.len() {
         return Err(malformed());
     }
@@ -194,13 +178,7 @@ impl LookApi {
                 .iter()
                 .flat_map(|w| w.to_le_bytes())
                 .collect();
-            match backend.exchange(CONTROL_SETTINGS_SET, &payload)?.0 {
-                0 => {}
-                CONTROL_BUSY => return Err(camera_busy()),
-                CONTROL_INVALID => return Err(unavailable()),
-                CONTROL_UNSUPPORTED => return Err(unsupported()),
-                _ => return Err(malformed()),
-            }
+            CODES.checked(backend.exchange(CONTROL_SETTINGS_SET, &payload)?)?;
         }
         Ok(Reply::json(
             200,
@@ -261,7 +239,7 @@ fn remove_picture(root: &Path) -> Result<Reply> {
         let _ = fs::metadata(entry.path());
     }
     match fs::remove_file(&path) {
-        Ok(()) => super::look_up_unused(directory),
+        Ok(()) => crate::update::look_up_unused(directory),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(_) => {
             return Err(problem(
@@ -320,7 +298,7 @@ mod tests {
         let request = crate::parse(text.as_bytes()).unwrap();
         let context = RequestContext {
             boot_id: "boot",
-            card_id: "card",
+            card_id: "card".into(),
             software_pending: false,
             root,
             release_keys: &[],

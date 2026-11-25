@@ -39,7 +39,6 @@ use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::{Read, Write},
     path::Path,
     sync::{Mutex, MutexGuard, TryLockError},
 };
@@ -53,7 +52,7 @@ const MAX_COVER: usize = 1024;
 
 pub struct RequestContext<'a> {
     pub boot_id: &'a str,
-    pub card_id: &'a str,
+    pub card_id: String,
     pub software_pending: bool,
     /// The mounted card.
     pub root: &'a Path,
@@ -519,25 +518,10 @@ fn write_file(root: &Path, name: &str, bytes: &[u8]) -> Result<()> {
     ))
 }
 
-/// Write the whole file in place, as the card cannot replace a file, and
-/// read it back. True when the card holds `bytes`.
+/// Write the whole file in place and read it back (`update::write_checked`).
+/// True when the card holds `bytes`.
 fn write_checked(path: &Path, bytes: &[u8]) -> bool {
-    let write = || -> std::io::Result<Vec<u8>> {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(path)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
-        let mut stored = Vec::with_capacity(bytes.len());
-        fs::File::open(path)?
-            .take(bytes.len() as u64 + 1)
-            .read_to_end(&mut stored)?;
-        Ok(stored)
-    };
-    write().is_ok_and(|stored| stored == bytes)
+    crate::update::write_checked(path, bytes).is_ok()
 }
 
 /// Remove an effect file. On the camera, the lookup of the next new name in
@@ -553,15 +537,8 @@ fn remove_file(root: &Path, name: &str) -> Result<()> {
             "The Look could not be removed from the card.",
         )
     })?;
-    look_up_unused(&directory);
+    crate::update::look_up_unused(&directory);
     Ok(())
-}
-/// Look up one name that no file of `directory` has, after a delete there.
-fn look_up_unused(directory: &Path) {
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |time| time.subsec_nanos() ^ time.as_secs() as u32);
-    let _ = fs::metadata(directory.join(format!("{stamp:08X}.TMP")));
 }
 
 fn decode(id: &str, bytes: &[u8]) -> Result<(effects::Effect, Vec<u8>)> {
@@ -1175,6 +1152,7 @@ fn problem(status: u16, code: &'static str, detail: &'static str) -> Problem {
     Problem::new(status, code, detail)
 }
 
+mod codec;
 mod covers;
 mod module_api;
 mod recipe_api;

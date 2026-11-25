@@ -590,6 +590,96 @@ pub(crate) fn package_list<'a>(
         .into_bytes()
 }
 
+/// `PACKAGE_LIST` as the runtime reads it (`runtime/install_library.h`): names separated
+/// by ASCII whitespace, and each left-out effect after `-`. The runtime compares names
+/// without case, so the names here are upper case.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PackageList {
+    /// The module and effect files of the package.
+    pub names: BTreeSet<String>,
+    /// The effect files that the person did not choose (`EffectSet`).
+    pub left_out: BTreeSet<String>,
+}
+
+impl PackageList {
+    pub fn parse(bytes: &[u8]) -> Self {
+        let mut list = Self::default();
+        for word in String::from_utf8_lossy(bytes).split_ascii_whitespace() {
+            let word = word.to_ascii_uppercase();
+            match word.strip_prefix('-') {
+                Some(name) if !name.is_empty() => {
+                    list.left_out.insert(name.to_owned());
+                }
+                Some(_) => {}
+                None => {
+                    list.names.insert(word);
+                }
+            }
+        }
+        list
+    }
+
+    /// The bytes that a package writes (`package_list`).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        package_list(&self.names, &self.left_out)
+    }
+
+    /// The module IDs that the list names.
+    pub fn modules(&self) -> impl Iterator<Item = &str> {
+        self.names
+            .iter()
+            .filter_map(|name| name.strip_suffix(".GRM"))
+    }
+
+    /// The effect files that the list names.
+    pub fn effects(&self) -> impl Iterator<Item = &str> {
+        self.names
+            .iter()
+            .filter(|name| name.ends_with(".GRF"))
+            .map(String::as_str)
+    }
+
+    /// This list with the Looks of `card`, the listed and the left-out ones, in place of
+    /// its own: an update keeps the Looks of the card.
+    pub fn with_looks_of(mut self, card: &PackageList) -> Self {
+        self.names.retain(|name| !name.ends_with(".GRF"));
+        self.names.extend(card.effects().map(str::to_owned));
+        self.left_out = card.left_out.clone();
+        self
+    }
+}
+
+/// Whether the camera puts the card file `path` there with each package: the list, the
+/// release evidence, the runtime files, the modules, and the package effects. An update
+/// removes only these when the new package does not have them; other files of the package
+/// folder, such as the import library, stay.
+pub fn package_owned(path: &str) -> bool {
+    if path == PACKAGE_LIST
+        || path == crate::release::CARD_STATEMENT
+        || path == crate::release::CARD_SIGNATURE
+        || is_runtime_path(path)
+    {
+        return true;
+    }
+    let in_folder = |folder: &str, extension: &str| {
+        path.strip_prefix(folder)
+            .and_then(|name| name.strip_prefix('/'))
+            .is_some_and(|name| !name.contains('/') && name.ends_with(extension))
+    };
+    let core = path
+        .strip_prefix(card::PACKAGE_FOLDER)
+        .and_then(|rest| rest.strip_prefix("/CORE"))
+        .is_some_and(|rest| rest.ends_with(".BIN") && !rest.contains('/'));
+    in_folder(card::MODULES_FOLDER, ".GRM") || in_effect_inbox(path) || core
+}
+
+/// Whether `path` is a Look file in the inbox of the package effects (`EFFECTS_FOLDER`).
+pub fn in_effect_inbox(path: &str) -> bool {
+    path.strip_prefix(EFFECTS_FOLDER)
+        .and_then(|name| name.strip_prefix('/'))
+        .is_some_and(|name| !name.contains('/') && name.ends_with(".GRF"))
+}
+
 /// A package filename of an effect: 1 to 8 uppercase letters, digits, or `_`, then `.GRF`.
 fn effect_file_name(name: &str) -> bool {
     name.strip_suffix(".GRF").is_some_and(|stem| {
@@ -1289,6 +1379,28 @@ pub(crate) fn read_entries(bytes: &[u8]) -> Result<Files> {
         contents.insert(name, blob);
     }
     Ok(contents)
+}
+
+/// The entry `name` of a ZIP, at most `limit` bytes, without reading the other entries.
+/// `None` when the ZIP has no such entry.
+pub(crate) fn read_entry(bytes: &[u8], name: &str, limit: usize) -> Result<Option<Vec<u8>>> {
+    let mut archive = ZipArchive::new(Cursor::new(bytes)).context("Invalid ZIP archive")?;
+    let mut entry = match archive.by_name(name) {
+        Ok(entry) => entry,
+        Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+        Err(error) => return Err(error).context("Invalid ZIP archive"),
+    };
+    ensure!(
+        entry.size() <= limit as u64 && !entry.encrypted(),
+        "Invalid archive entry {name}"
+    );
+    let mut blob = Vec::new();
+    (&mut entry).take(limit as u64 + 1).read_to_end(&mut blob)?;
+    ensure!(
+        blob.len() as u64 == entry.size(),
+        "Archive entry size mismatch"
+    );
+    Ok(Some(blob))
 }
 
 fn declared_entry_count(bytes: &[u8]) -> Result<usize> {

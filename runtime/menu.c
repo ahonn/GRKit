@@ -1081,8 +1081,7 @@ static u32 control_pending(volatile u32 *h);
 #include "persist.h"
 #include "menu_dial.h"
 #include "menu_recipes.h"
-#include "control_mailbox.h"
-#include "control_looks.h"
+#include "control.h"
 #include "menu_section.h"
 #include "menu_about.h"
 #include "distance.h"
@@ -1398,7 +1397,7 @@ A32_ENTRY void menu_changed(u32 controller) {
 /* The Update row of the MOD page while an update over Wi-Fi waits
    (runtime/manage.h: SWITCH_ROW_UPDATE). */
 static u32 update_row(volatile u32 *h) {
-    return h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
+    return update_waiting(h) && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
            h[GRKIT_HOST_MODULE/4]==SWITCH_MODULE && h[GRKIT_HOST_MENU_CURSOR/4]==SWITCH_ROW_UPDATE;
 }
 /* Execute or Cancel of the confirm in ADJ, whose controller is `controller`.
@@ -1406,8 +1405,7 @@ static u32 update_row(volatile u32 *h) {
    (menu_event), and the live view tells to restart, as the load cue does. */
 static void update_adj_done(u32 executed,u32 controller) {
     volatile u32 *h=menu_header();
-    if(executed==1U && h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING) {
-        h[GRKIT_HOST_UPDATE/4]=GRKIT_UPDATE_CONFIRMED;
+    if(update_confirm(h,executed)) {
         if(h[GRKIT_HOST_MENU_CURSOR/4]>=count(h)) h[GRKIT_HOST_MENU_CURSOR/4]=count(h)-1;
         h[GRKIT_HOST_CUE_LABEL/4]=GRKIT_CUE_UPDATE_RESTART;
         h[GRKIT_HOST_LOAD_CUE/4]=GRKIT_CUE_PENDING;
@@ -1447,7 +1445,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     if(back==2) return 0;
     /* A message, a confirm, or a progress box takes each key. */
     if(private_mode(controller) && ui_modal(h)) {
-        u32 waiting=h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING;
+        u32 waiting=update_waiting(h);
         ui_event(h,kind,back==1);
         /* Execute on the confirm of an update closes ADJ, as OK on a row
            that closes it does. */

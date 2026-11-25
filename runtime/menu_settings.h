@@ -218,26 +218,7 @@ static const Setting core_group_settings[CORE_GROUPS]={
    the confirmation, the row reads Restart to apply. */
 static void settings_value_again(volatile u32 *h,u32 back);
 static void settings_value_leave(volatile u32 *h);
-static u32 update_shown(volatile u32 *h) { return h[GRKIT_HOST_UPDATE/4]-GRKIT_UPDATE_WAITING<=GRKIT_UPDATE_READY-GRKIT_UPDATE_WAITING; }
-static u32 update_confirmed(volatile u32 *h) { return update_shown(h) && h[GRKIT_HOST_UPDATE/4]!=GRKIT_UPDATE_WAITING; }
-/* Append the version of the update, such as 1.7.0, or nothing when the
-   package does not name it. */
-static u32 update_append_version(volatile u32 *h,volatile u16 *to,u32 at) {
-    static const u16 dot[]={'.',0};
-    u32 version=h[GRKIT_HOST_UPDATE_VERSION/4];
-    if(!version) return at;
-    at=recipe_append(to,recipe_append_number(to,at,version>>16&255U),dot);
-    at=recipe_append(to,recipe_append_number(to,at,version>>8&255U),dot);
-    return recipe_append_number(to,at,version&255U);
-}
-/* Update and the version, in the text of About GRKit and of the page. */
-static const u16 *update_title(volatile u32 *h) {
-    static const u16 space[]={' ',0};
-    volatile u16 *to=recipe_text_at(h,RECIPE_UPDATE_AT);
-    u32 at=recipe_append(to,0,text(h,TEXT_UPDATE));
-    if(h[GRKIT_HOST_UPDATE_VERSION/4]) update_append_version(h,to,recipe_append(to,at,space));
-    return (const u16 *)to;
-}
+#include "menu_update.h"
 static const u16 *update_label(volatile u32 *h) { return text(h,TEXT_UPDATE); }
 static u32 update_values(volatile u32 *h) { (void)h; return 1; }
 static const u16 *update_value_text(volatile u32 *h,u32 value) {
@@ -245,25 +226,17 @@ static const u16 *update_value_text(volatile u32 *h,u32 value) {
     return update_confirmed(h) ? text(h,TEXT_RESTART) : text(h,TEXT_UPDATE+1);
 }
 static u32 update_value(volatile u32 *h) { (void)h; return 0; }
-/* The confirm of the update that waits, on the canvas of `controller`, the
-   cursor on Cancel: OK calls done(1 for Execute, arg). */
-static u32 update_ask(volatile u32 *h,u32 controller,void (*done)(u32,u32),u32 arg) {
-    volatile u16 *to=recipe_text_at(h,RECIPE_BOX_AT);
-    recipe_append(to,update_append_version(h,to,recipe_append(to,0,text(h,TEXT_UPDATE+2))),text(h,TEXT_UPDATE+3));
-    return ui_confirm_on(h,controller,recipe_box(h),done,arg);
-}
 /* Execute or Cancel of the confirm in MENU: the page has no other choice, so
    both leave it. */
 static void update_box_done(u32 executed,u32 arg) {
     volatile u32 *h=menu_header();
     (void)arg;
-    if(executed==1U && h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING)
-        h[GRKIT_HOST_UPDATE/4]=GRKIT_UPDATE_CONFIRMED;
+    update_confirm(h,executed);
     settings_value_leave(h);
 }
 /* OK on the page asks again if its box could not open. MENU returns. */
 static u32 update_select(volatile u32 *h,u32 controller,u32 value) {
-    if(value==SETTING_BACK || h[GRKIT_HOST_UPDATE/4]!=GRKIT_UPDATE_WAITING) return 0;
+    if(value==SETTING_BACK || !update_waiting(h)) return 0;
     update_ask(h,controller,update_box_done,0);
     return 1;
 }
@@ -563,7 +536,7 @@ A32_ENTRY u32 menu_select_start(u32 controller,u32 id,u32 arg,u32 more) {
     check_word(h,CHECK_SHOWN)[0]=controller;
     check_word(h,CHECK_SHOWN_ID)[0]=id;
     /* The page of an update that waits is its confirm box. */
-    if(id==check_word(h,CHECK_ID)[0] && h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING &&
+    if(id==check_word(h,CHECK_ID)[0] && update_waiting(h) &&
        settings_page(h)==core_page_settings &&
        settings_row_setting(h,core_page_settings,check_word(h,CHECK_SETTING)[0])==&update_setting)
         update_ask(h,controller,update_box_done,0);

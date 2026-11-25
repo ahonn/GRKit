@@ -30,6 +30,9 @@ pub const STATEMENT_ENTRY: &str = "RELEASE.JSON";
 pub const SIGNATURE_ENTRY: &str = "RELEASE.SIG";
 pub const CARD_STATEMENT: &str = "SCRIPT/GRKIT/RELEASE.JSN";
 pub const CARD_SIGNATURE: &str = "SCRIPT/GRKIT/RELEASE.SIG";
+/// The largest statement and signature that a reader takes.
+pub const MAX_STATEMENT_BYTES: usize = 128 * 1024;
+pub const MAX_SIGNATURE_BYTES: usize = 1024;
 /// The folder of the package runtime next to a statement on the site.
 pub const PACKAGE_FOLDER: &str = "sd";
 
@@ -306,6 +309,19 @@ pub fn verify(statement: &[u8], signature: &[u8], keys: &[[u8; 32]]) -> Result<S
     Statement::parse(statement)
 }
 
+/// The error of a package without a release statement or signature: an
+/// unsigned package, as a development build makes.
+#[derive(Debug)]
+pub struct Unsigned(&'static str);
+
+impl std::fmt::Display for Unsigned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "The package is not signed: it has no {}", self.0)
+    }
+}
+
+impl std::error::Error for Unsigned {}
+
 /// What a signed update holds.
 #[derive(Debug)]
 pub struct Update {
@@ -429,18 +445,28 @@ pub fn assemble_update(
 /// `SHA256SUMS`, the signature of one of `keys`, and its files
 /// (`check_files`). Returns what it holds, and the files of the update at
 /// their paths from the card root.
+///
+/// It checks the signature before it decompresses the other entries, so an
+/// unsigned package costs no more memory than its statement.
 pub fn verify_update(zip: &[u8], keys: &[[u8; 32]]) -> Result<(Update, Files)> {
+    let entry = |name: &'static str, limit: usize| -> Result<Vec<u8>> {
+        packaging::read_entry(zip, name, limit)?.ok_or_else(|| Unsigned(name).into())
+    };
+    let statement_bytes = entry(STATEMENT_ENTRY, MAX_STATEMENT_BYTES)?;
+    let statement = verify(
+        &statement_bytes,
+        &entry(SIGNATURE_ENTRY, MAX_SIGNATURE_BYTES)?,
+        keys,
+    )?;
     let entries = packaging::read_entries(zip)?;
+    ensure!(
+        entries.get(STATEMENT_ENTRY) == Some(&statement_bytes),
+        "The package has another release statement"
+    );
     ensure!(
         entries.get("SHA256SUMS") == Some(&packaging::checksum_list(&entries)),
         "SHA256SUMS differs from package"
     );
-    let entry = |name: &str| {
-        entries
-            .get(name)
-            .with_context(|| format!("The package is not signed: it has no {name}"))
-    };
-    let statement = verify(entry(STATEMENT_ENTRY)?, entry(SIGNATURE_ENTRY)?, keys)?;
     let update = check_files(&entries, &statement)?;
     let files = entries
         .into_iter()
