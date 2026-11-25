@@ -21,8 +21,9 @@
    makes the shot neither arms nor disarms the check of that shot.
 
    crop_queue_start also notes the start and its time (CROP_QUEUE_STARTED),
-   so that the core changes the camera's crop factor only after the
-   completion of the shot (runtime/crop.h: crop_busy). */
+   and crop_queue_post notes when the back end has written the files of its
+   queue (CROP_QUEUE_WRITTEN), so that the core changes the camera's crop
+   factor only between shots (runtime/crop.h: crop_busy). */
 #include "crop_queue.h"
 /* rd = rn + a header offset. An ARM immediate holds one byte, rotated, so
    add the two bytes of the offset apart. */
@@ -35,7 +36,8 @@
 .endm
 #if defined(HOOK_CROP_QUEUE_START) != defined(HOOK_CROP_QUEUE_RELEASE) \
     || defined(HOOK_CROP_QUEUE_START) != defined(HOOK_CROP_QUEUE_POST) \
-    || defined(HOOK_CROP_QUEUE_START) != defined(FW_QUEUE_COMPLETE)
+    || defined(HOOK_CROP_QUEUE_START) != defined(FW_QUEUE_COMPLETE) \
+    || defined(HOOK_CROP_QUEUE_START) != defined(FW_QUEUE_WRITTEN_RETURN)
 #error "The crop_queue_* hooks and the FW_QUEUE_* functions go together"
 #endif
 #ifdef HOOK_CROP_QUEUE_START
@@ -70,13 +72,36 @@ crop_queue_start:
 /* Replaces `mov r12, sp` at the entry of the event poster (r0 the owner,
    r1 the event). The queue completion of the last shot sets
    CROP_QUEUE_POSTED. After crop_queue_release, only the first completion
-   of the shot goes out: a later one returns without a post. */
+   of the shot goes out: a later one returns without a post.
+
+   The back end posts the image completion each time it ends a recipe of
+   its queue, after the files of that recipe are written. At that post
+   (return address FW_QUEUE_WRITTEN_RETURN), r7 holds the count of the
+   recipes that the queue still processes, which the back end checks next.
+   A count of 0 sets CROP_QUEUE_WRITTEN. */
 .global crop_queue_post
 .type crop_queue_post, %function
 crop_queue_post:
-    cmp r1, #CROP_QUEUE_EVENT
-    bne 3f
     push {r2-r5}
+    ldr r2, =FW_QUEUE_WRITTEN_RETURN
+    cmp lr, r2
+    bne 4f
+    cmp r7, #0
+    bne 2f
+    ldr r2, =GRKIT_HEADER_REFERENCE
+    ldr r3, [r2, #GRKIT_HOST_CROP_QUEUE_OWNER]
+    cmp r0, r3
+    bne 2f
+    add_header r2, r2, GRKIT_HOST_CROP_QUEUE_FLAGS
+5:  ldrex r3, [r2]
+    orr r3, r3, #CROP_QUEUE_WRITTEN
+    strex r4, r3, [r2]
+    cmp r4, #0
+    bne 5b
+    dmb ish
+    b 2f
+4:  cmp r1, #CROP_QUEUE_EVENT
+    bne 2f
     ldr r2, =GRKIT_HEADER_REFERENCE
     ldr r3, [r2, #GRKIT_HOST_CROP_QUEUE_OWNER]
     cmp r0, r3

@@ -501,6 +501,35 @@ static void recipe_preview_follow(volatile u32 *h,u32 movie) {
         e=recipe_row_slot(h,h[GRKIT_HOST_MENU_CURSOR/4]);
     recipe_preview_show(h,e);
 }
+#ifdef CROP_NATIVE_BITS
+/* GR IV: a change of the camera's crop factor waits while the back end
+   makes a shot (runtime/crop.h: crop_busy). ADJ may not bind the live view
+   again after the shot, so an App-task timer tries again every
+   CROP_WAIT_MS until the change applies. */
+#ifndef CROP_WAIT_TIMER_START
+#define CROP_WAIT_TIMER_START(ms) ui_timer_start(ms)
+#endif
+#define CROP_WAIT_MS 50U
+static void crop_follow(volatile u32 *h) {
+    volatile u32 *timer;
+    crop_sync(h);
+    if(!crop_busy(h)) return;
+    timer=services_word(h,SERVICES_CROP_TIMER);
+    if(!timer[0]) timer[0]=CROP_WAIT_TIMER_START(CROP_WAIT_MS);
+}
+#endif
+static u32 crop_wait_fired(volatile u32 *h,u32 id) {
+#ifdef CROP_NATIVE_BITS
+    volatile u32 *timer=services_word(h,SERVICES_CROP_TIMER);
+    if(!id || id!=timer[0]) return 0;
+    timer[0]=0;
+    crop_follow(h);
+    return 1;
+#else
+    (void)h; (void)id;
+    return 0;
+#endif
+}
 static void frame_preview(volatile u32 *h,u32 controller,u32 movie) {
     u32 frame=h[GRKIT_HOST_FRAME_PREVIEW/4], at=h[GRKIT_HOST_FRAME_PREVIEW_ADJ/4];
     u32 handle=h[GRKIT_HOST_MODULE_PREVIEW/4], value=h[GRKIT_HOST_MODULE_PREVIEW/4+1];
@@ -511,12 +540,13 @@ static void frame_preview(volatile u32 *h,u32 controller,u32 movie) {
                   handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1]))
         MENU_PREVIEW_INVALIDATE(canvas);
 #ifdef CROP_NATIVE_BITS
-    /* The live view follows the highlighted crop at once (crop_shown); the
-       next bind of the live view would too, a little later. */
+    /* The live view follows the highlighted crop at once (crop_shown), or
+       after the shot that the back end makes (crop_follow); the next bind
+       of the live view would too, a little later. */
     if(!movie && (handle-1U==GRKIT_CORE_CROP || h[GRKIT_HOST_MODULE_PREVIEW/4]-1U==GRKIT_CORE_CROP) &&
        (handle!=h[GRKIT_HOST_MODULE_PREVIEW/4] || value!=h[GRKIT_HOST_MODULE_PREVIEW/4+1] ||
         frame!=h[GRKIT_HOST_FRAME_PREVIEW/4]))
-        crop_sync(h);
+        crop_follow(h);
 #endif
 }
 

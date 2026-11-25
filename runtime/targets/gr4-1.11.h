@@ -31,8 +31,9 @@
 #define FW_CROP_SET FIRMWARE(0x532f862c)
 /* The queue completion of a crop shot (runtime/crop_queue.S): the counts
    of the recipes of a queue in states 1, 2, and 3, the recipes in states
-   2 and 3, the recipe bank and its table of a recipe ID, and the
-   completion check of the back end. */
+   2 and 3, the recipe bank and its table of a recipe ID, the
+   completion check of the back end, and the return address of its post of
+   the image completion. */
 #define FW_QUEUE_COUNT1 FIRMWARE(0x53727c44)
 #define FW_QUEUE_COUNT2 FIRMWARE(0x53727cd4)
 #define FW_QUEUE_COUNT3 FIRMWARE(0x53727d64)
@@ -40,6 +41,7 @@
 #define FW_RECIPE_BANK FIRMWARE(0x53712374)
 #define FW_RECIPE_TABLE FIRMWARE(0x5371446c)
 #define FW_QUEUE_COMPLETE FIRMWARE(0x53719940)
+#define FW_QUEUE_WRITTEN_RETURN FIRMWARE(0x53723204)
 /* The size classifier is 0x533a2820. */
 
 /* Allocation and the vector helpers of View children. */

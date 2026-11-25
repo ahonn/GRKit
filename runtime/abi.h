@@ -487,8 +487,8 @@
    post when a crop shot finishes before the shutter release stops
    (runtime/crop_queue.S). */
 #define GRKIT_HOST_CROP_QUEUE_OWNER 1084
-/* GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
-   CROP_QUEUE_RECOVERED. */
+/* GR IV: the flags of that shot (runtime/crop_queue.h): its start and start
+   time, its queue completion, and the write of its files. */
 #define GRKIT_HOST_CROP_QUEUE_FLAGS 1088
 /* CORE.BORDER: 0 Off, 1 Thin, 2 Wide, 3 Instant (runtime/canvas.h). */
 #define GRKIT_HOST_BORDER 1092

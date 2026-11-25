@@ -1159,8 +1159,9 @@ static void crop_follows_the_adj_preview(void)
 }
 #ifdef FW_QUEUE_COMPLETE
 /* GR IV: while the back end makes a shot, a highlighted crop keeps the
-   camera's factor; the bind after the queue completion sets it. A start
-   without a completion ends after CROP_QUEUE_WAIT. */
+   camera's factor, also after the queue completion; the bind after the
+   write of the files sets it. A start without a write ends after
+   CROP_QUEUE_WAIT. */
 static void crop_waits_for_the_shot(void)
 {
     reset();
@@ -1176,6 +1177,9 @@ static void crop_waits_for_the_shot(void)
     framing_bind(TEST_OWNER);
     assert(native_crop_sets == 0 && !header[GRKIT_HOST_CROP_NATIVE/4]);
     header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] |= CROP_QUEUE_POSTED;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_sets == 0);
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] |= CROP_QUEUE_WRITTEN;
     framing_bind(TEST_OWNER);
     assert(native_crop_bits == crop_factors[3]);
     header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] = 100U << CROP_QUEUE_TIME_SHIFT | CROP_QUEUE_STARTED;
@@ -2104,7 +2108,7 @@ int main(void)
     header[GRKIT_HOST_CROP_QUEUE_FLAGS/4]=CROP_QUEUE_STARTED;
     framing_bind(TEST_OWNER);
     assert(capture_requests==1);
-    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4]|=CROP_QUEUE_POSTED;
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4]|=CROP_QUEUE_WRITTEN;
 #endif
     framing_bind(TEST_OWNER);
     assert(capture_requests==2 && capture_aspect==0);
