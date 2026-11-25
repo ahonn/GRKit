@@ -198,6 +198,16 @@ impl AppState {
     pub fn open_pending_update(self) {
         let confirmed = self.journal.get() == Some(JournalState::Confirmed);
         if self.demo() {
+            // As below: a sheet opened from the camera's journal alone shows
+            // the camera's step, not the send.
+            if matches!(self.phase.get(), UpdatePhase::Idle) {
+                let kind = UpdateKind::Install;
+                self.phase.set(if confirmed {
+                    UpdatePhase::Restart { kind }
+                } else {
+                    UpdatePhase::WaitingConfirm { kind }
+                });
+            }
             self.update_shown.set(true);
             self.sheet.set(Some(if confirmed {
                 Sheet::Restart

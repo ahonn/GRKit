@@ -15,7 +15,7 @@ use crate::domain::{
     fake_modules::{self, FakeChange},
     modules::{
         CatalogAnswer, Managed, ModuleCatalog, ModuleDraft, ModuleLayout, ModulePlace, ModuleRow,
-        ModulesState, module_rows, package_can_install, png_data_uri, settle,
+        ModulesState, module_rows, package_can_install, pixel_icon_svg, settle,
     },
 };
 use crate::platform::modules::{self as remote, CachedIcon, ModuleCache};
@@ -194,7 +194,7 @@ impl AppState {
             .modules
             .iter()
             .filter_map(|module| match cache.icon(&module.id)? {
-                CachedIcon::Image(bytes) => Some((module.id.clone(), png_data_uri(&bytes)?)),
+                CachedIcon::Image(bytes) => Some((module.id.clone(), pixel_icon_svg(&bytes)?)),
                 CachedIcon::Missing => None,
             })
             .collect();
@@ -333,7 +333,7 @@ impl AppState {
             if self.connect_generation.get() != generation {
                 return;
             }
-            let uri = icon.as_deref().and_then(png_data_uri);
+            let uri = icon.as_deref().and_then(pixel_icon_svg);
             cache.save_icon(
                 &module.id,
                 uri.is_some().then_some(icon.as_deref()).flatten(),
@@ -357,6 +357,19 @@ impl AppState {
         }
         if self.modules.state.with(Option::is_none) {
             self.modules.state.set(Some(fake_modules::demo_state()));
+        }
+        if self.modules.icons.with(BTreeMap::is_empty) {
+            let icons = self.modules.catalog.with(|catalog| {
+                catalog
+                    .iter()
+                    .flat_map(|c| &c.modules)
+                    .filter_map(|module| {
+                        let svg = pixel_icon_svg(fake_modules::demo_icon(&module.id)?)?;
+                        Some((module.id.clone(), svg))
+                    })
+                    .collect()
+            });
+            self.modules.icons.set(icons);
         }
         self.modules.writable.set(self.camera_online());
     }
@@ -450,7 +463,6 @@ impl AppState {
     }
 
     fn finish_module_change(self, before: ModulesState, answer: Result<ModulesState, LookError>) {
-        self.modules.busy.set(None);
         self.modules.rollback.with(|slot| *slot = None);
         let (state, error) = settle(before, answer);
         if error.is_none()
@@ -461,7 +473,12 @@ impl AppState {
             cache.save_state(&state);
         }
         let done = error.is_none();
-        self.set_module_state(state);
+        // One update: a switch shows the value asked for until the slot is
+        // free, and must not show the old value between the two.
+        batch(|| {
+            self.modules.busy.set(None);
+            self.set_module_state(state);
+        });
         if let Some(error) = error {
             if !self.demo() && error != LookError::ConnectionLost {
                 self.refresh_modules();
@@ -558,7 +575,11 @@ impl AppState {
         // The Settings tab shows the GRKit settings whatever tab is open at a
         // connect.
         self.refresh_camera_settings();
-        if self.demo() || !self.camera_online() || self.modules.loading.get() {
+        if self.demo() {
+            self.refresh_demo_modules();
+            return;
+        }
+        if !self.camera_online() || self.modules.loading.get() {
             return;
         }
         let cache = self.adopt_module_cache();
@@ -907,6 +928,14 @@ impl AppState {
         self.modules.catalog.set(None);
         self.modules.state.set(None);
         self.modules.loading.set(true);
+    }
+
+    /// Demo screens: a read of the modules that failed.
+    pub(crate) fn seed_demo_modules_failed(self) {
+        self.modules.catalog.set(None);
+        self.modules.state.set(None);
+        self.modules.loading.set(false);
+        self.modules.error.set(Some(LookError::ConnectionLost));
     }
 
     /// Demo screens: a row whose change is being saved.

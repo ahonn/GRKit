@@ -17,6 +17,7 @@ pub(crate) mod http_api;
 mod link;
 pub mod link_health;
 pub mod look_media;
+pub mod look_preview;
 pub mod looks;
 pub mod modules;
 pub mod nearby_watch;
@@ -29,7 +30,7 @@ mod update;
 mod update_api;
 pub use update_api::{
     JournalState, SoftwareRequestSummary, UpdateIntent, UpdateObservation, UpdateResource,
-    UpdateSnapshot, observe_update, problem_code, response_error,
+    UpdateSnapshot, observe_update, problem_code, response_error, stage_error,
 };
 pub mod uuids;
 mod wifi_cred;

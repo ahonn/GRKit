@@ -81,6 +81,15 @@ enum Change {
 }
 
 impl AppState {
+    /// Demo screens: a read of the recipes that failed.
+    pub(crate) fn seed_demo_recipes_failed(self) {
+        self.recipes.snapshot.set(None);
+        self.recipes.loading.set(false);
+        self.recipes
+            .error
+            .set(Some(RecipeError::Look(LookError::ConnectionLost)));
+    }
+
     pub fn recipes_snapshot(self) -> Option<RecipesSnapshot> {
         self.recipes.snapshot.get()
     }
@@ -356,13 +365,17 @@ impl AppState {
                     ),
                 };
                 let result = remote::change(&boot_id, method, &path, body).await;
-                self.release_recipe(&work);
                 match result {
                     Ok(snapshot) => {
-                        self.recipes.snapshot.set(Some(snapshot));
+                        // One update, so a switch moves no more than once.
+                        batch(|| {
+                            self.release_recipe(&work);
+                            self.recipes.snapshot.set(Some(snapshot));
+                        });
                         done(self);
                     }
                     Err(error) => {
+                        self.release_recipe(&work);
                         failed(self);
                         self.refresh_recipes();
                         self.alert_recipe_error(error);

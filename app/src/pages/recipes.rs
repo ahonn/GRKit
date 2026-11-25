@@ -1,7 +1,7 @@
 //! Recipes tab: the camera's recipes in camera menu order. Browse applies
 //! a recipe from its row; Edit turns recipes on or off and moves them.
 
-use nsh_base::{alert_dialog, theme};
+use nsh_base::alert_dialog;
 use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
@@ -11,22 +11,23 @@ use grkit_core::recipes::Look;
 
 use crate::domain::recipes::RecipeItem;
 use crate::pages::looks::{
-    ROW_COVER, ROW_GAP, ROW_HEIGHT, RowGestures, RowMode, drag_handle, list, list_count,
-    loading_card, offline_card, refresh_notice, reorder_list, round_check, section,
+    ROW_COVER, ROW_GAP, RowMode, loading_card, no_camera, offline_card, refresh_notice, section,
 };
 use crate::pages::recipe_text::{glow_level, grain_level};
-use crate::store::{AppState, Route, Tab, app_store_url};
+use crate::store::{AppState, Route, app_store_url};
 use crate::strings::tr;
+use crate::ui::PageTitle;
 use crate::ui::{
-    badge, camera_art, cover_view, grouped_card, primary_button, secondary_button, token,
+    ButtonKind, ButtonSize, ChipTone, ListRow, RowGestures, button, check_circle, cover_thumb,
+    drag_handle, empty_state, glyph, list_row, list_section, notice_card, reorder_list, row_chip,
+    token,
 };
 
 pub fn recipes_root(app: AppState) -> impl IntoElement {
     // Edit shows the checks and the handles; Browse opens and applies.
     let editing = signal(false);
     crate::ui::app_page()
-        .title(move || tr("recipes.title", &[]))
-        .header_large_title(!cfg!(target_os = "android"))
+        .page_title(move || tr("recipes.title", &[]), true)
         .header_right_items(move || {
             if !can_add(app) {
                 return Vec::new();
@@ -45,11 +46,7 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
                     .on_press(move || app.open_recipe_presets()),
             ];
             if can_edit(app) {
-                items.push(
-                    HeaderItem::new(tr("recipes.edit", &[]))
-                        .key("edit")
-                        .on_press(move || editing.set(true)),
-                );
+                items.push(crate::pages::looks::sort_item(editing));
             }
             items
         })
@@ -70,10 +67,10 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
                 .refresh(Some(crate::store::page_refresh::RECIPES.to_owned()))
                 .top_of(Some(crate::store::Tab::Recipes.key().to_owned()))
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
-                        .px_6()
+                        .px_4()
                         .pt_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .gap(px(ROW_GAP))
@@ -94,85 +91,28 @@ fn can_edit(app: AppState) -> bool {
             .is_some_and(|s| !s.recipes.is_empty())
 }
 
-/// A card with art, a title, a note, and one button.
-pub(crate) fn center_card(
-    art: AnyElement,
-    title: String,
-    body: String,
-    button: String,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    grouped_card(
-        view()
-            .p_6()
-            .gap_4()
-            .items_center()
-            .child(art)
-            .child(
-                text(title)
-                    .text_size(px(crate::ui::ty::HEADLINE))
-                    .font_weight(FontWeight::SEMIBOLD),
-            )
-            .child(
-                text(body)
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .line_height(px(22.0))
-                    .text_center()
-                    .text_color(move || theme().muted_foreground),
-            )
-            .child(view().w_full().child(primary_button(button, on_press))),
-    )
-}
-
-const RECIPE_ART: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 90" width="150" height="112" fill="none" stroke="#9A9A9A" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="30" y="8" width="60" height="74" rx="8"/><path d="M42 30h36M42 44h36M42 58h22"/></svg>"##;
-
 fn on_camera(app: AppState, editing: bool) -> AnyElement {
     if !app.camera_online() {
         if let Some(snapshot) = app.offline_recipes() {
             return offline_recipes(app, snapshot).into_element();
         }
-        return center_card(
-            view()
-                .opacity(0.35)
-                .child(camera_art(crate::domain::CameraModel::Gr3, 180.0, false))
-                .into_element(),
-            tr("looks.no_camera_title", &[]),
-            tr("recipes.no_camera_body", &[]),
-            tr("looks.connect", &[]),
-            move || {
-                app.set_tab(Tab::Camera);
-                app.connect_saved();
-            },
-        )
-        .into_element();
+        return no_camera(app, "recipes.no_camera_body").into_element();
     }
     let Some(snapshot) = app.recipes_snapshot() else {
         if app.recipes_error().is_some() {
-            return grouped_card(
-                view()
-                    .p_4()
-                    .gap_3()
-                    .child(text(tr("recipes.read_failed", &[])).text_size(px(crate::ui::ty::BODY)))
-                    .child(secondary_button(tr("looks.retry", &[]), move || {
-                        app.refresh_recipes()
-                    })),
-            )
-            .into_element();
+            return empty_state(glyph::WARNING, tr("recipes.read_failed_title", &[]))
+                .action(tr("looks.retry", &[]), move || app.refresh_recipes())
+                .into_element();
         }
         return loading_card(tr("recipes.loading", &[])).into_element();
     };
     if snapshot.recipes.is_empty() && snapshot.unreadable == 0 {
-        return center_card(
-            image(nsh_core::element::ImageSrc::svg_markup(RECIPE_ART))
-                .w(px(150.0))
-                .h(px(112.0))
-                .into_element(),
-            tr("recipes.empty_title", &[]),
-            tr("recipes.empty_body", &[]),
-            tr("recipes.add_title", &[]),
-            move || app.open_recipe_presets(),
-        )
-        .into_element();
+        return empty_state(glyph::RECIPE, tr("recipes.empty_title", &[]))
+            .body(tr("recipes.empty_body", &[]))
+            .action(tr("recipes.add_title", &[]), move || {
+                app.open_recipe_presets()
+            })
+            .into_element();
     }
     let editable = app.recipe_busy().is_none();
     let mode = if editing {
@@ -191,19 +131,14 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
             move |from, to| app.move_recipe(from, to),
             move |index, gestures| {
                 let item = rows.borrow_mut()[index].take().expect("each row once");
-                recipe_row(app, item, mode, editable, index + 1 == count, gestures).into_element()
+                edit_row(app, item, editable, index + 1 == count, gestures)
             },
         )
         .into_element()
     } else {
-        let last = count.saturating_sub(1);
-        list(
+        list_section(
             on.into_iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    recipe_row(app, item, mode, editable, i == last, None).into_element()
-                })
-                .collect(),
+                .map(|item| recipe_row(app, item, mode, editable)),
         )
         .into_element()
     };
@@ -217,26 +152,31 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
         .child(look_off_notice(app, &snapshot))
         .child(section(
             tr("recipes.menu", &[]),
-            list_count(snapshot.on_count(), snapshot.max_on),
             move || app.recipes_refreshing(),
             menu_list,
-            (mode != RowMode::Edit).then(|| tr("recipes.menu_note", &[])),
+            None,
         ))
         .child((!off.is_empty()).then(|| {
-            let last = off.len() - 1;
-            let n = off.len().to_string();
-            let rows = off
-                .into_iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    recipe_row(app, item, mode, editable, i == last, None).into_element()
-                })
-                .collect();
+            let rows = if mode == RowMode::Edit {
+                let last = off.len() - 1;
+                crate::ui::list(
+                    off.into_iter()
+                        .enumerate()
+                        .map(|(i, item)| edit_row(app, item, editable, i == last, None))
+                        .collect(),
+                )
+                .into_element()
+            } else {
+                list_section(
+                    off.into_iter()
+                        .map(|item| recipe_row(app, item, mode, editable)),
+                )
+                .into_element()
+            };
             section(
                 tr("recipes.off", &[]),
-                n,
                 || false,
-                list(rows),
+                rows,
                 (mode == RowMode::Edit).then(|| tr("recipes.off_edit_note", &[])),
             )
         }))
@@ -253,73 +193,26 @@ fn look_off_notice(
         return None;
     }
     let id = app.film_look_off()?;
-    let action = tr("modules.enable", &[]);
     Some(
-        grouped_card(
-            view()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .gap_3()
-                .min_h(px(56.0))
-                .px_4()
-                .child(
-                    text(tr("modules.looks_off", &[]))
-                        .flex_1()
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(
-                    view()
-                        .role(AccessibilityRole::Button)
-                        .label(action.clone())
-                        .min_h(px(44.0))
-                        .justify_center()
-                        .on_press(move || app.set_module_enabled(&id, true))
-                        .active(|s| s.opacity(0.72))
-                        .child(
-                            text(action)
-                                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                .font_weight(FontWeight::SEMIBOLD),
-                        ),
-                ),
-        )
-        .into_element(),
+        notice_card(tr("modules.looks_off", &[]))
+            .action(button(
+                tr("modules.enable", &[]),
+                ButtonKind::Tinted,
+                ButtonSize::Small,
+                move || app.set_module_enabled(&id, true),
+            ))
+            .into_element(),
     )
 }
 
 /// The recipes of a later GRKit that this app leaves out.
 fn newer_app_row(count: usize) -> impl IntoElement {
-    let action = tr("recipes.needs_app_action", &[]);
-    grouped_card(
-        view()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .gap_3()
-            .min_h(px(56.0))
-            .px_4()
-            .child(
-                text(tr("recipes.needs_app", &[("count", &count.to_string())]))
-                    .flex_1()
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .text_color(move || theme().muted_foreground),
-            )
-            .child(
-                view()
-                    .role(AccessibilityRole::Button)
-                    .label(action.clone())
-                    .min_h(px(44.0))
-                    .justify_center()
-                    .on_press(|| crate::pages::software::open(app_store_url()))
-                    .active(|s| s.opacity(0.72))
-                    .child(
-                        text(action)
-                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    ),
-            ),
-    )
+    notice_card(tr("recipes.needs_app", &[("count", &count.to_string())])).action(button(
+        tr("recipes.needs_app_action", &[]),
+        ButtonKind::Tinted,
+        ButtonSize::Small,
+        || crate::pages::software::open(app_store_url()),
+    ))
 }
 
 /// The recipes as the phone last read them, while no camera is connected:
@@ -331,40 +224,25 @@ fn offline_recipes(
     let (on, off): (Vec<RecipeItem>, Vec<RecipeItem>) =
         snapshot.recipes.into_iter().partition(|r| r.enabled);
     let rows = |items: Vec<RecipeItem>| {
-        let last = items.len().saturating_sub(1);
-        list(
+        list_section(
             items
                 .into_iter()
-                .enumerate()
-                .map(|(i, item)| {
-                    recipe_row(app, item, RowMode::ReadOnly, false, i == last, None).into_element()
-                })
-                .collect(),
+                .map(|item| recipe_row(app, item, RowMode::ReadOnly, false)),
         )
     };
-    let on_count = list_count(on.len(), snapshot.max_on);
-    let off_count = off.len().to_string();
     let has_off = !off.is_empty();
     view()
         .gap(px(ROW_GAP))
         .child(offline_card(app))
-        .child(section(
-            tr("recipes.menu", &[]),
-            on_count,
-            || false,
-            rows(on),
-            None,
-        ))
-        .child(
-            has_off.then(|| section(tr("recipes.off", &[]), off_count, || false, rows(off), None)),
-        )
+        .child(section(tr("recipes.menu", &[]), || false, rows(on), None))
+        .child(has_off.then(|| section(tr("recipes.off", &[]), || false, rows(off), None)))
 }
 
 /// The tile of a recipe: the cover of its Film Look, else the camera's icon
 /// of its Image Control type.
 pub fn recipe_tile(app: AppState, item: &RecipeItem, size: f32, faded: bool) -> AnyElement {
     if let Some(look) = item.effect_id.as_deref().and_then(|id| app.look(id)) {
-        return cover_view(&look.shown_cover(), size, faded);
+        return cover_thumb(&look.shown_cover(), size, faded);
     }
     match &item.recipe.look {
         Look::Native(native) => crate::ui::image_control_tile(native.image_type, size, faded),
@@ -391,16 +269,32 @@ pub fn native_tile(label: String, size: f32, faded: bool) -> AnyElement {
         .p(px(3.0))
         .opacity(if faded { 0.45 } else { 1.0 })
         .child(
-            // Drawn on a fixed tile, as a cover is.
-            text(label)
+            // Drawn on a fixed tile, as a cover is. The longest word fits
+            // the tile's width, so a line breaks between words, not inside
+            // one (CineStill, not CineSt / ill).
+            text(label.clone())
                 .allow_font_scaling(false)
-                .text_size(px((size / 4.0).max(10.0)))
+                .text_size(px(native_tile_text(&label, size)))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_center()
                 .number_of_lines(3)
                 .text_color(rgb(0xffffff)),
         )
         .into_element()
+}
+
+/// The text size of a name tile `size` points wide: a quarter of the tile,
+/// smaller when the longest word would not fit on one line (about 0.6 em
+/// a letter in the semibold system font), and not under a sixth of it.
+fn native_tile_text(label: &str, size: f32) -> f32 {
+    let longest = label
+        .split_whitespace()
+        .map(|word| word.chars().count())
+        .max()
+        .unwrap_or(1)
+        .max(1) as f32;
+    let fits = (size - 6.0) / (longest * 0.6);
+    (size / 4.0).max(10.0).min(fits).max(size / 6.0)
 }
 
 /// The line under the name: the look, and its grain and glow.
@@ -438,23 +332,56 @@ pub fn recipe_summary(app: AppState, item: &RecipeItem) -> String {
     parts.join(" · ")
 }
 
-fn recipe_row(
+/// A recipe in Browse or ReadOnly: its tile, name and summary. Browse
+/// opens it, and applies it from its button; the current recipe has a chip
+/// instead, as there is nothing to apply.
+fn recipe_row(app: AppState, item: RecipeItem, mode: RowMode, editable: bool) -> ListRow {
+    let name = app.recipe_name(&item);
+    let summary = recipe_summary(app, &item);
+    let (id, current, ready) = (item.id, item.current, item.ready);
+    let working = app.recipe_row_busy(id);
+    let row = list_row(name.clone())
+        .subtitle(summary)
+        .leading(crate::ui::recipe_badge(
+            recipe_tile(app, &item, ROW_COVER, !item.enabled),
+            ROW_COVER,
+            !item.enabled,
+        ))
+        .test_id(format!("recipe:{id}"));
+    if mode != RowMode::Browse {
+        return row;
+    }
+    let end = if current && !working {
+        row_chip(tr("recipes.current", &[]), ChipTone::Tint)
+    } else {
+        button(
+            tr("recipes.apply_short", &[]),
+            ButtonKind::Tinted,
+            ButtonSize::Small,
+            move || app.apply_recipe(id),
+        )
+        .label(tr("recipes.apply_named", &[("name", &name)]))
+        .enabled(editable && ready)
+        .loading(working)
+        .into_element()
+    };
+    // The row opens the recipe: the chevron says so beside Apply.
+    row.trailing(end)
+        .page(move || app.push(Route::RecipeDetail(id)))
+}
+
+/// A recipe in Edit: the check that shows or hides it in the camera menu,
+/// its tile and name, and the handle that moves it.
+fn edit_row(
     app: AppState,
     item: RecipeItem,
-    mode: RowMode,
     editable: bool,
     last: bool,
     gestures: Option<RowGestures>,
-) -> impl IntoElement {
+) -> AnyElement {
     let name = app.recipe_name(&item);
-    let summary = recipe_summary(app, &item);
-    let off = !item.enabled;
-    let (id, enabled, current, ready) = (item.id, item.enabled, item.current, item.ready);
+    let (id, enabled) = (item.id, item.enabled);
     let working = app.recipe_row_busy(id);
-    let mut label = format!("{name}, {summary}");
-    if current {
-        label = format!("{label}, {}", tr("recipes.current", &[]));
-    }
     let toggle_label = tr(
         if enabled {
             "recipes.hide_named"
@@ -463,86 +390,34 @@ fn recipe_row(
         },
         &[("name", &name)],
     );
-    let apply_label = tr("recipes.apply_named", &[("name", &name)]);
-    let handle_name = name.clone();
-    view()
+    let leading = view()
         .flex_row()
         .items_center()
-        .min_h(px(ROW_HEIGHT))
-        .pr(px(4.0))
-        .bg(move || theme().card)
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child((mode == RowMode::Edit).then(|| {
-            round_check(enabled, toggle_label, editable, working, move || {
-                app.set_recipe_enabled(id, !enabled)
-            })
-        }))
-        .child({
-            let v = view()
-                .flex_1()
-                .min_h(px(ROW_HEIGHT))
-                .py_1()
-                .flex_row()
-                .items_center()
-                .gap_3()
-                .pl(px(if mode == RowMode::Edit { 4.0 } else { 12.0 }))
-                .role(AccessibilityRole::Button)
-                .label(label)
-                .when(mode == RowMode::Browse, |v| {
-                    v.on_press(move || app.push(Route::RecipeDetail(id)))
-                        .active(|s| s.opacity(0.72))
-                });
-            v.child(recipe_tile(app, &item, ROW_COVER, off)).child(
-                view()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .child(
-                                text(name.clone())
-                                    .flex_shrink(1.0)
-                                    .text_size(px(crate::ui::ty::HEADLINE))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(move || {
-                                        if off {
-                                            theme().muted_foreground
-                                        } else {
-                                            theme().foreground
-                                        }
-                                    }),
-                            )
-                            .child(current.then(|| badge(tr("recipes.current", &[])))),
-                    )
-                    .child(
-                        text(summary)
-                            .number_of_lines(1)
-                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                            .text_color(move || theme().muted_foreground),
-                    ),
-            )
-        })
-        .child(match mode {
-            // The camera already has the current recipe's settings: its
-            // badge says so, and there is nothing to apply.
-            RowMode::Browse if current && !working => view().into_element(),
-            RowMode::Browse => crate::ui::pill_button_loading(
-                tr("recipes.apply_short", &[]),
-                apply_label,
-                editable && ready,
-                working,
-                move || app.apply_recipe(id),
-            )
-            .into_element(),
-            RowMode::Edit if gestures.is_some() => {
-                drag_handle(handle_name, gestures).into_element()
-            }
-            _ => view().into_element(),
-        })
+        // The check's touch area reaches into the card's margin.
+        .ml(px(-10.0))
+        .gap(px(4.0))
+        .child(check_circle(
+            enabled,
+            toggle_label,
+            editable,
+            working,
+            move || app.set_recipe_enabled(id, !enabled),
+        ))
+        .child(crate::ui::recipe_badge(
+            recipe_tile(app, &item, ROW_COVER, !enabled),
+            ROW_COVER,
+            !enabled,
+        ));
+    let mut row = list_row(name.clone())
+        .subtitle(recipe_summary(app, &item))
+        .leading(leading);
+    if gestures.is_some() {
+        row = row.trailing(drag_handle(name, gestures));
+    }
+    view()
+        .bg(move || token("list-card"))
+        .child(row.into_row(last))
+        .into_element()
 }
 
 pub fn confirm_delete_recipe(app: AppState, id: u32, name: String) {

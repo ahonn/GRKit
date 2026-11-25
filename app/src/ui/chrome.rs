@@ -172,16 +172,65 @@ pub fn held_menu(title: impl Into<SharedString>) -> nsh_base::AlertDialogOptions
 /// A page of the navigation stacks. Android's bar otherwise takes its colors
 /// from the activity's light theme, whatever the appearance.
 pub fn app_page() -> nsh_core::element::Screen {
-    let page = nsh_base::nav_page();
-    if cfg!(target_os = "android") {
-        page.header_style_with(|s| {
-            s.bg(theme().background)
-                .text_color(theme().foreground)
-                .tint_color(theme().foreground)
-        })
-    } else {
-        page
+    nsh_base::nav_page().header_style_with(bar_style)
+}
+
+/// The title of a page in its bar. iOS keeps the system title. Android's
+/// toolbar draws its title at 20 sp, smaller than Material 3: the page draws
+/// its own instead, at 28 sp on the root page of a tab and 22 sp on a page
+/// pushed above it.
+pub trait PageTitle: Sized {
+    fn page_title<T>(self, title: T, root: bool) -> Self
+    where
+        T: IntoReactive<SharedString> + Clone + 'static;
+}
+
+impl PageTitle for nsh_core::element::Screen {
+    fn page_title<T>(self, title: T, root: bool) -> Self
+    where
+        T: IntoReactive<SharedString> + Clone + 'static,
+    {
+        let screen = self.title(title.clone());
+        if !cfg!(target_os = "android") {
+            return screen;
+        }
+        screen.header_title(
+            crate::ui::ty::text(title)
+                .text_size(px(if root { 28.0 } else { 22.0 }))
+                .number_of_lines(1)
+                .text_color(move || theme().foreground)
+                .role(AccessibilityRole::Header),
+        )
     }
+}
+
+/// The bar in the fill of the page under it, so the two read as one.
+/// Android's bar otherwise takes its colors from the activity's light
+/// theme, whatever the appearance.
+fn bar_style(s: nsh_core::element::StyleRefinement) -> nsh_core::element::StyleRefinement {
+    let s = s.bg(token("list-background"));
+    if cfg!(target_os = "android") {
+        s.text_color(theme().foreground)
+            .tint_color(theme().foreground)
+    } else {
+        s
+    }
+}
+
+/// A page whose top can be a photo ([`crate::ui::detail_header`]): while
+/// `over_photo`, the bar is see-through over the photo and its buttons are
+/// white. The bar has no title: the page shows it.
+pub fn photo_page(over_photo: impl Fn() -> bool + Clone + 'static) -> nsh_core::element::Screen {
+    nsh_base::nav_page()
+        .header_title(view())
+        .header_transparent(over_photo.clone())
+        .header_style_with(move |s| {
+            if over_photo() {
+                s.tint_color(rgb(0xFFFFFF))
+            } else {
+                bar_style(s)
+            }
+        })
 }
 
 /// Floating sheet surface, with an opaque fill in light mode.
@@ -212,42 +261,6 @@ pub fn camera_art(model: CameraModel, width: f32, faded: bool) -> impl IntoEleme
         .opacity(opacity)
 }
 
-pub fn primary_button(title: impl Into<String>, on_press: impl Fn() + 'static) -> impl IntoElement {
-    primary_button_loading(title, false, on_press)
-}
-
-/// [`primary_button`] with a spinner in place of its title while `loading`.
-pub fn primary_button_loading(
-    title: impl Into<String>,
-    loading: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    let title = title.into();
-    view()
-        .min_h(px(50.0))
-        .py_3()
-        .px_8()
-        .rounded_full()
-        .items_center()
-        .justify_center()
-        .bg(move || token("button"))
-        .role(AccessibilityRole::Button)
-        .label(title.clone())
-        .accessibility_state(busy_state(loading))
-        .when(!loading, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.72))
-        })
-        .child(loading_content(
-            loading,
-            20.0,
-            token("button-foreground"),
-            text(title)
-                .text_size(px(crate::ui::ty::BUTTON))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("button-foreground")),
-        ))
-}
-
 /// Full-width primary action inside a sheet.
 pub fn sheet_primary_button(
     title: impl Into<String>,
@@ -271,7 +284,8 @@ pub fn sheet_primary_button_loading(
         .rounded_full()
         .items_center()
         .justify_center()
-        .bg(move || token("button"))
+        // The brand tint, as the main buttons of the pages.
+        .bg(move || token("tint-fill"))
         .role(AccessibilityRole::Button)
         .label(title.clone())
         .accessibility_state(busy_state(loading))
@@ -281,13 +295,18 @@ pub fn sheet_primary_button_loading(
         .child(loading_content(
             loading,
             20.0,
-            token("button-foreground"),
+            rgb(0xFFFFFF).into(),
             text(title)
                 .text_size(px(crate::ui::ty::BUTTON))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("button-foreground")),
+                .text_color(rgb(0xFFFFFF)),
         ))
 }
+
+/// The touch target of a [`secondary_button`], and the part of it below its
+/// one line of title (a 20-point line).
+const SECONDARY_HEIGHT: f32 = 44.0;
+const SECONDARY_SLACK: f32 = (SECONDARY_HEIGHT - 20.0) / 2.0;
 
 pub fn secondary_button(
     title: impl Into<String>,
@@ -304,31 +323,31 @@ pub fn secondary_button_loading(
     on_press: impl Fn() + 'static,
 ) -> impl IntoElement {
     let title = title.into();
-    // The quiet twin of the primary button: the same capsule in a gray fill
-    // that stays visible on pages and on sheets. The app has no bare text
-    // buttons.
+    // The other ways out under the main button: links in the tint, as the
+    // links below a page's content (`text_link`). The touch target reaches
+    // below the title; on the native sheet that part overlaps the sheet's
+    // bottom padding instead of adding to it, so a sheet that ends with a
+    // link keeps the same space under it as above its title.
     view()
         .w_full()
-        .min_h(px(50.0))
-        .py_3()
-        .rounded_full()
+        .min_h(px(SECONDARY_HEIGHT))
+        .when(NATIVE_SHEET, |v| v.mb(px(-SECONDARY_SLACK)))
         .items_center()
         .justify_center()
-        .bg(move || token("button-secondary"))
         .role(AccessibilityRole::Button)
         .label(title.clone())
         .accessibility_state(busy_state(loading))
         .when(!loading, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.7))
+            v.on_press(on_press).active(|s| s.opacity(0.72))
         })
         .child(loading_content(
             loading,
-            20.0,
-            theme().foreground,
+            18.0,
+            token("tint"),
             text(title)
-                .text_size(px(crate::ui::ty::BUTTON))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || theme().foreground),
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(move || token("tint")),
         ))
 }
 
@@ -348,95 +367,6 @@ pub fn close_chip(on_press: impl Fn() + 'static) -> impl IntoElement {
                 .text_size(px(crate::ui::ty::BODY))
                 .text_color(move || theme().muted_foreground),
         )
-}
-
-/// The header of a group of rows, as iOS draws a grouped list's: lighter
-/// than the rows under it.
-pub fn section_title(title: impl Into<String>) -> impl IntoElement {
-    text(title.into())
-        .text_size(px(crate::ui::ty::FOOTNOTE))
-        .line_height(px(18.0))
-        .text_color(move || theme().muted_foreground)
-}
-
-pub fn grouped_card(child: impl IntoElement) -> impl IntoElement {
-    view()
-        .rounded(px(10.0))
-        .border_1()
-        .border_color(move || theme().border)
-        .overflow_hidden()
-        .bg(move || theme().card)
-        .child(child)
-}
-
-pub fn info_row(
-    title: impl Into<String>,
-    value: impl Into<String>,
-    last: bool,
-) -> impl IntoElement {
-    let title = title.into();
-    let value = value.into();
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .min_h(px(50.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child(
-            text(title)
-                .flex_shrink(1.0)
-                .text_size(px(crate::ui::ty::BODY)),
-        )
-        .child(
-            text(value)
-                .flex_shrink(1.0)
-                .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || theme().muted_foreground),
-        )
-}
-
-pub fn chevron_row(
-    title: impl Into<String>,
-    subtitle: Option<String>,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    let title = title.into();
-    let label = match &subtitle {
-        Some(s) => format!("{title}, {s}"),
-        None => title.clone(),
-    };
-    view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .min_h(px(68.0))
-        .py_3()
-        .px_4()
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .on_press(on_press)
-        .active(|s| s.opacity(0.72).bg(move || theme().accent))
-        .child(
-            view()
-                .flex_1()
-                .gap(px(4.0))
-                .child(
-                    text(title.clone())
-                        .text_size(px(crate::ui::ty::HEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(subtitle.map(|s| {
-                    text(s)
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .line_height(px(22.0))
-                        .text_color(move || theme().muted_foreground)
-                })),
-        )
-        .child(crate::ui::chevron())
 }
 
 #[derive(Clone, Copy)]
@@ -511,26 +441,6 @@ pub fn sheet_shell(
         .child(body)
 }
 
-/// The GRKit wordmark: GR and Kit in a red box. `height` sets its size.
-pub fn wordmark(height: f32) -> impl IntoElement {
-    const LIGHT: &str = include_str!("../../../resources/brand/logo/wordmark.svg");
-    const DARK: &str = include_str!("../../../resources/brand/logo/wordmark-inverse.svg");
-    // The proportions of the wordmark's view box (2663 × 1018).
-    let width = height * 2663.0 / 1018.0;
-    view()
-        .role(AccessibilityRole::Header)
-        .label("GRKit")
-        .child(dynamic(move || {
-            svg(nsh_core::element::ImageSrc::svg_markup(if dark() {
-                DARK
-            } else {
-                LIGHT
-            }))
-            .w(px(width))
-            .h(px(height))
-        }))
-}
-
 /// The mark of a step an error stopped at: a white cross on amber.
 pub fn failed_icon(size: f32) -> impl IntoElement {
     view()
@@ -556,7 +466,7 @@ pub fn connection_button(title: String, on_press: impl Fn() + 'static) -> impl I
         .rounded_full()
         .items_center()
         .justify_center()
-        .bg(move || token("connection-accent"))
+        .bg(move || token("tint-fill"))
         .role(AccessibilityRole::Button)
         .label(title.clone())
         .on_press(on_press)
@@ -565,7 +475,7 @@ pub fn connection_button(title: String, on_press: impl Fn() + 'static) -> impl I
             text(title)
                 .text_size(px(crate::ui::ty::BUTTON))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("connection-accent-foreground")),
+                .text_color(rgb(0xFFFFFF)),
         )
 }
 
@@ -789,106 +699,9 @@ pub fn toggle_loading(
         )
 }
 
-/// Small gray chip, such as In Use.
-pub fn badge(title: String) -> impl IntoElement {
-    view()
-        .min_h(px(22.0))
-        .px_2()
-        .py(px(2.0))
-        .rounded_full()
-        .items_center()
-        .justify_center()
-        .bg(move || theme().muted)
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::CAPTION))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || theme().foreground),
-        )
-}
-
-/// A Look cover, `size` points square, drawn from its SVG at the screen's
-/// pixels.
+/// A Look cover, `size` points wide ([`crate::ui::cover_thumb`]).
 pub fn cover_view(cover: &Cover, size: f32, faded: bool) -> AnyElement {
-    image(nsh_core::element::ImageSrc::svg_markup(&cover.svg()))
-        .w(px(size))
-        .h(px(size))
-        .object_fit(ResizeMode::Contain)
-        .opacity(if faded { 0.45 } else { 1.0 })
-        .into_element()
-}
-
-/// A row with a title and a trailing control or value.
-pub fn control_row(
-    title: impl Into<String>,
-    trailing: impl IntoElement,
-    last: bool,
-) -> impl IntoElement {
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .min_h(px(50.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child(
-            text(title.into())
-                .text_size(px(crate::ui::ty::BODY))
-                .flex_shrink(1.0),
-        )
-        .child(trailing)
-}
-
-/// A pressable row whose title is the action, in `color`.
-pub fn action_row(
-    title: impl Into<String>,
-    destructive: bool,
-    last: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    action_row_loading(title, destructive, last, false, on_press)
-}
-
-/// [`action_row`] with a spinner at its end while `loading`.
-pub fn action_row_loading(
-    title: impl Into<String>,
-    destructive: bool,
-    last: bool,
-    loading: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    let title = title.into();
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .min_h(px(50.0))
-        .px_4()
-        .role(AccessibilityRole::Button)
-        .label(title.clone())
-        .accessibility_state(busy_state(loading))
-        .when(!loading, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.72))
-        })
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child(
-            text(title)
-                .flex_shrink(1.0)
-                .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || {
-                    if destructive {
-                        theme().destructive
-                    } else {
-                        token("link")
-                    }
-                }),
-        )
-        .child(loading.then(|| quiet_spinner(18.0)))
+    crate::ui::cover_thumb(cover, size, faded)
 }
 
 /// The chevron at the end of a row that opens a page.
@@ -899,61 +712,4 @@ pub fn chevron() -> impl IntoElement {
     .w(px(8.0))
     .h(px(14.0))
     .tint_color(move || theme().muted_foreground)
-}
-
-/// A small pill button in the muted fill, such as Apply on a row. The
-/// pill is 32 points tall; its touch target is the platform's.
-///
-/// A spinner replaces its title while `loading`. A pill at work stays at
-/// full strength while the others dim.
-pub fn pill_button_loading(
-    title: String,
-    label: String,
-    enabled: bool,
-    loading: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    let pressable = enabled && !loading;
-    view()
-        .min_h(px(touch_target()))
-        .px_1()
-        .justify_center()
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .accessibility_state(move || AccessibilityState {
-            busy: loading,
-            disabled: !pressable,
-            ..AccessibilityState::default()
-        })
-        .opacity(if enabled || loading { 1.0 } else { 0.4 })
-        .when(pressable, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.6))
-        })
-        .child(
-            view()
-                .min_h(px(32.0))
-                .px(px(14.0))
-                .py_1()
-                .rounded_full()
-                .items_center()
-                .justify_center()
-                .bg(move || theme().muted)
-                .child(loading_content(
-                    loading,
-                    16.0,
-                    theme().foreground,
-                    text(title)
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(move || theme().foreground),
-                )),
-        )
-}
-
-/// Footnote under a group.
-pub fn footnote(copy: impl Into<String>) -> impl IntoElement {
-    text(copy.into())
-        .text_size(px(crate::ui::ty::FOOTNOTE))
-        .line_height(px(18.0))
-        .text_color(move || theme().muted_foreground)
 }

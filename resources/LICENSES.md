@@ -18,6 +18,8 @@ The installation guide uses the [Noto Sans CJK](https://github.com/notofonts/not
 
 The screenshots in the README and the installation guide show the photo [Sakiko buys a delicious soup at Kitchen Grizzly](https://www.flickr.com/photos/mujitra/53311001084/) by MIKI Yoshihito, which is licensed under [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). The photo is cropped and scaled, and the screenshot shows the GRKit menu and the Portra 400 effect over it.
 
+The GRKit app shows the same photo as the sample of each film look (`app/data/look-sample.grlin`), at half size in linear light, with the effect of the look applied. The app shows the credit with the photo.
+
 ## Effects
 
 Each file in `SD_ROOT/GRKIT/EFFECTS/` is one Film Look effect. Each effect of the GRKit catalog is a fit of one film simulation LUT. GRKit contributors made the fits. The files contain the fitted parameters, not the LUTs. "Changes to the LUTs" below describes the changes.

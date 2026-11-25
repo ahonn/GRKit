@@ -5,7 +5,7 @@
 use super::camera_http_base;
 use crate::domain::{
     JournalState, PackageResponse, SoftwareRequestSummary, UpdateError, UpdateIntent,
-    UpdateResource, UpdateSnapshot, problem_code, response_error,
+    UpdateResource, UpdateSnapshot, problem_code, response_error, stage_error,
 };
 use nsh_core::prelude::data_dir;
 use std::{fs, time::Duration};
@@ -114,7 +114,7 @@ pub async fn stage(body: Vec<u8>, boot_id: &str) -> Result<(), UpdateError> {
         Ok(response) if response.ok() => return Ok(()),
         Ok(response) => {
             let body = response.text();
-            let error = response_error(response.status(), &body);
+            let error = stage_error(response.status(), &body);
             if problem_code(&body).as_deref() != Some("software_pending") {
                 return Err(error);
             }

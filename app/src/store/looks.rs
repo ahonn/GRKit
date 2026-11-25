@@ -2,11 +2,14 @@
 //! official catalog, and imports. The camera is authoritative: every change
 //! ends with a fresh read of its Looks, also after a failure.
 
-use std::{cell::RefCell, collections::BTreeSet};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use grkit_core::{
     color::Encoding,
-    cover::{Cover, Scheme, Variant},
+    cover::{Cover, Variant},
     fit::Grade,
 };
 
@@ -16,7 +19,7 @@ use nsh_core::prelude::*;
 
 use super::{AppState, Route, Tab};
 use crate::domain::{
-    CatalogLook, ConnectionState, CoverGroup, JournalState, Look, LookError, LookFilter, LookGroup,
+    CatalogLook, ConnectionState, JournalState, Look, LookError, LookFilter, LookGroup,
     LooksSnapshot,
     fake_looks::{FakeLooks, demo_catalog},
     group_of, look_media,
@@ -28,9 +31,6 @@ use crate::platform::{
     looks::{self as remote, CameraContext},
 };
 use crate::strings::tr;
-
-/// The busy key of a covers change.
-pub const COVERS_KEY: &str = "covers";
 
 /// The demo catalog: each official Look with its GRF file.
 type DemoCatalog = Vec<(CatalogLook, Vec<u8>)>;
@@ -46,12 +46,10 @@ pub enum LookAction {
     TakeBack,
     Add,
     Order,
-    Scheme(Scheme),
-    Reset(CoverGroup),
     Send,
 }
 
-/// The key of the Look (or `order`, `covers`) being changed, and how.
+/// The key of the Look (or `order`) being changed, and how.
 type LookWork = (String, LookAction);
 
 /// An official Look of the catalog.
@@ -116,6 +114,11 @@ pub struct LooksStore {
     draft_source: Stored<RefCell<Option<Vec<u8>>>>,
     fake: Stored<RefCell<Option<FakeLooks>>>,
     fake_catalog: Stored<RefCell<DemoCatalog>>,
+    /// The sample photo with each Look, as PNG `data:` URIs, by the digest
+    /// of the Look's file; `None` when it cannot be made.
+    previews: Signal<BTreeMap<String, Option<String>>>,
+    /// The previews asked for, so each is made once.
+    preview_requests: Stored<RefCell<BTreeSet<String>>>,
 }
 
 impl LooksStore {
@@ -138,6 +141,8 @@ impl LooksStore {
             draft_source: stored(RefCell::new(None)),
             fake: stored(RefCell::new(demo.then(FakeLooks::demo))),
             fake_catalog: stored(RefCell::new(if demo { demo_catalog() } else { Vec::new() })),
+            previews: signal(BTreeMap::new()),
+            preview_requests: stored(RefCell::new(BTreeSet::new())),
         }
     }
 }
@@ -154,6 +159,15 @@ pub(super) async fn off_thread<T: Send + 'static>(
 }
 
 impl AppState {
+    /// Demo screens: a read of the Looks that failed.
+    pub(crate) fn seed_demo_looks_failed(self) {
+        self.looks.snapshot.set(None);
+        self.looks.loading.set(false);
+        self.looks
+            .error
+            .set(Some(crate::domain::LookError::ConnectionLost));
+    }
+
     fn looks_store(self) -> LooksStore {
         self.looks
     }
@@ -433,6 +447,129 @@ impl AppState {
         });
     }
 
+    /// The sample photo with the Look `id` as a PNG `data:` URI, once made.
+    /// The first ask starts it: an official Look takes its preview table
+    /// from the site, another Look one made from its file.
+    pub fn look_preview(self, id: &str) -> Option<String> {
+        let look = self.look(id)?;
+        let source = Source::Camera {
+            id: look.id.clone(),
+        };
+        self.preview(look.content_hash.clone(), look.id, source)
+    }
+
+    /// The sample photo with an official Look of the catalog, for the Add
+    /// page, as [`Self::look_preview`].
+    pub fn catalog_preview(self, item: &CatalogItem) -> Option<String> {
+        let source = Source::Catalog {
+            look: item.look.clone(),
+        };
+        self.preview(
+            format!("catalog:{}", item.look.id),
+            item.look.id.clone(),
+            source,
+        )
+    }
+
+    /// The preview kept under `key`, or `None` while it is made: the first
+    /// ask starts it.
+    fn preview(self, key: String, id: String, source: Source) -> Option<String> {
+        if let Some(made) = self.looks.previews.with(|p| p.get(&key).cloned()) {
+            return made;
+        }
+        let first = self
+            .looks
+            .preview_requests
+            .with(|r| r.borrow_mut().insert(key.clone()));
+        if first {
+            self.root.run(|| {
+                spawn(async move {
+                    let made = self.make_preview(&id, source).await;
+                    self.looks.previews.update(|p| {
+                        p.insert(key, made);
+                    });
+                });
+            });
+        }
+        None
+    }
+
+    /// The sample photo as the camera's Standard renders it, without a
+    /// Look: the site's table for the camera's firmware. None in the demo.
+    pub fn standard_preview(self) -> Option<String> {
+        const KEY: &str = "standard";
+        if let Some(made) = self.looks.previews.with(|p| p.get(KEY).cloned()) {
+            return made;
+        }
+        let first = self
+            .looks
+            .preview_requests
+            .with(|r| r.borrow_mut().insert(KEY.to_owned()));
+        if first && !self.demo() {
+            self.root.run(|| {
+                spawn(async move {
+                    self.ensure_catalog().await;
+                    let made = match self.looks.catalog_target.get() {
+                        Some(target) => match remote::standard_table(&target).await {
+                            Ok(table) => off_thread(move || {
+                                crate::domain::look_preview::sample_preview_png(&table).ok()
+                            })
+                            .await
+                            .flatten()
+                            .map(|png| crate::domain::modules::data_uri("image/png", &png)),
+                            Err(_) => None,
+                        },
+                        None => None,
+                    };
+                    self.looks.previews.update(|p| {
+                        p.insert(KEY.to_owned(), made);
+                    });
+                });
+            });
+        }
+        None
+    }
+
+    /// The sample photo with the Look `id`: the site's table of an official
+    /// Look, else a table made from the Look's file in `source`.
+    async fn make_preview(self, id: &str, source: Source) -> Option<String> {
+        let table = match self.catalog_table(id).await {
+            Some(table) => table,
+            // The site has the tables of its Looks: an official Look is not
+            // downloaded whole for a preview.
+            None if matches!(source, Source::Catalog { .. }) && !self.demo() => return None,
+            None => {
+                if self.looks.base_gamma.with(|b| b.borrow().is_none()) {
+                    self.ensure_catalog().await;
+                }
+                let base_gamma = self.looks.base_gamma.with(|b| b.borrow().clone())?;
+                let grf = self.source_bytes(&source).await?;
+                off_thread(move || look_media::preview_table(&grf, &base_gamma).ok())
+                    .await
+                    .flatten()?
+            }
+        };
+        let png = off_thread(move || crate::domain::look_preview::sample_preview_png(&table).ok())
+            .await
+            .flatten()?;
+        Some(crate::domain::modules::data_uri("image/png", &png))
+    }
+
+    /// The site's preview table of the official Look `id`, which shows the
+    /// camera's own tone of a Look made from a native one.
+    async fn catalog_table(self, id: &str) -> Option<Vec<u8>> {
+        if self.demo() {
+            return None;
+        }
+        self.ensure_catalog().await;
+        let target = self.looks.catalog_target.get()?;
+        let item = self
+            .looks
+            .catalog
+            .with(|c| c.as_ref()?.iter().find(|i| i.look.id == id).cloned())?;
+        remote::preview_table(&target, &item.look).await.ok()
+    }
+
     /// Present a failed change as an alert.
     pub fn alert_look_error(self, error: LookError) {
         // A change that the lost link cut off: a notice, and the tab shows
@@ -456,7 +593,7 @@ impl AppState {
             LookError::Service(detail) => format!("{} {detail}", tr(body, &[])),
             _ => tr(body, &[("max", &max)]),
         };
-        if matches!(error, LookError::UpdatePending | LookError::ChangesOff) {
+        if error == LookError::UpdatePending {
             self.looks.blocked.set(Some(error.clone()));
         }
         spawn(async move {
@@ -502,18 +639,20 @@ impl AppState {
         Fut: std::future::Future<Output = Result<(), LookError>> + 'static,
     {
         if self.demo() {
-            self.release_look(&work);
             let result = self.looks.fake.with(|fake| {
                 fake.borrow_mut()
                     .as_mut()
                     .map_or(Err(LookError::ConnectionLost), demo)
             });
-            self.refresh_looks();
             let ok = result.is_ok();
+            batch(|| {
+                self.release_look(&work);
+                self.refresh_looks();
+                settle(self, ok);
+            });
             if let Err(error) = result {
                 self.alert_look_error(error);
             }
-            settle(self, ok);
             return;
         }
         let Some(snapshot) = self.looks.snapshot.get() else {
@@ -525,13 +664,16 @@ impl AppState {
         self.root.run(|| {
             spawn(async move {
                 let result = real(context).await;
-                self.release_look(&work);
-                self.refresh_looks();
                 let ok = result.is_ok();
+                // One update: the slot is free when the result shows.
+                batch(|| {
+                    self.release_look(&work);
+                    self.refresh_looks();
+                    settle(self, ok);
+                });
                 if let Err(error) = result {
                     self.alert_look_error(error);
                 }
-                settle(self, ok);
             });
         });
     }
@@ -539,12 +681,26 @@ impl AppState {
     pub fn set_look_enabled(self, id: String, enabled: bool) {
         let key = id.clone();
         let demo_id = id.clone();
+        let key_id = id.clone();
         self.change(
             key,
             LookAction::Toggle,
             move |fake| fake.set_enabled(&demo_id, enabled),
             move |context| async move { remote::set_enabled(&context, &id, enabled).await },
-            |_, _| {},
+            // The switch keeps the new value while the list is read again,
+            // instead of moving back until it arrives.
+            move |app, ok| {
+                if ok {
+                    app.looks.snapshot.update(|snapshot| {
+                        if let Some(look) = snapshot
+                            .as_mut()
+                            .and_then(|s| s.looks.iter_mut().find(|look| look.id == key_id))
+                        {
+                            look.enabled = enabled;
+                        }
+                    });
+                }
+            },
         );
     }
 
@@ -636,38 +792,6 @@ impl AppState {
         {
             self.pop_to(Tab::Looks, depth);
         }
-    }
-
-    /// Give the built-in Looks without an individual cover the covers of
-    /// `scheme`. The camera rewrites their files.
-    pub fn set_cover_scheme(self, scheme: Scheme) {
-        if self
-            .looks
-            .snapshot
-            .get()
-            .is_some_and(|snapshot| snapshot.official_covers == scheme)
-        {
-            return;
-        }
-        self.change(
-            COVERS_KEY.into(),
-            LookAction::Scheme(scheme),
-            move |fake| fake.set_scheme(scheme),
-            move |context| async move { remote::set_cover_scheme(&context, scheme).await },
-            |_, _| {},
-        );
-    }
-
-    /// Put the individual covers of the built-in Looks of `group` back to the
-    /// scheme.
-    pub fn reset_covers(self, group: CoverGroup) {
-        self.change(
-            COVERS_KEY.into(),
-            LookAction::Reset(group),
-            move |fake| fake.reset_covers(group),
-            move |context| async move { remote::reset_covers(&context, group).await },
-            |_, _| {},
-        );
     }
 
     /// Delete a Look and go back to the Looks tab.

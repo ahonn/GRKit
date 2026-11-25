@@ -40,13 +40,14 @@ pub fn app_language() -> &'static str {
 pub fn tr(key: &str, args: &[(&str, &str)]) -> String {
     let key = if cfg!(target_os = "android") {
         match key {
-            "connecting.wifi_sub" => "android.connecting.wifi_sub",
             "cam.step_wifi_sub" => "android.cam.step_wifi_sub",
             "cam.step_pair_gr3" => "android.cam.step_pair_gr3",
             "error.bt_body" => "android.error.bt_body",
             "app.store" => "android.app.store",
             "conn.local_network.body" => "android.conn.local_network.body",
-            "conn.wifi_config.body" => "android.conn.wifi_config.body",
+            "conn.wifi_denied.title" => "android.conn.wifi_denied.title",
+            "conn.wifi_denied.body" => "android.conn.wifi_denied.body",
+            "conn.wifi_failed.body" => "android.conn.wifi_failed.body",
             _ => key,
         }
     } else {
@@ -100,11 +101,9 @@ fn en(key: &str) -> &'static str {
         "update.menu_value" => "Update %{version}",
         "update.updated_toast" => "GRKit updated to %{version}",
         "update.failed_title" => "Update Didn't Finish",
-        "update.failed_sub" => {
-            "The camera started without finishing the install, so GRKit isn't running."
-        }
+        "update.failed_sub" => "The install didn’t finish, so GRKit isn’t running.",
         "update.failed_body" => {
-            "Restart the camera once more. If GRKit still doesn't start, put the card in a computer and install GRKit again at grkit.app."
+            "Restart the camera again. If GRKit still doesn’t start, reinstall it at grkit.app."
         }
         "update.open_site" => "Open grkit.app",
         "restart.running_title" => "Restarting the Camera",
@@ -123,7 +122,7 @@ fn en(key: &str) -> &'static str {
         "error.download_title" => "Couldn't Download the Update",
         "error.module_title" => "Update with the Memory Card",
         "error.module_body" => {
-            "This update doesn't have the module %{module} that the camera has. Update GRKit with the memory card."
+            "This update has no %{module} module. Update GRKit with the memory card."
         }
         "error.package_title" => "Can't Prepare the Update",
         "error.package_body" => {
@@ -133,19 +132,16 @@ fn en(key: &str) -> &'static str {
         "error.card_full_body" => {
             "%{size} more is needed. Delete some photos on the camera, then try again."
         }
-        "error.refused_body" => "This update doesn't fit the firmware of this camera.",
+        "error.refused_body" => "The camera didn’t accept this update. Check for updates again.",
         "error.lost_body" => "Reconnect, and the app continues with this update.",
-        "software.confirm_note" => {
-            "You confirm the update on the camera, then restart it once. Your film looks and settings stay."
-        }
+        "software.confirm_note" => "You confirm the update on the camera, then restart it once.",
         "software.up_to_date" => "GRKit is up to date",
         "software.check_failed" => "Couldn't check for updates",
-        "software.restart_manual" => "Turn the camera off and on. It reconnects when it starts.",
+        "software.restart_manual" => "Turn the camera off and on, then tap Reconnect.",
         "software.check_failed_body" => {
             "On the camera's Wi‑Fi, the phone downloads updates over cellular data. Check it and try again."
         }
         "software.retry" => "Try Again",
-        "software.current" => "Current %{version} · %{model}",
         "software.update" => "Update",
         "software.latest_sub" => "Up to Date · %{model}",
         "software.whats_new" => "What's New",
@@ -165,7 +161,6 @@ fn en(key: &str) -> &'static str {
         "app.store" => "Go to the App Store",
         "android.app.store" => "Go to Google Play",
         "cam.update_available" => "GRKit %{version} Available",
-        "cam.update_available_sub" => "See Update",
         "cam.update_waiting" => "GRKit %{version} to Confirm",
         "cam.update_waiting_sub" => "Confirm on the camera",
         "cam.update_ready" => "GRKit %{version} to Install",
@@ -174,24 +169,20 @@ fn en(key: &str) -> &'static str {
             "Choose the camera in the Android network prompt. Stay connected even without internet."
         }
         "android.error.bt_body" => {
-            "Turn on Bluetooth. In Android Settings, allow Nearby devices for GRKit on Android 12 or later. On Android 11 or earlier, allow Location and turn on Location services."
+            "Turn on Bluetooth and allow Nearby devices for GRKit. On Android 11 or earlier, allow Location and turn it on."
         }
         "android.error.wifi_body" => {
-            "Select the camera in the network prompt. On Android 13 or later, allow Nearby devices for GRKit. On Android 12 or earlier, allow Location and turn on Location services."
+            "Choose the camera in the network prompt and allow Nearby devices for GRKit. On Android 12 or earlier, allow Location and turn it on."
         }
 
         "error.cancel_pending" => "Cancel Pending Update",
-        "software.checking" => "Checking for updates…",
         "software.check" => "Check for Updates",
-        "error.download_body" => {
-            "Could not download the update. Check the internet connection and try again."
-        }
         "error.service_title" => "Could Not Complete the Request",
-        "loading.camera" => "Connecting to your camera…",
-        "loading.update" => "Checking for updates…",
+        "loading.reading" => "Reading…",
         "tab.camera" => "Camera",
+        "tab.connect" => "Connect",
         "home.title" => "Add Your Camera",
-        "home.subtitle" => "Connect your camera. Manage GRKit.",
+        "home.pair_first" => "Before connecting the first time, choose %{path} on the camera.",
         "home.add" => "Add Camera",
         "nearby.powered_on" => "Powered on",
         "nearby.connect" => "Connect",
@@ -205,17 +196,9 @@ fn en(key: &str) -> &'static str {
         "connecting.cancel" => "Cancel",
         "connecting.title" => "Connecting to %{model}",
         "connecting.keep_on" => "Keep the camera on and nearby.",
-        "connecting.bt" => "Connect over Bluetooth",
-        "connecting.wifi" => "Join the camera's Wi‑Fi",
-        "connecting.wifi_sub" => "If iOS asks, allow it.",
-        "connecting.version" => "Read GRKit version",
-        "connected.status" => "Connected",
         "connected.offline" => "Not Connected",
-        "connected.reconnecting" => "Reconnecting…",
-        "connected.whats_new" => "What's New",
         "connected.grkit" => "GRKit",
         "connected.firmware" => "Firmware",
-        "connected.software_update" => "Software Update",
         "software.title" => "Software Update",
         "confirm.title" => "Confirm on the Camera",
         "installed.title" => "GRKit %{version} Is Installed",
@@ -223,7 +206,7 @@ fn en(key: &str) -> &'static str {
         "error.refused_title" => "The Camera Refused the Update",
         "error.lost_title" => "Connection Lost",
         "error.card_ready_title" => "Camera Not Ready",
-        "error.card_ready_body" => "The memory card is still starting. Try again in a moment.",
+        "error.card_ready_body" => "The memory card isn’t ready yet. Try again in a moment.",
         "error.bt_title" => "Bluetooth Unavailable",
         "error.bt_body" => "Turn on Bluetooth and allow access for GRKit.",
         "error.try_again" => "Try Again",
@@ -233,6 +216,7 @@ fn en(key: &str) -> &'static str {
         "settings.version" => "Version",
         "settings.rate" => "Rate GRKit",
         "settings.privacy" => "Privacy Policy",
+        "settings.sample_photo" => "Sample Photo",
         "settings.more_maker" => "More from the Maker",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "Wireless transfer and remote for RICOH GR",
@@ -267,10 +251,8 @@ fn zh(key: &str) -> Option<&'static str> {
         "update.menu_value" => "更新 %{version}",
         "update.updated_toast" => "GRKit 已更新到 %{version}",
         "update.failed_title" => "更新没有完成",
-        "update.failed_sub" => "相机开机时没有完成安装，GRKit 没有运行。",
-        "update.failed_body" => {
-            "请再重启一次相机。如果还是这样，把存储卡插到电脑上，在 grkit.app 重新安装。"
-        }
+        "update.failed_sub" => "安装没有完成，GRKit 没有运行。",
+        "update.failed_body" => "请再重启一次相机。如果 GRKit 仍未启动，请在 grkit.app 重新安装。",
         "update.open_site" => "打开 grkit.app",
         "restart.running_title" => "正在重启相机",
         "restart.running_body" => "请不要关闭相机或离开应用。",
@@ -287,20 +269,19 @@ fn zh(key: &str) -> Option<&'static str> {
         "installed.verified" => "相机正在运行新版本。",
         "error.download_title" => "无法下载更新",
         "error.module_title" => "需要用存储卡更新",
-        "error.module_body" => "这次更新没有相机上的模块「%{module}」。请用存储卡更新 GRKit。",
+        "error.module_body" => "这次更新不含模块「%{module}」。请用存储卡更新 GRKit。",
         "error.package_title" => "无法准备更新",
         "error.package_body" => "这次更新的文件不完整。请稍后再检查更新。",
         "error.card_full_title" => "存储卡空间不足",
         "error.card_full_body" => "还需要 %{size}。请在相机上删除一些照片后重试。",
-        "error.refused_body" => "这个更新不适用于这台相机的固件。",
+        "error.refused_body" => "相机没有接受这次更新。请重新检查更新。",
         "error.lost_body" => "重新连接后，应用会接着处理这次更新。",
-        "software.confirm_note" => "更新需要在相机上确认，并重启一次相机。胶片风格和设置会保留。",
-        "software.up_to_date" => "GRKit 已是最新",
+        "software.confirm_note" => "更新需要在相机上确认，并重启一次相机。",
+        "software.up_to_date" => "GRKit 已是最新版本",
         "software.check_failed" => "无法检查更新",
-        "software.restart_manual" => "请把相机关机再开机，开机后会自动连接。",
+        "software.restart_manual" => "请把相机关机再开机，然后点按「重新连接」。",
         "software.check_failed_body" => "连接相机 Wi‑Fi 时，需要用蜂窝数据下载更新。请检查后重试。",
         "software.retry" => "重试",
-        "software.current" => "当前 %{version} · %{model}",
         "software.update" => "更新",
         "software.latest_sub" => "已是最新 · %{model}",
         "software.whats_new" => "新功能",
@@ -310,7 +291,7 @@ fn zh(key: &str) -> Option<&'static str> {
         "software.history_github" => "在 GitHub 上查看",
         "software.firmware_old" => "需要更新相机固件",
         "software.firmware_old_body" => "GRKit 需要 %{model} 固件 %{firmware}。",
-        "software.firmware_how" => "了解如何更新固件",
+        "software.firmware_how" => "如何更新固件",
         "software.firmware_new" => "暂不支持此固件",
         "software.firmware_new_body" => "GRKit 还不支持固件 %{firmware}，请等待后续版本。",
         "software.app_old" => "需要更新 GRKit 应用",
@@ -318,7 +299,6 @@ fn zh(key: &str) -> Option<&'static str> {
         "app.store" => "前往 App Store",
         "android.app.store" => "前往 Google Play",
         "cam.update_available" => "GRKit %{version} 可用",
-        "cam.update_available_sub" => "查看更新",
         "cam.update_waiting" => "GRKit %{version} 待确认",
         "cam.update_waiting_sub" => "在相机上确认",
         "cam.update_ready" => "GRKit %{version} 待安装",
@@ -327,20 +307,19 @@ fn zh(key: &str) -> Option<&'static str> {
             "请在 Android 网络提示中选择相机。即使没有互联网，也请保持连接。"
         }
         "android.error.bt_body" => {
-            "请打开蓝牙。在 Android 设置中，Android 12 及更新版本需允许 GRKit 使用“附近的设备”；Android 11 及更早版本需允许位置权限，并打开定位服务。"
+            "请打开蓝牙，并允许 GRKit 使用「附近的设备」。Android 11 及更早版本需允许位置权限并打开定位服务。"
         }
         "android.error.wifi_body" => {
-            "请在网络提示中选择相机。Android 13 及更新版本需允许 GRKit 使用“附近的设备”；Android 12 及更早版本需允许位置权限，并打开定位服务。"
+            "请在网络提示中选择相机，并允许 GRKit 使用「附近的设备」。Android 12 及更早版本需允许位置权限并打开定位服务。"
         }
         "error.cancel_pending" => "取消待处理的更新",
-        "software.checking" => "正在检查更新…",
         "software.check" => "检查更新",
         "error.service_title" => "无法完成请求",
-        "loading.camera" => "正在连接相机…",
-        "loading.update" => "正在检查更新…",
+        "loading.reading" => "正在读取…",
         "tab.camera" => "相机",
+        "tab.connect" => "连接",
         "home.title" => "添加你的相机",
-        "home.subtitle" => "连接相机，管理 GRKit。",
+        "home.pair_first" => "首次连接前，在相机上选择%{path}。",
         "home.add" => "添加相机",
         "nearby.powered_on" => "已开机",
         "nearby.connect" => "连接",
@@ -354,17 +333,9 @@ fn zh(key: &str) -> Option<&'static str> {
         "connecting.cancel" => "取消",
         "connecting.title" => "正在连接 %{model}",
         "connecting.keep_on" => "请保持相机开机并在附近。",
-        "connecting.bt" => "通过蓝牙连接",
-        "connecting.wifi" => "加入相机的 Wi‑Fi",
-        "connecting.wifi_sub" => "若系统询问，请允许。",
-        "connecting.version" => "读取 GRKit 版本",
-        "connected.status" => "已连接",
         "connected.offline" => "未连接",
-        "connected.reconnecting" => "正在重新连接…",
-        "connected.whats_new" => "新功能",
         "connected.grkit" => "GRKit",
         "connected.firmware" => "固件",
-        "connected.software_update" => "软件更新",
         "software.title" => "软件更新",
         "confirm.title" => "在相机上确认",
         "installed.title" => "GRKit %{version} 已安装",
@@ -372,7 +343,7 @@ fn zh(key: &str) -> Option<&'static str> {
         "error.refused_title" => "相机拒绝了这次更新",
         "error.lost_title" => "连接已断开",
         "error.card_ready_title" => "相机未就绪",
-        "error.card_ready_body" => "存储卡仍在启动，请稍后再试。",
+        "error.card_ready_body" => "存储卡还没准备好，请稍后再试。",
         "error.bt_title" => "蓝牙不可用",
         "error.bt_body" => "请打开蓝牙并允许 GRKit 使用。",
         "error.try_again" => "重试",
@@ -382,6 +353,7 @@ fn zh(key: &str) -> Option<&'static str> {
         "settings.version" => "版本",
         "settings.rate" => "为 GRKit 评分",
         "settings.privacy" => "隐私政策",
+        "settings.sample_photo" => "示例照片",
         "settings.more_maker" => "来自同一作者",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 的无线传输与遥控",
@@ -417,9 +389,9 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "update.menu_value" => "更新 %{version}",
         "update.updated_toast" => "GRKit 已更新到 %{version}",
         "update.failed_title" => "更新沒有完成",
-        "update.failed_sub" => "相機開機時沒有完成安裝，GRKit 沒有執行。",
+        "update.failed_sub" => "安裝沒有完成，GRKit 沒有執行。",
         "update.failed_body" => {
-            "請再重新啟動一次相機。如果還是這樣，把記憶卡插到電腦上，在 grkit.app 重新安裝。"
+            "請再重新啟動一次相機。如果 GRKit 仍未啟動，請在 grkit.app 重新安裝。"
         }
         "update.open_site" => "開啟 grkit.app",
         "restart.running_title" => "正在重新啟動相機",
@@ -437,22 +409,19 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "installed.verified" => "相機正在執行新版本。",
         "error.download_title" => "無法下載更新",
         "error.module_title" => "需要用記憶卡更新",
-        "error.module_body" => "這次更新沒有相機上的模組「%{module}」。請用記憶卡更新 GRKit。",
+        "error.module_body" => "這次更新不含模組「%{module}」。請用記憶卡更新 GRKit。",
         "error.package_title" => "無法準備更新",
         "error.package_body" => "這次更新的檔案不完整。請稍後再檢查更新。",
         "error.card_full_title" => "記憶卡空間不足",
         "error.card_full_body" => "還需要 %{size}。請在相機上刪除一些照片後重試。",
-        "error.refused_body" => "這個更新不適用於這台相機的韌體。",
+        "error.refused_body" => "相機沒有接受這次更新。請重新檢查更新。",
         "error.lost_body" => "重新連線後，App 會接著處理這次更新。",
-        "software.confirm_note" => {
-            "更新需要在相機上確認，並重新啟動一次相機。底片風格和設定會保留。"
-        }
+        "software.confirm_note" => "更新需要在相機上確認，並重新啟動一次相機。",
         "software.up_to_date" => "GRKit 已是最新版本",
         "software.check_failed" => "無法檢查更新",
-        "software.restart_manual" => "請把相機關機再開機，開機後會自動連線。",
+        "software.restart_manual" => "請將相機關機再開機，然後點一下「重新連線」。",
         "software.check_failed_body" => "連線相機 Wi‑Fi 時，需要用行動數據下載更新。請檢查後重試。",
         "software.retry" => "重試",
-        "software.current" => "目前 %{version} · %{model}",
         "software.update" => "更新",
         "software.latest_sub" => "已是最新 · %{model}",
         "software.whats_new" => "新功能",
@@ -462,7 +431,7 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "software.history_github" => "在 GitHub 上查看",
         "software.firmware_old" => "需要更新相機韌體",
         "software.firmware_old_body" => "GRKit 需要 %{model} 韌體 %{firmware}。",
-        "software.firmware_how" => "了解如何更新韌體",
+        "software.firmware_how" => "如何更新韌體",
         "software.firmware_new" => "尚不支援此韌體",
         "software.firmware_new_body" => "GRKit 還不支援韌體 %{firmware}，請等待後續版本。",
         "software.app_old" => "需要更新 GRKit App",
@@ -470,7 +439,6 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "app.store" => "前往 App Store",
         "android.app.store" => "前往 Google Play",
         "cam.update_available" => "GRKit %{version} 可用",
-        "cam.update_available_sub" => "查看更新",
         "cam.update_waiting" => "GRKit %{version} 待確認",
         "cam.update_waiting_sub" => "在相機上確認",
         "cam.update_ready" => "GRKit %{version} 待安裝",
@@ -479,21 +447,19 @@ fn zh_hant(key: &str) -> Option<&'static str> {
             "請在 Android 網路提示中選擇相機。即使沒有網際網路，也請保持連線。"
         }
         "android.error.bt_body" => {
-            "請開啟藍牙。在 Android 設定中，Android 12 及更新版本需允許 GRKit 使用「鄰近裝置」；Android 11 及更早版本需允許位置權限，並開啟定位服務。"
+            "請開啟藍牙，並允許 GRKit 使用「鄰近裝置」。Android 11 及更早版本需允許位置權限並開啟定位服務。"
         }
         "android.error.wifi_body" => {
-            "請在網路提示中選擇相機。Android 13 及更新版本需允許 GRKit 使用「鄰近裝置」；Android 12 及更早版本需允許位置權限，並開啟定位服務。"
+            "請在網路提示中選擇相機，並允許 GRKit 使用「鄰近裝置」。Android 12 及更早版本需允許位置權限並開啟定位服務。"
         }
         "error.cancel_pending" => "取消待處理的更新",
-        "software.checking" => "正在檢查更新…",
         "software.check" => "檢查更新",
-        "error.download_body" => "無法下載更新。請檢查網際網路連線後重試。",
         "error.service_title" => "無法完成要求",
-        "loading.camera" => "正在連線相機…",
-        "loading.update" => "正在檢查更新…",
+        "loading.reading" => "正在讀取…",
         "tab.camera" => "相機",
+        "tab.connect" => "連線",
         "home.title" => "新增你的相機",
-        "home.subtitle" => "連線相機，管理 GRKit。",
+        "home.pair_first" => "首次連線前，在相機上選擇%{path}。",
         "home.add" => "新增相機",
         "nearby.powered_on" => "已開機",
         "nearby.connect" => "連線",
@@ -507,17 +473,9 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "connecting.cancel" => "取消",
         "connecting.title" => "正在連線 %{model}",
         "connecting.keep_on" => "請保持相機開機並放在附近。",
-        "connecting.bt" => "透過藍牙連線",
-        "connecting.wifi" => "加入相機的 Wi‑Fi",
-        "connecting.wifi_sub" => "若系統詢問，請允許。",
-        "connecting.version" => "讀取 GRKit 版本",
-        "connected.status" => "已連線",
         "connected.offline" => "未連線",
-        "connected.reconnecting" => "正在重新連線…",
-        "connected.whats_new" => "新功能",
         "connected.grkit" => "GRKit",
         "connected.firmware" => "韌體",
-        "connected.software_update" => "軟體更新",
         "software.title" => "軟體更新",
         "confirm.title" => "在相機上確認",
         "installed.title" => "GRKit %{version} 已安裝",
@@ -525,7 +483,7 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "error.refused_title" => "相機拒絕了這次更新",
         "error.lost_title" => "連線已中斷",
         "error.card_ready_title" => "相機尚未就緒",
-        "error.card_ready_body" => "記憶卡仍在啟動，請稍後再試。",
+        "error.card_ready_body" => "記憶卡還沒準備好，請稍後再試。",
         "error.bt_title" => "無法使用藍牙",
         "error.bt_body" => "請開啟藍牙並允許 GRKit 使用。",
         "error.try_again" => "重試",
@@ -535,6 +493,7 @@ fn zh_hant(key: &str) -> Option<&'static str> {
         "settings.version" => "版本",
         "settings.rate" => "為 GRKit 評分",
         "settings.privacy" => "隱私權政策",
+        "settings.sample_photo" => "範例照片",
         "settings.more_maker" => "來自同一作者",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 的無線傳輸與遙控",
@@ -554,7 +513,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "update.step_send" => "カメラに送信",
         "update.step_confirm" => "カメラで確認",
         "update.step_restart" => "カメラを再起動",
-        "update.keep_on" => "カメラの電源を入れたまま、アプリを閉じないでください。",
+        "update.keep_on" => "カメラの電源を入れたまま、アプリから離れないでください。",
         "update.download_body" => {
             "カメラの Wi‑Fi に接続中は、モバイルデータ通信でアップデートをダウンロードします。確認してもう一度お試しください。"
         }
@@ -574,15 +533,13 @@ fn ja(key: &str) -> Option<&'static str> {
         "update.menu_value" => "アップデート %{version}",
         "update.updated_toast" => "GRKit を %{version} にアップデートしました",
         "update.failed_title" => "アップデートが完了しませんでした",
-        "update.failed_sub" => {
-            "インストールが完了しないままカメラが起動したため、GRKit は動作していません。"
-        }
+        "update.failed_sub" => "インストールが完了しなかったため、GRKit は動作していません。",
         "update.failed_body" => {
-            "カメラをもう一度再起動してください。それでも GRKit が起動しない場合は、メモリーカードをコンピューターに挿入し、grkit.app で GRKit をインストールし直してください。"
+            "カメラをもう一度再起動してください。それでも GRKit が起動しない場合は、grkit.app でインストールし直してください。"
         }
         "update.open_site" => "grkit.app を開く",
         "restart.running_title" => "カメラを再起動中",
-        "restart.running_body" => "カメラの電源を切ったり、アプリを閉じたりしないでください。",
+        "restart.running_body" => "カメラの電源を切ったり、アプリから離れたりしないでください。",
         "restart.manual_body" => "カメラの電源を入れ直してから、「再接続」をタップしてください。",
         "restart.auto_body" => "アプリがカメラの電源を入れ直し、バージョンを確認します。",
         "restart.run" => "カメラを再起動",
@@ -599,7 +556,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "error.download_title" => "アップデートをダウンロードできません",
         "error.module_title" => "メモリーカードでアップデート",
         "error.module_body" => {
-            "このアップデートには、カメラにあるモジュール「%{module}」が含まれていません。メモリーカードで GRKit をアップデートしてください。"
+            "このアップデートにはモジュール「%{module}」が含まれていません。メモリーカードで GRKit をアップデートしてください。"
         }
         "error.package_title" => "アップデートを準備できません",
         "error.package_body" => {
@@ -610,22 +567,19 @@ fn ja(key: &str) -> Option<&'static str> {
             "あと %{size} 必要です。カメラで写真を削除してから、もう一度お試しください。"
         }
         "error.refused_body" => {
-            "このアップデートは、このカメラのファームウェアに対応していません。"
+            "カメラはこのアップデートを受け付けませんでした。もう一度アップデートを確認してください。"
         }
         "error.lost_body" => "再接続すると、アプリがこのアップデートを続行します。",
-        "software.confirm_note" => {
-            "アップデートはカメラで確認し、カメラを一度再起動します。フィルムルックと設定はそのまま残ります。"
-        }
+        "software.confirm_note" => "アップデートはカメラで確認し、カメラを一度再起動します。",
         "software.up_to_date" => "GRKit は最新です",
         "software.check_failed" => "アップデートを確認できません",
         "software.restart_manual" => {
-            "カメラの電源を入れ直してください。起動すると自動で接続します。"
+            "カメラの電源を入れ直してから、「再接続」をタップしてください。"
         }
         "software.check_failed_body" => {
             "カメラの Wi‑Fi に接続中は、モバイルデータ通信でアップデートをダウンロードします。確認してもう一度お試しください。"
         }
         "software.retry" => "再試行",
-        "software.current" => "現在 %{version} · %{model}",
         "software.update" => "アップデート",
         "software.latest_sub" => "最新 · %{model}",
         "software.whats_new" => "新機能",
@@ -633,7 +587,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "software.show_all" => "すべて表示",
         "software.history" => "アップデート履歴",
         "software.history_github" => "GitHub で見る",
-        "software.firmware_old" => "ファームウェアのアップデートが必要",
+        "software.firmware_old" => "カメラのファームウェアのアップデートが必要",
         "software.firmware_old_body" => {
             "GRKit には %{model} のファームウェア %{firmware} が必要です。"
         }
@@ -649,7 +603,6 @@ fn ja(key: &str) -> Option<&'static str> {
         "app.store" => "App Store へ",
         "android.app.store" => "Google Play へ",
         "cam.update_available" => "GRKit %{version} が利用可能",
-        "cam.update_available_sub" => "アップデートを見る",
         "cam.update_waiting" => "GRKit %{version} 確認待ち",
         "cam.update_waiting_sub" => "カメラで確認",
         "cam.update_ready" => "GRKit %{version} インストール待ち",
@@ -658,23 +611,19 @@ fn ja(key: &str) -> Option<&'static str> {
             "Android のネットワーク確認でカメラを選択してください。インターネットに接続できなくても、接続を維持してください。"
         }
         "android.error.bt_body" => {
-            "Bluetooth をオンにしてください。Android の設定で、Android 12 以降は GRKit に「付近のデバイス」を許可します。Android 11 以前は「位置情報」を許可し、位置情報サービスをオンにします。"
+            "Bluetooth をオンにし、GRKit に「付近のデバイス」を許可してください。Android 11 以前は「位置情報」を許可してオンにしてください。"
         }
         "android.error.wifi_body" => {
-            "ネットワーク確認でカメラを選択してください。Android 13 以降は GRKit に「付近のデバイス」を許可します。Android 12 以前は「位置情報」を許可し、位置情報サービスをオンにします。"
+            "ネットワーク確認でカメラを選択し、GRKit に「付近のデバイス」を許可してください。Android 12 以前は「位置情報」を許可してオンにしてください。"
         }
         "error.cancel_pending" => "保留中のアップデートをキャンセル",
-        "software.checking" => "アップデートを確認中…",
         "software.check" => "アップデートを確認",
-        "error.download_body" => {
-            "アップデートをダウンロードできませんでした。インターネット接続を確認して、もう一度お試しください。"
-        }
         "error.service_title" => "リクエストを完了できません",
-        "loading.camera" => "カメラに接続中…",
-        "loading.update" => "アップデートを確認中…",
+        "loading.reading" => "読み込み中…",
         "tab.camera" => "カメラ",
+        "tab.connect" => "接続",
         "home.title" => "カメラを追加",
-        "home.subtitle" => "カメラに接続して、GRKit を管理。",
+        "home.pair_first" => "初めて接続する前に、カメラで%{path}を選択してください。",
         "home.add" => "カメラを追加",
         "nearby.powered_on" => "電源オン",
         "nearby.connect" => "接続",
@@ -688,17 +637,9 @@ fn ja(key: &str) -> Option<&'static str> {
         "connecting.cancel" => "キャンセル",
         "connecting.title" => "%{model} に接続中",
         "connecting.keep_on" => "カメラの電源を入れたまま、近くに置いてください。",
-        "connecting.bt" => "Bluetooth で接続",
-        "connecting.wifi" => "カメラの Wi‑Fi に接続",
-        "connecting.wifi_sub" => "確認が表示されたら許可してください。",
-        "connecting.version" => "GRKit のバージョンを読み取り",
-        "connected.status" => "接続済み",
         "connected.offline" => "未接続",
-        "connected.reconnecting" => "再接続中…",
-        "connected.whats_new" => "新機能",
         "connected.grkit" => "GRKit",
         "connected.firmware" => "ファームウェア",
-        "connected.software_update" => "ソフトウェアアップデート",
         "software.title" => "ソフトウェアアップデート",
         "confirm.title" => "カメラで確認",
         "installed.title" => "GRKit %{version} をインストールしました",
@@ -718,6 +659,7 @@ fn ja(key: &str) -> Option<&'static str> {
         "settings.version" => "バージョン",
         "settings.rate" => "GRKit を評価",
         "settings.privacy" => "プライバシーポリシー",
+        "settings.sample_photo" => "サンプル写真",
         "settings.more_maker" => "同じ開発者のアプリ",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR のワイヤレス転送とリモート撮影",
@@ -755,9 +697,9 @@ fn ko(key: &str) -> Option<&'static str> {
         "update.menu_value" => "업데이트 %{version}",
         "update.updated_toast" => "GRKit을 %{version}(으)로 업데이트했습니다",
         "update.failed_title" => "업데이트가 완료되지 않음",
-        "update.failed_sub" => "설치가 끝나지 않은 채 카메라가 시작되어 GRKit이 실행되지 않습니다.",
+        "update.failed_sub" => "설치가 끝나지 않아 GRKit이 실행되지 않습니다.",
         "update.failed_body" => {
-            "카메라를 한 번 더 재시작하세요. 그래도 GRKit이 시작되지 않으면 메모리 카드를 컴퓨터에 넣고 grkit.app에서 GRKit을 다시 설치하세요."
+            "카메라를 한 번 더 재시작하세요. 그래도 GRKit이 시작되지 않으면 grkit.app에서 다시 설치하세요."
         }
         "update.open_site" => "grkit.app 열기",
         "restart.running_title" => "카메라 재시작 중",
@@ -776,7 +718,7 @@ fn ko(key: &str) -> Option<&'static str> {
         "error.download_title" => "업데이트를 다운로드할 수 없음",
         "error.module_title" => "메모리 카드로 업데이트",
         "error.module_body" => {
-            "이 업데이트에는 카메라에 있는 모듈 「%{module}」이(가) 없습니다. 메모리 카드로 GRKit을 업데이트하세요."
+            "이 업데이트에는 모듈 「%{module}」이(가) 없습니다. 메모리 카드로 GRKit을 업데이트하세요."
         }
         "error.package_title" => "업데이트를 준비할 수 없음",
         "error.package_body" => {
@@ -786,19 +728,18 @@ fn ko(key: &str) -> Option<&'static str> {
         "error.card_full_body" => {
             "%{size}이(가) 더 필요합니다. 카메라에서 사진을 삭제한 후 다시 시도하세요."
         }
-        "error.refused_body" => "이 업데이트는 이 카메라의 펌웨어에 맞지 않습니다.",
-        "error.lost_body" => "다시 연결하면 앱이 이 업데이트를 이어서 진행합니다.",
-        "software.confirm_note" => {
-            "업데이트는 카메라에서 확인한 뒤 카메라를 한 번 재시작합니다. 필름 룩과 설정은 유지됩니다."
+        "error.refused_body" => {
+            "카메라가 이 업데이트를 받아들이지 않았습니다. 업데이트를 다시 확인하세요."
         }
+        "error.lost_body" => "다시 연결하면 앱이 이 업데이트를 이어서 진행합니다.",
+        "software.confirm_note" => "업데이트는 카메라에서 확인한 뒤 카메라를 한 번 재시작합니다.",
         "software.up_to_date" => "GRKit이 최신 버전입니다",
         "software.check_failed" => "업데이트를 확인할 수 없음",
-        "software.restart_manual" => "카메라를 껐다 켜 주세요. 켜지면 자동으로 연결됩니다.",
+        "software.restart_manual" => "카메라를 껐다 켠 후 「다시 연결」을 탭하세요.",
         "software.check_failed_body" => {
             "카메라 Wi‑Fi에 연결된 동안에는 모바일 데이터로 업데이트를 다운로드합니다. 확인한 후 다시 시도하세요."
         }
         "software.retry" => "다시 시도",
-        "software.current" => "현재 %{version} · %{model}",
         "software.update" => "업데이트",
         "software.latest_sub" => "최신 · %{model}",
         "software.whats_new" => "새로운 기능",
@@ -820,7 +761,6 @@ fn ko(key: &str) -> Option<&'static str> {
         "app.store" => "App Store로 이동",
         "android.app.store" => "Google Play로 이동",
         "cam.update_available" => "GRKit %{version} 사용 가능",
-        "cam.update_available_sub" => "업데이트 보기",
         "cam.update_waiting" => "GRKit %{version} 확인 대기",
         "cam.update_waiting_sub" => "카메라에서 확인",
         "cam.update_ready" => "GRKit %{version} 설치 대기",
@@ -829,23 +769,19 @@ fn ko(key: &str) -> Option<&'static str> {
             "Android 네트워크 알림에서 카메라를 선택하세요. 인터넷이 없어도 연결을 유지하세요."
         }
         "android.error.bt_body" => {
-            "Bluetooth를 켜세요. Android 설정에서 Android 12 이상은 GRKit에 근처 기기 권한을 허용하세요. Android 11 이하는 위치 권한을 허용하고 위치 서비스를 켜세요."
+            "Bluetooth를 켜고 GRKit에 근처 기기 권한을 허용하세요. Android 11 이하는 위치 권한을 허용하고 위치를 켜세요."
         }
         "android.error.wifi_body" => {
-            "네트워크 알림에서 카메라를 선택하세요. Android 13 이상은 GRKit에 근처 기기 권한을 허용하세요. Android 12 이하는 위치 권한을 허용하고 위치 서비스를 켜세요."
+            "네트워크 알림에서 카메라를 선택하고 GRKit에 근처 기기 권한을 허용하세요. Android 12 이하는 위치 권한을 허용하고 위치를 켜세요."
         }
         "error.cancel_pending" => "대기 중인 업데이트 취소",
-        "software.checking" => "업데이트 확인 중…",
         "software.check" => "업데이트 확인",
-        "error.download_body" => {
-            "업데이트를 다운로드하지 못했습니다. 인터넷 연결을 확인하고 다시 시도하세요."
-        }
         "error.service_title" => "요청을 완료할 수 없음",
-        "loading.camera" => "카메라에 연결하는 중…",
-        "loading.update" => "업데이트 확인 중…",
+        "loading.reading" => "읽는 중…",
         "tab.camera" => "카메라",
+        "tab.connect" => "연결",
         "home.title" => "카메라 추가",
-        "home.subtitle" => "카메라를 연결하고 GRKit을 관리하세요.",
+        "home.pair_first" => "처음 연결하기 전에 카메라에서 %{path}을(를) 선택하세요.",
         "home.add" => "카메라 추가",
         "nearby.powered_on" => "켜짐",
         "nearby.connect" => "연결",
@@ -859,17 +795,9 @@ fn ko(key: &str) -> Option<&'static str> {
         "connecting.cancel" => "취소",
         "connecting.title" => "%{model}에 연결하는 중",
         "connecting.keep_on" => "카메라를 켜 두고 가까이 두세요.",
-        "connecting.bt" => "Bluetooth로 연결",
-        "connecting.wifi" => "카메라 Wi‑Fi에 연결",
-        "connecting.wifi_sub" => "요청이 표시되면 허용하세요.",
-        "connecting.version" => "GRKit 버전 읽기",
-        "connected.status" => "연결됨",
         "connected.offline" => "연결 안 됨",
-        "connected.reconnecting" => "다시 연결하는 중…",
-        "connected.whats_new" => "새로운 기능",
         "connected.grkit" => "GRKit",
         "connected.firmware" => "펌웨어",
-        "connected.software_update" => "소프트웨어 업데이트",
         "software.title" => "소프트웨어 업데이트",
         "confirm.title" => "카메라에서 확인",
         "installed.title" => "GRKit %{version} 설치됨",
@@ -887,6 +815,7 @@ fn ko(key: &str) -> Option<&'static str> {
         "settings.version" => "버전",
         "settings.rate" => "GRKit 평가하기",
         "settings.privacy" => "개인정보 처리방침",
+        "settings.sample_photo" => "샘플 사진",
         "settings.more_maker" => "같은 개발자의 앱",
         "settings.gr_snap_name" => "GR Snap",
         "settings.gr_snap_desc" => "RICOH GR 무선 전송과 원격 촬영",
@@ -913,7 +842,7 @@ pub fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{en, language_tag, text_in};
+    use super::{language_tag, text_in};
     use std::collections::{BTreeMap, BTreeSet};
 
     const LOCALES: &str = include_str!("../locales/app.yml");
@@ -927,8 +856,6 @@ mod tests {
     ];
     /// Keys in the file that no screen reads.
     const FILE_ONLY: [&str; 2] = ["nearby.title_suffix", "recipes.read_only_note"];
-    /// No Simplified Chinese text yet: this key shows in English there.
-    const NO_ZH_HANS: &str = "error.download_body";
     /// The Simplified Chinese text counts the total, the English the rest.
     const OWN_ZH_HANS_PLACEHOLDER: &str = "looks.use_more";
 
@@ -960,10 +887,6 @@ mod tests {
         for (key, texts) in &entries {
             let english = placeholders(texts.get("en").expect(key));
             for (file_tag, language) in LANGUAGES {
-                if key == &NO_ZH_HANS && language == "zh-Hans" {
-                    assert_eq!(text_in(language, key), en(key));
-                    continue;
-                }
                 let text = texts
                     .get(file_tag)
                     .unwrap_or_else(|| panic!("{key}: {file_tag}"));

@@ -17,6 +17,16 @@ pub fn demo_base_gamma() -> Vec<u16> {
     serde_json::from_str(DEMO_BASE_GAMMA).expect("bundled base gamma parses")
 }
 
+/// The preview table of a GRF effect for the sample photo, on the camera's
+/// base gamma (`grkit_core::site::linear_preview_lut`).
+pub fn preview_table(grf: &[u8], base_gamma: &[u16]) -> Result<Vec<u8>> {
+    let (effect, _) = effects::decode(grf)?;
+    let base: &[u16; 256] = base_gamma
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("Expected 256 base gamma values"))?;
+    grkit_core::site::linear_preview_lut(base, &effect)
+}
+
 /// Name, ID and monochrome flag of a GRF effect.
 pub fn label(grf: &[u8]) -> Result<(String, String, bool)> {
     let (effect, _) = effects::decode(grf)?;
@@ -116,6 +126,15 @@ pub fn compile(definition: &str) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_look_file_gives_a_preview_table_on_the_base_gamma() {
+        let (_, grf) = crate::domain::fake_looks::demo_catalog().remove(0);
+        let table = preview_table(&grf, &demo_base_gamma()).unwrap();
+        assert!(crate::domain::look_preview::table_size(table.len()).is_some());
+        assert!(preview_table(&grf, &[0; 3]).is_err());
+    }
+
     use super::*;
 
     const VELVIA: &str = include_str!("../../../effects/velvia-100-v1/effect.json");

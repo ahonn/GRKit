@@ -17,7 +17,7 @@ mod update;
 mod warmup;
 
 pub use camera_settings::{PictureRead, SettingsRead};
-pub use looks::{COVERS_KEY, CatalogItem, ImportDraft, LookAction, LooksStore};
+pub use looks::{CatalogItem, ImportDraft, LookAction, LooksStore};
 pub use modules::{ModulePart, ModulesBlock, ModulesStore};
 pub use recipes::{RecipeAction, RecipesStore, native_type_name};
 
@@ -90,8 +90,6 @@ pub enum Route {
     LookImportCover,
     /// The saved cameras, from Settings.
     SavedCameras,
-    /// The cover colors of the built-in Looks, from the Looks list.
-    LookScheme,
     /// One recipe on the camera, by ID.
     RecipeDetail(u32),
     /// The presets of the site.
@@ -110,8 +108,8 @@ pub enum Route {
     ShutdownScreen,
     /// The picture made from a picked photo, before it goes to the camera.
     ShutdownCrop,
-    /// The GR IV film looks, made from a firmware file.
-    LookUnlock,
+    /// The film looks of another GR camera, made from its firmware file.
+    LookUnlock(native_looks::Firmware),
 }
 
 /// Modal sheets over the camera tab.
@@ -192,8 +190,11 @@ pub struct AppState {
     /// The probe policy of the current camera session.
     health: Stored<RefCell<LinkHealth>>,
     link_state: Signal<LinkState>,
-    /// Short notices at the top of the screen.
+    /// Short notices at the bottom of the screen.
     toasts: crate::ui::Toasts,
+    /// How far up from the bottom of the content the Connect page's buttons
+    /// reach, so notices show above them.
+    connect_foot: Signal<f32>,
     /// The tab a lost link moved the user from, restored after a reconnect.
     return_tab: Signal<Option<Tab>>,
     /// When the change stream last got a frame; `None` while it is closed.
@@ -302,6 +303,7 @@ impl AppState {
             health: stored(RefCell::new(LinkHealth::default())),
             link_state: signal(LinkState::Idle),
             toasts: crate::ui::Toasts::new(),
+            connect_foot: signal(0.0),
             name_draft: signal(None),
             return_tab: signal(None),
             stream_heard: stored(Cell::new(None)),
@@ -346,6 +348,29 @@ impl AppState {
 
     pub fn initial_connect(self) -> bool {
         self.initial_connect.get()
+    }
+
+    /// The camera tab's root is the Connect page: no camera is connected
+    /// and no first connect runs.
+    fn connect_page_shown(self) -> bool {
+        !self.initial_connect() && !self.camera_online()
+    }
+
+    pub(crate) fn set_connect_foot(self, height: f32) {
+        self.connect_foot.set(height);
+    }
+
+    /// How far up from the bottom of the content notices must stay clear
+    /// of the page in front: the Connect page's buttons, else nothing.
+    pub fn toast_floor(self) -> f32 {
+        let connect_in_front = self.tab() == Tab::Camera
+            && self.route_at(Tab::Camera, 0).is_none()
+            && self.connect_page_shown();
+        if connect_in_front {
+            self.connect_foot.get()
+        } else {
+            0.0
+        }
     }
 
     pub fn demo(self) -> bool {
@@ -777,6 +802,11 @@ impl AppState {
             if let Some(package) = package {
                 self.package.set(Some(package));
             }
+            // As a real connect: the camera tab shows the Look in use, the
+            // current recipe and the modules at once.
+            self.refresh_module_state();
+            self.refresh_looks();
+            self.refresh_recipes();
             self.sheet.set(None);
             self.connect_started.set(None);
         } else {

@@ -16,8 +16,7 @@ use crate::pages::grkit_settings;
 use crate::pages::{
     CoverTarget, add_page, camera_root, cover_page, import_page, look_page, looks_root,
     module_options_page, module_page, modules_page, preset_page, presets_page, recipe_page,
-    recipes_root, release_history_page, saved_cameras_page, scheme_page, settings_root,
-    software_page,
+    recipes_root, release_history_page, saved_cameras_page, settings_root, software_page,
 };
 use crate::store::{AppState, Route, Tab};
 use crate::strings::tr;
@@ -35,6 +34,10 @@ const RECIPES_ICON: &str = if cfg!(target_os = "android") {
 } else {
     "list.bullet.rectangle.portrait"
 };
+
+/// The camera tab while no camera is connected: Connect, with the Wi-Fi
+/// symbol. See [`tab_item`].
+const CONNECT_TAB: (&str, &str) = ("tab.connect", "wifi");
 
 const TABS: &[(Tab, &str, &str)] = &[
     (Tab::Camera, "tab.camera", "camera"),
@@ -78,16 +81,24 @@ pub fn shell(app: AppState) -> impl IntoElement {
     // it; Android's bar takes its own row below the content.
     let overlay = cfg!(target_os = "ios");
     let bar_height = signal(0.0f32);
-    let lift = move || if overlay { bar_height.get() } else { 0.0 };
+    let lift = move || {
+        let bar = if overlay { bar_height.get() } else { 0.0 };
+        bar.max(app.toast_floor())
+    };
     let stacks = stacks
         .relative()
         .child(crate::ui::toast_layer(app.toasts(), lift));
+    let online = computed({
+        let app = app.clone();
+        move || app.camera_online()
+    });
     let bar = dynamic(move || {
         let visible = shown.get();
+        let online = online.get();
         let app = app.clone();
         let items = visible.clone();
         untracked(|| {
-            tabs(&visible, selected, move |i| {
+            tabs(&visible, online, selected, move |i| {
                 if let Some(tab) = items.get(i as usize) {
                     if *tab == app.tab() {
                         app.reselect_tab(*tab);
@@ -154,7 +165,6 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::LookImport => import_page(app, back).into_element(),
         Route::LookImportCover => cover_page(app, CoverTarget::Import, back).into_element(),
         Route::SavedCameras => saved_cameras_page(app, back).into_element(),
-        Route::LookScheme => scheme_page(app, back).into_element(),
         Route::RecipeDetail(id) => recipe_page(app, id, back).into_element(),
         Route::RecipePresets => presets_page(app, back).into_element(),
         Route::RecipePreset(id) => preset_page(app, id, back).into_element(),
@@ -164,18 +174,40 @@ fn pushed(app: AppState, tab: Tab, depth: usize, route: Route) -> AnyElement {
         Route::DisplaySettings => grkit_settings::display_page(app, back).into_element(),
         Route::ShutdownScreen => grkit_settings::shutdown_page(app, back).into_element(),
         Route::ShutdownCrop => grkit_settings::crop_page(app, back).into_element(),
-        Route::LookUnlock => crate::pages::unlock_page(app, back).into_element(),
+        Route::LookUnlock(firmware) => {
+            crate::pages::unlock_page(app, firmware, back).into_element()
+        }
+    }
+}
+
+/// A tab's title key and symbol. The camera tab is Connect until a camera
+/// connects, then Camera.
+fn tab_item(
+    tab: Tab,
+    key: &'static str,
+    symbol: &'static str,
+    online: bool,
+) -> (&'static str, &'static str) {
+    if tab == Tab::Camera && !online {
+        CONNECT_TAB
+    } else {
+        (key, symbol)
     }
 }
 
 fn tabs(
     visible: &[Tab],
+    online: bool,
     selected: impl Fn() -> u32 + Copy + 'static,
     choose: impl Fn(u32) + 'static + Clone,
 ) -> AnyElement {
-    let items: Vec<_> = TABS
+    let items: Vec<(Tab, &str, &str)> = TABS
         .iter()
         .filter(|(t, _, _)| visible.contains(t))
+        .map(|&(t, key, symbol)| {
+            let (key, symbol) = tab_item(t, key, symbol, online);
+            (t, key, symbol)
+        })
         .collect();
     if matches!(os(), Os::Ios | Os::Android) {
         let choose = choose.clone();

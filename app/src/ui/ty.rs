@@ -18,8 +18,8 @@ pub fn text(content: impl IntoReactive<SharedString>) -> Text {
     nsh_core::prelude::text(content).max_font_size_multiplier(MAX_TEXT_SCALE)
 }
 
+pub const TITLE1: f32 = 28.0;
 pub const TITLE2: f32 = 22.0;
-pub const TITLE3: f32 = 20.0;
 pub const HEADLINE: f32 = 17.0;
 pub const BODY: f32 = 17.0;
 pub const CALLOUT: f32 = 16.0;

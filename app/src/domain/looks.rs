@@ -460,10 +460,10 @@ pub enum LookError {
     CardFull,
     /// A software update waits on the camera.
     UpdatePending,
-    /// Phone changes are off on the camera.
-    ChangesOff,
     /// Another change is running.
     Busy,
+    /// The camera did not answer in time and can still make the change.
+    Late,
     /// The Looks on the camera differ from the ones the phone read, as
     /// after a restart of the camera.
     Changed,
@@ -494,8 +494,8 @@ impl LookError {
             LookError::NoRoom => ("looks.error.full_title", "looks.error.full_body"),
             LookError::CardFull => ("looks.error.card_full_title", "looks.error.card_full_body"),
             LookError::UpdatePending => ("looks.error.pending_title", "looks.error.pending_body"),
-            LookError::ChangesOff => ("looks.error.off_title", "looks.error.off_body"),
             LookError::Busy => ("looks.error.busy_title", "looks.error.busy_body"),
+            LookError::Late => ("looks.error.late_title", "looks.error.late_body"),
             LookError::Changed => ("looks.error.changed_title", "looks.error.changed_body"),
             LookError::InvalidName => ("looks.error.name_title", "looks.error.name_body"),
             LookError::NotFound => ("looks.error.gone_title", "looks.error.gone_body"),
@@ -518,17 +518,15 @@ pub fn look_error(status: u16, body: &str) -> LookError {
     };
     let code = problem.get("code").and_then(|v| v.as_str()).unwrap_or("");
     match code {
-        "dependency_in_use" | "dependencies_unavailable" => return LookError::InUse,
+        "dependency_in_use" => return LookError::InUse,
         "active_look" => return LookError::ActiveLook,
-        "official_look_read_only" | "origin_unknown" | "origin_conflict" => {
-            return LookError::OfficialReadOnly;
-        }
+        "official_look_read_only" => return LookError::OfficialReadOnly,
         "look_capacity" => return LookError::NoRoom,
         "software_pending" => return LookError::UpdatePending,
-        "writes_disabled" => return LookError::ChangesOff,
         "camera_busy" => return LookError::CameraBusy,
         "restart_required" => return LookError::RestartRequired,
         "runtime_busy" => return LookError::Busy,
+        "runtime_late" => return LookError::Late,
         "context_changed" => return LookError::Changed,
         "invalid_name" => return LookError::InvalidName,
         "look_not_found" => return LookError::NotFound,
@@ -705,6 +703,10 @@ pub struct CatalogLook {
     /// The cover JSON of the Look file, when the Look has a film cover.
     #[serde(default)]
     pub cover: Option<serde_json::Value>,
+    /// The Look's preview table under `effects/<target>/`, for the sample
+    /// photo (`domain::look_preview`).
+    #[serde(default)]
+    pub preview: Option<String>,
 }
 
 impl CatalogLook {
@@ -912,6 +914,10 @@ mod tests {
         assert_eq!(
             look_error(409, r#"{"code":"software_pending"}"#),
             LookError::UpdatePending
+        );
+        assert_eq!(
+            look_error(503, r#"{"status":503,"code":"runtime_late"}"#),
+            LookError::Late
         );
         assert_eq!(
             look_error(507, r#"{"status":507,"code":"cover_not_saved"}"#),

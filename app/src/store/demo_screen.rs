@@ -75,8 +75,6 @@ pub enum DemoScreen {
     L14,
     /// L15 — a Look detail.
     L15,
-    /// L16 — Cover Colors.
-    L16,
     /// L17 — rename a Look.
     L17,
     /// L18 — the card holds as many Looks as it can (alert).
@@ -205,6 +203,12 @@ pub enum DemoScreen {
     S3,
     /// S4 — Unlock GR IV Film Looks.
     S4,
+    /// H1 — Camera tab, connected, nothing read yet.
+    H1,
+    /// H2 — Camera tab, the Looks and modules read, the rest not yet.
+    H2,
+    /// H3 — Camera tab, every read failed.
+    H3,
 }
 
 /// Every id string the env / CLI accept, in design order.
@@ -237,7 +241,6 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("L13", DemoScreen::L13),
     ("L14", DemoScreen::L14),
     ("L15", DemoScreen::L15),
-    ("L16", DemoScreen::L16),
     ("L17", DemoScreen::L17),
     ("L18", DemoScreen::L18),
     ("L19", DemoScreen::L19),
@@ -302,6 +305,9 @@ pub const DEMO_SCREEN_IDS: &[(&str, DemoScreen)] = &[
     ("S2", DemoScreen::S2),
     ("S3", DemoScreen::S3),
     ("S4", DemoScreen::S4),
+    ("H1", DemoScreen::H1),
+    ("H2", DemoScreen::H2),
+    ("H3", DemoScreen::H3),
 ];
 
 /// Parse a design id (`A5`, `a5`, …). Unknown → `None` (normal demo).
@@ -487,18 +493,24 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             seed_connected_available(app);
             seed_sending(app, UpdateKind::Install, 0.62);
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Sending));
         }
         DemoScreen::B3 => {
             seed_connected_available(app);
             seed_waiting(app, UpdateKind::Install);
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Confirm));
         }
         DemoScreen::B4 => {
             seed_connected_available(app);
             seed_restart(app, UpdateKind::Install);
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Restart));
         }
         DemoScreen::B5 => {
@@ -509,6 +521,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 version: "1.7.0".into(),
             });
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Installed {
                 version: "1.7.0".into(),
                 previous: "1.6.1".into(),
@@ -520,6 +534,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 bytes_needed: 12 * 1024 * 1024,
             }));
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Error(UpdateError::CardFull {
                 bytes_needed: 12 * 1024 * 1024,
             })));
@@ -558,6 +574,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 kind: UpdateKind::Install,
             });
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Sending));
         }
         DemoScreen::U8 => {
@@ -569,6 +587,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 step: crate::domain::RestartStep::PoweringOn,
             });
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Restart));
         }
         DemoScreen::U9 => {
@@ -579,6 +599,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 kind: UpdateKind::Install,
             });
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Restart));
         }
         DemoScreen::U10 => {
@@ -586,6 +608,8 @@ pub fn apply(app: AppState, screen: DemoScreen) {
             seed_sending(app, UpdateKind::Install, 0.42);
             app.update_shown.set(true);
             app.set_tab(Tab::Camera);
+            // The update sheet opens from Software Update.
+            app.push(Route::SoftwareUpdate);
             app.set_sheet(Some(Sheet::Sending));
             spawn(async move {
                 next_frame().await;
@@ -711,10 +735,6 @@ pub fn apply(app: AppState, screen: DemoScreen) {
         DemoScreen::L15 => {
             seed_looks(app);
             app.push(Route::LookDetail(PORTRA.into()));
-        }
-        DemoScreen::L16 => {
-            seed_looks(app);
-            app.push(Route::LookScheme);
         }
         DemoScreen::L17 => {
             seed_looks(app);
@@ -869,7 +889,7 @@ pub fn apply(app: AppState, screen: DemoScreen) {
                 if let Some(row) = app.module_row("GRAIN") {
                     let setting = row.settings()[0].clone();
                     let current = row.value_of(&setting);
-                    crate::pages::value_menu(app, "GRAIN".into(), setting, current);
+                    crate::pages::value_menu(app, "GRAIN".into(), setting, current).show();
                 }
             });
         }
@@ -947,10 +967,50 @@ pub fn apply(app: AppState, screen: DemoScreen) {
         DemoScreen::S1 => seed_grkit_settings(app, Route::ShootingSettings),
         DemoScreen::S2 => seed_grkit_settings(app, Route::DisplaySettings),
         DemoScreen::S3 => seed_grkit_settings(app, Route::ShutdownScreen),
+        DemoScreen::H1 => {
+            seed_connected_status(app);
+            app.seed_demo_modules_loading();
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
+        DemoScreen::H2 => {
+            seed_connected_status(app);
+            app.camera.with(|slot| {
+                if let Some(cam) = slot.borrow_mut().as_mut()
+                    && let Ok(mut package) = block_on_ready(cam.read_package())
+                {
+                    // The release check has not answered yet.
+                    package.available = None;
+                    app.package.set(Some(package));
+                }
+            });
+            app.release_busy.set(true);
+            app.refresh_modules();
+            app.refresh_looks();
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
+        DemoScreen::H3 => {
+            seed_connected_status(app);
+            app.camera.with(|slot| {
+                if let Some(cam) = slot.borrow_mut().as_mut()
+                    && let Ok(mut package) = block_on_ready(cam.read_package())
+                {
+                    package.available = None;
+                    app.package.set(Some(package));
+                }
+            });
+            app.release_problem.set(Some(ReleaseProblem::Network));
+            app.seed_demo_modules_failed();
+            app.seed_demo_looks_failed();
+            app.seed_demo_recipes_failed();
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+        }
         DemoScreen::S4 => {
             seed_looks(app);
             app.open_add();
-            app.push(Route::LookUnlock);
+            app.push(Route::LookUnlock(super::native_looks::Firmware::Gr4));
         }
     }
 }
@@ -1047,6 +1107,18 @@ fn seed_saved(app: AppState) {
     ));
 }
 
+/// A connected camera whose status alone is read.
+fn seed_connected_status(app: AppState) {
+    app.camera.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        let cam = slot.get_or_insert_with(|| FakeCamera::new(FakeConfig::default()));
+        let _ = block_on_ready(cam.connect());
+        if let Ok(status) = block_on_ready(cam.read_status()) {
+            app.status.set(Some(status));
+        }
+    });
+}
+
 fn seed_connected_available(app: AppState) {
     app.camera.with(|slot| {
         let mut slot = slot.borrow_mut();
@@ -1059,8 +1131,11 @@ fn seed_connected_available(app: AppState) {
             app.package.set(Some(package));
         }
     });
-    // A connect reads the modules; the home's modules row shows them.
+    // As a connect: the home shows the Look in use, the current recipe and
+    // the modules.
     app.refresh_modules();
+    app.refresh_looks();
+    app.refresh_recipes();
 }
 
 fn seed_connected_up_to_date(app: AppState) {
@@ -1087,6 +1162,8 @@ fn seed_connected_up_to_date_at(app: AppState, version: &str) {
         *slot = Some(cam);
     });
     app.refresh_modules();
+    app.refresh_looks();
+    app.refresh_recipes();
 }
 
 /// Software Update with no release: under way, or with `problem`.
@@ -1109,6 +1186,7 @@ fn update_error(app: AppState, error: UpdateError) {
     app.update_shown.set(true);
     app.phase.set(UpdatePhase::Failed(error.clone()));
     app.set_tab(Tab::Camera);
+    app.push(Route::SoftwareUpdate);
     app.set_sheet(Some(Sheet::Error(error)));
 }
 
@@ -1167,7 +1245,7 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::B5 => "GRKit 1.7.0 Is Installed",
         DemoScreen::C4 => "Card Is Full",
         DemoScreen::L1 => "In Camera Menu",
-        DemoScreen::L2 => "Enabled",
+        DemoScreen::L2 => "Enable",
         DemoScreen::L3 => "My LUT",
         DemoScreen::L4 => "Put on Camera",
         DemoScreen::L5 => "Delete Portra 400?",
@@ -1181,20 +1259,19 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::L13 => "Film name",
         DemoScreen::L14 => "1 change applies after a restart",
         DemoScreen::L15 => "Portra 400",
-        DemoScreen::L16 => "Every built-in film look has a gray cover",
         DemoScreen::L17 => "Name",
         DemoScreen::L18 => "No Room on the Card",
         DemoScreen::L19 => "Disconnected. This change wasn't saved.",
         DemoScreen::L20 | DemoScreen::L21 | DemoScreen::L22 => "Camera Not Connected",
         DemoScreen::L23 => "Restart the Camera",
-        DemoScreen::A8 => "Other Cameras",
+        DemoScreen::A8 => "Not Connected",
         DemoScreen::A9 => "Lost Connection",
         DemoScreen::A10 => "First time with this camera? On the camera, choose",
         DemoScreen::A11 => "Camera Wi‑Fi Unreachable",
         DemoScreen::A12 => "No GRKit on the Camera",
         DemoScreen::A13 => "Only one camera can connect at a time.",
         DemoScreen::U1 => "What's New in This Version",
-        DemoScreen::U2 => "Current 1.6.1 · RICOH GR III",
+        DemoScreen::U2 => "RICOH GR III",
         DemoScreen::U3 => "Couldn't check for updates",
         DemoScreen::U4 => "Camera firmware needs an update",
         DemoScreen::U5 => "This firmware isn't supported yet",
@@ -1239,10 +1316,13 @@ pub fn key_text(screen: DemoScreen) -> &'static str {
         DemoScreen::M13 => "Update GRKit",
         DemoScreen::M14 => "Update the App",
         DemoScreen::M15 => "label:Reading modules…",
-        DemoScreen::M16 => "Other Cameras",
+        DemoScreen::M16 => "Not Connected",
         DemoScreen::S1 => "Uncropped RAW",
         DemoScreen::S2 => "Battery Percentage",
         DemoScreen::S3 => "Show Text",
         DemoScreen::S4 => "Choose Firmware File",
+        DemoScreen::H1 => "label:Software Update, Reading…",
+        DemoScreen::H2 => "Film Looks",
+        DemoScreen::H3 => "Couldn't check for updates",
     }
 }

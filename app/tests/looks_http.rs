@@ -447,17 +447,9 @@ fn start_phone_with(
 
 fn open_looks(app: &mut Headless) {
     // The camera card shows the versions once connected.
-    app.wait_for_within("Connected", WAIT).unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
     app.press("role:button[Film Looks]").unwrap();
     app.wait_for_within("In Camera Menu", WAIT).unwrap();
-}
-
-/// Open Cover Colors from the Looks list.
-fn open_cover_colors(app: &mut Headless) {
-    app.wait_for_within("Cover Colors", WAIT).unwrap();
-    app.press("text:Cover Colors").unwrap();
-    app.wait_for_within("Every built-in film look has a gray cover", WAIT)
-        .unwrap();
 }
 
 /// Let the app run until `done` holds, at most `WAIT`.
@@ -500,10 +492,10 @@ fn turning_a_look_off_patches_it_at_once() {
     let (mut app, camera, network) = start_phone(&environment, Camera::new());
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
-    app.press("role:switch[Enabled]").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    app.press("role:switch[Enable]").unwrap();
     until(&mut app, || !camera.lock().unwrap().looks[1].enabled);
-    app.wait_for_within("role:switch[Enabled]", WAIT).unwrap();
+    app.wait_for_within("role:switch[Enable]", WAIT).unwrap();
     assert_eq!(count(&network, "PATCH", "/v1/looks/trix-400-mono-v1"), 1);
     // A change needs no read of its own before it.
     assert!(
@@ -526,7 +518,7 @@ fn a_disconnected_camera_shows_only_the_home_page() {
     app.press("role:button[Camera]").unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
     app.press("label:More").unwrap();
-    app.wait_for_gone("Connected", WAIT).unwrap();
+    app.wait_for_gone("label:/^Software Update/", WAIT).unwrap();
     app.wait_for_within("role:button[Connect]", WAIT).unwrap();
     app.wait_for_gone("role:button[Film Looks]", WAIT).unwrap();
 }
@@ -540,7 +532,7 @@ fn a_restarted_camera_asks_to_check_the_looks_again() {
     let (mut app, camera, network) = start_phone(&environment, state);
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     let reads = count(&network, "GET", "/v1/looks");
     let titles = Arc::new(Mutex::new(Vec::new()));
     let seen = titles.clone();
@@ -550,7 +542,7 @@ fn a_restarted_camera_asks_to_check_the_looks_again() {
             .push(dialog.title.clone().unwrap_or_default());
         DialogAnswer::Press("OK".into())
     });
-    app.press("role:switch[Enabled]").unwrap();
+    app.press("role:switch[Enable]").unwrap();
     until(&mut app, || !titles.lock().unwrap().is_empty());
     assert_eq!(titles.lock().unwrap().as_slice(), ["Film Looks Changed"]);
     // The phone reads the Looks again, so a second try names the new start.
@@ -589,7 +581,7 @@ fn an_official_look_changes_its_cover_and_only_its_icon() {
     let (mut app, camera, network) = start_phone(&environment, Camera::new());
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     app.press("role:button[Cover]").unwrap();
     app.wait_for_within("Film name", WAIT).unwrap();
     // The second color set of the editor, named by its look.
@@ -682,10 +674,10 @@ fn the_default_cover_puts_an_official_look_back_on_the_scheme() {
     let (mut app, camera, network) = start_phone(&environment, camera);
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     app.press("role:button[Cover]").unwrap();
-    app.wait_for_within("Use the Default Cover", WAIT).unwrap();
-    app.press("role:button[Use the Default Cover]").unwrap();
+    app.wait_for_within("Restore Default Cover", WAIT).unwrap();
+    app.press("role:button[Restore Default Cover]").unwrap();
     until(&mut app, || {
         camera.lock().unwrap().looks[1].pending.is_some()
     });
@@ -706,7 +698,7 @@ fn a_busy_camera_asks_for_the_shooting_screen() {
     let (mut app, camera, _network) = start_phone(&environment, state);
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     let titles = Arc::new(Mutex::new(Vec::new()));
     let seen = titles.clone();
     app.on_dialog(move |dialog| {
@@ -715,7 +707,7 @@ fn a_busy_camera_asks_for_the_shooting_screen() {
             .push(dialog.title.clone().unwrap_or_default());
         DialogAnswer::Press("OK".into())
     });
-    app.press("role:switch[Enabled]").unwrap();
+    app.press("role:switch[Enable]").unwrap();
     until(&mut app, || !titles.lock().unwrap().is_empty());
     assert_eq!(titles.lock().unwrap().as_slice(), ["Camera Busy"]);
     assert!(camera.lock().unwrap().looks[1].enabled);
@@ -735,9 +727,9 @@ fn a_look_that_waits_for_a_restart_says_so() {
     app.wait_for_within("label:Night, After restart", WAIT)
         .unwrap();
     app.press("text:Night").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     // The camera cannot show or hide a Look that it does not list.
-    let _ = app.press("role:switch[Enabled]");
+    let _ = app.press("role:switch[Enable]");
     app.wait(Duration::from_millis(300)).unwrap();
     assert_eq!(count(&network, "PATCH", "/v1/looks/lut-night"), 0);
 }
@@ -789,7 +781,7 @@ fn a_refused_change_explains_the_pending_update() {
     let (mut app, camera, _network) = start_phone(&environment, state);
     open_looks(&mut app);
     app.press("text:Tri-X 400").unwrap();
-    app.wait_for_within("Enabled", WAIT).unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
     let titles = Arc::new(Mutex::new(Vec::new()));
     let seen = titles.clone();
     app.on_dialog(move |dialog| {
@@ -798,7 +790,7 @@ fn a_refused_change_explains_the_pending_update() {
             .push(dialog.title.clone().unwrap_or_default());
         DialogAnswer::Press("OK".into())
     });
-    app.press("role:switch[Enabled]").unwrap();
+    app.press("role:switch[Enable]").unwrap();
     until(&mut app, || !titles.lock().unwrap().is_empty());
     assert_eq!(titles.lock().unwrap().as_slice(), ["An Update Is Waiting"]);
     assert!(camera.lock().unwrap().looks[1].enabled);
@@ -811,7 +803,7 @@ fn dragging_a_look_saves_the_complete_order() {
     let (mut app, camera, _network) = start_phone(&environment, Camera::new());
     open_looks(&mut app);
     // In Edit, the handle of Night, the third row, dragged up two rows.
-    app.press("role:button[Edit]").unwrap();
+    app.press("role:button[Sort]").unwrap();
     app.wait_for_within("Drag to move Night", WAIT).unwrap();
     app.drag(
         "label:Drag to move Night",
@@ -824,72 +816,6 @@ fn dragging_a_look_saves_the_complete_order() {
     until(&mut app, || camera.lock().unwrap().order_revision > 1);
     let ids: Vec<&str> = camera.lock().unwrap().looks.iter().map(|e| e.id).collect();
     assert_eq!(ids, [CUSTOM, PORTRA, TRIX]);
-}
-
-/// The JSON bodies of the requests `method` to `suffix`.
-fn bodies(network: &StubNetwork, method: &str, suffix: &str) -> Vec<Value> {
-    network
-        .requests()
-        .iter()
-        .filter(|r| r.method == method && r.url.ends_with(suffix))
-        .map(|r| serde_json::from_slice(body(r)).unwrap())
-        .collect()
-}
-
-/// A camera whose Tri-X 400 has its gray default cover and `cover`.
-fn built_in_camera(cover: &Cover) -> Camera {
-    let mut camera = Camera::new();
-    camera.looks[1].default_cover = definition(TRIX)["icon"].clone();
-    camera.looks[1].cover = cover.to_json();
-    camera
-}
-
-#[test]
-fn the_film_box_colors_set_the_scheme_of_the_camera() {
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let environment = TestEnvironment::new();
-    let gray = Cover::from_json(&definition(TRIX)["icon"]).unwrap();
-    let (mut app, camera, network) = start_phone(&environment, built_in_camera(&gray));
-    open_looks(&mut app);
-    open_cover_colors(&mut app);
-    // No individual cover: no reset.
-    assert!(
-        app.wait_for_within("Reset B&W covers", Duration::from_millis(300))
-            .is_err()
-    );
-    app.press("text:All").unwrap();
-    until(&mut app, || {
-        camera.lock().unwrap().official_covers == "filmBox"
-    });
-    assert_eq!(
-        bodies(&network, "PUT", "/v1/looks/covers/scheme"),
-        [json!({"scheme": "filmBox"})]
-    );
-}
-
-#[test]
-fn a_reset_puts_the_individual_covers_of_a_group_back() {
-    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let environment = TestEnvironment::new();
-    let (mut app, camera, network) =
-        start_phone(&environment, built_in_camera(&Cover::for_name("Mine")));
-    open_looks(&mut app);
-    open_cover_colors(&mut app);
-    app.wait_for_within("Reset B&W covers", WAIT).unwrap();
-    assert!(
-        app.wait_for_within("Reset color covers", Duration::from_millis(300))
-            .is_err()
-    );
-    app.press("role:button[Reset B&W covers]").unwrap();
-    until(&mut app, || {
-        let camera = camera.lock().unwrap();
-        camera.looks[1].cover == camera.looks[1].default_cover
-    });
-    assert_eq!(
-        bodies(&network, "POST", "/v1/looks/covers/reset"),
-        [json!({"group": "mono"})]
-    );
-    app.wait_for_gone("Reset B&W covers", WAIT).unwrap();
 }
 
 #[test]
@@ -960,7 +886,7 @@ fn a_drag_during_another_change_saves_no_order() {
     state.write_delay = Duration::from_millis(600);
     let (mut app, camera, network) = start_phone(&environment, state);
     open_looks(&mut app);
-    app.press("role:button[Edit]").unwrap();
+    app.press("role:button[Sort]").unwrap();
     app.wait_for_within("Drag to move Night", WAIT).unwrap();
     app.press("label:Remove Tri-X 400 from the menu").unwrap();
     let _ = app.drag(
@@ -1016,8 +942,8 @@ fn software_update_closes_when_the_link_goes_down() {
     let mut state = Camera::new();
     state.looks[2].pending = Some("add");
     let (mut app, _camera, _network) = start_phone(&environment, state);
-    app.wait_for_within("Connected", WAIT).unwrap();
-    app.press("role:button[Software Update]").unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
+    app.press("label:/^Software Update/").unwrap();
     app.wait_for_within("Couldn't check for updates", WAIT)
         .unwrap();
     // The Looks tab restarts the camera, which ends the link as expected.
@@ -1028,8 +954,9 @@ fn software_update_closes_when_the_link_goes_down() {
     app.press("role:button[Restart Camera]").unwrap();
     // The restart keeps the tab it started on.
     app.wait_for_within("Camera Not Connected", WAIT).unwrap();
-    app.press("role:button[Camera]").unwrap();
-    app.wait_for_within("role:button[Connect]", WAIT).unwrap();
+    // Without a camera the camera tab is Connect, after the card's button.
+    app.press("role:button[Connect] >> nth=1").unwrap();
+    app.wait_for_within("Add Camera", WAIT).unwrap();
     app.wait_for_gone("Couldn't check for updates", WAIT)
         .unwrap();
 }
@@ -1041,7 +968,7 @@ fn the_more_menu_turns_the_camera_off_after_a_confirm() {
     let mut state = Camera::new();
     state.write_delay = Duration::from_millis(800);
     let (mut app, _camera, network) = start_phone(&environment, state);
-    app.wait_for_within("Connected", WAIT).unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
     let dialogs = Arc::new(Mutex::new(Vec::new()));
     let seen = dialogs.clone();
     app.on_dialog(move |dialog| {
@@ -1070,7 +997,7 @@ fn the_more_menu_turns_the_camera_off_after_a_confirm() {
         2,
         "the menu, then its confirm"
     );
-    app.wait_for_gone("Connected", WAIT).unwrap();
+    app.wait_for_gone("label:/^Software Update/", WAIT).unwrap();
     assert_eq!(count(&network, "POST", "/v1/device/finish"), 1);
 }
 
@@ -1082,7 +1009,7 @@ fn a_drag_saves_the_order_at_a_large_text_size() {
     state.font_scale = 2.0;
     let (mut app, camera, _network) = start_phone(&environment, state);
     open_looks(&mut app);
-    app.press("role:button[Edit]").unwrap();
+    app.press("role:button[Sort]").unwrap();
     app.wait_for_within("Drag to move Night", WAIT).unwrap();
     app.drag(
         "label:Drag to move Night",

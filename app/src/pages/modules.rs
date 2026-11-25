@@ -1,34 +1,30 @@
 //! Modules page: the camera's modules in ADJ order. Every title, value and
 //! icon comes from the camera. Edit moves the modules that ADJ can order.
 
-use nsh_base::theme;
-use nsh_core::element::{ImageSrc, header::HeaderItem};
+use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
 use crate::domain::modules::{
     Managed, ModuleLayout, ModulePlace, ModuleRow, Summary, split_for_edit,
 };
-use crate::pages::looks::{
-    ROW_GAP, RowGestures, drag_handle, list, loading_card, offline_card, refresh_notice,
-    reorder_list,
-};
-use crate::pages::recipes::center_card;
-use crate::store::{AppState, ModulePart, ModulesBlock, Route, Tab};
+use crate::pages::looks::{ROW_GAP, loading_card, no_camera, offline_card, refresh_notice};
+use crate::store::{AppState, ModulePart, ModulesBlock, Route};
 use crate::strings::tr;
+use crate::ui::PageTitle;
 use crate::ui::ty::text;
 use crate::ui::{
-    camera_art, footnote, grouped_card, header_buttons, header_text, secondary_button,
-    section_title, toggle_loading, token,
+    ButtonKind, ButtonSize, ChipTone, Choice, Choices, ListRow, RowGestures, button, check_circle,
+    chip, drag_handle, empty_state, glyph, header_buttons, header_text, list_row, list_section,
+    notice_card, reorder_list, system_switch, token,
 };
 
-/// The least height of a module row; rows grow with their text.
-const ROW_HEIGHT: f32 = 60.0;
+/// The side of a module's tile in a row.
 const ROW_TILE: f32 = 32.0;
 
 pub fn modules_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     let editing = app.modules.editing;
     crate::ui::app_page()
-        .title(move || tr("modules.title", &[]))
+        .page_title(move || tr("modules.title", &[]), false)
         .on_dismiss(on_dismiss)
         .header_right_items(move || {
             if !can_edit(app) {
@@ -56,10 +52,10 @@ pub fn modules_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
             crate::ui::page_scroll()
                 .refresh(Some(crate::store::page_refresh::MODULES.to_owned()))
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
-                        .px_6()
+                        .px_4()
                         .pt_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .gap(px(ROW_GAP))
@@ -77,50 +73,25 @@ fn can_edit(app: AppState) -> bool {
             .is_some_and(|rows| rows.iter().filter(|r| r.state.orderable).count() > 1)
 }
 
-/// The art of a state without modules: the camera, faded.
-fn faded_camera() -> AnyElement {
-    view()
-        .opacity(0.35)
-        .child(camera_art(crate::domain::CameraModel::Gr3, 180.0, false))
-        .into_element()
-}
-
-fn message_card(title: String, body: String) -> AnyElement {
-    grouped_card(
-        view()
-            .p_6()
-            .gap_3()
-            .items_center()
-            .child(faded_camera())
-            .child(
-                text(title)
-                    .text_center()
-                    .text_size(px(crate::ui::ty::HEADLINE))
-                    .font_weight(FontWeight::SEMIBOLD),
-            )
-            .child(
-                text(body)
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .line_height(px(22.0))
-                    .text_center()
-                    .text_color(move || theme().muted_foreground),
-            ),
-    )
-    .into_element()
-}
-
 fn on_camera(app: AppState, editing: bool) -> AnyElement {
     let online = app.camera_online();
     if online && let Some(block) = app.modules_block() {
         return match block {
-            ModulesBlock::Unsupported => message_card(
-                tr("modules.unsupported_title", &[]),
-                tr("modules.unsupported_body", &[]),
-            ),
-            ModulesBlock::AppTooOld => message_card(
-                tr("modules.app_old_title", &[]),
-                tr("modules.app_old_body", &[]),
-            ),
+            // The camera's GRKit takes a newer one over Wi-Fi: the way to
+            // it is Software Update.
+            ModulesBlock::Unsupported => {
+                empty_state(glyph::DOWNLOAD, tr("modules.unsupported_title", &[]))
+                    .body(tr("modules.unsupported_body", &[]))
+                    .action(tr("software.title", &[]), move || {
+                        app.open_software_update()
+                    })
+                    .into_element()
+            }
+            ModulesBlock::AppTooOld => {
+                empty_state(glyph::DOWNLOAD, tr("modules.app_old_title", &[]))
+                    .body(tr("modules.app_old_body", &[]))
+                    .into_element()
+            }
         };
     }
     let rows = app.module_rows();
@@ -129,41 +100,23 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
             Some(rows) => view()
                 .gap(px(ROW_GAP))
                 .child(offline_card(app))
-                .child(browse_list(app, rows, false))
+                .child(browse_list(app, rows, false, None))
                 .into_element(),
-            None => center_card(
-                faded_camera(),
-                tr("looks.no_camera_title", &[]),
-                tr("modules.no_camera_body", &[]),
-                tr("looks.connect", &[]),
-                move || {
-                    app.set_tab(Tab::Camera);
-                    app.connect_saved();
-                },
-            )
-            .into_element(),
+            None => no_camera(app, "modules.no_camera_body").into_element(),
         };
     }
     let Some(rows) = rows else {
         if app.modules_error().is_some() {
-            return grouped_card(
-                view()
-                    .p_4()
-                    .gap_3()
-                    .child(text(tr("modules.read_failed", &[])).text_size(px(crate::ui::ty::BODY)))
-                    .child(secondary_button(tr("looks.retry", &[]), move || {
-                        app.refresh_modules()
-                    })),
-            )
-            .into_element();
+            return empty_state(glyph::WARNING, tr("modules.read_failed_title", &[]))
+                .action(tr("looks.retry", &[]), move || app.refresh_modules())
+                .into_element();
         }
         return loading_card(tr("modules.loading", &[])).into_element();
     };
     if rows.is_empty() {
-        return message_card(
-            tr("modules.empty_title", &[]),
-            tr("modules.empty_body", &[]),
-        );
+        return empty_state(glyph::SLIDERS, tr("modules.empty_title", &[]))
+            .body(tr("modules.empty_body", &[]))
+            .into_element();
     }
     let notice = dynamic(move || {
         app.modules_error().map(|_| {
@@ -173,14 +126,8 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
     let content = if editing && can_edit(app) {
         edit_list(app, rows)
     } else {
-        view()
-            .gap_2()
-            .child(browse_list(app, rows, app.modules_writable()))
-            .child(
-                (!app.grkit_paused() && !app.safe_mode())
-                    .then(|| footnote(tr("modules.list_note", &[]))),
-            )
-            .into_element()
+        let note = (!app.grkit_paused() && !app.safe_mode()).then(|| tr("modules.list_note", &[]));
+        browse_list(app, rows, app.modules_writable(), note)
     };
     view()
         .gap(px(ROW_GAP))
@@ -192,40 +139,20 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
         .into_element()
 }
 
-fn notice_card(title: String, body: Option<String>) -> AnyElement {
-    view()
-        .gap(px(2.0))
-        .p_4()
-        .rounded(px(10.0))
-        .bg(move || theme().muted)
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD),
-        )
-        .child(body.map(|body| {
-            text(body)
-                .text_size(px(crate::ui::ty::FOOTNOTE))
-                .text_color(move || theme().muted_foreground)
-        }))
-        .into_element()
-}
-
 /// GRKit stops every module.
 fn state_notice(app: AppState) -> Option<AnyElement> {
-    if app.safe_mode() {
-        Some(notice_card(
-            tr("modules.safe", &[]),
-            Some(tr("modules.safe_body", &[])),
-        ))
+    let (title, body) = if app.safe_mode() {
+        ("modules.safe", "modules.safe_body")
     } else if app.grkit_paused() {
-        Some(notice_card(
-            tr("modules.grkit_off", &[]),
-            Some(tr("modules.grkit_off_body", &[])),
-        ))
+        ("modules.grkit_off", "modules.grkit_off_body")
     } else {
-        None
-    }
+        return None;
+    };
+    Some(
+        notice_card(tr(title, &[]))
+            .subtitle(tr(body, &[]))
+            .into_element(),
+    )
 }
 
 /// The module changes that wait for the next update.
@@ -234,64 +161,35 @@ fn draft_notice(app: AppState) -> Option<AnyElement> {
     if draft.is_empty() {
         return None;
     }
-    let action = tr("modules.view_update", &[]);
     Some(
-        view()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .p_3()
-            .pl_4()
-            .rounded(px(10.0))
-            .bg(move || theme().muted)
-            .child(
-                text(tr(
-                    "modules.changes",
-                    &[("count", &draft.count().to_string())],
-                ))
-                .flex_1()
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD),
-            )
-            .child(
-                view()
-                    .min_h(px(36.0))
-                    .px_4()
-                    .rounded_full()
-                    .items_center()
-                    .justify_center()
-                    .bg(move || theme().foreground)
-                    .role(AccessibilityRole::Button)
-                    .label(action.clone())
-                    .on_press(move || app.open_software_update())
-                    .active(|s| s.opacity(0.72))
-                    .child(
-                        text(action)
-                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(move || theme().background),
-                    ),
-            )
-            .into_element(),
+        notice_card(tr(
+            "modules.changes",
+            &[("count", &draft.count().to_string())],
+        ))
+        .emphasis()
+        .action(button(
+            tr("modules.view_update", &[]),
+            ButtonKind::Primary,
+            ButtonSize::Small,
+            move || app.open_software_update(),
+        ))
+        .into_element(),
     )
 }
 
-/// A small action on a row: the muted pill of Apply, not bare text.
+/// A small action on a row, such as Add or Undo.
 fn small_action(title: String, on_press: impl Fn() + 'static) -> AnyElement {
-    crate::ui::pill_button_loading(title.clone(), title, true, false, on_press).into_element()
+    button(title, ButtonKind::Tinted, ButtonSize::Small, on_press).into_element()
 }
 
-fn tag(title: String) -> AnyElement {
+/// A change that waits for the update, and its Undo.
+fn pending_end(title: String, on_undo: impl Fn() + 'static) -> AnyElement {
     view()
-        .px_2()
-        .py(px(3.0))
-        .rounded(px(6.0))
-        .bg(move || theme().muted)
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::FOOTNOTE))
-                .text_color(move || theme().muted_foreground),
-        )
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(chip(title, ChipTone::Pending))
+        .child(small_action(tr("modules.undo", &[]), on_undo))
         .into_element()
 }
 
@@ -303,119 +201,98 @@ fn install_section(app: AppState) -> Option<AnyElement> {
         return None;
     }
     let manageable = app.modules_manageable();
-    let last = modules.len() - 1;
-    let rows = modules
-        .into_iter()
-        .enumerate()
-        .map(|(index, (id, title))| {
-            let pending = draft.add.contains(&id);
-            let toggle = id.clone();
-            let trailing: Option<AnyElement> = if pending {
-                Some(
-                    view()
-                        .flex_row()
-                        .items_center()
-                        .gap_1()
-                        .child(tag(tr("modules.pending_add", &[])))
-                        .child(small_action(tr("modules.undo", &[]), move || {
-                            app.toggle_module_add(&toggle)
-                        }))
-                        .into_element(),
-                )
-            } else {
-                manageable.then(|| {
-                    small_action(tr("modules.add", &[]), move || {
-                        app.toggle_module_add(&toggle)
-                    })
-                })
-            };
-            view()
-                .flex_row()
-                .items_center()
-                .gap_3()
-                .min_h(px(ROW_HEIGHT))
-                .pl_3()
-                .pr_1()
-                .bg(move || theme().card)
-                .when(index != last, |st| {
-                    st.border_b_1().border_b_color(move || theme().border)
-                })
-                .child(module_tile(app, id, ROW_TILE, false))
-                .child(
-                    text(title)
-                        .flex_1()
-                        .text_size(px(crate::ui::ty::CALLOUT))
-                        .font_weight(FontWeight::MEDIUM),
-                )
-                .child(trailing)
-                .into_element()
-        })
-        .collect::<Vec<_>>();
+    let rows = modules.into_iter().map(|(id, title)| {
+        let pending = draft.add.contains(&id);
+        let toggle = id.clone();
+        let row = list_row(title).leading(module_tile(app, id, ROW_TILE, false));
+        if pending {
+            row.trailing(pending_end(tr("modules.pending_add", &[]), move || {
+                app.toggle_module_add(&toggle)
+            }))
+        } else if manageable {
+            row.trailing(small_action(tr("modules.add", &[]), move || {
+                app.toggle_module_add(&toggle)
+            }))
+        } else {
+            row
+        }
+    });
     Some(
-        view()
-            .gap_2()
-            .child(
-                view()
-                    .px_1()
-                    .child(crate::ui::section_title(tr("modules.not_installed", &[]))),
-            )
-            .child(list(rows))
+        list_section(rows)
+            .header(tr("modules.not_installed", &[]))
             .into_element(),
     )
 }
 
 /// The actions of a module, on a long press.
-fn module_menu(app: AppState, row: ModuleRow) {
+fn module_menu(app: AppState, row: &ModuleRow) -> Choices {
     let id = row.id().to_owned();
     let on = row.state.enabled;
     let can_delete = !row.state.custom && app.modules_manageable();
     let pending = app.module_draft().remove.contains(&id);
     let can_toggle = app.modules_editable() && !row.paused() && !row.safe();
-    spawn(async move {
-        let mut menu = crate::ui::held_menu(row.title().to_owned());
-        menu = menu.action("open", tr("modules.open", &[]));
-        if can_toggle {
-            menu = menu.action(
-                "toggle",
-                tr(
-                    if on {
-                        "modules.turn_off"
-                    } else {
-                        "modules.turn_on"
-                    },
-                    &[],
-                ),
-            );
-        }
-        if can_delete {
-            menu = if pending {
-                menu.action("restore", tr("modules.undo", &[]))
-            } else {
-                menu.destructive("delete", tr("modules.delete", &[]))
-            };
-        }
-        let answer = menu.cancel("cancel", tr("looks.cancel", &[])).show().await;
-        match answer.ok().and_then(|a| a.action).as_deref() {
-            Some("open") => app.push(Route::ModuleDetail(id.clone())),
-            Some("toggle") => app.set_module_enabled(&id, !on),
-            Some("delete" | "restore") => app.toggle_module_remove(&id),
+    let mut choices = vec![Choice::new("open", tr("modules.open", &[]))];
+    if can_toggle {
+        let toggle = if on {
+            "modules.turn_off"
+        } else {
+            "modules.turn_on"
+        };
+        choices.push(Choice::new("toggle", tr(toggle, &[])));
+    }
+    if can_delete {
+        choices.push(if pending {
+            Choice::new("restore", tr("modules.undo", &[]))
+        } else {
+            Choice::new("delete", tr("modules.delete", &[])).destructive()
+        });
+    }
+    Choices::new(
+        row.title().to_owned(),
+        choices,
+        move |chosen| match chosen {
+            "open" => app.push(Route::ModuleDetail(id.clone())),
+            "toggle" => app.set_module_enabled(&id, !on),
+            "delete" | "restore" => app.toggle_module_remove(&id),
             _ => {}
-        }
-    });
+        },
+    )
 }
 
-fn browse_list(app: AppState, rows: Vec<ModuleRow>, live: bool) -> AnyElement {
-    let last = rows.len().saturating_sub(1);
-    list(
-        rows.into_iter()
-            .enumerate()
-            .map(|(index, row)| {
-                let trailing = switch(app, &row, live);
-                module_row(app, row, trailing, index == last, true).into_element()
-            })
-            .collect(),
-    )
-    .into_element()
+fn browse_list(
+    app: AppState,
+    rows: Vec<ModuleRow>,
+    live: bool,
+    note: Option<String>,
+) -> AnyElement {
+    // A module that failed to load has no page: a note under the list says
+    // where the reason is.
+    let failed = rows.iter().any(ModuleRow::failed);
+    let rows = rows.into_iter().map(|row| {
+        let trailing = switch(app, &row, live);
+        module_row(app, row, trailing, true)
+    });
+    let section = list_section(rows);
+    let section = match note {
+        Some(note) => section.footer(note).into_element(),
+        None => section.into_element(),
+    };
+    if !failed {
+        return section;
+    }
+    view()
+        .gap_2()
+        .child(section)
+        .child(crate::ui::list_note(tr("modules.failed_note", &[])))
+        .into_element()
+}
+
+/// A row of a list whose rows a handle moves: drawn on its own card fill.
+fn moving_row(row: ListRow, last: bool) -> AnyElement {
+    view()
+        .bg(move || token("list-card"))
+        .child(row.into_row(last))
+        .into_element()
 }
 
 /// Edit: the orderable modules move; the others show their place. A GRKit
@@ -427,26 +304,18 @@ fn edit_list(app: AppState, rows: Vec<ModuleRow>) -> AnyElement {
     let (before, movable, after) = split_for_edit(rows);
     let fixed = |rows: Vec<ModuleRow>| {
         (!rows.is_empty()).then(|| {
-            let last = rows.len() - 1;
-            list(
-                rows.into_iter()
-                    .enumerate()
-                    .map(|(index, row)| {
-                        let place = place_label(&row);
-                        module_row(
-                            app,
-                            row,
-                            text(place)
-                                .text_size(px(crate::ui::ty::FOOTNOTE))
-                                .text_color(move || theme().muted_foreground)
-                                .into_element(),
-                            index == last,
-                            false,
-                        )
-                        .into_element()
-                    })
-                    .collect(),
-            )
+            list_section(rows.into_iter().map(|row| {
+                let place = place_label(&row);
+                module_row(
+                    app,
+                    row,
+                    text(place)
+                        .text_size(px(crate::ui::ty::FOOTNOTE))
+                        .text_color(move || token("list-secondary"))
+                        .into_element(),
+                    false,
+                )
+            }))
         })
     };
     let count = movable.len();
@@ -458,7 +327,7 @@ fn edit_list(app: AppState, rows: Vec<ModuleRow>) -> AnyElement {
         move |index, gestures: Option<RowGestures>| {
             let row = cells.borrow_mut()[index].take().expect("each row once");
             let handle = drag_handle(row.title().to_owned(), gestures).into_element();
-            module_row(app, row, handle, index + 1 == count, false).into_element()
+            moving_row(module_row(app, row, handle, false), index + 1 == count)
         },
     );
     view()
@@ -466,7 +335,7 @@ fn edit_list(app: AppState, rows: Vec<ModuleRow>) -> AnyElement {
         .child(fixed(before))
         .child(moving)
         .child(fixed(after))
-        .child(footnote(tr("modules.edit_note", &[])))
+        .child(crate::ui::list_note(tr("modules.edit_note", &[])))
         .into_element()
 }
 
@@ -509,7 +378,7 @@ fn layout_edit(app: AppState, rows: Vec<ModuleRow>, layout: ModuleLayout) -> Any
                 // the row moves it between the top row and the GRK tab.
                 let shown = place != ModulePlace::Hidden;
                 let check_id = id.clone();
-                let check = crate::pages::looks::round_check(
+                let check = check_circle(
                     shown,
                     tr(
                         if shown {
@@ -530,31 +399,33 @@ fn layout_edit(app: AppState, rows: Vec<ModuleRow>, layout: ModuleLayout) -> Any
                         app.move_to_place(&check_id, to);
                     },
                 );
-                view()
+                let summary = summary_text(app, &row);
+                let off = !row.state.enabled;
+                let leading = view()
                     .flex_row()
                     .items_center()
-                    .bg(move || theme().card)
+                    // The check's touch area reaches into the card's margin.
+                    .ml(px(-10.0))
+                    .gap(px(4.0))
                     .child(check)
-                    .child(
-                        view()
-                            .flex_1()
-                            .on_press(move || {
-                                place_menu(app, id.clone(), name.clone(), place, full)
-                            })
-                            .child(module_row(app, row, handle, index + 1 == count, false)),
-                    )
-                    .into_element()
+                    .child(module_tile(app, id.clone(), ROW_TILE, off));
+                let row = list_row(name.clone())
+                    .subtitle(summary)
+                    .leading(leading)
+                    .trailing(handle)
+                    .press(move || place_menu(app, id.clone(), name.clone(), place, full));
+                moving_row(row, index + 1 == count)
             },
         );
         content = content.child(
             view()
                 .gap_2()
-                .child(view().px(px(2.0)).child(section_title(title)))
+                .child(crate::ui::list_note(title).role(AccessibilityRole::Header))
                 .child(moving),
         );
     }
     content
-        .child(footnote(tr("modules.layout_note", &[])))
+        .child(crate::ui::list_note(tr("modules.layout_note", &[])))
         .into_element()
 }
 
@@ -600,15 +471,9 @@ fn switch(app: AppState, row: &ModuleRow, live: bool) -> AnyElement {
     let id = row.id().to_owned();
     if app.module_draft().remove.contains(&id) {
         let toggle = id.clone();
-        return view()
-            .flex_row()
-            .items_center()
-            .gap_1()
-            .child(tag(tr("modules.pending_remove", &[])))
-            .child(small_action(tr("modules.undo", &[]), move || {
-                app.toggle_module_remove(&toggle)
-            }))
-            .into_element();
+        return pending_end(tr("modules.pending_remove", &[]), move || {
+            app.toggle_module_remove(&toggle)
+        });
     }
     let on = row.state.enabled;
     let paused = row.paused();
@@ -618,15 +483,16 @@ fn switch(app: AppState, row: &ModuleRow, live: bool) -> AnyElement {
         .flex_row()
         .items_center()
         .gap_2()
-        .child(custom.then(|| tag(tr("modules.custom", &[]))))
+        .child(custom.then(|| chip(tr("modules.custom", &[]), ChipTone::Neutral)))
         .child(dynamic(move || {
             let toggle_id = id.clone();
-            toggle_loading(
-                on,
+            let saving = app.module_part_busy(&id, &ModulePart::Enabled);
+            system_switch(
+                on != saving,
                 title.clone(),
                 live && !paused && app.modules_editable(),
-                app.module_part_busy(&id, &ModulePart::Enabled),
-                move || app.set_module_enabled(&toggle_id, !on),
+                saving,
+                move |on| app.set_module_enabled(&toggle_id, on),
             )
         }))
         .into_element()
@@ -685,100 +551,28 @@ pub(crate) fn module_tile(app: AppState, id: String, size: f32, faded: bool) -> 
         .next()
         .map(|c| c.to_uppercase().to_string())
         .unwrap_or_default();
-    view()
-        .size(px(size))
-        .rounded(px(size * 0.22))
-        .bg(rgb(0x353536))
-        .items_center()
-        .justify_center()
-        .opacity(if faded { 0.45 } else { 1.0 })
-        .child(dynamic(move || {
-            match app.module_icon(&id) {
-                Some(uri) => image(ImageSrc::from(uri))
-                    .size(px(size * 0.875))
-                    .object_fit(ResizeMode::Contain)
-                    .into_element(),
-                // Drawn on a fixed tile, as a cover is.
-                None => text(initial.clone())
-                    .allow_font_scaling(false)
-                    .text_size(px(size * 0.45))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(0xffffff))
-                    .into_element(),
-            }
-        }))
-        .into_element()
+    dynamic(move || {
+        crate::ui::module_icon_tile(app.module_icon(&id).as_deref(), &initial, size, faded)
+    })
+    .into_element()
 }
 
-fn module_row(
-    app: AppState,
-    row: ModuleRow,
-    trailing: AnyElement,
-    last: bool,
-    opens: bool,
-) -> impl IntoElement {
+/// A module: its tile, title and summary, and `trailing`. When it
+/// `opens`, a press opens the module and a held finger its menu.
+fn module_row(app: AppState, row: ModuleRow, trailing: AnyElement, opens: bool) -> ListRow {
     let summary = summary_text(app, &row);
-    let title = row.title().to_owned();
     let id = row.id().to_owned();
     let off = !row.state.enabled;
     let pressable = opens && !row.failed() && !row.safe();
-    let menu_row = row.clone();
-    let label = if summary.is_empty() {
-        title.clone()
-    } else {
-        format!("{title}, {summary}")
-    };
-    let route = Route::ModuleDetail(id.clone());
-    view()
-        .flex_row()
-        .items_center()
-        .min_h(px(ROW_HEIGHT))
-        .pr_3()
-        .gap_2()
-        .bg(move || theme().card)
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child(
-            view()
-                .flex_1()
-                .min_h(px(ROW_HEIGHT))
-                .py_1()
-                .pl_3()
-                .flex_row()
-                .items_center()
-                .gap_3()
-                .role(AccessibilityRole::Button)
-                .label(label)
-                .when(pressable, |v| {
-                    v.on_press(move || app.push(route.clone()))
-                        .on_long_press(move || module_menu(app, menu_row.clone()))
-                        .active(|s| s.opacity(0.72))
-                })
-                .child(module_tile(app, id, ROW_TILE, off))
-                .child(
-                    view()
-                        .flex_1()
-                        .gap(px(1.0))
-                        .child(
-                            text(title)
-                                .text_size(px(crate::ui::ty::CALLOUT))
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(move || {
-                                    if off {
-                                        theme().muted_foreground
-                                    } else {
-                                        theme().foreground
-                                    }
-                                }),
-                        )
-                        .child((!summary.is_empty()).then(|| {
-                            text(summary)
-                                .number_of_lines(1)
-                                .text_size(px(crate::ui::ty::FOOTNOTE))
-                                .text_color(move || theme().muted_foreground)
-                        })),
-                ),
-        )
-        .child(trailing)
+    let list_row = list_row(row.title().to_owned())
+        .subtitle(summary)
+        .leading(module_tile(app, id.clone(), ROW_TILE, off))
+        .trailing(trailing);
+    if !pressable {
+        return list_row;
+    }
+    let route = Route::ModuleDetail(id);
+    list_row
+        .press(move || app.push(route.clone()))
+        .held(move || Some(module_menu(app, &row)))
 }

@@ -1,143 +1,178 @@
 //! Camera tab: the first camera to add, the saved cameras, and the
 //! connected camera with its update, modules, Looks and recipes.
 
-use nsh_base::{alert_dialog, theme};
+use nsh_base::alert_dialog;
 use nsh_core::element::ImageSrc;
 use nsh_core::element::desktop::MenuItem;
 use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
 use crate::pages::look_pages::TAB_BAR_CLEARANCE;
+use crate::pages::software::{CardState, card_state};
 use crate::ui::ty::text;
 
-use crate::domain::{CameraModel, RememberedCamera};
+use crate::domain::{CameraModel, ReleaseProblem, RememberedCamera};
 use crate::store::{AppState, Route, Tab, is_up_to_date};
 use crate::strings::tr;
+use crate::ui::PageTitle;
 use crate::ui::{
-    camera_art, chevron, connection_button, cover_view, grouped_card, header_busy, header_buttons,
-    header_icon, quiet_spinner, secondary_button, section_title, token, wordmark,
+    ButtonKind, ButtonSize, Choice, Choices, ListRow, TileTone, button, camera_art, glyph,
+    header_busy, header_buttons, header_icon, held_view, icon_tile, list_row, list_section,
+    notice_card, photo_hero, quiet_spinner, status_line, token,
 };
 
-/// The height of the wordmark at the start of the camera tab's header.
-const WORDMARK_HEIGHT: f32 = 26.0;
 /// Three dots: More.
 const MORE_PATH: &str = "M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0";
 
+/// The camera tab: Connect while no camera is connected, then the camera.
 pub fn camera_root(app: AppState) -> impl IntoElement {
-    // The header of the other tabs, with the wordmark in place of the title.
-    let page = crate::ui::app_page()
-        .title(move || tr("cam.title", &[]))
-        .header_title(view());
-    // iOS 26 draws a bar item on glass, as a button: there the wordmark
-    // heads the page instead, where the other tabs show their large title.
-    let page = if cfg!(target_os = "ios") {
-        page
-    } else {
-        page.header_left(wordmark(WORDMARK_HEIGHT))
-    };
-    page.header_right_items(move || native_header(app))
+    let online = move || app.camera_online() && app.status().is_some() && !app.initial_connect();
+    crate::ui::app_page()
+        .page_title(
+            move || match app.status().filter(|_| online()) {
+                Some(status) => format!("RICOH {}", status.camera.model.display_name()),
+                // The Connect tab names the page: the bar stays empty.
+                None => String::new(),
+            },
+            true,
+        )
+        // Without a camera the page has no bar to see: a see-through one,
+        // as iOS brings a hidden bar back only with a page that comes in.
+        // The first connect shows the connected page's layout under the
+        // same bar, so the page does not move when the camera answers.
+        .header_transparent(move || !online() && !app.initial_connect())
+        // The back button of the pages above is the arrow alone, not the
+        // camera's name.
+        .header_back_title("")
+        .header_right_items(move || native_header(app))
         .header_right(dynamic(move || header_actions(app)))
-        .child(dynamic(move || {
-            if app.initial_connect() {
-                return connecting_home().into_element();
-            }
-            if app.camera_online()
-                && let Some(status) = app.status()
-            {
-                return untracked(|| connected(app, status.camera.model).into_element());
-            }
-            match app.remembered() {
-                Some(camera) => untracked(|| saved_home(app, camera).into_element()),
-                None => empty_home(app).into_element(),
-            }
-        }))
+        .child({
+            // The page stays while the status refreshes: only a connect, a
+            // disconnect or another model makes it again.
+            let model = computed(move || {
+                (!app.initial_connect() && app.camera_online())
+                    .then(|| app.status().map(|s| s.camera.model))
+                    .flatten()
+            });
+            dynamic(move || {
+                if app.initial_connect() {
+                    return connecting_home().into_element();
+                }
+                if model.get().is_some() {
+                    return untracked(|| connected(app).into_element());
+                }
+                match app.remembered() {
+                    Some(camera) => untracked(|| saved_home(app, camera).into_element()),
+                    None => empty_home(app).into_element(),
+                }
+            })
+        })
 }
 
-/// The wordmark at the head of the camera tab on iOS, in the place and at
-/// the margin of a large title.
-fn home_wordmark() -> Option<impl IntoElement> {
-    cfg!(target_os = "ios").then(|| view().px_4().pt_2().child(wordmark(WORDMARK_HEIGHT)))
-}
-
+/// The first connect to a saved camera: the connected page's layout with
+/// nothing read yet, so the page does not move when the camera answers.
 fn connecting_home() -> impl IntoElement {
     crate::ui::page_scroll()
         .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .flex_1()
-        .bg(move || token("grouped"))
-        .child(home_wordmark())
+        .bg(move || token("list-background"))
         .child(
             view()
-                .px_6()
+                .gap(px(24.0))
                 .pt_4()
-                .gap_4()
-                .child(crate::ui::camera_skeleton()),
+                .px_4()
+                .pb(px(TAB_BAR_CLEARANCE))
+                .child(current_card_frame(
+                    crate::ui::hero_skeleton(),
+                    Some(crate::ui::cover_row_skeleton()),
+                ))
+                .child(
+                    list_section([
+                        list_row(tr("software.title", &[]))
+                            .leading(software_tile())
+                            .subtitle_placeholder(SOFTWARE_BAR)
+                            .trailing(crate::ui::chevron()),
+                        list_row(tr("modules.title", &[]))
+                            .leading(modules_tile())
+                            .subtitle_placeholder(MODULES_BAR)
+                            .trailing(crate::ui::chevron()),
+                    ])
+                    .footer_placeholder(VERSIONS_BAR),
+                ),
         )
 }
 
-/// A card with the camera art, a title, a status line and its buttons.
-fn camera_card(
-    model: CameraModel,
+/// The widths of the bars in place of the words that the camera tab reads:
+/// about the length of the words.
+const SOFTWARE_BAR: f32 = 110.0;
+const MODULES_BAR: f32 = 150.0;
+const VERSIONS_BAR: f32 = 150.0;
+
+/// The Connect page: the camera, its title and a line under it in the
+/// middle, and the actions at the foot, within reach of the thumb. The bar
+/// over the page is see-through, so the page keeps clear of the status bar
+/// only.
+fn connect_frame(
+    app: AppState,
+    art: impl IntoElement,
     title: String,
-    status: AnyElement,
-    buttons: AnyElement,
-    on_long_press: Option<Box<dyn Fn()>>,
+    line: impl IntoElement,
+    actions: impl IntoElement,
 ) -> impl IntoElement {
     view()
-        .rounded(px(10.0))
-        .border_1()
-        .border_color(move || token("connection-line"))
-        .bg(move || token("connection-background"))
-        .p_6()
-        .gap_5()
-        .when_some(on_long_press, |v, on_long_press| {
-            v.on_long_press(on_long_press)
-        })
+        .flex_1()
+        .bg(move || token("list-background"))
+        .px_5()
+        .pt(move || px(safe_area().top.0))
+        .pb(px(TAB_BAR_CLEARANCE + 20.0))
         .child(
             view()
+                .flex_1()
                 .items_center()
-                .py_4()
-                .child(camera_art(model, 170.0, false)),
-        )
-        .child(
-            view()
-                .gap_2()
+                .justify_center()
+                .gap(px(20.0))
+                .child(art)
                 .child(
                     text(title)
-                        .text_size(px(crate::ui::ty::TITLE2))
-                        .font_weight(FontWeight::SEMIBOLD),
+                        .mt(px(12.0))
+                        .text_size(px(30.0))
+                        .font_weight(FontWeight::BOLD)
+                        .text_center()
+                        .role(AccessibilityRole::Header),
                 )
-                .child(status),
+                .child(line),
         )
-        .child(buttons)
-}
-
-fn empty_home(app: AppState) -> impl IntoElement {
-    crate::ui::page_scroll()
-        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
-        .flex_1()
-        .bg(move || token("connection-background"))
-        .child(home_wordmark())
         .child(
+            // Notices show above the buttons, not over them.
             view()
-                .px_6()
-                .pt_4()
-                .pb(px(TAB_BAR_CLEARANCE))
-                .gap_6()
-                .child(camera_card(
-                    CameraModel::Gr3,
-                    tr("home.title", &[]),
-                    muted_line(tr("connecting.bt", &[])).into_element(),
-                    connection_button(tr("home.add", &[]), move || app.open_scan()).into_element(),
-                    None,
-                )),
+                .on_layout(move |bounds: &Bounds<Points>| {
+                    app.set_connect_foot(TAB_BAR_CLEARANCE + 20.0 + bounds.size.height.0)
+                })
+                .child(actions),
         )
 }
 
-fn muted_line(copy: String) -> impl IntoElement {
-    text(copy)
+/// No camera saved yet: the camera, what to do on it first, and Add Camera.
+fn empty_home(app: AppState) -> impl IntoElement {
+    connect_frame(
+        app,
+        camera_art(CameraModel::Gr3, 290.0, false),
+        tr("home.title", &[]),
+        text(tr(
+            "home.pair_first",
+            &[("path", &tr("cam.path_common", &[]))],
+        ))
         .text_size(px(crate::ui::ty::SUBHEADLINE))
-        .line_height(px(20.0))
-        .text_color(move || theme().muted_foreground)
+        .line_height(px(22.0))
+        .text_center()
+        .text_color(move || token("list-secondary")),
+        button(
+            tr("home.add", &[]),
+            ButtonKind::Primary,
+            ButtonSize::Large,
+            move || app.open_scan(),
+        ),
+    )
 }
 
 /// Whether the nearby watch sees this camera powered on.
@@ -147,7 +182,7 @@ fn seen_nearby(app: AppState, camera: &RememberedCamera) -> bool {
         .any(|c| c.powered_on && c.peripheral_id.eq_ignore_ascii_case(&camera.peripheral_id))
 }
 
-/// "On · Nearby" with a green dot, or "Not connected".
+/// "On · Nearby" with a green dot, "Not connected", or the connect under way.
 fn presence_line(app: AppState, camera: RememberedCamera) -> impl IntoElement {
     dynamic(move || {
         let working = if app.camera_restarting() {
@@ -163,169 +198,92 @@ fn presence_line(app: AppState, camera: RememberedCamera) -> impl IntoElement {
                 .items_center()
                 .gap_2()
                 .child(quiet_spinner(14.0))
-                .child(muted_line(status))
+                .child(status_line(status, false))
                 .into_element();
         }
         if seen_nearby(app, &camera) {
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
-                    view()
-                        .size(px(7.0))
-                        .rounded_full()
-                        .bg(move || token("online-dot")),
-                )
-                .child(muted_line(tr("cam.nearby", &[])))
-                .into_element()
+            status_line(tr("cam.nearby", &[]), true)
         } else {
-            muted_line(tr("connected.offline", &[])).into_element()
+            status_line(tr("connected.offline", &[]), false)
         }
     })
 }
 
-/// The saved cameras, the most recent first, while none is connected.
+/// The most recent saved camera while none is connected: Connect, and Add
+/// Camera under it. Press and hold the camera for its menu; the other saved
+/// cameras are in Settings.
 fn saved_home(app: AppState, camera: RememberedCamera) -> impl IntoElement {
-    let others: Vec<RememberedCamera> = app.saved_cameras().into_iter().skip(1).collect();
     let menu_camera = camera.clone();
-    crate::ui::page_scroll()
-        .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
-        .flex_1()
-        .bg(move || token("connection-background"))
-        .child(home_wordmark())
-        .child(
-            view()
-                .px_6()
-                .pt_4()
-                .pb(px(TAB_BAR_CLEARANCE))
-                .gap_6()
-                .child(camera_card(
-                    camera.model,
-                    format!("RICOH {}", camera.model.display_name()),
-                    presence_line(app, camera.clone()).into_element(),
-                    view()
-                        .w_full()
-                        .gap_3()
-                        .child(connection_button(tr("nearby.connect", &[]), move || {
-                            app.connect_saved()
-                        }))
-                        .child(secondary_button(tr("home.add", &[]), move || {
-                            app.open_scan()
-                        }))
-                        .into_element(),
-                    Some(Box::new(move || camera_menu(app, menu_camera.clone()))),
-                ))
-                .child((!others.is_empty()).then(|| other_cameras(app, others))),
-        )
-}
-
-fn other_cameras(app: AppState, cameras: Vec<RememberedCamera>) -> impl IntoElement {
-    let count = cameras.len();
-    view()
-        .gap_2()
-        .child(section_title(tr("cam.others", &[])))
-        .child(grouped_card(view().children(
-            cameras.into_iter().enumerate().map(move |(index, camera)| {
-                saved_row(app, camera, index + 1 == count, false).into_element()
-            }),
-        )))
+    let art = held_view(
+        move || Some(camera_menu(app, &menu_camera)),
+        view().child(camera_art(camera.model, 290.0, false)),
+    );
+    connect_frame(
+        app,
+        art,
+        format!("RICOH {}", camera.model.display_name()),
+        presence_line(app, camera),
+        view()
+            .gap(px(12.0))
+            .child(button(
+                tr("nearby.connect", &[]),
+                ButtonKind::Primary,
+                ButtonSize::Large,
+                move || app.connect_saved(),
+            ))
+            .child(button(
+                tr("home.add", &[]),
+                ButtonKind::Tinted,
+                ButtonSize::Large,
+                move || app.open_scan(),
+            )),
+    )
 }
 
 /// One saved camera: tap to connect, press and hold for its menu. While
 /// another camera is connected it only shows.
-pub fn saved_row(
-    app: AppState,
-    camera: RememberedCamera,
-    last: bool,
-    connected: bool,
-) -> impl IntoElement {
+pub fn saved_row(app: AppState, camera: RememberedCamera, connected: bool) -> ListRow {
     let name = format!("RICOH {}", camera.model.display_name());
     let id = camera.peripheral_id.clone();
     let menu_camera = camera.clone();
     let busy = app.camera_online();
-    let detail = camera.last_ssid.clone();
-    view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .min_h(px(64.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .role(AccessibilityRole::Button)
-        .label(name.clone())
-        .when(!busy, |v| {
-            v.on_press(move || app.connect_camera(&id))
-                .active(|s| s.bg(move || theme().accent))
-        })
-        .when(!connected, |v| {
-            v.on_long_press(move || camera_menu(app, menu_camera.clone()))
-        })
-        .child(camera_art(camera.model, 48.0, false))
-        .child(
-            view()
-                .flex_1()
-                .gap(px(2.0))
-                .child(
-                    text(name)
-                        .text_size(px(crate::ui::ty::HEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(
-                    text(detail)
-                        .text_size(px(crate::ui::ty::FOOTNOTE))
-                        .text_color(move || theme().muted_foreground),
-                ),
-        )
-        .child(if connected {
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
-                    view()
-                        .size(px(7.0))
-                        .rounded_full()
-                        .bg(move || token("online-dot")),
-                )
-                .child(
-                    text(tr("cam.connected", &[]))
-                        .text_size(px(crate::ui::ty::FOOTNOTE))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(move || token("online")),
-                )
-                .into_element()
-        } else if busy {
-            view().into_element()
-        } else {
-            text(tr("nearby.connect", &[]))
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .text_color(move || token("link"))
-                .into_element()
-        })
+    let mut row = list_row(name)
+        .subtitle(camera.last_ssid.clone())
+        .leading(camera_art(camera.model, 48.0, false));
+    if connected {
+        row = row.trailing(status_line(tr("cam.connected", &[]), true));
+    } else {
+        row = row.held(move || Some(camera_menu(app, &menu_camera)));
+    }
+    if !busy {
+        row = row
+            .trailing(
+                text(tr("nearby.connect", &[]))
+                    .text_size(px(crate::ui::ty::BODY))
+                    .text_color(move || token("tint")),
+            )
+            .press(move || app.connect_camera(&id));
+    }
+    row
 }
 
 /// The long-press menu of a saved camera: connect, or remove it.
-pub fn camera_menu(app: AppState, camera: RememberedCamera) {
+pub fn camera_menu(app: AppState, camera: &RememberedCamera) -> Choices {
     let name = format!("RICOH {}", camera.model.display_name());
-    spawn(async move {
-        let mut sheet = crate::ui::held_menu(name.clone());
-        if !app.camera_online() {
-            sheet = sheet.action("connect", tr("nearby.connect", &[]));
+    let mut choices = Vec::new();
+    if !app.camera_online() {
+        choices.push(Choice::new("connect", tr("nearby.connect", &[])));
+    }
+    choices.push(Choice::new("remove", tr("cam.remove", &[])).destructive());
+    let camera = camera.clone();
+    Choices::new(name.clone(), choices, move |chosen| match chosen {
+        "connect" => app.connect_camera(&camera.peripheral_id),
+        "remove" => {
+            let (camera, name) = (camera.clone(), name.clone());
+            spawn(async move { confirm_remove(app, camera, name).await });
         }
-        let answer = sheet
-            .destructive("remove", tr("cam.remove", &[]))
-            .cancel("cancel", tr("cam.cancel", &[]))
-            .show()
-            .await;
-        match answer.ok().and_then(|a| a.action).as_deref() {
-            Some("connect") => app.connect_camera(&camera.peripheral_id),
-            Some("remove") => confirm_remove(app, camera, name).await,
-            _ => {}
-        }
-    });
+        _ => {}
+    })
 }
 
 async fn confirm_remove(app: AppState, camera: RememberedCamera, name: String) {
@@ -341,73 +299,38 @@ async fn confirm_remove(app: AppState, camera: RememberedCamera, name: String) {
     }
 }
 
-fn connected(app: AppState, model: CameraModel) -> impl IntoElement {
+fn connected(app: AppState) -> impl IntoElement {
     crate::ui::page_scroll()
         .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .refresh(Some(crate::store::page_refresh::CAMERA.to_owned()))
         .flex_1()
-        .bg(move || token("grouped"))
-        .child(home_wordmark())
+        .bg(move || token("list-background"))
         .child(
             view()
-                .gap_4()
+                .gap(px(24.0))
                 .pt_4()
-                .px_6()
+                .px_4()
                 .pb(px(TAB_BAR_CLEARANCE))
-                .child(grouped_card(
-                    view().p_4().gap_4().child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap_4()
-                            .child(camera_art(model, 80.0, false))
-                            .child(
-                                view()
-                                    .flex_1()
-                                    .gap(px(4.0))
-                                    .child(
-                                        text(format!("RICOH {}", model.display_name()))
-                                            .text_size(px(crate::ui::ty::TITLE3))
-                                            .font_weight(FontWeight::SEMIBOLD),
-                                    )
-                                    .child(
-                                        text(tr("connected.status", &[]))
-                                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                            .text_color(move || theme().muted_foreground),
-                                    )
-                                    .child(
-                                        text(move || version_line(app))
-                                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                                            .text_color(move || theme().muted_foreground),
-                                    ),
-                            ),
-                    ),
-                ))
-                // Rows come and go, so each brings its own gap. Each has its
-                // own dynamic: a list that finishes loading must not redraw
-                // the row under a finger.
-                .child(
-                    view()
-                        .mt(px(-16.0))
-                        .child(spaced_row(move || update_card(app)))
-                        .child(spaced_row(move || modules_card(app)))
-                        .child(spaced_row(move || current_card(app))),
-                ),
+                // Each part has its own dynamic: a list that finishes
+                // loading must not redraw another part under a finger.
+                .child(dynamic(move || current_card(app)))
+                .child(dynamic(move || grkit_card(app))),
         )
 }
 
-/// A row of the camera tab with the gap above it, or nothing.
-fn spaced_row(row: impl Fn() -> Option<AnyElement> + 'static) -> impl IntoElement {
-    dynamic(move || row().map(|row| view().mt_4().child(row)))
+/// What the camera's update says, and whether it waits on the camera.
+struct UpdateState {
+    title: String,
+    subtitle: Option<String>,
+    pending: bool,
+    /// An update that the phone can install now.
+    available: bool,
 }
 
-/// A line of text that follows the state it reads.
-type Line = Box<dyn Fn() -> String>;
-
-/// One row about an update: one the phone can install, or one that waits
-/// on the camera for its confirmation or a restart. Up to date, it still
-/// opens Software Update; nothing before the camera's package is read.
-fn update_card(app: AppState) -> Option<AnyElement> {
+/// The update state: one the phone can install, one that waits on the
+/// camera for its confirmation or a restart, module changes to send, or
+/// up to date. Nothing before the camera's package is read.
+fn update_state(app: AppState) -> Option<UpdateState> {
     use crate::domain::JournalState;
     let package = app.package();
     let available = package.as_ref().and_then(|p| p.available.clone());
@@ -416,93 +339,148 @@ fn update_card(app: AppState) -> Option<AnyElement> {
         None => available.clone().unwrap_or_default(),
     };
     let named = |key: &str, args: &[(&str, &str)]| tr(key, args);
-    let (title, subtitle, pending): (String, Option<Line>, bool) = match app.camera_journal() {
-        Some(JournalState::Waiting) => (
+    let state = |title: String, subtitle: Option<String>, pending: bool, available: bool| {
+        // Without a known version, the title names GRKit alone.
+        let title = title.replace("GRKit  ", "GRKit ");
+        Some(UpdateState {
+            title,
+            subtitle,
+            pending,
+            available,
+        })
+    };
+    match app.camera_journal() {
+        Some(JournalState::Waiting) => state(
             named("cam.update_waiting", &[("version", &version)]),
-            Some(Box::new(|| tr("cam.update_waiting_sub", &[]))),
+            Some(tr("cam.update_waiting_sub", &[])),
             true,
-        ),
-        Some(JournalState::Confirmed) => (
-            named("cam.update_ready", &[("version", &version)]),
-            Some(Box::new(|| tr("cam.update_ready_sub", &[]))),
-            true,
-        ),
-        _ if available.is_some() && !package.as_ref().is_some_and(is_up_to_date) => (
-            named("cam.update_available", &[("version", &version)]),
-            Some(Box::new(|| tr("cam.update_available_sub", &[]))),
             false,
+        ),
+        Some(JournalState::Confirmed) => state(
+            named("cam.update_ready", &[("version", &version)]),
+            Some(tr("cam.update_ready_sub", &[])),
+            true,
+            false,
+        ),
+        _ if available.is_some() && !package.as_ref().is_some_and(is_up_to_date) => state(
+            named("cam.update_available", &[("version", &version)]),
+            None,
+            false,
+            true,
         ),
         _ if !app.module_draft().is_empty()
             && package
                 .as_ref()
                 .is_some_and(|p| p.available.as_deref() == Some(p.installed.as_str())) =>
         {
-            (
+            state(
                 named(
                     "modules.changes",
                     &[("count", &app.module_draft().count().to_string())],
                 ),
-                Some(Box::new(|| tr("modules.view_update", &[]))),
+                Some(tr("modules.view_update", &[])),
+                false,
                 false,
             )
         }
         // Up to date, or no answer from the release check yet: the row
-        // still opens Software Update, and says only what is known.
+        // still opens Software Update, and says what its card says.
         _ if package.is_some() => {
             let known =
-                package.as_ref().is_some_and(is_up_to_date) && app.release_problem().is_none();
-            let subtitle: Option<Line> =
-                known.then(|| Box::new(|| tr("software.up_to_date", &[])) as Line);
-            (tr("software.title", &[]), subtitle, false)
-        }
-        _ => return None,
-    };
-    // Without a known version, the title names GRKit alone.
-    let title = title.replace("GRKit  ", "GRKit ");
-    let card = grouped_card(
-        view()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .min_h(px(68.0))
-            .px_4()
-            .role(AccessibilityRole::Button)
-            .label(title.clone())
-            .on_press(move || {
-                if pending {
-                    app.open_pending_update()
-                } else {
-                    app.open_software_update()
-                }
-            })
-            .active(|s| s.opacity(0.72).bg(move || theme().accent))
-            .child(
-                view()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        text(title)
-                            .text_size(px(crate::ui::ty::HEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    )
-                    .child(subtitle.map(|subtitle| {
-                        text(subtitle)
-                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .text_color(move || theme().muted_foreground)
-                    })),
+                matches!(card_state(app), CardState::UpToDate) && app.release_problem().is_none();
+            state(
+                tr("software.title", &[]),
+                known.then(|| tr("software.up_to_date", &[])),
+                false,
+                false,
             )
-            // Its own dynamic: a check that ends must not redraw the row
-            // under a finger.
-            .child(dynamic(move || {
-                app.release_checking().then(|| quiet_spinner(14.0))
-            }))
-            .child(chevron()),
-    );
-    Some(card.into_element())
+        }
+        _ => None,
+    }
 }
 
-/// What the camera uses now: the recipe that matches it and the Film Look in
-/// use. Browsing and switching stay on their tabs, so a row opens the detail.
+/// The Software Update row. An update to install, or one that waits on
+/// the camera for its confirmation or a restart, shows as red text with a
+/// dot; one that waits on the camera opens Software Update with its steps
+/// over it.
+fn software_row(app: AppState) -> Option<ListRow> {
+    let mut row = list_row(tr("software.title", &[])).leading(software_tile());
+    let Some(update) = update_state(app) else {
+        // The camera's versions are not read yet: the row holds its place.
+        return Some(
+            row.subtitle_placeholder(SOFTWARE_BAR)
+                .page(move || app.open_software_update()),
+        );
+    };
+    let pending = update.pending;
+    row = row.page(move || {
+        app.open_software_update();
+        if pending {
+            app.open_pending_update();
+        }
+    });
+    if update.available || update.pending {
+        // The version and where it is; its sheet has the steps.
+        row = row.subtitle(update.title).tint_subtitle().trailing(
+            view()
+                .size(px(8.0))
+                .rounded_full()
+                .bg(move || token("tint")),
+        );
+    } else if update.title != tr("software.title", &[]) {
+        row = row.subtitle(update.title);
+    } else if let Some(subtitle) = update.subtitle {
+        row = row.subtitle(subtitle);
+    } else if let Some(problem) = match card_state(app) {
+        // No release known and no check under way.
+        CardState::Problem(problem) => Some(problem),
+        CardState::Checking => None,
+        _ => app.release_problem().filter(|_| !app.release_checking()),
+    } {
+        // Why the check gave no answer, as Software Update says it.
+        row = row.subtitle(tr(
+            match problem {
+                ReleaseProblem::Network => "software.check_failed",
+                ReleaseProblem::FirmwareTooOld { .. } => "software.firmware_old",
+                ReleaseProblem::FirmwareTooNew => "software.firmware_new",
+                ReleaseProblem::AppTooOld => "software.app_old",
+            },
+            &[],
+        ));
+    } else {
+        // The first check is under way: the line holds its place.
+        row = row.subtitle_placeholder(SOFTWARE_BAR);
+    }
+    Some(row)
+}
+
+/// The Software Update row's tile: the update mark, white on the dark tile
+/// of the camera.
+fn software_tile() -> AnyElement {
+    icon_tile(glyph::DOWNLOAD, 32.0, TileTone::Camera)
+}
+
+/// Software Update and Modules, with the versions on the camera under them.
+/// The versions name GRKit, so the group has no title.
+fn grkit_card(app: AppState) -> Option<AnyElement> {
+    let rows: Vec<ListRow> = [software_row(app), modules_row(app)]
+        .into_iter()
+        .flatten()
+        .collect();
+    if rows.is_empty() {
+        return None;
+    }
+    Some(
+        list_section(rows)
+            .footer(version_line(app))
+            .footer_placeholder(VERSIONS_BAR)
+            .into_element(),
+    )
+}
+
+/// What the camera uses now: the Look in use on the sample photo and the
+/// recipe that matches the camera. Browsing and switching stay on their
+/// tabs, so the card opens the detail.
 fn current_card(app: AppState) -> Option<AnyElement> {
     if app.grkit_paused() || app.safe_mode() {
         let (title, body) = if app.safe_mode() {
@@ -510,145 +488,206 @@ fn current_card(app: AppState) -> Option<AnyElement> {
         } else {
             ("modules.grkit_off", "modules.grkit_off_body")
         };
-        return Some(status_notice(tr(title, &[]), tr(body, &[])));
-    }
-    let (recipes_on, looks_on) = (app.recipes_available(), app.looks_available());
-    let recipes = app.recipes_snapshot();
-    let looks = app.looks_snapshot();
-    if !recipes_on && !looks_on {
-        return None;
-    }
-    let mut rows = Vec::new();
-    match &recipes {
-        _ if !recipes_on => {}
-        Some(snapshot) => {
-            if let Some(item) = snapshot.recipes.iter().find(|r| r.current) {
-                let id = item.id;
-                rows.push(current_row(
-                    crate::pages::recipes::recipe_tile(app, item, 44.0, false),
-                    app.recipe_name(item),
-                    tr("tab.recipes", &[]),
-                    move || open_detail(app, Tab::Recipes, Route::RecipeDetail(id)),
-                ));
-            }
-        }
-        None => rows.extend(unread_row(
-            app,
-            app.recipes_loading(),
-            app.recipes_error().is_some(),
-            "tab.recipes",
-            "recipes.loading",
-            "recipes.read_failed",
-            Tab::Recipes,
-        )),
-    }
-    match &looks {
-        _ if !looks_on => {}
-        Some(snapshot) => {
-            if let Some(look) = snapshot.looks.iter().find(|l| l.selected) {
-                let id = look.id.clone();
-                rows.push(current_row(
-                    cover_view(&look.shown_cover(), 44.0, false),
-                    look.name.clone(),
-                    tr("tab.looks", &[]),
-                    move || open_detail(app, Tab::Looks, Route::LookDetail(id.clone())),
-                ));
-            }
-        }
-        None => rows.extend(unread_row(
-            app,
-            app.looks_loading(),
-            app.looks_error().is_some(),
-            "tab.looks",
-            "looks.loading",
-            "looks.read_failed",
-            Tab::Looks,
-        )),
-    }
-    if rows.is_empty() {
-        if (recipes_on && recipes.is_none()) || (looks_on && looks.is_none()) {
-            return None;
-        }
-        rows.push(
-            view()
-                .min_h(px(52.0))
-                .justify_center()
-                .px_4()
-                .child(
-                    text(tr("cam.current_none", &[]))
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .text_color(move || theme().muted_foreground),
-                )
+        return Some(
+            notice_card(tr(title, &[]))
+                .subtitle(tr(body, &[]))
                 .into_element(),
         );
     }
-    let rows = rows.into_iter().enumerate().map(|(index, row)| {
-        view()
-            .when(index > 0, |v| {
-                v.border_t_1().border_color(move || theme().border)
-            })
-            .child(row)
-    });
-    Some(
-        view()
-            .gap_2()
-            .child(grouped_card(view().children(rows)))
-            .into_element(),
-    )
-}
-
-/// The Modules row in a card of its own: the way to the Modules page. GRKit
-/// off and safe mode stop every module, and the current card says so.
-fn modules_card(app: AppState) -> Option<AnyElement> {
-    if app.grkit_paused() || app.safe_mode() {
+    let (recipes_on, looks_on) = (app.recipes_available(), app.looks_available());
+    if !recipes_on && !looks_on {
         return None;
     }
-    modules_row(app).map(|row| grouped_card(row).into_element())
+    let recipes = app.recipes_snapshot();
+    let looks = app.looks_snapshot();
+    // A list that the phone has not read is being read, or its read failed.
+    // Its part of the card holds its place until then.
+    let recipes_unread = recipes_on && recipes.is_none();
+    let looks_unread = looks_on && looks.is_none();
+    let recipes_failed = recipes_unread && !app.recipes_loading() && app.recipes_error().is_some();
+    let looks_failed = looks_unread && !app.looks_loading() && app.looks_error().is_some();
+    let recipe = recipes
+        .as_ref()
+        .filter(|_| recipes_on)
+        .and_then(|s| s.recipes.iter().find(|r| r.current).cloned());
+    let look = looks
+        .as_ref()
+        .filter(|_| looks_on)
+        .and_then(|s| s.looks.iter().find(|l| l.selected).cloned());
+    let recipe_row = |item: &crate::domain::recipes::RecipeItem| {
+        let id = item.id;
+        list_row(app.recipe_name(item))
+            .subtitle(tr("cam.current_recipe", &[]))
+            .leading(crate::ui::recipe_badge(
+                crate::pages::recipes::recipe_tile(app, item, 40.0, false),
+                40.0,
+                false,
+            ))
+            .page(move || open_detail(app, Tab::Recipes, Route::RecipeDetail(id)))
+            .into_element()
+    };
+    // The photo shows the Look in use, else the recipe in use: it waits for
+    // the Looks, and for the recipes while no Look is in use.
+    let hero: AnyElement = if looks_unread {
+        if looks_failed {
+            failed_hero(tr("looks.read_failed", &[]), move || app.refresh_looks())
+        } else {
+            crate::ui::hero_skeleton()
+        }
+    } else if look.is_none() && recipes_unread {
+        if recipes_failed {
+            failed_hero(tr("recipes.read_failed", &[]), move || {
+                app.refresh_recipes()
+            })
+        } else {
+            crate::ui::hero_skeleton()
+        }
+    } else {
+        match (&look, &recipe) {
+            // The Look in use on the sample.
+            (Some(look), _) => {
+                let id = look.id.clone();
+                let mut hero = photo_hero(tr("cam.current_look", &[]), look.name.clone())
+                    .cover(look.shown_cover())
+                    .open(move || open_detail(app, Tab::Looks, Route::LookDetail(id.clone())));
+                if let Some(photo) = app.look_preview(&look.id) {
+                    hero = hero.photo(ImageSrc::from(photo));
+                }
+                hero.into_element()
+            }
+            // A recipe of the camera's own Image Control: its icon, and no Look.
+            (None, Some(item)) => {
+                let id = item.id;
+                photo_hero(tr("cam.current_recipe", &[]), app.recipe_name(item))
+                    .center(crate::pages::recipes::recipe_tile(app, item, 112.0, false))
+                    .open(move || open_detail(app, Tab::Recipes, Route::RecipeDetail(id)))
+                    .into_element()
+            }
+            // Neither: the camera's own colors on the sample.
+            (None, None) => {
+                let mut hero = photo_hero(String::new(), tr("cam.current_none", &[])).empty_mark();
+                if let Some(photo) = app.standard_preview() {
+                    hero = hero.photo(ImageSrc::from(photo));
+                }
+                hero.into_element()
+            }
+        }
+    };
+    let row: Option<AnyElement> = if recipes_unread {
+        match (recipes_failed, look.is_some() || looks_unread) {
+            // Under a Look: the recipe row says why it is missing.
+            (true, true) => Some(
+                list_row(tr("tab.recipes", &[]))
+                    .subtitle(tr("recipes.read_failed", &[]))
+                    .leading(cover_box())
+                    .press(move || app.set_tab(Tab::Recipes))
+                    .into_element(),
+            ),
+            // Without a Look, the photo says it.
+            (true, false) => None,
+            (false, _) => Some(crate::ui::cover_row_skeleton()),
+        }
+    } else {
+        match (&look, &recipe) {
+            (Some(_), recipe) => recipe.as_ref().map(recipe_row),
+            (None, Some(_)) => looks_on.then(|| {
+                list_row(tr("tab.looks", &[]))
+                    .value(tr("modules.not_used", &[]))
+                    .into_element()
+            }),
+            (None, None) => None,
+        }
+    };
+    Some(current_card_frame(hero, row))
+}
+
+/// The card of what the camera uses: the photo, and a row under it.
+fn current_card_frame(hero: AnyElement, row: Option<AnyElement>) -> AnyElement {
+    view()
+        .rounded(px(crate::ui::SECTION_RADIUS))
+        .overflow_hidden()
+        .bg(move || token("list-card"))
+        .child(hero)
+        .child(row)
+        .into_element()
+}
+
+/// The photo's place when a list could not be read: why, and another try.
+fn failed_hero(message: String, retry: impl Fn() + 'static) -> AnyElement {
+    view()
+        .w_full()
+        .h(px(crate::ui::HERO_HEIGHT))
+        .bg(move || token("skeleton-area"))
+        .items_center()
+        .justify_center()
+        .gap_3()
+        .px(px(24.0))
+        .child(
+            text(message)
+                .text_size(px(crate::ui::ty::SUBHEADLINE))
+                .line_height(px(20.0))
+                .text_center()
+                .text_color(move || token("list-secondary")),
+        )
+        .child(button(
+            tr("looks.retry", &[]),
+            ButtonKind::Tinted,
+            ButtonSize::Small,
+            retry,
+        ))
+        .into_element()
+}
+
+/// The place of a cover in a row whose list is not read.
+fn cover_box() -> AnyElement {
+    view()
+        .w(px(40.0))
+        .h(px(40.0 * 34.0 / 40.0))
+        .rounded(px(3.0))
+        .bg(move || token("skeleton"))
+        .into_element()
 }
 
 /// The modules that run, with their values. It opens the Modules page.
-fn modules_row(app: AppState) -> Option<AnyElement> {
+/// GRKit off and safe mode stop every module, and the current card says so.
+fn modules_row(app: AppState) -> Option<ListRow> {
+    if app.grkit_paused() || app.safe_mode() {
+        return None;
+    }
     let Some(rows) = app.module_rows() else {
         return Some(unread_modules_row(app));
     };
-    let on: Vec<_> = rows
-        .iter()
-        .filter(|row| {
-            row.state.enabled
-                && row.managed().is_none()
-                && !row.failed()
-                && !matches!(row.summary(), crate::domain::modules::Summary::NotUsed)
-        })
-        .collect();
-    // The count of the modules in use, and their names on one line.
-    let (title, subtitle) = if on.is_empty() {
-        let count = rows.iter().filter(|row| row.state.enabled).count();
-        (
-            tr("modules.title", &[]),
-            tr("modules.on_count", &[("count", &count.to_string())]),
-        )
-    } else {
-        (
-            tr("modules.in_use_count", &[("count", &on.len().to_string())]),
-            on.iter()
-                .map(|row| row.title())
-                .collect::<Vec<_>>()
-                .join(" · "),
-        )
+    // The modules in use by name; while none is, the ones that are on.
+    let names = |used: bool| {
+        rows.iter()
+            .filter(|row| {
+                row.state.enabled
+                    && row.managed().is_none()
+                    && !row.failed()
+                    && (!used || !matches!(row.summary(), crate::domain::modules::Summary::NotUsed))
+            })
+            .map(|row| row.title())
+            .collect::<Vec<_>>()
+            .join(" · ")
     };
-    Some(current_row_lines(
-        modules_tile(),
-        title,
-        subtitle,
-        1,
-        move || app.open_modules_page(),
-    ))
+    let in_use = names(true);
+    let subtitle = if in_use.is_empty() {
+        names(false)
+    } else {
+        in_use
+    };
+    Some(
+        list_row(tr("modules.title", &[]))
+            .subtitle(subtitle)
+            .leading(modules_tile())
+            .page(move || app.open_modules_page()),
+    )
 }
 
 /// The Modules row before the phone has the modules. It is the only way to
 /// the Modules page, so it shows while they are read, after a failed read,
 /// and when the camera cannot serve them.
-fn unread_modules_row(app: AppState) -> AnyElement {
+fn unread_modules_row(app: AppState) -> ListRow {
     use crate::store::ModulesBlock;
     let (loading, subtitle) = match app.modules_block() {
         Some(ModulesBlock::Unsupported) => (false, "modules.unsupported_title"),
@@ -656,65 +695,22 @@ fn unread_modules_row(app: AppState) -> AnyElement {
         None if app.modules_error().is_some() => (false, "modules.read_failed"),
         None => (true, ""),
     };
-    let tile = if loading {
-        view()
-            .size(px(44.0))
-            .items_center()
-            .justify_center()
-            .child(quiet_spinner(20.0))
-            .into_element()
+    let mut row = list_row(tr("modules.title", &[]))
+        .leading(modules_tile())
+        .page(move || app.open_modules_page());
+    if loading {
+        // While loading, the line holds its place.
+        row = row.subtitle_placeholder(MODULES_BAR);
     } else {
-        modules_tile()
-    };
-    // While loading, the spinner tile is the only sign; a screen reader
-    // hears that the modules load.
-    let subtitle = if loading {
-        String::new()
-    } else {
-        tr(subtitle, &[])
-    };
-    let title = tr("modules.title", &[]);
-    let label = if loading {
-        format!("{}, {title}", tr("modules.loading", &[]))
-    } else {
-        format!("{subtitle}, {title}")
-    };
-    current_row_labeled(tile, title, subtitle, 2, label, move || {
-        app.open_modules_page()
-    })
+        row = row.subtitle(tr(subtitle, &[]));
+    }
+    row
 }
 
-/// The Modules page's sliders on the dark tile of a module.
+/// The Modules row's tile: sliders, white on the dark tile of the camera,
+/// as the Software Update row's.
 fn modules_tile() -> AnyElement {
-    const SLIDERS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg>"##;
-    view()
-        .size(px(44.0))
-        .rounded(px(44.0 * 0.22))
-        .bg(rgb(0x353536))
-        .items_center()
-        .justify_center()
-        .child(svg(ImageSrc::svg_markup(SLIDERS)).size(px(26.0)))
-        .into_element()
-}
-
-/// A state of GRKit that stops every module, in place of the current items.
-fn status_notice(title: String, body: String) -> AnyElement {
-    view()
-        .gap(px(2.0))
-        .p_4()
-        .rounded(px(10.0))
-        .bg(move || theme().muted)
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD),
-        )
-        .child(
-            text(body)
-                .text_size(px(crate::ui::ty::FOOTNOTE))
-                .text_color(move || theme().muted_foreground),
-        )
-        .into_element()
+    icon_tile(glyph::SLIDERS, 32.0, TileTone::Camera)
 }
 
 /// Open a detail page on its tab, over the tab's list.
@@ -722,99 +718,6 @@ fn open_detail(app: AppState, tab: Tab, route: Route) {
     app.pop_to(tab, 0);
     app.set_tab(tab);
     app.push(route);
-}
-
-/// The list of a tab that the phone has not read: it is being read, or the
-/// read failed and the tab offers another try.
-fn unread_row(
-    app: AppState,
-    loading: bool,
-    failed: bool,
-    title: &'static str,
-    reading: &'static str,
-    read_failed: &'static str,
-    tab: Tab,
-) -> Option<AnyElement> {
-    let (tile, subtitle) = if loading {
-        let tile = view()
-            .size(px(44.0))
-            .items_center()
-            .justify_center()
-            .child(quiet_spinner(20.0))
-            .into_element();
-        (tile, tr(reading, &[]))
-    } else if failed {
-        (view().size(px(44.0)).into_element(), tr(read_failed, &[]))
-    } else {
-        return None;
-    };
-    Some(current_row(tile, tr(title, &[]), subtitle, move || {
-        app.set_tab(tab)
-    }))
-}
-
-/// A row of the card: a tile, a name, what it is.
-fn current_row(
-    tile: AnyElement,
-    title: String,
-    subtitle: String,
-    on_press: impl Fn() + 'static,
-) -> AnyElement {
-    current_row_lines(tile, title, subtitle, 2, on_press)
-}
-
-/// A row of the current items whose subtitle takes at most `lines` lines.
-fn current_row_lines(
-    tile: AnyElement,
-    title: String,
-    subtitle: String,
-    lines: u32,
-    on_press: impl Fn() + 'static,
-) -> AnyElement {
-    let label = format!("{subtitle}, {title}");
-    current_row_labeled(tile, title, subtitle, lines, label, on_press)
-}
-
-/// A current-items row with its own screen reader label. An empty subtitle
-/// shows no line.
-fn current_row_labeled(
-    tile: AnyElement,
-    title: String,
-    subtitle: String,
-    lines: u32,
-    label: String,
-    on_press: impl Fn() + 'static,
-) -> AnyElement {
-    view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .min_h(px(68.0))
-        .px_4()
-        .py_2()
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .on_press(on_press)
-        .active(|s| s.opacity(0.72).bg(move || theme().accent))
-        .child(tile)
-        .child(
-            view()
-                .flex_1()
-                .gap(px(2.0))
-                .child(
-                    text(title)
-                        .text_size(px(crate::ui::ty::HEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child((!subtitle.is_empty()).then(|| {
-                    text(subtitle)
-                        .number_of_lines(lines)
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .text_color(move || theme().muted_foreground)
-                })),
-        )
-        .child(chevron())
-        .into_element()
 }
 
 /// The versions on the camera, as text: Software Update opens from the

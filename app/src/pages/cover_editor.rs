@@ -12,11 +12,15 @@ use crate::ui::ty::text;
 use super::look_pages::{TAB_BAR_CLEARANCE, header_button};
 use crate::store::{AppState, LookAction};
 use crate::strings::tr;
-use crate::ui::{action_row_loading, cover_view, footnote, grouped_card, section_title, token};
+use crate::ui::PageTitle;
+use crate::ui::{SECTION_RADIUS, cover_view, list_note, list_row, list_section, token};
 
 const PREVIEW: f32 = 150.0;
 const LAYOUT_TILE: f32 = 56.0;
 const SWATCH_WIDTH: f32 = 40.0;
+/// From a swatch to the next: five and a half fit on a 390-point phone, so
+/// the half at the edge says that the row scrolls.
+const SWATCH_STEP: f32 = 70.0;
 
 /// The name under a layout, stronger when it is selected.
 fn swatch_label(name: String, selected: bool) -> impl IntoElement {
@@ -150,7 +154,7 @@ pub fn cover_page(
         }
     };
     crate::ui::app_page()
-        .title(tr("looks.cover", &[]))
+        .page_title(tr("looks.cover", &[]), false)
         .on_dismiss(on_dismiss)
         .header_right(dynamic(move || {
             let ready = draft
@@ -163,11 +167,11 @@ pub fn cover_page(
         .child(
             view()
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(initial.map(|_| {
                     crate::ui::page_scroll().flex_1().child(
                         view()
-                            .px_6()
+                            .px_4()
                             .pt_4()
                             .pb(px(TAB_BAR_CLEARANCE))
                             .gap_5()
@@ -189,21 +193,17 @@ fn default_cover(app: AppState, target: CoverTarget) -> impl IntoElement {
         let cover = target.default_cover(app)?;
         let target = target.clone();
         let restoring = target.restoring(app);
+        // An import says what its default cover is; an official Look's
+        // default is its own film box.
         let note = match target {
-            CoverTarget::Look(_) => "looks.cover_default_note",
-            CoverTarget::Import => "looks.cover_note",
+            CoverTarget::Look(_) => String::new(),
+            CoverTarget::Import => tr("looks.cover_note", &[]),
         };
         Some(
-            view()
-                .gap_2()
-                .child(grouped_card(action_row_loading(
-                    tr("looks.cover_default", &[]),
-                    false,
-                    true,
-                    restoring,
-                    move || target.use_default(app, cover.clone()),
-                )))
-                .child(footnote(tr(note, &[]))),
+            list_section([list_row(tr("looks.cover_default", &[]))
+                .busy(restoring)
+                .press(move || target.use_default(app, cover.clone()))])
+            .footer(note),
         )
     })
 }
@@ -224,8 +224,8 @@ fn preview(draft: Signal<Option<Film>>) -> impl IntoElement {
         .gap(px(10.0))
         .pt(px(24.0))
         .pb(px(16.0))
-        .rounded(px(16.0))
-        .bg(move || theme().muted)
+        .rounded(px(SECTION_RADIUS))
+        .bg(move || token("list-card"))
         .child(dynamic(move || {
             let cover = Cover::Film(draft.get()?);
             Some(
@@ -258,7 +258,8 @@ fn texts(draft: Signal<Option<Film>>) -> impl IntoElement {
             .min_h(px(50.0))
             .px_4()
             .style_when(!last, |st| {
-                st.border_b_1().border_b_color(move || theme().border)
+                st.border_b_1()
+                    .border_b_color(move || token("list-separator"))
             })
             .child(
                 text(tr(title, &[]))
@@ -285,8 +286,11 @@ fn texts(draft: Signal<Option<Film>>) -> impl IntoElement {
     };
     view()
         .gap_2()
-        .child(grouped_card(
+        .child(
             view()
+                .rounded(px(SECTION_RADIUS))
+                .overflow_hidden()
+                .bg(move || token("list-card"))
                 .child(field(
                     "looks.cover_brand",
                     None,
@@ -312,7 +316,7 @@ fn texts(draft: Signal<Option<Film>>) -> impl IntoElement {
                     |film, text| film.number = (!text.is_empty()).then_some(text),
                     true,
                 )),
-        ))
+        )
         .child(dynamic(move || {
             let film = draft.get()?;
             let (key, problem) = if !valid_texts(&film) {
@@ -322,18 +326,13 @@ fn texts(draft: Signal<Option<Film>>) -> impl IntoElement {
             } else {
                 ("looks.cover_note", false)
             };
-            Some(
-                text(tr(key, &[]))
-                    .text_size(px(crate::ui::ty::FOOTNOTE))
-                    .line_height(px(18.0))
-                    .text_color(move || {
-                        if problem {
-                            theme().destructive
-                        } else {
-                            theme().muted_foreground
-                        }
-                    }),
-            )
+            Some(list_note(tr(key, &[])).text_color(move || {
+                if problem {
+                    theme().destructive
+                } else {
+                    theme().muted_foreground
+                }
+            }))
         }))
 }
 
@@ -341,7 +340,7 @@ fn texts(draft: Signal<Option<Film>>) -> impl IntoElement {
 fn layouts(draft: Signal<Option<Film>>) -> impl IntoElement {
     view()
         .gap_2()
-        .child(section_title(tr("looks.cover_layout", &[])))
+        .child(list_note(tr("looks.cover_layout", &[])).role(AccessibilityRole::Header))
         .child(dynamic(move || {
             let film = draft.get()?;
             let mut row = view().flex_row().gap_2();
@@ -365,7 +364,7 @@ fn layouts(draft: Signal<Option<Film>>) -> impl IntoElement {
                                     if selected {
                                         theme().foreground
                                     } else {
-                                        token("grouped")
+                                        token("list-background")
                                     }
                                 })
                                 .role(AccessibilityRole::Radio)
@@ -438,13 +437,13 @@ fn colors(draft: Signal<Option<Film>>) -> impl IntoElement {
         {
             looks.insert(0, own);
         }
-        let mut row = view().flex_row().gap(px(12.0)).px_6().py(px(6.0));
+        let mut row = view().flex_row().gap(px(12.0)).px_4().py(px(6.0));
         for look in looks {
             let colors = look.colors();
             let selected = colors == current;
             let name = tr(&format!("looks.cover_look.{}", look.id), &[]);
             row = row.child(
-                view().min_w(px(SWATCH_WIDTH + 16.0)).items_center().child(
+                view().min_w(px(SWATCH_STEP - 12.0)).items_center().child(
                     view()
                         .p(px(3.0))
                         .rounded(px(9.0))
@@ -453,7 +452,7 @@ fn colors(draft: Signal<Option<Film>>) -> impl IntoElement {
                             if selected {
                                 theme().foreground
                             } else {
-                                token("grouped")
+                                token("list-background")
                             }
                         })
                         .role(AccessibilityRole::Radio)
@@ -487,13 +486,13 @@ fn colors(draft: Signal<Option<Film>>) -> impl IntoElement {
         Some(
             view()
                 .gap_2()
-                .child(section_title(tr("looks.cover_colors", &[])))
+                .child(list_note(tr("looks.cover_colors", &[])).role(AccessibilityRole::Header))
                 // The row runs to the edges of the page.
                 .child(
                     scroll()
                         .horizontal()
                         .scrollbar(false)
-                        .mx(px(-24.0))
+                        .mx(px(-16.0))
                         .child(row),
                 ),
         )

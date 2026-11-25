@@ -3,19 +3,17 @@
 pub fn en(key: &str) -> Option<&'static str> {
     Some(match key {
         "conn.app_old.title" => "GRKit App Needs an Update",
-        "conn.app_old.body" => {
-            "The GRKit on the camera is newer than this app. Update the app, then connect again."
-        }
+        "conn.app_old.body" => "The GRKit on the camera is newer than this app. Update the app.",
         "conn.unsupported.body" => {
-            "The camera replied, but GRKit couldn't understand the response. Try again."
+            "The camera replied, but GRKit couldn’t understand the response."
         }
         "conn.open_settings" => "Open Settings",
         "conn.switched_wifi" => "I've Switched Wi‑Fi",
         "conn.ble_failed.title" => "Bluetooth Connection Failed",
-        "conn.ble_failed.body" => "Toggle Bluetooth off and on, then retry.",
+        "conn.ble_failed.body" => "Turn Bluetooth off and on.",
         "conn.ble_auth.title" => "Pairing Didn't Complete",
         "conn.ble_auth.body" => {
-            "The camera didn't finish pairing. On the camera, select Pairing → Execute Pairing, then try again. If that fails, forget this camera in Settings → Bluetooth first."
+            "On the camera, select Pairing → Execute Pairing. If it still fails, remove this camera in the phone’s Bluetooth settings first."
         }
         "conn.ble_pair.title" => "Pair on the Camera",
         "conn.ble_pair.body" => {
@@ -23,13 +21,17 @@ pub fn en(key: &str) -> Option<&'static str> {
         }
         "conn.ble_stale.title" => "Camera Forgot This Device",
         "conn.ble_stale.body" => {
-            "In Settings → Bluetooth, tap ⓘ next to this camera and choose Forget This Device. Then pair again on the camera and try again."
+            "In Settings → Bluetooth, tap ⓘ next to this camera and choose Forget This Device. Then pair again on the camera."
         }
         "conn.ble_timeout.title" => "Camera Not Responding",
-        "conn.ble_timeout.body" => "Turn the camera on and keep it close by, then try again.",
+        "conn.ble_timeout.body" => "Turn the camera on and keep it close by.",
         "conn.wifi_denied.title" => "Wi‑Fi Join Canceled",
         "conn.wifi_denied.body" => {
             "Tap Join on the system prompt, or join the camera's Wi‑Fi in Settings › Wi‑Fi."
+        }
+        "android.conn.wifi_denied.title" => "Nearby Devices Not Allowed",
+        "android.conn.wifi_denied.body" => {
+            "Tap Open Settings and allow Nearby devices for GRKit. On Android 12 or earlier, allow Location."
         }
         "conn.wifi_password.title" => "Wrong Wi‑Fi Password",
         "conn.wifi_password.body" => {
@@ -43,20 +45,19 @@ pub fn en(key: &str) -> Option<&'static str> {
             "Android couldn't apply these Wi‑Fi settings. Try again."
         }
         "conn.wifi_failed.title" => "Camera Wi‑Fi Not Ready",
-        "conn.wifi_failed.body" => {
-            "The camera's Wi‑Fi hasn't started yet. Keep the camera on for a few seconds, then try again."
+        "conn.wifi_failed.body" => "Keep the camera on for a few seconds, then try again.",
+        "android.conn.wifi_failed.body" => {
+            "Keep the camera on, then try again and accept the Wi‑Fi request when Android asks."
         }
         "conn.wifi_timeout.title" => "Camera Wi‑Fi Unreachable",
         "conn.wifi_timeout.body" => "Make sure the camera is on and its Wi‑Fi is enabled.",
         "conn.network_not_ready.title" => "Still Switching to Camera Wi‑Fi",
-        "conn.network_not_ready.body" => {
-            "Your device joined the camera's Wi‑Fi but hasn't switched over yet. Wait a moment, then try again."
-        }
+        "conn.network_not_ready.body" => "Wait a moment, then try again.",
         "conn.subnet.title" => "Wi‑Fi Address Conflict",
         "conn.subnet.body" => {
-            "Your phone reached your router, not the camera: both use 192.168.0.x. Turn on Airplane Mode, turn Wi‑Fi back on, then join the camera's Wi‑Fi."
+            "Your phone reached your router, not the camera. Turn on Airplane Mode, turn Wi‑Fi back on, then join the camera’s Wi‑Fi."
         }
-        "conn.verify.title" => "Camera Isn't Responding",
+        "conn.verify.title" => "Camera Not Responding",
         "conn.verify.body" => "Wi‑Fi joined but no reply. Restart the camera.",
         "conn.local_network.title" => "Local Network Access Denied",
         "conn.local_network.body" => {
@@ -71,13 +72,13 @@ pub fn en(key: &str) -> Option<&'static str> {
         }
         "conn.unsupported.title" => "Unsupported Camera Response",
         "conn.unknown.title" => "Couldn't Connect",
-        "conn.unknown.body" => "Something went wrong. Please retry.",
-        "cam.title" => "Camera",
-        "cam.detect" => "Joined camera Wi‑Fi? Detect now",
+        "conn.unknown.body" => "Something went wrong.",
+        "cam.detect" => "Joined Camera Wi‑Fi? Detect Now",
         "cam.nearby" => "On · Nearby",
-        "cam.others" => "Other Cameras",
         "cam.lost_title" => "Lost Connection",
         "cam.current_none" => "No recipe or Film Look in use",
+        "cam.current_look" => "Current Film Look",
+        "cam.current_recipe" => "Current Recipe",
         "cam.remove" => "Remove Camera",
         "cam.remove_body" => "Remove “%{name}” from saved cameras?",
         "cam.remove_confirm" => "Remove",
@@ -96,7 +97,6 @@ pub fn en(key: &str) -> Option<&'static str> {
         "cam.disconnect_confirm" => "Disconnect",
         "cam.power" => "Turn Off Camera",
         "cam.power_title" => "Turn Off Camera",
-        "cam.power_body" => "The camera turns off.",
         "cam.power_confirm" => "Turn Off",
         "cam.prompt_title" => "Connect %{model}?",
         "cam.prompt_body" => "The camera is on and nearby.",
@@ -109,11 +109,11 @@ pub fn en(key: &str) -> Option<&'static str> {
         "cam.step_wake" => "Connecting to camera",
         "cam.step_wake_sub" => "Waking the camera over Bluetooth.",
         "cam.step_pair_gr3" => "The camera may show a passkey. Enter it when iOS asks.",
-        "cam.step_pair_gr4" => "The camera may ask to confirm pairing. Accept it on the camera.",
+        "cam.step_pair_gr4" => "If the camera asks, confirm pairing there.",
         "cam.step_wifi" => "Joining camera Wi‑Fi",
         "cam.step_wifi_sub" => "If iOS asks, allow GRKit to connect to the camera.",
         "cam.step_wifi_slow" => "GR IV takes longer to start its Wi‑Fi. Please wait.",
-        "cam.step_verify" => "Contacting the camera",
+        "cam.step_verify" => "Contacting camera",
         "cam.step_verify_sub" => "Checking the connection.",
         "cam.no_grkit_title" => "No GRKit on the Camera",
         "cam.no_grkit_body" => "Install GRKit 1.7.0 or later on the memory card.",
@@ -127,27 +127,31 @@ pub fn en(key: &str) -> Option<&'static str> {
 pub fn zh(key: &str) -> Option<&'static str> {
     Some(match key {
         "conn.app_old.title" => "需要更新 GRKit 应用",
-        "conn.app_old.body" => "相机上的 GRKit 比这个应用新。请先更新应用，再连接。",
-        "conn.unsupported.body" => "相机有响应，但 GRKit 无法识别。请重试。",
+        "conn.app_old.body" => "相机上的 GRKit 比这个应用新。请更新应用。",
+        "conn.unsupported.body" => "相机有响应，但 GRKit 无法识别。",
         "conn.open_settings" => "打开设置",
         "conn.switched_wifi" => "已切换 Wi‑Fi",
         "conn.ble_failed.title" => "蓝牙连接失败",
-        "conn.ble_failed.body" => "请关闭蓝牙后再打开，然后重试。",
+        "conn.ble_failed.body" => "请关闭蓝牙后再打开。",
         "conn.ble_auth.title" => "配对未完成",
         "conn.ble_auth.body" => {
-            "相机没有完成配对。请在相机上选择「配对」→「执行配对」，然后重试。如果仍然失败，请先在「设置」→「蓝牙」中忽略此相机。"
+            "请在相机上选择「配对」→「执行配对」。如果仍然失败，请先在手机的蓝牙设置中忽略此相机。"
         }
-        "conn.ble_pair.title" => "请在相机上执行蓝牙配对",
+        "conn.ble_pair.title" => "在相机上配对",
         "conn.ble_pair.body" => "请在相机上选择「配对」→「执行配对」，然后点按「重试」。",
         "conn.ble_stale.title" => "相机已不记得此设备",
         "conn.ble_stale.body" => {
-            "请在「设置」→「蓝牙」中点击此相机旁的 ⓘ，选择「忽略此设备」。然后在相机上重新配对并重试。"
+            "请在「设置」→「蓝牙」中点击此相机旁的 ⓘ，选择「忽略此设备」。然后在相机上重新配对。"
         }
         "conn.ble_timeout.title" => "相机无响应",
-        "conn.ble_timeout.body" => "请打开相机电源并放在附近，然后重试。",
+        "conn.ble_timeout.body" => "请打开相机电源并放在附近。",
         "conn.wifi_denied.title" => "已取消加入 Wi‑Fi",
         "conn.wifi_denied.body" => {
             "请在系统提示中点「加入」，或在「设置」→「Wi‑Fi」中加入相机 Wi‑Fi。"
+        }
+        "android.conn.wifi_denied.title" => "未允许「附近的设备」",
+        "android.conn.wifi_denied.body" => {
+            "请点「打开设置」，允许 GRKit 使用「附近的设备」。Android 12 及更早版本需允许位置权限。"
         }
         "conn.wifi_password.title" => "Wi‑Fi 密码错误",
         "conn.wifi_password.body" => "相机的 Wi‑Fi 密码可能已更改。请在相机上重新配对，然后重试。",
@@ -155,18 +159,18 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "conn.wifi_ssid.body" => "请检查相机的 SSID。",
         "conn.wifi_config.title" => "Wi‑Fi 设置被拒绝",
         "conn.wifi_config.body" => "iOS 无法应用此 Wi‑Fi 设置，请重试。",
-        "android.conn.wifi_config.body" => "Android 无法应用此 Wi‑Fi 设置，请重试。",
         "conn.wifi_failed.title" => "相机 Wi‑Fi 尚未就绪",
-        "conn.wifi_failed.body" => "相机的 Wi‑Fi 还没有启动。请保持相机开机几秒钟，然后重试。",
+        "conn.wifi_failed.body" => "请保持相机开机几秒钟，然后重试。",
+        "android.conn.wifi_failed.body" => {
+            "请保持相机开机，然后重试，并在 Android 请求连接 Wi‑Fi 时同意。"
+        }
         "conn.wifi_timeout.title" => "无法连接相机 Wi‑Fi",
         "conn.wifi_timeout.body" => "请确认相机已开机且 Wi‑Fi 已开启。",
         "conn.network_not_ready.title" => "正在切换到相机 Wi‑Fi",
-        "conn.network_not_ready.body" => {
-            "设备已加入相机 Wi‑Fi，但还没有切换过去。请稍等片刻后重试。"
-        }
+        "conn.network_not_ready.body" => "请稍等片刻后重试。",
         "conn.subnet.title" => "Wi‑Fi 网段与相机冲突",
         "conn.subnet.body" => {
-            "手机连到了路由器，不是相机（两者都用 192.168.0.x）。请打开飞行模式，只开 Wi‑Fi，再加入相机 Wi‑Fi。"
+            "手机连到了路由器，不是相机。请打开飞行模式，只开 Wi‑Fi，再加入相机 Wi‑Fi。"
         }
         "conn.verify.title" => "相机无响应",
         "conn.verify.body" => "已加入 Wi‑Fi 但相机无响应，请重启相机。",
@@ -181,13 +185,13 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "conn.not_gr.body" => "看起来你连接到了其他 Wi‑Fi，请切换到相机的 Wi‑Fi。",
         "conn.unsupported.title" => "无法识别的相机响应",
         "conn.unknown.title" => "连接失败",
-        "conn.unknown.body" => "出了点问题，请重试。",
-        "cam.title" => "相机",
+        "conn.unknown.body" => "出了点问题。",
         "cam.detect" => "已加入相机 Wi‑Fi？立即检测",
         "cam.nearby" => "已开机 · 在附近",
-        "cam.others" => "其他相机",
         "cam.lost_title" => "连接已断开",
         "cam.current_none" => "未使用配方或胶片风格",
+        "cam.current_look" => "当前胶片风格",
+        "cam.current_recipe" => "当前配方",
         "cam.remove" => "移除相机",
         "cam.remove_body" => "确定从已保存的相机中移除「%{name}」吗？",
         "cam.remove_confirm" => "移除",
@@ -204,7 +208,6 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "cam.disconnect_confirm" => "断开",
         "cam.power" => "关闭相机",
         "cam.power_title" => "关闭相机",
-        "cam.power_body" => "相机会关机。",
         "cam.power_confirm" => "关机",
         "cam.prompt_title" => "连接 %{model}？",
         "cam.prompt_body" => "相机已开机，就在附近。",
@@ -217,7 +220,7 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "cam.step_wake" => "正在连接相机",
         "cam.step_wake_sub" => "正在通过蓝牙唤醒相机。",
         "cam.step_pair_gr3" => "相机可能会显示配对码，iOS 弹窗出现时输入即可。",
-        "cam.step_pair_gr4" => "相机可能会弹出配对确认，请在相机上同意。",
+        "cam.step_pair_gr4" => "如相机请求确认配对，请在相机上同意。",
         "cam.step_wifi" => "正在加入相机 Wi‑Fi",
         "cam.step_wifi_sub" => "若 iOS 弹出提示，请允许 GRKit 连接相机。",
         "cam.step_wifi_slow" => "GR IV 启动 Wi‑Fi 需要更长时间，请稍候。",
@@ -225,9 +228,9 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "cam.step_verify_sub" => "正在检查连接。",
         "cam.no_grkit_title" => "相机上没有 GRKit",
         "cam.no_grkit_body" => "需要在存储卡上安装 GRKit 1.7.0 或更高版本。",
-        "cam.install_guide" => "查看安装说明",
-        "android.cam.step_wifi_sub" => "若系统弹出提示，请允许 GRKit 连接相机。",
-        "android.cam.step_pair_gr3" => "相机可能会显示配对码，系统弹窗出现时输入即可。",
+        "cam.install_guide" => "安装说明",
+        "android.cam.step_wifi_sub" => "若 Android 弹出提示，请允许 GRKit 连接相机。",
+        "android.cam.step_pair_gr3" => "相机可能会显示配对码，Android 弹窗出现时输入即可。",
         _ => return None,
     })
 }
@@ -235,27 +238,31 @@ pub fn zh(key: &str) -> Option<&'static str> {
 pub fn zh_hant(key: &str) -> Option<&'static str> {
     Some(match key {
         "conn.app_old.title" => "需要更新 GRKit App",
-        "conn.app_old.body" => "相機上的 GRKit 比這個 App 新。請先更新 App，再連線。",
-        "conn.unsupported.body" => "相機有回應，但 GRKit 無法辨識。請重試。",
+        "conn.app_old.body" => "相機上的 GRKit 比這個 App 新。請更新 App。",
+        "conn.unsupported.body" => "相機有回應，但 GRKit 無法辨識。",
         "conn.open_settings" => "開啟設定",
         "conn.switched_wifi" => "已切換 Wi‑Fi",
         "conn.ble_failed.title" => "藍牙連線失敗",
-        "conn.ble_failed.body" => "請關閉藍牙再重新開啟，然後重試。",
+        "conn.ble_failed.body" => "請關閉藍牙再重新開啟。",
         "conn.ble_auth.title" => "配對未完成",
         "conn.ble_auth.body" => {
-            "相機沒有完成配對。請在相機上選擇「配對」→「執行配對」，然後重試。如果仍然失敗，請先在「設定」→「藍牙」中忘記此相機。"
+            "請在相機上選擇「配對」→「執行配對」。如果仍然失敗，請先在手機的藍牙設定中忘記此相機。"
         }
-        "conn.ble_pair.title" => "請在相機上執行藍牙配對",
+        "conn.ble_pair.title" => "在相機上配對",
         "conn.ble_pair.body" => "請在相機上選擇「配對」→「執行配對」，然後點一下「重試」。",
         "conn.ble_stale.title" => "相機已不記得此裝置",
         "conn.ble_stale.body" => {
-            "請在「設定」→「藍牙」中點一下此相機旁的 ⓘ，選擇「忘記此裝置」。然後在相機上重新配對並重試。"
+            "請在「設定」→「藍牙」中點一下此相機旁的 ⓘ，選擇「忘記此裝置」。然後在相機上重新配對。"
         }
         "conn.ble_timeout.title" => "相機沒有回應",
-        "conn.ble_timeout.body" => "請開啟相機電源並放在附近，然後重試。",
+        "conn.ble_timeout.body" => "請開啟相機電源並放在附近。",
         "conn.wifi_denied.title" => "已取消加入 Wi‑Fi",
         "conn.wifi_denied.body" => {
             "請在系統提示中點選「加入」，或在「設定」→「Wi‑Fi」中加入相機 Wi‑Fi。"
+        }
+        "android.conn.wifi_denied.title" => "未允許「鄰近裝置」",
+        "android.conn.wifi_denied.body" => {
+            "請點一下「開啟設定」，允許 GRKit 使用「鄰近裝置」。Android 12 及更早版本需允許位置權限。"
         }
         "conn.wifi_password.title" => "Wi‑Fi 密碼錯誤",
         "conn.wifi_password.body" => "相機的 Wi‑Fi 密碼可能已變更。請在相機上重新配對，然後重試。",
@@ -263,18 +270,18 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "conn.wifi_ssid.body" => "請檢查相機的 SSID。",
         "conn.wifi_config.title" => "Wi‑Fi 設定被拒絕",
         "conn.wifi_config.body" => "iOS 無法套用此 Wi‑Fi 設定，請重試。",
-        "android.conn.wifi_config.body" => "Android 無法套用此 Wi‑Fi 設定，請重試。",
         "conn.wifi_failed.title" => "相機 Wi‑Fi 尚未就緒",
-        "conn.wifi_failed.body" => "相機的 Wi‑Fi 還沒有啟動。請保持相機開機幾秒鐘，然後重試。",
+        "conn.wifi_failed.body" => "請保持相機開機幾秒鐘，然後重試。",
+        "android.conn.wifi_failed.body" => {
+            "請保持相機開機，然後重試，並在 Android 要求連線 Wi‑Fi 時同意。"
+        }
         "conn.wifi_timeout.title" => "無法連線相機 Wi‑Fi",
         "conn.wifi_timeout.body" => "請確認相機已開機且 Wi‑Fi 已開啟。",
         "conn.network_not_ready.title" => "正在切換到相機 Wi‑Fi",
-        "conn.network_not_ready.body" => {
-            "裝置已加入相機 Wi‑Fi，但還沒有切換過去。請稍候片刻後重試。"
-        }
+        "conn.network_not_ready.body" => "請稍候片刻後重試。",
         "conn.subnet.title" => "Wi‑Fi 網段與相機衝突",
         "conn.subnet.body" => {
-            "手機連到了路由器，不是相機（兩者都用 192.168.0.x）。請開啟飛航模式，只開 Wi‑Fi，再加入相機 Wi‑Fi。"
+            "手機連到了路由器，不是相機。請開啟飛航模式，只開 Wi‑Fi，再加入相機 Wi‑Fi。"
         }
         "conn.verify.title" => "相機沒有回應",
         "conn.verify.body" => "已加入 Wi‑Fi 但相機沒有回應，請重新啟動相機。",
@@ -289,13 +296,13 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "conn.not_gr.body" => "看起來你連線到了其他 Wi‑Fi，請切換到相機的 Wi‑Fi。",
         "conn.unsupported.title" => "無法辨識的相機回應",
         "conn.unknown.title" => "連線失敗",
-        "conn.unknown.body" => "發生問題，請重試。",
-        "cam.title" => "相機",
+        "conn.unknown.body" => "發生問題。",
         "cam.detect" => "已加入相機 Wi‑Fi？立即偵測",
         "cam.nearby" => "已開機 · 在附近",
-        "cam.others" => "其他相機",
         "cam.lost_title" => "連線已中斷",
         "cam.current_none" => "未使用配方或底片風格",
+        "cam.current_look" => "目前底片風格",
+        "cam.current_recipe" => "目前配方",
         "cam.remove" => "移除相機",
         "cam.remove_body" => "確定從已儲存的相機中移除「%{name}」嗎？",
         "cam.remove_confirm" => "移除",
@@ -312,7 +319,6 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "cam.disconnect_confirm" => "中斷",
         "cam.power" => "關閉相機",
         "cam.power_title" => "關閉相機",
-        "cam.power_body" => "相機會關機。",
         "cam.power_confirm" => "關機",
         "cam.prompt_title" => "連線 %{model}？",
         "cam.prompt_body" => "相機已開機，就在附近。",
@@ -325,7 +331,7 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "cam.step_wake" => "正在連線相機",
         "cam.step_wake_sub" => "正在透過藍牙喚醒相機。",
         "cam.step_pair_gr3" => "相機可能會顯示配對碼，iOS 跳出提示時輸入即可。",
-        "cam.step_pair_gr4" => "相機可能會跳出配對確認，請在相機上同意。",
+        "cam.step_pair_gr4" => "如相機請求確認配對，請在相機上同意。",
         "cam.step_wifi" => "正在加入相機 Wi‑Fi",
         "cam.step_wifi_sub" => "若 iOS 顯示提示，請允許 GRKit 連接相機。",
         "cam.step_wifi_slow" => "GR IV 啟動 Wi‑Fi 需要更長時間，請稍候。",
@@ -333,7 +339,7 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "cam.step_verify_sub" => "正在檢查連線。",
         "cam.no_grkit_title" => "相機上沒有 GRKit",
         "cam.no_grkit_body" => "需要在記憶卡上安裝 GRKit 1.7.0 或更新版本。",
-        "cam.install_guide" => "查看安裝說明",
+        "cam.install_guide" => "安裝說明",
         "android.cam.step_wifi_sub" => "若 Android 顯示提示，請允許 GRKit 連接相機。",
         "android.cam.step_pair_gr3" => "相機可能會顯示配對碼，Android 跳出提示時輸入即可。",
         _ => return None,
@@ -344,34 +350,36 @@ pub fn ja(key: &str) -> Option<&'static str> {
     Some(match key {
         "conn.app_old.title" => "GRKit アプリのアップデートが必要",
         "conn.app_old.body" => {
-            "カメラの GRKit はこのアプリより新しいバージョンです。アプリをアップデートしてから、もう一度接続してください。"
+            "カメラの GRKit はこのアプリより新しいです。アプリをアップデートしてください。"
         }
         "conn.unsupported.body" => {
-            "カメラは応答しましたが、GRKit がその内容を理解できませんでした。もう一度お試しください。"
+            "カメラは応答しましたが、GRKit がその内容を理解できませんでした。"
         }
         "conn.open_settings" => "設定を開く",
         "conn.switched_wifi" => "Wi‑Fi を切り替えました",
         "conn.ble_failed.title" => "Bluetooth 接続に失敗しました",
-        "conn.ble_failed.body" => {
-            "Bluetooth をオフにしてから再度オンにし、もう一度お試しください。"
-        }
+        "conn.ble_failed.body" => "Bluetooth をオフにしてから再度オンにしてください。",
         "conn.ble_auth.title" => "ペアリングが完了しませんでした",
         "conn.ble_auth.body" => {
-            "カメラ側でペアリングが完了しませんでした。カメラで「ペアリング」→「ペアリング実行」を選択し、もう一度お試しください。それでも失敗する場合は、先に「設定」→「Bluetooth」でこのカメラの登録を解除してください。"
+            "カメラで「ペアリング」→「ペアリング実行」を選択してください。それでも失敗する場合は、先にスマートフォンの Bluetooth 設定でこのカメラの登録を解除してください。"
         }
-        "conn.ble_pair.title" => "カメラで Bluetooth ペアリングを開始してください",
+        "conn.ble_pair.title" => "カメラでペアリング",
         "conn.ble_pair.body" => {
             "カメラで「ペアリング」→「ペアリング実行」を選択してから、「再試行」をタップしてください。"
         }
         "conn.ble_stale.title" => "カメラがこの端末を認識していません",
         "conn.ble_stale.body" => {
-            "「設定」→「Bluetooth」でこのカメラの横の「ⓘ」をタップし、「このデバイスの登録を解除」を選択してください。その後、カメラでもう一度ペアリングしてから再試行してください。"
+            "「設定」→「Bluetooth」でこのカメラの横の「ⓘ」をタップし、「このデバイスの登録を解除」を選択してください。その後、カメラでもう一度ペアリングしてください。"
         }
         "conn.ble_timeout.title" => "カメラが応答しません",
-        "conn.ble_timeout.body" => "カメラの電源を入れて近くに置き、もう一度お試しください。",
+        "conn.ble_timeout.body" => "カメラの電源を入れて近くに置いてください。",
         "conn.wifi_denied.title" => "Wi‑Fi 接続をキャンセルしました",
         "conn.wifi_denied.body" => {
             "システムの確認で「接続」をタップするか、「設定」→「Wi‑Fi」でカメラの Wi‑Fi に接続してください。"
+        }
+        "android.conn.wifi_denied.title" => "「付近のデバイス」が許可されていません",
+        "android.conn.wifi_denied.body" => {
+            "「設定を開く」をタップし、GRKit に「付近のデバイス」を許可してください。Android 12 以前は「位置情報」を許可してください。"
         }
         "conn.wifi_password.title" => "Wi‑Fi パスワードが違います",
         "conn.wifi_password.body" => {
@@ -388,19 +396,20 @@ pub fn ja(key: &str) -> Option<&'static str> {
         }
         "conn.wifi_failed.title" => "カメラの Wi‑Fi の準備ができていません",
         "conn.wifi_failed.body" => {
-            "カメラの Wi‑Fi がまだ起動していません。カメラの電源を入れたまま数秒待ってから、もう一度お試しください。"
+            "カメラの電源を入れたまま数秒待ってから、もう一度お試しください。"
+        }
+        "android.conn.wifi_failed.body" => {
+            "カメラの電源を入れたまま、もう一度お試しください。Android で Wi‑Fi への接続を求められたら許可してください。"
         }
         "conn.wifi_timeout.title" => "カメラの Wi‑Fi に接続できません",
         "conn.wifi_timeout.body" => {
             "カメラの電源が入っていて、Wi‑Fi がオンになっているか確認してください。"
         }
         "conn.network_not_ready.title" => "カメラの Wi‑Fi に切り替え中です",
-        "conn.network_not_ready.body" => {
-            "お使いの端末はカメラの Wi‑Fi に接続しましたが、まだ切り替わっていません。少し待ってから、もう一度お試しください。"
-        }
+        "conn.network_not_ready.body" => "少し待ってから、もう一度お試しください。",
         "conn.subnet.title" => "Wi‑Fi のアドレスが重複しています",
         "conn.subnet.body" => {
-            "スマートフォンがカメラではなくルーターに接続しています（どちらも 192.168.0.x を使用）。機内モードをオンにしてから Wi‑Fi だけをオンに戻し、カメラの Wi‑Fi に接続してください。"
+            "スマートフォンがカメラではなくルーターに接続しています。機内モードをオンにしてから Wi‑Fi だけをオンに戻し、カメラの Wi‑Fi に接続してください。"
         }
         "conn.verify.title" => "カメラが応答しません",
         "conn.verify.body" => {
@@ -419,13 +428,13 @@ pub fn ja(key: &str) -> Option<&'static str> {
         }
         "conn.unsupported.title" => "未対応のカメラ応答",
         "conn.unknown.title" => "接続できませんでした",
-        "conn.unknown.body" => "問題が発生しました。もう一度お試しください。",
-        "cam.title" => "カメラ",
+        "conn.unknown.body" => "問題が発生しました。",
         "cam.detect" => "カメラの Wi‑Fi に接続済み？今すぐ検出",
         "cam.nearby" => "電源オン · 近くにあります",
-        "cam.others" => "その他のカメラ",
         "cam.lost_title" => "接続が切れました",
         "cam.current_none" => "レシピもフィルムルックも未使用",
+        "cam.current_look" => "現在のフィルムルック",
+        "cam.current_recipe" => "現在のレシピ",
         "cam.remove" => "カメラを削除",
         "cam.remove_body" => "保存済みのカメラから「%{name}」を削除しますか？",
         "cam.remove_confirm" => "削除",
@@ -444,7 +453,6 @@ pub fn ja(key: &str) -> Option<&'static str> {
         "cam.disconnect_confirm" => "解除",
         "cam.power" => "カメラの電源を切る",
         "cam.power_title" => "カメラの電源を切る",
-        "cam.power_body" => "カメラの電源が切れます。",
         "cam.power_confirm" => "電源を切る",
         "cam.prompt_title" => "%{model} に接続しますか？",
         "cam.prompt_body" => "カメラの電源が入っていて、近くにあります。",
@@ -459,9 +467,7 @@ pub fn ja(key: &str) -> Option<&'static str> {
         "cam.step_pair_gr3" => {
             "カメラにペアリングコードが表示されることがあります。iOS の入力画面が出たら入力してください。"
         }
-        "cam.step_pair_gr4" => {
-            "カメラに確認画面が表示されることがあります。カメラ側で承認してください。"
-        }
+        "cam.step_pair_gr4" => "カメラにペアリングの確認が表示されたら、承認してください。",
         "cam.step_wifi" => "カメラの Wi‑Fi に接続中",
         "cam.step_wifi_sub" => "iOS で確認が表示されたら、GRKit とカメラの接続を許可してください。",
         "cam.step_wifi_slow" => "GR IV は Wi‑Fi の起動に時間がかかります。お待ちください。",
@@ -483,33 +489,33 @@ pub fn ja(key: &str) -> Option<&'static str> {
 pub fn ko(key: &str) -> Option<&'static str> {
     Some(match key {
         "conn.app_old.title" => "GRKit 앱 업데이트 필요",
-        "conn.app_old.body" => {
-            "카메라의 GRKit이 이 앱보다 최신입니다. 앱을 업데이트한 후 다시 연결하세요."
-        }
-        "conn.unsupported.body" => {
-            "카메라가 응답했지만 GRKit이 응답 내용을 이해하지 못했습니다. 다시 시도하세요."
-        }
+        "conn.app_old.body" => "카메라의 GRKit이 이 앱보다 최신입니다. 앱을 업데이트하세요.",
+        "conn.unsupported.body" => "카메라가 응답했지만 GRKit이 응답 내용을 이해하지 못했습니다.",
         "conn.open_settings" => "설정 열기",
         "conn.switched_wifi" => "Wi‑Fi 전환 완료",
         "conn.ble_failed.title" => "Bluetooth 연결 실패",
-        "conn.ble_failed.body" => "Bluetooth를 껐다 켠 후 다시 시도하세요.",
+        "conn.ble_failed.body" => "Bluetooth를 껐다 켜세요.",
         "conn.ble_auth.title" => "페어링이 완료되지 않음",
         "conn.ble_auth.body" => {
-            "카메라에서 페어링이 끝나지 않았습니다. 카메라에서 「페어링」 → 「페어링 실행」을 선택한 후 다시 시도하세요. 그래도 실패하면 먼저 설정 → Bluetooth에서 이 카메라를 지우세요."
+            "카메라에서 「페어링」 → 「페어링 실행」을 선택하세요. 그래도 실패하면 먼저 휴대폰의 Bluetooth 설정에서 이 카메라를 지우세요."
         }
-        "conn.ble_pair.title" => "카메라에서 Bluetooth 페어링 시작",
+        "conn.ble_pair.title" => "카메라에서 페어링",
         "conn.ble_pair.body" => {
             "카메라에서 「페어링」 → 「페어링 실행」을 선택한 후 「다시 시도」를 탭하세요."
         }
         "conn.ble_stale.title" => "카메라가 이 기기를 기억하지 못함",
         "conn.ble_stale.body" => {
-            "설정 → Bluetooth에서 이 카메라 옆의 ⓘ를 탭하고 「이 기기 지우기」를 선택하세요. 그런 다음 카메라에서 다시 페어링한 후 다시 시도하세요."
+            "설정 → Bluetooth에서 이 카메라 옆의 ⓘ를 탭하고 「이 기기 지우기」를 선택하세요. 그런 다음 카메라에서 다시 페어링하세요."
         }
         "conn.ble_timeout.title" => "카메라가 응답하지 않음",
-        "conn.ble_timeout.body" => "카메라를 켜고 가까이 둔 후 다시 시도하세요.",
+        "conn.ble_timeout.body" => "카메라를 켜고 가까이 두세요.",
         "conn.wifi_denied.title" => "Wi‑Fi 연결 취소됨",
         "conn.wifi_denied.body" => {
             "시스템 알림에서 「연결」을 탭하거나 설정 → Wi‑Fi에서 카메라 Wi‑Fi에 연결하세요."
+        }
+        "android.conn.wifi_denied.title" => "근처 기기 권한 없음",
+        "android.conn.wifi_denied.body" => {
+            "「설정 열기」를 탭하고 GRKit에 근처 기기 권한을 허용하세요. Android 12 이하는 위치 권한을 허용하세요."
         }
         "conn.wifi_password.title" => "잘못된 Wi‑Fi 비밀번호",
         "conn.wifi_password.body" => {
@@ -523,18 +529,17 @@ pub fn ko(key: &str) -> Option<&'static str> {
             "Android가 이 Wi‑Fi 설정을 적용하지 못했습니다. 다시 시도하세요."
         }
         "conn.wifi_failed.title" => "카메라 Wi‑Fi가 아직 준비되지 않음",
-        "conn.wifi_failed.body" => {
-            "카메라 Wi‑Fi가 아직 시작되지 않았습니다. 카메라를 켠 채 몇 초 기다린 후 다시 시도하세요."
+        "conn.wifi_failed.body" => "카메라를 켠 채 몇 초 기다린 후 다시 시도하세요.",
+        "android.conn.wifi_failed.body" => {
+            "카메라를 켠 채 다시 시도하고, Android에서 Wi‑Fi 연결을 요청하면 허용하세요."
         }
         "conn.wifi_timeout.title" => "카메라 Wi‑Fi에 연결할 수 없음",
         "conn.wifi_timeout.body" => "카메라가 켜져 있고 Wi‑Fi가 활성화되어 있는지 확인하세요.",
         "conn.network_not_ready.title" => "카메라 Wi‑Fi로 전환하는 중",
-        "conn.network_not_ready.body" => {
-            "기기가 카메라 Wi‑Fi에 연결되었지만 아직 전환되지 않았습니다. 잠시 기다린 후 다시 시도하세요."
-        }
+        "conn.network_not_ready.body" => "잠시 기다린 후 다시 시도하세요.",
         "conn.subnet.title" => "Wi‑Fi 주소 대역이 겹칩니다",
         "conn.subnet.body" => {
-            "휴대폰이 카메라 대신 공유기에 연결되었습니다(둘 다 192.168.0.x 사용). 에어플레인 모드를 켠 뒤 Wi‑Fi만 다시 켜고 카메라 Wi‑Fi에 연결하세요."
+            "휴대폰이 카메라 대신 공유기에 연결되었습니다. 에어플레인 모드를 켠 뒤 Wi‑Fi만 다시 켜고 카메라 Wi‑Fi에 연결하세요."
         }
         "conn.verify.title" => "카메라가 응답하지 않음",
         "conn.verify.body" => "Wi‑Fi에 연결되었지만 응답이 없습니다. 카메라를 재시작하세요.",
@@ -551,13 +556,13 @@ pub fn ko(key: &str) -> Option<&'static str> {
         }
         "conn.unsupported.title" => "지원되지 않는 카메라 응답",
         "conn.unknown.title" => "연결할 수 없음",
-        "conn.unknown.body" => "문제가 발생했습니다. 다시 시도해 주세요.",
-        "cam.title" => "카메라",
+        "conn.unknown.body" => "문제가 발생했습니다.",
         "cam.detect" => "카메라 Wi‑Fi에 연결했나요? 지금 감지",
         "cam.nearby" => "켜짐 · 근처에 있음",
-        "cam.others" => "다른 카메라",
         "cam.lost_title" => "연결이 끊김",
         "cam.current_none" => "사용 중인 레시피나 필름 룩 없음",
+        "cam.current_look" => "현재 필름 룩",
+        "cam.current_recipe" => "현재 레시피",
         "cam.remove" => "카메라 삭제",
         "cam.remove_body" => "저장된 카메라에서 「%{name}」을(를) 삭제할까요?",
         "cam.remove_confirm" => "삭제",
@@ -574,7 +579,6 @@ pub fn ko(key: &str) -> Option<&'static str> {
         "cam.disconnect_confirm" => "해제",
         "cam.power" => "카메라 끄기",
         "cam.power_title" => "카메라 끄기",
-        "cam.power_body" => "카메라가 꺼집니다.",
         "cam.power_confirm" => "끄기",
         "cam.prompt_title" => "%{model}에 연결할까요?",
         "cam.prompt_body" => "카메라가 켜져 있고 근처에 있습니다.",
@@ -589,7 +593,7 @@ pub fn ko(key: &str) -> Option<&'static str> {
         "cam.step_pair_gr3" => {
             "카메라에 페어링 코드가 표시될 수 있습니다. iOS 입력 창이 나타나면 입력해 주세요."
         }
-        "cam.step_pair_gr4" => "카메라에 확인 창이 표시될 수 있습니다. 카메라에서 승인해 주세요.",
+        "cam.step_pair_gr4" => "카메라에 페어링 확인이 표시되면 승인하세요.",
         "cam.step_wifi" => "카메라 Wi‑Fi에 연결 중",
         "cam.step_wifi_sub" => "iOS에서 요청하면 GRKit의 카메라 연결을 허용해 주세요.",
         "cam.step_wifi_slow" => {

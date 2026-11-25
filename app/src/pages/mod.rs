@@ -19,7 +19,7 @@ pub use camera::camera_root;
 pub use cover_editor::{CoverTarget, cover_page};
 pub use look_add::{add_page, unlock_page};
 pub use look_pages::{confirm_delete, import_page, look_page};
-pub use looks::{import_sheet, looks_root, scheme_page};
+pub use looks::{import_sheet, looks_root};
 pub use module_pages::{module_options_page, module_page, value_menu};
 pub use modules::modules_page;
 pub use recipe_pages::{preset_page, presets_page, recipe_page};

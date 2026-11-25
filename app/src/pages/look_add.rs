@@ -1,34 +1,34 @@
 //! The Add page: official Looks that the camera does not have, and the
 //! import of a file.
 
-use nsh_base::theme;
+use nsh_core::element::ImageSrc;
 use nsh_core::prelude::*;
 
 use crate::ui::ty::text;
 
 use grkit_core::cover::{Cover, Scheme, Variant};
 
-use super::looks::{TILE_COVER, corner_button, corner_icon, grid, tile};
 use crate::domain::{LookFilter, PendingChange};
 use crate::store::Route;
-use crate::store::native_looks::{GR4_FIRMWARE_PAGE, gr4_looks};
+use crate::store::native_looks::{Firmware, OfferedLook};
 use crate::store::{AppState, CatalogItem, LookAction, Sheet};
 use crate::strings::tr;
-use crate::ui::{grouped_card, section_title, segmented, token};
-
-const PLUS: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>"##;
-const LOCK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="2.6"/></svg>"##;
-const CHECK: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>"##;
+use crate::ui::PageTitle;
+use crate::ui::{
+    ButtonKind, ButtonSize, CaptionTone, CoverCell, TileTone, button, cover_cell, cover_grid,
+    cover_grid_of, cover_thumb, glyph, icon_tile, list_row, list_section, notice_card,
+    system_segmented, token,
+};
 
 pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     crate::ui::app_page()
-        .title(tr("looks.add_title", &[]))
+        .page_title(tr("looks.add_title", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
-            view().flex_1().bg(move || token("grouped")).child(
+            view().flex_1().bg(move || token("list-background")).child(
                 crate::ui::page_scroll().flex_1().child(
                     view()
-                        .px_6()
+                        .px_4()
                         .pt_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .gap(px(super::looks::ROW_GAP))
@@ -40,7 +40,7 @@ pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElem
 
 fn add_content(app: AppState) -> impl IntoElement {
     let filter = app.looks_filter();
-    let chips = segmented(
+    let chips = system_segmented(
         [
             (LookFilter::All, "looks.filter.all"),
             (LookFilter::Color, "looks.filter.color"),
@@ -67,14 +67,7 @@ fn add_content(app: AppState) -> impl IntoElement {
         let Some(message) = app.catalog_error() else {
             return column.child(super::looks::loading_card(tr("looks.catalog_loading", &[])));
         };
-        return column.child(grouped_card(
-            view().p_4().child(
-                text(message)
-                    .text_size(px(crate::ui::ty::SUBHEADLINE))
-                    .line_height(px(22.0))
-                    .text_color(move || theme().muted_foreground),
-            ),
-        ));
+        return column.child(notice_card(message));
     };
     // A Look added here stays, marked, until the page closes.
     let items: Vec<(CatalogItem, bool)> = items
@@ -92,16 +85,15 @@ fn add_content(app: AppState) -> impl IntoElement {
         .map(|s| s.official_covers)
         .unwrap_or_default();
     // One grid: the filter picks color, B&W, or both.
-    let tiles: Vec<AnyElement> = items
-        .iter()
+    let cells = items
+        .into_iter()
         .filter(|(item, _)| match filter {
             LookFilter::All => true,
             LookFilter::Color => !item.group.monochrome(),
             LookFilter::Mono => item.group.monochrome(),
         })
-        .map(|(item, added)| catalog_tile(app, item.clone(), *added, scheme, full).into_element())
-        .collect();
-    column.child(grid(tiles))
+        .map(|(item, added)| catalog_cell(app, item, added, scheme));
+    column.child(cover_grid(cells))
 }
 
 /// The cover that a catalog Look gets on this card: the scheme's.
@@ -112,251 +104,260 @@ fn scheme_cover(item: &CatalogItem, scheme: Scheme) -> Cover {
     }
 }
 
-/// An official Look: the tile or its corner adds it, or takes back the one
-/// just added.
-fn catalog_tile(
-    app: AppState,
-    item: CatalogItem,
-    added: bool,
-    scheme: Scheme,
-    full: bool,
-) -> impl IntoElement {
+/// An official Look: Add puts it on the camera; Undo takes back the one
+/// just added. A full card still takes the press, which says why it fails.
+fn catalog_cell(app: AppState, item: CatalogItem, added: bool, scheme: Scheme) -> CoverCell {
     let id = item.look.id.clone();
     let name = item.look.name.clone();
     let adding = app.catalog_adding(&id);
-    let working = adding || app.look_working(&id, LookAction::TakeBack);
-    let enabled = app.looks_blocked().is_none() && app.look_busy().is_none() && !adding;
-    // A full card greys the adds; pressing one says why.
-    let dimmed = full && !added;
-    let status = if adding {
-        Some((tr("looks.adding", &[]), false))
+    let enabled = app.looks_blocked().is_none() && app.look_busy().is_none();
+    let cell = cover_cell(scheme_cover(&item, scheme), name.clone())
+        .photo(app.catalog_preview(&item).map(ImageSrc::from))
+        .enabled(enabled || adding)
+        .test_id(format!("catalog:{id}"));
+    if added {
+        let working = app.look_working(&id, LookAction::TakeBack);
+        cell.caption(tr("looks.after_restart", &[]), CaptionTone::Pending)
+            .undo(
+                tr("looks.undo", &[]),
+                tr("looks.added_named", &[("name", &name)]),
+                working,
+                move || app.take_back_look(id.clone()),
+            )
+            .enabled(enabled || working)
     } else {
-        added.then(|| (tr("looks.after_restart", &[]), false))
-    };
-    let label = match &status {
-        Some((status, _)) => format!("{name}, {status}"),
-        None => name.clone(),
-    };
-    let corner_label = tr(
-        if added {
-            "looks.added_named"
-        } else {
-            "looks.add_named"
-        },
-        &[("name", &name)],
-    );
-    // The whole tile does what its corner does, so a tap on the cover adds.
-    let toggle = move || {
-        if added {
-            app.take_back_look(id.clone())
-        } else {
-            app.add_catalog_look(id.clone())
-        }
-    };
-    let on_tile = toggle.clone();
-    tile(
-        crate::ui::cover_view(&scheme_cover(&item, scheme), TILE_COVER, false),
-        name,
-        status,
-        label,
-        enabled.then(|| Box::new(on_tile) as Box<dyn Fn()>),
-        corner_button(
-            true,
-            Some(token("button")),
-            corner_icon(if added { CHECK } else { PLUS }),
-            corner_label,
-            AccessibilityRole::Checkbox,
-            Some(added),
-            enabled,
-            dimmed,
-            working,
-            toggle,
-        ),
-    )
+        cell.add(
+            tr("looks.add_named", &[("name", &name)]),
+            adding,
+            move || app.add_catalog_look(id.clone()),
+        )
+    }
 }
 
-/// The GR IV looks that a firmware file unlocks, while the camera lacks
-/// one of them.
+/// The firmware files that unlock looks the camera lacks: a row for each,
+/// with the cover of its first look.
 fn unlock_section(app: AppState) -> Option<AnyElement> {
-    if !app.gr4_looks_offered() {
-        return None;
-    }
-    let snapshot = app.looks_snapshot()?;
-    let looks: Vec<_> = gr4_looks()
+    let rows: Vec<_> = Firmware::ALL
         .into_iter()
-        .filter(|(id, _, _)| snapshot.get(id).is_none())
-        .collect();
-    if looks.is_empty() {
-        return None;
-    }
-    let tiles = looks
-        .into_iter()
-        .map(|(_, name, cover)| {
-            let open = move || app.push(Route::LookUnlock);
-            tile(
-                crate::ui::cover_view(&cover, TILE_COVER, false),
-                name.to_owned(),
-                None,
-                name.to_owned(),
-                Some(Box::new(open)),
-                corner_button(
-                    true,
-                    Some(token("button")),
-                    corner_icon(LOCK),
-                    tr("looks.unlock_title", &[]),
-                    AccessibilityRole::Button,
-                    None,
-                    true,
-                    false,
-                    false,
-                    open,
-                ),
+        .filter_map(|firmware| {
+            let looks = app.unlock_offered(firmware);
+            let first = looks.first()?.cover.clone();
+            Some(
+                list_row(tr(firmware.row_key(), &[]))
+                    .subtitle(unlock_summary(&looks))
+                    .leading(cover_thumb(&first, 32.0, false))
+                    .page(move || app.push(Route::LookUnlock(firmware))),
             )
-            .into_element()
         })
         .collect();
+    if rows.is_empty() {
+        return None;
+    }
     Some(
         view()
             .gap_2()
             .child(
-                view()
-                    .px(px(2.0))
-                    .child(section_title(tr("looks.unlock_section", &[]))),
+                text(tr("looks.unlock_section", &[]))
+                    .px_4()
+                    .text_size(px(crate::ui::ty::FOOTNOTE))
+                    .line_height(px(18.0))
+                    .text_color(move || token("list-secondary"))
+                    .role(AccessibilityRole::Header),
             )
-            .child(grid(tiles))
+            .child(list_section(rows))
             .into_element(),
     )
 }
 
-/// Unlock the GR IV looks: choose the firmware file, then put them on the
-/// camera.
-pub fn unlock_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
+/// What a firmware file unlocks: its one look by name, else how many color
+/// and B&W looks.
+fn unlock_summary(looks: &[OfferedLook]) -> String {
+    if let [look] = looks {
+        return look.name.to_owned();
+    }
+    let mono = looks.iter().filter(|look| look.monochrome).count();
+    let color = looks.len() - mono;
+    let key = match (color, mono) {
+        (_, 0) => "looks.unlock_color",
+        (0, _) => "looks.unlock_mono",
+        _ => "looks.unlock_color_mono",
+    };
+    let (color, mono) = (color.to_string(), mono.to_string());
+    tr(key, &[("color", &color), ("mono", &mono)])
+}
+
+/// Unlock the looks of `firmware`: choose the firmware file, choose its
+/// looks, then put them on the camera.
+pub fn unlock_page(
+    app: AppState,
+    firmware: Firmware,
+    on_dismiss: impl Fn() + 'static,
+) -> impl IntoElement {
     crate::ui::app_page()
-        .title(tr("looks.unlock_title", &[]))
+        .page_title(tr(firmware.title_key(), &[]), false)
         .on_dismiss(move || {
             app.discard_native_looks();
             on_dismiss()
         })
         .child(
-            view().flex_1().bg(move || token("grouped")).child(
+            view().flex_1().bg(move || token("list-background")).child(
                 crate::ui::page_scroll().flex_1().child(
                     view()
-                        .px_6()
+                        .px_4()
                         .pt_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .gap_6()
-                        .child(dynamic(move || unlock_content(app))),
+                        .child(dynamic(move || unlock_content(app, firmware))),
                 ),
             ),
         )
 }
 
-fn unlock_content(app: AppState) -> impl IntoElement {
-    let found = app.native_looks_found();
-    let covers: Vec<(String, Cover)> = match &found {
-        Some((_, looks)) => looks
+/// The covers in rows of four on the unlock page.
+const UNLOCK_COLUMNS: u16 = 4;
+/// The width of the cover when a firmware file gives one look.
+const SINGLE_COVER: f32 = 140.0;
+
+fn unlock_content(app: AppState, firmware: Firmware) -> impl IntoElement {
+    let found = app
+        .native_looks_found()
+        .filter(|found| found.firmware == firmware);
+    // Before the file is read: the looks it gives. After: those it gave,
+    // each with its check.
+    let looks: Vec<(String, String, bool, Cover)> = match &found {
+        Some(found) => found
+            .looks
             .iter()
-            .map(|l| (l.name.clone(), l.cover.clone()))
+            .map(|l| (l.id.clone(), l.name.clone(), l.monochrome, l.cover.clone()))
             .collect(),
-        None => gr4_looks()
+        None => app
+            .unlock_offered(firmware)
             .into_iter()
-            .map(|(_, name, cover)| (name.to_owned(), cover))
+            .map(|l| (l.id.to_owned(), l.name.to_owned(), l.monochrome, l.cover))
             .collect(),
     };
-    let row = view()
-        .flex_row()
-        .justify_center()
-        .gap_6()
-        .children(covers.into_iter().map(|(name, cover)| {
+    let reading = found.is_some();
+    // One look shows larger, in the middle.
+    let single = looks.len() == 1;
+    let sending = app.native_looks_sending();
+    let group = |monochrome: bool| {
+        let cells: Vec<_> = looks
+            .iter()
+            .filter(|(_, _, mono, _)| *mono == monochrome)
+            .map(|(id, name, _, cover)| {
+                let cell = cover_cell(cover.clone(), name.clone());
+                let cell = if single { cell.centered() } else { cell };
+                if reading {
+                    let id = id.clone();
+                    cell.check(app.native_look_chosen(&id), move || {
+                        app.toggle_native_look(&id)
+                    })
+                    .enabled(!sending)
+                } else {
+                    cell
+                }
+            })
+            .collect();
+        (!cells.is_empty()).then_some(cells)
+    };
+    let groups: Vec<(&str, Vec<_>)> = [(false, "looks.filter.color"), (true, "looks.filter.mono")]
+        .into_iter()
+        .filter_map(|(mono, key)| group(mono).map(|cells| (key, cells)))
+        .collect();
+    // One kind of look needs no heading.
+    let titled = groups.len() > 1;
+    let mut column = view().gap_6();
+    if let Some(found) = &found {
+        column = column.child(
+            text(tr(
+                "looks.firmware_read",
+                &[("camera", firmware.camera()), ("version", &found.version)],
+            ))
+            .px_4()
+            .text_size(px(crate::ui::ty::FOOTNOTE))
+            .line_height(px(18.0))
+            .text_color(move || token("list-secondary")),
+        );
+    }
+    for (key, cells) in groups {
+        column = column.child(
             view()
-                .items_center()
                 .gap_2()
-                .child(crate::ui::cover_view(&cover, 120.0, false))
-                .child(
-                    text(name)
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-        }));
-    let buttons = if found.is_some() {
-        view().gap_3().child(crate::ui::primary_button_loading(
-            tr("looks.send", &[]),
-            app.native_looks_sending(),
-            move || app.send_native_looks(),
-        ))
+                .child(titled.then(|| {
+                    text(tr(key, &[]))
+                        .px_4()
+                        .text_size(px(crate::ui::ty::FOOTNOTE))
+                        .line_height(px(18.0))
+                        .text_color(move || token("list-secondary"))
+                        .role(AccessibilityRole::Header)
+                }))
+                .child(if single {
+                    view()
+                        .items_center()
+                        .child(view().w(px(SINGLE_COVER)).child(cover_grid_of(1, cells)))
+                        .into_element()
+                } else {
+                    cover_grid_of(UNLOCK_COLUMNS, cells)
+                }),
+        );
+    }
+    let buttons = if reading {
+        let count = app.native_looks_chosen_count();
+        view().gap_3().child(
+            button(
+                tr("looks.send_count", &[("count", &count.to_string())]),
+                ButtonKind::Primary,
+                ButtonSize::Large,
+                move || app.send_native_looks(),
+            )
+            .enabled(count > 0)
+            .loading(sending),
+        )
     } else {
         view()
             .gap_3()
-            .child(crate::ui::primary_button_loading(
-                tr("looks.choose_firmware", &[]),
-                app.native_looks_reading(),
-                move || app.choose_gr4_firmware(),
-            ))
-            .child(crate::ui::secondary_button(
+            .child(
+                button(
+                    tr("looks.choose_firmware", &[]),
+                    ButtonKind::Primary,
+                    ButtonSize::Large,
+                    move || app.choose_firmware(firmware),
+                )
+                .loading(app.native_looks_reading()),
+            )
+            .child(button(
                 tr("looks.open_ricoh", &[]),
-                || {
+                ButtonKind::Tinted,
+                ButtonSize::Large,
+                move || {
                     spawn(async move {
-                        let _ = open_url(GR4_FIRMWARE_PAGE).await;
+                        let _ = open_url(firmware.page()).await;
                     });
                 },
             ))
     };
-    view().gap_8().child(row).child(buttons)
+    column.child(buttons)
 }
 
-/// The row at the top that imports a file as a new Look.
+/// The row at the top that imports a file as a new Look. A full card
+/// still takes the press, which says why it fails.
 fn import_row(app: AppState, full: bool) -> impl IntoElement {
     let enabled = app.looks_blocked().is_none() && app.look_busy().is_none();
-    grouped_card(
-        view()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .min_h(px(64.0))
-            .px_4()
-            .role(AccessibilityRole::Button)
-            .label(tr("looks.import_row", &[]))
-            .opacity(if enabled && !full { 1.0 } else { 0.4 })
-            .when(enabled, |v| {
-                v.on_press(move || {
-                    if full {
-                        app.alert_look_error(crate::domain::LookError::CardFull)
-                    } else {
-                        app.set_sheet(Some(Sheet::ImportLook))
-                    }
-                })
-                .active(|s| s.opacity(0.72))
-            })
-            .child(
-                view()
-                    .size(px(44.0))
-                    .rounded(px(6.0))
-                    .border(px(1.5))
-                    .border_dashed()
-                    .border_color(move || theme().border)
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        text("+")
-                            .text_size(px(crate::ui::ty::TITLE2))
-                            .text_color(move || token("link")),
-                    ),
-            )
-            .child(
-                view()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .child(
-                        text(tr("looks.import_row", &[]))
-                            .text_size(px(crate::ui::ty::HEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    )
-                    .child(
-                        text(tr("looks.import_row_sub", &[]))
-                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                            .text_color(move || theme().muted_foreground),
-                    ),
-            )
-            .child(crate::ui::chevron()),
-    )
+    let row = list_row(tr("looks.import_row", &[]))
+        .subtitle(tr("looks.import_row_sub", &[]))
+        .leading(icon_tile(glyph::PLUS, 32.0, TileTone::Tint));
+    let row = if enabled {
+        row.page(move || {
+            if full {
+                app.alert_look_error(crate::domain::LookError::CardFull)
+            } else {
+                app.set_sheet(Some(Sheet::ImportLook))
+            }
+        })
+    } else {
+        row
+    };
+    view()
+        .opacity(if enabled && !full { 1.0 } else { 0.4 })
+        .child(list_section([row]))
 }

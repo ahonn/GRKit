@@ -16,7 +16,8 @@ use serde_json::{Value, json};
 
 const WAIT: Duration = Duration::from_secs(10);
 const HASH: &str = "00112233aabbccdd";
-const PNG: &[u8] = b"\x89PNG\r\n\x1a\nicon";
+/// A module icon as the camera serves it: a 40 x 40 PNG.
+const PNG: &[u8] = include_bytes!("../../modules/grain/tiles/0-module.png");
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct Camera {
@@ -184,7 +185,7 @@ impl Phone {
         config.data_dir = Some(self.directory.clone());
         config.network = Some(network.clone());
         let mut app = Headless::start(config).unwrap();
-        app.wait_for_within("Connected", WAIT).unwrap();
+        app.wait_for_within("label:More", WAIT).unwrap();
         // The Modules page opens from its row on the camera tab.
         // The camera tab draws its rows again once the Looks read ends.
         app.wait_for_within("Could not read the film looks on the camera.", WAIT)

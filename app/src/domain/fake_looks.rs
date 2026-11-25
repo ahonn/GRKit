@@ -140,6 +140,7 @@ pub fn demo_catalog() -> Vec<(CatalogLook, Vec<u8>)> {
                 file,
                 sha256: grkit_core::packaging::sha256(&grf),
                 cover: definition_cover(definition),
+                preview: None,
             };
             (look, grf)
         })

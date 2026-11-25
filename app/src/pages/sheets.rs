@@ -440,8 +440,10 @@ fn step_indicator(state: StepState, changed: bool) -> AnyElement {
                 .rounded_full()
                 .items_center()
                 .justify_center()
-                .bg(move || theme().foreground)
-                .text_color(move || theme().background)
+                // A step behind: gray, as its title. The tint marks only
+                // the step under way and what the person has to do.
+                .bg(move || theme().muted_foreground)
+                .text_color(rgb(0xFFFFFF))
                 .child(svg(nsh_core::element::ImageSrc::svg_markup(CHECK)).size(px(12.0)));
             if changed {
                 badge
@@ -680,14 +682,22 @@ fn scan(app: AppState) -> impl IntoElement {
                             .child(crate::ui::chevron())
                     }))
                     .child(
+                        // The list stays open for more cameras: the words
+                        // say so beside the spinner.
                         view()
                             .flex_row()
                             .items_center()
+                            .gap_2()
                             .min_h(px(64.0))
                             .justify_center()
                             .px_4()
                             .label(tr("scan.looking", &[]))
-                            .child(activity_indicator(16.0)),
+                            .child(activity_indicator(16.0))
+                            .child(
+                                text(tr("scan.looking", &[]))
+                                    .text_size(px(crate::ui::ty::FOOTNOTE))
+                                    .text_color(move || theme().muted_foreground),
+                            ),
                     ),
             )
             .child(pairing_hint("cam.first_time", "cam.path_common", false)),
@@ -1116,12 +1126,12 @@ pub(crate) fn confirm_detail(version: &str) -> impl IntoElement {
                     .rounded_full()
                     .items_center()
                     .justify_center()
-                    .bg(move || theme().foreground)
+                    .bg(move || token("tint-fill"))
                     .child(
                         text(n.to_string())
                             .text_size(px(crate::ui::ty::CAPTION))
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(move || theme().background),
+                            .text_color(rgb(0xFFFFFF)),
                     ),
             )
             .child(
@@ -1203,9 +1213,16 @@ fn update_buttons(
     }
     if let Some(error) = error {
         let (primary, key): (Option<Box<dyn Fn()>>, &str) = match error {
-            UpdateError::Refused | UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid => {
-                (None, "")
-            }
+            // The camera did not take the package: a new check tells why,
+            // such as firmware that the release does not support.
+            UpdateError::Refused => (
+                Some(Box::new(move || {
+                    app.dismiss_error();
+                    app.refresh_update_info();
+                })),
+                "software.check",
+            ),
+            UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid => (None, ""),
             UpdateError::ConnectionLost => (
                 Some(Box::new(move || app.retry_update())),
                 "update.reconnect",
@@ -1285,7 +1302,7 @@ fn cancelling_row() -> impl IntoElement {
 fn primary_is_some(error: &UpdateError) -> bool {
     !matches!(
         error,
-        UpdateError::Refused | UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid
+        UpdateError::ModuleNotKept(_) | UpdateError::PackageInvalid
     )
 }
 
@@ -1315,11 +1332,15 @@ fn install_failed(app: AppState) -> impl IntoElement {
                         tr("update.reconnect", &[]),
                         move || app.reconnect_install_failed(),
                     ))
-                    .child(secondary_button(tr("update.open_site", &[]), || {
-                        spawn(async {
-                            let _ = open_url(crate::store::INSTALL_URL).await;
-                        });
-                    })),
+                    .child(crate::ui::text_link(
+                        tr("update.open_site", &[]),
+                        true,
+                        || {
+                            spawn(async {
+                                let _ = open_url(crate::store::INSTALL_URL).await;
+                            });
+                        },
+                    )),
             ),
     )
 }

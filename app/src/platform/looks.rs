@@ -9,11 +9,7 @@
 
 use std::{fs, path::PathBuf, time::Duration};
 
-use grkit_core::{
-    camera,
-    cover::{Cover, Scheme},
-    packaging,
-};
+use grkit_core::{camera, cover::Cover, packaging};
 use nsh_core::{
     element::HttpResponse,
     platform::HttpRequest,
@@ -22,8 +18,8 @@ use nsh_core::{
 
 use super::camera_http_base;
 use crate::domain::{
-    CameraModel, Catalog, CatalogLook, CoverGroup, LookError, LooksSnapshot, look_error,
-    parse_catalog, parse_looks,
+    CameraModel, Catalog, CatalogLook, LookError, LooksSnapshot, look_error, parse_catalog,
+    parse_looks,
 };
 
 /// A Looks read: the camera service reads each Look file from the card.
@@ -31,6 +27,8 @@ const READ_TIMEOUT: Duration = Duration::from_secs(15);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(15);
 const CATALOG_LIMIT: usize = 4 * 1024 * 1024;
 const GRF_LIMIT: usize = 16 * 1024;
+/// A preview table: 33 points on each axis take 108 KB.
+const PREVIEW_LIMIT: usize = 1024 * 1024;
 
 /// The camera start of the last Looks read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -224,32 +222,6 @@ pub async fn set_order(context: &CameraContext, ids: &[String]) -> Result<(), Lo
     .await
 }
 
-/// Give the built-in Looks without an individual cover the covers of
-/// `scheme`. The camera rewrites their files.
-pub async fn set_cover_scheme(context: &CameraContext, scheme: Scheme) -> Result<(), LookError> {
-    mutate(
-        "PUT",
-        "/v1/looks/covers/scheme",
-        json_body(serde_json::json!({ "scheme": scheme.id() })),
-        json_type(),
-        context,
-    )
-    .await
-}
-
-/// Put the individual covers of the built-in Looks of `group` back to the
-/// scheme of the card.
-pub async fn reset_covers(context: &CameraContext, group: CoverGroup) -> Result<(), LookError> {
-    mutate(
-        "POST",
-        "/v1/looks/covers/reset",
-        json_body(serde_json::json!({ "group": group.id() })),
-        json_type(),
-        context,
-    )
-    .await
-}
-
 /// Add a Look, replace the content of an imported one with this ID, or give
 /// a Look another cover. `cover` must draw the icon of `grf`; the camera
 /// keeps it for the Look.
@@ -336,6 +308,64 @@ pub async fn catalog(target: &str) -> Result<Catalog, String> {
             parse_catalog(&bytes)
         }
     }
+}
+
+/// A preview table under `effects/<target>/`, from the cache file `cache`
+/// when it holds one. A path from the catalog names a file in `preview/`.
+async fn preview_table_at(
+    target: &str,
+    path: &str,
+    cache: Option<String>,
+) -> Result<Vec<u8>, String> {
+    let name = path.strip_prefix("preview/").unwrap_or_default();
+    if name.is_empty()
+        || !name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        || name.starts_with('.')
+    {
+        return Err(format!("Unexpected preview path {path}"));
+    }
+    let file = cache.and_then(|name| Some(cache_dir()?.join(name)));
+    if let Some(bytes) = file
+        .as_ref()
+        .and_then(|f| fs::read(f).ok())
+        .filter(|b| crate::domain::look_preview::table_size(b.len()).is_some())
+    {
+        return Ok(bytes);
+    }
+    let bytes = site_get(&format!("effects/{target}/{path}"), PREVIEW_LIMIT).await?;
+    if crate::domain::look_preview::table_size(bytes.len()).is_none() {
+        return Err(format!("{path} is no preview table"));
+    }
+    if let Some(file) = file {
+        let saved = file
+            .parent()
+            .map_or(Ok(()), fs::create_dir_all)
+            .and_then(|_| fs::write(&file, &bytes));
+        if let Err(error) = saved {
+            log::warn!("Could not cache a preview: {error}");
+        }
+    }
+    Ok(bytes)
+}
+
+/// The preview table of a catalog Look, cached under the digest of its GRF,
+/// so a new version of the Look fetches its own.
+pub async fn preview_table(target: &str, look: &CatalogLook) -> Result<Vec<u8>, String> {
+    let path = look.preview.as_deref().ok_or("The Look has no preview")?;
+    let cache = checked_hash(&look.sha256).then(|| format!("{}-{target}.lut", look.sha256));
+    preview_table_at(target, path, cache).await
+}
+
+/// The preview table of the camera's own Standard, without a Look.
+pub async fn standard_table(target: &str) -> Result<Vec<u8>, String> {
+    preview_table_at(
+        target,
+        "preview/standard.lut",
+        Some(format!("standard-{target}.lut")),
+    )
+    .await
 }
 
 /// The GRF of a catalog Look, checked against the catalog digest.

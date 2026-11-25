@@ -257,3 +257,20 @@ pub fn apply(state: &mut ModulesState, change: &FakeChange) -> Result<(), LookEr
     state.revision += 1;
     Ok(())
 }
+
+/// The icon tile that the camera shows for a demo module: the module's own
+/// tile from the repository, as the camera serves it.
+pub fn demo_icon(id: &str) -> Option<&'static [u8]> {
+    Some(match id {
+        "RECIPES" => include_bytes!("../../../modules/recipes/tiles/0-module.png"),
+        "FILM" => include_bytes!("../../../modules/film-look/tiles/0-module.png"),
+        "CROP" => include_bytes!("../../../modules/crop/tiles/0-module.png"),
+        "FRAMING" => include_bytes!("../../../modules/framing/tiles/0-module.png"),
+        "GUIDES" => include_bytes!("../../../modules/guides/tiles/0-module.png"),
+        "DATE" => include_bytes!("../../../modules/date/tiles/0-module.png"),
+        "BORDER" => include_bytes!("../../../modules/border/tiles/0-module.png"),
+        "GLOW" => include_bytes!("../../../modules/glow/tiles/0-module.png"),
+        "GRAIN" => include_bytes!("../../../modules/grain/tiles/0-module.png"),
+        _ => return None,
+    })
+}

@@ -1,7 +1,8 @@
 //! Pages pushed from the Looks tab: one Look, import.
 //! The cover editor is in `cover_editor`.
 
-use nsh_base::{alert_dialog, input, theme};
+use nsh_base::{alert_dialog, input};
+use nsh_core::element::ImageSrc;
 use nsh_core::prelude::*;
 
 use crate::ui::ty::text;
@@ -11,65 +12,43 @@ use grkit_core::{color::Encoding, cover::Cover, fit::Grade};
 use crate::domain::{Look, LookSource, looks::NAME_MAX};
 use crate::store::{AppState, ImportDraft, LookAction, Route};
 use crate::strings::tr;
+use crate::ui::PageTitle;
 use crate::ui::{
-    action_row_loading, badge, control_row, cover_view, footnote, grouped_card, loading_content,
-    primary_button, secondary_button, toggle_loading, token,
+    ButtonKind, ButtonSize, ChipTone, ListRow, SECTION_RADIUS, button, chip, cover_thumb,
+    detail_header, list_row, list_section, loading_content, notice_card, system_switch, token,
 };
 
-/// The side of the large cover of a Look page.
+/// The side of the large cover of the import result.
 const PAGE_COVER: f32 = 148.0;
 /// The side of the cover in a settings row.
 const SMALL_COVER: f32 = 32.0;
 
-/// The large cover at the top of a page, or a muted square without one.
+/// The large cover at the top of a page, or an empty square without one.
 fn page_cover(cover: Option<Cover>) -> impl IntoElement {
     view().items_center().py_2().child(match cover {
-        Some(cover) => cover_view(&cover, PAGE_COVER, false),
+        Some(cover) => cover_thumb(&cover, PAGE_COVER, false),
         None => view()
             .size(px(PAGE_COVER))
             .rounded(px(10.0))
-            .bg(move || theme().muted)
+            .bg(move || token("list-card"))
             .into_element(),
     })
-}
-
-/// A settings row that opens a page: its title, the value, and a chevron.
-fn link_row(
-    title: String,
-    label: String,
-    value: AnyElement,
-    enabled: bool,
-    loading: bool,
-    last: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    view()
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .accessibility_state(crate::ui::busy_state(loading))
-        .when(enabled && !loading, |v| v.on_press(on_press))
-        .child(control_row(
-            title,
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(loading_content(loading, 16.0, token("tint"), value))
-                .child(crate::ui::chevron()),
-            last,
-        ))
 }
 
 // --- One Look ---------------------------------------------------------------
 
 pub fn look_page(app: AppState, id: String, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     let title_id = id.clone();
-    crate::ui::app_page()
+    // The photo reaches under the bar; the title shows on the page.
+    crate::ui::photo_page(|| true)
         .title(move || app.look(&title_id).map(|l| l.name).unwrap_or_default())
         .on_dismiss(on_dismiss)
         .child(dynamic(move || match app.look(&id) {
             Some(look) => look_content(app, look).into_element(),
-            None => view().flex_1().bg(move || token("grouped")).into_element(),
+            None => view()
+                .flex_1()
+                .bg(move || token("list-background"))
+                .into_element(),
         }))
 }
 
@@ -93,103 +72,73 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
         subtitle = format!("{subtitle} · {}", tr("looks.after_restart", &[]));
     }
 
-    let mut settings = view().child(control_row(
-        tr("looks.show_in_menu", &[]),
-        // The camera shows or hides only a Look that it lists.
-        toggle_loading(
-            look.enabled,
-            tr("looks.show_in_menu", &[]),
-            editable && look.listed(),
-            app.look_working(&look.id, LookAction::Toggle),
-            {
-                let (id, enabled) = (look.id.clone(), look.enabled);
-                move || app.set_look_enabled(id.clone(), !enabled)
-            },
-        ),
-        false,
-    ));
-    if look.editable() {
-        let id = look.id.clone();
-        settings = settings.child(link_row(
-            tr("looks.name", &[]),
-            format!("{}, {}", tr("looks.name", &[]), look.name),
-            text(look.name.clone())
-                .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || theme().muted_foreground)
-                .into_element(),
-            editable,
-            app.look_working(&look.id, LookAction::Rename),
-            false,
-            move || app.ask_rename_look(id.clone()),
-        ));
+    let mut header = detail_header(look.name.clone())
+        .subtitle(subtitle)
+        .cover(look.shown_cover());
+    if look.selected {
+        header = header.chip(chip(tr("looks.in_use", &[]), ChipTone::Tint));
     }
-    if look.editable() {
-        let id = look.id.clone();
-        settings = settings.child(link_row(
-            tr("looks.cover", &[]),
-            tr("looks.cover", &[]),
-            cover_view(&look.shown_cover(), SMALL_COVER, false),
-            editable,
-            app.look_working(&look.id, LookAction::Cover)
-                || app.look_working(&look.id, LookAction::DefaultCover),
-            true,
-            move || app.push(Route::LookCover(id.clone())),
-        ));
+    // The sample photo through the Look, once it is made.
+    if let Some(photo) = app.look_preview(&look.id) {
+        header = header.photo(ImageSrc::from(photo));
     }
-    let actions = view().child(action_row_loading(
-        tr("looks.delete", &[]),
-        true,
-        true,
-        app.look_working(&look.id, LookAction::Delete),
-        {
-            let look = look.clone();
-            move || {
-                if editable {
-                    confirm_delete(app, look.clone())
-                }
-            }
-        },
-    ));
 
-    view().flex_1().bg(move || token("grouped")).child(
+    // The camera shows or hides only a Look that it lists.
+    let saving = app.look_working(&look.id, LookAction::Toggle);
+    let toggle_id = look.id.clone();
+    let mut settings: Vec<ListRow> =
+        vec![
+            list_row(tr("looks.show_in_menu", &[])).trailing(system_switch(
+                look.enabled != saving,
+                tr("looks.show_in_menu", &[]),
+                editable && look.listed(),
+                saving,
+                move |on| app.set_look_enabled(toggle_id.clone(), on),
+            )),
+        ];
+    if look.editable() {
+        let id = look.id.clone();
+        let row = list_row(tr("looks.name", &[]))
+            .value(look.name.clone())
+            .busy(app.look_working(&look.id, LookAction::Rename));
+        settings.push(if editable {
+            row.page(move || app.ask_rename_look(id.clone()))
+        } else {
+            row
+        });
+        let id = look.id.clone();
+        let row = list_row(tr("looks.cover", &[]))
+            .trailing(cover_thumb(&look.shown_cover(), SMALL_COVER, false))
+            .busy(
+                app.look_working(&look.id, LookAction::Cover)
+                    || app.look_working(&look.id, LookAction::DefaultCover),
+            );
+        settings.push(if editable {
+            row.page(move || app.push(Route::LookCover(id.clone())))
+        } else {
+            row
+        });
+    }
+    let delete = list_row(tr("looks.delete", &[]))
+        .destructive()
+        .busy(app.look_working(&look.id, LookAction::Delete));
+    let delete = if editable {
+        let look = look.clone();
+        delete.press(move || confirm_delete(app, look.clone()))
+    } else {
+        delete
+    };
+
+    view().flex_1().bg(move || token("list-background")).child(
         crate::ui::page_scroll().flex_1().child(
-            view()
-                .px_6()
-                .pt_4()
-                .pb(px(TAB_BAR_CLEARANCE))
-                .gap_4()
-                .child(page_cover(Some(look.shown_cover())))
-                .child(
-                    view()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child(
-                            view()
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
-                                .child(
-                                    text(look.name.clone())
-                                        .flex_shrink(1.0)
-                                        .text_size(px(crate::ui::ty::TITLE2))
-                                        .font_weight(FontWeight::BOLD),
-                                )
-                                .child(look.selected.then(|| badge(tr("looks.in_use", &[])))),
-                        )
-                        .child(
-                            text(subtitle)
-                                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                .text_center()
-                                .text_color(move || theme().muted_foreground),
-                        ),
-                )
-                .child(
-                    view()
-                        .gap_2()
-                        .child(grouped_card(settings))
-                        .child(footnote(tr("looks.show_note", &[]))),
-                )
-                .child(view().gap_2().child(grouped_card(actions))),
+            view().pb(px(TAB_BAR_CLEARANCE)).child(header).child(
+                view()
+                    .px_4()
+                    .pt(px(24.0))
+                    .gap(px(28.0))
+                    .child(list_section(settings).footer(tr("looks.show_note", &[])))
+                    .child(list_section([delete])),
+            ),
         ),
     )
 }
@@ -295,18 +244,16 @@ fn name_field(
 ) -> impl IntoElement {
     view()
         .gap_2()
-        .child(crate::ui::section_title(title.clone()))
+        .child(crate::ui::list_note(title.clone()).role(AccessibilityRole::Header))
         .child(
             view()
                 .flex_row()
                 .items_center()
-                .min_h(px(50.0))
+                .min_h(px(48.0))
                 .px_4()
                 .gap_2()
-                .rounded(px(10.0))
-                .border_1()
-                .border_color(crate::ui::control_border)
-                .bg(move || theme().card)
+                .rounded(px(SECTION_RADIUS))
+                .bg(move || token("list-card"))
                 .child(
                     input()
                         .flex_1()
@@ -321,7 +268,7 @@ fn name_field(
                 .child(
                     text(move || format!("{}/{NAME_MAX}", name.get().len()))
                         .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .text_color(move || theme().muted_foreground),
+                        .text_color(move || token("list-secondary")),
                 ),
         )
 }
@@ -355,7 +302,7 @@ fn grade_summary(grade: Grade) -> String {
 
 pub fn import_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     crate::ui::app_page()
-        .title(move || tr("looks.new_title", &[]))
+        .page_title(move || tr("looks.new_title", &[]), false)
         .header_right(dynamic(move || {
             let draft = app.import_draft()?;
             (draft.done && !draft.sending).then(|| {
@@ -373,33 +320,27 @@ pub fn import_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoE
 
 fn import_content(app: AppState) -> AnyElement {
     let Some(draft) = app.import_draft() else {
-        return view().flex_1().bg(move || token("grouped")).into_element();
+        return view()
+            .flex_1()
+            .bg(move || token("list-background"))
+            .into_element();
     };
-    let base = view().flex_1().bg(move || token("grouped"));
+    let base = view().flex_1().bg(move || token("list-background"));
     if let Some(error) = draft.error.clone() {
         let (title, body) = error.keys();
         return base
-            .px_6()
+            .px_4()
             .pt_6()
-            .child(grouped_card(
-                view()
-                    .p_4()
-                    .gap_2()
-                    .child(
-                        text(tr(title, &[]))
-                            .text_size(px(crate::ui::ty::HEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    )
-                    .child(
-                        text(tr(body, &[]))
-                            .text_size(px(crate::ui::ty::SUBHEADLINE))
-                            .line_height(px(22.0))
-                            .text_color(move || theme().muted_foreground),
-                    )
-                    .child(secondary_button(tr("looks.choose_again", &[]), move || {
-                        app.begin_import()
-                    })),
-            ))
+            .child(
+                notice_card(tr(title, &[]))
+                    .subtitle(tr(body, &[]))
+                    .action(button(
+                        tr("looks.choose_again", &[]),
+                        ButtonKind::Tinted,
+                        ButtonSize::Small,
+                        move || app.begin_import(),
+                    )),
+            )
             .into_element();
     }
     if draft.done {
@@ -424,63 +365,38 @@ fn import_form(app: AppState, draft: ImportDraft) -> impl IntoElement {
         Some(input) if !input.is_display() => "looks.input_log_note",
         _ => "looks.input_note",
     };
-    let file = view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .min_h(px(50.0))
-        .px_4()
-        .role(AccessibilityRole::Button)
-        .label(format!(
-            "{}, {}",
-            draft.file_name,
-            tr("looks.change_file", &[])
-        ))
-        .on_press(move || app.begin_import())
-        .active(|s| s.opacity(0.72))
-        .child(
-            text(draft.file_name.clone())
-                .flex_1()
-                .text_size(px(crate::ui::ty::BODY)),
-        )
-        .child(
+    let file = list_row(draft.file_name.clone())
+        .trailing(
             text(tr("looks.change_file", &[]))
                 .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || token("link")),
-        );
-    let mut options = view();
+                .text_color(move || token("tint")),
+        )
+        .press(move || app.begin_import());
+    let mut options = Vec::new();
     if !preset {
-        options = options.child(link_row(
-            tr("looks.input", &[]),
-            format!("{}, {input_value}", tr("looks.input", &[])),
-            text(input_value.clone())
-                .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || theme().muted_foreground)
-                .into_element(),
-            !draft.sending,
-            false,
-            false,
-            move || choose_input(app),
-        ));
+        let row = list_row(tr("looks.input", &[])).value(input_value);
+        options.push(if draft.sending {
+            row
+        } else {
+            row.page(move || choose_input(app))
+        });
     }
-    options = options.child(link_row(
-        tr("looks.cover", &[]),
-        tr("looks.cover", &[]),
-        dynamic(move || {
-            app.import_cover()
-                .map(|cover| cover_view(&cover, SMALL_COVER, false))
-        })
-        .into_element(),
-        true,
-        false,
-        true,
-        move || app.push(Route::LookImportCover),
-    ));
+    options.push(
+        list_row(tr("looks.cover", &[]))
+            .trailing(dynamic(move || {
+                app.import_cover()
+                    .map(|cover| cover_thumb(&cover, SMALL_COVER, false))
+            }))
+            .page(move || app.push(Route::LookImportCover)),
+    );
+    let mut options = list_section(options);
+    if !preset {
+        options = options.footer(tr(input_note, &[]));
+    }
     base_scroll(
         view()
             .gap(px(22.0))
-            .child(grouped_card(file))
+            .child(list_section([file]))
             .child(
                 view()
                     .gap_2()
@@ -493,29 +409,25 @@ fn import_form(app: AppState, draft: ImportDraft) -> impl IntoElement {
                         },
                         move || app.finish_import(),
                     ))
-                    .child(footnote(tr("looks.name_note", &[]))),
+                    .child(crate::ui::list_note(tr("looks.name_note", &[]))),
             )
+            .child(options)
+            .child(crate::ui::list_note(tr("looks.import_fit_note", &[])))
             .child(
-                view()
-                    .gap_2()
-                    .child(grouped_card(options))
-                    .child((!preset).then(|| footnote(tr(input_note, &[])))),
-            )
-            .child(footnote(tr("looks.import_fit_note", &[])))
-            .child(
-                view()
-                    .opacity(if working { 0.4 } else { 1.0 })
-                    .child(primary_button(
-                        tr(
-                            if working {
-                                "looks.converting_short"
-                            } else {
-                                "looks.import"
-                            },
-                            &[],
-                        ),
-                        move || app.finish_import(),
-                    )),
+                button(
+                    tr(
+                        if working {
+                            "looks.converting_short"
+                        } else {
+                            "looks.import"
+                        },
+                        &[],
+                    ),
+                    ButtonKind::Primary,
+                    ButtonSize::Large,
+                    move || app.finish_import(),
+                )
+                .enabled(!working),
             ),
     )
 }
@@ -565,13 +477,14 @@ fn import_result(app: AppState, draft: ImportDraft) -> impl IntoElement {
     };
     view()
         .flex_1()
-        .bg(move || token("grouped"))
+        .bg(move || token("list-background"))
         .child(base_scroll(
             view()
                 .gap(px(18.0))
                 .child(dynamic(move || page_cover(app.import_cover())))
                 .child(
                     view()
+                        .px_4()
                         .gap(px(2.0))
                         .child(
                             text(draft.name.trim().to_owned())
@@ -581,45 +494,40 @@ fn import_result(app: AppState, draft: ImportDraft) -> impl IntoElement {
                         .child(
                             text(kind)
                                 .text_size(px(crate::ui::ty::SUBHEADLINE))
-                                .text_color(move || theme().muted_foreground),
+                                .text_color(move || token("list-secondary")),
                         ),
                 )
-                .child(
-                    view()
-                        .gap_2()
-                        .child(grouped_card(control_row(
-                            tr("looks.fit", &[]),
-                            text(grade.letter())
-                                .text_size(px(crate::ui::ty::BODY))
-                                .text_color(move || theme().muted_foreground),
-                            true,
-                        )))
-                        .child(footnote(grade_summary(grade))),
-                ),
+                // How close the camera comes to the LUT, in words: a letter
+                // grade would need a scale to read.
+                .child(list_section([list_row(grade_summary(grade))]).header(tr("looks.fit", &[]))),
         ))
-        .child(view().px_6().pb_6().gap_2().child(primary_button(
-            tr(
-                if sending {
-                    "looks.sending"
-                } else {
-                    "looks.send"
-                },
-                &[],
+        .child(
+            // Over the floating tab bar, as the main button of the Connect page.
+            view().px_4().pb(px(TAB_BAR_CLEARANCE + 20.0)).child(
+                button(
+                    tr(
+                        if sending {
+                            "looks.sending"
+                        } else {
+                            "looks.send"
+                        },
+                        &[],
+                    ),
+                    ButtonKind::Primary,
+                    ButtonSize::Large,
+                    move || app.send_import(),
+                )
+                .enabled(!sending),
             ),
-            move || {
-                if !sending {
-                    app.send_import()
-                }
-            },
-        )))
+        )
 }
 
 /// A scrolled page body on the grouped background.
 fn base_scroll(content: impl IntoElement) -> impl IntoElement {
-    view().flex_1().bg(move || token("grouped")).child(
+    view().flex_1().bg(move || token("list-background")).child(
         crate::ui::page_scroll().flex_1().child(
             view()
-                .px_6()
+                .px_4()
                 .pt_4()
                 .pb(px(TAB_BAR_CLEARANCE))
                 .child(content),

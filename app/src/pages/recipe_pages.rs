@@ -1,7 +1,6 @@
 //! The page of one recipe and the presets of the site.
 //! The settings of a recipe show read-only: the camera saves recipes.
 
-use nsh_base::theme;
 use nsh_core::prelude::*;
 
 use crate::ui::ty::text;
@@ -9,80 +8,163 @@ use crate::ui::ty::text;
 use grkit_core::recipes::Look;
 
 use crate::domain::recipes::{PresetItem, RecipeItem};
-use crate::pages::recipe_text::{Group, groups};
+use crate::pages::recipe_text::{Group, Icon, Setting, State, groups};
 use crate::pages::recipes::{confirm_delete_recipe, native_tile, recipe_summary, recipe_tile};
 use crate::store::{AppState, RecipeAction, Route, native_type_name};
 use crate::strings::tr;
+use crate::ui::PageTitle;
+use crate::ui::setting_icons::setting_icon;
 use crate::ui::{
-    action_row, action_row_loading, badge, control_row, cover_view, footnote, grouped_card,
-    info_row, loading_content, primary_button_loading, quiet_spinner, secondary_button,
-    section_title, segmented, toggle_loading, token,
+    ButtonKind, ButtonSize, ChipTone, ListRow, SECTION_RADIUS, button, cover_thumb, list_row,
+    list_section, notice_card, quiet_spinner, row_chip, system_segmented, system_switch, token,
 };
 
 /// A page's scroll view around `content`. The scroll view stays while the
 /// data changes: only the content follows it, so a change does not move
-/// the page back to the top.
+/// the page back to the top. `content` draws its own top and sides.
 fn page_body<E: IntoElements>(content: impl Fn() -> E + 'static) -> impl IntoElement {
     crate::ui::page_scroll()
         .flex_1()
-        .bg(move || token("grouped"))
+        .bg(move || token("list-background"))
         .child(
             view()
-                .px_6()
-                .pt_4()
                 .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
-                .gap(px(20.0))
                 .child(dynamic(content)),
         )
 }
 
-fn group_view(group: Group) -> impl IntoElement {
-    let (title, rows) = group;
-    let last = rows.len().saturating_sub(1);
-    let mut card = view();
-    for (i, (name, value)) in rows.into_iter().enumerate() {
-        card = card.child(info_row(name, value, i == last));
-    }
-    view()
-        .gap_2()
-        .child(view().px(px(2.0)).child(section_title(title)))
-        .child(grouped_card(card))
+/// The part of a page under its top, with the margins of a list.
+fn page_rest() -> View {
+    view().px_4().pt(px(24.0)).gap(px(24.0))
 }
 
-/// The tile, name, and line under it at the top of a page.
-fn hero(tile: AnyElement, name: String, sub: String, current: bool) -> impl IntoElement {
+/// The side of the icon at the start of a setting's row.
+const SETTING_ICON: f32 = 28.0;
+
+/// The settings of a recipe: a section of each group with the settings that
+/// the recipe sets, then one section that names the settings it leaves
+/// alone, turns off or sets to 0. `look_icon` draws the Film Look or Image
+/// Control type, and `open_look` opens the Film Look's page.
+fn settings_view(
+    app: AppState,
+    groups: Vec<Group>,
+    look_icon: AnyElement,
+    open_look: Option<String>,
+) -> Vec<AnyElement> {
+    let mut look_icon = Some(look_icon);
+    let (mut keep, mut off, mut zero) = (Vec::new(), Vec::new(), Vec::new());
+    let mut sections = Vec::new();
+    for (title, settings) in groups {
+        let mut rows = Vec::new();
+        for setting in settings {
+            match setting.state {
+                State::Keep => keep.push(setting.name),
+                State::Off => off.push(setting.name),
+                State::Zero => zero.push(setting.name),
+                State::Set => {
+                    let icon = match setting.icon {
+                        Icon::Look => look_icon.take(),
+                        Icon::Module(id) => Some(module_icon(app, id, &setting.name)),
+                        Icon::Glyph(icon) => Some(setting_icon(icon, SETTING_ICON - 4.0)),
+                    };
+                    let mut row = list_row(setting.name).value(setting.value);
+                    if let Some(icon) = icon {
+                        row = row.leading(
+                            view()
+                                .size(px(SETTING_ICON))
+                                .items_center()
+                                .justify_center()
+                                .child(icon),
+                        );
+                    }
+                    if setting.icon == Icon::Look
+                        && let Some(id) = open_look.clone()
+                    {
+                        row = row.page(move || app.push(Route::LookDetail(id.clone())));
+                    }
+                    rows.push(row);
+                }
+            }
+        }
+        if !rows.is_empty() {
+            sections.push(list_section(rows).header(title).into_element());
+        }
+    }
+    let separator = tr("recipes.list_separator", &[]);
+    let unchanged: Vec<ListRow> = [
+        (tr("recipes.keep", &[]), keep.join(&separator)),
+        (tr("recipes.unchanged_off", &[]), off.join(&separator)),
+        (tr("recipes.unchanged_zero", &[]), zero.join(&separator)),
+    ]
+    .into_iter()
+    .filter(|(_, names)| !names.is_empty())
+    .map(|(title, names)| list_row(title).subtitle(names))
+    .collect();
+    if !unchanged.is_empty() {
+        sections.push(
+            list_section(unchanged)
+                .header(tr("recipes.unchanged", &[]))
+                .into_element(),
+        );
+    }
+    sections
+}
+
+/// The pixel icon of GRKit module `id` from the camera, else the initial of
+/// `name` on the module tile.
+fn module_icon(app: AppState, id: &str, name: &str) -> AnyElement {
+    let initial = name
+        .chars()
+        .next()
+        .map(|c| c.to_uppercase().to_string())
+        .unwrap_or_default();
+    crate::ui::module_icon_tile(
+        app.module_icon(id).as_deref(),
+        &initial,
+        SETTING_ICON,
+        false,
+    )
+}
+
+/// The top of a recipe or preset page: its tile, name, the line under it
+/// and, for the current recipe, Current. No sample photo: the page of its
+/// Film Look shows that, and the settings come first here.
+fn page_top(tile: AnyElement, name: String, sub: String, current: bool) -> AnyElement {
     view()
+        .px_4()
+        .pt_4()
         .items_center()
-        .gap_2()
-        .child(view().pt_1().child(tile))
+        .gap(px(6.0))
+        .child(view().pb(px(4.0)).child(tile))
         .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(
-                    text(name)
-                        .flex_shrink(1.0)
-                        .text_size(px(crate::ui::ty::TITLE2))
-                        .font_weight(FontWeight::BOLD)
-                        .text_center(),
-                )
-                .child(current.then(|| badge(tr("recipes.current", &[])))),
+            text(name)
+                .text_size(px(crate::ui::ty::TITLE1))
+                .font_weight(FontWeight::BOLD)
+                .text_center()
+                .role(AccessibilityRole::Header),
         )
         .child(
             text(sub)
                 .text_size(px(crate::ui::ty::SUBHEADLINE))
                 .text_center()
-                .text_color(move || theme().muted_foreground),
+                .text_color(move || token("list-secondary")),
         )
+        .child(current.then(|| row_chip(tr("recipes.current", &[]), ChipTone::Tint)))
+        .into_element()
 }
 
-/// The look row of a recipe: its Film Look or its Image Control type.
-fn look_row(item_look: &Look, effect: Option<String>, looks_on: bool) -> (String, String) {
-    match item_look {
+/// The Film Look of a recipe on the camera.
+fn recipe_look(app: AppState, item: &RecipeItem) -> Option<crate::domain::Look> {
+    item.effect_id.as_deref().and_then(|id| app.look(id))
+}
+
+/// The look setting of a recipe: its Film Look or its Image Control type.
+fn look_row(item_look: &Look, effect: Option<String>, looks_on: bool) -> Setting {
+    let (name, value, state) = match item_look {
         Look::Native(native) => (
             tr("recipes.image_control", &[]),
             native_type_name(native.image_type),
+            State::Set,
         ),
         Look::Effect { .. } => (
             tr("recipes.film_look", &[]),
@@ -96,18 +178,25 @@ fn look_row(item_look: &Look, effect: Option<String>, looks_on: bool) -> (String
                     &[],
                 )
             }),
+            State::Set,
         ),
-        _ => (tr("recipes.film_look", &[]), tr("recipes.keep", &[])),
+        _ => (
+            tr("recipes.film_look", &[]),
+            tr("recipes.keep", &[]),
+            State::Keep,
+        ),
+    };
+    Setting {
+        name,
+        value,
+        state,
+        icon: Icon::Look,
     }
 }
 
 pub fn recipe_page(app: AppState, id: u32, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
-    crate::ui::app_page()
-        .title(move || {
-            app.recipe(id)
-                .map(|r| app.recipe_name(&r))
-                .unwrap_or_default()
-        })
+    // The page shows the name under the tile, so the bar has no title.
+    crate::ui::photo_page(|| false)
         .on_dismiss(on_dismiss)
         .child(page_body(move || {
             app.recipe(id).map(|item| recipe_content(app, item))
@@ -138,72 +227,68 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
     };
     let id = item.id;
     let (enabled, hidden) = (item.enabled, item.recipe.hidden);
-    let mut content = view()
-        .gap(px(20.0))
-        .child(hero(
-            recipe_tile(app, &item, 120.0, false),
+    let open_look = recipe_look(app, &item).map(|look| look.id);
+    let settings = settings_view(
+        app,
+        groups(
+            &item.recipe,
+            look_row(
+                &item.recipe.look,
+                item.effect_name.clone(),
+                app.looks_available(),
+            ),
+        ),
+        recipe_tile(app, &item, SETTING_ICON, false),
+        open_look,
+    );
+    let rest = page_rest()
+        .child((item.ready && (!item.current || applying)).then(|| {
+            button(
+                tr("recipes.apply", &[]),
+                ButtonKind::Primary,
+                ButtonSize::Large,
+                move || app.apply_recipe(id),
+            )
+            .loading(applying)
+        }))
+        .children(settings)
+        .child(edit_steps(item.current));
+    let mut shown: Vec<ListRow> =
+        vec![
+            list_row(tr("recipes.show_in_menu", &[])).trailing(system_switch(
+                enabled != toggling,
+                tr("recipes.show_in_menu", &[]),
+                editable,
+                toggling,
+                move |on| app.set_recipe_enabled(id, on),
+            )),
+        ];
+    if hidden {
+        shown.push(list_row(tr("recipes.in_adj", &[])).value(tr("recipes.hidden", &[])));
+    }
+    shown.push(list_row(tr("recipes.rename", &[])).press(move || app.ask_rename_recipe(id)));
+    let mut shown = list_section(shown);
+    if hidden {
+        shown = shown.footer(tr("recipes.hidden_note", &[]));
+    }
+    view()
+        .child(page_top(
+            recipe_tile(app, &item, HERO_TILE, false),
             name.clone(),
             sub,
             item.current,
         ))
-        .child((item.ready && (!item.current || applying)).then(|| {
-            primary_button_loading(tr("recipes.apply", &[]), applying, move || {
-                app.apply_recipe(id)
-            })
-        }))
-        .child(edit_steps(item.current));
-    for group in groups(
-        &item.recipe,
-        look_row(
-            &item.recipe.look,
-            item.effect_name.clone(),
-            app.looks_available(),
-        ),
-    ) {
-        content = content.child(group_view(group));
-    }
-    let mut shown = view().child(control_row(
-        tr("recipes.show_in_menu", &[]),
-        toggle_loading(
-            enabled,
-            tr("recipes.show_in_menu", &[]),
-            editable,
-            toggling,
-            move || app.set_recipe_enabled(id, !enabled),
-        ),
-        !hidden,
-    ));
-    if hidden {
-        shown = shown.child(info_row(
-            tr("recipes.in_adj", &[]),
-            tr("recipes.hidden", &[]),
-            true,
-        ));
-    }
-    content
         .child(
-            view()
-                .gap_2()
-                .child(grouped_card(shown))
-                .child(hidden.then(|| footnote(tr("recipes.hidden_note", &[])))),
+            rest.child(shown)
+                .child(list_section([list_row(tr("recipes.delete", &[]))
+                    .destructive()
+                    .busy(deleting)
+                    .press(move || confirm_delete_recipe(app, id, name.clone()))])),
         )
-        .child(grouped_card(
-            view()
-                .child(action_row(
-                    tr("recipes.rename", &[]),
-                    false,
-                    false,
-                    move || app.ask_rename_recipe(id),
-                ))
-                .child(action_row_loading(
-                    tr("recipes.delete", &[]),
-                    true,
-                    true,
-                    deleting,
-                    move || confirm_delete_recipe(app, id, name.clone()),
-                )),
-        ))
 }
+
+/// The width of the tile at the top of a recipe or preset page.
+const HERO_TILE: f32 = 88.0;
 
 /// How to change a recipe's settings: the camera saves recipes, so the
 /// phone shows the steps. The current recipe's settings are already on the
@@ -225,12 +310,12 @@ fn edit_steps(current: bool) -> impl IntoElement {
                     .rounded_full()
                     .items_center()
                     .justify_center()
-                    .bg(move || token("button"))
+                    .bg(move || token("tint"))
                     .child(
                         text(n.to_string())
                             .text_size(px(crate::ui::ty::CAPTION))
                             .font_weight(FontWeight::BOLD)
-                            .text_color(move || token("button-foreground")),
+                            .text_color(rgb(0xFFFFFF)),
                     ),
             )
             .child(
@@ -241,11 +326,11 @@ fn edit_steps(current: bool) -> impl IntoElement {
             )
     };
     view()
-        .rounded(px(10.0))
-        .py_3()
+        .rounded(px(SECTION_RADIUS))
+        .py(px(14.0))
         .px_4()
         .gap(px(10.0))
-        .bg(move || theme().muted)
+        .bg(move || token("list-card"))
         .role(AccessibilityRole::Text)
         .label(format!(
             "{}: {}",
@@ -278,14 +363,16 @@ enum Filter {
 pub fn presets_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     let filter = signal(Filter::All);
     crate::ui::app_page()
-        .title(move || tr("recipes.presets_title", &[]))
+        .page_title(move || tr("recipes.presets_title", &[]), false)
         .on_dismiss(on_dismiss)
-        .child(page_body(move || presets_content(app, filter)))
+        .child(page_body(move || {
+            view().px_4().pt_4().child(presets_content(app, filter))
+        }))
 }
 
 fn presets_content(app: AppState, filter: Signal<Filter>) -> impl IntoElement {
     let chosen = filter.get();
-    let chips = segmented(
+    let chips = system_segmented(
         [
             (Filter::All, "looks.filter.all"),
             (Filter::Color, "looks.filter.color"),
@@ -315,43 +402,67 @@ fn presets_content(app: AppState, filter: Signal<Filter>) -> impl IntoElement {
             Filter::Mono => p.monochrome(),
         })
         .collect();
-    let mut list = view().gap_3();
-    if none && app.release_checking() {
-        list = list.child(
+    let state: Option<AnyElement> = if none && app.release_checking() {
+        Some(
             view()
                 .flex_row()
                 .items_center()
                 .gap_2()
+                .px_4()
                 .child(quiet_spinner(16.0))
-                .child(footnote(tr("recipes.presets_loading", &[]))),
-        );
+                .child(crate::ui::list_note(tr("recipes.presets_loading", &[])).px_0())
+                .into_element(),
+        )
     } else if none {
-        list = list
-            .child(footnote(tr("recipes.presets_offline", &[])))
-            .child(secondary_button(tr("looks.retry", &[]), move || {
-                app.refresh_update_info()
-            }));
-    }
-    for preset in presets {
-        list = list.child(preset_card(app, preset));
-    }
+        Some(
+            notice_card(tr("recipes.presets_offline", &[]))
+                .action(button(
+                    tr("looks.retry", &[]),
+                    ButtonKind::Tinted,
+                    ButtonSize::Small,
+                    move || app.refresh_update_info(),
+                ))
+                .into_element(),
+        )
+    } else {
+        None
+    };
+    let has_presets = !presets.is_empty();
+    let rows = presets.into_iter().map(|preset| preset_row(app, preset));
     view()
         .gap(px(16.0))
         .child(chips)
-        .child(footnote(tr("recipes.presets_note", &[("model", &model)])))
-        .child(list)
+        .child(crate::ui::list_note(tr(
+            "recipes.presets_note",
+            &[("model", &model)],
+        )))
+        .child(state)
+        .child(has_presets.then(|| list_section(rows)))
 }
 
-/// The tile of a preset: the cover of its official Look, else its type.
+/// The tile of a preset: the cover of its official Look, from the camera or,
+/// before the preset adds it, from the site catalog; else its type.
 fn preset_tile(app: AppState, preset: &PresetItem, size: f32) -> AnyElement {
     let look = preset.effect.as_deref().and_then(|id| app.look(id));
     match (&preset.recipe.look, look) {
-        (_, Some(look)) => cover_view(&look.shown_cover(), size, false),
+        (_, Some(look)) => cover_thumb(&look.shown_cover(), size, false),
         (Look::Native(native), None) => {
             crate::ui::image_control_tile(native.image_type, size, false)
         }
-        _ => native_tile(preset.recipe.name.clone(), size, false),
+        _ => match catalog_cover(app, preset) {
+            Some(cover) => cover_thumb(&cover, size, false),
+            None => native_tile(preset.recipe.name.clone(), size, false),
+        },
     }
+}
+
+/// The cover of the official Look of `preset` in the site catalog.
+fn catalog_cover(app: AppState, preset: &PresetItem) -> Option<grkit_core::cover::Cover> {
+    let id = preset.effect.as_deref()?;
+    app.catalog_items()?
+        .into_iter()
+        .find(|item| item.look.id == id)
+        .map(|item| item.look.shown_cover())
 }
 
 /// The official Look that a preset needs and the camera does not have.
@@ -388,17 +499,18 @@ fn look_title(id: &str) -> String {
 
 fn preset_text(preset: &PresetItem) -> String {
     let language = crate::strings::app_language();
-    let by = preset
-        .author
-        .as_ref()
-        .map_or_else(|| "GRKit".to_owned(), |a| tr("recipes.by", &[("name", a)]));
+    // A preset without an author is GRKit's own, said in the same form.
+    let author = preset.author.as_deref().unwrap_or("GRKit");
+    let by = tr("recipes.by", &[("name", author)]);
     match preset.text_in(language) {
         Some(text) => format!("{by} · {text}"),
         None => by,
     }
 }
 
-fn preset_card(app: AppState, preset: PresetItem) -> impl IntoElement {
+/// A preset: its tile, name, author and words. It opens the preset; Add
+/// puts it on the camera, with the official Look it needs.
+fn preset_row(app: AppState, preset: PresetItem) -> ListRow {
     let added = app.preset_added(&preset);
     let busy = app.recipe_busy();
     let adding = busy.as_deref() == Some(preset.id.as_str());
@@ -408,155 +520,92 @@ fn preset_card(app: AppState, preset: PresetItem) -> impl IntoElement {
         preset.id.clone(),
         preset.recipe.name.clone(),
     );
-    let trailing: AnyElement = if added {
-        text(tr("recipes.on_camera", &[]))
-            .text_size(px(crate::ui::ty::FOOTNOTE))
-            .text_color(move || theme().muted_foreground)
-            .into_element()
-    } else {
-        add_chip(
-            tr("recipes.add", &[]),
-            tr("recipes.add_named", &[("name", &name)]),
-            busy.is_none(),
-            adding,
-            move || app.add_preset(id.clone()),
-        )
-        .into_element()
-    };
-    grouped_card(
-        view()
-            .flex_row()
-            .items_center()
-            .gap_3()
-            .px(px(14.0))
-            .py_3()
-            .child(preset_tile(app, &preset, 40.0))
-            .child(
-                view()
-                    .flex_1()
-                    .gap(px(2.0))
-                    .role(AccessibilityRole::Button)
-                    .label(name.clone())
-                    .on_press(move || app.push(Route::RecipePreset(open_id.clone())))
-                    .active(|s| s.opacity(0.72))
-                    .child(
-                        text(name)
-                            .text_size(px(crate::ui::ty::HEADLINE))
-                            .font_weight(FontWeight::SEMIBOLD),
-                    )
-                    .child(
-                        text(preset_text(&preset))
-                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                            .line_height(px(18.0))
-                            .text_color(move || theme().muted_foreground),
-                    )
-                    .child(missing.filter(|_| !added).map(|look| {
-                        text(tr("recipes.adds_look", &[("look", &look)]))
-                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                    })),
-            )
-            .child(trailing),
-    )
-}
-
-fn add_chip(
-    title: String,
-    label: String,
-    enabled: bool,
-    loading: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    view()
-        .min_h(px(32.0))
-        .px(px(14.0))
-        .py_1()
-        .hit_slop(crate::ui::vertical_hit_slop(32.0))
-        .rounded_full()
-        .justify_center()
-        .bg(move || theme().foreground)
-        .opacity(if enabled || loading { 1.0 } else { 0.4 })
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .accessibility_state(crate::ui::busy_state(loading))
-        .when(enabled && !loading, |v| {
-            v.on_press(on_press).active(|s| s.opacity(0.72))
-        })
-        .child(loading_content(
-            loading,
-            16.0,
-            theme().background,
-            text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || theme().background),
+    let mut sub = preset_text(&preset);
+    if let Some(look) = missing.filter(|_| !added) {
+        sub = format!("{sub}\n{}", tr("recipes.adds_look", &[("look", &look)]));
+    }
+    let row = list_row(name.clone())
+        .subtitle(sub)
+        .leading(crate::ui::recipe_badge(
+            preset_tile(app, &preset, 40.0),
+            40.0,
+            false,
         ))
+        .page(move || app.push(Route::RecipePreset(open_id.clone())));
+    if added {
+        row.trailing(row_chip(tr("recipes.on_camera", &[]), ChipTone::Neutral))
+    } else {
+        row.trailing(
+            button(
+                tr("recipes.add", &[]),
+                ButtonKind::Tinted,
+                ButtonSize::Small,
+                move || app.add_preset(id.clone()),
+            )
+            .label(tr("recipes.add_named", &[("name", &name)]))
+            .enabled(busy.is_none())
+            .loading(adding),
+        )
+    }
 }
 
 pub fn preset_page(app: AppState, id: String, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
-    let title_id = id.clone();
     let find = move |id: &str| app.recipe_presets().into_iter().find(|p| p.id == id);
-    crate::ui::app_page()
-        .title(move || find(&title_id).map(|p| p.recipe.name).unwrap_or_default())
+    // The page shows the name under the tile, so the bar has no title.
+    crate::ui::photo_page(|| false)
         .on_dismiss(on_dismiss)
         .child(page_body(move || {
             find(&id).map(|preset| preset_content(app, preset))
         }))
 }
 
+/// The Film Look of a preset on the camera.
+fn preset_look(app: AppState, preset: &PresetItem) -> Option<crate::domain::Look> {
+    preset.effect.as_deref().and_then(|id| app.look(id))
+}
+
 fn preset_content(app: AppState, preset: PresetItem) -> impl IntoElement {
     let added = app.preset_added(&preset);
     let missing = missing_look(app, &preset);
-    let look_name = missing.clone().or_else(|| {
-        preset
-            .effect
-            .as_deref()
-            .and_then(|id| app.look(id))
-            .map(|l| l.name)
-    });
+    let look = preset_look(app, &preset);
+    let look_name = missing
+        .clone()
+        .or_else(|| look.as_ref().map(|l| l.name.clone()));
     let id = preset.id.clone();
     let adding = app.recipe_working(&id, RecipeAction::Add);
-    let mut content = view()
-        .gap(px(20.0))
-        .child(hero(
-            preset_tile(app, &preset, 120.0),
+    let settings = settings_view(
+        app,
+        groups(
+            &preset.recipe,
+            look_row(&preset.recipe.look, look_name, true),
+        ),
+        preset_tile(app, &preset, SETTING_ICON),
+        look.map(|look| look.id),
+    );
+    let rest = page_rest()
+        .child(if added {
+            crate::ui::list_note(tr("recipes.on_camera", &[]))
+                .text_center()
+                .into_element()
+        } else {
+            button(
+                tr("recipes.add_to_camera", &[]),
+                ButtonKind::Primary,
+                ButtonSize::Large,
+                move || app.add_preset(id.clone()),
+            )
+            .enabled(adding || app.recipe_busy().is_none())
+            .loading(adding)
+            .into_element()
+        })
+        .child(missing.map(|look| notice_card(tr("recipes.adds_look_note", &[("look", &look)]))))
+        .children(settings);
+    view()
+        .child(page_top(
+            preset_tile(app, &preset, HERO_TILE),
             preset.recipe.name.clone(),
             preset_text(&preset),
             false,
         ))
-        .child(missing.map(|look| {
-            view()
-                .rounded(px(10.0))
-                .bg(move || theme().muted)
-                .p(px(14.0))
-                .child(
-                    text(tr("recipes.adds_look_note", &[("look", &look)]))
-                        .text_size(px(crate::ui::ty::SUBHEADLINE)),
-                )
-        }));
-    for group in groups(
-        &preset.recipe,
-        look_row(&preset.recipe.look, look_name, true),
-    ) {
-        content = content.child(group_view(group));
-    }
-    content.child(if added {
-        footnote(tr("recipes.on_camera", &[])).into_element()
-    } else {
-        view()
-            .opacity(if adding || app.recipe_busy().is_none() {
-                1.0
-            } else {
-                0.4
-            })
-            .child(primary_button_loading(
-                tr("recipes.add_to_camera", &[]),
-                adding,
-                move || {
-                    if app.recipe_busy().is_none() {
-                        app.add_preset(id.clone())
-                    }
-                },
-            ))
-            .into_element()
-    })
+        .child(rest)
 }

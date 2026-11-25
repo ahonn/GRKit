@@ -1,8 +1,6 @@
-//! A page's scroll view. On iOS it always bounces, as system pages do: a
-//! large title collapses as the page scrolls and comes back only when the
-//! page is pulled past its top, and a collapsed title leaves more room, so a
-//! page that overflowed by little would otherwise stop scrolling. Elsewhere
-//! it scrolls only when the content exceeds the space below system chrome.
+//! A page's scroll view. On iOS it always bounces, as system pages do.
+//! Elsewhere it scrolls only when the content exceeds the space below
+//! system chrome.
 //!
 //! A page named in `refresh` (`store::page_refresh`) reloads when it is
 //! pulled down. The spinner shows from the pull until the reload ends.

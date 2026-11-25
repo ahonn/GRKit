@@ -1,10 +1,10 @@
-//! Short notices that leave by themselves: one line above the tab bar, read aloud as it shows, swiped away or gone after a few seconds.
+//! Short notices that leave by themselves: one line above the tab bar, read aloud as it shows, swiped away or gone after a few seconds. A dark capsule in both appearances, so it stands off the page.
 
 use std::time::Duration;
 
 use nsh_base::{
-    Anchor, ToastManager, ToastMotion, ToastOptions, ToastStackState, ToastTransitionStatus, theme,
-    toast, toast_stack,
+    Anchor, ToastManager, ToastMotion, ToastOptions, ToastStackState, ToastTransitionStatus, toast,
+    toast_stack,
 };
 use nsh_core::{prelude::*, time::now};
 
@@ -47,29 +47,35 @@ impl Toasts {
     /// Show `message`. Call under an owner that outlives the notice (the
     /// app root's), since the lifecycle runs as a task.
     pub fn show(self, message: impl Into<SharedString>) {
-        self.push((message.into(), None));
+        self.push((message.into(), None), Some(SHOWN_FOR));
     }
 
     /// Show `message` with a button that runs `action` and closes the
-    /// notice.
+    /// notice. While a screen reader runs, the notice stays until the
+    /// person acts on it or closes it: its time would run out before they
+    /// reach it.
     pub fn show_action(
         self,
         message: impl Into<SharedString>,
         title: impl Into<SharedString>,
         action: impl Fn() + 'static,
     ) {
-        let id = self.push((message.into(), Some(title.into())));
+        let message = message.into();
+        let title = title.into();
+        announce_for_accessibility(format!("{message}, {title}"));
+        let timeout = (!screen_reader()).then_some(SHOWN_FOR);
+        let id = self.push((message, Some(title)), timeout);
         self.actions
             .with(|a| a.push((id, std::rc::Rc::new(action))));
     }
 
-    fn push(self, notice: Notice) -> u64 {
+    fn push(self, notice: Notice, timeout: Option<Duration>) -> u64 {
         let id = self.next_id.with(|n| {
             *n += 1;
             *n
         });
         self.manager
-            .with(|m| m.push(id, notice, ToastOptions::timeout(Some(SHOWN_FOR)), now()));
+            .with(|m| m.push(id, notice, ToastOptions::timeout(timeout), now()));
         self.sync();
         if self.ticking.with(|t| std::mem::replace(t, true)) {
             return id;
@@ -101,6 +107,11 @@ impl Toasts {
         if let Some(action) = action {
             action();
         }
+    }
+
+    fn dismiss(self, id: u64) {
+        self.manager.with(|m| m.dismiss(&id, now()));
+        self.sync();
     }
 
     fn sync(self) {
@@ -141,16 +152,19 @@ pub fn toast_layer(toasts: Toasts, lift: impl Fn() -> f32 + 'static) -> impl Int
                             move |item, _| {
                                 toast()
                                     .transition_status(move || item.get().2)
-                                    .accessibility_label(move || Some(item.get().1.0))
-                                    .on_dismiss_request(move || {
-                                        toasts.manager.with(|m| m.dismiss(&item.get().0, now()));
-                                        toasts.sync();
+                                    // A notice with a button says itself, so its button
+                                    // stays its own element for a screen reader: a
+                                    // label would make the notice one element.
+                                    .accessibility_label(move || {
+                                        let (_, (message, action), _) = item.get();
+                                        action.is_none().then_some(message)
                                     })
+                                    .on_dismiss_request(move || toasts.dismiss(item.get().0))
                                     .rounded_full()
                                     .px_5()
                                     .py_3()
                                     .items_center()
-                                    .bg(move || theme().foreground)
+                                    .bg(rgba(0x1E1E20EB))
                                     .shadow_lg()
                                     .transition_all()
                                     .duration(200.0)
@@ -159,11 +173,12 @@ pub fn toast_layer(toasts: Toasts, lift: impl Fn() -> f32 + 'static) -> impl Int
                                     .flex_row()
                                     .gap(px(14.0))
                                     .child(
+                                        // The button sits at the end.
                                         text(move || item.get().1.0)
-                                            .flex_shrink(1.0)
+                                            .flex_1()
                                             .text_size(px(crate::ui::ty::SUBHEADLINE))
                                             .font_weight(FontWeight::MEDIUM)
-                                            .text_color(move || theme().background),
+                                            .text_color(rgb(0xFFFFFF)),
                                     )
                                     .child(dynamic(move || {
                                         item.get().1.1.map(|title| {
@@ -171,10 +186,12 @@ pub fn toast_layer(toasts: Toasts, lift: impl Fn() -> f32 + 'static) -> impl Int
                                                 .min_h(px(36.0))
                                                 .px(px(14.0))
                                                 .my(px(-6.0))
-                                                .mr(px(-12.0))
+                                                // 6 pt from the edge on each
+                                                // side, as above and below.
+                                                .mr(px(-14.0))
                                                 .rounded_full()
                                                 .justify_center()
-                                                .bg(rgba(0xffffff2e))
+                                                .bg(rgba(0xFFFFFF24))
                                                 .hit_slop(crate::ui::vertical_hit_slop(36.0))
                                                 .role(AccessibilityRole::Button)
                                                 .label(title.to_string())
@@ -183,7 +200,7 @@ pub fn toast_layer(toasts: Toasts, lift: impl Fn() -> f32 + 'static) -> impl Int
                                                     text(title)
                                                         .text_size(px(crate::ui::ty::SUBHEADLINE))
                                                         .font_weight(FontWeight::SEMIBOLD)
-                                                        .text_color(move || theme().background),
+                                                        .text_color(rgb(0xFFFFFF)),
                                                 )
                                         })
                                     }))

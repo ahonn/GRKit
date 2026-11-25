@@ -1,81 +1,74 @@
 //! The Settings tab: the cameras, GRKit Settings of the connected camera,
 //! About, and More from the Maker (GR Snap).
 
-use nsh_base::{alert_dialog, theme};
+use nsh_base::alert_dialog;
 use nsh_core::prelude::*;
 
-use crate::ui::ty::text;
-
 use super::camera::saved_row;
+use crate::domain::look_preview;
 use crate::store::{
     APP_BUILD, APP_VERSION, AppState, GR_SNAP_URL, HELP_URL, PRIVACY_URL, Route, rate_url,
 };
 use crate::strings::tr;
-use crate::ui::{camera_art, footnote, gr_snap_icon, grouped_card, section_title, token};
+use crate::ui::PageTitle;
+use crate::ui::{ListRow, camera_art, gr_snap_icon, list_row, list_section, token};
 
 /// The Settings tab: the cameras, About, and More from the Maker.
 /// Disconnect and turn off are on the camera card.
 pub fn settings_root(app: AppState) -> impl IntoElement {
     crate::ui::app_page()
-        .title(move || tr("settings.title", &[]))
-        .header_large_title(!cfg!(target_os = "android"))
+        .page_title(move || tr("settings.title", &[]), true)
         .child(
             crate::ui::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .top_of(Some(crate::store::Tab::Settings.key().to_owned()))
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
-                        .gap_8()
+                        .gap(px(24.0))
                         .pt_4()
-                        .px_6()
+                        .px_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || camera_section(app)))
                         .child(dynamic(move || super::grkit_settings::grkit_section(app)))
+                        .child(about_section())
                         .child(
-                            view()
-                                .gap_2()
-                                .child(section_title(tr("settings.about", &[])))
-                                .child(grouped_card(
-                                    view()
-                                        .child(value_row(
-                                            tr("settings.version", &[]),
-                                            format!("{APP_VERSION} ({APP_BUILD})"),
-                                            false,
-                                        ))
-                                        .child(link_row(tr("cam.help", &[]), false, true, || {
-                                            spawn(async move {
-                                                let _ = open_url(HELP_URL).await;
-                                            });
-                                        }))
-                                        .child((!cfg!(target_os = "android")).then(|| {
-                                            link_row(tr("settings.rate", &[]), false, false, || {
-                                                spawn(async move {
-                                                    let _ = open_url(rate_url()).await;
-                                                });
-                                            })
-                                        }))
-                                        .child(link_row(
-                                            tr("settings.privacy", &[]),
-                                            true,
-                                            false,
-                                            || {
-                                                spawn(async move {
-                                                    let _ = open_url(PRIVACY_URL).await;
-                                                });
-                                            },
-                                        )),
-                                )),
-                        )
-                        .child(
-                            view()
-                                .gap_2()
-                                .child(section_title(tr("settings.more_maker", &[])))
-                                .child(grouped_card(gr_snap_row())),
+                            list_section([gr_snap_row()]).header(tr("settings.more_maker", &[])),
                         ),
                 ),
         )
+}
+
+/// The app's version and the pages about it outside the app.
+fn about_section() -> impl IntoElement {
+    let open = |url: &'static str| {
+        move || {
+            spawn(async move {
+                let _ = open_url(url).await;
+            });
+        }
+    };
+    let mut rows = vec![
+        list_row(tr("settings.version", &[])).value(format!("{APP_VERSION} ({APP_BUILD})")),
+        list_row(tr("cam.help", &[])).external(open(HELP_URL)),
+    ];
+    // The stores rate an app on iOS only from inside it.
+    if !cfg!(target_os = "android") {
+        rows.push(list_row(tr("settings.rate", &[])).external(move || {
+            spawn(async move {
+                let _ = open_url(rate_url()).await;
+            });
+        }));
+    }
+    rows.push(list_row(tr("settings.privacy", &[])).external(open(PRIVACY_URL)));
+    // The Looks show on this photo: its author and license.
+    rows.push(
+        list_row(tr("settings.sample_photo", &[]))
+            .subtitle(look_preview::SAMPLE_CREDIT)
+            .external(open(look_preview::SAMPLE_SOURCE)),
+    );
+    list_section(rows).header(tr("settings.about", &[]))
 }
 
 pub fn confirm_disconnect(app: AppState) {
@@ -97,7 +90,6 @@ pub fn confirm_power_off(app: AppState) {
     spawn(async move {
         let answer = alert_dialog()
             .title(tr("cam.power_title", &[]))
-            .description(tr("cam.power_body", &[]))
             .cancel("cancel", tr("cam.cancel", &[]))
             .destructive("power", tr("cam.power_confirm", &[]))
             .show()
@@ -108,74 +100,39 @@ pub fn confirm_power_off(app: AppState) {
     });
 }
 
-/// The most recent camera and the way to the saved cameras.
+/// The way to the saved cameras, with the art of the most recent one and
+/// the models of all.
 fn camera_section(app: AppState) -> Option<AnyElement> {
-    let camera = app.remembered()?;
-    let online = app.camera_online();
-    let count = app.saved_cameras().len();
-    let status = if online {
-        format!("{} · {}", tr("cam.connected", &[]), camera.last_ssid)
-    } else {
-        tr("connected.offline", &[])
+    let remembered = app.remembered();
+    let online = app.status().filter(|_| app.camera_online());
+    // The connected camera, else the one used last.
+    let model = online
+        .as_ref()
+        .map(|s| s.camera.model)
+        .or_else(|| remembered.as_ref().map(|c| c.model))?;
+    let status = match (&online, &remembered) {
+        (Some(_), Some(camera)) if !camera.last_ssid.is_empty() => {
+            format!("{} · {}", tr("cam.connected", &[]), camera.last_ssid)
+        }
+        (Some(_), _) => tr("cam.connected", &[]),
+        (None, _) => tr("connected.offline", &[]),
     };
+    let mut rows: Vec<ListRow> = vec![
+        list_row(format!("RICOH {}", model.display_name()))
+            .subtitle(status)
+            .leading(camera_art(model, 48.0, false)),
+    ];
+    let count = app.saved_cameras().len();
+    if count > 0 {
+        rows.push(
+            list_row(tr("cam.saved", &[]))
+                .value(count.to_string())
+                .page(move || app.push(Route::SavedCameras)),
+        );
+    }
     Some(
-        view()
-            .gap_2()
-            .child(section_title(tr("cam.settings_group", &[])))
-            .child(grouped_card(
-                view()
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .gap_3()
-                            .min_h(px(68.0))
-                            .px_4()
-                            .border_b_1()
-                            .border_b_color(move || theme().border)
-                            .child(camera_art(camera.model, 48.0, false))
-                            .child(
-                                view()
-                                    .flex_1()
-                                    .gap(px(2.0))
-                                    .child(
-                                        text(format!("RICOH {}", camera.model.display_name()))
-                                            .text_size(px(crate::ui::ty::HEADLINE))
-                                            .font_weight(FontWeight::SEMIBOLD),
-                                    )
-                                    .child(
-                                        text(status)
-                                            .text_size(px(crate::ui::ty::FOOTNOTE))
-                                            .text_color(move || theme().muted_foreground),
-                                    ),
-                            ),
-                    )
-                    .child(
-                        view()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .min_h(px(52.0))
-                            .px_4()
-                            .role(AccessibilityRole::Button)
-                            .label(tr("cam.saved", &[]))
-                            .on_press(move || app.push(Route::SavedCameras))
-                            .active(|st| st.bg(move || theme().accent))
-                            .child(text(tr("cam.saved", &[])).text_size(px(crate::ui::ty::BODY)))
-                            .child(
-                                view()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(10.0))
-                                    .child(
-                                        text(count.to_string())
-                                            .text_size(px(crate::ui::ty::BODY))
-                                            .text_color(move || theme().muted_foreground),
-                                    )
-                                    .child(crate::ui::chevron()),
-                            ),
-                    ),
-            ))
+        list_section(rows)
+            .header(tr("cam.settings_group", &[]))
             .into_element(),
     )
 }
@@ -183,133 +140,41 @@ fn camera_section(app: AppState) -> Option<AnyElement> {
 /// The saved cameras: tap to connect, press and hold to remove.
 pub fn saved_cameras_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     crate::ui::app_page()
-        .title(move || tr("cam.saved", &[]))
+        .page_title(move || tr("cam.saved", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
             crate::ui::page_scroll()
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
-                        .gap_2()
                         .pt_4()
-                        .px_6()
+                        .px_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
-                            let cameras = app.saved_cameras();
-                            let count = cameras.len();
                             let online = app.camera_online();
-                            grouped_card(view().children(cameras.into_iter().enumerate().map(
-                                move |(index, camera)| {
-                                    saved_row(app, camera, index + 1 == count, online && index == 0)
-                                        .into_element()
-                                },
-                            )))
-                        }))
-                        .child(footnote(tr("cam.saved_note", &[]))),
+                            let rows = app.saved_cameras().into_iter().enumerate().map(
+                                |(index, camera)| saved_row(app, camera, online && index == 0),
+                            );
+                            list_section(rows).footer(tr("cam.saved_note", &[]))
+                        })),
                 ),
         )
 }
 
-fn value_row(title: String, value: String, last: bool) -> impl IntoElement {
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .min_h(px(52.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .child(
-            text(title)
-                .flex_shrink(1.0)
-                .text_size(px(crate::ui::ty::BODY)),
-        )
-        .child(
-            text(value)
-                .flex_shrink(1.0)
-                .text_size(px(crate::ui::ty::BODY))
-                .text_color(move || theme().muted_foreground),
-        )
-}
-
-/// A row that opens a page outside the app; `external` marks it with ↗.
-fn link_row(
-    title: String,
-    last: bool,
-    external: bool,
-    on_press: impl Fn() + 'static,
-) -> impl IntoElement {
-    let label = title.clone();
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .min_h(px(52.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .on_press(on_press)
-        .active(|st| st.bg(move || theme().accent))
-        .child(text(title).text_size(px(crate::ui::ty::BODY)))
-        .child(external.then(|| {
-            text("↗")
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .text_color(move || theme().muted_foreground)
-        }))
-}
-
 /// GR Snap: the row opens its page.
-fn gr_snap_row() -> impl IntoElement {
-    let label = format!(
-        "{}, {}",
-        tr("settings.gr_snap_name", &[]),
-        tr("settings.gr_snap_desc", &[])
-    );
-    view()
-        .flex_row()
-        .items_center()
-        .gap_3()
-        .p_4()
-        .min_h(px(72.0))
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .on_press(|| {
+fn gr_snap_row() -> ListRow {
+    list_row(tr("settings.gr_snap_name", &[]))
+        .subtitle(tr("settings.gr_snap_desc", &[]))
+        .leading(
+            image(gr_snap_icon())
+                .size(px(36.0))
+                .rounded(px(9.0))
+                .object_fit(ResizeMode::Cover),
+        )
+        .external(|| {
             spawn(async move {
                 let _ = open_url(GR_SNAP_URL).await;
             });
         })
-        .active(|st| st.bg(move || theme().accent))
-        .child(
-            image(gr_snap_icon())
-                .size(px(56.0))
-                .rounded(px(13.0))
-                .object_fit(ResizeMode::Cover),
-        )
-        .child(
-            view()
-                .flex_1()
-                .gap(px(4.0))
-                .child(
-                    text(move || tr("settings.gr_snap_name", &[]))
-                        .text_size(px(crate::ui::ty::HEADLINE))
-                        .font_weight(FontWeight::SEMIBOLD),
-                )
-                .child(
-                    text(move || tr("settings.gr_snap_desc", &[]))
-                        .text_size(px(crate::ui::ty::SUBHEADLINE))
-                        .line_height(px(21.0))
-                        .text_color(move || theme().muted_foreground),
-                ),
-        )
-        .child(
-            text("↗")
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .text_color(move || theme().muted_foreground),
-        )
 }

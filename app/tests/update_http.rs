@@ -307,9 +307,11 @@ fn an_update_whose_answer_was_lost_is_found_on_the_camera_and_completes() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let (mut app, camera, network) = start_phone_after_a_lost_answer(&environment);
-    // The update found on the camera shows on the camera tab first.
-    app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
-    app.press("GRKit 1.8.0 to Confirm").unwrap();
+    // The update found on the camera shows first on the camera tab's
+    // Software Update row.
+    let to_confirm = "GRKit 1.8.0 to Confirm";
+    app.wait_for_within(to_confirm, WAIT).unwrap();
+    app.press(to_confirm).unwrap();
     // The update sheet opens at its step: what to do on the camera.
     app.wait_for_within("Choose MOD, then Update 1.8.0", WAIT)
         .unwrap();
@@ -341,9 +343,11 @@ fn cancelling_an_update_posts_cancel_and_verifies_the_camera_journal() {
     let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let environment = TestEnvironment::new();
     let (mut app, camera, network) = start_phone_after_a_lost_answer(&environment);
-    // The update found on the camera shows on the camera tab first.
-    app.wait_for_within("GRKit 1.8.0 to Confirm", WAIT).unwrap();
-    app.press("GRKit 1.8.0 to Confirm").unwrap();
+    // The update found on the camera shows first on the camera tab's
+    // Software Update row.
+    let to_confirm = "GRKit 1.8.0 to Confirm";
+    app.wait_for_within(to_confirm, WAIT).unwrap();
+    app.press(to_confirm).unwrap();
     app.wait_for_within("Choose Execute", WAIT).unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Cancel Update".into()));
     app.press("role:button[Cancel Update]").unwrap();
@@ -371,13 +375,12 @@ fn automatic_connection_starts_with_a_local_placeholder() {
     let environment = TestEnvironment::new();
     let (mut app, _, _) =
         start_phone_with_delay(&environment, camera(), Duration::from_millis(300));
-    app.wait_for("Connecting to your camera…").unwrap();
+    // The connected page's layout, with nothing read yet.
+    app.wait_for("label:Software Update, Reading…").unwrap();
     app.wait_for_gone("Add Your Camera", WAIT).unwrap();
     app.wait_for_gone("Connecting to RICOH GR III", WAIT)
         .unwrap();
-    app.wait_for_within("Connected", WAIT).unwrap();
-    app.wait_for_gone("Connecting to your camera…", WAIT)
-        .unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
 }
 
 #[test]
@@ -390,12 +393,13 @@ fn a_check_that_a_reconnect_overtakes_runs_again() {
         Duration::ZERO,
         Duration::from_millis(1500),
     );
-    app.wait_for_within("Connected", WAIT).unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
     app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
     app.press("label:More").unwrap();
-    app.wait_for_gone("Connected", WAIT).unwrap();
-    app.press("role:button[Connect]").unwrap();
-    app.wait_for_within("Connected", WAIT).unwrap();
+    app.wait_for_gone("label:/^Software Update/", WAIT).unwrap();
+    // The saved camera's Connect; the Connect tab comes after it.
+    app.press("role:button[Connect] >> nth=0").unwrap();
+    app.wait_for_within("label:More", WAIT).unwrap();
     for _ in 0..100 {
         if index_reads(&network) >= 2 {
             break;
@@ -405,7 +409,7 @@ fn a_check_that_a_reconnect_overtakes_runs_again() {
     assert_eq!(index_reads(&network), 2);
     // A failed check does not make the camera tab say it is up to date.
     app.wait_for_gone("GRKit is up to date", WAIT).unwrap();
-    app.press("role:button[Software Update]").unwrap();
+    app.press("label:/^Software Update/").unwrap();
     // The page ends in a state with a way forward, not in a spinner.
     app.wait_for_within("Couldn't check for updates", WAIT)
         .unwrap();

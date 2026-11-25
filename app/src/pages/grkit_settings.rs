@@ -3,7 +3,6 @@
 //! Display Settings, and Shutdown Screen. It shows only with a connected
 //! camera.
 
-use nsh_base::theme;
 use nsh_core::prelude::*;
 
 use crate::domain::camera_settings::{
@@ -11,9 +10,11 @@ use crate::domain::camera_settings::{
 };
 use crate::store::{AppState, PictureRead, Route, SettingsRead};
 use crate::strings::tr;
+use crate::ui::PageTitle;
 use crate::ui::ty::text;
 use crate::ui::{
-    busy_state, control_row, grouped_card, quiet_spinner, section_title, toggle_loading, token,
+    ButtonKind, ButtonSize, Choice, Choices, ListRow, button, list_row, list_section,
+    system_switch, token,
 };
 
 /// The GRKit Settings group of the Settings tab, or nothing without a
@@ -22,77 +23,43 @@ pub fn grkit_section(app: AppState) -> Option<AnyElement> {
     if !app.camera_online() {
         return None;
     }
-    let card = match app.camera_settings() {
-        // While the camera answers, a row keeps the section's place, so
-        // the page does not move when the settings come.
-        SettingsRead::Unknown if app.camera_settings_loading() => {
-            grouped_card(reading_row()).into_element()
-        }
-        SettingsRead::Unknown => return None,
-        SettingsRead::Unsupported => grouped_card(update_row(app)).into_element(),
-        SettingsRead::Ready(settings) => grouped_card(settings_rows(app, &settings)).into_element(),
-    };
-    Some(
-        view()
-            .gap_2()
-            .child(section_title(tr("grkit.title", &[])))
-            .child(card)
-            .into_element(),
-    )
+    let rows =
+        match app.camera_settings() {
+            // While the camera answers, a row keeps the section's place, so
+            // the page does not move when the settings come.
+            SettingsRead::Unknown if app.camera_settings_loading() => {
+                vec![list_row(tr("grkit.title", &[])).busy(true)]
+            }
+            SettingsRead::Unknown => return None,
+            // A GRKit from before the phone could change its settings.
+            SettingsRead::Unsupported => vec![
+                list_row(tr("modules.unsupported_title", &[])).trailing(button(
+                    tr("software.update", &[]),
+                    ButtonKind::Tinted,
+                    ButtonSize::Small,
+                    move || app.open_software_update(),
+                )),
+            ],
+            SettingsRead::Ready(settings) => settings_rows(app, &settings),
+        };
+    Some(list_section(rows).into_element())
 }
 
-/// The settings being read: a spinner in a row of the section's height.
-fn reading_row() -> impl IntoElement {
-    view()
-        .min_h(px(52.0))
-        .px_4()
-        .flex_row()
-        .items_center()
-        .label(tr("grkit.title", &[]))
-        .accessibility_state(busy_state(true))
-        .child(quiet_spinner(18.0))
-}
-
-/// A GRKit from before the phone could change its settings.
-fn update_row(app: AppState) -> impl IntoElement {
-    let button = view()
-        .min_h(px(32.0))
-        .px_4()
-        .rounded_full()
-        .items_center()
-        .justify_center()
-        .bg(move || token("button"))
-        .role(AccessibilityRole::Button)
-        .label(tr("software.update", &[]))
-        .on_press(move || app.open_software_update())
-        .active(|s| s.opacity(0.72))
-        .child(
-            text(tr("software.update", &[]))
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(move || token("button-foreground")),
-        );
-    control_row(tr("modules.unsupported_title", &[]), button, true)
-}
-
-/// A row of GRKit Settings: its title, its value, and what it opens.
-type Row = (String, Option<String>, Box<dyn Fn()>);
-
-fn settings_rows(app: AppState, settings: &CameraSettings) -> impl IntoElement {
-    let mut rows: Vec<Row> = Vec::new();
+/// The rows of GRKit Settings, in the order of the camera's MENU: Enable
+/// at Start opens a menu of its values, the others open their pages.
+fn settings_rows(app: AppState, settings: &CameraSettings) -> Vec<ListRow> {
+    let mut rows = Vec::new();
     if let Some(start) = settings.start {
-        rows.push((
-            tr("grkit.start", &[]),
-            Some(start_text(start)),
-            Box::new(move || start_menu(app, start)),
-        ));
+        rows.push(
+            list_row(tr("grkit.start", &[]))
+                .value(start_text(start))
+                .menu(start_menu(app, start)),
+        );
     }
     if settings.switch(SettingSwitch::UncroppedRaw).is_some() {
-        rows.push((
-            tr("grkit.shooting", &[]),
-            None,
-            Box::new(move || app.push(Route::ShootingSettings)),
-        ));
+        rows.push(
+            list_row(tr("grkit.shooting", &[])).page(move || app.push(Route::ShootingSettings)),
+        );
     }
     if settings.unit.is_some()
         || [
@@ -103,73 +70,19 @@ fn settings_rows(app: AppState, settings: &CameraSettings) -> impl IntoElement {
         .into_iter()
         .any(|s| settings.switch(s).is_some())
     {
-        rows.push((
-            tr("grkit.display", &[]),
-            None,
-            Box::new(move || app.push(Route::DisplaySettings)),
-        ));
+        rows.push(
+            list_row(tr("grkit.display", &[])).page(move || app.push(Route::DisplaySettings)),
+        );
     }
     if [SettingSwitch::CustomPicture, SettingSwitch::ShowText]
         .into_iter()
         .any(|s| settings.switch(s).is_some())
     {
-        rows.push((
-            tr("grkit.shutdown", &[]),
-            None,
-            Box::new(move || app.push(Route::ShutdownScreen)),
-        ));
+        rows.push(
+            list_row(tr("grkit.shutdown", &[])).page(move || app.push(Route::ShutdownScreen)),
+        );
     }
-    let last = rows.len().saturating_sub(1);
-    view().children(
-        rows.into_iter()
-            .enumerate()
-            .map(|(index, (title, value, open))| nav_row(title, value, index == last, open)),
-    )
-}
-
-/// A row that opens a page or a choice, with its value before the chevron.
-fn nav_row(
-    title: String,
-    value: Option<String>,
-    last: bool,
-    on_press: Box<dyn Fn()>,
-) -> AnyElement {
-    let label = match &value {
-        Some(value) => format!("{title}, {value}"),
-        None => title.clone(),
-    };
-    view()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_3()
-        .min_h(px(50.0))
-        .px_4()
-        .style_when(!last, |st| {
-            st.border_b_1().border_b_color(move || theme().border)
-        })
-        .role(AccessibilityRole::Button)
-        .label(label)
-        .on_press(on_press)
-        .active(|st| st.bg(move || theme().accent))
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::BODY))
-                .flex_shrink(1.0),
-        )
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .child(value.map(|value| {
-                    text(value)
-                        .text_size(px(crate::ui::ty::BODY))
-                        .text_color(move || theme().muted_foreground)
-                }))
-                .child(crate::ui::chevron()),
-        )
-        .into_element()
+    rows
 }
 
 fn start_text(mode: StartMode) -> String {
@@ -199,41 +112,37 @@ fn choose<T: Copy + PartialEq + 'static>(
     values: Vec<(T, String)>,
     current: T,
     pick: impl Fn(T) + 'static,
-) {
-    spawn(async move {
-        let mut menu = crate::ui::held_menu(title);
-        for (index, (value, label)) in values.iter().enumerate() {
-            let label = if *value == current {
-                format!("✓ {label}")
-            } else {
-                label.clone()
-            };
-            menu = menu.action(index.to_string(), label);
-        }
-        let answer = menu.cancel("cancel", tr("looks.cancel", &[])).show().await;
-        let chosen = answer
+) -> Choices {
+    let choices = values
+        .iter()
+        .enumerate()
+        .map(|(index, (value, label))| {
+            Choice::new(index.to_string(), label.clone()).checked(*value == current)
+        })
+        .collect();
+    Choices::new(title, choices, move |id| {
+        let chosen = id
+            .parse::<usize>()
             .ok()
-            .and_then(|a| a.action)
-            .and_then(|action| action.parse::<usize>().ok())
             .and_then(|index| values.get(index).map(|(value, _)| *value));
         if let Some(value) = chosen.filter(|value| *value != current) {
             pick(value);
         }
-    });
+    })
 }
 
-fn start_menu(app: AppState, current: StartMode) {
+fn start_menu(app: AppState, current: StartMode) -> Choices {
     let values = StartMode::ALL
         .into_iter()
         .map(|mode| (mode, start_text(mode)))
         .collect();
     choose(tr("grkit.start", &[]), values, current, move |mode| {
         app.set_camera_setting(SettingChange::Start(mode))
-    });
+    })
 }
 
 /// A switch row of a settings page.
-fn switch_row(app: AppState, switch: SettingSwitch, title: &str, last: bool) -> Option<AnyElement> {
+fn switch_row(app: AppState, switch: SettingSwitch, title: &str) -> Option<ListRow> {
     let SettingsRead::Ready(settings) = app.camera_settings() else {
         return None;
     };
@@ -241,57 +150,55 @@ fn switch_row(app: AppState, switch: SettingSwitch, title: &str, last: bool) -> 
     let saving =
         app.camera_setting_busy(|c| matches!(c, SettingChange::Switch(s, _) if s == switch));
     let title = tr(title, &[]);
-    let toggle = toggle_loading(on, title.clone(), true, saving, move || {
-        app.set_camera_setting(SettingChange::Switch(switch, !on))
+    // The store shows the value asked for while it saves.
+    let toggle = system_switch(on, title.clone(), true, saving, move |on| {
+        app.set_camera_setting(SettingChange::Switch(switch, on))
     });
-    Some(control_row(title, toggle, last).into_element())
+    Some(list_row(title).trailing(toggle))
 }
 
-fn unit_row(app: AppState, last: bool) -> Option<AnyElement> {
+fn unit_row(app: AppState) -> Option<ListRow> {
     let SettingsRead::Ready(settings) = app.camera_settings() else {
         return None;
     };
     let unit = settings.unit?;
-    let open = Box::new(move || {
-        let values = DistanceUnit::ALL
-            .into_iter()
-            .map(|unit| (unit, unit_text(unit)))
-            .collect();
-        choose(tr("grkit.unit", &[]), values, unit, move |unit| {
-            app.set_camera_setting(SettingChange::Unit(unit))
-        });
+    let values = DistanceUnit::ALL
+        .into_iter()
+        .map(|unit| (unit, unit_text(unit)))
+        .collect();
+    let menu = choose(tr("grkit.unit", &[]), values, unit, move |unit| {
+        app.set_camera_setting(SettingChange::Unit(unit))
     });
-    Some(nav_row(
-        tr("grkit.unit", &[]),
-        Some(unit_text(unit)),
-        last,
-        open,
-    ))
+    Some(
+        list_row(tr("grkit.unit", &[]))
+            .value(unit_text(unit))
+            .menu(menu),
+    )
 }
 
 /// A page of switches and choices, which follows the camera's settings.
 fn settings_page(
     app: AppState,
     title: &'static str,
-    rows: impl Fn(AppState) -> Vec<AnyElement> + 'static,
+    rows: impl Fn(AppState) -> Vec<ListRow> + 'static,
     on_dismiss: impl Fn() + 'static,
 ) -> impl IntoElement {
     crate::ui::app_page()
-        .title(move || tr(title, &[]))
+        .page_title(move || tr(title, &[]), false)
         .on_dismiss(on_dismiss)
         .child(
             crate::ui::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
                         .pt_4()
-                        .px_6()
+                        .px_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             let rows = rows(app);
-                            (!rows.is_empty()).then(|| grouped_card(view().children(rows)))
+                            (!rows.is_empty()).then(|| list_section(rows))
                         })),
                 ),
         )
@@ -302,7 +209,7 @@ pub fn shooting_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
         app,
         "grkit.shooting",
         |app| {
-            switch_row(app, SettingSwitch::UncroppedRaw, "grkit.raw", true)
+            switch_row(app, SettingSwitch::UncroppedRaw, "grkit.raw")
                 .into_iter()
                 .collect()
         },
@@ -316,20 +223,10 @@ pub fn display_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
         "grkit.display",
         |app| {
             let rows = [
-                unit_row(app, false),
-                switch_row(app, SettingSwitch::SimpleBattery, "grkit.battery", false),
-                switch_row(
-                    app,
-                    SettingSwitch::BatteryPercent,
-                    "grkit.battery_percent",
-                    false,
-                ),
-                switch_row(
-                    app,
-                    SettingSwitch::PlaybackIcons,
-                    "grkit.playback_icons",
-                    true,
-                ),
+                unit_row(app),
+                switch_row(app, SettingSwitch::SimpleBattery, "grkit.battery"),
+                switch_row(app, SettingSwitch::BatteryPercent, "grkit.battery_percent"),
+                switch_row(app, SettingSwitch::PlaybackIcons, "grkit.playback_icons"),
             ];
             rows.into_iter().flatten().collect()
         },
@@ -342,18 +239,18 @@ pub fn display_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
 pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     app.refresh_shutdown_picture();
     crate::ui::app_page()
-        .title(move || tr("grkit.shutdown", &[]))
+        .page_title(move || tr("grkit.shutdown", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
             crate::ui::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .child(
                     view()
                         .gap_5()
                         .pt_4()
-                        .px_6()
+                        .px_4()
                         .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             app.shutdown_picture_sent()
@@ -365,23 +262,22 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                             // turn on nothing: choosing a photo comes first.
                             let has_picture =
                                 matches!(app.shutdown_picture(), PictureRead::Picture(_));
-                            let rows: Vec<AnyElement> = [
+                            let rows: Vec<ListRow> = [
                                 has_picture
                                     .then(|| {
                                         switch_row(
                                             app,
                                             SettingSwitch::CustomPicture,
                                             "grkit.custom_picture",
-                                            false,
                                         )
                                     })
                                     .flatten(),
-                                switch_row(app, SettingSwitch::ShowText, "grkit.show_text", true),
+                                switch_row(app, SettingSwitch::ShowText, "grkit.show_text"),
                             ]
                             .into_iter()
                             .flatten()
                             .collect();
-                            (!rows.is_empty()).then(|| grouped_card(view().children(rows)))
+                            (!rows.is_empty()).then(|| list_section(rows))
                         }))
                         .child(dynamic(move || picture_buttons(app))),
                 ),
@@ -390,16 +286,7 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
 
 /// The line that says the camera has the new picture.
 fn sent_notice(title: String) -> AnyElement {
-    view()
-        .p_4()
-        .rounded(px(10.0))
-        .bg(move || theme().muted)
-        .child(
-            text(title)
-                .text_size(px(crate::ui::ty::SUBHEADLINE))
-                .font_weight(FontWeight::SEMIBOLD),
-        )
-        .into_element()
+    crate::ui::notice_card(title).into_element()
 }
 
 /// The picture at the ratio of the camera's screen.
@@ -454,7 +341,7 @@ fn picture_buttons(app: AppState) -> Option<AnyElement> {
     Some(
         view()
             .gap_3()
-            .child(crate::ui::primary_button(
+            .child(crate::ui::button(
                 tr(
                     if matches!(picture, PictureRead::Picture(_)) {
                         "grkit.change_photo"
@@ -463,14 +350,18 @@ fn picture_buttons(app: AppState) -> Option<AnyElement> {
                     },
                     &[],
                 ),
+                crate::ui::ButtonKind::Primary,
+                crate::ui::ButtonSize::Large,
                 move || app.choose_shutdown_picture(),
             ))
             .child(matches!(picture, PictureRead::Picture(_)).then(|| {
-                crate::ui::secondary_button_loading(
+                crate::ui::button(
                     tr("grkit.restore_picture", &[]),
-                    busy,
+                    crate::ui::ButtonKind::Tinted,
+                    crate::ui::ButtonSize::Large,
                     move || app.save_shutdown_picture(false, || {}),
                 )
+                .loading(busy)
             }))
             .into_element(),
     )
@@ -480,23 +371,25 @@ fn picture_buttons(app: AppState) -> Option<AnyElement> {
 pub fn crop_page(app: AppState, on_dismiss: impl Fn() + Clone + 'static) -> impl IntoElement {
     let done = on_dismiss.clone();
     crate::ui::app_page()
-        .title(move || tr("grkit.crop", &[]))
+        .page_title(move || tr("grkit.crop", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
             view()
                 .flex_1()
-                .bg(move || token("grouped"))
+                .bg(move || token("list-background"))
                 .pt_4()
-                .px_6()
+                .px_4()
                 .gap_5()
                 .child(dynamic(move || app.shutdown_draft().map(picture_view)))
                 .child(dynamic(move || {
                     let done = done.clone();
-                    crate::ui::primary_button_loading(
+                    crate::ui::button(
                         tr("looks.send", &[]),
-                        app.shutdown_picture_busy(),
+                        crate::ui::ButtonKind::Primary,
+                        crate::ui::ButtonSize::Large,
                         move || app.save_shutdown_picture(true, done.clone()),
                     )
+                    .loading(app.shutdown_picture_busy())
                 })),
         )
 }

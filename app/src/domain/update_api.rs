@@ -145,6 +145,19 @@ pub fn response_error(status: u16, body: &str) -> UpdateError {
     }
 }
 
+/// Why the camera did not stage a package. A package that the camera checked
+/// and did not take, for its camera, firmware, or signature, is refused;
+/// the free space it needs stays a card-full error.
+pub fn stage_error(status: u16, body: &str) -> UpdateError {
+    let error = response_error(status, body);
+    if matches!(error, UpdateError::Service(_))
+        && problem_code(body).as_deref() == Some("software_request_rejected")
+    {
+        return UpdateError::Refused;
+    }
+    error
+}
+
 /// The `code` of a problem document.
 pub fn problem_code(body: &str) -> Option<String> {
     serde_json::from_str::<serde_json::Value>(body)
@@ -194,6 +207,29 @@ mod tests {
             observe_update(JournalState::None, "1.8.0", None, &unknown),
             UpdateObservation::Installed
         );
+    }
+    #[test]
+    fn a_rejected_package_is_refused_unless_the_card_is_full() {
+        let rejected = |detail: &str| {
+            serde_json::json!({ "code": "software_request_rejected", "detail": detail }).to_string()
+        };
+        assert_eq!(
+            stage_error(
+                422,
+                &rejected("The package does not support firmware 2.20 of the GR III")
+            ),
+            UpdateError::Refused
+        );
+        assert_eq!(
+            stage_error(
+                422,
+                &rejected("The card needs 1024 more bytes for the update")
+            ),
+            UpdateError::CardFull { bytes_needed: 1024 }
+        );
+        let busy =
+            serde_json::json!({ "code": "camera_unavailable", "detail": "Busy" }).to_string();
+        assert_eq!(stage_error(503, &busy), UpdateError::Service("Busy".into()));
     }
     #[test]
     fn maps_service_errors_without_inventing_free_space() {
