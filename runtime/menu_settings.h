@@ -226,18 +226,10 @@ static const u16 *update_value_text(volatile u32 *h,u32 value) {
     return update_confirmed(h) ? text(h,TEXT_RESTART) : text(h,TEXT_UPDATE+1);
 }
 static u32 update_value(volatile u32 *h) { (void)h; return 0; }
-/* Execute or Cancel of the confirm in MENU: the page has no other choice, so
-   both leave it. */
-static void update_box_done(u32 executed,u32 arg) {
-    volatile u32 *h=menu_header();
-    (void)arg;
-    update_confirm(h,executed);
-    settings_value_leave(h);
-}
 /* OK on the page asks again if its box could not open. MENU returns. */
 static u32 update_select(volatile u32 *h,u32 controller,u32 value) {
     if(value==SETTING_BACK || !update_waiting(h)) return 0;
-    update_ask(h,controller,update_box_done,0);
+    update_ask_menu(h,controller);
     return 1;
 }
 static const Setting update_setting={update_label,update_values,update_value_text,update_value,no_set,update_select,
@@ -539,7 +531,7 @@ A32_ENTRY u32 menu_select_start(u32 controller,u32 id,u32 arg,u32 more) {
     if(id==check_word(h,CHECK_ID)[0] && update_waiting(h) &&
        settings_page(h)==core_page_settings &&
        settings_row_setting(h,core_page_settings,check_word(h,CHECK_SETTING)[0])==&update_setting)
-        update_ask(h,controller,update_box_done,0);
+        update_ask_menu(h,controller);
     return r;
 }
 A32_ENTRY u32 menu_select_stop(u32 controller) {

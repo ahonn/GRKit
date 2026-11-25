@@ -5936,16 +5936,16 @@ static void the_section_rows_follow_the_listed_modules(void)
     check[CHECK_ID / 4] = settings_pages[0];
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
     controller_changes = 0;
-    update_box_done(0, 0);
+    update_menu_done(0, 0);
     assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_WAITING && controller_changes == 1 &&
            controller_to == MENU_RETURN_CONTROLLER);
-    update_box_done(1, 0);
+    update_menu_done(1, 0);
     assert(controller_changes == 2 && controller_from == TEST_OBJECTS + 0x800U &&
            controller_to == MENU_RETURN_CONTROLLER && controller_arg == CONTROLLER_BACK);
     /* From GRKit Settings, the value page returns there. */
     h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
-    update_box_done(1, 0);
+    update_menu_done(1, 0);
     assert(controller_changes == 3 && controller_to == SETTINGS_SUBMENU);
     MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = 0;
     check[CHECK_RADIO / 4] = check[CHECK_ID / 4] = 0;

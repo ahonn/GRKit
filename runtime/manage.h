@@ -579,7 +579,7 @@ static const Setting manage_settings[SUBMENU_ROWS]={
    goes to another position, and the switch keeps its value
    (runtime/mode_dial.h: dial_suspend). While an update over Wi-Fi waits, the
    root row names it and the page has a third row, Update: OK on it asks to
-   install it (runtime/menu.c: update_row). */
+   install it (runtime/menu_update.h: update_row). */
 #define SWITCH_ROW_UPDATE 2U
 static void dial_suspend(volatile u32 *h,u32 off);
 static const u16 *update_title(volatile u32 *h);

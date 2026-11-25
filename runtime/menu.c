@@ -1394,30 +1394,11 @@ A32_ENTRY void menu_changed(u32 controller) {
    a row reaches here: menu_changed does not run the native change, and a slot
    change leaves the page first. The touch selects the row as OK does, and ADJ
    stays open, as after a touch on a native row. */
-/* The Update row of the MOD page while an update over Wi-Fi waits
-   (runtime/manage.h: SWITCH_ROW_UPDATE). */
-static u32 update_row(volatile u32 *h) {
-    return update_waiting(h) && h[GRKIT_HOST_MENU_LEVEL/4]==MENU_MODULE &&
-           h[GRKIT_HOST_MODULE/4]==SWITCH_MODULE && h[GRKIT_HOST_MENU_CURSOR/4]==SWITCH_ROW_UPDATE;
-}
-/* Execute or Cancel of the confirm in ADJ, whose controller is `controller`.
-   Cancel keeps the page. Execute confirms the update: ADJ then closes
-   (menu_event), and the live view tells to restart, as the load cue does. */
-static void update_adj_done(u32 executed,u32 controller) {
-    volatile u32 *h=menu_header();
-    if(update_confirm(h,executed)) {
-        if(h[GRKIT_HOST_MENU_CURSOR/4]>=count(h)) h[GRKIT_HOST_MENU_CURSOR/4]=count(h)-1;
-        h[GRKIT_HOST_CUE_LABEL/4]=GRKIT_CUE_UPDATE_RESTART;
-        h[GRKIT_HOST_LOAD_CUE/4]=GRKIT_CUE_PENDING;
-        return;
-    }
-    render(controller);
-}
 A32_ENTRY void menu_apply(u32 controller) {
     volatile u32 *h=menu_header();
     if(!private_mode(controller)) { menu_apply_original(controller); return; }
     if(ui_modal(h)) return;
-    if(update_row(h)) { update_ask(h,controller,update_adj_done,controller); return; }
+    if(update_ask_adj(h,controller)) return;
     if(direct_settings_root(h) && open_settings(controller)) return;
     menu_confirm(h);
     render(controller);
@@ -1587,10 +1568,7 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
        If the commit made a module show a UI box or ask for a native screen,
        ADJ stays open on the page instead (ui_holds_page), as it does for a
        row whose page keeps it open (row_stays). */
-    if(kind==EV_CONFIRM && update_row(h) && !after_adj_press(h)) {
-        update_ask(h,controller,update_adj_done,controller);
-        return 0;
-    }
+    if(kind==EV_CONFIRM && !after_adj_press(h) && update_ask_adj(h,controller)) return 0;
     if(kind==EV_CONFIRM) {
         u32 stays=row_stays(h), returns=confirm_returns(h,controller), close=confirm_selection(h);
         if(close && (stays || ui_holds_page(h))) close=0;
