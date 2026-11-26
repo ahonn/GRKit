@@ -233,10 +233,11 @@ fn the_runtime_names_the_rough_look() {
 /// share a code, and none is in that page.
 #[test]
 fn unlockable_looks_have_codes_of_their_own() {
-    let native = LOOKS
-        .iter()
-        .map(|look| look.effect_id.to_owned())
-        .chain(grkit_core::gr2_looks::TARGETS.iter().map(|(id, _)| (*id).to_owned()));
+    let native = LOOKS.iter().map(|look| look.effect_id.to_owned()).chain(
+        grkit_core::gr2_looks::TARGETS
+            .iter()
+            .map(|(id, _)| (*id).to_owned()),
+    );
     let catalog = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../effects"))
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap());
