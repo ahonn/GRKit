@@ -167,7 +167,10 @@
 /* The code of the modules that a soft Off stopped at this start
    (runtime/manage.h): their count, then the start and the end of the code of
    each. The core calls no module code in these ranges. */
-#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_RETURN + 4U)
+/* The controller of the GRKit menu of ADJ that closes for a change of the
+   Wi-Fi service (runtime/control.h: control_blocked), or 0. */
+#define MENU_ROWS_CLOSING (MENU_ROWS_RETURN + 4U)
+#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_CLOSING + 4U)
 #define SERVICES_SUSPENDED_MAX GRKIT_MODULES_MAX
 /* The own SelectMenuControllers of the long value pages
    (runtime/menu_settings.h): the checkbox page of options pages, or 0 before

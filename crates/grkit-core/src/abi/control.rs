@@ -23,6 +23,9 @@ pub const CONTROL_CHANGED: u32 = 19;
 pub const CONTROL_UNSUPPORTED: u32 = 20;
 pub const CONTROL_INVALID: u32 = 21;
 pub const CONTROL_BUSY: u32 = 22;
+/// The change did not apply: ADJ showed, and the App task closes it for the
+/// change. The service sends the same command again.
+pub const CONTROL_CLOSING: u32 = 23;
 pub const CONTROL_ATTACH: u32 = 1;
 pub const CONTROL_PING: u32 = 2;
 /// The listed effects (runtime/control_looks.h). No payload. The response is

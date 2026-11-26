@@ -8,9 +8,10 @@
    change in MENU. A recipe is found by its ID (runtime/recipe_id.h), which
    stays with it when it moves.
 
-   A change of the list waits while a page of GRKit shows, as a change of
-   the effects does (control_idle): the pages of the recipes keep
-   their rows while they show. */
+   A change of the list waits while a page of GRKit shows, or closes the
+   GRKit menu of ADJ first, as a change of the effects does
+   (control_blocked): the pages of the recipes keep their rows while they
+   show. */
 
 /* The slot of the recipe with ID `id`, or RECIPE_NONE. */
 static u32 control_recipe_slot(volatile u32 *h,u32 id) {
@@ -53,7 +54,7 @@ static u32 control_recipe_turn(volatile u32 *h,const u8 *payload,u32 length) {
     off=control_word(payload+4);
     if(off>1) return GRKIT_CONTROL_INVALID;
     if(slot==RECIPE_NONE) return GRKIT_CONTROL_CHANGED;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     e=recipe_entries(h);
     if(off && slot<e) {
         recipe_shift(h,slot,e-1U);
@@ -75,7 +76,7 @@ static u32 control_recipes_order(volatile u32 *h,const u8 *payload,u32 length) {
         if(slot==RECIPE_NONE || slot>=e) return GRKIT_CONTROL_CHANGED;
         for(j=0;j<i;++j) if(control_word(payload+4*j)==control_word(payload+4*i)) return GRKIT_CONTROL_INVALID;
     }
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0;i<e;++i) {
         slot=control_recipe_slot(h,control_word(payload+4*i));
         if(slot!=i) recipe_move(h,slot,i);
@@ -93,7 +94,7 @@ static u32 control_recipe_rename(volatile u32 *h,const u8 *payload,u32 length) {
     while(4U+n<length && payload[4U+n]) ++n;
     for(i=0;i<n;++i) if(payload[4U+i]<0x20U || payload[4U+i]>0x7eU) return GRKIT_CONTROL_INVALID;
     for(i=4U+n;i<length;++i) if(payload[i]) return GRKIT_CONTROL_INVALID;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0;i<n;++i) text[i]=payload[4+i];
     text[n]=0;
     recipe_name_set(h,slot,text);
@@ -104,7 +105,7 @@ static u32 control_recipe_delete(volatile u32 *h,const u8 *payload,u32 length) {
     if(length!=4) return GRKIT_CONTROL_BAD_LENGTH;
     slot=control_recipe_slot(h,control_word(payload));
     if(slot==RECIPE_NONE) return GRKIT_CONTROL_CHANGED;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     recipe_remove(h,slot);
     return 0;
 }
@@ -115,7 +116,7 @@ static u32 control_recipe_apply(volatile u32 *h,u8 *payload,u32 length,u32 *size
     if(length!=4) return GRKIT_CONTROL_BAD_LENGTH;
     slot=control_recipe_slot(h,control_word(payload));
     if(slot==RECIPE_NONE) return GRKIT_CONTROL_CHANGED;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,slot)[i];
     reason=recipe_reason(h,w);
     if(reason!=RECIPE_READY) result=reason;
@@ -130,7 +131,7 @@ static u32 control_recipe_apply(volatile u32 *h,u8 *payload,u32 length,u32 *size
 }
 static u32 control_recipe_undo(volatile u32 *h,u8 *payload,u32 length,u32 *size) {
     if(length) return GRKIT_CONTROL_BAD_LENGTH;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     if(!recipe_undo_count(h)) return GRKIT_CONTROL_INVALID;
     recipe_undo(h);
     control_put(payload,recipe_undo_count(h));
@@ -147,7 +148,7 @@ static u32 control_recipe_add(volatile u32 *h,u8 *payload,u32 length,u32 *size) 
     if(!recipe_word_valid(w[0])) return GRKIT_CONTROL_INVALID;
     for(i=1;i<GRKIT_RECIPE_WORDS;++i) if(w[i]>>GRKIT_RECIPE_VALUE_BITS) return GRKIT_CONTROL_INVALID;
     if(n>=GRKIT_RECIPE_SLOTS) return GRKIT_CONTROL_INVALID;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     id=recipe_new_id(h);
     if(!id) return GRKIT_CONTROL_INVALID;
     slot=e<GRKIT_RECIPE_ON_MAX ? e : n;

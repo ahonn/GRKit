@@ -226,6 +226,8 @@
 #define EV_DIAL_UP 0xd4
 #define EV_DIAL_DOWN 0xd5
 #define EV_CONFIRM 0xd8
+/* The request that FW_ADJ_OK posts, which ADJ also gets as an event. */
+#define EV_OK_REQUEST 0x86
 
 /* The playback metadata (FW_PLAYBACK_METADATA): +0x220 holds key 0x25, the
    Image Control tag. */

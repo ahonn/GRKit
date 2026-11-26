@@ -357,6 +357,8 @@
 #define EV_DIAL_UP 0xda
 #define EV_DIAL_DOWN 0xdb
 #define EV_CONFIRM 0xe0
+/* The request that FW_ADJ_OK posts, which ADJ also gets as an event. */
+#define EV_OK_REQUEST 0x8a
 
 /* GR IV draws ADJ before the toolbar exists, so the new cell needs a redraw. */
 #define TOOLBAR_CREATED(widget,icon) \

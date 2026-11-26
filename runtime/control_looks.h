@@ -74,7 +74,7 @@ static u32 control_looks_turn(volatile u32 *h,const u8 *payload,u32 length) {
     off=control_word(payload+4);
     if(off>1) return GRKIT_CONTROL_INVALID;
     if(effect==EFFECTS_LISTED) return GRKIT_CONTROL_CHANGED;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     if(effects_off(h,effect)!=off) effects_turn(h,effect,off);
     return 0;
 }
@@ -90,7 +90,7 @@ static u32 control_looks_order(volatile u32 *h,const u8 *payload,u32 length) {
         for(j=0;j<i;++j) if(order[j]==effect) return GRKIT_CONTROL_INVALID;
         order[i]=(u8)effect;
     }
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0;i<n;++i) {
         u32 choice=(i+1U)<<1|effects_off(h,order[i]);
         if(effects_choice(h,order[i])!=choice) setting_store(h,effects_handle(h,order[i]),choice);

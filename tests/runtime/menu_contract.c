@@ -267,6 +267,16 @@ static unsigned change_controller(unsigned from, unsigned to, unsigned arg)
     return 0;
 }
 #define FW_CHANGE_CONTROLLER change_controller
+/* The OK method of ADJ, which posts the request that closes ADJ. */
+#undef FW_ADJ_OK
+static unsigned adj_ok_posts;
+static unsigned adj_ok(unsigned controller)
+{
+    (void)controller;
+    ++adj_ok_posts;
+    return 0;
+}
+#define FW_ADJ_OK adj_ok
 /* A vtable that the test puts in object memory has the method addresses
    TEST_METHODS + 4 * slot: a call of one runs test_select_method. */
 #define TEST_METHODS 0x5a800000U
@@ -3142,7 +3152,22 @@ static void the_service_reads_and_sets_the_effect_choices(void)
     words[0] = 0x1000;
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x54000000;
     assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY && !effects_off(h, 0));
+    /* The GRKit menu of ADJ shows: the change closes ADJ with one request
+       and applies when it goes again after the exit. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = ADJ_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CLOSING && !effects_off(h, 0));
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CLOSING && adj_ok_posts == 1);
+    /* A native page that GRKit opens from ADJ keeps the change waiting. */
+    menu_closed(h);
+    h[GRKIT_HOST_RETURN / 4] = RETURN_OPENING;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY && adj_ok_posts == 1);
+    h[GRKIT_HOST_RETURN / 4] = 0;
     h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && effects_off(h, 0));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 0));
+    words[1] = 1;
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
     assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY);
     /* The information page shows a GRKit view: nothing changes. */

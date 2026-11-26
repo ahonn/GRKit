@@ -114,6 +114,9 @@
 #define FW_MENU_ROW_VALUE FIRMWARE(0x533a08a8)
 #define FW_ADJ_REFRESH FIRMWARE(0x531a5144)
 #define FW_ADJ_SELECT_SLOT FIRMWARE(0x531a5894)
+/* The OK method of ADJ: it posts the request of the App task that
+   takes the camera to the shooting screen, and uses no argument. */
+#define FW_ADJ_OK FIRMWARE(0x531a29c4)
 #define FW_CHANGE_CONTROLLER FIRMWARE(0x5316da14)
 /* The setter of an ASCII string view (gr3.h: INFO_LINES). */
 #define FW_STRING_VIEW_SET_ASCII FIRMWARE(0x53393928)

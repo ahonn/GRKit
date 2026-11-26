@@ -19,6 +19,30 @@ static u32 control_idle(volatile u32 *h) {
            !(h[GRKIT_HOST_PARAMETERS/4]&~1U) && !settings_shows(current) &&
            !(current==INFO_CONTROLLER && services_word(h,SERVICES_MENU+MENU_ROWS_ABOUT)[0]);
 }
+/* A change while the GRKit menu of ADJ shows closes ADJ first. The OK
+   method of ADJ posts the request that takes the camera to the shooting
+   screen, and ADJ exits after this poll without storing the highlighted row
+   (runtime/menu.c: menu_exit). The command does not apply and answers
+   GRKIT_CONTROL_CLOSING, so the service sends it again. The other pages of
+   control_idle, a native page that GRKit opens from ADJ, and ADJ that shows
+   another controller keep the change waiting. 0 when the change applies. */
+static u32 control_blocked(volatile u32 *h) {
+    volatile u32 *closing;
+    if(control_idle(h)) return 0;
+    if(!h[GRKIT_HOST_SERVICES/4] || !h[GRKIT_HOST_MENU_CONTROLLER/4] || h[GRKIT_HOST_DEVELOP/4] ||
+       h[GRKIT_HOST_PARAMETERS/4]&~1U || services_word(h,SERVICES_MENU+MENU_ROWS_CURRENT)[0]!=ADJ_CONTROLLER ||
+       ui_word(h,UI_NATIVE)[0] || RETURN_STATE(h[GRKIT_HOST_RETURN/4])==RETURN_OPENING)
+        return GRKIT_CONTROL_BUSY;
+    closing=services_word(h,SERVICES_MENU+MENU_ROWS_CLOSING);
+    /* One request for each close: a command that goes again waits for it. */
+    if(!closing[0]) {
+        closing[0]=h[GRKIT_HOST_MENU_CONTROLLER/4];
+        CALL1(FW_ADJ_OK)(closing[0]);
+    }
+    return GRKIT_CONTROL_CLOSING;
+}
+/* Return the answer of control_blocked unless the change applies now. */
+#define CONTROL_UNBLOCKED(h) do { u32 blocked_=control_blocked(h); if(blocked_) return blocked_; } while(0)
 #include "control_looks.h"
 #include "control_recipes.h"
 #include "control_modules.h"

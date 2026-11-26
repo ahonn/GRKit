@@ -371,7 +371,7 @@ static CONTROL_FRAME u32 control_module_set(volatile u32 *h,const u8 *payload,u3
             if(moved && !control_page_orders(h,current,c)) return GRKIT_CONTROL_INVALID;
         }
     }
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     if(fields&GRKIT_CONTROL_MODULE_SET_ENABLED) {
         setting_store(h,manage_off_handle(h,module),off);
         manage_off_changed(h);
@@ -400,7 +400,7 @@ static CONTROL_FRAME u32 control_modules_order(volatile u32 *h,const u8 *payload
         if(seen>>module&1U) return GRKIT_CONTROL_INVALID;
         seen|=1U<<module;
     }
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0;i<p.roots;++i) setting_store(h,manage_off_handle(h,control_word(payload+4U*i))+1U,i+1U);
     return 0;
 }
@@ -430,7 +430,7 @@ static CONTROL_FRAME u32 control_modules_layout(volatile u32 *h,const u8 *payloa
         if(seen>>module&1U) return GRKIT_CONTROL_INVALID;
         seen|=1U<<module;
     }
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     for(i=0,j=0;i<n;++i) {
         u32 word=control_word(payload+4U*i), module=word&0xffU, place=word>>GRKIT_CONTROL_MODULE_PLACE_SHIFT, position;
         if(place==GRKIT_CONTROL_MODULE_TOOLBAR) position=MANAGE_POS_PIN+j++;
@@ -476,7 +476,7 @@ static CONTROL_FRAME u32 control_settings_set(volatile u32 *h,const u8 *payload,
     value=control_word(payload+4);
     if(index>=GRKIT_CONTROL_SETTINGS || !control_settings[index].handle(h) || value>=control_settings[index].values)
         return GRKIT_CONTROL_INVALID;
-    if(!control_idle(h)) return GRKIT_CONTROL_BUSY;
+    CONTROL_UNBLOCKED(h);
     control_settings[index].set(h,value);
     return 0;
 }

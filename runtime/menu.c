@@ -312,6 +312,15 @@ static void descriptor(volatile u32 *at, const u16 *name) {
 }
 /* The timer and UI services for modules and the pages of the core. */
 #include "ui.h"
+/* Whether the GRKit menu of ADJ closes for a change of the Wi-Fi service
+   (runtime/control.h: control_blocked). The exit or the destroy of ADJ ends
+   the close. */
+static u32 menu_closing(volatile u32 *h) {
+    return h[GRKIT_HOST_SERVICES/4] && services_word(h,SERVICES_MENU+MENU_ROWS_CLOSING)[0];
+}
+static void menu_closed(volatile u32 *h) {
+    if(h[GRKIT_HOST_SERVICES/4]) services_word(h,SERVICES_MENU+MENU_ROWS_CLOSING)[0]=0;
+}
 #include "ui_keyboard.h"
 #include "modules.h"
 /* Only the still-viewfinder slot consults module state. Playback continues
@@ -1303,7 +1312,9 @@ A32_ENTRY void menu_exit(u32 controller) {
     u32 in_grkit=private_mode(controller);
     /* The entry that showed: MENU on its page left it before the exit. */
     u32 pin=h[GRKIT_HOST_SERVICES/4] ? pin_word(h,MENU_ROWS_PIN)[0] : 0;
-    if(in_grkit) exit_commit(h);
+    /* ADJ that closes for a change of the Wi-Fi service stores no
+       highlighted row (runtime/control.h: control_blocked). */
+    if(in_grkit) { if(!menu_closing(h)) exit_commit(h); }
     else if(h[GRKIT_HOST_ACTIVE/4] && h[GRKIT_HOST_SERVICES/4] &&
             native_ic_chosen(h[GRKIT_HOST_ADJ_IC_TYPE/4],MENU_NATIVE_IC_TYPE(),
                              CALL2(FW_ADJ_SLOT_TYPE)(controller,BYTE(controller,ADJ_SLOT))==ADJ_IC_SLOT_TYPE,
@@ -1339,6 +1350,7 @@ A32_ENTRY void menu_exit(u32 controller) {
         toolbar_layout(controller,0,0);
         title_fit(controller,0);
     }
+    menu_closed(menu_header());
 }
 A32_ENTRY u32 menu_destroy(u32 controller) {
     volatile u32 *h=menu_header();
@@ -1362,10 +1374,12 @@ A32_ENTRY u32 menu_destroy(u32 controller) {
         }
     }
     if(h[GRKIT_HOST_MENU_CONTROLLER/4]==controller) {
-        /* A destroy without an exit keeps the highlighted row too. */
-        exit_commit(h);
+        /* A destroy without an exit keeps the highlighted row too, unless
+           ADJ closes for a change of the Wi-Fi service. */
+        if(!menu_closing(h)) exit_commit(h);
         h[GRKIT_HOST_MENU_CONTROLLER/4]=0; h[GRKIT_HOST_MENU_LEVEL/4]=0;
     }
+    menu_closed(h);
     recipe_preview_show(h,RECIPE_NONE);
     h[GRKIT_HOST_PREVIEW/4]=0;
     h[GRKIT_HOST_FRAME_PREVIEW/4]=0;
@@ -1415,6 +1429,8 @@ A32_ENTRY u32 menu_event(u32 controller,const u16 *event) {
     h[GRKIT_HOST_MENU_EVENT_RING/4+(h[GRKIT_HOST_MENU_EVENTS/4]&(GRKIT_HOST_MENU_EVENT_RING_WORDS-1))]=kind | ((kind==EV_FN || kind==EV_SWITCH || kind==EV_SWITCH_END) ? ((u32)*(u8 *)WORD((u32)event,4)<<16) :
         kind==EV_TOUCH ? (u32)BYTE(WORD((u32)event,4),0x50)<<16 : 0);
     ++h[GRKIT_HOST_MENU_EVENTS/4];
+    /* The request that closes ADJ for the Wi-Fi service is no OK of GRKit. */
+    if(kind==EV_OK_REQUEST && menu_closing(h)) return 0;
     /* An ADJ that opened before INSTALL drew its slots without GRKit: the
        first event after INSTALL refreshes it. */
     if(h[GRKIT_HOST_SERVICES/4] && !services_word(h,SERVICES_MENU+MENU_ROWS_ADJ)[0]) {

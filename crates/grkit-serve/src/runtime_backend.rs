@@ -9,6 +9,9 @@ type Result<T> = std::result::Result<T, Problem>;
 /// The App task polls every 100 ms. A camera that is busy with a capture
 /// can answer later.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
+/// The wait before a command that answered `CONTROL_CLOSING` goes again: ADJ
+/// closes after the poll that answered.
+const CLOSE_WAIT: Duration = Duration::from_millis(100);
 
 pub trait RuntimeBackend: Send {
     /// The count of setting changes that the App task published, read from
@@ -73,11 +76,30 @@ impl<M: crate::control::MailboxIo> ControlBackend<M> {
     }
     fn raw(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
         use crate::control::Exchange;
-        match self
-            .client
-            .exchange(self.nonce, command, payload, COMMAND_TIMEOUT)
-            .map_err(|_| invalid("The control mailbox of the camera is not usable."))?
-        {
+        use grkit_core::abi::{CONTROL_BUSY, CONTROL_CLOSING};
+        let deadline = std::time::Instant::now() + COMMAND_TIMEOUT;
+        loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            match self
+                .client
+                .exchange(self.nonce, command, payload, left)
+                .map_err(|_| invalid("The control mailbox of the camera is not usable."))?
+            {
+                // The command did not apply, so it goes again once ADJ
+                // closed. ADJ that stays open is a busy camera.
+                Exchange::Answered(reply) if reply.result == CONTROL_CLOSING => {
+                    if std::time::Instant::now() + CLOSE_WAIT >= deadline {
+                        return Ok((CONTROL_BUSY, Vec::new()));
+                    }
+                    std::thread::sleep(CLOSE_WAIT);
+                }
+                answer => return Self::answer(answer),
+            }
+        }
+    }
+    fn answer(answer: crate::control::Exchange) -> Result<(u32, Vec<u8>)> {
+        use crate::control::Exchange;
+        match answer {
             Exchange::Answered(reply) => Ok((reply.result, reply.bytes)),
             Exchange::NotSent => Err(Problem::new(
                 503,
@@ -187,6 +209,37 @@ mod tests {
                 .unwrap_err()
                 .code,
             "runtime_unavailable"
+        );
+    }
+
+    #[test]
+    fn a_change_that_closes_adj_goes_again_and_applies() {
+        use grkit_core::abi::CONTROL_CLOSING;
+        let mut memory = Memory::new();
+        let mut closing = 1;
+        memory.handler = Box::new(move |_, _| {
+            if closing > 0 {
+                closing -= 1;
+                (CONTROL_CLOSING, Vec::new())
+            } else {
+                (0, vec![5, 0, 0, 0])
+            }
+        });
+        let mut backend = ControlBackend::new(Client::new(memory).unwrap(), [7; 16]);
+        assert_eq!(
+            backend.exchange(CONTROL_LOOK_TURN, &[1, 0, 0, 0]).unwrap(),
+            (0, vec![5, 0, 0, 0])
+        );
+        // ADJ that never closes ends as a busy camera, without a change.
+        let mut memory = Memory::new();
+        memory.handler = Box::new(|_, _| (CONTROL_CLOSING, Vec::new()));
+        let mut backend = ControlBackend::new(Client::new(memory).unwrap(), [7; 16]);
+        assert_eq!(
+            backend
+                .exchange(CONTROL_LOOK_TURN, &[1, 0, 0, 0])
+                .unwrap()
+                .0,
+            CONTROL_BUSY
         );
     }
 }
