@@ -18,6 +18,7 @@ versioned_files = [
     { path = "Cargo.lock", dependency = "grkit-cli" },
     { path = "Cargo.lock", dependency = "grkit-core" },
     { path = "Cargo.lock", dependency = "grkit-firmware" },
+    { path = "Cargo.lock", dependency = "grkit-serve" },
     { path = "Cargo.lock", dependency = "grkit-wasm" },
 ]
 changelog = "CHANGELOG.md"
