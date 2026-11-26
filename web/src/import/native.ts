@@ -11,6 +11,7 @@ const READ_TIMEOUT = 60_000;
 let tableCount = 0;
 
 import { NATIVE_LOOKS, type NativeFirmware } from '../packageCovers';
+import { isReleased } from '../release';
 
 export { NATIVE_LOOKS, type NativeFirmware };
 
@@ -22,9 +23,11 @@ export const FIRMWARE_PAGES: Readonly<Record<NativeFirmware, string>> = {
   gr2: 'https://www.ricoh-imaging.co.jp/english/support/digital/gr2_s.html',
 };
 
-/** The native looks that the camera entry `camera` (`Camera.key`) can use. */
-export const nativeLooksFor = (camera: string) =>
-  NATIVE_LOOKS.filter((look) => look.cameras.includes(camera));
+/** The native looks that the camera entry `camera` (`Camera.key`) can use in release `version`. */
+export const nativeLooksFor = (camera: string, version: string = __GRKIT_VERSION__) =>
+  NATIVE_LOOKS.filter(
+    (look) => look.cameras.includes(camera) && (!look.since || isReleased(look.since, version)),
+  );
 
 /**
  * The imports that the camera entry `camera` can use: each LUT import, and the native looks of
@@ -33,8 +36,9 @@ export const nativeLooksFor = (camera: string) =>
 export function importsForCamera<T extends ImportedEffect>(
   imported: readonly T[],
   camera: string,
+  version: string = __GRKIT_VERSION__,
 ): readonly T[] {
-  const looks = nativeLooksFor(camera);
+  const looks = nativeLooksFor(camera, version);
   return imported.filter(
     (effect) => effect.imported.kind !== 'native' || looks.some((look) => look.id === effect.id),
   );
@@ -91,8 +95,8 @@ function run(request: NativeRequest, signal: AbortSignal): Promise<NativeRespons
 }
 
 /**
- * Reads the native looks of an official firmware ZIP or its firmware file (GR IV: Cinema Yellow
- * and Cinema Green; GR II: GR II Positive), in a worker, and returns them as effects of the page.
+ * Reads the native looks of an official firmware ZIP or its firmware file (GR IV: the Cinema and
+ * Monochrome looks; GR II: GR II Positive), in a worker, and returns them as effects of the page.
  * The file stays in the browser. `baseGamma` is the catalog's, for the previews.
  */
 export async function unlockNativeLooks(

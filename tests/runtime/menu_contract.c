@@ -26,6 +26,12 @@ static void record_native_aspect(unsigned id);
 /* The native Image Control type plus 1 (runtime/menu.c). */
 static unsigned native_ic_value;
 #define MENU_NATIVE_IC_TYPE() (native_ic_value)
+/* Whether a phone is connected to the Wi-Fi of the camera (runtime/menu.c). */
+static unsigned wlan_station_value;
+#define MENU_WLAN_STATION() (wlan_station_value)
+/* Whether the Wi-Fi access point of the camera is on (runtime/menu.c). */
+static unsigned wlan_on_value;
+#define MENU_WLAN_ON() (wlan_on_value)
 /* GR IIIx: the lens of 40 mm that the GR III family runtime asks for. */
 #undef CROP_LENS_40MM
 static unsigned test_lens_40mm;
@@ -254,16 +260,26 @@ static void slot_name_set(unsigned slot, unsigned name, unsigned registered)
 #define DIAL_SLOT_ASSIGN(u,slot) (++slot_assigns, slot_assign_saves = slot_saves, slot_of[(u)] = (slot))
 /* A change of the controller, as to the keyboard, which the test records. */
 #undef FW_CHANGE_CONTROLLER
-static unsigned controller_changes, controller_from, controller_to;
+static unsigned controller_changes, controller_from, controller_to, controller_arg;
 static unsigned change_controller(unsigned from, unsigned to, unsigned arg)
 {
-    (void)arg;
     ++controller_changes;
     controller_from = from;
     controller_to = to;
+    controller_arg = arg;
     return 0;
 }
 #define FW_CHANGE_CONTROLLER change_controller
+/* The OK method of ADJ, which posts the request that closes ADJ. */
+#undef FW_ADJ_OK
+static unsigned adj_ok_posts;
+static unsigned adj_ok(unsigned controller)
+{
+    (void)controller;
+    ++adj_ok_posts;
+    return 0;
+}
+#define FW_ADJ_OK adj_ok
 /* A vtable that the test puts in object memory has the method addresses
    TEST_METHODS + 4 * slot: a call of one runs test_select_method. */
 #define TEST_METHODS 0x5a800000U
@@ -349,7 +365,12 @@ static unsigned test_shown_number(void)
 #define PLAYBACK_INVALIDATE(view) ((void)(view), ++playback_redraws)
 #define PLAYBACK_TIMER_START(ms) ((void)(ms), 0x20000U + ++playback_timers)
 #define PLAYBACK_BARRIER() ((void)0)
+/* The Standard parameter set of the development model (runtime/develop.h),
+   one byte for each parameter kind. */
+static uint8_t develop_model_set[17];
+#define DEVELOP_SET(kind) develop_model_set[(kind)]
 #include "menu.c"
+static u32 control_words[GRKIT_CONTROL_PAYLOAD_BYTES / 4];
 _Static_assert(SERVICES_SIZE <= sizeof(services_memory), "The test maps the services block");
 static void native_set_record(const char *const *argv)
 {
@@ -414,8 +435,12 @@ static unsigned view_call(unsigned fn, unsigned a, unsigned b, unsigned c, unsig
 /* The flag word of a running RAW development (runtime/menu.c:
    develop_running): no development runs. */
 static unsigned develop_guard;
+/* The guard and the service of the power report (runtime/battery_percent.h). */
+static unsigned power_guard, power_service;
 static unsigned *object_at(unsigned address)
 {
+    if (address == (FW_POWER_GUARD & ~3U)) return &power_guard;
+    if (address == FW_POWER_HOLDER + POWER_SERVICE) return &power_service;
 #ifdef FW_DEVELOP_GUARD
     if (address == (FW_DEVELOP_GUARD & ~3U)) return &develop_guard;
 #endif
@@ -680,7 +705,7 @@ static void the_root_reads_off_without_a_committed_effect(void)
     reset();
     descriptor(slot, grkit_title);
     assert(slot[0] == 0x106);
-    assert(selected_icon(test_header) == 0x7fff);
+    assert(selected_icon(test_header) == GRKIT_ICON_OFF);
     descriptor(slot, MODULE(0).summary(test_header));
     assert(same(MODULE(0).summary(test_header), "Film Look: Off") && slot[0] == 0x10f);
     assert(same(MODULE(0).title(test_header), "Film Look"));
@@ -906,14 +931,14 @@ static void icons_toolbar_and_edges_map_their_ids(void)
     assert(!native_action_release(10, 0));
     assert(!native_action_release(0, 1));
     assert(native_action_release(10, 1));
-    assert(menu_icon(0x7ffe) == 0x59003000);
+    assert(menu_icon(GRKIT_ICON_GRKIT) == 0x59003000);
     /* The Version icon follows the GRKit icon in chunk 0. */
     assert(menu_icon(GRKIT_ICON_VERSION) == 0x59003000 + GRKIT_ICON_STRIDE);
     assert(toolbar_x(0, 0) == 415 && toolbar_x(0, 5) == 665);
     /* Two entries of modules move the native cells left by two cells: the
        entries take x 565 and 615, and GRKit stays at the right edge. */
     assert(toolbar_x(2, 0) == 315 && toolbar_x(2, 5) == 565 && toolbar_x(2, 6) == 615 && toolbar_x(2, 7) == 665);
-    assert(menu_icon(0x7fff) == 0x59001000);
+    assert(menu_icon(GRKIT_ICON_OFF) == 0x59001000);
     assert(menu_icon(0x166) == 0);
     assert(menu_icon(0x8005) == 0);
     assert(menu_icon(0xffff) == 0);
@@ -1002,8 +1027,10 @@ static void fn_values_add_the_defaults_of_a_native_look(void)
 }
 
 /* Toning (runtime/toning.h): adjustment 9 of a native look with its own red and
-   blue curves in a tail slot. A change makes the record curves from the slot,
-   green + (own - green) x (2 + t) / 2, and clears the gamma key. */
+   blue curves in a tail slot. The page shows the three GR IV levels as values
+   0 to 2, the look's own toning in the middle. A change makes the record
+   curves from the slot, green + (own - green) x (2 + t) / 2, and clears the
+   gamma key. */
 static void toning_moves_red_and_blue_from_green(void)
 {
 #ifdef PARAMETER_TONING_BASE
@@ -1023,21 +1050,26 @@ static void toning_moves_red_and_blue_from_green(void)
         HALF(slot, 512 + i * 2) = (u16)(green - 200);
     }
     test_header[GRKIT_HOST_PARAMETERS / 4] = record;
-    /* Its own toning reads as the neutral native value. */
-    assert(menu_parameter_get(PARAMETER_TONING) == 4 + 1);
-    const struct { u32 native; u8 stored; int red, blue; } steps[] = {
-        {5, 1, 150, -300},  /* +1, the GR IV level 3 */
-        {3, 8, 50, -100},   /* -1, the GR IV level 1 */
-        {2, 7, 0, 0},       /* -2, gray */
-        {0, 5, -100, 200},  /* -4, the other way */
-        {8, 4, 300, -600},  /* +4 */
-        {4, 0, 100, -200},  /* its own toning again */
+    /* Its own toning reads as the middle level. */
+    assert(menu_parameter_get(PARAMETER_TONING) == 1 + 1);
+    /* The track follows the strongest tint up to mid-gray, not a highlight. */
+    u32 colors[6];
+    HALF(slot, 200 * 2) = (u16)(1000 + 200 * 40 - 4000);
+    assert(toning_track_colors(record + GRKIT_RECORD_CURVES, slot, colors));
+    const u32 track_colors[6] = {204, 195, 176, 252, 195, 80};
+    assert(!memcmp(colors, track_colors, sizeof(colors)));
+    HALF(slot, 200 * 2) = (u16)(1000 + 200 * 40 + 100);
+    const struct { u32 value; u8 stored; u32 shown; int red, blue; } steps[] = {
+        {2, 1, 2, 150, -300}, /* +1, the GR IV level 3 */
+        {0, 8, 0, 50, -100},  /* -1, the GR IV level 1 */
+        {5, 1, 2, 150, -300}, /* beyond the levels: the last one */
+        {1, 0, 1, 100, -200}, /* its own toning again */
     };
     for (u32 s = 0; s < sizeof(steps) / sizeof(steps[0]); ++s) {
         test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
-        assert(menu_parameter_set(PARAMETER_TONING, steps[s].native));
+        assert(menu_parameter_set(PARAMETER_TONING, steps[s].value));
         assert(BYTE(record, GRKIT_RECORD_TONING) == steps[s].stored);
-        assert(menu_parameter_get(PARAMETER_TONING) == steps[s].native + 1);
+        assert(menu_parameter_get(PARAMETER_TONING) == steps[s].shown + 1);
         assert(test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
         for (u32 i = 0; i < 256; i += 51) {
             int green = 1000 + (int)i * 40;
@@ -1046,17 +1078,127 @@ static void toning_moves_red_and_blue_from_green(void)
             assert(HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) == green);
         }
     }
+    /* A value that an earlier GRKit stored beyond the levels takes the nearest one. */
+    BYTE(record, GRKIT_RECORD_TONING) = 4;
+    assert(menu_parameter_get(PARAMETER_TONING) == 2 + 1);
+    BYTE(record, GRKIT_RECORD_TONING) = 5;
+    assert(menu_parameter_get(PARAMETER_TONING) == 0 + 1);
+    /* The row text gives the level as GR IV shows it. */
+    const u32 text = TEST_OBJECTS + 0x3900U;
+    WORD(text, 0) = 0xffffffffU;
+    BYTE(record, GRKIT_RECORD_TONING) = 8;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '1' && !BYTE(text, 1));
+    BYTE(record, GRKIT_RECORD_TONING) = 0;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '2');
+    BYTE(record, GRKIT_RECORD_TONING) = 1;
+    assert(menu_parameter_toning_label(text) == 1 && BYTE(text, 0) == '3');
+    /* The marker of each slider shows the default: the middle level of Toning,
+       and the Fn default of an adjustment as a native value. */
+    assert(menu_parameter_mark(PARAMETER_TONING) == 1 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 3) = 1;     /* Contrast +1 */
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 5) = 9 - 3; /* Shadow -3 */
+    assert(menu_parameter_mark(3) == 5 + 1);
+    assert(menu_parameter_mark(5) == 1 + 1);
+    assert(menu_parameter_mark(0) == 4 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 3) = 0;
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 5) = 0;
     /* The snapshot holds Toning in its row kind. */
     const u32 model = TEST_OBJECTS + 0x3800U;
     BYTE(record, GRKIT_RECORD_TONING) = 1;
     menu_parameter_page_snapshot(model);
-    assert(BYTE(model, MODEL_SNAPSHOT + PARAMETER_TONING_KIND) == 5);
-    /* Without a slot, the native getter and setter run. */
+    assert(BYTE(model, MODEL_SNAPSHOT + PARAMETER_TONING_KIND) == 2);
+    /* Without a slot, the native getter, setter, marker, and text run. */
     BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
     assert(menu_parameter_get(PARAMETER_TONING) == 0);
-    assert(!menu_parameter_set(PARAMETER_TONING, 6));
+    assert(!menu_parameter_set(PARAMETER_TONING, 2));
     assert(BYTE(record, GRKIT_RECORD_TONING) == 1);
+    assert(menu_parameter_mark(PARAMETER_TONING) == 0);
+    assert(menu_parameter_toning_label(text) == 0);
+    /* Without a session, every marker is native. */
     test_header[GRKIT_HOST_PARAMETERS / 4] = 0;
+    assert(menu_parameter_mark(3) == 0);
+#endif
+}
+
+/* The parameter page of a RAW development, while the Standard set holds an
+   effect with Toning (runtime/develop.h): the rows with Toning, the markers
+   of the effect, the levels 1 to 3, and curves of the development that
+   follow the Toning of the set, while the record keeps its own. */
+static void develop_toning_follows_the_set(void)
+{
+#if defined(DEVELOP_PARAMETERS) && defined(PARAMETER_TONING_STEP)
+    const u32 record = TEST_OBJECTS + 0x2000U, slot = TEST_OBJECTS + 0x3400U;
+    const u32 curves = slot - GRKIT_TONE_CURVES + GRKIT_DEVELOP_CURVES;
+    reset();
+    for (u32 k = 0; k < 9; ++k) BYTE(record, GRKIT_RECORD_FN_DEFAULTS + k) = 0;
+    test_header[GRKIT_HOST_TAIL / 4] = slot - GRKIT_TONE_CURVES;
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 1;
+    BYTE(record, GRKIT_RECORD_TONING) = 0;
+    for (u32 i = 0; i < 256; ++i) {
+        u32 green = 1000 + i * 40;
+        HALF(record, GRKIT_RECORD_CURVES + i * 2) = (u16)(green + 100);
+        HALF(record, GRKIT_RECORD_CURVES + 512 + i * 2) = (u16)green;
+        HALF(record, GRKIT_RECORD_CURVES + 1024 + i * 2) = (u16)(green - 200);
+        HALF(slot, i * 2) = (u16)(green + 100);
+        HALF(slot, 512 + i * 2) = (u16)(green - 200);
+    }
+    test_header[GRKIT_HOST_DEVELOP_FILLED / 4] = record;
+    /* The rows with Toning replace the Standard rows only. */
+    assert(menu_develop_toning_base(0) == PARAMETER_TONING_BASE);
+    assert(menu_develop_toning_base(3) == 3);
+    /* The markers of the effect. */
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 6) = 9 - 3; /* Sharpness -3 */
+    assert(menu_develop_mark(6) == 1 + 1 && menu_develop_mark(0) == 4 + 1);
+    assert(menu_develop_mark(PARAMETER_TONING) == 1 + 1);
+    BYTE(record, GRKIT_RECORD_FN_DEFAULTS + 6) = 0;
+    /* The text of a set value. */
+    const u32 text = TEST_OBJECTS + 0x3900U;
+    assert(menu_develop_toning_label(text, 2) == 1 && BYTE(text, 0) == '3' && !BYTE(text, 1));
+    assert(menu_develop_toning_label(text, 0) == 1 && BYTE(text, 0) == '1');
+    /* The own level of the record needs no curves of the development. */
+    develop_model_set[PARAMETER_TONING_KIND] = 1;
+    test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
+    menu_develop_toning_changed();
+    assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == 0 && test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
+    /* Levels 3 and 1: the curves of the development tone red and blue, and
+       the record keeps its own curves. */
+    const struct { u8 value; int red, blue; } levels[] = {{2, 150, -300}, {0, 50, -100}};
+    for (u32 l = 0; l < 2; ++l) {
+        develop_model_set[PARAMETER_TONING_KIND] = levels[l].value;
+        test_header[GRKIT_HOST_GAMMA_KEY / 4] = 0x1234567U;
+        menu_develop_toning_changed();
+        assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == record && test_header[GRKIT_HOST_GAMMA_KEY / 4] == 0);
+        for (u32 i = 0; i < 256; i += 51) {
+            int green = 1000 + (int)i * 40;
+            assert(HALF(curves, i * 2) == green + levels[l].red);
+            assert(HALF(curves, 512 + i * 2) == green);
+            assert(HALF(curves, 1024 + i * 2) == green + levels[l].blue);
+            assert(HALF(record, GRKIT_RECORD_CURVES + i * 2) == green + 100);
+        }
+    }
+    assert(BYTE(record, GRKIT_RECORD_TONING) == 0);
+    /* The core stores Toning for Standard only, which the native setter
+       refuses. */
+    const u32 model = TEST_OBJECTS + 0x3a00U;
+    BYTE(model, DEVELOP_CATEGORY) = 0;
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD;
+    develop_model_set[PARAMETER_TONING_KIND] = 1;
+    assert(menu_develop_toning_store(model, 2) == 1 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD + 1;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_VALUES) = DEVELOP_STANDARD;
+    BYTE(model, DEVELOP_CATEGORY) = 1;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    BYTE(model, DEVELOP_CATEGORY) = 0;
+    /* Without Toning, or without an effect in the set, the page is native. */
+    BYTE(record, GRKIT_RECORD_TONE_SLOT) = 0;
+    assert(menu_develop_toning_store(model, 0) == 0 && develop_model_set[PARAMETER_TONING_KIND] == 2);
+    assert(menu_develop_toning_base(0) == 0 && menu_develop_toning_label(text, 2) == 0);
+    menu_develop_toning_changed();
+    assert(test_header[GRKIT_HOST_DEVELOP_TONED / 4] == 0);
+    assert(menu_develop_mark(0) == 4 + 1);
+    test_header[GRKIT_HOST_DEVELOP_FILLED / 4] = 0;
+    assert(menu_develop_mark(0) == 0 && menu_develop_toning_base(0) == 0);
 #endif
 }
 
@@ -1187,7 +1329,12 @@ static void module_tiles_follow_the_effect_icons(void)
     /* The labels of the manual focus scale in feet follow the Fn hint. */
     assert(menu_icon(GRKIT_ICON_SCALE_FEET) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 5 * GRKIT_ICON_STRIDE);
     assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN) == test_header[GRKIT_HOST_GRKIT_ICON / 4] + 6 * GRKIT_ICON_STRIDE);
-    assert(menu_icon(GRKIT_ICON_SCALE_SIXTEEN - 1) == 0);
+    /* Each host slot has its own ID, from the table of abi.h. */
+    assert(menu_icon(BATTERY_ICON(1)) ==
+           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_ICON_SLOT_BATTERY + 1U) * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_ICON_UPDATE) ==
+           test_header[GRKIT_HOST_GRKIT_ICON / 4] + (GRKIT_ICON_SLOT_UPDATE - 1U) * GRKIT_ICON_STRIDE);
+    assert(menu_icon(GRKIT_HOST_ICON_TOP - GRKIT_HOST_ICON_COUNT) == 0);
 }
 
 /* The ADJ page blocks start with record 0 committed, as ADJ has it, and
@@ -1254,7 +1401,7 @@ static void the_framing_page_sets_the_ratios_of_the_target(void)
         assert(current_module(test_header)->checked(test_header, row));
         assert(!current_module(test_header)->checked(test_header, (row + 1) % ROW_COUNT));
         assert(same(current_module(test_header)->label(test_header, row), ratio_names[value]));
-        assert(CURRENT_ICON(row) == (row ? FRAMING_TILE(value) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? FRAMING_TILE(value) : GRKIT_ICON_OFF));
         assert(same(current_module(test_header)->summary(test_header), ratio_summaries[value]));
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
@@ -1464,7 +1611,7 @@ static void the_guides_page_commits_only_its_style(void)
             assert(current_module(test_header)->checked(test_header, row));
             assert(!current_module(test_header)->checked(test_header, (row + 1) % 6));
             assert(same(current_module(test_header)->label(test_header, row), guide_names[row]));
-            assert(CURRENT_ICON(row) == (row ? GUIDE_TILE(row) : 0x7fff));
+            assert(CURRENT_ICON(row) == (row ? GUIDE_TILE(row) : GRKIT_ICON_OFF));
             assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO);
             assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
         }
@@ -1537,7 +1684,7 @@ static void the_date_imprint_page_lists_its_styles(void)
         assert(DATE_STYLE == row);
         assert(current_module(test_header)->checked(test_header, row));
         assert(same(current_module(test_header)->label(test_header, row), stamp_names[row]));
-        assert(CURRENT_ICON(row) == (row ? DATE_TILE(row) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? DATE_TILE(row) : GRKIT_ICON_OFF));
         assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO && GUIDE_STYLE == 0 && DATE_LOOK == 0);
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
     }
@@ -1574,7 +1721,7 @@ static void the_grain_page_changes_only_the_grain_word(void)
         assert(test_header[GRKIT_HOST_GRAIN / 4] == row);
         assert(current_module(test_header)->checked(test_header, row));
         assert(same(current_module(test_header)->label(test_header, row), grain_names[row]));
-        assert(CURRENT_ICON(row) == (row ? GRAIN_TILE(row) : 0x7fff));
+        assert(CURRENT_ICON(row) == (row ? GRAIN_TILE(row) : GRKIT_ICON_OFF));
         assert(test_header[GRKIT_HOST_FRAME_RATIO / 4] == CROP_RATIO && DATE_STYLE == 0);
         assert(test_header[GRKIT_HOST_ACTIVE / 4] == 0x59005000);
         assert(GUIDE_STYLE == guide_style && settings_memory[1] == module_changes);
@@ -2087,7 +2234,7 @@ static void the_recipe_page_shows_recipe_tiles(void)
     test_header[GRKIT_HOST_MENU_CURSOR / 4] = GRAIN_ROW;
     menu_confirm(test_header);
     assert(count(test_header) == 4);
-    assert(icons[0] && icons[0] < 0x7000U);
+    assert(icons[0] && icons[0] < GRKIT_ICON_FIRST);
     assert(CURRENT_ICON(0) == GRKIT_ICON_RECIPE(0));
     assert(CURRENT_ICON(1) == GRKIT_ICON_RECIPE(1));
     assert(CURRENT_ICON(2) == GRKIT_ICON_RECIPE(2));
@@ -2430,7 +2577,7 @@ static void the_date_imprint_settings_page_reads_and_stores_values(void)
 static void install_module_list(void)
 {
     u32 entry;
-    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 52, "The test list matches manage.h");
+    _Static_assert(MANAGE_STRIDE == 56 && MANAGE_HEADER == 56, "The test list matches manage.h");
     settings_memory[0] = 12;
     for (u32 i = 0; i < 3; ++i) {
         settings_memory[2 + (3 + 3 * i) * 3 + 1] = 0;
@@ -2698,6 +2845,23 @@ static void the_switch_stops_each_module_at_once(void)
     assert(same(MODULE(SWITCH_MODULE).label(h, 0), "Off") && same(MODULE(SWITCH_MODULE).label(h, 1), "On"));
     assert(!MODULE(SWITCH_MODULE).checked(h, 0) && MODULE(SWITCH_MODULE).checked(h, 1));
     assert(MODULE(SWITCH_MODULE).icon(h, 0) == GRKIT_ICON_OFF && MODULE(SWITCH_MODULE).icon(h, 1) == GRKIT_ICON_MODULES);
+    /* An update that waits adds its row, which asks on OK and changes
+       nothing else. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    assert(count(h) == 3 && MODULE(SWITCH_MODULE).icon(h, SWITCH_ROW_UPDATE) == GRKIT_ICON_UPDATE &&
+           !MODULE(SWITCH_MODULE).checked(h, SWITCH_ROW_UPDATE));
+    h[GRKIT_HOST_MENU_CURSOR / 4] = SWITCH_ROW_UPDATE;
+    assert(update_row(h));
+    MODULE(SWITCH_MODULE).apply(h, SWITCH_ROW_UPDATE);
+    assert(!manage_all_off(h));
+    /* Execute confirms it and asks for the cue of the live view. */
+    update_adj_done(1, 0);
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && count(h) == 2 && !update_row(h) &&
+           h[GRKIT_HOST_MENU_CURSOR / 4] == 1 && h[GRKIT_HOST_CUE_LABEL / 4] == GRKIT_CUE_UPDATE_RESTART &&
+           h[GRKIT_HOST_LOAD_CUE / 4] == GRKIT_CUE_PENDING);
+    h[GRKIT_HOST_CUE_LABEL / 4] = h[GRKIT_HOST_LOAD_CUE / 4] = 0;
+    h[GRKIT_HOST_UPDATE / 4] = 0;
+    h[GRKIT_HOST_MENU_CURSOR / 4] = 1;
     /* An ADJ exit on the page, such as a half-press with Off highlighted,
        keeps the switch On. */
     h[GRKIT_HOST_MENU_CURSOR / 4] = 0;
@@ -2723,7 +2887,7 @@ static void the_switch_stops_each_module_at_once(void)
     /* Film Look keeps its effect, and the viewfinder shows the native
        icon. */
     h[GRKIT_HOST_ACTIVE / 4] = 0x59005000;
-    assert(selected_icon(h) == 0x7fff);
+    assert(selected_icon(h) == GRKIT_ICON_OFF);
     /* On starts the modules whose Enable is On: Date Imprint stays Off. */
     settings_memory[2 + 6 * 3 + 1] = 1;
     manage_set_all_off(h, 0);
@@ -2936,6 +3100,201 @@ static void film_look_lists_the_installed_effects_that_are_on(void)
     assert(!effects_changed(test_header));
 }
 
+/* The Wi-Fi service reads the effect list and sets the choices through the
+   mailbox (runtime/control.h), as the options rows and Order do. */
+static u32 look_command(u32 command, const u32 *words, u32 count, u32 *length)
+{
+    static struct control_request request;
+    request.command = command; request.length = 4 * count;
+    if (count) memcpy(request.payload, words, 4 * count);
+    *length = 0;
+    u32 result = control_dispatch((void *)test_header, &request, length);
+    memcpy(control_words, request.payload, sizeof(control_words));
+    return result;
+}
+static void the_service_reads_and_sets_the_effect_choices(void)
+{
+    reset();
+    install_effect_list();
+    volatile u32 *h = test_header;
+    u32 length, words[4];
+    for (u32 i = 0; i < 3; ++i) settings_memory[2 + (12 + i) * 3] = 0x1000 + i;
+    h[GRKIT_HOST_COUNT / 4] = 2;
+    h[GRKIT_HOST_EFFECTS / 4] = TEST_EFFECTS;
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    /* Without CORE.TONE, the camera has no effects. */
+    h[GRKIT_HOST_CAPABILITIES / 4] &= ~GRKIT_CORE_TONE_BIT;
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == GRKIT_CONTROL_UNSUPPORTED);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_TONE_BIT;
+    /* Velvia 100 is committed. A recipe and a mode-dial set name effects. */
+    setting_store(h, GRKIT_CORE_TONE, 2);
+    /* Recipe slot 3, number 2, named "Odd", uses effect 0x123: the use
+       names its slot + 1 and number, and the name words follow it. */
+    h[GRKIT_HOST_RECIPES / 4 + 3 * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_EFFECT | 0x123U << RECIPE_CODE_SHIFT | 2U << RECIPE_NUMBER_SHIFT;
+    h[GRKIT_HOST_RECIPE_NAMES / 4 + 3 * GRKIT_RECIPE_NAME_WORDS] = 'O' | 'd' << 7 | 'd' << 14;
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, 0, 0, &length) == 0);
+    assert(length == GRKIT_CONTROL_LOOKS_HEADER + 3 * GRKIT_CONTROL_LOOK_ENTRY + 4 + 4 * GRKIT_RECIPE_NAME_WORDS);
+    assert(control_words[0] == 3 && control_words[1] == 0x1001 && control_words[2] == h[GRKIT_HOST_STATE_CHANGES / 4] && control_words[3] == 1);
+    assert(control_words[4] == 0x1000 && control_words[5] == 0 && control_words[6] == 1);
+    assert(control_words[10] == 0x1002 && control_words[11] == 1 && control_words[12] == 0);
+    assert(control_words[13] == (0x123U | 4U << GRKIT_CONTROL_USE_ORIGIN_SHIFT | 2U << GRKIT_CONTROL_USE_NUMBER_SHIFT | GRKIT_CONTROL_USE_NAMED));
+    assert(control_words[14] == ('O' | 'd' << 7 | 'd' << 14) && !control_words[15]);
+    assert(look_command(GRKIT_CONTROL_LOOKS_READ, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
+    /* Off of the committed effect commits Off, as its checkbox does. */
+    words[0] = 0x1001; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !length);
+    assert(effects_off(h, 1) && !tone_value(h));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 1));
+    words[1] = 2;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    words[0] = 0x2000; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
+    /* A page that lists the effects is open: nothing changes. */
+    words[0] = 0x1000;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0x54000000;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY && !effects_off(h, 0));
+    /* The GRKit menu of ADJ shows: the change closes ADJ with one request
+       and applies when it goes again after the exit. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = ADJ_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CLOSING && !effects_off(h, 0));
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_CLOSING && adj_ok_posts == 1);
+    /* A native page that GRKit opens from ADJ keeps the change waiting. */
+    menu_closed(h);
+    h[GRKIT_HOST_RETURN / 4] = RETURN_OPENING;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY && adj_ok_posts == 1);
+    h[GRKIT_HOST_RETURN / 4] = 0;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && effects_off(h, 0));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 0));
+    words[1] = 1;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY);
+    /* The information page shows a GRKit view: nothing changes. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = INFO_CONTROLLER;
+    services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = MENU_ABOUT_GRKIT;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == GRKIT_CONTROL_BUSY);
+    services_word(h, SERVICES_MENU + MENU_ROWS_ABOUT)[0] = 0;
+    /* Playback and the other pages of MENU take a change, as the shooting
+       screen does. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0x4000000;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && effects_off(h, 0));
+    words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_LOOK_TURN, words, 2, &length) == 0 && !effects_off(h, 0));
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    /* A new order: each effect once. */
+    words[0] = 0x1002; words[1] = 0x1000; words[2] = 0x1001;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == 0);
+    assert(effects_choice(h, 2) == (1U << 1 | 1U) && effects_choice(h, 0) == 2U << 1 && effects_choice(h, 1) == 3U << 1);
+    assert(effects_at(h, 0) == 2 && effects_at(h, 1) == 0 && effects_at(h, 2) == 1);
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    words[2] = 0x1000;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    words[2] = 0x2000;
+    assert(look_command(GRKIT_CONTROL_LOOKS_ORDER, words, 3, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(99, 0, 0, &length) == GRKIT_CONTROL_UNSUPPORTED);
+    /* Each poll copies the count of setting changes into the mailbox, where
+       the service reads it without a command. */
+    volatile struct control_mailbox *box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
+    static const u32 epoch[4] = {0};
+    control_init(box, epoch);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
+    control_poll(h);
+    assert(box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4]);
+    u32 before = box->state_changes;
+    GRKIT_STATE_CHANGED(h);
+    assert(box->state_changes == before);
+    control_poll(h);
+    assert(box->state_changes == before + 1 && box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4]);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
+}
+
+/* The Wi-Fi service reads and changes the recipes through the mailbox
+   (runtime/control_recipes.h), by their IDs. */
+static void put_recipe(volatile u32 *h, u32 slot, u32 id, u32 off)
+{
+    h[GRKIT_HOST_RECIPES / 4 + slot * GRKIT_RECIPE_WORDS] = RECIPE_USED | RECIPE_LOOK_OFF;
+    h[GRKIT_HOST_RECIPES / 4 + slot * GRKIT_RECIPE_WORDS + RECIPE_MODULE_WORD] = off ? RECIPE_OFF : 0;
+    h[GRKIT_HOST_RECIPE_IDS / 4 + slot] = id;
+}
+static u32 recipe_id_of(u32 slot) { return test_header[GRKIT_HOST_RECIPE_IDS / 4 + slot]; }
+static void the_service_reads_and_changes_the_recipes(void)
+{
+    reset();
+    install_effect_list();
+    volatile u32 *h = test_header;
+    u32 length, words[16];
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SHOOTING_CONTROLLER;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_UNSUPPORTED);
+    h[GRKIT_HOST_CAPABILITIES / 4] |= GRKIT_CORE_RECIPE_BIT;
+    /* Two recipes on, one off. */
+    put_recipe(h, 0, 11, 0); put_recipe(h, 1, 12, 0); put_recipe(h, 2, 13, 1);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0);
+    assert(length == GRKIT_CONTROL_RECIPES_HEADER + 3 * GRKIT_CONTROL_RECIPE_ENTRY);
+    assert(control_words[0] == 3 && control_words[1] == 2 && control_words[5] == 0 && control_words[6] == 3);
+    assert(control_words[7] == 11 && control_words[7 + 11] == 12 && control_words[7 + 22] == 13);
+    words[0] = 4;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_INVALID);
+    /* Off goes before the others that are off; on, after the ones on. */
+    words[0] = 11; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(recipe_entries(h) == 1 && recipe_id_of(0) == 12 && recipe_id_of(1) == 11 && recipe_id_of(2) == 13);
+    words[0] = 13; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(recipe_entries(h) == 2 && recipe_id_of(1) == 13 && recipe_id_of(2) == 11);
+    /* The order of the ones on, each once. */
+    words[0] = 13; words[1] = 12;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == 0);
+    assert(recipe_id_of(0) == 13 && recipe_id_of(1) == 12);
+    words[1] = 13;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    words[1] = 11;
+    assert(look_command(GRKIT_CONTROL_RECIPES_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    /* A name of printable ASCII; none gives the automatic name. */
+    words[0] = 12; memcpy(&words[1], "Odd", 3);
+    {
+        static struct control_request request;
+        /* NUL-padded to whole words; an odd length is not one. */
+        request.command = GRKIT_CONTROL_RECIPE_RENAME; request.length = 7;
+        memcpy(request.payload, words, 7);
+        assert(control_dispatch((void *)h, &request, &length) == GRKIT_CONTROL_BAD_LENGTH);
+        request.length = 8; request.payload[7] = 0;
+        assert(control_dispatch((void *)h, &request, &length) == 0);
+    }
+    assert(recipe_name_length(h, 1) == 3 && recipe_name_char(h, 1, 0) == 'O');
+    /* A page of GRKit is open: nothing changes. */
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = SETTINGS_SUBMENU;
+    words[0] = 12;
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == GRKIT_CONTROL_BUSY && recipe_count(h) == 3);
+    services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0x4000000;
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == 0 && recipe_count(h) == 2);
+    assert(look_command(GRKIT_CONTROL_RECIPE_DELETE, words, 1, &length) == GRKIT_CONTROL_CHANGED);
+    /* An apply leaves an undo step, and the undo removes it. */
+    words[0] = 13;
+    assert(look_command(GRKIT_CONTROL_RECIPE_APPLY, words, 1, &length) == 0 && length == 4 && recipe_undo_count(h) == 1);
+    /* The current recipe can be one that is off. */
+    words[0] = 13; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0 && !recipe_entries(h));
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0 && control_words[2] == 0);
+    words[0] = 13; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_TURN, words, 2, &length) == 0);
+    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == 0 && control_words[0] == 0);
+    assert(look_command(GRKIT_CONTROL_RECIPE_UNDO, 0, 0, &length) == GRKIT_CONTROL_INVALID);
+    /* An added recipe is on after the ones on, with a new ID. */
+    for (u32 i = 0; i < GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS; ++i) words[i] = 0;
+    words[0] = RECIPE_USED | RECIPE_LOOK_OFF;
+    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == 0);
+    assert(recipe_entries(h) == 2 && recipe_count(h) == 3 && recipe_id_of(1) == control_words[0] && control_words[0]);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_RECIPE_ADD, words, GRKIT_RECIPE_WORDS + GRKIT_RECIPE_NAME_WORDS, &length) == GRKIT_CONTROL_INVALID);
+}
+
 /* The MENU pages: the settings page of a module in the GRKit section,
    its options page, the GRKit section rows, and About GRKit. The listed
    modules are Film Look, Framing, and Guides, with their pages in slots
@@ -2983,6 +3342,202 @@ static void install_menu_pages(void)
     h[GRKIT_HOST_EFFECTS / 4] = TEST_EFFECTS;
     install_guide_rows(2);
     *page_at(guides + PAGE_FLAGS) |= CHOICE_OPTIONS;
+}
+
+/* The Wi-Fi service reads and changes the module settings through the
+   mailbox (runtime/control_modules.h), with the stores of the MENU rows. */
+static void module_set(u32 *words, u32 module, u32 fields, u32 off, u32 hidden, u32 settings, u32 ordered)
+{
+    words[0] = module; words[1] = fields; words[2] = off; words[3] = hidden;
+    words[4] = settings; words[5] = ordered;
+}
+static void the_service_reads_and_sets_module_settings(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    const u32 style_key = 0x1234, guides = 2, off = 2 + (3 + 3 * guides) * 3 + 1,
+              rows = 2 + (3 + 3 * guides + 2) * 3 + 1, order = 2 + (18 + MANAGE_ORDER_WORDS * guides) * 3 + 1;
+    u32 length, words[32], before;
+    settings_memory[0] = 24;
+    for (u32 k = 18; k < 24; ++k) {
+        settings_memory[2 + k * 3 + 1] = 0;
+        settings_memory[2 + k * 3 + 2] = MANAGE_ORDER_LIMIT;
+    }
+    manage_memory[MANAGE_ORDERS / 4] = 18 + 1;
+    settings_memory[2] = style_key;
+    GUIDE_STYLE = 3;
+    /* No Look or Recipe capability, and MENU never opened: the mask is 0. */
+    h[GRKIT_HOST_CAPABILITIES / 4] = 0;
+    h[GRKIT_HOST_ADJ_MODULES / 4] = 0;
+    h[GRKIT_HOST_MODULE_CHOICE / 4] = 1;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(h[GRKIT_HOST_MODULE_CHOICE / 4] == 1 && h[GRKIT_HOST_ADJ_MODULES / 4]);
+    assert(control_words[0] == 3 && control_words[3] == 0 && control_words[4] == 3);
+    u32 at = GRKIT_CONTROL_MODULES_HEADER / 4, found = 0;
+    for (u32 k = 0; k < 3; ++k) {
+        u32 n = control_words[at + 4] & 0xff, m = control_words[at + 4] >> 8;
+        if ((control_words[at] & 0xff) == guides) {
+            found = 1;
+            assert(control_words[at] & GRKIT_CONTROL_MODULE_ENABLED && control_words[at] & GRKIT_CONTROL_MODULE_ORDERABLE);
+            assert(control_words[at + 5] == style_key && control_words[at + 6] == 3 && m == 6);
+        }
+        at += GRKIT_CONTROL_MODULE_ENTRY / 4 + 2 * n + (m + 3) / 4;
+    }
+    assert(found && 4 * at == length);
+    assert(control_words[5] == h[GRKIT_HOST_CAPABILITIES / 4]);
+    /* A color-only module on a monochrome camera is not listed. */
+    u32 color_only = (guides + 1) % 3;
+    volatile u32 *color_status = MANAGE_MAP(manage_entry(h, color_only) + MANAGE_STATUS);
+    u32 color_before = *color_status;
+    *color_status = MANAGE_COLOR_ONLY;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(control_words[0] == 2 && control_words[4] == 2);
+    *color_status = color_before;
+    /* The first record names the module, its options, and the page key. */
+    words[0] = guides; words[1] = 0; words[2] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == 0);
+    assert(control_words[0] == GRKIT_CONTROL_MODULE_TEXTS_END && control_words[1] > 6);
+    assert((control_words[2] & 0xff) == GRKIT_CONTROL_MODULE_RECORD_MODULE);
+    assert(control_words[3] & GRKIT_CONTROL_MODULE_HAS_OPTIONS && control_words[3] & GRKIT_CONTROL_MODULE_ORDERED);
+    assert(control_words[4] == style_key);
+    words[1] = GRKIT_TEXT_LANGUAGES;
+    assert(look_command(GRKIT_CONTROL_MODULE_TEXTS, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    /* A bad field changes nothing, also with a good field before it. */
+    before = h[GRKIT_HOST_STATE_CHANGES / 4];
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED | GRKIT_CONTROL_MODULE_SET_HIDDEN, 1, 1U << 0, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_INVALID);
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 1, 0);
+    words[6] = style_key; words[7] = 6;
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 8, &length) == GRKIT_CONTROL_INVALID);
+    /* Each value but the first row cannot go off together. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_HIDDEN, 0, 0x3e, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_INVALID);
+    /* The first row stays first. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ORDER, 0, 0, 0, 6);
+    for (u32 k = 0; k < 6; ++k) words[6 + k] = 5 - k;
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == GRKIT_CONTROL_INVALID);
+    assert(h[GRKIT_HOST_STATE_CHANGES / 4] == before && !settings_memory[off] && GUIDE_STYLE == 3);
+    /* While a GRKit page shows, a valid change waits. */
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED, 1, 0, 0, 0);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 6, &length) == GRKIT_CONTROL_BUSY && !settings_memory[off]);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    /* Off, a new order, and the value that goes off in ADJ, in one step:
+       the setting of the hidden value goes to Off, as in MENU. */
+    module_set(words, guides, GRKIT_CONTROL_MODULE_SET_ENABLED | GRKIT_CONTROL_MODULE_SET_HIDDEN |
+               GRKIT_CONTROL_MODULE_SET_ORDER, 1, 1U << 3, 0, 6);
+    const u32 sequence[6] = {0, 2, 1, 3, 4, 5};
+    memcpy(words + 6, sequence, sizeof sequence);
+    assert(look_command(GRKIT_CONTROL_MODULE_SET, words, 12, &length) == 0);
+    assert(settings_memory[off] == 1 && settings_memory[rows] == 1U << 3 && !GUIDE_STYLE);
+    assert(settings_memory[order] == 0x54312U);
+    /* ADJ Order: the root modules in a new order, each once. */
+    words[0] = 2; words[1] = 1; words[2] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == 0);
+    assert(manage_position(h, 2) == 1 && manage_position(h, 1) == 2 && manage_position(h, 0) == 3);
+    words[1] = 2;
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_MODULES_ORDER, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    /* A module without a tile has no icon. */
+    words[0] = guides; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULE_TILE, words, 2, &length) == GRKIT_CONTROL_INVALID);
+}
+
+/* The service places the modules of ADJ Order in one step, as the ADJ
+   Order page does: the toolbar, the root, and the hidden modules. */
+static void the_service_places_the_modules(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    const u32 pin = GRKIT_CONTROL_MODULE_TOOLBAR << GRKIT_CONTROL_MODULE_PLACE_SHIFT,
+              root = GRKIT_CONTROL_MODULE_ROOT << GRKIT_CONTROL_MODULE_PLACE_SHIFT,
+              hidden = GRKIT_CONTROL_MODULE_HIDDEN << GRKIT_CONTROL_MODULE_PLACE_SHIFT;
+    u32 length, words[4];
+    ManagePlaces p;
+    h[GRKIT_HOST_CAPABILITIES / 4] = 0;
+    h[GRKIT_HOST_ADJ_MODULES / 4] = 0;
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_MODULES_READ, words, 1, &length) == 0);
+    assert(manage_adj_count(h) == 3);
+    assert(control_words[GRKIT_CONTROL_MODULES_HEADER / 4] & GRKIT_CONTROL_MODULE_PLACEABLE);
+    /* A module twice, the groups out of order, or a module that ADJ does
+       not show changes nothing. */
+    words[0] = 2 | pin; words[1] = 2 | root; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    words[0] = 0 | root; words[1] = 2 | pin; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_INVALID);
+    words[0] = 7 | pin; words[1] = 0 | root; words[2] = 1 | hidden;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_CHANGED);
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 2, &length) == GRKIT_CONTROL_CHANGED);
+    words[0] = 2 | pin;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == GRKIT_CONTROL_BUSY);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    assert(!manage_position(h, 0) && !manage_position(h, 1) && !manage_position(h, 2));
+    /* Guides goes to the toolbar, Film Look stays in the root, and Framing
+       leaves ADJ: CORE.POS of each, which ADJ reads at once. */
+    u32 before_changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(look_command(GRKIT_CONTROL_MODULES_LAYOUT, words, 3, &length) == 0 && !length);
+    assert(manage_position(h, 2) == MANAGE_POS_PIN && manage_position(h, 0) == 1 &&
+           manage_position(h, 1) == MANAGE_POS_HIDDEN && h[GRKIT_HOST_STATE_CHANGES / 4] != before_changes);
+    manage_places(h, &p);
+    assert(p.pins[0] == 2 && p.roots == 1 && p.root[0] == 0 && p.hiddens == 1 && p.hidden[0] == 1);
+}
+
+/* The service reads and sets the rows of GRKit Settings with their MENU
+   stores. This camera has Enable at Start (setting 18), Distance Unit (19),
+   and Show Text (20), and no other row. */
+static void the_service_reads_and_sets_grkit_settings(void)
+{
+    install_menu_pages();
+    volatile u32 *h = test_header;
+    u32 length, words[2];
+    const u32 handles[8] = {MANAGE_START, MANAGE_RAW, MANAGE_UNIT, MANAGE_BATTERY, MANAGE_BATTERY_PERCENT,
+                            MANAGE_PLAYBACK_INFO, MANAGE_GOODBYE, MANAGE_GOODBYE_TEXT};
+    for (u32 i = 0; i < 8; ++i) manage_memory[handles[i] / 4] = 0;
+    settings_memory[0] = 21;
+    settings_memory[2 + 18 * 3 + 1] = MANAGE_START_KEEP;
+    settings_memory[2 + 18 * 3 + 2] = MANAGE_START_VALUES;
+    settings_memory[2 + 19 * 3 + 1] = MANAGE_UNIT_METERS;
+    settings_memory[2 + 19 * 3 + 2] = MANAGE_UNIT_VALUES;
+    settings_memory[2 + 20 * 3 + 1] = MANAGE_GOODBYE_TEXT_ON;
+    settings_memory[2 + 20 * 3 + 2] = MANAGE_GOODBYE_TEXT_VALUES;
+    manage_memory[MANAGE_START / 4] = 18 + 1;
+    manage_memory[MANAGE_UNIT / 4] = 19 + 1;
+    manage_memory[MANAGE_GOODBYE_TEXT / 4] = 20 + 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, 0, 0, &length) == 0 && length == 4 * GRKIT_CONTROL_SETTINGS);
+    const u32 read[8] = {MANAGE_START_KEEP, GRKIT_CONTROL_SETTING_NONE, MANAGE_UNIT_METERS, GRKIT_CONTROL_SETTING_NONE,
+                         GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, GRKIT_CONTROL_SETTING_NONE, 1};
+    for (u32 i = 0; i < 8; ++i) assert(control_words[i] == read[i]);
+    words[0] = 0;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
+    /* A setting that the camera does not have, a value or an index out of
+       range, or a page of GRKit on the screen changes nothing. */
+    words[0] = GRKIT_CONTROL_SETTING_RAW; words[1] = 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_VALUES;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    words[0] = GRKIT_CONTROL_SETTINGS; words[1] = 0;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_INVALID);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 1, &length) == GRKIT_CONTROL_BAD_LENGTH);
+    words[0] = GRKIT_CONTROL_SETTING_UNIT; words[1] = MANAGE_UNIT_FEET;
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 1;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == GRKIT_CONTROL_BUSY);
+    h[GRKIT_HOST_MENU_CONTROLLER / 4] = 0;
+    assert(settings_memory[2 + 19 * 3 + 1] == MANAGE_UNIT_METERS);
+    /* The store of the MENU row: the value, its copy, and a change count. */
+    u32 before_changes = h[GRKIT_HOST_STATE_CHANGES / 4];
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0 && !length);
+    assert(unit_feet(h) && h[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_UNIT] == MANAGE_UNIT_FEET + 1 &&
+           h[GRKIT_HOST_STATE_CHANGES / 4] != before_changes);
+    words[0] = GRKIT_CONTROL_SETTING_START; words[1] = MANAGE_START_OFF;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0);
+    words[0] = GRKIT_CONTROL_SETTING_GOODBYE_TEXT; words[1] = MANAGE_GOODBYE_TEXT_OFF;
+    assert(look_command(GRKIT_CONTROL_SETTINGS_SET, words, 2, &length) == 0);
+    assert(look_command(GRKIT_CONTROL_SETTINGS_READ, 0, 0, &length) == 0);
+    assert(control_words[0] == MANAGE_START_OFF && control_words[2] == MANAGE_UNIT_FEET && control_words[7] == 0);
 }
 
 static void settings_entry_enable_preserves_each_value(void)
@@ -5384,6 +5939,55 @@ static void the_section_rows_follow_the_listed_modules(void)
     menu_tabs[MENU_TAB_GRKIT] = TEST_TAB;
     menu_rows_install(h);
     assert(menu_tabs[MENU_TAB_GRKIT] == TEST_TAB && factory_calls == 1);
+    /* An update over Wi-Fi that waits shows Update first in GRKit
+       Settings, and About GRKit reads Update and its version and opens the
+       same page, whose confirm box opens with it. Cancel keeps the update
+       waiting, Execute confirms it, and both return, as MENU does, to the page
+       that opened the value page. Then it and About GRKit read Restart to
+       apply. The test cannot show the box, so it calls its return. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    h[GRKIT_HOST_UPDATE_VERSION / 4] = 1U << 16 | 7U << 8 | 12U;
+    assert(same(grkit_value(h), "Update 1.7.12"));
+    assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
+    assert(settings_rows(h) == 3 && same(core_page_settings[0].label(h), "Update") &&
+           same(core_page_settings[1].label(h), "Mode Dial"));
+    const Setting *update = core_row_setting(h, 0);
+    assert(update == &update_setting && update->flags == SETTING_OWN_PAGE);
+    assert(same(update->title(h), "Update 1.7.12") && update->values(h) == 1 && update->get(h) == 0 &&
+           same(update->value_text(h, 0), "Install"));
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, SETTING_BACK));
+    assert(update->select(h, TEST_OBJECTS + 0x800U, 0));
+    assert(same((const u16 *)recipe_text_at(h, RECIPE_BOX_AT), "Install GRKit 1.7.12?"));
+    volatile u32 *check = services_word(h, SERVICES_CHECK);
+    check[CHECK_SETTING / 4] = 0;
+    check[CHECK_RADIO / 4] = TEST_OBJECTS + 0x800U;
+    check[CHECK_ID / 4] = settings_pages[0];
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = MENU_RETURN_CONTROLLER;
+    controller_changes = 0;
+    update_menu_done(0, 0);
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_WAITING && controller_changes == 1 &&
+           controller_to == MENU_RETURN_CONTROLLER);
+    update_menu_done(1, 0);
+    assert(controller_changes == 2 && controller_from == TEST_OBJECTS + 0x800U &&
+           controller_to == MENU_RETURN_CONTROLLER && controller_arg == CONTROLLER_BACK);
+    /* From GRKit Settings, the value page returns there. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = SETTINGS_SUBMENU;
+    update_menu_done(1, 0);
+    assert(controller_changes == 3 && controller_to == SETTINGS_SUBMENU);
+    MENU_OBJECT_WORD(TEST_OBJECTS + 0x800U, SETTINGS_RETURN_TARGET) = 0;
+    check[CHECK_RADIO / 4] = check[CHECK_ID / 4] = 0;
+    assert(h[GRKIT_HOST_UPDATE / 4] == GRKIT_UPDATE_CONFIRMED && update->get(h) == 0 &&
+           same(update->value_text(h, 0), "Restart to apply") && same(grkit_value(h), "Restart to apply"));
+    /* A confirmed update asks nothing more. */
+    assert(!update->select(h, TEST_OBJECTS + 0x800U, 0));
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_READY;
+    assert(same(grkit_value(h), "Restart to apply"));
+    /* Without a version, the texts leave it out. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    h[GRKIT_HOST_UPDATE_VERSION / 4] = 0;
+    assert(same(grkit_value(h), "Update"));
+    h[GRKIT_HOST_UPDATE / 4] = 0;
     /* GRKit Settings has Mode Dial, then ADJ Order, which opens its page;
        MENU there returns to GRKit Settings. */
     assert(menu_rows_controller(h, MENU_ROW_TARGET) == SETTINGS_SUBMENU);
@@ -5598,6 +6202,17 @@ static void battery_shows_in_the_simple_display(void)
     assert(!battery_simple(h) && test_header[GRKIT_HOST_MANAGE_COPY / 4 + GRKIT_MANAGE_COPY_BATTERY] == 0 + 1);
     services_word(h, SERVICES_MENU + MENU_ROWS_CURRENT)[0] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
+    /* With each row, an update that waits keeps ADJ Order as the seventh. */
+    h[GRKIT_HOST_UPDATE / 4] = GRKIT_UPDATE_WAITING;
+    manage_memory[MANAGE_GOODBYE / 4] = 15 + 1;
+    settings_start(h, CORE_PAGE);
+    assert(settings_rows(h) == CORE_ROWS && core_row_setting(h, 0) == &update_setting &&
+           core_row_setting(h, 5) == dial_menu_setting() && core_row_setting(h, 6) == &adj_order_setting &&
+           same(core_page_settings[6].label(h), "ADJ Order"));
+    assert(menu_settings_row_controller(0, 6) == MENU_ACTION_TARGET + 6);
+    manage_memory[MANAGE_GOODBYE / 4] = 0;
+    h[GRKIT_HOST_UPDATE / 4] = 0;
+    h[GRKIT_HOST_SETTINGS / 4] = 0;
     /* Without Distance Unit, Display Settings has Simplified Info. Battery
        only. */
     manage_memory[MANAGE_UNIT / 4] = 0;
@@ -5664,6 +6279,50 @@ static void the_playback_info_has_its_row(void)
     manage_memory[MANAGE_PLAYBACK_INFO / 4] = 0;
     settings_memory[2 + 17 * 3 + 1] = 0;
     h[GRKIT_HOST_SETTINGS / 4] = 0;
+}
+/* The report word of the buffer that the writer has finished, the checks of
+   the charge, and a shown value that does not move near a step. */
+static void battery_percent_reads_the_power_report(void)
+{
+    unsigned service = TEST_OBJECTS + 0x4000U;
+    assert(!battery_report());
+    power_guard = 1;
+    power_service = service;
+    WORD(service, POWER_BUFFERS) = service + 0x40U;
+    WORD(service, POWER_BUFFERS + 4U) = service + 0x60U;
+    WORD(service + 0x40U, POWER_REPORT) = 0x4f042811U;
+    WORD(service + 0x60U, POWER_REPORT) = 0x53042811U;
+    WORD(service, POWER_INDEX) = 0;
+    assert(battery_report() == 0x4f042811U);
+    /* While the writer fills buffer 1, buffer 0 is the finished one. */
+    WORD(service, POWER_INDEX) = 1U | POWER_INDEX_BUSY;
+    assert(battery_report() == 0x4f042811U);
+    WORD(service, POWER_INDEX) = 1;
+    assert(battery_report() == 0x53042811U);
+    power_guard = power_service = 0;
+    assert(battery_charge(0x4f042811U, 4) == 79);
+    assert(battery_charge(0x4f842811U, 4) == 79);
+    assert(!battery_charge(0x4f042812U, 4) && !battery_charge(0x65042811U, 4) && !battery_charge(0x4f022811U, 4));
+    unsigned average = battery_average(0, 80, 100, 1);
+    assert(battery_points(average) == 80);
+    /* A moment of load moves the average by a fraction of the sample. */
+    assert(battery_points(battery_average(average, 64, 101, 0)) == 79);
+    assert(battery_points(battery_average(average, 64, 100 + BATTERY_AVERAGE_GAP, 0)) == 64);
+    assert(battery_next(BATTERY_FRONT, 79, 5) == (BATTERY_FRONT | 80 | 5U << BATTERY_CHANGE_SHIFT));
+    unsigned shown = 80 | 100U << BATTERY_CHANGE_SHIFT;
+    assert(battery_next(shown, 70, 100 + BATTERY_FALL_WAIT - 1) == shown);
+    assert((battery_next(shown, 70, 100 + BATTERY_FALL_WAIT) & BATTERY_SHOWN_MASK) == 78);
+    assert(battery_next(shown, 85, 100 + BATTERY_RISE_WAIT) == shown);
+    assert(battery_next(shown, 86, 100 + BATTERY_RISE_WAIT - 1) == shown);
+    assert((battery_next(shown, 87, 100 + BATTERY_RISE_WAIT) & BATTERY_SHOWN_MASK) == 88);
+    unsigned digits[3];
+    assert(battery_digits(8, digits) == 1 && digits[0] == 8);
+    assert(battery_digits(100, digits) == 3 && digits[0] == 1 && !digits[1] && !digits[2]);
+    /* A shown value falls below 10, and the lowest step shows at once. */
+    assert((battery_next(10 | 100U << BATTERY_CHANGE_SHIFT, 2, 100 + BATTERY_FALL_WAIT) & BATTERY_SHOWN_MASK) == 8);
+    assert(battery_next(BATTERY_FRONT, BATTERY_PERCENT_MIN, 5) == (BATTERY_FRONT | 2 | 5U << BATTERY_CHANGE_SHIFT));
+    assert(battery_frame(0, 0, BATTERY_FILL) >> 24 == 0 && battery_frame(9, 10, BATTERY_FILL) == 0xfffefefeU &&
+           battery_frame(30, 20, BATTERY_FILL_LOW) == BATTERY_FILL_LOW && battery_frame(7, 20, BATTERY_FILL_LOW) == BATTERY_FILL && battery_frame(4, 20, BATTERY_FILL) == 0xfe000000U);
 }
 static void playback_put(unsigned at, unsigned value, unsigned bytes)
 {
@@ -6377,6 +7036,7 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     persist_baseline(h, p);
     h[GRKIT_HOST_CROP / 4] = 3; /* Before resident startup. */
     p[GRKIT_PERSIST_REQUEST / 4] = 1;
+    wlan_station_value = 1;
     menu_viewfinder(VIEWFINDER_READY);
     assert(p[GRKIT_PERSIST_REVISION / 4] == 2 && p[GRKIT_PERSIST_READY / 4] == 1);
     timer = services_word(h, SERVICES_PERSIST_TIMER)[0];
@@ -6391,6 +7051,74 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     assert(p[GRKIT_PERSIST_READY / 4] == 2 && p[GRKIT_PERSIST_REVISION / 4] == 3);
     assert(services_word(h, SERVICES_PERSIST_TIMER)[0] != timer);
     assert(dial_word(h, DIAL_TIMER)[0] == dial_timer_ids);
+    wlan_station_value = 0;
+}
+/* The poll runs only while it has work, in every start: without a phone, a
+   timer dispatch of the App task serves a waiting request of the resident
+   loader or of the Wi-Fi service and starts no timer; a phone keeps the
+   100 ms timer running, and the timer stops at the tick after it leaves.
+   The shooting screen does not start the timer on its own. */
+static void the_poll_runs_only_while_it_has_work(void)
+{
+    volatile u32 *h = test_header, *p, *timer;
+    volatile struct control_mailbox *box;
+    static const u32 epoch[4] = {0};
+    u32 id, starts;
+    dial_reset();
+    p = persist_test_buffer();
+    persist_baseline(h, p);
+    timer = services_word(h, SERVICES_PERSIST_TIMER);
+    h[GRKIT_HOST_PERSIST_WORD / 4] = 1;
+    wlan_station_value = 0;
+    starts = persist_timer_ids;
+    menu_viewfinder(VIEWFINDER_READY);
+    menu_timers_due();
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* A request of the resident loader: the next dispatch answers it. */
+    p[GRKIT_PERSIST_RELEASE / 4] = p[GRKIT_PERSIST_READY / 4];
+    p[GRKIT_PERSIST_REQUEST / 4] = p[GRKIT_PERSIST_READY / 4] + 1;
+    menu_timers_due();
+    assert(p[GRKIT_PERSIST_READY / 4] == p[GRKIT_PERSIST_REQUEST / 4]);
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* A request of the Wi-Fi service: the next dispatch answers it. */
+    box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
+    control_init(box, epoch);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
+    menu_timers_due();
+    assert(!timer[0]);
+    const u8 nonce[16] = {1};
+    assert(control_submit(box, epoch, GRKIT_CONTROL_ATTACH, nonce, 16) == 1);
+    assert(control_pending(h));
+    menu_timers_due();
+    assert(box->ready == 1 && !control_pending(h));
+    assert(!timer[0] && persist_timer_ids == starts);
+    /* Each dispatch copies whether the access point is on, for the resident
+       loader. */
+    wlan_on_value = 1;
+    menu_timers_due();
+    assert(h[GRKIT_HOST_WLAN / 4] == 1);
+    wlan_on_value = 0;
+    menu_timers_due();
+    assert(h[GRKIT_HOST_WLAN / 4] == 0);
+    /* A phone: the 100 ms timer runs and keeps running. */
+    wlan_station_value = 1;
+    menu_timers_due();
+    id = timer[0];
+    assert(id && persist_timer_ms == PERSIST_POLL_MS);
+    menu_timers_due();
+    assert(timer[0] == id);
+    ui_timer_fired(0, id);
+    assert(timer[0] && timer[0] != id);
+    /* The phone leaves: the next tick does not start the timer again. */
+    wlan_station_value = 0;
+    ui_timer_fired(0, timer[0]);
+    assert(!timer[0]);
+    menu_timers_due();
+    assert(!timer[0]);
+    h[GRKIT_HOST_SERVICES / 4] = 0;
+    menu_timers_due();
+    h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
 }
 /* The resident loader exports after a count only. A page sets the module
    of the next ADJ session without a count, so the end of a session counts
@@ -6460,6 +7188,7 @@ int main(void)
     a_half_press_keeps_the_parameter_session();
     fn_values_add_the_defaults_of_a_native_look();
     toning_moves_red_and_blue_from_green();
+    develop_toning_follows_the_set();
     the_root_lists_the_official_modules();
     module_tiles_follow_the_effect_icons();
     the_framing_page_sets_the_ratios_of_the_target();
@@ -6493,6 +7222,8 @@ int main(void)
     enable_applies_at_once();
     the_switch_stops_each_module_at_once();
     film_look_lists_the_installed_effects_that_are_on();
+    the_service_reads_and_sets_the_effect_choices();
+    the_service_reads_and_changes_the_recipes();
     /* The MENU page blocks after the first continue the screen that the block
        before them leaves. */
     settings_entry_enable_preserves_each_value();
@@ -6527,6 +7258,7 @@ int main(void)
     the_shutdown_screen_checks_its_file_at_the_start();
     the_shutdown_text_hides_its_views();
     the_playback_info_has_its_row();
+    battery_percent_reads_the_power_report();
     playback_lists_the_grkit_settings_of_a_photo();
     snap_distances_show_in_feet();
     a_unit_change_lays_out_the_distances_again();
@@ -6554,6 +7286,10 @@ int main(void)
     persistence_freezes_the_complete_file_until_release();
     persistence_ignores_unsaved_values_and_rejects_incomplete_views();
     persistence_timer_runs_in_menus_and_preserves_early_dirty_values();
+    the_poll_runs_only_while_it_has_work();
     the_end_of_a_session_counts_a_module_that_no_export_holds();
+    the_service_reads_and_sets_module_settings();
+    the_service_places_the_modules();
+    the_service_reads_and_sets_grkit_settings();
     return 0;
 }

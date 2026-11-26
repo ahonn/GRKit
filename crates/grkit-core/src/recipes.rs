@@ -29,3 +29,24 @@ pub use model::*;
 pub use presets::{presets, Preset};
 pub use site::generated;
 pub use words::WORD_LIMIT;
+
+/// The name words of a recipe (`abi::RECIPE_NAME_WORDS`): four 7-bit ASCII
+/// characters in each word, the first in the low bits, at most
+/// `abi::RECIPE_NAME_CHARS`.
+pub fn name_words(name: &str) -> [u32; crate::abi::RECIPE_NAME_WORDS] {
+    let mut words = [0; crate::abi::RECIPE_NAME_WORDS];
+    for (i, c) in name.bytes().take(crate::abi::RECIPE_NAME_CHARS).enumerate() {
+        words[i / 4] |= u32::from(c & 0x7f) << (7 * (i % 4));
+    }
+    words
+}
+
+/// The name of `name_words`: the characters up to the first one that is not
+/// printable ASCII, such as the 0 after a name. Empty for the automatic name.
+pub fn name_of_words(words: &[u32]) -> String {
+    (0..words.len() * 4)
+        .map(|i| (words[i / 4] >> (7 * (i % 4)) & 0x7f) as u8)
+        .take_while(|c| (0x20..=0x7e).contains(c))
+        .map(char::from)
+        .collect()
+}

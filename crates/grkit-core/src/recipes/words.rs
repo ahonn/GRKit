@@ -195,6 +195,7 @@ impl Recipe {
                 (value != 0).then(|| value as u8 - 1)
             }),
             glow: None,
+            grain_style: None,
             border: None,
             exposure: Exposure::of_bits(w[MODULE_WORD])?,
             enabled: w[MODULE_WORD] & OFF == 0,

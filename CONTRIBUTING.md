@@ -60,6 +60,7 @@ export GRKIT_SANITIZER_CC=clang
 export GRKIT_REQUIRE_NATIVE_TESTS=1
 cargo run --locked -p grkit-cli -- module test --dir modules/glow --cc "$GRKIT_HOST_CC"
 cargo run --locked -p grkit-cli -- module test --dir modules/date --cc "$GRKIT_HOST_CC"
+cargo run --locked -p grkit-cli -- module test --dir modules/grain --cc "$GRKIT_HOST_CC"
 cargo test --locked -p grkit-core --test native_contracts
 unset GRKIT_HOST_CC GRKIT_SANITIZER_CC GRKIT_REQUIRE_NATIVE_TESTS
 ```
@@ -82,7 +83,7 @@ For the web site, see [web/README.md](web/README.md).
 
 - Keep filesystem and process access out of `grkit-core`.
 - Put target addresses in the target definition or its native adapter. Check the hook bytes before you patch them.
-- Do not edit `runtime/abi.h` or `web/src/generated/`. Change the layout tables in `crates/grkit-core/src/abi.rs`, the capabilities in `crates/grkit-core/src/capabilities.rs`, or the official modules in `crates/grkit-core/src/modules.rs`. Then run `GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated`.
+- Do not edit `runtime/abi.h` or `web/src/generated/`. Change the layout tables in `crates/grkit-core/src/abi/`, the capabilities in `crates/grkit-core/src/capabilities.rs`, or the official modules in `crates/grkit-core/src/modules.rs`. Then run `GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test generated`.
 - For independent controls in one ADJ entry, use `[page] kind = "settings"` and list the controls in `page.settings`. See [Page syntax](docs/module-reference.md#page).
 - For separate settings pages under one ADJ entry, use `[page] kind = "group"` and declare `[[page.children]]`. Each child has a title and its own settings. MENU keeps one module entry and opens the same child pages.
 - To add a module, follow [Writing a module](docs/modules.md). [docs/module-reference.md](docs/module-reference.md) gives the keys, services, limits, and error numbers.

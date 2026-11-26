@@ -692,6 +692,41 @@ pub fn modules_off_pixels() -> Vec<u8> {
     rgba
 }
 
+/// The Update row of the MOD page: an arrow down into a tray, as a new
+/// version comes to the camera.
+pub fn update_pixels() -> Vec<u8> {
+    const SAMPLES: i32 = 8;
+    let inside = |x: f32, y: f32| {
+        let shaft = (x - 20.0).abs() <= 1.75 && (9.0..=20.0).contains(&y);
+        let head = (17.0..=25.5).contains(&y) && (x - 20.0).abs() <= 25.5 - y;
+        let tray = (9.5..=30.5).contains(&x) && (28.0..=30.5).contains(&y);
+        let sides =
+            ((x - 10.75).abs() <= 1.25 || (x - 29.25).abs() <= 1.25) && (24.0..=30.5).contains(&y);
+        shaft || head || tray || sides
+    };
+    let mut rgba = background();
+    for y in 3..37 {
+        for x in 2..38 {
+            let mut covered = 0;
+            for b in 0..SAMPLES {
+                for a in 0..SAMPLES {
+                    let sx = x as f32 + (a as f32 + 0.5) / SAMPLES as f32;
+                    let sy = y as f32 + (b as f32 + 0.5) / SAMPLES as f32;
+                    covered += i32::from(inside(sx, sy));
+                }
+            }
+            blend(
+                &mut rgba,
+                x,
+                y,
+                gray(255),
+                covered as f32 / (SAMPLES * SAMPLES) as f32,
+            );
+        }
+    }
+    rgba
+}
+
 /// The width and the height of a label of the manual focus distance scale.
 pub const SCALE_LABEL_WIDTH: usize = 30;
 pub const SCALE_LABEL_HEIGHT: usize = 20;
@@ -936,7 +971,9 @@ pub fn strike(rgba: &mut [u8]) {
 /// that came later, such as a later Framing ratio, and the crop badges of
 /// the crops that the camera has too (`CAMERA_CROP_BADGES`). The label of
 /// each ratio is `aspect::label_index` (FRAMING_RATIO_LABELS).
-pub const OVERLAY_LABELS: [&str; 22] = [
+/// The last two are the other texts of the load cue (runtime/core.h:
+/// LABEL_UPDATE_READY, LABEL_UPDATE_RESTART).
+pub const OVERLAY_LABELS: [&str; 24] = [
     "GRKit Loaded",
     "XPan",
     "16:9",
@@ -959,6 +996,8 @@ pub const OVERLAY_LABELS: [&str; 22] = [
     "35mm",
     "50mm",
     "71mm",
+    "GRKit Update Ready",
+    "Restart Camera",
 ];
 /// The badges of the crops that the camera has too, so that each crop shows
 /// the same badge: 35 and 50 mm of a 28 mm lens, and 50 and 71 mm of GR IIIx
@@ -1033,7 +1072,7 @@ fn overlay_lines(index: usize) -> Vec<(&'static str, usize, f32)> {
         .position(|candidate| *candidate == "DATE")
         .expect("the labels have DATE");
     match label.split_once(' ') {
-        Some((date_line, time)) if index > date => vec![
+        Some((date_line, time)) if index > date && time == "HM" => vec![
             (
                 date_line,
                 OVERLAY_DATE_CAPITAL,
@@ -1096,11 +1135,20 @@ fn overlay_coverage(index: usize) -> (usize, usize, Vec<f32>) {
         .max()
         .unwrap()
         + 2 * OVERLAY_OUTLINE;
+    // A text with a descender, such as the p of "GRKit Update Ready", has rows
+    // below the baseline for it. The other labels keep their height.
+    let descender = OVERLAY_LABELS[index].contains(['g', 'j', 'p', 'q', 'y']);
+    let below = if descender {
+        let (_, bounds, _) = lines.last().expect("a label has a line");
+        OVERLAY_BELOW + bounds.max.y.max(0.0).ceil() as usize
+    } else {
+        OVERLAY_BELOW
+    };
     let height = 2 * OVERLAY_OUTLINE
         + OVERLAY_ABOVE
         + lines.iter().map(|(_, _, capital)| capital).sum::<usize>()
         + OVERLAY_LINE_GAP * (lines.len() - 1)
-        + OVERLAY_BELOW;
+        + below;
     let mut coverage = vec![0f32; width * height];
     let mut top = OVERLAY_OUTLINE + OVERLAY_ABOVE;
     for (outlines, bounds, capital) in lines {
@@ -1293,6 +1341,37 @@ fn caption_glyph(character: u8) -> (usize, usize, Vec<u8>) {
     (width, height, coverage)
 }
 
+/// The digits of Battery Percentage after the caption glyphs, in the bold text
+/// with the outline of the live-view text (`runtime/battery_percent.h`).
+pub const BATTERY_DIGITS: usize = 10;
+const BATTERY_DIGIT_SIZE: f32 = 21.0;
+/// The height of each digit, and the row of its baseline.
+pub const BATTERY_DIGIT_HEIGHT: usize = 18;
+const BATTERY_DIGIT_BASELINE: usize = 16;
+
+fn battery_digit(digit: u8) -> (usize, usize, Vec<u8>) {
+    let font = FontRef::try_from_slice(FONT).expect("embedded font is valid");
+    let scaled = font.as_scaled(PxScale::from(BATTERY_DIGIT_SIZE));
+    let id = scaled.glyph_id(char::from(b'0' + digit));
+    let width = scaled.h_advance(id).round() as usize + 2 * OVERLAY_OUTLINE;
+    let height = BATTERY_DIGIT_HEIGHT;
+    let mut coverage = vec![0f32; width * height];
+    if let Some(outline) = font.outline_glyph(id.with_scale_and_position(
+        scaled.scale(),
+        point(OVERLAY_OUTLINE as f32, BATTERY_DIGIT_BASELINE as f32),
+    )) {
+        let origin = outline.px_bounds().min;
+        outline.draw(|x, y, value| {
+            let (x, y) = (origin.x as i32 + x as i32, origin.y as i32 + y as i32);
+            if (0..width as i32).contains(&x) && (0..height as i32).contains(&y) {
+                let cell = &mut coverage[y as usize * width + x as usize];
+                *cell = (*cell + value).min(1.0);
+            }
+        });
+    }
+    (width, height, outlined_text(width, height, coverage))
+}
+
 /// The tile of a recipe in the lists of ADJ, before its caption: the list
 /// frame and the stacked cards of the Recipes module, small, above the place
 /// of the caption. The core writes the abbreviation of the name of the
@@ -1412,8 +1491,8 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 
 /// The label table that the installer copies after the menu text
 /// (`GRKIT_LABELS` in `runtime/abi.h`): the labels, then the glyphs of
-/// `OVERLAY_GLYPHS`, the small glyphs of the same characters, and the
-/// caption glyphs of `CAPTION_CHARACTERS`. For entry n, a u16 width, a u16 height, and the u32
+/// `OVERLAY_GLYPHS`, the small glyphs of the same characters, the caption
+/// glyphs of `CAPTION_CHARACTERS`, and the digits of Battery Percentage. For entry n, a u16 width, a u16 height, and the u32
 /// offset of its rows at 8 n, then the rows of each entry (`overlay_label`,
 /// `overlay_glyph`). Each row holds only its drawn pixels: a u8 span
 /// count, then for each span a u16 first column, a u16 length, and its
@@ -1423,10 +1502,13 @@ fn crop_badge(text: &str) -> (usize, usize, Vec<u8>) {
 pub fn overlay_labels() -> Vec<u8> {
     let small = OVERLAY_LABELS.len() + OVERLAY_GLYPH_COUNT;
     let captions = small + OVERLAY_GLYPH_COUNT;
-    let entries = captions + CAPTION_CHARACTERS.len();
+    let digits = captions + CAPTION_CHARACTERS.len();
+    let entries = digits + BATTERY_DIGITS;
     let mut table = vec![0; entries * 8];
     for index in 0..entries {
-        let (width, height, pixels) = if let Some(caption) = index.checked_sub(captions) {
+        let (width, height, pixels) = if let Some(digit) = index.checked_sub(digits) {
+            battery_digit(digit as u8)
+        } else if let Some(caption) = index.checked_sub(captions) {
             caption_glyph(CAPTION_CHARACTERS[caption])
         } else if let Some(glyph) = index.checked_sub(small) {
             overlay_glyph(

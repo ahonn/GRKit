@@ -131,6 +131,7 @@ const SITES: &[Site] = &[
     ("menu_parameter_row_8", 0x533ab4d4, "fe4a0feb"),
     ("menu_settings_change", 0x5318408c, "0dc0a0e1"),
     ("menu_info_update", 0x531fe920, "0dc0a0e1"),
+    ("menu_timer_dispatch", 0x53261a98, "402090e5"),
     ("menu_check_factory", 0x531871bc, "2e3100e3"),
     ("menu_check_lines", 0x531d8e00, "cded0eeb"),
     ("menu_check_dot", 0x531dcb08, "89070feb"),
@@ -283,6 +284,7 @@ const SITES: &[Site] = &[
     // DigitalFilterProcess SetEffectParameter (0x53726fe4), and its stage
     // gate (0x5373a4ac, plan +0x25).
     ("grain_enable", 0x537271c0, "b537d4e5"),
+    ("grain_type", 0x537271cc, "9c37d4e5"),
     ("grain_strength", 0x537271e0, "b737d4e5"),
     ("grain_size", 0x53727204, "b637d4e5"),
     ("grain_gate", 0x5373a990, "c5feffeb"),
@@ -306,6 +308,7 @@ const SITES: &[Site] = &[
     ("canvas_filter_0", 0x53727400, "6f9f06eb"),
     ("canvas_filter_1", 0x53727a8c, "cc9d06eb"),
     ("menu_battery_mode", 0x5318a280, "030053e3"),
+    ("menu_battery_icon", 0x533aa150, "010051e3"),
     ("menu_goodbye", 0x53264c30, "86ad14eb"),
     ("menu_goodbye_text_0", 0x531bad30, "0dc0a0e1"),
     ("menu_goodbye_text_1", 0x531bae04, "0dc0a0e1"),
@@ -313,6 +316,8 @@ const SITES: &[Site] = &[
     ("picture_dng_xmp", 0x53828b28, "981208e3"),
     // The tag setter of the DNG writer: its first instruction.
     ("picture_dng_set", 0x5382b2d0, "0dc0a0e1"),
+    // The end test of the list of sizes that the camera resizes for a phone.
+    ("picture_transfer_size", 0x537d9244, "000052e3"),
 ];
 
 /// The stock instructions around the processing hooks.

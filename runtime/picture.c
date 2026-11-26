@@ -204,6 +204,39 @@ __attribute__((used)) void grkit_export_local_time(u8 *out) {
     PICTURE_DATE(out);
 }
 __attribute__((used)) u32 grkit_export_divide(u32 n,u32 d) { return core_divide(n,d); }
+/* The smaller copy of a picture that the camera sends to a phone that asks
+   for one (runtime/picture.S: picture_transfer_size). The camera has sizes
+   for the copy only for its own aspects, so for a Framing or Crop size it
+   sent the whole file. The copy gets about 1920 pixels on its long side.
+   The camera fits the picture into the copy at its own aspect and leaves
+   the rest of the copy unwritten. It takes two aspects as the same when
+   width / height, rounded to hundredths, is the same, and then fills the
+   whole copy. So the copy takes a size with the aspect of the picture in
+   hundredths: a long side that is a multiple of 16 near 1920, and a short
+   side that is a multiple of 8, else an even one. Width and height as the
+   size object holds them (width | height << 16), or 0 to send the whole
+   file: a picture that is no larger, or no size near 1920 fits. */
+#define TRANSFER_LONG_SIDE 1920U
+#define TRANSFER_STEPS 20U
+/* width / height in hundredths, rounded half up. */
+static u32 transfer_aspect(u32 w,u32 h) { return core_divide(200U*w+h,2U*h); }
+static u32 transfer_size(u32 w,u32 h) {
+    static const u8 steps[2]={8U,2U};
+    u32 wide=w>=h, l_side=wide ? w : h, s_side=wide ? h : w, aspect, k, pass, i, offset, l, s, exact;
+    if(!s_side || l_side<=TRANSFER_LONG_SIDE || l_side>0xffffU) return 0;
+    aspect=transfer_aspect(w,h);
+    for(k=0;k<2U;++k)
+        for(pass=steps[k],i=0;i<=2U*TRANSFER_STEPS;++i) {
+            offset=16U*((i+1U)/2U);
+            l=i&1U ? TRANSFER_LONG_SIDE-offset : TRANSFER_LONG_SIDE+offset;
+            exact=core_divide(l*s_side,l_side);
+            for(s=exact&~(pass-1U);s<=exact+pass;s+=pass)
+                if(s && s<=s_side && transfer_aspect(wide ? l : s,wide ? s : l)==aspect)
+                    return wide ? l|s<<16 : s|l<<16;
+        }
+    return 0;
+}
+__attribute__((used)) u32 picture_transfer_fit(u32 w,u32 h) { return transfer_size(w,h); }
 /* The white of the effect of a recorded picture: input 255 of the curves of
    its record, after its post matrix, as R, G, B levels, and 255 each without
    a record. The Fn adjustments are not in it. runtime/level.h gives the luma
@@ -624,6 +657,7 @@ void picture_develop_start(void) {
        ones (runtime/develop.h). */
     h[GRKIT_HOST_DEVELOP_FILLED/4]=0;
     h[GRKIT_HOST_DEVELOP_CHANGED/4]=0;
+    h[GRKIT_HOST_DEVELOP_TONED/4]=0;
     develop_copy_start(h,settings_table(h));
     picture_develop_record(h);
     if(value>>16==1 && (record=record_of_code(h,(value+0x100)&0xffffU))) h[GRKIT_HOST_DEVELOP/4]=record;
@@ -636,6 +670,33 @@ u32 picture_header_word(u32 offset) {
     volatile u32 *h=framing_header(), *copy=develop_copy_header(h,offset);
     return copy ? *copy : h[offset/4];
 }
+/* The state file ID of GRAIN.STYLE (grkit_core::runtime::state_key_id), the
+   setting of modules/grain: 0 System, 1 Film-like. */
+#define GRAIN_STYLE_ID 252484306U
+/* Whether the Grain module draws the grain itself (Film-like, the plane
+   filter of modules/grain/grain.c). Without the setting, as with an older
+   Grain module, the grain is System. A RAW development reads the value of
+   its copy (setting_value). */
+static u32 grain_style_film(volatile u32 *h) {
+    volatile u32 *t=settings_table(h);
+    u32 i;
+    for(i=0;t && i<t[0];++i)
+        if(t[SETTINGS_ENTRY(i)]==GRAIN_STYLE_ID) return setting_value(h,i)==1U;
+    return 0;
+}
+/* Whether the Grain module draws the grain of this shot: Film-like, and a
+   level other than Off. While the module is Off, the native stage keeps the
+   default grain of a look (picture_grain_level). */
+static u32 grain_module_film(volatile u32 *h) {
+    return (h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_GRAIN_BIT) && picture_header_word(GRKIT_HOST_GRAIN) &&
+        grain_style_film(h);
+}
+/* For grain_module_draws (runtime/picture.S): in the Film-like style the
+   native grain stage runs as in the System style, with no amplitude, so
+   that everything else that stage of the firmware does stays the same
+   (such as the brightness that Glow's highlights depend on), and the plane
+   filter of the Grain module adds the grain. */
+u32 grain_film_like(void) { return grain_module_film(framing_header()); }
 /* The quarter turns clockwise of an EXIF Orientation (1: 0, 6: 1, 3: 2, 8: 3). */
 static u32 orientation_turns(u32 orientation) {
     return orientation==6 ? 1 : orientation==3 ? 2 : orientation==8 ? 3 : 0;
@@ -686,10 +747,55 @@ void picture_record_parameters(u32 entry,u32 shot) {
    not neutral. The record is the one that the build takes (module_parameters
    in runtime/processing.h): the effect of a RAW development, or the
    committed effect. Native processing keeps `flag`, the native result. */
+/* The grain that the look of this shot has by itself (GRKIT_RECORD_LOOK_GRAIN). */
+static u32 look_grain(volatile u32 *h) {
+    u32 record;
+    if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return 0;
+    record=PICTURE_DEVELOPING() ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
+    return owned(h,record) ? BYTE(record,GRKIT_RECORD_LOOK_GRAIN) : 0;
+}
+/* The level of CORE.GRAIN, 0 without a module that uses it. */
+static u32 grain_setting(volatile u32 *h) {
+    return h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_GRAIN_BIT ? picture_header_word(GRKIT_HOST_GRAIN) : 0;
+}
+/* 1 while the Grain module is Off and this shot takes the default grain of its
+   look: Hi-Contrast, and Grainy on a camera without the Rough grain. */
+static u32 look_default_grain(volatile u32 *h) {
+    u32 grain=look_grain(h);
+#ifdef GRKIT_ROUGH_GRAIN
+    if(grain==1) return 0;
+#endif
+    return grain && !grain_setting(h);
+}
+/* For runtime/picture.S: the grain level of this shot, 0 Off to 4 Extra Strong.
+   The Grain module wins. While it is Off, the default grain of a look is strong,
+   the native default of Hi-Contrast on GR IV Monochrome. */
+u32 picture_grain_level(void) {
+    volatile u32 *h=framing_header();
+    return look_default_grain(h) ? 3 : grain_setting(h);
+}
+/* For runtime/picture.S: 1 while this shot has the default grain of its look. */
+u32 picture_look_grain_on(void) {
+    return look_default_grain(framing_header());
+}
+/* For runtime/picture.S: the value of CORE.GRAIN_SIZE for this shot. The grain
+   of a look has medium size. */
+u32 picture_grain_size(void) {
+    return look_default_grain(framing_header()) ? 2 : picture_header_word(GRKIT_HOST_GRAIN_SIZE);
+}
+#ifdef GRKIT_ROUGH_GRAIN
+/* Whether this shot takes the Rough grain of the firmware: its look is Grainy. */
+u32 picture_rough(void) {
+    return look_grain(framing_header())==1;
+}
+#endif
 u32 picture_gate_flag(u32 flag) {
     volatile u32 *h=framing_header();
     u32 record, running;
     if(!(h[GRKIT_HOST_CAPABILITIES/4]&GRKIT_CORE_TONE_BIT)) return flag;
+#ifdef GRKIT_ROUGH_GRAIN
+    if(picture_rough()) return 1;
+#endif
     running=PICTURE_DEVELOPING();
     record=running ? h[GRKIT_HOST_DEVELOP/4] : h[GRKIT_HOST_ACTIVE/4];
     if(!owned(h,record)) return flag;
@@ -732,9 +838,14 @@ static void encode_shot(volatile u32 *h,u32 message,const u32 *canvas) {
     selective=selective_wanted(&set);
     any=selective;
     /* The value of each filter. A filter does not run at 0, or while a soft
-       Off stops its module. */
+       Off stops its module. The Rough grain of a look replaces the grain of
+       CORE.GRAIN, as in the native stage. */
     for(i=0;i<filters;++i) {
-        values[i]=services_suspended(h,MODULE_FILTER(h,i)[0]) ? 0 : setting_value(h,MODULE_FILTER(h,i)[1]&0xffffU);
+        u32 setting=MODULE_FILTER(h,i)[1]&0xffffU;
+        values[i]=services_suspended(h,MODULE_FILTER(h,i)[0]) ? 0 : setting_value(h,setting);
+#ifdef GRKIT_ROUGH_GRAIN
+        if(setting==GRKIT_CORE_GRAIN && picture_rough()) values[i]=0;
+#endif
         any|=values[i];
     }
     if(!any) return;
@@ -839,6 +950,14 @@ void grain_noise(u32 buffer,u32 size,u32 pitch,u32 height) {
     u32 shot=h[GRKIT_HOST_GRAIN_SHOT/4],table=h[GRKIT_HOST_PROFILE/4],high,low,block;
     if(!shot || shot>3 || !pitch || pitch%16 || pitch>GRAIN_ROW_MAX || pitch*height!=size || height<1) {
         GRAIN_NATIVE_FILL(buffer,size);
+        return;
+    }
+    /* Film-like: the Grain module draws the grain, and the native stage
+       blends neutral noise (with no amplitude, grain_amplitude). */
+    if(grain_module_film(h)) {
+        u8 *plane=GRAIN_MAP(buffer);
+        u32 i;
+        for(i=0;i<size;++i) plane[i]=128;
         return;
     }
     low=GRAIN_COUNTER(&high);

@@ -211,6 +211,7 @@ static u32 test_id_source;
 #define HALATION_COLOR 2U
 #define BORDER 3U
 #define BORDER_COLOR 4U
+#define GRAIN_STYLE 5U
 /* Whether recipe `slot` holds setting i of GRKIT_RECIPE_SETTINGS, and its
    value. */
 static u32 slot_words[GRKIT_RECIPE_WORDS];
@@ -1386,6 +1387,7 @@ static void details_name_what_the_recipe_holds(void)
     recipe_setting_hold(w, HALATION_COLOR, 0);
     recipe_setting_hold(w, BORDER, 1);
     recipe_setting_hold(w, BORDER_COLOR, 1);
+    recipe_setting_hold(w, GRAIN_STYLE, 1);
     char effect[16];
     snprintf(effect, sizeof effect, "%x", GRKIT_ICON_EFFECT(1));
     const char *const items[][4] = {
@@ -1393,6 +1395,7 @@ static void details_name_what_the_recipe_holds(void)
         {"Saturation", "+1", "+1", 0},
         {"Contrast", "0", "0", 0},
         {"Grain", "Medium, size Large", "", 0},
+        {"Grain Style", "Film-like", "", 0},
         {"Bloom", "Weak", "", 0},
         {"Halation", "Medium, Red", "", 0},
         {"Border", "Thin, Black", "", 0},
@@ -1406,10 +1409,10 @@ static void details_name_what_the_recipe_holds(void)
         {"Metering", "Spot", "", 0},
         {"ND Filter", "On", "", 0}};
     const u32 icons[] = {0, parameter_icons[NATIVE_PARAMETER_SATURATION], parameter_icons[NATIVE_PARAMETER_CONTRAST],
-                         0, 0, 0, 0, mode_icons[MODE_DAYLIGHT], correction_icons[0], correction_icons[3 + 4],
+                         0, 0, 0, 0, 0, mode_icons[MODE_DAYLIGHT], correction_icons[0], correction_icons[3 + 4],
                          correction_icons[8 + 0], correction_icons[10 + 1], NATIVE_DETAIL_COMPENSATION_ICON,
                          NATIVE_DETAIL_ISO_ICON, metering_icons[2], nd_icons[1]};
-    static const u32 groups[] = {0, 1, 1, 2, 2, 2, 2, 3, 4, 4, 4, 4, 5, 5, 5, 5};
+    static const u32 groups[] = {0, 1, 1, 2, 2, 2, 2, 2, 3, 4, 4, 4, 4, 5, 5, 5, 5};
     u32 n = details_of(w);
     assert(n == sizeof items / sizeof items[0]);
     for (u32 i = 0; i < n; ++i) {
@@ -1421,8 +1424,8 @@ static void details_name_what_the_recipe_holds(void)
        value. */
     assert(DETAIL_SETTING(detail_item(detail_block, 3)[DETAIL_ITEM_META / 4]) == DETAIL_GRAIN &&
            DETAIL_SETTING_VALUE(detail_item(detail_block, 3)[DETAIL_ITEM_META / 4]) == 2);
-    assert(DETAIL_SETTING(detail_item(detail_block, 5)[DETAIL_ITEM_META / 4]) == HALATION + 1 &&
-           DETAIL_SETTING_VALUE(detail_item(detail_block, 5)[DETAIL_ITEM_META / 4]) == 2);
+    assert(DETAIL_SETTING(detail_item(detail_block, 6)[DETAIL_ITEM_META / 4]) == HALATION + 1 &&
+           DETAIL_SETTING_VALUE(detail_item(detail_block, 6)[DETAIL_ITEM_META / 4]) == 2);
 
     /* The name of an effect keeps its own characters. */
     HALF(record_at(1), GRKIT_RECORD_NAME + 2) = 0x4e2d;

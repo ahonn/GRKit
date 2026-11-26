@@ -30,10 +30,6 @@
    The includer defines u8, u16, u32, BYTE, HALF, and WORD, and includes
    runtime/services.h, runtime/native_look.h, and runtime/recipes.h. */
 #include "recipe_detail_names.h"
-/* The icon ID of effect record n, as runtime/core.h has it. */
-#ifndef GRKIT_ICON_EFFECT
-#define GRKIT_ICON_EFFECT(n) (0x8000U+(n))
-#endif
 
 #if !defined(NATIVE_DETAIL_MODE_ICONS) || !defined(NATIVE_DETAIL_PARAMETER_ICONS) || \
     !defined(NATIVE_DETAIL_CORRECTION_ICONS) || !defined(NATIVE_DETAIL_METERING_ICONS) || \
@@ -68,7 +64,7 @@ static const u32 detail_iso_values[]={NATIVE_ISO_VALUES};
 _Static_assert(sizeof(detail_iso_values)/sizeof(detail_iso_values[0])>=NATIVE_GR3_ISO_STEPS &&
                sizeof(detail_iso_values)/sizeof(detail_iso_values[0])>=NATIVE_GR4_ISO_STEPS,
                "an ISO for each third stop of the Auto ISO limit");
-_Static_assert(GRKIT_RECIPE_SETTINGS==5U,"the details name each module setting of a recipe");
+_Static_assert(GRKIT_RECIPE_SETTINGS==6U,"the details name each module setting of a recipe");
 _Static_assert(DETAIL_SHORT_UNITS<=DETAIL_VALUE_UNITS,"a short value fits the value");
 
 /* An item while it is written. */
@@ -242,7 +238,8 @@ static void detail_module(DetailList *list,u32 name,u32 setting,u32 value,const 
     if(more) { detail_add(&item,", "); detail_add(&item,more); }
     detail_put(list,&item);
 }
-/* Grain, Bloom, Halation, and Border, as the recipe holds them. */
+/* Grain with its size and its Film-like style (module setting 5), Bloom,
+   Halation, and Border, as the recipe holds them. */
 static void detail_modules(DetailList *list,const u32 *w) {
     u32 level, v;
     char size[16];
@@ -255,6 +252,8 @@ static void detail_modules(DetailList *list,const u32 *w) {
             while(*n) size[k++]=*n++;
             size[k]=0;
             detail_module(list,DETAIL_NAME_GRAIN,DETAIL_GRAIN,level,detail_grains[level],size);
+            if(recipe_setting_held(w,5) && recipe_setting_value(w,5)==1U)
+                detail_module(list,DETAIL_NAME_GRAIN_STYLE,6U,1U,"Film-like",0);
         }
     }
     if(recipe_setting_held(w,0) && (v=recipe_setting_value(w,0)) && v<4U)

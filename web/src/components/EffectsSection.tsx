@@ -148,31 +148,31 @@ function buildList(
   // All: Color then B&W. Color / B&W filters: one flat shelf, with a header only to hold the reset
   // of the covers of its group.
   // Card-only effects join the shelf so a Cinema look on the SD card is not also an unlock tile.
-  // GR IV unlock tiles sit at the end of Color; Import LUT tiles close Color and B&W.
+  // GR IV unlock tiles sit at the end of their group; Import LUT tiles close Color and B&W.
   const showHeader = (group: CoverGroup) => filter === 'all' || resettable.has(group);
   const pool = [...catalog, ...imports, ...cards];
   const color = pool.filter((effect) => !effect.monochrome);
   const mono = pool.filter((effect) => effect.monochrome);
-  const showNative = locked.length > 0 && filter !== 'mono';
+  const lockedColor = filter === 'mono' ? [] : locked.filter((look) => !look.monochrome);
+  const lockedMono = filter === 'color' ? [] : locked.filter((look) => look.monochrome);
   const importColor = canImport && filter !== 'mono';
   const importMono = canImport && filter !== 'color';
 
-  if (color.length > 0 || showNative || importColor) {
+  if (color.length > 0 || lockedColor.length > 0 || importColor) {
     if (showHeader('color')) {
       entries.push({ kind: 'header', key: 'h-color', label: groupLabel('color', t), group: 'color' });
     }
     for (const effect of color) entries.push({ kind: 'effect', effect });
-    if (showNative) {
-      for (const look of locked) entries.push({ kind: 'native', look });
-    }
+    for (const look of lockedColor) entries.push({ kind: 'native', look });
     if (importColor) entries.push({ kind: 'import', key: 'import-color' });
   }
 
-  if (mono.length > 0 || importMono) {
+  if (mono.length > 0 || lockedMono.length > 0 || importMono) {
     if (showHeader('mono')) {
       entries.push({ kind: 'header', key: 'h-mono', label: groupLabel('mono', t), group: 'mono' });
     }
     for (const effect of mono) entries.push({ kind: 'effect', effect });
+    for (const look of lockedMono) entries.push({ kind: 'native', look });
     if (importMono) entries.push({ kind: 'import', key: 'import-mono' });
   }
 
@@ -448,8 +448,8 @@ export function EffectsSection({
         : requested.imported
           ? `${requested.imported.source} · ${t.fitText[requested.imported.grade]}`
           : (t.looks[requested.id] ?? requested.look);
-  // Locked native looks wait as Color tiles until the user unlocks them from firmware, or until
-  // the connected card already has that effect file.
+  // Locked native looks wait as tiles of their group until the user unlocks them from firmware, or
+  // until the connected card already has that effect file.
   const locked = catalog.baseGamma ? missingNativeLooks([...imported, ...cardEffects], nativeLooks) : [];
   const [filter, setFilter] = useState<EffectFilter>('all');
   // What the frame waits for: a new photo, or the preview of the selected effect.

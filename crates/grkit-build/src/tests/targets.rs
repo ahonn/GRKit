@@ -145,9 +145,30 @@ fn framing_or_border_without_film_look_still_records_shot_parameters() {
         {
             let expected = if DEVELOP.contains(&other.symbol) {
                 Point::Tuning.bit() | Point::CaptureAspect.bit()
+            } else if other.symbol == "picture_transfer_size" {
+                // Framing and Crop both record sizes that the camera does
+                // not resize for a phone.
+                Point::CaptureAspect.bit() | Point::CaptureCrop.bit()
             } else if other.symbol == "grain_gate" {
                 // Film Look gives the gate the Shading and Clarity of its effect.
                 Point::PipelineGrain.bit() | Point::Tuning.bit()
+            } else if matches!(
+                other.symbol,
+                "grain_type"
+                    | "grain_enable"
+                    | "grain_strength"
+                    | "grain_size"
+                    | "grain_particle"
+                    | "grain_fill"
+            ) || (other.symbol == "grain_amplitude"
+                && target
+                    .family
+                    .hooks
+                    .iter()
+                    .any(|hook| hook.symbol == "grain_type"))
+            {
+                // The Grainy and Hi-Contrast looks of Film Look have grain.
+                other.point.bit() | Point::Tuning.bit()
             } else {
                 other.point.bit()
             };

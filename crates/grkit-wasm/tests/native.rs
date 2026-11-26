@@ -28,7 +28,8 @@ fn a_gr4_file_gives_its_looks() {
         looks.iter().map(|l| l.id.as_str()).collect::<Vec<_>>(),
         grkit_core::gr4_looks::LOOKS
             .iter()
-            .filter(|look| look.offered)
+            // A 1.11 file has no Solarized curve sets.
+            .filter(|look| !matches!(look.kind, grkit_core::gr4_looks::Kind::Solarized(_)))
             .map(|look| look.effect_id)
             .collect::<Vec<_>>()
     );

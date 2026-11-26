@@ -19,6 +19,11 @@
    native Image Control type at +0x79c. Standard is type 11. The shot settings
    hold the type at the same offset as the settings payload. */
 #define SETTINGS_IC_TYPE 0x79c
+/* The state of the Wi-Fi access point of the camera in the same payload:
+   SETTINGS_WLAN_STATION while a phone is connected. */
+#define SETTINGS_WLAN_STATE 0x24a
+/* 1 while the Wi-Fi access point of the camera is on. */
+#define SETTINGS_WLAN_ENABLED 0x7ff
 /* The digital filter values of the shot settings, which the grain stage of
    recorded pictures reads: Shading and Clarity (0 to 8, 4 is neutral), grain
    on (0 is off), and the HDR Tone strength (0 is off). The native parameter
@@ -26,6 +31,9 @@
 #define SETTINGS_SHADING 0x7b3
 #define SETTINGS_CLARITY 0x7b4
 #define SETTINGS_GRAIN 0x7b5
+/* The firmware has the Rough grain of Grainy (type 28), which a GRKit look can take
+   (grain_type in runtime/picture.S). */
+#define GRKIT_ROUGH_GRAIN 1
 #define SETTINGS_HDR 0x7b8
 /* The ImageTone code of the first look of GR IV Monochrome. Its looks record
    0x8100 and up, in the order Standard, Solid, Soft, Hi-Contrast, Grainy,
@@ -165,7 +173,7 @@
 #define DEVELOP_TOP_AVAILABLE_END sub sp, r11, #16; ldm sp, {r4, r11, sp, pc}
 #define DEVELOP_TOP_NO_VALUE 0x28
 #define DEVELOP_TOP_FILL_ROW 8
-#define DEVELOP_TOP_ICON 0x7ffe
+#define DEVELOP_TOP_ICON GRKIT_ICON_GRKIT
 #define DEVELOP_LIST_VIEW 0x168
 #define DEVELOP_ROW_STYLE 0x1aU
 #define DEVELOP_ROW_HEIGHT 0x3aU
@@ -349,6 +357,8 @@
 #define EV_DIAL_UP 0xda
 #define EV_DIAL_DOWN 0xdb
 #define EV_CONFIRM 0xe0
+/* The request that FW_ADJ_OK posts, which ADJ also gets as an event. */
+#define EV_OK_REQUEST 0x8a
 
 /* GR IV draws ADJ before the toolbar exists, so the new cell needs a redraw. */
 #define TOOLBAR_CREATED(widget,icon) \

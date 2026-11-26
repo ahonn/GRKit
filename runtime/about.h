@@ -5,9 +5,8 @@
    OK on it opens no page. */
 #include "core.h"
 
-/* The About tile reads VER, so the GRKit root shows one GRK tile. It follows
-   the GRKit tile in chunk 0. */
-#define GRKIT_ICON_VERSION 0x7ffdU
+/* The About tile, GRKIT_ICON_VERSION, reads VER, so the GRKit root shows one
+   GRK tile. */
 
 static const u16 *about_text(volatile u32 *h) { return text(h,TEXT_VERSION); }
 static const u16 *about_label(volatile u32 *h,u32 row) { (void)row; return about_text(h); }

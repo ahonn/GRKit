@@ -16,6 +16,7 @@ struct patch { u32 address, size, kind; const u8 *before; u8 *after; };
 /* The layout of the state of the core services. */
 #include "services.h"
 #include "install_status.h"
+#include "control_mailbox.h"
 
 /* RTOS_NATIVE builds the installer into the RTOS-side loader of
    runtime/fastboot/, whose backend.c serves the same calls without Linux. */
@@ -307,6 +308,7 @@ static void prepare_relocation(void)
     relocation.symbol_at = relocated;
     relocation.hint = 0;
     relocation.optional = window_optional;
+    relocation.required = 0;
     if (read_text(relocation_path, (u8 *)hint_words, sizeof(hint_words)) == (long)sizeof(hint_words) &&
         hint_words[0] == HINT_MAGIC && hint_words[1] == RELOCATION_WINDOW_COUNT && hint_words[2] == word(RTOS_IDENTITY))
         relocation.hint = hint_words + HINT_KEY;
@@ -587,12 +589,13 @@ static void apply_state(u32 base, u32 table)
     }
 }
 /* The script arrays that the loader allocated (grkit_core::runtime::loader):
-   the registry, the icon chunks, the module array, then the tail. */
-struct arrays { u32 base, tail, module_array, icon_bases[MAX_CHUNKS]; };
+   the registry, the icon chunks, the module array, the tail, then the text
+   area. */
+struct arrays { u32 base, tail, text, module_array, icon_bases[MAX_CHUNKS]; };
 /* Check that each array has its planned size and that no two overlap. */
 static int check_arrays(struct arrays *a)
 {
-    if (*(volatile u16 *)at(ARRAY_COUNT) != ARRAY_LEAD + 2 + icon_chunks + (module_words != 0) || word(ARRAYS) != size / 4) return STATUS_ARRAYS;
+    if (*(volatile u16 *)at(ARRAY_COUNT) != ARRAY_LEAD + 3 + icon_chunks + (module_words != 0) || word(ARRAYS) != size / 4) return STATUS_ARRAYS;
     u32 base = a->base = word(ARRAYS + 4), *icon_bases = a->icon_bases;
     if (!heap(base, size)) return STATUS_ARRAY_MEMORY;
     for (u32 i = 0; i < icon_chunks; ++i) {
@@ -621,6 +624,15 @@ static int check_arrays(struct arrays *a)
         (module_array && tail < module_array + module_words * 4 && module_array < tail + GRKIT_TAIL_SIZE)) return STATUS_ARRAY_MEMORY;
     for (u32 j = 0; j < icon_chunks; ++j)
         if (tail < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < tail + GRKIT_TAIL_SIZE) return STATUS_ARRAY_MEMORY;
+    /* The text area follows the tail and overlaps no other array. */
+    u32 entry = ARRAYS + (2 + icon_chunks + (module_words != 0)) * 8;
+    u32 text = a->text = word(entry + 4);
+    if (word(entry) != GRKIT_TEXT_AREA_SIZE / 4 || !heap(text, GRKIT_TEXT_AREA_SIZE) ||
+        (text < base + size && base < text + GRKIT_TEXT_AREA_SIZE) ||
+        (text < tail + GRKIT_TAIL_SIZE && tail < text + GRKIT_TEXT_AREA_SIZE) ||
+        (module_array && text < module_array + module_words * 4 && module_array < text + GRKIT_TEXT_AREA_SIZE)) return STATUS_ARRAY_MEMORY;
+    for (u32 j = 0; j < icon_chunks; ++j)
+        if (text < icon_bases[j] + chunk_count(j) * ICON_STRIDE && icon_bases[j] < text + GRKIT_TEXT_AREA_SIZE) return STATUS_ARRAY_MEMORY;
     return 0;
 }
 
@@ -698,6 +710,7 @@ static void write_header(const struct arrays *a)
     zero(at(base), size);
     store(base + GRKIT_HOST_COUNT, count); store(base + GRKIT_HOST_RECORDS, base + GRKIT_HOST_HEADER_SIZE);
     store(base + GRKIT_HOST_TAIL, tail);
+    store(base + GRKIT_HOST_TEXT_AREA, a->text);
     store(base + GRKIT_HOST_MAGIC, GRKIT_HOST_MAGIC_VALUE); store(base + GRKIT_HOST_VERSION, GRKIT_HOST_VERSION_VALUE);
     /* The next still live view shows that GRKit has loaded (runtime/framing.c). */
     store(base + GRKIT_HOST_LOAD_CUE, 1);
@@ -710,10 +723,10 @@ static void write_header(const struct arrays *a)
         zero(at(a->icon_bases[i]), chunk_count(i) * ICON_STRIDE);
         store(base + GRKIT_HOST_ICON_CHUNKS + i * 4, a->icon_bases[i]);
     }
-    /* Menu text after the picture scratch (runtime/abi.h). */
+    /* The menu text, then the labels, in the text area (runtime/abi.h). */
     _Static_assert(MAX_COUNT <= GRKIT_TEXT_RECORDS, "Menu text has no summary slot for each record");
     _Static_assert(MENU_TEXT_BYTES <= GRKIT_TEXT_SUMMARY, "Menu text table overlaps the summaries");
-    u32 text = tail + GRKIT_PICTURE_SCRATCH;
+    u32 text = a->text;
     copy(at(text), menu_text, MENU_TEXT_BYTES);
     _Static_assert(LABELS_BYTES <= GRKIT_LABELS_SIZE, "Live-view labels exceed their area");
     copy(at(text + GRKIT_TEXT_SIZE), overlay_labels, LABELS_BYTES);
@@ -724,7 +737,7 @@ static void write_header(const struct arrays *a)
 static void write_records(const struct arrays *a, u32 pixels)
 {
     u32 tone_slots = 0;
-    u32 base = a->base, text = a->tail + GRKIT_PICTURE_SCRATCH;
+    u32 base = a->base, text = a->text;
     const u32 *icon_bases = a->icon_bases;
     for (u32 i = 0; i < count; ++i) {
         u32 record = base + GRKIT_HOST_HEADER_SIZE + i * GRKIT_RECORD_SIZE;
@@ -764,6 +777,12 @@ static void write_records(const struct arrays *a, u32 pixels)
         for (u32 j = 0; j < n; ++j) at(record + GRKIT_RECORD_NAME + j * 2)[0] = profile[CATALOG_EFFECT_NAME + j];
         store(record + GRKIT_RECORD_MONOCHROME, get32(profile + GRKIT_GRF_FLAGS));
         copy(at(record + GRKIT_RECORD_ID), profile + GRKIT_GRF_ID, GRKIT_GRF_ID_SIZE);
+        /* The grain of a look of GR IV Monochrome (runtime/picture.c): Grainy
+           takes the Rough grain of GR IV firmware, and Hi-Contrast has the
+           native default grain, which Grainy also takes without Rough. */
+        at(record + GRKIT_RECORD_LOOK_GRAIN)[0] =
+            grf_equal(profile + GRKIT_GRF_ID, (const u8 *)"gr4-mono-grainy", sizeof("gr4-mono-grainy")) ? 1 :
+            grf_equal(profile + GRKIT_GRF_ID, (const u8 *)"gr4-mono-hi-contrast", sizeof("gr4-mono-hi-contrast")) ? 2 : 0;
         /* The Image Control summary in each language: the prefix, then the name. */
         for (u32 language = 0; language < GRKIT_TEXT_LANGUAGES; ++language) {
             volatile u16 *summary = (volatile u16 *)at(text + GRKIT_TEXT_SUMMARY +
@@ -796,30 +815,40 @@ static void write_host_icons(const struct arrays *a, u32 pixels)
 {
     u32 base = a->base;
     /* Host artwork does not consume an effect record or a native settings ID.
-       It comes first in chunk 0: Off, the GRKit tile, the Version tile, the
-       Modules tile, the Modules tile of Enable GRKit Off, the Fn hint of a
-       row where Fn turns a setting, the "ft" and "16" labels of the manual
-       focus scale (SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT), then the tile of
-       a recipe without its caption and the slots of the tiles of recipes,
-       which start as that tile (runtime/recipe_card.h). */
-#define HOST_ARTWORK 9
-    _Static_assert(HOST_ICON_COUNT == HOST_ARTWORK + RECIPE_CARD_SLOTS,
-                   "The host icons are Off, GRKit, Version, Modules, Modules Off, Rotate, two scale labels, the "
-                   "recipe tile, and the slots of the recipe tiles");
-    for (u32 i = 0; i < HOST_ICON_COUNT; ++i) {
-        u32 icon = a->icon_bases[0] + i * ICON_STRIDE, label = i == 6 || i == 7;
-        static const u8 *const artwork[HOST_ARTWORK] = {off_pixels, grkit_pixels, version_pixels, modules_pixels,
-                                                         modules_off_pixels, rotate_pixels, scale_feet_pixels,
-                                                         scale_sixteen_pixels, recipe_card_pixels};
+       It comes first in chunk 0, in the slots of grkit_core::abi::HOST_ICONS
+       (GRKIT_ICON_SLOT_*). The "ft" and "16" labels of the manual focus scale
+       are SCALE_LABEL_WIDTH x SCALE_LABEL_HEIGHT. */
+    _Static_assert(HOST_ICON_COUNT == GRKIT_HOST_ICON_COUNT, "The loader and abi.h count the same host icons");
+    for (u32 i = 0; i < GRKIT_ICON_SLOT_BATTERY; ++i) {
+        u32 icon = a->icon_bases[0] + i * ICON_STRIDE;
+        u32 label = i == GRKIT_ICON_SLOT_SCALE_FEET || i == GRKIT_ICON_SLOT_SCALE_SIXTEEN;
+        /* The tiles of recipes start as the tile without a caption. */
+        static const u8 *const artwork[GRKIT_ICON_SLOT_BATTERY] = {
+            [GRKIT_ICON_SLOT_OFF] = off_pixels,
+            [GRKIT_ICON_SLOT_GRKIT] = grkit_pixels,
+            [GRKIT_ICON_SLOT_VERSION] = version_pixels,
+            [GRKIT_ICON_SLOT_MODULES] = modules_pixels,
+            [GRKIT_ICON_SLOT_MODULES_OFF] = modules_off_pixels,
+            [GRKIT_ICON_SLOT_ROTATE] = rotate_pixels,
+            [GRKIT_ICON_SLOT_SCALE_FEET] = scale_feet_pixels,
+            [GRKIT_ICON_SLOT_SCALE_SIXTEEN] = scale_sixteen_pixels,
+            [GRKIT_ICON_SLOT_RECIPE_TILE ... GRKIT_ICON_SLOT_RECIPE_CARDS + GRKIT_ICON_SLOTS_RECIPE_CARDS - 1] =
+                recipe_card_pixels,
+            [GRKIT_ICON_SLOT_UPDATE] = update_pixels,
+        };
         if (label) icon_sized(icon, pixels, SCALE_LABEL_WIDTH, SCALE_LABEL_HEIGHT);
         else icon_header(icon, pixels);
-        copy(at(icon + ICON_PIXELS), artwork[i < HOST_ARTWORK ? i : HOST_ARTWORK - 1],
-             label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
+        copy(at(icon + ICON_PIXELS), artwork[i], label ? SCALE_LABEL_WIDTH * SCALE_LABEL_HEIGHT * 4 : 6400);
         /* The menu derives the icons after the GRKit icon from its
            address. */
-        if (i < 2) store(base + (i ? GRKIT_HOST_GRKIT_ICON : GRKIT_HOST_OFF_ICON), icon);
+        if (i == GRKIT_ICON_SLOT_OFF) store(base + GRKIT_HOST_OFF_ICON, icon);
+        if (i == GRKIT_ICON_SLOT_GRKIT) store(base + GRKIT_HOST_GRKIT_ICON, icon);
     }
-#undef HOST_ARTWORK
+    _Static_assert(GRKIT_ICON_SLOT_BATTERY + GRKIT_ICON_SLOTS_BATTERY == GRKIT_HOST_ICON_COUNT,
+                   "The core writes the pictures of Battery Percentage in the last host slots");
+    /* The core writes the pixels of the two pictures of Battery Percentage. */
+    for (u32 i = GRKIT_ICON_SLOT_BATTERY; i < GRKIT_HOST_ICON_COUNT; i += 2)
+        icon_sized(a->icon_bases[0] + i * ICON_STRIDE, pixels, 60, 40);
 }
 
 /* Link the modules and register them in the header. */
@@ -834,6 +863,7 @@ static int write_modules(const struct arrays *a, u32 pixels, u32 code)
     store(base + GRKIT_HOST_SERVICES, services_block);
     store(base + GRKIT_HOST_MODULE_SETTINGS, a->module_array);
     store(base + GRKIT_HOST_PERSIST_WORD, (services_block + SERVICES_PERSIST - a->module_array) / 4U);
+    store(base + GRKIT_HOST_CONTROL_WORD, (SERVICES_CONTROL_ADDRESS(services_block) - a->module_array) / 4U);
     store(base + GRKIT_HOST_CAPABILITIES, capabilities_running);
     store(base + GRKIT_HOST_MODULE_PAGE_COUNT, module_page_count);
     for (u32 i = 0; i < module_page_count * 3; ++i) store(base + GRKIT_HOST_MODULE_PAGES + i * 4, module_pages[i]);
@@ -938,6 +968,17 @@ static int install(void)
         u32 persist = services_block + SERVICES_PERSIST;
         persist_baseline((volatile u32 *)at(arrays.base), (volatile u32 *)at(persist));
         if (!sync_alias(persist, GRKIT_PERSIST_SIZE)) return STATUS_SYNC;
+        /* The mailbox of the Wi-Fi service starts without an epoch: the
+           service attaches after it finds the mailbox (control_info). */
+        const u32 epoch[4]={0,0,0,0};
+        u32 control=SERVICES_CONTROL_ADDRESS(services_block);
+        control_init((volatile struct control_mailbox *)at(control),epoch);
+#ifdef RTOS_NATIVE
+        /* sync_alias of the fast path cleans only code. Clean each line of
+           the mailbox once, before a producer can attach. */
+        CONTROL_CLEAN((volatile void *)at(control),GRKIT_CONTROL_SIZE);
+#endif
+        if (!sync_alias(control, GRKIT_CONTROL_SIZE)) return STATUS_SYNC;
     }
     check_recipes(arrays.base, count, module_count ? arrays.module_array : 0, capabilities_running);
     for (u32 i = 0; i < CODE_RELOCATION_COUNT; ++i) {
@@ -952,6 +993,65 @@ static int install(void)
     print("GR_MODULE_INSTALLED "); number(count); print("\n");
     return 0;
 }
+#ifndef RTOS_NATIVE
+/* --control-info: find the mailbox of the Wi-Fi service in a camera that
+   runs GRKit, from the array table of the script interpreter. The pointers
+   of a header are not enough: the whole mailbox must lie in the module
+   array that the resident loader still holds. This path only reads. */
+static int control_info(void)
+{
+    u8 required[RELOCATION_SYMBOL_COUNT];
+    zero(required,sizeof(required));
+    required[ARRAY_COUNT_SYMBOL]=required[ARRAY_TABLE_SYMBOL]=required[HEAP_MIN_SYMBOL]=1;
+    relocation.read=read_word;
+    relocation.window_at=window_at;
+    relocation.symbol_at=relocated;
+    relocation.required=required;
+    if(!relocation_resolve(&relocation_tables,&relocation)) return STATUS_RELOCATION;
+    u32 n=*(volatile u16 *)at(ARRAY_COUNT), i, module_words_live=0;
+    if(n<ARRAY_LEAD+4 || n>ARRAY_LEAD+4+MAX_CHUNKS) return STATUS_NO_HEADER;
+    u32 base=word(ARRAYS+4);
+    if(!heap(base,GRKIT_HOST_HEADER_SIZE) || word(base+GRKIT_HOST_MAGIC)!=GRKIT_HOST_MAGIC_VALUE ||
+       word(base+GRKIT_HOST_VERSION)!=GRKIT_HOST_VERSION_VALUE) return STATUS_NO_HEADER;
+    u32 module=word(base+GRKIT_HOST_MODULE_SETTINGS), offset=word(base+GRKIT_HOST_CONTROL_WORD);
+    u32 services=word(base+GRKIT_HOST_SERVICES);
+    if(!module || !offset) return STATUS_NO_HEADER;
+    for(i=ARRAY_LEAD;i<n;++i) if(word(ARRAY_TABLE+8*i+4)==module) {
+        module_words_live=word(ARRAY_TABLE+8*i); break;
+    }
+    if(!module_words_live || module_words_live>(HEAP_END-HEAP_MIN)/4 ||
+       !heap(module,module_words_live*4) || offset>module_words_live ||
+       GRKIT_CONTROL_WORDS>module_words_live-offset) return STATUS_NO_HEADER;
+    u32 control=module+offset*4;
+    if(services<module || services>control || control!=SERVICES_CONTROL_ADDRESS(services) ||
+       word(control+GRKIT_CONTROL_MAGIC)!=GRKIT_CONTROL_MAGIC_VALUE ||
+       word(control+GRKIT_CONTROL_VERSION)!=GRKIT_CONTROL_VERSION_VALUE ||
+       word(control+GRKIT_CONTROL_CAPACITY)!=GRKIT_CONTROL_PAYLOAD_BYTES) return STATUS_NO_HEADER;
+    print("{\"headerAddress\":"); number(base);
+    print(",\"mailboxAddress\":"); number(control);
+    print(",\"mailboxSize\":"); number(GRKIT_CONTROL_SIZE);
+    print(",\"mailboxVersion\":"); number(GRKIT_CONTROL_VERSION_VALUE);
+    print(",\"epoch\":[");
+    for(i=0;i<4;++i) { if(i) print(","); number(word(control+GRKIT_CONTROL_EPOCH+4*i)); }
+    print("]");
+    print("}\n");
+    return 0;
+}
+static int control_discover(void)
+{
+    long fd=syscall6(5,(u32)"/dev/mem",0x101000,0,0,0,0);
+    if(fd<0) return STATUS_NO_MEMORY;
+    long mapped=syscall6(192,0,MAP_SIZE,1,1,fd,MAP_BASE>>12);
+    int status=STATUS_NO_MAPPING;
+    if((u32)mapped<0xfffff001U) {
+        mapping=(volatile u8 *)mapped;
+        status=control_info();
+        syscall6(91,(u32)mapping,MAP_SIZE,0,0,0,0);
+    }
+    syscall6(6,fd,0,0,0,0,0);
+    return status;
+}
+#endif
 #ifdef MODULE_DIAGNOSTICS
 /* Diagnostic builds can select profiles independently of the menu. */
 static int select_profile(const char *id)
@@ -1074,6 +1174,10 @@ __attribute__((used)) void start(u32 *stack)
     if (argc == 2 && text_equal(argv[1], "--known")) mode = INSTALL_KNOWN;
     else if (argc == 2 && text_equal(argv[1], "--try")) mode = INSTALL_TRY;
     int installing = argc == 2 && (mode != INSTALL_LAST || text_equal(argv[1], "--install"));
+#ifndef RTOS_NATIVE
+    if (argc == 2 && text_equal(argv[1], "--control-info")) status = control_discover();
+    else
+#endif
     if (argc == 2 && text_equal(argv[1], "--scan")) status = scan();
     else if (installing
 #ifdef MODULE_DIAGNOSTICS

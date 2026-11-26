@@ -14,6 +14,11 @@
 /* Settings domain (FW_SETTINGS_DOMAIN): +0x518 -> control -> payload with the
    native Image Control type at SETTINGS_IC_TYPE. Standard is type 11. */
 #define SETTINGS_IC_TYPE 0x77c
+/* The state of the Wi-Fi access point of the camera in the same payload:
+   SETTINGS_WLAN_STATION while a phone is connected. */
+#define SETTINGS_WLAN_STATE 0x230
+/* 1 while the Wi-Fi access point of the camera is on. */
+#define SETTINGS_WLAN_ENABLED 0x7da
 /* The native monochrome types, as a bit mask of the type: 13 to 16 are
    Monotone, Soft Monotone, Hard Monotone, and Hi-Contrast B&W (ImageTone 258
    to 261). The shot settings hold the type at the same offset as the
@@ -65,6 +70,26 @@
    the Retro type also sets its own Shading. */
 #define PARAMETER_TONING_BASE 9
 #define PARAMETER_TONING_KIND 9
+/* The slider of that Toning row for a native look: the three levels of the
+   GR IV Cinema slider, 180 pixels apart, which spans the track as the nine
+   native values 45 pixels apart do. The track of the Retro row, icon
+   TONING_TRACK_ICON of TONING_TRACK_WIDTH x TONING_TRACK_HEIGHT pixels, has
+   its gradient in rows TONING_TRACK_TOP to TONING_TRACK_BOTTOM from column
+   TONING_TRACK_LEFT to TONING_TRACK_RIGHT, but for the white mark and its
+   black edges in columns TONING_TRACK_MARK_LEFT to TONING_TRACK_MARK_RIGHT.
+   GR IV draws the track of a Cinema look the same way, with a gradient
+   between two colors. */
+#define PARAMETER_TONING_LEVELS 3U
+#define PARAMETER_TONING_STEP 180U
+#define TONING_TRACK_ICON 0x232U
+#define TONING_TRACK_WIDTH 400U
+#define TONING_TRACK_HEIGHT 60U
+#define TONING_TRACK_TOP 10U
+#define TONING_TRACK_BOTTOM 13U
+#define TONING_TRACK_LEFT 20U
+#define TONING_TRACK_RIGHT 379U
+#define TONING_TRACK_MARK_LEFT 197U
+#define TONING_TRACK_MARK_RIGHT 202U
 /* The page event that opens another controller (0x2000015) from the page. */
 #define DETAIL_EV_SUBPAGE 0x88
 
@@ -201,6 +226,8 @@
 #define EV_DIAL_UP 0xd4
 #define EV_DIAL_DOWN 0xd5
 #define EV_CONFIRM 0xd8
+/* The request that FW_ADJ_OK posts, which ADJ also gets as an event. */
+#define EV_OK_REQUEST 0x86
 
 /* The playback metadata (FW_PLAYBACK_METADATA): +0x220 holds key 0x25, the
    Image Control tag. */

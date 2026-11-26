@@ -1,7 +1,7 @@
-//! Cinema (Yellow) and Cinema (Green) from local GR IV firmware files. The digests stand for
+//! The Cinema and Monochrome looks from local GR IV firmware files. The digests stand for
 //! the camera's tables, so the tests hold no firmware data.
 use anyhow::{Context, Result};
-use grkit_core::gr4_looks::{mono_matrix, Image, Kind, LOOKS};
+use grkit_core::gr4_looks::{mono_matrix, Image, Kind, LOOKS, ROUGH_EFFECT_ID};
 use grkit_core::native_tone::ToneSteps;
 use sha2::{Digest, Sha256};
 use std::io::Write;
@@ -93,21 +93,21 @@ fn gr4_cinema_looks_become_effects() -> Result<()> {
 #[ignore = "Requires local GRKIT_TEST_FIRMWARE_GR4"]
 fn gr4_111_holds_the_monochrome_looks() -> Result<()> {
     let image = Image::read(&firmware("GRKIT_TEST_FIRMWARE_GR4")?)?;
-    let effects = image.all_effects()?;
+    let effects = image.effects()?;
     let ids: Vec<&str> = effects.iter().map(|(look, _)| look.effect_id).collect();
-    assert_eq!(ids, LOOKS.map(|look| look.effect_id));
-    let offered: Vec<&str> = image
-        .effects()?
+    // A 1.11 file has no Solarized curve sets.
+    let expected: Vec<&str> = LOOKS
         .iter()
-        .map(|(look, _)| look.effect_id)
+        .filter(|look| !matches!(look.kind, Kind::Solarized(_)))
+        .map(|look| look.effect_id)
         .collect();
-    assert_eq!(offered, ["gr4-cinema-yellow", "gr4-cinema-green"]);
+    assert_eq!(ids, expected);
     let definitions: Vec<_> = image
         .definitions()?
         .into_iter()
         .map(|d| d["effect_id"].clone())
         .collect();
-    assert_eq!(definitions, offered);
+    assert_eq!(definitions, ids);
     let matrix = mono_matrix();
     assert_eq!(matrix[..3].iter().map(|v| i32::from(*v)).sum::<i32>(), 8192);
     for (look, effect) in &effects {
@@ -128,7 +128,7 @@ fn gr4_111_holds_the_monochrome_looks() -> Result<()> {
             .1
     };
     assert_eq!(
-        by_id("gr4-mono-high-contrast").curves[0],
+        by_id("gr4-mono-hi-contrast").curves[0],
         image.curve_set(16)?.mixed()[1]
     );
     assert_eq!(
@@ -165,7 +165,7 @@ fn gr4_120_holds_the_looks_of_111() -> Result<()> {
         );
     }
     let ids: Vec<&str> = new
-        .all_effects()?
+        .effects()?
         .iter()
         .map(|(look, _)| look.effect_id)
         .collect();
@@ -195,11 +195,57 @@ fn gr4_121_holds_the_looks_of_120() -> Result<()> {
     assert_eq!(strip(new.definitions()?), strip(old.definitions()?));
     let ids = |image: &Image| -> Result<Vec<&'static str>> {
         Ok(image
-            .all_effects()?
+            .effects()?
             .iter()
             .map(|(look, _)| look.effect_id)
             .collect())
     };
     assert_eq!(ids(&new)?, ids(&old)?);
+    // Each Solarized look holds one falling curve.
+    for (look, effect) in new.effects()? {
+        if matches!(look.kind, Kind::Solarized(_)) {
+            assert!(effect.monochrome(), "{}", look.effect_id);
+            assert!(
+                effect.curves[1].windows(2).any(|pair| pair[1] < pair[0]),
+                "{}",
+                look.effect_id
+            );
+        }
+    }
     Ok(())
+}
+
+/// The runtime finds the looks with their own grain by these IDs.
+#[test]
+fn the_runtime_names_the_rough_look() {
+    let installer = include_str!("../../../runtime/installer.c");
+    assert!(installer.contains(&format!("\"{ROUGH_EFFECT_ID}\"")));
+    assert!(LOOKS.iter().any(|look| look.effect_id == ROUGH_EFFECT_ID));
+    assert!(installer.contains("\"gr4-mono-hi-contrast\""));
+    assert!(LOOKS
+        .iter()
+        .any(|look| look.effect_id == "gr4-mono-hi-contrast"));
+}
+
+/// A look that the phone adds over Wi-Fi needs a code of its own: the camera
+/// service refuses a code that another look has, and one in the native page
+/// of GR IV (0x81xx), on every camera. So no two unlockable or catalog looks
+/// share a code, and none is in that page.
+#[test]
+fn unlockable_looks_have_codes_of_their_own() {
+    let native = LOOKS
+        .iter()
+        .map(|look| look.effect_id.to_owned())
+        .chain(grkit_core::gr2_looks::TARGETS.iter().map(|(id, _)| (*id).to_owned()));
+    let catalog = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../effects"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let mut codes = std::collections::BTreeMap::new();
+    for id in native.chain(catalog) {
+        let code = 0x8000 | grkit_core::recipes::effect_code(&id);
+        assert_ne!(code >> 8, 0x81, "{id} is in the native page of GR IV");
+        if let Some(other) = codes.insert(code, id.clone()) {
+            panic!("{id} and {other} share the code {code:#x}");
+        }
+    }
 }

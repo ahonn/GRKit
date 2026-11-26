@@ -741,6 +741,22 @@ fn native_state_contract_reads_the_pairs_of_the_loader() {
     checked(&mut Command::new(&executable));
 }
 
+#[test]
+fn native_control_mailbox_contract_bounds_and_serializes_requests() {
+    let Some(compiler) = compiler() else {
+        return;
+    };
+    let temporary = tempfile::tempdir().unwrap();
+    let executable = temporary.path().join("control_mailbox_contract");
+    compile(
+        &compiler,
+        &root().join("tests/runtime/control_mailbox_contract.c"),
+        &executable,
+        &[],
+    );
+    checked(&mut Command::new(&executable));
+}
+
 /// Each target, because the native tables and the grain form differ by
 /// camera family. The Rust codec and the camera agree on the words: the
 /// camera has each value of the recipes of the site (the presets and a
@@ -1159,6 +1175,7 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
                 halation: 3,
                 halation_color: Some(2),
             }),
+            grain_style: None,
             border: Some(Border {
                 style: 3,
                 color: Some(1),
@@ -1196,6 +1213,7 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
             }),
             grain: None,
             glow: None,
+            grain_style: None,
             border: None,
             white_balance: None,
             corrections: [None; 4],
@@ -1215,6 +1233,7 @@ fn library_recipes() -> Vec<grkit_core::recipes::Recipe> {
                 halation: 1,
                 halation_color: None,
             }),
+            grain_style: None,
             border: None,
             white_balance: None,
             corrections: [None; 4],

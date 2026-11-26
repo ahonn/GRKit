@@ -42,6 +42,7 @@ pub fn from_preset(hints: &Hints, family: Family, name: &str, effect_id: &str) -
         },
         grain,
         glow: None,
+        grain_style: None,
         border: None,
         white_balance,
         corrections: [None; 4],

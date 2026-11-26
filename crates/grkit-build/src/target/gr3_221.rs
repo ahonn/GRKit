@@ -125,6 +125,7 @@ const SITES: &[Site] = &[
     ("menu_parameter_row_8", 0x532af54c, "4f760aeb"),
     ("menu_settings_change", 0x5316da14, "0dc0a0e1"),
     ("menu_info_update", 0x531e1b20, "0dc0a0e1"),
+    ("menu_timer_dispatch", 0x5322dc04, "402090e5"),
     ("menu_check_factory", 0x53170474, "413100e3"),
     ("menu_check_lines", 0x531bb610, "8a6e07eb"),
     ("menu_check_dot", 0x531bf188, "f98707eb"),
@@ -294,6 +295,42 @@ const SITES: &[Site] = &[
     ("menu_parameter_get_9", 0x532c50fc, "0dc0a0e1"),
     ("menu_parameter_set_9", 0x532c2ea0, "0dc0a0e1"),
     ("menu_parameter_row_9", 0x532af14c, "e9760aeb"),
+    // The slider setups of the rows of ImageControlDetailController: the call
+    // to the native default of the type (Saturation 0x531ae01c to Clarity
+    // 0x531af708, Toning 0x531aeb5c), the call of the Toning setup to
+    // FW_SLIDER_INIT, and the end of the Toning row text 0x532af130.
+    ("menu_parameter_mark_0", 0x531ae050, "0c5f04eb"),
+    ("menu_parameter_mark_1", 0x531ae190, "576004eb"),
+    ("menu_parameter_mark_2", 0x531ae2d0, "a26104eb"),
+    ("menu_parameter_mark_3", 0x531ae410, "356304eb"),
+    ("menu_parameter_mark_4", 0x531ae550, "c86404eb"),
+    ("menu_parameter_mark_5", 0x531ae690, "5b6604eb"),
+    ("menu_parameter_mark_6", 0x531ae7d0, "ee6704eb"),
+    ("menu_parameter_mark_7", 0x531af5fc, "5c6f04eb"),
+    ("menu_parameter_mark_8", 0x531af73c, "ef7004eb"),
+    ("menu_parameter_mark_9", 0x531aeb90, "906a04eb"),
+    ("menu_parameter_toning_init", 0x531aebdc, "fbcb07eb"),
+    ("menu_parameter_toning_text", 0x532af164, "b8ffffea"),
+    // The parameter page of a RAW development: the call of its kinds method
+    // 0x5318ed84 to the base kind of a type, the calls to the native default
+    // in the slider setups of its rows (Saturation 0x5318f418 to Clarity
+    // 0x53190b28, Toning 0x5318ff58), the call of the Toning setup to
+    // FW_SLIDER_INIT, the entry of the model setter of Toning, and the call
+    // of the Toning row text 0x53191a40 to the native text of a value.
+    ("menu_develop_kinds", 0x5318edd4, "b1ffffeb"),
+    ("menu_develop_mark_0", 0x5318f44c, "34df03eb"),
+    ("menu_develop_mark_1", 0x5318f58c, "eede03eb"),
+    ("menu_develop_mark_2", 0x5318f6cc, "a8de03eb"),
+    ("menu_develop_mark_3", 0x5318f80c, "62de03eb"),
+    ("menu_develop_mark_4", 0x5318f94c, "1cde03eb"),
+    ("menu_develop_mark_5", 0x5318fa8c, "d6dd03eb"),
+    ("menu_develop_mark_6", 0x5318fbcc, "90dd03eb"),
+    ("menu_develop_mark_7", 0x53190a1c, "77da03eb"),
+    ("menu_develop_mark_8", 0x53190b5c, "31da03eb"),
+    ("menu_develop_mark_9", 0x5318ff8c, "bedc03eb"),
+    ("menu_develop_toning_init", 0x5318ffd8, "fc4608eb"),
+    ("menu_develop_toning_set", 0x5328a108, "04e02de5"),
+    ("menu_develop_toning_text", 0x53191a8c, "6e7504eb"),
     // The entry of the apply of a dial position, which each App event of the
     // dial reaches.
     ("menu_dial", 0x53226898, "0dc0a0e1"),
@@ -309,6 +346,7 @@ const SITES: &[Site] = &[
     ("canvas_filter_0", 0x53505e28, "59f905eb"),
     ("canvas_filter_1", 0x535064f4, "a6f705eb"),
     ("menu_battery_mode", 0x53173198, "030053e3"),
+    ("menu_battery_icon", 0x532ae488, "010051e3"),
     ("menu_goodbye", 0x53230c14, "01119ce7"),
     ("menu_goodbye_text_0", 0x5319fe78, "0dc0a0e1"),
     ("menu_goodbye_text_1", 0x5319ff4c, "0dc0a0e1"),
@@ -316,6 +354,8 @@ const SITES: &[Site] = &[
     ("picture_dng_xmp", 0x535fb708, "981208e3"),
     // The tag setter of the DNG writer: its first instruction.
     ("picture_dng_set", 0x535fdce4, "0dc0a0e1"),
+    // The end test of the list of sizes that the camera resizes for a phone.
+    ("picture_transfer_size", 0x535a003c, "000052e3"),
 ];
 
 const CONTEXTS: &[(u32, &str)] = &[

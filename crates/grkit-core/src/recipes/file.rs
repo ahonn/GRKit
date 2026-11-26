@@ -20,14 +20,7 @@ impl FileRecord {
     /// The recipe of the record for a camera of `family`, or an error when
     /// the checks of the family reject it.
     fn recipe(&self, family: Family) -> Result<Recipe> {
-        let mut name = String::new();
-        for n in 0..crate::abi::RECIPE_NAME_CHARS {
-            let c = self.name[n / 4] >> (7 * (n % 4)) & 0x7f;
-            if !(0x20..=0x7e).contains(&c) {
-                break;
-            }
-            name.push(c as u8 as char);
-        }
+        let name = super::name_of_words(&self.name);
         let mut recipe = Recipe::from_words(name.trim().to_string(), family, self.words)?;
         recipe.id = if self.id <= RECIPE_ID_MAX { self.id } else { 0 };
         Ok(recipe)
@@ -114,13 +107,9 @@ pub fn write_recipe_file(recipes: &[Recipe], family: Family, previous: &str) -> 
         let words = recipe
             .words()
             .with_context(|| format!("Recipe {}", recipe.name))?;
-        let mut name = [0u32; RECIPE_NAME_WORDS];
-        for (n, byte) in recipe.name.bytes().enumerate() {
-            name[n / 4] |= u32::from(byte & 0x7f) << (7 * (n % 4));
-        }
         records.push(FileRecord {
             words,
-            name,
+            name: super::name_words(&recipe.name),
             id: once(recipe.id),
         });
     }

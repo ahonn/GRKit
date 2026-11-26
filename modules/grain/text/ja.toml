@@ -8,6 +8,10 @@ label = "強度"
 label = "サイズ"
 values = ["オート", "小", "中", "大"]
 
+[settings.STYLE]
+label = "スタイル"
+values = ["システム", "フィルム調"]
+
 [settings.ICON]
 label = "アイコン表示"
 values = ["オン", "オフ"]

@@ -133,6 +133,9 @@
 #define FW_MENU_ROW_VALUE FIRMWARE(0x5359e068)
 #define FW_ADJ_REFRESH FIRMWARE(0x531c0f08)
 #define FW_ADJ_SELECT_SLOT FIRMWARE(0x531c148c)
+/* The OK method of ADJ: it posts the request of the App task that
+   takes the camera to the shooting screen, and uses no argument. */
+#define FW_ADJ_OK FIRMWARE(0x531bd654)
 #define FW_CHANGE_CONTROLLER FIRMWARE(0x5318408c)
 /* The controller factory singleton, which holds one instance of each controller. */
 #define INFO_TITLE_TEXT 0x2d5
@@ -169,6 +172,10 @@
 /* Playback metadata singleton and the maker-note IFD entry setter: (entry, 0,
    value) stores a u16 value. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x532418a4)
+/* The power report of the sub-CPU (runtime/battery_percent.h): the guard and
+   the holder of its service. */
+#define FW_POWER_GUARD FIRMWARE(0x5537efc4)
+#define FW_POWER_HOLDER FIRMWARE(0x5537eea0)
 #define FW_IFD_SET_SHORT FIRMWARE(0x5380eb40)
 /* The TIFF writer: append an entry to an IFD, and copy the data of an
    entry (runtime/picture.c: picture_dng_xmp_add). */
@@ -327,5 +334,13 @@
    which asserts that no use is set. */
 #define FW_KEYBOARD_MODEL FIRMWARE(0x53242360)
 #define FW_KEYBOARD_SET_FUNCTION FIRMWARE(0x533f7ad8)
+
+/* The resize of a picture for a phone (runtime/picture.S:
+   picture_transfer_size): the setter of the size of the copy (the size
+   object, width, height), and where the size check goes on without a size
+   (the camera sends the whole file) or with one. */
+#define FW_TRANSFER_SET FIRMWARE(0x539129c8)
+#define FW_TRANSFER_MISS FIRMWARE(0x537d9000)
+#define FW_TRANSFER_DONE FIRMWARE(0x537d92bc)
 
 #endif

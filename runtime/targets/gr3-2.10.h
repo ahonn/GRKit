@@ -112,6 +112,9 @@
 #define FW_MENU_ROW_VALUE FIRMWARE(0x5339de6c)
 #define FW_ADJ_REFRESH FIRMWARE(0x531a4114)
 #define FW_ADJ_SELECT_SLOT FIRMWARE(0x531a4864)
+/* The OK method of ADJ: it posts the request of the App task that
+   takes the camera to the shooting screen, and uses no argument. */
+#define FW_ADJ_OK FIRMWARE(0x531a1998)
 #define FW_CHANGE_CONTROLLER FIRMWARE(0x5316c9d8)
 /* The setter of an ASCII string view (gr3.h: INFO_LINES). */
 #define FW_STRING_VIEW_SET_ASCII FIRMWARE(0x53390ef8)
@@ -131,11 +134,17 @@
 
 /* Playback metadata singleton (gr3.h: METADATA_*) and the native icon table. */
 #define FW_PLAYBACK_METADATA FIRMWARE(0x5320b97c)
+/* The power report of the sub-CPU (runtime/battery_percent.h): the guard and
+   the holder of its service. */
+#define FW_POWER_GUARD FIRMWARE(0x55349090)
+#define FW_POWER_HOLDER FIRMWARE(0x55348f6c)
 #define FW_ICON_TABLE FIRMWARE(0x550020fc)
 /* RawDevelopmentModel: the guard of its static instance, and the instance.
    The family header gives its state (DEVELOP_STATE). */
 #define FW_DEVELOP_GUARD FIRMWARE(0x550662d0)
 #define FW_DEVELOP_MODEL FIRMWARE(0x550666e0)
+/* The update of the development model after a store of Toning. */
+#define FW_DEVELOP_TONING_UPDATE FIRMWARE(0x532878d4)
 /* RAW development, the Image Control list (runtime/menu.c): the label and
    the icon of an Image Control (model, category, value). */
 #define FW_DEVELOP_TONE_TEXT FIRMWARE(0x532891f4)
@@ -242,5 +251,13 @@
 #define FW_SLIDER_RANGE FIRMWARE(0x5339f1f0)
 #define FW_SLIDER_FLAG FIRMWARE(0x5339f210)
 #define FW_SLIDER_APPLY FIRMWARE(0x5339f328)
+
+/* The resize of a picture for a phone (runtime/picture.S:
+   picture_transfer_size): the setter of the size of the copy (the size
+   object, width, height), and where the size check goes on without a size
+   (the camera sends the whole file) or with one. */
+#define FW_TRANSFER_SET FIRMWARE(0x536b5d20)
+#define FW_TRANSFER_MISS FIRMWARE(0x5359d290)
+#define FW_TRANSFER_DONE FIRMWARE(0x5359d54c)
 
 #endif

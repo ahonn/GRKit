@@ -115,6 +115,11 @@ const MENU_PAGES: &[HookSpec] = &[
     b("menu_settings_change", Menu, MenuPage),
     // The update of the camera information page, which About GRKit shows.
     b("menu_info_update", Menu, MenuPage),
+    // The dispatch of the expired timers of the App task, which runs in each
+    // start: on the shooting screen, in playback, and in the standby of a
+    // Bluetooth start. It starts the poll of the saved state and the
+    // mailbox of the Wi-Fi service (`runtime/persist.h`).
+    b("menu_timer_dispatch", Menu, MenuPage),
     // An options page shows checkboxes (`runtime/menu_settings.h`): the
     // controller factory gives it a second SelectMenuController, the list of
     // that controller gets checkbox rows, and its start does not hide their
@@ -334,11 +339,27 @@ pub const DNG_XMP: &[HookSpec] = &[
     b("picture_dng_set", Framing, PictureXmp),
 ];
 
+/// The smaller copy of a picture that the camera sends to a phone
+/// (`runtime/picture.S: picture_transfer_size`): the test for the end of the
+/// list of the sizes that the camera resizes. A Framing or Crop size is not
+/// in that list, so the camera sent the whole file; the hook gives such a
+/// picture a size for the copy.
+pub const TRANSFER: &[HookSpec] = &[b_shared(
+    "picture_transfer_size",
+    Framing,
+    CaptureAspect,
+    &[CaptureCrop],
+)];
+
 /// Battery in Simple Display (`runtime/manage.h`): the compare of the display
 /// mode in UpdateViewBattery of LiveViewController, before the jump table
 /// that shows the battery icon at each level only with the full information
-/// (`runtime/menu.S: menu_battery_mode`).
-pub const BATTERY: &[HookSpec] = &[b("menu_battery_mode", Menu, MenuPage)];
+/// (`runtime/menu.S: menu_battery_mode`); and the entry of GetBatteryIcon, for
+/// Battery Percentage (`runtime/battery_percent.h`).
+pub const BATTERY: &[HookSpec] = &[
+    b("menu_battery_mode", Menu, MenuPage),
+    b("menu_battery_icon", Menu, MenuPage),
+];
 
 /// Shutdown Screen (`runtime/goodbye.h`): where playback takes the
 /// picture that the GoodBye controller shows at the power-off. In a build

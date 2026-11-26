@@ -8,8 +8,8 @@ use anyhow::{bail, ensure, Context, Result};
 use grkit_core::{
     artwork::{
         grkit_pixels, modules_off_pixels, modules_pixels, off_pixels, recipe_card_pixels,
-        rotate_pixels, scale_feet_pixels, scale_sixteen_pixels, version_pixels, SCALE_LABEL_HEIGHT,
-        SCALE_LABEL_WIDTH,
+        rotate_pixels, scale_feet_pixels, scale_sixteen_pixels, update_pixels, version_pixels,
+        SCALE_LABEL_HEIGHT, SCALE_LABEL_WIDTH,
     },
     card::{LINUX_DATA_DIRECTORY, LINUX_DIRECTORY, LINUX_LEGACY_DIRECTORY, LINUX_RAM_PLAN},
     runtime::{icon_stride, HOST_ICON_COUNT, ICONS_PER_CHUNK, MAX_CHUNKS, MAX_COUNT},
@@ -126,6 +126,13 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         "static const char target_marker[] __attribute__((used)) = \"{}{}\";",
         grkit_core::packaging::TARGET_MARKER,
         target.name
+    )?;
+    // An update over Wi-Fi shows the version of a package (packaging).
+    writeln!(
+        result,
+        "static const char version_marker[] __attribute__((used)) = \"{}{}\";",
+        grkit_core::packaging::VERSION_MARKER,
+        version
     )?;
     if target.icon_descriptor_bytes()? == 12 {
         // GR IV icon descriptors: width and a valid flag, height, pixel offset.
@@ -346,6 +353,7 @@ pub fn header(plan: &PatchPlan, body: &FirmwareImage, version: &str) -> Result<S
         true,
     );
     array(&mut result, "rotate_pixels", &rotate_pixels(), true);
+    array(&mut result, "update_pixels", &update_pixels(), true);
     // The labels of the manual focus scale in feet (runtime/distance.h).
     writeln!(result, "#define SCALE_LABEL_WIDTH {}U", SCALE_LABEL_WIDTH)?;
     writeln!(result, "#define SCALE_LABEL_HEIGHT {}U", SCALE_LABEL_HEIGHT)?;
@@ -575,6 +583,11 @@ fn relocation_tables(
         defines.push(format!(
             "#define {name} (relocated[{symbol}] + {offset:#x}U)"
         ));
+        // The symbols that `--control-info` resolves by themselves
+        // (runtime/installer.c).
+        if matches!(name, "ARRAY_COUNT" | "ARRAY_TABLE" | "HEAP_MIN") {
+            defines.push(format!("#define {name}_SYMBOL {symbol}U"));
+        }
     }
     let mut tables = Vec::new();
     let mut initialized = Vec::new();

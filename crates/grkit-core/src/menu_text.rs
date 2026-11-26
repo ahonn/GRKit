@@ -27,7 +27,7 @@ pub const TEXT_GROUP_VALUE: usize = TEXT_SETTINGS - 2 * GROUP_UNITS;
 /// The units of the longest string with its NUL, and of each summary slot.
 pub const SUMMARY_UNITS: usize = 32;
 /// The number of strings in each language (`GRKIT_TEXT_STRINGS`).
-pub const STRINGS: usize = 87;
+pub const STRINGS: usize = 93;
 /// The project address that About GRKit shows.
 const PROJECT: &str = "github.com/ahonn/grkit";
 /// The longest effect name in a record.
@@ -108,6 +108,9 @@ struct Words {
     /// of a photo as icons on the first page of the detailed information of
     /// playback. Its values are the Off and On of the switch.
     playback_info: &'static str,
+    /// The Battery Percentage row of Display Settings. Its values are the Off
+    /// and On of the switch.
+    battery_percent: &'static str,
     /// The MENU row that orders the module pages in the GRKit root of ADJ.
     adj_order: &'static str,
     /// The places of a module on the ADJ Order page: its own entry 1 to 4 of
@@ -160,7 +163,7 @@ struct Words {
     /// The message after an apply that left out a setting of a module that
     /// is not loaded, for each module of `recipes::setting_modules`: Glow,
     /// then Border.
-    recipe_no_module: [&'static str; 2],
+    recipe_no_module: [&'static str; 3],
     /// The mark after the name of a recipe whose effect is not installed.
     recipe_missing_mark: &'static str,
     /// The names of the native Image Control types in the order of
@@ -168,6 +171,10 @@ struct Words {
     /// seven are the types of GR IV Monochrome, with the names of its
     /// firmware.
     native_types: [&'static str; 21],
+    /// The GRKit Settings row of an update over Wi-Fi that waits for its
+    /// confirmation, which About GRKit also opens; its values: not now, and
+    /// install it; then the confirm before and after the version.
+    update: [&'static str; 4],
 }
 
 const ENGLISH: Words = Words {
@@ -198,6 +205,7 @@ const ENGLISH: Words = Words {
     shutdown_screen: "Custom Picture",
     shutdown_text: "Show Text",
     playback_info: "Effect Icons in Playback",
+    battery_percent: "Battery Percentage",
     adj_order: "ADJ Order",
     adj_pins: ["Top 1", "Top 2", "Top 3", "Top 4"],
     adj_hidden: "Hidden",
@@ -224,6 +232,7 @@ const ENGLISH: Words = Words {
     recipe_no_module: [
         "Glow needs the Glow module",
         "Border needs the Border module",
+        "Grain needs the Grain module",
     ],
     recipe_missing_mark: "effect missing",
     native_types: [
@@ -249,6 +258,7 @@ const ENGLISH: Words = Words {
         "HDR Tone",
         "Solarized Effect",
     ],
+    update: ["Update", "Install", "Install GRKit ", "?"],
 };
 
 const SIMPLIFIED_CHINESE: Words = Words {
@@ -279,6 +289,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
     shutdown_screen: "自定义图片",
     shutdown_text: "显示文字",
     playback_info: "回放效果图标",
+    battery_percent: "电量百分比",
     adj_order: "ADJ 菜单顺序",
     adj_pins: ["顶栏 1", "顶栏 2", "顶栏 3", "顶栏 4"],
     adj_hidden: "隐藏",
@@ -302,7 +313,11 @@ const SIMPLIFIED_CHINESE: Words = Words {
     recipe_actions: ["重命名", "删除"],
     recipe_apply: "应用",
     recipe_view: "查看",
-    recipe_no_module: ["光晕需要光晕模块", "边框需要边框模块"],
+    recipe_no_module: [
+        "光晕需要光晕模块",
+        "边框需要边框模块",
+        "颗粒感需要颗粒感模块",
+    ],
     recipe_missing_mark: "缺少效果",
     native_types: [
         "标准",
@@ -327,6 +342,7 @@ const SIMPLIFIED_CHINESE: Words = Words {
         "HDR色调",
         "中途曝光效果",
     ],
+    update: ["更新", "安装", "安装 GRKit ", "？"],
 };
 
 const TRADITIONAL_CHINESE: Words = Words {
@@ -357,6 +373,7 @@ const TRADITIONAL_CHINESE: Words = Words {
     shutdown_screen: "自訂圖片",
     shutdown_text: "顯示文字",
     playback_info: "播放效果圖示",
+    battery_percent: "電量百分比",
     adj_order: "ADJ 選單順序",
     adj_pins: ["頂欄 1", "頂欄 2", "頂欄 3", "頂欄 4"],
     adj_hidden: "隱藏",
@@ -380,7 +397,11 @@ const TRADITIONAL_CHINESE: Words = Words {
     recipe_actions: ["重命名", "刪除"],
     recipe_apply: "套用",
     recipe_view: "檢視",
-    recipe_no_module: ["光暈需要光暈模組", "邊框需要邊框模組"],
+    recipe_no_module: [
+        "光暈需要光暈模組",
+        "邊框需要邊框模組",
+        "粒紋感需要粒紋感模組",
+    ],
     recipe_missing_mark: "缺少效果",
     native_types: [
         "標準",
@@ -405,6 +426,7 @@ const TRADITIONAL_CHINESE: Words = Words {
         "HDR色調",
         "中途曝光效果",
     ],
+    update: ["更新", "安裝", "安裝 GRKit ", "？"],
 };
 
 const JAPANESE: Words = Words {
@@ -437,6 +459,7 @@ const JAPANESE: Words = Words {
     shutdown_screen: "カスタム画像",
     shutdown_text: "文字を表示",
     playback_info: "再生時の効果アイコン",
+    battery_percent: "バッテリー残量の%表示",
     adj_order: "ADJ メニューの順番",
     adj_pins: ["上段 1", "上段 2", "上段 3", "上段 4"],
     adj_hidden: "非表示",
@@ -463,6 +486,7 @@ const JAPANESE: Words = Words {
     recipe_no_module: [
         "グローにはグローモジュールが必要",
         "ボーダーにはボーダーモジュールが必要",
+        "粒状感には粒状感モジュールが必要",
     ],
     recipe_missing_mark: "エフェクトなし",
     native_types: [
@@ -487,6 +511,12 @@ const JAPANESE: Words = Words {
         "ソリッド",
         "HDR調",
         "ソラリゼーション調",
+    ],
+    update: [
+        "アップデート",
+        "インストール",
+        "GRKit ",
+        " をインストールしますか？",
     ],
 };
 
@@ -518,6 +548,7 @@ const KOREAN: Words = Words {
     shutdown_screen: "사용자 지정 이미지",
     shutdown_text: "텍스트 표시",
     playback_info: "재생 효과 아이콘",
+    battery_percent: "배터리 잔량 % 표시",
     adj_order: "ADJ 메뉴 순서",
     adj_pins: ["상단 1", "상단 2", "상단 3", "상단 4"],
     adj_hidden: "숨김",
@@ -544,6 +575,7 @@ const KOREAN: Words = Words {
     recipe_no_module: [
         "글로우에는 글로우 모듈이 필요함",
         "테두리에는 테두리 모듈이 필요함",
+        "입자감에는 입자감 모듈이 필요함",
     ],
     recipe_missing_mark: "효과 없음",
     native_types: [
@@ -569,6 +601,7 @@ const KOREAN: Words = Words {
         "HDR톤",
         "솔라리제이션톤",
     ],
+    update: ["업데이트", "설치", "GRKit ", " 설치를 진행할까요?"],
 };
 
 /// The text between a page title and its value in a root row summary, such
@@ -668,7 +701,7 @@ pub const RUNS: &[Run] = &[
     ),
     run(
         "RECIPE",
-        17,
+        18,
         "The page of recipes: the Undo and Save rows, the text before a saved name, \
          the text before and after the name to delete, the message when the recipes are \
          full, the text of a missing effect, the name of a recipe without a look, the \
@@ -735,6 +768,18 @@ pub const RUNS: &[Run] = &[
         1,
         "The Effect Icons in Playback row of Display Settings. Its values are TEXT_OFF and \
          TEXT_ON.",
+    ),
+    run(
+        "BATTERY_PERCENT",
+        1,
+        "The Battery Percentage row of Display Settings. Its values are TEXT_OFF and TEXT_ON.",
+    ),
+    run(
+        "UPDATE",
+        4,
+        "The GRKit Settings row of an update over Wi-Fi that waits for its \
+         confirmation, then its value Install, then the text of its \
+         confirm before and after the version.",
     ),
 ];
 
@@ -828,6 +873,8 @@ fn run_strings(w: &Words, name: &str, version: &str) -> Vec<String> {
         "DISPLAY" => words(&[w.display_settings, w.shooting_settings, w.shutdown_settings]),
         "GOODBYE" => words(&[w.shutdown_screen, w.shutdown_text]),
         "PLAYBACK_INFO" => words(&[w.playback_info]),
+        "BATTERY_PERCENT" => words(&[w.battery_percent]),
+        "UPDATE" => words(&w.update),
         _ => unreachable!("Unknown menu text run {name}"),
     }
 }
@@ -1040,6 +1087,23 @@ mod tests {
         ];
         for (language, text) in expected {
             assert_eq!(strings(language, VERSION)[id("PLAYBACK_INFO")], text);
+            assert_eq!(language.undrawable(text), None);
+        }
+    }
+
+    /// Battery Percentage is a row of Display Settings, which the camera can
+    /// draw in each language.
+    #[test]
+    fn the_battery_percentage_has_its_row_in_each_language() {
+        for language in [
+            Language::English,
+            Language::SimplifiedChinese,
+            Language::TraditionalChinese,
+            Language::Japanese,
+            Language::Korean,
+        ] {
+            let text = &strings(language, VERSION)[id("BATTERY_PERCENT")];
+            assert!(!text.is_empty());
             assert_eq!(language.undrawable(text), None);
         }
     }

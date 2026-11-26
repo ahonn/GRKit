@@ -1,9 +1,10 @@
 static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10";
+static const char version_marker[] __attribute__((used)) = "GRKIT_VERSION=0.0.0";
 #define MAX_COUNT 0x28U
 #define MAX_CHUNKS 0x5U
 #define ICONS_PER_CHUNK 0x28U
 #define ICON_STRIDE 0x1908U
-#define HOST_ICON_COUNT 0x15U
+#define HOST_ICON_COUNT 0x1aU
 #define MAP_BASE 0x51000000U
 #define MAP_SIZE 0xf000000U
 #define HEAP_END 0x60000000U
@@ -14,22 +15,22 @@ static const char target_marker[] __attribute__((used)) = "GRKIT_TARGET=gr3-2.10
 #define CODE_RELOCATION_COUNT 0x1U
 #define TAIL_SYMBOL 0U
 #define TAIL_BYTES 0x0U
-static const u32 relocation_words[] = { /* 2264 values, SHA-256 f908da3366a313457d499c5265ee3c3ffe50b1065ae82726687c192b0a2cbbc1 */ };
+static const u32 relocation_words[] = { /* 2520 values, SHA-256 c7dd2bcfde6f77fe3718ceaad6a414daf3e60d0513f0af82acf66fd9dbfa7c37 */ };
 static const struct relocation_window relocation_windows[] = {
-{0x53010300,0,512,1,0,1},
-{0x53010400,512,448,2,0,1},
-{0x530003f0,960,24,0,0,0},
-{0x55002b6c,984,64,0,1,1},
-{0x55018fcc,1048,64,0,1,1},
-{0x53010100,1112,640,1,0,1},
-{0x550186f4,1752,64,0,1,1},
-{0x55018d54,1816,64,1,1,1},
-{0x55018cb0,1880,64,0,1,1},
-{0x55018e0c,1944,64,0,1,1},
-{0x53dc2774,2008,64,0,0,1},
-{0x53dc28f8,2072,64,0,0,1},
-{0x53dc299c,2136,64,1,0,1},
-{0x53dc2404,2200,64,0,0,1},
+{0x53010500,0,576,1,0,1},
+{0x53010600,576,512,1,0,1},
+{0x530003f0,1088,24,0,0,0},
+{0x55002b6c,1112,64,0,1,1},
+{0x55018fcc,1176,64,0,1,1},
+{0x53010100,1240,768,1,0,1},
+{0x550186f4,2008,64,0,1,1},
+{0x55018d54,2072,64,1,1,1},
+{0x55018cb0,2136,64,0,1,1},
+{0x55018e0c,2200,64,0,1,1},
+{0x53dc2774,2264,64,0,0,1},
+{0x53dc28f8,2328,64,0,0,1},
+{0x53dc299c,2392,64,1,0,1},
+{0x53dc2404,2456,64,0,0,1},
 };
 static const u32 relocation_symbols[] = { /* 15 values, SHA-256 cb2b3274bda7d58aaaa1998a9b17324e3c26a9d27974571a603ef9833ce6bf59 */ };
 static const struct relocation_source relocation_sources[] = {
@@ -60,8 +61,11 @@ static const u32 patch_compare[] = {0x0,0x0};
 #define RELOCATION_REFERENCE_COUNT 0U
 static const u32 relocation_references[] = {};
 #define ARRAY_COUNT (relocated[1] + 0x0U)
+#define ARRAY_COUNT_SYMBOL 1U
 #define ARRAY_TABLE (relocated[2] + 0x0U)
+#define ARRAY_TABLE_SYMBOL 2U
 #define HEAP_MIN (relocated[3] + 0x0U)
+#define HEAP_MIN_SYMBOL 3U
 #define ENGLISH_SLOT (relocated[4] + 0x4U)
 #define STOCK_RECORD (relocated[5] + 0x0U)
 #define SETTINGS_DOMAIN (relocated[6] + 0x0U)
@@ -133,15 +137,16 @@ static const u8 version_pixels[] __attribute__((aligned(4))) = { /* 6400 values,
 static const u8 modules_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 c63d6fe4548456b6724e152bfa63bdadcf44163e6bb2b9e13a1842e9a9a4acea */ };
 static const u8 modules_off_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 b9fbdee6ffee02a4e4663ecd9b3ef74a8216ce39f2bb8495dab46a7fb7e942c2 */ };
 static const u8 rotate_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8a5f3688e3432fc4c20d670e4b092cf937baf93ebd9db2e934d4e3ce63ae2d56 */ };
+static const u8 update_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 8ddfd7452751bc907391a6957d788e12c54a5e1dc5c13acf6224c5e102e83f38 */ };
 #define SCALE_LABEL_WIDTH 30U
 #define SCALE_LABEL_HEIGHT 20U
 static const u8 scale_feet_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 3035b84a34c34a48cf875d679bf732869c4b70c8e01f9a1a6c904e721f5bc1ef */ };
 static const u8 scale_sixteen_pixels[] __attribute__((aligned(4))) = { /* 2400 values, SHA-256 39ce4c2f7f5579af5c39910e572b3987d7875b3aa451cf90726fb42d0a56148b */ };
 static const u8 recipe_card_pixels[] __attribute__((aligned(4))) = { /* 6400 values, SHA-256 08f40ffcc7f1ac6a7839fba8956becc7493be6a5f2f7cb4a23f4752dda76fff8 */ };
-#define MENU_TEXT_BYTES 7326U
-static const u8 menu_text[] __attribute__((aligned(4))) = { /* 7326 values, SHA-256 79955d1beedbbfd36734c39d69d7dd08cfccbe35e614d45b817bc78878e2bfce */ };
-#define LABELS_BYTES 75020U
-static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 75020 values, SHA-256 c0e1ff379c7d0f145930d8ae9242c9161972efa1496a61c535a5812335f22fc7 */ };
+#define MENU_TEXT_BYTES 7928U
+static const u8 menu_text[] __attribute__((aligned(4))) = { /* 7928 values, SHA-256 692fcc5486a80e5b67ae51df02fb09bc1ea4e08c8f23eef2748e1a66b24b4bfb */ };
+#define LABELS_BYTES 87952U
+static const u8 overlay_labels[] __attribute__((aligned(4))) = { /* 87952 values, SHA-256 0675eb668002c49d0a50dee604128c29ca3fe20e74928c95b50442f9e82e06be */ };
 static const u8 stock_tables[] __attribute__((aligned(4))) = { /* 312 values, SHA-256 43c6a333770e97d39d0749933c4cc8fd3d39ab51233e06eaefe7dda15bae5cb6 */ };
 static const u32 code_relocations[] = {0x0,0x0};
 static const u8 before_0[] __attribute__((aligned(4))) = {0,0,0,0,0,0,0,0};

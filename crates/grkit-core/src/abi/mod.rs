@@ -28,6 +28,16 @@ macro_rules! fields {
     };
 }
 
+/// Declares each constant as a `pub const` and lists them in `$list`, from
+/// which `header` writes a `GRKIT_` define of each: a constant that the
+/// runtime shares is written once.
+macro_rules! header_consts {
+    ($list:ident { $($(#[doc = $doc:literal])* pub const $name:ident: $ty:ty = $value:expr;)* }) => {
+        $($(#[doc = $doc])* pub const $name: $ty = $value;)*
+        pub(crate) const $list: &[(&str, u64)] = &[$((stringify!($name), $name as u64)),*];
+    };
+}
+
 /// Declares fields that follow each other from offset 0 in the order given:
 /// a `usize` constant for each, a table of the fields, and their total size.
 /// A field is one line, so a new field moves the ones after it, and none has
@@ -67,21 +77,116 @@ pub const MODULE_SETTINGS_MAX: usize = 160;
 /// The most artwork tiles of all modules. The installer puts them in the
 /// icon chunks after the effect icons.
 pub const MODULE_TILES_MAX: usize = 128;
-/// Off, GRKit, Version, Modules, Modules with a line through it (Enable
-/// GRKit Off), the Fn hint of a row where Fn turns a setting, then "ft" and
-/// "16" of the manual focus scale in feet (`runtime/distance.h`), the tile of
-/// a recipe without its caption, and the slots of the tiles of recipes that
-/// the core writes (`runtime/recipe_card.h`). The menu
-/// addresses the icons after Off by their offset from the GRKit icon, so the
-/// host icons come first in chunk 0, and they must fit in it. The effect
-/// icons follow them.
-pub const HOST_ICON_COUNT: usize = 21;
+/// A host icon: artwork in chunk 0 before the effect icons (`HOST_ICONS`).
+pub struct HostIcon {
+    /// The C name after `GRKIT_ICON_`.
+    pub name: &'static str,
+    /// Its icon slots. An icon that is wider than a slot takes more, and a
+    /// set of icons takes one slot each.
+    pub slots: usize,
+}
+
+const fn host_icon(name: &'static str, slots: usize) -> HostIcon {
+    HostIcon { name, slots }
+}
+
+/// The slots of the tiles of recipes that the core writes
+/// (`runtime/recipe_card.h`).
+pub const RECIPE_CARD_SLOTS: usize = 12;
+/// The slots of the two pictures of Battery Percentage, of two slots each
+/// (`runtime/battery_percent.h`).
+pub const BATTERY_ICON_SLOTS: usize = 4;
+
+/// The host icons in the order of their slots, each with its slots: Off,
+/// GRKit, Version, Modules, Modules with a line through it (Enable GRKit Off),
+/// the Fn hint of a row where Fn turns a setting, "ft" and "16" of the manual
+/// focus scale in feet (`runtime/distance.h`), the tile of a recipe without
+/// its caption, the tiles of recipes, the Update tile, and the pictures of
+/// Battery Percentage. Slot `s` has the icon ID `HOST_ICON_TOP - s`, so the
+/// menu finds a slot from an ID by one subtraction, and a new icon is one more
+/// entry. The installer writes the artwork of each slot
+/// (`runtime/installer.c`).
+pub const HOST_ICONS: [HostIcon; 12] = [
+    host_icon("OFF", 1),
+    host_icon("GRKIT", 1),
+    host_icon("VERSION", 1),
+    host_icon("MODULES", 1),
+    host_icon("MODULES_OFF", 1),
+    host_icon("ROTATE", 1),
+    host_icon("SCALE_FEET", 1),
+    host_icon("SCALE_SIXTEEN", 1),
+    host_icon("RECIPE_TILE", 1),
+    host_icon("RECIPE_CARDS", RECIPE_CARD_SLOTS),
+    host_icon("UPDATE", 1),
+    host_icon("BATTERY", BATTERY_ICON_SLOTS),
+];
+
+/// The slots of all host icons. They fit chunk 0, so the menu addresses each
+/// one from the GRKit icon.
+pub const HOST_ICON_COUNT: usize = {
+    let mut total = 0;
+    let mut i = 0;
+    while i < HOST_ICONS.len() {
+        total += HOST_ICONS[i].slots;
+        i += 1;
+    }
+    total
+};
+
+/// The icon IDs of GRKit start here; the camera's own icons are below.
+pub const ICON_FIRST: u32 = 0x7000;
+/// The icon ID of host slot 0, Off. The IDs of the slots go down from it.
+pub const HOST_ICON_TOP: u32 = 0x7fff;
+/// A run of icon IDs from `ICON_FIRST` up (`ICON_RANGES`), each as
+/// `GRKIT_ICON_<name>(n)`.
+pub struct IconRange {
+    pub name: &'static str,
+    pub size: usize,
+}
+
+/// The icon ID runs, in order from `ICON_FIRST`: the module tiles, the tiles
+/// of recipes by recipe slot (`runtime/recipe_card.h`), the core live-view
+/// labels, and the Toning track of the parameter page of a native look with
+/// Toning (`runtime/menu.c`: `toning_track`). The effect icons follow the
+/// host icons, from `HOST_ICON_TOP + 1`, as `GRKIT_ICON_EFFECT(n)` of record
+/// n.
+pub const ICON_RANGES: [IconRange; 4] = [
+    IconRange {
+        name: "MODULE_TILE",
+        size: MODULE_TILES_MAX,
+    },
+    IconRange {
+        name: "RECIPE",
+        size: RECIPE_SLOTS,
+    },
+    IconRange {
+        name: "CORE_LABEL",
+        size: crate::artwork::OVERLAY_LABELS.len(),
+    },
+    IconRange {
+        name: "TONING_TRACK",
+        size: 1,
+    },
+];
+
+const _: () = {
+    let mut end = ICON_FIRST as usize;
+    let mut i = 0;
+    while i < ICON_RANGES.len() {
+        end += ICON_RANGES[i].size;
+        i += 1;
+    }
+    assert!(end + HOST_ICON_COUNT <= HOST_ICON_TOP as usize + 1);
+};
 const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// Product limit for private Image Control effects. Each effect takes a
 /// record of the registry array and an icon slot, about 10.5 KB of script
 /// memory. The registry holds only the header and the records, and they fit
 /// one array of 65536 words. The tail is an array of its own.
 pub const MAX_COUNT: usize = 40;
+/// The most effect files that GRKit lists, those with the smallest IDs
+/// (runtime/effects.h).
+pub const EFFECTS_LISTED: usize = 64;
 /// The chunk addresses that the header holds (`GRKIT_HOST_ICON_CHUNKS`).
 pub const ICON_CHUNK_SLOTS: usize = 5;
 
@@ -159,14 +264,15 @@ pub const DIAL_VALUE_ON: u32 = 0;
 pub const DIAL_VALUE_OFF: u32 = 1;
 pub const DIAL_VALUE_SNAPSHOT: u32 = 2;
 const _: () = assert!(DIAL_SET_EFFECT > crate::recipes::layout::CODE_MASK);
-/// A copy of eight settings of the core that no snapshot holds, in the file
+/// A copy of nine settings of the core that no snapshot holds, in the file
 /// of the user modes (`HOST_MANAGE_COPY`, runtime/manage.h): the switch
 /// Enable GRKit (`MANAGE_COPY_SWITCH`), Enable at Start
 /// (`MANAGE_COPY_START`), Distance Unit (`MANAGE_COPY_UNIT`), Uncropped RAW
 /// (`MANAGE_COPY_RAW`), Simplified Info. Battery (`MANAGE_COPY_BATTERY`),
 /// Custom Picture (`MANAGE_COPY_GOODBYE`), Show Text
-/// (`MANAGE_COPY_GOODBYE_TEXT`), and Effect Icons in Playback
-/// (`MANAGE_COPY_PLAYBACK_INFO`), each as its value + 1, or 0 without a copy.
+/// (`MANAGE_COPY_GOODBYE_TEXT`), Effect Icons in Playback
+/// (`MANAGE_COPY_PLAYBACK_INFO`), and Battery Percentage
+/// (`MANAGE_COPY_BATTERY_PERCENT`), each as its value + 1, or 0 without a copy.
 pub const MANAGE_COPY_SWITCH: usize = 0;
 pub const MANAGE_COPY_START: usize = 1;
 pub const MANAGE_COPY_UNIT: usize = 2;
@@ -175,7 +281,8 @@ pub const MANAGE_COPY_BATTERY: usize = 4;
 pub const MANAGE_COPY_GOODBYE: usize = 5;
 pub const MANAGE_COPY_GOODBYE_TEXT: usize = 6;
 pub const MANAGE_COPY_PLAYBACK_INFO: usize = 7;
-pub const MANAGE_COPY_WORDS: usize = 8;
+pub const MANAGE_COPY_BATTERY_PERCENT: usize = 8;
+pub const MANAGE_COPY_WORDS: usize = 9;
 
 /// The immutable main-state export in the module array. Offsets are bytes.
 /// CORE follows state_keys(), which excludes the final CORE.RECIPE handle.
@@ -201,6 +308,9 @@ packed_fields!(PERSIST_FIELDS, PERSIST_SIZE {
     PERSIST_MODULES: 4 * PERSIST_MODULE_WORDS * MODULE_SETTINGS_MAX;
 });
 pub const PERSIST_WORDS: usize = PERSIST_SIZE / 4;
+
+mod control;
+pub use control::*;
 
 // The fields of the header. The loader, the installer, and the ARM code of one
 // build take the offsets from this table, so a field can go anywhere in it.
@@ -230,7 +340,7 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// Highlighted row of the private menu.
     HOST_MENU_CURSOR: 4;
     /// Address of the tail, an array of its own: the picture scratch, the
-    /// menu text, then the live-view labels. INSTALL writes it.
+    /// profile table, and the curves (`TAIL_SIZE`). INSTALL writes it.
     HOST_TAIL: 4;
     /// Grain level, the capability CORE.GRAIN: 0 Off, 1 weak, 2 medium, 3
     /// strong. The native grain stage of recorded pictures uses it instead of
@@ -557,6 +667,9 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     HOST_MANAGE_COPY: 4 * MANAGE_COPY_WORDS;
     /// Word index of the PERSIST buffer within modulecode, not a native address.
     HOST_PERSIST_WORD: 4;
+    /// The word index of the mailbox of the Wi-Fi service in the module
+    /// array, or 0 without modules (runtime/control_mailbox.h).
+    HOST_CONTROL_WORD: 4;
     /// The record of the ADJ preview of a recipe whose Fn adjustments the
     /// live view takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the
     /// record, while GRKIT_HOST_PREVIEW is that record; else 0
@@ -570,7 +683,54 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// writes native settings. A capture of the current settings reads the
     /// native settings from it (runtime/recipes.h).
     HOST_RECIPE_PREVIEW: 4;
+    /// Battery Percentage: the value that the icon shows, 0 for the native
+    /// icon, the picture that has it, and the time of its last change
+    /// (runtime/battery_percent.h).
+    HOST_BATTERY_ICON: 4;
+    /// Battery Percentage: the average of the charge and the time of its
+    /// last sample (runtime/battery_percent.h).
+    HOST_BATTERY_AVERAGE: 4;
+    /// The Toning track that the parameter page shows for a native look with
+    /// Toning (runtime/menu.c: toning_track): an 8-byte icon descriptor, then
+    /// the pixels, in a firmware block that the core makes at its first use;
+    /// else 0.
+    HOST_TONING_TRACK: 4;
+    /// The record whose Toning in the RAW development differs from its own
+    /// (runtime/develop.h): while a development runs, its builds take the
+    /// curves at GRKIT_DEVELOP_CURVES of the tail for it; else 0.
+    HOST_DEVELOP_TONED: 4;
+    /// An update over Wi-Fi (grkit_core::runtime::update): UPDATE_WAITING
+    /// while its journal waits for the confirmation on the camera, which the
+    /// resident loader sets; UPDATE_CONFIRMED after the confirmation in GRKit
+    /// Settings (runtime/menu_settings.h); UPDATE_READY after the resident
+    /// loader made the journal run at the next power-on; else 0.
+    HOST_UPDATE: 4;
+    /// The version of that update, from `card::VERSION_FILE`: major << 16,
+    /// minor << 8, and patch, or 0 when the package does not name it.
+    HOST_UPDATE_VERSION: 4;
+    /// The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
+    /// CUE_UPDATE_READY while an update over Wi-Fi waits, or
+    /// CUE_UPDATE_RESTART after its confirmation in ADJ. The cue sets it back
+    /// to 0 when it ends (runtime/viewfinder.h).
+    HOST_CUE_LABEL: 4;
+    /// 1 while the Wi-Fi access point of the camera is on, else 0. The App
+    /// task copies it at each timer dispatch (runtime/menu.c); the resident
+    /// loader starts the Wi-Fi service while it is 1 and stops it at 0.
+    HOST_WLAN: 4;
+    /// Address of the text area, an array of its own: the menu text, then
+    /// the live-view labels (`TEXT_AREA_SIZE`). INSTALL writes it.
+    HOST_TEXT_AREA: 4;
 });
+
+/// The values of GRKIT_HOST_UPDATE.
+pub const UPDATE_WAITING: u32 = 1;
+pub const UPDATE_CONFIRMED: u32 = 2;
+pub const UPDATE_READY: u32 = 3;
+/// GRKIT_HOST_LOAD_CUE for a cue that starts at the next still live view.
+pub const CUE_PENDING: u32 = 1;
+/// The values of GRKIT_HOST_CUE_LABEL.
+pub const CUE_UPDATE_READY: u32 = 1;
+pub const CUE_UPDATE_RESTART: u32 = 2;
 
 pub const RECORD_SIZE: usize = 0x1100;
 
@@ -594,9 +754,14 @@ fields!(RECORD_FIELDS {
     RECORD_POST = 0x704, 18;
     /// Selective color for recorded pictures: i16 cos and sin of the target hue
     /// (Q12), u16 inner and outer tangents toward smaller hue angles, then toward
-    /// larger ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72b are
+    /// larger ones (Q8), and u8 chroma gate c0 and c1. Bytes 0x724..0x72a are
     /// reserved and zero.
-    RECORD_SELECTIVE = 0x716, 0x72c - 0x716;
+    RECORD_SELECTIVE = 0x716, 0x72b - 0x716;
+    /// The grain that this effect has by itself: 0 none, 1 the Rough grain of GR IV
+    /// firmware (other cameras give 2), or 2 strong grain of medium size while the
+    /// Grain module is Off. INSTALL sets it from the effect ID. It is the last reserved
+    /// byte of a GRF.
+    RECORD_LOOK_GRAIN = 0x72b, 1;
     /// Fn adjustments of the effect: saturation, hue, high/low key, contrast,
     /// highlight contrast, shadow contrast, sharpness, shading, clarity. Each
     /// byte is (native value - 4) mod 9, so zero is neutral. A native value is
@@ -814,13 +979,16 @@ pub const CANVAS_ENTRY_SIZE: usize = 80;
 pub const PICTURE_SCRATCH: usize = CANVAS_TABLE + CANVAS_ENTRIES * CANVAS_ENTRY_SIZE;
 /// Bytes of the live-view labels and glyphs after the menu text
 /// (`artwork::overlay_labels`).
-pub const LABELS_SIZE: usize = 77824;
-/// The profile table after the labels (runtime/profile.h): for each of the
+pub const LABELS_SIZE: usize = 88576;
+/// The text area, a script array of its own (`HOST_TEXT_AREA`): the menu
+/// text, then the live-view labels.
+pub const TEXT_AREA_SIZE: usize = menu_text::TEXT_SIZE + LABELS_SIZE;
+/// The profile table after the picture scratch (runtime/profile.h): for each of the
 /// first `PROFILE_MODULES` listed modules its code start, its code end, and 8
 /// ASCII bytes of its name, then a
 /// counter slot of calls, cycles, and the largest call for each core point
 /// and for each module and kind.
-pub const PROFILE: usize = PICTURE_SCRATCH + menu_text::TEXT_SIZE + LABELS_SIZE;
+pub const PROFILE: usize = PICTURE_SCRATCH;
 pub const PROFILE_MODULE_SIZE: usize = 16;
 pub const PROFILE_NAME_BYTES: usize = 8;
 /// The modules that the profile counts. The loader writes the lines of each
@@ -852,9 +1020,14 @@ pub const PROFILE_SIZE: usize = PROFILE_SLOTS + PROFILE_SLOT_COUNT * PROFILE_SLO
 pub const TONE_CURVES: usize = PROFILE + PROFILE_SIZE;
 pub const TONE_SLOTS: usize = 4;
 pub const TONE_SLOT_SIZE: usize = 2 * 512;
-/// Everything after the records: the picture scratch, the menu text, the
-/// live-view labels, the profile table, then the Toning curves.
-pub const TAIL_SIZE: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
+/// The curves of a RAW development with its own Toning of a native look
+/// (`HOST_DEVELOP_TONED`): the red, green, and blue curves of 256 u16 samples
+/// each, as the record holds them.
+pub const DEVELOP_CURVES: usize = TONE_CURVES + TONE_SLOTS * TONE_SLOT_SIZE;
+pub const DEVELOP_CURVES_SIZE: usize = 3 * 512;
+/// The tail, a script array of its own (`HOST_TAIL`): the picture scratch,
+/// the profile table, the Toning curves, then the curves of a development.
+pub const TAIL_SIZE: usize = DEVELOP_CURVES + DEVELOP_CURVES_SIZE;
 // The summaries of every record in every menu language end before the
 // value of a group page.
 const _: () = assert!(
@@ -1189,12 +1362,50 @@ fn hue_tables(out: &mut String) {
     }
 }
 
+/// The icon IDs and host icon slots (`HOST_ICONS`, `ICON_RANGES`). The IDs
+/// are plain numbers, so the ARM assembly can load them too.
+fn icon_ids(out: &mut String) {
+    comment(
+        out,
+        "Icon IDs: the camera's own icons are below GRKIT_ICON_FIRST. Host slot \
+         s has the ID GRKIT_HOST_ICON_TOP - s; GRKIT_ICON_SLOT_<name> is the \
+         first slot of a host icon and GRKIT_ICON_SLOTS_<name> its slots. IDs \
+         only reach transient menu widgets, so they can change between \
+         releases.",
+    );
+    writeln!(out, "#define GRKIT_ICON_FIRST {ICON_FIRST:#x}").unwrap();
+    writeln!(out, "#define GRKIT_HOST_ICON_TOP {HOST_ICON_TOP:#x}").unwrap();
+    let mut slot = 0;
+    for icon in &HOST_ICONS {
+        let id = HOST_ICON_TOP as usize - slot;
+        writeln!(out, "#define GRKIT_ICON_SLOT_{} {slot}", icon.name).unwrap();
+        writeln!(out, "#define GRKIT_ICON_SLOTS_{} {}", icon.name, icon.slots).unwrap();
+        if icon.slots == 1 {
+            writeln!(out, "#define GRKIT_ICON_{} {id:#x}", icon.name).unwrap();
+        } else {
+            writeln!(out, "#define GRKIT_ICON_{}(n) ({id:#x}-(n))", icon.name).unwrap();
+        }
+        slot += icon.slots;
+    }
+    let mut first = ICON_FIRST as usize;
+    for range in &ICON_RANGES {
+        writeln!(out, "#define GRKIT_ICON_{}(n) ({first:#x}+(n))", range.name).unwrap();
+        first += range.size;
+    }
+    writeln!(
+        out,
+        "#define GRKIT_ICON_EFFECT(n) ({:#x}+(n))",
+        HOST_ICON_TOP + 1
+    )
+    .unwrap();
+}
+
 /// The contents of `runtime/abi.h`.
 pub fn header() -> String {
     let mut out = String::new();
     comment(
         &mut out,
-        "Generated from crates/grkit-core/src/abi.rs. Do not edit: change the \
+        "Generated from crates/grkit-core/src/abi/. Do not edit: change the \
          tables there, then run GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core \
          --test generated.",
     );
@@ -1343,6 +1554,7 @@ pub fn header() -> String {
         ("GOODBYE", MANAGE_COPY_GOODBYE as u32),
         ("GOODBYE_TEXT", MANAGE_COPY_GOODBYE_TEXT as u32),
         ("PLAYBACK_INFO", MANAGE_COPY_PLAYBACK_INFO as u32),
+        ("BATTERY_PERCENT", MANAGE_COPY_BATTERY_PERCENT as u32),
         ("WORDS", MANAGE_COPY_WORDS as u32),
         ("KEY", crate::runtime::MANAGE_COPY_KEY),
     ] {
@@ -1388,7 +1600,8 @@ pub fn header() -> String {
     writeln!(out, "#define GRKIT_HOST_ICON_COUNT {}", HOST_ICON_COUNT).unwrap();
     writeln!(out, "#define GRKIT_ICONS_PER_CHUNK {}", ICONS_PER_CHUNK).unwrap();
     writeln!(out, "#define GRKIT_MODULE_TILES_MAX {}", MODULE_TILES_MAX).unwrap();
-    writeln!(out, "#define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))").unwrap();
+    writeln!(out, "#define GRKIT_EFFECTS_LISTED {}U", EFFECTS_LISTED).unwrap();
+    icon_ids(&mut out);
     // A change of a saved selection: the loader saves after the count changes.
     writeln!(
         out,
@@ -1403,6 +1616,16 @@ pub fn header() -> String {
     .unwrap();
     writeln!(out, "#define GRKIT_HOST_MAGIC_VALUE {HOST_MAGIC_VALUE:#x}").unwrap();
     writeln!(out, "#define GRKIT_HOST_VERSION_VALUE {HOST_VERSION_VALUE}").unwrap();
+    for (name, value) in [
+        ("UPDATE_WAITING", UPDATE_WAITING),
+        ("UPDATE_CONFIRMED", UPDATE_CONFIRMED),
+        ("UPDATE_READY", UPDATE_READY),
+        ("CUE_PENDING", CUE_PENDING),
+        ("CUE_UPDATE_READY", CUE_UPDATE_READY),
+        ("CUE_UPDATE_RESTART", CUE_UPDATE_RESTART),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
     table(&mut out, HEADER_FIELDS, false);
     table(&mut out, PERSIST_FIELDS, false);
     for (name, value) in [
@@ -1412,6 +1635,18 @@ pub fn header() -> String {
         ("PERSIST_SIZE", PERSIST_SIZE),
         ("PERSIST_WORDS", PERSIST_WORDS),
     ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
+    out.push('\n');
+
+    table(&mut out, CONTROL_FIELDS, false);
+    for (name, value) in [
+        ("CONTROL_SIZE", CONTROL_SIZE),
+        ("CONTROL_WORDS", CONTROL_WORDS),
+    ] {
+        writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
+    }
+    for (name, value) in CONTROL_CONSTS {
         writeln!(out, "#define GRKIT_{name} {value}U").unwrap();
     }
     out.push('\n');
@@ -1684,9 +1919,15 @@ pub fn header() -> String {
     }
     define(
         &mut out,
-        "Everything after the records: the script array must hold it.",
+        "The tail array: the picture scratch, the profile table, and the curves.",
         "TAIL_SIZE",
         TAIL_SIZE,
+    );
+    define(
+        &mut out,
+        "The text area array: the menu text, then the live-view labels.",
+        "TEXT_AREA_SIZE",
+        TEXT_AREA_SIZE,
     );
     define(
         &mut out,
@@ -1697,6 +1938,18 @@ pub fn header() -> String {
     );
     writeln!(out, "#define GRKIT_TONE_SLOTS {TONE_SLOTS}").unwrap();
     writeln!(out, "#define GRKIT_TONE_SLOT_SIZE {TONE_SLOT_SIZE}").unwrap();
+    define(
+        &mut out,
+        "The red, green, and blue curves of a RAW development with its own Toning \
+         (GRKIT_HOST_DEVELOP_TONED), 256 u16 samples each.",
+        "DEVELOP_CURVES",
+        DEVELOP_CURVES,
+    );
+    writeln!(
+        out,
+        "#define GRKIT_DEVELOP_CURVES_SIZE {DEVELOP_CURVES_SIZE}"
+    )
+    .unwrap();
     writeln!(
         out,
         "#define GRKIT_TEXT_SUMMARY {}",
@@ -1739,7 +1992,7 @@ pub fn header() -> String {
     )
     .unwrap();
     writeln!(out, "#define GRKIT_TEXT_RECORDS {}", MAX_COUNT).unwrap();
-    out.push_str("#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)\n");
+    out.push_str("#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TEXT_AREA/4])\n");
     out.push_str("#define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)\n");
     writeln!(
         out,
@@ -1807,6 +2060,20 @@ pub fn header() -> String {
     .unwrap();
     writeln!(
         out,
+        "#define GRKIT_BATTERY_DIGIT_FIRST {}",
+        crate::artwork::OVERLAY_LABELS.len()
+            + 2 * crate::artwork::OVERLAY_GLYPH_COUNT
+            + crate::artwork::CAPTION_CHARACTERS.len()
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "#define GRKIT_BATTERY_DIGIT_HEIGHT {}",
+        crate::artwork::BATTERY_DIGIT_HEIGHT
+    )
+    .unwrap();
+    writeln!(
+        out,
         "#define GRKIT_CAPTION_TOP {}",
         crate::artwork::CAPTION_BASELINE - crate::artwork::CAPTION_GLYPH_BASELINE
     )
@@ -1868,6 +2135,7 @@ mod tests {
             .all(|field| field.offset % 4 == 0 && field.size % 4 == 0));
         check(HEADER_FIELDS, HOST_HEADER_SIZE, true);
         check(PERSIST_FIELDS, PERSIST_SIZE, true);
+        check(CONTROL_FIELDS, CONTROL_SIZE, true);
         assert_eq!(PERSIST_CORE_COUNT, capabilities::state_keys().len());
     }
 

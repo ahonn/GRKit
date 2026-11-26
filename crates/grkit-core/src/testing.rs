@@ -102,6 +102,69 @@ pub fn camera_runtimes(camera: &crate::camera::Camera) -> Vec<packaging::Verifie
     camera.targets().into_iter().map(marked_runtime).collect()
 }
 
+/// The verified runtime of each build of `camera`, whose installers also
+/// name the GRKit version `version`, as a release builds them.
+pub fn release_runtimes(
+    camera: &crate::camera::Camera,
+    version: &str,
+) -> Vec<packaging::VerifiedRuntime> {
+    camera
+        .targets()
+        .into_iter()
+        .map(|target| {
+            let mut binary = marked_installer(target);
+            binary
+                .extend_from_slice(format!("{}{version}\0", packaging::VERSION_MARKER).as_bytes());
+            let files = runtime_files(&binary, target);
+            packaging::load_runtime(&manifest(target, &files), &files).unwrap()
+        })
+        .collect()
+}
+
+/// The seed of the signing key of the tests, in place of the official key.
+pub const RELEASE_SEED: &str = "0707070707070707070707070707070707070707070707070707070707070707";
+
+/// The public key of `RELEASE_SEED`.
+pub fn release_key() -> [u8; 32] {
+    crate::release::SigningKey::from_hex(RELEASE_SEED)
+        .unwrap()
+        .public_key()
+}
+
+/// A package of `release_runtimes(camera, version)` with the official modules
+/// and `effects`, which `RELEASE_SEED` signed.
+pub fn signed_package(
+    camera: &'static crate::camera::Camera,
+    version: &str,
+    effects: &[&str],
+) -> Vec<u8> {
+    let runtimes = release_runtimes(camera, version);
+    let modules = official_modules();
+    let statement = crate::release::Statement::of_release(&runtimes, &modules, camera)
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    let signature = crate::release::SigningKey::from_hex(RELEASE_SEED)
+        .unwrap()
+        .sign(&statement);
+    packaging::assemble_with(
+        &runtimes,
+        &effect_set(effects),
+        &modules,
+        camera,
+        &packaging::Guide {
+            language: crate::language::Language::English,
+            pdf: b"%PDF-1.7\n% test guide\n",
+        },
+        packaging::Extras {
+            release: Some((&statement, &signature)),
+            ..packaging::Extras::default()
+        },
+    )
+    .unwrap()
+    .bytes
+}
+
 /// The effect set of `effect(id)` for each of `ids`.
 pub fn effect_set(ids: &[&str]) -> packaging::EffectSet {
     let mut set = packaging::EffectSet::default();

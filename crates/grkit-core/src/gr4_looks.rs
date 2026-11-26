@@ -7,9 +7,9 @@
 //! section, and the addresses of the tables that `native_tone` and `native_look` need. A
 //! color look keeps the type's look matrix (relative to Standard), its curve set, its
 //! MultiAxial set, and the default Fn adjustments that the GR IV parameter page shows. A
-//! monochrome look keeps its curve set and its defaults; GR III makes the gray from its
-//! Standard colors (`MONO_MATRIX`), because GR IV Monochrome has a sensor without color
-//! filters and its firmware holds no color response.
+//! monochrome look keeps its curve set and its defaults; the camera makes the gray from the
+//! GR III Standard colors (`mono_matrix`), as the other monochrome effects do, because GR IV
+//! Monochrome has a sensor without color filters and its firmware holds no color response.
 use anyhow::{bail, ensure, Context, Result};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -126,6 +126,9 @@ pub enum Kind {
     /// A monochrome look of GR IV Monochrome: the curve set of the type in block 2 of the
     /// curve set table, which that camera reads, or linear curves for `None`.
     Monochrome(Option<u32>),
+    /// A Solarized Effect type of GR IV Monochrome: the falling curve of this curve set. The
+    /// sets exist from firmware 1.20, so a 1.11 file gives no such look.
+    Solarized(u32),
 }
 
 /// One look of the source builds.
@@ -141,13 +144,15 @@ pub struct Look {
     /// firmware writes them as instruction immediates into its defaults record, so they
     /// are fixed values, read from the parameter page of each camera.
     pub defaults: [i8; 9],
-    /// False for a look that GRKit holds back: `Image::effects` and the site leave it out.
-    pub offered: bool,
 }
+
+/// The effect ID of the look that takes the Rough grain of GR IV firmware. The GR IV runtime
+/// matches this ID (`runtime/installer.c`), and other runtimes give its tone only.
+pub const ROUGH_EFFECT_ID: &str = "gr4-mono-grainy";
 
 /// The looks, in the order of the camera lists. A monochrome look whose curve set the file
 /// lacks is left out.
-pub const LOOKS: [Look; 7] = [
+pub const LOOKS: [Look; 10] = [
     Look {
         image_type: 18,
         kind: Kind::Color,
@@ -155,7 +160,6 @@ pub const LOOKS: [Look; 7] = [
         name: "Cinema Yellow",
         cover: ("cine", "CINEMA", "YELLOW"),
         defaults: [0, 0, -1, 3, 0, -2, -3, 0, 0],
-        offered: true,
     },
     Look {
         image_type: 19,
@@ -164,11 +168,9 @@ pub const LOOKS: [Look; 7] = [
         name: "Cinema Green",
         cover: ("cine", "CINEMA", "GREEN"),
         defaults: [-2, 0, 0, 1, 0, -3, -3, 0, 0],
-        offered: true,
     },
     // GR IV Monochrome: its tone curves follow its defaults and curve sets exactly
-    // (live view of GR IV Monochrome 1.10). Grain stays with the Grain module. Held back
-    // for now.
+    // (live view of GR IV Monochrome 1.10).
     Look {
         image_type: 25,
         kind: Kind::Monochrome(None),
@@ -176,7 +178,6 @@ pub const LOOKS: [Look; 7] = [
         name: "Mono Standard",
         cover: ("box", "MONO", "STD"),
         defaults: [0; 9],
-        offered: false,
     },
     Look {
         image_type: 32,
@@ -185,7 +186,6 @@ pub const LOOKS: [Look; 7] = [
         name: "Mono Solid",
         cover: ("box", "MONO", "SOLID"),
         defaults: [0; 9],
-        offered: false,
     },
     Look {
         image_type: 26,
@@ -193,26 +193,48 @@ pub const LOOKS: [Look; 7] = [
         effect_id: "gr4-mono-soft",
         name: "Mono Soft",
         cover: ("box", "MONO", "SOFT"),
-        defaults: [0, 0, 1, -2, 0, 0, -1, 0, 0],
-        offered: false,
+        // The camera shows Clarity 0 for this look but develops it at -3.
+        defaults: [0, 0, 1, -2, 0, 0, -1, 0, -3],
     },
     Look {
         image_type: 30,
         kind: Kind::Monochrome(Some(30)),
-        effect_id: "gr4-mono-high-contrast",
+        effect_id: "gr4-mono-hi-contrast",
         name: "Mono Hi-Contrast",
         cover: ("box", "MONO", "HI"),
         defaults: [0, 0, 0, 0, 0, 0, 1, 0, 0],
-        offered: false,
     },
     Look {
         image_type: 31,
         kind: Kind::Monochrome(Some(31)),
-        effect_id: "gr4-mono-grainy",
+        effect_id: ROUGH_EFFECT_ID,
         name: "Mono Grainy",
         cover: ("box", "MONO", "GRAINY"),
         defaults: [0; 9],
-        offered: false,
+    },
+    Look {
+        image_type: 35,
+        kind: Kind::Solarized(35),
+        effect_id: "gr4-mono-solarized-1",
+        name: "Solarized 1",
+        cover: ("box", "MONO", "SOLAR 1"),
+        defaults: [0; 9],
+    },
+    Look {
+        image_type: 36,
+        kind: Kind::Solarized(36),
+        effect_id: "gr4-mono-solarized-2",
+        name: "Solarized 2",
+        cover: ("box", "MONO", "SOLAR 2"),
+        defaults: [0; 9],
+    },
+    Look {
+        image_type: 37,
+        kind: Kind::Solarized(37),
+        effect_id: "gr4-mono-solarized-3",
+        name: "Solarized 3",
+        cover: ("box", "MONO", "SOLAR 3"),
+        defaults: [0; 9],
     },
 ];
 
@@ -391,6 +413,34 @@ impl Image {
         Ok(set)
     }
 
+    /// The falling curve of a Solarized curve set, or `None` when the file has no such set.
+    /// `read_curve_set` rejects a falling curve, so this read checks the form of the set.
+    fn solarized_curve(&self, set: u32) -> Result<Option<Curve>> {
+        if set >= self.source.curve_set_entries {
+            return Ok(None);
+        }
+        let address = self.curve_set_address(set, MONOCHROME_BLOCK)?;
+        let header = self.bytes(self.word(address)?, 5)?;
+        let flags = self.bytes(address + 4, 2)?;
+        let pointer = self.word(address + 8)?;
+        ensure!(
+            header == [1; 5]
+                && flags == [1, 0]
+                && self.word(address + 12)? == pointer
+                && self.word(address + 16)? == pointer,
+            "Unexpected Solarized curve set {set}"
+        );
+        let curve = self.curve(pointer)?;
+        ensure!(
+            curve[0] == 0
+                && curve.windows(2).any(|pair| pair[1] < pair[0])
+                && curve.iter().all(|v| *v <= 0x4000),
+            "Unexpected Solarized curve {set}"
+        );
+        // A set may end at 16384; an effect curve holds 14 bits.
+        Ok(Some(curve.map(|v| v.min(16383))))
+    }
+
     /// The look matrix (Q13, at record +4) of an Image Control type.
     fn look_matrix(&self, image_type: u32) -> Result<[i16; 9]> {
         let record = self.word(self.source.look_table + 4 * image_type)?;
@@ -492,34 +542,11 @@ impl Image {
             }
             None => std::array::from_fn(|i| (i * 16383 / 255) as u16),
         };
-        Ok(Some(Effect {
-            id: look.effect_id.to_owned(),
-            name: look.name.to_owned(),
-            flags: crate::effects::MONOCHROME,
-            matrix: mono_matrix(),
-            curves: [curve; 3],
-            post_matrix: None,
-            selective: None,
-            hue_sectors: None,
-            native_look: None,
-            fn_defaults: look
-                .defaults
-                .iter()
-                .any(|v| *v != 0)
-                .then_some(look.defaults),
-        }))
+        Ok(Some(gray_effect(look, curve)))
     }
 
-    /// The effects of the offered `LOOKS` for GR III that the file holds.
+    /// The effects of the `LOOKS` that the file holds.
     pub fn effects(&self) -> Result<Vec<(&'static Look, Effect)>> {
-        let mut effects = self.all_effects()?;
-        effects.retain(|(look, _)| look.offered);
-        Ok(effects)
-    }
-
-    /// The effects of every look of `LOOKS` for GR III that the file holds, the held-back
-    /// looks included.
-    pub fn all_effects(&self) -> Result<Vec<(&'static Look, Effect)>> {
         let mut out = Vec::new();
         for look in &LOOKS {
             let effect = match look.kind {
@@ -531,6 +558,9 @@ impl Image {
                     look.name,
                 )?),
                 Kind::Monochrome(set) => self.monochrome(look, set)?,
+                Kind::Solarized(set) => self
+                    .solarized_curve(set)?
+                    .map(|curve| gray_effect(look, curve)),
             };
             if let Some(effect) = effect {
                 out.push((look, effect));
@@ -539,7 +569,7 @@ impl Image {
         Ok(out)
     }
 
-    /// The effect.json definition of each offered look that the file holds, for GR III.
+    /// The effect.json definition of each look that the file holds.
     pub fn definitions(&self) -> Result<Vec<Value>> {
         self.effects()?
             .into_iter()
@@ -564,6 +594,26 @@ impl Image {
                 Ok(value)
             })
             .collect()
+    }
+}
+
+/// The monochrome effect of `look` with one curve for each channel.
+fn gray_effect(look: &Look, curve: Curve) -> Effect {
+    Effect {
+        id: look.effect_id.to_owned(),
+        name: look.name.to_owned(),
+        flags: crate::effects::MONOCHROME,
+        matrix: mono_matrix(),
+        curves: [curve; 3],
+        post_matrix: None,
+        selective: None,
+        hue_sectors: None,
+        native_look: None,
+        fn_defaults: look
+            .defaults
+            .iter()
+            .any(|v| *v != 0)
+            .then_some(look.defaults),
     }
 }
 

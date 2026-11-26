@@ -46,7 +46,7 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/llvm-21.list
           sudo apt-get update
           sudo apt-get install --yes clang-21 lld-21 libclang-rt-21-dev
-      # qemu-arm runs the NEON parity test of Glow (synthetic_glow_neon_parity).
+      # qemu-arm runs the NEON parity tests of Glow, Date, and Grain (synthetic_*_neon_parity).
       - if: runner.os == 'Linux'
         run: sudo apt-get install --yes qemu-user
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -79,6 +79,7 @@ jobs:
         run: |
           cargo run --locked -p grkit-cli -- module test --dir modules/glow --cc "$GRKIT_HOST_CC"
           cargo run --locked -p grkit-cli -- module test --dir modules/date --cc "$GRKIT_HOST_CC"
+          cargo run --locked -p grkit-cli -- module test --dir modules/grain --cc "$GRKIT_HOST_CC"
           cargo test --locked -p grkit-core --test native_contracts
       - run: cargo build --release --locked -p grkit-cli
       - run: target/release/grkit --help

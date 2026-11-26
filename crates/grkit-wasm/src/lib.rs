@@ -373,6 +373,7 @@ impl Builder {
             packaging::Extras {
                 imports: self.imports.as_deref(),
                 recipes: self.recipes.as_deref(),
+                ..Default::default()
             },
         )?;
         Ok(package.bytes)

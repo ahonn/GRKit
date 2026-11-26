@@ -104,7 +104,20 @@ const LUT_PREFIX = 'lut-';
 export const isLutImportId = (id: string): boolean => id.startsWith(LUT_PREFIX);
 
 /** The IDs of the native looks (`NATIVE_LOOKS` of `native.ts`, which a worker cannot load). */
-export const NATIVE_LOOK_IDS: readonly string[] = ['gr4-cinema-yellow', 'gr4-cinema-green', 'gr2-positive-film', 'gr2-positive-film-gr4'];
+export const NATIVE_LOOK_IDS: readonly string[] = [
+  'gr4-cinema-yellow',
+  'gr4-cinema-green',
+  'gr4-mono-standard',
+  'gr4-mono-solid',
+  'gr4-mono-soft',
+  'gr4-mono-hi-contrast',
+  'gr4-mono-grainy',
+  'gr4-mono-solarized-1',
+  'gr4-mono-solarized-2',
+  'gr4-mono-solarized-3',
+  'gr2-positive-film',
+  'gr2-positive-film-gr4',
+];
 
 /** True for the effect ID of a native look. */
 export const isNativeLookId = (id: string): boolean => NATIVE_LOOK_IDS.includes(id);

@@ -77,7 +77,11 @@
    follows Show Text in the table. On is the default; Off reads
    no file and draws nothing.
 
-   The header keeps a copy of these eight settings (GRKIT_HOST_MANAGE_COPY,
+   Battery Percentage, a row of Display Settings, shows the charge in the
+   battery icon (runtime/battery_percent.h). Its setting, CORE.BATPCT, follows
+   Effect Icons in Playback in the table. Off, as the camera, is the default.
+
+   The header keeps a copy of these nine settings (GRKIT_HOST_MANAGE_COPY,
    manage_copy), which the resident loader saves in the file of the user
    modes of the mode dial. On a user mode with a snapshot, the core holds
    the main state file (runtime/mode_dial.h), but not that file, so a change
@@ -116,6 +120,8 @@
 #define MANAGE_GOODBYE_TEXT 40U
 /* The handle + 1 of CORE.PBINFO, Effect Icons in Playback, or 0 without it. */
 #define MANAGE_PLAYBACK_INFO 44U
+/* The handle + 1 of CORE.BATPCT, Battery Percentage, or 0 without it. */
+#define MANAGE_BATTERY_PERCENT 48U
 /* The handle + 1 of CORE.ORDER of module 0, or 0 without it. Module i has
    CORE.ORDER at handle base + MANAGE_ORDER_WORDS * i, then CORE.ORDER2.
    The two settings hold the values of the page of the module after its
@@ -127,12 +133,12 @@
    (runtime/modules.h: choice_sequence), so the nibbles order each page with
    options: its MANAGE_OPTION_VALUES - 1 values after the first row but the
    last one, which follows. */
-#define MANAGE_ORDERS 48U
+#define MANAGE_ORDERS 52U
 #define MANAGE_ORDER_WORDS 2U
 #define MANAGE_ORDER_NIBBLES 7U
 #define MANAGE_ORDER_VALUES (MANAGE_ORDER_NIBBLES * MANAGE_ORDER_WORDS)
 #define MANAGE_ORDER_LIMIT (1U << 4U * MANAGE_ORDER_NIBBLES)
-#define MANAGE_HEADER 52U
+#define MANAGE_HEADER 56U
 /* Each module: its status at this start, the address of the title texts of
    its page or 0, the global index of its tile 0 or MANAGE_NO_TILE, the start
    and the end of its code and the capabilities that it uses (a loaded module;
@@ -214,6 +220,9 @@
 #define MANAGE_PLAYBACK_INFO_OFF 0U
 #define MANAGE_PLAYBACK_INFO_ON 1U
 #define MANAGE_PLAYBACK_INFO_VALUES 2U
+/* The setting of Battery Percentage: 0 Off, as the camera, 1 On. */
+#define MANAGE_BATTERY_PERCENT_KEY "CORE.BATPCT"
+#define MANAGE_BATTERY_PERCENT_VALUES 2U
 
 #ifdef MENU_TEXT
 /* The module list at a camera address. A host test maps it. */
@@ -371,8 +380,9 @@ _Static_assert(MANAGE_START==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_START &&
                MANAGE_BATTERY==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY &&
                MANAGE_GOODBYE==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE &&
                MANAGE_GOODBYE_TEXT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_GOODBYE_TEXT &&
-               MANAGE_PLAYBACK_INFO==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_PLAYBACK_INFO && GRKIT_MANAGE_COPY_SWITCH==0U &&
-               GRKIT_MANAGE_COPY_WORDS==8U, "The copy follows the handles of the module list");
+               MANAGE_PLAYBACK_INFO==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_PLAYBACK_INFO &&
+               MANAGE_BATTERY_PERCENT==MANAGE_SWITCH+4U*GRKIT_MANAGE_COPY_BATTERY_PERCENT && GRKIT_MANAGE_COPY_SWITCH==0U &&
+               GRKIT_MANAGE_COPY_WORDS==9U, "The copy follows the handles of the module list");
 static void manage_copy(volatile u32 *h) {
     u32 i, at, value, changed=0;
     if(!h[GRKIT_HOST_MANAGE/4]) return;
@@ -567,26 +577,39 @@ static const Setting manage_settings[SUBMENU_ROWS]={
    through it while GRKit is off. The page shows whether GRKit runs, also
    where the mode dial turned it off; On there turns it on until the dial
    goes to another position, and the switch keeps its value
-   (runtime/mode_dial.h: dial_suspend). */
+   (runtime/mode_dial.h: dial_suspend). While an update over Wi-Fi waits, the
+   root row names it and the page has a third row, Update: OK on it asks to
+   install it (runtime/menu_update.h: update_row). */
+#define SWITCH_ROW_UPDATE 2U
 static void dial_suspend(volatile u32 *h,u32 off);
+static const u16 *update_title(volatile u32 *h);
+static u32 switch_update(volatile u32 *h) { return h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING; }
 static const u16 *switch_title(volatile u32 *h) { return text(h,TEXT_ENABLE); }
-static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_grkit_off(h)); }
+static const u16 *switch_summary(volatile u32 *h) {
+    return switch_update(h) ? update_title(h) : text(h,TEXT_SWITCH+manage_grkit_off(h));
+}
 /* The MENU row: Enable GRKit. */
 static const u16 *switch_menu_label(volatile u32 *h) { return text(h,TEXT_SWITCH+2); }
 static u32 switch_rows(volatile u32 *h) { (void)h; return 2; }
 static const u16 *switch_value_text(volatile u32 *h,u32 off) { return text(h,off ? TEXT_OFF : TEXT_ON); }
-static const u16 *switch_label(volatile u32 *h,u32 row) { return switch_value_text(h,!row); }
+static u32 switch_page_rows(volatile u32 *h) { return switch_update(h) ? SWITCH_ROW_UPDATE+1U : SWITCH_ROW_UPDATE; }
+static const u16 *switch_label(volatile u32 *h,u32 row) {
+    return row==SWITCH_ROW_UPDATE ? update_title(h) : switch_value_text(h,!row);
+}
 static u32 switch_icon(volatile u32 *h,u32 row) {
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return manage_grkit_off(h) ? GRKIT_ICON_MODULES_OFF : GRKIT_ICON_MODULES;
+    if(row==SWITCH_ROW_UPDATE) return GRKIT_ICON_UPDATE;
     return row ? GRKIT_ICON_MODULES : GRKIT_ICON_OFF;
 }
-static u32 switch_checked(volatile u32 *h,u32 row) { return (!row)==manage_grkit_off(h); }
+static u32 switch_checked(volatile u32 *h,u32 row) { return row<SWITCH_ROW_UPDATE && (!row)==manage_grkit_off(h); }
 static void switch_apply(volatile u32 *h,u32 row) {
+    /* The Update row only asks, on OK. An ADJ exit on it changes nothing. */
+    if(row>=SWITCH_ROW_UPDATE) return;
     manage_set_all_off(h,!row);
     if(row && h[GRKIT_HOST_SERVICES/4]) dial_suspend(h,0);
 }
 static u32 switch_committed(volatile u32 *h) { return !manage_grkit_off(h); }
-#define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_label,switch_icon, \
+#define SWITCH_PAGE {switch_title,switch_summary,switch_page_rows,switch_label,switch_icon, \
     switch_checked,switch_apply,switch_committed,0,0,0}
 /* The MENU row opens the value page of this one setting at once
    (menu_rows_controller), titled Enable GRKit: On, then Off, as the Enable
@@ -711,6 +734,22 @@ static void playback_info_set(volatile u32 *h,u32 value) {
     }
 }
 static const u16 *playback_info_label(volatile u32 *h) { return text(h,TEXT_PLAYBACK_INFO); }
+static u32 battery_percent_handle(volatile u32 *h) {
+    return h[GRKIT_HOST_MANAGE/4] ? manage_word(h,MANAGE_BATTERY_PERCENT) : 0;
+}
+/* Whether the battery icon shows the charge as a number. */
+static u32 battery_percent_on(volatile u32 *h) {
+    u32 at=battery_percent_handle(h);
+    return at && setting_value(h,at-1)==1U;
+}
+static void battery_percent_set(volatile u32 *h,u32 value) {
+    u32 at=battery_percent_handle(h);
+    if(at && value<MANAGE_BATTERY_PERCENT_VALUES) {
+        setting_store(h,at-1,value);
+        manage_copy(h);
+    }
+}
+static const u16 *battery_percent_label(volatile u32 *h) { return text(h,TEXT_BATTERY_PERCENT); }
 #define START_SETTING {start_label,start_values,start_value_text,start_value,start_set}
 #define UNIT_SETTING {unit_label,unit_values,unit_value_text,unit_value,unit_set}
 /* The value page of an On/Off setting lists On, then Off, as Enable GRKit:
@@ -724,8 +763,9 @@ ONOFF_ROWS(battery,battery_simple)
 ONOFF_ROWS(goodbye,goodbye_custom)
 ONOFF_ROWS(goodbye_text,goodbye_text_shown)
 ONOFF_ROWS(playback_info,playback_info_on)
+ONOFF_ROWS(battery_percent,battery_percent_on)
 #define ONOFF_SETTING(name) {name##_label,onoff_values,switch_value_text,name##_row,name##_choose}
-static const Setting core_settings[7]={START_SETTING,UNIT_SETTING,ONOFF_SETTING(raw),ONOFF_SETTING(battery),
-    ONOFF_SETTING(goodbye),ONOFF_SETTING(goodbye_text),ONOFF_SETTING(playback_info)};
+static const Setting core_settings[8]={START_SETTING,UNIT_SETTING,ONOFF_SETTING(raw),ONOFF_SETTING(battery),
+    ONOFF_SETTING(goodbye),ONOFF_SETTING(goodbye_text),ONOFF_SETTING(playback_info),ONOFF_SETTING(battery_percent)};
 #endif
 #endif

@@ -11,8 +11,9 @@
 use std::collections::BTreeSet;
 
 use anyhow::{ensure, Context, Result};
-use serde_json::Value;
+use serde_json::{json, Value};
 
+use crate::cover::Cover;
 use crate::effects;
 
 /// The start of an import library, with its format version.
@@ -30,6 +31,151 @@ pub struct Import {
     pub details: String,
     /// The compiled `.GRF` effect.
     pub effect: Vec<u8>,
+}
+
+impl Import {
+    /// The ID of the effect.
+    pub fn id(&self) -> Result<String> {
+        Ok(effects::decode(&self.effect)?.0.id)
+    }
+
+    /// The `cover` of the details, or None when it is absent or invalid.
+    pub fn cover(&self) -> Option<Cover> {
+        let details: Value = serde_json::from_str(&self.details).ok()?;
+        Cover::from_json(details.get("cover")?).ok()
+    }
+}
+
+/// The import of the effect `id`.
+pub fn find<'a>(imports: &'a [Import], id: &str) -> Option<&'a Import> {
+    imports
+        .iter()
+        .find(|import| import.id().is_ok_and(|other| other == id))
+}
+
+/// Puts `effect` in the library with `cover`, which must draw its icon. An import of the same
+/// effect ID gets the new effect and the cover, and keeps its other details. A new import
+/// goes last with only the cover, and with `"kind": "cover"` for an `official` Look: the site
+/// keeps the custom cover of an official Look so.
+pub fn upsert(
+    imports: &mut Vec<Import>,
+    effect: Vec<u8>,
+    cover: &Cover,
+    official: bool,
+) -> Result<()> {
+    let (decoded, icon) = effects::decode(&effect)?;
+    ensure!(
+        cover.matches(&icon),
+        "The cover does not draw the icon of {}",
+        decoded.id
+    );
+    let at = imports
+        .iter()
+        .position(|import| import.id().is_ok_and(|id| id == decoded.id));
+    let mut details = match at {
+        Some(at) => serde_json::from_str(&imports[at].details)
+            .context("The details of an import are not JSON")?,
+        None if official => json!({"kind": "cover"}),
+        None => json!({}),
+    };
+    details
+        .as_object_mut()
+        .context("The details of an import are not a JSON object")?
+        .insert("cover".into(), cover.to_json());
+    let import = Import {
+        details: details.to_string(),
+        effect,
+    };
+    place(imports, at, import)
+}
+
+/// Records the changes of an official Look in its import: `{"kind": "cover"}` with `cover`,
+/// which must draw the icon of `effect`, when it is an individual cover, and the name of
+/// `effect` when `renamed`. A variant of `statement`, the statement cover of the Look, is not
+/// an individual cover: the card shows its scheme (`cover::Scheme`). An existing
+/// import gets the new effect and keeps its other details. Without a cover and a name, the
+/// import goes away. It fails when nothing changes: no import to remove.
+pub fn record_official(
+    imports: &mut Vec<Import>,
+    effect: Vec<u8>,
+    cover: Option<&Cover>,
+    statement: Option<&Cover>,
+    renamed: bool,
+) -> Result<()> {
+    let (decoded, icon) = effects::decode(&effect)?;
+    let cover = cover
+        .filter(|cover| statement.is_none_or(|statement| statement.variant_of(cover).is_none()));
+    if cover.is_none() && !renamed {
+        ensure!(
+            remove(imports, &decoded.id).is_some(),
+            "The Look has no import"
+        );
+        return Ok(());
+    }
+    let at = imports
+        .iter()
+        .position(|import| import.id().is_ok_and(|id| id == decoded.id));
+    let mut details = match at {
+        Some(at) => serde_json::from_str(&imports[at].details)
+            .context("The details of an import are not JSON")?,
+        None => json!({"kind": "cover"}),
+    };
+    let fields = details
+        .as_object_mut()
+        .context("The details of an import are not a JSON object")?;
+    match cover {
+        Some(cover) => {
+            ensure!(
+                cover.matches(&icon),
+                "The cover does not draw the icon of {}",
+                decoded.id
+            );
+            fields.insert("cover".into(), cover.to_json())
+        }
+        None => fields.remove("cover"),
+    };
+    match renamed {
+        true => fields.insert("name".into(), decoded.name.into()),
+        false => fields.remove("name"),
+    };
+    let import = Import {
+        details: details.to_string(),
+        effect,
+    };
+    place(imports, at, import)
+}
+
+/// Puts `import` at `at`, or last as a new import.
+fn place(imports: &mut Vec<Import>, at: Option<usize>, import: Import) -> Result<()> {
+    check(&import)?;
+    match at {
+        Some(at) => imports[at] = import,
+        None => {
+            ensure!(
+                imports.len() < MAX_IMPORTS,
+                "An import library holds at most {MAX_IMPORTS} imports"
+            );
+            imports.push(import);
+        }
+    }
+    Ok(())
+}
+
+/// Removes the import of the effect `id`, and returns it.
+pub fn remove(imports: &mut Vec<Import>, id: &str) -> Option<Import> {
+    let at = imports
+        .iter()
+        .position(|import| import.id().is_ok_and(|other| other == id))?;
+    Some(imports.remove(at))
+}
+
+/// The library file of `imports`, or None without an import: the site writes no file then,
+/// and a package without imports has no `card::IMPORTS_FILE`. A writer removes the file.
+pub fn library_file(imports: &[Import]) -> Result<Option<Vec<u8>>> {
+    if imports.is_empty() {
+        return Ok(None);
+    }
+    encode(imports).map(Some)
 }
 
 /// Checks one import: details that are a JSON object within `MAX_DETAILS`, and a complete

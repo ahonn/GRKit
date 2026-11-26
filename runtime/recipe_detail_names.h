@@ -31,7 +31,9 @@
 #define DETAIL_NAME_FRAMING 30U
 #define DETAIL_NAME_CROP 31U
 #define DETAIL_NAME_DATE 32U
-#define DETAIL_NAMES 33U
+/* The Film-like style of Grain (GRAIN.STYLE), after the settings above. */
+#define DETAIL_NAME_GRAIN_STYLE 33U
+#define DETAIL_NAMES 34U
 static const char *const detail_names[DETAIL_NAMES]={
     0,"Film Look","Image Control",
     "Saturation","Hue","High/Low Key","Contrast","Contrast (Highlight)","Contrast (Shadow)","Sharpness",
@@ -41,5 +43,6 @@ static const char *const detail_names[DETAIL_NAMES]={
     "White Balance",
     "Highlight Correction","Shadow Correction","Peripheral Illumination","High-ISO NR",
     "Exposure Compensation","Auto ISO Upper Limit","Metering","ND Filter",
-    "Framing","Crop","Date Imprint"};
+    "Framing","Crop","Date Imprint",
+    "Grain Style"};
 #endif

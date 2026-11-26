@@ -11,6 +11,7 @@ repository.workspace = true
 ab_glyph.workspace = true
 anyhow.workspace = true
 crc32fast.workspace = true
+ed25519-compact.workspace = true
 flate2.workspace = true
 hex.workspace = true
 serde.workspace = true

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import {
   COVER_LAYOUTS,
-  COVER_LOOK_IDS,
   colorsFromLook,
   coverLayout,
   isCoverEditorLookId,
   layoutFields,
+  offeredCoverLooks,
   randomCoverLayout,
   randomCoverLook,
   rgbCss,
@@ -109,7 +109,8 @@ const lookLabel = (t: Strings, look: CoverLookId): string =>
 
 /** Looks to show: the short editor set, plus the current look when it is a stock-only look. */
 function editorLooks(current: CoverLookId): readonly CoverLookId[] {
-  return isCoverEditorLookId(current) ? COVER_LOOK_IDS : [current, ...COVER_LOOK_IDS];
+  const offered: readonly CoverLookId[] = offeredCoverLooks();
+  return offered.includes(current) ? offered : [current, ...offered];
 }
 
 /** The film cover icon of an effect, with layout, colors, brand, film name, number, and band. */
