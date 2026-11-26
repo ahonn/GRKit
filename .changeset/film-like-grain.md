@@ -2,4 +2,4 @@
 default: minor
 ---
 
-Grain has a Style setting, where Film-like adds the colored grain of a color negative after the grain model of spektrafilm and System keeps the camera's grain.
+Grain has a Style setting: Film-like adds the colored grain of color negative film, modeled on spektrafilm, and System keeps the camera's grain.

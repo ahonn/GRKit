@@ -2,4 +2,4 @@
 default: minor
 ---
 
-With the camera's Wi-Fi on, the GRKit phone app can manage Looks, recipes, and settings, and send an official GRKit update that you confirm on the camera.
+With the camera's Wi-Fi on, GRKit is ready for the GRKit phone app, coming later, to manage Looks, recipes, settings, and updates.
