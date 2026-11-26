@@ -395,13 +395,13 @@ impl Card {
         request.phase = SoftwarePhase::Cancelling;
         request.cancellable = false;
         self.append_request(request.clone())?;
-        // The RTOS renames the request when the person confirms it, with a
-        // FAT driver of its own: Linux sees the folder as it last read it,
-        // and an unlink writes that folder sector back. Read the folder from
-        // the card again just before the unlink, so that the window between
-        // the two drivers is as short as it can be. It is not closed: the
-        // camera can still confirm between this read and the unlink.
-        self.forget_card_reads();
+        // The card of Linux (ipcufs) has no FAT of its own: it sends each
+        // folder read, delete, and rename by path to the RTOS, which renames
+        // the request when the person confirms it. The delete of the request
+        // and that rename are two operations of the RTOS on one name. When
+        // the confirmation comes first, the delete fails, or the folder,
+        // which Linux reads from the RTOS each time, lists the journal after
+        // it.
         ensure!(
             self.state()? == JournalState::Waiting,
             "The camera already confirmed the software request"

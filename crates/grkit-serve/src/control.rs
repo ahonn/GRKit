@@ -69,10 +69,24 @@ pub struct Reply {
 
 const POLL: Duration = Duration::from_millis(10);
 
+/// How one exchange ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Exchange {
+    /// The App task answered the command.
+    Answered(Reply),
+    /// The App task did not end an earlier request in time, so the command
+    /// was not sent. Sending it again is safe.
+    NotSent,
+    /// The command was sent, and its answer did not come in time. The App
+    /// task can still run it, so its outcome is unknown: some commands add or
+    /// undo a step, and sending them again can run them twice.
+    Unanswered,
+}
+
 /// The one producer of the mailbox. Each command is a single exchange that
-/// the App task answers in its next poll (100 ms). The commands only read
-/// camera state or set a choice to a given value, so a command whose answer
-/// did not arrive can be sent again.
+/// the App task answers in its next poll (100 ms). A command that the App
+/// task did not answer stays in the slot until it ends: the next exchange
+/// waits for it and drops its answer.
 pub struct Client<M: MailboxIo> {
     memory: M,
 }
@@ -197,20 +211,19 @@ impl<M: MailboxIo> Client<M> {
         self.memory.sync()?;
         Ok(Some(Reply { result, bytes }))
     }
-    /// Send one command and wait for its answer: None when the App task did
-    /// not answer within `timeout`. The first command of a start of the
-    /// camera installs `nonce` as the epoch; a later service keeps that
-    /// epoch.
+    /// Send one command and wait for its answer within `timeout`. The first
+    /// command of a start of the camera installs `nonce` as the epoch; a
+    /// later service keeps that epoch.
     pub fn exchange(
         &mut self,
         nonce: [u8; 16],
         command: u32,
         payload: &[u8],
         timeout: Duration,
-    ) -> Result<Option<Reply>> {
+    ) -> Result<Exchange> {
         let deadline = Instant::now() + timeout;
         if !self.settle(deadline)? {
-            return Ok(None);
+            return Ok(Exchange::NotSent);
         }
         if self.epoch() == [0; 4] {
             ensure!(nonce != [0; 16], "The attach nonce must be nonzero");
@@ -218,12 +231,16 @@ impl<M: MailboxIo> Client<M> {
             match self.answer(sequence, deadline)? {
                 Some(Reply { result: 0, .. }) => {}
                 Some(reply) => bail!("The runtime rejected the attach: {}", reply.result),
-                None => return Ok(None),
+                // Only the attach is in the slot; the command was not sent.
+                None => return Ok(Exchange::NotSent),
             }
             ensure!(self.epoch() != [0; 4], "The runtime kept no epoch");
         }
         let sequence = self.submit(self.epoch(), command, payload)?;
-        self.answer(sequence, deadline)
+        Ok(match self.answer(sequence, deadline)? {
+            Some(reply) => Exchange::Answered(reply),
+            None => Exchange::Unanswered,
+        })
     }
 }
 
@@ -677,7 +694,7 @@ pub(crate) mod tests {
         let reply = client.exchange([7; 16], 9, &[1, 2, 3, 4], SHORT).unwrap();
         assert_eq!(
             reply,
-            Some(Reply {
+            Exchange::Answered(Reply {
                 result: 0,
                 bytes: vec![9, 1, 2, 3, 4]
             })
@@ -685,7 +702,7 @@ pub(crate) mod tests {
         assert_eq!(client.epoch(), [0x07070707; 4]);
         // A restarted service has another nonce and keeps the epoch.
         let reply = client.exchange([8; 16], CONTROL_PING, &[], SHORT).unwrap();
-        assert_eq!(reply.unwrap().result, 0);
+        assert!(matches!(reply, Exchange::Answered(Reply { result: 0, .. })));
         assert_eq!(client.epoch(), [0x07070707; 4]);
         assert_eq!(client.memory.commands, [CONTROL_ATTACH, 9, CONTROL_PING]);
         assert_eq!(client.memory.read(CONTROL_RELEASE), 3);
@@ -709,22 +726,35 @@ pub(crate) mod tests {
         let mut client = Client::new(Memory::new()).unwrap();
         assert!(client.exchange([0; 16], CONTROL_PING, &[], SHORT).is_err());
         client.memory.stalled = true;
+        // Only the attach was sent.
         assert_eq!(
             client.exchange([7; 16], CONTROL_PING, &[], SHORT).unwrap(),
-            None
+            Exchange::NotSent
         );
         // The slot is still taken: nothing new is published.
         assert_eq!(client.memory.read(CONTROL_REQUEST), 1);
         assert_eq!(
             client.exchange([7; 16], CONTROL_PING, &[], SHORT).unwrap(),
-            None
+            Exchange::NotSent
         );
         assert_eq!(client.memory.read(CONTROL_REQUEST), 1);
         // The App task polls again: the old request ends, then the new one.
         client.memory.stalled = false;
-        let reply = client.exchange([7; 16], 5, &[], SHORT).unwrap().unwrap();
-        assert_eq!(reply.result, CONTROL_UNSUPPORTED);
+        let reply = client.exchange([7; 16], 5, &[], SHORT).unwrap();
+        assert!(matches!(
+            reply,
+            Exchange::Answered(Reply {
+                result: CONTROL_UNSUPPORTED,
+                ..
+            })
+        ));
         assert_eq!(client.memory.commands, [CONTROL_ATTACH, 5]);
+        // A command that was sent and not answered has an unknown outcome.
+        client.memory.stalled = true;
+        assert_eq!(
+            client.exchange([7; 16], 6, &[], SHORT).unwrap(),
+            Exchange::Unanswered
+        );
     }
 
     #[test]
@@ -747,12 +777,11 @@ pub(crate) mod tests {
         memory.handler = Box::new(|_, _| (0, vec![1, 2, 3]));
         let mut client = Client::new(memory).unwrap();
         assert_eq!(
-            client
-                .exchange([7; 16], 5, &[], SHORT)
-                .unwrap()
-                .unwrap()
-                .bytes,
-            [1, 2, 3]
+            client.exchange([7; 16], 5, &[], SHORT).unwrap(),
+            Exchange::Answered(Reply {
+                result: 0,
+                bytes: vec![1, 2, 3]
+            })
         );
         client.memory.words[CONTROL_REQUEST / 4] = CONTROL_SEQUENCE_MAX;
         client.memory.words[CONTROL_READY / 4] = CONTROL_SEQUENCE_MAX;

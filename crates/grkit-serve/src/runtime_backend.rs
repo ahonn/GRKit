@@ -72,14 +72,26 @@ impl<M: crate::control::MailboxIo> ControlBackend<M> {
         Self { client, nonce }
     }
     fn raw(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
-        let reply = self
+        use crate::control::Exchange;
+        match self
             .client
             .exchange(self.nonce, command, payload, COMMAND_TIMEOUT)
             .map_err(|_| invalid("The control mailbox of the camera is not usable."))?
-            .ok_or_else(|| {
-                Problem::new(503, "runtime_busy", "The camera did not answer. Try again.")
-            })?;
-        Ok((reply.result, reply.bytes))
+        {
+            Exchange::Answered(reply) => Ok((reply.result, reply.bytes)),
+            Exchange::NotSent => Err(Problem::new(
+                503,
+                "runtime_busy",
+                "The camera did not answer. Try again.",
+            )),
+            // The camera can still make the change: a second send of an add
+            // or an undo would make it twice.
+            Exchange::Unanswered => Err(Problem::new(
+                503,
+                "runtime_late",
+                "The camera did not answer in time and can still make the change. Read it again before you try again.",
+            )),
+        }
     }
 }
 impl<M: crate::control::MailboxIo + Send> RuntimeBackend for ControlBackend<M> {

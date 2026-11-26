@@ -175,14 +175,6 @@ impl Card {
         }
     }
 
-    /// Drops what Linux read from the card and has not changed, so that the
-    /// next read of a folder comes from the card, with the changes of the
-    /// RTOS. 3: the cached names and file nodes, and the clean pages, which
-    /// hold the folder sectors.
-    pub(super) fn forget_card_reads(&self) {
-        let _ = fs::write("/proc/sys/vm/drop_caches", "3");
-    }
-
     /// Looks up `paths`, so that the card finds them after a delete in their
     /// folders. A path that does not exist is fine.
     pub(super) fn warm<'a>(&self, paths: impl IntoIterator<Item = &'a str>) {

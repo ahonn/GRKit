@@ -6,6 +6,10 @@
 //! the files that change to the update folder, reads each one back, and
 //! writes the journal. The camera installs the update at the next power-on.
 //!
+//! Linux reaches the card through ipcufs, which sends each folder read,
+//! create, write, delete, and rename by path to the RTOS. The RTOS keeps the
+//! only FAT of the card, and a folder read lists what the RTOS holds.
+//!
 //! The card has rules that the steps follow:
 //! - It cannot rename a folder or replace a file, so the service never
 //!   renames over a file, and the journal moves the files.
