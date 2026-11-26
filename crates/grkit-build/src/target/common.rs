@@ -339,6 +339,18 @@ pub const DNG_XMP: &[HookSpec] = &[
     b("picture_dng_set", Framing, PictureXmp),
 ];
 
+/// The smaller copy of a picture that the camera sends to a phone
+/// (`runtime/picture.S: picture_transfer_size`): the test for the end of the
+/// list of the sizes that the camera resizes. A Framing or Crop size is not
+/// in that list, so the camera sent the whole file; the hook gives such a
+/// picture a size for the copy.
+pub const TRANSFER: &[HookSpec] = &[b_shared(
+    "picture_transfer_size",
+    Framing,
+    CaptureAspect,
+    &[CaptureCrop],
+)];
+
 /// Battery in Simple Display (`runtime/manage.h`): the compare of the display
 /// mode in UpdateViewBattery of LiveViewController, before the jump table
 /// that shows the battery icon at each level only with the full information

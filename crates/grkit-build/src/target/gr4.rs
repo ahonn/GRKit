@@ -50,6 +50,7 @@ const GROUPS: &[&[HookSpec]] = &[
     common::BATTERY,
     common::GOODBYE,
     common::DNG_XMP,
+    common::TRANSFER,
 ];
 
 /// Image Control processing (`runtime/targets/gr4-processing.S`): the BL to

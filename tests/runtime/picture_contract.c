@@ -2104,6 +2104,20 @@ int main(void)
         assert(picture_gate_flag(1) == 1 && picture_gate_flag(0) == 0);
         developing = 0;
     }
+    /* The copy for a phone: the aspect of the picture in hundredths, about
+       1920 on the long side; nothing for a picture that is no larger. */
+    {
+        static const u32 sizes[][4] = {
+            {6000, 4000, 1920, 1280}, {6000, 2216, 1888, 696}, {6000, 2552, 1920, 816},
+            {4992, 4000, 1920, 1536}, {4656, 4000, 1920, 1656}, {2216, 6000, 704, 1920},
+        };
+        for (u32 i = 0; i < sizeof(sizes) / sizeof(sizes[0]); ++i) {
+            u32 size = picture_transfer_fit(sizes[i][0], sizes[i][1]);
+            assert((size & 0xffffU) == sizes[i][2] && size >> 16 == sizes[i][3]);
+            assert(transfer_aspect(sizes[i][2], sizes[i][3]) == transfer_aspect(sizes[i][0], sizes[i][1]));
+        }
+        assert(picture_transfer_fit(1920, 1280) == 0 && picture_transfer_fit(0, 0) == 0);
+    }
     /* Division helper used for reciprocals. */
     for (u32 n = 0; n < 70000; n += 37) for (u32 d = 1; d < 400; d += 13) assert(divide(n, d) == n / d);
     return 0;

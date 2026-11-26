@@ -321,4 +321,12 @@
 #define FW_KEYBOARD_MODEL FIRMWARE(0x53240134)
 #define FW_KEYBOARD_SET_FUNCTION FIRMWARE(0x533e5508)
 
+/* The resize of a picture for a phone (runtime/picture.S:
+   picture_transfer_size): the setter of the size of the copy (the size
+   object, width, height), and where the size check goes on without a size
+   (the camera sends the whole file) or with one. */
+#define FW_TRANSFER_SET FIRMWARE(0x538ea168)
+#define FW_TRANSFER_MISS FIRMWARE(0x537b1f80)
+#define FW_TRANSFER_DONE FIRMWARE(0x537b223c)
+
 #endif

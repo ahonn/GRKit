@@ -254,4 +254,12 @@
 #define FW_SLIDER_FLAG FIRMWARE(0x533a1c4c)
 #define FW_SLIDER_APPLY FIRMWARE(0x533a1d64)
 
+/* The resize of a picture for a phone (runtime/picture.S:
+   picture_transfer_size): the setter of the size of the copy (the size
+   object, width, height), and where the size check goes on without a size
+   (the camera sends the whole file) or with one. */
+#define FW_TRANSFER_SET FIRMWARE(0x536b92f8)
+#define FW_TRANSFER_MISS FIRMWARE(0x5359fdf8)
+#define FW_TRANSFER_DONE FIRMWARE(0x535a00b4)
+
 #endif

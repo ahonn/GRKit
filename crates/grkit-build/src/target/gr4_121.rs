@@ -316,6 +316,8 @@ const SITES: &[Site] = &[
     ("picture_dng_xmp", 0x53828b28, "981208e3"),
     // The tag setter of the DNG writer: its first instruction.
     ("picture_dng_set", 0x5382b2d0, "0dc0a0e1"),
+    // The end test of the list of sizes that the camera resizes for a phone.
+    ("picture_transfer_size", 0x537d9244, "000052e3"),
 ];
 
 /// The stock instructions around the processing hooks.

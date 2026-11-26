@@ -204,6 +204,39 @@ __attribute__((used)) void grkit_export_local_time(u8 *out) {
     PICTURE_DATE(out);
 }
 __attribute__((used)) u32 grkit_export_divide(u32 n,u32 d) { return core_divide(n,d); }
+/* The smaller copy of a picture that the camera sends to a phone that asks
+   for one (runtime/picture.S: picture_transfer_size). The camera has sizes
+   for the copy only for its own aspects, so for a Framing or Crop size it
+   sent the whole file. The copy gets about 1920 pixels on its long side.
+   The camera fits the picture into the copy at its own aspect and leaves
+   the rest of the copy unwritten. It takes two aspects as the same when
+   width / height, rounded to hundredths, is the same, and then fills the
+   whole copy. So the copy takes a size with the aspect of the picture in
+   hundredths: a long side that is a multiple of 16 near 1920, and a short
+   side that is a multiple of 8, else an even one. Width and height as the
+   size object holds them (width | height << 16), or 0 to send the whole
+   file: a picture that is no larger, or no size near 1920 fits. */
+#define TRANSFER_LONG_SIDE 1920U
+#define TRANSFER_STEPS 20U
+/* width / height in hundredths, rounded half up. */
+static u32 transfer_aspect(u32 w,u32 h) { return core_divide(200U*w+h,2U*h); }
+static u32 transfer_size(u32 w,u32 h) {
+    static const u8 steps[2]={8U,2U};
+    u32 wide=w>=h, l_side=wide ? w : h, s_side=wide ? h : w, aspect, k, pass, i, offset, l, s, exact;
+    if(!s_side || l_side<=TRANSFER_LONG_SIDE || l_side>0xffffU) return 0;
+    aspect=transfer_aspect(w,h);
+    for(k=0;k<2U;++k)
+        for(pass=steps[k],i=0;i<=2U*TRANSFER_STEPS;++i) {
+            offset=16U*((i+1U)/2U);
+            l=i&1U ? TRANSFER_LONG_SIDE-offset : TRANSFER_LONG_SIDE+offset;
+            exact=core_divide(l*s_side,l_side);
+            for(s=exact&~(pass-1U);s<=exact+pass;s+=pass)
+                if(s && s<=s_side && transfer_aspect(wide ? l : s,wide ? s : l)==aspect)
+                    return wide ? l|s<<16 : s|l<<16;
+        }
+    return 0;
+}
+__attribute__((used)) u32 picture_transfer_fit(u32 w,u32 h) { return transfer_size(w,h); }
 /* The white of the effect of a recorded picture: input 255 of the curves of
    its record, after its post matrix, as R, G, B levels, and 255 each without
    a record. The Fn adjustments are not in it. runtime/level.h gives the luma

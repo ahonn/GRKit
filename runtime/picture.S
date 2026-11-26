@@ -463,6 +463,36 @@ picture_dng_set:
 .ltorg
 #endif
 
+#ifdef HOOK_PICTURE_TRANSFER_SIZE
+/* The size check of the copy of a picture for a phone, at its test for the
+   end of the lists of sizes that the camera resizes. Before the end, the
+   check goes on. At the end, when the check has a size object for the copy,
+   picture_transfer_fit (picture.c) gives a size for the copy from the size
+   of the picture; the firmware setter stores it, and the check succeeds as
+   for a size of a list. Without that size, or for the caller that only asks
+   whether the camera resizes the picture, the check fails as the camera's
+   does, and the camera sends the whole file. */
+.global picture_transfer_size
+picture_transfer_size:
+    cmp r2, #0
+    ldrne pc, =HOOK_PICTURE_TRANSFER_SIZE_RESUME
+    cmp r5, #0
+    beq 1f
+    ldr r1, [r0, #4]
+    ldr r0, [r0]
+    bl picture_transfer_fit
+    movs r2, r0, lsr #16
+    beq 1f
+    uxth r1, r0
+    mov r0, r5
+    ldr r3, =FW_TRANSFER_SET
+    blx r3
+    mov r4, #0
+    ldr pc, =FW_TRANSFER_DONE
+1:  ldr pc, =FW_TRANSFER_MISS
+.ltorg
+#endif
+
 /* Capture: the maker-note adjustments (tag 0x247) of a GRKit shot. Replaces
    the BL to the native fill: r0 = the setter + 8, r1 is the IFD entry, and r2
    the shot settings. The native fill runs first, and its result returns. */
