@@ -524,7 +524,10 @@ static u32 text_width(const char *text,u32 n,u32 m,u32 look) {
     if(look==LOOK_DOTS) return (u32)((total-2*pitch_column(m)+255)>>8);
     return (u32)(total>>8)-((m*18000)>>16)+((m*31)>>8);
 }
-static void glyph(u8 *mask,u32 width,u32 height,char c,int x,u32 top,u32 m,u32 look) {
+/* Not inlined: the letters and the dots would otherwise grow the frame of
+   stamp_mask, which runs on the stack of the JPEG encoder task
+   (DATE_STACK_BUDGET). */
+static __attribute__((noinline)) void glyph(u8 *mask,u32 width,u32 height,char c,int x,u32 top,u32 m,u32 look) {
     if(look==LOOK_DOTS) dots_glyph(mask,width,height,c,x,top,m);
     else classic_glyph(mask,width,c,x,top,m);
 }
@@ -625,8 +628,10 @@ static void light_pair(const Plane *p,u32 x,u32 y,const u32 *core,const u32 *hal
     }
 }
 /* Add the light of `pairs` pixel pairs of row y from column x (even): the
-   core and halo light of each pixel. A pair without light stays as it is. */
-static void light_row(const Plane *p,u32 x,u32 y,const u8 *core,const u8 *halo,u32 pairs,u32 mono,u32 chroma,u32 look) {
+   core and halo light of each pixel. A pair without light stays as it is.
+   Inlined into its two callers, so that its frame does not add to theirs
+   above date_light_blocks (DATE_STACK_BUDGET). */
+static inline __attribute__((always_inline)) void light_row(const Plane *p,u32 x,u32 y,const u8 *core,const u8 *halo,u32 pairs,u32 mono,u32 chroma,u32 look) {
     u32 i=0;
 #if DATE_NEON
     if(look!=LOOK_DOTS) {
@@ -902,8 +907,8 @@ static void mask_add(const Stamp *st,int cx,int cy,u32 *core,u32 *halo) {
 static void sample_products(const Plane *src,const Stamp *st,u32 turns,u32 rf,long long px,long long py,long long *pu,long long *pv) {
     long long u, v, scale=(long long)(st->ss*rf);
     upright(src,turns,px,py,&u,&v);
-    *pu=(u-((long long)st->ox<<16))*scale;
-    *pv=(v-((long long)st->oy<<16))*scale;
+    *pu=(u-(long long)st->ox*65536)*scale;
+    *pv=(v-(long long)st->oy*65536)*scale;
 }
 /* The stamp of the main picture `src` on the picture `dst`: each pixel of
    dst samples the mask at four points, so the stamp keeps the same place and
@@ -1017,7 +1022,9 @@ static u32 gr2_ink(const char *text,u32 n,u32 x,u32 y) {
 #define GR2_Y 146
 #define GR2_CB 46
 #define GR2_CR 225
-static void gr2_paint(const Plane *dst,const Plane *src,const char *text,u32 n,u32 mono,u32 turns) {
+/* Not inlined, so that its locals stay out of the frame of date_apply, under
+   which the classic and GR1s looks draw (DATE_STACK_BUDGET). */
+static __attribute__((noinline)) void gr2_paint(const Plane *dst,const Plane *src,const char *text,u32 n,u32 mono,u32 turns) {
     u32 sw=src->right-src->left, sh=src->bottom-src->top, dw=dst->right-dst->left, dh=dst->bottom-dst->top;
     u32 short_side=sw<sh ? sw : sh, s=short_side>GR2_SHORT ? divide(short_side<<16,GR2_SHORT) : 65536;
     u32 kx, ky, rs, x, y, k, q;
@@ -1071,7 +1078,13 @@ static void gr2_paint(const Plane *dst,const Plane *src,const char *text,u32 n,u
 /* The largest picture draws the stamp. The smaller ones scale its mask, so
    playback keeps the stamp's place and width when it switches from the
    screennail to the main picture. The core calls this only for a style,
-   not for Off. */
+   not for Off.
+
+   This runs on the stack of the firmware JPEG encoder task, which has little
+   room left: a 992-byte frame of Glow made that task warn of a low stack.
+   The deepest chain of Date (date_apply, stamp_sample, light_row,
+   date_light_blocks) stays within DATE_STACK_BUDGET bytes, which
+   crates/grkit-build/src/tests/modules.rs checks for the camera build. */
 void date_apply(PictureSet *set, u32 style)
 {
     GrkitDateTime now;

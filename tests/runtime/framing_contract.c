@@ -157,6 +157,9 @@ static uint32_t native_crop_bits = 0x3f800000U, native_crop_sets, native_crop_q1
 #define CROP_NATIVE_BITS() (native_crop_bits)
 #define CROP_NATIVE_SET(bits) (native_crop_bits = (bits), ++native_crop_sets)
 #define CROP_NATIVE_Q16() (native_crop_q16)
+/* GR IV: the generic timer of crop_busy, in its units. */
+static uint32_t queue_now;
+#define CROP_QUEUE_NOW() (queue_now)
 /* GR IIIx: the lens of 40 mm that the GR III family runtime asks for. */
 #undef CROP_LENS_40MM
 static uint32_t lens_40mm;
@@ -1155,6 +1158,42 @@ static void crop_follows_the_adj_preview(void)
     framing_bind(TEST_OWNER);
     assert(native_crop_bits == 0x3f800000U && !header[GRKIT_HOST_CROP_NATIVE/4]);
 }
+#ifdef FW_QUEUE_COMPLETE
+/* GR IV: while the back end makes a shot, a highlighted crop keeps the
+   camera's factor, also after the queue completion; the bind after the
+   write of the files sets it. A start without a write ends after
+   CROP_QUEUE_WAIT. */
+static void crop_waits_for_the_shot(void)
+{
+    reset();
+    header[GRKIT_HOST_FRAME_RATIO/4] = 0;
+    add_crop_layer();
+    native_crop_bits = 0x3f800000U;
+    native_crop_sets = 0;
+    queue_now = 100;
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] = 100U << CROP_QUEUE_TIME_SHIFT | CROP_QUEUE_STARTED;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4] = GRKIT_CORE_CROP + 1;
+    header[GRKIT_HOST_MODULE_PREVIEW/4 + 1] = 3;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_sets == 0 && !header[GRKIT_HOST_CROP_NATIVE/4]);
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] |= CROP_QUEUE_POSTED;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_sets == 0);
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] |= CROP_QUEUE_WRITTEN;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3]);
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4] = 100U << CROP_QUEUE_TIME_SHIFT | CROP_QUEUE_STARTED;
+    header[GRKIT_HOST_FRAME_PREVIEW/4] = 0;
+    queue_now = 100 + CROP_QUEUE_WAIT - 1;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == crop_factors[3]);
+    queue_now = 100 + CROP_QUEUE_WAIT;
+    framing_bind(TEST_OWNER);
+    assert(native_crop_bits == 0x3f800000U);
+    queue_now = 0;
+}
+#endif
 /* The camera's grid guide hides while the still live view shows a frame:
    the area of a Framing ratio, also of a composition frame, or the frame of
    a crop. A crop that the camera shows in the whole view, a soft Off, a
@@ -1568,6 +1607,9 @@ int main(void)
     crop_badges_replace_the_camera_badge();
     crop_sets_the_camera_factor();
     crop_follows_the_adj_preview();
+#ifdef FW_QUEUE_COMPLETE
+    crop_waits_for_the_shot();
+#endif
     the_camera_grid_hides_behind_layers();
 #if CROP_LIVE_FACTOR
     crop_zooms_the_live_view();
@@ -2062,6 +2104,13 @@ int main(void)
     framing_bind(TEST_OWNER);
     assert(capture_requests==1);
     header[GRKIT_HOST_FRAME_RATIO/4]=0;
+#ifdef FW_QUEUE_COMPLETE
+    /* GR IV: the request waits for the shot that the back end makes. */
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4]=CROP_QUEUE_STARTED;
+    framing_bind(TEST_OWNER);
+    assert(capture_requests==1);
+    header[GRKIT_HOST_CROP_QUEUE_FLAGS/4]|=CROP_QUEUE_WRITTEN;
+#endif
     framing_bind(TEST_OWNER);
     assert(capture_requests==2 && capture_aspect==0);
     header[GRKIT_HOST_FRAME_RATIO/4]=LAST_RATIO;

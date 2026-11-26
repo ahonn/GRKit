@@ -195,6 +195,40 @@ void crop_native_set(u32 bits);
 #define CROP_NATIVE_BITS() crop_native_bits()
 #define CROP_NATIVE_SET(bits) crop_native_set(bits)
 #endif
+/* Whether the back end of GR IV still makes the last shot: from its start
+   until it has written the files of its queue (runtime/crop_queue.S). A change of the camera's
+   crop factor changes the live view at once, also while the back end
+   develops or writes a shot, which can leave parts of another frame in that
+   photo or break its file.
+   So the core changes the factor only when no shot is made, and the next
+   bind of the live view after the shot applies a change
+   (runtime/framing.c: bind_canvas). A start older than CROP_QUEUE_WAIT
+   units of time is over, so that a write that did not complete does not
+   keep the factor. */
+#ifdef FW_QUEUE_COMPLETE
+#include "crop_queue.h"
+#define CROP_QUEUE_WAIT 12U
+#ifndef CROP_QUEUE_NOW
+/* The generic timer in the units of CROP_QUEUE_TIME_SHIFT. */
+static __attribute__((unused)) u32 crop_queue_now(void) {
+#ifdef __arm__
+    u32 low, high;
+    __asm__ volatile("mrrc p15, 0, %0, %1, c14" : "=r"(low), "=r"(high));
+    return high<<7|low>>25;
+#else
+    return 0;
+#endif
+}
+#define CROP_QUEUE_NOW() crop_queue_now()
+#endif
+static __attribute__((unused)) u32 crop_busy(volatile u32 *h) {
+    u32 flags=h[GRKIT_HOST_CROP_QUEUE_FLAGS/4];
+    if(!(flags&CROP_QUEUE_STARTED) || (flags&CROP_QUEUE_WRITTEN)) return 0;
+    return ((CROP_QUEUE_NOW()-(flags>>CROP_QUEUE_TIME_SHIFT))&0xffffU)<CROP_QUEUE_WAIT;
+}
+#else
+#define crop_busy(h) 0U
+#endif
 #ifdef CROP_NATIVE_BITS
 /* Whether the camera knows the crop factor `bits`: Off, 35 mm, or 50 mm. */
 static __attribute__((unused)) u32 crop_native_known(u32 bits) {
@@ -208,12 +242,18 @@ static __attribute__((unused)) u32 crop_native_known(u32 bits) {
    not know returns to Off first: an earlier GRKit saved it at power-off, or
    the camera's crop button stepped from one to 0. The live view reads its
    factor again only when the camera's factor changes, so a new live factor
-   with the same camera factor sets another factor of the camera first. */
+   with the same camera factor sets another factor of the camera first.
+   While the back end makes a shot (crop_busy), nothing changes. */
 static __attribute__((unused)) void crop_sync(volatile u32 *h) {
-    u32 crop=crop_capture(h), want=crop ? crop_factors[crop_live_values[crop]] : 0;
-    u32 owned=h[GRKIT_HOST_CROP_NATIVE/4], now=CROP_NATIVE_BITS(), target;
-    u32 view=crop_view_value(crop), live=crop && view!=crop_live_values[crop] ? crop_factors[view] : 0;
-    u32 before=h[GRKIT_HOST_CROP_LIVE/4];
+    u32 crop, want, owned, now, view, live, before, target;
+    if(crop_busy(h)) return;
+    crop=crop_capture(h);
+    want=crop ? crop_factors[crop_live_values[crop]] : 0;
+    owned=h[GRKIT_HOST_CROP_NATIVE/4];
+    now=CROP_NATIVE_BITS();
+    view=crop_view_value(crop);
+    live=crop && view!=crop_live_values[crop] ? crop_factors[view] : 0;
+    before=h[GRKIT_HOST_CROP_LIVE/4];
     h[GRKIT_HOST_CROP_SHOT/4]=crop && crop_live_values[crop]!=crop ? crop_factors[crop] : 0;
     h[GRKIT_HOST_CROP_LIVE/4]=live;
     h[GRKIT_HOST_CROP_LIVE_ZOOM/4]=live ? crop_zoom(live) : 0;

@@ -432,7 +432,10 @@
    the check of the file. */
 #define SERVICES_GOODBYE (SERVICES_PLAYBACK + PLAYBACK_SIZE)
 #define GOODBYE_SCRATCH_BYTES 2560U
-#define SERVICES_SIZE (SERVICES_GOODBYE + 4U + GOODBYE_SCRATCH_BYTES)
+/* The App-task timer of a crop change that waits for a shot
+   (runtime/modules.h: crop_follow). */
+#define SERVICES_CROP_TIMER (SERVICES_GOODBYE + 4U + GOODBYE_SCRATCH_BYTES)
+#define SERVICES_SIZE (SERVICES_CROP_TIMER + 4U)
 #define SERVICES_WORDS (SERVICES_SIZE / 4U)
 /* The events (GRKIT_EVENT_*). */
 #define SERVICE_EVENT_SYSTEM_READY 1U

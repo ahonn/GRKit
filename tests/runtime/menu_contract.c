@@ -216,6 +216,9 @@ static unsigned dial_timer_start(unsigned ms)
 static unsigned persist_timer_ids, persist_timer_ms, persist_barriers;
 #define PERSIST_TIMER_START(ms) (persist_timer_ms = (ms), 0x10000U + ++persist_timer_ids)
 #define PERSIST_BARRIER() (++persist_barriers)
+/* GR IV: the App timer of a crop change that waits for a shot. */
+static unsigned crop_wait_ids, crop_wait_ms;
+#define CROP_WAIT_TIMER_START(ms) (crop_wait_ms = (ms), 0x20000U + ++crop_wait_ids)
 /* The native slots of the user modes (runtime/mode_dial.h): a settings
    record of the test at TEST_RECORD, whose byte 0 marks its content and
    which holds the name of slot n at TEST_NAME(n) and its registered flag at
@@ -6760,6 +6763,29 @@ static void fn_steps_the_setting_of_its_row(void)
     *page_at(page) = 40;
 }
 
+#ifdef FW_QUEUE_COMPLETE
+/* GR IV: a crop change that waits for a shot tries again on its timer, and
+   applies when the back end has written the shot. */
+static void crop_waits_on_its_timer(void)
+{
+    volatile u32 *timer;
+    unsigned sets = test_crop_sets;
+    test_header[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
+    timer = services_word(test_header, SERVICES_CROP_TIMER);
+    /* A factor that the camera does not know: crop_sync sets Off. */
+    test_crop_bits = 0x12345678U;
+    test_header[GRKIT_HOST_CROP_QUEUE_FLAGS / 4] = CROP_QUEUE_STARTED;
+    crop_follow(test_header);
+    assert(test_crop_sets == sets && crop_wait_ms == CROP_WAIT_MS);
+    assert(timer[0] == 0x20000U + crop_wait_ids);
+    ui_timer_fired(0, timer[0]);
+    assert(test_crop_sets == sets && timer[0] == 0x20000U + crop_wait_ids);
+    test_header[GRKIT_HOST_CROP_QUEUE_FLAGS / 4] |= CROP_QUEUE_WRITTEN;
+    ui_timer_fired(0, timer[0]);
+    assert(test_crop_sets == sets + 1 && test_crop_bits == 0x3f800000U && !timer[0]);
+    test_header[GRKIT_HOST_CROP_QUEUE_FLAGS / 4] = 0;
+}
+#endif
 /* GR IIIx names the crops by the focal lengths of its 40 mm lens, in the
    texts and in the tiles after those of the other cameras. The other
    cameras keep the module texts and tiles, and so do other settings and
@@ -7141,6 +7167,9 @@ static void the_end_of_a_session_counts_a_module_that_no_export_holds(void)
 int main(void)
 {
     crops_name_the_focal_lengths_of_the_lens();
+#ifdef FW_QUEUE_COMPLETE
+    crop_waits_on_its_timer();
+#endif
     fn_steps_the_setting_of_its_row();
     registered_icons_use_committed_values_and_restore_the_native_slot();
     the_root_reads_off_without_a_committed_effect();

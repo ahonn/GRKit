@@ -601,8 +601,8 @@ packed_fields!(HEADER_FIELDS, HOST_HEADER_SIZE {
     /// can post when a crop shot finishes before the shutter release stops
     /// (runtime/crop_queue.S).
     HOST_CROP_QUEUE_OWNER: 4;
-    /// GR IV: the queue completion flags of that shot, CROP_QUEUE_POSTED and
-    /// CROP_QUEUE_RECOVERED.
+    /// GR IV: the flags of that shot (runtime/crop_queue.h): its start and
+    /// start time, its queue completion, and the write of its files.
     HOST_CROP_QUEUE_FLAGS: 4;
     /// CORE.BORDER: 0 Off, 1 Thin, 2 Wide, 3 Instant (runtime/canvas.h).
     HOST_BORDER: 4;
