@@ -110,7 +110,7 @@ export const NATIVE_LOOK_IDS: readonly string[] = [
   'gr4-mono-standard',
   'gr4-mono-solid',
   'gr4-mono-soft',
-  'gr4-mono-high-contrast',
+  'gr4-mono-hi-contrast',
   'gr4-mono-grainy',
   'gr4-mono-solarized-1',
   'gr4-mono-solarized-2',

@@ -199,7 +199,7 @@ pub const LOOKS: [Look; 10] = [
     Look {
         image_type: 30,
         kind: Kind::Monochrome(Some(30)),
-        effect_id: "gr4-mono-high-contrast",
+        effect_id: "gr4-mono-hi-contrast",
         name: "Mono Hi-Contrast",
         cover: ("box", "MONO", "HI"),
         defaults: [0, 0, 0, 0, 0, 0, 1, 0, 0],

@@ -128,7 +128,7 @@ fn gr4_111_holds_the_monochrome_looks() -> Result<()> {
             .1
     };
     assert_eq!(
-        by_id("gr4-mono-high-contrast").curves[0],
+        by_id("gr4-mono-hi-contrast").curves[0],
         image.curve_set(16)?.mixed()[1]
     );
     assert_eq!(
@@ -221,8 +221,31 @@ fn the_runtime_names_the_rough_look() {
     let installer = include_str!("../../../runtime/installer.c");
     assert!(installer.contains(&format!("\"{ROUGH_EFFECT_ID}\"")));
     assert!(LOOKS.iter().any(|look| look.effect_id == ROUGH_EFFECT_ID));
-    assert!(installer.contains("\"gr4-mono-high-contrast\""));
+    assert!(installer.contains("\"gr4-mono-hi-contrast\""));
     assert!(LOOKS
         .iter()
-        .any(|look| look.effect_id == "gr4-mono-high-contrast"));
+        .any(|look| look.effect_id == "gr4-mono-hi-contrast"));
+}
+
+/// A look that the phone adds over Wi-Fi needs a code of its own: the camera
+/// service refuses a code that another look has, and one in the native page
+/// of GR IV (0x81xx), on every camera. So no two unlockable or catalog looks
+/// share a code, and none is in that page.
+#[test]
+fn unlockable_looks_have_codes_of_their_own() {
+    let native = LOOKS
+        .iter()
+        .map(|look| look.effect_id.to_owned())
+        .chain(grkit_core::gr2_looks::TARGETS.iter().map(|(id, _)| (*id).to_owned()));
+    let catalog = std::fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/../../effects"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().into_string().unwrap());
+    let mut codes = std::collections::BTreeMap::new();
+    for id in native.chain(catalog) {
+        let code = 0x8000 | grkit_core::recipes::effect_code(&id);
+        assert_ne!(code >> 8, 0x81, "{id} is in the native page of GR IV");
+        if let Some(other) = codes.insert(code, id.clone()) {
+            panic!("{id} and {other} share the code {code:#x}");
+        }
+    }
 }

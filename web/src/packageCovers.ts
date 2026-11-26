@@ -190,7 +190,7 @@ export const NATIVE_LOOKS: readonly NativeLookInfo[] = [
   monoLook('gr4-mono-standard', 'Mono Standard', 'MONO', 'STD'),
   monoLook('gr4-mono-solid', 'Mono Solid', 'MONO', 'SOLID'),
   monoLook('gr4-mono-soft', 'Mono Soft', 'MONO', 'SOFT'),
-  monoLook('gr4-mono-high-contrast', 'Mono Hi-Contrast', 'MONO', 'HI'),
+  monoLook('gr4-mono-hi-contrast', 'Mono Hi-Contrast', 'MONO', 'HI'),
   monoLook('gr4-mono-grainy', 'Mono Grainy', 'MONO', 'GRAINY'),
   monoLook('gr4-mono-solarized-1', 'Solarized 1', 'MONO', 'SOLAR 1'),
   monoLook('gr4-mono-solarized-2', 'Solarized 2', 'MONO', 'SOLAR 2'),
