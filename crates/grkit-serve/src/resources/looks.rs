@@ -19,9 +19,8 @@
 //! Each Look carries the cover that draws its icon, when the service knows
 //! one (`covers`). A content write can bring a cover in `X-GRKit-Cover`.
 //! The covers of the built-in Looks (official Looks and native looks)
-//! without an individual cover follow one scheme (`cover::Scheme`): one
-//! request rewrites their files for another scheme, and one puts the
-//! individual covers of a group back to it.
+//! without an individual cover follow one scheme (`cover::Scheme`), which
+//! the covers on the card give.
 use super::{lock, problem, try_lock, write_checked, RequestContext, Resources, Result};
 use crate::{
     api::Reply,
@@ -260,21 +259,12 @@ impl Resources {
                 Reply::json(200, body)
             }
             LookRoute::Configuration(id) => Reply::json(200, view.get(id)?.configuration()),
-            LookRoute::Info(id) => Reply::json(200, view.get(id)?.info()),
             LookRoute::Content(id) => {
                 let look = view.get(id)?;
                 Reply::binary(200, look.file.bytes.clone(), "application/octet-stream")
                     .header("X-GRKit-Content-SHA256", look.file.content_hash.clone())
             }
             LookRoute::Order => Reply::json(200, json!({"ids": view.ids()})),
-            LookRoute::Scheme => Reply::json(200, json!({"scheme": view.scheme.id()})),
-            LookRoute::Reset => {
-                return Err(problem(
-                    405,
-                    "method_not_allowed",
-                    "This method is not supported for the resource.",
-                ))
-            }
         })
     }
 
@@ -302,7 +292,6 @@ impl Resources {
         // A problem after the file changed: the answer reports it, and the
         // phone still hears of the change.
         let mut late = None;
-        let mut rewritten = Vec::new();
         let (status, id) = {
             let mut guard = lock(&self.session);
             let session = guard.as_mut().ok_or_else(coordinator)?;
@@ -341,14 +330,7 @@ impl Resources {
                     order(backend.as_mut(), &view, body)?;
                     (200, None)
                 }
-                LookRoute::Scheme | LookRoute::Reset => {
-                    let (scheme, reset) = covers_request(route, body, view.scheme)?;
-                    (rewritten, late) =
-                        rewrite_covers(context.root, &view, session, scheme, reset)?;
-                    session.covers.chosen = Some(scheme);
-                    (200, None)
-                }
-                LookRoute::Collection | LookRoute::Info(_) => {
+                LookRoute::Collection => {
                     return Err(problem(
                         405,
                         "method_not_allowed",
@@ -365,9 +347,6 @@ impl Resources {
             return Err(problem);
         }
         let result = match (route, id) {
-            (LookRoute::Scheme | LookRoute::Reset, _) => {
-                json!({"officialCovers":view.scheme.id(),"changed":rewritten})
-            }
             (_, Some(id)) => view
                 .get(id)
                 .map_or_else(|_| json!({"id":id,"removed":true}), Look::configuration),
@@ -630,102 +609,6 @@ fn put_content(
         }
     }
     Ok(None)
-}
-
-/// The scheme and the group to reset (true for B&W) of a covers request:
-/// `{"scheme": id}` for `LookRoute::Scheme`, `{"group": "color" | "mono"}` for
-/// `LookRoute::Reset`, which keeps the scheme of the card.
-fn covers_request(
-    route: &LookRoute,
-    body: &[u8],
-    current: Scheme,
-) -> Result<(Scheme, Option<bool>)> {
-    let (key, detail) = match route {
-        LookRoute::Scheme => (
-            "scheme",
-            "Supply only a scheme: gray, colorFilmBox, or filmBox.",
-        ),
-        _ => ("group", "Supply only a group: color or mono."),
-    };
-    let invalid = || problem(422, "invalid_covers", detail);
-    let value = effects::parse_json(body).map_err(|_| invalid())?;
-    let text = value
-        .as_object()
-        .filter(|object| object.len() == 1)
-        .and_then(|object| object.get(key)?.as_str())
-        .ok_or_else(invalid)?;
-    match route {
-        LookRoute::Scheme => Ok((Scheme::parse(text).ok_or_else(invalid)?, None)),
-        _ => match text {
-            "color" => Ok((current, Some(false))),
-            "mono" => Ok((current, Some(true))),
-            _ => Err(invalid()),
-        },
-    }
-}
-
-/// Give each built-in Look the cover of `scheme`: each without an
-/// individual cover, or with `reset`, each of that group (true for B&W) with
-/// one. Names stay. Returns the IDs of the rewritten files, and a problem
-/// after a file was written. Each file is staged and written as a cover save
-/// does, so a failure leaves the Looks before it rewritten.
-fn rewrite_covers(
-    root: &Path,
-    view: &View,
-    session: &mut Session,
-    scheme: Scheme,
-    reset: Option<bool>,
-) -> Result<(Vec<String>, Option<Problem>)> {
-    let mut rewritten = Vec::new();
-    let mut late = None;
-    for look in &view.looks {
-        let id = look.file.id.as_str();
-        let (Some(base), Some((individual, monochrome))) = (
-            session.covers.base(id, look.source),
-            session.covers.kind(id),
-        ) else {
-            continue;
-        };
-        let chosen = match reset {
-            None => !individual,
-            Some(group) => individual && group == monochrome,
-        };
-        if !chosen || view.duplicates.contains(id) {
-            continue;
-        }
-        let cover = scheme.cover(&base, monochrome);
-        let Ok((effect, icon)) = effects::decode(&look.file.bytes) else {
-            continue;
-        };
-        let Ok(pixels) = cover.pixels() else {
-            continue;
-        };
-        if pixels == icon && !individual {
-            continue;
-        }
-        let bytes = effect
-            .encode(&pixels)
-            .map_err(|_| problem(422, "invalid_grf", "The Look cannot be encoded."))?;
-        let staged = match look.source {
-            "official" => session
-                .covers
-                .stage_official(root, id, &bytes, Some(&cover)),
-            _ => session.covers.stage_native(root, id, &bytes, Some(&cover)),
-        }
-        .map_err(|()| library_unavailable())?;
-        write_file(root, &look.file.file, &bytes)?;
-        rewritten.push(id.to_owned());
-        if let Some(staged) = staged {
-            if !session.covers.commit(root, staged) {
-                late = Some(problem(
-                    507,
-                    "cover_not_saved",
-                    "The Look was written, but its cover could not be saved.",
-                ));
-            }
-        }
-    }
-    Ok((rewritten, late))
 }
 
 fn patch(

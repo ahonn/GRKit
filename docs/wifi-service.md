@@ -26,7 +26,7 @@ JSON uses camelCase. An error is `application/problem+json` (RFC 9457). The app 
 | Area | Paths |
 | --- | --- |
 | Camera and service | `/ping`, `/props`, `/changes` |
-| Film Looks | `/looks`, `/looks/<id>`, `/looks/<id>/info`, `/looks/<id>/content`, `/looks/covers/...`, `/params/looks/order` |
+| Film Looks | `/looks`, `/looks/<id>`, `/looks/<id>/content`, `/params/looks/order` |
 | Recipes | `/recipes`, `/recipes/<id>`, `/recipes/<id>/apply`, `/recipes/order`, `/recipes/undo` |
 | Modules | `/modules/catalog`, `/modules/<id>/icon`, `/params/modules`, `/params/modules/<id>`, `/params/modules/order`, `/params/modules/layout` |
 | GRKit Settings | `/params/settings`, `/shutdown-picture` |

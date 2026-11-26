@@ -30,13 +30,8 @@ pub enum Route {
 pub enum LookRoute {
     Collection,
     Configuration(String),
-    Info(String),
     Content(String),
     Order,
-    /// The scheme of the built-in covers.
-    Scheme,
-    /// The individual covers of a group back to the scheme.
-    Reset,
 }
 
 /// `/v1/recipes/...` (`resources::recipes`). A recipe is found by its ID.
@@ -139,10 +134,7 @@ impl Route {
             ["update"] => Self::Update,
             ["update", "cancel"] => Self::UpdateCancel,
             ["looks"] => Self::Looks(LookRoute::Collection),
-            ["looks", "covers", "scheme"] => Self::Looks(LookRoute::Scheme),
-            ["looks", "covers", "reset"] => Self::Looks(LookRoute::Reset),
             ["looks", id] => Self::Looks(LookRoute::Configuration(look(id)?)),
-            ["looks", id, "info"] => Self::Looks(LookRoute::Info(look(id)?)),
             ["looks", id, "content"] => Self::Looks(LookRoute::Content(look(id)?)),
             ["params", "looks", "order"] => Self::Looks(LookRoute::Order),
             ["recipes"] => Self::Recipes(RecipeRoute::Collection),
@@ -169,10 +161,9 @@ impl Route {
             Self::Ping | Self::Changes | Self::Props | Self::Diagnostics => &["GET"],
             Self::Update => &["GET", "PUT"],
             Self::UpdateCancel => &["POST"],
-            Self::Looks(L::Collection | L::Info(_)) => &["GET"],
+            Self::Looks(L::Collection) => &["GET"],
             Self::Looks(L::Configuration(_)) => &["GET", "PATCH", "DELETE"],
-            Self::Looks(L::Content(_) | L::Order | L::Scheme) => &["GET", "PUT"],
-            Self::Looks(L::Reset) => &["POST"],
+            Self::Looks(L::Content(_) | L::Order) => &["GET", "PUT"],
             Self::Recipes(R::Collection) => &["GET", "POST"],
             Self::Recipes(R::Order) => &["PUT"],
             Self::Recipes(R::Undo | R::Apply(_)) => &["POST"],
@@ -202,7 +193,6 @@ impl Route {
             },
             (Self::Looks(L::Configuration(_)), "PATCH") => JSON_SMALL,
             (Self::Looks(L::Order), "PUT") => JSON_LIST,
-            (Self::Looks(L::Scheme), "PUT") | (Self::Looks(L::Reset), "POST") => JSON_SMALL,
             (Self::Recipes(R::Collection), "POST") | (Self::Recipes(R::Order), "PUT") => JSON_LIST,
             (Self::Recipes(R::Recipe(_)), "PATCH") => JSON_SMALL,
             (Self::Modules(M::Order | M::Layout), "PUT") => JSON_SMALL,

@@ -172,10 +172,8 @@ mod tests {
         assert!(!accepted("", "GET"));
     }
     #[test]
-    fn the_cover_settings_and_layout_routes_take_a_json_body() {
+    fn the_settings_and_layout_routes_take_a_json_body() {
         for (method, path) in [
-            ("PUT", "/v1/looks/covers/scheme"),
-            ("POST", "/v1/looks/covers/reset"),
             ("PATCH", "/v1/params/settings"),
             ("PUT", "/v1/params/modules/layout"),
         ] {

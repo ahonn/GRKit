@@ -147,17 +147,12 @@ pub(super) struct Covers {
     /// and how a built-in Look counts for the scheme (`vote`). Drawing a cover
     /// to compare it costs time on the camera.
     resolved: BTreeMap<String, Resolved>,
-    /// The scheme that the phone last chose in this start. A group without
-    /// built-in Looks that count follows it (`Scheme::of_or`).
-    pub chosen: Option<Scheme>,
 }
 
 struct Resolved {
     hash: String,
     cover: Option<Cover>,
     monochrome: bool,
-    /// The library records a cover that is no variant of the base cover.
-    individual: bool,
     vote: Option<(bool, Variant)>,
 }
 
@@ -213,7 +208,6 @@ impl Covers {
                         hash: look.file.content_hash.clone(),
                         cover,
                         monochrome,
-                        individual,
                         vote,
                     }
                 }
@@ -228,7 +222,7 @@ impl Covers {
     pub fn scheme(&self) -> Scheme {
         Scheme::of_or(
             self.resolved.values().filter_map(|entry| entry.vote),
-            self.chosen.unwrap_or(Scheme::NEW_CARD),
+            Scheme::NEW_CARD,
         )
     }
 
@@ -246,14 +240,6 @@ impl Covers {
     pub fn default_cover(&self, id: &str, source: &str, scheme: Scheme) -> Option<Cover> {
         let base = self.base(id, source)?;
         Some(scheme.cover(&base, self.resolved.get(id)?.monochrome))
-    }
-
-    /// Whether the built-in Look `id` has an individual cover, and whether it
-    /// is monochrome (`resolve`).
-    pub fn kind(&self, id: &str) -> Option<(bool, bool)> {
-        self.resolved
-            .get(id)
-            .map(|entry| (entry.individual, entry.monochrome))
     }
 
     /// The cover of the import of `file`, else for a built-in Look the base

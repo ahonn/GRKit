@@ -320,10 +320,6 @@ fn the_list_joins_the_files_of_the_card_with_the_choices_of_the_camera() {
     let content = fixture.call("GET", "/v1/looks/beta/content", b"", &[]);
     assert_eq!(content.body, testing::effect("beta"));
     assert_eq!(
-        json(&fixture.call("GET", "/v1/looks/beta/info", b"", &[])),
-        beta["runtime"]
-    );
-    assert_eq!(
         json(&fixture.call("GET", "/v1/params/looks/order", b"", &[])),
         json!({"ids": ["beta", "alpha", "gamma"]})
     );
@@ -1096,111 +1092,6 @@ fn built_in_card(statement: &Cover, own: &Cover) -> Fixture {
     });
     fs::write(library_file(root), imports::encode(&library).unwrap()).unwrap();
     fixture
-}
-
-fn covers(fixture: &Fixture) -> Vec<(String, Value)> {
-    fixture.list()["looks"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|look| {
-            (
-                look["id"].as_str().unwrap().to_owned(),
-                look["cover"].clone(),
-            )
-        })
-        .collect()
-}
-
-#[test]
-fn a_scheme_rewrites_the_built_in_covers_without_an_individual_cover() {
-    let (statement, own) = (Cover::for_name("Kodak Portra 400"), label("MINE"));
-    let fixture = built_in_card(&statement, &own);
-    let root = fixture.root.path();
-    let native = grkit_core::cover::native_cover(CINEMA).unwrap();
-    let cinema = fixture.look(CINEMA);
-    assert_eq!(cinema["runtime"]["source"], "native");
-    assert_eq!(cinema["defaultCover"], native.to_json());
-    assert_eq!(fixture.list()["officialCovers"], "gray");
-
-    let reply = fixture.change("PUT", "/v1/looks/covers/scheme", br#"{"scheme":"filmBox"}"#);
-    assert_eq!(
-        reply.status,
-        200,
-        "{}",
-        String::from_utf8_lossy(&reply.body)
-    );
-    assert_eq!(
-        json(&reply),
-        json!({"officialCovers": "filmBox", "changed": ["alpha", CINEMA]})
-    );
-    let film_box = statement.film_box().to_json();
-    let mine = own.to_json();
-    let expected = |cinema: &Cover| {
-        vec![
-            ("alpha".to_owned(), film_box.clone()),
-            ("beta".to_owned(), mine.clone()),
-            ("mono".to_owned(), mine.clone()),
-            (CINEMA.to_owned(), cinema.to_json()),
-        ]
-    };
-    assert_eq!(covers(&fixture), expected(&native.film_box()));
-    // Names stay; the imports keep the individual covers, and the native
-    // import takes its new file.
-    assert_eq!(fixture.look("beta")["name"], "Beta");
-    assert_eq!(fixture.look("alpha")["runtime"]["pending"], "update");
-    let library = read_library(root);
-    assert_eq!(library.len(), 3);
-    assert!(imports::find(&library, "alpha").is_none());
-    assert_eq!(
-        imports::find(&library, CINEMA).unwrap().effect,
-        fs::read(file(root, CINEMA)).unwrap()
-    );
-    // Each B&W Look has an individual cover: the B&W group follows the
-    // scheme that the phone chose in this start.
-    assert_eq!(fixture.list()["officialCovers"], "filmBox");
-    let reply = fixture.change("PUT", "/v1/looks/covers/scheme", br#"{"scheme":"gray"}"#);
-    assert_eq!(json(&reply)["changed"], json!(["alpha", CINEMA]));
-    assert_eq!(covers(&fixture)[3].1, native.to_json());
-    assert_eq!(fixture.list()["officialCovers"], "gray");
-    for body in [&br#"{"scheme":"blue"}"#[..], br#"{"group":"color"}"#] {
-        let reply = fixture.change("PUT", "/v1/looks/covers/scheme", body);
-        assert_eq!((reply.status, code(&reply)), (422, "invalid_covers".into()));
-    }
-}
-
-#[test]
-fn a_reset_puts_the_individual_covers_of_a_group_back_to_the_scheme() {
-    let (statement, own) = (Cover::for_name("Kodak Portra 400"), label("MINE"));
-    let fixture = built_in_card(&statement, &own);
-    let reply = fixture.change(
-        "PUT",
-        "/v1/looks/covers/scheme",
-        br#"{"scheme":"colorFilmBox"}"#,
-    );
-    assert_eq!(json(&reply)["changed"], json!(["alpha", CINEMA]));
-
-    let reply = fixture.change("POST", "/v1/looks/covers/reset", br#"{"group":"color"}"#);
-    assert_eq!(
-        json(&reply),
-        json!({"officialCovers": "colorFilmBox", "changed": ["beta"]})
-    );
-    let look = fixture.look("beta");
-    assert_eq!(
-        (&look["name"], &look["cover"]),
-        (&json!("Beta"), &statement.film_box().to_json())
-    );
-    assert_eq!(fixture.look("mono")["cover"], own.to_json());
-    // The import of beta keeps its name only.
-    let library = read_library(fixture.root.path());
-    let details: Value =
-        serde_json::from_str(&imports::find(&library, "beta").unwrap().details).unwrap();
-    assert_eq!(details, json!({"kind": "cover", "name": "Beta"}));
-
-    let reply = fixture.change("POST", "/v1/looks/covers/reset", br#"{"group":"mono"}"#);
-    assert_eq!(json(&reply)["changed"], json!(["mono"]));
-    assert_eq!(fixture.look("mono")["cover"], statement.to_json());
-    assert_eq!(fixture.list()["officialCovers"], "colorFilmBox");
 }
 
 #[test]
