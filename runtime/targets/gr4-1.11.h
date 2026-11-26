@@ -121,6 +121,9 @@
 #define FW_MENU_ROW_VALUE FIRMWARE(0x5357a474)
 #define FW_ADJ_REFRESH FIRMWARE(0x531bf3c8)
 #define FW_ADJ_SELECT_SLOT FIRMWARE(0x531bf94c)
+/* The OK method of ADJ: it posts the request of the App task that
+   takes the camera to the shooting screen, and uses no argument. */
+#define FW_ADJ_OK FIRMWARE(0x531bbb10)
 #define FW_CHANGE_CONTROLLER FIRMWARE(0x53182e4c)
 /* The controller factory singleton, which holds one instance of each controller. */
 #define INFO_TITLE_TEXT 0x2ab

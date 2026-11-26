@@ -14,15 +14,15 @@
    because a battery icon is wider than a slot. The includer defines u32,
    WORD, BYTE, A32_ENTRY, and includes runtime/manage.h and
    runtime/recipe_card.h (card_field). */
-#define GRKIT_ICON_BATTERY(n) (0x7ff6U+(n))
 #define BATTERY_ICON_WIDTH 60U
 #define BATTERY_ICON_HEIGHT 40U
-/* The host icons of the two pictures, as offsets from the GRKit icon. */
-#define BATTERY_ICON_BASE (GRKIT_HOST_ICON_COUNT-GRKIT_BATTERY_ICON_SLOTS-1U)
+/* Picture n takes host slots GRKIT_ICON_SLOT_BATTERY + 2n and the next one,
+   and its icon ID is the ID of its first slot. */
+#define BATTERY_ICON(n) GRKIT_ICON_BATTERY(2U*(n))
 #define BATTERY_ICON_PIXELS (GRKIT_ICON_STRIDE-GRKIT_GRF_ICON_SIZE)
 _Static_assert(BATTERY_ICON_WIDTH*BATTERY_ICON_HEIGHT*4U+BATTERY_ICON_PIXELS<=2U*GRKIT_ICON_STRIDE,
                "A battery icon fits two icon slots");
-_Static_assert(GRKIT_BATTERY_ICON_SLOTS==4U,"Two pictures of two slots");
+_Static_assert(GRKIT_ICON_SLOTS_BATTERY==4U,"Two pictures of two slots");
 /* The number is in the bold digits of the label table, white with a black
    outline, centered on the body of the battery. */
 #define BATTERY_DIGIT_TOP 11U
@@ -177,9 +177,8 @@ static void battery_write(volatile u32 *h,volatile u32 *to,u32 value) {
     for(i=0;i<n;++i) x+=battery_digit(table,to,x,digits[i]);
 }
 /* The descriptor of a picture, or 0. */
-static u32 battery_icon_address(volatile u32 *h,u32 id) {
-    u32 grkit=h[GRKIT_HOST_GRKIT_ICON/4];
-    return grkit ? grkit+(BATTERY_ICON_BASE+2U*(id-GRKIT_ICON_BATTERY(0)))*GRKIT_ICON_STRIDE : 0;
+static u32 battery_icon_address(volatile u32 *h,u32 front) {
+    return GRKIT_HOST_ICON(h,GRKIT_ICON_SLOT_BATTERY+2U*front);
 }
 /* The icon ID for the native level, or 0 for the native icon. A report below
    BATTERY_PERCENT_MIN ends the number only through the average, so that a
@@ -194,7 +193,7 @@ A32_ENTRY u32 menu_battery_percent_icon(u32 level) {
         return 0;
     }
     now=battery_now();
-    if(shown && average>>BATTERY_AVERAGE_TIME_SHIFT==(now&BATTERY_AVERAGE_MASK)) return GRKIT_ICON_BATTERY(front);
+    if(shown && average>>BATTERY_AVERAGE_TIME_SHIFT==(now&BATTERY_AVERAGE_MASK)) return BATTERY_ICON(front);
     average=battery_average(average,charge,now,!shown);
     h[GRKIT_HOST_BATTERY_AVERAGE/4]=average;
     if(battery_points(average)<BATTERY_PERCENT_MIN) {
@@ -205,11 +204,11 @@ A32_ENTRY u32 menu_battery_percent_icon(u32 level) {
     value=next&BATTERY_SHOWN_MASK;
     if(value!=shown) {
         front=!front;
-        icon=battery_icon_address(h,GRKIT_ICON_BATTERY(front));
+        icon=battery_icon_address(h,front);
         battery_write(h,(volatile u32 *)(icon+BATTERY_ICON_PIXELS),value);
         next=(next&~BATTERY_FRONT)|(front ? BATTERY_FRONT : 0U);
     }
     if(next!=state) h[GRKIT_HOST_BATTERY_ICON/4]=next;
-    return GRKIT_ICON_BATTERY(front);
+    return BATTERY_ICON(front);
 }
 #endif

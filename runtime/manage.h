@@ -577,26 +577,39 @@ static const Setting manage_settings[SUBMENU_ROWS]={
    through it while GRKit is off. The page shows whether GRKit runs, also
    where the mode dial turned it off; On there turns it on until the dial
    goes to another position, and the switch keeps its value
-   (runtime/mode_dial.h: dial_suspend). */
+   (runtime/mode_dial.h: dial_suspend). While an update over Wi-Fi waits, the
+   root row names it and the page has a third row, Update: OK on it asks to
+   install it (runtime/menu_update.h: update_row). */
+#define SWITCH_ROW_UPDATE 2U
 static void dial_suspend(volatile u32 *h,u32 off);
+static const u16 *update_title(volatile u32 *h);
+static u32 switch_update(volatile u32 *h) { return h[GRKIT_HOST_UPDATE/4]==GRKIT_UPDATE_WAITING; }
 static const u16 *switch_title(volatile u32 *h) { return text(h,TEXT_ENABLE); }
-static const u16 *switch_summary(volatile u32 *h) { return text(h,TEXT_SWITCH+manage_grkit_off(h)); }
+static const u16 *switch_summary(volatile u32 *h) {
+    return switch_update(h) ? update_title(h) : text(h,TEXT_SWITCH+manage_grkit_off(h));
+}
 /* The MENU row: Enable GRKit. */
 static const u16 *switch_menu_label(volatile u32 *h) { return text(h,TEXT_SWITCH+2); }
 static u32 switch_rows(volatile u32 *h) { (void)h; return 2; }
 static const u16 *switch_value_text(volatile u32 *h,u32 off) { return text(h,off ? TEXT_OFF : TEXT_ON); }
-static const u16 *switch_label(volatile u32 *h,u32 row) { return switch_value_text(h,!row); }
+static u32 switch_page_rows(volatile u32 *h) { return switch_update(h) ? SWITCH_ROW_UPDATE+1U : SWITCH_ROW_UPDATE; }
+static const u16 *switch_label(volatile u32 *h,u32 row) {
+    return row==SWITCH_ROW_UPDATE ? update_title(h) : switch_value_text(h,!row);
+}
 static u32 switch_icon(volatile u32 *h,u32 row) {
     if(h[GRKIT_HOST_MENU_LEVEL/4]==MENU_ROOT) return manage_grkit_off(h) ? GRKIT_ICON_MODULES_OFF : GRKIT_ICON_MODULES;
+    if(row==SWITCH_ROW_UPDATE) return GRKIT_ICON_UPDATE;
     return row ? GRKIT_ICON_MODULES : GRKIT_ICON_OFF;
 }
-static u32 switch_checked(volatile u32 *h,u32 row) { return (!row)==manage_grkit_off(h); }
+static u32 switch_checked(volatile u32 *h,u32 row) { return row<SWITCH_ROW_UPDATE && (!row)==manage_grkit_off(h); }
 static void switch_apply(volatile u32 *h,u32 row) {
+    /* The Update row only asks, on OK. An ADJ exit on it changes nothing. */
+    if(row>=SWITCH_ROW_UPDATE) return;
     manage_set_all_off(h,!row);
     if(row && h[GRKIT_HOST_SERVICES/4]) dial_suspend(h,0);
 }
 static u32 switch_committed(volatile u32 *h) { return !manage_grkit_off(h); }
-#define SWITCH_PAGE {switch_title,switch_summary,switch_rows,switch_label,switch_icon, \
+#define SWITCH_PAGE {switch_title,switch_summary,switch_page_rows,switch_label,switch_icon, \
     switch_checked,switch_apply,switch_committed,0,0,0}
 /* The MENU row opens the value page of this one setting at once
    (menu_rows_controller), titled Enable GRKit: On, then Off, as the Enable

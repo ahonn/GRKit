@@ -96,9 +96,11 @@ static u32 menu_return(volatile u32 *h) {
 #define SETTINGS_OPEN_ROWS 0xff000000U
 #include "menu_listed.h"
 /* The page of GRKit Settings in the GRKit section of MENU, which has no ADJ
-   page. Its rows: Enable at Start while the switch shows, the groups of
-   the settings of the core that have a setting (core_groups), Mode Dial
-   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module. A group and ADJ Order open their pages
+   page. Its rows: Update while an update over Wi-Fi waits (update_setting),
+   Enable at Start while the switch shows, the groups of the settings of
+   the core that have a setting (core_groups), Mode Dial
+   (runtime/menu_dial.h), and ADJ Order while ADJ shows a module. A group and
+   ADJ Order open their pages
    (MENU_GROUP_PAGE_TARGET, MENU_ADJ_TARGET, runtime/menu_section.h), whose
    MENU returns here. The rows are the rows of the page as it opened
    (MENU_ROWS_CORE_KINDS), as a text hook must not read the module pages.
@@ -116,8 +118,16 @@ static u32 menu_return(volatile u32 *h) {
 #define CORE_ROW_DIAL 0U
 #define CORE_ROW_ADJ 1U
 #define CORE_ROW_START 2U
+#define CORE_ROW_UPDATE 3U
 /* Group g is the row kind CORE_ROW_GROUP + g. */
-#define CORE_ROW_GROUP 3U
+#define CORE_ROW_GROUP 4U
+/* The most rows of GRKit Settings: Update, Enable at Start, each group, Mode
+   Dial, and ADJ Order. MENU_ROWS_CORE_KINDS holds CORE_ROW_BITS for each. */
+#define CORE_ROWS (CORE_GROUPS+4U)
+#define CORE_ROW_BITS 3U
+_Static_assert(CORE_ROWS<=SUBMENU_ROWS && CORE_ROWS*CORE_ROW_BITS<=24U &&
+               CORE_ROW_GROUP+CORE_GROUPS<=1U<<CORE_ROW_BITS,
+               "The submenu and MENU_ROWS_CORE_KINDS hold each row of GRKit Settings");
 #define MENU_ADJ_TARGET 0x2000fa0U
 #define MENU_GROUP_PAGE_TARGET 0x2000fc0U
 static const Setting *dial_menu_setting(void);
@@ -198,16 +208,41 @@ static const Setting core_group_settings[CORE_GROUPS]={
     {core_group_label_1,one_value,adj_order_text,no_value,no_set,core_group_select_1,SETTING_ACTION},
     {core_group_label_2,one_value,adj_order_text,no_value,no_set,core_group_select_2,SETTING_ACTION},
 };
-_Static_assert(CORE_GROUPS+3U<=SETTING_ROWS,
-    "GRKit Settings has a row for Enable at Start, each group, Mode Dial, and ADJ Order");
+/* Update: an update over Wi-Fi waits for the confirmation on the camera
+   (GRKIT_HOST_UPDATE). The row shows from the resident loader's notice of
+   the update until the next power-on; About GRKit opens its page too
+   (runtime/menu_section.h). The page opens with the confirm box over it
+   (menu_select_start). Execute confirms the update, and the resident loader
+   then makes it run at the next power-on. Execute and Cancel both return to
+   the page that opened it, as MENU does: About GRKit or GRKit Settings. After
+   the confirmation, the row reads Restart to apply. */
+static void settings_value_again(volatile u32 *h,u32 back);
+static void settings_value_leave(volatile u32 *h);
+#include "menu_update.h"
+static const u16 *update_label(volatile u32 *h) { return text(h,TEXT_UPDATE); }
+static u32 update_values(volatile u32 *h) { (void)h; return 1; }
+static const u16 *update_value_text(volatile u32 *h,u32 value) {
+    (void)value;
+    return update_confirmed(h) ? text(h,TEXT_RESTART) : text(h,TEXT_UPDATE+1);
+}
+static u32 update_value(volatile u32 *h) { (void)h; return 0; }
+/* OK on the page asks again if its box could not open. MENU returns. */
+static u32 update_select(volatile u32 *h,u32 controller,u32 value) {
+    if(value==SETTING_BACK || !update_waiting(h)) return 0;
+    update_ask_menu(h,controller);
+    return 1;
+}
+static const Setting update_setting={update_label,update_values,update_value_text,update_value,no_set,update_select,
+    SETTING_OWN_PAGE,update_value,update_title};
 static volatile u32 *core_kinds(volatile u32 *h) { return services_word(h,SERVICES_MENU+MENU_ROWS_CORE_KINDS); }
 static void core_refresh(volatile u32 *h) {
     u32 kinds=0, n=0, g;
     manage_adj_refresh(h);
-    if(core_setting_shown(h,0U)) kinds|=CORE_ROW_START<<(4U*n++);
-    for(g=0;g<CORE_GROUPS;++g) if(core_group_rows(h,g)) kinds|=(CORE_ROW_GROUP+g)<<(4U*n++);
-    kinds|=CORE_ROW_DIAL<<(4U*n++);
-    if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(4U*n++);
+    if(update_shown(h)) kinds|=CORE_ROW_UPDATE<<(CORE_ROW_BITS*n++);
+    if(core_setting_shown(h,0U)) kinds|=CORE_ROW_START<<(CORE_ROW_BITS*n++);
+    for(g=0;g<CORE_GROUPS;++g) if(core_group_rows(h,g)) kinds|=(CORE_ROW_GROUP+g)<<(CORE_ROW_BITS*n++);
+    kinds|=CORE_ROW_DIAL<<(CORE_ROW_BITS*n++);
+    if(manage_adj_count(h)>0) kinds|=CORE_ROW_ADJ<<(CORE_ROW_BITS*n++);
     core_kinds(h)[0]=kinds|n<<24;
 }
 static u32 core_rows(volatile u32 *h) { return core_kinds(h)[0]>>24; }
@@ -215,9 +250,10 @@ static u32 core_rows(volatile u32 *h) { return core_kinds(h)[0]>>24; }
 static const Setting *core_row_setting(volatile u32 *h,u32 row) {
     u32 kind;
     if(row>=core_rows(h)) return 0;
-    kind=core_kinds(h)[0]>>(4U*row)&15U;
+    kind=core_kinds(h)[0]>>(CORE_ROW_BITS*row)&((1U<<CORE_ROW_BITS)-1U);
     if(kind>=CORE_ROW_GROUP) return kind-CORE_ROW_GROUP<CORE_GROUPS ? core_group_settings+(kind-CORE_ROW_GROUP) : 0;
     if(kind==CORE_ROW_START) return core_settings;
+    if(kind==CORE_ROW_UPDATE) return &update_setting;
     return kind==CORE_ROW_DIAL ? dial_menu_setting() : &adj_order_setting;
 }
 #define CORE_ROW(n) \
@@ -227,14 +263,16 @@ static const Setting *core_row_setting(volatile u32 *h,u32 row) {
         const Setting *s=core_row_setting(h,n); return s ? s->value_text(h,value) : no_value_text; } \
     static u32 core_get_##n(volatile u32 *h) { const Setting *s=core_row_setting(h,n); return s ? s->get(h) : 0; } \
     static void core_set_##n(volatile u32 *h,u32 value) { const Setting *s=core_row_setting(h,n); if(s) s->set(h,value); }
-CORE_ROW(0) CORE_ROW(1) CORE_ROW(2) CORE_ROW(3) CORE_ROW(4) CORE_ROW(5)
-static const Setting core_page_settings[SETTING_ROWS]={
+CORE_ROW(0) CORE_ROW(1) CORE_ROW(2) CORE_ROW(3) CORE_ROW(4) CORE_ROW(5) CORE_ROW(6)
+_Static_assert(CORE_ROWS==7U,"A row of the page for each row of GRKit Settings");
+static const Setting core_page_settings[CORE_ROWS]={
     {core_label_0,core_values_0,core_text_0,core_get_0,core_set_0},
     {core_label_1,core_values_1,core_text_1,core_get_1,core_set_1},
     {core_label_2,core_values_2,core_text_2,core_get_2,core_set_2},
     {core_label_3,core_values_3,core_text_3,core_get_3,core_set_3},
     {core_label_4,core_values_4,core_text_4,core_get_4,core_set_4},
     {core_label_5,core_values_5,core_text_5,core_get_5,core_set_5},
+    {core_label_6,core_values_6,core_text_6,core_get_6,core_set_6},
 };
 /* The rows of the page of the open group (core_group_open). */
 #define CORE_GROUP_ROW(n) \
@@ -375,6 +413,16 @@ static void settings_value_again(volatile u32 *h,u32 back) {
     if(!page || !check_word(h,CHECK_ID)[0]) return;
     CALL3(FW_CHANGE_CONTROLLER)(page,back ? SETTINGS_SUBMENU : check_word(h,CHECK_ID)[0],0x10000000);
 }
+/* Return from the open own value page to the controller that opened it,
+   as MENU does: a page that a row of MENU opens returns to MENU, and a row
+   of a settings page to that page. */
+static void settings_value_leave(volatile u32 *h) {
+    u32 setting=check_word(h,CHECK_SETTING)[0];
+    u32 page=check_word(h,settings_options(h,settings_page(h),setting) ? CHECK_PAGE : CHECK_RADIO)[0], target;
+    if(!page || !check_word(h,CHECK_ID)[0]) return;
+    target=MENU_OBJECT_WORD(page,SETTINGS_RETURN_TARGET);
+    CALL3(FW_CHANGE_CONTROLLER)(page,target ? target : SETTINGS_SUBMENU,0x10000000);
+}
 /* Open the keyboard from the own value page `controller` of MENU, which
    the keyboard returns to, with `text` of at most `limit` characters: 1, or
    0 as ui_keyboard_prepare refuses. */
@@ -479,6 +527,11 @@ A32_ENTRY u32 menu_select_start(u32 controller,u32 id,u32 arg,u32 more) {
     u32 r=CALL4(check_native(h,controller,SELECT_START_SLOT))(controller,id,arg,more);
     check_word(h,CHECK_SHOWN)[0]=controller;
     check_word(h,CHECK_SHOWN_ID)[0]=id;
+    /* The page of an update that waits is its confirm box. */
+    if(id==check_word(h,CHECK_ID)[0] && update_waiting(h) &&
+       settings_page(h)==core_page_settings &&
+       settings_row_setting(h,core_page_settings,check_word(h,CHECK_SETTING)[0])==&update_setting)
+        update_ask_menu(h,controller);
     return r;
 }
 A32_ENTRY u32 menu_select_stop(u32 controller) {

@@ -427,14 +427,15 @@ fn runtime_layout_matches_target_capacity() {
     assert_eq!(runtime::MAX_COUNT, 40);
     assert_eq!(
         runtime::layout(0).unwrap(),
-        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "icon_words": [25 * 1602]})
+        json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "text_words": runtime::TEXT_WORDS, "icon_words": [26 * 1602]})
     );
     assert_eq!(
         runtime::layout(40).unwrap(),
         json!({
             "words": (runtime::HEADER_SIZE + 40 * 0x1100) / 4,
             "tail_words": runtime::TAIL_WORDS,
-            "icon_words": [64080, 25 * 1602]
+            "text_words": runtime::TEXT_WORDS,
+            "icon_words": [64080, 26 * 1602]
         })
     );
     assert!(runtime::layout(41).is_err());
@@ -452,8 +453,8 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
             .map(|v| v.as_u64().unwrap() as usize)
             .collect();
         // The registry holds the header and the records. The tail holds the
-        // picture scratch, the menu text, the live-view labels, the profile
-        // table, and the Toning curves (abi::TAIL_SIZE).
+        // picture scratch, the profile table, and the curves (abi::TAIL_SIZE);
+        // the text area the menu text and the live-view labels.
         assert_eq!(
             words * 4,
             runtime::HEADER_SIZE + count * 0x1100,
@@ -463,6 +464,9 @@ fn allocation_includes_host_icons_at_chunk_boundaries() {
         let tail = layout["tail_words"].as_u64().unwrap() as usize;
         assert_eq!(tail * 4, grkit_core::abi::TAIL_SIZE);
         assert!(tail <= grkit_core::abi::MODULE_ARRAY_WORDS);
+        let text = layout["text_words"].as_u64().unwrap() as usize;
+        assert_eq!(text * 4, grkit_core::abi::TEXT_AREA_SIZE);
+        assert!(text <= grkit_core::abi::MODULE_ARRAY_WORDS);
         assert_eq!(
             icons.iter().sum::<usize>() * 4,
             (count + runtime::HOST_ICON_COUNT) * 6408,
@@ -1052,9 +1056,13 @@ fn a_package_holds_the_core_file_of_each_build_of_its_camera() {
         assert!(script.ends_with(&expected), "{script}");
         let start = &script[..script.len() - expected.len()];
         if mode == "scan" {
+            // It starts or stops only the service with an argument, else
+            // starts the boot log; a scan does not start the service.
+            assert!(start.starts_with("case \"$1\" in\nserve)\n"), "{script}");
             assert!(
-                start.starts_with(
-                    "mkdir -p /media/storage1/GRKIT\nif [ ! -e /tmp/grkit-boot ]; then\n"
+                start.contains(
+                    "esac\n\
+                     mkdir -p /media/storage1/GRKIT\nif [ ! -e /tmp/grkit-boot ]; then\n"
                 ),
                 "{script}"
             );
@@ -1678,4 +1686,114 @@ fn a_single_build_package_has_one_core_file() {
     assert!(grkit_core::packaging::card_files(&package.bytes).is_err());
     // A build that the camera does not run.
     assert!(single(&runtimes[1..], &camera::GR4, true).is_err());
+}
+
+/// A stand-in for `SERVE.BIN`: an ARM program with one program header of
+/// type `kind`. Type 3 (PT_INTERP) names a dynamic linker.
+fn service(kind: u32) -> Vec<u8> {
+    let mut binary = testing::installer();
+    binary[28..32].copy_from_slice(&52u32.to_le_bytes());
+    binary[42..44].copy_from_slice(&32u16.to_le_bytes());
+    binary[44..46].copy_from_slice(&1u16.to_le_bytes());
+    let mut header = [0; 32];
+    header[..4].copy_from_slice(&kind.to_le_bytes());
+    binary.extend_from_slice(&header);
+    binary
+}
+
+/// The runtime of `target` with the service `service`, as `load_runtime`
+/// gives it.
+fn served_runtime(target: &str, service: &[u8]) -> anyhow::Result<VerifiedRuntime> {
+    let mut files = testing::runtime_files(&testing::marked_installer(target), target);
+    files.insert(grkit_core::card::SERVE_FILE.into(), service.to_vec());
+    load_runtime(&testing::manifest(target, &files), &files)
+}
+
+#[test]
+fn a_package_holds_the_service_of_its_runtimes() {
+    let program = service(1);
+    assert!(served_runtime("gr3-2.10", &service(3))
+        .unwrap_err()
+        .to_string()
+        .contains("static program"));
+    let runtimes = vec![
+        served_runtime("gr3-2.10", &program).unwrap(),
+        served_runtime("gr3-2.21", &program).unwrap(),
+    ];
+    let package = |runtimes: &[VerifiedRuntime]| {
+        assemble(
+            runtimes,
+            &EffectSet::default(),
+            &testing::official_modules(),
+            &camera::GR3,
+            &english(),
+        )
+        .map(|package| package.bytes)
+    };
+    let bytes = package(&runtimes).unwrap();
+    verify_package(&bytes).unwrap();
+    assert_eq!(files_of(&bytes)["SD_ROOT/SCRIPT/GRKIT/SERVE.BIN"], program);
+    // SCAN.SH starts the service, with or without it in the package.
+    let scan = String::from_utf8(files_of(&bytes)["SD_ROOT/SCRIPT/GRKIT/SCAN.SH"].clone()).unwrap();
+    assert!(scan.contains("[ -e /media/storage1/SCRIPT/GRKIT/SERVE.BIN ]"));
+    assert_eq!(
+        files_of(&package(&gr3_runtimes()).unwrap())["SD_ROOT/SCRIPT/GRKIT/SCAN.SH"],
+        scan.as_bytes()
+    );
+    // Each runtime needs the same service.
+    let mut other = program.clone();
+    other.push(0);
+    for mixed in [
+        vec![runtimes[0].clone(), testing::marked_runtime("gr3-2.21")],
+        vec![
+            runtimes[0].clone(),
+            served_runtime("gr3-2.21", &other).unwrap(),
+        ],
+    ] {
+        assert!(package(&mixed)
+            .unwrap_err()
+            .to_string()
+            .contains("the same SCRIPT/GRKIT/SERVE.BIN"));
+    }
+    // A package with a dynamic program as its service is not valid.
+    let mut files = files_of(&bytes);
+    files.insert("SD_ROOT/SCRIPT/GRKIT/SERVE.BIN".into(), service(3));
+    let files = with_sums(files);
+    assert!(verify_package(&repack(&files, CompressionMethod::Deflated)).is_err());
+}
+
+#[test]
+fn the_package_list_reads_as_the_runtime_does_and_keeps_the_looks_of_the_card() {
+    use grkit_core::packaging::PackageList;
+    let new = PackageList::parse(b"A.GRM\nNEW.GRF\nB.GRM\n-GONE.GRF\n");
+    // The runtime separates names by any ASCII whitespace and ignores case.
+    let card = PackageList::parse(b"a.grm OLD.GRF\nmine.grf\t-left.grf\n");
+    assert_eq!(new.modules().collect::<Vec<_>>(), ["A", "B"]);
+    assert_eq!(
+        String::from_utf8(new.with_looks_of(&card).to_bytes()).unwrap(),
+        "A.GRM\nB.GRM\nMINE.GRF\nOLD.GRF\n-LEFT.GRF\n"
+    );
+}
+
+#[test]
+fn the_package_owns_its_runtime_modules_and_effects() {
+    use grkit_core::packaging::package_owned;
+    for path in [
+        "SCRIPT/GRKIT/CORE.BIN",
+        "SCRIPT/GRKIT/CORE3.BIN",
+        "SCRIPT/GRKIT/SERVE.BIN",
+        "SCRIPT/GRKIT/RELEASE.JSN",
+        "SCRIPT/GRKIT/MODULES/GLOW.GRM",
+        "SCRIPT/GRKIT/EFFECTS/1234ABCD.GRF",
+    ] {
+        assert!(package_owned(path), "{path}");
+    }
+    for path in [
+        "SCRIPT/GRKIT/IMPORTS.BIN",
+        "SCRIPT/GRKIT/COMMIT.TTL",
+        "SCRIPT/GRKIT/MODULES/README.TXT",
+        "GRKIT/EFFECTS/1234ABCD.GRF",
+    ] {
+        assert!(!package_owned(path), "{path}");
+    }
 }

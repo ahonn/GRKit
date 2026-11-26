@@ -11,7 +11,7 @@
 //! Fn adjustments: nine i8 at `FN_DEFAULTS` of a `SIZE_WITH_LEVELS` file, after the data of
 //! features 16 and 32, so it goes with any effect, monochrome ones included.
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{ensure, Context, Result};
 use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
     Deserialize, Deserializer,
@@ -156,78 +156,11 @@ pub fn parse_json(bytes: &[u8]) -> Result<Value> {
     Ok(value)
 }
 
-fn has_keys(value: &Value, keys: &[&str]) -> bool {
-    value.as_object().is_some_and(|object| {
-        object.len() == keys.len() && keys.iter().all(|k| object.contains_key(*k))
-    })
-}
-
 /// Renders the `icon` of an effect definition: a label tile (`label`, `shape`),
 /// a film box (`template` "box"), or a motion picture film label (`template` "cine").
-/// A cover can leave out `number`, and then shows a large name.
+/// A cover can leave out `number`, and then shows a large name (`cover::Cover`).
 pub fn icon_pixels(icon: &Value) -> Result<Vec<u8>> {
-    let text = |key: &str| {
-        icon[key]
-            .as_str()
-            .with_context(|| format!("Expected icon {key}"))
-    };
-    // A present number has 1 to 12 characters. Without the key, the cover has none.
-    let number = || -> Result<&str> {
-        match icon.get("number") {
-            None => Ok(""),
-            Some(_) => {
-                let number = text("number")?;
-                ensure!(
-                    !number.is_empty(),
-                    "Expected a cover number, or no number key"
-                );
-                Ok(number)
-            }
-        }
-    };
-    // Optional: number, colors (any RGB). Named palettes live on the website only.
-    let colors = || -> Result<crate::artwork::Palette> {
-        match icon.get("colors") {
-            None => Ok(crate::artwork::NEUTRAL_PALETTE),
-            Some(value) => crate::artwork::parse_colors(value),
-        }
-    };
-    match icon.get("template").map(|t| t.as_str().unwrap_or_default()) {
-        None => {
-            ensure!(
-                has_keys(icon, &["label", "shape"]),
-                "Expected icon label and shape"
-            );
-            crate::artwork::render_tile(text("label")?, text("shape")?)
-        }
-        Some("box") => {
-            ensure!(
-                has_keys_with(
-                    icon,
-                    &["template", "brand", "name", "band"],
-                    &["number", "colors"]
-                ),
-                "Expected box icon brand, name, band, optional number and colors"
-            );
-            let band = icon["band"].as_bool().context("Expected icon band")?;
-            crate::artwork::render_box(text("brand")?, text("name")?, number()?, band, colors()?)
-        }
-        Some("cine") => {
-            ensure!(
-                has_keys_with(icon, &["template", "brand", "name"], &["number", "colors"]),
-                "Expected cine icon brand, name, optional number and colors"
-            );
-            crate::artwork::render_cine(text("brand")?, text("name")?, number()?, colors()?)
-        }
-        Some("stack") => {
-            ensure!(
-                has_keys_with(icon, &["template", "brand", "name"], &["number", "colors"]),
-                "Expected stack icon brand, name, optional number and colors"
-            );
-            crate::artwork::render_stack(text("brand")?, text("name")?, number()?, colors()?)
-        }
-        Some(_) => bail!("Expected icon template box, cine, or stack"),
-    }
+    crate::cover::Cover::from_json(icon)?.pixels()
 }
 
 /// `required` keys, any of the `optional` keys, and nothing else.
@@ -729,6 +662,18 @@ pub fn decode(blob: &[u8]) -> Result<(Effect, Vec<u8>)> {
     effect.check()?;
     check_icon(&icon)?;
     Ok((effect, icon))
+}
+
+/// The name that `body_hash` gives each effect.
+const BODY_NAME: &str = "-";
+
+/// The SHA-256 of a GRF without its name and cover: the file encoded again with the name
+/// `BODY_NAME` and an all-zero icon. Two files that differ only in the name or the icon, and so
+/// in the CRC, have the same body hash.
+pub fn body_hash(blob: &[u8]) -> Result<String> {
+    let (mut effect, _) = decode(blob)?;
+    effect.name = BODY_NAME.to_owned();
+    Ok(hex::encode(Sha256::digest(effect.encode(&[0; ICON_SIZE])?)))
 }
 
 pub fn interpolate_curve(points: &Value) -> Result<Vec<u16>> {

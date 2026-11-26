@@ -1,4 +1,4 @@
-/* Generated from crates/grkit-core/src/abi.rs. Do not edit: change the tables
+/* Generated from crates/grkit-core/src/abi/. Do not edit: change the tables
    there, then run GRKIT_UPDATE_GENERATED=1 cargo test -p grkit-core --test
    generated. */
 #ifndef GRKIT_ABI_H
@@ -7,7 +7,7 @@
 /* The private header: the start of the registry array. ARM code addresses it
    through the literal GRKIT_HEADER_REFERENCE, which the installer relocates. */
 #define GRKIT_HEADER_REFERENCE 0x58012340
-#define GRKIT_HOST_HEADER_SIZE 6568
+#define GRKIT_HOST_HEADER_SIZE 6592
 /* The most module pages, layers, and plane filters that the header holds. */
 #define GRKIT_MODULE_PAGES_MAX 16
 #define GRKIT_MODULE_LAYERS_MAX 16
@@ -184,15 +184,67 @@
 /* Icon slots: the host icons, then the effect icons, then the module tiles, in
    chunks of GRKIT_ICONS_PER_CHUNK (GRKIT_HOST_ICON_CHUNKS).
    GRKIT_ICON_MODULE_TILE(n) is the icon ID of module tile n. */
-#define GRKIT_HOST_ICON_COUNT 25
-#define GRKIT_BATTERY_ICON_SLOTS 4U
+#define GRKIT_HOST_ICON_COUNT 26
 #define GRKIT_ICONS_PER_CHUNK 40
 #define GRKIT_MODULE_TILES_MAX 128
-#define GRKIT_ICON_MODULE_TILE(n) (0x7000U+(n))
+#define GRKIT_EFFECTS_LISTED 64U
+/* Icon IDs: the camera's own icons are below GRKIT_ICON_FIRST. Host slot s has
+   the ID GRKIT_HOST_ICON_TOP - s; GRKIT_ICON_SLOT_<name> is the first slot of
+   a host icon and GRKIT_ICON_SLOTS_<name> its slots. IDs only reach transient
+   menu widgets, so they can change between releases. */
+#define GRKIT_ICON_FIRST 0x7000
+#define GRKIT_HOST_ICON_TOP 0x7fff
+#define GRKIT_ICON_SLOT_OFF 0
+#define GRKIT_ICON_SLOTS_OFF 1
+#define GRKIT_ICON_OFF 0x7fff
+#define GRKIT_ICON_SLOT_GRKIT 1
+#define GRKIT_ICON_SLOTS_GRKIT 1
+#define GRKIT_ICON_GRKIT 0x7ffe
+#define GRKIT_ICON_SLOT_VERSION 2
+#define GRKIT_ICON_SLOTS_VERSION 1
+#define GRKIT_ICON_VERSION 0x7ffd
+#define GRKIT_ICON_SLOT_MODULES 3
+#define GRKIT_ICON_SLOTS_MODULES 1
+#define GRKIT_ICON_MODULES 0x7ffc
+#define GRKIT_ICON_SLOT_MODULES_OFF 4
+#define GRKIT_ICON_SLOTS_MODULES_OFF 1
+#define GRKIT_ICON_MODULES_OFF 0x7ffb
+#define GRKIT_ICON_SLOT_ROTATE 5
+#define GRKIT_ICON_SLOTS_ROTATE 1
+#define GRKIT_ICON_ROTATE 0x7ffa
+#define GRKIT_ICON_SLOT_SCALE_FEET 6
+#define GRKIT_ICON_SLOTS_SCALE_FEET 1
+#define GRKIT_ICON_SCALE_FEET 0x7ff9
+#define GRKIT_ICON_SLOT_SCALE_SIXTEEN 7
+#define GRKIT_ICON_SLOTS_SCALE_SIXTEEN 1
+#define GRKIT_ICON_SCALE_SIXTEEN 0x7ff8
+#define GRKIT_ICON_SLOT_RECIPE_TILE 8
+#define GRKIT_ICON_SLOTS_RECIPE_TILE 1
+#define GRKIT_ICON_RECIPE_TILE 0x7ff7
+#define GRKIT_ICON_SLOT_RECIPE_CARDS 9
+#define GRKIT_ICON_SLOTS_RECIPE_CARDS 12
+#define GRKIT_ICON_RECIPE_CARDS(n) (0x7ff6-(n))
+#define GRKIT_ICON_SLOT_UPDATE 21
+#define GRKIT_ICON_SLOTS_UPDATE 1
+#define GRKIT_ICON_UPDATE 0x7fea
+#define GRKIT_ICON_SLOT_BATTERY 22
+#define GRKIT_ICON_SLOTS_BATTERY 4
+#define GRKIT_ICON_BATTERY(n) (0x7fe9-(n))
+#define GRKIT_ICON_MODULE_TILE(n) (0x7000+(n))
+#define GRKIT_ICON_RECIPE(n) (0x7080+(n))
+#define GRKIT_ICON_CORE_LABEL(n) (0x70c0+(n))
+#define GRKIT_ICON_TONING_TRACK(n) (0x70d8+(n))
+#define GRKIT_ICON_EFFECT(n) (0x8000+(n))
 #define GRKIT_STATE_CHANGED(h) (++(h)[GRKIT_HOST_STATE_CHANGES/4])
 #define GRKIT_RECIPES_CHANGED(h) (++(h)[GRKIT_HOST_RECIPE_CHANGES/4])
 #define GRKIT_HOST_MAGIC_VALUE 0x314d5247
 #define GRKIT_HOST_VERSION_VALUE 1
+#define GRKIT_UPDATE_WAITING 1U
+#define GRKIT_UPDATE_CONFIRMED 2U
+#define GRKIT_UPDATE_READY 3U
+#define GRKIT_CUE_PENDING 1U
+#define GRKIT_CUE_UPDATE_READY 1U
+#define GRKIT_CUE_UPDATE_RESTART 2U
 /* Number of Image Control records. */
 #define GRKIT_HOST_COUNT 0
 /* Address of record 0. The records follow the header without gaps. */
@@ -217,8 +269,8 @@
 #define GRKIT_HOST_MENU_LEVEL 36
 /* Highlighted row of the private menu. */
 #define GRKIT_HOST_MENU_CURSOR 40
-/* Address of the tail, an array of its own: the picture scratch, the menu
-   text, then the live-view labels. INSTALL writes it. */
+/* Address of the tail, an array of its own: the picture scratch, the profile
+   table, and the curves (`TAIL_SIZE`). INSTALL writes it. */
 #define GRKIT_HOST_TAIL 44
 /* Grain level, the capability CORE.GRAIN: 0 Off, 1 weak, 2 medium, 3 strong.
    The native grain stage of recorded pictures uses it instead of the native
@@ -557,35 +609,59 @@
 #define GRKIT_HOST_MANAGE_COPY_WORDS 9
 /* Word index of the PERSIST buffer within modulecode, not a native address. */
 #define GRKIT_HOST_PERSIST_WORD 6528
+/* The word index of the mailbox of the Wi-Fi service in the module array, or 0
+   without modules (runtime/control_mailbox.h). */
+#define GRKIT_HOST_CONTROL_WORD 6532
 /* The record of the ADJ preview of a recipe whose Fn adjustments the live view
    takes from GRKIT_HOST_PREVIEW_FN_BYTES, not from the record, while
    GRKIT_HOST_PREVIEW is that record; else 0 (runtime/recipe_preview.h,
    runtime/processing.h). */
-#define GRKIT_HOST_PREVIEW_FN 6532
+#define GRKIT_HOST_PREVIEW_FN 6536
 /* Those adjustments: one stored byte each, in the order of RECORD_PARAMETERS.
    It follows GRKIT_HOST_PREVIEW_FN. */
-#define GRKIT_HOST_PREVIEW_FN_BYTES 6536
+#define GRKIT_HOST_PREVIEW_FN_BYTES 6540
 #define GRKIT_HOST_PREVIEW_FN_BYTES_WORDS 3
 /* The copy of the native settings record from the start of the ADJ preview of
    a recipe, in the services block, or 0 while no preview writes native
    settings. A capture of the current settings reads the native settings from
    it (runtime/recipes.h). */
-#define GRKIT_HOST_RECIPE_PREVIEW 6548
+#define GRKIT_HOST_RECIPE_PREVIEW 6552
 /* Battery Percentage: the value that the icon shows, 0 for the native icon,
    the picture that has it, and the time of its last change
    (runtime/battery_percent.h). */
-#define GRKIT_HOST_BATTERY_ICON 6552
+#define GRKIT_HOST_BATTERY_ICON 6556
 /* Battery Percentage: the average of the charge and the time of its last
    sample (runtime/battery_percent.h). */
-#define GRKIT_HOST_BATTERY_AVERAGE 6556
+#define GRKIT_HOST_BATTERY_AVERAGE 6560
 /* The Toning track that the parameter page shows for a native look with Toning
    (runtime/menu.c: toning_track): an 8-byte icon descriptor, then the pixels,
    in a firmware block that the core makes at its first use; else 0. */
-#define GRKIT_HOST_TONING_TRACK 6560
+#define GRKIT_HOST_TONING_TRACK 6564
 /* The record whose Toning in the RAW development differs from its own
    (runtime/develop.h): while a development runs, its builds take the curves at
    GRKIT_DEVELOP_CURVES of the tail for it; else 0. */
-#define GRKIT_HOST_DEVELOP_TONED 6564
+#define GRKIT_HOST_DEVELOP_TONED 6568
+/* An update over Wi-Fi (grkit_core::runtime::update): UPDATE_WAITING while its
+   journal waits for the confirmation on the camera, which the resident loader
+   sets; UPDATE_CONFIRMED after the confirmation in GRKit Settings
+   (runtime/menu_settings.h); UPDATE_READY after the resident loader made the
+   journal run at the next power-on; else 0. */
+#define GRKIT_HOST_UPDATE 6572
+/* The version of that update, from `card::VERSION_FILE`: major << 16, minor <<
+   8, and patch, or 0 when the package does not name it. */
+#define GRKIT_HOST_UPDATE_VERSION 6576
+/* The text of the load cue (GRKIT_HOST_LOAD_CUE): 0 for GRKit Loaded,
+   CUE_UPDATE_READY while an update over Wi-Fi waits, or CUE_UPDATE_RESTART
+   after its confirmation in ADJ. The cue sets it back to 0 when it ends
+   (runtime/viewfinder.h). */
+#define GRKIT_HOST_CUE_LABEL 6580
+/* 1 while the Wi-Fi access point of the camera is on, else 0. The App task
+   copies it at each timer dispatch (runtime/menu.c); the resident loader
+   starts the Wi-Fi service while it is 1 and stops it at 0. */
+#define GRKIT_HOST_WLAN 6584
+/* Address of the text area, an array of its own: the menu text, then the
+   live-view labels (`TEXT_AREA_SIZE`). INSTALL writes it. */
+#define GRKIT_HOST_TEXT_AREA 6588
 /* Consumer request ticket, 1..2147483647. Zero means no request. */
 #define GRKIT_PERSIST_REQUEST 0
 /* Producer publishes this ticket after all payload stores are visible. */
@@ -611,6 +687,136 @@
 #define GRKIT_PERSIST_MODULE_WORDS 2U
 #define GRKIT_PERSIST_SIZE 1828U
 #define GRKIT_PERSIST_WORDS 457U
+
+#define GRKIT_CONTROL_MAGIC 0
+#define GRKIT_CONTROL_VERSION 4
+#define GRKIT_CONTROL_CAPACITY 8
+#define GRKIT_CONTROL_EPOCH 12
+#define GRKIT_CONTROL_EPOCH_WORDS 4
+#define GRKIT_CONTROL_STATE_CHANGES 28
+#define GRKIT_CONTROL_DESCRIPTOR_PADDING 32
+#define GRKIT_CONTROL_DESCRIPTOR_PADDING_WORDS 8
+#define GRKIT_CONTROL_REQUEST 64
+#define GRKIT_CONTROL_RELEASE 68
+#define GRKIT_CONTROL_REQUEST_EPOCH 72
+#define GRKIT_CONTROL_REQUEST_EPOCH_WORDS 4
+#define GRKIT_CONTROL_COMMAND 88
+#define GRKIT_CONTROL_LENGTH 92
+#define GRKIT_CONTROL_CHECKSUM 96
+/* CONTROL_SERVICE_RUNNING while the Wi-Fi service runs: the service writes it
+   as it starts and clears it as it stops. The resident loader starts and stops
+   the service with it and GRKIT_HOST_WLAN. */
+#define GRKIT_CONTROL_SERVICE 100
+#define GRKIT_CONTROL_PRODUCER_PADDING 104
+#define GRKIT_CONTROL_PRODUCER_PADDING_WORDS 6
+#define GRKIT_CONTROL_CLAIMED 128
+#define GRKIT_CONTROL_READY 132
+#define GRKIT_CONTROL_RESULT 136
+#define GRKIT_CONTROL_RESPONSE_LENGTH 140
+#define GRKIT_CONTROL_RESPONSE_CHECKSUM 144
+#define GRKIT_CONTROL_CONSUMER_PADDING 148
+#define GRKIT_CONTROL_CONSUMER_PADDING_WORDS 11
+#define GRKIT_CONTROL_PAYLOAD 192
+#define GRKIT_CONTROL_PAYLOAD_WORDS 512
+#define GRKIT_CONTROL_RESPONSE 2240
+#define GRKIT_CONTROL_RESPONSE_WORDS 512
+#define GRKIT_CONTROL_SIZE 4288U
+#define GRKIT_CONTROL_WORDS 1072U
+#define GRKIT_CONTROL_MAGIC_VALUE 1196573489U
+#define GRKIT_CONTROL_VERSION_VALUE 1U
+#define GRKIT_CONTROL_PAYLOAD_BYTES 2048U
+#define GRKIT_CONTROL_SEQUENCE_MAX 2147483647U
+#define GRKIT_CONTROL_EMPTY 0U
+#define GRKIT_CONTROL_ACCEPTED 1U
+#define GRKIT_CONTROL_BAD_CONTEXT 16U
+#define GRKIT_CONTROL_BAD_LENGTH 17U
+#define GRKIT_CONTROL_BAD_DIGEST 18U
+#define GRKIT_CONTROL_CHANGED 19U
+#define GRKIT_CONTROL_UNSUPPORTED 20U
+#define GRKIT_CONTROL_INVALID 21U
+#define GRKIT_CONTROL_BUSY 22U
+#define GRKIT_CONTROL_CLOSING 23U
+#define GRKIT_CONTROL_ATTACH 1U
+#define GRKIT_CONTROL_PING 2U
+#define GRKIT_CONTROL_LOOKS_READ 3U
+#define GRKIT_CONTROL_USE_CODE_MASK 32767U
+#define GRKIT_CONTROL_USE_ORIGIN_SHIFT 16U
+#define GRKIT_CONTROL_USE_ORIGIN_MASK 127U
+#define GRKIT_CONTROL_USE_DIAL 8388608U
+#define GRKIT_CONTROL_USE_NUMBER_SHIFT 24U
+#define GRKIT_CONTROL_USE_NUMBER_MASK 15U
+#define GRKIT_CONTROL_USE_NAMED 2147483648U
+#define GRKIT_CONTROL_LOOK_TURN 4U
+#define GRKIT_CONTROL_LOOKS_ORDER 5U
+#define GRKIT_CONTROL_LOOKS_HEADER 16U
+#define GRKIT_CONTROL_RECIPES_READ 6U
+#define GRKIT_CONTROL_RECIPE_TURN 7U
+#define GRKIT_CONTROL_RECIPES_ORDER 8U
+#define GRKIT_CONTROL_RECIPE_RENAME 9U
+#define GRKIT_CONTROL_RECIPE_DELETE 10U
+#define GRKIT_CONTROL_RECIPE_APPLY 11U
+#define GRKIT_CONTROL_RECIPE_UNDO 12U
+#define GRKIT_CONTROL_RECIPE_ADD 13U
+#define GRKIT_CONTROL_MODULES_READ 14U
+#define GRKIT_CONTROL_MODULE_TEXTS 15U
+#define GRKIT_CONTROL_MODULE_TILE 16U
+#define GRKIT_CONTROL_MODULE_SET 17U
+#define GRKIT_CONTROL_MODULES_ORDER 18U
+#define GRKIT_CONTROL_SETTINGS_READ 19U
+#define GRKIT_CONTROL_SETTINGS_SET 20U
+#define GRKIT_CONTROL_MODULES_LAYOUT 21U
+#define GRKIT_CONTROL_SETTING_START 0U
+#define GRKIT_CONTROL_SETTING_RAW 1U
+#define GRKIT_CONTROL_SETTING_UNIT 2U
+#define GRKIT_CONTROL_SETTING_BATTERY 3U
+#define GRKIT_CONTROL_SETTING_BATTERY_PERCENT 4U
+#define GRKIT_CONTROL_SETTING_PLAYBACK_INFO 5U
+#define GRKIT_CONTROL_SETTING_GOODBYE 6U
+#define GRKIT_CONTROL_SETTING_GOODBYE_TEXT 7U
+#define GRKIT_CONTROL_SETTINGS 8U
+#define GRKIT_CONTROL_SETTING_NONE 4294967295U
+#define GRKIT_CONTROL_MODULES_HEADER 24U
+#define GRKIT_CONTROL_MODULE_ENTRY 20U
+#define GRKIT_CONTROL_MODULE_NAME_AT 4U
+#define GRKIT_CONTROL_MODULE_NAME_BYTES 8U
+#define GRKIT_CONTROL_MODULE_HIDDEN_AT 12U
+#define GRKIT_CONTROL_MODULE_SIZES_AT 16U
+#define GRKIT_CONTROL_MODULE_TEXTS_HEADER 8U
+#define GRKIT_CONTROL_MODULE_TEXTS_END 4294967295U
+#define GRKIT_CONTROL_MODULE_TEXT_UNITS 120U
+#define GRKIT_CONTROL_MODULE_RECORD_MODULE 0U
+#define GRKIT_CONTROL_MODULE_RECORD_GROUP 1U
+#define GRKIT_CONTROL_MODULE_RECORD_SETTING 2U
+#define GRKIT_CONTROL_MODULE_RECORD_VALUE 3U
+#define GRKIT_CONTROL_MODULE_MANAGED_MASK 255U
+#define GRKIT_CONTROL_MODULE_MANAGED_LOOKS 1U
+#define GRKIT_CONTROL_MODULE_MANAGED_RECIPES 2U
+#define GRKIT_CONTROL_MODULE_HAS_OPTIONS 256U
+#define GRKIT_CONTROL_MODULE_ORDERED 512U
+#define GRKIT_CONTROL_MODULE_KEY_HANDLE 1073741824U
+#define GRKIT_CONTROL_MODULE_STATUS_SHIFT 8U
+#define GRKIT_CONTROL_MODULE_STATUS_MASK 3U
+#define GRKIT_CONTROL_MODULE_RUNNING 0U
+#define GRKIT_CONTROL_MODULE_STOPPED 1U
+#define GRKIT_CONTROL_MODULE_SAFE 2U
+#define GRKIT_CONTROL_MODULE_FAILED 3U
+#define GRKIT_CONTROL_MODULE_PLACE_SHIFT 10U
+#define GRKIT_CONTROL_MODULE_PLACE_MASK 3U
+#define GRKIT_CONTROL_MODULE_TOOLBAR 0U
+#define GRKIT_CONTROL_MODULE_ROOT 1U
+#define GRKIT_CONTROL_MODULE_HIDDEN 2U
+#define GRKIT_CONTROL_MODULE_ORDERABLE 4096U
+#define GRKIT_CONTROL_MODULE_ENABLED 8192U
+#define GRKIT_CONTROL_MODULE_PLACEABLE 16384U
+#define GRKIT_CONTROL_MODULE_SET_ENABLED 1U
+#define GRKIT_CONTROL_MODULE_SET_HIDDEN 2U
+#define GRKIT_CONTROL_MODULE_SET_ORDER 4U
+#define GRKIT_CONTROL_RECIPES_HEADER 28U
+#define GRKIT_CONTROL_RECIPE_ENTRY 44U
+#define GRKIT_CONTROL_RECIPES_PAGE 32U
+#define GRKIT_CONTROL_RECIPE_NONE 4294967295U
+#define GRKIT_CONTROL_LOOK_ENTRY 12U
+#define GRKIT_CONTROL_REQUEST_SIZE 2064U
 
 /* The capabilities of the core (grkit_core::capabilities): the handle of each
    CORE setting, and for each handle in order, its header word and its number
@@ -951,7 +1157,7 @@
    glyphs from GRKIT_GLYPH_FIRST. For entry n, a u16 width, a u16 height, and
    the u32 offset of its pixels from the table start at 8 n. Each pixel is one
    byte of text coverage, row by row. */
-#define GRKIT_LABELS_SIZE 77824
+#define GRKIT_LABELS_SIZE 88576
 /* The profile table after the labels (runtime/profile.h). For each of the
    first GRKIT_PROFILE_MODULES listed modules, at GRKIT_PROFILE_MODULE_SIZE n:
    its code start, its code end, and GRKIT_PROFILE_NAME_BYTES ASCII bytes of
@@ -959,7 +1165,7 @@
    GRKIT_PROFILE_SLOT_SIZE bytes: calls, cycles, and the cycles of the largest
    call. The core points come first, then GRKIT_PROFILE_KINDS slots for each of
    those modules. */
-#define GRKIT_PROFILE 244360
+#define GRKIT_PROFILE 141960
 #define GRKIT_PROFILE_SIZE 500
 #define GRKIT_PROFILE_MODULES 8
 #define GRKIT_PROFILE_MODULE_SIZE 16
@@ -979,16 +1185,18 @@
 #define GRKIT_PROFILE_PAINT 0
 #define GRKIT_PROFILE_FILTER 1
 #define GRKIT_PROFILE_CALL 2
-/* Everything after the records: the script array must hold it. */
-#define GRKIT_TAIL_SIZE 250492
+/* The tail array: the picture scratch, the profile table, and the curves. */
+#define GRKIT_TAIL_SIZE 148092
+/* The text area array: the menu text, then the live-view labels. */
+#define GRKIT_TEXT_AREA_SIZE 113152
 /* The own red and blue curves of the native looks with Toning: for each of
    GRKIT_TONE_SLOTS slots, 256 u16 red samples, then the blue ones. */
-#define GRKIT_TONE_CURVES 244860
+#define GRKIT_TONE_CURVES 142460
 #define GRKIT_TONE_SLOTS 4
 #define GRKIT_TONE_SLOT_SIZE 1024
 /* The red, green, and blue curves of a RAW development with its own Toning
    (GRKIT_HOST_DEVELOP_TONED), 256 u16 samples each. */
-#define GRKIT_DEVELOP_CURVES 248956
+#define GRKIT_DEVELOP_CURVES 146556
 #define GRKIT_DEVELOP_CURVES_SIZE 1536
 #define GRKIT_TEXT_SUMMARY 8192
 /* The parameter page title of a GRKit session, after the summaries: the page,
@@ -1005,19 +1213,19 @@
 #define GRKIT_TEXT_GROUP_UNITS 256
 #define GRKIT_TEXT_LANGUAGES 5
 #define GRKIT_TEXT_RECORDS 40
-#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TAIL/4]+GRKIT_PICTURE_SCRATCH)
+#define GRKIT_TEXT(h) ((h)[GRKIT_HOST_TEXT_AREA/4])
 #define GRKIT_LABELS(h) (GRKIT_TEXT(h)+GRKIT_TEXT_SIZE)
-#define GRKIT_LABEL_COUNT 22
+#define GRKIT_LABEL_COUNT 24
 #define GRKIT_LABEL_CROP_CAMERA 19
 #define GRKIT_MODULE_LABEL_COUNT 14
-#define GRKIT_GLYPH_FIRST 22
+#define GRKIT_GLYPH_FIRST 24
 #define GRKIT_GLYPH_COUNT 95
 #define GRKIT_GLYPH_HEIGHT 28
-#define GRKIT_SMALL_GLYPH_FIRST 117
+#define GRKIT_SMALL_GLYPH_FIRST 119
 #define GRKIT_SMALL_GLYPH_HEIGHT 20
-#define GRKIT_CAPTION_FIRST 212
+#define GRKIT_CAPTION_FIRST 214
 #define GRKIT_CAPTION_CHARACTERS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#define GRKIT_BATTERY_DIGIT_FIRST 248
+#define GRKIT_BATTERY_DIGIT_FIRST 250
 #define GRKIT_BATTERY_DIGIT_HEIGHT 18
 #define GRKIT_CAPTION_TOP 22
 #define GRKIT_CAPTION_INK 255
@@ -1102,6 +1310,10 @@
 /* The Battery Percentage row of Display Settings. Its values are TEXT_OFF and
    TEXT_ON. */
 #define TEXT_BATTERY_PERCENT 88
-#define GRKIT_TEXT_STRINGS 89
+/* The GRKit Settings row of an update over Wi-Fi that waits for its
+   confirmation, then its value Install, then the text of its confirm before
+   and after the version. */
+#define TEXT_UPDATE 89
+#define GRKIT_TEXT_STRINGS 93
 
 #endif

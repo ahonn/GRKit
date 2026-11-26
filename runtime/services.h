@@ -133,7 +133,7 @@
 #define MENU_ROWS_PAGE_TITLE (MENU_ROWS_PAGE_TEXTS + 3U * 8U)
 #define MENU_ROWS_FIRST (MENU_ROWS_PAGE_TITLE + 2U * MENU_PAGE_TITLE_UNITS)
 /* The rows of GRKit Settings as its page opened (runtime/menu_settings.h:
-   core_refresh): the kind of row i in bits 4i to 4i + 3, and the number of
+   core_refresh): the kind of row i in bits 3i to 3i + 2, and the number of
    rows in bits 24 to 31. */
 #define MENU_ROWS_CORE_KINDS (MENU_ROWS_FIRST + MENU_ROWS_SLOTS * MENU_ROW_SIZE)
 /* The row + 1 of a page that a child returns to, where the cursor goes
@@ -167,7 +167,10 @@
 /* The code of the modules that a soft Off stopped at this start
    (runtime/manage.h): their count, then the start and the end of the code of
    each. The core calls no module code in these ranges. */
-#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_RETURN + 4U)
+/* The controller of the GRKit menu of ADJ that closes for a change of the
+   Wi-Fi service (runtime/control.h: control_blocked), or 0. */
+#define MENU_ROWS_CLOSING (MENU_ROWS_RETURN + 4U)
+#define SERVICES_SUSPENDED (SERVICES_MENU + MENU_ROWS_CLOSING + 4U)
 #define SERVICES_SUSPENDED_MAX GRKIT_MODULES_MAX
 /* The own SelectMenuControllers of the long value pages
    (runtime/menu_settings.h): the checkbox page of options pages, or 0 before
@@ -215,7 +218,10 @@
 #define RECIPE_SUMMARY_AT (RECIPE_ROWS_MAX * RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_AT (RECIPE_SUMMARY_AT + RECIPE_TEXT_SIZE)
 #define RECIPE_BOX_TABLE_AT (RECIPE_BOX_AT + RECIPE_TEXT_SIZE)
-#define RECIPE_SERVICES_SIZE (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
+/* The value of About GRKit and the title of its page while an update over
+   Wi-Fi waits: Update and its version (runtime/menu_settings.h). */
+#define RECIPE_UPDATE_AT (RECIPE_BOX_TABLE_AT + 4U * GRKIT_TEXT_LANGUAGES)
+#define RECIPE_SERVICES_SIZE (RECIPE_UPDATE_AT + RECIPE_TEXT_SIZE)
 /* The entry of the menu component for the shooting screen (runtime/menu.c:
    menu_viewfinder), which INSTALL writes: the framing component calls it
    in the App task with an event, as the components link apart: the first
@@ -301,7 +307,8 @@
 #define DETAIL_PAGE_ITEMS 14U
 /* Item i of the details block `base`, a word pointer. */
 #define DETAIL_ITEM_AT(base, i) ((base) + (DETAIL_ITEMS + (i) * DETAIL_ITEM_SIZE) / 4U)
-/* The native icon IDs are below this; GRKit icon IDs start at 0x7000. */
+/* The native icon IDs are below this; GRKit icon IDs start at
+   GRKIT_ICON_FIRST. */
 #define DETAIL_NATIVE_ICONS 0x1000U
 /* The meta word: the group in bits 0 to 7, the name
    (runtime/recipe_detail_names.h) in bits 8 to 15, and for a setting of a
@@ -322,7 +329,7 @@
    each of the RECIPE_CARD_SLOTS composed tiles shows, four ASCII bytes, 0
    while the slot is free, then the slot that the next new tile takes. */
 #define SERVICES_CARDS (SERVICES_DETAILS + DETAILS_SIZE)
-#define RECIPE_CARD_SLOTS 12U
+#define RECIPE_CARD_SLOTS GRKIT_ICON_SLOTS_RECIPE_CARDS
 #define CARD_KEYS 0U
 #define CARD_NEXT (4U * RECIPE_CARD_SLOTS)
 #define CARDS_SIZE (CARD_NEXT + 4U)
@@ -337,12 +344,18 @@
    HOST_PERSIST_WORD gives the export's word index in the module array. */
 #define SERVICES_PERSIST_TIMER (SERVICES_CARDS + CARDS_SIZE)
 #define SERVICES_PERSIST (SERVICES_PERSIST_TIMER + 4U)
+/* The mailbox of the Wi-Fi service (runtime/control_mailbox.h), on a
+   64-byte boundary, then the copy of a request that only the App task
+   reads and writes. The 60 bytes are the most that the boundary skips. */
+#define SERVICES_CONTROL (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
+#define SERVICES_CONTROL_ADDRESS(base) (((base) + SERVICES_CONTROL + 63U) & ~63U)
+#define SERVICES_CONTROL_CANDIDATE (SERVICES_CONTROL + 60U + GRKIT_CONTROL_SIZE)
 /* The ADJ preview of a recipe (runtime/recipe_preview.h): the words of the
    recipe that the live view shows, word 0 being 0 while none shows; then
    the copy of the native settings record from the start of the preview
    (GRKIT_HOST_RECIPE_PREVIEW), PREVIEW_IMAGE_BYTES bytes, which hold each
    native field of runtime/native_look.h of each build. */
-#define SERVICES_PREVIEW (SERVICES_PERSIST + GRKIT_PERSIST_SIZE)
+#define SERVICES_PREVIEW (SERVICES_CONTROL_CANDIDATE + GRKIT_CONTROL_REQUEST_SIZE)
 #define PREVIEW_WORDS 0U
 #define PREVIEW_IMAGE (4U * GRKIT_RECIPE_WORDS)
 #define PREVIEW_IMAGE_BYTES 0xb40U

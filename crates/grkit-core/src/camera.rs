@@ -220,6 +220,15 @@ pub fn generated() -> Vec<(&'static str, String)> {
     vec![("web/src/generated/cameras.ts", site_module())]
 }
 
+/// The camera of `model`, a model name of the camera's own HTTP API such
+/// as `RICOH GR III`. An HDF model has the package of its camera.
+pub fn of_api_model(model: &str) -> Option<&'static Camera> {
+    let name = model.strip_prefix("RICOH ").unwrap_or(model);
+    CAMERAS
+        .into_iter()
+        .find(|camera| camera.name == name || camera.hdf == name)
+}
+
 pub fn find(id: &str) -> Result<&'static Camera> {
     match CAMERAS.iter().find(|camera| camera.id == id) {
         Some(camera) => Ok(camera),

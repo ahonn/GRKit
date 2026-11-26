@@ -180,6 +180,13 @@ jobs:
             echo "::error::$latest was published during this run. Start Site again to deploy web/ of main with $latest."
             exit 1
           fi
+          # The release index, which the app reads. Keep the one on the branch
+          # while it is for this release: Release Notes may have updated its notes.
+          if [ "$(jq -r .version release/index.json 2>/dev/null)" = "${TAG#v}" ]; then
+            cp -R release "$RUNNER_TEMP/site/"
+          elif [ -d "$RUNNER_TEMP/release/release" ]; then
+            cp -R "$RUNNER_TEMP/release/release" "$RUNNER_TEMP/site/"
+          fi
           sh ../.github/scripts/commit-site.sh "$RUNNER_TEMP/site" "deploy web ${GITHUB_SHA::7} with $TAG"
       - name: Wait until the site serves the web page
         run: |

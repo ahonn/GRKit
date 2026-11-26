@@ -936,6 +936,21 @@ menu_info_after:
 .ltorg
 #endif
 
+#ifdef HOOK_MENU_TIMER_DISPATCH
+/* The dispatch of the expired timers of the App task (menu.c:
+   menu_timers_due), before it reads its timer list. r0 is the timer
+   service. */
+.global menu_timer_dispatch
+.type menu_timer_dispatch, %function
+menu_timer_dispatch:
+    push {r0-r3, r12, lr}
+    bl menu_timers_due
+    pop {r0-r3, r12, lr}
+    .inst HOOK_MENU_TIMER_DISPATCH_STOCK
+    ldr pc, =HOOK_MENU_TIMER_DISPATCH_RESUME
+.ltorg
+#endif
+
 /* Each replaces the MOVT of the submenu kind table base with a BL, after the
    function has saved lr. The register gets the whole base. Other registers and
    the flags keep their values. A base in r0 to r3 goes to its saved slot. */

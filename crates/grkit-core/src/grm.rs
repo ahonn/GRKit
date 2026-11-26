@@ -281,6 +281,13 @@ impl Module {
     /// Read only the placement of each indicator from the unrelocated code.
     /// Code pointers in a GRM are offsets from zero. Bound every read before
     /// package verification uses it; do not execute or link module code.
+    /// The module runs only on a camera with a color sensor.
+    pub fn color_only(&self) -> Result<bool> {
+        let descriptor = self.descriptor as usize;
+        Ok(word(&self.code, descriptor)? >= DESCRIPTOR_FLAGS_SIZE
+            && word(&self.code, descriptor + DESCRIPTOR_FLAGS_SIZE as usize - 4)? & 1 != 0)
+    }
+
     pub(crate) fn indicator_placements(&self) -> Result<Vec<IndicatorPlacement>> {
         use layout::*;
         let descriptor = self.descriptor as usize;

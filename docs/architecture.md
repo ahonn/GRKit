@@ -30,6 +30,7 @@ The core is per target. It owns the firmware hooks, the state of each capability
 | `crates/grkit-build` | Firmware checks, patch generation, Clang and LLD invocation. |
 | `crates/grkit-cli` | The `grkit` command. It embeds `runtime/` and `resources/`, so it works outside the checkout. |
 | `crates/grkit-wasm` | Package assembly in the browser, with the same checks as the CLI. |
+| `crates/grkit-serve` | The Wi-Fi service, `SERVE.BIN`, which runs on the camera's Linux. See [Wi-Fi service](wifi-service.md). |
 | `runtime/` | Native C and assembly: the installer, the hooks, and the core. `runtime/sdk/` is the module SDK. |
 | `modules/` | The official modules. |
 | `effects/` | Built-in effect definitions. See [effects/README.md](../effects/README.md). |
@@ -183,6 +184,10 @@ When the camera turns off, the firmware shows a JPEG of its own for a second, wi
 ## Playback information
 
 In playback of one photo, DISP turns the detailed information on, and the camera turns its two pages. The first page shows the Film Look effect of the photo in the place of its Image Control. With **Effect Icons in Playback** on, the default, the core also shows a row of icons against the right end of the row of the drive mode, a part of the first page that each Image Control leaves free: one for each of Grain, Bloom, Halation, Border, and Date Imprint that was on, from `grkit:State` and the properties of the XMP packet of the photo (`runtime/playback_info.h`). The crop of the photo shows as the crop badge of the live view in the place of the camera's own badge, right of the focal length, which it covers for 35 and 50 mm. Framing shows no icon: the size and the thumbnail of the photo show its ratio. For a photo of interval shooting, whose shot number the camera shows at the right of that row, the row ends before the number, and for interval composite before its time as well; the drive mode comes from the maker note of the photo, and the icons that do not fit are not shown. A photo of a GRKit version without the state, or without GRKit, shows no icons. The App task reads at most two blocks of 4 KB of a photo when the first page shows it for the first time, and keeps the items for that photo; the draw reads no file. With the setting off, nothing reads or draws.
+
+## Wi-Fi service
+
+While the camera's access point is on, `SERVE.BIN` runs on the camera's Linux and serves the GRKit phone app over HTTP. It writes card files through Linux, and it sends each setting change through a mailbox in RAM that the App task of the camera polls. An update over Wi-Fi installs at the next start, after the person confirms it on the camera. See [Wi-Fi service](wifi-service.md).
 
 ## Relocation
 

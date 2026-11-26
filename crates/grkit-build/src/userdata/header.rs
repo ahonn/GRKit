@@ -261,7 +261,7 @@ fn type_icons(image: &FirmwareImage, codes: &[u32]) -> Result<Vec<u32>> {
             }
             let icon = type_icon(&image, mapper, code)?;
             ensure!(
-                icon != 0 && icon < 0x7000,
+                icon != 0 && icon < grkit_core::abi::ICON_FIRST,
                 "{}: the icon of {} is {icon:#x}",
                 target.name,
                 image_type.label

@@ -579,13 +579,10 @@ static u32 recipe_save(volatile u32 *h) {
     GRKIT_RECIPES_CHANGED(h);
     return e;
 }
-/* Move entry `from` to entry `to`, as the Order row of the module in the
-   GRKit section of MENU does: the recipes between them move by one entry.
-   The lists of ADJ and MENU show the entries in this order, and the recipe
-   file keeps it. */
-static void recipe_move(volatile u32 *h,u32 from,u32 to) {
-    u32 n=recipe_entries(h), w[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS], id, i;
-    if(from>=n || to>=n || from==to) return;
+/* Move slot `from` to slot `to` with its name and ID: the slots between
+   them move by one. */
+static void recipe_shift(volatile u32 *h,u32 from,u32 to) {
+    u32 w[GRKIT_RECIPE_WORDS], name[GRKIT_RECIPE_NAME_WORDS], id, i;
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) w[i]=recipe_at(h,from)[i];
     for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) name[i]=recipe_name_at(h,from)[i];
     id=*recipe_id_at(h,from);
@@ -594,14 +591,25 @@ static void recipe_move(volatile u32 *h,u32 from,u32 to) {
     for(i=0;i<GRKIT_RECIPE_WORDS;++i) recipe_at(h,to)[i]=w[i];
     for(i=0;i<GRKIT_RECIPE_NAME_WORDS;++i) recipe_name_at(h,to)[i]=name[i];
     *recipe_id_at(h,to)=id;
+}
+/* Move entry `from` to entry `to`, as the Order row of the module in the
+   GRKit section of MENU does: the recipes between them move by one entry.
+   The lists of ADJ and MENU show the entries in this order, and the recipe
+   file keeps it. */
+static void recipe_move(volatile u32 *h,u32 from,u32 to) {
+    u32 n=recipe_entries(h);
+    if(from>=n || to>=n || from==to) return;
+    recipe_shift(h,from,to);
     GRKIT_RECIPES_CHANGED(h);
 }
-/* Delete entry `slot`. The recipes after it move up. */
-static void recipe_delete(volatile u32 *h,u32 slot) {
-    u32 n=recipe_count(h);
-    if(slot>=recipe_entries(h)) return;
-    recipe_close_gap(h,slot,n);
+/* Remove the recipe in `slot`, on or off: the recipes after it move up. */
+static void recipe_remove(volatile u32 *h,u32 slot) {
+    recipe_close_gap(h,slot,recipe_count(h));
     GRKIT_RECIPES_CHANGED(h);
+}
+/* Delete entry `slot`, as MENU and ADJ do: they list only the entries. */
+static void recipe_delete(volatile u32 *h,u32 slot) {
+    if(slot<recipe_entries(h)) recipe_remove(h,slot);
 }
 /* Store the current settings as the newest undo step: its slot. With all
    steps taken, the oldest goes. */
