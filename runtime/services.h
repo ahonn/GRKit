@@ -340,10 +340,12 @@
 #define FRAME_PREVIEW_RATIO(word) ((word) & 0xffU)
 #define FRAME_PREVIEW_PANEL(word) ((word) >> 8 & 0xffU)
 #define FRAME_PREVIEW_PANEL_SHIFT 8U
-/* The App-task timer and the frozen STATE.TXT export (runtime/persist.h).
-   HOST_PERSIST_WORD gives the export's word index in the module array. */
+/* The App-task timer, the count of fast polls left (runtime/persist.h:
+   PERSIST_ACTIVE_POLLS), and the frozen STATE.TXT export. HOST_PERSIST_WORD
+   gives the export's word index in the module array. */
 #define SERVICES_PERSIST_TIMER (SERVICES_CARDS + CARDS_SIZE)
-#define SERVICES_PERSIST (SERVICES_PERSIST_TIMER + 4U)
+#define SERVICES_PERSIST_ACTIVE (SERVICES_PERSIST_TIMER + 4U)
+#define SERVICES_PERSIST (SERVICES_PERSIST_ACTIVE + 4U)
 /* The mailbox of the Wi-Fi service (runtime/control_mailbox.h), on a
    64-byte boundary, then the copy of a request that only the App task
    reads and writes. The 60 bytes are the most that the boundary skips. */

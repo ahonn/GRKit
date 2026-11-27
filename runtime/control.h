@@ -85,15 +85,21 @@ static u32 control_pending(volatile u32 *h) {
     CONTROL_INVALIDATE(&box->request,64);
     return box->request!=box->ready;
 }
+/* Copy the count of setting changes into the mailbox, where the service
+   watches it to tell the phone of a change made on the camera. The line
+   belongs to the App task: no request and no card read. */
+static void control_publish(volatile u32 *h) {
+    if(!h[GRKIT_HOST_CONTROL_WORD/4]) return;
+    volatile struct control_mailbox *box=(volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(h[GRKIT_HOST_SERVICES/4]));
+    u32 changes=h[GRKIT_HOST_STATE_CHANGES/4];
+    if(box->state_changes!=changes) { box->state_changes=changes; CONTROL_CLEAN(&box->magic,64); }
+}
 /* The poll of the mailbox, from the timer of the saved state
    (runtime/persist.h). */
 static void control_poll(volatile u32 *h) {
     if(!h[GRKIT_HOST_CONTROL_WORD/4]) return;
     volatile struct control_mailbox *box=(volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(h[GRKIT_HOST_SERVICES/4]));
-    /* The service watches this count to tell the phone of a change that the
-       user made on the camera. No request and no card read. */
-    u32 changes=h[GRKIT_HOST_STATE_CHANGES/4];
-    if(box->state_changes!=changes) { box->state_changes=changes; CONTROL_CLEAN(&box->magic,64); }
+    control_publish(h);
     control_poll_once(box,(struct control_request *)services_word(h,SERVICES_CONTROL_CANDIDATE),control_dispatch,(void *)h);
 }
 #endif

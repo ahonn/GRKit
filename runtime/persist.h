@@ -4,6 +4,9 @@
    same task, including while MENU or a native keyboard is open. Capture
    contains no firmware calls, so a dial transition cannot interleave it. */
 #define PERSIST_POLL_MS 100U
+/* The polls after a request of the Wi-Fi service: about 10 s, in which the
+   phone app usually sends its next request. */
+#define PERSIST_ACTIVE_POLLS 100U
 #ifndef PERSIST_TIMER_START
 #define PERSIST_TIMER_START(ms) ui_timer_start(ms)
 #endif
@@ -62,26 +65,38 @@ static void persist_poll(volatile u32 *h) {
     PERSIST_BARRIER();
     out[GRKIT_PERSIST_READY/4]=request;
 }
-/* Whether the poll has work: a phone on the Wi-Fi of the camera, which can
-   send a request at any time, a request of the Wi-Fi service, or a request
-   of the resident loader for the saved state. Without one, the timer does
-   not run, and each timer dispatch of the App task checks again
-   (runtime/menu.c: menu_timers_due). */
+/* Whether the poll has work: a request of the resident loader for the saved
+   state, a request of the Wi-Fi service, or one of PERSIST_ACTIVE_POLLS polls
+   after one, while the phone app usually sends more. Without work, no timer
+   runs: the timer dispatches of the App task answer the first request of the
+   service (runtime/menu.c: menu_timers_due), at least about once a second
+   also while MENU shows. The timer then keeps the next answers near
+   PERSIST_POLL_MS on the screens where those dispatches are rare. */
 static u32 persist_wanted(volatile u32 *h) {
     volatile u32 *out=services_word(h,SERVICES_PERSIST);
-    return MENU_WLAN_STATION() || out[GRKIT_PERSIST_REQUEST/4]!=out[GRKIT_PERSIST_READY/4] ||
-           control_pending(h);
+    return out[GRKIT_PERSIST_REQUEST/4]!=out[GRKIT_PERSIST_READY/4] ||
+           services_word(h,SERVICES_PERSIST_ACTIVE)[0] || control_pending(h);
+}
+/* Answer a waiting request of the Wi-Fi service, and poll on after it. */
+static void persist_control(volatile u32 *h) {
+    volatile u32 *active=services_word(h,SERVICES_PERSIST_ACTIVE);
+    u32 asked=control_pending(h);
+    control_poll(h);
+    if(asked) active[0]=PERSIST_ACTIVE_POLLS;
+    else if(active[0]) --active[0];
 }
 static void persist_ready(volatile u32 *h) {
     volatile u32 *timer=services_word(h,SERVICES_PERSIST_TIMER);
     if(!h[GRKIT_HOST_PERSIST_WORD/4] || timer[0]) return;
-    control_poll(h);
+    persist_control(h);
     persist_poll(h);
     if(persist_wanted(h)) timer[0]=PERSIST_TIMER_START(PERSIST_POLL_MS);
 }
-/* A timer dispatch of the App task: poll once when there is work and the
-   timer does not run. */
+/* A timer dispatch of the App task: tell the Wi-Fi service of the changes
+   made on the camera, and poll once when there is work and the timer does
+   not run. */
 static void persist_due(volatile u32 *h) {
+    control_publish(h);
     if(!services_word(h,SERVICES_PERSIST_TIMER)[0] && persist_wanted(h)) persist_ready(h);
 }
 static u32 persist_fired(volatile u32 *h,u32 id) {

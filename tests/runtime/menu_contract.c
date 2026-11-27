@@ -26,9 +26,6 @@ static void record_native_aspect(unsigned id);
 /* The native Image Control type plus 1 (runtime/menu.c). */
 static unsigned native_ic_value;
 #define MENU_NATIVE_IC_TYPE() (native_ic_value)
-/* Whether a phone is connected to the Wi-Fi of the camera (runtime/menu.c). */
-static unsigned wlan_station_value;
-#define MENU_WLAN_STATION() (wlan_station_value)
 /* Whether the Wi-Fi access point of the camera is on (runtime/menu.c). */
 static unsigned wlan_on_value;
 #define MENU_WLAN_ON() (wlan_on_value)
@@ -7026,6 +7023,19 @@ static void persistence_ignores_unsaved_values_and_rejects_incomplete_views(void
     persist_poll(h);
     assert(p[GRKIT_PERSIST_READY / 4] == 2 && p[GRKIT_PERSIST_REVISION / 4] == 1);
 }
+/* A new mailbox of the Wi-Fi service, with the service's first request
+   (ATTACH) waiting. */
+static volatile struct control_mailbox *test_service_request(volatile u32 *h)
+{
+    static const u32 epoch[4] = {0};
+    static const u8 nonce[16] = {1};
+    volatile struct control_mailbox *box =
+        (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
+    control_init(box, epoch);
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
+    assert(control_submit(box, epoch, GRKIT_CONTROL_ATTACH, nonce, 16) == 1);
+    return box;
+}
 static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(void)
 {
     volatile u32 *h = test_header, *p;
@@ -7036,7 +7046,7 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     persist_baseline(h, p);
     h[GRKIT_HOST_CROP / 4] = 3; /* Before resident startup. */
     p[GRKIT_PERSIST_REQUEST / 4] = 1;
-    wlan_station_value = 1;
+    test_service_request(h); /* Keeps the timer running. */
     menu_viewfinder(VIEWFINDER_READY);
     assert(p[GRKIT_PERSIST_REVISION / 4] == 2 && p[GRKIT_PERSIST_READY / 4] == 1);
     timer = services_word(h, SERVICES_PERSIST_TIMER)[0];
@@ -7051,13 +7061,16 @@ static void persistence_timer_runs_in_menus_and_preserves_early_dirty_values(voi
     assert(p[GRKIT_PERSIST_READY / 4] == 2 && p[GRKIT_PERSIST_REVISION / 4] == 3);
     assert(services_word(h, SERVICES_PERSIST_TIMER)[0] != timer);
     assert(dial_word(h, DIAL_TIMER)[0] == dial_timer_ids);
-    wlan_station_value = 0;
+    services_word(h, SERVICES_PERSIST_TIMER)[0] = 0;
+    services_word(h, SERVICES_PERSIST_ACTIVE)[0] = 0;
+    h[GRKIT_HOST_CONTROL_WORD / 4] = 0;
 }
-/* The poll runs only while it has work, in every start: without a phone, a
-   timer dispatch of the App task serves a waiting request of the resident
-   loader or of the Wi-Fi service and starts no timer; a phone keeps the
-   100 ms timer running, and the timer stops at the tick after it leaves.
-   The shooting screen does not start the timer on its own. */
+/* The poll runs only while it has work, in every start: a timer dispatch of
+   the App task serves a waiting request of the resident loader or of the
+   Wi-Fi service. A request of the service keeps the timer for
+   PERSIST_ACTIVE_POLLS polls, and a change made on the camera reaches the
+   mailbox with no timer. The shooting screen does not start the timer on
+   its own. */
 static void the_poll_runs_only_while_it_has_work(void)
 {
     volatile u32 *h = test_header, *p, *timer;
@@ -7069,7 +7082,6 @@ static void the_poll_runs_only_while_it_has_work(void)
     persist_baseline(h, p);
     timer = services_word(h, SERVICES_PERSIST_TIMER);
     h[GRKIT_HOST_PERSIST_WORD / 4] = 1;
-    wlan_station_value = 0;
     starts = persist_timer_ids;
     menu_viewfinder(VIEWFINDER_READY);
     menu_timers_due();
@@ -7080,7 +7092,9 @@ static void the_poll_runs_only_while_it_has_work(void)
     menu_timers_due();
     assert(p[GRKIT_PERSIST_READY / 4] == p[GRKIT_PERSIST_REQUEST / 4]);
     assert(!timer[0] && persist_timer_ids == starts);
-    /* A request of the Wi-Fi service: the next dispatch answers it. */
+    /* A request of the Wi-Fi service: the next dispatch answers it, and the
+       poll stays fast for PERSIST_ACTIVE_POLLS polls, while the phone app
+       usually sends more. */
     box = (volatile struct control_mailbox *)SERVICES_MAP(SERVICES_CONTROL_ADDRESS(TEST_SERVICES));
     control_init(box, epoch);
     h[GRKIT_HOST_CONTROL_WORD / 4] = 1;
@@ -7091,7 +7105,9 @@ static void the_poll_runs_only_while_it_has_work(void)
     assert(control_pending(h));
     menu_timers_due();
     assert(box->ready == 1 && !control_pending(h));
-    assert(!timer[0] && persist_timer_ids == starts);
+    assert(timer[0] && persist_timer_ms == PERSIST_POLL_MS);
+    for(id = 1; timer[0]; ++id) ui_timer_fired(0, timer[0]);
+    assert(id == PERSIST_ACTIVE_POLLS + 1 && persist_timer_ids == starts + PERSIST_ACTIVE_POLLS);
     /* Each dispatch copies whether the access point is on, for the resident
        loader. */
     wlan_on_value = 1;
@@ -7100,21 +7116,11 @@ static void the_poll_runs_only_while_it_has_work(void)
     wlan_on_value = 0;
     menu_timers_due();
     assert(h[GRKIT_HOST_WLAN / 4] == 0);
-    /* A phone: the 100 ms timer runs and keeps running. */
-    wlan_station_value = 1;
+    /* A change made on the camera reaches the mailbox in the next dispatch,
+       with no timer. */
+    h[GRKIT_HOST_STATE_CHANGES / 4] = box->state_changes + 1;
     menu_timers_due();
-    id = timer[0];
-    assert(id && persist_timer_ms == PERSIST_POLL_MS);
-    menu_timers_due();
-    assert(timer[0] == id);
-    ui_timer_fired(0, id);
-    assert(timer[0] && timer[0] != id);
-    /* The phone leaves: the next tick does not start the timer again. */
-    wlan_station_value = 0;
-    ui_timer_fired(0, timer[0]);
-    assert(!timer[0]);
-    menu_timers_due();
-    assert(!timer[0]);
+    assert(box->state_changes == h[GRKIT_HOST_STATE_CHANGES / 4] && !timer[0]);
     h[GRKIT_HOST_SERVICES / 4] = 0;
     menu_timers_due();
     h[GRKIT_HOST_SERVICES / 4] = TEST_SERVICES;
