@@ -757,6 +757,10 @@ mod tests {
         assert_eq!(value["camera"]["model"], "RICOH GR III");
         assert_eq!(value["grkit"]["version"], "1.6.2");
         assert_eq!(value["writeAccess"]["allowed"], true);
+        // The app reads the props with the wire contract.
+        let props: grkit_protocol::props::PropsResponse =
+            serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(props.card_id.as_deref(), Some("card-test"));
         // A camera without a runtime session has no settings commands; the
         // card takes the shutdown picture.
         assert_eq!(

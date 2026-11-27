@@ -2,7 +2,7 @@
 //! recipes live in the App task, so each change applies at once, and the
 //! camera saves the recipe file as after a change in MENU. A recipe is
 //! found by its ID, which stays with it when it moves.
-use super::{problem, try_lock, RequestContext, Resources, Result};
+use super::{looks::EffectName, problem, try_lock, RequestContext, Resources, Result};
 use crate::codec::{word, Codes, Page};
 use crate::{
     api::Reply,
@@ -15,6 +15,7 @@ use crate::{
 };
 use grkit_core::abi::*;
 use grkit_core::recipes::{self, name_words, Family, Look, Recipe};
+use grkit_protocol::recipes::RecipeStatus;
 use serde_json::{json, Value};
 
 /// A recipe of the camera as its words give it.
@@ -111,7 +112,7 @@ impl Resources {
                 )
             })?;
             let mut backend = try_lock(&self.backend)?;
-            let names = self.effect_names(backend.as_mut(), context);
+            let names = self.effect_names(context);
             if request.method == "GET" {
                 return Ok(Reply::json(
                     200,
@@ -158,24 +159,12 @@ impl Resources {
         })();
         result.unwrap_or_else(Reply::problem)
     }
-
-    /// The ID and name of each Look on the card, by the recipe code of its
-    /// effect. Empty while the Looks cannot be read.
-    fn effect_names(
-        &self,
-        backend: &mut dyn RuntimeBackend,
-        context: &RequestContext<'_>,
-    ) -> Vec<(u16, String, String)> {
-        self.view(backend, context)
-            .map(|view| view.effect_names())
-            .unwrap_or_default()
-    }
 }
 
 fn list_json(
     list: &List,
     family: Family,
-    names: &[(u16, String, String)],
+    names: &[EffectName],
     context: &RequestContext<'_>,
 ) -> Value {
     let recipes: Vec<Value> = list
@@ -188,16 +177,28 @@ fn list_json(
                     .ok()?;
             let mut value = serde_json::to_value(&recipe).ok()?;
             let effect = match &recipe.look {
-                Look::Effect { code, .. } => names.iter().find(|(c, _, _)| c == code),
+                Look::Effect { code, .. } => names.iter().find(|look| look.code == *code),
                 _ => None,
             };
-            value["id"] = json!(entry.id);
-            value["name"] = json!(entry.name);
-            value["enabled"] = json!(slot < list.on);
-            value["current"] = json!(list.current == Some(entry.id));
-            value["effectId"] = json!(effect.map(|(_, id, _)| id));
-            value["effectName"] = json!(effect.map(|(_, _, name)| name));
-            value["ready"] = json!(!matches!(recipe.look, Look::Effect { .. }) || effect.is_some());
+            let status = RecipeStatus {
+                id: entry.id,
+                name: entry.name.clone(),
+                enabled: slot < list.on,
+                current: list.current == Some(entry.id),
+                effect_id: effect.map(|look| look.id.clone()),
+                effect_name: effect.map(|look| look.name.clone()),
+                // A Look on the card only does not apply (`recipe_look_missing`).
+                ready: match recipe.look {
+                    Look::Effect { .. } => effect.is_some_and(|look| !look.stored),
+                    _ => true,
+                },
+                effect_stored: effect.is_some_and(|look| look.stored),
+            };
+            if let (Some(value), Value::Object(status)) =
+                (value.as_object_mut(), serde_json::to_value(status).ok()?)
+            {
+                value.extend(status);
+            }
             Some(value)
         })
         .collect();
@@ -481,6 +482,58 @@ mod tests {
         let applied = apply(&mut camera, 100).unwrap();
         assert_eq!(applied["skipped"]["grain"], true);
         assert_eq!(applied["skipped"]["modules"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_recipe_whose_look_is_on_the_card_only_is_not_ready() {
+        let preset = recipes::presets()
+            .into_iter()
+            .find(|p| p.id == "cinestill-800t")
+            .unwrap();
+        let recipe = &preset.recipes[0];
+        let list = List {
+            entries: vec![Entry {
+                id: 7,
+                words: recipe.words().unwrap(),
+                name: None,
+            }],
+            on: 1,
+            current: None,
+            revision: 0,
+            undo: 0,
+        };
+        let id = "vision3-500t-supra-v1";
+        let mut names = [EffectName {
+            code: recipes::effect_code(id),
+            id: id.into(),
+            name: "Vision3".into(),
+            stored: true,
+        }];
+        let context = RequestContext {
+            boot_id: "b",
+            card_id: Some("c".into()),
+            root: std::path::Path::new("/"),
+            release_keys: &[],
+            family: Some(recipe.family),
+        };
+        let item = |names: &[EffectName]| {
+            list_json(&list, recipe.family, names, &context)["recipes"][0].clone()
+        };
+        let stored = item(&names);
+        assert_eq!(
+            (
+                &stored["effectName"],
+                &stored["ready"],
+                &stored["effectStored"]
+            ),
+            (&json!("Vision3"), &json!(false), &json!(true))
+        );
+        names[0].stored = false;
+        let on_camera = item(&names);
+        assert_eq!(
+            (&on_camera["ready"], &on_camera["effectStored"]),
+            (&json!(true), &json!(false))
+        );
     }
 
     #[test]

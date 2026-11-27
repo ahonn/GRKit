@@ -171,51 +171,65 @@ impl Covers {
         }
     }
 
-    /// Set the cover of each Look.
+    /// Set the cover of each Look. A Look on the card only has no bytes: the
+    /// service learned its cover when it read the file (`learn`), else its
+    /// file is read again.
     pub fn resolve(&mut self, root: &Path, looks: &mut [Look]) {
         let mut resolved = BTreeMap::new();
         for look in looks {
             let entry = match self.resolved.remove(&look.file.id) {
                 Some(entry) if entry.hash == look.file.content_hash => entry,
                 _ => {
-                    let base = self.base(&look.file.id, look.source);
-                    let cover = self.find(root, &look.file, base.as_ref());
-                    // A cover that the library records and that is no
-                    // variant is individual. An icon that no cover draws
-                    // exactly, such as one of another build of the drawing,
-                    // counts by the nearer variant.
-                    let individual = base
-                        .as_ref()
-                        .zip(cover.as_ref())
-                        .is_some_and(|(base, cover)| base.variant_of(cover).is_none());
-                    let decoded = effects::decode(&look.file.bytes).ok();
-                    // A native look is a color look.
-                    let monochrome = look.source == "official"
-                        && decoded
-                            .as_ref()
-                            .is_some_and(|(effect, _)| effect.monochrome());
-                    // How a built-in Look without an individual cover counts
-                    // for the scheme of the card (`Scheme::of`). A Look whose
-                    // film box is gray has one cover for each scheme.
-                    let vote = base
-                        .filter(|base| {
-                            !individual
-                                && base.variant_of(&base.film_box()) == Some(Variant::FilmBox)
-                        })
-                        .zip(decoded)
-                        .map(|(base, (_, icon))| (monochrome, base.nearest_variant(&icon)));
-                    Resolved {
-                        hash: look.file.content_hash.clone(),
-                        cover,
-                        monochrome,
-                        vote,
-                    }
+                    let bytes = look.bytes(root).unwrap_or_default();
+                    self.entry(root, &look.file, &bytes, look.source)
                 }
             };
             look.cover.clone_from(&entry.cover);
             resolved.insert(look.file.id.clone(), entry);
         }
         self.resolved = resolved;
+    }
+
+    /// Find the cover of `file`, whose content is `bytes`, while the bytes
+    /// are at hand. The next `resolve` keeps it while it sees the Look.
+    pub fn learn(&mut self, root: &Path, file: &LookFile, source: &str) {
+        let entry = self.entry(root, file, &file.bytes, source);
+        self.resolved.insert(file.id.clone(), entry);
+    }
+
+    fn entry(&mut self, root: &Path, file: &LookFile, bytes: &[u8], source: &str) -> Resolved {
+        let base = self.base(&file.id, source);
+        let decoded = effects::decode(bytes).ok();
+        let cover = decoded
+            .as_ref()
+            .and_then(|(_, icon)| self.find(root, &file.id, icon, base.as_ref()));
+        // A cover that the library records and that is no variant is
+        // individual. An icon that no cover draws exactly, such as one of
+        // another build of the drawing, counts by the nearer variant.
+        let individual = base
+            .as_ref()
+            .zip(cover.as_ref())
+            .is_some_and(|(base, cover)| base.variant_of(cover).is_none());
+        // A native look is a color look.
+        let monochrome = source == "official"
+            && decoded
+                .as_ref()
+                .is_some_and(|(effect, _)| effect.monochrome());
+        // How a built-in Look without an individual cover counts for the
+        // scheme of the card (`Scheme::of`). A Look whose film box is gray
+        // has one cover for each scheme.
+        let vote = base
+            .filter(|base| {
+                !individual && base.variant_of(&base.film_box()) == Some(Variant::FilmBox)
+            })
+            .zip(decoded)
+            .map(|(base, (_, icon))| (monochrome, base.nearest_variant(&icon)));
+        Resolved {
+            hash: file.content_hash.clone(),
+            cover,
+            monochrome,
+            vote,
+        }
     }
 
     /// The scheme of the built-in Looks on the card (`resolve`).
@@ -242,22 +256,22 @@ impl Covers {
         Some(scheme.cover(&base, self.resolved.get(id)?.monochrome))
     }
 
-    /// The cover of the import of `file`, else for a built-in Look the base
-    /// cover or its film box cover, when it draws the icon of the file.
-    fn find(&mut self, root: &Path, file: &LookFile, base: Option<&Cover>) -> Option<Cover> {
+    /// The cover of the import of the Look `id`, else for a built-in Look the
+    /// base cover or its film box cover, when it draws `icon`, the icon of
+    /// the file.
+    fn find(&mut self, root: &Path, id: &str, icon: &[u8], base: Option<&Cover>) -> Option<Cover> {
         let library = match self.library(root) {
-            Library::Ready(loaded) => loaded.covers.get(&file.id).cloned(),
+            Library::Ready(loaded) => loaded.covers.get(id).cloned(),
             _ => None,
         };
         let statement = base
             .map(|cover| [cover.clone(), cover.film_box()])
             .into_iter()
             .flatten();
-        let (_, icon) = effects::decode(&file.bytes).ok()?;
         library
             .into_iter()
             .chain(statement)
-            .find(|cover| cover.matches(&icon))
+            .find(|cover| cover.matches(icon))
     }
 
     fn library(&mut self, root: &Path) -> &Library {

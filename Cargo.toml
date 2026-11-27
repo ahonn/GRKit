@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crates/grkit-wasm", "crates/grkit-firmware", "crates/grkit-serve"]
+members = ["crates/grkit-core", "crates/grkit-build", "crates/grkit-cli", "crates/grkit-wasm", "crates/grkit-firmware", "crates/grkit-serve", "crates/grkit-protocol"]
 resolver = "2"
 
 [workspace.package]
@@ -34,6 +34,7 @@ zip = { version = "9.0", default-features = false, features = ["deflate"] }
 grkit-core = { path = "crates/grkit-core" }
 grkit-build = { path = "crates/grkit-build" }
 grkit-firmware = { path = "crates/grkit-firmware" }
+grkit-protocol = { path = "crates/grkit-protocol" }
 
 [profile.release]
 lto = "thin"

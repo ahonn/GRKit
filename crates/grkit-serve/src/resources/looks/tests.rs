@@ -167,6 +167,9 @@ impl Fixture {
 fn file(root: &Path, id: &str) -> std::path::PathBuf {
     looks::library(root).join(effects::filename(id).unwrap())
 }
+fn stored_file(root: &Path, id: &str) -> std::path::PathBuf {
+    looks::stored(root).join(effects::filename(id).unwrap())
+}
 fn json(reply: &Reply) -> Value {
     reply.value()
 }
@@ -291,11 +294,15 @@ fn the_list_joins_the_files_of_the_card_with_the_choices_of_the_camera() {
     assert_eq!(ids, ["beta", "alpha", "gamma"]);
     assert_eq!(list["bootId"], BOOT);
     assert_eq!(list["cardId"], CARD);
-    assert_eq!(list["counts"], json!({"listed": 3, "loaded": 2}));
+    assert_eq!(
+        list["counts"],
+        json!({"listed": 3, "loaded": 2, "stored": 0})
+    );
     assert_eq!(
         list["limits"],
-        json!({"listedLooks": 64, "loadedLooks": 40})
+        json!({"listedLooks": 64, "loadedLooks": 40, "storedLooks": looks::MAX_STORED})
     );
+    assert_eq!(list["diagnostics"], json!([]));
     let beta = &list["looks"][0];
     assert_eq!(beta["name"], "Test");
     assert_eq!(beta["position"], 0);
@@ -587,7 +594,8 @@ fn a_new_look_needs_a_free_code_and_room() {
         (409, "effect_code_collision")
     );
 
-    let ids: Vec<String> = (0..64).map(|i| format!("full-{i}")).collect();
+    // A camera with as many Looks as it loads: the new one goes to the card.
+    let ids: Vec<String> = (0..MAX_LOADED).map(|i| format!("full-{i}")).collect();
     let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
     let fixture = Fixture::new(&ids, &[]);
     let reply = fixture.call(
@@ -596,11 +604,201 @@ fn a_new_look_needs_a_free_code_and_room() {
         &testing::effect("one-more"),
         &create,
     );
+    assert_eq!(reply.status, 201);
+    assert_eq!(json(&reply)["place"], "card");
+    assert!(!file(fixture.root.path(), "one-more").exists());
+    assert!(stored_file(fixture.root.path(), "one-more").exists());
+    let list = fixture.list();
+    assert_eq!(list["stored"][0]["id"], "one-more");
+    assert_eq!(list["counts"]["stored"], 1);
+}
+
+#[test]
+fn a_look_moves_between_the_camera_and_the_card() {
+    let fixture = Fixture::new(&["alpha", "beta"], &["alpha", "beta"]);
+    let alpha = look_key("alpha");
+    {
+        let mut camera = fixture.camera.lock().unwrap();
+        camera.looks.selected = Some(alpha);
+        camera.looks.uses = vec![LookUse {
+            code: u32::from(recipes::effect_code("beta")),
+            origin: UseOrigin::Unknown,
+        }];
+    }
+    let to_card = br#"{"place":"card"}"#;
+    // The Look in use needs the camera to go to Off.
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", to_card);
+    assert_eq!((reply.status, code(&reply).as_str()), (409, "active_look"));
+    let reply = fixture.change(
+        "PATCH",
+        "/v1/looks/alpha",
+        br#"{"place":"card","activeOff":true}"#,
+    );
+    assert_eq!(
+        reply.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&reply.body)
+    );
+    assert_eq!(json(&reply)["place"], "card");
+    assert_eq!(fixture.commands(), [format!("turn {alpha} true")]);
+    assert!(!file(fixture.root.path(), "alpha").exists());
+    assert!(stored_file(fixture.root.path(), "alpha").exists());
+    // A recipe that uses a Look does not keep it on the camera.
+    assert_eq!(
+        fixture.change("PATCH", "/v1/looks/beta", to_card).status,
+        200
+    );
+    fixture.commands();
+    let list = fixture.list();
+    assert!(list["looks"].as_array().unwrap().is_empty());
+    let stored: Vec<_> = list["stored"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|look| {
+            (
+                look["id"].as_str().unwrap(),
+                look["runtime"]["usedBy"].as_u64(),
+            )
+        })
+        .collect();
+    assert_eq!(stored, [("alpha", Some(0)), ("beta", Some(1))]);
+
+    // Back on the camera, the Look that the camera still lists is On again.
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"camera"}"#);
+    assert_eq!(
+        reply.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&reply.body)
+    );
+    assert_eq!(fixture.commands(), [format!("turn {alpha} false")]);
+    assert!(file(fixture.root.path(), "alpha").exists());
+    assert!(!stored_file(fixture.root.path(), "alpha").exists());
+    assert_eq!(fixture.look("alpha")["enabled"], true);
+}
+
+#[test]
+fn a_look_goes_back_to_the_camera_only_while_it_has_room() {
+    let ids: Vec<String> = (0..MAX_LOADED).map(|i| format!("full-{i}")).collect();
+    let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    let fixture = Fixture::new(&ids, &[]);
+    fs::create_dir_all(looks::stored(fixture.root.path())).unwrap();
+    fs::write(
+        stored_file(fixture.root.path(), "kept"),
+        testing::effect("kept"),
+    )
+    .unwrap();
+    let reply = fixture.change("PATCH", "/v1/looks/kept", br#"{"place":"camera"}"#);
     assert_eq!(
         (reply.status, code(&reply).as_str()),
         (409, "look_capacity")
     );
-    assert!(!file(fixture.root.path(), "one-more").exists());
+    assert!(stored_file(fixture.root.path(), "kept").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn a_move_that_fails_keeps_the_look_and_a_late_one_still_tells_the_phone() {
+    use std::os::unix::fs::PermissionsExt;
+    let fixture = Fixture::new(&["alpha"], &["alpha"]);
+    let root = fixture.root.path();
+    let alpha = look_key("alpha");
+    let stored = looks::stored(root);
+    fs::create_dir_all(&stored).unwrap();
+    // The card takes no new file there: the Look stays on the camera, On.
+    fs::set_permissions(&stored, fs::Permissions::from_mode(0o555)).unwrap();
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"card"}"#);
+    fs::set_permissions(&stored, fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(
+        (reply.status, code(&reply).as_str()),
+        (507, "card_write_failed")
+    );
+    assert_eq!(
+        fixture.commands(),
+        [format!("turn {alpha} true"), format!("turn {alpha} false")]
+    );
+    assert!(file(root, "alpha").exists());
+    assert_eq!(fixture.look("alpha")["enabled"], true);
+
+    // Back on the camera while the camera is busy: the file moved, so the
+    // phone hears of the change, and the answer says that the Look is Off.
+    let to_card = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"card"}"#);
+    assert_eq!(to_card.status, 200);
+    fixture.camera.lock().unwrap().busy = true;
+    let before = fixture.changes.counts();
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"camera"}"#);
+    assert_eq!((reply.status, code(&reply).as_str()), (503, "camera_busy"));
+    assert_ne!(fixture.changes.counts(), before);
+    assert!(file(root, "alpha").exists() && !stored_file(root, "alpha").exists());
+}
+
+#[test]
+fn a_card_without_a_readable_stored_folder_still_lists_the_camera() {
+    let fixture = Fixture::new(&["alpha"], &["alpha"]);
+    fs::write(looks::stored(fixture.root.path()), b"not a folder").unwrap();
+    let list = fixture.list();
+    assert_eq!(list["looks"][0]["id"], "alpha");
+    assert_eq!(list["stored"], json!([]));
+    assert_eq!(list["diagnostics"], json!([{"code": "stored_unreadable"}]));
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"card"}"#);
+    assert_eq!(
+        (reply.status, code(&reply).as_str()),
+        (503, "library_unavailable")
+    );
+    assert!(fixture.commands().is_empty());
+}
+
+#[test]
+fn a_look_on_the_card_only_is_read_once_while_its_file_keeps_its_stamp() {
+    let fixture = Fixture::new(&[], &[]);
+    let path = stored_file(fixture.root.path(), "kept");
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    fs::write(&path, testing::effect("kept")).unwrap();
+    let hash = packaging::sha256(&testing::effect("kept"));
+    assert_eq!(fixture.list()["stored"][0]["contentHash"], hash);
+    // Other content with the same stamp: the list does not read it again.
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    fs::write(&path, named("kept", "Other")).unwrap();
+    fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(modified)
+        .unwrap();
+    assert_eq!(fixture.list()["stored"][0]["contentHash"], hash);
+    // A change of the Look reads its file again.
+    let reply = fixture.change("PATCH", "/v1/looks/kept", br#"{"name":"Test"}"#);
+    assert_eq!(
+        reply.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&reply.body)
+    );
+    assert_eq!(json(&reply)["name"], "Other");
+    let content = fixture.call("GET", "/v1/looks/kept/content", b"", &[]);
+    assert_eq!(content.body, named("kept", "Other"));
+}
+
+#[test]
+fn a_copy_that_a_move_left_on_the_card_goes_with_the_next_change() {
+    let fixture = Fixture::new(&["alpha"], &["alpha"]);
+    let root = fixture.root.path();
+    fs::create_dir_all(looks::stored(root)).unwrap();
+    fs::write(stored_file(root, "alpha"), testing::effect("alpha")).unwrap();
+    let list = fixture.list();
+    assert_eq!(list["looks"][0]["id"], "alpha");
+    assert_eq!(list["stored"], json!([]));
+    let reply = fixture.change("PATCH", "/v1/looks/alpha", br#"{"place":"card"}"#);
+    assert_eq!(
+        reply.status,
+        200,
+        "{}",
+        String::from_utf8_lossy(&reply.body)
+    );
+    assert!(!file(root, "alpha").exists());
+    assert_eq!(fixture.list()["stored"][0]["id"], "alpha");
 }
 
 #[test]

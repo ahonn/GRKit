@@ -329,12 +329,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "grkit-protocol"
+version = "1.6.6"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "grkit-serve"
 version = "1.6.6"
 dependencies = [
  "anyhow",
  "crc32fast",
  "grkit-core",
+ "grkit-protocol",
  "libc",
  "serde",
  "serde_json",
