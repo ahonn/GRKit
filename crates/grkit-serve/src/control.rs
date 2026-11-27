@@ -568,8 +568,17 @@ mod platform {
             }
             thread::sleep(Duration::from_millis(5));
         };
+        // A child that the kernel holds (for example in a card read) does
+        // not end at the kill: a thread of its own waits for it, so that
+        // discovery returns.
         let _ = child.kill();
-        let _ = child.wait();
+        if !matches!(child.try_wait(), Ok(Some(_))) {
+            let _ = thread::Builder::new()
+                .name("grkit-reap".into())
+                .spawn(move || {
+                    let _ = child.wait();
+                });
+        }
         result
     }
 }

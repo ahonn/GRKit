@@ -6,8 +6,9 @@ use std::time::Duration;
 
 type Result<T> = std::result::Result<T, Problem>;
 
-/// The App task polls every 100 ms. A camera that is busy with a capture
-/// can answer later.
+/// The App task answers in its next timer dispatch, at most about a second
+/// apart while MENU shows, then polls every 100 ms for a while. A camera
+/// that is busy with a capture can answer later.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
 /// The wait before a command that answered `CONTROL_CLOSING` goes again: ADJ
 /// closes after the poll that answered.
@@ -133,44 +134,90 @@ impl<M: crate::control::MailboxIo + Send> RuntimeBackend for ControlBackend<M> {
 /// Discovery runs the installed core, which can fail while GRKit still
 /// starts. The backend tries again later, and the other resources of the
 /// service work meanwhile.
-pub struct LazyLinuxBackend {
-    root: std::path::PathBuf,
-    nonce: [u8; 16],
-    session: Option<LinuxBackend>,
-    retry_after: Option<std::time::Instant>,
+///
+/// Discovery reads the card and runs a program, which the kernel can hold.
+/// It runs on a thread of its own, so that a request waits for it at most
+/// `wait` and the backend never stays locked; a discovery that runs longer
+/// than `ABANDON_AFTER` is left, and the next request starts another.
+pub struct LazyBackend<B> {
+    discover: std::sync::Arc<dyn Fn() -> anyhow::Result<B> + Send + Sync>,
+    wait: Duration,
+    session: Option<B>,
+    pending: Option<(std::sync::mpsc::Receiver<anyhow::Result<B>>, Instant)>,
+    retry_after: Option<Instant>,
 }
+pub type LazyLinuxBackend = LazyBackend<LinuxBackend>;
+use std::time::Instant;
+/// The wait of a request for a discovery: longer than the run of one core
+/// (`control::DISCOVERY_TIMEOUT`).
+const DISCOVERY_WAIT: Duration = Duration::from_secs(3);
+const ABANDON_AFTER: Duration = Duration::from_secs(30);
+const RETRY_AFTER: Duration = Duration::from_secs(2);
+
 impl LazyLinuxBackend {
     pub fn new(root: std::path::PathBuf, nonce: [u8; 16]) -> Self {
+        Self::with_discovery(DISCOVERY_WAIT, move || LinuxBackend::discover(&root, nonce))
+    }
+}
+impl<B: Send + 'static> LazyBackend<B> {
+    pub fn with_discovery(
+        wait: Duration,
+        discover: impl Fn() -> anyhow::Result<B> + Send + Sync + 'static,
+    ) -> Self {
         Self {
-            root,
-            nonce,
+            discover: std::sync::Arc::new(discover),
+            wait,
             session: None,
+            pending: None,
             retry_after: None,
         }
     }
-    fn session(&mut self) -> Result<&mut LinuxBackend> {
+    fn session(&mut self) -> Result<&mut B> {
+        use std::sync::mpsc::RecvTimeoutError;
         if self.session.is_none() {
             if self
-                .retry_after
-                .is_some_and(|deadline| std::time::Instant::now() < deadline)
+                .pending
+                .as_ref()
+                .is_some_and(|(_, started)| started.elapsed() >= ABANDON_AFTER)
             {
-                return Err(unavailable());
+                self.pending = None;
             }
-            match LinuxBackend::discover(&self.root, self.nonce) {
-                Ok(session) => {
-                    self.session = Some(session);
-                    self.retry_after = None;
-                }
-                Err(_) => {
-                    self.retry_after = Some(std::time::Instant::now() + Duration::from_secs(2));
+            if self.pending.is_none() {
+                if self.retry_after.is_some_and(|at| Instant::now() < at) {
                     return Err(unavailable());
                 }
+                let (sender, answer) = std::sync::mpsc::channel();
+                let discover = std::sync::Arc::clone(&self.discover);
+                let started = std::thread::Builder::new()
+                    .name("grkit-discover".into())
+                    .spawn(move || {
+                        let _ = sender.send(discover());
+                    });
+                if started.is_err() {
+                    self.retry_after = Some(Instant::now() + RETRY_AFTER);
+                    return Err(unavailable());
+                }
+                self.pending = Some((answer, Instant::now()));
+            }
+            let (answer, _) = self.pending.as_ref().expect("pending discovery");
+            match answer.recv_timeout(self.wait) {
+                Ok(Ok(session)) => {
+                    self.session = Some(session);
+                    self.pending = None;
+                    self.retry_after = None;
+                }
+                Ok(Err(_)) | Err(RecvTimeoutError::Disconnected) => {
+                    self.pending = None;
+                    self.retry_after = Some(Instant::now() + RETRY_AFTER);
+                    return Err(unavailable());
+                }
+                Err(RecvTimeoutError::Timeout) => return Err(unavailable()),
             }
         }
         Ok(self.session.as_mut().expect("discovered session"))
     }
 }
-impl RuntimeBackend for LazyLinuxBackend {
+impl<B: RuntimeBackend + 'static> RuntimeBackend for LazyBackend<B> {
     fn state_changes(&mut self) -> Option<u32> {
         self.session.as_mut()?.state_changes()
     }
@@ -241,5 +288,39 @@ mod tests {
                 .0,
             CONTROL_BUSY
         );
+    }
+
+    #[test]
+    fn a_discovery_that_hangs_does_not_hold_the_backend() {
+        let release = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let hang = std::sync::Arc::clone(&release);
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
+        let counted = std::sync::Arc::clone(&calls);
+        let mut backend = LazyBackend::with_discovery(Duration::from_millis(20), move || {
+            if counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 {
+                hang.wait();
+            }
+            Ok(ControlBackend::new(
+                Client::new(Memory::new()).unwrap(),
+                [7; 16],
+            ))
+        });
+        // Each request waits a bounded time and does not start a second
+        // discovery while the first one runs.
+        for _ in 0..2 {
+            let started = Instant::now();
+            assert_eq!(
+                backend.exchange(CONTROL_LOOKS_READ, &[]).unwrap_err().code,
+                "runtime_unavailable"
+            );
+            assert!(started.elapsed() < Duration::from_secs(1));
+        }
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        // Once it ends, the next request uses its session.
+        release.wait();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while backend.session().is_err() {
+            assert!(Instant::now() < deadline);
+        }
     }
 }
