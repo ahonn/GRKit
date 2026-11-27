@@ -63,7 +63,7 @@ cargo run -- --demo-screen C4
 | L1–L15, L17–L28 | Film Looks |
 | R1–R13 | Recipes |
 | M1–M16 | Modules |
-| S1–S4 | GRKit Settings, Look unlock |
+| S1–S4, S8–S9 | GRKit Settings, Look unlock, Shutdown Screen picture |
 
 Unknown ids fall back to the normal demo home.
 

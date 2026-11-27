@@ -8,6 +8,7 @@ use nsh_core::prelude::*;
 use crate::domain::camera_settings::{
     CameraSettings, DistanceUnit, SettingChange, SettingSwitch, StartMode,
 };
+use crate::domain::shutdown_picture::Crop;
 use crate::store::{AppState, PictureRead, Route, SettingsRead};
 use crate::strings::tr;
 use crate::ui::PageTitle;
@@ -244,10 +245,11 @@ pub fn display_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
     )
 }
 
-/// Shutdown Screen: the picture of the card, its switches, and the photo
-/// that replaces it.
+/// Shutdown Screen: what the camera shows at power-off, its switches, and
+/// the photo that replaces the picture of the card.
 pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElement {
     app.refresh_shutdown_picture();
+    let frame = signal(0.0f32);
     crate::ui::app_page()
         .page_title(move || tr("grkit.shutdown", &[]), false)
         .on_dismiss(on_dismiss)
@@ -266,7 +268,7 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                             app.shutdown_picture_sent()
                                 .then(|| sent_notice(tr("grkit.picture_sent", &[])))
                         }))
-                        .child(dynamic(move || picture_preview(app)))
+                        .child(dynamic(move || picture_preview(app, frame)))
                         .child(dynamic(move || {
                             // Without a picture on the card the switch would
                             // turn on nothing: choosing a photo comes first.
@@ -287,7 +289,8 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                             .into_iter()
                             .flatten()
                             .collect();
-                            (!rows.is_empty()).then(|| list_section(rows))
+                            (!rows.is_empty())
+                                .then(|| list_section(rows).footer(tr("grkit.show_text_note", &[])))
                         }))
                         .child(dynamic(move || picture_buttons(app))),
                 ),
@@ -299,39 +302,115 @@ fn sent_notice(title: String) -> AnyElement {
     crate::ui::notice_card(title).into_element()
 }
 
-/// The picture at the ratio of the camera's screen.
-fn picture_view(uri: String) -> AnyElement {
+/// The value of a switch of the camera, when it has read and has it.
+fn camera_switch(app: AppState, switch: SettingSwitch) -> Option<bool> {
+    match app.camera_settings() {
+        SettingsRead::Ready(settings) => settings.switch(switch),
+        _ => None,
+    }
+}
+
+/// A frame at the ratio of the camera's screen around `content`, with the
+/// camera's text over it while Show Text is on. `frame` keeps its width,
+/// which sizes the text.
+fn screen_frame(app: AppState, frame: Signal<f32>, content: AnyElement) -> AnyElement {
     view()
         .w_full()
         .aspect_ratio(3.0 / 2.0)
         .rounded(px(8.0))
         .overflow_hidden()
         .bg(rgb(0x0B0B0B))
-        .child(
-            image(nsh_core::element::ImageSrc::from(uri))
-                .size_full()
-                .object_fit(ResizeMode::Cover),
-        )
+        .relative()
+        .on_layout(move |bounds: &Bounds<Points>| frame.set(bounds.size.width.0))
+        .child(content)
+        .child(dynamic(move || {
+            (camera_switch(app, SettingSwitch::ShowText) == Some(true))
+                .then(|| camera_text(app, frame.get()))
+                .flatten()
+        }))
         .into_element()
 }
 
-/// The picture the camera shows at power-off: the card's, or, without one,
-/// the camera's own, which the phone cannot read and names instead.
-fn picture_preview(app: AppState) -> Option<AnyElement> {
-    match app.shutdown_picture() {
-        PictureRead::Picture(uri) => Some(picture_view(uri)),
-        PictureRead::None => Some(default_picture_view()),
-        PictureRead::Unknown | PictureRead::Unsupported => None,
+/// The text that the camera draws over the picture, at its places on the
+/// screen of 720 by 480: the shot counts on a dark bar, and the firmware
+/// version. An approximation: the counts are placeholders.
+fn camera_text(app: AppState, width: f32) -> Option<AnyElement> {
+    if width <= 0.0 {
+        return None;
     }
+    let s = width / 720.0;
+    let version = app.package().and_then(|p| firmware_number(&p.firmware));
+    let label = |words: String| {
+        text(words)
+            .text_size(px(24.0 * s))
+            .text_color(rgb(0xFFFFFF))
+    };
+    Some(
+        view()
+            .absolute()
+            .left(px(0.0))
+            .top(px(0.0))
+            .size_full()
+            .pointer_events(PointerEvents::None)
+            .child(
+                view()
+                    .absolute()
+                    .left(px(20.0 * s))
+                    .top(px(340.0 * s))
+                    .w(px(680.0 * s))
+                    .h(px(40.0 * s))
+                    .bg(rgba(0x00000073))
+                    .items_center()
+                    .justify_center()
+                    .child(label("Today : 0000000 > Total: 0000000".to_owned())),
+            )
+            .child(version.map(|version| {
+                view()
+                    .absolute()
+                    .right(px(10.0 * s))
+                    .bottom(px(14.0 * s))
+                    .child(label(format!("FW Ver.{version}")))
+            }))
+            .into_element(),
+    )
 }
 
-/// The frame of the picture with the name of the camera's own picture.
-fn default_picture_view() -> AnyElement {
+/// The version number in the firmware name of the camera (`2.21`).
+fn firmware_number(firmware: &str) -> Option<String> {
+    let start = firmware.find(|c: char| c.is_ascii_digit())?;
+    let rest = &firmware[start..];
+    let end = rest
+        .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .unwrap_or(rest.len());
+    let number = rest[..end].trim_end_matches('.');
+    number.contains('.').then(|| number.to_owned())
+}
+
+/// A picture that fills the frame.
+fn picture_image(uri: String) -> AnyElement {
+    image(nsh_core::element::ImageSrc::from(uri))
+        .size_full()
+        .object_fit(ResizeMode::Cover)
+        .into_element()
+}
+
+/// What the camera shows at power-off: the card's picture while Custom
+/// Picture is on, or else the camera's own, which the phone cannot read and
+/// names instead.
+fn picture_preview(app: AppState, frame: Signal<f32>) -> Option<AnyElement> {
+    let custom = camera_switch(app, SettingSwitch::CustomPicture) != Some(false);
+    let content = match app.shutdown_picture() {
+        PictureRead::Picture(uri) if custom => picture_image(uri),
+        PictureRead::Picture(_) | PictureRead::None => default_picture(),
+        PictureRead::Unknown | PictureRead::Unsupported => return None,
+    };
+    Some(screen_frame(app, frame, content))
+}
+
+/// The name of the camera's own picture, in the middle of the frame.
+fn default_picture() -> AnyElement {
     view()
-        .w_full()
-        .aspect_ratio(3.0 / 2.0)
-        .rounded(px(8.0))
-        .bg(rgb(0x0B0B0B))
+        .size_full()
         .items_center()
         .justify_center()
         .child(
@@ -351,19 +430,22 @@ fn picture_buttons(app: AppState) -> Option<AnyElement> {
     Some(
         view()
             .gap_3()
-            .child(crate::ui::button(
-                tr(
-                    if matches!(picture, PictureRead::Picture(_)) {
-                        "grkit.change_photo"
-                    } else {
-                        "grkit.choose_photo"
-                    },
-                    &[],
-                ),
-                crate::ui::ButtonKind::Primary,
-                crate::ui::ButtonSize::Large,
-                move || app.choose_shutdown_picture(),
-            ))
+            .child(
+                crate::ui::button(
+                    tr(
+                        if matches!(picture, PictureRead::Picture(_)) {
+                            "grkit.change_photo"
+                        } else {
+                            "grkit.choose_photo"
+                        },
+                        &[],
+                    ),
+                    crate::ui::ButtonKind::Primary,
+                    crate::ui::ButtonSize::Large,
+                    move || app.choose_shutdown_picture(),
+                )
+                .loading(app.shutdown_photo_reading()),
+            )
             .child(matches!(picture, PictureRead::Picture(_)).then(|| {
                 crate::ui::button(
                     tr("grkit.restore_picture", &[]),
@@ -377,9 +459,11 @@ fn picture_buttons(app: AppState) -> Option<AnyElement> {
     )
 }
 
-/// The picture made from the picked photo, and the button that sends it.
+/// The picked photo in the frame of the screen: dragging and pinching pick
+/// the part that goes to the camera, and the button sends it.
 pub fn crop_page(app: AppState, on_dismiss: impl Fn() + Clone + 'static) -> impl IntoElement {
     let done = on_dismiss.clone();
+    let frame = signal(0.0f32);
     crate::ui::app_page()
         .page_title(move || tr("grkit.crop", &[]), false)
         .on_dismiss(on_dismiss)
@@ -389,8 +473,17 @@ pub fn crop_page(app: AppState, on_dismiss: impl Fn() + Clone + 'static) -> impl
                 .bg(move || token("list-background"))
                 .pt_4()
                 .px_4()
-                .gap_5()
-                .child(dynamic(move || app.shutdown_draft().map(picture_view)))
+                .gap_3()
+                .child(screen_frame(
+                    app,
+                    frame,
+                    dynamic(move || crop_view(app, frame.get())).into_element(),
+                ))
+                .child(
+                    text(tr("grkit.crop_hint", &[]))
+                        .text_size(px(crate::ui::ty::FOOTNOTE))
+                        .text_color(move || token("list-secondary")),
+                )
                 .child(dynamic(move || {
                     let done = done.clone();
                     crate::ui::button(
@@ -402,4 +495,50 @@ pub fn crop_page(app: AppState, on_dismiss: impl Fn() + Clone + 'static) -> impl
                     .loading(app.shutdown_picture_busy())
                 })),
         )
+}
+
+/// The photo in a scroll view that zooms, at the size that covers a frame
+/// `width` points wide, starting at its middle (`Crop::middle`).
+fn crop_view(app: AppState, width: f32) -> Option<AnyElement> {
+    let draft = app.shutdown_draft()?;
+    if width <= 0.0 {
+        return None;
+    }
+    let height = width * 2.0 / 3.0;
+    let (photo_w, photo_h) = (draft.photo.width as f32, draft.photo.height as f32);
+    let wide = photo_w * height > photo_h * width;
+    let (content_w, content_h) = if wide {
+        (height * photo_w / photo_h, height)
+    } else {
+        (width, width * photo_h / photo_w)
+    };
+    let start = Point {
+        x: Points((content_w - width) / 2.0),
+        y: Points((content_h - height) / 2.0),
+    };
+    let mut view = scroll()
+        .size_full()
+        .zoom_range(1.0, 4.0)
+        .scrollbar(false)
+        .content_offset(start)
+        .on_scroll(move |event: &ScrollEvent| {
+            let crop = Crop::shown(
+                (event.offset.x.0, event.offset.y.0),
+                (event.content_size.width.0, event.content_size.height.0),
+                (event.size.width.0, event.size.height.0),
+            );
+            if let Some(crop) = crop {
+                app.set_shutdown_crop(crop);
+            }
+        })
+        .child(
+            image(nsh_core::element::ImageSrc::from(draft.uri))
+                .w(px(content_w))
+                .h(px(content_h))
+                .object_fit(ResizeMode::Cover),
+        );
+    if wide {
+        view = view.horizontal();
+    }
+    Some(view.into_element())
 }

@@ -5,10 +5,12 @@ use nsh_core::prelude::*;
 use super::PORTRA;
 use crate::dev::fake::{FakeCamera, FakeConfig, ModuleSupport};
 use crate::dev::fake_looks::DEMO_CUSTOM_ID;
+use crate::domain::images::jpeg_data_uri;
+use crate::domain::shutdown_picture::Photo;
 use crate::domain::{
     ConnectionState, JournalState, ReleaseProblem, UpdateError, UpdateKind, UpdatePhase,
 };
-use crate::store::{Alert, AppState, ModulesBlock, Route, Sheet, Tab};
+use crate::store::{Alert, AppState, ModulesBlock, Route, Sheet, Tab, off_thread};
 
 /// What the screens set up, on the app and on the demo camera.
 #[derive(Clone, Copy)]
@@ -166,6 +168,28 @@ impl Seed<'_> {
         });
     }
 
+    /// Shutdown Screen, with the sample photo picked: `then` gets the photo
+    /// and its preview once the phone has read it.
+    pub(super) fn shutdown_photo(self, then: impl FnOnce(Seed<'_>, Photo, String) + 'static) {
+        self.grkit_settings(Route::ShutdownScreen);
+        let demo = self.demo.clone();
+        spawn(async move {
+            let Some((photo, preview)) = off_thread(sample_photo).await.flatten() else {
+                return;
+            };
+            if let Some(uri) = jpeg_data_uri(&preview) {
+                then(
+                    Seed {
+                        app: self.app,
+                        demo: &demo,
+                    },
+                    photo,
+                    uri,
+                );
+            }
+        });
+    }
+
     /// Show `alert` once the page is up.
     pub(super) fn alert_after_frames(self, alert: Alert) {
         let app = self.app;
@@ -234,4 +258,17 @@ impl Seed<'_> {
         );
         self.app.seed_journal(Some(JournalState::Confirmed));
     }
+}
+
+/// The sample photo as the camera's Standard renders it, read as a picked
+/// photo, and its preview.
+fn sample_photo() -> Option<(Photo, Vec<u8>)> {
+    let base: [u16; 256] = crate::domain::look_media::demo_base_gamma()
+        .try_into()
+        .ok()?;
+    let table = grkit_core::site::standard_linear_preview_lut(&base);
+    let png = crate::domain::look_preview::sample_preview_png(&table).ok()?;
+    let photo = Photo::decode(&png).ok()?;
+    let preview = photo.preview();
+    Some((photo, preview))
 }

@@ -236,6 +236,11 @@ impl FakeCamera {
         self.0.borrow_mut().module_support = support;
     }
 
+    /// The picture of Shutdown Screen on the card.
+    pub fn set_shutdown_picture(&self, jpeg: Vec<u8>) {
+        self.0.borrow_mut().picture = Some(jpeg);
+    }
+
     /// An update of the release that waits on the camera in `journal`.
     pub fn set_journal(&self, journal: JournalState) {
         let mut state = self.0.borrow_mut();

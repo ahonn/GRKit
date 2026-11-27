@@ -1,14 +1,16 @@
 //! The GRKit settings of the camera's MENU, which the Settings tab shows
-//! while a camera is connected. A change applies on the camera at once. The
-//! picture of Shutdown Screen applies at the camera's next start.
+//! while a camera is connected. A change applies on the camera at once. A new
+//! picture of Shutdown Screen shows at the camera's next power-off.
 
 use nsh_core::prelude::*;
 
 use super::AppState;
 use crate::domain::LookError;
-use crate::domain::camera_settings::{CameraSettings, SettingChange};
+use std::rc::Rc;
+
+use crate::domain::camera_settings::{CameraSettings, SettingChange, SettingSwitch};
 use crate::domain::images::jpeg_data_uri;
-use crate::domain::shutdown_picture::shutdown_picture;
+use crate::domain::shutdown_picture::{Crop, MAX_SIDE, Photo, PhotoError};
 use crate::strings::tr;
 
 /// What the phone knows of the camera's GRKit settings.
@@ -33,6 +35,21 @@ pub enum PictureRead {
     Picture(String),
 }
 
+/// A picked photo for the picture of Shutdown Screen, before it goes to the
+/// camera.
+#[derive(Clone)]
+pub struct PictureDraft {
+    pub photo: Rc<Photo>,
+    /// A `data:` URI of the photo, for the crop page.
+    pub uri: String,
+}
+
+impl PartialEq for PictureDraft {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.photo, &other.photo)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct CameraSettingsStore {
     read: Signal<SettingsRead>,
@@ -40,8 +57,11 @@ pub struct CameraSettingsStore {
     /// The change being saved.
     busy: Signal<Option<SettingChange>>,
     picture: Signal<PictureRead>,
-    /// The file made from a picked photo, before it goes to the camera.
-    draft: Signal<Option<Vec<u8>>>,
+    draft: Signal<Option<PictureDraft>>,
+    /// The part of the draft that the crop page shows; `None`: its middle.
+    crop: Signal<Option<Crop>>,
+    /// The phone reads a picked photo.
+    picture_reading: Signal<bool>,
     picture_busy: Signal<bool>,
     /// The picture went to the camera in this visit of the page.
     picture_sent: Signal<bool>,
@@ -55,6 +75,8 @@ impl CameraSettingsStore {
             busy: signal(None),
             picture: signal(PictureRead::Unknown),
             draft: signal(None),
+            crop: signal(None),
+            picture_reading: signal(false),
             picture_busy: signal(false),
             picture_sent: signal(false),
         }
@@ -148,11 +170,18 @@ impl AppState {
         self.camera_settings.picture.get()
     }
 
-    /// The picture made from the picked photo, as a `data:` URI.
-    pub fn shutdown_draft(self) -> Option<String> {
-        self.camera_settings
-            .draft
-            .with(|draft| draft.as_deref().and_then(jpeg_data_uri))
+    /// The picked photo, for the crop page.
+    pub fn shutdown_draft(self) -> Option<PictureDraft> {
+        self.camera_settings.draft.get()
+    }
+
+    /// The crop page shows `crop` of the draft.
+    pub fn set_shutdown_crop(self, crop: Crop) {
+        self.camera_settings.crop.set(Some(crop));
+    }
+
+    pub fn shutdown_photo_reading(self) -> bool {
+        self.camera_settings.picture_reading.get()
     }
 
     pub fn shutdown_picture_busy(self) -> bool {
@@ -192,39 +221,78 @@ impl AppState {
         });
     }
 
-    /// Pick a photo and make the picture from its middle; the crop page then
+    /// Pick a photo and read it off the engine thread; the crop page then
     /// shows it.
     pub fn choose_shutdown_picture(self) {
+        if self.camera_settings.picture_reading.get() {
+            return;
+        }
         self.root.run(|| {
             spawn(async move {
-                let picked = pick_images(nsh_core::picker::PickRequest::new(false, 1)).await;
+                // The picker scales a large photo down, with its orientation
+                // applied, and turns HEIC into JPEG.
+                let mut request = nsh_core::picker::PickRequest::new(false, 1);
+                request.max_dimension = Some(DevicePixels(MAX_SIDE as i32));
+                let picked = pick_images(request).await;
                 let Some(file) = picked.into_iter().next() else {
                     return;
                 };
-                match shutdown_picture(file.data.bytes()) {
-                    Ok(jpeg) => {
-                        self.camera_settings.draft.set(Some(jpeg));
+                self.camera_settings.picture_reading.set(true);
+                let bytes = file.data.bytes().to_vec();
+                let read = blocking(move || {
+                    Photo::decode(&bytes).map(|photo| {
+                        let preview = photo.preview();
+                        (photo, preview)
+                    })
+                })
+                .await
+                .unwrap_or(Err(PhotoError::Unreadable));
+                self.camera_settings.picture_reading.set(false);
+                match read {
+                    Ok((photo, preview)) => {
+                        let Some(uri) = jpeg_data_uri(&preview) else {
+                            self.show_toast(tr("grkit.picture_failed", &[]));
+                            return;
+                        };
+                        self.camera_settings.draft.set(Some(PictureDraft {
+                            photo: Rc::new(photo),
+                            uri,
+                        }));
+                        self.camera_settings.crop.set(None);
                         self.push(super::Route::ShutdownCrop);
                     }
-                    Err(error) => {
-                        log::warn!("Could not use the photo: {error}");
-                        self.show_toast(tr("grkit.picture_failed", &[]));
-                    }
+                    Err(PhotoError::Format) => self.show_toast(tr("grkit.picture_format", &[])),
+                    Err(PhotoError::Unreadable) => self.show_toast(tr("grkit.picture_failed", &[])),
                 }
             });
         });
     }
 
-    /// Send the picked picture to the camera, or remove the card's picture
-    /// (`send: false`). `done` runs once the camera has the change.
+    /// Send the shown part of the picked photo to the camera, or remove the
+    /// card's picture (`send: false`). `done` runs once the camera has the
+    /// change. A sent picture turns Custom Picture on, so that the camera
+    /// shows it.
     pub fn save_shutdown_picture(self, send: bool, done: impl Fn() + 'static) {
         if self.camera_settings.picture_busy.get() {
             return;
         }
         let jpeg = if send {
-            match self.camera_settings.draft.get() {
-                Some(jpeg) => Some(jpeg),
-                None => return,
+            let Some(draft) = self.camera_settings.draft.get() else {
+                return;
+            };
+            let photo = &draft.photo;
+            let crop = self
+                .camera_settings
+                .crop
+                .get()
+                .unwrap_or_else(|| Crop::middle(photo.width, photo.height));
+            match photo.picture(crop) {
+                Ok(jpeg) => Some(jpeg),
+                Err(error) => {
+                    log::warn!("Could not make the picture: {error}");
+                    self.show_toast(tr("grkit.picture_failed", &[]));
+                    return;
+                }
             }
         } else {
             None
@@ -249,6 +317,17 @@ impl AppState {
                     self.camera_settings.picture.set(shown);
                     self.camera_settings.picture_sent.set(send);
                     self.camera_settings.draft.set(None);
+                    let custom_off = matches!(
+                        self.camera_settings.read.get(),
+                        SettingsRead::Ready(settings)
+                            if settings.switch(SettingSwitch::CustomPicture) == Some(false)
+                    );
+                    if send && custom_off {
+                        self.set_camera_setting(SettingChange::Switch(
+                            SettingSwitch::CustomPicture,
+                            true,
+                        ));
+                    }
                     done();
                 }
                 Err(error) if error != LookError::ConnectionLost => {
@@ -257,5 +336,25 @@ impl AppState {
                 Err(_) => {}
             }
         });
+    }
+}
+
+/// Demo screens (`dev::screens`).
+#[cfg(demo)]
+impl AppState {
+    /// `photo` is picked, and the crop page shows its middle.
+    pub(crate) fn seed_shutdown_draft(self, photo: Photo, uri: String) {
+        self.camera_settings.draft.set(Some(PictureDraft {
+            photo: Rc::new(photo),
+            uri,
+        }));
+        self.camera_settings.crop.set(None);
+    }
+
+    /// The card has the picture `uri`, which went to the camera in this
+    /// visit of the page.
+    pub(crate) fn seed_shutdown_sent(self, uri: String) {
+        self.camera_settings.picture.set(PictureRead::Picture(uri));
+        self.camera_settings.picture_sent.set(true);
     }
 }
