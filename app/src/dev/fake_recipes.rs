@@ -5,9 +5,23 @@ use grkit_core::recipes::{Family, Look};
 use grkit_core::release_index::IndexPreset;
 
 use crate::domain::{
-    LookError,
+    LookError, LooksSnapshot,
     recipes::{PresetItem, RecipeChange, RecipeError, RecipeItem, RecipesSnapshot},
 };
+
+/// The recipes as the camera serves them with `looks`: a recipe whose Film
+/// Look is on the card only does not apply (`recipe_look_missing`).
+pub fn served(f: &RecipesSnapshot, looks: &LooksSnapshot) -> RecipesSnapshot {
+    let mut f = f.clone();
+    for recipe in &mut f.recipes {
+        if let Some(id) = &recipe.effect_id {
+            let stored = looks.stored.iter().any(|look| &look.id == id);
+            recipe.effect_stored = stored;
+            recipe.ready = !stored;
+        }
+    }
+    f
+}
 
 /// Apply a change as the camera does.
 pub fn apply(f: &mut RecipesSnapshot, change: &RecipeChange) -> Result<(), RecipeError> {

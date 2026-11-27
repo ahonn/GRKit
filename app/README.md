@@ -57,15 +57,19 @@ cargo run -- --demo-screen C4
 
 | Ids | Screens |
 |-----|---------|
-| A1–A13 | Connect, camera tab, Settings, saved cameras |
+| A1–A14 | Connect, camera tab, Settings, saved cameras |
 | B1–B5, C4, U1–U19 | Software Update and the update sheet |
 | H1–H3 | Camera tab while it reads the camera |
-| L1–L15, L17–L23 | Film Looks |
-| R1–R12 | Recipes |
+| L1–L15, L17–L28 | Film Looks |
+| R1–R13 | Recipes |
 | M1–M16 | Modules |
 | S1–S4 | GRKit Settings, Look unlock |
 
 Unknown ids fall back to the normal demo home.
+
+An id names the same screen here and in the Figma file (page Screens). A
+new screen takes the next free number; an id is never reused for another
+screen.
 
 ### Development camera URL (no Bluetooth)
 

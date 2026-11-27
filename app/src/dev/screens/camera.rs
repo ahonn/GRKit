@@ -173,6 +173,22 @@ pub(super) const SCREENS: &[DemoScreen] = &[
             app.push(Route::SavedCameras);
         },
     },
+    // A14 — Camera tab, no recipe or Look in use: the camera's own Image
+    // Control.
+    DemoScreen {
+        id: "A14",
+        key_text: "Image Control",
+        alert: false,
+        seed: |seed| {
+            let (app, demo) = (seed.app, seed.demo);
+            demo.edit_looks(|f| f.set_selected(None));
+            demo.edit_recipes(|f| f.recipes.iter_mut().for_each(|r| r.current = false));
+            seed.connected_up_to_date();
+            app.set_tab(Tab::Camera);
+            app.set_sheet(None);
+            app.refresh_modules();
+        },
+    },
     // H1 — Camera tab, connected, nothing read yet.
     DemoScreen {
         id: "H1",

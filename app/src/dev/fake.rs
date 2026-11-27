@@ -371,11 +371,26 @@ impl CameraApi for FakeCamera {
     }
 
     fn standard_table(&self, _target: &str) -> Fut<Result<Vec<u8>, String>> {
-        ready(Err("The demo has no Standard table.".into()))
+        // The site's table of the camera's Standard, made here as the site
+        // makes it.
+        Box::pin(async move {
+            crate::store::off_thread(|| {
+                let base: [u16; 256] = look_media::demo_base_gamma()
+                    .try_into()
+                    .map_err(|_| "Expected 256 base gamma values".to_owned())?;
+                Ok(grkit_core::site::standard_linear_preview_lut(&base))
+            })
+            .await
+            .unwrap_or_else(|| Err("The preview was not made.".into()))
+        })
     }
 
     fn recipes(&self) -> Fut<Result<RecipesSnapshot, RecipeError>> {
-        ready(Ok(self.0.borrow().recipes.clone()))
+        let state = self.0.borrow();
+        ready(Ok(fake_recipes::served(
+            &state.recipes,
+            &state.looks.snapshot(),
+        )))
     }
 
     fn change_recipe(
@@ -384,8 +399,8 @@ impl CameraApi for FakeCamera {
         change: RecipeChange,
     ) -> Fut<Result<RecipesSnapshot, RecipeError>> {
         let mut state = self.0.borrow_mut();
-        let answer =
-            fake_recipes::apply(&mut state.recipes, &change).map(|()| state.recipes.clone());
+        let answer = fake_recipes::apply(&mut state.recipes, &change)
+            .map(|()| fake_recipes::served(&state.recipes, &state.looks.snapshot()));
         ready(answer)
     }
 

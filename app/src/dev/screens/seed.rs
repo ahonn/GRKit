@@ -124,6 +124,17 @@ impl Seed<'_> {
         self.app.set_tab(Tab::Recipes);
     }
 
+    /// Recipe `recipe` uses the Film Look `look` (id, name) instead of its
+    /// own.
+    pub(super) fn recipe_on(self, recipe: u32, (id, name): (&str, &str)) {
+        self.demo.edit_recipes(|f| {
+            if let Some(item) = f.recipes.iter_mut().find(|r| r.id == recipe) {
+                item.effect_id = Some(id.into());
+                item.effect_name = Some(name.into());
+            }
+        });
+    }
+
     /// The Looks tab of a camera that a restart for changed Looks took down.
     pub(super) fn look_restart(self) {
         self.saved();

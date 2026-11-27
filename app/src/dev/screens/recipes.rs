@@ -2,7 +2,7 @@
 
 use nsh_core::prelude::*;
 
-use super::DemoScreen;
+use super::{DemoScreen, EKTAR};
 use crate::store::{Route, Tab};
 
 pub(super) const SCREENS: &[DemoScreen] = &[
@@ -153,9 +153,22 @@ pub(super) const SCREENS: &[DemoScreen] = &[
             seed.recipes();
         },
     },
-    // R12 — The Recipes tab without a camera: the home page shows.
+    // R12 — a recipe whose Film Look is on the card only.
     DemoScreen {
         id: "R12",
+        key_text: "Put it back on the camera to apply this recipe.",
+        alert: false,
+        seed: |seed| {
+            let app = seed.app;
+            seed.recipe_on(2, EKTAR);
+            seed.recipes();
+            app.refresh_recipes();
+            app.push(Route::RecipeDetail(2));
+        },
+    },
+    // R13 — The Recipes tab without a camera: the home page shows.
+    DemoScreen {
+        id: "R13",
         key_text: "Add Your Camera",
         alert: false,
         seed: |seed| {

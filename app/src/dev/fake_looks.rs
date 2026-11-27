@@ -307,6 +307,47 @@ impl FakeLooks {
         }
     }
 
+    /// The Look in use, or none: the camera then shoots with its own Image
+    /// Control.
+    pub fn set_selected(&mut self, id: Option<&str>) {
+        self.selected = id.map(str::to_owned);
+    }
+
+    /// Fill the camera to its most Looks with copies of the imported Look,
+    /// so a full camera shows the real limit.
+    pub fn fill_camera(&mut self) {
+        let Some(max) = self.max_camera else {
+            return;
+        };
+        let Some(template) = self
+            .entries
+            .iter()
+            .find(|e| e.id == DEMO_CUSTOM_ID)
+            .cloned()
+        else {
+            return;
+        };
+        let mut number = 1;
+        while self.camera().count() < max {
+            let name = format!("LUT {number:02}");
+            let id = format!("lut-{number:02}");
+            let cover = Cover::for_name(&name);
+            let Ok(grf) = look_media::relabel(&template.grf, &id, &name, &cover) else {
+                return;
+            };
+            let enabled = self.enabled_count() < self.max_loaded;
+            self.entries.push(Entry {
+                id,
+                name,
+                enabled,
+                grf,
+                cover: Some(cover),
+                ..template.clone()
+            });
+            number += 1;
+        }
+    }
+
     pub fn content(&self, id: &str) -> Option<Vec<u8>> {
         self.entries
             .iter()

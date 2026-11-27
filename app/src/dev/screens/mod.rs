@@ -24,6 +24,8 @@ use crate::store::AppState;
 use seed::Seed;
 
 const PORTRA: &str = "portra-400-endura-v1";
+/// On the card only in the demo.
+const EKTAR: (&str, &str) = ("ektar-100-edge-v1", "Ektar 100");
 
 /// One design screen of the demo.
 pub struct DemoScreen {

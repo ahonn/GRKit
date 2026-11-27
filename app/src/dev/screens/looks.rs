@@ -3,9 +3,12 @@
 use nsh_core::prelude::*;
 
 use super::DemoScreen;
-use super::PORTRA;
+use super::{EKTAR, PORTRA};
 use crate::dev::fake_looks::DEMO_CUSTOM_ID;
+use crate::domain::looks::LookUse;
 use crate::domain::{JournalState, LinkError, LookError};
+
+const TRIX: &str = "trix-400-mono-v1";
 use crate::store::{Alert, Route, Sheet, Tab};
 
 pub(super) const SCREENS: &[DemoScreen] = &[
@@ -262,6 +265,86 @@ pub(super) const SCREENS: &[DemoScreen] = &[
         seed: |seed| {
             seed.look_restart();
             seed.alert_after_frames(Alert::ManualRestart);
+        },
+    },
+    // L24 — the camera is full, with changes waiting for a restart.
+    DemoScreen {
+        id: "L24",
+        key_text: "40/40 on Camera · Full",
+        alert: false,
+        seed: |seed| {
+            seed.demo.edit_looks(|f| {
+                f.fill_camera();
+                f.set_pending(DEMO_CUSTOM_ID);
+            });
+            seed.looks();
+        },
+    },
+    // L25 — a Look on the card only, used by a recipe.
+    DemoScreen {
+        id: "L25",
+        key_text: "Used by Recipes",
+        alert: false,
+        seed: |seed| {
+            let app = seed.app;
+            seed.recipe_on(2, EKTAR);
+            seed.looks();
+            app.refresh_recipes();
+            app.push(Route::LookDetail(EKTAR.0.into()));
+        },
+    },
+    // L26 — a Look on the card only, and the camera is full.
+    DemoScreen {
+        id: "L26",
+        key_text: "The camera is full (40/40). Move a film look off the camera first.",
+        alert: false,
+        seed: |seed| {
+            let app = seed.app;
+            seed.demo.edit_looks(|f| f.fill_camera());
+            seed.recipe_on(2, EKTAR);
+            seed.looks();
+            app.refresh_recipes();
+            app.push(Route::LookDetail(EKTAR.0.into()));
+        },
+    },
+    // L27 — move a Look that a recipe uses off the camera (alert).
+    DemoScreen {
+        id: "L27",
+        key_text: "Move Tri-X 400 Off the Camera?",
+        alert: true,
+        seed: |seed| {
+            let app = seed.app;
+            seed.demo.edit_looks(|f| {
+                f.set_uses(
+                    TRIX,
+                    vec![LookUse::Recipe {
+                        slot: 1,
+                        name: Some("Street".into()),
+                        number: 0,
+                    }],
+                )
+            });
+            seed.looks();
+            app.push(Route::LookDetail(TRIX.into()));
+            spawn(async move {
+                next_frame().await;
+                next_frame().await;
+                if let Some(look) = app.look(TRIX) {
+                    crate::pages::look_pages::confirm_move_to_card(app, look);
+                }
+            });
+        },
+    },
+    // L28 — the Add page when the camera is full.
+    DemoScreen {
+        id: "L28",
+        key_text: "New film looks stay on the card only.",
+        alert: false,
+        seed: |seed| {
+            let app = seed.app;
+            seed.demo.edit_looks(|f| f.fill_camera());
+            seed.looks();
+            app.open_add();
         },
     },
 ];
