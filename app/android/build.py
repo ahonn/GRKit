@@ -42,8 +42,13 @@ def main():
     metadata = json.loads((ROOT / "nsh.json").read_text())
     runtime = args.runtime_apk
     if runtime is None:
+        # A development variable makes the Rust build compile the demo camera
+        # (build.rs), which a release leaves out.
+        env = {key: value for key, value in os.environ.items()
+               if not (args.release and key in ("GRKIT_DEMO", "GRKIT_CAMERA_URL", "GRKIT_DEMO_SCREEN"))}
+
         def package():
-            run("nsh", "package", ROOT, "--target", "android", "--abi", args.abi, "--out", out / "runtime")
+            run("nsh", "package", ROOT, "--target", "android", "--abi", args.abi, "--out", out / "runtime", env=env)
 
         # NSH fetches only from the hosts of nsh.json. A development build
         # also reaches the hosts of its overrides, such as a local release

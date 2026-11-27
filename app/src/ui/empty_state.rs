@@ -19,7 +19,7 @@ const BUTTON_HEIGHT: f32 = 44.0;
 const BUTTON_MIN_WIDTH: f32 = 140.0;
 /// What a page keeps above and below its content on a phone: the bar under
 /// the status bar, the content's top margin, and the floating tab bar.
-const BARS: f32 = 54.0 + 16.0 + crate::pages::look_pages::TAB_BAR_CLEARANCE;
+const BARS: f32 = 54.0 + 16.0 + crate::ui::TAB_BAR_CLEARANCE;
 /// How far the group sits above the middle: a little high, as the eye
 /// reads a page.
 const RAISE: f32 = 120.0;

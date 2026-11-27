@@ -1,4 +1,6 @@
 //! Headless walks of demo mode: update and card-full error.
+//! Demo mode is in debug builds and with the `demo` feature (`cfg(demo)`).
+#![cfg(demo)]
 
 use std::{
     env,
@@ -25,7 +27,7 @@ fn lock_demo() -> MutexGuard<'static, ()> {
 }
 
 fn start_phone() -> Headless {
-    let mut config = EngineConfig::new(Root::of::<App>());
+    let mut config = EngineConfig::new(Root::of::<App>().translations(grkit_app::translations()));
     config.environment.os = Os::Web;
     Headless::start(config).unwrap()
 }

@@ -26,6 +26,8 @@ cargo clippy --all-targets -- -D warnings
 GRKIT_DEMO=1 cargo run
 # or
 cargo run -- --demo
+# a release build has demo mode only with the feature
+cargo run --release --features demo -- --demo
 
 # iOS simulator
 GRKIT_DEMO=1 nsh run --target ios
@@ -38,13 +40,13 @@ Force an error path in demo mode:
 
 ```sh
 GRKIT_DEMO=1 GRKIT_DEMO_FAIL=card_full cargo run
-# also: refused | not_confirmed | connection_lost
+# also: refused | connection_lost
 ```
 
 ### Demo screens (screenshots)
 
 With demo on, jump straight to a design screen (sheet / alert already open).
-Mapping lives in `src/store/demo_screen.rs`.
+The ids and what each shows are the screen tables in `src/dev/screens/`, one per tab.
 
 ```sh
 GRKIT_DEMO=1 GRKIT_DEMO_SCREEN=A5 cargo run
@@ -53,28 +55,23 @@ GRKIT_DEMO=1 cargo run -- --demo-screen B3
 cargo run -- --demo-screen C4
 ```
 
-| Id | Screen |
-|----|--------|
-| A1 | First launch |
-| A2 | Camera nearby sheet |
-| A3 | Add a camera sheet |
-| A4 | Connecting sheet |
-| A5 | Update available |
-| A6 | Up to date |
-| A7 | Settings |
-| B1 | Software Update |
-| B2 | Sending (~62%) |
-| B3 | Confirm on camera |
-| B4 | Restart |
-| B5 | Installed |
-| C4 | Card full |
-| C5 | Not confirmed |
+| Ids | Screens |
+|-----|---------|
+| A1–A13 | Connect, camera tab, Settings, saved cameras |
+| B1–B5, C4, U1–U19 | Software Update and the update sheet |
+| H1–H3 | Camera tab while it reads the camera |
+| L1–L15, L17–L23 | Film Looks |
+| R1–R12 | Recipes |
+| M1–M16 | Modules |
+| S1–S4 | GRKit Settings, Look unlock |
 
 Unknown ids fall back to the normal demo home.
 
 ### Development camera URL (no Bluetooth)
 
-When demo mode is off and `GRKIT_CAMERA_URL` is set, Add Camera skips Bluetooth and
+In a debug build, a build with `--features demo`, or a build started with the
+variable set (as below), when demo mode is off and
+`GRKIT_CAMERA_URL` is set, Add Camera skips Bluetooth and
 Wi-Fi and talks HTTP to that base URL (status poll with 503 retry, then package).
 Useful on the iOS simulator, which has no Bluetooth:
 
@@ -105,10 +102,12 @@ the app.
 
 ## Layout
 
-- `src/domain/` — camera model, update state machine, `CameraLink`, `FakeCamera`
-- `src/store/` — tabs, sheets, demo wiring (`demo_screen.rs` for screenshot ids)
+- `src/domain/` — camera model, update state machine, request and answer types
+- `src/camera_api/` — `CameraApi`, what the store reads and writes: the camera service, the release site, the phone's records
+- `src/store/` — tabs, sheets, the camera session and the update flow
+- `src/dev/` — demo mode (debug builds and `--features demo`): `FakeCamera`, demo screens
 - `src/shell/` — tab bar and nav stacks
 - `src/pages/` — Camera, Settings, Software Update, update sheets
 - `src/ui/` — shared chrome
-- `locales/app.yml` — English and Simplified Chinese (kept with `src/strings.rs`)
+- `locales/app.yml` — all UI text in the five languages; `android.<key>` replaces `<key>` on Android
 - `assets/` — camera line art, confirm screenshots, GR Snap icon

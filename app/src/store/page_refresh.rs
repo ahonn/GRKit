@@ -1,4 +1,4 @@
-//! What each page reloads when it is pulled down (`ui::page_scroll`).
+//! What each page reloads when it is pulled down (`pages::page_scroll`).
 
 use nsh_core::prelude::*;
 
@@ -18,7 +18,7 @@ impl AppState {
     pub fn refresh_page(self, page: &str) {
         match page {
             CAMERA => {
-                if self.camera_online() && !self.update_busy.get() {
+                if self.camera_online() && !self.update_running() {
                     spawn(async move { self.refresh_camera_package().await });
                 }
                 self.refresh_update_info();

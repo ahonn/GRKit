@@ -9,10 +9,11 @@ use nsh_core::prelude::*;
 
 use crate::ui::ty::text;
 
-use super::look_pages::{TAB_BAR_CLEARANCE, header_button};
+use super::look_pages::header_button;
 use crate::store::{AppState, LookAction};
 use crate::strings::tr;
 use crate::ui::PageTitle;
+use crate::ui::TAB_BAR_CLEARANCE;
 use crate::ui::{SECTION_RADIUS, cover_view, list_note, list_row, list_section, token};
 
 const PREVIEW: f32 = 150.0;
@@ -169,7 +170,7 @@ pub fn cover_page(
                 .flex_1()
                 .bg(move || token("list-background"))
                 .child(initial.map(|_| {
-                    crate::ui::page_scroll().flex_1().child(
+                    crate::pages::page_scroll().flex_1().child(
                         view()
                             .px_4()
                             .pt_4()

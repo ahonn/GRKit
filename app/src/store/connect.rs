@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 
 use nsh_core::prelude::*;
 
-use super::{AppState, Sheet, Tab, now_ms, warmup};
+use super::{AppState, Sheet, Tab, dev_camera_url, now_ms, warmup};
+use crate::camera_api;
 use crate::domain::auto_connect::{self, AutoTrigger, LEASE_DEBOUNCE, Reach};
 use crate::domain::nearby_watch::AdvertisedPower;
 use crate::domain::saved_connect::{
@@ -31,7 +32,7 @@ pub(super) enum AttemptKind {
 }
 
 /// How an attempt reached the camera.
-enum Reached {
+pub(super) enum Reached {
     /// The camera answered on the network the phone is on.
     Network {
         status: CameraStatus,
@@ -77,7 +78,7 @@ impl AppState {
 
     /// Connect to the remembered camera, or add one when there is none.
     pub fn connect_saved(self) {
-        if self.demo() || platform::has_dev_camera_url() {
+        if self.demo() || dev_camera_url() {
             self.open_scan();
             return;
         }
@@ -163,7 +164,7 @@ impl AppState {
     fn begin_connect(self, kind: AttemptKind) {
         self.restart_connect.set(false);
         // An update waits for this connect after a restart the person ran.
-        if self.update_busy.get() && !matches!(self.flow_phase(), UpdatePhase::ManualRestart { .. })
+        if self.update_running() && !matches!(self.flow_phase(), UpdatePhase::ManualRestart { .. })
         {
             return;
         }
@@ -184,6 +185,7 @@ impl AppState {
         let generation = self.connect_generation.get().wrapping_add(1);
         self.connect_generation.set(generation);
 
+        // A simulated camera connects on the ticker (`tick_connecting`).
         if self.demo() {
             return;
         }
@@ -311,7 +313,12 @@ impl AppState {
     }
 
     /// A connected camera, however it was reached.
-    fn finish_connect(self, peripheral_id: &str, reached: Reached, options: ConnectOptions) {
+    pub(super) fn finish_connect(
+        self,
+        peripheral_id: &str,
+        reached: Reached,
+        options: ConnectOptions,
+    ) {
         let (status, package) = match reached {
             Reached::Network { status, package } => {
                 self.remember_identity(&status);
@@ -329,7 +336,8 @@ impl AppState {
                 self.remember_camera(connected.remembered);
                 // Steps that must follow a Bluetooth wake go here, before the
                 // session starts. A woken camera waits in `bleStartup`.
-                self.root.run(|| spawn(platform::http::leave_ble_startup()));
+                self.root
+                    .run(|| spawn(camera_api::service::leave_ble_startup()));
                 (connected.status, connected.package)
             }
         };
@@ -341,7 +349,7 @@ impl AppState {
         self.status.set(Some(status));
         self.package.set(Some(package));
         // An update's reconnect keeps its sheet. The connect sheet ends here.
-        if !self.update_busy.get() || matches!(self.sheet.get(), Some(Sheet::Connecting { .. })) {
+        if !self.update_running() || matches!(self.sheet.get(), Some(Sheet::Connecting { .. })) {
             self.sheet.set(None);
         }
         self.connect_started.set(None);
@@ -406,14 +414,10 @@ impl AppState {
     /// already be on the camera network. A miss leaves everything as it was,
     /// including an error sheet it ran over.
     pub(super) fn auto_connect(self, trigger: AutoTrigger) {
-        if self.demo()
-            || platform::has_dev_camera_url()
-            || self.link_connected()
-            || self.auto_suppressed.get()
-        {
+        if self.demo() || dev_camera_url() || self.link_connected() || self.auto_suppressed.get() {
             return;
         }
-        if self.update_busy.get()
+        if self.update_running()
             || !matches!(self.flow_phase(), UpdatePhase::Idle)
             || self.connect_in_flight()
         {
@@ -442,7 +446,7 @@ impl AppState {
                     if !auto_connect::poll_until_reachable(&mut ServiceReach).await {
                         return None;
                     }
-                    platform::http::read_package_within(model, auto_connect::VERIFY_TIMEOUT)
+                    camera_api::service::read_package_within(model, auto_connect::VERIFY_TIMEOUT)
                         .await
                         .ok()
                 };
@@ -555,7 +559,7 @@ impl SavedTransport for SavedSteps<'_> {
 
     fn direct(&mut self, timeout: Duration) -> BoxFut<'_, Option<Self::Camera>> {
         Box::pin(async move {
-            let (status, package) = platform::http::read_package_within(self.model, timeout)
+            let (status, package) = camera_api::service::read_package_within(self.model, timeout)
                 .await
                 .ok()?;
             let same = match (self.expected.as_deref(), status.device_id.as_deref()) {
@@ -579,7 +583,7 @@ struct ServiceReach;
 
 impl Reach for ServiceReach {
     fn reachable(&mut self, timeout: Duration) -> BoxFut<'_, bool> {
-        Box::pin(async move { link_support::probe_props(timeout).await == Probe::Reachable })
+        Box::pin(async move { camera_api::service::probe_props(timeout).await == Probe::Reachable })
     }
     fn pause(&mut self, duration: Duration) -> BoxFut<'_, ()> {
         Box::pin(timer(duration))

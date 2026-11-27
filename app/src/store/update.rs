@@ -1,5 +1,8 @@
-//! Real update orchestration. The camera journal is authoritative across reconnects.
+//! The update of GRKit on the camera: the release check, the download and
+//! send, the camera's confirmation, and the restart that installs it. The
+//! camera journal is authoritative across reconnects.
 use super::*;
+use crate::camera_api::DownloadError;
 use crate::domain::{
     JournalState, ReleaseProblem, RestartStep, UpdateIntent, UpdateObservation, card_shortfall,
     observe_update, package_to_models,
@@ -22,7 +25,8 @@ impl AppState {
         self.release_problem.get()
     }
     pub fn has_pending_update(self) -> bool {
-        platform::update::load_intent()
+        self.api()
+            .intent()
             .is_some_and(|i| self.camera_id().as_deref() == Some(&i.camera_id))
     }
     /// The update journal of the connected camera: an update that waits for
@@ -33,7 +37,8 @@ impl AppState {
     /// The version of the update that waits on the camera, when known: this
     /// phone's own, else the release the phone offers.
     pub fn pending_version(self) -> Option<String> {
-        platform::update::load_intent()
+        self.api()
+            .intent()
             .filter(|i| self.camera_id().as_deref() == Some(&i.camera_id) && !i.target.is_empty())
             .map(|i| i.target)
             .or_else(|| self.package.get().and_then(|p| p.available))
@@ -46,7 +51,12 @@ impl AppState {
 
     /// The person's cancel of an update is under way.
     pub fn update_cancelling(self) -> bool {
-        self.update_cancel.get()
+        self.update_run.get() == UpdateRun::Cancelling
+    }
+
+    /// This phone's update task runs.
+    pub(super) fn update_running(self) -> bool {
+        self.update_run.get() != UpdateRun::Idle
     }
 
     /// The phone restarts the camera so it reads changed Look files.
@@ -57,10 +67,10 @@ impl AppState {
     /// Check the release site. A check that a reconnect overtakes runs again
     /// for the new connection, so no page waits on a dropped answer.
     pub fn refresh_update_info(self) {
-        if self.demo() || self.release_busy.get() {
+        if self.release_busy.get() {
             return;
         }
-        if self.update_busy.get() {
+        if self.update_running() {
             // A reconnect during an update reads a package without an offer.
             let known = self
                 .release
@@ -83,58 +93,54 @@ impl AppState {
         let generation = self.connect_generation.get();
         self.release_busy.set(true);
         self.release_problem.set(None);
-        self.root.run(|| {
-            spawn(async move {
-                let release =
-                    platform::release::latest(status.camera.model, &status.camera.firmware).await;
-                let current = self.connect_generation.get() == generation;
-                if current {
-                    match release {
-                        Ok(release) => {
-                            log::info!(
-                                "Release {} transfer estimate {} bytes",
-                                release.version,
-                                release.bytes
-                            );
-                            self.package.update(|p| {
-                                if let Some(p) = p {
-                                    p.available = Some(release.version.clone());
-                                    // Transfer estimates are not the final archive's size.
-                                    p.package_bytes = 0;
-                                }
-                            });
-                            self.release_notes.set(release.notes.clone());
-                            self.recipes.presets.set(release.presets.clone());
-                            // The cached release still offers its update, but
-                            // the check itself failed.
-                            if release.offline {
-                                self.release_problem.set(Some(ReleaseProblem::Network));
+        let release = self
+            .api()
+            .latest_release(status.camera.model, &status.camera.firmware);
+        self.run(async move {
+            let release = release.await;
+            let current = self.connect_generation.get() == generation;
+            if current {
+                match release {
+                    Ok(release) => {
+                        log::info!(
+                            "Release {} transfer estimate {} bytes",
+                            release.version,
+                            release.bytes
+                        );
+                        self.package.update(|p| {
+                            if let Some(p) = p {
+                                p.available = Some(release.version.clone());
+                                // Transfer estimates are not the final archive's size.
+                                p.package_bytes = 0;
                             }
-                            self.release.with(|slot| *slot.borrow_mut() = Some(release));
+                        });
+                        self.release_notes.set(release.notes.clone());
+                        self.recipes.presets.set(release.presets.clone());
+                        // The cached release still offers its update, but
+                        // the check itself failed.
+                        if release.offline {
+                            self.release_problem.set(Some(ReleaseProblem::Network));
                         }
-                        Err(problem) => self.release_problem.set(Some(problem)),
+                        self.release.with(|slot| *slot.borrow_mut() = Some(release));
                     }
+                    Err(problem) => self.release_problem.set(Some(problem)),
                 }
-                self.release_busy.set(false);
-                if !current {
-                    self.refresh_update_info();
-                }
-            })
+            }
+            self.release_busy.set(false);
+            if !current {
+                self.refresh_update_info();
+            }
         });
         self.refresh_journal();
     }
 
     /// Read the update journal of the camera for the camera tab.
     pub(super) fn refresh_journal(self) {
-        if self.demo() {
-            return;
-        }
-        self.root.run(|| {
-            spawn(async move {
-                if let Ok(snapshot) = platform::update::snapshot().await {
-                    self.note_journal(snapshot.state);
-                }
-            })
+        let snapshot = self.api().update_snapshot();
+        self.run(async move {
+            if let Ok(snapshot) = snapshot.await {
+                self.note_journal(snapshot.state);
+            }
         });
     }
 
@@ -147,16 +153,14 @@ impl AppState {
     /// request of another phone. This reads only the camera, never the
     /// release site.
     pub(super) fn refresh_software(self) {
-        if self.demo() || self.package.get().is_none() || self.update_busy.get() {
+        if self.package.get().is_none() || self.update_running() {
             return;
         }
-        self.root.run(|| {
-            spawn(async move {
-                self.refresh_camera_package().await;
-                if let Ok(snapshot) = platform::update::snapshot().await {
-                    self.note_journal(snapshot.state);
-                }
-            })
+        self.run(async move {
+            self.refresh_camera_package().await;
+            if let Ok(snapshot) = self.api().update_snapshot().await {
+                self.note_journal(snapshot.state);
+            }
         });
     }
 
@@ -197,29 +201,10 @@ impl AppState {
     /// version is unknown.
     pub fn open_pending_update(self) {
         let confirmed = self.journal.get() == Some(JournalState::Confirmed);
-        if self.demo() {
-            // As below: a sheet opened from the camera's journal alone shows
-            // the camera's step, not the send.
-            if matches!(self.phase.get(), UpdatePhase::Idle) {
-                let kind = UpdateKind::Install;
-                self.phase.set(if confirmed {
-                    UpdatePhase::Restart { kind }
-                } else {
-                    UpdatePhase::WaitingConfirm { kind }
-                });
-            }
-            self.update_shown.set(true);
-            self.sheet.set(Some(if confirmed {
-                Sheet::Restart
-            } else {
-                Sheet::Confirm
-            }));
-            return;
-        }
         let Some(camera_id) = self.camera_id() else {
             return;
         };
-        if platform::update::load_intent().is_none() {
+        if self.api().intent().is_none() {
             let Some(package) = self.package.get() else {
                 return;
             };
@@ -231,13 +216,13 @@ impl AppState {
                 confirmed: self.journal.get() == Some(JournalState::Confirmed),
                 modules: Vec::new(),
             };
-            if platform::update::save_intent(&intent).is_err() {
+            if self.api().save_intent(&intent).is_err() {
                 return;
             }
         }
         // The sheet shows the camera's step until the monitor reads it; a
         // restart under way keeps its own.
-        if !self.update_busy.get() {
+        if !self.update_running() {
             let kind = UpdateKind::Install;
             self.phase.set(if confirmed {
                 UpdatePhase::Restart { kind }
@@ -272,7 +257,13 @@ impl AppState {
         self.update_shown.set(false);
     }
 
-    pub(super) fn begin_real_update(self, kind: UpdateKind) {
+    /// Download the release and send it to the camera; the camera then
+    /// asks the person to confirm it, and installs it at its next start.
+    pub fn begin_update(self, kind: UpdateKind) {
+        if self.update_running() {
+            return;
+        }
+        self.update_kind.set(kind);
         let Some(package) = self.package.get() else {
             return;
         };
@@ -288,7 +279,7 @@ impl AppState {
         }
         self.update_shown.set(true);
         self.update_notice.set(None);
-        if platform::update::load_intent().is_some() {
+        if self.api().intent().is_some() {
             self.fail_update(UpdateError::Service("A previous update needs to be checked before starting another one. Reconnect to that camera first.".into()));
             return;
         }
@@ -307,8 +298,7 @@ impl AppState {
             confirmed: false,
             modules: self.drafted_modules(),
         };
-        self.update_busy.set(true);
-        self.update_cancel.set(false);
+        self.update_run.set(UpdateRun::Running);
         self.baseline.set(Some(intent.baseline.clone()));
         self.phase.set(UpdatePhase::Downloading {
             progress: 0.0,
@@ -320,16 +310,15 @@ impl AppState {
                 let result = self.prepare_and_stage(&intent).await;
                 match result {
                     Ok(()) => {
-                        let intent = platform::update::load_intent().unwrap_or(intent);
+                        let intent = self.api().intent().unwrap_or(intent);
                         self.monitor_update(intent).await;
                     }
-                    Err(_) if self.update_cancel.get() && !self.has_pending_update() => {
+                    Err(_) if self.update_cancelling() && !self.has_pending_update() => {
                         self.dismiss_error()
                     }
                     Err(error) => self.fail_update(error),
                 }
-                self.update_busy.set(false);
-                self.update_cancel.set(false);
+                self.update_run.set(UpdateRun::Idle);
             })
         });
     }
@@ -369,7 +358,7 @@ impl AppState {
         }
         let kind = intent.kind;
         let cancelled = async {
-            while !self.update_cancel.get() {
+            while !self.update_cancelling() {
                 timer(Duration::from_millis(100)).await;
             }
         };
@@ -377,7 +366,7 @@ impl AppState {
             self.phase.set(UpdatePhase::Downloading { progress, kind });
         };
         match futures_util::future::select(
-            Box::pin(platform::release::download(&release, before, progress)),
+            release.package.download(before, Box::new(progress)),
             Box::pin(cancelled),
         )
         .await
@@ -386,13 +375,11 @@ impl AppState {
                 let body = result.map_err(|error| {
                     log::warn!("Release download failed: {error}");
                     match error {
-                        platform::release::DownloadError::Network(_) => {
+                        DownloadError::Network(_) => {
                             UpdateError::Download(crate::strings::tr("update.download_body", &[]))
                         }
-                        platform::release::DownloadError::ModuleNotKept(id) => {
-                            UpdateError::ModuleNotKept(id)
-                        }
-                        platform::release::DownloadError::Package(_) => UpdateError::PackageInvalid,
+                        DownloadError::ModuleNotKept(id) => UpdateError::ModuleNotKept(id),
+                        DownloadError::Package(_) => UpdateError::PackageInvalid,
                     }
                 })?;
                 self.staged.with(|slot| {
@@ -405,10 +392,11 @@ impl AppState {
     }
 
     async fn prepare_and_stage(self, intent: &UpdateIntent) -> Result<(), UpdateError> {
-        let state = platform::update::snapshot().await?;
+        let api = self.api();
+        let state = api.update_snapshot().await?;
         // The start of the camera that these reads saw: the request names
         // it, so the camera refuses the request after a restart.
-        let boot_id = platform::update::boot_id().await?;
+        let boot_id = api.boot_id().await?;
         if state.state != JournalState::None {
             return Err(UpdateError::Service("The camera already has a pending update. Confirm or cancel it on the camera first.".into()));
         }
@@ -422,7 +410,7 @@ impl AppState {
             self.dismiss_error();
             return Ok(());
         };
-        if self.update_cancel.get() {
+        if self.update_cancelling() {
             self.dismiss_error();
             return Ok(());
         }
@@ -431,31 +419,29 @@ impl AppState {
             kind: intent.kind,
         });
         // Room on the card, before the send rather than after it.
-        if let Some(bytes_needed) =
-            card_shortfall(body.len() as u64, platform::update::free_bytes().await)
-        {
+        if let Some(bytes_needed) = card_shortfall(body.len() as u64, api.free_bytes().await) {
             return Err(UpdateError::CardFull { bytes_needed });
         }
         // Recheck after downloading. Do not overwrite changes made by another client.
-        let fresh = platform::update::snapshot().await?;
+        let fresh = api.update_snapshot().await?;
         if fresh.package != before || fresh.state != JournalState::None {
             return Err(UpdateError::Service(
                 "The camera package changed while preparing the update. Reconnect and try again."
                     .into(),
             ));
         }
-        if self.update_cancel.get() {
+        if self.update_cancelling() {
             self.dismiss_error();
             return Ok(());
         }
-        platform::update::save_intent(intent)?;
+        api.save_intent(intent)?;
         // Do not abort an in-flight PUT: cancellation must run after it settles.
-        let staged = platform::update::stage(body, &boot_id).await;
-        if self.update_cancel.get() {
+        let staged = api.stage_update(body, &boot_id).await;
+        if self.update_cancelling() {
             // A request can wait even when its answer did not arrive; a
             // cancel without one changes nothing.
             let _ = self.cancel_staged().await;
-            platform::update::clear_intent();
+            api.clear_intent();
             self.dismiss_error();
             return Ok(());
         }
@@ -463,11 +449,12 @@ impl AppState {
             Ok(()) => Ok(()),
             Err(error) => {
                 // Only a fresh camera response can resolve an uncertain mutation.
-                if platform::update::snapshot()
+                if api
+                    .update_snapshot()
                     .await
                     .is_ok_and(|s| s.state == JournalState::None)
                 {
-                    platform::update::clear_intent();
+                    api.clear_intent();
                 }
                 Err(error)
             }
@@ -476,15 +463,16 @@ impl AppState {
 
     /// Cancel the update that waits on the camera.
     async fn cancel_staged(self) -> Result<(), UpdateError> {
-        let boot_id = platform::update::boot_id().await?;
-        platform::update::cancel(&boot_id).await
+        let api = self.api();
+        let boot_id = api.boot_id().await?;
+        api.cancel_update(&boot_id).await
     }
 
     pub(super) fn resume_update(self) {
-        if self.demo() || self.update_busy.get() {
+        if self.update_running() {
             return;
         }
-        let Some(intent) = platform::update::load_intent() else {
+        let Some(intent) = self.api().intent() else {
             return;
         };
         if self.camera_id().as_deref() != Some(&intent.camera_id) {
@@ -492,13 +480,11 @@ impl AppState {
         }
         self.update_kind.set(intent.kind);
         self.baseline.set(Some(intent.baseline.clone()));
-        self.update_busy.set(true);
-        self.update_cancel.set(false);
+        self.update_run.set(UpdateRun::Running);
         self.root.run(|| {
             spawn(async move {
                 self.monitor_update(intent).await;
-                self.update_busy.set(false);
-                self.update_cancel.set(false);
+                self.update_run.set(UpdateRun::Idle);
             })
         });
     }
@@ -540,12 +526,7 @@ impl AppState {
                     return;
                 }
                 app_info!("look restart: no standby camera; manual restart");
-                let _ = nsh_base::alert_dialog()
-                    .title(crate::strings::tr("restart.title", &[]))
-                    .description(crate::strings::tr("restart.manual_body", &[]))
-                    .action("ok", crate::strings::tr("update.ok", &[]))
-                    .show()
-                    .await;
+                self.alert_closed(Alert::ManualRestart).await;
                 self.camera_restarting.set(false);
             })
         });
@@ -560,6 +541,10 @@ impl AppState {
             kind,
             step: RestartStep::PoweringOff,
         });
+        #[cfg(demo)]
+        if self.demo() {
+            return self.simulated_restart(intent).await;
+        }
         let off_at = now_ms();
         self.power_off_for_update(&intent.camera_id).await;
         self.phase.set(UpdatePhase::Restarting {
@@ -595,6 +580,10 @@ impl AppState {
     /// update left GRKit off answers without the service: that update did
     /// not install.
     async fn rejoin_for_update(self, intent: &UpdateIntent) -> bool {
+        #[cfg(demo)]
+        if self.demo() {
+            return self.simulated_rejoin(intent).await;
+        }
         let model = self
             .remembered()
             .map(|r| r.model)
@@ -621,7 +610,8 @@ impl AppState {
     }
 
     async fn monitor_update(self, mut intent: UpdateIntent) {
-        if platform::update::load_intent().is_none() {
+        let api = self.api();
+        if api.intent().is_none() {
             return;
         }
         // The time limit counts from the last answer of the camera, so an
@@ -629,10 +619,10 @@ impl AppState {
         let mut started = Instant::now();
         let mut failures = 0;
         loop {
-            if self.update_cancel.get() {
+            if self.update_cancelling() {
                 match self.cancel_staged().await {
                     Ok(()) => {
-                        platform::update::clear_intent();
+                        api.clear_intent();
                         self.journal.set(None);
                         self.dismiss_error();
                         self.refresh_camera_package().await;
@@ -674,7 +664,7 @@ impl AppState {
                 timer(Duration::from_millis(500)).await;
                 continue;
             }
-            match platform::update::snapshot().await {
+            match api.update_snapshot().await {
                 Ok(state) => {
                     failures = 0;
                     self.note_journal(state.state);
@@ -693,7 +683,7 @@ impl AppState {
                         UpdateObservation::Restart => {
                             if !intent.confirmed {
                                 intent.confirmed = true;
-                                let _ = platform::update::save_intent(&intent);
+                                let _ = api.save_intent(&intent);
                             }
                             if !matches!(
                                 self.flow_phase(),
@@ -715,11 +705,11 @@ impl AppState {
                             });
                             self.journal.set(None);
                             self.staged.with(|slot| *slot.borrow_mut() = None);
-                            platform::update::clear_intent();
+                            api.clear_intent();
                             if !intent.modules.is_empty() {
                                 self.clear_module_draft();
                             }
-                            platform::update::save_seen_version(&intent.camera_id, &version);
+                            api.save_seen_version(&intent.camera_id, &version);
                             if self.update_shown.get() {
                                 haptic(Haptic::Notification(HapticNotification::Success));
                                 self.sheet.set(Some(Sheet::Installed {
@@ -741,7 +731,7 @@ impl AppState {
                             // The update left the camera without an
                             // install, as when another phone cancelled it:
                             // the pages show the camera as it is.
-                            platform::update::clear_intent();
+                            api.clear_intent();
                             self.journal.set(None);
                             self.phase.set(UpdatePhase::Idle);
                             self.sheet.set(None);
@@ -785,7 +775,8 @@ impl AppState {
             .get()
             .map(|s| s.camera.model)
             .unwrap_or(CameraModel::Gr3);
-        if let Ok(raw) = platform::update::package().await
+        let api = self.api();
+        if let Ok(raw) = api.update_package().await
             && let Ok((camera, mut package)) = package_to_models(&raw, model)
         {
             package.available = self
@@ -793,7 +784,7 @@ impl AppState {
                 .with(|slot| slot.borrow().as_ref().map(|r| r.version.clone()));
             // Prefer camera metadata from the live props read when package omits it.
             if camera.firmware == "—"
-                && let Ok((status, _)) = platform::http::read_package(model).await
+                && let Ok((status, _)) = api.read_package(model).await
             {
                 self.status.set(Some(status));
             } else {
@@ -812,10 +803,11 @@ impl AppState {
     /// camera, with no update of this phone pending, was updated elsewhere
     /// or while the app was away.
     pub(super) fn note_installed_version(self, camera_id: &str, installed: &str) {
-        if self.demo() || platform::update::load_intent().is_some() {
+        let api = self.api();
+        if api.intent().is_some() {
             return;
         }
-        if let Some(seen) = platform::update::seen_version(camera_id)
+        if let Some(seen) = api.seen_version(camera_id)
             && seen != installed
             && crate::domain::version_at_least(installed, &seen)
         {
@@ -824,36 +816,107 @@ impl AppState {
                 &[("version", installed)],
             ));
         }
-        platform::update::save_seen_version(camera_id, installed);
+        api.save_seen_version(camera_id, installed);
     }
 
-    pub(super) fn cancel_real_update(self) {
-        self.update_cancel.set(true);
-        if !self.update_busy.get() {
+    /// The person cancels the update: the running task, or the one that
+    /// waits on the camera, ends it.
+    pub fn cancel_update(self) {
+        if !self.update_running() {
             self.resume_update();
-            // Without an update to resume, nothing would end the cancel.
-            self.update_cancel.set(self.update_busy.get());
+        }
+        // Without an update to resume, nothing would end the cancel.
+        if self.update_running() {
+            self.update_run.set(UpdateRun::Cancelling);
         }
     }
 
     /// This phone sent an update to `camera_id` that the camera confirmed:
     /// a camera without GRKit now means the install did not finish.
     pub(super) fn update_confirmed_for(self, camera_id: &str) -> bool {
-        platform::update::load_intent()
+        self.api()
+            .intent()
             .is_some_and(|i| i.confirmed && i.camera_id.eq_ignore_ascii_case(camera_id))
     }
 
-    /// Restart the camera from the restart step.
-    pub(super) fn request_restart(self) {
+    /// The restart step's main action: the phone turns the camera off and on
+    /// again, then reads the version.
+    pub fn restart_for_update(self) {
+        self.set_frozen(false);
         self.restart_request.set(true);
         self.resume_update();
         // The step answers the tap at once; the running update turns the
         // camera off on its next pass.
-        if self.update_busy.get() {
+        if self.update_running() {
             self.phase.set(UpdatePhase::Restarting {
                 kind: self.update_kind.get(),
                 step: RestartStep::PoweringOff,
             });
+        }
+    }
+
+    /// Reconnect after the person restarted the camera: the camera tab runs
+    /// its usual connect, and the update goes on from what the camera answers.
+    pub fn reconnect_for_update(self) {
+        // The update's own reconnect: no connect sheet over Software Update.
+        self.update_reconnect.set(true);
+        self.resume_update();
+    }
+
+    /// The restart is under way: it cannot be stopped or swiped away.
+    pub fn update_restarting(self) -> bool {
+        matches!(self.flow_phase(), UpdatePhase::Restarting { .. })
+    }
+
+    /// The user restarts the camera by hand: the sheet closes and the update
+    /// waits on the camera, where the camera tab offers it again.
+    pub fn restart_manually(self) {
+        self.sheet.set(None);
+        self.update_shown.set(false);
+        // The connect after the restart must be allowed, and the update must
+        // wait as long as the person needs.
+        if self.update_running() {
+            self.phase.set(UpdatePhase::ManualRestart {
+                kind: self.update_kind.get(),
+            });
+        }
+    }
+
+    pub fn dismiss_install_failed(self) {
+        self.sheet.set(None);
+        self.update_shown.set(false);
+    }
+
+    /// Connect again after a restart that left GRKit off.
+    pub fn reconnect_install_failed(self) {
+        self.dismiss_install_failed();
+        if let Some(camera) = self.remembered() {
+            self.connect_camera(&camera.peripheral_id);
+        }
+    }
+
+    pub fn dismiss_installed(self) {
+        self.phase.set(UpdatePhase::Idle);
+        self.sheet.set(None);
+        self.update_shown.set(false);
+        self.journal.set(None);
+        self.stacks
+            .update(|stacks| stacks[tab_index(Tab::Camera)].clear());
+    }
+
+    pub fn dismiss_error(self) {
+        self.phase.set(UpdatePhase::Idle);
+        self.sheet.set(None);
+        self.update_shown.set(false);
+    }
+
+    pub fn retry_update(self) {
+        self.dismiss_error();
+        if self.api().intent().is_some() {
+            self.update_reconnect.set(true);
+            self.resume_update();
+        } else {
+            self.begin_update(self.update_kind.get());
         }
     }
 }

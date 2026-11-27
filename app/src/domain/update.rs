@@ -1,4 +1,4 @@
-//! Update state machine that mirrors the camera service.
+//! The phases and errors of an update, as the camera service reports them.
 
 use serde::{Deserialize, Serialize};
 
@@ -93,112 +93,6 @@ pub enum UpdatePhase {
     Failed(UpdateError),
 }
 
-/// Drives [`UpdatePhase`] transitions. Progress and deadlines are fed in from
-/// the camera link; this type only enforces legal moves.
-#[derive(Clone, Debug)]
-pub struct UpdateFlow {
-    phase: UpdatePhase,
-    /// Version the camera had when the flow started; used to prove errors
-    /// leave the package alone.
-    baseline_version: Option<String>,
-}
-
-impl UpdateFlow {
-    pub fn new() -> Self {
-        Self {
-            phase: UpdatePhase::Idle,
-            baseline_version: None,
-        }
-    }
-
-    pub fn phase(&self) -> &UpdatePhase {
-        &self.phase
-    }
-
-    pub fn baseline_version(&self) -> Option<&str> {
-        self.baseline_version.as_deref()
-    }
-
-    /// Begin sending. `baseline` is the installed version before the send.
-    pub fn begin_sending(&mut self, kind: UpdateKind, baseline: impl Into<String>) {
-        self.baseline_version = Some(baseline.into());
-        self.phase = UpdatePhase::Sending {
-            progress: 0.0,
-            kind,
-        };
-    }
-
-    /// Progress while sending, clamped to 0..=1.
-    pub fn set_progress(&mut self, progress: f32) {
-        if let UpdatePhase::Sending { progress: p, .. } = &mut self.phase {
-            *p = progress.clamp(0.0, 1.0);
-        }
-    }
-
-    /// The package is on the camera and waits for confirmation.
-    pub fn mark_waiting(&mut self) {
-        let kind = match &self.phase {
-            UpdatePhase::Sending { kind, .. } => *kind,
-            _ => return,
-        };
-        self.phase = UpdatePhase::WaitingConfirm { kind };
-    }
-
-    /// The camera confirmed; next the user restarts it.
-    pub fn mark_confirmed(&mut self) {
-        let kind = match &self.phase {
-            UpdatePhase::WaitingConfirm { kind, .. } => *kind,
-            _ => return,
-        };
-        self.phase = UpdatePhase::Confirmed { kind };
-    }
-
-    /// Show the restart step after confirmation.
-    pub fn mark_restart(&mut self) {
-        let kind = match &self.phase {
-            UpdatePhase::Confirmed { kind } => *kind,
-            UpdatePhase::WaitingConfirm { kind, .. } => *kind,
-            _ => return,
-        };
-        self.phase = UpdatePhase::Restart { kind };
-    }
-
-    /// The new version is running.
-    pub fn mark_installed(&mut self, version: impl Into<String>) {
-        let kind = match &self.phase {
-            UpdatePhase::Restart { kind }
-            | UpdatePhase::Confirmed { kind }
-            | UpdatePhase::WaitingConfirm { kind, .. } => *kind,
-            _ => return,
-        };
-        self.phase = UpdatePhase::Installed {
-            kind,
-            version: version.into(),
-        };
-    }
-
-    /// Fail without changing the camera package.
-    pub fn fail(&mut self, error: UpdateError) {
-        match &self.phase {
-            UpdatePhase::Idle | UpdatePhase::Installed { .. } | UpdatePhase::Failed(_) => {}
-            _ => self.phase = UpdatePhase::Failed(error),
-        }
-    }
-
-    /// Back to idle after success, cancel, or dismissing an error.
-    pub fn reset(&mut self) {
-        self.phase = UpdatePhase::Idle;
-        self.baseline_version = None;
-    }
-
-    pub fn is_busy(&self) -> bool {
-        !matches!(
-            self.phase,
-            UpdatePhase::Idle | UpdatePhase::Installed { .. } | UpdatePhase::Failed(_)
-        )
-    }
-}
-
 /// The step of the update sheet a phase is at: 0 download, 1 send, 2
 /// confirm on the camera, 3 restart, 4 all done.
 pub fn update_step(phase: &UpdatePhase) -> usize {
@@ -282,64 +176,9 @@ pub fn needs_newer_app(ping_body: &str) -> bool {
         .is_some_and(|protocol| protocol > SERVICE_PROTOCOL)
 }
 
-impl Default for UpdateFlow {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn install_walks_idle_to_installed() {
-        let mut flow = UpdateFlow::new();
-        flow.begin_sending(UpdateKind::Install, "1.6.1");
-        flow.set_progress(0.5);
-        assert!(matches!(
-            flow.phase(),
-            UpdatePhase::Sending {
-                progress,
-                kind: UpdateKind::Install
-            } if (*progress - 0.5).abs() < f32::EPSILON
-        ));
-        flow.mark_waiting();
-        flow.mark_confirmed();
-        flow.mark_restart();
-        flow.mark_installed("1.7.0");
-        assert_eq!(
-            flow.phase(),
-            &UpdatePhase::Installed {
-                kind: UpdateKind::Install,
-                version: "1.7.0".into(),
-            }
-        );
-        assert_eq!(flow.baseline_version(), Some("1.6.1"));
-    }
-
-    #[test]
-    fn each_error_can_be_set_from_sending_or_waiting() {
-        for error in [
-            UpdateError::CardFull {
-                bytes_needed: 12 * 1024 * 1024,
-            },
-            UpdateError::Refused,
-            UpdateError::ConnectionLost,
-        ] {
-            let mut flow = UpdateFlow::new();
-            flow.begin_sending(UpdateKind::Install, "1.6.1");
-            flow.fail(error.clone());
-            assert_eq!(flow.phase(), &UpdatePhase::Failed(error.clone()));
-            assert_eq!(flow.baseline_version(), Some("1.6.1"));
-
-            let mut flow = UpdateFlow::new();
-            flow.begin_sending(UpdateKind::Install, "1.6.1");
-            flow.mark_waiting();
-            flow.fail(error.clone());
-            assert_eq!(flow.phase(), &UpdatePhase::Failed(error));
-        }
-    }
 
     #[test]
     fn each_phase_maps_to_its_sheet_step() {
@@ -408,15 +247,5 @@ mod tests {
         assert!(!needs_newer_app(r#"{"protocol":1,"bootId":"b"}"#));
         assert!(needs_newer_app(r#"{"protocol":2}"#));
         assert!(!needs_newer_app("not json"));
-    }
-
-    #[test]
-    fn reset_clears_a_finished_or_failed_flow() {
-        let mut flow = UpdateFlow::new();
-        flow.begin_sending(UpdateKind::Install, "1.6.1");
-        flow.fail(UpdateError::Refused);
-        flow.reset();
-        assert_eq!(flow.phase(), &UpdatePhase::Idle);
-        assert!(flow.baseline_version().is_none());
     }
 }

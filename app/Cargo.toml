@@ -6,6 +6,11 @@ publish = false
 
 [workspace]
 
+[features]
+# The demo camera and the development hooks (`src/dev`) in a release build.
+# Debug builds have them without it.
+demo = []
+
 [dependencies]
 nsh-core = { version = "0.6.0", features = ["svg"] }
 nsh-base = "0.6.0"
@@ -13,6 +18,8 @@ env_logger = "0.11"
 log = "0.4"
 # Official release verification and package assembly.
 grkit-core = { path = "../crates/grkit-core" }
+# The wire contract with the camera service (grkit-serve).
+grkit-protocol = { path = "../crates/grkit-protocol" }
 # Decodes the photo of Shutdown Screen; resvg already builds it.
 zune-jpeg = "0.5.15"
 anyhow = "1"
@@ -84,6 +91,10 @@ objc2-ui-kit = { version = "0.3.2", default-features = false, features = [
 ] }
 block2 = "0.6.2"
 dispatch2 = "0.3.1"
+
+[build-dependencies]
+# Reads `locales/` as `nsh` does (build.rs).
+nsh-i18n = { version = "0.6.0", features = ["build"] }
 
 # Optimize the LUT fit in debug builds and tests too.
 [profile.dev.package.grkit-core]

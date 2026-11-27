@@ -47,7 +47,6 @@ pub(crate) fn card_state(app: AppState) -> CardState {
         None if app.release_checking() => CardState::Checking,
         None => match app.release_problem() {
             Some(problem) => CardState::Problem(problem),
-            None if app.demo() => CardState::UpToDate,
             // No answer and no check under way: offer another try.
             None => CardState::Problem(ReleaseProblem::Network),
         },
@@ -237,7 +236,7 @@ fn software_content(app: AppState, expanded: Signal<bool>) -> impl IntoElement {
     }
 
     view().flex_1().bg(move || token("list-background")).child(
-        crate::ui::page_scroll()
+        crate::pages::page_scroll()
             .refresh(Some(crate::store::page_refresh::SOFTWARE.to_owned()))
             .flex_1()
             .child(
@@ -361,7 +360,7 @@ pub fn release_history_page(app: AppState, on_dismiss: impl Fn() + 'static) -> i
         .child(dynamic(move || {
             let versions = history(&app.release_notes());
             view().flex_1().bg(move || token("list-background")).child(
-                crate::ui::page_scroll().flex_1().child(
+                crate::pages::page_scroll().flex_1().child(
                     view()
                         .gap_4()
                         .px_4()

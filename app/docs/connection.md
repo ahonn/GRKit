@@ -4,7 +4,9 @@ The connection path is BLE discovery → encrypted Wi-Fi credentials → camera 
 and AP start → AP warm-up → Wi-Fi join → readiness of the GRKit service. The
 shared flow is `run_connect` (`src/domain/connect_flow.rs`); its budgets are in
 `src/domain/connect_policy.rs`. iOS and Android supply the operations through
-`ConnectTransport`. Demo mode uses `FakeCamera`; updates use the
+`ConnectTransport`. Demo mode has no link: it steps through a connect on a
+timer (`src/store/simulated_link.rs`) and reaches the demo camera
+(`src/dev/fake.rs`) through `CameraApi`; updates use the
 [camera update protocol](updates.md).
 
 ## Ownership and cancellation

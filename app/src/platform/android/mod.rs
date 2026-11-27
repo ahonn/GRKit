@@ -14,6 +14,8 @@ use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     future::Future,
+    io,
+    net::{SocketAddr, TcpStream},
     pin::Pin,
     sync::{
         Mutex, MutexGuard, OnceLock,
@@ -270,7 +272,12 @@ pub fn bluetooth_unavailable() -> bool {
 }
 pub fn start_scanning(tx: Sender<Frame>, remembered: Option<&str>, ask: bool) {
     *lock(&SCANS) = Some(tx);
-    if dispatch(0, "scan", json!({"remembered_id": remembered, "ask": ask})).is_err() {
+    let data = json!({
+        "remembered_id": remembered,
+        "ask": ask,
+        "services": [uuids::CAMERA_INFORMATION_SERVICE, uuids::BLUETOOTH_CONTROL_SERVICE],
+    });
+    if dispatch(0, "scan", data).is_err() {
         UNAVAILABLE.store(true, Ordering::Relaxed);
     }
 }
@@ -306,9 +313,14 @@ pub async fn network_snapshot() -> NetworkSnapshot {
 }
 /// Close the camera's access point, or turn it off, over Bluetooth.
 pub async fn end_session(peripheral_id: &str, power_off: bool) -> bool {
+    let characteristic = if power_off {
+        uuids::CAMERA_POWER
+    } else {
+        uuids::NETWORK_TYPE
+    };
     call(
         "endSession",
-        json!({"id": peripheral_id, "power_off": power_off}),
+        json!({"id": peripheral_id, "characteristic": characteristic}),
         END_SESSION_BUDGET,
     )
     .await
@@ -383,15 +395,109 @@ impl Drop for Attempt {
             Outcome::Succeeded => dispatch(0, "finish", json!({})),
             // A camera the user cancelled is told to close its access point;
             // an attempt that ran out of time leaves it as it is.
-            Outcome::Cancelled if !super::connect_deadline_reached() => {
-                dispatch(0, "cancel", json!({"teardown": true}))
-            }
+            Outcome::Cancelled if !super::connect_deadline_reached() => dispatch(
+                0,
+                "cancel",
+                json!({"teardown": true, "network_type": uuids::NETWORK_TYPE}),
+            ),
             Outcome::Cancelled => dispatch(0, "cancel", json!({})),
             Outcome::Failed => dispatch(0, "cancel", json!({})),
         };
     }
 }
 type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
+
+/// A connect or a read: connection retries, or a read that waits for the
+/// system pairing prompt.
+const BLE_PAIRING_BUDGET: Duration = Duration::from_secs(240);
+/// Room over a native GATT deadline for the bridge round trip.
+const BLE_BRIDGE_MARGIN: Duration = Duration::from_secs(5);
+
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// The GATT port of one setup over the Java bridge. Each operation is one
+/// call on the bridge's radio thread, on the link `bleConnect` opened.
+struct AndroidGatt {
+    connect: Value,
+    /// The link came up: a failed setup closes it.
+    connected: bool,
+}
+
+impl AndroidGatt {
+    fn gatt(
+        operation: &'static str,
+        data: Value,
+        budget: Duration,
+    ) -> BoxFut<'static, Result<Value, LinkError>> {
+        Box::pin(async move { call(operation, data, budget).await.map_err(link_error) })
+    }
+}
+
+impl GattPort for AndroidGatt {
+    fn connect(&mut self) -> BoxFut<'_, Result<(), LinkError>> {
+        let data = self.connect.clone();
+        Box::pin(async move {
+            Self::gatt("bleConnect", data, BLE_PAIRING_BUDGET).await?;
+            self.connected = true;
+            Ok(())
+        })
+    }
+
+    fn read(&mut self, characteristic: &'static str) -> BoxFut<'_, Result<Vec<u8>, LinkError>> {
+        let read = Self::gatt(
+            "bleRead",
+            json!({"uuid": characteristic}),
+            BLE_PAIRING_BUDGET,
+        );
+        Box::pin(async move {
+            let value = read.await?;
+            STANDARD
+                .decode(value.as_str().ok_or(LinkError::ConnectionLost)?)
+                .map_err(|_| LinkError::ConnectionLost)
+        })
+    }
+
+    fn write(
+        &mut self,
+        characteristic: &'static str,
+        value: &'static [u8],
+    ) -> BoxFut<'_, Result<(), LinkError>> {
+        let data = json!({"uuid": characteristic, "value": STANDARD.encode(value)});
+        let write = Self::gatt("bleWrite", data, timing::GATT_TIMEOUT + BLE_BRIDGE_MARGIN);
+        Box::pin(async move { write.await.map(|_| ()) })
+    }
+
+    fn subscribe(&mut self, characteristic: &'static str) -> BoxFut<'_, Result<(), LinkError>> {
+        let data = json!({"uuid": characteristic});
+        let subscribe = Self::gatt(
+            "bleSubscribe",
+            data,
+            timing::GATT_TIMEOUT + BLE_BRIDGE_MARGIN,
+        );
+        Box::pin(async move { subscribe.await.map(|_| ()) })
+    }
+
+    fn wait_notify(
+        &mut self,
+        characteristic: &'static str,
+        value: u8,
+        timeout: Duration,
+    ) -> BoxFut<'_, Result<bool, LinkError>> {
+        let data = json!({"uuid": characteristic, "value": value, "timeout_ms": millis(timeout)});
+        let wait = Self::gatt("bleWaitNotify", data, timeout + BLE_BRIDGE_MARGIN);
+        Box::pin(async move { Ok(wait.await?.as_bool().unwrap_or(false)) })
+    }
+
+    fn unsubscribe(&mut self, characteristic: &'static str) {
+        let _ = dispatch(0, "bleUnsubscribe", json!({"uuid": characteristic}));
+    }
+
+    fn pause(&mut self, duration: Duration) -> BoxFut<'_, ()> {
+        Box::pin(nsh_core::prelude::timer(duration))
+    }
+}
 
 struct AndroidTransport {
     model_hint: CameraModel,
@@ -409,40 +515,25 @@ impl ConnectTransport for AndroidTransport {
         let powered_on = self.powered_on;
         let (connect_timeout, timeout_retries) = self.ble_budget;
         Box::pin(async move {
-            let setup = call(
-                "setup",
-                json!({
+            let mut port = AndroidGatt {
+                connect: json!({
                     "id": id,
-                    "model": model,
-                    "powered_on": powered_on,
-                    "connect_timeout_ms": connect_timeout.as_millis() as u64,
+                    "settle_ms": millis(timing::SCAN_CONNECT_SETTLE),
+                    "connect_timeout_ms": millis(connect_timeout),
                     "timeout_retries": timeout_retries,
+                    "attempts": timing::BLE_CONNECT_ATTEMPTS,
+                    "retry_delay_ms": millis(timing::BLE_CONNECT_RETRY_DELAY),
+                    "gatt_timeout_ms": millis(timing::GATT_TIMEOUT),
                 }),
-                // Includes connection retries and up to two waits for the
-                // system pairing prompt.
-                Duration::from_secs(240),
-            )
-            .await
-            .map_err(link_error)?;
-            let credentials = &setup["credentials"];
-            let ssid = credentials["ssid"]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .ok_or(LinkError::NotPaired)?;
-            let passphrase = credentials["passphrase"]
-                .as_str()
-                .filter(|s| !s.is_empty())
-                .ok_or(LinkError::NotPaired)?;
-            Ok(BleSetup {
-                peripheral_id: id,
-                model,
-                powered_on_already: setup["powered_on_already"].as_bool().unwrap_or(false),
-                credentials: WifiCredentials {
-                    ssid: ssid.to_owned(),
-                    passphrase: passphrase.to_owned(),
-                },
-                ap_ready: setup["ap_ready"].as_bool().unwrap_or(false),
-            })
+                connected: false,
+            };
+            let result = run_ble_setup(&mut port, &id, model, powered_on).await;
+            if result.is_err() && port.connected {
+                // Drop the link and scan again; a cancel still closes the
+                // access point over a new link.
+                let _ = dispatch(0, "closeLink", json!({}));
+            }
+            result
         })
     }
 
@@ -476,16 +567,16 @@ impl ConnectTransport for AndroidTransport {
     }
 
     fn probe(&mut self, timeout: Duration) -> BoxFut<'_, Probe> {
-        Box::pin(super::link_support::probe_props(timeout))
+        Box::pin(crate::camera_api::service::probe_props(timeout))
     }
 
     fn camera_api_answers(&mut self) -> BoxFut<'_, bool> {
-        Box::pin(super::http::camera_api_answers())
+        Box::pin(crate::camera_api::service::camera_api_answers())
     }
 
     fn read_version(&mut self, model: CameraModel) -> BoxFut<'_, Result<(), LinkError>> {
         Box::pin(async move {
-            self.package = Some(super::http::read_package(model).await?);
+            self.package = Some(crate::camera_api::service::read_package(model).await?);
             Ok(())
         })
     }
@@ -557,11 +648,69 @@ pub async fn open_app_settings() {
 /// Route the socket `fd` over the camera network that the app requested, as
 /// `camera_request` does. Without that network the socket keeps the default
 /// route.
-pub fn bind_socket(fd: i32) -> Result<(), String> {
+fn bind_socket(fd: i32) -> Result<(), String> {
     with_env(|env, class| {
         env.call_static_method(class, "bindSocket", "(I)V", &[JValue::Int(fd)])
             .map(|_| ())
     })
+}
+
+/// On Android the camera Wi-Fi, which has no internet, is not the default
+/// network: the socket goes over the network that the app requested for the
+/// camera, as the camera HTTP requests do.
+pub fn connect_socket(address: SocketAddr, timeout: Duration) -> io::Result<TcpStream> {
+    use std::os::fd::{FromRawFd, OwnedFd};
+    // The camera service has an IPv4 address; a development URL may not.
+    let SocketAddr::V4(target) = address else {
+        return TcpStream::connect_timeout(&address, timeout);
+    };
+    // SAFETY: `socket` returns a new descriptor or -1.
+    let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_STREAM | libc::SOCK_CLOEXEC, 0) };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `fd` is a new descriptor that nothing else owns. Owning it at
+    // once closes it on each early return.
+    let socket = unsafe { OwnedFd::from_raw_fd(fd) };
+    bind_socket(fd).map_err(io::Error::other)?;
+    // Linux bounds a blocking connect by the send timeout.
+    let send_timeout = libc::timeval {
+        tv_sec: timeout.as_secs() as libc::time_t,
+        tv_usec: 0,
+    };
+    // SAFETY: the option value is a `timeval` of the given size.
+    let set = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            libc::SO_SNDTIMEO,
+            (&raw const send_timeout).cast(),
+            size_of::<libc::timeval>() as libc::socklen_t,
+        )
+    };
+    if set != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let target = libc::sockaddr_in {
+        sin_family: libc::AF_INET as libc::sa_family_t,
+        sin_port: target.port().to_be(),
+        sin_addr: libc::in_addr {
+            s_addr: u32::from(*target.ip()).to_be(),
+        },
+        sin_zero: [0; 8],
+    };
+    // SAFETY: the address is a `sockaddr_in` of the given size.
+    let connected = unsafe {
+        libc::connect(
+            fd,
+            (&raw const target).cast(),
+            size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        )
+    };
+    if connected != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(TcpStream::from(socket))
 }
 
 pub async fn camera_request(

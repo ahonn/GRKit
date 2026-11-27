@@ -12,12 +12,12 @@ use grkit_core::{color::Encoding, cover::Cover, fit::Grade};
 use crate::domain::{Look, LookSource, looks::NAME_MAX};
 use crate::store::{AppState, ImportDraft, LookAction, Route};
 use crate::strings::tr;
-use crate::ui::PageTitle;
 use crate::ui::{
     ButtonKind, ButtonSize, ChipTone, ListRow, SECTION_RADIUS, button, chip, cover_thumb,
     detail_header, list_note, list_row, list_section, loading_content, notice_card, system_switch,
     token,
 };
+use crate::ui::{PageTitle, TAB_BAR_CLEARANCE};
 
 /// The side of the large cover of the import result.
 const PAGE_COVER: f32 = 148.0;
@@ -98,7 +98,7 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
     };
     let page = |content: AnyElement| {
         view().flex_1().bg(move || token("list-background")).child(
-            crate::ui::page_scroll().flex_1().child(
+            crate::pages::page_scroll().flex_1().child(
                 view().pb(px(TAB_BAR_CLEARANCE)).child(header).child(
                     view()
                         .px_4()
@@ -382,9 +382,6 @@ fn name_field(
         )
 }
 
-/// Room under scrolled content for the floating tab bar.
-pub const TAB_BAR_CLEARANCE: f32 = 96.0;
-
 // --- Import -------------------------------------------------------------------
 
 /// The LUT inputs, in the order the site offers them.
@@ -634,7 +631,7 @@ fn import_result(app: AppState, draft: ImportDraft) -> impl IntoElement {
 /// A scrolled page body on the grouped background.
 fn base_scroll(content: impl IntoElement) -> impl IntoElement {
     view().flex_1().bg(move || token("list-background")).child(
-        crate::ui::page_scroll().flex_1().child(
+        crate::pages::page_scroll().flex_1().child(
             view()
                 .px_4()
                 .pt_4()

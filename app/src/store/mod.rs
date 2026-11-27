@@ -1,11 +1,14 @@
-//! App state: tabs, camera session, update sheets, and demo mode.
+//! App state: tabs, camera session, update sheets. The camera, the release
+//! site and the phone's records come through `camera_api::CameraApi`.
 //!
 //! Reactive fields use NSH `Signal`s so the UI updates when they change.
 
+mod alerts;
 mod camera_settings;
 mod changes;
 mod connect;
-mod demo_screen;
+#[cfg(demo)]
+mod demo_hooks;
 mod liveness;
 mod looks;
 mod modules;
@@ -13,33 +16,36 @@ pub mod native_looks;
 pub mod page_refresh;
 mod recipes;
 mod rename;
+#[cfg(demo)]
+mod simulated_link;
 mod update;
 mod warmup;
 
+pub use alerts::{Alert, AlertRequest};
 pub use camera_settings::{PictureRead, SettingsRead};
+#[cfg(demo)]
+pub(crate) use looks::off_thread;
 pub use looks::{CatalogItem, ImportDraft, LookAction, LooksStore};
 pub use modules::{ModulePart, ModulesBlock, ModulesStore};
 pub use recipes::{RecipeAction, RecipesStore, native_type_name};
 
-pub use demo_screen::{
-    DEMO_SCREEN_IDS, DemoScreen, demo_screen_from_env, key_text, parse_demo_screen, shows_alert,
-};
-
 use std::{
     cell::{Cell, RefCell},
-    env,
+    future::Future,
+    rc::Rc,
+    task::{Context, Waker},
     time::{Duration, Instant},
 };
 
 use nsh_core::prelude::*;
 
+use crate::camera_api::{CameraApi, ReleaseOffer};
 use crate::domain::auto_connect::{AutoTrigger, LeaseWatch};
 use crate::domain::link_health::{LinkHealth, LinkState};
 use crate::domain::nearby_watch::{AdvertisedPower, NearbyWatch, PRUNE_INTERVAL_MS};
 use crate::domain::{
-    CameraLink, CameraModel, CameraStatus, ConnectionState, DemoFail, FakeCamera, LinkError,
-    NearbyCamera, PackageInfo, RememberedCamera, UpdateError, UpdateKind, UpdatePhase, UpdatePoll,
-    block_on_ready,
+    CameraModel, CameraStatus, ConnectionState, LinkError, NearbyCamera, PackageInfo,
+    RememberedCamera, UpdateError, UpdateKind, UpdatePhase,
 };
 use crate::platform;
 
@@ -139,10 +145,25 @@ pub enum Sheet {
 /// The package assembled for a target version: (version, zip bytes).
 type StagedPackage = (String, Vec<u8>);
 
+/// The update task of this phone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UpdateRun {
+    Idle,
+    Running,
+    /// The person cancelled it: the task ends it.
+    Cancelling,
+}
+
 /// Shared app state provided at the root (`Copy` handle on signals).
 #[derive(Clone, Copy)]
 pub struct AppState {
+    /// The camera is simulated (`CameraApi::simulated`): no Bluetooth or
+    /// Wi-Fi link to it.
     demo: bool,
+    /// The camera, the release site and the phone's records.
+    api: Stored<Rc<dyn CameraApi>>,
+    /// Alerts for the pages to show (`pages::present_alerts`).
+    alerts: Stored<alerts::AlertQueue>,
     tab: Signal<Tab>,
     /// The last request to scroll a tab's root page to its top, with a
     /// count that makes each request new.
@@ -161,10 +182,8 @@ pub struct AppState {
     pub(crate) phase: Signal<UpdatePhase>,
     connect_started: Signal<Option<Instant>>,
     initial_connect: Signal<bool>,
-    /// When true, the ticker does not advance connecting / update sheets.
+    /// When true, the ticker does not advance a simulated connect.
     frozen: Signal<bool>,
-    /// Fake camera for demo mode; mutated from tick handlers.
-    pub(crate) camera: Stored<RefCell<Option<FakeCamera>>>,
     pub(crate) baseline: Signal<Option<String>>,
     nearby: Signal<Vec<NearbyCamera>>,
     /// The saved cameras, the most recent first; the first is the one a
@@ -204,8 +223,7 @@ pub struct AppState {
     /// `spawn` ends with the owner it was made under, and a sheet's owner is
     /// disposed as soon as the sheet changes.
     root: Owner,
-    update_busy: Signal<bool>,
-    update_cancel: Signal<bool>,
+    update_run: Signal<UpdateRun>,
     update_reconnect: Signal<bool>,
     update_kind: Signal<UpdateKind>,
     release_busy: Signal<bool>,
@@ -217,7 +235,7 @@ pub struct AppState {
     restart_connect: Signal<bool>,
     release_problem: Signal<Option<crate::domain::ReleaseProblem>>,
     release_notes: Signal<Vec<crate::domain::release_notes::VersionNotes>>,
-    release: Stored<RefCell<Option<platform::release::Release>>>,
+    release: Stored<RefCell<Option<ReleaseOffer>>>,
     /// The phone restarts the camera for the update.
     restart_request: Signal<bool>,
     /// The person opened the update: its steps show in the sheet.
@@ -232,30 +250,17 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new() -> Self {
-        let demo = demo_requested();
-        let fail = demo_fail_from_env();
-        let screen = if demo { demo_screen_from_env() } else { None };
-        let camera = if demo {
-            let base = FakeCamera::with_fail(fail).config().clone();
-            Some(FakeCamera::new(crate::domain::FakeConfig {
-                send_ticks: 4,
-                confirm_ticks: 3,
-                fail,
-                ..base
-            }))
-        } else {
-            None
-        };
-        let saved = if demo {
-            Vec::new()
-        } else {
-            platform::load_saved()
-        };
+    /// The app state on `api`: a real camera starts the link watches, a
+    /// simulated one waits for the demo to drive it.
+    pub fn new(api: Rc<dyn CameraApi>) -> Self {
+        let demo = api.simulated().is_some();
+        let dev_url = dev_camera_url() && !demo;
+        let saved = api.saved_cameras();
         let app = Self {
             demo,
-            update_busy: signal(false),
-            update_cancel: signal(false),
+            api: stored(api),
+            alerts: stored(alerts::AlertQueue::new()),
+            update_run: signal(UpdateRun::Idle),
             update_reconnect: signal(false),
             update_kind: signal(UpdateKind::Install),
             release_busy: signal(false),
@@ -273,8 +278,8 @@ impl AppState {
             tab: signal(Tab::Camera),
             scroll_top: signal(None),
             stacks: signal([Vec::new(), Vec::new(), Vec::new(), Vec::new()]),
-            looks: LooksStore::new(demo),
-            recipes: RecipesStore::new(demo),
+            looks: LooksStore::new(),
+            recipes: RecipesStore::new(),
             modules: ModulesStore::new(),
             camera_settings: camera_settings::CameraSettingsStore::new(),
             native_looks: native_looks::NativeLooksStore::default(),
@@ -283,9 +288,8 @@ impl AppState {
             package: signal(None),
             phase: signal(UpdatePhase::Idle),
             connect_started: signal(None),
-            initial_connect: signal(!demo && platform::has_dev_camera_url()),
+            initial_connect: signal(dev_url),
             frozen: signal(false),
-            camera: stored(RefCell::new(camera)),
             baseline: signal(None),
             nearby: signal(Vec::new()),
             saved: signal(saved),
@@ -308,20 +312,9 @@ impl AppState {
             return_tab: signal(None),
             stream_heard: stored(Cell::new(None)),
         };
-        // Development: open a tab at launch, for simulator runs without taps.
-        match platform::config_value("GRKIT_START_TAB").as_deref() {
-            Some("looks") => app.tab.set(Tab::Looks),
-            Some("recipes") => app.set_tab(Tab::Recipes),
-            Some("modules") => app.open_modules_page(),
-            Some("looks-add") => {
-                app.tab.set(Tab::Looks);
-                app.open_add();
-            }
-            _ => {}
-        }
-        if let Some(screen) = screen {
-            demo_screen::apply(app, screen);
-        } else if !demo && !platform::has_dev_camera_url() {
+        if demo {
+            // The demo drives the simulated camera.
+        } else if !dev_url {
             app.watch_link();
             app.watch_changes();
             app.start_ble_scan();
@@ -330,11 +323,11 @@ impl AppState {
                 next_frame().await;
                 app.auto_connect(AutoTrigger::Launch);
             });
-        } else if !demo {
+        } else {
             app.watch_changes();
             app_info!(
                 "GRKIT_CAMERA_URL set; skipping BLE scan ({})",
-                platform::camera_http_base()
+                crate::camera_api::camera_http_base()
             );
             // The development URL connects at launch, so a simulator run
             // needs no tap to reach the HTTP part.
@@ -344,6 +337,24 @@ impl AppState {
             });
         }
         app
+    }
+
+    /// The camera, the release site and the phone's records.
+    pub(crate) fn api(self) -> Rc<dyn CameraApi> {
+        self.api.with(|api| api.clone())
+    }
+
+    /// Run `task` under the app root, so that it outlives the page that
+    /// starts it. A task that needs no wait (the demo camera answers at
+    /// once) ends before this returns, as a change on a camera in hand does.
+    pub(crate) fn run(self, task: impl Future<Output = ()> + 'static) {
+        self.root.run(|| {
+            let mut task = Box::pin(task);
+            let mut cx = Context::from_waker(Waker::noop());
+            if task.as_mut().poll(&mut cx).is_pending() {
+                spawn(task);
+            }
+        });
     }
 
     pub fn initial_connect(self) -> bool {
@@ -373,8 +384,9 @@ impl AppState {
         }
     }
 
-    pub fn demo(self) -> bool {
-        self.demo
+    /// The camera is simulated: the store steps through its link.
+    fn demo(self) -> bool {
+        cfg!(demo) && self.demo
     }
 
     pub fn set_frozen(self, frozen: bool) {
@@ -486,19 +498,9 @@ impl AppState {
     }
 
     pub fn nearby_cameras(self) -> Vec<NearbyCamera> {
+        #[cfg(demo)]
         if self.demo() {
-            return self
-                .nearby_model()
-                .map(|model| {
-                    vec![NearbyCamera {
-                        peripheral_id: "demo".into(),
-                        model,
-                        powered_on: true,
-                        name: Some("GR_A1B2C3".into()),
-                        rssi: Some(-45),
-                    }]
-                })
-                .unwrap_or_default();
+            return self.simulated_nearby();
         }
         self.nearby.get()
     }
@@ -535,9 +537,7 @@ impl AppState {
     }
 
     fn store_saved(self, cams: Vec<RememberedCamera>) {
-        if !self.demo
-            && let Err(error) = platform::save_saved(&cams)
-        {
+        if let Err(error) = self.api().save_cameras(&cams) {
             log::warn!("Could not save the cameras: {error}");
         }
         self.saved.set(cams);
@@ -575,13 +575,7 @@ impl AppState {
             .get()
             .map(|s| s.camera.model.display_name().to_owned())
             .or_else(|| self.selected_model().map(|m| m.display_name().to_owned()))
-            .or_else(|| {
-                self.camera.with(|c| {
-                    c.borrow()
-                        .as_ref()
-                        .map(|cam| cam.config().model.display_name().to_owned())
-                })
-            })
+            .or_else(|| self.api().simulated().map(|m| m.display_name().to_owned()))
             .unwrap_or_else(|| CameraModel::Gr3.display_name().to_owned())
     }
 
@@ -605,9 +599,7 @@ impl AppState {
 
     pub fn nearby_model(self) -> Option<CameraModel> {
         if self.demo() {
-            return self
-                .camera
-                .with(|c| c.borrow().as_ref().and_then(|cam| cam.nearby()));
+            return self.api().simulated();
         }
         self.nearby_cameras()
             .first()
@@ -725,7 +717,7 @@ impl AppState {
     }
 
     pub fn open_scan(self) {
-        if !self.demo() && platform::has_dev_camera_url() {
+        if !self.demo() && dev_camera_url() {
             self.selected_id.set(Some("dev-url".into()));
             self.start_connect();
             return;
@@ -770,345 +762,12 @@ impl AppState {
         self.attempt_kind.get() == connect::AttemptKind::Saved
     }
 
-    /// Advance connecting checklist and finish with a connected camera (demo).
-    pub fn tick_connecting(self) {
-        if self.frozen() || !self.demo() {
-            return;
-        }
-        let Some(started) = self.connect_started.get() else {
-            return;
-        };
-        let step = (started.elapsed().as_millis() / 250) as u8;
-        if !matches!(self.sheet.get(), Some(Sheet::Connecting { .. })) {
-            return;
-        }
-        if step >= 3 {
-            let (status, package) = self.camera.with(|slot| {
-                let mut slot = slot.borrow_mut();
-                let Some(cam) = slot.as_mut() else {
-                    return (None, None);
-                };
-                match block_on_ready(cam.connect()) {
-                    Ok(status) => {
-                        let package = block_on_ready(cam.read_package()).ok();
-                        (Some(status), package)
-                    }
-                    Err(_) => (None, None),
-                }
-            });
-            if let Some(status) = status {
-                self.status.set(Some(status));
-            }
-            if let Some(package) = package {
-                self.package.set(Some(package));
-            }
-            // As a real connect: the camera tab shows the Look in use, the
-            // current recipe and the modules at once.
-            self.refresh_module_state();
-            self.refresh_looks();
-            self.refresh_recipes();
-            self.sheet.set(None);
-            self.connect_started.set(None);
-        } else {
-            self.sheet.set(Some(Sheet::Connecting { step }));
-        }
-    }
-
     pub fn open_software_update(self) {
         self.push(Route::SoftwareUpdate);
     }
 
-    pub fn begin_update(self, kind: UpdateKind) {
-        if self.update_busy.get() {
-            return;
-        }
-        self.update_kind.set(kind);
-        if !self.demo() {
-            self.begin_real_update(kind);
-            return;
-        }
-        self.set_frozen(false);
-        self.update_shown.set(true);
-        let ok = self.camera.with(|slot| {
-            let mut slot = slot.borrow_mut();
-            let Some(cam) = slot.as_mut() else {
-                return false;
-            };
-            block_on_ready(cam.send_update(kind)).is_ok()
-        });
-        if !ok {
-            return;
-        }
-        self.baseline.set(self.package.get().map(|p| p.installed));
-        self.phase.set(UpdatePhase::Sending {
-            progress: 0.0,
-            kind,
-        });
-        self.sheet.set(Some(Sheet::Sending));
-    }
-
-    /// Poll the fake camera and mirror phases into sheets.
-    pub fn tick_update(self) {
-        if !self.demo() {
-            return;
-        }
-        if self.frozen() {
-            return;
-        }
-        let sheet = self.sheet.get();
-        let in_flow = matches!(
-            sheet,
-            Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart)
-        );
-
-        let outcome = self.camera.with(|slot| {
-            let mut slot = slot.borrow_mut();
-            let cam = slot.as_mut()?;
-            if !in_flow
-                && !cam.flow().is_busy()
-                && !matches!(
-                    cam.flow().phase(),
-                    UpdatePhase::Installed { .. } | UpdatePhase::Failed(_)
-                )
-            {
-                return None;
-            }
-            let poll = block_on_ready(cam.poll_update()).ok()?;
-            let flow = cam.flow().clone();
-            let package = block_on_ready(cam.read_package()).ok();
-            let status = block_on_ready(cam.read_status()).ok();
-            Some((poll, flow, package, status))
-        });
-
-        let Some((poll, flow, package, status)) = outcome else {
-            return;
-        };
-
-        let restarting = matches!(flow.phase(), UpdatePhase::Restart { .. });
-        // The phone's own restart steps stand over the camera's phase.
-        let own_restart = matches!(
-            self.phase.get(),
-            UpdatePhase::Restarting { .. } | UpdatePhase::ManualRestart { .. }
-        );
-        if !(own_restart && restarting) {
-            self.phase.set(flow.phase().clone());
-        }
-        if let Some(package) = package {
-            self.package.set(Some(package));
-        }
-        if let Some(status) = status {
-            self.status.set(Some(status));
-        }
-
-        match poll {
-            UpdatePoll::Sending { .. } => self.sheet.set(Some(Sheet::Sending)),
-            UpdatePoll::WaitingConfirm => {
-                self.journal.set(Some(crate::domain::JournalState::Waiting));
-            }
-            UpdatePoll::Confirmed => {
-                self.journal
-                    .set(Some(crate::domain::JournalState::Confirmed));
-            }
-            UpdatePoll::Installed { version } => {
-                haptic(Haptic::Notification(HapticNotification::Success));
-                if self.update_shown.get() {
-                    // As a real update: the open sheet says it.
-                    self.sheet.set(Some(Sheet::Installed {
-                        previous: self.baseline.get().unwrap_or_default(),
-                        version,
-                    }));
-                } else {
-                    // Software Update says it, with a toast.
-                    self.dismiss_demo_update();
-                    self.show_toast(crate::strings::tr(
-                        "update.updated_toast",
-                        &[("version", &version)],
-                    ));
-                }
-            }
-            UpdatePoll::Failed(error) => {
-                if matches!(self.sheet.get(), Some(Sheet::Sending)) {
-                    self.sheet.set(Some(Sheet::Error(error)));
-                } else {
-                    self.update_notice.set(Some(error));
-                }
-            }
-        }
-    }
-
-    /// The demo update ended: the flow is idle and the page reads the new
-    /// version.
-    fn dismiss_demo_update(self) {
-        self.camera.with(|slot| {
-            if let Some(cam) = slot.borrow_mut().as_mut() {
-                let _ = block_on_ready(cam.cancel());
-                self.package.set(block_on_ready(cam.read_package()).ok());
-            }
-        });
-        self.phase.set(UpdatePhase::Idle);
-        self.journal.set(None);
-    }
-
-    /// The restart step's main action: the phone turns the camera off and on
-    /// again, then reads the version.
-    pub fn restart_for_update(self) {
-        let kind = self.update_kind.get();
-        if !self.demo() {
-            self.request_restart();
-            return;
-        }
-        self.set_frozen(false);
-        self.phase.set(UpdatePhase::Restarting {
-            kind,
-            step: crate::domain::RestartStep::PoweringOff,
-        });
-        self.root.run(|| {
-            spawn(async move {
-                for step in [
-                    crate::domain::RestartStep::PoweringOn,
-                    crate::domain::RestartStep::Reconnecting,
-                ] {
-                    timer(Duration::from_millis(900)).await;
-                    self.phase.set(UpdatePhase::Restarting { kind, step });
-                }
-                timer(Duration::from_millis(900)).await;
-                self.demo_camera_restarted();
-            })
-        });
-    }
-
-    /// Reconnect after the person restarted the camera: the camera tab runs
-    /// its usual connect, and the update goes on from what the camera answers.
-    pub fn reconnect_for_update(self) {
-        if self.demo() {
-            self.demo_camera_restarted();
-            return;
-        }
-        // The update's own reconnect: no connect sheet over Software Update.
-        self.update_reconnect.set(true);
-        self.resume_update();
-    }
-
-    fn demo_camera_restarted(self) {
-        self.camera.with(|slot| {
-            if let Some(cam) = slot.borrow_mut().as_mut() {
-                cam.restart();
-            }
-        });
-        self.phase.set(UpdatePhase::Restart {
-            kind: self.update_kind.get(),
-        });
-        self.tick_update();
-    }
-
-    /// Ask before an update stops: the cancel button and a swipe down.
-    pub fn ask_cancel_update(self) {
-        if self.update_cancelling() {
-            return;
-        }
-        let step = crate::domain::update_step(&self.flow_phase());
-        spawn(async move {
-            let answer = nsh_base::alert_dialog()
-                .title(crate::strings::tr("update.cancel_title", &[]))
-                .description(crate::strings::tr(
-                    crate::domain::cancel_body_key(step),
-                    &[],
-                ))
-                .cancel("keep", crate::strings::tr("update.cancel_keep", &[]))
-                .destructive("cancel", crate::strings::tr("update.cancel_confirm", &[]))
-                .show()
-                .await;
-            if answer.ok().and_then(|a| a.action).as_deref() == Some("cancel") {
-                self.cancel_update();
-            }
-        });
-    }
-
-    /// The restart is under way: it cannot be stopped or swiped away.
-    pub fn update_restarting(self) -> bool {
-        matches!(self.flow_phase(), UpdatePhase::Restarting { .. })
-    }
-
-    /// The user restarts the camera by hand: the sheet closes and the update
-    /// waits on the camera, where the camera tab offers it again.
-    pub fn restart_manually(self) {
-        self.sheet.set(None);
-        self.update_shown.set(false);
-        // The connect after the restart must be allowed, and the update must
-        // wait as long as the person needs.
-        if !self.demo() && self.update_busy.get() {
-            self.phase.set(UpdatePhase::ManualRestart {
-                kind: self.update_kind.get(),
-            });
-        }
-    }
-
-    pub fn dismiss_install_failed(self) {
-        self.sheet.set(None);
-        self.update_shown.set(false);
-    }
-
-    /// Connect again after a restart that left GRKit off.
-    pub fn reconnect_install_failed(self) {
-        self.dismiss_install_failed();
-        if let Some(camera) = self.remembered() {
-            self.connect_camera(&camera.peripheral_id);
-        }
-    }
-
-    pub fn dismiss_installed(self) {
-        self.camera.with(|slot| {
-            if let Some(cam) = slot.borrow_mut().as_mut() {
-                let _ = block_on_ready(cam.cancel());
-                self.package.set(block_on_ready(cam.read_package()).ok());
-            }
-        });
-        self.phase.set(UpdatePhase::Idle);
-        self.sheet.set(None);
-        self.update_shown.set(false);
-        self.journal.set(None);
-        self.stacks
-            .update(|stacks| stacks[tab_index(Tab::Camera)].clear());
-    }
-
-    pub fn dismiss_error(self) {
-        self.camera.with(|slot| {
-            if let Some(cam) = slot.borrow_mut().as_mut() {
-                let _ = block_on_ready(cam.cancel());
-            }
-        });
-        self.phase.set(UpdatePhase::Idle);
-        self.sheet.set(None);
-        self.update_shown.set(false);
-    }
-
-    pub fn cancel_update(self) {
-        if !self.demo() {
-            self.cancel_real_update();
-            return;
-        }
-        self.camera.with(|slot| {
-            if let Some(cam) = slot.borrow_mut().as_mut() {
-                let _ = block_on_ready(cam.cancel());
-            }
-        });
-        self.phase.set(UpdatePhase::Idle);
-        self.sheet.set(None);
-        self.update_shown.set(false);
-        self.journal.set(None);
-    }
-
-    pub fn retry_update(self) {
-        self.dismiss_error();
-        if !self.demo() && platform::update::load_intent().is_some() {
-            self.update_reconnect.set(true);
-            self.resume_update();
-        } else {
-            self.begin_update(self.update_kind.get());
-        }
-    }
-
-    /// Spawn a light poll loop while connecting or updating.
+    /// Spawn a light poll loop: a simulated connect advances, and a scan
+    /// notices that Bluetooth went away.
     pub fn ensure_ticker(self) {
         spawn(async move {
             loop {
@@ -1117,11 +776,8 @@ impl AppState {
                     continue;
                 }
                 match self.sheet() {
-                    Some(Sheet::Connecting { .. }) => self.tick_connecting(),
-                    Some(Sheet::Sending | Sheet::Confirm | Sheet::Restart) => self.tick_update(),
-                    // After the send the demo update goes on without a sheet,
-                    // as a real one does on the camera.
-                    None if self.demo() && self.journal.get().is_some() => self.tick_update(),
+                    #[cfg(demo)]
+                    Some(Sheet::Connecting { .. }) if self.demo() => self.tick_connecting(),
                     Some(Sheet::Scan) if !self.demo() && platform::bluetooth_unavailable() => {
                         self.set_sheet(Some(Sheet::ConnectError(LinkError::BluetoothUnavailable)));
                     }
@@ -1134,7 +790,7 @@ impl AppState {
 
 impl Tab {
     /// A stable name of the tab, as a page names its tab
-    /// (`ui::page_scroll`'s `top_of`).
+    /// (`pages::page_scroll`'s `top_of`).
     pub fn key(self) -> &'static str {
         match self {
             Tab::Camera => "camera",
@@ -1154,37 +810,10 @@ fn tab_index(tab: Tab) -> usize {
     }
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-fn demo_requested() -> bool {
-    if env::var("GRKIT_DEMO").as_deref() == Ok("1")
-        || crate::platform::config_value("GRKIT_DEMO_SCREEN").is_some()
-    {
-        return true;
-    }
-    for arg in env::args() {
-        if arg == "--demo"
-            || arg == "demo"
-            || arg == "--demo-screen"
-            || arg.starts_with("--demo-screen=")
-        {
-            return true;
-        }
-    }
-    false
-}
-
-fn demo_fail_from_env() -> DemoFail {
-    match env::var("GRKIT_DEMO_FAIL").as_deref() {
-        Ok("card_full") => DemoFail::CardFull,
-        Ok("refused") => DemoFail::Refused,
-        Ok("connection_lost") => DemoFail::ConnectionLost,
-        _ => DemoFail::None,
-    }
+/// `GRKIT_CAMERA_URL` is set: development builds connect to that camera
+/// service over HTTP alone, without Bluetooth or Wi-Fi.
+fn dev_camera_url() -> bool {
+    cfg!(demo) && crate::camera_api::has_dev_camera_url()
 }
 
 fn now_ms() -> u64 {

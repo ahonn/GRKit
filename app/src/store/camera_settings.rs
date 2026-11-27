@@ -6,10 +6,9 @@ use nsh_core::prelude::*;
 
 use super::AppState;
 use crate::domain::LookError;
-use crate::domain::camera_settings::{CameraSettings, SettingChange, demo_settings};
-use crate::domain::modules::jpeg_data_uri;
+use crate::domain::camera_settings::{CameraSettings, SettingChange};
+use crate::domain::images::jpeg_data_uri;
 use crate::domain::shutdown_picture::shutdown_picture;
-use crate::platform::modules as remote;
 use crate::strings::tr;
 
 /// What the phone knows of the camera's GRKit settings.
@@ -78,35 +77,26 @@ impl AppState {
 
     /// Read the settings of the connected camera.
     pub fn refresh_camera_settings(self) {
-        if self.demo() {
-            if self.camera_online() {
-                self.camera_settings
-                    .read
-                    .set(SettingsRead::Ready(demo_settings()));
-            }
-            return;
-        }
         if !self.camera_online() || self.camera_settings.loading.get() {
             return;
         }
         let generation = self.connect_generation.get();
         self.camera_settings.loading.set(true);
-        self.root.run(|| {
-            spawn(async move {
-                let result = remote::camera_settings().await;
-                if self.connect_generation.get() != generation {
-                    return;
+        let read = self.api().camera_settings();
+        self.run(async move {
+            let result = read.await;
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.camera_settings.loading.set(false);
+            match result {
+                Ok(Some(settings)) if self.camera_settings.busy.get().is_none() => {
+                    self.camera_settings.read.set(SettingsRead::Ready(settings));
                 }
-                self.camera_settings.loading.set(false);
-                match result {
-                    Ok(Some(settings)) if self.camera_settings.busy.get().is_none() => {
-                        self.camera_settings.read.set(SettingsRead::Ready(settings));
-                    }
-                    Ok(Some(_)) => {}
-                    Ok(None) => self.camera_settings.read.set(SettingsRead::Unsupported),
-                    Err(error) => log::warn!("Could not read the GRKit settings: {error:?}"),
-                }
-            });
+                Ok(Some(_)) => {}
+                Ok(None) => self.camera_settings.read.set(SettingsRead::Unsupported),
+                Err(error) => log::warn!("Could not read the GRKit settings: {error:?}"),
+            }
         });
     }
 
@@ -122,29 +112,26 @@ impl AppState {
         self.camera_settings
             .read
             .set(SettingsRead::Ready(before.with(change)));
-        if self.demo() {
-            return;
-        }
         self.camera_settings.busy.set(Some(change));
-        let boot_id = self.modules_boot_id();
         let generation = self.connect_generation.get();
-        self.root.run(|| {
-            spawn(async move {
-                let answer = remote::patch_camera_setting(&boot_id, change).await;
-                if self.connect_generation.get() != generation {
-                    return;
-                }
-                self.camera_settings.busy.set(None);
-                match answer {
-                    Ok(settings) => self.camera_settings.read.set(SettingsRead::Ready(settings)),
-                    Err(error) => {
-                        self.camera_settings.read.set(SettingsRead::Ready(before));
-                        if error != LookError::ConnectionLost {
-                            self.show_toast(tr("grkit.save_failed", &[]));
-                        }
+        let answer = self
+            .api()
+            .change_camera_setting(&self.modules_boot_id(), change);
+        self.run(async move {
+            let answer = answer.await;
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.camera_settings.busy.set(None);
+            match answer {
+                Ok(settings) => self.camera_settings.read.set(SettingsRead::Ready(settings)),
+                Err(error) => {
+                    self.camera_settings.read.set(SettingsRead::Ready(before));
+                    if error != LookError::ConnectionLost {
+                        self.show_toast(tr("grkit.save_failed", &[]));
                     }
                 }
-            });
+            }
         });
     }
 
@@ -179,34 +166,29 @@ impl AppState {
     /// Read the card's picture, as the Shutdown Screen page opens.
     pub fn refresh_shutdown_picture(self) {
         self.camera_settings.picture_sent.set(false);
-        if self.demo() {
-            self.camera_settings.picture.set(PictureRead::None);
-            return;
-        }
         if !self.camera_online() {
             return;
         }
         let generation = self.connect_generation.get();
-        self.root.run(|| {
-            spawn(async move {
-                let read = match remote::shutdown_picture_writable().await {
-                    Ok(false) => Ok(PictureRead::Unsupported),
-                    Ok(true) => remote::shutdown_picture().await.map(|bytes| {
-                        match bytes.as_deref().and_then(jpeg_data_uri) {
-                            Some(uri) => PictureRead::Picture(uri),
-                            None => PictureRead::None,
-                        }
-                    }),
-                    Err(error) => Err(error),
-                };
-                if self.connect_generation.get() != generation {
-                    return;
-                }
-                match read {
-                    Ok(read) => self.camera_settings.picture.set(read),
-                    Err(error) => log::warn!("Could not read the shutdown picture: {error:?}"),
-                }
-            });
+        let api = self.api();
+        self.run(async move {
+            let read = match api.shutdown_picture_writable().await {
+                Ok(false) => Ok(PictureRead::Unsupported),
+                Ok(true) => api.shutdown_picture().await.map(|bytes| {
+                    match bytes.as_deref().and_then(jpeg_data_uri) {
+                        Some(uri) => PictureRead::Picture(uri),
+                        None => PictureRead::None,
+                    }
+                }),
+                Err(error) => Err(error),
+            };
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            match read {
+                Ok(read) => self.camera_settings.picture.set(read),
+                Err(error) => log::warn!("Could not read the shutdown picture: {error:?}"),
+            }
         });
     }
 
@@ -251,35 +233,29 @@ impl AppState {
             Some(uri) => PictureRead::Picture(uri),
             None => PictureRead::None,
         };
-        if self.demo() {
-            self.camera_settings.picture.set(shown);
-            self.camera_settings.picture_sent.set(send);
-            done();
-            return;
-        }
         self.camera_settings.picture_busy.set(true);
-        let boot_id = self.modules_boot_id();
         let generation = self.connect_generation.get();
-        self.root.run(|| {
-            spawn(async move {
-                let answer = remote::put_shutdown_picture(&boot_id, jpeg).await;
-                if self.connect_generation.get() != generation {
-                    return;
+        let answer = self
+            .api()
+            .put_shutdown_picture(&self.modules_boot_id(), jpeg);
+        self.run(async move {
+            let answer = answer.await;
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.camera_settings.picture_busy.set(false);
+            match answer {
+                Ok(()) => {
+                    self.camera_settings.picture.set(shown);
+                    self.camera_settings.picture_sent.set(send);
+                    self.camera_settings.draft.set(None);
+                    done();
                 }
-                self.camera_settings.picture_busy.set(false);
-                match answer {
-                    Ok(()) => {
-                        self.camera_settings.picture.set(shown);
-                        self.camera_settings.picture_sent.set(send);
-                        self.camera_settings.draft.set(None);
-                        done();
-                    }
-                    Err(error) if error != LookError::ConnectionLost => {
-                        self.show_toast(tr("grkit.save_failed", &[]));
-                    }
-                    Err(_) => {}
+                Err(error) if error != LookError::ConnectionLost => {
+                    self.show_toast(tr("grkit.save_failed", &[]));
                 }
-            });
+                Err(_) => {}
+            }
         });
     }
 }

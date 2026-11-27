@@ -164,7 +164,7 @@ async fn wait_join(
             // Never let an HTTP answer bypass the ASK consent sheet.
             if is_joining()
                 && lifecycle() == Lifecycle::Active
-                && crate::platform::http::service_ready().await
+                && crate::camera_api::service::service_ready().await
             {
                 return Ok(());
             }

@@ -7,8 +7,8 @@ use nsh_core::element::desktop::MenuItem;
 use nsh_core::element::header::HeaderItem;
 use nsh_core::prelude::*;
 
-use crate::pages::look_pages::TAB_BAR_CLEARANCE;
 use crate::pages::software::{CardState, card_state};
+use crate::ui::TAB_BAR_CLEARANCE;
 use crate::ui::ty::text;
 
 use crate::domain::{CameraModel, ReleaseProblem, RememberedCamera};
@@ -72,7 +72,7 @@ pub fn camera_root(app: AppState) -> impl IntoElement {
 /// The first connect to a saved camera: the connected page's layout with
 /// nothing read yet, so the page does not move when the camera answers.
 fn connecting_home() -> impl IntoElement {
-    crate::ui::page_scroll()
+    crate::pages::page_scroll()
         .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .flex_1()
         .bg(move || token("list-background"))
@@ -300,7 +300,7 @@ async fn confirm_remove(app: AppState, camera: RememberedCamera, name: String) {
 }
 
 fn connected(app: AppState) -> impl IntoElement {
-    crate::ui::page_scroll()
+    crate::pages::page_scroll()
         .top_of(Some(crate::store::Tab::Camera.key().to_owned()))
         .refresh(Some(crate::store::page_refresh::CAMERA.to_owned()))
         .flex_1()

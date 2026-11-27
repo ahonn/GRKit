@@ -16,7 +16,6 @@ import android.util.Base64;
 import org.json.*;
 import java.io.*;
 import java.net.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -24,12 +23,6 @@ import java.util.concurrent.*;
 public final class CameraBridge {
     private static final int PERMISSIONS = 4701;
     private static final int SINGLE_PERMISSION = 4702;
-    // Bluetooth connect: per-attempt budget, attempts, the delay between them,
-    // and how many of them a native connect timeout may use.
-    private static final long BLE_CONNECT_TIMEOUT_MS = 15_000;
-    private static final int BLE_CONNECT_ATTEMPTS = 3;
-    private static final long BLE_CONNECT_RETRY_DELAY_MS = 2_000;
-    private static final int BLE_CONNECT_TIMEOUT_RETRIES = 1;
     /** The longest a read the camera refused for want of pairing waits for the system pairing dialog. */
     private static final long PAIRING_WAIT_MS = 90_000;
     /**
@@ -54,12 +47,8 @@ public final class CameraBridge {
     private static final String LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK";
     private static final int LOCAL_NETWORK_API = 37;
     private static final long LOCAL_NETWORK_REQUEST_MS = 60_000;
-    private static final UUID INFORMATION = uuid("9A5ED1C5-74CC-4C50-B5B6-66A48E7CCFF1");
-    private static final UUID CONTROL = uuid("0F291746-0C80-4726-87A7-3C501FD3B4B6");
-    private static final UUID POWER = uuid("B58CE84C-0666-4DE9-BEC8-2D27B27B3211");
-    private static final UUID NETWORK = uuid("9111CDD0-9F01-45C4-A2D4-E09E8FB0424D");
-    private static final UUID SSID = uuid("90638E5A-E77D-409D-B550-78F7E1CA5AB4");
-    private static final UUID PASSWORD = uuid("0F38279C-FE9E-461B-8596-81287E8C9A81");
+    // Camera service and characteristic UUIDs come from Rust with each
+    // operation. This is the standard notification descriptor.
     private static final UUID CCCD = uuid("00002902-0000-1000-8000-00805f9b34fb");
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final ExecutorService RADIO = Executors.newSingleThreadExecutor();
@@ -78,6 +67,8 @@ public final class CameraBridge {
     private static volatile long generation;
     private static boolean scanning;
     private static boolean wantsScan;
+    /** The advertised services a scan looks for, from the last scan request. */
+    private static List<ScanFilter> scanFilters;
     /** A connect attempt is running; scanning stays paused until it ends. */
     private static volatile boolean connecting;
     private static boolean requestingPermissions;
@@ -180,18 +171,25 @@ public final class CameraBridge {
             return;
         }
         if (operation.equals("scan") || operation.equals("stopScan") || operation.equals("cancel")
-                || operation.equals("finish") || operation.equals("release")) {
+                || operation.equals("finish") || operation.equals("release") || operation.equals("closeLink")) {
             MAIN.post(() -> {
                 try {
                     if (operation.equals("scan")) {
+                        JSONObject args = new JSONObject(json);
                         wantsScan = true;
-                        if (new JSONObject(json).optBoolean("ask")) mayAsk = true;
+                        if (args.optBoolean("ask")) mayAsk = true;
+                        scanFilters = scanFilters(args.getJSONArray("services"));
                         startScan();
                     }
                     else if (operation.equals("stopScan")) { wantsScan = false; stopScan(); }
                     else if (operation.equals("finish")) finish();
                     else if (operation.equals("release")) releaseLink();
-                    else cancel(new JSONObject(json).optBoolean("teardown"));
+                    else if (operation.equals("closeLink")) closeLink();
+                    else {
+                        JSONObject args = new JSONObject(json);
+                        String networkType = args.optString("network_type", "");
+                        cancel(args.optBoolean("teardown"), networkType.isEmpty() ? null : uuid(networkType));
+                    }
                     complete(id, "null", null);
                 } catch (Exception error) { complete(id, null, errorName(error)); }
             });
@@ -204,7 +202,9 @@ public final class CameraBridge {
                 JSONObject args = new JSONObject(json);
                 Object result;
                 switch (operation) {
-                    case "setup": result = setup(args, attempt); break;
+                    case "bleConnect": bleConnect(args, attempt); result = JSONObject.NULL; break;
+                    case "bleRead": case "bleWrite": case "bleSubscribe": case "bleWaitNotify": case "bleUnsubscribe":
+                        result = gatt(operation, args, attempt); break;
                     case "join": join(args, attempt); result = JSONObject.NULL; break;
                     case "endSession": endSession(args, attempt); result = JSONObject.NULL; break;
                     case "settings": openSettings(); result = JSONObject.NULL; break;
@@ -262,14 +262,20 @@ public final class CameraBridge {
         BluetoothAdapter adapter = adapter();
         boolean unavailable = adapter == null || !adapter.isEnabled();
         event("unavailable", Boolean.toString(unavailable));
-        if (unavailable || scanning || !wantsScan) return;
+        if (unavailable || scanning || !wantsScan || scanFilters == null) return;
         BluetoothLeScanner scanner = adapter.getBluetoothLeScanner();
         if (scanner == null) return;
-        scanner.startScan(Arrays.asList(
-                new ScanFilter.Builder().setServiceUuid(new ParcelUuid(INFORMATION)).build(),
-                new ScanFilter.Builder().setServiceUuid(new ParcelUuid(CONTROL)).build()),
+        scanner.startScan(scanFilters,
                 new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), SCAN);
         scanning = true;
+    }
+
+    private static List<ScanFilter> scanFilters(JSONArray services) throws JSONException {
+        List<ScanFilter> filters = new ArrayList<>();
+        for (int i = 0; i < services.length(); i++) {
+            filters.add(new ScanFilter.Builder().setServiceUuid(new ParcelUuid(uuid(services.getString(i)))).build());
+        }
+        return filters;
     }
 
     public static void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
@@ -324,80 +330,87 @@ public final class CameraBridge {
         }
     };
 
-    private static JSONObject setup(JSONObject args, long attempt) throws Exception {
+    /**
+     * Open the link a Bluetooth setup runs on: pause scanning, let the scan
+     * settle, then connect and discover. Rust runs the setup steps on it
+     * through {@link #gatt} and passes every timing value.
+     */
+    private static void bleConnect(JSONObject args, long attempt) throws Exception {
         if (!radioPermissions()) throw new Failure("BluetoothUnavailable");
         BluetoothAdapter adapter = adapter();
         if (adapter == null || !adapter.isEnabled()) throw new Failure("BluetoothUnavailable");
         connecting = true;
         MAIN.post(CameraBridge::stopScan);
-        pause(500, attempt);
-        String id = args.getString("id");
-        String model = args.getString("model");
+        pause(args.getLong("settle_ms"), attempt);
         BluetoothDevice device;
-        try { device = adapter.getRemoteDevice(id); }
+        try { device = adapter.getRemoteDevice(args.getString("id")); }
         catch (IllegalArgumentException error) { throw new Failure("NotNearby"); }
-        long connectTimeoutMs = args.optLong("connect_timeout_ms", BLE_CONNECT_TIMEOUT_MS);
-        int timeoutRetries = args.optInt("timeout_retries", BLE_CONNECT_TIMEOUT_RETRIES);
-        Session link = connectWithRetries(device, connectTimeoutMs, timeoutRetries, attempt);
+        connectWithRetries(device, args, attempt);
+    }
+
+    /**
+     * One GATT operation on the link {@link #bleConnect} opened for this
+     * attempt. Runs on the radio thread; the callbacks complete it from a
+     * binder thread.
+     */
+    private static Object gatt(String operation, JSONObject args, long attempt) throws Exception {
+        Session link = session;
+        if (link == null || link.attempt != attempt) throw new Failure("Cancelled");
+        UUID characteristic = uuid(args.getString("uuid"));
         try {
-            String ssid = credential(link.read(SSID));
-            String password = credential(link.read(PASSWORD));
-            if (ssid.isEmpty() || password.isEmpty()) throw new Failure("NotPaired");
-            // Only a fresh advertisement skips the wake write.
-            boolean alreadyOn = args.optBoolean("powered_on", false);
-            if (!alreadyOn) {
-                try { link.write(POWER, new byte[]{1}); }
-                catch (Failure ignored) { /* Some firmware wakes before acknowledging. */ }
+            switch (operation) {
+                case "bleRead":
+                    return JSONObject.quote(Base64.encodeToString(link.read(characteristic), Base64.NO_WRAP));
+                case "bleWrite":
+                    link.write(characteristic, Base64.decode(args.getString("value"), Base64.DEFAULT));
+                    return JSONObject.NULL;
+                case "bleSubscribe": link.subscribe(characteristic); return JSONObject.NULL;
+                case "bleWaitNotify":
+                    return link.awaitNotify(characteristic, (byte) args.getInt("value"), args.getLong("timeout_ms"));
+                case "bleUnsubscribe": link.unsubscribe(characteristic); return JSONObject.NULL;
+                default: throw new Failure("ConnectionLost");
             }
-            boolean ready = false;
-            boolean subscribed = false;
-            try { link.subscribe(); subscribed = true; }
-            catch (Exception ignored) { /* Starting the AP does not require notification support. */ }
-            try {
-                for (int retry = 0; retry < 2 && !ready; retry++) {
-                    link.write(NETWORK, new byte[]{1});
-                    ready = subscribed && link.apReady.poll(2, TimeUnit.SECONDS) != null;
-                    if (!ready && retry == 0) pause(500, attempt);
-                }
-            } catch (Exception ignored) {
-                // AP startup can drop GATT. Credentials remain valid; HTTP verifies readiness.
-            }
-            // The shared Rust flow waits out the learned access point warm-up.
-            checkAttempt(attempt);
-            return new JSONObject().put("peripheral_id", id).put("model", model)
-                    .put("powered_on_already", alreadyOn).put("ap_ready", ready)
-                    .put("credentials", new JSONObject()
-                            .put("ssid", ssid).put("passphrase", password));
         } catch (Exception error) {
-            // The camera dropped the link before giving its credentials. Rust
-            // retries this once, as a transient drop, before asking to pair.
-            boolean dropped = link.disconnected && errorName(error).equals("ConnectionLost");
-            link.close();
-            MAIN.post(() -> { if (wantsScan) startScan(); });
-            if (dropped) throw new Failure("Disconnected");
+            String name = errorName(error);
+            // A cancel aborted the operation, which the stack may still hold:
+            // the teardown takes the camera back over a new link.
+            if (name.equals("Cancelled")) link.close();
+            // The camera dropped the link. Rust retries this once, as a
+            // transient drop, before asking to pair.
+            if (link.disconnected && name.equals("ConnectionLost")) throw new Failure("Disconnected");
             throw error;
         }
     }
 
+    /** A setup failed after the link came up: drop it and scan again. A cancel still tears the camera down. */
+    private static void closeLink() {
+        Session link = session;
+        if (link != null) link.close();
+        if (wantsScan) startScan();
+    }
+
     /**
      * Connect and discover services. A failed connect is tried again, up to
-     * BLE_CONNECT_ATTEMPTS in all; a connect that times out after
-     * connectTimeoutMs only maxTimeoutRetries times, because it means the
-     * camera is asleep or out of range. Every other failure ends setup at
-     * once; the shared Rust flow owns the retries across setups.
+     * `attempts` in all; a connect that times out after `connect_timeout_ms`
+     * only `timeout_retries` times, because it means the camera is asleep or
+     * out of range. Every other failure ends setup at once; the shared Rust
+     * flow owns the retries across setups.
      */
-    private static Session connectWithRetries(BluetoothDevice device, long connectTimeoutMs,
-            int maxTimeoutRetries, long attempt) throws Exception {
+    private static Session connectWithRetries(BluetoothDevice device, JSONObject args, long attempt) throws Exception {
+        long connectTimeoutMs = args.getLong("connect_timeout_ms");
+        int maxTimeoutRetries = args.getInt("timeout_retries");
+        int attempts = args.getInt("attempts");
+        long retryDelayMs = args.getLong("retry_delay_ms");
+        long gattTimeoutMs = args.getLong("gatt_timeout_ms");
         int timeoutRetries = 0;
         for (int round = 1; ; round++) {
             checkAttempt(attempt);
             if (session != null) session.close();
-            Session link = new Session(device, attempt);
+            Session link = new Session(device, attempt, connectTimeoutMs);
             session = link;
             try {
-                link.timeoutMs = connectTimeoutMs;
                 link.connect();
-                link.timeoutMs = BLE_CONNECT_TIMEOUT_MS;
+                link.timeoutMs = gattTimeoutMs;
                 link.discover();
                 return link;
             } catch (Exception error) {
@@ -405,13 +418,13 @@ public final class CameraBridge {
                 checkAttempt(attempt);
                 String name = errorName(error);
                 boolean timeoutRetry = name.equals("Timeout") && timeoutRetries < maxTimeoutRetries;
-                if ((!name.equals("ConnectFailed") && !timeoutRetry) || round == BLE_CONNECT_ATTEMPTS) {
+                if ((!name.equals("ConnectFailed") && !timeoutRetry) || round == attempts) {
                     // A drop after the link came up is a transient drop or a lost pairing.
                     if (link.disconnected && name.equals("ConnectionLost")) throw new Failure("Disconnected");
                     throw error;
                 }
                 if (timeoutRetry) timeoutRetries++;
-                pause(BLE_CONNECT_RETRY_DELAY_MS, attempt);
+                pause(retryDelayMs, attempt);
             }
         }
     }
@@ -463,12 +476,6 @@ public final class CameraBridge {
         host.runOnUiThread(() -> host.startActivity(intent));
     }
 
-    private static String credential(byte[] bytes) {
-        int end = 0;
-        while (end < bytes.length && bytes[end] != 0) end++;
-        return new String(bytes, 0, end, StandardCharsets.UTF_8).trim();
-    }
-
     private static void checkAttempt(long attempt) throws Failure {
         if (attempt != generation || activity == null) throw new Failure("Cancelled");
     }
@@ -493,21 +500,31 @@ public final class CameraBridge {
         Result(int status, byte[] data) { this.status = status; this.data = data; }
     }
 
+    private static final class Notified {
+        final UUID characteristic;
+        final byte[] value;
+        Notified(UUID characteristic, byte[] value) { this.characteristic = characteristic; this.value = value; }
+    }
+
     /** One outstanding GATT operation; callbacks never block the Android binder thread. */
     private static final class Session extends BluetoothGattCallback {
         final BluetoothDevice device;
         /** The attempt that owns this link; a cancel teardown adopts it. */
         volatile long attempt;
-        final BlockingQueue<Boolean> apReady = new LinkedBlockingQueue<>();
+        /** Notifications since the last write, queued from the binder thread. */
+        final BlockingQueue<Notified> notified = new LinkedBlockingQueue<>();
         volatile BluetoothGatt gatt;
         volatile CompletableFuture<Result> pending;
         volatile UUID expected;
         volatile String operation;
-        volatile long timeoutMs = BLE_CONNECT_TIMEOUT_MS;
+        /** The deadline of the next operation. */
+        volatile long timeoutMs;
         volatile boolean closed;
         volatile boolean connected;
         volatile boolean disconnected;
-        Session(BluetoothDevice device, long attempt) { this.device = device; this.attempt = attempt; }
+        Session(BluetoothDevice device, long attempt, long timeoutMs) {
+            this.device = device; this.attempt = attempt; this.timeoutMs = timeoutMs;
+        }
         void begin(String kind, UUID uuid) throws Failure {
             checkAttempt(attempt);
             if (closed) throw new Failure("ConnectionLost");
@@ -586,6 +603,9 @@ public final class CameraBridge {
         void write(UUID uuid, byte[] bytes) throws Exception {
             BluetoothGattCharacteristic value = characteristic(uuid);
             begin("write", uuid);
+            // Drop older notifications; one that arrives before the write
+            // response still answers this write.
+            notified.clear();
             boolean accepted;
             if (Build.VERSION.SDK_INT >= 33) accepted = gatt.writeCharacteristic(value, bytes,
                     BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS;
@@ -598,8 +618,8 @@ public final class CameraBridge {
             success(await());
         }
         @SuppressWarnings("deprecation")
-        void subscribe() throws Exception {
-            BluetoothGattCharacteristic value = characteristic(NETWORK);
+        void subscribe(UUID uuid) throws Exception {
+            BluetoothGattCharacteristic value = characteristic(uuid);
             if (!gatt.setCharacteristicNotification(value, true)) throw new Failure("ConnectionLost");
             BluetoothGattDescriptor descriptor = value.getDescriptor(CCCD);
             if (descriptor == null) throw new Failure("ConnectionLost");
@@ -610,6 +630,27 @@ public final class CameraBridge {
             else { descriptor.setValue(bytes); accepted = gatt.writeDescriptor(descriptor); }
             if (!accepted) throw new Failure("ConnectionLost");
             success(await());
+        }
+        /** Whether `uuid` notified a value that starts with `first` since the last write, waiting up to timeoutMs. */
+        boolean awaitNotify(UUID uuid, byte first, long timeoutMs) throws Exception {
+            checkAttempt(attempt);
+            long deadline = SystemClock.elapsedRealtime() + timeoutMs;
+            for (long left = timeoutMs; left > 0; left = deadline - SystemClock.elapsedRealtime()) {
+                Notified next = notified.poll(left, TimeUnit.MILLISECONDS);
+                if (next == null) break;
+                if (next.characteristic.equals(uuid) && next.value.length > 0 && next.value[0] == first) return true;
+            }
+            return false;
+        }
+        /**
+         * Stop delivering notifications of `uuid`. Only local: a descriptor
+         * write left unanswered would hold the next GATT operation. What the
+         * camera still notifies is dropped here.
+         */
+        void unsubscribe(UUID uuid) throws Exception {
+            BluetoothGatt current = gatt;
+            if (closed || current == null) return;
+            current.setCharacteristicNotification(characteristic(uuid), false);
         }
         /** Fail the operation in flight but keep the link, for a teardown that still needs it. */
         void abort() {
@@ -660,7 +701,7 @@ public final class CameraBridge {
             deliver("descriptor", value.getUuid(), status, null);
         }
         @Override public void onCharacteristicChanged(BluetoothGatt source, BluetoothGattCharacteristic value, byte[] bytes) {
-            if (!closed && value.getUuid().equals(NETWORK) && bytes != null && bytes.length > 0 && bytes[0] == 1) apReady.offer(true);
+            if (!closed && bytes != null) notified.offer(new Notified(value.getUuid(), bytes.clone()));
         }
         @Override @SuppressWarnings("deprecation")
         public void onCharacteristicChanged(BluetoothGatt source, BluetoothGattCharacteristic value) {
@@ -884,20 +925,21 @@ public final class CameraBridge {
 
     /**
      * End the current attempt. With `teardown`, a camera the attempt reached
-     * over Bluetooth is told to close its access point before the link drops.
+     * over Bluetooth is told to close its access point (`networkType` 0)
+     * before the link drops.
      */
-    private static void cancel(boolean teardown) {
+    private static void cancel(boolean teardown, UUID networkType) {
         generation++;
         connecting = false;
         Session old = session;
         session = null;
         if (old != null) {
-            if (teardown && old.connected) {
-                // Setup, if still running, fails at its next step and closes the
-                // link; the teardown then takes it back.
+            if (teardown && networkType != null && old.connected) {
+                // A setup operation still running fails and closes the link;
+                // the teardown then takes it back.
                 old.abort();
                 long owner = generation;
-                RADIO.execute(() -> stopAccessPoint(old, owner));
+                RADIO.execute(() -> stopAccessPoint(old, owner, networkType));
             } else old.close();
         }
         CompletableFuture<Network> pendingJoin = joining;
@@ -914,16 +956,15 @@ public final class CameraBridge {
      * TEARDOWN_RECONNECT_TIMEOUT_MS and the write gets TEARDOWN_COMMAND_TIMEOUT_MS.
      * Runs on the radio thread, so the next attempt's setup waits for it.
      */
-    private static void stopAccessPoint(Session old, long owner) {
+    private static void stopAccessPoint(Session old, long owner, UUID networkType) {
         Session link = old;
         try {
             // A later cancel or shutdown owns the camera now.
             if (owner != generation) return;
             if (link.closed || link.disconnected || link.gatt == null) {
                 link.close();
-                link = new Session(old.device, owner);
+                link = new Session(old.device, owner, TEARDOWN_RECONNECT_TIMEOUT_MS);
                 long deadline = SystemClock.elapsedRealtime() + TEARDOWN_RECONNECT_TIMEOUT_MS;
-                link.timeoutMs = TEARDOWN_RECONNECT_TIMEOUT_MS;
                 link.connect();
                 link.timeoutMs = Math.max(1, deadline - SystemClock.elapsedRealtime());
                 link.discover();
@@ -931,7 +972,7 @@ public final class CameraBridge {
                 link.attempt = owner;
             }
             link.timeoutMs = TEARDOWN_COMMAND_TIMEOUT_MS;
-            link.write(NETWORK, new byte[]{0});
+            link.write(networkType, new byte[]{0});
         } catch (Exception ignored) {
             // Best effort: the attempt is already over.
         } finally {
@@ -941,8 +982,8 @@ public final class CameraBridge {
     }
 
     /**
-     * The user disconnects or turns the camera off: write NETWORK_TYPE 0 so it
-     * closes its access point, or CAMERA_POWER 0 so it turns off. Uses the
+     * The user disconnects or turns the camera off: write 0 to `characteristic`,
+     * NETWORK_TYPE so it closes its access point or CAMERA_POWER so it turns off. Uses the
      * current link when it is up, otherwise connects once, bounded like a
      * teardown. A power off may drop the link before the write is answered.
      */
@@ -953,21 +994,20 @@ public final class CameraBridge {
         BluetoothDevice device;
         try { device = adapter.getRemoteDevice(args.getString("id")); }
         catch (IllegalArgumentException error) { throw new Failure("NotNearby"); }
-        boolean powerOff = args.optBoolean("power_off");
+        UUID characteristic = uuid(args.getString("characteristic"));
         Session current = session;
         boolean reuse = current != null && !current.closed && !current.disconnected && current.gatt != null
                 && current.device.getAddress().equalsIgnoreCase(device.getAddress());
-        Session link = reuse ? current : new Session(device, attempt);
+        Session link = reuse ? current : new Session(device, attempt, TEARDOWN_RECONNECT_TIMEOUT_MS);
         try {
             if (!reuse) {
                 long deadline = SystemClock.elapsedRealtime() + TEARDOWN_RECONNECT_TIMEOUT_MS;
-                link.timeoutMs = TEARDOWN_RECONNECT_TIMEOUT_MS;
                 link.connect();
                 link.timeoutMs = Math.max(1, deadline - SystemClock.elapsedRealtime());
                 link.discover();
             }
             link.timeoutMs = TEARDOWN_COMMAND_TIMEOUT_MS;
-            link.write(powerOff ? POWER : NETWORK, new byte[]{0});
+            link.write(characteristic, new byte[]{0});
         } finally {
             if (!reuse) link.close();
         }
@@ -981,7 +1021,7 @@ public final class CameraBridge {
         wantsScan = false;
         requestingPermissions = false;
         stopScan();
-        cancel(false);
+        cancel(false, null);
         synchronized (activeRequests) { cancelledRequests.addAll(activeRequests); }
         for (HttpURLConnection request : requests.values()) request.disconnect();
         activity = null;

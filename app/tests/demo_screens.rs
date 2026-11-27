@@ -1,4 +1,6 @@
 //! Each demo screen id starts on its design state with one key text visible.
+//! Demo mode is in debug builds and with the `demo` feature (`cfg(demo)`).
+#![cfg(demo)]
 
 use std::{
     env,
@@ -7,7 +9,7 @@ use std::{
 };
 
 use grkit_app::App;
-use grkit_app::store::{DEMO_SCREEN_IDS, key_text, shows_alert};
+use grkit_app::dev::demo_screens;
 use nsh_core::geometry::Size;
 use nsh_core::platform::Os;
 use nsh_core::prelude::Points;
@@ -28,7 +30,7 @@ fn start_screen(id: &str) -> Headless {
         env::set_var("GRKIT_DEMO_SCREEN", id);
         env::remove_var("GRKIT_DEMO_FAIL");
     }
-    let mut config = EngineConfig::new(Root::of::<App>());
+    let mut config = EngineConfig::new(Root::of::<App>().translations(grkit_app::translations()));
     config.environment.os = Os::Web;
     Headless::start(config).unwrap()
 }
@@ -36,10 +38,10 @@ fn start_screen(id: &str) -> Headless {
 #[test]
 fn each_demo_screen_shows_its_key_text() {
     let _guard = lock_demo();
-    for &(id, screen) in DEMO_SCREEN_IDS {
-        let key = key_text(screen);
+    for screen in demo_screens() {
+        let (id, key) = (screen.id, screen.key_text);
         let mut app = start_screen(id);
-        if shows_alert(screen) {
+        if screen.alert {
             // Alert is presented asynchronously; poll dialogs until the title appears.
             let mut found = false;
             for _ in 0..40 {
@@ -104,8 +106,9 @@ fn no_demo_screen_clips_text_at_a_large_text_size() {
     let _guard = lock_demo();
     let width = 390.0;
     let mut failures = Vec::new();
-    for &(id, screen) in DEMO_SCREEN_IDS {
-        if shows_alert(screen) {
+    for screen in demo_screens() {
+        let id = screen.id;
+        if screen.alert {
             continue;
         }
         unsafe {
@@ -113,7 +116,8 @@ fn no_demo_screen_clips_text_at_a_large_text_size() {
             env::set_var("GRKIT_DEMO_SCREEN", id);
             env::remove_var("GRKIT_DEMO_FAIL");
         }
-        let mut config = EngineConfig::new(Root::of::<App>());
+        let mut config =
+            EngineConfig::new(Root::of::<App>().translations(grkit_app::translations()));
         config.environment.os = Os::Web;
         config.environment.font_scale = 2.0;
         config.viewport = Size {
@@ -121,7 +125,7 @@ fn no_demo_screen_clips_text_at_a_large_text_size() {
             height: Points(844.0),
         };
         let mut app = Headless::start(config).unwrap();
-        app.wait_for_within(key_text(screen), WAIT)
+        app.wait_for_within(screen.key_text, WAIT)
             .unwrap_or_else(|e| panic!("screen {id}: {e}"));
         app.wait(Duration::from_millis(50)).unwrap();
         let clipped = clipped_texts(&app, width);

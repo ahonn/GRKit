@@ -1499,12 +1499,14 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "grkit-core",
+ "grkit-protocol",
  "jni 0.21.1",
  "libc",
  "log",
  "nsh-base",
  "nsh-core",
  "nsh-engine",
+ "nsh-i18n",
  "nsh-platform-ios",
  "nsh-platform-macos",
  "nsh-testing",
@@ -1533,6 +1535,14 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "zip",
+]
+
+[[package]]
+name = "grkit-protocol"
+version = "1.6.6"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2427,6 +2437,10 @@ name = "nsh-i18n"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01fb5dd304d3e5818b7252bdd80c36c59433f6b3086829d39312263dc6adacd3"
+dependencies = [
+ "rust-i18n-support",
+ "serde_json",
+]
 
 [[package]]
 name = "nsh-js"

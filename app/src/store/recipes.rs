@@ -2,18 +2,16 @@
 //! the presets of the release index. Each change answers with the list as
 //! the camera has it after the change.
 
-use nsh_base::alert_dialog;
 use nsh_core::prelude::*;
 
-use grkit_core::recipes::{Family, Look};
+use grkit_core::recipes::Family;
 use grkit_core::release_index::IndexPreset;
 
-use super::{AppState, Route, Tab};
+use super::{Alert, AppState, Route, Tab};
 use crate::domain::{
     ConnectionState, LookError,
-    recipes::{PresetItem, RecipeError, RecipeItem, RecipesSnapshot, family_of},
+    recipes::{PresetItem, RecipeChange, RecipeError, RecipeItem, RecipesSnapshot, family_of},
 };
-use crate::platform::recipes as remote;
 use crate::strings::tr;
 
 /// What a change to the recipes does, so that only its own control shows it.
@@ -45,51 +43,30 @@ pub struct RecipesStore {
     error: Signal<Option<RecipeError>>,
     /// The change under way.
     busy: Signal<Option<RecipeWork>>,
-    /// The presets of the release index; the demo has the built-in ones.
+    /// The presets of the release index.
     pub(crate) presets: Signal<Vec<IndexPreset>>,
-    /// The demo camera's recipes.
-    fake: Signal<Option<RecipesSnapshot>>,
 }
 
 impl RecipesStore {
-    pub fn new(demo: bool) -> Self {
+    pub fn new() -> Self {
         Self {
             snapshot: signal(None),
             owner: signal(None),
             loading: signal(false),
             error: signal(None),
             busy: signal(None),
-            presets: signal(if demo {
-                IndexPreset::all(&Default::default())
-            } else {
-                Vec::new()
-            }),
-            fake: signal(demo.then(demo_recipes)),
+            presets: signal(Vec::new()),
         }
     }
 }
 
-/// What a change does.
-enum Change {
-    Enabled(u32, bool),
-    Rename(u32, Option<String>),
-    Delete(u32),
-    Order(Vec<u32>),
-    Apply(u32),
-    Undo,
-    Add(String),
+impl Default for RecipesStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AppState {
-    /// Demo screens: a read of the recipes that failed.
-    pub(crate) fn seed_demo_recipes_failed(self) {
-        self.recipes.snapshot.set(None);
-        self.recipes.loading.set(false);
-        self.recipes
-            .error
-            .set(Some(RecipeError::Look(LookError::ConnectionLost)));
-    }
-
     pub fn recipes_snapshot(self) -> Option<RecipesSnapshot> {
         self.recipes.snapshot.get()
     }
@@ -213,38 +190,32 @@ impl AppState {
             self.recipes.error.set(None);
             return;
         }
-        if self.demo() {
-            self.recipes.snapshot.set(self.recipes.fake.get());
-            self.recipes.error.set(None);
-            return;
-        }
         let generation = self.connect_generation.get();
         self.recipes.loading.set(true);
-        self.root.run(|| {
-            spawn(async move {
-                let result = remote::list().await;
-                if self.connect_generation.get() != generation {
-                    return;
+        let list = self.api().recipes();
+        self.run(async move {
+            let result = list.await;
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.recipes.loading.set(false);
+            match result {
+                Ok(snapshot) => {
+                    self.recipes.snapshot.set(Some(snapshot));
+                    self.recipes
+                        .owner
+                        .set(self.remembered().map(|c| c.peripheral_id));
+                    self.recipes.error.set(None);
                 }
-                self.recipes.loading.set(false);
-                match result {
-                    Ok(snapshot) => {
-                        self.recipes.snapshot.set(Some(snapshot));
-                        self.recipes
-                            .owner
-                            .set(self.remembered().map(|c| c.peripheral_id));
-                        self.recipes.error.set(None);
-                    }
-                    Err(error) => {
-                        log::warn!("Could not read recipes: {error:?}");
-                        self.recipes.error.set(Some(error));
-                    }
+                Err(error) => {
+                    log::warn!("Could not read recipes: {error:?}");
+                    self.recipes.error.set(Some(error));
                 }
-            });
+            }
         });
     }
 
-    /// Present a failed change as an alert.
+    /// Report a failed change: an alert, or for a lost link a notice.
     pub fn alert_recipe_error(self, error: RecipeError) {
         if error == RecipeError::Look(LookError::ConnectionLost) {
             self.clear_name_draft();
@@ -252,27 +223,7 @@ impl AppState {
             self.pop_to(Tab::Recipes, 0);
             return;
         }
-        let (title, body) = error.keys();
-        let limits = self.recipes.snapshot.get();
-        let max = match &error {
-            RecipeError::MenuFull => limits.map(|s| s.max_on),
-            RecipeError::CardFull => limits.map(|s| s.max_listed),
-            _ => None,
-        }
-        .unwrap_or_default()
-        .to_string();
-        let body = match &error {
-            RecipeError::Look(LookError::Service(detail)) => format!("{} {detail}", tr(body, &[])),
-            _ => tr(body, &[("max", &max)]),
-        };
-        spawn(async move {
-            let _ = alert_dialog()
-                .title(tr(title, &[]))
-                .description(body)
-                .cancel("ok", tr("looks.ok", &[]))
-                .show()
-                .await;
-        });
+        self.alert(Alert::Recipe(error));
     }
 
     /// Send one change and take the list it answers with.
@@ -280,7 +231,7 @@ impl AppState {
         self,
         key: String,
         action: RecipeAction,
-        change: Change,
+        change: RecipeChange,
         done: impl FnOnce(AppState) + 'static,
     ) {
         self.recipe_change_or(key, action, change, done, |_| {});
@@ -292,7 +243,7 @@ impl AppState {
         self,
         key: String,
         action: RecipeAction,
-        change: Change,
+        change: RecipeChange,
         done: impl FnOnce(AppState) + 'static,
         failed: impl FnOnce(AppState) + 'static,
     ) {
@@ -307,81 +258,33 @@ impl AppState {
     fn run_recipe_change(
         self,
         work: RecipeWork,
-        change: Change,
+        change: RecipeChange,
         done: impl FnOnce(AppState) + 'static,
         failed: impl FnOnce(AppState) + 'static,
     ) {
-        if self.demo() {
-            self.release_recipe(&work);
-            let mut result = Err(RecipeError::Look(LookError::ConnectionLost));
-            self.recipes.fake.update(|fake| {
-                if let Some(f) = fake.as_mut() {
-                    result = demo_change(f, &change);
-                }
-            });
-            match result {
-                Ok(()) => {
-                    self.refresh_recipes();
-                    done(self);
-                }
-                Err(error) => {
-                    failed(self);
-                    self.alert_recipe_error(error);
-                }
-            }
-            return;
-        }
         let Some(snapshot) = self.recipes.snapshot.get() else {
             self.release_recipe(&work);
             failed(self);
             return;
         };
-        let boot_id = snapshot.boot_id.clone();
-        self.root.run(|| {
-            spawn(async move {
-                let (method, path, body) = match &change {
-                    Change::Enabled(id, on) => (
-                        "PATCH",
-                        format!("/{id}"),
-                        Some(serde_json::json!({"enabled": on})),
-                    ),
-                    Change::Rename(id, name) => (
-                        "PATCH",
-                        format!("/{id}"),
-                        Some(serde_json::json!({"name": name})),
-                    ),
-                    Change::Delete(id) => ("DELETE", format!("/{id}"), None),
-                    Change::Order(ids) => (
-                        "PUT",
-                        "/order".to_owned(),
-                        Some(serde_json::json!({"ids": ids})),
-                    ),
-                    Change::Apply(id) => ("POST", format!("/{id}/apply"), None),
-                    Change::Undo => ("POST", "/undo".to_owned(), None),
-                    Change::Add(preset) => (
-                        "POST",
-                        String::new(),
-                        Some(serde_json::json!({"preset": preset})),
-                    ),
-                };
-                let result = remote::change(&boot_id, method, &path, body).await;
-                match result {
-                    Ok(snapshot) => {
-                        // One update, so a switch moves no more than once.
-                        batch(|| {
-                            self.release_recipe(&work);
-                            self.recipes.snapshot.set(Some(snapshot));
-                        });
-                        done(self);
-                    }
-                    Err(error) => {
+        let answer = self.api().change_recipe(&snapshot.boot_id, change);
+        self.run(async move {
+            match answer.await {
+                Ok(snapshot) => {
+                    // One update, so a switch moves no more than once.
+                    batch(|| {
                         self.release_recipe(&work);
-                        failed(self);
-                        self.refresh_recipes();
-                        self.alert_recipe_error(error);
-                    }
+                        self.recipes.snapshot.set(Some(snapshot));
+                    });
+                    done(self);
                 }
-            });
+                Err(error) => {
+                    self.release_recipe(&work);
+                    failed(self);
+                    self.refresh_recipes();
+                    self.alert_recipe_error(error);
+                }
+            }
         });
     }
 
@@ -389,7 +292,7 @@ impl AppState {
         self.recipe_change(
             id.to_string(),
             RecipeAction::Toggle,
-            Change::Enabled(id, enabled),
+            RecipeChange::Enabled(id, enabled),
             |_| {},
         );
     }
@@ -404,7 +307,7 @@ impl AppState {
         self.recipe_change(
             id.to_string(),
             RecipeAction::Rename,
-            Change::Rename(id, name),
+            RecipeChange::Rename(id, name),
             |app| app.clear_name_draft(),
         );
     }
@@ -413,7 +316,7 @@ impl AppState {
         self.recipe_change(
             id.to_string(),
             RecipeAction::Delete,
-            Change::Delete(id),
+            RecipeChange::Delete(id),
             |app| app.pop_to(Tab::Recipes, 0),
         );
     }
@@ -440,7 +343,7 @@ impl AppState {
         self.recipe_change_or(
             "order".into(),
             RecipeAction::Order,
-            Change::Order(ids),
+            RecipeChange::Order(ids),
             |_| {},
             move |app| {
                 // The camera kept its order, also when it cannot be read now.
@@ -465,7 +368,7 @@ impl AppState {
         self.recipe_change(
             id.to_string(),
             RecipeAction::Apply,
-            Change::Apply(id),
+            RecipeChange::Apply(id),
             move |app| {
                 let skipped: Vec<String> = app
                     .recipes_snapshot()
@@ -488,9 +391,12 @@ impl AppState {
     }
 
     pub fn undo_recipe(self) {
-        self.recipe_change("undo".into(), RecipeAction::Undo, Change::Undo, |app| {
-            app.show_toast(tr("recipes.undone", &[]))
-        });
+        self.recipe_change(
+            "undo".into(),
+            RecipeAction::Undo,
+            RecipeChange::Undo,
+            |app| app.show_toast(tr("recipes.undone", &[])),
+        );
         // The notice that started the Undo has closed.
         if !self.recipe_working("undo", RecipeAction::Undo) {
             return;
@@ -536,7 +442,7 @@ impl AppState {
                 let name = preset.recipe.name.clone();
                 self.run_recipe_change(
                     work,
-                    Change::Add(id),
+                    RecipeChange::Add(id),
                     move |app| app.show_toast(tr("recipes.added", &[("name", &name)])),
                     |_| {},
                 );
@@ -562,15 +468,6 @@ impl AppState {
         }
         self.push(Route::RecipePresets);
     }
-
-    /// Demo screens: edit the demo camera's recipes.
-    pub(crate) fn with_fake_recipes(self, edit: impl FnOnce(&mut RecipesSnapshot)) {
-        self.recipes.fake.update(|f| {
-            if let Some(f) = f {
-                edit(f)
-            }
-        });
-    }
 }
 
 /// The name of an Image Control type in the app language.
@@ -578,173 +475,14 @@ pub fn native_type_name(image_type: usize) -> String {
     tr(&format!("recipes.type.{image_type}"), &[])
 }
 
-fn demo_change(f: &mut RecipesSnapshot, change: &Change) -> Result<(), RecipeError> {
-    let at = |f: &RecipesSnapshot, id: u32| {
-        f.recipes
-            .iter()
-            .position(|r| r.id == id)
-            .ok_or(RecipeError::Look(LookError::NotFound))
-    };
-    match change {
-        Change::Enabled(id, on) => {
-            let i = at(f, *id)?;
-            if *on && f.on_count() >= f.max_on {
-                return Err(RecipeError::MenuFull);
-            }
-            let mut item = f.recipes.remove(i);
-            item.enabled = *on;
-            let to = f.on_count();
-            f.recipes.insert(to, item);
-        }
-        Change::Rename(id, name) => {
-            let i = at(f, *id)?;
-            f.recipes[i].name = name.clone();
-        }
-        Change::Delete(id) => {
-            let i = at(f, *id)?;
-            f.recipes.remove(i);
-        }
-        Change::Order(ids) => {
-            f.recipes
-                .sort_by_key(|r| ids.iter().position(|id| *id == r.id).unwrap_or(usize::MAX));
-        }
-        Change::Apply(id) => {
-            at(f, *id)?;
-            for r in &mut f.recipes {
-                r.current = r.id == *id;
-            }
-            f.undo = (f.undo + 1).min(5);
-        }
-        Change::Undo => {
-            if f.undo == 0 {
-                return Err(RecipeError::NothingToUndo);
-            }
-            f.undo -= 1;
-            for r in &mut f.recipes {
-                r.current = false;
-            }
-        }
-        Change::Add(preset) => {
-            if f.recipes.len() >= f.max_listed {
-                return Err(RecipeError::CardFull);
-            }
-            let p = PresetItem::for_family(&IndexPreset::all(&Default::default()), Family::Gr3)
-                .into_iter()
-                .find(|p| &p.id == preset)
-                .ok_or(RecipeError::Look(LookError::NotFound))?;
-            let id = f.recipes.iter().map(|r| r.id).max().unwrap_or(0) + 1;
-            let enabled = f.on_count() < f.max_on;
-            let item = demo_item(
-                id,
-                Some(p.recipe.name.clone()),
-                p.recipe,
-                enabled,
-                false,
-                None,
-            );
-            let to = if enabled {
-                f.on_count()
-            } else {
-                f.recipes.len()
-            };
-            f.recipes.insert(to, item);
-        }
-    }
-    Ok(())
-}
-
-fn demo_item(
-    id: u32,
-    name: Option<String>,
-    recipe: grkit_core::recipes::Recipe,
-    enabled: bool,
-    current: bool,
-    effect: Option<(&str, &str)>,
-) -> RecipeItem {
-    RecipeItem {
-        id,
-        name,
-        enabled,
-        current,
-        ready: !matches!(recipe.look, Look::Effect { .. }) || effect.is_some(),
-        effect_id: effect.map(|(id, _)| id.to_owned()),
-        effect_name: effect.map(|(_, name)| name.to_owned()),
-        recipe,
-    }
-}
-
-/// The demo camera's recipes: two on Film Looks, the rest presets.
-fn demo_recipes() -> RecipesSnapshot {
-    let presets = PresetItem::for_family(&IndexPreset::all(&Default::default()), Family::Gr3);
-    let find = |id: &str| {
-        presets
-            .iter()
-            .find(|p| p.id == id)
-            .map(|p| p.recipe.clone())
-    };
-    let effect = find("cinestill-800t").expect("preset");
-    let mut recipes = vec![
-        demo_item(
-            1,
-            Some("Odd Film".into()),
-            effect.clone(),
-            true,
-            true,
-            Some(("portra-400-endura-v1", "Portra 400")),
-        ),
-        demo_item(
-            2,
-            Some("Street".into()),
-            effect.clone(),
-            true,
-            false,
-            Some(("trix-400-mono-v1", "Tri-X 400")),
-        ),
-    ];
-    let mut numbered = effect;
-    numbered.number = 2;
-    let mut id = 3;
-    for (preset, on) in [("bennet-800", true), ("reggie-negative", true)] {
-        let recipe = find(preset).expect("preset");
-        recipes.push(demo_item(
-            id,
-            Some(recipe.name.clone()),
-            recipe,
-            on,
-            false,
-            None,
-        ));
-        id += 1;
-    }
-    recipes.push(demo_item(
-        id,
-        None,
-        numbered,
-        true,
-        false,
-        Some(("portra-400-endura-v1", "Portra 400")),
-    ));
-    id += 1;
-    for preset in ["dante-sisofo-street-bw", "candy-color-400"] {
-        let recipe = find(preset).expect("preset");
-        recipes.push(demo_item(
-            id,
-            Some(recipe.name.clone()),
-            recipe,
-            false,
-            false,
-            None,
-        ));
-        id += 1;
-    }
-    RecipesSnapshot {
-        boot_id: "demo-boot".into(),
-        recipes,
-        max_on: 40,
-        max_listed: 64,
-        undo: 0,
-        unreadable: 0,
-        unreadable_on: Vec::new(),
-        skipped: Vec::new(),
+/// Demo screens (`dev::screens`).
+#[cfg(demo)]
+impl AppState {
+    pub(crate) fn seed_recipes_failed(self) {
+        self.recipes.snapshot.set(None);
+        self.recipes.loading.set(false);
+        self.recipes
+            .error
+            .set(Some(RecipeError::Look(LookError::ConnectionLost)));
     }
 }

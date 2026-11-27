@@ -1,7 +1,10 @@
 //! Parse camera HTTP props/package JSON and decide readiness retries.
 //!
-//! Shapes match `grkit-serve` (`GET /v1/props`, `GET /v1/update` inventory).
+//! The props have the shapes of the wire contract
+//! (`grkit_protocol::props`); the package matches `grkit-serve`
+//! (`GET /v1/update` inventory).
 
+pub use grkit_protocol::props::{PropsCamera, PropsResponse};
 use serde::Deserialize;
 
 use super::PackageInfo;
@@ -13,43 +16,6 @@ pub const CAMERA_HTTP_BASE: &str = "http://192.168.0.1:8080";
 
 /// How long to keep polling `/v1/props` after joining Wi-Fi.
 pub const STATUS_POLL_BUDGET_MS: u64 = 30_000;
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PropsCamera {
-    pub model: Option<String>,
-    #[serde(alias = "firmware")]
-    pub firmware_version: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct PropsGrkit {
-    pub version: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-pub struct PropsStorage {
-    pub state: Option<String>,
-    /// Free bytes on the card, when the service could read them.
-    #[serde(default, rename = "freeBytes")]
-    pub free_bytes: Option<u64>,
-}
-
-/// `/v1/props` body from the camera service.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PropsResponse {
-    /// A stable identity of the camera body (a hash of its serial number);
-    /// absent until the camera's own API has answered the service.
-    #[serde(default)]
-    pub device_id: Option<String>,
-    pub boot_id: String,
-    pub card_id: Option<String>,
-    pub camera: Option<PropsCamera>,
-    pub grkit: PropsGrkit,
-    #[serde(default)]
-    pub storage: Option<PropsStorage>,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
 pub struct PackageCamera {

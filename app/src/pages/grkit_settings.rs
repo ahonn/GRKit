@@ -187,7 +187,7 @@ fn settings_page(
         .page_title(move || tr(title, &[]), false)
         .on_dismiss(on_dismiss)
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .flex_1()
                 .bg(move || token("list-background"))
@@ -195,7 +195,7 @@ fn settings_page(
                     view()
                         .pt_4()
                         .px_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             let rows = rows(app);
                             (!rows.is_empty()).then(|| list_section(rows))
@@ -242,7 +242,7 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
         .page_title(move || tr("grkit.shutdown", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .flex_1()
                 .bg(move || token("list-background"))
@@ -251,7 +251,7 @@ pub fn shutdown_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                         .gap_5()
                         .pt_4()
                         .px_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             app.shutdown_picture_sent()
                                 .then(|| sent_notice(tr("grkit.picture_sent", &[])))

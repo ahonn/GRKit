@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 use grkit_core::recipes::{Family, Look, Recipe};
 use grkit_core::release_index::IndexPreset;
+use grkit_protocol::recipes::RecipeStatus;
 use serde_json::Value;
 
 use super::LookError;
@@ -24,6 +25,9 @@ pub struct RecipeItem {
     pub effect_name: Option<String>,
     /// The camera can apply the recipe: it has its Look.
     pub ready: bool,
+    /// The Look of the recipe is on the card only: it must go back on the
+    /// camera before the recipe applies.
+    pub effect_stored: bool,
     pub recipe: Recipe,
 }
 
@@ -105,18 +109,19 @@ impl RecipesSnapshot {
 fn read_item(value: &Value) -> Option<RecipeItem> {
     // A recipe without a name has `name: null`, which the model reads as
     // the empty name.
-    let name = value["name"].as_str().map(str::to_owned);
     let mut fields = value.clone();
-    fields["name"] = Value::String(name.clone().unwrap_or_default());
+    fields["name"] = Value::String(value["name"].as_str().unwrap_or_default().to_owned());
     let recipe: Recipe = serde_json::from_value(fields).ok()?;
+    let status: RecipeStatus = serde_json::from_value(value.clone()).ok()?;
     Some(RecipeItem {
-        id: u32::try_from(value["id"].as_u64()?).ok()?,
-        name,
-        enabled: value["enabled"].as_bool()?,
-        current: value["current"].as_bool().unwrap_or(false),
-        effect_id: value["effectId"].as_str().map(str::to_owned),
-        effect_name: value["effectName"].as_str().map(str::to_owned),
-        ready: value["ready"].as_bool().unwrap_or(true),
+        id: status.id,
+        name: status.name,
+        enabled: status.enabled,
+        current: status.current,
+        effect_id: status.effect_id,
+        effect_name: status.effect_name,
+        ready: status.ready,
+        effect_stored: status.effect_stored,
         recipe,
     })
 }
@@ -236,6 +241,22 @@ pub fn monochrome_type(image_type: usize) -> bool {
     matches!(image_type, 2..=5 | 14..=20)
 }
 
+/// A change to the camera's recipes. The camera answers each one with the
+/// list as it is after the change.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RecipeChange {
+    Enabled(u32, bool),
+    /// A new name, or `None` for the automatic one.
+    Rename(u32, Option<String>),
+    Delete(u32),
+    /// The complete order, by ID.
+    Order(Vec<u32>),
+    Apply(u32),
+    Undo,
+    /// Add a preset of the site, by its ID.
+    Add(String),
+}
+
 /// A failed recipe change.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecipeError {
@@ -325,6 +346,10 @@ mod tests {
             };
             value["enabled"] = enabled.into();
             value["current"] = (i == 0).into();
+            if i == 2 {
+                value["ready"] = false.into();
+                value["effectStored"] = true.into();
+            }
             items.push(value);
         }
         serde_json::json!({"bootId":"b","undo":1,"limits":{"on":40,"listed":64},"recipes":items})
@@ -359,6 +384,10 @@ mod tests {
         assert!(s.get(1).unwrap().current);
         assert_eq!(s.undo, 1);
         assert_eq!(s.moved(1, 0), vec![2, 1]);
+        // A recipe whose Look is on the card only waits for it.
+        let (first, third) = (s.get(1).unwrap(), s.get(3).unwrap());
+        assert!(first.ready && !first.effect_stored);
+        assert!(!third.ready && third.effect_stored);
         // An unnamed recipe shows the look and its number.
         let unnamed = s.get(2).unwrap();
         assert_eq!(

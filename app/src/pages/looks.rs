@@ -116,7 +116,7 @@ pub(crate) fn edit_add_buttons(
 /// The scroll view stays while the Looks change: only its content follows
 /// them, so a change does not move the list back to the top.
 fn looks_content(app: AppState, editing: Signal<bool>) -> impl IntoElement {
-    crate::ui::page_scroll()
+    crate::pages::page_scroll()
         .refresh(Some(crate::store::page_refresh::LOOKS.to_owned()))
         .top_of(Some(crate::store::Tab::Looks.key().to_owned()))
         .flex_1()
@@ -125,7 +125,7 @@ fn looks_content(app: AppState, editing: Signal<bool>) -> impl IntoElement {
             view()
                 .px_4()
                 .pt_4()
-                .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                 .gap(px(ROW_GAP))
                 .child(dynamic(move || on_camera(app, editing.get()))),
         )

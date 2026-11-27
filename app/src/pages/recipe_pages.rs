@@ -23,12 +23,12 @@ use crate::ui::{
 /// data changes: only the content follows it, so a change does not move
 /// the page back to the top. `content` draws its own top and sides.
 fn page_body<E: IntoElements>(content: impl Fn() -> E + 'static) -> impl IntoElement {
-    crate::ui::page_scroll()
+    crate::pages::page_scroll()
         .flex_1()
         .bg(move || token("list-background"))
         .child(
             view()
-                .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                 .child(dynamic(content)),
         )
 }
@@ -251,6 +251,12 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
             )
             .loading(applying)
         }))
+        // The Look is on the card only: the recipe applies after the Look
+        // is on the camera again.
+        .child(
+            (!item.ready && item.effect_stored)
+                .then(|| crate::ui::list_note(tr("recipes.look_stored_note", &[])).text_center()),
+        )
         .children(settings)
         .child(edit_steps(item.current));
     let mut shown: Vec<ListRow> =

@@ -6,6 +6,7 @@
 /build/
 /target/
 /app/target/
+/app/build/
 /app/.nsh/
 *.bin
 *.raw

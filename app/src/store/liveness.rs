@@ -16,7 +16,7 @@ use crate::domain::link_health::{
     WARM_PROBE_TIMEOUT, same_camera,
 };
 use crate::domain::{ConnectionState, UpdatePhase};
-use crate::platform::{self, link_support};
+use crate::platform;
 
 /// What woke the loop.
 enum Wake {
@@ -108,7 +108,7 @@ impl AppState {
         let probe = |timeout| {
             let expected = expected.clone();
             async move {
-                match link_support::read_props(timeout).await {
+                match crate::camera_api::service::read_props(timeout).await {
                     None => ProbeOutcome::Failed,
                     Some(props) if same_camera(&props, expected.as_deref(), model) => {
                         ProbeOutcome::Ok
@@ -198,18 +198,19 @@ impl AppState {
         let peripheral = self.remembered().map(|r| r.peripheral_id);
         self.auto_suppressed.set(true);
         self.powering_off.set(power_off);
+        let api = self.api();
         self.root.run(|| {
             spawn(async move {
                 let mut finished = false;
                 if power_off {
-                    finished = platform::http::camera_finish(true).await;
+                    finished = api.finish(true).await;
                     if !finished && let Some(id) = &peripheral {
                         finished = platform::end_session_over_bluetooth(id, true).await;
                     }
                     app_info!("camera power off finished={finished}");
                 }
                 // The access point request goes out before the link stops.
-                let closing = (!finished).then(|| platform::http::camera_finish(false));
+                let closing = (!finished).then(|| api.finish(false));
                 self.powering_off.set(false);
                 self.health_step(|h| h.down(DownReason::User));
                 if let Some(closing) = closing
@@ -229,12 +230,10 @@ impl AppState {
         // Neither way may hold the restart step: a camera that does not
         // answer, or a phone without Bluetooth, falls back to a restart by
         // hand.
-        let mut finished = platform::with_timeout(
-            platform::http::camera_finish(true),
-            std::time::Duration::from_secs(8),
-        )
-        .await
-        .unwrap_or(false);
+        let mut finished =
+            platform::with_timeout(self.api().finish(true), std::time::Duration::from_secs(8))
+                .await
+                .unwrap_or(false);
         if !finished {
             finished = platform::with_timeout(
                 platform::end_session_over_bluetooth(peripheral_id, true),

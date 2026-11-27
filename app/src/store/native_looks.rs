@@ -11,8 +11,7 @@ use serde_json::json;
 
 use super::looks::off_thread;
 use super::{AppState, LookAction};
-use crate::domain::{CameraModel, look_media};
-use crate::platform::looks as remote;
+use crate::domain::{CameraModel, look_media, looks::LookChange};
 use crate::strings::tr;
 
 /// The largest file the picker takes: an official GR IV zip has about 35 MB.
@@ -327,15 +326,14 @@ impl AppState {
             }
             return;
         };
-        let demo_grf = look.grf.clone();
-        let demo_cover = look.cover.clone();
         let name = look.name.clone();
         self.change(
             look.id.clone(),
             LookAction::Add,
-            move |fake| fake.put(&demo_grf, true, Some(demo_cover)),
-            move |context| async move {
-                remote::put_content(&context, &look.id, look.grf, Some(&look.cover)).await
+            LookChange::Content {
+                id: look.id,
+                grf: look.grf,
+                cover: Some(look.cover),
             },
             move |app, ok| {
                 if !ok {

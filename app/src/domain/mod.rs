@@ -1,19 +1,19 @@
-//! Camera and update flow models used by the UI and by demo mode.
+//! Camera and update flow models, and the requests and answers of the
+//! camera service.
 //!
 //! Kept free of NSH so unit tests run without an engine.
 
 mod advertisement;
 pub mod auto_connect;
+mod ble_setup;
 mod camera;
 pub mod camera_settings;
 pub mod changes;
 mod connect_flow;
 pub mod connect_policy;
 mod event_filter;
-mod fake;
-pub mod fake_looks;
-pub mod fake_modules;
 pub(crate) mod http_api;
+pub mod images;
 mod link;
 pub mod link_health;
 pub mod look_media;
@@ -36,23 +36,20 @@ pub mod uuids;
 mod wifi_cred;
 
 pub use advertisement::{Advertisement, is_supported_camera, model_from_code, parse_advertisement};
+pub use ble_setup::{GattPort, run_ble_setup};
 pub use camera::{Camera, CameraModel, ConnectionState, PackageInfo};
 pub use connect_flow::{
     BleSetup, ConnectOptions, ConnectReport, ConnectStep, ConnectTransport, Join,
     LocalNetworkAccess, Probe, WifiCredentials, run_connect, timing,
 };
 pub use event_filter::{ApReadyLatch, is_ble_pairing_error, matches_operation};
-pub use fake::{DemoFail, FakeCamera, FakeConfig};
 pub use http_api::{
     CAMERA_HTTP_BASE, PackageCamera, PackageMapError, PackageResponse, PropsResponse,
     STATUS_POLL_BUDGET_MS, StatusAttempt, classify_props_response, in_ble_startup,
     installed_to_models, package_to_models, parse_package, parse_props, should_retry_status,
     status_backoff_ms, status_poll_timeout_error, version_at_least,
 };
-pub use link::{
-    CameraLink, CameraStatus, ErrorAction, LinkError, NearbyCamera, SendProgress, UpdatePoll,
-    block_on_ready,
-};
+pub use link::{CameraStatus, ErrorAction, LinkError, NearbyCamera, block_on_ready};
 pub use looks::{
     Catalog, CatalogLook, CoverGroup, Look, LookError, LookFilter, LookGroup, LookSource,
     LooksSnapshot, PendingChange, group_of, look_error, parse_catalog, parse_looks, valid_name,
@@ -62,8 +59,7 @@ pub use remembered::{
     remove as remove_saved, upsert as upsert_saved,
 };
 pub use update::{
-    CARD_SPARE_BYTES, ReleaseProblem, RestartStep, SERVICE_PROTOCOL, UpdateError, UpdateFlow,
-    UpdateKind, UpdatePhase, cancel_body_key, card_shortfall, firmware_problem, needs_newer_app,
-    update_step,
+    CARD_SPARE_BYTES, ReleaseProblem, RestartStep, SERVICE_PROTOCOL, UpdateError, UpdateKind,
+    UpdatePhase, cancel_body_key, card_shortfall, firmware_problem, needs_newer_app, update_step,
 };
 pub use wifi_cred::decode_cred;

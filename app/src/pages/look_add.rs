@@ -26,11 +26,11 @@ pub fn add_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl IntoElem
         .on_dismiss(on_dismiss)
         .child(
             view().flex_1().bg(move || token("list-background")).child(
-                crate::ui::page_scroll().flex_1().child(
+                crate::pages::page_scroll().flex_1().child(
                     view()
                         .px_4()
                         .pt_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .gap(px(super::looks::ROW_GAP))
                         .child(dynamic(move || add_content(app))),
                 ),
@@ -214,11 +214,11 @@ pub fn unlock_page(
         })
         .child(
             view().flex_1().bg(move || token("list-background")).child(
-                crate::ui::page_scroll().flex_1().child(
+                crate::pages::page_scroll().flex_1().child(
                     view()
                         .px_4()
                         .pt_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .gap_6()
                         .child(dynamic(move || unlock_content(app, firmware))),
                 ),

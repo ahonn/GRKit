@@ -1,5 +1,5 @@
 //! Platform pieces the connect flow shares on iOS and Android: foreground
-//! time, the Wi-Fi interface address, and one probe of the GRKit service.
+//! time and the Wi-Fi interface address.
 // The desktop stub has no camera link; only the clock is used there.
 #![cfg_attr(not(any(target_os = "ios", target_os = "android")), allow(dead_code))]
 
@@ -11,7 +11,6 @@ use nsh_core::platform::Lifecycle;
 use nsh_core::prelude::{lifecycle, timer};
 
 use crate::domain::connect_policy::NetworkSnapshot;
-use crate::domain::{LinkError, Probe, parse_props};
 
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 const FOREGROUND_POLL: Duration = Duration::from_millis(250);
@@ -86,72 +85,9 @@ pub fn network_snapshot() -> NetworkSnapshot {
     snapshot
 }
 
-/// Whether an HTTP answer is something other than camera JSON: an HTML
-/// router page or another non-JSON body under 500.
-fn non_camera_answer(status: u16, body: &str) -> bool {
-    status < 500
-        && !body.trim().is_empty()
-        && !serde_json::from_str::<serde_json::Value>(body).is_ok_and(|v| v.is_object())
-}
-
-/// `GET /v1/props` within `timeout`, parsed; `None` when the service did not
-/// answer with its properties.
-pub async fn read_props(timeout: Duration) -> Option<crate::domain::PropsResponse> {
-    let url = format!("{}/v1/props", super::camera_http_base());
-    let response = super::camera_request_now("GET", url, Vec::new(), timeout, &[])
-        .await
-        .ok()?;
-    if !response.ok() {
-        return None;
-    }
-    parse_props(&response.text()).ok()
-}
-
-/// One `GET /v1/props` within `timeout`.
-pub async fn probe_props(timeout: Duration) -> Probe {
-    let url = format!("{}/v1/props", super::camera_http_base());
-    let response = match super::camera_request_now("GET", url, Vec::new(), timeout, &[]).await {
-        Ok(response) => response,
-        Err(error) => {
-            app_info!("probe /v1/props failed: {error}");
-            return Probe::Failed;
-        }
-    };
-    let status = response.status();
-    if status != 200 {
-        app_info!("probe /v1/props HTTP {status}");
-    }
-    let body = response.text();
-    if crate::domain::should_retry_status(status) {
-        return Probe::CardNotReady;
-    }
-    if non_camera_answer(status, &body) {
-        return Probe::NotCamera;
-    }
-    if !(200..300).contains(&status) {
-        return Probe::Failed;
-    }
-    match parse_props(&body) {
-        Ok(_) => Probe::Reachable,
-        Err(error) => Probe::Fatal(LinkError::Http(format!(
-            "props body ({} bytes): {error}",
-            body.len()
-        ))),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn router_pages_are_not_camera_answers() {
-        assert!(non_camera_answer(404, "<html>Not Found</html>"));
-        assert!(non_camera_answer(200, "<html>login</html>"));
-        assert!(!non_camera_answer(404, r#"{"errCode":404}"#));
-        assert!(!non_camera_answer(502, "<html>bad gateway</html>"));
-        assert!(!non_camera_answer(404, ""));
-    }
 
     #[test]
     fn the_host_has_a_readable_interface_list() {

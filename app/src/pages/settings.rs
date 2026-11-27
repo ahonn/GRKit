@@ -19,7 +19,7 @@ pub fn settings_root(app: AppState) -> impl IntoElement {
     crate::ui::app_page()
         .page_title(move || tr("settings.title", &[]), true)
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .refresh(Some(crate::store::page_refresh::SETTINGS.to_owned()))
                 .top_of(Some(crate::store::Tab::Settings.key().to_owned()))
                 .flex_1()
@@ -29,7 +29,7 @@ pub fn settings_root(app: AppState) -> impl IntoElement {
                         .gap(px(24.0))
                         .pt_4()
                         .px_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || camera_section(app)))
                         .child(dynamic(move || super::grkit_settings::grkit_section(app)))
                         .child(about_section())
@@ -143,14 +143,14 @@ pub fn saved_cameras_page(app: AppState, on_dismiss: impl Fn() + 'static) -> imp
         .page_title(move || tr("cam.saved", &[]), false)
         .on_dismiss(on_dismiss)
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .flex_1()
                 .bg(move || token("list-background"))
                 .child(
                     view()
                         .pt_4()
                         .px_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             let online = app.camera_online();
                             let rows = app.saved_cameras().into_iter().enumerate().map(

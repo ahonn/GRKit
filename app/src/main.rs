@@ -6,7 +6,9 @@ fn main() -> impl std::process::Termination {
     use nsh_platform_macos as platform;
     env_logger::init();
     platform::run_app(
-        platform::AppSource::Rust(platform::Root::of::<grkit_app::App>()),
+        platform::AppSource::Rust(
+            platform::Root::of::<grkit_app::App>().translations(grkit_app::translations()),
+        ),
         platform::AppOptions {
             title: "GRKit".to_owned(),
             size: (390, 844),

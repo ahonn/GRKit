@@ -15,7 +15,8 @@ use crate::domain::{
 };
 
 use super::{ble, local_network, wifi};
-use crate::platform::{Connected, http, link_support};
+use crate::camera_api::service;
+use crate::platform::{Connected, link_support};
 
 /// The latest connect attempt. A cancelled attempt's teardown stops once a
 /// newer attempt starts, so it never drops the successor's link.
@@ -111,17 +112,17 @@ impl ConnectTransport for IosTransport {
     }
 
     fn probe(&mut self, timeout: Duration) -> BoxFut<'_, Probe> {
-        Box::pin(link_support::probe_props(timeout))
+        Box::pin(service::probe_props(timeout))
     }
 
     fn camera_api_answers(&mut self) -> BoxFut<'_, bool> {
-        Box::pin(http::camera_api_answers())
+        Box::pin(service::camera_api_answers())
     }
 
     fn read_version(&mut self, model: CameraModel) -> BoxFut<'_, Result<(), LinkError>> {
         Box::pin(async move {
             app_info!("connect step Version");
-            let (status, package) = http::read_package(model).await?;
+            let (status, package) = service::read_package(model).await?;
             self.package = Some((status, package));
             Ok(())
         })

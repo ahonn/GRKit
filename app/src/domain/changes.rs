@@ -11,7 +11,7 @@ use std::time::Duration;
 use serde::Deserialize;
 
 /// The path of the change stream on the camera service.
-pub const PATH: &str = "/v1/changes";
+pub const PATH: &str = grkit_protocol::routes::CHANGES;
 /// A frame within this time shows that the camera service still answers,
 /// so the periodic HTTP probe can wait. The service pings every 15 s.
 pub const FRESH: Duration = Duration::from_secs(20);

@@ -291,7 +291,7 @@ fn start_phone_with_delays(
             StubRoute::Response(release_missing),
         ),
     ]));
-    let mut config = EngineConfig::new(Root::of::<App>());
+    let mut config = EngineConfig::new(Root::of::<App>().translations(grkit_app::translations()));
     config.environment.os = Os::Web;
     config.data_dir = Some(environment.directory.clone());
     config.network = Some(network.clone());

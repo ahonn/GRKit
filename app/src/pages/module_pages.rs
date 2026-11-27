@@ -16,14 +16,14 @@ use crate::ui::{
 const HERO_TILE: f32 = 84.0;
 
 fn page_body<E: IntoElements>(content: impl Fn() -> E + 'static) -> impl IntoElement {
-    crate::ui::page_scroll()
+    crate::pages::page_scroll()
         .flex_1()
         .bg(move || token("list-background"))
         .child(
             view()
                 .px_4()
                 .pt_4()
-                .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                 .gap(px(24.0))
                 .child(dynamic(content)),
         )

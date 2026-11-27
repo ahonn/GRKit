@@ -63,7 +63,7 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
         // The scroll view stays while the recipes change: only its content
         // follows them, so a change does not move the list back to the top.
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .refresh(Some(crate::store::page_refresh::RECIPES.to_owned()))
                 .top_of(Some(crate::store::Tab::Recipes.key().to_owned()))
                 .flex_1()
@@ -72,7 +72,7 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
                     view()
                         .px_4()
                         .pt_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .gap(px(ROW_GAP))
                         .child(dynamic(move || on_camera(app, editing.get()))),
                 ),

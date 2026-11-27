@@ -180,7 +180,8 @@ impl Phone {
                 StubRoute::Response(missing),
             ),
         ]));
-        let mut config = EngineConfig::new(Root::of::<App>());
+        let mut config =
+            EngineConfig::new(Root::of::<App>().translations(grkit_app::translations()));
         config.environment.os = Os::Web;
         config.data_dir = Some(self.directory.clone());
         config.network = Some(network.clone());

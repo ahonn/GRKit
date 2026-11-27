@@ -1,19 +1,7 @@
-//! The camera link the phone uses. Demo uses FakeCamera; iOS uses the real link.
+//! The link to a camera: what a connect reads, why it fails, and the
+//! cameras a scan sees. `camera_api::CameraApi` reaches a connected camera.
 
-use crate::domain::{Camera, CameraModel, PackageInfo, UpdateError, UpdateKind};
-
-/// Progress while a package is copied to the camera, 0..=1.
-pub type SendProgress = f32;
-
-/// What polling the camera reports during an update.
-#[derive(Clone, Debug, PartialEq)]
-pub enum UpdatePoll {
-    Sending { progress: f32 },
-    WaitingConfirm,
-    Confirmed,
-    Installed { version: String },
-    Failed(UpdateError),
-}
+use crate::domain::{Camera, CameraModel};
 
 /// Status returned while connecting or when already connected.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -242,21 +230,7 @@ pub struct NearbyCamera {
     pub rssi: Option<i32>,
 }
 
-/// Talks to a camera: connect, read package state, send an update.
-pub trait CameraLink {
-    fn nearby(&self) -> Option<CameraModel>;
-    fn connect(&mut self) -> impl std::future::Future<Output = Result<CameraStatus, LinkError>>;
-    fn read_status(&self) -> impl std::future::Future<Output = Result<CameraStatus, LinkError>>;
-    fn read_package(&self) -> impl std::future::Future<Output = Result<PackageInfo, LinkError>>;
-    fn send_update(
-        &mut self,
-        kind: UpdateKind,
-    ) -> impl std::future::Future<Output = Result<(), LinkError>>;
-    fn poll_update(&mut self) -> impl std::future::Future<Output = Result<UpdatePoll, LinkError>>;
-    fn cancel(&mut self) -> impl std::future::Future<Output = Result<(), LinkError>>;
-}
-
-/// Poll a future that is known to be ready (demo / unit tests).
+/// Poll a future that is known to be ready (unit tests).
 pub fn block_on_ready<T>(fut: impl std::future::Future<Output = T>) -> T {
     use std::task::{Context, Poll, Waker};
     let mut fut = std::pin::pin!(fut);

@@ -49,7 +49,7 @@ pub fn modules_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
             })
         }))
         .child(
-            crate::ui::page_scroll()
+            crate::pages::page_scroll()
                 .refresh(Some(crate::store::page_refresh::MODULES.to_owned()))
                 .flex_1()
                 .bg(move || token("list-background"))
@@ -57,7 +57,7 @@ pub fn modules_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
                     view()
                         .px_4()
                         .pt_4()
-                        .pb(px(crate::pages::look_pages::TAB_BAR_CLEARANCE))
+                        .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .gap(px(ROW_GAP))
                         .child(dynamic(move || on_camera(app, editing.get()))),
                 ),

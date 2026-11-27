@@ -132,7 +132,7 @@ pub fn icon_tile(glyph: &str, size: f32, tone: TileTone) -> AnyElement {
 }
 
 /// The tile of a module, `size` points square: its pixel icon from the
-/// camera (`domain::modules::pixel_icon_svg`), else the initial of its title
+/// camera (`domain::images::pixel_icon_svg`), else the initial of its title
 /// on the camera's dark tile.
 pub fn module_icon_tile(icon: Option<&str>, initial: &str, size: f32, faded: bool) -> AnyElement {
     let tile = view()

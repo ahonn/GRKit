@@ -9,20 +9,20 @@ use nsh_core::platform::Lifecycle;
 use nsh_core::prelude::*;
 
 use super::AppState;
-use crate::domain::changes::{ChangeEvent, ChangeKind, FRESH, retry_delay};
-use crate::platform::{
+use crate::camera_api::{
     self,
     changes::{ChangeStream, StreamEvent},
 };
+use crate::domain::changes::{ChangeEvent, ChangeKind, FRESH, retry_delay};
 
 /// How often the watch looks at the link and the lifecycle.
 const WATCH_INTERVAL: Duration = Duration::from_secs(1);
 
 impl AppState {
     /// Keep a change stream open while the camera link is up and the app is
-    /// in the foreground. Not in the demo, nor where no camera link exists.
+    /// in the foreground. Not where no camera link exists.
     pub(super) fn watch_changes(self) {
-        if self.demo() || !platform::changes::supported() {
+        if !camera_api::changes::supported() {
             return;
         }
         spawn(async move {
@@ -44,7 +44,7 @@ impl AppState {
                 // it again after its hello.
                 let reconnect = session == Some(generation);
                 session = Some(generation);
-                let stream = platform::changes::open(&platform::camera_http_base());
+                let stream = camera_api::changes::open(&camera_api::camera_http_base());
                 let greeted = self.follow_changes(&stream, generation, reconnect).await;
                 drop(stream);
                 self.stream_heard.with(|heard| heard.set(None));

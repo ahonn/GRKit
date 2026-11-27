@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn a_look_file_gives_a_preview_table_on_the_base_gamma() {
-        let (_, grf) = crate::domain::fake_looks::demo_catalog().remove(0);
+        let grf = compile(VELVIA).unwrap();
         let table = preview_table(&grf, &demo_base_gamma()).unwrap();
         assert!(crate::domain::look_preview::table_size(table.len()).is_some());
         assert!(preview_table(&grf, &[0; 3]).is_err());

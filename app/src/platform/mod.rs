@@ -1,11 +1,39 @@
-//! Native Bluetooth / Wi-Fi bridges for iOS and Android.
+//! The phone's own services: the Bluetooth and Wi-Fi link to a camera,
+//! the saved cameras, system alerts and settings, and the HTTP and socket
+//! transport. Each OS module (`ios`, `android`, and `stub` for the desktop)
+//! has the same functions; this module forwards to the one it builds for.
+//! The camera service's clients over that transport are in `camera_api`.
 
 #[cfg(target_os = "android")]
 mod android;
+#[cfg(not(target_os = "android"))]
+mod generic;
 #[cfg(target_os = "ios")]
 mod ios;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 mod stub;
+
+pub(crate) mod link_support;
+
+#[cfg(target_os = "android")]
+use android as imp;
+#[cfg(target_os = "ios")]
+use ios as imp;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use stub as imp;
+
+use std::io;
+use std::net::{SocketAddr, TcpStream};
+use std::time::Duration;
+
+#[cfg(demo)]
+use crate::camera_api::service;
+use crate::domain::connect_policy::NetworkSnapshot;
+use crate::domain::nearby_watch::Frame;
+use crate::domain::{
+    CameraModel, CameraStatus, ConnectOptions, ConnectReport, ConnectStep, LinkError, PackageInfo,
+    RememberedCamera,
+};
 
 /// Registers the app's native views on an iOS surface (`lib.rs`).
 #[cfg(target_os = "ios")]
@@ -30,33 +58,8 @@ pub(crate) struct NamePrompt {
 /// Ask for a name in the platform's own alert: the text on Save, `None` on
 /// Cancel.
 pub(crate) async fn ask_name(prompt: NamePrompt) -> Option<String> {
-    #[cfg(target_os = "ios")]
-    {
-        ios::name_prompt::ask(prompt).await
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::ask_name(prompt).await
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::ask_name(prompt)
-    }
+    imp::ask_name(prompt).await
 }
-
-pub(crate) mod changes;
-pub(crate) mod http;
-pub(crate) mod link_support;
-pub(crate) mod looks;
-pub(crate) mod modules;
-pub(crate) mod recipes;
-pub(crate) mod release;
-pub(crate) mod update;
-
-use crate::domain::{
-    CAMERA_HTTP_BASE, CameraModel, CameraStatus, ConnectOptions, ConnectReport, ConnectStep,
-    LinkError, PackageInfo, RememberedCamera,
-};
 
 /// A connected camera, and what the attempt taught the warm-up learner
 /// (none for an HTTP-only development connect).
@@ -67,235 +70,94 @@ pub struct Connected {
     pub report: Option<ConnectReport>,
 }
 
-/// Base URL for camera HTTP. `GRKIT_CAMERA_URL` overrides the on-camera default when set.
-pub fn camera_http_base() -> String {
-    config_value("GRKIT_CAMERA_URL")
-        .map(|s| s.trim().trim_end_matches('/').to_owned())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| CAMERA_HTTP_BASE.to_owned())
-}
-
-/// True when `GRKIT_CAMERA_URL` is set (HTTP-only connect for simulator / local server).
-pub fn has_dev_camera_url() -> bool {
-    config_value("GRKIT_CAMERA_URL")
-        .map(|s| !s.trim().is_empty())
-        .unwrap_or(false)
-}
-
-/// True when this build can drive a Bluetooth central in principle (iOS / Android).
-#[allow(dead_code)]
-pub fn bluetooth_available() -> bool {
-    #[cfg(any(target_os = "ios", target_os = "android"))]
-    {
-        true
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        false
-    }
-}
-
 /// True when the central has reported that Bluetooth cannot be used (e.g. simulator Unsupported).
 pub fn bluetooth_unavailable() -> bool {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::bluetooth_unavailable()
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::bluetooth_unavailable()
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        true
-    }
+    imp::bluetooth_unavailable()
 }
 
 /// Load the saved cameras, the most recent first.
 pub fn load_saved() -> Vec<RememberedCamera> {
-    #[cfg(target_os = "ios")]
-    {
-        ios::remember::load()
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::load_saved()
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::load_saved()
-    }
+    imp::load_saved()
 }
 
 /// Persist the saved cameras.
 pub fn save_saved(cameras: &[RememberedCamera]) -> Result<(), String> {
-    #[cfg(target_os = "ios")]
-    {
-        ios::remember::save(cameras)
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::save_saved(cameras)
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::save_saved(cameras)
-    }
+    imp::save_saved(cameras)
 }
 
 /// End the session over Bluetooth, when the camera's API did not: close the
 /// camera's access point, or turn the camera off. Best effort and bounded.
 pub async fn end_session_over_bluetooth(peripheral_id: &str, power_off: bool) -> bool {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::end_session(peripheral_id, power_off).await
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::end_session(peripheral_id, power_off).await
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let _ = (peripheral_id, power_off);
-        false
-    }
+    imp::end_session(peripheral_id, power_off).await
 }
 
 /// Start scanning for nearby cameras. Each advertisement frame is pushed on `tx`.
 /// When `remembered_id` is set, retrieve that peripheral so reconnect works before a fresh advertisement.
 /// Only `ask` may show the system's Bluetooth permission request: a scan
 /// without it waits until the user has allowed Bluetooth.
-pub fn start_scanning(
-    tx: async_channel::Sender<crate::domain::nearby_watch::Frame>,
-    remembered_id: Option<&str>,
-    ask: bool,
-) {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::start_scanning(tx, remembered_id, ask);
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::start_scanning(tx, remembered_id, ask);
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::start_scanning(tx, remembered_id, ask);
-    }
+pub fn start_scanning(tx: async_channel::Sender<Frame>, remembered_id: Option<&str>, ask: bool) {
+    imp::start_scanning(tx, remembered_id, ask);
 }
 
 /// Sends the id of each camera that disconnects on `tx`.
 pub fn watch_disconnects(tx: async_channel::Sender<String>) {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::watch_disconnects(tx);
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::watch_disconnects(tx);
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::watch_disconnects(tx);
-    }
+    imp::watch_disconnects(tx);
 }
 
 /// Sends a value on `tx` each time the phone drops the camera network the
 /// app requested. Only Android reports this; elsewhere the probes notice.
 pub fn watch_network_loss(tx: async_channel::Sender<()>) {
-    #[cfg(target_os = "android")]
-    {
-        android::watch_network_loss(tx);
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        drop(tx);
-    }
+    imp::watch_network_loss(tx);
 }
 
 /// The route the phone's camera traffic takes now.
-pub async fn network_snapshot() -> crate::domain::connect_policy::NetworkSnapshot {
-    #[cfg(target_os = "android")]
-    {
-        android::network_snapshot().await
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        link_support::network_snapshot()
-    }
+pub async fn network_snapshot() -> NetworkSnapshot {
+    imp::network_snapshot().await
 }
 
 /// Stop an active scan.
-#[allow(dead_code)]
 pub fn stop_scanning() {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::stop_scanning();
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::stop_scanning();
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        stub::stop_scanning();
-    }
+    imp::stop_scanning();
 }
 
 /// The camera session ended: drop the Bluetooth link the connect kept, so the
 /// camera advertises again and the nearby watch sees it power off and on.
 /// The camera's access point and the phone's Wi-Fi are left as they are.
 pub fn release_link(peripheral_id: &str) {
-    #[cfg(target_os = "ios")]
-    {
-        ios::ble::release_link(peripheral_id);
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::release_link(peripheral_id);
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let _ = peripheral_id;
-    }
+    imp::release_link(peripheral_id);
 }
 
-/// Full connect: BLE wake + Wi-Fi join + status/package, or HTTP-only when `GRKIT_CAMERA_URL` is set.
+/// Full connect: BLE wake + Wi-Fi join + status/package. A development
+/// build with `GRKIT_CAMERA_URL` set connects over HTTP alone.
 pub async fn connect_camera(
     peripheral_id: &str,
     model_hint: CameraModel,
     options: ConnectOptions,
     mut on_step: impl FnMut(ConnectStep),
 ) -> Result<Connected, LinkError> {
-    if has_dev_camera_url() {
+    #[cfg(demo)]
+    if crate::camera_api::has_dev_camera_url() {
         return connect_http_only(model_hint, &mut on_step).await;
     }
-    #[cfg(target_os = "ios")]
-    {
-        ios::link::connect(peripheral_id, model_hint, options, &mut on_step).await
-    }
-    #[cfg(target_os = "android")]
-    {
-        android::connect_camera(peripheral_id, model_hint, options, &mut on_step).await
-    }
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
-    {
-        let _ = (peripheral_id, model_hint, options, &mut on_step);
-        stub::connect_camera().await
-    }
+    imp::connect_camera(peripheral_id, model_hint, options, &mut on_step).await
 }
 
-/// Skip Bluetooth and Wi-Fi; poll status then package against [`camera_http_base`].
+/// Skip Bluetooth and Wi-Fi; poll status then package against
+/// `camera_api::camera_http_base`.
+#[cfg(demo)]
 async fn connect_http_only(
     model_hint: CameraModel,
     on_step: &mut dyn FnMut(ConnectStep),
 ) -> Result<Connected, LinkError> {
-    app_info!("connect HTTP-only against {}", camera_http_base());
+    app_info!(
+        "connect HTTP-only against {}",
+        crate::camera_api::camera_http_base()
+    );
     on_step(ConnectStep::Bluetooth);
     on_step(ConnectStep::Wifi);
-    http::wait_until_ready().await?;
+    service::wait_until_ready().await?;
     on_step(ConnectStep::Version);
-    let (status, package) = http::read_package(model_hint).await?;
+    let (status, package) = service::read_package(model_hint).await?;
     let remembered = RememberedCamera::new("dev-url", status.camera.model, "dev".to_owned());
     Ok(Connected {
         status,
@@ -327,20 +189,13 @@ pub(crate) fn connect_deadline_reached() -> bool {
 
 /// Open this app's page in the system settings (permissions, Local Network).
 pub async fn open_app_settings() {
-    #[cfg(target_os = "android")]
-    {
-        android::open_app_settings().await;
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let _ = nsh_core::prelude::open_url("app-settings:").await;
-    }
+    imp::open_app_settings().await;
 }
 
 /// Bound a platform operation even when its native completion never arrives.
 pub(crate) async fn with_timeout<T>(
     future: impl std::future::Future<Output = T>,
-    duration: std::time::Duration,
+    duration: Duration,
 ) -> Option<T> {
     use futures_util::future::{Either, select};
     match select(
@@ -354,89 +209,34 @@ pub(crate) async fn with_timeout<T>(
     }
 }
 
-/// Android debug host injects build settings without mutating process environment.
+/// A build setting that the host passes in: the debuggable Android host
+/// injects them without changing the process environment. `None` elsewhere.
+pub(crate) fn host_config(name: &str) -> Option<String> {
+    imp::config(name)
+}
+
+/// A build setting: from the host ([`host_config`]), else from the process
+/// environment.
 pub(crate) fn config_value(name: &str) -> Option<String> {
-    #[cfg(target_os = "android")]
-    if let Some(value) = android::config(name) {
-        return Some(value);
-    }
-    std::env::var(name).ok()
+    host_config(name).or_else(|| std::env::var(name).ok())
 }
 
-/// The camera service takes at most four connections at once and closes
-/// any more without an answer (grkit-serve `MAX_CONNECTIONS`). The change
-/// feed holds one and the link check ([`camera_request_now`]) one, so the
-/// other requests to the service take turns in the rest.
-const SERVICE_SLOTS: usize = 2;
-static SERVICE_IN_FLIGHT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-
-/// A turn at the camera service, given back when dropped.
-struct ServiceTurn;
-
-impl ServiceTurn {
-    async fn take() -> Self {
-        use std::sync::atomic::Ordering;
-        loop {
-            let current = SERVICE_IN_FLIGHT.load(Ordering::Acquire);
-            if current < SERVICE_SLOTS
-                && SERVICE_IN_FLIGHT
-                    .compare_exchange(current, current + 1, Ordering::AcqRel, Ordering::Acquire)
-                    .is_ok()
-            {
-                return Self;
-            }
-            nsh_core::prelude::timer(std::time::Duration::from_millis(10)).await;
-        }
-    }
-}
-
-impl Drop for ServiceTurn {
-    fn drop(&mut self) {
-        SERVICE_IN_FLIGHT.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-    }
-}
-
-/// A request to the camera. One to the GRKit service waits for its turn
-/// first; `budget` counts from the send.
-pub(crate) async fn camera_request(
-    method: &str,
-    url: String,
-    body: Vec<u8>,
-    budget: std::time::Duration,
-    headers: &[(&str, String)],
-) -> Result<nsh_core::element::HttpResponse, String> {
-    let _turn = if url.starts_with(&camera_http_base()) {
-        Some(ServiceTurn::take().await)
-    } else {
-        None
-    };
-    camera_request_now(method, url, body, budget, headers).await
-}
-
-/// A request to the camera without waiting for a turn: the link check,
-/// which must not wait behind a slow read.
+/// A request to the camera over the phone's own HTTP stack, without waiting
+/// for a turn at the service (`camera_api::camera_request` waits): the link
+/// check, which must not wait behind a slow read. On Android it goes over
+/// the network that the app requested for the camera.
 pub(crate) async fn camera_request_now(
     method: &str,
     url: String,
     body: Vec<u8>,
-    budget: std::time::Duration,
+    budget: Duration,
     headers: &[(&str, String)],
 ) -> Result<nsh_core::element::HttpResponse, String> {
-    #[cfg(target_os = "android")]
-    {
-        android::camera_request(method, url, body, budget, headers).await
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        let mut request = nsh_core::platform::HttpRequest::new(method, url)
-            .header("Cache-Control", "no-cache, no-store");
-        for (name, value) in headers {
-            request = request.header(*name, value.clone());
-        }
-        let mut request = request.body(body);
-        request.follow_redirects = false;
-        with_timeout(nsh_core::prelude::fetch(request), budget)
-            .await
-            .ok_or_else(|| "ConnectionLost".to_owned())?
-    }
+    imp::camera_request(method, url, body, budget, headers).await
+}
+
+/// A TCP connection to the camera within `timeout`: on Android over the
+/// camera network that the app requested, which is not the default route.
+pub(crate) fn connect_socket(address: SocketAddr, timeout: Duration) -> io::Result<TcpStream> {
+    imp::connect_socket(address, timeout)
 }

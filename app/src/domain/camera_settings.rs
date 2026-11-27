@@ -145,22 +145,6 @@ pub fn parse_camera_settings(bytes: &[u8]) -> Result<CameraSettings, String> {
     Ok(out)
 }
 
-/// The settings of the demo camera.
-pub fn demo_settings() -> CameraSettings {
-    CameraSettings {
-        start: Some(StartMode::Last),
-        unit: Some(DistanceUnit::Meters),
-        switches: [
-            Some(false),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-            Some(true),
-        ],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

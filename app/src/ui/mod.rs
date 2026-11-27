@@ -61,11 +61,11 @@ pub use reorder::{HandleDrag, RowGestures, check_circle, drag_handle, list, reor
 mod system;
 pub use system::{Choice, Choices, held_view, menu_row, system_segmented, system_switch};
 
-mod page_scroll;
-pub use page_scroll::page_scroll;
-
 mod empty_state;
 pub use empty_state::empty_state;
+
+/// Room under scrolled content for the floating tab bar.
+pub const TAB_BAR_CLEARANCE: f32 = 96.0;
 
 pub mod setting_icons;
 pub mod ty;

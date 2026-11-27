@@ -1,11 +1,14 @@
 //! Film Looks on the camera (`/v1/looks`) and in the official catalog.
 //!
-//! Kept free of NSH so unit tests run without an engine. Shapes match
-//! `grkit-serve` (`look_api.rs`) and the site catalog (`site::CATALOG_SCHEMA`).
+//! Kept free of NSH so unit tests run without an engine. The camera list
+//! has the shapes of the wire contract (`grkit_protocol::looks`); the
+//! catalog has the shapes of the site (`site::CATALOG_SCHEMA`).
 
 use std::collections::BTreeSet;
 
 use grkit_core::cover::{Cover, Film, Scheme};
+use grkit_protocol::looks as wire;
+pub use grkit_protocol::looks::{LookSource, LookUse, PendingChange};
 use serde::Deserialize;
 
 /// The longest Look name the camera menu shows (`effects::NAME_MAX`).
@@ -14,20 +17,6 @@ pub const NAME_MAX: usize = 16;
 pub const ID_MAX: usize = 31;
 /// The ID prefix of Looks imported on a phone; no catalog ID starts with it.
 pub const IMPORT_PREFIX: &str = "lut-";
-
-/// Where a Look on the card came from, as the camera reports it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum LookSource {
-    Official,
-    Custom,
-    /// A native look of GR IV (Cinema Yellow, Cinema Green) that the site
-    /// added: its cover follows the scheme as an official Look's does.
-    Native,
-    /// Also a source that a later GRKit reports.
-    #[serde(other)]
-    Unknown,
-}
 
 /// The film family of a catalog Look, in the order the catalog lists them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,24 +147,6 @@ pub struct Look {
     pub stored: bool,
 }
 
-/// A recipe or a mode-dial set that uses a Look.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum LookUse {
-    /// A recipe: the name that the person gave it, or none for the automatic
-    /// name (the Look's name and the number).
-    Recipe {
-        #[serde(default)]
-        name: Option<String>,
-        #[serde(default)]
-        number: u32,
-    },
-    /// A user mode of the mode dial: U1 is 1.
-    Dial { mode: u32 },
-    #[serde(other)]
-    Unknown,
-}
-
 /// How many uses the message that blocks a delete names.
 pub const USES_NAMED: usize = 3;
 
@@ -191,7 +162,7 @@ pub fn use_labels(
         .uses
         .iter()
         .filter_map(|use_| match use_ {
-            LookUse::Recipe { name, number } => Some(recipe(&match name {
+            LookUse::Recipe { name, number, .. } => Some(recipe(&match name {
                 Some(name) => name.clone(),
                 None if *number > 0 => format!("{} {number}", look.name),
                 None => look.name.clone(),
@@ -220,16 +191,6 @@ impl CoverGroup {
             CoverGroup::Mono => "mono",
         }
     }
-}
-
-/// A change of a Look file. The camera reads its Look files when it starts.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum PendingChange {
-    /// A new Look: the camera does not list it yet.
-    Add,
-    /// A new name, content or cover: the camera still has the old ones.
-    Update,
 }
 
 impl Look {
@@ -358,103 +319,47 @@ impl LooksSnapshot {
     }
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WireList {
-    looks: Vec<WireLook>,
-    #[serde(default)]
-    stored: Vec<WireLook>,
-    counts: WireCounts,
-    limits: WireLimits,
-    boot_id: String,
-    card_id: String,
-    #[serde(default)]
-    official_covers: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct WireCounts {
-    loaded: usize,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WireLimits {
-    listed_looks: usize,
-    loaded_looks: usize,
-    #[serde(default)]
-    camera_looks: Option<usize>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WireLook {
-    id: String,
-    name: String,
-    content_hash: String,
-    enabled: bool,
-    position: usize,
-    runtime: WireRuntime,
-    #[serde(default)]
-    cover: Option<serde_json::Value>,
-    #[serde(default)]
-    default_cover: Option<serde_json::Value>,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WireRuntime {
-    source: LookSource,
-    loaded: bool,
-    selected: bool,
-    #[serde(default)]
-    used_by: usize,
-    #[serde(default)]
-    uses: Vec<LookUse>,
-    #[serde(default, deserialize_with = "known_pending")]
-    pending: Option<PendingChange>,
-}
-
-/// A change that a later GRKit reports says nothing about a restart here.
-fn known_pending<'de, D>(deserializer: D) -> Result<Option<PendingChange>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
-    Ok(value.and_then(|value| serde_json::from_value(value).ok()))
-}
-
 /// Parse a `GET /v1/looks` body.
 pub fn parse_looks(body: &[u8]) -> Result<LooksSnapshot, String> {
-    let wire: WireList = serde_json::from_slice(body).map_err(|e| e.to_string())?;
-    let look = |look: WireLook, stored: bool| Look {
-        id: look.id,
-        name: look.name,
-        content_hash: look.content_hash,
-        enabled: look.enabled,
-        position: look.position,
-        source: look.runtime.source,
-        loaded: look.runtime.loaded,
-        selected: look.runtime.selected,
-        used_by: look.runtime.used_by,
-        uses: look.runtime.uses,
-        pending: look.runtime.pending,
-        // A cover this app cannot read shows as the default one.
-        cover: look.cover.and_then(|cover| Cover::from_json(&cover).ok()),
-        default_cover: look
-            .default_cover
-            .and_then(|cover| Cover::from_json(&cover).ok()),
-        stored,
+    let wire: wire::LookList = serde_json::from_slice(body).map_err(|e| e.to_string())?;
+    let look = |look: wire::Look, stored: bool| {
+        let (configuration, runtime) = (look.configuration, look.runtime);
+        Look {
+            id: configuration.id,
+            name: configuration.name,
+            content_hash: configuration.content_hash,
+            enabled: configuration.enabled,
+            position: look.position,
+            source: runtime.source,
+            loaded: runtime.loaded,
+            selected: runtime.selected,
+            used_by: runtime.used_by,
+            uses: runtime.uses,
+            pending: runtime.pending,
+            // A cover this app cannot read shows as the default one.
+            cover: configuration
+                .cover
+                .and_then(|cover| Cover::from_json(&cover).ok()),
+            default_cover: configuration
+                .default_cover
+                .and_then(|cover| Cover::from_json(&cover).ok()),
+            stored,
+        }
     };
     let mut looks: Vec<Look> = wire.looks.into_iter().map(|l| look(l, false)).collect();
     looks.sort_by_key(|look| look.position);
+    let limits = wire.limits;
     Ok(LooksSnapshot {
         looks,
         stored: wire.stored.into_iter().map(|l| look(l, true)).collect(),
-        max_camera: wire.limits.camera_looks,
+        // Each Look on the camera loads, so the camera takes as many as it
+        // both lists and loads.
+        max_camera: limits
+            .stored_looks
+            .map(|_| limits.listed_looks.min(limits.loaded_looks)),
         loaded: wire.counts.loaded,
-        max_loaded: wire.limits.loaded_looks,
-        max_listed: wire.limits.listed_looks,
+        max_loaded: limits.loaded_looks,
+        max_listed: limits.listed_looks,
         boot_id: wire.boot_id,
         card_id: wire.card_id,
         // A camera before schemes, or an unknown scheme, has gray covers.
@@ -464,6 +369,34 @@ pub fn parse_looks(body: &[u8]) -> Result<LooksSnapshot, String> {
             .and_then(Scheme::parse)
             .unwrap_or_default(),
     })
+}
+
+/// A change to the camera's Looks, as the phone asks for it. Each one names
+/// the camera start that the phone read the Looks in.
+#[derive(Clone, Debug, PartialEq)]
+pub enum LookChange {
+    /// Show or hide a Look in the camera menu.
+    Enabled { id: String, enabled: bool },
+    /// Rename an imported Look.
+    Rename { id: String, name: String },
+    /// Remove a Look. `active_off` switches the camera to Off when it is in
+    /// use.
+    Delete { id: String, active_off: bool },
+    /// Move a Look to the card only (`to_card`), or back to the camera.
+    Place {
+        id: String,
+        to_card: bool,
+        active_off: bool,
+    },
+    /// The complete menu order, by ID.
+    Order(Vec<String>),
+    /// Add a Look, replace the content of an imported one, or give a Look
+    /// another cover. `cover` must draw the icon of `grf`.
+    Content {
+        id: String,
+        grf: Vec<u8>,
+        cover: Option<Cover>,
+    },
 }
 
 /// Why a Looks request failed, in terms the UI explains.
@@ -882,8 +815,8 @@ mod tests {
         assert!(snapshot.stored.is_empty() && snapshot.camera_room().is_none());
         let list = LIST
             .replace(
-                r#""loadedLooks":40}"#,
-                r#""loadedLooks":40,"cameraLooks":2}"#,
+                r#""listedLooks":64,"loadedLooks":40}"#,
+                r#""listedLooks":2,"loadedLooks":40,"storedLooks":500}"#,
             )
             .replace(
                 r#""counts""#,

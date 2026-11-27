@@ -1,13 +1,18 @@
 //! GRKit phone app: update GRKit on a RICOH GR camera over Wi-Fi.
 //!
 //! Layers, top down:
+//! - `dev`: demo mode and development hooks (`cfg(demo)`: debug builds and
+//!   the `demo` feature)
 //! - `shell`: tab bar and navigation stacks
-//! - `pages`: Camera, Settings, Software Update, sheets
+//! - `pages`: Camera, Settings, Software Update, sheets, alerts
 //! - `ui`: shared phone chrome
-//! - `store`: app state and demo mode
-//! - `domain`: camera model, update flow, fake camera link
-//! - `platform`: Bluetooth / Wi-Fi bridges (iOS / Android) or desktop stubs
-//! - `strings`: English and Simplified Chinese copy
+//! - `store`: app state
+//! - `camera_api`: the camera service, the release site and the phone's
+//!   records, as the store uses them
+//! - `domain`: camera model, update flow, request and answer types
+//! - `platform`: Bluetooth / Wi-Fi bridges (iOS / Android) or desktop stubs,
+//!   and the HTTP clients
+//! - `strings`: UI text from `locales/app.yml` in the system language
 
 #![allow(clippy::clone_on_copy)]
 
@@ -29,22 +34,22 @@ macro_rules! app_info {
     };
 }
 
+mod camera_api;
+#[cfg(demo)]
+pub mod dev;
 pub mod domain;
 mod pages;
 mod platform;
 mod shell;
 pub mod store;
 mod strings;
-mod strings_connect;
-mod strings_looks;
-mod strings_modules;
-mod strings_recipes;
 mod ui;
 
 use nsh_base::theme;
 use nsh_core::prelude::*;
 
 use crate::store::AppState;
+pub use crate::strings::translations;
 
 /// The crate's native views on iOS: the platform loader
 /// (`ui::ACTIVITY_COMPONENT`). Android registers its own in `MainActivity`.
@@ -62,8 +67,9 @@ fn native(registry: &mut Registry) {
 /// Application root.
 #[component]
 pub fn App() -> impl IntoElement {
-    let app = AppState::new();
+    let app = launch();
     app.ensure_ticker();
+    pages::present_alerts(app);
     provide_context(app.clone());
     view()
         .flex_1()
@@ -71,4 +77,17 @@ pub fn App() -> impl IntoElement {
         .text_color(move || theme().foreground)
         .child(shell::shell(app.clone()))
         .child(pages::overlay(app))
+}
+
+/// The app state on the camera that this build talks to: a real one, or in
+/// demo mode the demo camera.
+fn launch() -> AppState {
+    #[cfg(demo)]
+    {
+        dev::launch()
+    }
+    #[cfg(not(demo))]
+    {
+        AppState::new(std::rc::Rc::new(camera_api::HttpCamera))
+    }
 }

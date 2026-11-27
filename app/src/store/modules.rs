@@ -4,21 +4,21 @@
 //! A value or an Enable shows once the camera confirms it. A drag shows its
 //! new order at once, and the old order returns when the camera refuses it.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, rc::Rc};
 
-use nsh_base::alert_dialog;
 use nsh_core::prelude::*;
 
-use super::{AppState, MAX_DEPTH, Route, Tab};
+use super::{Alert, AppState, MAX_DEPTH, Route, Tab};
+use crate::camera_api::modules::CachedIcon;
+use crate::camera_api::{CameraApi, ModuleCache};
 use crate::domain::{
     LookError,
-    fake_modules::{self, FakeChange},
+    images::pixel_icon_svg,
     modules::{
-        CatalogAnswer, Managed, ModuleCatalog, ModuleDraft, ModuleLayout, ModulePlace, ModuleRow,
-        ModulesState, module_rows, package_can_install, pixel_icon_svg, settle,
+        CatalogAnswer, Managed, ModuleCatalog, ModuleDraft, ModuleLayout, ModulePatch, ModulePlace,
+        ModuleRow, ModulesState, module_rows, package_can_install, settle,
     },
 };
-use crate::platform::modules::{self as remote, CachedIcon, ModuleCache};
 use crate::strings::{app_language, tr};
 
 /// Why the tab shows a message in place of the modules.
@@ -99,7 +99,7 @@ impl Default for ModulesStore {
 
 /// A change to send to the camera.
 enum Change {
-    Patch(String, serde_json::Value, FakeChange),
+    Patch(String, ModulePatch),
     Order(Vec<String>),
     Layout(ModuleLayout),
 }
@@ -168,9 +168,9 @@ impl AppState {
     /// for this one until the camera answers.
     fn adopt_module_cache(self) -> Option<ModuleCache> {
         let owner = self.module_owner();
-        let cache = ModuleCache::open(&owner.0, &owner.1);
+        let cache = self.api().module_cache(&owner.0, &owner.1);
         if self.modules.owner.with(|o| o.as_ref() != Some(&owner)) {
-            self.modules.draft.set(remote::load_draft(&owner.0));
+            self.modules.draft.set(self.api().module_draft(&owner.0));
             self.modules.owner.set(Some(owner));
             self.modules
                 .catalog
@@ -230,9 +230,7 @@ impl AppState {
 
     /// The Modules page became visible.
     pub fn open_modules(self) {
-        if self.demo() {
-            self.refresh_modules();
-        } else if self.camera_online() {
+        if self.camera_online() {
             if !self.modules.loading.get() {
                 self.refresh_modules();
             }
@@ -251,10 +249,6 @@ impl AppState {
         // The GRKit settings come and go with the modules: on a connect, a
         // change on the camera, and a pull.
         self.refresh_camera_settings();
-        if self.demo() {
-            self.refresh_demo_modules();
-            return;
-        }
         if !self.camera_online() || self.modules.loading.get() {
             return;
         }
@@ -263,68 +257,70 @@ impl AppState {
         let generation = self.connect_generation.get();
         let changes = self.modules.changes.with(|count| *count);
         self.modules.loading.set(true);
-        self.root.run(|| {
-            spawn(async move {
-                let result = read_modules(language, cache.clone()).await;
-                self.modules.loading.set(false);
-                if self.connect_generation.get() != generation {
-                    // A refresh for the new connection returned while this
-                    // one loaded.
-                    self.refresh_modules();
-                    return;
+        let api = self.api();
+        self.run(async move {
+            let result = read_modules(&api, language, cache.clone()).await;
+            self.modules.loading.set(false);
+            if self.connect_generation.get() != generation {
+                // A refresh for the new connection returned while this
+                // one loaded.
+                self.refresh_modules();
+                return;
+            }
+            match result {
+                Ok(ModulesRead::Blocked(block)) => {
+                    self.modules.block.set(Some(block));
+                    self.modules.writable.set(false);
+                    self.modules.error.set(None);
                 }
-                match result {
-                    Ok(ModulesRead::Blocked(block)) => {
-                        self.modules.block.set(Some(block));
-                        self.modules.writable.set(false);
-                        self.modules.error.set(None);
-                    }
-                    Ok(ModulesRead::Ready {
-                        catalog,
-                        state,
-                        boot_id,
-                        write,
-                    }) => {
-                        self.modules.block.set(None);
-                        self.modules.error.set(None);
-                        self.modules.boot_id.set(Some(boot_id));
-                        self.modules.writable.set(write);
-                        self.modules.catalog.set(Some(catalog));
-                        // A change made during the read has the newer state.
-                        if self.modules.changes.with(|count| *count) == changes
-                            && self.modules.busy.with(Option::is_none)
-                        {
-                            if let Some(cache) = &cache {
-                                cache.save_state(&state);
-                            }
-                            self.set_module_state(state);
-                        }
+                Ok(ModulesRead::Ready {
+                    catalog,
+                    state,
+                    boot_id,
+                    write,
+                }) => {
+                    self.modules.block.set(None);
+                    self.modules.error.set(None);
+                    self.modules.boot_id.set(Some(boot_id));
+                    self.modules.writable.set(write);
+                    self.modules.catalog.set(Some(catalog));
+                    // A change made during the read has the newer state.
+                    if self.modules.changes.with(|count| *count) == changes
+                        && self.modules.busy.with(Option::is_none)
+                    {
                         if let Some(cache) = &cache {
-                            self.load_cached_icons(cache);
-                            self.fetch_module_icons(cache, generation).await;
+                            cache.save_state(&state);
                         }
+                        self.set_module_state(state);
                     }
-                    Err(error) => {
-                        log::warn!("Could not read modules: {error:?}");
-                        self.modules.error.set(Some(error));
+                    if let Some(cache) = &cache {
+                        self.load_cached_icons(cache);
                     }
+                    self.fetch_module_icons(cache.as_ref(), generation).await;
                 }
-            });
+                Err(error) => {
+                    log::warn!("Could not read modules: {error:?}");
+                    self.modules.error.set(Some(error));
+                }
+            }
         });
     }
 
     /// Fetch the icons the cache does not hold, one at a time. A module the
     /// camera had no icon for is asked again: a camera can answer so while
-    /// its runtime still starts.
-    async fn fetch_module_icons(self, cache: &ModuleCache, generation: u64) {
+    /// its runtime still starts. Without a cache, each icon is fetched.
+    async fn fetch_module_icons(self, cache: Option<&ModuleCache>, generation: u64) {
         let Some(catalog) = self.modules.catalog.get() else {
             return;
         };
+        let api = self.api();
         for module in &catalog.modules {
-            if matches!(cache.icon(&module.id), Some(CachedIcon::Image(_))) {
+            if cache
+                .is_some_and(|cache| matches!(cache.icon(&module.id), Some(CachedIcon::Image(_))))
+            {
                 continue;
             }
-            let icon = match remote::icon(&module.id).await {
+            let icon = match api.module_icon(&module.id).await {
                 Ok(icon) => icon,
                 Err(LookError::ConnectionLost) => return,
                 // Not recorded: a later read tries again.
@@ -334,44 +330,18 @@ impl AppState {
                 return;
             }
             let uri = icon.as_deref().and_then(pixel_icon_svg);
-            cache.save_icon(
-                &module.id,
-                uri.is_some().then_some(icon.as_deref()).flatten(),
-            );
+            if let Some(cache) = cache {
+                cache.save_icon(
+                    &module.id,
+                    uri.is_some().then_some(icon.as_deref()).flatten(),
+                );
+            }
             if let Some(uri) = uri {
                 self.modules.icons.update(|icons| {
                     icons.insert(module.id.clone(), uri);
                 });
             }
         }
-    }
-
-    fn refresh_demo_modules(self) {
-        if !self.camera_online() {
-            return;
-        }
-        if self.modules.catalog.with(Option::is_none) {
-            self.modules
-                .catalog
-                .set(Some(fake_modules::demo_catalog(app_language())));
-        }
-        if self.modules.state.with(Option::is_none) {
-            self.modules.state.set(Some(fake_modules::demo_state()));
-        }
-        if self.modules.icons.with(BTreeMap::is_empty) {
-            let icons = self.modules.catalog.with(|catalog| {
-                catalog
-                    .iter()
-                    .flat_map(|c| &c.modules)
-                    .filter_map(|module| {
-                        let svg = pixel_icon_svg(fake_modules::demo_icon(&module.id)?)?;
-                        Some((module.id.clone(), svg))
-                    })
-                    .collect()
-            });
-            self.modules.icons.set(icons);
-        }
-        self.modules.writable.set(self.camera_online());
     }
 
     /// A read that a lost link cut off never reports back. The catalog and
@@ -392,7 +362,7 @@ impl AppState {
         }
     }
 
-    /// Present a failed change as an alert.
+    /// Report a failed change: an alert, or for a lost link a notice.
     pub fn alert_module_error(self, error: LookError) {
         if error == LookError::ConnectionLost {
             self.show_toast(tr("looks.lost_toast", &[]));
@@ -401,19 +371,7 @@ impl AppState {
             }
             return;
         }
-        let (title, body) = error.keys();
-        let body = match &error {
-            LookError::Service(detail) => format!("{} {detail}", tr(body, &[])),
-            _ => tr(body, &[]),
-        };
-        spawn(async move {
-            let _ = alert_dialog()
-                .title(tr(title, &[]))
-                .description(body)
-                .cancel("ok", tr("looks.ok", &[]))
-                .show()
-                .await;
-        });
+        self.alert(Alert::Module(error));
     }
 
     /// Send one change. `shown` is the state to display until the camera
@@ -432,33 +390,22 @@ impl AppState {
             self.modules.rollback.with(|slot| *slot = Some(saved));
             self.modules.state.set(Some(shown));
         }
-        if self.demo() {
-            let mut next = before.clone();
-            let fake = match &change {
-                Change::Patch(_, _, fake) => fake.clone(),
-                Change::Order(ids) => FakeChange::Order(ids.clone()),
-                Change::Layout(layout) => FakeChange::Layout(layout.clone()),
-            };
-            let answer = fake_modules::apply(&mut next, &fake).map(|()| next);
-            self.finish_module_change(before, answer);
-            return;
-        }
         let boot_id = self.modules.boot_id.get().unwrap_or_default();
         let generation = self.connect_generation.get();
-        self.root.run(|| {
-            spawn(async move {
-                let answer = match change {
-                    Change::Patch(id, body, _) => remote::patch(&boot_id, &id, body)
-                        .await
-                        .map(|(module, revision)| before.with_module(module, revision)),
-                    Change::Order(ids) => remote::put_order(&boot_id, &ids).await,
-                    Change::Layout(layout) => remote::put_layout(&boot_id, &layout).await,
-                };
-                if self.connect_generation.get() != generation {
-                    return;
-                }
-                self.finish_module_change(before, answer);
-            });
+        let api = self.api();
+        self.run(async move {
+            let answer = match change {
+                Change::Patch(id, patch) => api
+                    .patch_module(&boot_id, &id, patch)
+                    .await
+                    .map(|(module, revision)| before.with_module(module, revision)),
+                Change::Order(ids) => api.put_module_order(&boot_id, &ids).await,
+                Change::Layout(layout) => api.put_module_layout(&boot_id, &layout).await,
+            };
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.finish_module_change(before, answer);
         });
     }
 
@@ -467,8 +414,7 @@ impl AppState {
         let (state, error) = settle(before, answer);
         if error.is_none()
             && let Some((camera, language)) = self.modules.owner.get()
-            && let Some(cache) = ModuleCache::open(&camera, &language)
-            && !self.demo()
+            && let Some(cache) = self.api().module_cache(&camera, &language)
         {
             cache.save_state(&state);
         }
@@ -480,7 +426,7 @@ impl AppState {
             self.set_module_state(state);
         });
         if let Some(error) = error {
-            if !self.demo() && error != LookError::ConnectionLost {
+            if error != LookError::ConnectionLost {
                 self.refresh_modules();
             }
             self.alert_module_error(error);
@@ -575,54 +521,49 @@ impl AppState {
         // The Settings tab shows the GRKit settings whatever tab is open at a
         // connect.
         self.refresh_camera_settings();
-        if self.demo() {
-            self.refresh_demo_modules();
-            return;
-        }
         if !self.camera_online() || self.modules.loading.get() {
             return;
         }
         let cache = self.adopt_module_cache();
         let generation = self.connect_generation.get();
         let changes = self.modules.changes.with(|count| *count);
-        self.root.run(|| {
-            spawn(async move {
-                // A failed read says so on the home row instead of reading
-                // on there.
-                let failed = move || {
-                    if self.connect_generation.get() == generation {
-                        self.modules.error.set(Some(LookError::ConnectionLost));
-                    }
-                };
-                let Ok(access) = remote::access().await else {
-                    return failed();
-                };
-                if !access.read {
-                    return;
+        let api = self.api();
+        self.run(async move {
+            // A failed read says so on the home row instead of reading
+            // on there.
+            let failed = move || {
+                if self.connect_generation.get() == generation {
+                    self.modules.error.set(Some(LookError::ConnectionLost));
                 }
-                let Ok(state) = remote::state().await else {
-                    return failed();
-                };
-                if self.connect_generation.get() != generation {
-                    return;
+            };
+            let Ok(access) = api.module_access().await else {
+                return failed();
+            };
+            if !access.read {
+                return;
+            }
+            let Ok(state) = api.module_state().await else {
+                return failed();
+            };
+            if self.connect_generation.get() != generation {
+                return;
+            }
+            self.modules.error.set(None);
+            self.modules.boot_id.set(Some(access.boot_id));
+            self.modules.writable.set(access.write);
+            if self.modules.changes.with(|count| *count) == changes
+                && self.modules.busy.with(Option::is_none)
+            {
+                if let Some(cache) = &cache {
+                    cache.save_state(&state);
                 }
-                self.modules.error.set(None);
-                self.modules.boot_id.set(Some(access.boot_id));
-                self.modules.writable.set(access.write);
-                if self.modules.changes.with(|count| *count) == changes
-                    && self.modules.busy.with(Option::is_none)
-                {
-                    if let Some(cache) = &cache {
-                        cache.save_state(&state);
-                    }
-                    self.set_module_state(state);
-                }
-                // The home row and the way to turn a feature on name the
-                // modules, so a camera without a cached catalog reads it.
-                if self.modules.catalog.with(Option::is_none) {
-                    self.refresh_modules();
-                }
-            });
+                self.set_module_state(state);
+            }
+            // The home row and the way to turn a feature on name the
+            // modules, so a camera without a cached catalog reads it.
+            if self.modules.catalog.with(Option::is_none) {
+                self.refresh_modules();
+            }
         });
     }
 
@@ -641,10 +582,8 @@ impl AppState {
     fn change_module_draft(self, change: impl FnOnce(&mut ModuleDraft)) {
         let mut draft = self.modules.draft.get();
         change(&mut draft);
-        if !self.demo()
-            && let Some((camera, _)) = self.modules.owner.get()
-        {
-            remote::save_draft(&camera, &draft);
+        if let Some((camera, _)) = self.modules.owner.get() {
+            self.api().save_module_draft(&camera, &draft);
         }
         self.modules.draft.set(draft);
     }
@@ -664,7 +603,7 @@ impl AppState {
     /// Modules can be added and removed: the camera is connected and no
     /// update waits or runs.
     pub fn modules_manageable(self) -> bool {
-        self.camera_online() && self.camera_journal().is_none() && !self.update_busy.get()
+        self.camera_online() && self.camera_journal().is_none() && !self.update_running()
     }
 
     fn package_module_ids(self) -> Vec<String> {
@@ -703,7 +642,7 @@ impl AppState {
         self.release.with(|slot| {
             slot.borrow()
                 .as_ref()
-                .map_or_else(Vec::new, |release| release.official_modules())
+                .map_or_else(Vec::new, |release| release.modules.clone())
         })
     }
 
@@ -772,11 +711,7 @@ impl AppState {
     pub fn set_module_enabled(self, id: &str, enabled: bool) {
         self.send_module_change(
             (id.to_owned(), ModulePart::Enabled),
-            Change::Patch(
-                id.to_owned(),
-                serde_json::json!({ "enabled": enabled }),
-                FakeChange::Enabled(id.to_owned(), enabled),
-            ),
+            Change::Patch(id.to_owned(), ModulePatch::enabled(enabled)),
             None,
         );
     }
@@ -784,11 +719,7 @@ impl AppState {
     pub fn set_module_value(self, id: &str, key: &str, value: i64) {
         self.send_module_change(
             (id.to_owned(), ModulePart::Setting(key.to_owned())),
-            Change::Patch(
-                id.to_owned(),
-                serde_json::json!({ "values": { key: value } }),
-                FakeChange::Value(id.to_owned(), key.to_owned(), value),
-            ),
+            Change::Patch(id.to_owned(), ModulePatch::value(key, value)),
             None,
         );
     }
@@ -834,17 +765,12 @@ impl AppState {
             return;
         };
         let order = ordered.then(|| choices.order());
-        let mut body = serde_json::json!({ "hiddenValues": choices.hidden });
-        if let Some(order) = &order {
-            body["valueOrder"] = serde_json::json!(order);
-        }
         let shown = show_at_once.then(|| state.with_choices(id, &choices, ordered));
         self.send_module_change(
             (id.to_owned(), part),
             Change::Patch(
                 id.to_owned(),
-                body,
-                FakeChange::Options(id.to_owned(), choices.hidden.clone(), order),
+                ModulePatch::options(choices.hidden.clone(), order),
             ),
             shown,
         );
@@ -907,39 +833,33 @@ impl AppState {
             Some(shown),
         );
     }
+}
 
-    /// Demo screens: show a state of the tab.
-    pub(crate) fn seed_demo_modules(
-        self,
-        edit: impl FnOnce(&mut ModulesState),
-        block: Option<ModulesBlock>,
-    ) {
-        let mut state = fake_modules::demo_state();
-        edit(&mut state);
-        self.modules
-            .catalog
-            .set(Some(fake_modules::demo_catalog(app_language())));
+/// Demo screens (`dev::screens`).
+#[cfg(demo)]
+impl AppState {
+    /// The modules as the phone last read them.
+    pub(crate) fn seed_modules(self, catalog: ModuleCatalog, state: ModulesState) {
+        self.modules.catalog.set(Some(catalog));
         self.modules.state.set(Some(state));
-        self.modules.block.set(block);
     }
 
-    /// Demo screens: a read that has not answered yet.
-    pub(crate) fn seed_demo_modules_loading(self) {
+    /// A read of the modules that has not answered yet.
+    pub(crate) fn seed_modules_loading(self) {
         self.modules.catalog.set(None);
         self.modules.state.set(None);
         self.modules.loading.set(true);
     }
 
-    /// Demo screens: a read of the modules that failed.
-    pub(crate) fn seed_demo_modules_failed(self) {
+    pub(crate) fn seed_modules_failed(self) {
         self.modules.catalog.set(None);
         self.modules.state.set(None);
         self.modules.loading.set(false);
         self.modules.error.set(Some(LookError::ConnectionLost));
     }
 
-    /// Demo screens: a row whose change is being saved.
-    pub(crate) fn seed_demo_module_saving(self, id: &str, part: ModulePart) {
+    /// A module change being saved.
+    pub(crate) fn seed_module_saving(self, id: &str, part: ModulePart) {
         self.modules.busy.set(Some((id.to_owned(), part)));
     }
 }
@@ -957,15 +877,16 @@ enum ModulesRead {
 /// Read what the camera can do, its catalog (through the cache), and its
 /// state.
 async fn read_modules(
+    api: &Rc<dyn CameraApi>,
     language: &'static str,
     cache: Option<ModuleCache>,
 ) -> Result<ModulesRead, LookError> {
-    let access = remote::access().await?;
+    let access = api.module_access().await?;
     if !access.read {
         return Ok(ModulesRead::Blocked(ModulesBlock::Unsupported));
     }
     let cached = cache.as_ref().and_then(ModuleCache::catalog);
-    let catalog = match remote::catalog(language, cached).await {
+    let catalog = match api.module_catalog(language, cached).await {
         Ok(CatalogAnswer::Fresh(catalog, bytes)) => {
             if let Some(cache) = &cache {
                 cache.save_catalog(&bytes);
@@ -978,7 +899,7 @@ async fn read_modules(
         Err(LookError::NotFound) => return Ok(ModulesRead::Blocked(ModulesBlock::Unsupported)),
         Err(error) => return Err(error),
     };
-    let state = remote::state().await?;
+    let state = api.module_state().await?;
     Ok(ModulesRead::Ready {
         catalog,
         state,
