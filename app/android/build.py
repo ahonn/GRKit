@@ -26,6 +26,7 @@ def main():
     parser.add_argument("--release", action="store_true", help="Disable development overrides; requires release signing environment")
     parser.add_argument("--runtime-apk", type=Path, help="Reuse a freshly built NSH APK instead of rebuilding Rust")
     parser.add_argument("--install", action="store_true")
+    parser.add_argument("--version-code", type=int, help="Version code of the APK (default: nsh.json build); must grow with every release")
     args = parser.parse_args()
     if args.release and "GRKIT_RELEASE_PUBLIC_KEY" in os.environ:
         raise SystemExit("GRKIT_RELEASE_PUBLIC_KEY is only allowed in development builds.")
@@ -160,7 +161,7 @@ class DevActivity {
         run(build_tools / "aapt2", "compile", "--dir", icon_res, "-o", icons)
         unsigned = work / "unsigned.apk"
         run(build_tools / "aapt2", "link", resources, icons, "--manifest", manifest, "-I", android_jar,
-            "--min-sdk-version", "29", "--target-sdk-version", "35", "--version-code", str(metadata["build"]),
+            "--min-sdk-version", "29", "--target-sdk-version", "35", "--version-code", str(args.version_code or metadata["build"]),
             "--version-name", metadata["version"], "-A", assets, "-o", unsigned)
         with zipfile.ZipFile(unsigned, "a") as apk, zipfile.ZipFile(runtime) as original:
             for name in original.namelist():

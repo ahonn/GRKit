@@ -9,7 +9,7 @@ cancellation, recovery, and hardware verification.
 ## Requirements
 
 - Rust 1.99.1 (see `rust-toolchain.toml`)
-- NSH CLI 0.5.1 (`nsh --version`)
+- NSH CLI 0.6.0 (`nsh --version`)
 - Xcode (for iOS simulator packaging)
 
 ## Commands

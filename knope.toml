@@ -1,5 +1,7 @@
-# Versions and CHANGELOG.md come only from change files in .changeset/, never
-# from commit messages. Write one with `knope document-change` or by hand:
+# Versions and changelogs come only from change files in .changeset/, never
+# from commit messages. Write one with `knope document-change` or by hand, with
+# the package that the change affects: `default` (the camera side, CHANGELOG.md)
+# or `app` (the phone app, app/CHANGELOG.md).
 #
 #     ---
 #     default: patch
@@ -9,9 +11,10 @@
 #
 # Below 1.0, `major` bumps the minor version and `minor` bumps the patch.
 # The Release PR workflow runs `prepare-release`. Merging that PR tags the
-# release and builds it. See docs/releasing.md.
+# camera release and builds it. The App Build workflow builds the app.
+# See docs/releasing.md.
 
-[package]
+[packages.default]
 versioned_files = [
     "Cargo.toml",
     { path = "Cargo.lock", dependency = "grkit-build" },
@@ -23,6 +26,13 @@ versioned_files = [
     { path = "Cargo.lock", dependency = "grkit-wasm" },
 ]
 changelog = "CHANGELOG.md"
+
+[packages.app]
+versioned_files = [
+    { path = "app/nsh.json", regex = "\"version\": \"(?<version>\\d+\\.\\d+\\.\\d+)\"" },
+    { path = "app/GRKit.xcodeproj/project.pbxproj", regex = "MARKETING_VERSION = (?<version>\\d+\\.\\d+\\.\\d+);" },
+]
+changelog = "app/CHANGELOG.md"
 
 [changes]
 ignore_conventional_commits = true

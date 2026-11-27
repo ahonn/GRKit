@@ -1,8 +1,10 @@
 name: Release PR
 
 # Keeps one pull request from the release branch open while change files are
-# pending. knope sets the version and writes CHANGELOG.md from the change
-# files. Merging the pull request starts the Release workflow.
+# pending. knope sets the versions and writes the changelogs from the change
+# files: the camera side (`default`, CHANGELOG.md) and the phone app (`app`,
+# app/CHANGELOG.md). Merging the pull request starts the Release workflow,
+# which releases the camera side when its version changed.
 on:
   push:
     branches: [main]
@@ -62,37 +64,77 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -C release
-          # knope updates the versions and CHANGELOG.md, deletes the change files,
-          # and adds these changes to the index.
+          camera_version() { sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml; }
+          app_version() { jq -er .version app/nsh.json; }
+          camera_before=$(camera_version)
+          app_before=$(app_version)
+          # knope updates the versions and the changelogs, deletes the change
+          # files, and adds these changes to the index.
           knope prepare-release
           # Reject a Cargo.lock that does not match the new versions.
           cargo metadata --format-version 1 --locked > /dev/null
-          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p' Cargo.toml)
+          version=$(camera_version)
+          app=$(app_version)
           test -n "$version"
-          git commit -m "chore(release): version $version"
+          test -n "$app"
+          [ "$version" != "$camera_before" ] || version=''
+          [ "$app" != "$app_before" ] || app=''
+          if [ -n "$version" ] && [ -n "$app" ]; then
+            title="v$version and app v$app"
+            message="version $version and app $app"
+          elif [ -n "$version" ]; then
+            title="v$version"
+            message="version $version"
+          elif [ -n "$app" ]; then
+            title="app v$app"
+            message="app version $app"
+          else
+            echo "::error::The change files changed no version."
+            exit 1
+          fi
+          git commit -m "chore(release): $message"
           # The release branch belongs to this workflow, and each run makes it again from main.
           git push --force origin release
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "app=$app"
+            echo "title=Release $title"
+          } >> "$GITHUB_OUTPUT"
       - name: Open or update the release pull request
         if: steps.changes.outputs.pending == 'true'
         env:
           VERSION: ${{ steps.prepare.outputs.version }}
+          APP: ${{ steps.prepare.outputs.app }}
+          TITLE: ${{ steps.prepare.outputs.title }}
         run: |
           set -euo pipefail
           {
-            echo "Merging this pull request tags v$VERSION, tests and builds the release, deploys the site, and publishes the GitHub release."
-            echo "Test the camera packages right after the release. If a test fails, start the Deploy workflow with the tag of the previous release."
-            echo
-            sh .github/scripts/changelog-section.sh "$VERSION"
+            if [ -n "$VERSION" ]; then
+              [ -z "$APP" ] || echo "## GRKit $VERSION"$'\n'
+              echo "Merging this pull request tags v$VERSION, tests and builds the release, deploys the site, and publishes the GitHub release."
+              echo "Test the camera packages right after the release. If a test fails, start the Deploy workflow with the tag of the previous release."
+              echo
+              sh .github/scripts/changelog-section.sh "$VERSION"
+            fi
+            if [ -n "$APP" ]; then
+              [ -z "$VERSION" ] || echo $'\n'"## App $APP"$'\n'
+              echo "Merging this pull request sets the app version to $APP. Then start the App Build workflow on main to build the app."
+              echo
+              sh .github/scripts/changelog-section.sh "$APP" app/CHANGELOG.md
+            fi
           } > "$RUNNER_TEMP/body.md"
           number=$(gh pr list --head release --base main --state open --json number --jq '.[0].number // empty')
           if [ -n "$number" ]; then
-            gh pr edit "$number" --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+            gh pr edit "$number" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
           else
-            gh pr create --head release --base main --title "Release v$VERSION" --body-file "$RUNNER_TEMP/body.md"
+            gh pr create --head release --base main --title "$TITLE" --body-file "$RUNNER_TEMP/body.md"
           fi
       # A push with the workflow token starts pull request runs that wait for
       # approval. This run puts the test results on the release commit.
       - name: Test the release branch
         if: steps.changes.outputs.pending == 'true'
-        run: gh workflow run tests.yml --ref release
+        env:
+          APP: ${{ steps.prepare.outputs.app }}
+        run: |
+          gh workflow run tests.yml --ref release
+          if [ -n "$APP" ]; then gh workflow run app.yml --ref release; fi

@@ -1,0 +1,53 @@
+name: App
+
+# Checks the phone app in app/. The app also builds the crates that it shares
+# with the camera service, so a change to them runs these checks too.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'crates/grkit-core/**'
+      - 'crates/grkit-protocol/**'
+      - '.github/workflows/app.yml'
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'crates/grkit-core/**'
+      - 'crates/grkit-protocol/**'
+      - '.github/workflows/app.yml'
+  # Release PR starts the checks of the release branch.
+  workflow_dispatch:
+  # App Build checks the commit that it builds.
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to check. The default is the commit of the event.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: fmt + clippy + test
+    # The tests open the app's pages on the macOS host.
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      # Installs the channel, components, and targets that app/rust-toolchain.toml pins.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: app
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo check --target aarch64-apple-ios --release --locked
