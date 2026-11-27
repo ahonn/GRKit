@@ -6530,7 +6530,8 @@ static void the_shutdown_screen_takes_a_usable_file(void)
 }
 /* The first shooting screen checks the file once, while the setting is on,
    so a power-off reads the card only for a usable file, through the
-   firmware. A power-off before a check checks the file then. */
+   firmware. The Wi-Fi service asks for a check after it changes the file.
+   A power-off before a check checks the file then. */
 static void the_shutdown_screen_checks_its_file_at_the_start(void)
 {
     install_stock_tab(10, 3);
@@ -6541,6 +6542,14 @@ static void the_shutdown_screen_checks_its_file_at_the_start(void)
     goodbye_length = goodbye_reads = 0;
     menu_viewfinder(VIEWFINDER_READY);
     assert(goodbye_reads == 1 && !goodbye_shown() && goodbye_reads == 1);
+    /* The Wi-Fi service wrote a picture and asks for a check: the next
+       power-off shows it with no check. */
+    u32 length;
+    goodbye_card_picture(sizeof test_goodbye_picture);
+    assert(look_command(GRKIT_CONTROL_GOODBYE_CHECK, 0, 0, &length) == 0 && length == 4 && control_words[0] == 1);
+    goodbye_reads = 0;
+    assert(goodbye_shown() && goodbye_reads == 0);
+    goodbye_length = 0;
     /* With the setting off at the start, the power-off checks the file. */
     install_stock_tab(10, 3);
     settings_memory[0] = 16;

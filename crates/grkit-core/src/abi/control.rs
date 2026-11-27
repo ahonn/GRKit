@@ -135,6 +135,10 @@ pub const CONTROL_SETTINGS_SET: u32 = 20;
 /// most `capabilities::ADJ_ENTRIES`), then the root in its order, then the
 /// hidden modules.
 pub const CONTROL_MODULES_LAYOUT: u32 = 21;
+/// Check the picture of Shutdown Screen on the card again (runtime/goodbye.h),
+/// after the service wrote or removed it, so that the next power-off shows
+/// it. No payload. The response is a word: 1 when the file is usable.
+pub const CONTROL_GOODBYE_CHECK: u32 = 22;
 pub const CONTROL_SETTING_START: u32 = 0;
 pub const CONTROL_SETTING_RAW: u32 = 1;
 pub const CONTROL_SETTING_UNIT: u32 = 2;

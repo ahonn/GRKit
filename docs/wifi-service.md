@@ -50,7 +50,7 @@ The service sends each setting change through a mailbox in camera RAM ([`runtime
 - A Look on or off, and the order of the Looks.
 - A recipe that is added, changed, applied, undone, or deleted.
 
-The camera reads its Look files and the shutdown picture only when it starts. A new or changed Look file, or a new shutdown picture, applies at the next start.
+The camera reads its Look files only when it starts, so a new or changed Look file applies at the next start. After the service writes or removes the shutdown picture, the camera checks it at once, and the next power-off shows the change.
 
 A GRKit page keeps its rows while it shows, so the camera does not change a value under an open page ([`runtime/control.h`](../runtime/control.h)):
 

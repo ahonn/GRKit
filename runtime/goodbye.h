@@ -11,9 +11,11 @@
    The power-off does not check the file: the first shooting screen after
    the start checks it once (goodbye_ready), so the camera reads the card at
    the power-off only for a usable file, as the firmware reads its picture.
-   A file that changes after that check applies at the next start. A
-   power-off before a check, after a start in playback or with the setting
-   turned on later, checks the file then.
+   When the Wi-Fi service writes or removes the file, it asks for a check
+   at once (GRKIT_CONTROL_GOODBYE_CHECK), so the next power-off shows the
+   new file. Another change of the file after the check applies at the next
+   start. A power-off before a check, after a start in playback or with the
+   setting turned on later, checks the file then.
 
    The firmware reads the file into a buffer of two bytes for each pixel of
    the size of its record, and its decoder takes the size of the frame from

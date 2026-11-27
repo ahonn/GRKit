@@ -480,6 +480,15 @@ static CONTROL_FRAME u32 control_settings_set(volatile u32 *h,const u8 *payload,
     control_settings[index].set(h,value);
     return 0;
 }
+/* The service wrote or removed the picture of Shutdown Screen: check the
+   file now, whatever the setting, so that the next power-off shows it with
+   no check (runtime/goodbye.h). */
+static CONTROL_FRAME u32 control_goodbye_check(volatile u32 *h,u32 length,u8 *out,u32 *size) {
+    if(length) return GRKIT_CONTROL_BAD_LENGTH;
+    control_put(out,goodbye_check(h)==GOODBYE_USABLE);
+    *size=4;
+    return 0;
+}
 static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request *request,u32 *size) {
     u32 choice=h[GRKIT_HOST_MODULE_CHOICE/4], result;
     /* ADJ Order reads a mask that only the menu refreshes, so it can be
@@ -495,6 +504,7 @@ static CONTROL_FRAME u32 control_modules(volatile u32 *h,struct control_request 
     case GRKIT_CONTROL_MODULES_LAYOUT: result=control_modules_layout(h,request->payload,request->length); break;
     case GRKIT_CONTROL_SETTINGS_READ: result=control_settings_read(h,request->length,request->payload,size); break;
     case GRKIT_CONTROL_SETTINGS_SET: result=control_settings_set(h,request->payload,request->length); break;
+    case GRKIT_CONTROL_GOODBYE_CHECK: result=control_goodbye_check(h,request->length,request->payload,size); break;
     default: result=GRKIT_CONTROL_UNSUPPORTED; break;
     }
     h[GRKIT_HOST_MODULE_CHOICE/4]=choice;
