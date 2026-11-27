@@ -29,6 +29,8 @@ enum HeroMark {
     Cover(Cover),
     /// Neither a recipe nor a Look is in use.
     Empty,
+    /// The camera's own Image Control of this type is in use.
+    ImageControl(usize),
 }
 
 /// The large card of what the camera uses: a photo with the Look, its
@@ -67,6 +69,13 @@ impl PhotoHero {
     /// Image Control icon of a recipe.
     pub fn center(mut self, center: impl IntoElement) -> Self {
         self.center = Some(center.into_element());
+        self
+    }
+
+    /// The icon of the camera's own Image Control `image_type` beside the
+    /// title.
+    pub fn image_control(mut self, image_type: usize) -> Self {
+        self.mark = HeroMark::ImageControl(image_type);
         self
     }
 
@@ -111,6 +120,9 @@ impl IntoElement for PhotoHero {
                     .into_element(),
             ),
             HeroMark::Empty => Some(empty_mark()),
+            HeroMark::ImageControl(image_type) => {
+                Some(crate::ui::image_control_tile(image_type, 48.0, false))
+            }
         };
         let mut card = view()
             .h(px(HERO_HEIGHT))
@@ -155,7 +167,7 @@ impl IntoElement for PhotoHero {
                             }))
                             .child(
                                 text(self.title)
-                                    .number_of_lines(1)
+                                    .number_of_lines(2)
                                     .text_size(px(crate::ui::ty::TITLE2))
                                     .font_weight(FontWeight::BOLD)
                                     .text_color(rgb(0xFFFFFF)),

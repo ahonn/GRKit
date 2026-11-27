@@ -169,7 +169,7 @@ fn an_official_look_changes_its_cover_and_only_its_icon() {
     assert_eq!(effect, original);
     assert_eq!(icon, cover.pixels().unwrap());
     // Back on the Look, which the camera shows after it starts again.
-    app.wait_for_within("Official · B&W · After restart", WAIT)
+    app.wait_for_within("Built-in · B&W · After restart", WAIT)
         .unwrap();
 }
 

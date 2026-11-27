@@ -563,9 +563,18 @@ fn current_card(app: AppState) -> Option<AnyElement> {
                     .open(move || open_detail(app, Tab::Recipes, Route::RecipeDetail(id)))
                     .into_element()
             }
-            // Neither: the camera's own colors on the sample.
+            // Neither: the camera's own Image Control, else nothing in use,
+            // on the sample.
             (None, None) => {
-                let mut hero = photo_hero(String::new(), tr("cam.current_none", &[])).empty_mark();
+                let native = recipes.as_ref().and_then(|s| s.image_control);
+                let mut hero = match native {
+                    Some(image_type) => photo_hero(
+                        tr("recipes.image_control", &[]),
+                        crate::store::native_type_name(image_type),
+                    )
+                    .image_control(image_type),
+                    None => photo_hero(String::new(), tr("cam.current_none", &[])).empty_mark(),
+                };
                 if let Some(photo) = app.standard_preview() {
                     hero = hero.photo(ImageSrc::from(photo));
                 }
@@ -657,24 +666,22 @@ fn modules_row(app: AppState) -> Option<ListRow> {
     let Some(rows) = app.module_rows() else {
         return Some(unread_modules_row(app));
     };
-    // The modules in use by name; while none is, the ones that are on.
-    let names = |used: bool| {
-        rows.iter()
-            .filter(|row| {
-                row.state.enabled
-                    && row.managed().is_none()
-                    && !row.failed()
-                    && (!used || !matches!(row.summary(), crate::domain::modules::Summary::NotUsed))
-            })
-            .map(|row| row.title())
-            .collect::<Vec<_>>()
-            .join(" · ")
-    };
-    let in_use = names(true);
-    let subtitle = if in_use.is_empty() {
-        names(false)
+    // The modules in use by name; while none is, how many are on.
+    let on: Vec<_> = rows
+        .iter()
+        .filter(|row| row.state.enabled && row.managed().is_none() && !row.failed())
+        .collect();
+    let in_use: Vec<_> = on
+        .iter()
+        .filter(|row| !matches!(row.summary(), crate::domain::modules::Summary::NotUsed))
+        .map(|row| row.title())
+        .collect();
+    let subtitle = if on.is_empty() {
+        String::new()
+    } else if in_use.is_empty() {
+        tr("cam.modules_none_used", &[("count", &on.len().to_string())])
     } else {
-        in_use
+        in_use.join(" · ")
     };
     Some(
         list_row(tr("modules.title", &[]))

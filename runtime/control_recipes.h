@@ -19,6 +19,15 @@ static u32 control_recipe_slot(volatile u32 *h,u32 id) {
     for(i=0;id && i<n;++i) if(*recipe_id_at(h,i)==id) return i;
     return RECIPE_NONE;
 }
+/* The native Image Control type of the camera plus 1, numbered as a
+   recipe numbers it (native_type_codes), or 0 before the camera has its
+   settings. */
+static u32 control_native_type(void) {
+    u32 code=MENU_NATIVE_IC_TYPE(), t;
+    if(!code) return 0;
+    for(t=0;t<NATIVE_TYPES;++t) if(native_type_codes[t]==code-1U) return t+1U;
+    return 0;
+}
 static u32 control_recipes_read(volatile u32 *h,const u8 *payload,u32 length,u8 *out,u32 *size) {
     u32 n=recipe_count(h), first, k, i, w, at=GRKIT_CONTROL_RECIPES_HEADER, current=RECIPE_NONE, now[GRKIT_RECIPE_WORDS];
     if(length!=4) return GRKIT_CONTROL_BAD_LENGTH;
@@ -36,6 +45,8 @@ static u32 control_recipes_read(volatile u32 *h,const u8 *payload,u32 length,u8 
     control_put(out+16,recipe_undo_count(h));
     control_put(out+20,first);
     control_put(out+24,k);
+    /* The phone shows the native Image Control while no recipe matches. */
+    control_put(out+28,control_native_type());
     for(i=first;i<first+k;++i) {
         control_put(out+at,*recipe_id_at(h,i)); at+=4;
         for(w=0;w<GRKIT_RECIPE_WORDS;++w,at+=4) control_put(out+at,recipe_at(h,i)[w]);

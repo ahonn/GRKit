@@ -677,6 +677,8 @@ fn a_look_moves_between_the_camera_and_the_card() {
     assert!(file(fixture.root.path(), "alpha").exists());
     assert!(!stored_file(fixture.root.path(), "alpha").exists());
     assert_eq!(fixture.look("alpha")["enabled"], true);
+    // The move back names itself while a change waits for the start.
+    assert_eq!(fixture.look("alpha")["runtime"]["edits"], json!(["place"]));
 }
 
 #[test]
@@ -1146,6 +1148,11 @@ fn a_rename_redraws_the_default_cover_and_a_delete_drops_the_import() {
         let stored = fs::read(file(root, id)).unwrap();
         assert_eq!(stored, drawn(id, "Portra 400", cover), "{id}");
         assert_eq!(fixture.look(id)["cover"], cover.to_json());
+        assert_eq!(
+            fixture.look(id)["runtime"]["edits"],
+            json!(["name"]),
+            "{id}"
+        );
         let import = imports::find(&library, id).unwrap();
         assert_eq!(
             (&import.effect, import.cover().as_ref()),

@@ -339,7 +339,7 @@ fn a_notice_runs_its_button_or_opens_and_a_feature_card_leads_with_its_title() {
 fn Header() -> impl IntoElement {
     view().w(px(390.0)).child(
         detail_header("Portra 400")
-            .subtitle("Official · Negative")
+            .subtitle("Built-in · Negative")
             .cover(film_cover())
             .chip(chip("In Use", ChipTone::Tint))
             .photo_button(overlay_button(glyph::PICTURE, "Change Photo", || {})),

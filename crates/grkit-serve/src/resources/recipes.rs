@@ -30,6 +30,8 @@ struct List {
     current: Option<u32>,
     revision: u32,
     undo: u32,
+    /// The native Image Control type of the camera, when it has settings.
+    image_control: Option<u32>,
 }
 
 const CODES: Codes = Codes {
@@ -80,6 +82,7 @@ fn read_list(backend: &mut dyn RuntimeBackend) -> Result<List> {
     })?;
     let header = |i: usize| word(&last, 4 * i).ok_or_else(malformed);
     let (on, current, revision, undo) = (header(1)?, header(2)?, header(3)?, header(4)?);
+    let image_control = header(7)?.checked_sub(1);
     let current = (current != CONTROL_RECIPE_NONE)
         .then(|| entries.get(current as usize).map(|e| e.id))
         .flatten();
@@ -89,6 +92,7 @@ fn read_list(backend: &mut dyn RuntimeBackend) -> Result<List> {
         current,
         revision,
         undo,
+        image_control,
     })
 }
 
@@ -202,9 +206,15 @@ fn list_json(
             Some(value)
         })
         .collect();
-    json!({"bootId":context.boot_id,"revision":list.revision,"undo":list.undo,
+    let mut value = json!({"bootId":context.boot_id,"revision":list.revision,"undo":list.undo,
         "counts":{"listed":list.entries.len(),"on":list.on},
-        "limits":{"listed":RECIPE_SLOTS,"on":RECIPE_ON_MAX},"recipes":recipes})
+        "limits":{"listed":RECIPE_SLOTS,"on":RECIPE_ON_MAX},"recipes":recipes});
+    // The camera's own Image Control, which the phone shows while no recipe
+    // or Look is in use.
+    if let Some(kind) = list.image_control {
+        value["imageControl"] = json!({"type": kind});
+    }
+    value
 }
 
 fn patch(backend: &mut dyn RuntimeBackend, id: u32, value: &Value) -> Result<()> {
@@ -389,6 +399,8 @@ mod tests {
                 0,
                 first as u32,
                 page.len() as u32,
+                // Negative Film (type 6) plus 1.
+                7,
             ];
             for (id, w, name) in page {
                 words.push(*id);
@@ -448,6 +460,7 @@ mod tests {
         assert_eq!(value["recipes"][1]["enabled"], false);
         assert_eq!(value["recipes"][1]["current"], true);
         assert_eq!(value["recipes"][0]["look"]["kind"], "native");
+        assert_eq!(value["imageControl"]["type"], 6);
     }
 
     #[test]
@@ -501,6 +514,7 @@ mod tests {
             current: None,
             revision: 0,
             undo: 0,
+            image_control: None,
         };
         let id = "vision3-500t-supra-v1";
         let mut names = [EffectName {

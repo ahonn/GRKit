@@ -3231,10 +3231,15 @@ static void the_service_reads_and_changes_the_recipes(void)
     /* Two recipes on, one off. */
     put_recipe(h, 0, 11, 0); put_recipe(h, 1, 12, 0); put_recipe(h, 2, 13, 1);
     words[0] = 0;
+    /* Negative Film: the camera's code of portable type 6. */
+    native_ic_value = native_type_codes[6] + 1U;
     assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0);
     assert(length == GRKIT_CONTROL_RECIPES_HEADER + 3 * GRKIT_CONTROL_RECIPE_ENTRY);
     assert(control_words[0] == 3 && control_words[1] == 2 && control_words[5] == 0 && control_words[6] == 3);
-    assert(control_words[7] == 11 && control_words[7 + 11] == 12 && control_words[7 + 22] == 13);
+    /* The native Image Control type plus 1, for the phone. */
+    assert(control_words[7] == 7);
+    assert(control_words[8] == 11 && control_words[8 + 11] == 12 && control_words[8 + 22] == 13);
+    native_ic_value = 0;
     words[0] = 4;
     assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_INVALID);
     /* Off goes before the others that are off; on, after the ones on. */

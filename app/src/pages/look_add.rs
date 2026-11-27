@@ -65,13 +65,35 @@ fn add_content(app: AppState) -> impl IntoElement {
         }))
         .child(import_row(app, full))
         .child(unlock_section(app));
+    // The built-in Looks under a title of their own, so that a note about
+    // them does not read as one about the firmware rows above.
+    column.child(super::looks::section(
+        tr("looks.catalog_section", &[]),
+        || false,
+        catalog(app, chips, snapshot),
+        None,
+    ))
+}
+
+/// The built-in Looks that the camera lacks, with the filter.
+fn catalog(
+    app: AppState,
+    chips: impl IntoElement,
+    snapshot: Option<crate::domain::LooksSnapshot>,
+) -> AnyElement {
+    let filter = app.looks_filter();
+    let column = view().gap(px(super::looks::ROW_GAP));
     let Some(items) = app.catalog_items() else {
         let Some(message) = app.catalog_error() else {
             return column
                 .child(chips)
-                .child(super::looks::loading_card(tr("looks.catalog_loading", &[])));
+                .child(super::looks::loading_card(tr("looks.catalog_loading", &[])))
+                .into_element();
         };
-        return column.child(chips).child(notice_card(message));
+        return column
+            .child(chips)
+            .child(notice_card(message))
+            .into_element();
     };
     // A Look added here stays, marked, until the page closes.
     let items: Vec<(CatalogItem, bool)> = items
@@ -84,9 +106,11 @@ fn add_content(app: AppState) -> impl IntoElement {
             },
         )
         .collect::<Vec<_>>();
-    // Every official Look is on the camera: nothing to filter.
+    // Every built-in Look is on the camera: nothing to filter.
     if items.is_empty() {
-        return column.child(list_note(tr("looks.catalog_all_added", &[])));
+        return column
+            .child(list_note(tr("looks.catalog_all_added", &[])))
+            .into_element();
     }
     let scheme = snapshot
         .as_ref()
@@ -104,9 +128,11 @@ fn add_content(app: AppState) -> impl IntoElement {
         .collect();
     let column = column.child(chips);
     if cells.is_empty() {
-        return column.child(list_note(tr("looks.catalog_kind_added", &[])));
+        return column
+            .child(list_note(tr("looks.catalog_kind_added", &[])))
+            .into_element();
     }
-    column.child(cover_grid(cells))
+    column.child(cover_grid(cells)).into_element()
 }
 
 /// The cover that a catalog Look gets on this card: the scheme's.

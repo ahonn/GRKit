@@ -179,5 +179,7 @@ pub fn demo_recipes() -> RecipesSnapshot {
         unreadable: 0,
         unreadable_on: Vec::new(),
         skipped: Vec::new(),
+        // Negative Film: the hero shows it while no recipe or Look is in use.
+        image_control: Some(6),
     }
 }

@@ -11,8 +11,12 @@ use crate::ui::{chevron, token};
 pub struct NoticeCard {
     title: String,
     subtitle: Option<String>,
+    /// A list under the title, one item a line.
+    items: Vec<String>,
     leading: Option<AnyElement>,
     action: Option<AnyElement>,
+    /// A button under the words, as wide as it needs.
+    below: Option<AnyElement>,
     open: Option<Box<dyn Fn()>>,
     emphasis: bool,
     test_id: Option<String>,
@@ -22,8 +26,10 @@ pub fn notice_card(title: impl Into<String>) -> NoticeCard {
     NoticeCard {
         title: title.into(),
         subtitle: None,
+        items: Vec::new(),
         leading: None,
         action: None,
+        below: None,
         open: None,
         emphasis: false,
         test_id: None,
@@ -33,6 +39,18 @@ pub fn notice_card(title: impl Into<String>) -> NoticeCard {
 impl NoticeCard {
     pub fn subtitle(mut self, subtitle: impl Into<String>) -> Self {
         self.subtitle = Some(subtitle.into()).filter(|s: &String| !s.is_empty());
+        self
+    }
+
+    /// A list under the title, such as the changes that wait for a restart.
+    pub fn items(mut self, items: Vec<String>) -> Self {
+        self.items = items;
+        self
+    }
+
+    /// A button under the words, for a card whose words need the width.
+    pub fn action_below(mut self, action: impl IntoElement) -> Self {
+        self.below = Some(action.into_element());
         self
     }
 
@@ -70,10 +88,14 @@ impl NoticeCard {
 
 impl IntoElement for NoticeCard {
     fn into_element(self) -> AnyElement {
-        let label = match &self.subtitle {
+        let mut label = match &self.subtitle {
             Some(subtitle) => format!("{}, {subtitle}", self.title),
             None => self.title.clone(),
         };
+        for item in &self.items {
+            label.push_str(", ");
+            label.push_str(item);
+        }
         let emphasis = self.emphasis;
         let mut card = view()
             .flex_row()
@@ -111,7 +133,27 @@ impl IntoElement for NoticeCard {
                         text(subtitle)
                             .text_size(px(crate::ui::ty::SUBHEADLINE))
                             .text_color(move || token("list-secondary"))
-                    })),
+                    }))
+                    .children(self.items.into_iter().map(|item| {
+                        view()
+                            .flex_row()
+                            .gap(px(6.0))
+                            .child(
+                                text("•")
+                                    .text_size(px(crate::ui::ty::SUBHEADLINE))
+                                    .text_color(move || token("list-secondary")),
+                            )
+                            .child(
+                                text(item)
+                                    .flex_1()
+                                    .text_size(px(crate::ui::ty::SUBHEADLINE))
+                                    .text_color(move || token("list-secondary")),
+                            )
+                    }))
+                    .child(
+                        self.below
+                            .map(|below| view().flex_row().mt(px(10.0)).child(below)),
+                    ),
             )
             .child(self.action)
             .child(self.open.is_some().then(chevron));

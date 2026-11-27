@@ -28,8 +28,10 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
     let editing = signal(false);
     crate::ui::app_page()
         .page_title(move || tr("recipes.title", &[]), true)
+        // Without recipes the page's own button adds the presets: the header
+        // stays empty, so that one thing has one way in.
         .header_right_items(move || {
-            if !can_add(app) {
+            if !can_edit(app) {
                 return Vec::new();
             }
             if editing.get() {
@@ -51,7 +53,7 @@ pub fn recipes_root(app: AppState) -> impl IntoElement {
             items
         })
         .header_right(dynamic(move || {
-            can_add(app).then(|| {
+            can_edit(app).then(|| {
                 crate::pages::looks::edit_add_buttons(
                     editing,
                     can_edit(app),

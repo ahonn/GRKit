@@ -153,11 +153,7 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
     } else {
         RowMode::Browse
     };
-    let pending = snapshot
-        .looks
-        .iter()
-        .filter(|look| look.pending.is_some())
-        .count();
+    let pending = snapshot.looks.iter().any(|look| look.pending.is_some());
     let (shown, hidden): (Vec<Look>, Vec<Look>) = snapshot
         .looks
         .iter()
@@ -176,16 +172,23 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
             })
         }))
         .child(blocked.then(|| banner(tr("looks.pending_title", &[]), "looks.error.pending_body")))
-        .child((pending > 0).then(|| restart_banner(app, pending, editable)))
-        .child(snapshot.camera_full().then(|| {
-            notice_card(tr("looks.camera_full_title", &[]))
-                .subtitle(tr("looks.camera_full_body", &[]))
-        }))
+        .child(pending.then(|| restart_banner(app, &snapshot.looks, editable)))
         .child(section_counted(
             tr("looks.menu", &[]),
             camera_count(&snapshot),
             move || app.looks_refreshing(),
-            shown,
+            view()
+                .gap_2()
+                // A full camera says so under the count: moving Looks off
+                // makes room.
+                .child(snapshot.camera_full().then(|| {
+                    text(tr("looks.camera_full_body", &[]))
+                        .px_4()
+                        .text_size(px(crate::ui::ty::FOOTNOTE))
+                        .line_height(px(18.0))
+                        .text_color(move || token("list-secondary"))
+                }))
+                .child(shown),
             None,
         ))
         .child((!hidden.is_empty()).then(|| {
@@ -219,16 +222,29 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
 
 /// How many Looks the camera holds of the most it takes, for a camera that
 /// keeps Looks on the card only.
-fn camera_count(snapshot: &crate::domain::LooksSnapshot) -> Option<String> {
+fn camera_count(snapshot: &crate::domain::LooksSnapshot) -> Option<Count> {
     snapshot.max_camera.map(|max| {
-        tr(
-            "looks.camera_count",
+        let full = snapshot.camera_full();
+        let words = tr(
+            if full {
+                "looks.camera_count_full"
+            } else {
+                "looks.camera_count"
+            },
             &[
                 ("count", &snapshot.looks.len().to_string()),
                 ("max", &max.to_string()),
             ],
-        )
+        );
+        Count { words, alert: full }
     })
+}
+
+/// The count at the end of a section title. An alert count, such as a full
+/// camera, takes the tint.
+pub(crate) struct Count {
+    pub words: String,
+    pub alert: bool,
 }
 
 /// The Looks on the card only, as covers alone, four in a row.
@@ -342,7 +358,7 @@ pub(crate) fn section(
 /// A [`section`] with a count at the end of its title line.
 pub(crate) fn section_counted(
     title: String,
-    count: Option<String>,
+    count: Option<Count>,
     working: impl Fn() -> bool + 'static,
     content: impl IntoElement,
     note: Option<String>,
@@ -364,7 +380,10 @@ pub(crate) fn section_counted(
                 .child(words(title).flex_1().role(AccessibilityRole::Header))
                 // Its own dynamic: a read does not redraw the list.
                 .child(dynamic(move || working().then(|| quiet_spinner(14.0))))
-                .child(count.map(words)),
+                .child(count.map(|count| {
+                    let alert = count.alert;
+                    words(count.words).when(alert, |words| words.text_color(move || token("tint")))
+                })),
         )
         .child(content)
         .child(note.map(|note| words(note).px_4()))
@@ -477,25 +496,72 @@ pub(crate) enum RowMode {
     ReadOnly,
 }
 
+/// The most pending changes that the restart notice lists by name.
+const RESTART_LISTED: usize = 5;
+
 /// New and changed Looks wait: the camera reads its Look files when it
-/// starts. Restart Camera turns it off and on, then connects again.
-fn restart_banner(app: AppState, count: usize, enabled: bool) -> impl IntoElement {
-    let title = match count {
+/// starts. The notice lists each change, and Restart Camera turns the camera
+/// off and on, then connects again.
+fn restart_banner(app: AppState, looks: &[Look], enabled: bool) -> impl IntoElement {
+    let pending: Vec<&Look> = looks.iter().filter(|look| look.pending.is_some()).collect();
+    let title = match pending.len() {
         1 => tr("looks.restart_one", &[]),
         n => tr("looks.restart_many", &[("count", &n.to_string())]),
     };
-    notice_card(title)
-        .subtitle(tr("looks.restart_body", &[]))
-        .action(
-            button(
-                tr("looks.restart_now", &[]),
-                ButtonKind::Primary,
-                ButtonSize::Small,
-                move || confirm_restart(app),
+    let mut items: Vec<String> = pending
+        .iter()
+        .take(RESTART_LISTED)
+        .map(|look| {
+            tr(
+                "looks.pending_item",
+                &[("name", &look.name), ("change", &pending_change(look))],
             )
-            .enabled(enabled)
-            .loading(app.camera_restarting()),
+        })
+        .collect();
+    if pending.len() > RESTART_LISTED {
+        let more = (pending.len() - RESTART_LISTED).to_string();
+        items.push(tr("looks.pending_more", &[("count", &more)]));
+    }
+    notice_card(title).items(items).action_below(
+        button(
+            tr("looks.restart_now", &[]),
+            ButtonKind::Primary,
+            ButtonSize::Small,
+            move || confirm_restart(app),
         )
+        .enabled(enabled)
+        .loading(app.camera_restarting()),
+    )
+}
+
+/// The change of a Look that waits for the restart, in words: put back,
+/// added, or what changed in it.
+fn pending_change(look: &Look) -> String {
+    use crate::domain::looks::{LookEdit, PendingChange};
+    if look.pending == Some(PendingChange::Add) {
+        let key = if look.edits.contains(&LookEdit::Place) {
+            "looks.change.put_back"
+        } else {
+            "looks.change.added"
+        };
+        return tr(key, &[]);
+    }
+    let words: Vec<String> = look
+        .edits
+        .iter()
+        .filter_map(|edit| match edit {
+            LookEdit::Name => Some("looks.change.renamed"),
+            LookEdit::Cover => Some("looks.change.cover"),
+            LookEdit::Content => Some("looks.change.content"),
+            LookEdit::Place | LookEdit::Unknown => None,
+        })
+        .map(|key| tr(key, &[]))
+        .collect();
+    if words.is_empty() {
+        tr("looks.change.changed", &[])
+    } else {
+        words.join(&tr("looks.change.join", &[]))
+    }
 }
 
 fn confirm_restart(app: AppState) {

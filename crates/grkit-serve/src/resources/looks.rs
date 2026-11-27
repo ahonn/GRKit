@@ -73,6 +73,9 @@ pub(super) struct Session {
     /// The Looks of `GRKIT/STORED` that the service read, by file name
     /// (`stored_files`).
     stored: BTreeMap<String, Known>,
+    /// What a phone changed in each Look since the session started, by ID,
+    /// so that a pending change names itself (`LookRuntime::edits`).
+    edits: BTreeMap<String, BTreeSet<wire::LookEdit>>,
 }
 
 /// A Look on the card only as the service last read it, without its bytes.
@@ -209,6 +212,8 @@ pub(super) struct Look {
     uses: Vec<UseOrigin>,
     /// The change of the file that waits for the next start.
     pending: Option<wire::PendingChange>,
+    /// What a phone changed since the session started.
+    edits: Vec<wire::LookEdit>,
     /// The key in the running camera, when the camera lists the Look.
     key: Option<u32>,
     /// The cover that draws the icon of the file, when the service knows it.
@@ -239,6 +244,7 @@ impl Look {
                 .map(|used| used.origin.clone())
                 .collect(),
             pending: None,
+            edits: Vec::new(),
             key: None,
             cover: None,
             default_cover: None,
@@ -270,6 +276,7 @@ impl Look {
             used_by: self.used_by,
             uses: self.uses.iter().map(wire_use).collect(),
             pending: self.pending,
+            edits: self.edits.clone(),
         }
     }
     /// The file of the Look: the bytes of the scan, or the file on the card
@@ -634,6 +641,11 @@ fn join(
                     Some(_) => None,
                 },
                 key: listed.map(|look| look.key),
+                edits: session
+                    .edits
+                    .get(&file.id)
+                    .map(|edits| edits.iter().copied().collect())
+                    .unwrap_or_default(),
                 ..Look::from_file(file, false, source, runtime)
             },
         ));
@@ -871,6 +883,14 @@ fn put_content(
             None => None,
         }
     };
+    if let Ok(look) = view.get(id) {
+        let edits = content_edits(id, &look.bytes(root)?, bytes)?;
+        session
+            .edits
+            .entry(id.to_owned())
+            .or_default()
+            .extend(edits);
+    }
     write_file(root, stored, &name, bytes)?;
     if let Some(staged) = staged {
         if !session.covers.commit(root, staged) {
@@ -879,6 +899,25 @@ fn put_content(
         }
     }
     Ok((stored, None))
+}
+
+/// What a new file of a Look changes: its name, its cover (the icon), and
+/// the rest of its content.
+fn content_edits(id: &str, old: &[u8], new: &[u8]) -> Result<Vec<wire::LookEdit>> {
+    let (mut before, old_icon) = decode(id, old)?;
+    let (after, new_icon) = decode(id, new)?;
+    let mut edits = Vec::new();
+    if before.name != after.name {
+        edits.push(wire::LookEdit::Name);
+    }
+    if old_icon != new_icon {
+        edits.push(wire::LookEdit::Cover);
+    }
+    before.name.clone_from(&after.name);
+    if before.encode(&new_icon).ok() != after.encode(&new_icon).ok() {
+        edits.push(wire::LookEdit::Content);
+    }
+    Ok(edits)
 }
 
 /// A new name, on or off, or a move. Returns Some problem after a move,
@@ -917,7 +956,14 @@ fn patch(
         if view.duplicates.contains(&look.file.id) {
             return Err(ambiguous());
         }
-        return move_look(root, backend, view, look, to_card, active_off);
+        let moved = move_look(root, backend, view, look, to_card, active_off)?;
+        let edits = session.edits.entry(look.file.id.clone()).or_default();
+        if to_card {
+            edits.remove(&wire::LookEdit::Place);
+        } else {
+            edits.insert(wire::LookEdit::Place);
+        }
+        return Ok(moved);
     }
     if fields.is_empty()
         || fields.iter().any(|(key, value)| match key.as_str() {
@@ -966,6 +1012,11 @@ fn patch(
         }
     }
     if let Some(name) = name.filter(|name| *name != look.file.name) {
+        session
+            .edits
+            .entry(look.file.id.clone())
+            .or_default()
+            .insert(wire::LookEdit::Name);
         let (mut effect, icon) = decode(&look.file.id, &look.bytes(root)?)?;
         // The default cover names the Look, so it follows the new name when
         // that fits. A Look without a known cover has it when its icon is it.

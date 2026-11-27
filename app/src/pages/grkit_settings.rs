@@ -176,11 +176,13 @@ fn unit_row(app: AppState) -> Option<ListRow> {
     )
 }
 
-/// A page of switches and choices, which follows the camera's settings.
+/// A page of switches and choices, which follows the camera's settings,
+/// with a `footer` under them that says what they do.
 fn settings_page(
     app: AppState,
     title: &'static str,
     rows: impl Fn(AppState) -> Vec<ListRow> + 'static,
+    footer: Option<&'static str>,
     on_dismiss: impl Fn() + 'static,
 ) -> impl IntoElement {
     crate::ui::app_page()
@@ -198,7 +200,13 @@ fn settings_page(
                         .pb(px(crate::ui::TAB_BAR_CLEARANCE))
                         .child(dynamic(move || {
                             let rows = rows(app);
-                            (!rows.is_empty()).then(|| list_section(rows))
+                            (!rows.is_empty()).then(|| {
+                                let section = list_section(rows);
+                                match footer {
+                                    Some(footer) => section.footer(tr(footer, &[])),
+                                    None => section,
+                                }
+                            })
                         })),
                 ),
         )
@@ -213,6 +221,7 @@ pub fn shooting_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Int
                 .into_iter()
                 .collect()
         },
+        Some("grkit.raw_note"),
         on_dismiss,
     )
 }
@@ -230,6 +239,7 @@ pub fn display_page(app: AppState, on_dismiss: impl Fn() + 'static) -> impl Into
             ];
             rows.into_iter().flatten().collect()
         },
+        None,
         on_dismiss,
     )
 }

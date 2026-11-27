@@ -142,7 +142,13 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
                 .loading(moving),
             )
             .child(list_note(note));
-        return page(action.into_element());
+        return page(
+            view()
+                .gap(px(28.0))
+                .child(action)
+                .child(used_by_section(app, &look.id))
+                .into_element(),
+        );
     }
 
     // The camera shows or hides only a Look that it lists.
@@ -638,5 +644,44 @@ fn base_scroll(content: impl IntoElement) -> impl IntoElement {
                 .pb(px(TAB_BAR_CLEARANCE))
                 .child(content),
         ),
+    )
+}
+
+/// The recipes that use a Look on the card only: each opens, and none
+/// applies until the Look is back on the camera.
+fn used_by_section(app: AppState, look_id: &str) -> Option<AnyElement> {
+    let recipes: Vec<_> = app
+        .recipes_snapshot()?
+        .recipes
+        .into_iter()
+        .filter(|item| item.effect_id.as_deref() == Some(look_id))
+        .collect();
+    if recipes.is_empty() {
+        return None;
+    }
+    let note = if recipes.len() == 1 {
+        "looks.used_by_note"
+    } else {
+        "looks.used_by_note_many"
+    };
+    let rows: Vec<ListRow> = recipes
+        .into_iter()
+        .map(|item| {
+            let id = item.id;
+            list_row(app.recipe_name(&item))
+                .subtitle(tr("recipes.look_missing", &[]))
+                .leading(crate::ui::recipe_badge(
+                    crate::pages::recipes::recipe_tile(app, &item, 40.0, false),
+                    40.0,
+                    false,
+                ))
+                .page(move || app.push(Route::RecipeDetail(id)))
+        })
+        .collect();
+    Some(
+        list_section(rows)
+            .header(tr("looks.used_by_section", &[]))
+            .footer(tr(note, &[]))
+            .into_element(),
     )
 }

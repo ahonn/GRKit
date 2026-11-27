@@ -338,11 +338,11 @@ looks.not_loaded:
   ja: "未読み込み"
   ko: "불러오지 않음"
 looks.official:
-  en: Official
-  zh-Hans: 官方
-  zh-Hant: "官方"
-  ja: "公式"
-  ko: "공식"
+  en: "Built-in"
+  zh-Hans: "内置"
+  zh-Hant: "內建"
+  ja: "内蔵"
+  ko: "내장"
 looks.imported:
   en: Imported
   zh-Hans: 导入
@@ -422,11 +422,17 @@ looks.catalog_loading:
   ja: "フィルムルックを読み込み中…"
   ko: "필름 룩을 불러오는 중…"
 looks.catalog_all_added:
-  en: "Every official film look is added."
-  zh-Hans: "已添加全部官方胶片风格。"
-  zh-Hant: "已加入全部官方底片風格。"
-  ja: "公式フィルムルックはすべて追加済みです。"
-  ko: "공식 필름 룩을 모두 추가했습니다."
+  en: "All added."
+  zh-Hans: "已全部添加。"
+  zh-Hant: "已全部加入。"
+  ja: "すべて追加済みです。"
+  ko: "모두 추가했습니다."
+looks.catalog_section:
+  en: "Built-in Film Looks"
+  zh-Hans: "内置胶片风格"
+  zh-Hant: "內建底片風格"
+  ja: "内蔵フィルムルック"
+  ko: "내장 필름 룩"
 looks.catalog_kind_added:
   en: "All of these are added."
   zh-Hans: "这一类已全部添加。"
@@ -434,17 +440,17 @@ looks.catalog_kind_added:
   ja: "このタイプはすべて追加済みです。"
   ko: "이 종류는 모두 추가했습니다."
 looks.catalog_offline:
-  en: Connect to the internet once to download the official film looks.
-  zh-Hans: 需要联网一次来下载官方胶片风格。
-  zh-Hant: "需要連上網際網路一次來下載官方底片風格。"
-  ja: "公式フィルムルックのダウンロードには、一度インターネット接続が必要です。"
-  ko: "공식 필름 룩을 다운로드하려면 인터넷에 한 번 연결하세요."
+  en: "Connect to the internet once to download the built-in film looks."
+  zh-Hans: "需要联网一次来下载内置胶片风格。"
+  zh-Hant: "需要連上網際網路一次來下載內建底片風格。"
+  ja: "内蔵フィルムルックのダウンロードには、一度インターネット接続が必要です。"
+  ko: "내장 필름 룩을 다운로드하려면 인터넷에 한 번 연결하세요."
 looks.catalog_unsupported:
-  en: This firmware has no official film looks.
-  zh-Hans: 这个固件没有官方胶片风格。
-  zh-Hant: "這個韌體沒有官方底片風格。"
-  ja: "このファームウェアには公式フィルムルックがありません。"
-  ko: "이 펌웨어에는 공식 필름 룩이 없습니다."
+  en: "This firmware has no built-in film looks."
+  zh-Hans: "这个固件没有内置胶片风格。"
+  zh-Hant: "這個韌體沒有內建底片風格。"
+  ja: "このファームウェアには内蔵フィルムルックがありません。"
+  ko: "이 펌웨어에는 내장 필름 룩이 없습니다."
 looks.no_camera_title:
   en: No Camera Connected
   zh-Hans: 未连接相机
@@ -494,11 +500,11 @@ looks.show_in_menu:
   ja: "有効"
   ko: "사용"
 looks.show_note:
-  en: "When it's not in the menu, it stays on the card."
-  zh-Hans: "不在菜单中时，仍保留在卡上。"
-  zh-Hant: "不在選單中時，仍保留在卡上。"
-  ja: "メニューにないときも、カードには残ります。"
-  ko: "메뉴에 없어도 카드에는 남아 있습니다."
+  en: "When it's off, the camera menu doesn't show it."
+  zh-Hans: "关闭后，相机菜单里不显示它。"
+  zh-Hant: "關閉後，相機選單裡不顯示它。"
+  ja: "オフにすると、カメラのメニューに表示されません。"
+  ko: "끄면 카메라 메뉴에 표시되지 않습니다."
 looks.delete:
   en: Delete Film Look
   zh-Hans: 删除胶片风格
@@ -1004,11 +1010,11 @@ looks.error.active_body:
   ja: "もう一度削除すると、カメラはオフに切り替わります。"
   ko: "다시 삭제하면 카메라가 꺼짐으로 전환됩니다."
 looks.error.official_title:
-  en: Official Film Look
-  zh-Hans: 官方胶片风格
-  zh-Hant: "官方底片風格"
-  ja: "公式フィルムルック"
-  ko: "공식 필름 룩"
+  en: "Built-in Film Look"
+  zh-Hans: "内置胶片风格"
+  zh-Hant: "內建底片風格"
+  ja: "内蔵フィルムルック"
+  ko: "내장 필름 룩"
 looks.error.official_body:
   en: "Only the name and cover can change."
   zh-Hans: "只能修改名称和封面。"
@@ -1189,6 +1195,12 @@ looks.camera_count:
   zh-Hant: "相機上 %{count} / %{max}"
   ja: "カメラ上 %{count} / %{max}"
   ko: "카메라 %{count} / %{max}"
+looks.camera_count_full:
+  en: "%{count}/%{max} on Camera · Full"
+  zh-Hans: "相机上 %{count} / %{max} · 已满"
+  zh-Hant: "相機上 %{count} / %{max} · 已滿"
+  ja: "カメラ上 %{count} / %{max} · いっぱい"
+  ko: "카메라 %{count} / %{max} · 가득 참"
 looks.camera_full_title:
   en: "The Camera Is Full"
   zh-Hans: "相机上的胶片风格已满"
@@ -1231,6 +1243,24 @@ looks.move_to_camera_note:
   zh-Hant: "相機重新啟動後出現在選單中。"
   ja: "カメラの再起動後にメニューに表示されます。"
   ko: "카메라를 재시작하면 메뉴에 나타납니다."
+looks.used_by_section:
+  en: "Used by Recipes"
+  zh-Hans: "用到它的配方"
+  zh-Hant: "用到它的配方"
+  ja: "使用中のレシピ"
+  ko: "사용 중인 레시피"
+looks.used_by_note:
+  en: "Put it back on the camera to apply this recipe."
+  zh-Hans: "放回相机后，这个配方才能应用。"
+  zh-Hant: "放回相機後，這個配方才能套用。"
+  ja: "カメラに戻すと、このレシピを適用できます。"
+  ko: "카메라에 다시 넣으면 이 레시피를 적용할 수 있습니다."
+looks.used_by_note_many:
+  en: "Put it back on the camera to apply these recipes."
+  zh-Hans: "放回相机后，这些配方才能应用。"
+  zh-Hant: "放回相機後，這些配方才能套用。"
+  ja: "カメラに戻すと、これらのレシピを適用できます。"
+  ko: "카메라에 다시 넣으면 이 레시피들을 적용할 수 있습니다."
 looks.camera_full_note:
   en: "The camera is full (%{count}/%{max}). Move a film look off the camera first."
   zh-Hans: "相机上已满（%{count} / %{max}）。先把一个胶片风格移出相机。"
@@ -1244,11 +1274,11 @@ looks.move_to_card:
   ja: "カメラから外す"
   ko: "카메라에서 빼기"
 looks.move_to_card_note:
-  en: "It stays on the card, and the camera stops loading it. You can put it back at any time."
-  zh-Hans: "仍保留在存储卡上，相机不再加载。可以随时放回。"
-  zh-Hant: "仍保留在記憶卡上，相機不再載入。可以隨時放回。"
-  ja: "カードには残り、カメラは読み込まなくなります。いつでも戻せます。"
-  ko: "카드에는 남고 카메라는 더 이상 불러오지 않습니다. 언제든지 다시 넣을 수 있습니다."
+  en: "It goes to the card to make room for new ones. You can put it back at any time."
+  zh-Hans: "放到存储卡上，给新的腾地方。随时可以放回。"
+  zh-Hant: "放到記憶卡上，給新的騰出空間。隨時可以放回。"
+  ja: "カードに移して、新しいものの場所を空けます。いつでも戻せます。"
+  ko: "카드로 옮겨 새 필름 룩을 넣을 자리를 만듭니다. 언제든지 다시 넣을 수 있습니다."
 looks.move_title:
   en: "Move %{name} Off the Camera?"
   zh-Hans: "把 %{name} 移出相机？"
@@ -1268,11 +1298,11 @@ looks.move_used_body:
   ja: "レシピまたはモードダイヤルの設定で使用中です。カメラに戻すまで、それらは適用できません。"
   ko: "레시피 또는 모드 다이얼 설정에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
 looks.move_used_names:
-  en: "Used by %{names}. They can’t apply until it’s back on the camera."
-  zh-Hans: "%{names} 用到它。放回相机前，它们不能应用。"
-  zh-Hant: "%{names} 用到它。放回相機前，它們不能套用。"
-  ja: "%{names} で使用中です。カメラに戻すまで適用できません。"
-  ko: "%{names}에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
+  en: "Used by %{names}, which can’t apply until it’s back on the camera."
+  zh-Hans: "%{names} 用到它，放回相机前无法应用。"
+  zh-Hant: "%{names} 用到它，放回相機前無法套用。"
+  ja: "%{names} で使用中のため、カメラに戻すまで適用できません。"
+  ko: "%{names}에서 사용 중이어서, 카메라에 다시 넣기 전까지 적용할 수 없습니다."
 looks.unlock_overflow:
   en: " The camera has room for %{room} more. The other %{rest} stay on the card."
   zh-Hans: "相机上还能放 %{room} 个，其余 %{rest} 个只放到存储卡。"
@@ -1315,6 +1345,60 @@ looks.restart_many:
   zh-Hant: "%{count} 項變更在相機重新啟動後生效"
   ja: "%{count} 件の変更はカメラの再起動後に反映"
   ko: "변경 %{count}건은 카메라 재시작 후 적용"
+looks.pending_item:
+  en: "%{name}: %{change}"
+  zh-Hans: "%{name}：%{change}"
+  zh-Hant: "%{name}：%{change}"
+  ja: "%{name}：%{change}"
+  ko: "%{name}: %{change}"
+looks.pending_more:
+  en: "%{count} more"
+  zh-Hans: "还有 %{count} 项"
+  zh-Hant: "還有 %{count} 項"
+  ja: "ほか %{count} 件"
+  ko: "외 %{count}건"
+looks.change.added:
+  en: "added"
+  zh-Hans: "新加"
+  zh-Hant: "新增"
+  ja: "追加"
+  ko: "추가"
+looks.change.put_back:
+  en: "put back on the camera"
+  zh-Hans: "放回相机"
+  zh-Hant: "放回相機"
+  ja: "カメラに戻す"
+  ko: "카메라로 되돌림"
+looks.change.renamed:
+  en: "renamed"
+  zh-Hans: "改名"
+  zh-Hant: "改名"
+  ja: "名称変更"
+  ko: "이름 변경"
+looks.change.cover:
+  en: "new cover"
+  zh-Hans: "改封面"
+  zh-Hant: "改封面"
+  ja: "カバー変更"
+  ko: "커버 변경"
+looks.change.content:
+  en: "new content"
+  zh-Hans: "改内容"
+  zh-Hant: "改內容"
+  ja: "内容を変更"
+  ko: "내용 변경"
+looks.change.changed:
+  en: "changed"
+  zh-Hans: "有改动"
+  zh-Hant: "有變更"
+  ja: "変更あり"
+  ko: "변경됨"
+looks.change.join:
+  en: ", "
+  zh-Hans: "、"
+  zh-Hant: "、"
+  ja: "、"
+  ko: ", "
 looks.import_again:
   en: "Import Another"
   zh-Hans: "再导入一个"
@@ -1701,6 +1785,12 @@ cam.current_none:
   zh-Hant: "未使用配方或底片風格"
   ja: "レシピもフィルムルックも未使用"
   ko: "사용 중인 레시피나 필름 룩 없음"
+cam.modules_none_used:
+  en: "%{count} on, none in use"
+  zh-Hans: "%{count} 个已开启，都未使用"
+  zh-Hant: "%{count} 個已開啟，都未使用"
+  ja: "%{count} 個オン、いずれも未使用"
+  ko: "%{count}개 켜짐, 사용 중 없음"
 cam.current_look:
   en: Current Film Look
   zh-Hans: 当前胶片风格
@@ -2392,12 +2482,6 @@ error.package_body:
   zh-Hant: "這次更新的檔案不完整。請稍後再檢查更新。"
   ja: "このアップデートのファイルが不完全です。しばらくしてからもう一度確認してください。"
   ko: "이 업데이트의 파일이 불완전합니다. 나중에 업데이트를 다시 확인하세요."
-looks.restart_body:
-  en: "Film looks you added, renamed, or gave a new cover show in the menu after a restart."
-  zh-Hans: "新加、改名和改封面的胶片风格，重启后出现在菜单中。"
-  zh-Hant: "新增、改名和改封面的底片風格，重新啟動後會出現在選單中。"
-  ja: "追加、名称変更、カバー変更したフィルムルックは、再起動後にメニューに表示されます。"
-  ko: "추가하거나 이름·커버를 바꾼 필름 룩은 재시작 후 메뉴에 표시됩니다."
 looks.cannot_delete_names:
   en: "Used by %{names}. Stop using it there first."
   zh-Hans: "%{names} 正在使用它，请先修改。"
@@ -3975,6 +4059,12 @@ grkit.raw:
   zh-Hant: "RAW 不裁切"
   ja: "RAW クロップなし"
   ko: "RAW 크롭 없음"
+grkit.raw_note:
+  en: "With Framing, Crop, or the camera's own aspect ratio, RAW keeps the whole picture, so you can crop again later."
+  zh-Hans: "用画幅、裁切或相机自带的比例拍摄时，RAW 仍保留完整画面，后期可以重新裁切。"
+  zh-Hant: "用畫幅、裁切或相機內建的比例拍攝時，RAW 仍保留完整畫面，後期可以重新裁切。"
+  ja: "フレーミング、クロップ、またはカメラ本体の画面比率で撮影しても、RAW は全体の画像を残すので、あとでトリミングし直せます。"
+  ko: "프레이밍, 크롭 또는 카메라 자체 화면비로 찍어도 RAW는 전체 화면을 남기므로 나중에 다시 자를 수 있습니다."
 grkit.unit:
   en: "Distance Unit"
   zh-Hans: "距离单位"
@@ -4150,11 +4240,11 @@ looks.unlock_section:
   ja: "リコーのファームウェアから解除"
   ko: "리코 펌웨어에서 잠금 해제"
 looks.unlock_title:
-  en: "Unlock GR IV Film Looks"
-  zh-Hans: "解锁 GR IV 胶片风格"
-  zh-Hant: "解鎖 GR IV 底片風格"
-  ja: "GR IV のフィルムルックを解除"
-  ko: "GR IV 필름 룩 잠금 해제"
+  en: "Unlock GR IV Effects"
+  zh-Hans: "解锁 GR IV 效果"
+  zh-Hant: "解鎖 GR IV 效果"
+  ja: "GR IV のエフェクトを解除"
+  ko: "GR IV 효과 잠금 해제"
 looks.choose_firmware:
   en: "Choose Firmware File"
   zh-Hans: "选择固件文件"
@@ -4247,25 +4337,25 @@ looks.undo:
   ko: "실행 취소"
 looks.unlock_color:
   en: "%{color} Cinema"
-  zh-Hans: "%{color} 个 Cinema 胶片风格"
-  zh-Hant: "%{color} 個 Cinema 底片風格"
+  zh-Hans: "%{color} 个 Cinema 效果"
+  zh-Hant: "%{color} 個 Cinema 效果"
   ja: "Cinema %{color} 個"
   ko: "Cinema %{color}개"
 looks.unlock_color_mono:
   en: "%{color} Cinema, %{mono} B&W"
-  zh-Hans: "%{color} 个 Cinema 和 %{mono} 个黑白胶片风格"
-  zh-Hant: "%{color} 個 Cinema 和 %{mono} 個黑白底片風格"
+  zh-Hans: "%{color} 个 Cinema 效果和 %{mono} 个黑白效果"
+  zh-Hant: "%{color} 個 Cinema 效果和 %{mono} 個黑白效果"
   ja: "Cinema %{color} 個、モノクロ %{mono} 個"
   ko: "Cinema %{color}개, 흑백 %{mono}개"
 looks.unlock_mono:
   en: "%{mono} B&W"
-  zh-Hans: "%{mono} 个黑白胶片风格"
-  zh-Hant: "%{mono} 個黑白底片風格"
+  zh-Hans: "%{mono} 个黑白效果"
+  zh-Hant: "%{mono} 個黑白效果"
   ja: "モノクロ %{mono} 個"
   ko: "흑백 %{mono}개"
 looks.unlock_title_gr2:
-  en: "Unlock GR II Film Looks"
-  zh-Hans: "解锁 GR II 胶片风格"
-  zh-Hant: "解鎖 GR II 底片風格"
-  ja: "GR II のフィルムルックを解除"
-  ko: "GR II 필름 룩 잠금 해제"
+  en: "Unlock GR II Effects"
+  zh-Hans: "解锁 GR II 效果"
+  zh-Hant: "解鎖 GR II 效果"
+  ja: "GR II のエフェクトを解除"
+  ko: "GR II 효과 잠금 해제"

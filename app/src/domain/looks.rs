@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 
 use grkit_core::cover::{Cover, Film, Scheme};
 use grkit_protocol::looks as wire;
-pub use grkit_protocol::looks::{LookSource, LookUse, PendingChange};
+pub use grkit_protocol::looks::{LookEdit, LookSource, LookUse, PendingChange};
 use serde::Deserialize;
 
 /// The longest Look name the camera menu shows (`effects::NAME_MAX`).
@@ -139,6 +139,9 @@ pub struct Look {
     pub uses: Vec<LookUse>,
     /// The change that waits for the next start of the camera.
     pub pending: Option<PendingChange>,
+    /// What the phone changed since the camera started, which names the
+    /// pending change.
+    pub edits: Vec<LookEdit>,
     /// The cover that draws the icon of the file, when the camera knows it.
     pub cover: Option<Cover>,
     /// For a built-in Look, the cover that the scheme of the card gives it.
@@ -336,6 +339,7 @@ pub fn parse_looks(body: &[u8]) -> Result<LooksSnapshot, String> {
             used_by: runtime.used_by,
             uses: runtime.uses,
             pending: runtime.pending,
+            edits: runtime.edits,
             // A cover this app cannot read shows as the default one.
             cover: configuration
                 .cover

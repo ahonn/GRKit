@@ -75,6 +75,8 @@ pub struct RecipesSnapshot {
     pub unreadable_on: Vec<(usize, u32)>,
     /// The modules whose settings the last Apply left out.
     pub skipped: Vec<String>,
+    /// The camera's own Image Control type, when the camera says it.
+    pub image_control: Option<usize>,
 }
 
 impl RecipesSnapshot {
@@ -162,6 +164,9 @@ pub fn parse_recipes(body: &[u8]) -> Result<RecipesSnapshot, String> {
         unreadable,
         unreadable_on,
         skipped: skipped_modules(&value["skipped"]),
+        image_control: value["imageControl"]["type"]
+            .as_u64()
+            .map(|kind| kind as usize),
     })
 }
 
@@ -352,7 +357,8 @@ mod tests {
             }
             items.push(value);
         }
-        serde_json::json!({"bootId":"b","undo":1,"limits":{"on":40,"listed":64},"recipes":items})
+        serde_json::json!({"bootId":"b","undo":1,"limits":{"on":40,"listed":64},"recipes":items,
+            "imageControl":{"type":6}})
     }
 
     fn snapshot() -> RecipesSnapshot {
@@ -383,6 +389,7 @@ mod tests {
         assert_eq!(s.on_count(), 2);
         assert!(s.get(1).unwrap().current);
         assert_eq!(s.undo, 1);
+        assert_eq!(s.image_control, Some(6));
         assert_eq!(s.moved(1, 0), vec![2, 1]);
         // A recipe whose Look is on the card only waits for it.
         let (first, third) = (s.get(1).unwrap(), s.get(3).unwrap());

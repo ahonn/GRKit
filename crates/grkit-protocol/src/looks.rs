@@ -123,6 +123,10 @@ pub struct LookRuntime {
     /// The change of the file that waits for the next start of the camera.
     #[serde(default, deserialize_with = "known_pending")]
     pub pending: Option<PendingChange>,
+    /// What a phone changed in the Look since the camera started, so that a
+    /// pending change can name itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edits: Vec<LookEdit>,
 }
 
 /// Where a Look on the card came from.
@@ -171,6 +175,23 @@ pub enum PendingChange {
     Add,
     /// A new name, content, or cover: the camera still has the old ones.
     Update,
+}
+
+/// A change that a phone made to a Look while the camera runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum LookEdit {
+    /// The Look came back from the card to the camera.
+    Place,
+    /// A new name.
+    Name,
+    /// A new cover.
+    Cover,
+    /// New content.
+    Content,
+    /// A change that a later service reports.
+    #[serde(other)]
+    Unknown,
 }
 
 /// A change that a later service reports says nothing about a restart here.

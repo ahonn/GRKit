@@ -187,6 +187,7 @@ impl Camera {
                         used_by: e.used_by,
                         uses: Vec::new(),
                         pending: e.pending,
+                        edits: Vec::new(),
                     },
                 })
                 .collect()

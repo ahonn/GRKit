@@ -257,6 +257,7 @@ impl FakeLooks {
             used_by: e.uses.len(),
             uses: e.uses.clone(),
             pending: e.pending,
+            edits: Vec::new(),
             cover: e.cover.clone(),
             default_cover: e.base.as_ref().map(|base| scheme.cover(base, e.monochrome)),
             stored: e.stored,
