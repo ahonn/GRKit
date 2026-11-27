@@ -21,6 +21,8 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.undo" => "Undo",
         "looks.loading" => "Reading the film looks…",
         "looks.catalog_loading" => "Loading the film looks…",
+        "looks.catalog_all_added" => "Every official film look is added.",
+        "looks.catalog_kind_added" => "All of these are added.",
         "looks.catalog_offline" => {
             "Connect to the internet once to download the official film looks."
         }
@@ -182,6 +184,34 @@ pub fn en(key: &str) -> Option<&'static str> {
         "looks.added_named" => "Undo %{name}",
         "looks.menu" => "In Camera Menu",
         "looks.off_section" => "Not in Menu",
+        "looks.camera_count" => "%{count}/%{max} on Camera",
+        "looks.camera_full_title" => "The Camera Is Full",
+        "looks.camera_full_body" => "Move ones you rarely use off the camera to make room.",
+        "looks.stored_section" => "On the Card",
+        "looks.stored_note" => "Kept on the card only. The camera doesn’t load them.",
+        "looks.stored_subtitle" => "On the Card · Not on the Camera",
+        "looks.move_to_camera" => "Put on Camera",
+        "looks.move_to_camera_note" => "It shows in the menu after the camera restarts.",
+        "looks.camera_full_note" => {
+            "The camera is full (%{count}/%{max}). Move a film look off the camera first."
+        }
+        "looks.move_to_card" => "Move Off Camera",
+        "looks.move_to_card_note" => {
+            "It stays on the card, and the camera stops loading it. You can put it back at any time."
+        }
+        "looks.move_title" => "Move %{name} Off the Camera?",
+        "looks.move_action" => "Move Off",
+        "looks.move_used_body" => {
+            "Recipes or mode dial settings use it. They can’t apply until it’s back on the camera."
+        }
+        "looks.move_used_names" => {
+            "Used by %{names}. They can’t apply until it’s back on the camera."
+        }
+        "looks.unlock_overflow" => {
+            " The camera has room for %{room} more. The other %{rest} stay on the card."
+        }
+        "looks.unlock_all_stored" => " The camera is full. These stay on the card.",
+        "looks.add_full_body" => "New film looks stay on the card only.",
         "looks.hide_named" => "Remove %{name} from the menu",
         "looks.show_named" => "Add %{name} to the menu",
         "looks.restart_one" => "1 change applies after a restart",
@@ -253,6 +283,8 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.undo" => "撤销",
         "looks.loading" => "正在读取胶片风格…",
         "looks.catalog_loading" => "正在加载胶片风格…",
+        "looks.catalog_all_added" => "已添加全部官方胶片风格。",
+        "looks.catalog_kind_added" => "这一类已全部添加。",
         "looks.catalog_offline" => "需要联网一次来下载官方胶片风格。",
         "looks.catalog_unsupported" => "这个固件没有官方胶片风格。",
         "looks.no_camera_title" => "未连接相机",
@@ -398,6 +430,24 @@ pub fn zh(key: &str) -> Option<&'static str> {
         "looks.added_named" => "撤销 %{name}",
         "looks.menu" => "在相机菜单中",
         "looks.off_section" => "不在菜单中",
+        "looks.camera_count" => "相机上 %{count} / %{max}",
+        "looks.camera_full_title" => "相机上的胶片风格已满",
+        "looks.camera_full_body" => "把不常用的移出相机，就能放新的上去。",
+        "looks.stored_section" => "存储卡",
+        "looks.stored_note" => "只存在存储卡上，相机不加载。",
+        "looks.stored_subtitle" => "存储卡 · 不在相机上",
+        "looks.move_to_camera" => "放到相机上",
+        "looks.move_to_camera_note" => "相机重启后出现在菜单中。",
+        "looks.camera_full_note" => "相机上已满（%{count} / %{max}）。先把一个胶片风格移出相机。",
+        "looks.move_to_card" => "移出相机",
+        "looks.move_to_card_note" => "仍保留在存储卡上，相机不再加载。可以随时放回。",
+        "looks.move_title" => "把 %{name} 移出相机？",
+        "looks.move_action" => "移出",
+        "looks.move_used_body" => "有配方或模式转盘设置用到它。放回相机前，它们不能应用。",
+        "looks.move_used_names" => "%{names} 用到它。放回相机前，它们不能应用。",
+        "looks.unlock_overflow" => "相机上还能放 %{room} 个，其余 %{rest} 个只放到存储卡。",
+        "looks.unlock_all_stored" => "相机上已满，选中的只放到存储卡。",
+        "looks.add_full_body" => "新加的胶片风格只放到存储卡。",
         "looks.hide_named" => "把 %{name} 从菜单中移除",
         "looks.show_named" => "把 %{name} 加入菜单",
         "looks.restart_one" => "1 项改动在相机重启后生效",
@@ -467,6 +517,8 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "looks.undo" => "復原",
         "looks.loading" => "正在讀取底片風格…",
         "looks.catalog_loading" => "正在載入底片風格…",
+        "looks.catalog_all_added" => "已加入全部官方底片風格。",
+        "looks.catalog_kind_added" => "這一類已全部加入。",
         "looks.catalog_offline" => "需要連上網際網路一次來下載官方底片風格。",
         "looks.catalog_unsupported" => "這個韌體沒有官方底片風格。",
         "looks.no_camera_title" => "相機未連線",
@@ -612,6 +664,24 @@ pub fn zh_hant(key: &str) -> Option<&'static str> {
         "looks.added_named" => "復原 %{name}",
         "looks.menu" => "在相機選單中",
         "looks.off_section" => "不在選單中",
+        "looks.camera_count" => "相機上 %{count} / %{max}",
+        "looks.camera_full_title" => "相機上的底片風格已滿",
+        "looks.camera_full_body" => "把不常用的移出相機，就能放新的上去。",
+        "looks.stored_section" => "記憶卡",
+        "looks.stored_note" => "只存在記憶卡上，相機不載入。",
+        "looks.stored_subtitle" => "記憶卡 · 不在相機上",
+        "looks.move_to_camera" => "放到相機上",
+        "looks.move_to_camera_note" => "相機重新啟動後出現在選單中。",
+        "looks.camera_full_note" => "相機上已滿（%{count} / %{max}）。先把一個底片風格移出相機。",
+        "looks.move_to_card" => "移出相機",
+        "looks.move_to_card_note" => "仍保留在記憶卡上，相機不再載入。可以隨時放回。",
+        "looks.move_title" => "把 %{name} 移出相機？",
+        "looks.move_action" => "移出",
+        "looks.move_used_body" => "有配方或模式轉盤設定用到它。放回相機前，它們不能套用。",
+        "looks.move_used_names" => "%{names} 用到它。放回相機前，它們不能套用。",
+        "looks.unlock_overflow" => "相機上還能放 %{room} 個，其餘 %{rest} 個只放到記憶卡。",
+        "looks.unlock_all_stored" => "相機上已滿，選取的只放到記憶卡。",
+        "looks.add_full_body" => "新加入的底片風格只放到記憶卡。",
         "looks.hide_named" => "把 %{name} 從選單中移除",
         "looks.show_named" => "把 %{name} 加入選單",
         "looks.restart_one" => "1 項變更在相機重新啟動後生效",
@@ -681,6 +751,8 @@ pub fn ja(key: &str) -> Option<&'static str> {
         "looks.undo" => "元に戻す",
         "looks.loading" => "フィルムルックを読み取り中…",
         "looks.catalog_loading" => "フィルムルックを読み込み中…",
+        "looks.catalog_all_added" => "公式フィルムルックはすべて追加済みです。",
+        "looks.catalog_kind_added" => "このタイプはすべて追加済みです。",
         "looks.catalog_offline" => {
             "公式フィルムルックのダウンロードには、一度インターネット接続が必要です。"
         }
@@ -848,6 +920,34 @@ pub fn ja(key: &str) -> Option<&'static str> {
         "looks.added_named" => "%{name} を元に戻す",
         "looks.menu" => "カメラのメニューに表示",
         "looks.off_section" => "メニューに非表示",
+        "looks.camera_count" => "カメラ上 %{count} / %{max}",
+        "looks.camera_full_title" => "カメラのフィルムルックがいっぱいです",
+        "looks.camera_full_body" => {
+            "あまり使わないものをカメラから外すと、新しいものを入れられます。"
+        }
+        "looks.stored_section" => "カード",
+        "looks.stored_note" => "カードにだけ保存され、カメラは読み込みません。",
+        "looks.stored_subtitle" => "カード · カメラにはありません",
+        "looks.move_to_camera" => "カメラに入れる",
+        "looks.move_to_camera_note" => "カメラの再起動後にメニューに表示されます。",
+        "looks.camera_full_note" => {
+            "カメラがいっぱいです（%{count} / %{max}）。先にフィルムルックを 1 つカメラから外してください。"
+        }
+        "looks.move_to_card" => "カメラから外す",
+        "looks.move_to_card_note" => {
+            "カードには残り、カメラは読み込まなくなります。いつでも戻せます。"
+        }
+        "looks.move_title" => "%{name} をカメラから外しますか？",
+        "looks.move_action" => "外す",
+        "looks.move_used_body" => {
+            "レシピまたはモードダイヤルの設定で使用中です。カメラに戻すまで、それらは適用できません。"
+        }
+        "looks.move_used_names" => "%{names} で使用中です。カメラに戻すまで適用できません。",
+        "looks.unlock_overflow" => {
+            "カメラにはあと %{room} 個入ります。残りの %{rest} 個はカードにだけ保存します。"
+        }
+        "looks.unlock_all_stored" => "カメラがいっぱいなので、選んだものはカードにだけ保存します。",
+        "looks.add_full_body" => "新しいフィルムルックはカードにだけ保存します。",
         "looks.hide_named" => "%{name} をメニューから外す",
         "looks.show_named" => "%{name} をメニューに追加",
         "looks.restart_one" => "1 件の変更はカメラの再起動後に反映",
@@ -921,6 +1021,8 @@ pub fn ko(key: &str) -> Option<&'static str> {
         "looks.undo" => "실행 취소",
         "looks.loading" => "필름 룩을 읽는 중…",
         "looks.catalog_loading" => "필름 룩을 불러오는 중…",
+        "looks.catalog_all_added" => "공식 필름 룩을 모두 추가했습니다.",
+        "looks.catalog_kind_added" => "이 종류는 모두 추가했습니다.",
         "looks.catalog_offline" => "공식 필름 룩을 다운로드하려면 인터넷에 한 번 연결하세요.",
         "looks.catalog_unsupported" => "이 펌웨어에는 공식 필름 룩이 없습니다.",
         "looks.no_camera_title" => "연결된 카메라 없음",
@@ -1080,6 +1182,36 @@ pub fn ko(key: &str) -> Option<&'static str> {
         "looks.added_named" => "%{name} 실행 취소",
         "looks.menu" => "카메라 메뉴에 있음",
         "looks.off_section" => "메뉴에 없음",
+        "looks.camera_count" => "카메라 %{count} / %{max}",
+        "looks.camera_full_title" => "카메라의 필름 룩이 가득 찼습니다",
+        "looks.camera_full_body" => {
+            "자주 쓰지 않는 것을 카메라에서 빼면 새 필름 룩을 넣을 수 있습니다."
+        }
+        "looks.stored_section" => "카드",
+        "looks.stored_note" => "카드에만 저장되며 카메라는 불러오지 않습니다.",
+        "looks.stored_subtitle" => "카드 · 카메라에 없음",
+        "looks.move_to_camera" => "카메라에 넣기",
+        "looks.move_to_camera_note" => "카메라를 재시작하면 메뉴에 나타납니다.",
+        "looks.camera_full_note" => {
+            "카메라가 가득 찼습니다(%{count} / %{max}). 먼저 필름 룩 하나를 카메라에서 빼세요."
+        }
+        "looks.move_to_card" => "카메라에서 빼기",
+        "looks.move_to_card_note" => {
+            "카드에는 남고 카메라는 더 이상 불러오지 않습니다. 언제든지 다시 넣을 수 있습니다."
+        }
+        "looks.move_title" => "%{name}을(를) 카메라에서 뺄까요?",
+        "looks.move_action" => "빼기",
+        "looks.move_used_body" => {
+            "레시피 또는 모드 다이얼 설정에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
+        }
+        "looks.move_used_names" => {
+            "%{names}에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
+        }
+        "looks.unlock_overflow" => {
+            " 카메라에는 %{room}개 더 넣을 수 있습니다. 나머지 %{rest}개는 카드에만 저장됩니다."
+        }
+        "looks.unlock_all_stored" => " 카메라가 가득 차서 선택한 항목은 카드에만 저장됩니다.",
+        "looks.add_full_body" => "새 필름 룩은 카드에만 저장됩니다.",
         "looks.hide_named" => "메뉴에서 %{name} 제거",
         "looks.show_named" => "메뉴에 %{name} 추가",
         "looks.restart_one" => "변경 1건은 카메라 재시작 후 적용",

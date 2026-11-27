@@ -154,6 +154,8 @@ pub struct Look {
     pub cover: Option<Cover>,
     /// For a built-in Look, the cover that the scheme of the card gives it.
     pub default_cover: Option<Cover>,
+    /// On the card only: the camera does not load it.
+    pub stored: bool,
 }
 
 /// A recipe or a mode-dial set that uses a Look.
@@ -276,10 +278,15 @@ impl Look {
     }
 }
 
-/// The camera's Looks, in camera menu order.
+/// The camera's Looks, in camera menu order, and the Looks on the card only.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct LooksSnapshot {
     pub looks: Vec<Look>,
+    /// The Looks on the card only, by name.
+    pub stored: Vec<Look>,
+    /// The most Looks that the camera holds, or None for a camera that keeps
+    /// no Looks on the card only.
+    pub max_camera: Option<usize>,
     pub loaded: usize,
     pub max_loaded: usize,
     pub max_listed: usize,
@@ -291,7 +298,22 @@ pub struct LooksSnapshot {
 
 impl LooksSnapshot {
     pub fn get(&self, id: &str) -> Option<&Look> {
-        self.looks.iter().find(|look| look.id == id)
+        self.looks
+            .iter()
+            .chain(&self.stored)
+            .find(|look| look.id == id)
+    }
+
+    /// The camera takes no more Looks: a new one stays on the card only.
+    pub fn camera_full(&self) -> bool {
+        self.max_camera.is_some_and(|max| self.looks.len() >= max)
+    }
+
+    /// How many more Looks the camera takes, when it keeps Looks on the
+    /// card only.
+    pub fn camera_room(&self) -> Option<usize> {
+        self.max_camera
+            .map(|max| max.saturating_sub(self.looks.len()))
     }
 
     pub fn ids(&self) -> Vec<String> {
@@ -316,9 +338,12 @@ impl LooksSnapshot {
     }
 
     /// Why one more Look does not fit: the card holds `max_listed` Looks,
-    /// the camera menu shows `max_loaded`.
+    /// the camera menu shows `max_loaded`. A camera that keeps Looks on the
+    /// card only takes each new Look there when it is full.
     pub fn room_problem(&self) -> Option<LookError> {
-        if self.card_full() {
+        if self.max_camera.is_some() {
+            None
+        } else if self.card_full() {
             Some(LookError::CardFull)
         } else if self.loaded >= self.max_loaded {
             Some(LookError::NoRoom)
@@ -329,7 +354,7 @@ impl LooksSnapshot {
 
     /// The card holds as many Looks as the camera lists.
     pub fn card_full(&self) -> bool {
-        self.looks.len() >= self.max_listed
+        self.max_camera.is_none() && self.looks.len() >= self.max_listed
     }
 }
 
@@ -337,6 +362,8 @@ impl LooksSnapshot {
 #[serde(rename_all = "camelCase")]
 struct WireList {
     looks: Vec<WireLook>,
+    #[serde(default)]
+    stored: Vec<WireLook>,
     counts: WireCounts,
     limits: WireLimits,
     boot_id: String,
@@ -355,6 +382,8 @@ struct WireCounts {
 struct WireLimits {
     listed_looks: usize,
     loaded_looks: usize,
+    #[serde(default)]
+    camera_looks: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -398,31 +427,31 @@ where
 /// Parse a `GET /v1/looks` body.
 pub fn parse_looks(body: &[u8]) -> Result<LooksSnapshot, String> {
     let wire: WireList = serde_json::from_slice(body).map_err(|e| e.to_string())?;
-    let mut looks: Vec<Look> = wire
-        .looks
-        .into_iter()
-        .map(|look| Look {
-            id: look.id,
-            name: look.name,
-            content_hash: look.content_hash,
-            enabled: look.enabled,
-            position: look.position,
-            source: look.runtime.source,
-            loaded: look.runtime.loaded,
-            selected: look.runtime.selected,
-            used_by: look.runtime.used_by,
-            uses: look.runtime.uses,
-            pending: look.runtime.pending,
-            // A cover this app cannot read shows as the default one.
-            cover: look.cover.and_then(|cover| Cover::from_json(&cover).ok()),
-            default_cover: look
-                .default_cover
-                .and_then(|cover| Cover::from_json(&cover).ok()),
-        })
-        .collect();
+    let look = |look: WireLook, stored: bool| Look {
+        id: look.id,
+        name: look.name,
+        content_hash: look.content_hash,
+        enabled: look.enabled,
+        position: look.position,
+        source: look.runtime.source,
+        loaded: look.runtime.loaded,
+        selected: look.runtime.selected,
+        used_by: look.runtime.used_by,
+        uses: look.runtime.uses,
+        pending: look.runtime.pending,
+        // A cover this app cannot read shows as the default one.
+        cover: look.cover.and_then(|cover| Cover::from_json(&cover).ok()),
+        default_cover: look
+            .default_cover
+            .and_then(|cover| Cover::from_json(&cover).ok()),
+        stored,
+    };
+    let mut looks: Vec<Look> = wire.looks.into_iter().map(|l| look(l, false)).collect();
     looks.sort_by_key(|look| look.position);
     Ok(LooksSnapshot {
         looks,
+        stored: wire.stored.into_iter().map(|l| look(l, true)).collect(),
+        max_camera: wire.limits.camera_looks,
         loaded: wire.counts.loaded,
         max_loaded: wire.limits.loaded_looks,
         max_listed: wire.limits.listed_looks,
@@ -845,6 +874,27 @@ mod tests {
         assert_eq!((snapshot.loaded, snapshot.max_loaded), (2, 40));
         assert_eq!(snapshot.boot_id, "boot");
         assert!(snapshot.has_room());
+    }
+
+    #[test]
+    fn a_camera_that_keeps_looks_on_the_card_lists_them_apart() {
+        let snapshot = parse_looks(LIST.as_bytes()).unwrap();
+        assert!(snapshot.stored.is_empty() && snapshot.camera_room().is_none());
+        let list = LIST
+            .replace(
+                r#""loadedLooks":40}"#,
+                r#""loadedLooks":40,"cameraLooks":2}"#,
+            )
+            .replace(
+                r#""counts""#,
+                r#""stored":[{"id":"gold","name":"Gold","contentHash":"c","enabled":false,"position":0,
+                    "place":"card","runtime":{"source":"custom","loaded":false,"selected":false}}],"counts""#,
+            );
+        let snapshot = parse_looks(list.as_bytes()).unwrap();
+        assert_eq!(snapshot.ids(), ["portra-400-endura-v1", "trix-400-mono-v1"]);
+        assert!(snapshot.get("gold").unwrap().stored);
+        // A full camera takes a new Look on the card only.
+        assert!(snapshot.camera_full() && snapshot.has_room());
     }
 
     #[test]

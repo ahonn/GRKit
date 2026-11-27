@@ -15,7 +15,8 @@ use crate::strings::tr;
 use crate::ui::PageTitle;
 use crate::ui::{
     ButtonKind, ButtonSize, ChipTone, ListRow, SECTION_RADIUS, button, chip, cover_thumb,
-    detail_header, list_row, list_section, loading_content, notice_card, system_switch, token,
+    detail_header, list_note, list_row, list_section, loading_content, notice_card, system_switch,
+    token,
 };
 
 /// The side of the large cover of the import result.
@@ -71,6 +72,9 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
     if look.pending.is_some() {
         subtitle = format!("{subtitle} · {}", tr("looks.after_restart", &[]));
     }
+    if look.stored {
+        subtitle = tr("looks.stored_subtitle", &[]);
+    }
 
     let mut header = detail_header(look.name.clone())
         .subtitle(subtitle)
@@ -81,6 +85,64 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
     // The sample photo through the Look, once it is made.
     if let Some(photo) = app.look_preview(&look.id) {
         header = header.photo(ImageSrc::from(photo));
+    }
+
+    let delete = list_row(tr("looks.delete", &[]))
+        .destructive()
+        .busy(app.look_working(&look.id, LookAction::Delete));
+    let delete = if editable {
+        let look = look.clone();
+        delete.press(move || confirm_delete(app, look.clone()))
+    } else {
+        delete
+    };
+    let page = |content: AnyElement| {
+        view().flex_1().bg(move || token("list-background")).child(
+            crate::ui::page_scroll().flex_1().child(
+                view().pb(px(TAB_BAR_CLEARANCE)).child(header).child(
+                    view()
+                        .px_4()
+                        .pt(px(24.0))
+                        .gap(px(28.0))
+                        .child(content)
+                        .child(list_section([delete])),
+                ),
+            ),
+        )
+    };
+    let snapshot = app.looks_snapshot();
+    let moving = app.look_working(&look.id, LookAction::Move);
+    // On the card only: the one action puts it back on the camera.
+    if look.stored {
+        let full = snapshot.as_ref().is_some_and(|s| s.camera_full());
+        let note = match snapshot.as_ref().and_then(|s| s.max_camera) {
+            Some(max) if full => tr(
+                "looks.camera_full_note",
+                &[
+                    (
+                        "count",
+                        &snapshot.as_ref().map_or(0, |s| s.looks.len()).to_string(),
+                    ),
+                    ("max", &max.to_string()),
+                ],
+            ),
+            _ => tr("looks.move_to_camera_note", &[]),
+        };
+        let id = look.id.clone();
+        let action = view()
+            .gap_2()
+            .child(
+                button(
+                    tr("looks.move_to_camera", &[]),
+                    ButtonKind::Primary,
+                    ButtonSize::Large,
+                    move || app.move_look(id.clone(), false, false),
+                )
+                .enabled(editable && !full)
+                .loading(moving),
+            )
+            .child(list_note(note));
+        return page(action.into_element());
     }
 
     // The camera shows or hides only a Look that it lists.
@@ -119,28 +181,75 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
             row
         });
     }
-    let delete = list_row(tr("looks.delete", &[]))
-        .destructive()
-        .busy(app.look_working(&look.id, LookAction::Delete));
-    let delete = if editable {
-        let look = look.clone();
-        delete.press(move || confirm_delete(app, look.clone()))
-    } else {
-        delete
-    };
-
-    view().flex_1().bg(move || token("list-background")).child(
-        crate::ui::page_scroll().flex_1().child(
-            view().pb(px(TAB_BAR_CLEARANCE)).child(header).child(
-                view()
-                    .px_4()
-                    .pt(px(24.0))
-                    .gap(px(28.0))
-                    .child(list_section(settings).footer(tr("looks.show_note", &[])))
-                    .child(list_section([delete])),
-            ),
-        ),
+    // A camera that keeps Looks on the card only can take this one off.
+    let to_card = snapshot
+        .as_ref()
+        .is_some_and(|s| s.max_camera.is_some())
+        .then(|| {
+            let row = list_row(tr("looks.move_to_card", &[])).busy(moving);
+            let row = if editable {
+                let look = look.clone();
+                row.press(move || confirm_move_to_card(app, look.clone()))
+            } else {
+                row
+            };
+            list_section([row]).footer(tr("looks.move_to_card_note", &[]))
+        });
+    page(
+        view()
+            .gap(px(28.0))
+            .child(list_section(settings).footer(tr("looks.show_note", &[])))
+            .child(to_card)
+            .into_element(),
     )
+}
+
+/// Ask before a Look leaves the camera when a recipe uses it or it is the
+/// Look in use; else move it at once.
+fn confirm_move_to_card(app: AppState, look: Look) {
+    if look.used_by == 0 && !look.selected {
+        app.move_look(look.id, true, false);
+        return;
+    }
+    spawn(async move {
+        let body = if look.used_by != 0 {
+            move_blocked_body(&look)
+        } else {
+            tr("looks.move_active_body", &[])
+        };
+        let answer = alert_dialog()
+            .title(tr("looks.move_title", &[("name", &look.name)]))
+            .description(body)
+            .cancel("cancel", tr("looks.cancel", &[]))
+            .action("move", tr("looks.move_action", &[]))
+            .show()
+            .await;
+        if matches!(answer, Ok(r) if r.action.as_deref() == Some("move")) {
+            app.move_look(look.id.clone(), true, look.selected);
+        }
+    });
+}
+
+/// The recipes and dial modes that cannot apply while `look` is off the
+/// camera.
+fn move_blocked_body(look: &Look) -> String {
+    let (names, more) = crate::domain::looks::use_labels(
+        look,
+        |name| tr("looks.use_recipe", &[("name", name)]),
+        |mode| tr("looks.use_dial", &[("mode", &mode.to_string())]),
+    );
+    if names.is_empty() {
+        return tr("looks.move_used_body", &[]);
+    }
+    let mut list = names.join(&tr("looks.use_separator", &[]));
+    if more > 0 {
+        let total = (names.len() + more).to_string();
+        list += &tr(
+            "looks.use_more",
+            &[("more", &more.to_string()), ("total", &total)],
+        );
+    }
+    capitalized(tr("looks.move_used_names", &[("names", &list)]))
 }
 
 /// Ask before deleting. A Look that recipes use cannot be deleted; the Look

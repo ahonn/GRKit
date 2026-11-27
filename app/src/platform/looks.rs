@@ -210,6 +210,25 @@ pub async fn delete(context: &CameraContext, id: &str, active_off: bool) -> Resu
     .await
 }
 
+/// Move a Look to the card only (`to_card`), or back to the camera.
+/// `active_off` switches the camera to Off when the Look is in use.
+pub async fn set_place(
+    context: &CameraContext,
+    id: &str,
+    to_card: bool,
+    active_off: bool,
+) -> Result<(), LookError> {
+    let place = if to_card { "card" } else { "camera" };
+    mutate(
+        "PATCH",
+        &format!("/v1/looks/{id}"),
+        json_body(serde_json::json!({ "place": place, "activeOff": active_off })),
+        json_type(),
+        context,
+    )
+    .await
+}
+
 /// Replace the camera menu order with the complete list of IDs.
 pub async fn set_order(context: &CameraContext, ids: &[String]) -> Result<(), LookError> {
     mutate(

@@ -14,15 +14,18 @@ use crate::strings::tr;
 use crate::ui::PageTitle;
 use crate::ui::{
     ButtonKind, ButtonSize, CaptionTone, RowGestures, SECTION_RADIUS, button, check_circle,
-    cover_cell, cover_grid, cover_thumb, drag_handle, empty_state, glyph, header_buttons,
-    header_icon, header_text, list, list_row, list_section, notice_card, quiet_spinner,
-    reorder_list, token,
+    cover_cell, cover_grid, cover_grid_of, cover_thumb, drag_handle, empty_state, glyph,
+    header_buttons, header_icon, header_text, list, list_row, list_section, notice_card,
+    quiet_spinner, reorder_list, token,
 };
 
 const PLUS: &str = "M12 5v14M5 12h14";
 /// Up and down arrows: sort.
 const SORT: &str = "M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4";
 pub const ROW_GAP: f32 = 18.0;
+/// The Looks on the card only show as covers alone, smaller than the
+/// sample photos of the camera's Looks.
+const STORED_COLUMNS: u16 = 4;
 
 pub fn looks_root(app: AppState) -> impl IntoElement {
     // Edit shows the checks and the handles; Browse opens and applies.
@@ -174,8 +177,13 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
         }))
         .child(blocked.then(|| banner(tr("looks.pending_title", &[]), "looks.error.pending_body")))
         .child((pending > 0).then(|| restart_banner(app, pending, editable)))
-        .child(section(
+        .child(snapshot.camera_full().then(|| {
+            notice_card(tr("looks.camera_full_title", &[]))
+                .subtitle(tr("looks.camera_full_body", &[]))
+        }))
+        .child(section_counted(
             tr("looks.menu", &[]),
+            camera_count(&snapshot),
             move || app.looks_refreshing(),
             shown,
             None,
@@ -201,20 +209,65 @@ fn on_camera(app: AppState, editing: bool) -> AnyElement {
                 (mode == RowMode::Edit).then(|| tr("looks.off_edit_note", &[])),
             )
         }))
+        .child(
+            (mode != RowMode::Edit)
+                .then(|| stored_section(app, snapshot.stored, mode))
+                .flatten(),
+        )
         .into_element()
+}
+
+/// How many Looks the camera holds of the most it takes, for a camera that
+/// keeps Looks on the card only.
+fn camera_count(snapshot: &crate::domain::LooksSnapshot) -> Option<String> {
+    snapshot.max_camera.map(|max| {
+        tr(
+            "looks.camera_count",
+            &[
+                ("count", &snapshot.looks.len().to_string()),
+                ("max", &max.to_string()),
+            ],
+        )
+    })
+}
+
+/// The Looks on the card only, as covers alone, four in a row.
+fn stored_section(app: AppState, looks: Vec<Look>, mode: RowMode) -> Option<impl IntoElement> {
+    if looks.is_empty() {
+        return None;
+    }
+    let cells = looks.into_iter().map(|look| {
+        let cell = cover_cell(look.shown_cover(), look.name.clone())
+            .test_id(format!("stored:{}", look.id));
+        if mode == RowMode::Browse {
+            let id = look.id.clone();
+            cell.open(move || app.push(Route::LookDetail(id.clone())))
+        } else {
+            cell
+        }
+    });
+    Some(section(
+        tr("looks.stored_section", &[]),
+        || false,
+        cover_grid_of(STORED_COLUMNS, cells),
+        Some(tr("looks.stored_note", &[])),
+    ))
 }
 
 /// The Looks as the phone last read them, while no camera is connected:
 /// read-only, with a way to connect.
 fn offline_looks(app: AppState, snapshot: crate::domain::LooksSnapshot) -> impl IntoElement {
+    let count = camera_count(&snapshot);
+    let stored = snapshot.stored;
     let (shown, hidden): (Vec<Look>, Vec<Look>) =
         snapshot.looks.into_iter().partition(|look| look.enabled);
     let has_hidden = !hidden.is_empty();
     view()
         .gap(px(ROW_GAP))
         .child(offline_card(app))
-        .child(section(
+        .child(section_counted(
             tr("looks.menu", &[]),
+            count,
             || false,
             look_grid(app, shown, RowMode::ReadOnly),
             None,
@@ -227,6 +280,7 @@ fn offline_looks(app: AppState, snapshot: crate::domain::LooksSnapshot) -> impl 
                 None,
             )
         }))
+        .child(stored_section(app, stored, RowMode::ReadOnly))
 }
 
 /// Not connected, and the list below is the last one read: Connect.
@@ -282,6 +336,17 @@ pub(crate) fn section(
     content: impl IntoElement,
     note: Option<String>,
 ) -> impl IntoElement {
+    section_counted(title, None, working, content, note)
+}
+
+/// A [`section`] with a count at the end of its title line.
+pub(crate) fn section_counted(
+    title: String,
+    count: Option<String>,
+    working: impl Fn() -> bool + 'static,
+    content: impl IntoElement,
+    note: Option<String>,
+) -> impl IntoElement {
     let words = |copy: String| {
         text(copy)
             .text_size(px(crate::ui::ty::FOOTNOTE))
@@ -298,7 +363,8 @@ pub(crate) fn section(
                 .px_4()
                 .child(words(title).flex_1().role(AccessibilityRole::Header))
                 // Its own dynamic: a read does not redraw the list.
-                .child(dynamic(move || working().then(|| quiet_spinner(14.0)))),
+                .child(dynamic(move || working().then(|| quiet_spinner(14.0))))
+                .child(count.map(words)),
         )
         .child(content)
         .child(note.map(|note| words(note).px_4()))

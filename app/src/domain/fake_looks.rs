@@ -48,6 +48,8 @@ struct Entry {
     base: Option<Cover>,
     /// A B&W official Look.
     monochrome: bool,
+    /// On the card only.
+    stored: bool,
 }
 
 impl Entry {
@@ -86,6 +88,9 @@ pub struct FakeLooks {
     selected: Option<String>,
     pub max_loaded: usize,
     pub max_listed: usize,
+    /// The most Looks on the camera; None for a camera without Looks on the
+    /// card only.
+    pub max_camera: Option<usize>,
     /// A software update waits on the camera: changes are refused.
     pub update_pending: bool,
     /// The scheme last set, for a group without built-in Looks.
@@ -122,6 +127,7 @@ fn entry(definition: &str, enabled: bool) -> Entry {
         base: cover.clone(),
         cover,
         monochrome,
+        stored: false,
     }
 }
 
@@ -172,7 +178,10 @@ impl FakeLooks {
             cover: Some(cover),
             base: None,
             monochrome: false,
+            stored: false,
         };
+        let mut ektar = entry(EKTAR, false);
+        ektar.stored = true;
         Self {
             entries: vec![
                 portra,
@@ -181,10 +190,12 @@ impl FakeLooks {
                 custom,
                 entry(ETERNA, true),
                 entry(VELVIA, false),
+                ektar,
             ],
             selected: Some("portra-400-endura-v1".into()),
             max_loaded: 40,
             max_listed: 64,
+            max_camera: Some(40),
             update_pending: false,
             chosen: None,
         }
@@ -233,9 +244,24 @@ impl FakeLooks {
     pub fn snapshot(&self) -> LooksSnapshot {
         let scheme = self.scheme();
         let mut loaded = 0;
+        let look = |position: usize, e: &Entry, is_loaded: bool| Look {
+            id: e.id.clone(),
+            name: e.name.clone(),
+            content_hash: grkit_core::packaging::sha256(&e.grf),
+            enabled: e.enabled,
+            position,
+            source: e.source,
+            loaded: is_loaded,
+            selected: self.selected.as_deref() == Some(&e.id),
+            used_by: e.uses.len(),
+            uses: e.uses.clone(),
+            pending: e.pending,
+            cover: e.cover.clone(),
+            default_cover: e.base.as_ref().map(|base| scheme.cover(base, e.monochrome)),
+            stored: e.stored,
+        };
         let looks = self
-            .entries
-            .iter()
+            .camera()
             .enumerate()
             .map(|(position, e)| {
                 let is_loaded =
@@ -243,25 +269,19 @@ impl FakeLooks {
                 if is_loaded {
                     loaded += 1;
                 }
-                Look {
-                    id: e.id.clone(),
-                    name: e.name.clone(),
-                    content_hash: grkit_core::packaging::sha256(&e.grf),
-                    enabled: e.enabled,
-                    position,
-                    source: e.source,
-                    loaded: is_loaded,
-                    selected: self.selected.as_deref() == Some(&e.id),
-                    used_by: e.uses.len(),
-                    uses: e.uses.clone(),
-                    pending: e.pending,
-                    cover: e.cover.clone(),
-                    default_cover: e.base.as_ref().map(|base| scheme.cover(base, e.monochrome)),
-                }
+                look(position, e, is_loaded)
             })
             .collect();
+        let mut stored: Vec<&Entry> = self.entries.iter().filter(|e| e.stored).collect();
+        stored.sort_by_key(|e| e.name.to_ascii_lowercase());
         LooksSnapshot {
             looks,
+            stored: stored
+                .into_iter()
+                .enumerate()
+                .map(|(position, e)| look(position, e, false))
+                .collect(),
+            max_camera: self.max_camera,
             loaded,
             max_loaded: self.max_loaded,
             max_listed: self.max_listed,
@@ -306,8 +326,54 @@ impl FakeLooks {
             .ok_or(LookError::NotFound)
     }
 
+    fn camera(&self) -> impl Iterator<Item = &Entry> {
+        self.entries.iter().filter(|e| !e.stored)
+    }
+
     fn enabled_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.enabled).count()
+        self.camera().filter(|e| e.enabled).count()
+    }
+
+    fn camera_room(&self) -> bool {
+        self.max_camera
+            .is_none_or(|max| self.camera().count() < max)
+    }
+
+    /// Move a Look to the card only, or back to the camera, as the camera
+    /// does: one that leaves the camera turns off; one that comes back
+    /// waits for a start.
+    pub fn set_place(
+        &mut self,
+        id: &str,
+        to_card: bool,
+        active_off: bool,
+    ) -> Result<(), LookError> {
+        self.writable()?;
+        let selected = self.selected.as_deref() == Some(id);
+        let room = self.camera_room();
+        let entry = self.find(id)?;
+        if entry.stored == to_card {
+            return Ok(());
+        }
+        if to_card {
+            if selected && !active_off {
+                return Err(LookError::ActiveLook);
+            }
+            entry.stored = true;
+            entry.enabled = false;
+            entry.pending = None;
+            if selected {
+                self.selected = None;
+            }
+        } else {
+            if !room {
+                return Err(LookError::NoRoom);
+            }
+            entry.stored = false;
+            entry.enabled = true;
+            entry.pending = Some(PendingChange::Add);
+        }
+        Ok(())
     }
 
     pub fn set_enabled(&mut self, id: &str, enabled: bool) -> Result<(), LookError> {
@@ -316,7 +382,7 @@ impl FakeLooks {
             return Err(LookError::NoRoom);
         }
         let entry = self.find(id)?;
-        if entry.pending == Some(PendingChange::Add) {
+        if entry.pending == Some(PendingChange::Add) || entry.stored {
             return Err(LookError::RestartRequired);
         }
         entry.enabled = enabled;
@@ -376,18 +442,19 @@ impl FakeLooks {
 
     pub fn set_order(&mut self, ids: &[String]) -> Result<(), LookError> {
         self.writable()?;
-        let mut current: Vec<&String> = self.entries.iter().map(|e| &e.id).collect();
+        let mut current: Vec<&String> = self.camera().map(|e| &e.id).collect();
         let mut wanted: Vec<&String> = ids.iter().collect();
         current.sort();
         wanted.sort();
         if current != wanted {
             return Err(LookError::Changed);
         }
-        let mut entries = Vec::with_capacity(ids.len());
+        let mut entries = Vec::with_capacity(self.entries.len());
         for id in ids {
             let at = self.entries.iter().position(|e| &e.id == id).unwrap();
             entries.push(self.entries.remove(at));
         }
+        entries.append(&mut self.entries);
         self.entries = entries;
         Ok(())
     }
@@ -426,11 +493,14 @@ impl FakeLooks {
             existing.pending.get_or_insert(PendingChange::Update);
             return Ok(());
         }
-        if self.entries.len() >= self.max_listed {
-            return Err(LookError::CardFull);
-        }
-        if self.enabled_count() >= self.max_loaded {
-            return Err(LookError::NoRoom);
+        let stored = !self.camera_room();
+        if self.max_camera.is_none() {
+            if self.entries.len() >= self.max_listed {
+                return Err(LookError::CardFull);
+            }
+            if self.enabled_count() >= self.max_loaded {
+                return Err(LookError::NoRoom);
+            }
         }
         let monochrome = official && effect.monochrome();
         self.entries.push(Entry {
@@ -438,7 +508,6 @@ impl FakeLooks {
             monochrome,
             id: effect.id,
             name: effect.name,
-            enabled: true,
             source: if official {
                 LookSource::Official
             } else {
@@ -446,8 +515,10 @@ impl FakeLooks {
             },
             grf: grf.to_vec(),
             uses: Vec::new(),
-            pending: Some(PendingChange::Add),
+            pending: (!stored).then_some(PendingChange::Add),
             cover,
+            enabled: !stored,
+            stored,
         });
         Ok(())
     }
@@ -512,6 +583,36 @@ mod tests {
         let snapshot = looks.snapshot();
         assert!(!snapshot.has_individual_covers(CoverGroup::Color));
         assert_eq!(snapshot.official_covers, Scheme::ColorFilmBox);
+    }
+
+    #[test]
+    fn a_full_camera_keeps_new_looks_on_the_card() {
+        let mut looks = FakeLooks::demo();
+        looks.max_camera = Some(looks.snapshot().looks.len());
+        let catalog = demo_catalog();
+        let (look, grf) = catalog
+            .iter()
+            .find(|(l, _)| l.id.starts_with("gold"))
+            .unwrap();
+        looks.put(grf, true, None).unwrap();
+        assert!(looks.snapshot().stored.iter().any(|l| l.id == look.id));
+        assert_eq!(
+            looks.set_place(&look.id, false, false),
+            Err(LookError::NoRoom)
+        );
+        let portra = "portra-400-endura-v1";
+        assert_eq!(
+            looks.set_place(portra, true, false),
+            Err(LookError::ActiveLook)
+        );
+        looks.set_place(portra, true, true).unwrap();
+        looks.set_place(&look.id, false, false).unwrap();
+        let snapshot = looks.snapshot();
+        assert!(snapshot.get(portra).unwrap().stored);
+        assert_eq!(
+            snapshot.get(&look.id).unwrap().pending,
+            Some(PendingChange::Add)
+        );
     }
 
     #[test]

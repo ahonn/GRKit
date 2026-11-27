@@ -421,6 +421,18 @@ looks.catalog_loading:
   zh-TW: "正在載入底片風格…"
   ja: "フィルムルックを読み込み中…"
   ko: "필름 룩을 불러오는 중…"
+looks.catalog_all_added:
+  en: "Every official film look is added."
+  zh-CN: "已添加全部官方胶片风格。"
+  zh-TW: "已加入全部官方底片風格。"
+  ja: "公式フィルムルックはすべて追加済みです。"
+  ko: "공식 필름 룩을 모두 추가했습니다."
+looks.catalog_kind_added:
+  en: "All of these are added."
+  zh-CN: "这一类已全部添加。"
+  zh-TW: "這一類已全部加入。"
+  ja: "このタイプはすべて追加済みです。"
+  ko: "이 종류는 모두 추가했습니다."
 looks.catalog_offline:
   en: Connect to the internet once to download the official film looks.
   zh-CN: 需要联网一次来下载官方胶片风格。
@@ -1171,6 +1183,114 @@ looks.off_section:
   zh-TW: "不在選單中"
   ja: "メニューに非表示"
   ko: "메뉴에 없음"
+looks.camera_count:
+  en: "%{count}/%{max} on Camera"
+  zh-CN: "相机上 %{count} / %{max}"
+  zh-TW: "相機上 %{count} / %{max}"
+  ja: "カメラ上 %{count} / %{max}"
+  ko: "카메라 %{count} / %{max}"
+looks.camera_full_title:
+  en: "The Camera Is Full"
+  zh-CN: "相机上的胶片风格已满"
+  zh-TW: "相機上的底片風格已滿"
+  ja: "カメラのフィルムルックがいっぱいです"
+  ko: "카메라의 필름 룩이 가득 찼습니다"
+looks.camera_full_body:
+  en: "Move ones you rarely use off the camera to make room."
+  zh-CN: "把不常用的移出相机，就能放新的上去。"
+  zh-TW: "把不常用的移出相機，就能放新的上去。"
+  ja: "あまり使わないものをカメラから外すと、新しいものを入れられます。"
+  ko: "자주 쓰지 않는 것을 카메라에서 빼면 새 필름 룩을 넣을 수 있습니다."
+looks.stored_section:
+  en: "On the Card"
+  zh-CN: "存储卡"
+  zh-TW: "記憶卡"
+  ja: "カード"
+  ko: "카드"
+looks.stored_note:
+  en: "Kept on the card only. The camera doesn’t load them."
+  zh-CN: "只存在存储卡上，相机不加载。"
+  zh-TW: "只存在記憶卡上，相機不載入。"
+  ja: "カードにだけ保存され、カメラは読み込みません。"
+  ko: "카드에만 저장되며 카메라는 불러오지 않습니다."
+looks.stored_subtitle:
+  en: "On the Card · Not on the Camera"
+  zh-CN: "存储卡 · 不在相机上"
+  zh-TW: "記憶卡 · 不在相機上"
+  ja: "カード · カメラにはありません"
+  ko: "카드 · 카메라에 없음"
+looks.move_to_camera:
+  en: "Put on Camera"
+  zh-CN: "放到相机上"
+  zh-TW: "放到相機上"
+  ja: "カメラに入れる"
+  ko: "카메라에 넣기"
+looks.move_to_camera_note:
+  en: "It shows in the menu after the camera restarts."
+  zh-CN: "相机重启后出现在菜单中。"
+  zh-TW: "相機重新啟動後出現在選單中。"
+  ja: "カメラの再起動後にメニューに表示されます。"
+  ko: "카메라를 재시작하면 메뉴에 나타납니다."
+looks.camera_full_note:
+  en: "The camera is full (%{count}/%{max}). Move a film look off the camera first."
+  zh-CN: "相机上已满（%{count} / %{max}）。先把一个胶片风格移出相机。"
+  zh-TW: "相機上已滿（%{count} / %{max}）。先把一個底片風格移出相機。"
+  ja: "カメラがいっぱいです（%{count} / %{max}）。先にフィルムルックを 1 つカメラから外してください。"
+  ko: "카메라가 가득 찼습니다(%{count} / %{max}). 먼저 필름 룩 하나를 카메라에서 빼세요."
+looks.move_to_card:
+  en: "Move Off Camera"
+  zh-CN: "移出相机"
+  zh-TW: "移出相機"
+  ja: "カメラから外す"
+  ko: "카메라에서 빼기"
+looks.move_to_card_note:
+  en: "It stays on the card, and the camera stops loading it. You can put it back at any time."
+  zh-CN: "仍保留在存储卡上，相机不再加载。可以随时放回。"
+  zh-TW: "仍保留在記憶卡上，相機不再載入。可以隨時放回。"
+  ja: "カードには残り、カメラは読み込まなくなります。いつでも戻せます。"
+  ko: "카드에는 남고 카메라는 더 이상 불러오지 않습니다. 언제든지 다시 넣을 수 있습니다."
+looks.move_title:
+  en: "Move %{name} Off the Camera?"
+  zh-CN: "把 %{name} 移出相机？"
+  zh-TW: "把 %{name} 移出相機？"
+  ja: "%{name} をカメラから外しますか？"
+  ko: "%{name}을(를) 카메라에서 뺄까요?"
+looks.move_action:
+  en: "Move Off"
+  zh-CN: "移出"
+  zh-TW: "移出"
+  ja: "外す"
+  ko: "빼기"
+looks.move_used_body:
+  en: "Recipes or mode dial settings use it. They can’t apply until it’s back on the camera."
+  zh-CN: "有配方或模式转盘设置用到它。放回相机前，它们不能应用。"
+  zh-TW: "有配方或模式轉盤設定用到它。放回相機前，它們不能套用。"
+  ja: "レシピまたはモードダイヤルの設定で使用中です。カメラに戻すまで、それらは適用できません。"
+  ko: "레시피 또는 모드 다이얼 설정에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
+looks.move_used_names:
+  en: "Used by %{names}. They can’t apply until it’s back on the camera."
+  zh-CN: "%{names} 用到它。放回相机前，它们不能应用。"
+  zh-TW: "%{names} 用到它。放回相機前，它們不能套用。"
+  ja: "%{names} で使用中です。カメラに戻すまで適用できません。"
+  ko: "%{names}에서 사용 중입니다. 카메라에 다시 넣기 전까지 적용할 수 없습니다."
+looks.unlock_overflow:
+  en: " The camera has room for %{room} more. The other %{rest} stay on the card."
+  zh-CN: "相机上还能放 %{room} 个，其余 %{rest} 个只放到存储卡。"
+  zh-TW: "相機上還能放 %{room} 個，其餘 %{rest} 個只放到記憶卡。"
+  ja: "カメラにはあと %{room} 個入ります。残りの %{rest} 個はカードにだけ保存します。"
+  ko: " 카메라에는 %{room}개 더 넣을 수 있습니다. 나머지 %{rest}개는 카드에만 저장됩니다."
+looks.unlock_all_stored:
+  en: " The camera is full. These stay on the card."
+  zh-CN: "相机上已满，选中的只放到存储卡。"
+  zh-TW: "相機上已滿，選取的只放到記憶卡。"
+  ja: "カメラがいっぱいなので、選んだものはカードにだけ保存します。"
+  ko: " 카메라가 가득 차서 선택한 항목은 카드에만 저장됩니다."
+looks.add_full_body:
+  en: "New film looks stay on the card only."
+  zh-CN: "新加的胶片风格只放到存储卡。"
+  zh-TW: "新加入的底片風格只放到記憶卡。"
+  ja: "新しいフィルムルックはカードにだけ保存します。"
+  ko: "새 필름 룩은 카드에만 저장됩니다."
 looks.hide_named:
   en: "Remove %{name} from the menu"
   zh-CN: "把 %{name} 从菜单中移除"

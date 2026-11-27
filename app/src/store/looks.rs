@@ -43,6 +43,8 @@ pub enum LookAction {
     Cover,
     DefaultCover,
     Delete,
+    /// To the card only, or back to the camera.
+    Move,
     TakeBack,
     Add,
     Order,
@@ -797,6 +799,22 @@ impl AppState {
     /// Delete a Look and go back to the Looks tab.
     pub fn delete_look(self, id: String, active_off: bool) {
         self.remove_look(id, active_off, true);
+    }
+
+    /// Move a Look to the card only (`to_card`), or back to the camera, and
+    /// stay on its page. `active_off` switches the camera to Off when the
+    /// Look is in use.
+    pub fn move_look(self, id: String, to_card: bool, active_off: bool) {
+        let demo_id = id.clone();
+        self.change(
+            id.clone(),
+            LookAction::Move,
+            move |fake| fake.set_place(&demo_id, to_card, active_off),
+            move |context| async move {
+                remote::set_place(&context, &id, to_card, active_off).await
+            },
+            |_, _| {},
+        );
     }
 
     /// Take back an official Look just added on the Add page, which stays.

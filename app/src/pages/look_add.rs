@@ -16,7 +16,7 @@ use crate::strings::tr;
 use crate::ui::PageTitle;
 use crate::ui::{
     ButtonKind, ButtonSize, CaptionTone, CoverCell, TileTone, button, cover_cell, cover_grid,
-    cover_grid_of, cover_thumb, glyph, icon_tile, list_row, list_section, notice_card,
+    cover_grid_of, cover_thumb, glyph, icon_tile, list_note, list_row, list_section, notice_card,
     system_segmented, token,
 };
 
@@ -60,14 +60,18 @@ fn add_content(app: AppState) -> impl IntoElement {
     let full = snapshot.as_ref().is_some_and(|s| s.card_full());
     let column = view()
         .gap(px(super::looks::ROW_GAP))
+        .child(snapshot.as_ref().is_some_and(|s| s.camera_full()).then(|| {
+            notice_card(tr("looks.camera_full_title", &[])).subtitle(tr("looks.add_full_body", &[]))
+        }))
         .child(import_row(app, full))
-        .child(unlock_section(app))
-        .child(chips);
+        .child(unlock_section(app));
     let Some(items) = app.catalog_items() else {
         let Some(message) = app.catalog_error() else {
-            return column.child(super::looks::loading_card(tr("looks.catalog_loading", &[])));
+            return column
+                .child(chips)
+                .child(super::looks::loading_card(tr("looks.catalog_loading", &[])));
         };
-        return column.child(notice_card(message));
+        return column.child(chips).child(notice_card(message));
     };
     // A Look added here stays, marked, until the page closes.
     let items: Vec<(CatalogItem, bool)> = items
@@ -79,20 +83,29 @@ fn add_content(app: AppState) -> impl IntoElement {
                 Some(_) => None,
             },
         )
-        .collect();
+        .collect::<Vec<_>>();
+    // Every official Look is on the camera: nothing to filter.
+    if items.is_empty() {
+        return column.child(list_note(tr("looks.catalog_all_added", &[])));
+    }
     let scheme = snapshot
         .as_ref()
         .map(|s| s.official_covers)
         .unwrap_or_default();
     // One grid: the filter picks color, B&W, or both.
-    let cells = items
+    let cells: Vec<_> = items
         .into_iter()
         .filter(|(item, _)| match filter {
             LookFilter::All => true,
             LookFilter::Color => !item.group.monochrome(),
             LookFilter::Mono => item.group.monochrome(),
         })
-        .map(|(item, added)| catalog_cell(app, item, added, scheme));
+        .map(|(item, added)| catalog_cell(app, item, added, scheme))
+        .collect();
+    let column = column.child(chips);
+    if cells.is_empty() {
+        return column.child(list_note(tr("looks.catalog_kind_added", &[])));
+    }
     column.child(cover_grid(cells))
 }
 
@@ -268,15 +281,39 @@ fn unlock_content(app: AppState, firmware: Firmware) -> impl IntoElement {
     let titled = groups.len() > 1;
     let mut column = view().gap_6();
     if let Some(found) = &found {
+        let mut note = tr(
+            "looks.firmware_read",
+            &[("camera", firmware.camera()), ("version", &found.version)],
+        );
+        // The chosen looks that the camera has no room for stay on the card.
+        let snapshot = app.looks_snapshot();
+        let new = looks
+            .iter()
+            .filter(|(id, ..)| app.native_look_chosen(id))
+            .filter(|(id, ..)| snapshot.as_ref().is_none_or(|s| s.get(id).is_none()))
+            .count();
+        match snapshot.and_then(|s| s.camera_room()) {
+            Some(0) if new > 0 => note = format!("{note}{}", tr("looks.unlock_all_stored", &[])),
+            Some(room) if new > room => {
+                note = format!(
+                    "{note}{}",
+                    tr(
+                        "looks.unlock_overflow",
+                        &[
+                            ("room", &room.to_string()),
+                            ("rest", &(new - room).to_string())
+                        ],
+                    )
+                )
+            }
+            _ => {}
+        }
         column = column.child(
-            text(tr(
-                "looks.firmware_read",
-                &[("camera", firmware.camera()), ("version", &found.version)],
-            ))
-            .px_4()
-            .text_size(px(crate::ui::ty::FOOTNOTE))
-            .line_height(px(18.0))
-            .text_color(move || token("list-secondary")),
+            text(note)
+                .px_4()
+                .text_size(px(crate::ui::ty::FOOTNOTE))
+                .line_height(px(18.0))
+                .text_color(move || token("list-secondary")),
         );
     }
     for (key, cells) in groups {
