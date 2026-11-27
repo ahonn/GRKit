@@ -344,6 +344,7 @@ fn recipe_row(app: AppState, item: RecipeItem, mode: RowMode, editable: bool) ->
     let working = app.recipe_row_busy(id);
     let row = list_row(name.clone())
         .subtitle(summary)
+        .subtitle_lines(1)
         .leading(crate::ui::recipe_badge(
             recipe_tile(app, &item, ROW_COVER, !item.enabled),
             ROW_COVER,

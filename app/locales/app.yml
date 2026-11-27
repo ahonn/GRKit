@@ -2280,8 +2280,8 @@ error.lost_body:
   ko: "다시 연결하면 앱이 이 업데이트를 이어서 진행합니다."
 software.up_to_date:
   en: "GRKit is up to date"
-  zh-Hans: "GRKit 已是最新版本"
-  zh-Hant: "GRKit 已是最新版本"
+  zh-Hans: "GRKit 已是最新"
+  zh-Hant: "GRKit 已是最新"
   ja: "GRKit は最新です"
   ko: "GRKit이 최신 버전입니다"
 software.check_failed:
@@ -2634,12 +2634,6 @@ recipes.look_missing:
   zh-Hant: "相機上沒有這個底片風格"
   ja: "このフィルムルックはカメラにありません"
   ko: "카메라에 이 필름 룩이 없음"
-recipes.look_stored_note:
-  en: "Put the film look on the camera to apply this recipe."
-  zh-Hans: "把胶片风格放到相机上后，才能应用这个配方。"
-  zh-Hant: "把底片風格放到相機上後，才能套用這個配方。"
-  ja: "このレシピを適用するには、フィルムルックをカメラに入れてください。"
-  ko: "이 레시피를 적용하려면 필름 룩을 카메라에 넣으세요."
 recipes.look_kept:
   en: "Keeps the look"
   zh-Hans: "保持当前风格"

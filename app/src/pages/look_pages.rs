@@ -53,6 +53,24 @@ pub fn look_page(app: AppState, id: String, on_dismiss: impl Fn() + 'static) -> 
         }))
 }
 
+/// Whether the camera has no room for one more Look, with the note that
+/// says so when the camera reports how many it holds.
+pub(crate) fn camera_room(app: AppState) -> (bool, Option<String>) {
+    let snapshot = app.looks_snapshot();
+    let full = snapshot.as_ref().is_some_and(|s| s.camera_full());
+    let note = snapshot
+        .as_ref()
+        .and_then(|s| s.max_camera.map(|max| (s.looks.len(), max)))
+        .filter(|_| full)
+        .map(|(count, max)| {
+            tr(
+                "looks.camera_full_note",
+                &[("count", &count.to_string()), ("max", &max.to_string())],
+            )
+        });
+    (full, note)
+}
+
 fn look_content(app: AppState, look: Look) -> impl IntoElement {
     let busy = app.look_busy().is_some();
     let blocked = app.looks_blocked().is_some();
@@ -114,20 +132,8 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
     let moving = app.look_working(&look.id, LookAction::Move);
     // On the card only: the one action puts it back on the camera.
     if look.stored {
-        let full = snapshot.as_ref().is_some_and(|s| s.camera_full());
-        let note = match snapshot.as_ref().and_then(|s| s.max_camera) {
-            Some(max) if full => tr(
-                "looks.camera_full_note",
-                &[
-                    (
-                        "count",
-                        &snapshot.as_ref().map_or(0, |s| s.looks.len()).to_string(),
-                    ),
-                    ("max", &max.to_string()),
-                ],
-            ),
-            _ => tr("looks.move_to_camera_note", &[]),
-        };
+        let (full, full_note) = camera_room(app);
+        let note = full_note.unwrap_or_else(|| tr("looks.move_to_camera_note", &[]));
         let id = look.id.clone();
         let action = view()
             .gap_2()
@@ -212,7 +218,7 @@ fn look_content(app: AppState, look: Look) -> impl IntoElement {
 
 /// Ask before a Look leaves the camera when a recipe uses it or it is the
 /// Look in use; else move it at once.
-fn confirm_move_to_card(app: AppState, look: Look) {
+pub(crate) fn confirm_move_to_card(app: AppState, look: Look) {
     if look.used_by == 0 && !look.selected {
         app.move_look(look.id, true, false);
         return;
@@ -669,7 +675,6 @@ fn used_by_section(app: AppState, look_id: &str) -> Option<AnyElement> {
         .map(|item| {
             let id = item.id;
             list_row(app.recipe_name(&item))
-                .subtitle(tr("recipes.look_missing", &[]))
                 .leading(crate::ui::recipe_badge(
                     crate::pages::recipes::recipe_tile(app, &item, 40.0, false),
                     40.0,

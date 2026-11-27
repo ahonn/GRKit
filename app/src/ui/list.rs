@@ -41,6 +41,8 @@ pub struct ListRow {
     destructive: bool,
     /// The subtitle in the tint: news to act on, such as an update.
     tinted_subtitle: bool,
+    /// At most this many subtitle lines, the last one cut with an ellipsis.
+    subtitle_lines: Option<u32>,
     /// A gray bar this wide in place of a subtitle not read yet.
     placeholder: Option<f32>,
     test_id: Option<String>,
@@ -59,6 +61,7 @@ pub fn list_row(title: impl Into<String>) -> ListRow {
         busy: false,
         destructive: false,
         tinted_subtitle: false,
+        subtitle_lines: None,
         placeholder: None,
         test_id: None,
         held: None,
@@ -82,6 +85,13 @@ impl ListRow {
     /// The subtitle in the tint, for news to act on, such as an update.
     pub fn tint_subtitle(mut self) -> Self {
         self.tinted_subtitle = true;
+        self
+    }
+
+    /// At most `lines` subtitle lines, the last one cut with an ellipsis.
+    /// Without it the subtitle wraps.
+    pub fn subtitle_lines(mut self, lines: u32) -> Self {
+        self.subtitle_lines = Some(lines);
         self
     }
 
@@ -220,6 +230,8 @@ impl ListRow {
                 let tinted = self.tinted_subtitle;
                 text(subtitle)
                     .text_size(px(crate::ui::ty::FOOTNOTE))
+                    // 0: no limit.
+                    .number_of_lines(self.subtitle_lines.unwrap_or(0))
                     .text_color(move || {
                         if tinted {
                             token("tint")

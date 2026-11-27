@@ -10,7 +10,7 @@ use grkit_core::recipes::Look;
 use crate::domain::recipes::{PresetItem, RecipeItem};
 use crate::pages::recipe_text::{Group, Icon, Setting, State, groups};
 use crate::pages::recipes::{confirm_delete_recipe, native_tile, recipe_summary, recipe_tile};
-use crate::store::{AppState, RecipeAction, Route, native_type_name};
+use crate::store::{AppState, LookAction, RecipeAction, Route, native_type_name};
 use crate::strings::tr;
 use crate::ui::PageTitle;
 use crate::ui::setting_icons::setting_icon;
@@ -158,6 +158,38 @@ fn recipe_look(app: AppState, item: &RecipeItem) -> Option<crate::domain::Look> 
     item.effect_id.as_deref().and_then(|id| app.look(id))
 }
 
+/// For a recipe whose Film Look is on the card only: the button that puts
+/// the Look back on the camera, as on the Look's own page, and a note that
+/// says why the recipe cannot apply yet, or that the camera is full.
+fn stored_look_action(app: AppState, item: &RecipeItem) -> AnyElement {
+    let note = crate::ui::list_note(tr("looks.used_by_note", &[])).text_center();
+    let Some(look) = recipe_look(app, item).filter(|look| look.stored) else {
+        return note.into_element();
+    };
+    let (full, full_note) = crate::pages::look_pages::camera_room(app);
+    let note = match full_note {
+        Some(full_note) => crate::ui::list_note(full_note).text_center(),
+        None => note,
+    };
+    let editable = app.look_busy().is_none() && app.looks_blocked().is_none();
+    let moving = app.look_working(&look.id, LookAction::Move);
+    let id = look.id;
+    view()
+        .gap_2()
+        .child(
+            button(
+                tr("looks.move_to_camera", &[]),
+                ButtonKind::Primary,
+                ButtonSize::Large,
+                move || app.move_look(id.clone(), false, false),
+            )
+            .enabled(editable && !full)
+            .loading(moving),
+        )
+        .child(note)
+        .into_element()
+}
+
 /// The look setting of a recipe: its Film Look or its Image Control type.
 fn look_row(item_look: &Look, effect: Option<String>, looks_on: bool) -> Setting {
     let (name, value, state) = match item_look {
@@ -253,10 +285,7 @@ fn recipe_content(app: AppState, item: RecipeItem) -> impl IntoElement {
         }))
         // The Look is on the card only: the recipe applies after the Look
         // is on the camera again.
-        .child(
-            (!item.ready && item.effect_stored)
-                .then(|| crate::ui::list_note(tr("recipes.look_stored_note", &[])).text_center()),
-        )
+        .child((!item.ready && item.effect_stored).then(|| stored_look_action(app, &item)))
         .children(settings)
         .child(edit_steps(item.current));
     let mut shown: Vec<ListRow> =
