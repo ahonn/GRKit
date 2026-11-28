@@ -142,10 +142,21 @@ impl Resources {
                 .map(|value| Reply::json(200, value)),
             (SettingsRoute::Settings, _) => self.patch_settings(body),
             (SettingsRoute::ShutdownPicture, "GET") => read_picture(root),
-            (SettingsRoute::ShutdownPicture, "PUT") => write_picture(root, body),
-            (SettingsRoute::ShutdownPicture, _) => remove_picture(root),
+            (SettingsRoute::ShutdownPicture, "PUT") => {
+                write_picture(root, body).inspect(|_| self.check_picture())
+            }
+            (SettingsRoute::ShutdownPicture, _) => {
+                remove_picture(root).inspect(|_| self.check_picture())
+            }
         };
         result.unwrap_or_else(Reply::problem)
+    }
+
+    /// Ask the runtime to check the picture of the card again, so that the
+    /// next power-off shows the change. The card already has the change: if
+    /// the runtime does not answer, the change applies at the next start.
+    fn check_picture(&self) {
+        let _ = crate::sync::lock(&self.backend).exchange(CONTROL_GOODBYE_CHECK, &[]);
     }
 
     /// Check the whole body and that the camera has each setting, then set
@@ -250,14 +261,20 @@ mod tests {
 
     /// A camera with Enable at Start, Distance Unit, and Show Text.
     struct Fake {
-        values: Arc<Mutex<[u32; 8]>>,
+        values: Values,
         answer: u32,
+        /// The checks of the shutdown picture asked for.
+        checks: Arc<Mutex<u32>>,
     }
     impl RuntimeBackend for Fake {
         fn exchange(&mut self, command: u32, payload: &[u8]) -> Result<(u32, Vec<u8>)> {
             let mut values = self.values.lock().unwrap();
             Ok(match command {
                 CONTROL_SETTINGS_READ => (0, values.iter().flat_map(|w| w.to_le_bytes()).collect()),
+                CONTROL_GOODBYE_CHECK => {
+                    *self.checks.lock().unwrap() += 1;
+                    (0, vec![1, 0, 0, 0])
+                }
                 CONTROL_SETTINGS_SET if self.answer == 0 => {
                     let word =
                         |at: usize| u32::from_le_bytes(payload[at..at + 4].try_into().unwrap());
@@ -268,14 +285,21 @@ mod tests {
             })
         }
     }
-    fn api(answer: u32) -> (Resources, Arc<Mutex<[u32; 8]>>) {
+    type Values = Arc<Mutex<[u32; 8]>>;
+    fn api(answer: u32) -> (Resources, Values) {
+        let (api, values, _) = api_with_checks(answer);
+        (api, values)
+    }
+    fn api_with_checks(answer: u32) -> (Resources, Values, Arc<Mutex<u32>>) {
         let none = CONTROL_SETTING_NONE;
         let values = Arc::new(Mutex::new([2, none, 0, none, none, none, none, 1]));
+        let checks = Arc::new(Mutex::new(0));
         let fake = Fake {
             values: values.clone(),
             answer,
+            checks: checks.clone(),
         };
-        (Resources::new(Box::new(fake)), values)
+        (Resources::new(Box::new(fake)), values, checks)
     }
     fn call(api: &Resources, root: &Path, head: &str, body: &[u8]) -> Reply {
         let text = format!(
@@ -351,12 +375,14 @@ mod tests {
     fn the_shutdown_picture_is_checked_written_and_removed() {
         let card = tempfile::tempdir().unwrap();
         fs::create_dir_all(card.path().join("GRKIT")).unwrap();
-        let (api, _) = api(0);
+        let (api, _, checks) = api_with_checks(0);
         let missing = call(&api, card.path(), "GET /v1/shutdown-picture", b"");
         assert_eq!(missing.status, 404);
         let picture = goodbye::encode(&vec![128; goodbye::WIDTH * goodbye::HEIGHT * 3]).unwrap();
         let put = call(&api, card.path(), "PUT /v1/shutdown-picture", &picture);
         assert!(put.status == 204 && put.body.is_empty());
+        // The runtime checks the new file, for the next power-off.
+        assert_eq!(*checks.lock().unwrap(), 1);
         let read = call(&api, card.path(), "GET /v1/shutdown-picture", b"");
         assert_eq!(
             (read.status, read.body.as_slice()),
@@ -381,5 +407,7 @@ mod tests {
             assert_eq!(removed.status, 204);
         }
         assert!(!card.path().join(goodbye::FILE).exists());
+        // One check for the write and one for each remove; none for a refused file.
+        assert_eq!(*checks.lock().unwrap(), 3);
     }
 }

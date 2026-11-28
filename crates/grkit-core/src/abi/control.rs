@@ -63,7 +63,10 @@ pub const CONTROL_LOOKS_HEADER: usize = 16;
 /// are on (they come first), the slot of the first recipe that is on and
 /// matches the current settings or `CONTROL_RECIPE_NONE`, the count of
 /// recipe changes (`HOST_RECIPE_CHANGES`), the number of undo steps, the
-/// first slot, and the number of entries. Then `CONTROL_RECIPE_ENTRY` bytes
+/// first slot, the number of entries, and the native Image Control type of
+/// the camera plus 1, numbered as a recipe numbers it (0 before the camera
+/// has its settings). Then
+/// `CONTROL_RECIPE_ENTRY` bytes
 /// for each recipe: its ID, its `RECIPE_WORDS` words, and its
 /// `RECIPE_NAME_WORDS` name words.
 pub const CONTROL_RECIPES_READ: u32 = 6;
@@ -132,6 +135,10 @@ pub const CONTROL_SETTINGS_SET: u32 = 20;
 /// most `capabilities::ADJ_ENTRIES`), then the root in its order, then the
 /// hidden modules.
 pub const CONTROL_MODULES_LAYOUT: u32 = 21;
+/// Check the picture of Shutdown Screen on the card again (runtime/goodbye.h),
+/// after the service wrote or removed it, so that the next power-off shows
+/// it. No payload. The response is a word: 1 when the file is usable.
+pub const CONTROL_GOODBYE_CHECK: u32 = 22;
 pub const CONTROL_SETTING_START: u32 = 0;
 pub const CONTROL_SETTING_RAW: u32 = 1;
 pub const CONTROL_SETTING_UNIT: u32 = 2;
@@ -189,7 +196,7 @@ pub const CONTROL_MODULE_PLACEABLE: u32 = 1 << 14;
 pub const CONTROL_MODULE_SET_ENABLED: u32 = 1;
 pub const CONTROL_MODULE_SET_HIDDEN: u32 = 2;
 pub const CONTROL_MODULE_SET_ORDER: u32 = 4;
-pub const CONTROL_RECIPES_HEADER: usize = 28;
+pub const CONTROL_RECIPES_HEADER: usize = 32;
 pub const CONTROL_RECIPE_ENTRY: usize = 4 * (1 + RECIPE_WORDS + RECIPE_NAME_WORDS);
 pub const CONTROL_RECIPES_PAGE: usize = 32;
 pub const CONTROL_RECIPE_NONE: u32 = u32::MAX;

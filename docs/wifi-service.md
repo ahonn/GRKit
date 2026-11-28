@@ -50,7 +50,7 @@ The service sends each setting change through a mailbox in camera RAM ([`runtime
 - A Look on or off, and the order of the Looks.
 - A recipe that is added, changed, applied, undone, or deleted.
 
-The camera reads its Look files and the shutdown picture only when it starts. A new or changed Look file, or a new shutdown picture, applies at the next start.
+The camera reads its Look files only when it starts, so a new or changed Look file applies at the next start. After the service writes or removes the shutdown picture, the camera checks it at once, and the next power-off shows the change.
 
 A GRKit page keeps its rows while it shows, so the camera does not change a value under an open page ([`runtime/control.h`](../runtime/control.h)):
 
@@ -58,6 +58,18 @@ A GRKit page keeps its rows while it shows, so the camera does not change a valu
 - While another GRKit page shows, a change returns 503 `camera_busy`. These pages are a development, the GRKit settings pages of MENU, and the information page with a GRKit view. A native page that GRKit opened from ADJ also counts.
 
 If the camera does not answer, the service returns 503. `runtime_busy` means that the change was not sent, so the app can send it again. `runtime_late` means that the camera can still make the change, so the app reads the resource before it tries again.
+
+## Film Looks on the card only
+
+The camera loads each Look in `GRKIT/EFFECTS` at its start, so the service puts at most `min(limits.listedLooks, limits.loadedLooks)` Looks there. A Look in `GRKIT/STORED` is on the card only. The camera does not read that folder, so the card can keep more Looks than the camera loads.
+
+- `GET /looks` gives the Looks on the camera in `looks` and the Looks on the card only in `stored`. Each Look has a `place`: `camera` or `card`. `counts.stored` and `limits.storedLooks` give the number and the maximum of the Looks on the card only.
+- If the service cannot read `GRKIT/STORED`, `stored` is empty and `diagnostics` contains `stored_unreadable`. The Looks on the camera stay available, and a change that puts a Look on the card returns 503 `library_unavailable`.
+- `PATCH /looks/<id>` with `{"place":"card"}` moves the file of a Look to `GRKIT/STORED`. The camera turns the Look off at once. `activeOff: true` lets the service move the Look that is in use. `{"place":"camera"}` moves the file back. The Look loads at the next start.
+- A new Look goes to the card only when the camera has no room.
+- In `GET /recipes`, `ready` is false for a recipe whose Look is not on the camera. `effectStored` is true when that Look is on the card only.
+
+A failed move or a power loss can leave the same file in both folders. The service then shows the Look on the camera, and the next change of the Look removes the copy on the card.
 
 ## Software updates
 
@@ -83,6 +95,7 @@ Linux reaches the card through `ipcufs`, which sends each file operation by path
 | Path | Contents |
 | --- | --- |
 | [`crates/grkit-serve/`](../crates/grkit-serve/) | The service: transport, routes, resources, updates, and the mailbox client |
+| [`crates/grkit-protocol/`](../crates/grkit-protocol/) | The wire contract with the app: the paths, and the bodies of the Looks list, the recipes, and the props |
 | [`runtime/control*.h`](../runtime/) | The commands of the mailbox in the camera runtime |
 | [`runtime/menu_update.h`](../runtime/menu_update.h) | The Update row and its confirmation |
 | [`crates/grkit-core/src/abi/control.rs`](../crates/grkit-core/src/abi/control.rs) | The mailbox layout, its commands, and its result codes |

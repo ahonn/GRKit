@@ -54,7 +54,9 @@ default: patch
 Show the GRKit version in the site footer.
 ```
 
-Write the text in English, for people who use GRKit. The change type sets the version and the `CHANGELOG.md` section:
+The key names the package that the change affects. Use `default` for the camera side, which goes to `CHANGELOG.md`. Use `app` for the phone app, which goes to `app/CHANGELOG.md`.
+
+Write the text in English, for people who use GRKit. The change type sets the version and the changelog section:
 
 | Type | Section | Version |
 | --- | --- | --- |

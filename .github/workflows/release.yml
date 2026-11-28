@@ -69,6 +69,16 @@ jobs:
               test -n "$version"
               tag="v$version"
               sha="$MERGE_SHA"
+              # A release pull request with only app change files keeps the
+              # camera version. The App Build workflow builds the app.
+              parent=$(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" --jq '.parents[0].sha')
+              previous=$(gh api "repos/$GITHUB_REPOSITORY/contents/Cargo.toml?ref=$parent" --jq .content \
+                | base64 --decode | sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"$/\1/p')
+              test -n "$previous"
+              if [ "$previous" = "$version" ]; then
+                echo "::notice::The camera version stays $version, so there is no camera release."
+                exit 0
+              fi
               # A tag that the workflow token creates does not start another run.
               if existing=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha 2>/dev/null); then
                 if [ "$existing" != "$sha" ]; then
@@ -95,12 +105,14 @@ jobs:
 
   tests:
     needs: tag
+    if: needs.tag.outputs.tag != ''
     uses: ./.github/workflows/tests.yml
     with:
       ref: ${{ needs.tag.outputs.sha }}
 
   build:
     needs: tag
+    if: needs.tag.outputs.tag != ''
     runs-on: ubuntu-24.04
     env:
       FIRMWARE_BASE_URL: https://www.ricoh-imaging.co.jp/resources/japan/support/download/digital/FIRMWARE

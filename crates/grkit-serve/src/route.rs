@@ -235,6 +235,34 @@ mod tests {
         for path in ["/v1/recipes/x", "/v1/looks/BAD ID", "/v2/ping", "/v1/other"] {
             assert_eq!(Route::parse(path), None, "{path}");
         }
+        // The paths of the wire contract are routes of the service.
+        use grkit_protocol::routes as paths;
+        for path in [
+            paths::PING.to_owned(),
+            paths::CHANGES.to_owned(),
+            paths::PROPS.to_owned(),
+            paths::UPDATE.to_owned(),
+            paths::UPDATE_CANCEL.to_owned(),
+            paths::LOOKS.to_owned(),
+            paths::look("alpha"),
+            paths::look_content("alpha"),
+            paths::LOOKS_ORDER.to_owned(),
+            paths::RECIPES.to_owned(),
+            paths::recipe(1),
+            paths::recipe_apply(1),
+            paths::RECIPES_ORDER.to_owned(),
+            paths::RECIPES_UNDO.to_owned(),
+            paths::MODULES_CATALOG.to_owned(),
+            paths::module_icon("film"),
+            paths::MODULES_PARAMS.to_owned(),
+            paths::module_params("film"),
+            paths::MODULES_ORDER.to_owned(),
+            paths::MODULES_LAYOUT.to_owned(),
+            paths::SETTINGS.to_owned(),
+            paths::SHUTDOWN_PICTURE.to_owned(),
+        ] {
+            assert!(Route::parse(&path).is_some(), "{path}");
+        }
         // Each method with a body is a method of its route.
         for path in [
             "/v1/update",

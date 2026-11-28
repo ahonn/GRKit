@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 anyhow.workspace = true
 grkit-core.workspace = true
+grkit-protocol.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 crc32fast.workspace = true

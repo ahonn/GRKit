@@ -1,4 +1,6 @@
-//! The effect files of the card (`GRKIT/EFFECTS`). The files do not show what
+//! The effect files of the card. The camera lists the files of
+//! `GRKIT/EFFECTS` at its start; the files of `GRKIT/STORED` stay on the
+//! card only, and the camera never reads them. The files do not show what
 //! the running camera loaded, selected, or enabled: a new, changed, or
 //! removed file applies at the next start.
 use anyhow::{ensure, Context, Result};
@@ -7,7 +9,8 @@ use serde_json::{json, Value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    path::Path,
+    path::{Path, PathBuf},
+    time::SystemTime,
 };
 
 /// Bound directory work, including unrelated entries, before returning a complete inventory.
@@ -16,14 +19,22 @@ pub const MAX_ENTRIES: usize = 256;
 /// inspection.
 pub const MAX_LISTED: usize = grkit_core::abi::EFFECTS_LISTED;
 
+/// The most entries that the scan of `GRKIT/STORED` reads.
+pub const MAX_STORED_ENTRIES: usize = 512;
+/// The Looks that `GRKIT/STORED` holds at most: room for the scan to
+/// skip a few other files.
+pub const MAX_STORED: usize = MAX_STORED_ENTRIES - 12;
+
 /// One valid effect file of the library.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LookFile {
-    /// The file name in `GRKIT/EFFECTS`.
+    /// The file name in its folder.
     pub file: String,
     pub id: String,
     pub name: String,
     pub content_hash: String,
+    /// The whole file. Empty when the service did not keep it: the file is
+    /// read again when a request needs it (`read_grf`).
     pub bytes: Vec<u8>,
 }
 
@@ -34,8 +45,92 @@ pub struct Scan {
     pub diagnostics: Vec<Value>,
 }
 
-pub fn library(root: &Path) -> std::path::PathBuf {
+/// The GRF files of a folder, before they are read, and the files that the
+/// listing skipped.
+#[derive(Debug, Default)]
+pub struct Listing {
+    pub entries: Vec<Entry>,
+    pub diagnostics: Vec<Value>,
+}
+
+/// A GRF file of a folder, by name.
+#[derive(Debug)]
+pub struct Entry {
+    pub name: String,
+    entry: fs::DirEntry,
+}
+
+/// The length and the time of the last change of a file. Nothing else writes
+/// the card while the camera is on, so a file with the same stamp still has
+/// the content that an earlier read found. A write of the service in the
+/// same second can keep the stamp: the service forgets what it read of a
+/// file before it writes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Stamp {
+    length: u64,
+    modified: Option<SystemTime>,
+}
+
+impl Entry {
+    /// The stamp of a regular file; None for anything else.
+    pub fn stamp(&self) -> Option<Stamp> {
+        let metadata = self.entry.metadata().ok()?;
+        metadata.is_file().then(|| Stamp {
+            length: metadata.len(),
+            modified: metadata.modified().ok(),
+        })
+    }
+
+    /// Read and decode the file. Err is the code of the diagnostic.
+    pub fn read(&self) -> std::result::Result<LookFile, &'static str> {
+        let read = || -> Result<Vec<u8>> {
+            ensure!(
+                self.entry.file_type()?.is_file(),
+                "Expected a regular GRF file"
+            );
+            read_open(fs::File::open(self.entry.path())?)
+        };
+        let bytes = read().map_err(|_| "unreadable_grf")?;
+        let (effect, _) = effects::decode(&bytes).map_err(|_| "invalid_grf")?;
+        Ok(LookFile {
+            file: self.name.clone(),
+            id: effect.id,
+            name: effect.name,
+            content_hash: packaging::sha256(&bytes),
+            bytes,
+        })
+    }
+}
+
+/// Read the GRF at `path`: a regular file with a length of a GRF. Its link
+/// is not followed.
+pub fn read_grf(path: &Path) -> Result<Vec<u8>> {
+    ensure!(
+        fs::symlink_metadata(path)?.is_file(),
+        "Expected a regular GRF file"
+    );
+    read_open(fs::File::open(path)?)
+}
+
+fn read_open(file: fs::File) -> Result<Vec<u8>> {
+    let length = file.metadata()?.len();
+    ensure!(
+        length == effects::SIZE as u64 || length == effects::SIZE_WITH_LEVELS as u64,
+        "Invalid GRF length"
+    );
+    Ok(grkit_core::bounded::read_to_limit(
+        file,
+        effects::SIZE_WITH_LEVELS,
+    )?)
+}
+
+pub fn library(root: &Path) -> PathBuf {
     root.join(DATA_FOLDER_PATH).join("EFFECTS")
+}
+
+/// The folder of the Looks that stay on the card only.
+pub fn stored(root: &Path) -> PathBuf {
+    root.join(DATA_FOLDER_PATH).join("STORED")
 }
 
 /// Read the effect files of `GRKIT/EFFECTS`, sorted by ID then file name.
@@ -43,75 +138,80 @@ pub fn library(root: &Path) -> std::path::PathBuf {
 /// are errors, not empty libraries. An unusable file is a diagnostic, as the
 /// installer skips it (runtime/install_effects.h).
 pub fn scan(root: &Path) -> Result<Scan> {
-    let directory = library(root);
+    let Listing {
+        entries,
+        mut diagnostics,
+    } = list(&library(root), MAX_ENTRIES)?;
+    let mut files = Vec::new();
+    for entry in entries {
+        match entry.read() {
+            Ok(file) => files.push(file),
+            Err(code) => diagnostics.push(json!({"file":entry.name,"code":code})),
+        }
+    }
+    files.sort_by(|a, b| a.id.cmp(&b.id).then(a.file.cmp(&b.file)));
+    Ok(Scan { files, diagnostics })
+}
+
+/// List the effect files of `GRKIT/STORED`, with the limits of `scan`. A
+/// card without the folder stores no Looks.
+pub fn list_stored(root: &Path) -> Result<Listing> {
+    let directory = stored(root);
+    match fs::symlink_metadata(&directory) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Listing::default()),
+        _ => list(&directory, MAX_STORED_ENTRIES),
+    }
+}
+
+/// The GRF files of `directory`, by name. The `._` companions that macOS
+/// writes next to each file that it copies are no effect files
+/// (runtime/catalog.h): they count against a limit of their own, one for each
+/// file.
+fn list(directory: &Path, limit: usize) -> Result<Listing> {
     ensure!(
-        fs::symlink_metadata(&directory)?.file_type().is_dir(),
+        fs::symlink_metadata(directory)?.file_type().is_dir(),
         "The Looks library is not a directory"
     );
     let mut entries = Vec::new();
-    for entry in fs::read_dir(&directory).context("Read the Looks library")? {
+    let mut companions = 0;
+    for entry in fs::read_dir(directory).context("Read the Looks library")? {
+        let entry = entry.context("Read a Looks directory entry")?;
+        let companion = entry.file_name().as_encoded_bytes().starts_with(b"._");
+        let count = if companion {
+            companions += 1;
+            companions
+        } else {
+            entries.push(entry);
+            entries.len()
+        };
         ensure!(
-            entries.len() < MAX_ENTRIES,
+            count <= limit,
             "The Looks library exceeds the inspection limit"
         );
-        entries.push(entry.context("Read a Looks directory entry")?);
     }
     entries.sort_by_key(|entry| entry.file_name());
-    let mut scan = Scan::default();
+    let mut listing = Listing::default();
     for entry in entries {
         let name = entry.file_name();
         let Some(name) = name.to_str() else {
-            scan.diagnostics.push(json!({"code":"invalid_filename"}));
+            listing.diagnostics.push(json!({"code":"invalid_filename"}));
             continue;
         };
         if !name.to_ascii_lowercase().ends_with(".grf") {
             continue;
         }
         if !effects::valid_filename(name) {
-            scan.diagnostics
+            listing
+                .diagnostics
                 .push(json!({"file":name,"code":"invalid_filename"}));
             continue;
         }
-        let read = || -> Result<Vec<u8>> {
-            ensure!(entry.file_type()?.is_file(), "Expected a regular GRF file");
-            let file = fs::File::open(entry.path())?;
-            let length = file.metadata()?.len();
-            ensure!(
-                length == effects::SIZE as u64 || length == effects::SIZE_WITH_LEVELS as u64,
-                "Invalid GRF length"
-            );
-            Ok(grkit_core::bounded::read_to_limit(
-                file,
-                effects::SIZE_WITH_LEVELS,
-            )?)
-        };
-        let bytes = match read() {
-            Ok(bytes) => bytes,
-            Err(_) => {
-                scan.diagnostics
-                    .push(json!({"file":name,"code":"unreadable_grf"}));
-                continue;
-            }
-        };
-        let effect = match effects::decode(&bytes) {
-            Ok((effect, _)) => effect,
-            Err(_) => {
-                scan.diagnostics
-                    .push(json!({"file":name,"code":"invalid_grf"}));
-                continue;
-            }
-        };
-        scan.files.push(LookFile {
-            file: name.to_owned(),
-            id: effect.id,
-            name: effect.name,
-            content_hash: packaging::sha256(&bytes),
-            bytes,
+        listing.entries.push(Entry {
+            name: name.to_owned(),
+            entry,
         });
     }
-    scan.files
-        .sort_by(|a, b| a.id.cmp(&b.id).then(a.file.cmp(&b.file)));
-    Ok(scan)
+    Ok(listing)
 }
 
 /// The file names that the package list leaves out (`-NAME.GRF`): the
@@ -287,5 +387,20 @@ mod tests {
             fs::write(dir.join(format!("{i}.txt")), b"").unwrap();
         }
         assert!(inventory(root.path(), &BTreeSet::new()).is_err());
+    }
+
+    #[test]
+    fn mac_companion_files_are_no_looks_and_do_not_fill_the_limit() {
+        let (root, dir) = library_fixture();
+        for i in 0..MAX_ENTRIES {
+            fs::write(dir.join(format!("L{i}.GRF")), b"").unwrap();
+            fs::write(dir.join(format!("._L{i}.GRF")), b"").unwrap();
+        }
+        let scan = scan(root.path()).unwrap();
+        assert_eq!(scan.diagnostics.len(), MAX_ENTRIES);
+        assert!(scan
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] == "unreadable_grf"));
     }
 }

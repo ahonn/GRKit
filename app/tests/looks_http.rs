@@ -1,0 +1,589 @@
+//! Looks pages with the real store and HTTP transport, against a camera that
+//! the test controls. Each mutation must name the camera start that the
+//! phone read, and nothing else.
+
+mod support;
+
+use std::{
+    env, fs,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
+use grkit_core::{cover::Cover, effects};
+use grkit_protocol::looks::PendingChange;
+use nsh_core::geometry::Point;
+use nsh_core::prelude::Points;
+use nsh_testing::{DialogAnswer, StubResponse, StubRoute};
+use serde_json::{Value, json};
+use support::looks::*;
+
+#[test]
+fn turning_a_look_off_patches_it_at_once() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, camera, network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    app.press("role:switch[Enable]").unwrap();
+    until(&mut app, || !camera.lock().unwrap().looks[1].enabled);
+    app.wait_for_within("role:switch[Enable]", WAIT).unwrap();
+    assert_eq!(count(&network, "PATCH", "/v1/looks/trix-400-mono-v1"), 1);
+    // A change needs no read of its own before it.
+    assert!(
+        !network
+            .requests()
+            .iter()
+            .any(|r| r.method == "GET" && r.url.ends_with("/v1/looks/trix-400-mono-v1"))
+    );
+}
+
+#[test]
+fn a_look_moves_off_the_camera_and_back() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, camera, network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    app.press("text:Night").unwrap();
+    app.wait_for_within("role:button[Move Off Camera]", WAIT)
+        .unwrap();
+    app.press("role:button[Move Off Camera]").unwrap();
+    until(&mut app, || camera.lock().unwrap().looks[2].stored);
+    // The page of a Look on the card only puts it back.
+    app.wait_for_within("role:button[Put on Camera]", WAIT)
+        .unwrap();
+    app.press("role:button[Put on Camera]").unwrap();
+    until(&mut app, || !camera.lock().unwrap().looks[2].stored);
+    let patches: Vec<Value> = network
+        .requests()
+        .iter()
+        .filter(|r| r.method == "PATCH" && r.url.ends_with(&format!("/v1/looks/{CUSTOM}")))
+        .map(|r| serde_json::from_slice(body(r)).unwrap())
+        .collect();
+    assert_eq!(
+        patches,
+        [
+            json!({"place": "card", "activeOff": false}),
+            json!({"place": "camera", "activeOff": false})
+        ]
+    );
+}
+
+#[test]
+fn a_disconnected_camera_shows_only_the_home_page() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.looks[1].enabled = false;
+    let (mut app, _camera, _network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.wait_for_within("Not in Menu", WAIT).unwrap();
+    app.press("role:button[Camera]").unwrap();
+    app.on_dialog(|_| DialogAnswer::Press("Disconnect".into()));
+    app.press("label:More").unwrap();
+    app.wait_for_gone("label:/^Software Update/", WAIT).unwrap();
+    app.wait_for_within("role:button[Connect]", WAIT).unwrap();
+    app.wait_for_gone("role:button[Film Looks]", WAIT).unwrap();
+}
+
+#[test]
+fn a_restarted_camera_asks_to_check_the_looks_again() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.refuse = Some((409, "context_changed"));
+    let (mut app, camera, network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    let reads = count(&network, "GET", "/v1/looks");
+    let titles = Arc::new(Mutex::new(Vec::new()));
+    let seen = titles.clone();
+    app.on_dialog(move |dialog| {
+        seen.lock()
+            .unwrap()
+            .push(dialog.title.clone().unwrap_or_default());
+        DialogAnswer::Press("OK".into())
+    });
+    app.press("role:switch[Enable]").unwrap();
+    until(&mut app, || !titles.lock().unwrap().is_empty());
+    assert_eq!(titles.lock().unwrap().as_slice(), ["Film Looks Changed"]);
+    // The phone reads the Looks again, so a second try names the new start.
+    until(&mut app, || count(&network, "GET", "/v1/looks") > reads);
+    assert!(camera.lock().unwrap().looks[1].enabled);
+}
+
+#[test]
+fn an_official_look_is_renamed_like_an_imported_one() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, camera, network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("role:button[Name, Tri-X 400]", WAIT)
+        .unwrap();
+    unsafe { std::env::set_var("GRKIT_TEST_NAME", "Tri-X 400 Push") };
+    app.press("role:button[Name, Tri-X 400]").unwrap();
+    until(&mut app, || {
+        camera.lock().unwrap().looks[1].name == "Tri-X 400 Push"
+    });
+    unsafe { std::env::remove_var("GRKIT_TEST_NAME") };
+    let patches: Vec<Value> = network
+        .requests()
+        .iter()
+        .filter(|r| r.method == "PATCH" && r.url.ends_with(&format!("/v1/looks/{TRIX}")))
+        .map(|r| serde_json::from_slice(body(r)).unwrap())
+        .collect();
+    assert_eq!(patches, [json!({"name": "Tri-X 400 Push"})]);
+}
+
+#[test]
+fn an_official_look_changes_its_cover_and_only_its_icon() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, camera, network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    app.press("role:button[Cover]").unwrap();
+    app.wait_for_within("Film name", WAIT).unwrap();
+    // The second color set of the editor, named by its look.
+    app.press("label:Kodak yellow").unwrap();
+    app.press("role:button[Save]").unwrap();
+    until(&mut app, || {
+        camera.lock().unwrap().looks[1].pending.is_some()
+    });
+    let puts = content_puts(&network, TRIX);
+    let [(Some(cover), body)] = puts.as_slice() else {
+        panic!("one PUT with a cover: {puts:?}");
+    };
+    let Cover::Film(film) = cover else {
+        panic!("a film cover: {cover:?}");
+    };
+    let second = grkit_core::cover::find_look(grkit_core::cover::EDITOR_LOOKS[1]).unwrap();
+    assert_eq!(film.colors, Some(second.colors()));
+    // Same ID, name and effect: only the icon changes, to the cover.
+    let (original, _) = effects::decode(&grf(TRIX)).unwrap();
+    let (effect, icon) = effects::decode(body).unwrap();
+    assert_eq!(effect, original);
+    assert_eq!(icon, cover.pixels().unwrap());
+    // Back on the Look, which the camera shows after it starts again.
+    app.wait_for_within("Built-in · B&W · After restart", WAIT)
+        .unwrap();
+}
+
+#[test]
+fn an_official_look_comes_with_the_film_box_cover_of_the_card() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let velvia: Value = grkit_core::effects::parse_json(
+        include_str!("../../effects/velvia-100-v1/effect.json").as_bytes(),
+    )
+    .unwrap();
+    let file = grkit_core::effects::compile_definition(&velvia).unwrap();
+    let name = effects::filename("velvia-100-v1").unwrap();
+    let catalog = json!({
+        "schema": grkit_core::site::CATALOG_SCHEMA, "target": "gr3-2.21",
+        "base_gamma": vec![0u16; 256],
+        "effects": [{"id": "velvia-100-v1", "name": "Velvia 100", "monochrome": false,
+            "file": name, "sha256": grkit_core::packaging::sha256(&file),
+            "cover": velvia["icon"]}]
+    });
+    let site = |path: &str, body: Vec<u8>| {
+        let mut answer = StubResponse::default();
+        answer.status = 200;
+        answer.body = body;
+        (
+            format!("GET https://release.test/effects/gr3-2.21/{path}"),
+            StubRoute::Response(answer),
+        )
+    };
+    let mut camera = Camera::new();
+    // Color Looks have the film box cover, B&W Looks the gray one.
+    camera.official_covers = "colorFilmBox";
+    let (mut app, camera, network) = start_phone_with(
+        &environment,
+        camera,
+        vec![
+            site("catalog.json", serde_json::to_vec(&catalog).unwrap()),
+            site(&name, file.clone()),
+        ],
+    );
+    open_looks(&mut app);
+    app.press("label:Add Film Looks").unwrap();
+    app.wait_for_within("Velvia 100", WAIT).unwrap();
+    app.press("label:Add Velvia 100").unwrap();
+    until(&mut app, || camera.lock().unwrap().looks.len() == 4);
+    let film_box = Cover::from_json(&velvia["icon"]).unwrap().film_box();
+    let puts = content_puts(&network, "velvia-100-v1");
+    let [(Some(cover), body)] = puts.as_slice() else {
+        panic!("one PUT with a cover: {puts:?}");
+    };
+    assert_eq!(cover, &film_box);
+    let (effect, icon) = effects::decode(body).unwrap();
+    assert_eq!(effect, effects::decode(&file).unwrap().0);
+    assert_eq!(icon, film_box.pixels().unwrap());
+}
+
+#[test]
+fn the_default_cover_puts_an_official_look_back_on_the_scheme() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let film_box = Cover::from_json(&definition(TRIX)["icon"])
+        .unwrap()
+        .film_box();
+    let mut camera = Camera::new();
+    camera.looks[1].default_cover = film_box.to_json();
+    let (mut app, camera, network) = start_phone(&environment, camera);
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    app.press("role:button[Cover]").unwrap();
+    app.wait_for_within("Restore Default Cover", WAIT).unwrap();
+    app.press("role:button[Restore Default Cover]").unwrap();
+    until(&mut app, || {
+        camera.lock().unwrap().looks[1].pending.is_some()
+    });
+    let puts = content_puts(&network, TRIX);
+    let [(Some(cover), body)] = puts.as_slice() else {
+        panic!("one PUT with a cover: {puts:?}");
+    };
+    assert_eq!(cover, &film_box);
+    assert_eq!(effects::decode(body).unwrap().1, film_box.pixels().unwrap());
+}
+
+#[test]
+fn a_busy_camera_asks_for_the_shooting_screen() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.refuse = Some((503, "camera_busy"));
+    let (mut app, camera, _network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    let titles = Arc::new(Mutex::new(Vec::new()));
+    let seen = titles.clone();
+    app.on_dialog(move |dialog| {
+        seen.lock()
+            .unwrap()
+            .push(dialog.title.clone().unwrap_or_default());
+        DialogAnswer::Press("OK".into())
+    });
+    app.press("role:switch[Enable]").unwrap();
+    until(&mut app, || !titles.lock().unwrap().is_empty());
+    assert_eq!(titles.lock().unwrap().as_slice(), ["Camera Busy"]);
+    assert!(camera.lock().unwrap().looks[1].enabled);
+}
+
+#[test]
+fn a_look_that_waits_for_a_restart_says_so() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    // A Look that the phone added: the camera does not list it yet.
+    state.looks[2].pending = Some(PendingChange::Add);
+    let (mut app, _camera, network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.wait_for_within("1 change applies after a restart", WAIT)
+        .unwrap();
+    app.wait_for_within("label:Night, After restart", WAIT)
+        .unwrap();
+    app.press("text:Night").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    // The camera cannot show or hide a Look that it does not list.
+    let _ = app.press("role:switch[Enable]");
+    app.wait(Duration::from_millis(300)).unwrap();
+    assert_eq!(count(&network, "PATCH", "/v1/looks/lut-night"), 0);
+}
+
+#[test]
+fn deleting_the_look_in_use_switches_the_camera_to_off() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.looks[0].used_by = 0;
+    let (mut app, camera, network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("text:Portra 400").unwrap();
+    app.wait_for_within("Delete Film Look", WAIT).unwrap();
+    app.on_dialog(|_| DialogAnswer::Press("Delete".into()));
+    app.press("Delete Film Look").unwrap();
+    app.wait_for_within("In Camera Menu", WAIT).unwrap();
+    app.wait_for_gone("text:Portra 400", WAIT).unwrap();
+    assert!(camera.lock().unwrap().selected.is_none());
+    assert!(
+        network.requests().iter().any(|r| r.method == "DELETE"
+            && r.url.ends_with("/v1/looks/portra-400-endura-v1?active=off"))
+    );
+}
+
+#[test]
+fn a_look_that_recipes_use_is_not_deleted() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, _camera, network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    app.press("text:Portra 400").unwrap();
+    app.wait_for_within("Delete Film Look", WAIT).unwrap();
+    app.on_dialog(|dialog| {
+        assert_eq!(dialog.title.as_deref(), Some("Can’t Delete Portra 400"));
+        DialogAnswer::Press("OK".into())
+    });
+    app.press("Delete Film Look").unwrap();
+    app.wait(Duration::from_millis(300)).unwrap();
+    assert_eq!(count(&network, "DELETE", "portra-400-endura-v1"), 0);
+}
+
+#[test]
+fn a_refused_change_explains_the_pending_update() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.refuse = Some((409, "software_pending"));
+    let (mut app, camera, _network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("Enable", WAIT).unwrap();
+    let titles = Arc::new(Mutex::new(Vec::new()));
+    let seen = titles.clone();
+    app.on_dialog(move |dialog| {
+        seen.lock()
+            .unwrap()
+            .push(dialog.title.clone().unwrap_or_default());
+        DialogAnswer::Press("OK".into())
+    });
+    app.press("role:switch[Enable]").unwrap();
+    until(&mut app, || !titles.lock().unwrap().is_empty());
+    assert_eq!(titles.lock().unwrap().as_slice(), ["An Update Is Waiting"]);
+    assert!(camera.lock().unwrap().looks[1].enabled);
+}
+
+#[test]
+fn dragging_a_look_saves_the_complete_order() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let (mut app, camera, _network) = start_phone(&environment, Camera::new());
+    open_looks(&mut app);
+    // In Edit, the handle of Night, the third row, dragged up two rows.
+    app.press("role:button[Sort]").unwrap();
+    app.wait_for_within("Drag to move Night", WAIT).unwrap();
+    app.drag(
+        "label:Drag to move Night",
+        Point {
+            x: Points(0.0),
+            y: Points(-128.0),
+        },
+    )
+    .unwrap();
+    until(&mut app, || camera.lock().unwrap().order_revision > 1);
+    let ids: Vec<&str> = camera.lock().unwrap().looks.iter().map(|e| e.id).collect();
+    assert_eq!(ids, [CUSTOM, PORTRA, TRIX]);
+}
+
+#[test]
+fn a_second_add_during_a_download_is_not_left_adding() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let effect = |id: &str| -> (Value, Vec<u8>, String) {
+        let path = format!("{}/../effects/{id}/effect.json", env!("CARGO_MANIFEST_DIR"));
+        let value = grkit_core::effects::parse_json(&fs::read(path).unwrap()).unwrap();
+        let file = grkit_core::effects::compile_definition(&value).unwrap();
+        (value, file, effects::filename(id).unwrap())
+    };
+    let (velvia, velvia_file, velvia_name) = effect("velvia-100-v1");
+    let (astia, astia_file, astia_name) = effect("astia-100f-v1");
+    let entry = |id: &str, name: &str, value: &Value, file: &[u8], path: &str| {
+        json!({"id": id, "name": name, "monochrome": false, "file": path,
+            "sha256": grkit_core::packaging::sha256(file), "cover": value["icon"]})
+    };
+    let catalog = json!({
+        "schema": grkit_core::site::CATALOG_SCHEMA, "target": "gr3-2.21",
+        "base_gamma": vec![0u16; 256],
+        "effects": [
+            entry("velvia-100-v1", "Velvia 100", &velvia, &velvia_file, &velvia_name),
+            entry("astia-100f-v1", "Astia 100F", &astia, &astia_file, &astia_name),
+        ]
+    });
+    let site = |path: &str, body: Vec<u8>, delay: Duration| {
+        let mut answer = StubResponse::default();
+        answer.status = 200;
+        answer.body = body;
+        answer.delay = delay;
+        (
+            format!("GET https://release.test/effects/gr3-2.21/{path}"),
+            StubRoute::Response(answer),
+        )
+    };
+    let (mut app, camera, _network) = start_phone_with(
+        &environment,
+        Camera::new(),
+        vec![
+            site(
+                "catalog.json",
+                serde_json::to_vec(&catalog).unwrap(),
+                Duration::ZERO,
+            ),
+            site(&velvia_name, velvia_file, Duration::from_millis(600)),
+            site(&astia_name, astia_file, Duration::ZERO),
+        ],
+    );
+    open_looks(&mut app);
+    app.press("label:Add Film Looks").unwrap();
+    app.wait_for_within("Astia 100F", WAIT).unwrap();
+    app.press("label:Add Velvia 100").unwrap();
+    // The second tile waits for the first; a press on it does nothing.
+    let _ = app.press("label:Add Astia 100F");
+    until(&mut app, || camera.lock().unwrap().looks.len() == 4);
+    app.wait_for_within("label:Add Astia 100F", WAIT).unwrap();
+    app.wait(Duration::from_millis(200)).unwrap();
+    app.press("label:Add Astia 100F").unwrap();
+    until(&mut app, || camera.lock().unwrap().looks.len() == 5);
+}
+
+#[test]
+fn a_drag_during_another_change_saves_no_order() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.write_delay = Duration::from_millis(600);
+    let (mut app, camera, network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("role:button[Sort]").unwrap();
+    app.wait_for_within("Drag to move Night", WAIT).unwrap();
+    app.press("label:Remove Tri-X 400 from the menu").unwrap();
+    let _ = app.drag(
+        "label:Drag to move Night",
+        Point {
+            x: Points(0.0),
+            y: Points(-128.0),
+        },
+    );
+    until(&mut app, || !camera.lock().unwrap().looks[1].enabled);
+    app.wait(Duration::from_millis(300)).unwrap();
+    assert_eq!(count(&network, "PUT", "/v1/looks/order"), 0);
+    let ids: Vec<&str> = camera.lock().unwrap().looks.iter().map(|e| e.id).collect();
+    assert_eq!(ids, [PORTRA, TRIX, CUSTOM]);
+}
+
+#[test]
+fn a_refused_rename_keeps_the_typed_name() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.refuse = Some((409, "software_pending"));
+    let (mut app, camera, _network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("text:Tri-X 400").unwrap();
+    app.wait_for_within("role:button[Name, Tri-X 400]", WAIT)
+        .unwrap();
+    let titles = Arc::new(Mutex::new(Vec::new()));
+    let seen = titles.clone();
+    app.on_dialog(move |dialog| {
+        seen.lock()
+            .unwrap()
+            .push(dialog.title.clone().unwrap_or_default());
+        DialogAnswer::Press("OK".into())
+    });
+    unsafe { std::env::set_var("GRKIT_TEST_NAME", "Tri-X 400 Push") };
+    app.press("role:button[Name, Tri-X 400]").unwrap();
+    until(&mut app, || !titles.lock().unwrap().is_empty());
+    app.wait(Duration::from_millis(300)).unwrap();
+    // The next alert opens with the refused text.
+    unsafe { std::env::set_var("GRKIT_TEST_NAME", "<keep>") };
+    app.press("role:button[Name, Tri-X 400]").unwrap();
+    until(&mut app, || {
+        camera.lock().unwrap().looks[1].name == "Tri-X 400 Push"
+    });
+    unsafe { std::env::remove_var("GRKIT_TEST_NAME") };
+}
+
+#[test]
+fn software_update_closes_when_the_link_goes_down() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.looks[2].pending = Some(PendingChange::Add);
+    let (mut app, _camera, _network) = start_phone(&environment, state);
+    app.wait_for_within("label:More", WAIT).unwrap();
+    app.press("label:/^Software Update/").unwrap();
+    app.wait_for_within("Couldn't check for updates", WAIT)
+        .unwrap();
+    // The Looks tab restarts the camera, which ends the link as expected.
+    app.press("role:button[Film Looks]").unwrap();
+    app.wait_for_within("role:button[Restart Camera]", WAIT)
+        .unwrap();
+    app.on_dialog(|_| DialogAnswer::Press("Restart".into()));
+    app.press("role:button[Restart Camera]").unwrap();
+    // The restart keeps the tab it started on.
+    app.wait_for_within("Camera Not Connected", WAIT).unwrap();
+    // Without a camera the camera tab is Connect, after the card's button.
+    app.press("role:button[Connect] >> nth=1").unwrap();
+    app.wait_for_within("Add Camera", WAIT).unwrap();
+    app.wait_for_gone("Couldn't check for updates", WAIT)
+        .unwrap();
+}
+
+#[test]
+fn the_more_menu_turns_the_camera_off_after_a_confirm() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.write_delay = Duration::from_millis(800);
+    let (mut app, _camera, network) = start_phone(&environment, state);
+    app.wait_for_within("label:More", WAIT).unwrap();
+    let dialogs = Arc::new(Mutex::new(Vec::new()));
+    let seen = dialogs.clone();
+    app.on_dialog(move |dialog| {
+        let title = dialog.title.clone().unwrap_or_default();
+        let menu = title == "RICOH GR III";
+        seen.lock().unwrap().push(title);
+        DialogAnswer::Press(if menu { "Turn Off Camera" } else { "Turn Off" }.into())
+    });
+    app.press("label:More").unwrap();
+    // The control works in place until the camera answers.
+    let mut busy = false;
+    for _ in 0..40 {
+        if let Ok(state) = app.screen().accessibility_state("label:More") {
+            busy = state.busy;
+        }
+        if busy {
+            break;
+        }
+        app.wait(Duration::from_millis(25)).unwrap();
+    }
+    assert!(busy, "More reports busy while the camera turns off");
+    // It takes no press meanwhile.
+    let _ = app.press("label:More");
+    assert_eq!(
+        dialogs.lock().unwrap().len(),
+        2,
+        "the menu, then its confirm"
+    );
+    app.wait_for_gone("label:/^Software Update/", WAIT).unwrap();
+    assert_eq!(count(&network, "POST", "/v1/device/finish"), 1);
+}
+
+#[test]
+fn a_drag_saves_the_order_at_a_large_text_size() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let environment = TestEnvironment::new();
+    let mut state = Camera::new();
+    state.font_scale = 2.0;
+    let (mut app, camera, _network) = start_phone(&environment, state);
+    open_looks(&mut app);
+    app.press("role:button[Sort]").unwrap();
+    app.wait_for_within("Drag to move Night", WAIT).unwrap();
+    app.drag(
+        "label:Drag to move Night",
+        Point {
+            x: Points(0.0),
+            y: Points(-600.0),
+        },
+    )
+    .unwrap();
+    until(&mut app, || camera.lock().unwrap().order_revision > 1);
+    let ids: Vec<&str> = camera.lock().unwrap().looks.iter().map(|e| e.id).collect();
+    assert_eq!(ids, [CUSTOM, PORTRA, TRIX]);
+}

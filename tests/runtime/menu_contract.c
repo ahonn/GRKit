@@ -3231,10 +3231,15 @@ static void the_service_reads_and_changes_the_recipes(void)
     /* Two recipes on, one off. */
     put_recipe(h, 0, 11, 0); put_recipe(h, 1, 12, 0); put_recipe(h, 2, 13, 1);
     words[0] = 0;
+    /* Negative Film: the camera's code of portable type 6. */
+    native_ic_value = native_type_codes[6] + 1U;
     assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == 0);
     assert(length == GRKIT_CONTROL_RECIPES_HEADER + 3 * GRKIT_CONTROL_RECIPE_ENTRY);
     assert(control_words[0] == 3 && control_words[1] == 2 && control_words[5] == 0 && control_words[6] == 3);
-    assert(control_words[7] == 11 && control_words[7 + 11] == 12 && control_words[7 + 22] == 13);
+    /* The native Image Control type plus 1, for the phone. */
+    assert(control_words[7] == 7);
+    assert(control_words[8] == 11 && control_words[8 + 11] == 12 && control_words[8 + 22] == 13);
+    native_ic_value = 0;
     words[0] = 4;
     assert(look_command(GRKIT_CONTROL_RECIPES_READ, words, 1, &length) == GRKIT_CONTROL_INVALID);
     /* Off goes before the others that are off; on, after the ones on. */
@@ -6525,7 +6530,8 @@ static void the_shutdown_screen_takes_a_usable_file(void)
 }
 /* The first shooting screen checks the file once, while the setting is on,
    so a power-off reads the card only for a usable file, through the
-   firmware. A power-off before a check checks the file then. */
+   firmware. The Wi-Fi service asks for a check after it changes the file.
+   A power-off before a check checks the file then. */
 static void the_shutdown_screen_checks_its_file_at_the_start(void)
 {
     install_stock_tab(10, 3);
@@ -6536,6 +6542,14 @@ static void the_shutdown_screen_checks_its_file_at_the_start(void)
     goodbye_length = goodbye_reads = 0;
     menu_viewfinder(VIEWFINDER_READY);
     assert(goodbye_reads == 1 && !goodbye_shown() && goodbye_reads == 1);
+    /* The Wi-Fi service wrote a picture and asks for a check: the next
+       power-off shows it with no check. */
+    u32 length;
+    goodbye_card_picture(sizeof test_goodbye_picture);
+    assert(look_command(GRKIT_CONTROL_GOODBYE_CHECK, 0, 0, &length) == 0 && length == 4 && control_words[0] == 1);
+    goodbye_reads = 0;
+    assert(goodbye_shown() && goodbye_reads == 0);
+    goodbye_length = 0;
     /* With the setting off at the start, the power-off checks the file. */
     install_stock_tab(10, 3);
     settings_memory[0] = 16;

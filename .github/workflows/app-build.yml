@@ -1,0 +1,199 @@
+name: App Build
+run-name: App Build (${{ inputs.platform }})
+
+# Builds the phone app at the version in app/nsh.json. Start it by hand after
+# the release pull request that sets the app version is merged.
+#
+# - iOS: Xcode Cloud archives main and uploads the build. This workflow starts
+#   that build, waits for it, and sends it to the external TestFlight group.
+# - Android: this workflow builds an APK signed with the upload key and keeps
+#   it as a workflow artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform
+        type: choice
+        required: true
+        default: all
+        options:
+          - all
+          - ios
+          - android
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-build
+  cancel-in-progress: false
+
+env:
+  # The CLI that packages the app. Keep it at the version of the nsh crates in app/Cargo.toml.
+  NSH_VERSION: v0.6.0
+  # The App Store Connect app of GRKit.
+  ASC_APP_ID: '6839017720'
+
+jobs:
+  check:
+    uses: ./.github/workflows/app.yml
+    with:
+      ref: ${{ github.sha }}
+
+  ios:
+    name: Xcode Cloud
+    needs: check
+    if: inputs.platform != 'android'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      # Xcode Cloud builds the head of main, not the commit of this run.
+      - name: Require main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Select main in the Run workflow branch selector to build iOS."
+          exit 1
+
+      - name: Install the App Store Connect CLI
+        uses: rudrankriyam/setup-asc@5358c70a27a3f0d1517604b0f1fdc43e70c1cc4d # v1.0.1
+        with:
+          version: 4.11.0
+
+      - name: Start the Xcode Cloud build and wait for TestFlight
+        env:
+          ASC_BYPASS_KEYCHAIN: '1'
+          ASC_NO_UPDATE: '1'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          WORKFLOW: ${{ vars.XCODE_CLOUD_WORKFLOW }}
+        run: |
+          set -euo pipefail
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_PRIVATE_KEY_B64 WORKFLOW; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret or variable: $name"
+              exit 1
+            fi
+          done
+
+          asc xcode-cloud run --app "$ASC_APP_ID" --workflow "$WORKFLOW" --branch main \
+            --output json > "$RUNNER_TEMP/cloud-run.json"
+          run_id=$(jq -er '.buildRunId | select(type == "string" and length > 0)' "$RUNNER_TEMP/cloud-run.json")
+          echo "Xcode Cloud build run: $run_id" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Canceling this run does not cancel the Xcode Cloud build. Manage it in App Store Connect." >> "$GITHUB_STEP_SUMMARY"
+
+          result=0
+          asc xcode-cloud status --run-id "$run_id" --wait \
+            --poll-interval 30s --timeout 80m --output json \
+            > "$RUNNER_TEMP/cloud-status.json" || result=$?
+          if [ -s "$RUNNER_TEMP/cloud-status.json" ]; then
+            jq -r '"Build \(.buildNumber): \(.executionProgress) / \(.completionStatus)\nSource commit: \(.sourceCommit.commitSha // "unknown")"' \
+              "$RUNNER_TEMP/cloud-status.json" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$result" -eq 0 ]; then
+            jq -er '.buildNumber | tostring' "$RUNNER_TEMP/cloud-status.json" > "$RUNNER_TEMP/build-number"
+          fi
+          exit "$result"
+
+      # The Xcode Cloud workflow only uploads the build. This step sends it to
+      # the external group, which needs Beta App Review for the first build of
+      # each version.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Send the build to external testing
+        env:
+          ASC_BYPASS_KEYCHAIN: '1'
+          ASC_NO_UPDATE: '1'
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY_B64: ${{ secrets.ASC_PRIVATE_KEY_B64 }}
+          GROUP: Public
+        run: |
+          set -euo pipefail
+          build=$(cat "$RUNNER_TEMP/build-number")
+          version=$(jq -er .version app/nsh.json)
+          select=(--app "$ASC_APP_ID" --build-number "$build" --version "$version" --platform IOS)
+
+          # App Store Connect processes an upload before it can be tested.
+          asc builds wait "${select[@]}" --fail-on-invalid --timeout 45m > /dev/null
+
+          notes=$(sh .github/scripts/changelog-section.sh "$version" app/CHANGELOG.md || true)
+          [ -n "$notes" ] || notes="GRKit app $version."
+          asc builds test-notes create "${select[@]}" --locale en-US --whats-new "$notes" > /dev/null
+
+          asc builds add-groups "${select[@]}" --group "$GROUP" --submit --confirm > /dev/null
+          echo "Build $version ($build) is in the $GROUP group and waits for Beta App Review." | tee -a "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Android APK
+    needs: check
+    if: inputs.platform != 'ios'
+    # The build that app/android/build.py makes was checked on macOS.
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install the Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-35" "build-tools;35.0.1"
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install
+          rustup target add aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: app
+
+      - name: Install nsh
+        run: |
+          curl --fail --location --silent --show-error --retry 3 https://nsh.dev/install.sh | NSH_VERSION="$NSH_VERSION" sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Build the APK
+        env:
+          KEYSTORE_B64: ${{ secrets.GRKIT_ANDROID_KEYSTORE_B64 }}
+          GRKIT_ANDROID_KEY_ALIAS: ${{ secrets.GRKIT_ANDROID_KEY_ALIAS }}
+          GRKIT_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.GRKIT_ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_B64 GRKIT_ANDROID_KEY_ALIAS GRKIT_ANDROID_KEYSTORE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing secret: $name"
+              exit 1
+            fi
+          done
+          export GRKIT_ANDROID_KEYSTORE="$RUNNER_TEMP/upload.p12"
+          trap 'rm -f "$GRKIT_ANDROID_KEYSTORE"' EXIT
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$GRKIT_ANDROID_KEYSTORE"
+
+          # The version code is the UTC hour of the build as YYMMDDHH. It grows
+          # with every build without a counter to keep. Two builds in one hour
+          # get the same code.
+          version_code=$(date -u +%y%m%d%H)
+          version=$(jq -er .version nsh.json)
+          python3 android/build.py --release --version-code "$version_code"
+
+          apk="GRKit-$version-$version_code.apk"
+          mv .nsh/out/android/GRKit.apk "$RUNNER_TEMP/$apk"
+          echo "APK=$RUNNER_TEMP/$apk" >> "$GITHUB_ENV"
+          echo "Android $version ($version_code): $apk" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-apk
+          path: ${{ env.APK }}
+          if-no-files-found: error
