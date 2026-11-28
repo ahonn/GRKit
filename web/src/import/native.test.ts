@@ -4,7 +4,15 @@ import { describe, expect, it } from 'vitest';
 import type { ImportedEffect } from '../catalog';
 import { offeredCoverLooks } from '../coverPalette';
 import { NATIVE_LOOK_IDS } from './names';
-import { hasNativeLooks, importsForCamera, missingNativeLooks, NATIVE_LOOKS, nativeLooksFor, nativeProblem } from './native';
+import {
+  hasNativeLooks,
+  importsForCamera,
+  missingNativeLooks,
+  NATIVE_LOOKS,
+  nativeLooksFor,
+  nativeProblem,
+  selectionForCamera,
+} from './native';
 
 const RELEASED = '1.7.0';
 
@@ -73,6 +81,16 @@ describe('importsForCamera', () => {
       'gr4-cinema-green',
       'gr2-positive-film',
     ]);
+  });
+});
+
+describe('selectionForCamera', () => {
+  it('keeps GR II Positive checked across a change of camera', () => {
+    const gr3 = new Set(['lut-a', 'gr2-positive-film', 'gr4-cinema-yellow', 'gr4-mono-solid']);
+    const gr4 = selectionForCamera(gr3, 'gr4', RELEASED);
+    expect([...gr4]).toEqual(['lut-a', 'gr2-positive-film-gr4', 'gr4-cinema-yellow', 'gr4-mono-solid']);
+    expect([...selectionForCamera(gr4, 'gr3x', RELEASED)]).toEqual([...gr3]);
+    expect(selectionForCamera(gr3, 'gr3x', RELEASED)).toBe(gr3);
   });
 });
 

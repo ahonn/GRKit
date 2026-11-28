@@ -45,6 +45,31 @@ export function importsForCamera<T extends ImportedEffect>(
 }
 
 /**
+ * `selection` for the camera entry `camera`. A checked native look that the camera cannot use
+ * gives way to its copy for this camera: GR II Positive has one effect for GR III and GR IIIx and
+ * one for GR IV, and a change of camera keeps it checked. Returns `selection` when nothing changes.
+ */
+export function selectionForCamera(
+  selection: ReadonlySet<string>,
+  camera: string,
+  version: string = __GRKIT_VERSION__,
+): ReadonlySet<string> {
+  const looks = nativeLooksFor(camera, version);
+  const next = new Set<string>();
+  let changed = false;
+  for (const id of selection) {
+    const look = NATIVE_LOOKS.find((item) => item.id === id);
+    const copy =
+      look && !looks.includes(look)
+        ? looks.find((item) => item.firmware === look.firmware && item.name === look.name)
+        : undefined;
+    if (copy) changed = true;
+    next.add(copy?.id ?? id);
+  }
+  return changed ? next : selection;
+}
+
+/**
  * The looks of `looks` that the page lacks, which the list offers to unlock. `owned` is imports
  * and card-only effects: a native look already on the SD card must not also show as an unlock tile.
  */

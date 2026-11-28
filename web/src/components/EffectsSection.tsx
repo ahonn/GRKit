@@ -499,9 +499,14 @@ export function EffectsSection({
     const first = effects[0];
     if (!first) return false;
     onImport(effects);
+    // An unlock also gives the copies of a look for other cameras (GR II Positive). They take no
+    // room here: a change of camera checks the copy in place of this one.
+    const usable = effects.filter(
+      (effect) => effect.imported.kind !== 'native' || nativeLooks.some((look) => look.id === effect.id),
+    );
     const { selection: next, full } = selectImport(
       checked,
-      effects.map((effect) => effect.id),
+      usable.map((effect) => effect.id),
       importFit(first.imported),
     );
     if (next !== checked) onSelectionChange(next);

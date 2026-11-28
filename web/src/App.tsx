@@ -92,7 +92,7 @@ import { fastbootPath, installPath } from './languagePage';
 import { loadFonts } from './fonts';
 import { encodeLibrary, IMPORTS_FILE, nativeTone, readLibrary, withDetails } from './import/library';
 import { restoreImports } from './import/lut';
-import { importsForCamera, NATIVE_LOOKS, nativeLooksFor } from './import/native';
+import { importsForCamera, NATIVE_LOOKS, nativeLooksFor, selectionForCamera } from './import/native';
 import { isLutImportId } from './import/names';
 import { deleteImport, saveImport, updateImport } from './import/store';
 import { applyLanguage, sentences, STRINGS, type Language, type Strings } from './i18n';
@@ -301,6 +301,10 @@ export function InstallPage({
 
   function chooseCamera(key: Camera['key']) {
     setCameraKey(key);
+    if (selection) {
+      const next = selectionForCamera(selection, key);
+      if (next !== selection) keepSelection(next);
+    }
     resetBuild();
     // The recipe file holds no camera line, and one card fits GR IV and GR IV Monochrome, so the
     // recipes of the card are read again for the line of the chosen camera.

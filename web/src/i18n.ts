@@ -289,7 +289,7 @@ const en = {
   nativeCount: (count: number) => (count === 1 ? '1 look' : `${count} looks`),
   nativeTitle: 'Unlock the GR IV looks',
   nativeIntro:
-    'Cinema Yellow and Cinema Green are the two Cinema looks built into GR IV. GRKit builds them from the GR IV firmware as film looks for GR III and GR IIIx.',
+    'Cinema Yellow and Cinema Green are the Cinema looks built into GR IV. The Mono and Solarized looks are those of GR IV Monochrome. GRKit builds them from the GR IV firmware as film looks: the Cinema looks for GR III and GR IIIx, the monochrome looks for GR III, GR IIIx, and GR IV.',
   nativeStepDownload: 'Download the GR IV firmware from Ricoh: version 1.11, 1.20, or 1.21. Solarized needs 1.20 or later.',
   nativeOpenRicoh: 'Open the Ricoh download page',
   nativeStepChoose: 'Choose the downloaded ZIP file, or drop it here.',
@@ -1017,7 +1017,7 @@ const zhHans: Strings = {
   nativeCount: (count) => `${count} 款`,
   nativeTitle: '解锁 GR IV 色彩',
   nativeIntro:
-    'Cinema Yellow 和 Cinema Green 是 GR IV 内置的两款 Cinema 色彩。GRKit 从 GR IV 固件中取出它们，做成 GR III 和 GR IIIx 可用的胶片风格。',
+    'Cinema Yellow 和 Cinema Green 是 GR IV 内置的 Cinema 色彩，Mono 和 Solarized 是 GR IV Monochrome 的黑白色彩。GRKit 从 GR IV 固件中取出它们，做成胶片风格：Cinema 色彩用于 GR III 和 GR IIIx，黑白色彩用于 GR III、GR IIIx 和 GR IV。',
   nativeStepDownload: '从理光官网下载 GR IV 固件（1.11、1.20 或 1.21 版）。Solarized 需要 1.20 或更高版本。',
   nativeOpenRicoh: '打开理光下载页面',
   nativeStepChoose: '选择下载好的 ZIP 文件，或直接拖到这里。',
@@ -1650,7 +1650,7 @@ const zhHant: Strings = {
   nativeCount: (count) => `${count} 款`,
   nativeTitle: '解鎖 GR IV 色彩',
   nativeIntro:
-    'Cinema Yellow 與 Cinema Green 是 GR IV 內建的兩款 Cinema 色彩。GRKit 從 GR IV 韌體中取出它們，做成 GR III 與 GR IIIx 可用的底片風格。',
+    'Cinema Yellow 與 Cinema Green 是 GR IV 內建的 Cinema 色彩，Mono 與 Solarized 是 GR IV Monochrome 的黑白色彩。GRKit 從 GR IV 韌體中取出它們，做成底片風格：Cinema 色彩用於 GR III 與 GR IIIx，黑白色彩用於 GR III、GR IIIx 與 GR IV。',
   nativeStepDownload: '從理光網站下載 GR IV 韌體（1.11、1.20 或 1.21 版）。Solarized 需要 1.20 或更新版本。',
   nativeOpenRicoh: '開啟理光下載頁面',
   nativeStepChoose: '選擇下載的 ZIP 檔案，或直接拖曳到這裡。',
@@ -2284,7 +2284,7 @@ const ja: Strings = {
   nativeCount: (count) => `${count} 種類`,
   nativeTitle: 'GR IV の色を使う',
   nativeIntro:
-    '「シネマ調（イエロー）」と「シネマ調（グリーン）」は、GR IV に搭載されているイメージコントロールです。GRKit は GR IV のファームウェアからこれらを取り出し、GR III・GR IIIx 用のフィルムルックにします。',
+    '「シネマ調（イエロー）」と「シネマ調（グリーン）」は GR IV に搭載されているイメージコントロールで、Mono と Solarized は GR IV Monochrome のモノクロのルックです。GRKit は GR IV のファームウェアからこれらを取り出してフィルムルックにします。シネマ調は GR III・GR IIIx 用、モノクロは GR III・GR IIIx・GR IV 用です。',
   nativeStepDownload: 'リコーのサイトから GR IV のファームウェア（バージョン 1.11、1.20、または 1.21）をダウンロードします。Solarized には 1.20 以降が必要です。',
   nativeOpenRicoh: 'リコーのダウンロードページを開く',
   nativeStepChoose: 'ダウンロードした ZIP ファイルを選択するか、ここにドロップします。',
@@ -2922,7 +2922,7 @@ const ko: Strings = {
   nativeCount: (count) => `${count}가지`,
   nativeTitle: 'GR IV 색감 잠금 해제',
   nativeIntro:
-    'Cinema Yellow와 Cinema Green은 GR IV에 들어 있는 두 가지 Cinema 색감입니다. GRKit은 GR IV 펌웨어에서 이 색감을 꺼내 GR III와 GR IIIx용 효과로 만듭니다.',
+    'Cinema Yellow와 Cinema Green은 GR IV에 들어 있는 Cinema 색감이고, Mono와 Solarized는 GR IV Monochrome의 흑백 색감입니다. GRKit은 GR IV 펌웨어에서 이 색감을 꺼내 효과로 만듭니다. Cinema 색감은 GR III와 GR IIIx용, 흑백 색감은 GR III, GR IIIx, GR IV용입니다.',
   nativeStepDownload: '리코 사이트에서 GR IV 펌웨어(1.11, 1.20 또는 1.21)를 다운로드합니다. Solarized는 1.20 이상이 필요합니다.',
   nativeOpenRicoh: '리코 다운로드 페이지 열기',
   nativeStepChoose: '다운로드한 ZIP 파일을 선택하거나 여기에 끌어다 놓습니다.',
