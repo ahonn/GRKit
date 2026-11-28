@@ -5,6 +5,7 @@ import { InstallPage } from './App';
 import { FastbootPage } from './components/FastbootPage';
 import { HomePage } from './components/HomePage';
 import { DocsPage } from './components/DocsPage';
+import { PrivacyPage } from './components/PrivacyPage';
 import { ResourcesPage } from './components/ResourcesPage';
 import { en } from './docs/content/en';
 import { ja } from './docs/content/ja';
@@ -44,5 +45,7 @@ export function render(language: Language, page: Page): string {
       return renderToString(<FastbootPage initialLanguage={language} />);
     case 'resources':
       return renderToString(<ResourcesPage initialLanguage={language} />);
+    case 'app/privacy':
+      return renderToString(<PrivacyPage initialLanguage={language} />);
   }
 }

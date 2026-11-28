@@ -130,6 +130,7 @@ export function Footer({ strings: t, language }: { strings: Strings; language: L
         { href: `${REPOSITORY}/blob/main/effects/NOTICE.md`, label: t.licenses },
         { href: siteUrl('THIRD_PARTY_LICENSES.txt'), label: t.thirdParty },
         { href: guideUrl('TERMS', language), label: t.terms },
+        { href: pagePath(language, 'app/privacy'), label: t.privacy },
       ],
     },
   ];

@@ -4381,3 +4381,29 @@ button.row-body {
     font-size: 17px;
   }
 }
+
+/* The privacy policy: English text in the reading width of the resources page. */
+.privacy-text p {
+  margin: 0;
+  max-width: 68ch;
+  text-wrap: pretty;
+}
+
+.privacy-text .privacy-date {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.privacy-points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 68ch;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.privacy-points li {
+  text-wrap: pretty;
+}

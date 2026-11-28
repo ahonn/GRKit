@@ -348,6 +348,13 @@ const en = {
   thirdParty: 'Third-party licenses',
   recovery: 'Recovery guide',
   terms: 'Terms of use',
+  /** The privacy policy in the footer. */
+  privacy: 'Privacy policy',
+  /** The page of the privacy policy. The policy itself is in English (`privacy.ts`). */
+  privacyPage: {
+    title: 'Privacy Policy',
+    lead: 'How the GRKit phone app and grkit.app handle your data.',
+  },
   /** The text before, in, and after the terms link, next to the buttons that write or download GRKit. */
   termsNote: [
     'If you continue, you accept the ',
@@ -1063,6 +1070,11 @@ const zhHans: Strings = {
   thirdParty: '第三方许可',
   recovery: '恢复指南',
   terms: '使用条款',
+  privacy: '隐私政策',
+  privacyPage: {
+    title: '隐私政策',
+    lead: 'GRKit 手机 App 和 grkit.app 如何处理你的数据。政策正文为英文。',
+  },
   termsNote: ['继续即表示接受', '使用条款', '。'],
   termsNoteReady: ['使用即表示接受', '使用条款', '。'],
   firmwareDump: '固件导出指南',
@@ -1691,6 +1703,11 @@ const zhHant: Strings = {
   thirdParty: '第三方授權',
   recovery: '復原指南',
   terms: '使用條款',
+  privacy: '隱私權政策',
+  privacyPage: {
+    title: '隱私權政策',
+    lead: 'GRKit 手機 App 與 grkit.app 如何處理你的資料。政策內文為英文。',
+  },
   termsNote: ['繼續即表示接受', '使用條款', '。'],
   termsNoteReady: ['使用即表示接受', '使用條款', '。'],
   firmwareDump: '韌體匯出指南',
@@ -2324,6 +2341,11 @@ const ja: Strings = {
   thirdParty: 'サードパーティーのライセンス',
   recovery: '復旧ガイド',
   terms: '利用規約',
+  privacy: 'プライバシーポリシー',
+  privacyPage: {
+    title: 'プライバシーポリシー',
+    lead: 'GRKit のスマートフォンアプリと grkit.app がデータをどう扱うかを説明します。本文は英語です。',
+  },
   termsNote: ['続行すると、', '利用規約', 'に同意したものとみなされます。'],
   termsNoteReady: ['使用すると、', '利用規約', 'に同意したものとみなされます。'],
   firmwareDump: 'ファームウェア書き出しガイド',
@@ -2955,6 +2977,11 @@ const ko: Strings = {
   thirdParty: '서드파티 라이선스',
   recovery: '복구 가이드',
   terms: '이용 약관',
+  privacy: '개인정보 처리방침',
+  privacyPage: {
+    title: '개인정보 처리방침',
+    lead: 'GRKit 휴대폰 앱과 grkit.app이 데이터를 처리하는 방식입니다. 본문은 영어입니다.',
+  },
   termsNote: ['계속 진행하면 ', '이용 약관', '에 동의한 것으로 간주됩니다.'],
   termsNoteReady: ['사용하면 ', '이용 약관', '에 동의한 것으로 간주됩니다.'],
   firmwareDump: '펌웨어 덤프 가이드',
@@ -3365,6 +3392,8 @@ export function pageText(language: Language, page: Page): { title: string; descr
       return { title: `${strings.fastboot.title} · GRKit`, description: strings.fastboot.lead, path };
     case 'resources':
       return { title: `${strings.resources.title} · GRKit`, description: strings.resources.lead, path };
+    case 'app/privacy':
+      return { title: `${strings.privacyPage.title} · GRKit`, description: strings.privacyPage.lead, path };
     // The text of a doc loads with the docs (`docPageText`), which then replaces this.
     default:
       return { title: `${strings.docsLink} · GRKit`, description: strings.description, path };

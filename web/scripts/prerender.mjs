@@ -93,6 +93,7 @@ const PAGES = [
   { page: 'install', index: true },
   { page: 'fastboot', index: false },
   { page: 'resources', index: false },
+  { page: 'app/privacy', index: false },
   ...DOCS_SITE_PAGES.map((page) => ({ page, index: true })),
 ];
 

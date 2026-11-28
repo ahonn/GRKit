@@ -16,6 +16,7 @@ import { installPath, isInstallAnchor, pagePath, pathPage } from './languagePage
 import { DocsPage } from './components/DocsPage';
 import { FastbootPage } from './components/FastbootPage';
 import { HomePage } from './components/HomePage';
+import { PrivacyPage } from './components/PrivacyPage';
 import { ResourcesPage } from './components/ResourcesPage';
 // The site serves its fonts itself, so a page view sends no request to a font host.
 // loadFonts adds the Chinese, Japanese, or Korean fonts when a page in that language needs them.
@@ -81,6 +82,12 @@ if (target !== null) {
     root.render(
       <StrictMode>
         <ResourcesPage initialLanguage={language} />
+      </StrictMode>,
+    );
+  } else if (page === 'app/privacy') {
+    root.render(
+      <StrictMode>
+        <PrivacyPage initialLanguage={language} />
       </StrictMode>,
     );
   } else if (page === 'home') {
