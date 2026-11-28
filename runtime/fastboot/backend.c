@@ -339,7 +339,31 @@ static struct cached_file *pack_file(const char *dos, u32 size, u32 stamp)
 /* Write the pack again when the files of the pack folders that this start
    read differ from those of the pack that it read. */
 static struct pack_header pack_next;
-static const u8 pack_zero[8];
+/* The exFAT driver of the camera puts the partial last sector of a write in
+   the sector after the last one that it wrote, also when the file goes on in
+   a cluster that is not the next one, so the first sector of another file is
+   lost. So the pack is whole sectors, and pack_put writes it in whole
+   sectors only: each write starts on a sector of the file. The zeros after
+   the last file belong to it, as the pad of each file does. */
+#define PACK_SECTOR 512U
+#define PACK_STAGE (8U * PACK_SECTOR)
+static const u8 pack_zero[PACK_SECTOR];
+static u8 pack_stage[PACK_STAGE];
+static u32 pack_staged;
+/* Add `n` bytes to the pack in `f`: 1 when a write failed. */
+static int pack_put(int f, const u8 *p, u32 n)
+{
+    while (n) {
+        u32 k = PACK_STAGE - pack_staged < n ? PACK_STAGE - pack_staged : n, len = 0;
+        for (u32 i = 0; i < k; ++i) pack_stage[pack_staged + i] = p[i];
+        pack_staged += k; p += k; n -= k;
+        if (pack_staged == PACK_STAGE) {
+            if (FS_WRITE((u32)f, pack_stage, PACK_STAGE, &len)) return 1;
+            pack_staged = 0;
+        }
+    }
+    return 0;
+}
 static void pack_save(void)
 {
     u32 n = 0, bytes = 0, same = pack != 0;
@@ -356,6 +380,8 @@ static void pack_save(void)
         same &= c->packed;
     }
     if (!n || (same && n == pack->count)) return;
+    u32 files_end = bytes;
+    bytes = ((sizeof(struct pack_header) + bytes + PACK_SECTOR - 1U) & ~(PACK_SECTOR - 1U)) - sizeof(struct pack_header);
     if (sizeof(struct pack_header) + bytes > CACHE_BYTES) return;
     for (u32 i = n; i < PACK_FILES; ++i)
         for (u32 k = 0; k < sizeof pack_next.entry[i]; ++k) ((u8 *)&pack_next.entry[i])[k] = 0;
@@ -372,6 +398,7 @@ static void pack_save(void)
         sum = pack_sum(sum, pack_zero, ((c->size + 7U) & ~7U) - c->size);
         ++k;
     }
+    sum = pack_sum(sum, pack_zero, bytes - files_end);
     pack_next.sum = sum;
     /* A cut write leaves a pack with another sum, which the next start does
        not use. */
@@ -383,16 +410,19 @@ static void pack_save(void)
     }
     int f = FS_OPEN(FAST_PACK_FILE, MODE_TRUNCATE, 0);
     if (f < 0) return;
-    u32 len = 0;
-    int failed = FS_WRITE((u32)f, &pack_next, sizeof pack_next, &len);
+    pack_staged = 0;
+    int failed = pack_put(f, (const u8 *)&pack_next, sizeof pack_next);
     for (u32 i = 0, k = 0; !failed && i < cache.files && k < n; ++i) {
         const struct cached_file *c = &cache.file[i];
         if (!c->listed || !pack_folder(c->dos)) continue;
-        u32 pad = ((c->size + 7U) & ~7U) - c->size;
-        failed = (c->size && FS_WRITE((u32)f, (void *)(cache.bytes + c->offset), c->size, &len)) ||
-                 (pad && FS_WRITE((u32)f, (void *)pack_zero, pad, &len));
+        failed = pack_put(f, cache.bytes + c->offset, c->size) ||
+                 pack_put(f, pack_zero, ((c->size + 7U) & ~7U) - c->size);
         ++k;
     }
+    if (!failed) failed = pack_put(f, pack_zero, bytes - files_end);
+    /* The pack is whole sectors, so the rest is too. */
+    u32 len = 0;
+    if (!failed && pack_staged) FS_WRITE((u32)f, pack_stage, pack_staged, &len);
     FS_CLOSE((u32)f);
 }
 
