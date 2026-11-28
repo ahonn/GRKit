@@ -271,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-build"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "grkit-core",
@@ -285,7 +285,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-cli"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -299,7 +299,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-core"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -317,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-firmware"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "hex",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-protocol"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -338,7 +338,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-serve"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "crc32fast",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "grkit-wasm"
-version = "1.6.6"
+version = "1.7.0"
 dependencies = [
  "anyhow",
  "grkit-core",
