@@ -180,7 +180,7 @@ fn effect_compilation_is_independent_of_target_capacity() {
     let empty = tmp.path().join("empty");
     assert!(compile(&input, &empty).status.success());
     assert_eq!(fs::read_dir(empty).unwrap().count(), 0);
-    for index in 0..41 {
+    for index in 0..=grkit_core::abi::MAX_COUNT {
         write_definition(&input, &format!("custom-{index:04}"));
     }
     let output = tmp.path().join("compiled");
@@ -192,9 +192,12 @@ fn effect_compilation_is_independent_of_target_capacity() {
     );
     assert_eq!(
         serde_json::from_slice::<Value>(&result.stdout).unwrap()["effects"],
-        41
+        grkit_core::abi::MAX_COUNT + 1
     );
-    assert_eq!(fs::read_dir(&output).unwrap().count(), 41);
+    assert_eq!(
+        fs::read_dir(&output).unwrap().count(),
+        grkit_core::abi::MAX_COUNT + 1
+    );
 
     let (build, _) = fixture(&tmp.path().join("package-input"));
     let archive = tmp.path().join("overflow.zip");
@@ -210,7 +213,8 @@ fn effect_compilation_is_independent_of_target_capacity() {
         text(&archive),
     ]);
     assert!(!result.status.success());
-    assert!(String::from_utf8_lossy(&result.stderr).contains("at most 40"));
+    assert!(String::from_utf8_lossy(&result.stderr)
+        .contains(&format!("at most {}", grkit_core::abi::MAX_COUNT)));
     assert!(!archive.exists());
 }
 

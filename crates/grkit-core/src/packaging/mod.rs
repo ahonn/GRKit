@@ -531,6 +531,18 @@ pub fn load_runtime(manifest: &[u8], files: &Files) -> Result<VerifiedRuntime> {
 
 pub use crate::card::EFFECTS_FOLDER;
 
+/// Refuses two effects with the same code (`recipes::effect_code`). Recipes and dial modes name
+/// an effect by its code, and the camera takes the first effect with the code, so a recipe of one
+/// would apply the other.
+pub(crate) fn unique_effect_code(a: &str, b: &str) -> Result<()> {
+    ensure!(
+        recipes::effect_code(a) != recipes::effect_code(b),
+        "The effects {a} and {b} have the same code, so a recipe of one would apply the other. \
+         Import one of them again to give it a new ID."
+    );
+    Ok(())
+}
+
 pub use crate::card::PACKAGE_LIST;
 
 /// The compiled effects of a package, each under its package filename (`effects::filename`),
@@ -551,8 +563,8 @@ impl EffectSet {
     }
 
     /// Adds one compiled effect and returns its ID. It refuses an effect that does not
-    /// decode, a second effect with the same filename, and more than `runtime::MAX_COUNT`
-    /// effects.
+    /// decode, a second effect with the same filename or the same code
+    /// (`unique_effect_code`), and more than `runtime::MAX_COUNT` effects.
     pub fn insert(&mut self, blob: Vec<u8>) -> Result<String> {
         let id = effects::decode(&blob)?.0.id;
         let name = effects::filename(&id)?;
@@ -560,6 +572,9 @@ impl EffectSet {
             !self.files.contains_key(&name),
             "Duplicate effect ID or filename hash collision: {id}"
         );
+        for other in self.files.values() {
+            unique_effect_code(&effects::decode(other)?.0.id, &id)?;
+        }
         ensure!(
             !self.left_out.contains(&name),
             "The package leaves out the effect {id}"

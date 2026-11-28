@@ -130,8 +130,26 @@ export const isTone = (value: unknown): value is Uint16Array =>
   value instanceof Uint16Array && (value.length === 0 || value.length === TONE_VALUES);
 
 /**
+ * The code of an effect in the records and in recipes: the low 15 bits of the FNV-1a hash of its
+ * ID (`grkit_core::recipes::effect_code`). Recipes and dial modes name an effect by this code.
+ */
+export function effectCode(id: string): number {
+  let hash = 0x811c9dc5;
+  for (const byte of new TextEncoder().encode(id)) {
+    hash ^= byte;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash & 0x7fff;
+}
+
+/** True for a code in the page of the native looks of GR IV (`NATIVE_CODE` of the installer). */
+const nativePageCode = (code: number): boolean => code >> 8 === 0x01;
+
+/**
  * A new effect ID for `name`: `lut-` and the lowercase letters and digits of the name, with a
- * number when the ID is taken. The prefix keeps imported IDs apart from the catalog IDs.
+ * number when the ID is taken. The prefix keeps imported IDs apart from the catalog IDs. The ID
+ * also needs a code of its own, apart from the codes of `taken` and of the native looks, and out of
+ * the native page of GR IV: a recipe of one effect must not apply another.
  */
 export function effectId(name: string, taken: ReadonlySet<string>): string {
   const slug =
@@ -141,8 +159,13 @@ export function effectId(name: string, taken: ReadonlySet<string>): string {
       .replace(/^-+|-+$/g, '') || 'effect';
   // Room for "-" and two digits.
   const base = `${LUT_PREFIX}${slug}`.slice(0, MAX_ID - 3).replace(/-+$/, '');
+  const codes = new Set([...taken, ...NATIVE_LOOK_IDS].map(effectCode));
+  const free = (id: string) => {
+    const code = effectCode(id);
+    return !taken.has(id) && !codes.has(code) && !nativePageCode(code);
+  };
   let id = base;
-  for (let number = 2; taken.has(id); number += 1) {
+  for (let number = 2; !free(id); number += 1) {
     id = `${base}-${number}`;
   }
   return id;

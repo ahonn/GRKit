@@ -116,28 +116,36 @@ static int dos_path(const char *path, char *out)
 }
 
 /* ---- RAM files (/tmp) ---------------------------------------------------- */
-/* The only /tmp file is the plan (FAST_PLAN_FILE). Its largest size is that
-   of the plan buffer of installer.c, 354 KB with 40 effects and 64 listed. A
+/* The only /tmp file is the plan (FAST_PLAN_FILE). Its bytes are the plan
+   buffer of installer.c (install_plan), which is in the kept data, so SCAN
+   writes the plan in place and INSTALL reads it in place. The buffer has
+   FAST_PLAN_MAX bytes (grkit-core PLAN_MAX_SIZE, which the build passes). A
    longer plan is a short write, so SCAN fails and the loader uses Linux. */
+#ifndef FAST_PLAN_MAX
+#error "The build passes FAST_PLAN_MAX"
+#endif
+extern u8 *const install_plan;
 #define RAM_FILES 1U
-#define RAM_CAP (360U * 1024U)
+#define RAM_CAP FAST_PLAN_MAX
 #define PATH_SIZE 96U
-struct ram_file { char path[PATH_SIZE]; u32 size; int present; u8 bytes[RAM_CAP]; };
+struct ram_file { char path[PATH_SIZE]; u32 size; int present; u8 *bytes; };
 static struct ram_file ram[RAM_FILES] __attribute__((section(".fast_keep")));
 static struct ram_file *ram_find(const char *path)
 {
     for (u32 i = 0; i < RAM_FILES; ++i) if (ram[i].present && seq(ram[i].path, path)) return &ram[i];
     return 0;
 }
+/* Only the plan can be a RAM file: its bytes are the plan buffer. */
 static struct ram_file *ram_make(const char *path)
 {
     struct ram_file *f = ram_find(path);
     if (!f) {
-        if (slen(path) >= PATH_SIZE) return 0;
+        if (!seq(path, FAST_PLAN_FILE) || slen(path) >= PATH_SIZE) return 0;
         for (u32 i = 0; i < RAM_FILES && !f; ++i) if (!ram[i].present) f = &ram[i];
         if (!f) return 0;
         u32 i = 0; for (; path[i]; ++i) f->path[i] = path[i]; f->path[i] = 0;
         f->present = 1;
+        f->bytes = install_plan;
     }
     f->size = 0;
     return f;

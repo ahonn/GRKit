@@ -422,6 +422,9 @@ pub enum LookError {
     OfficialReadOnly,
     /// The camera menu shows as many Looks as it can.
     NoRoom,
+    /// Another Look has the code of this one, so a recipe of one would
+    /// apply the other.
+    CodeTaken,
     /// The card holds as many Looks as the camera lists.
     CardFull,
     /// A software update waits on the camera.
@@ -458,6 +461,7 @@ impl LookError {
                 ("looks.error.official_title", "looks.error.official_body")
             }
             LookError::NoRoom => ("looks.error.full_title", "looks.error.full_body"),
+            LookError::CodeTaken => ("looks.error.code_title", "looks.error.code_body"),
             LookError::CardFull => ("looks.error.card_full_title", "looks.error.card_full_body"),
             LookError::UpdatePending => ("looks.error.pending_title", "looks.error.pending_body"),
             LookError::Busy => ("looks.error.busy_title", "looks.error.busy_body"),
@@ -488,6 +492,7 @@ pub fn look_error(status: u16, body: &str) -> LookError {
         "active_look" => return LookError::ActiveLook,
         "official_look_read_only" => return LookError::OfficialReadOnly,
         "look_capacity" => return LookError::NoRoom,
+        "effect_code_collision" => return LookError::CodeTaken,
         "software_pending" => return LookError::UpdatePending,
         "camera_busy" => return LookError::CameraBusy,
         "restart_required" => return LookError::RestartRequired,
@@ -602,7 +607,10 @@ pub fn name_from_file(file: &str) -> String {
 }
 
 /// A new Look ID for `name`: `lut-` and the lowercase letters and digits of
-/// the name, with a number when the ID is taken.
+/// the name, with a number when the ID is taken. The ID also needs a code of
+/// its own (`grkit_core::recipes::effect_code`), apart from the codes of
+/// `taken` and of the unlockable looks, and out of the native page of GR IV:
+/// recipes name a Look by its code, and the camera service refuses such an ID.
 pub fn import_id(name: &str, taken: &BTreeSet<String>) -> String {
     let mut slug = String::new();
     for c in name.to_ascii_lowercase().chars() {
@@ -621,9 +629,22 @@ pub fn import_id(name: &str, taken: &BTreeSet<String>) -> String {
     while base.ends_with('-') {
         base.pop();
     }
+    let code = grkit_core::recipes::effect_code;
+    let unlockable = grkit_core::gr4_looks::LOOKS
+        .iter()
+        .map(|look| look.effect_id)
+        .chain(grkit_core::gr2_looks::TARGETS.iter().map(|(id, _)| *id));
+    let codes: BTreeSet<u16> = taken
+        .iter()
+        .map(String::as_str)
+        .chain(unlockable)
+        .map(code)
+        .collect();
+    let free =
+        |id: &str| !taken.contains(id) && !codes.contains(&code(id)) && code(id) >> 8 != 0x01;
     let mut id = base.clone();
     let mut number = 2;
-    while taken.contains(&id) {
+    while !free(&id) {
         id = format!("{base}-{number}");
         number += 1;
     }
@@ -953,6 +974,11 @@ mod tests {
             import_id("Kodak Portra 400", &taken),
             "lut-kodak-portra-400-2"
         );
+        // lut-test-146 and lut-test-1220 have the code 0x0a41, and
+        // lut-page-38 is in the native page of GR IV (0x01ca).
+        let taken = BTreeSet::from(["lut-test-146".to_owned()]);
+        assert_eq!(import_id("Test 1220", &taken), "lut-test-1220-2");
+        assert_eq!(import_id("Page 38", &BTreeSet::new()), "lut-page-38-2");
         let long = import_id("A very long name for a look indeed", &BTreeSet::new());
         assert!(long.len() <= ID_MAX - 3);
         assert!(grkit_core::effects::valid_id(&long));

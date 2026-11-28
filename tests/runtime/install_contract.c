@@ -22,7 +22,7 @@ typedef unsigned int u32;
    (crates/grkit-build/src/loader.rs). The target has no Image Control, so
    discover lists no effect. */
 #define GRKIT_NO_IMAGE_CONTROL 1
-#define MAX_COUNT 40U
+#define MAX_COUNT 50U
 #define ICONS_PER_CHUNK 40U
 #define ICON_STRIDE 0x1908U
 #define HOST_ICON_COUNT 4U
@@ -1787,6 +1787,31 @@ static void the_package_list_leaves_out_effects(void)
     read_package_list();
     assert(!package_listed && !package_left_out_count && !package_leaves_out("13A530FC.GRF"));
 }
+/* Recipes name an effect by the code of its ID, so of two effects with one
+   code only the one with the smaller ID installs, in any order. The other
+   files are missing, so those effects stay unreadable. */
+static void an_effect_with_a_taken_code_does_not_install(void)
+{
+    /* lut-test-1220 and lut-test-146 have the code 0x0a41. */
+    static const char *const ids[] = {"lut-test-146", "portra-400", "lut-test-1220"};
+    reset();
+    read_package_list();
+    memset(listed, 0, sizeof listed);
+    listed_count = 3;
+    for (u32 i = 0; i < listed_count; ++i) {
+        memcpy(listed[i] + CATALOG_ID, ids[i], strlen(ids[i]));
+        snprintf(names[i], CATALOG_NAME_SIZE, "%08X.GRF", i);
+    }
+    assert(listed_code(0) == listed_code(2) && listed_code(0) != listed_code(1));
+    choose_effects();
+    assert(count == 0);
+    for (u32 i = 0; i < listed_count; ++i) {
+        const char *id = (const char *)listed[i] + CATALOG_ID;
+        assert(listed_status[i] == (!strcmp(id, "lut-test-146") ? EFFECT_CODE_TAKEN : EFFECT_UNREADABLE));
+        assert(listed_record[i] == EFFECTS_NO_RECORD);
+    }
+    listed_count = 0;
+}
 /* IMPORTED.TXT: a line with the size and the stamp of an inbox file gives its
    hash while both stay the same, so the RTOS side does not read the file. A
    line without them, or another size or stamp, needs the file. */
@@ -1931,6 +1956,7 @@ static void *run(void *unused)
     (void)unused;
     imported_lines_give_the_hash_of_an_unchanged_file();
     the_package_list_leaves_out_effects();
+    an_effect_with_a_taken_code_does_not_install();
     indicators_resolve_settings_and_preserve_shared_descriptors();
     indicators_reject_conflicts_overflow_and_used_value_ranges();
     legacy_tone_icon_is_only_for_old_module_abi();

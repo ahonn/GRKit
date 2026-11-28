@@ -63,7 +63,11 @@ impl DataCheck {
                 name.rsplit('/').next() == Some(effects::filename(&id)?.as_str()),
                 "Profile filename does not match its stable ID"
             );
-            ensure!(self.ids.insert(id), "Duplicate effect ID");
+            ensure!(!self.ids.contains(&id), "Duplicate effect ID");
+            for other in &self.ids {
+                unique_effect_code(other, &id)?;
+            }
+            self.ids.insert(id);
             self.listed
                 .push(name.rsplit('/').next().unwrap_or_default().to_owned());
         } else if let Some(file) = name

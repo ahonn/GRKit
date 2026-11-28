@@ -130,6 +130,7 @@ static void write_report(int status)
             say("  loaded, hidden: Off in the GRKit section of MENU\r\n");
         else if (listed_status[i] == EFFECT_OFF) say("  not loaded: Off in the GRKit section of MENU\r\n");
         else if (listed_status[i] == EFFECT_OVER) { say("  not loaded: GRKit installs at most "); say_number(MAX_COUNT); say(" effects\r\n"); }
+        else if (listed_status[i] == EFFECT_CODE_TAKEN) say("  not loaded: an effect with a smaller ID has its code, so a recipe could not tell them apart\r\n");
         else say("  not loaded: the file changed during the start\r\n");
     }
     if (overflow_count) {

@@ -300,7 +300,7 @@ fn the_list_joins_the_files_of_the_card_with_the_choices_of_the_camera() {
     );
     assert_eq!(
         list["limits"],
-        json!({"listedLooks": 64, "loadedLooks": 40, "storedLooks": looks::MAX_STORED})
+        json!({"listedLooks": 64, "loadedLooks": MAX_LOADED, "storedLooks": looks::MAX_STORED})
     );
     assert_eq!(list["diagnostics"], json!([]));
     let beta = &list["looks"][0];
@@ -414,8 +414,8 @@ fn off_and_on_set_the_choice_in_the_camera_at_once() {
 }
 
 #[test]
-fn at_most_forty_looks_are_on() {
-    let ids: Vec<String> = (0..41).map(|i| format!("look-{i}")).collect();
+fn at_most_max_loaded_looks_are_on() {
+    let ids: Vec<String> = (0..=MAX_LOADED).map(|i| format!("look-{i}")).collect();
     let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
     let fixture = Fixture::new(&ids, &ids);
     fixture.camera.lock().unwrap().looks.looks[0].enabled = false;

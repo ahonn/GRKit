@@ -311,18 +311,7 @@ export function sameRecipes(a: readonly Recipe[], b: readonly Recipe[]): boolean
   return a.length === b.length && canonical(a) === canonical(b);
 }
 
-/**
- * The code of an effect in the records and in recipes: the low 15 bits of the FNV-1a hash of its
- * ID (`grkit_core::recipes::effect_code`).
- */
-export function effectCode(id: string): number {
-  let hash = 0x811c9dc5;
-  for (const byte of new TextEncoder().encode(id)) {
-    hash ^= byte;
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash & 0x7fff;
-}
+export { effectCode } from './import/names';
 
 /**
  * The warnings of a library for a package: the recipes whose Grain has no effect without the

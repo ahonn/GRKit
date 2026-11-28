@@ -43,6 +43,8 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
     fs::create_dir_all(&directory)?;
     // The address of the loader for head.S and the installer (fast.ld).
     let fast_base = format!("-DFAST_BASE={:#x}", grkit_core::runtime::FAST_BASE);
+    // The size of the largest plan, for the RAM file of the plan (backend.c).
+    let plan_max = format!("-DFAST_PLAN_MAX={}U", grkit_core::abi::PLAN_MAX_SIZE);
     // The flags of the production installer, with RTOS_NATIVE.
     let compile = |source: &Path, include: &Path, output: &Path| {
         toolchain::run(
@@ -59,6 +61,7 @@ pub fn files(tools: &Toolchain, objects: &Path, runtime: &Path, target: &str) ->
                 "-fno-pic",
                 "-DRTOS_NATIVE",
                 fast_base.as_str(),
+                plan_max.as_str(),
                 "-I",
                 path(include)?,
                 "-c",

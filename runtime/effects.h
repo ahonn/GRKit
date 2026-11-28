@@ -34,11 +34,13 @@
 #define EFFECTS_STRIDE (EFFECTS_NAME + 2U * EFFECTS_NAME_UNITS)
 #define EFFECTS_NO_RECORD 0xffffffffU
 /* The status of an effect that installed, of one that is Off, of one past
-   MAX_COUNT, and of one whose file changed during the start. */
+   MAX_COUNT, of one whose file changed during the start, and of one whose ID
+   has the code of an effect with a smaller ID (runtime/install_effects.h). */
 #define EFFECT_LOADED 0U
 #define EFFECT_OFF 2U
 #define EFFECT_OVER 3U
 #define EFFECT_UNREADABLE 4U
+#define EFFECT_CODE_TAKEN 5U
 /* A choice: Off in bit 0, the position + 1 above. */
 #define EFFECT_CHOICE_VALUES (2U * (EFFECTS_LISTED + 1U))
 #define EFFECTS_DEFAULT_KEY 1000U
@@ -89,10 +91,12 @@ static u32 effects_record(volatile u32 *h,u32 effect) {
 /* Whether a choice waits for the next start: an effect that is On did not
    install, and its file can. */
 static u32 effects_changed(volatile u32 *h) {
-    u32 n=effects_count(h), i;
-    for(i=0;i<n;++i)
+    u32 n=effects_count(h), i, status;
+    for(i=0;i<n;++i) {
+        status=MANAGE_MAP(effects_entry(h,i)+EFFECTS_STATUS)[0];
         if(!effects_off(h,i) && effects_record(h,i)==EFFECTS_NO_RECORD &&
-           MANAGE_MAP(effects_entry(h,i)+EFFECTS_STATUS)[0]!=EFFECT_UNREADABLE) return 1;
+           status!=EFFECT_UNREADABLE && status!=EFFECT_CODE_TAKEN) return 1;
+    }
     return 0;
 }
 /* Turn an effect on or off. Off of the committed effect commits Off. */

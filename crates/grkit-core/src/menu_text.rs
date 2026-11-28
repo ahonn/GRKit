@@ -9,7 +9,7 @@ use anyhow::{bail, ensure, Result};
 use crate::language::Language;
 
 /// The size of the text area after the picture scratch.
-pub const TEXT_SIZE: usize = 24576;
+pub const TEXT_SIZE: usize = 28672;
 /// Where the Image Control summaries start in the text area. The label table
 /// must end before it.
 pub const TEXT_SUMMARY: usize = 8192;

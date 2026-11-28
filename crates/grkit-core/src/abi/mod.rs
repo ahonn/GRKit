@@ -183,12 +183,12 @@ const _: () = assert!(HOST_ICON_COUNT <= ICONS_PER_CHUNK);
 /// record of the registry array and an icon slot, about 10.5 KB of script
 /// memory. The registry holds only the header and the records, and they fit
 /// one array of 65536 words. The tail is an array of its own.
-pub const MAX_COUNT: usize = 40;
+pub const MAX_COUNT: usize = 50;
 /// The most effect files that GRKit lists, those with the smallest IDs
 /// (runtime/effects.h).
 pub const EFFECTS_LISTED: usize = 64;
 /// The chunk addresses that the header holds (`GRKIT_HOST_ICON_CHUNKS`).
-pub const ICON_CHUNK_SLOTS: usize = 5;
+pub const ICON_CHUNK_SLOTS: usize = 6;
 
 /// The placeholder for the header address in ARM code. The installer replaces
 /// each literal word with this value by the address of the `registry` array.
@@ -873,6 +873,12 @@ fields!(RCP_RECORD_FIELDS {
 /// (`GRKIT_GRF_MAX_SIZE` bytes each), then an entry for each listed effect.
 /// The loader reads the words up to `PLAN_MODULE_TILES` in order.
 pub const PLAN_HEADER_SIZE: usize = 40;
+/// The largest plan: `MAX_COUNT` installed effects and `EFFECTS_LISTED`
+/// entries (the `plan` buffer of runtime/installer.c). The fast-boot file of
+/// the plan holds this many bytes (runtime/fastboot/backend.c).
+pub const PLAN_MAX_SIZE: usize = PLAN_HEADER_SIZE
+    + MAX_COUNT * crate::effects::SIZE_WITH_LEVELS
+    + EFFECTS_LISTED * PLANNED_EFFECT_SIZE;
 /// The first word of the plan.
 pub const PLAN_MAGIC_VALUE: u32 = HOST_MAGIC_VALUE;
 /// The modes of `PLAN_MODES`.

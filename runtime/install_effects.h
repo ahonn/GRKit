@@ -32,12 +32,30 @@ static u32 effect_choice_id(u32 i)
     name[n] = 0;
     return grm_state_id(name);
 }
+/* The code of the ID of listed effect i (effect_code without its high bit).
+   Recipes and dial modes name an effect by this code (runtime/recipes.h), and
+   they take the first installed effect with it. */
+static u32 listed_code(u32 i)
+{
+    const u8 *id=listed[i]+CATALOG_ID;
+    return fnv(id,length((const char *)id))&0x7fffU;
+}
+/* Whether a listed effect with a smaller ID has the code of effect i. Then
+   effect i does not install, so a recipe of the other never applies it, and
+   which of the two installs does not depend on their order. */
+static int code_taken(const u32 *codes,u32 i)
+{
+    for(u32 j=0;j<listed_count;++j)
+        if(j!=i && codes[j]==codes[i] && catalog_compare(listed[j]+CATALOG_ID,listed[i]+CATALOG_ID)<0) return 1;
+    return 0;
+}
 /* Read the choices of the listed effects and order them: an effect with a
    position first, then the effects of the package, then the others, each
    group in ID order. Then install the effects that are not Off, in that
    order, then the effects that are Off while there is room, at most
    MAX_COUNT: an installed effect turns on or off at once
-   (runtime/effects.h). A pending effect installs from the inbox. */
+   (runtime/effects.h). A pending effect installs from the inbox. An effect
+   whose code another one has does not install (code_taken). */
 static struct state saved_state;
 static void choose_effects(void)
 {
@@ -57,6 +75,8 @@ static void choose_effects(void)
             t = keys[j]; keys[j] = keys[j - 1]; keys[j - 1] = t;
             t = listed_choice[j]; listed_choice[j] = listed_choice[j - 1]; listed_choice[j - 1] = t;
         }
+    u32 codes[EFFECTS_LISTED];
+    for (u32 i = 0; i < listed_count; ++i) codes[i] = listed_code(i);
     count = 0;
     for (u32 pass = 0; pass < 2; ++pass)
         for (u32 i = 0; i < listed_count; ++i) {
@@ -65,6 +85,10 @@ static void choose_effects(void)
             if (!pass) listed_record[i] = EFFECTS_NO_RECORD;
             if (off != pass) continue;
             listed_status[i] = off ? EFFECT_OFF : EFFECT_OVER;
+            if (code_taken(codes, i)) {
+                listed_status[i] = EFFECT_CODE_TAKEN;
+                continue;
+            }
             if (count == MAX_COUNT) continue;
             /* The file can change between the two reads: a profile with
                another ID does not install. */

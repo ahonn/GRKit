@@ -1117,6 +1117,18 @@ looks.error.gone_body:
   zh-Hant: "這個底片風格已不在相機上。"
   ja: "このフィルムルックはカメラにありません。"
   ko: "이 필름 룩은 더 이상 카메라에 없습니다."
+looks.error.code_title:
+  en: Film Look Conflict
+  zh-Hans: 胶片风格冲突
+  zh-Hant: "底片風格衝突"
+  ja: "フィルムルックが競合しています"
+  ko: "필름 룩 충돌"
+looks.error.code_body:
+  en: Recipes cannot tell this film look from another one. Remove one of them first.
+  zh-Hans: 配方无法区分这个胶片风格和另一个胶片风格。请先移除其中一个。
+  zh-Hant: "配方無法區分這個底片風格和另一個底片風格。請先移除其中一個。"
+  ja: "レシピでこのフィルムルックと別のフィルムルックを区別できません。先にどちらかを外してください。"
+  ko: "레시피가 이 필름 룩과 다른 필름 룩을 구분할 수 없습니다. 먼저 하나를 제거하세요."
 looks.error.cover_title:
   en: Cover Not Saved
   zh-Hans: 封面未保存

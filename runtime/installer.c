@@ -54,8 +54,18 @@ static u8 profiles[MAX_COUNT + 1][GRKIT_GRF_MAX_SIZE];
 static u8 temporary[GRKIT_GRF_MAX_SIZE];
 static u8 directory_entries[4096];
 /* The plan (runtime/abi.h: GRKIT_PLAN_*): the header, the installed
-   effects, then the listed effects. */
+   effects, then the listed effects. On the RTOS side it is also the bytes of
+   the RAM file of the plan (runtime/fastboot/backend.c), so it is in the
+   kept data, which lasts from SCAN to INSTALL, and the fast-boot file holds
+   the plan once. INSTALL only reads it, so a retry finds it unchanged. */
+#ifdef RTOS_NATIVE
+static u8 plan[GRKIT_PLAN_HEADER_SIZE + MAX_COUNT * GRKIT_GRF_MAX_SIZE + EFFECTS_LISTED * GRKIT_PLANNED_EFFECT_SIZE]
+    __attribute__((section(".fast_keep"), aligned(8)));
+_Static_assert(sizeof(plan) == FAST_PLAN_MAX, "The plan of the fast-boot file is grkit-core PLAN_MAX_SIZE");
+u8 *const install_plan = plan;
+#else
 static u8 plan[GRKIT_PLAN_HEADER_SIZE + MAX_COUNT * GRKIT_GRF_MAX_SIZE + EFFECTS_LISTED * GRKIT_PLANNED_EFFECT_SIZE];
+#endif
 static u32 count, size, icon_chunks;
 /* The package folder holds the core, the package list, the package modules,
    and the inbox of the package effects. GRKIT holds the data of the person:
@@ -442,7 +452,7 @@ static int read_plan(void)
         listed_status[i] = get32(entry + GRKIT_PLANNED_STATUS);
         listed_choice[i] = get32(entry + GRKIT_PLANNED_CHOICE);
         listed_record[i] = get32(entry + GRKIT_PLANNED_RECORD);
-        if (listed_status[i] > EFFECT_UNREADABLE || listed_choice[i] >= EFFECT_CHOICE_VALUES ||
+        if (listed_status[i] > EFFECT_CODE_TAKEN || listed_choice[i] >= EFFECT_CHOICE_VALUES ||
             (listed_record[i] != EFFECTS_NO_RECORD && listed_record[i] >= count)) return plan_failed(PLAN_CHECK_LISTED, i);
     }
     for (u32 i = 0; i < count; ++i) {

@@ -270,7 +270,7 @@ pub(super) const SCREENS: &[DemoScreen] = &[
     // L24 — the camera is full, with changes waiting for a restart.
     DemoScreen {
         id: "L24",
-        key_text: "40/40 on Camera · Full",
+        key_text: "50/50 on Camera · Full",
         alert: false,
         seed: |seed| {
             seed.demo.edit_looks(|f| {
@@ -296,7 +296,7 @@ pub(super) const SCREENS: &[DemoScreen] = &[
     // L26 — a Look on the card only, and the camera is full.
     DemoScreen {
         id: "L26",
-        key_text: "The camera is full (40/40). Move a film look off the camera first.",
+        key_text: "The camera is full (50/50). Move a film look off the camera first.",
         alert: false,
         seed: |seed| {
             let app = seed.app;

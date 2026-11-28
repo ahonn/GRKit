@@ -7,6 +7,7 @@ import {
   coverFromFile,
   coverIcon,
   effectFilename,
+  effectCode,
   effectId,
   isLutImportId,
   isPreset,
@@ -72,6 +73,15 @@ describe('imported effect names', () => {
     expect(long.length).toBeLessThanOrEqual(28);
     expect(effectId('An extremely long name here', new Set([long])).length).toBeLessThanOrEqual(31);
     expect(long).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+  });
+
+  it('gives a new ID a code of its own, out of the native page of GR IV', () => {
+    // lut-test-146 and lut-test-1220 have the code 0x0a41.
+    expect(effectCode('lut-test-146')).toBe(effectCode('lut-test-1220'));
+    expect(effectId('Test 1220', new Set(['lut-test-146']))).toBe('lut-test-1220-2');
+    // lut-page-38 has the code 0x01ca.
+    expect(effectCode('lut-page-38') >> 8).toBe(1);
+    expect(effectId('Page 38', new Set())).toBe('lut-page-38-2');
   });
 
   it('makes cover fields in the pattern of the catalog covers', () => {

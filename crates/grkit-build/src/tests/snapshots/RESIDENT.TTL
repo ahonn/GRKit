@@ -7,7 +7,7 @@ if result = 0 stateok = 0
 hasserve = 0
 servepolls = 0
 respon = 0
-cword = registry[1633]
+cword = registry[1634]
 if cword < 1 goto resident_serve
 if cword > modulewords - 1072 goto resident_serve
 filesearch 'C:\SCRIPT\GRKIT\SERVE.BIN'
@@ -22,19 +22,19 @@ if result <> 0 goto resident_updated
 filedelete 'C:\SCRIPT\GRKIT\COMMIT.VER'
 :resident_updated
 legacy = 0
-export = registry[1632]
+export = registry[1633]
 if modulewords <> 0 goto resident_export
 if export <> 0 goto resident_export
 legacy = 1
 :resident_export
 changes = 1
-if legacy <> 0 changes = registry[65]
+if legacy <> 0 changes = registry[66]
 saved = changes
 last = changes
-rchanges = registry[980]
+rchanges = registry[981]
 rsaved = 0
 rchangeslast = rchanges
-dchanges = registry[1012]
+dchanges = registry[1013]
 dsaved = 0
 dchangeslast = dchanges
 filesearch 'C:\GRKIT\STATE.TXT'
@@ -42,13 +42,13 @@ if result = 0 saved = changes - 1
 hint = 0
 quiet = 0 - 1
 idle = 0
-profile = registry[67]
+profile = registry[68]
 if profile <> 0 goto profile_watch
 :watch
 mpause 2000
 if hasserve <> 0 call serve
 call update_poll
-hint = registry[65] + registry[980] + registry[1012]
+hint = registry[66] + registry[981] + registry[1013]
 if hint <> quiet idle = 30
 idle = idle + 1
 if idle <= 30 goto watch
@@ -65,14 +65,14 @@ last = changes
 if legacy <> 0 goto watch_state_saved
 call release_capture
 :watch_state_saved
-rchanges = registry[980]
+rchanges = registry[981]
 if rchanges <> rchangeslast goto watch_recipes_saved
 if rchanges = rsaved goto watch_recipes_saved
 rstamp = rchanges
 call save_recipes
 :watch_recipes_saved
 rchangeslast = rchanges
-dchanges = registry[1012]
+dchanges = registry[1013]
 if dchanges <> dchangeslast goto watch_usermode_saved
 if dchanges = dsaved goto watch_usermode_saved
 dstamp = dchanges
@@ -180,8 +180,8 @@ goto save_parameters
 mindex = 0
 :save_modules
 if mindex >= mcount goto save_modules_end
-mid = modulecode[pbase + 137 + mindex * 2]
-mvalue = modulecode[pbase + 138 + mindex * 2]
+mid = modulecode[pbase + 167 + mindex * 2]
+mvalue = modulecode[pbase + 168 + mindex * 2]
 if mid <= 0 goto save_modules_next
 if mvalue < 0 goto save_modules_next
 int2str line mid
@@ -213,7 +213,7 @@ if sfh < 0 goto save_recipes_end
 rindex = 0
 :recipe_word
 if rindex >= 705 goto recipe_word_end
-rvalue = registry[275 + rindex]
+rvalue = registry[276 + rindex]
 if rvalue <= 0 goto recipe_word_next
 if rvalue > 536870911 goto recipe_word_next
 rkey = rindex % 6
@@ -261,7 +261,7 @@ if sfh < 0 goto save_usermode_end
 rindex = 0
 :set_word
 if rindex >= 619 goto set_word_end
-rvalue = registry[1013 + rindex]
+rvalue = registry[1014 + rindex]
 if rvalue <= 0 goto set_word_next
 if rvalue > 999999999 goto set_word_next
 rkey = rindex / 201
@@ -306,10 +306,10 @@ return
 :capture
 captured = 0
 if legacy <> 0 goto legacy_capture
-if modulewords < 457 return
-pbase = registry[1632]
+if modulewords < 487 return
+pbase = registry[1633]
 if pbase < 2 return
-pmax = modulewords - 457
+pmax = modulewords - 487
 if pbase > pmax return
 ticket = modulecode[pbase + 0]
 released = modulecode[pbase + 2]
@@ -330,8 +330,8 @@ goto capture_poll
 mpause 1
 pcount = modulecode[pbase + 15]
 if pcount < 0 goto capture_invalid
-if pcount > 40 goto capture_invalid
-mcount = modulecode[pbase + 136]
+if pcount > 50 goto capture_invalid
+mcount = modulecode[pbase + 166]
 if mcount < 0 goto capture_invalid
 if mcount > 160 goto capture_invalid
 changes = modulecode[pbase + 3]
@@ -346,10 +346,10 @@ mpause 1
 modulecode[pbase + 2] = ticket
 return
 :legacy_capture
-changes = registry[65]
+changes = registry[66]
 pcount = registry[0]
 if pcount < 0 pcount = 0
-if pcount > 40 pcount = 0
+if pcount > 50 pcount = 0
 mcount = 0
 captured = 1
 return
@@ -362,24 +362,24 @@ rest = offset % 4352
 if rest <> 0 goto legacy_values
 index = offset / 4352
 if index >= pcount goto legacy_values
-value0 = registry[1648 + index * 1088 + 446] and 65535
+value0 = registry[1649 + index * 1088 + 446] and 65535
 :legacy_values
-value1 = registry[52]
+value1 = registry[53]
 value2 = registry[12]
-value3 = registry[60]
-value4 = registry[245]
-value5 = registry[64]
-value6 = registry[47]
-value7 = registry[262]
-value8 = registry[263]
-value9 = registry[273]
-value10 = registry[274]
+value3 = registry[61]
+value4 = registry[246]
+value5 = registry[65]
+value6 = registry[48]
+value7 = registry[263]
+value8 = registry[264]
+value9 = registry[274]
+value10 = registry[275]
 return
 :legacy_parameters
-pcode = registry[1648 + pindex * 1088 + 446] and 32767
-pw0 = registry[1648 + pindex * 1088 + 459]
-pw1 = registry[1648 + pindex * 1088 + 460]
-pw2 = registry[1648 + pindex * 1088 + 461]
+pcode = registry[1649 + pindex * 1088 + 446] and 32767
+pw0 = registry[1649 + pindex * 1088 + 459]
+pw1 = registry[1649 + pindex * 1088 + 460]
+pw2 = registry[1649 + pindex * 1088 + 461]
 pvalue = 0
 pdigit = (pw2 >> 0) and 255
 if pdigit > 8 pdigit = 0
@@ -408,10 +408,10 @@ pvalue = pvalue * 9 + pdigit
 pdigit = (pw0 >> 0) and 255
 if pdigit > 8 pdigit = 0
 pvalue = pvalue * 9 + pdigit
-ptone = (registry[1648 + pindex * 1088 + 463] >> 16) and 255
+ptone = (registry[1649 + pindex * 1088 + 463] >> 16) and 255
 return
 :serve
-wlan = registry[1646]
+wlan = registry[1647]
 running = modulecode[cword + 25]
 if running <> 0 running = 1
 if running = wlan goto serve_settled
@@ -429,10 +429,10 @@ return
 servepolls = 0
 return
 :update_poll
-updstate = registry[1643]
+updstate = registry[1644]
 if updstate = 2 goto update_confirmed
 if updlooked = 0 goto update_count
-updwlan = registry[1646] + updstate
+updwlan = registry[1647] + updstate
 if updwlan = 0 return
 :update_count
 updatepolls = updatepolls + 1
@@ -446,14 +446,14 @@ if updstate <> 3 return
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.TTL'
 if result <> 0 return
 :update_none
-registry[1643] = 0
+registry[1644] = 0
 return
 :update_waits
 if updstate = 1 return
 call update_version
-registry[1643] = 1
-registry[1645] = 1
-registry[48] = 1
+registry[1644] = 1
+registry[1646] = 1
+registry[49] = 1
 return
 :update_confirmed
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.REQ'
@@ -462,7 +462,7 @@ filerename 'C:\SCRIPT\GRKIT\COMMIT.REQ' 'C:\SCRIPT\GRKIT\COMMIT.TTL'
 :update_renamed
 filesearch 'C:\SCRIPT\GRKIT\COMMIT.TTL'
 if result = 0 goto update_none
-registry[1643] = 3
+registry[1644] = 3
 return
 :update_version
 updversion = 0
@@ -484,7 +484,7 @@ next
 :update_version_close
 fileclose updfh
 :update_version_end
-registry[1644] = updversion
+registry[1645] = updversion
 return
 :profile_watch
 ppolls = 0
@@ -789,14 +789,14 @@ last = changes
 if legacy <> 0 goto profile_poll_state_saved
 call release_capture
 :profile_poll_state_saved
-rchanges = registry[980]
+rchanges = registry[981]
 if rchanges <> rchangeslast goto profile_poll_recipes_saved
 if rchanges = rsaved goto profile_poll_recipes_saved
 rstamp = rchanges
 call save_recipes
 :profile_poll_recipes_saved
 rchangeslast = rchanges
-dchanges = registry[1012]
+dchanges = registry[1013]
 if dchanges <> dchangeslast goto profile_poll_usermode_saved
 if dchanges = dsaved goto profile_poll_usermode_saved
 dstamp = dchanges

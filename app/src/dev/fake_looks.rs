@@ -194,9 +194,9 @@ impl FakeLooks {
                 ektar,
             ],
             selected: Some("portra-400-endura-v1".into()),
-            max_loaded: 40,
+            max_loaded: 50,
             max_listed: 64,
-            max_camera: Some(40),
+            max_camera: Some(50),
             update_pending: false,
             chosen: None,
         }

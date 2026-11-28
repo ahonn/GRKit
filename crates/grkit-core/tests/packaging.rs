@@ -239,6 +239,22 @@ fn production_boundaries_are_enforced() {
 }
 
 #[test]
+fn effects_with_the_same_code_are_refused() {
+    // Recipes name an effect by the low 15 bits of the FNV-1a hash of its ID: 0x0a41 for both.
+    assert_eq!(
+        grkit_core::recipes::effect_code("lut-test-146"),
+        grkit_core::recipes::effect_code("lut-test-1220")
+    );
+    let mut effects = EffectSet::default();
+    effects.insert(testing::effect("lut-test-146")).unwrap();
+    let error = effects
+        .insert(testing::effect("lut-test-1220"))
+        .unwrap_err();
+    assert!(error.to_string().contains("the same code"), "{error}");
+    assert_eq!(effects.blobs().count(), 1);
+}
+
+#[test]
 fn target_capacity_and_empty_effect_selection_are_supported() {
     let mut effects = EffectSet::default();
     for i in 0..runtime::MAX_COUNT {
@@ -424,21 +440,21 @@ fn json_matches_existing_ascii_pretty_format() {
 
 #[test]
 fn runtime_layout_matches_target_capacity() {
-    assert_eq!(runtime::MAX_COUNT, 40);
+    assert_eq!(runtime::MAX_COUNT, 50);
     assert_eq!(
         runtime::layout(0).unwrap(),
         json!({"words": runtime::HEADER_SIZE / 4, "tail_words": runtime::TAIL_WORDS, "text_words": runtime::TEXT_WORDS, "icon_words": [26 * 1602]})
     );
     assert_eq!(
-        runtime::layout(40).unwrap(),
+        runtime::layout(50).unwrap(),
         json!({
-            "words": (runtime::HEADER_SIZE + 40 * 0x1100) / 4,
+            "words": (runtime::HEADER_SIZE + 50 * 0x1100) / 4,
             "tail_words": runtime::TAIL_WORDS,
             "text_words": runtime::TEXT_WORDS,
-            "icon_words": [64080, 26 * 1602]
+            "icon_words": [64080, 36 * 1602]
         })
     );
-    assert!(runtime::layout(41).is_err());
+    assert!(runtime::layout(runtime::MAX_COUNT + 1).is_err());
 }
 
 #[test]
