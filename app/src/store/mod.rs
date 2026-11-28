@@ -51,7 +51,7 @@ use crate::platform;
 
 /// Placeholder App Store id until the listing exists.
 pub const APP_STORE_ID: &str = "0000000000";
-pub const PRIVACY_URL: &str = "https://grkit.app/privacy";
+pub const PRIVACY_URL: &str = "https://grkit.app/app/privacy/";
 /// The site, which installs GRKit on a memory card.
 pub const INSTALL_URL: &str = "https://grkit.app/";
 /// The public feedback board.
